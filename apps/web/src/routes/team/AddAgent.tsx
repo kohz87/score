@@ -10,6 +10,7 @@ import {
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { AGENT_ID_PATTERN, agentIdInput } from './agent-id.ts'
 import { ModelPicker } from '../../components/ModelPicker.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
@@ -162,15 +163,21 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
           }}
         >
           <label>
-            Agent name
+            Agent name (lowercase letters, digits, - and _)
             <input
               autoFocus
               required
-              pattern="[a-z0-9][a-z0-9_-]{0,63}"
+              pattern={AGENT_ID_PATTERN}
               title="Lowercase letters, digits, - and _"
               maxLength={64}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={input.id}
-              onChange={(event) => change({ id: event.target.value, name: event.target.value })}
+              onChange={(event) => {
+                const id = agentIdInput(event.target.value)
+                change({ id, name: id })
+              }}
             />
           </label>
           <label>

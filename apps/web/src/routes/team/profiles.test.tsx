@@ -95,7 +95,7 @@ function mount(element: React.ReactNode) {
 async function form(clone = false) {
   mount(<AddAgent agents={[agent]} />)
   fireEvent.click(screen.getByRole('button', { name: 'Add agent' }))
-  fireEvent.change(screen.getByLabelText('Agent name'), { target: { value: 'helper' } })
+  fireEvent.change(screen.getByLabelText(/^Agent name/), { target: { value: 'helper' } })
   fireEvent.change(screen.getByLabelText('Role or description'), {
     target: { value: 'Helps build changes' },
   })
