@@ -40,6 +40,10 @@ export const CodingRuntimeInfoSchema = z.object({
 export type CodingRuntimeInfo = z.infer<typeof CodingRuntimeInfoSchema>
 export const CodingRuntimesResponseSchema = z.object({ items: z.array(CodingRuntimeInfoSchema) })
 
+/** The quota floor (PLAN 8.6, decision 91): stop giving a coding agent new steps below this share left; 0 = off. */
+export const QuotaFloorSchema = z.int().min(0).max(50)
+export const DEFAULT_QUOTA_FLOOR_PERCENT = 10
+
 export const CodingAgentSchema = z.object({
   id: AgentIdSchema,
   name: z.string(),
@@ -50,6 +54,8 @@ export const CodingAgentSchema = z.object({
   model: z.string().nullable(),
   style: AgentStyleSchema,
   quota: z.string(),
+  /** Runs stop giving this agent new steps while a limit has less than this share left (0 = off; default 10). */
+  quotaFloorPercent: QuotaFloorSchema,
   cli: z.object({
     state: CliStateSchema,
     version: z.string().nullable(),
@@ -110,6 +116,7 @@ export const CodingAgentCreateSchema = z
     permission: CodingPermissionSchema.default('workspace-write'),
     model: ModelSchema.optional(),
     style: AgentStyleSchema,
+    quotaFloorPercent: QuotaFloorSchema.optional(),
     /** The security password; required when `permission` is `full`. */
     password: z.string().max(1024).optional(),
     /**
@@ -129,6 +136,7 @@ export const CodingAgentPatchSchema = z
     permission: CodingPermissionSchema.optional(),
     model: ModelSchema.nullable().optional(),
     workspace: z.string().min(1).max(4096).optional(),
+    quotaFloorPercent: QuotaFloorSchema.optional(),
     password: z.string().max(1024).optional(),
   })
   .strict()

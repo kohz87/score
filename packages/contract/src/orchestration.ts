@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { QuotaFloorSchema } from './coding.ts'
 import { AgentIdSchema } from './types.ts'
 
 // Contract §14 "Orchestrator" (PLAN 7.5a; design docs/briefs/7.5-orchestrator.md v3 + v3.1). A lead agent decides steps
@@ -185,6 +186,8 @@ export const OrchestrationCreateSchema = z
     acceptUnknownCost: z.array(CostSourceSchema).max(3).optional(),
     /** 7.7b: how many coding launches the run may release. */
     codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
+    /** 8.6: the quota floor for every coding agent of this run; omitted = each agent's own floor. */
+    quotaFloorPercent: QuotaFloorSchema.optional(),
   })
   .strict()
 export type OrchestrationCreate = z.infer<typeof OrchestrationCreateSchema>
@@ -284,6 +287,17 @@ export const AttemptViewSchema = z.object({
 })
 export type AttemptView = z.infer<typeof AttemptViewSchema>
 
+/** 8.6: why a step is held, and what it waits for. `override` = the person said "Use it anyway" for this step. */
+export const QuotaHoldViewSchema = z.object({
+  agentId: AgentIdSchema,
+  window: z.enum(['5 hours', 'week']),
+  group: z.string().nullable(),
+  leftPercent: z.number().min(0).max(100),
+  resetsAt: z.iso.datetime(),
+  state: z.enum(['held', 'waiting', 'override']),
+})
+export type QuotaHoldView = z.infer<typeof QuotaHoldViewSchema>
+
 export const StepViewSchema = z.object({
   id: z.string().min(1),
   agentId: AgentIdSchema,
@@ -300,6 +314,8 @@ export const StepViewSchema = z.object({
   attemptId: z.string().nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+  /** 8.6: set while the step's coding agent is below its quota floor. */
+  quotaHold: QuotaHoldViewSchema.nullable().optional(),
 })
 export type StepView = z.infer<typeof StepViewSchema>
 
@@ -358,6 +374,16 @@ export const NeedsYouSchema = z.discriminatedUnion('kind', [
   }),
   /** 7.7b: the run reached its coding step limit; raising `codingSteps` lets the blocked step go on. */
   z.object({ kind: z.literal('coding_limit'), stepId: z.string() }),
+  /** 8.6: a step is held because its coding agent has less than its quota floor left. */
+  z.object({
+    kind: z.literal('quota_low'),
+    stepId: z.string(),
+    agentId: AgentIdSchema,
+    window: z.enum(['5 hours', 'week']),
+    group: z.string().nullable(),
+    leftPercent: z.number().min(0).max(100),
+    resetsAt: z.iso.datetime(),
+  }),
   /** An agent was replaced after the run started: the run keeps working with the agent it was started with. */
   z.object({
     kind: z.literal('remap'),
@@ -432,6 +458,8 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
   acknowledgedAt: z.iso.datetime(),
   endReason: z.string().nullable(),
   storage: z.object({ reserveBytes: z.int(), storedBytes: z.int() }),
+  /** 8.6: the run's quota floor; null = each coding agent's own. */
+  quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
   /** 7.7b: the run's coding limits and the policy each coding worker was approved with. */
   coding: z
     .object({
@@ -522,11 +550,14 @@ export const LimitsDecisionSchema = z
       })
       .strict()
       .optional(),
+    /** 8.6: change the run's quota floor; `null` goes back to each coding agent's own. */
+    quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
     orchestrationRevision: revision,
   })
   .strict()
   .refine(
     (v) =>
+      v.quotaFloorPercent !== undefined ||
       v.budgetUsd !== undefined ||
       v.deadlineAt !== undefined ||
       v.acceptUnknownSpend !== undefined ||
@@ -569,6 +600,15 @@ export const PolicyRemapDecisionSchema = z
   })
   .strict()
 export type PolicyRemapDecision = z.infer<typeof PolicyRemapDecisionSchema>
+
+/** 8.6: the three answers to a held step: use the agent anyway (once), wait for its reset, or stop the run. */
+export const QuotaDecisionSchema = z
+  .object({
+    answer: z.enum(['use_anyway', 'wait', 'stop']),
+    orchestrationRevision: revision,
+  })
+  .strict()
+export type QuotaDecision = z.infer<typeof QuotaDecisionSchema>
 
 export const AbandonDecisionSchema = z
   .object({
@@ -622,6 +662,8 @@ export const OrchAssignArgsSchema = z.object({
   replaces: z.string().min(1).max(64).optional(),
   /** Under `lead-asks`: create the approval gate in this same call, so the step cannot start before the answer. */
   needsApproval: z.boolean().optional(),
+  /** 8.6: when the agent is below its quota floor, hold the step for the person instead of being refused. */
+  ifQuotaLow: z.literal('ask_owner').optional(),
 })
 export const OrchCancelArgsSchema = z.object({ ...toolBase, stepId: z.string().min(1).max(64) })
 export const OrchAskArgsSchema = z.object({

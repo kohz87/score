@@ -3,7 +3,10 @@ import {
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORC_CAPABILITY_PATTERN,
   ORC_CAPABILITY_PLACEHOLDER,
+  LimitsDecisionSchema,
+  NeedsYouSchema,
   OrchAssignArgsSchema,
+  QuotaDecisionSchema,
   OrchestrationCreateSchema,
   OrchestrationEventsSchema,
   OrchestrationSummarySchema,
@@ -72,5 +75,36 @@ describe('orchestration contract', () => {
     expect(() =>
       OrchestrationEventsSchema.parse({ asOfSeq: 3, events: [{ ...event, kind: 'nope' }] }),
     ).toThrow()
+  })
+
+  test('the quota guard: floor 0–50, the held-step item, its answers and ifQuotaLow', () => {
+    expect(
+      OrchestrationCreateSchema.parse({ ...create, quotaFloorPercent: 0 }).quotaFloorPercent,
+    ).toBe(0)
+    expect(() => OrchestrationCreateSchema.parse({ ...create, quotaFloorPercent: 51 })).toThrow()
+    expect(() => OrchestrationCreateSchema.parse({ ...create, quotaFloorPercent: 2.5 })).toThrow()
+    expect(
+      LimitsDecisionSchema.parse({ quotaFloorPercent: null, orchestrationRevision: 1 }),
+    ).toBeTruthy()
+    expect(() => LimitsDecisionSchema.parse({ orchestrationRevision: 1 })).toThrow()
+    for (const answer of ['use_anyway', 'wait', 'stop'])
+      expect(QuotaDecisionSchema.parse({ answer, orchestrationRevision: 2 }).answer).toBe(answer)
+    expect(() => QuotaDecisionSchema.parse({ answer: 'ok', orchestrationRevision: 2 })).toThrow()
+    expect(
+      NeedsYouSchema.parse({
+        kind: 'quota_low',
+        stepId: 's3',
+        agentId: 'builder',
+        window: '5 hours',
+        group: null,
+        leftPercent: 6,
+        resetsAt: '2026-10-17T13:40:00.000Z',
+      }).kind,
+    ).toBe('quota_low')
+    const args = { capability, commandId: 'c1', agent: 'builder', instruction: 'Do it' }
+    expect(OrchAssignArgsSchema.parse({ ...args, ifQuotaLow: 'ask_owner' }).ifQuotaLow).toBe(
+      'ask_owner',
+    )
+    expect(() => OrchAssignArgsSchema.parse({ ...args, ifQuotaLow: 'always' })).toThrow()
   })
 })
