@@ -42,6 +42,8 @@ export function createStreamClient({
   const controls = new Set<(control: StreamControl) => void>()
   const statusListeners = new Set<() => void>()
   const unknownTypes = new Set<string>()
+  // `look.changed` (contract §16) reaches the app even before the stream's event union lists it.
+  const lookListeners = new Set<(data: unknown) => void>()
   let currentStatus: StreamStatus = 'connecting'
   let epoch: string | undefined
   let lastSeq: number | undefined
@@ -83,6 +85,8 @@ export function createStreamClient({
         const envelope = StreamEnvelopeSchema.safeParse(JSON.parse(frame.data) as unknown)
         if (envelope.success && frame.lastEventId === String(envelope.data.seq))
           lastSeq = Math.max(lastSeq ?? 0, envelope.data.seq)
+        if (parsed.type === 'look.changed' && envelope.success)
+          lookListeners.forEach((listener) => listener(envelope.data.data))
         if (!unknownTypes.has(parsed.type)) {
           unknownTypes.add(parsed.type)
           console.debug('Unknown stream event type', parsed.type)
@@ -117,6 +121,7 @@ export function createStreamClient({
       'message',
       'stream.hello',
       'stream.reset',
+      'look.changed',
       ...StreamEventSchema.options.map((schema) => schema.shape.type.value),
     ]
     types.forEach((type) => connection.addEventListener(type, receive))
@@ -137,6 +142,13 @@ export function createStreamClient({
       listeners.add(listener)
       return () => {
         listeners.delete(listener)
+      }
+    },
+    /** The shared look changed on another device: `{ activeTheme, mode }`, to be validated by the caller. */
+    onLookChanged(listener: (data: unknown) => void) {
+      lookListeners.add(listener)
+      return () => {
+        lookListeners.delete(listener)
       }
     },
     onControl(listener: (control: StreamControl) => void) {
@@ -160,6 +172,7 @@ export function createStreamClient({
       if (timer !== undefined) cancel(timer)
       listeners.clear()
       controls.clear()
+      lookListeners.clear()
       statusListeners.clear()
     },
   }

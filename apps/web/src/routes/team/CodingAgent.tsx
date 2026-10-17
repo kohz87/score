@@ -437,7 +437,7 @@ function CodingSettings({
     onSuccess: onRemoved,
   })
   return (
-    <section className="team-card" aria-label="Coding agent">
+    <section className="team-card" aria-label="Coding agent" data-protected="block">
       <h2>Coding agent</h2>
       <dl className="team-facts">
         <div>

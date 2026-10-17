@@ -428,7 +428,8 @@ test('theme choice applies data-theme, is remembered, and System clears it', asy
   expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   fireEvent.click(within(group).getByRole('radio', { name: 'System' }))
   expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
-  expect(window.localStorage.getItem('score.theme')).toBeNull()
+  // System is this device's own choice (it stays System even when the shared colour mode is Dark).
+  expect(window.localStorage.getItem('score.theme')).toBe('system')
 })
 
 test('theme still switches when storage is blocked', async () => {

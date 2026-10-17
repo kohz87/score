@@ -54,38 +54,76 @@ test('"Send messages with" is a per-device choice between Enter and Ctrl+Enter',
   expect(localStorage.getItem('score.sendKey')).toBeNull()
 })
 
-test('Style picks a theme pack, applies its attributes live and remembers it', async () => {
-  window.localStorage.clear()
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() => Promise.resolve(Response.json({ code: 'USD', rate: 1 }))),
-  )
-  render(
+function mountLook(fetch: ReturnType<typeof vi.fn>) {
+  vi.stubGlobal('fetch', fetch)
+  return render(
     <QueryClientProvider client={new QueryClient()}>
       <LookSection />
     </QueryClientProvider>,
   )
-  const root = document.documentElement
-  const toggle = screen.getByRole('button', { name: 'Style: Score' })
-  expect(toggle.getAttribute('aria-expanded')).toBe('false')
-  expect(screen.queryByRole('radiogroup', { name: 'Style' })).toBeNull()
-  fireEvent.click(toggle)
+}
+
+test('Style is always shown; picking a theme is this device’s choice and is remembered', () => {
+  window.localStorage.clear()
+  mountLook(vi.fn(() => Promise.resolve(Response.json({ code: 'USD', rate: 1 }))))
   const group = screen.getByRole('radiogroup', { name: 'Style' })
   expect(group.querySelectorAll('[role="radio"]')).toHaveLength(4)
   fireEvent.click(screen.getByRole('radio', { name: /Dense/ }))
-  expect(root.getAttribute('data-pack')).toBe('dense')
-  expect(root.getAttribute('data-layout')).toBe('side')
-  expect(root.getAttribute('data-density')).toBe('compact')
-  expect(JSON.parse(window.localStorage.getItem('score.look')!)).toEqual({
-    pack: 'dense',
-    layout: 'side',
-    density: 'compact',
+  expect(window.localStorage.getItem('score.look.device')).toBe('dense')
+  expect(screen.getByRole('radio', { name: /Dense/ }).getAttribute('aria-checked')).toBe('true')
+  expect(screen.getByText(/This device uses Dense instead of the shared Score/)).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Use the shared theme' }))
+  expect(window.localStorage.getItem('score.look.device')).toBeNull()
+  expect(screen.getByRole('radio', { name: /^Score/ }).getAttribute('aria-checked')).toBe('true')
+})
+
+test('Theme for every device saves through PUT /api/look and lists the server’s themes', async () => {
+  window.localStorage.clear()
+  const themes = {
+    items: ['score', 'harbour'].map((id) => ({
+      id,
+      name: id === 'score' ? 'Score' : 'Harbour',
+      version: '1.0.0',
+      author: null,
+      description: null,
+      source: id === 'score' ? 'builtin' : 'imported',
+      updatedAt: '2026-10-17T00:00:00.000Z',
+      hasCss: false,
+    })),
+    active: 'score',
+    mode: 'system',
+  }
+  const fetch = vi.fn((url: string, init?: RequestInit) =>
+    Promise.resolve(
+      String(url).endsWith('/api/themes')
+        ? Response.json(themes)
+        : init?.method === 'PUT' && String(url).endsWith('/api/look')
+          ? new Response(null, { status: 204 })
+          : Response.json({ code: 'USD', rate: 1 }),
+    ),
+  )
+  mountLook(fetch)
+  await screen.findByRole('radio', { name: /Harbour/ })
+  fireEvent.change(screen.getByLabelText('Theme for every device'), {
+    target: { value: 'harbour' },
   })
-  expect(screen.getByRole('button', { name: 'Style: Dense' })).toBeDefined()
-  fireEvent.click(screen.getByRole('radio', { name: /^Score/ }))
-  expect(root.getAttribute('data-pack')).toBe('score')
-  expect(root.getAttribute('data-layout')).toBe('top')
-  expect(window.localStorage.getItem('score.look')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Save for every device' }))
+  await waitFor(() =>
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true),
+  )
+  const put = fetch.mock.calls.find(([, init]) => init?.method === 'PUT')!
+  expect(String(put[0])).toBe('/api/look')
+  expect(JSON.parse(String(put[1]!.body))).toEqual({ activeTheme: 'harbour', mode: 'system' })
+})
+
+test('Reset look on this device sends this device back to Score’s own look', () => {
+  window.localStorage.clear()
+  window.localStorage.setItem('score.look.device', 'night')
+  window.localStorage.setItem('score.look.cache', '{"id":"night"}')
+  mountLook(vi.fn(() => Promise.resolve(Response.json({ code: 'USD', rate: 1 }))))
+  fireEvent.click(screen.getByRole('button', { name: 'Reset look on this device' }))
+  expect(window.localStorage.getItem('score.look.device')).toBe('score')
+  expect(window.localStorage.getItem('score.look.cache')).toBeNull()
 })
 
 function guardFetch(answer: Response) {

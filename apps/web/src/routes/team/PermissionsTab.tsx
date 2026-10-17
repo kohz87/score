@@ -43,7 +43,11 @@ export function PermissionsTab({ agent }: { agent: AgentDetail }) {
   }
 
   return (
-    <section className="team-card" aria-labelledby="team-permissions-heading">
+    <section
+      className="team-card team-permissions"
+      aria-labelledby="team-permissions-heading"
+      data-protected="block"
+    >
       <h2 id="team-permissions-heading">Permissions</h2>
       <p className="team-muted-strong">
         {agent.name} starts from the <Link to="/settings#rules">team rules in Settings</Link>. Here

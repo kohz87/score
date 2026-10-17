@@ -963,28 +963,30 @@
   font-weight: 600;
 }
 
-/* Look › Style: theme packs (PLAN 8.3). The toggle sits on the Theme label's line so the closed card keeps its height. */
-.plugins-theme-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-}
-.plugins-theme-head .plugins-card-name {
-  flex: none;
-}
-.look-style-toggle {
+/* Look › Style: the theme cards (PLAN 8.3, always shown since 9.2). */
+.look-link {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--ink-muted);
-  font-size: 14px;
-  line-height: 1;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.look-style-toggle:hover {
-  color: var(--ink);
+.look-shared {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+}
+.look-shared label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 14px;
+  font-weight: 600;
 }
 .look-packs {
   align-self: stretch;

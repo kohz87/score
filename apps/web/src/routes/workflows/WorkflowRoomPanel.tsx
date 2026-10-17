@@ -43,7 +43,11 @@ export function WorkflowRoomPanel({
           {statusLabel[summary.status]}
         </span>
         {graph && <span className="orch-muted">{graph}</span>}
-        {needs > 0 && <span className="orch-pill">Needs you ({needs})</span>}
+        {needs > 0 && (
+          <span className="orch-pill" data-protected="inline">
+            Needs you ({needs})
+          </span>
+        )}
         {detail && <RunControls run={detail} actions={actions} />}
       </div>
       {open && (

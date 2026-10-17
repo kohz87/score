@@ -83,6 +83,7 @@ export function AgentGlyph({
     return (
       <svg
         {...accessibility}
+        data-protected="inline-flex"
         className={className}
         style={style}
         viewBox="0 0 20 20"
@@ -95,7 +96,7 @@ export function AgentGlyph({
   }
 
   return (
-    <span {...accessibility} className={className} style={style}>
+    <span {...accessibility} data-protected="inline-flex" className={className} style={style}>
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
         {elements}
       </svg>

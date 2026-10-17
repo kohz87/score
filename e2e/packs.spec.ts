@@ -3,7 +3,7 @@ import { pair } from './pair.ts'
 
 // Theme packs (PLAN 8.3): the picker switches live, the choice survives a reload, and the side layout keeps the same
 // links in the same order and falls back to the top bar on a phone.
-test('Settings › Look › Style: a pack applies live, survives a reload and the side rail keeps the same links', async ({
+test('Settings › Look › Style (always shown): a pack applies live, survives a reload and the side rail keeps the same links', async ({
   page,
 }) => {
   await pair(page)
@@ -24,7 +24,6 @@ test('Settings › Look › Style: a pack applies live, survives a reload and th
   ])
 
   const region = page.getByRole('region', { name: 'Look' })
-  await region.getByRole('button', { name: 'Style: Score' }).click()
   const styles = region.getByRole('radiogroup', { name: 'Style' })
   await styles.getByRole('radio', { name: /Night shift/ }).click()
   await expect(html).toHaveAttribute('data-pack', 'night')
@@ -53,10 +52,6 @@ test('Settings › Look › Style: a pack applies live, survives a reload and th
 
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/settings')
-  await page
-    .getByRole('region', { name: 'Look' })
-    .getByRole('button', { name: /^Style:/ })
-    .click()
   await page.getByRole('radio', { name: /^Score/ }).click()
   await expect(html).toHaveAttribute('data-pack', 'score')
   await page.reload()
