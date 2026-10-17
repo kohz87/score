@@ -1,13 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { DisplayCurrencySchema } from '@score/contract'
+import { DisplayCurrencySchema, type ThemeSummary } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { currencyKey, useDisplayCurrency } from '../../data/currency.ts'
 import '../../components/plugin-cards.css'
 import { isTouchDevice, readSendKey, saveSendKey, type SendKey } from '../../data/send-key.ts'
-import { readPackId, savePack } from '../../data/pack.ts'
-import { saveTheme, readTheme, themeChoices, type ThemeChoice } from '../../data/theme.ts'
-import { findPack, packs } from '../../styles/packs.ts'
+import { saveTheme, themeChoices, type ThemeChoice } from '../../data/theme.ts'
+import { packs } from '../../styles/packs.ts'
+import { useLook } from '../../themes/use-look.ts'
 import { checkSecurityPassword, passwordCheckProblem } from '../user/ViewSwitch.tsx'
 import { readGuard, saveGuard } from '../user/user-view.ts'
 
@@ -24,74 +24,87 @@ function previewMode(theme: ThemeChoice): 'light' | 'dark' {
 }
 
 function StylePanel({
-  theme,
-  packId,
+  mode,
+  themes,
+  selectedId,
   onPick,
 }: {
-  theme: ThemeChoice
-  packId: string
+  mode: ThemeChoice
+  themes: ThemeSummary[]
+  selectedId: string
   onPick: (id: string) => void
 }) {
   return (
-    <div id="look-style-panel" role="radiogroup" aria-label="Style" className="look-packs">
-      {packs.map((pack) => (
-        <button
-          key={pack.id}
-          type="button"
-          role="radio"
-          aria-checked={packId === pack.id}
-          className="look-pack"
-          data-pack-choice={pack.id}
-          onClick={() => {
-            onPick(pack.id)
-            savePack(pack)
-          }}
-        >
-          <span
-            className="look-pack-preview"
-            data-pack={pack.id}
-            data-theme={previewMode(theme)}
-            data-layout={pack.layout}
-            aria-hidden="true"
+    <div role="radiogroup" aria-label="Style" className="look-packs">
+      {themes.map((theme) => {
+        const pack = packs.find((item) => item.id === theme.id)
+        return (
+          <button
+            key={theme.id}
+            type="button"
+            role="radio"
+            aria-checked={selectedId === theme.id}
+            className="look-pack"
+            data-pack-choice={theme.id}
+            onClick={() => onPick(theme.id)}
           >
-            <span className="look-pack-nav" />
-            <span className="look-pack-page">
-              <span className="look-pack-title">Aa</span>
-              <span className="look-pack-card">
-                <span className="look-pack-line" />
-                <span className="look-pack-line look-pack-line--short" />
-                <span className="look-pack-button" />
+            <span
+              className="look-pack-preview"
+              data-pack={pack?.id ?? 'score'}
+              data-theme={previewMode(mode)}
+              data-layout={pack?.layout ?? 'top'}
+              aria-hidden="true"
+            >
+              <span className="look-pack-nav" />
+              <span className="look-pack-page">
+                <span className="look-pack-title">Aa</span>
+                <span className="look-pack-card">
+                  <span className="look-pack-line" />
+                  <span className="look-pack-line look-pack-line--short" />
+                  <span className="look-pack-button" />
+                </span>
               </span>
             </span>
-          </span>
-          <span className="look-pack-name">{pack.name}</span>
-          <span className="look-pack-blurb">{pack.blurb}</span>
-        </button>
-      ))}
+            <span className="look-pack-name">{theme.name}</span>
+            <span className="look-pack-blurb">
+              {pack?.blurb ?? theme.description ?? 'A theme added to this Score.'}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
 
 function ThemeCard() {
-  const [theme, setTheme] = useState<ThemeChoice>(readTheme)
-  const [stylesOpen, setStylesOpen] = useState(false)
-  const [packId, setPackId] = useState<string>(readPackId)
+  const look = useLook()
+  const [problem, setProblem] = useState('')
+  const [sharedChoice, setSharedChoice] = useState<string | null>(null)
+  const [sharedMode, setSharedMode] = useState<ThemeChoice | null>(null)
+  const [saving, setSaving] = useState(false)
+  const shownShared = sharedChoice ?? look.sharedId
+  const shownMode = sharedMode ?? look.sharedMode
+  const changed = shownShared !== look.sharedId || shownMode !== look.sharedMode
+  const sharedName = look.themes.find((item) => item.id === look.sharedId)?.name ?? look.sharedId
+  const deviceName = look.themes.find((item) => item.id === look.deviceId)?.name ?? look.deviceId
+  async function saveShared() {
+    setSaving(true)
+    setProblem('')
+    try {
+      await look.saveShared({ activeTheme: shownShared, mode: shownMode })
+      setSharedChoice(null)
+      setSharedMode(null)
+    } catch {
+      setProblem('Couldn’t save the theme for every device. Is this browser paired?')
+    } finally {
+      setSaving(false)
+    }
+  }
   return (
     <div className="plugins-card plugins-theme plugins-sendkey">
-      <div className="plugins-theme-head">
-        <span className="plugins-card-name" id="plugins-theme-label">
-          Theme
-        </span>
-        <button
-          type="button"
-          className="look-style-toggle"
-          aria-expanded={stylesOpen}
-          aria-controls="look-style-panel"
-          onClick={() => setStylesOpen((open) => !open)}
-        >
-          Style: {findPack(packId).name}
-        </button>
-      </div>
+      <span className="plugins-card-name" id="plugins-theme-label">
+        Theme
+      </span>
       <div
         role="radiogroup"
         aria-labelledby="plugins-theme-label"
@@ -102,20 +115,92 @@ function ThemeCard() {
             key={choice}
             type="button"
             role="radio"
-            aria-checked={theme === choice}
+            aria-checked={look.mode === choice}
             className="plugins-theme-choice"
             data-theme-choice={choice}
-            onClick={() => {
-              setTheme(choice)
-              saveTheme(choice)
-            }}
+            onClick={() => saveTheme(choice)}
           >
             <span className="plugins-theme-swatch" data-choice={choice} aria-hidden="true" />
             {themeLabels[choice]}
           </button>
         ))}
       </div>
-      {stylesOpen && <StylePanel theme={theme} packId={packId} onPick={setPackId} />}
+      <span className="plugins-card-name">Style on this device</span>
+      <StylePanel
+        mode={look.mode}
+        themes={look.themes}
+        selectedId={look.deviceId ?? look.sharedId}
+        onPick={look.chooseForDevice}
+      />
+      {look.deviceId && look.deviceId !== look.sharedId && (
+        <p className="settings-muted">
+          This device uses {deviceName} instead of the shared {sharedName}.{' '}
+          <button type="button" className="look-link" onClick={() => look.chooseForDevice(null)}>
+            Use the shared theme
+          </button>
+        </p>
+      )}
+      <div className="look-shared">
+        <label>
+          Theme for every device
+          <select value={shownShared} onChange={(event) => setSharedChoice(event.target.value)}>
+            {look.themes.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Colours for every device
+          <select
+            value={shownMode}
+            onChange={(event) => setSharedMode(event.target.value as ThemeChoice)}
+          >
+            {themeChoices.map((choice) => (
+              <option key={choice} value={choice}>
+                {themeLabels[choice]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="settings-pill"
+          disabled={!changed || saving}
+          onClick={() => void saveShared()}
+        >
+          {saving ? 'Saving…' : 'Save for every device'}
+        </button>
+      </div>
+      {look.deviceId && look.deviceId !== look.sharedId && (
+        <p className="settings-muted">Devices without their own choice follow {sharedName}.</p>
+      )}
+      {problem && <p role="alert">{problem}</p>}
+    </div>
+  )
+}
+
+/** The way back from any theme (design §4.5): also Ctrl+Shift+0, the command palette and ?look=safe. */
+function ResetLookCard() {
+  const look = useLook()
+  return (
+    <div className="plugins-card plugins-theme plugins-sendkey look-reset" data-protected="any">
+      <span className="plugins-card-name" id="plugins-reset-label">
+        If a theme gets in the way
+      </span>
+      <p className="settings-muted" id="plugins-reset-help">
+        Go back to Score’s own look on this device. You can also press Ctrl+Shift+0, search for
+        “Reset look” with Ctrl+K, or open Score with ?look=safe.
+      </p>
+      <button
+        type="button"
+        className="settings-pill"
+        aria-describedby="plugins-reset-help"
+        onClick={look.resetDevice}
+      >
+        Reset look on this device
+      </button>
     </div>
   )
 }
@@ -189,7 +274,7 @@ function AdminGuardCard() {
     }
   }
   return (
-    <div className="plugins-card plugins-theme plugins-sendkey">
+    <div className="plugins-card plugins-theme plugins-sendkey guard-form" data-protected="any">
       <span className="plugins-card-name" id="plugins-guard-label">
         Admin view on this browser
       </span>
@@ -312,6 +397,7 @@ export function LookSection() {
       </div>
       <div className="look-stack">
         <ThemeCard />
+        <ResetLookCard />
         <SendKeyCard />
         <AdminGuardCard />
         <CurrencyCard />
