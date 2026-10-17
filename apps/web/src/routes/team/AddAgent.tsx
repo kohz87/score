@@ -115,7 +115,7 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
       ref={dialog}
       open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
       className="team-profile-dialog"
-      aria-labelledby="add-agent-title"
+      aria-label="Add agent"
       onCancel={(event) => {
         event.preventDefault()
         close()

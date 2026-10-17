@@ -120,7 +120,7 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
       ref={dialog}
       open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
       className="team-profile-dialog"
-      aria-labelledby="import-agent-title"
+      aria-label="Import agent"
       onCancel={(event) => {
         event.preventDefault()
         leave()

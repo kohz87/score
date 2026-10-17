@@ -45,7 +45,7 @@ test('import an exported agent: inspect, refuse an existing id, then run the dur
 
   await dialog.getByLabel('New agent id').fill('imported-scout')
   await submit.click()
-  await expect(dialog.getByRole('heading', { name: 'Ready', exact: true })).toBeVisible()
+  await expect(dialog.getByRole('heading', { name: / joined the team$/ })).toBeVisible()
   await dialog.getByRole('link', { name: /^Open / }).click()
   await expect(page.getByRole('heading', { name: 'imported-scout', exact: true })).toBeVisible()
 
