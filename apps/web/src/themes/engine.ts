@@ -1,0 +1,318 @@
+import {
+  THEME_COLOR_TOKENS,
+  ThemeAssetRefSchema,
+  ThemeColorSchema,
+  ThemeIdSchema,
+  type ThemeColorToken,
+  type ThemeManifest,
+} from '@score/contract'
+import { applyPack } from '../data/pack.ts'
+import { findPack, packs } from '../styles/packs.ts'
+import { contrastRatio, parseColor } from './color.ts'
+import { sanitiseCss } from './sanitise.ts'
+
+// The theme engine (PLAN 9.2, design docs/briefs/9-themes.md §6): a manifest becomes <html> attributes, a generated
+// token sheet, namespaced @font-face rules, a background and the theme's own sanitised CSS. Everything lands in
+// adopted style sheets, which the cascade orders after every stylesheet of the app, so Score's CSS stays unlayered
+// and the default look stays exactly as it was. Only the 40 public colour tokens are ever written.
+
+export type ColorMode = 'light' | 'dark'
+type Look = Pick<ThemeManifest, 'colors' | 'fonts' | 'shape' | 'layout' | 'background'>
+
+/** Attributes the engine owns on <html>; boot-look.js restores the same set from the cache. */
+export const LOOK_ATTRIBUTES = [
+  'data-radius',
+  'data-elevation',
+  'data-surface',
+  'data-border',
+  'data-nav',
+  'data-width',
+  'data-chat',
+  'data-look',
+  'data-contrast-fallback',
+] as const
+
+export const builtinThemeIds: readonly string[] = packs.map((pack) => pack.id)
+export function isBuiltinTheme(id: string): boolean {
+  return builtinThemeIds.includes(id)
+}
+
+// Score's own pairs (tokens.css), for the contrast check when a theme sets only one side of a pair.
+const defaultColors: Record<ColorMode, Partial<Record<ThemeColorToken, string>>> = {
+  light: {
+    ground: '#eceef2',
+    card: '#ffffff',
+    ink: '#12131a',
+    'ink-muted': '#5e626c',
+    muted: '#626670',
+    'panel-ink': '#12131a',
+    'panel-card': '#ffffff',
+  },
+  dark: {
+    ground: '#0f1116',
+    card: '#181a21',
+    ink: '#eceef2',
+    'ink-muted': '#a9adb8',
+    muted: '#9fa3ae',
+    'panel-ink': '#242733',
+    'panel-card': '#ffffff',
+  },
+}
+export const defaultColorPairs = defaultColors
+
+const defaultFonts = {
+  heading: "'Bricolage Grotesque', 'Hanken Grotesk', sans-serif",
+  body: "'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif",
+  code: "'JetBrains Mono', ui-monospace, monospace",
+} as const
+
+/** The theme's font names are written into CSS, so only this shape (the contract's) is ever accepted. */
+const SAFE_FAMILY = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,59}$/
+
+function colorsFor(look: Look, mode: ColorMode): Partial<Record<ThemeColorToken, string>> {
+  const set = look.colors?.[mode] as Record<string, unknown> | undefined
+  const out: Partial<Record<ThemeColorToken, string>> = {}
+  if (!set) return out
+  for (const token of THEME_COLOR_TOKENS) {
+    const value = set[token]
+    if (typeof value === 'string' && ThemeColorSchema.safeParse(value).success) out[token] = value
+  }
+  return out
+}
+
+function declarations(colors: Partial<Record<ThemeColorToken, string>>): string {
+  return Object.entries(colors)
+    .map(([token, value]) => `--${token}:${value};`)
+    .join('')
+}
+
+/** A font face of a theme gets its own family name, so it can never replace one of Score's fonts. */
+export function faceFamily(themeId: string, family: string): string {
+  return `theme-${themeId}-${family.replace(/ /g, '-')}`
+}
+
+export function assetUrl(themeId: string, ref: string): string | null {
+  if (!ThemeIdSchema.safeParse(themeId).success || !ThemeAssetRefSchema.safeParse(ref).success)
+    return null
+  return `/api/themes/${themeId}/assets/${ref.slice('asset:'.length)}`
+}
+
+function fontStack(look: Look, themeId: string, key: 'heading' | 'body' | 'code'): string | null {
+  const family = look.fonts?.[key]
+  if (typeof family !== 'string' || !SAFE_FAMILY.test(family)) return null
+  const own = look.fonts?.faces?.some((face) => face.family === family)
+  return `"${own ? faceFamily(themeId, family) : family}", ${defaultFonts[key]}`
+}
+
+function radiusCss(shape: Look['shape']): string {
+  const radius = shape?.radius
+  if (typeof radius !== 'number' || !Number.isFinite(radius)) return ''
+  const n = Math.min(40, Math.max(0, Math.round(radius)))
+  const px = (factor: number) => `${Math.round(n * factor)}px`
+  return `--radius-xs:${px(0.2)};--radius-s:${px(0.3)};--radius-m:${px(0.5)};--radius-l:${px(0.7)};--radius-card:${n}px;`
+}
+
+const SCOPE = ":root[data-look='custom']"
+
+/** The generated token sheet: colours for both modes, fonts, numeric radius. No theme-controlled text but validated tokens. */
+export function tokenCss(look: Look, themeId: string): string {
+  const light = declarations(colorsFor(look, 'light'))
+  const dark = declarations(colorsFor(look, 'dark'))
+  const fonts = (['heading', 'body', 'code'] as const)
+    .map((key) => {
+      const stack = fontStack(look, themeId, key)
+      return stack ? `--font-${key}:${stack};` : ''
+    })
+    .join('')
+  const shared = fonts + radiusCss(look.shape)
+  const parts = [`${SCOPE}{${shared}}`]
+  if (light) {
+    parts.push(`${SCOPE}[data-theme='light']{${light}}`)
+    parts.push(`@media not (prefers-color-scheme: dark){${SCOPE}:not([data-theme]){${light}}}`)
+  }
+  if (dark) {
+    parts.push(`${SCOPE}[data-theme='dark']{${dark}}`)
+    parts.push(`@media (prefers-color-scheme: dark){${SCOPE}:not([data-theme]){${dark}}}`)
+  }
+  return parts.join('\n')
+}
+
+export function fontFaceCss(look: Look, themeId: string): string {
+  const faces = look.fonts?.faces ?? []
+  return faces
+    .flatMap((face) => {
+      const url = assetUrl(themeId, face.src)
+      if (!url || !SAFE_FAMILY.test(face.family)) return []
+      const weight = /^[1-9]00( [1-9]00)?$/.test(face.weight) ? face.weight : '400'
+      const style = face.style === 'italic' ? 'italic' : 'normal'
+      return [
+        `@font-face{font-family:"${faceFamily(themeId, face.family)}";src:url("${url}") format("woff2");font-weight:${weight};font-style:${style};font-display:swap}`,
+      ]
+    })
+    .join('\n')
+}
+
+export function backgroundCss(look: Look, themeId: string): string {
+  const image = look.background?.image
+  const url = image ? assetUrl(themeId, image) : null
+  if (!url) return ''
+  const dim = Math.min(80, Math.max(0, Math.round(look.background?.dim ?? 0)))
+  const veil = `color-mix(in srgb, var(--ground) ${dim}%, transparent)`
+  const tile = look.background?.fit === 'tile'
+  return `${SCOPE} body{background-image:linear-gradient(${veil},${veil}),url("${url}");background-size:${tile ? 'auto' : 'cover'};background-repeat:${tile ? 'repeat' : 'no-repeat'};background-attachment:fixed;background-position:center}`
+}
+
+/** The `data-*` attributes a manifest asks for (only values the contract allows are written). */
+export function themeAttributes(look: Look): Record<string, string> {
+  const out: Record<string, string> = { 'data-look': 'custom' }
+  const { shape, layout } = look
+  const radius = shape?.radius
+  if (typeof radius === 'number') out['data-radius'] = 'custom'
+  else if (radius) out['data-radius'] = radius
+  if (shape?.border) out['data-border'] = shape.border
+  if (shape?.elevation) out['data-elevation'] = shape.elevation
+  if (shape?.surface) out['data-surface'] = shape.surface
+  if (layout?.nav) out['data-nav'] = layout.nav
+  if (layout?.contentWidth) out['data-width'] = layout.contentWidth
+  if (layout?.chat?.messages) out['data-chat'] = layout.chat.messages
+  return out
+}
+
+/**
+ * True when a pair a protected surface draws fails WCAG AA (4.5:1) with the theme's colours: the surface then falls
+ * back to Score's own pairs (data-contrast-fallback, styles/protected.css).
+ */
+export function failsProtectedContrast(look: Look, mode: ColorMode): boolean {
+  const colors = { ...defaultColors[mode], ...colorsFor(look, mode) }
+  const rgba = (token: ThemeColorToken) => parseColor(colors[token] ?? '')
+  const pairs: [ThemeColorToken, ThemeColorToken][] = [
+    ['ink', 'card'],
+    ['ink-muted', 'card'],
+    ['muted', 'card'],
+    ['ink', 'ground'],
+    ['card', 'ink'],
+    ['panel-card', 'panel-ink'],
+    ['panel-ink', 'panel-card'],
+  ]
+  return pairs.some(([text, background]) => {
+    const fg = rgba(text)
+    const bg = rgba(background)
+    return !fg || !bg || contrastRatio(fg, bg) < 4.5
+  })
+}
+
+type Applied = { sheets: CSSStyleSheet[]; fallbackElements: HTMLStyleElement[] }
+let applied: Applied = { sheets: [], fallbackElements: [] }
+
+function supportsAdopted(): boolean {
+  return (
+    typeof CSSStyleSheet !== 'undefined' &&
+    'replaceSync' in CSSStyleSheet.prototype &&
+    Array.isArray(document.adoptedStyleSheets)
+  )
+}
+
+function setAdopted(texts: string[]): {
+  sheets: CSSStyleSheet[]
+  fallbackElements: HTMLStyleElement[]
+} {
+  applied.fallbackElements.forEach((element) => element.remove())
+  if (!supportsAdopted()) {
+    const elements = texts.map((text) => {
+      const element = document.createElement('style')
+      element.dataset.scoreLook = ''
+      element.textContent = text
+      document.head.append(element)
+      return element
+    })
+    return { sheets: [], fallbackElements: elements }
+  }
+  const keep = document.adoptedStyleSheets.filter((sheet) => !applied.sheets.includes(sheet))
+  const sheets = texts.map((text) => {
+    const sheet = new CSSStyleSheet()
+    sheet.replaceSync(text)
+    return sheet
+  })
+  document.adoptedStyleSheets = [...keep, ...sheets]
+  return { sheets, fallbackElements: [] }
+}
+
+/** Removes the sheets and attributes of a custom theme; the document is back at the unthemed Score look. */
+export function clearLook(): void {
+  const root = document.documentElement
+  applied.fallbackElements.forEach((element) => element.remove())
+  if (supportsAdopted())
+    document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+      (sheet) => !applied.sheets.includes(sheet),
+    )
+  applied = { sheets: [], fallbackElements: [] }
+  for (const name of LOOK_ATTRIBUTES) root.removeAttribute(name)
+  document.getElementById('score-look-boot')?.remove()
+}
+
+/** Switches to a built-in pack (the 8.3 themes): same attributes as before, no sheets. */
+export function applyBuiltin(id: string): void {
+  clearLook()
+  applyPack(findPack(id))
+}
+
+export type LookDetail = { id: string; manifest: Look; css: string }
+export type AppliedLook = {
+  report: ReturnType<typeof sanitiseCss>['report']
+  contrastFallback: boolean
+  cache: { attributes: Record<string, string>; css: string }
+}
+
+/**
+ * Applies a custom theme: attributes, token sheet, font faces, background and the sanitised theme CSS, in that
+ * cascade order. Throws when something is wrong; the caller skips the theme (the engine leaves the look cleared).
+ */
+export function applyCustom(detail: LookDetail, mode: ColorMode): AppliedLook {
+  clearLook()
+  try {
+    if (!ThemeIdSchema.safeParse(detail.id).success) throw new Error('Invalid theme id')
+    const root = document.documentElement
+    const attributes = themeAttributes(detail.manifest)
+    const contrastFallback = failsProtectedContrast(detail.manifest, mode)
+    // The look of Score's own layout/density attributes: a custom theme starts from the default pack.
+    root.setAttribute('data-pack', 'score')
+    root.setAttribute('data-layout', detail.manifest.layout?.nav === 'left' ? 'side' : 'top')
+    root.setAttribute('data-density', detail.manifest.shape?.density ?? 'comfortable')
+    const generated = [
+      tokenCss(detail.manifest, detail.id),
+      fontFaceCss(detail.manifest, detail.id),
+      backgroundCss(detail.manifest, detail.id),
+    ]
+      .filter(Boolean)
+      .join('\n')
+    const { css: cleaned, report } = sanitiseCss(detail.css, { themeId: detail.id })
+    applied = setAdopted([generated, cleaned].filter(Boolean))
+    for (const [name, value] of Object.entries(attributes)) root.setAttribute(name, value)
+    if (contrastFallback) root.setAttribute('data-contrast-fallback', '')
+    return {
+      report,
+      contrastFallback,
+      cache: {
+        attributes: {
+          ...attributes,
+          'data-pack': 'score',
+          'data-layout': root.getAttribute('data-layout') ?? 'top',
+          'data-density': root.getAttribute('data-density') ?? 'comfortable',
+          ...(contrastFallback ? { 'data-contrast-fallback': '' } : {}),
+        },
+        css: generated,
+      },
+    }
+  } catch (error) {
+    clearLook()
+    throw error
+  }
+}
+
+/** The sheets the engine added, for the guard that temporarily lifts them (themes/guard.ts). */
+export function appliedThemeSheets(): readonly CSSStyleSheet[] {
+  return applied.sheets
+}
+export function appliedThemeElements(): readonly HTMLStyleElement[] {
+  return applied.fallbackElements
+}
