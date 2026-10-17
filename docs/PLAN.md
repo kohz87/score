@@ -409,6 +409,8 @@ Agent tool card in Chat, Flow and Watch. Done when: the real captured turn repla
 **8.8 Role and personality for coding agents** · (owner 2026-10-17; decision 94; brief docs/briefs/8.8-coding-personality.md)
 role + "Personality and instructions" stored in Score, handed to the CLI each session (Claude Code via
 `--append-system-prompt-file`, Codex/Antigravity as the session's opening instructions); nothing written to the workspace.
+**8.9 Agent page cleanup** · (owner 2026-10-17; decision 97; brief docs/briefs/8.9-agent-page.md) one layout for Hermes
+and coding agents following docs/design/team.png: header actions, 3-column grid, capped lists, coding cards edited in place.
 
 ## Phase 9: Themes and the Customizer (owner 2026-10-17; design docs/briefs/9-themes.md; decision 90)
 
