@@ -12,6 +12,7 @@ import {
   WorkflowVersionSchema,
   type GateDecision,
   type LimitsDecision,
+  type QuotaDecision,
   type RunControl,
   type WaiverDecision,
   type AbandonDecision,
@@ -269,6 +270,10 @@ export function useWorkflowRunActions(id: string) {
     })),
     policyRemap: useAction<{ nodeId: string; body: WorkflowPolicyRemapDecision }>((v) => ({
       path: `nodes/${encodeURIComponent(v.nodeId)}/policy-remap`,
+      body: v.body,
+    })),
+    quota: useAction<{ nodeId: string; body: QuotaDecision }>((v) => ({
+      path: `nodes/${encodeURIComponent(v.nodeId)}/quota`,
       body: v.body,
     })),
     tryAgain: useAction<{ nodeId: string; body: WorkflowTryAgainDecision }>((v) => ({

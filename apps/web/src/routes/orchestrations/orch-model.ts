@@ -8,6 +8,7 @@ import type {
   StepView,
 } from '@score/contract'
 import type { RunCoding } from './CodingCards.tsx'
+import { heldCaption, heldNeedsText } from './quota-text.ts'
 
 // Pure model of the orchestration pages: how a step looks, which graph the diagram draws, which events move a dot,
 // how the live log is filtered and what the diagram shows at a scrubbed time of the replay. No React, no DOM.
@@ -124,6 +125,8 @@ export function buildGraph(
       kind: 'step' as const,
       agentId: step.agentId,
       label: step.id,
+      // A step held for a low limit says so on the diagram (8.6).
+      ...(step.quotaHold ? { caption: heldCaption(step.quotaHold) } : {}),
     })),
   ]
   const edges: GraphEdge[] = []
@@ -406,6 +409,8 @@ export function needsYouText(item: NeedsYou): string {
       return `${item.agentId}’s settings changed: decide whether ${item.stepId} uses the new ones`
     case 'coding_limit':
       return `${item.stepId} is waiting: the run reached its limit of coding steps`
+    case 'quota_low':
+      return heldNeedsText(item.stepId, item.agentId)
   }
 }
 
@@ -469,12 +474,16 @@ export const readinessText: Record<WorkerReadiness, string> = {
  * An orchestration's `coding` block in the shape the shared coding cards read (its limit is called `stepLimit` there;
  * a workflow calls it `codingSteps`).
  */
-export function orchCoding(coding: OrchestrationDetail['coding']): RunCoding | undefined {
+export function orchCoding(
+  coding: OrchestrationDetail['coding'],
+  quotaFloorPercent?: number | null,
+): RunCoding | undefined {
   return coding
     ? {
         workers: coding.workers,
         codingSteps: coding.stepLimit,
         acceptedUnknownCost: coding.acceptedUnknownCost,
+        quotaFloorPercent: quotaFloorPercent ?? null,
       }
     : undefined
 }

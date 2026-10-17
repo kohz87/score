@@ -1,4 +1,5 @@
 import {
+  DEFAULT_QUOTA_FLOOR_PERCENT,
   CodingPermissionSchema,
   CodingQuotaSchema,
   CodingRuntimeSchema,
@@ -21,6 +22,7 @@ const RowSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,
   confirmed_version: z.string().nullable(),
+  quota_floor_percent: z.int().min(0).max(50),
   created_at: z.iso.datetime(),
   removed_at: z.string().nullable(),
 })
@@ -34,6 +36,7 @@ export interface StoredCodingAgent {
   model: string | null
   style: { color: string; shape: z.infer<typeof ShapeSchema> }
   confirmedVersion: string | null
+  quotaFloorPercent: number
   createdAt: string
   removedAt: string | null
 }
@@ -49,6 +52,7 @@ const toAgent = (value: unknown): StoredCodingAgent => {
     model: row.model,
     style: { color: row.color, shape: row.shape },
     confirmedVersion: row.confirmed_version,
+    quotaFloorPercent: row.quota_floor_percent,
     createdAt: row.created_at,
     removedAt: row.removed_at,
   }
@@ -79,12 +83,14 @@ export function isCodingAgent(sqlite: DatabaseSync, id: string): boolean {
 }
 export function insertCodingAgent(
   sqlite: DatabaseSync,
-  agent: Omit<StoredCodingAgent, 'confirmedVersion' | 'removedAt'>,
+  agent: Omit<StoredCodingAgent, 'confirmedVersion' | 'removedAt' | 'quotaFloorPercent'> & {
+    quotaFloorPercent?: number
+  },
 ): void {
   sqlite
     .prepare(
-      `INSERT INTO coding_agents (id, name, role, runtime, workspace, permission, model, color, shape, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO coding_agents (id, name, role, runtime, workspace, permission, model, color, shape, created_at, quota_floor_percent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       agent.id,
@@ -97,6 +103,7 @@ export function insertCodingAgent(
       agent.style.color,
       agent.style.shape,
       agent.createdAt,
+      agent.quotaFloorPercent ?? DEFAULT_QUOTA_FLOOR_PERCENT,
     )
 }
 export function updateCodingAgent(
@@ -105,7 +112,13 @@ export function updateCodingAgent(
   patch: Partial<
     Pick<
       StoredCodingAgent,
-      'name' | 'role' | 'permission' | 'model' | 'workspace' | 'confirmedVersion'
+      | 'name'
+      | 'role'
+      | 'permission'
+      | 'model'
+      | 'workspace'
+      | 'confirmedVersion'
+      | 'quotaFloorPercent'
     >
   >,
 ): void {
@@ -116,6 +129,7 @@ export function updateCodingAgent(
     model: 'model',
     workspace: 'workspace',
     confirmedVersion: 'confirmed_version',
+    quotaFloorPercent: 'quota_floor_percent',
   }
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue

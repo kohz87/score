@@ -9,6 +9,7 @@ import { fetchPreflight, type DecisionActions, type RunActions } from './orchest
 import {
   CodingLimitCard,
   PolicyChangedCard,
+  QuotaLowCard,
   type PreflightWorker,
   type RunCoding,
 } from './CodingCards.tsx'
@@ -202,12 +203,19 @@ export function LimitsCard({
 }) {
   const [budget, setBudget] = useState('')
   const [deadline, setDeadline] = useState('')
+  // 8.6: blank leaves the floor as it is; a number from 0 to 50 sets this run's floor for every coding agent.
+  const [floor, setFloor] = useState('')
+  const floorValue = Number(floor)
+  const floorGiven = floor.trim() !== ''
+  const floorValid =
+    !floorGiven || (Number.isInteger(floorValue) && floorValue >= 0 && floorValue <= 50)
   const apply = () => {
     const raised = Number(budget)
     actions.limits.mutate({
       orchestrationRevision: run.revision,
       ...(budget !== '' && raised > 0 ? { budgetUsd: raised } : {}),
       ...(deadline !== '' ? { deadlineAt: new Date(deadline).toISOString() } : {}),
+      ...(floorGiven && floorValid ? { quotaFloorPercent: floorValue } : {}),
     })
   }
   return (
@@ -240,12 +248,35 @@ export function LimitsCard({
             onChange={(event) => setDeadline(event.target.value)}
           />
         </label>
+        {coding && (
+          <label className="orch-field">
+            <span>
+              Quota floor (%){' '}
+              {coding.quotaFloorPercent === null || coding.quotaFloorPercent === undefined
+                ? '(each agent’s own now)'
+                : `(${coding.quotaFloorPercent}% now)`}
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={50}
+              inputMode="numeric"
+              value={floor}
+              aria-invalid={!floorValid}
+              onChange={(event) => setFloor(event.target.value)}
+            />
+          </label>
+        )}
       </div>
       <div className="orch-actions">
         <button
           type="button"
           className="orch-primary"
-          disabled={actions.limits.isPending || (budget === '' && deadline === '')}
+          disabled={
+            actions.limits.isPending ||
+            !floorValid ||
+            (budget === '' && deadline === '' && !floorGiven)
+          }
           onClick={apply}
         >
           Apply and continue
@@ -487,7 +518,7 @@ export function RunNeeds({
       ),
     [leadAgentId],
   )
-  const coding = orchCoding(run.coding)
+  const coding = orchCoding(run.coding, run.quotaFloorPercent)
   const openGates = new Set(
     run.needsYou.flatMap((item) => (item.kind === 'gate' ? [item.gateId] : [])),
   )
@@ -592,6 +623,24 @@ export function RunNeeds({
                       ...decision,
                       orchestrationRevision: run.revision,
                     },
+                  })
+                }
+              />
+            )
+          case 'quota_low':
+            return (
+              <QuotaLowCard
+                key={`ql${item.stepId}`}
+                arrivalKey={item.stepId}
+                what={item.stepId}
+                hold={item}
+                agents={agents}
+                pending={actions.quota.isPending}
+                error={actions.quota.error}
+                onAnswer={(answer) =>
+                  actions.quota.mutate({
+                    stepId: item.stepId,
+                    body: { answer, orchestrationRevision: run.revision },
                   })
                 }
               />

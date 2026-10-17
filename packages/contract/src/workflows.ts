@@ -13,10 +13,12 @@ import {
   PauseReasonSchema,
   PolicyIdSchema,
   PreflightCheckSchema,
+  type QuotaDecision,
   StepViewSchema,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_LIMITS,
 } from './orchestration.ts'
+import { QuotaFloorSchema } from './coding.ts'
 import { AgentIdSchema } from './types.ts'
 
 // Contract §15 "Workflows" (PLAN 7.1a; design docs/briefs/7.1-workflow-builder.md v8 .. v8.3). A workflow run IS an
@@ -454,6 +456,8 @@ export const WaitingForSchema = z.enum([
   'coding_settings',
   'coding_limit',
   'held_back',
+  // 8.6: the step's coding agent is below its quota floor (the step stays queued and the person is asked).
+  'quota_low',
   // A queued coding step is parked because the run's room for unsent coding inputs is used up (computed, never stored).
   'coding_room',
 ])
@@ -639,6 +643,16 @@ export const WorkflowNeedsYouSchema = z.discriminatedUnion('kind', [
     used: z.int().nonnegative(),
     limit: z.int().positive(),
   }),
+  /** 8.6: a coding step is held because its agent has less than its quota floor left. */
+  z.object({
+    kind: z.literal('quota_low'),
+    nodeId: NodeIdSchema,
+    agentId: AgentIdSchema,
+    window: z.enum(['5 hours', 'week']),
+    group: z.string().nullable(),
+    leftPercent: z.number().min(0).max(100),
+    resetsAt: z.iso.datetime(),
+  }),
   /** A coding step was prepared 20 times and never started: Try again renews it (bounded), or Stop the run. */
   z.object({ kind: z.literal('coding_held_back'), nodeId: NodeIdSchema }),
   /** What a coding step was going to read was withdrawn before it started: re-run the upstream step or skip. */
@@ -716,6 +730,8 @@ export const WorkflowCodingBlockSchema = z.object({
   acceptedUnknownCost: z.array(CostSourceSchema),
   /** `continue` = every source's unknown cost is accepted; `pause` = only `acceptedUnknownCost` is. */
   unknownSpend: z.enum(['pause', 'continue']),
+  /** 8.6: the run's quota floor; null = each coding agent's own. */
+  quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
 })
 export type WorkflowCodingBlock = z.infer<typeof WorkflowCodingBlockSchema>
 
@@ -919,6 +935,8 @@ export const WorkflowRunCreateSchema = z
     acceptUnknownCost: z.array(CostSourceSchema).max(3).optional(),
     /** How many coding launches the run may release (default: the coding step nodes × their tries, at most 100). */
     codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
+    /** 8.6: the quota floor for every coding agent of this run; omitted = each agent's own floor. */
+    quotaFloorPercent: QuotaFloorSchema.optional(),
   })
   .strict()
   .refine(
@@ -941,6 +959,9 @@ const revision = z.int().positive()
 
 /** `POST /api/workflow-runs/:id/gates/:gateId/decision`: approve → `ok` token; reject → `rejected` token or stop. */
 export type WorkflowGateDecision = GateDecision
+
+/** `POST /api/workflow-runs/:id/nodes/:nodeId/quota`: the answer to a held coding step (same body as an orchestration step's). */
+export type WorkflowQuotaDecision = QuotaDecision
 
 /** `POST /api/workflow-runs/:id/nodes/:nodeId/retry`: only for an `unresolved` node with attempts left. */
 export const WorkflowRetryDecisionSchema = z

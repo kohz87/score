@@ -102,6 +102,7 @@ test('Release: shown only for groups Score can’t attribute, posts once and nam
     model: null,
     style: { color: '#6B4EFF', shape: 'hexagon' },
     quota: 'q',
+    quotaFloorPercent: 10,
     cli: { state: 'ready', version: '1.0.0', testedVersions: ['1.0.0'], confirmed: false },
     heldGroups: [{ runId: 'cr_1', pgid: 4242, canRelease }],
     createdAt: '2026-10-11T00:00:00.000Z',
@@ -161,6 +162,7 @@ test('Release: a supervised run is named by its service, not by a process group'
               model: null,
               style: { color: '#6B4EFF', shape: 'hexagon' },
               quota: 'q',
+              quotaFloorPercent: 10,
               cli: {
                 state: 'ready',
                 version: '1.0.0',
@@ -263,4 +265,58 @@ test('Backend note: a paused installation says why, offers Check again and makes
   expect(paragraph.getAttribute('data-backend')).toBe('paused')
   expect(screen.queryByText(/the service stops this agent/)).toBeNull()
   expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy()
+})
+
+test('the quota floor field: "stop using this agent in runs below N%", saved with the agent (PLAN 8.6)', async () => {
+  const { CodingOverview } = await import('./CodingAgent.tsx')
+  const agent = {
+    id: 'coder',
+    name: 'Coder',
+    role: '',
+    runtime: 'claude-code',
+    workspace: '/w',
+    permission: 'workspace-write',
+    model: null,
+    style: { color: '#6B4EFF', shape: 'hexagon' },
+    quota: 'q',
+    quotaFloorPercent: 10,
+    cli: { state: 'ready', version: '1.0.0', testedVersions: ['1.0.0'], confirmed: false },
+    heldGroups: [],
+    createdAt: '2026-10-11T00:00:00.000Z',
+  }
+  const patches: Record<string, unknown>[] = []
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
+    if (init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>
+      patches.push(body)
+      return json({ ...agent, quotaFloorPercent: body.quotaFloorPercent })
+    }
+    if (path.endsWith('/quota')) return json({ quota: null })
+    if (path.includes('/models')) return json({ models: [], source: 'none' })
+    if (path.endsWith('/backend'))
+      return json({ kind: 'unit', note: '', checks: [], checkedAt: '2026-10-11T00:00:00.000Z' })
+    if (path.endsWith('/runtimes')) return json({ items: runtimes })
+    return json({ items: [agent] })
+  })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <CodingOverview agent={{ id: 'coder' } as never} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  const field = (await screen.findByLabelText(
+    /Stop using this agent in runs when a limit is below/,
+  )) as HTMLInputElement
+  expect(field.value).toBe('10')
+  expect(screen.getByText(/Enter 0 to turn this off/)).toBeTruthy()
+  fireEvent.change(field, { target: { value: '60' } })
+  expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.change(field, { target: { value: '25' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(patches).toHaveLength(1))
+  expect(patches[0]).toMatchObject({ quotaFloorPercent: 25 })
 })

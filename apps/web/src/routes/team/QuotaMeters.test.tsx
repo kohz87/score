@@ -30,7 +30,10 @@ test('a meter shows "% left" from the used share, with the reset time and "as of
   expect(fiveHours.getAttribute('aria-valuetext')).toBe('94% left')
   expect(screen.getByText('94% left')).toBeDefined()
   expect(screen.getByText('22% left')).toBeDefined()
-  expect(screen.getByText(/^resets (1:40 pm|\d+ \w+, 1:40 pm)$/)).toBeDefined()
+  // Today's reset shows the time alone; another day shows its date first (the test's own date moves on).
+  expect(
+    screen.getAllByText(/^resets (1:40 pm|[A-Za-z]+ \d+, 1:40 pm|\d+ [A-Za-z]+, 1:40 pm)$/),
+  ).toHaveLength(2)
   expect(screen.getByText(/^As of /)).toBeDefined()
 })
 
@@ -87,4 +90,38 @@ test('helpers: left share is clamped, the compact line and relative times', () =
   const now = new Date('2026-10-16T06:00:00.000Z')
   expect(seenText('2026-10-16T05:48:00.000Z', now)).toBe('12 min ago')
   expect(seenText('2026-10-16T05:59:50.000Z', now)).toBe('just now')
+})
+
+test('the floor is marked on each bar and explained once (PLAN 8.6)', () => {
+  const { container } = render(
+    <QuotaMeters
+      runtime="claude-code"
+      floor={10}
+      quota={quota([
+        { name: '5 hours', group: null, usedPercent: 94, resetsAt: '2099-01-01T05:40:00.000Z' },
+        { name: 'week', group: null, usedPercent: 20, resetsAt: '2099-01-01T05:40:00.000Z' },
+      ])}
+    />,
+  )
+  const marks = container.querySelectorAll('.quota-floor')
+  expect(marks).toHaveLength(2)
+  expect((marks[0] as HTMLElement).style.left).toBe('10%')
+  expect(screen.getByRole('meter', { name: '5 hours left' }).getAttribute('aria-valuetext')).toBe(
+    '6% left, runs stop using this agent below 10%',
+  )
+  expect(screen.getByText(/runs stop giving this agent new steps below 10% left/)).toBeDefined()
+})
+
+test('with the floor off there is no mark and no extra line', () => {
+  const { container } = render(
+    <QuotaMeters
+      runtime="claude-code"
+      floor={0}
+      quota={quota([
+        { name: '5 hours', group: null, usedPercent: 94, resetsAt: '2099-01-01T05:40:00.000Z' },
+      ])}
+    />,
+  )
+  expect(container.querySelectorAll('.quota-floor')).toHaveLength(0)
+  expect(screen.queryByText(/below 0%/)).toBeNull()
 })

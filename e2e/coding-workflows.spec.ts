@@ -275,6 +275,44 @@ test.describe('a coding step in the live workflow view', () => {
     await page.evaluate(() => document.fonts.ready)
   }
 
+  test('8.6: a coding step below its agent’s limit floor waits, and the card sends the three answers', async ({
+    page,
+  }) => {
+    const posted: { url: string; body: unknown }[] = []
+    await liveView(
+      page,
+      codingRunSnapshot(
+        [
+          {
+            kind: 'quota_low',
+            nodeId: 'draft',
+            agentId: 'coder-a',
+            window: '5 hours',
+            group: null,
+            leftPercent: 6,
+            resetsAt: '2026-10-08T12:40:00.000Z',
+          },
+        ],
+        { waitingFor: 'quota_low' },
+      ),
+      posted,
+    )
+    const card = page.getByRole('region', { name: 'coder-a’s limit is low' })
+    await expect(card).toContainText('Draft the notes is held:')
+    await expect(card).toContainText('has 6% of its 5-hour limit left')
+    for (const name of ['Wait until it resets', 'Use it anyway', 'Stop the run'])
+      await card.getByRole('button', { name }).click()
+    await expect.poll(() => posted.length).toBe(3)
+    expect(posted.map((p) => p.url)).toEqual(
+      Array(3).fill('/api/workflow-runs/wfrun-1/nodes/draft/quota'),
+    )
+    expect(posted.map((p) => (p.body as { answer: string }).answer)).toEqual([
+      'wait',
+      'use_anyway',
+      'stop',
+    ])
+  })
+
   test('the step names its program; new settings and the step limit are decided from the Needs-you cards', async ({
     page,
   }) => {

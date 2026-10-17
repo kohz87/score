@@ -66,6 +66,7 @@ import {
 import type { CodingEvent } from './types.ts'
 import type { OrchestrationOwner } from '../../domain/orchestration/owner.ts'
 import type { CodingWorkerFacts } from '../../domain/orchestration/supported-agents.ts'
+import type { QuotaSource } from '../../domain/orchestration/quota-guard.ts'
 import type { BackendStatus, UnitBackend } from './unit-backend.ts'
 import { turnWitnessed } from '../../domain/orchestration/coding-checkpoint.ts'
 
@@ -263,6 +264,7 @@ export class CodingRuntime {
       model: agent.model,
       style: agent.style,
       quota: driver.quota,
+      quotaFloorPercent: agent.quotaFloorPercent,
       cli: {
         state: cli.state,
         version: cli.version,
@@ -381,6 +383,23 @@ export class CodingRuntime {
   }
 
   private readonly usageCache = new Map<string, { at: number; value: CodingUsage }>()
+
+  /**
+   * What the quota guard reads (PLAN 8.6): Antigravity's cached `/usage`, refreshed when older than a minute. A reading
+   * that couldn't be refreshed for two minutes is dropped, so a failed read never holds a step.
+   */
+  quotaSource(): QuotaSource {
+    return {
+      antigravity: () => {
+        const cached = this.usageCache.get('antigravity')
+        return cached && Date.now() - cached.at < 120_000 ? quotaFromUsage(cached.value) : null
+      },
+      refresh: async () => {
+        if (!this.agents().some((agent) => agent.runtime === 'antigravity')) return
+        await this.usage('antigravity').catch(() => undefined)
+      },
+    }
+  }
 
   /**
    * The CLI's own quota (Antigravity `/usage`): one short process, no model turn, cached for a minute. The tested
@@ -517,6 +536,7 @@ export class CodingRuntime {
       agent: (id) => this.agents().find((agent) => agent.id === id),
       report: (id) => this.workerReport(id),
       checkPolicy: (id, policy) => this.checkWorkerPolicy(id, policy),
+      quota: this.quotaSource(),
     }
   }
 

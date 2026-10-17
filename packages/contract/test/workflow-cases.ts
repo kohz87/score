@@ -184,6 +184,15 @@ const needsYou = [
     reach: 'Reads and edits files in /work.',
   },
   { kind: 'coding_limit', used: 4, limit: 4 },
+  {
+    kind: 'quota_low',
+    nodeId: 'draft',
+    agentId: 'coder',
+    window: '5 hours',
+    group: null,
+    leftPercent: 6,
+    resetsAt: '2026-10-17T13:40:00.000Z',
+  },
   { kind: 'coding_held_back', nodeId: 'draft' },
   { kind: 'node_inputs_withdrawn', nodeId: 'draft' },
 ] as const

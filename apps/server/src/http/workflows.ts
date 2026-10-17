@@ -2,6 +2,7 @@ import {
   AbandonDecisionSchema,
   GateDecisionSchema,
   LimitsDecisionSchema,
+  QuotaDecisionSchema,
   RunControlSchema,
   WaiverDecisionSchema,
   type WorkflowDefinition,
@@ -190,6 +191,10 @@ export function registerWorkflowRoutes(
       nodeId,
       WorkflowPolicyRemapDecisionSchema.parse(request.body),
     )
+  })
+  app.post('/api/workflow-runs/:id/nodes/:nodeId/quota', mutation, async (request) => {
+    const { id, nodeId } = NodeParams.parse(request.params)
+    return orchestrator.wfQuotaDecision(id, nodeId, QuotaDecisionSchema.parse(request.body))
   })
   app.post('/api/workflow-runs/:id/nodes/:nodeId/try-again', mutation, async (request) => {
     const { id, nodeId } = NodeParams.parse(request.params)

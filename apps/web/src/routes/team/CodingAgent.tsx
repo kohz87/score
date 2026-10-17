@@ -355,7 +355,7 @@ export function CodingOverview({ agent }: { agent: AgentDetail }) {
     )
   return (
     <CodingSettings
-      key={`${coding.permission}:${coding.model}:${coding.cli.confirmed}:${coding.heldGroups.length}`}
+      key={`${coding.permission}:${coding.model}:${coding.quotaFloorPercent}:${coding.cli.confirmed}:${coding.heldGroups.length}`}
       coding={coding}
       onChanged={() => {
         void queryClient.invalidateQueries({ queryKey: ['coding'] })
@@ -389,6 +389,10 @@ function CodingSettings({
   const [permission, setPermission] = useState(coding.permission)
   const [model, setModel] = useState(coding.model ?? '')
   const [password, setPassword] = useState('')
+  const [floor, setFloor] = useState(String(coding.quotaFloorPercent))
+  const floorValue = Number(floor)
+  const floorValid =
+    floor.trim() !== '' && Number.isInteger(floorValue) && floorValue >= 0 && floorValue <= 50
   const runtimes = useQuery(codingRuntimesQuery)
   const unverified =
     runtimes.data?.find((item) => item.runtime === coding.runtime)?.unverifiedPermissions ?? []
@@ -401,6 +405,7 @@ function CodingSettings({
           body: JSON.stringify({
             permission,
             model: model.trim() || null,
+            quotaFloorPercent: floorValue,
             ...(needsPassword ? { password } : {}),
           }),
         }),
@@ -441,7 +446,11 @@ function CodingSettings({
         <div>
           <dt>Limits left</dt>
           <dd>
-            <AgentQuota agentId={coding.id} runtime={coding.runtime} />
+            <AgentQuota
+              agentId={coding.id}
+              runtime={coding.runtime}
+              floor={coding.quotaFloorPercent}
+            />
           </dd>
         </div>
         <div>
@@ -504,6 +513,28 @@ function CodingSettings({
             />
           </label>
         )}
+        <div className="team-quota-floor">
+          <label>
+            Stop using this agent in runs when a limit is below
+            <span className="team-quota-floor-input">
+              <input
+                type="number"
+                min={0}
+                max={50}
+                step={1}
+                inputMode="numeric"
+                value={floor}
+                aria-invalid={!floorValid}
+                onChange={(event) => setFloor(event.target.value)}
+              />
+              <span aria-hidden>%</span>
+            </span>
+          </label>
+          <p className="team-muted">
+            Orchestrations and workflows don’t give it new steps while a limit has less than this
+            left. Steps already running carry on. Enter 0 to turn this off.
+          </p>
+        </div>
         <ReadAccessWarning runtime={coding.runtime} permission={permission} />
         {(save.error || confirm.error || remove.error) && (
           <p role="alert">{(save.error ?? confirm.error ?? remove.error)?.message}</p>
@@ -513,6 +544,7 @@ function CodingSettings({
             className="team-primary"
             disabled={
               save.isPending ||
+              !floorValid ||
               (permission !== coding.permission && unverified.includes(permission))
             }
           >
