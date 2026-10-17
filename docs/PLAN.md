@@ -399,3 +399,27 @@ own model cache `$CODEX_HOME/models_cache.json` (only `models[].slug/display_nam
 supported_reasoning_levels`; nothing else from that file, never `auth.json`); Claude Code from its documented aliases
 (no list command); every list keeps "CLI default" and "Other…" (free text). Lists cached for a few minutes, refreshed on
 open; unknown/unreadable ⇒ free text as today. Builds on 8.1's coding-agent page.
+
+## Phase 9: Themes and the Customizer (owner 2026-10-17; design docs/briefs/9-themes.md; decision 90)
+
+Owner: "like joomla etc cms or wordpress, freely configure the outlook". Declarative theme packages (theme.json + CSS,
+fonts, images; no scripts), a live Customizer, stored in Score and applied everywhere with a per-device override.
+
+**9.1 Theme storage, API, import/export** · Contract §16 + `packages/contract/src/themes.ts` (lead writes the schemas
+first); migration 0071 `themes`; routes per design §5; zip import with the Knowledge import guards; server-side safety
+re-checks (§4.1, §10.2); `look.changed` event. Done when: import/export round-trips the example theme; every rejection in
+§10.4 has a test; `pnpm check`.
+**9.2 Theme engine and safety** · manifest → attributes, token sheet, font faces, theme CSS link; CSS sanitiser;
+protected surfaces with layered `!important`; `?look=safe`, Ctrl+Shift+0, ⌘K entry, `scripts/score look reset`; boot
+cache; per-device override; 8.3 packs as built-in themes. Done when: Score default pixel-identical; a hostile test theme
+(fake Approve overlay, hidden Needs-you, escaped `content`, external `url()`, `!important`) changes nothing protected
+(e2e); escape hatches e2e.
+**9.3 Layout model** · nav top/left/right/launcher, content width, menu order/labels/hidden (Settings never hidden), Now
+card grid, chat bubbles/plain and room-list position, component variants (elevation, surface, border, radius, density),
+user-view overrides. Done when: each option has e2e + visual baselines; phone width works for every nav position.
+**9.4 Customizer** · full-screen live editor per design §8 with save/export/import, drag-and-drop menu and Now cards
+(keyboard alternative), undo/redo, contrast warnings, sanitiser report. Done when: e2e builds a theme from scratch,
+saves, exports, re-imports; a11y checks pass.
+**9.5 Built-in themes and author guide** · three new clearly different themes, `docs/THEMES.md`, example zip. Done
+when: visual baselines for each (light, dark, phone; Now, Chat, Settings, user view); guide examples import cleanly.
+**9.6 Phase gate** · lead review + adversarial review of the safety model; full e2e; release.
