@@ -1,9 +1,10 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router'
+import { useLocation, useParams, useSearchParams } from 'react-router'
 import { agentTint } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery, statusLabels, useAgentDetail } from './team-queries.ts'
 import { AgentOverview } from './AgentOverview.tsx'
+import { ProfileSettings } from './ProfileSettings.tsx'
 import { AgentStylePicker } from './AgentStylePicker.tsx'
 import { RoutinesTab } from './RoutinesTab.tsx'
 import { AgentFiles } from './AgentFiles.tsx'
@@ -17,7 +18,7 @@ import { PluginsTab } from './PluginsTab.tsx'
 import { ChannelsTab } from './ChannelsTab.tsx'
 import { HistoryTab } from './HistoryTab.tsx'
 import { WorkspaceTab } from './WorkspaceTab.tsx'
-import { PopOutButton } from '../pop/PopOutButton.tsx'
+import { AgentHeaderActions } from './AgentHeaderActions.tsx'
 import type { AgentFileName } from './file-queries.ts'
 import { CodingOverview } from './CodingAgent.tsx'
 
@@ -126,15 +127,15 @@ function AgentProfile({ agentId }: { agentId: string }) {
                 : statusLabels[agent.status]}
             {agent.activity && ` · ${agent.activity}`}
           </span>
-          {agent.lifecycle?.state !== 'removed' && agent.served && (
-            <Link className="team-watch-link" to={`/now/watch/${encodeURIComponent(agent.id)}`}>
-              Watch {agent.name} work
-            </Link>
-          )}
-          {agent.lifecycle?.state !== 'removed' && agent.served && (
-            <PopOutButton agentId={agent.id} agentName={agent.name} className="team-popout-link" />
-          )}
         </div>
+        {agent.lifecycle?.state !== 'removed' && (
+          <AgentHeaderActions
+            agentId={agent.id}
+            agentName={agent.name}
+            paused={agent.status === 'paused'}
+            served={agent.served}
+          />
+        )}
       </header>
       {detail.isError && (
         <p role="alert">
@@ -169,7 +170,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
         {tab === 'Overview' && isCoding ? (
           <CodingOverview agent={agent} />
         ) : tab === 'Overview' ? (
-          <>
+          <div className="team-stack">
             <AgentOverview
               agent={agent}
               agents={agents.data ?? []}
@@ -183,7 +184,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
             />
             {/* Settings and the danger zone come after the overview the design shows. */}
             <ProfileSettings key={`${agent.id}:${agent.name}:${agent.role}`} agent={agent} />
-          </>
+          </div>
         ) : tab === 'Routines' ? (
           <RoutinesTab
             key={String(composing)}
@@ -223,4 +224,3 @@ function AgentProfile({ agentId }: { agentId: string }) {
     </div>
   )
 }
-import { ProfileSettings } from './ProfileSettings.tsx'

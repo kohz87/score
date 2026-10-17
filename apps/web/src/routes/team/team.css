@@ -176,14 +176,79 @@
   font-size: 14px;
   font-weight: 600;
 }
-.team-watch-link {
+.team-band .team-status {
+  font-size: 15px;
+}
+
+/* Band actions (design: Message and Pause at the right; Watch and the pop-out window are quieter). */
+.team-band-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+.team-band-main {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+.team-band-primary,
+.team-band-secondary {
+  display: inline-flex;
+  align-items: center;
+  height: 52px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.team-band-primary {
+  padding: 0 24px;
+  border: 1.5px solid var(--team-band-ink);
+  background: var(--team-band-ink);
+  color: var(--team-color);
+}
+.team-band-secondary {
+  padding: 0 22px;
+  border: 1.5px solid var(--team-band-ink);
+  background: transparent;
+  color: var(--team-band-ink);
+  font-size: 15px;
+}
+.team-band-secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.team-band-primary:focus-visible,
+.team-band-secondary:focus-visible,
+.team-band-link:focus-visible,
+.team-band .team-popout-link:focus-visible {
+  outline: 2px solid var(--team-band-ink);
+  outline-offset: 3px;
+}
+.team-band-quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.team-band-link {
   font-size: 14px;
   font-weight: 600;
   color: inherit;
   text-underline-offset: 3px;
 }
-.team-band .team-status {
-  font-size: 15px;
+.team-band .team-popout-link {
+  border: 1.5px solid var(--team-band-ink);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--team-band-ink);
+}
+.team-band .team-band-error {
+  font-size: 14px;
+  text-align: right;
 }
 
 /* Glyph popover */
@@ -272,7 +337,28 @@
   font-weight: 600;
 }
 
-/* Overview cards */
+/* Overview cards: three equal columns, like the design; the same for Hermes and coding agents. */
+.team-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.team-overview-grid > .team-wide {
+  grid-column: 1 / -1;
+}
+.team-section-gap {
+  margin-top: var(--space-4);
+}
+@media (width < 1180px) {
+  .team-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (width < 720px) {
+  .team-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .team-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -298,6 +384,14 @@
   line-height: 1.3;
   letter-spacing: -0.015em;
   font-weight: 500;
+}
+.team-personality-text .team-muted-strong,
+.team-personality-text .coding-instructions p {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  font-weight: 400;
 }
 .team-facts {
   flex: 1 1 240px;
@@ -328,6 +422,34 @@
 .team-facts code {
   font-size: 13px;
   font-weight: 400;
+}
+.team-facts-stacked > div {
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.team-facts-stacked dd {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.team-facts-stacked dd.team-facts-plain {
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+.coding-backend {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  font-weight: 400;
+}
+.coding-backend summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.coding-backend details p {
+  margin: var(--space-1) 0 0;
 }
 .team-model-name {
   font-family: var(--font-heading);
@@ -508,7 +630,14 @@
     border-radius: var(--radius-card);
     padding: 22px var(--space-6);
     gap: var(--space-5);
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+  }
+  .team-band-actions {
+    flex: 1 1 100%;
+    align-items: flex-start;
+  }
+  .team-band-main {
+    justify-content: flex-start;
   }
   .team-style {
     flex: 0 0 88px;
@@ -561,6 +690,10 @@
     height: 36px;
   }
   .team-band-copy {
+    flex: none;
+    width: 100%;
+  }
+  .team-band-actions {
     flex: none;
     width: 100%;
   }
@@ -1183,7 +1316,7 @@ a.team-pill-button {
   border: 1px solid var(--hairline);
   border-radius: var(--radius-16);
   background: var(--subtle);
-  max-height: 320px;
+  max-height: 160px;
   overflow: auto;
 }
 

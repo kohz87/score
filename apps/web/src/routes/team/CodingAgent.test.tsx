@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AddCodingAgentForm } from './CodingAgent.tsx'
@@ -315,6 +315,7 @@ test('the quota floor field: "stop using this agent in runs below N%", saved wit
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  fireEvent.click(await screen.findByRole('button', { name: 'Change access' }))
   const field = (await screen.findByLabelText(
     /Stop using this agent in runs when a limit is below/,
   )) as HTMLInputElement
@@ -456,4 +457,65 @@ test('Add form: the optional role is sent only when filled in', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Add coding agent' }))
   await waitFor(() => expect(posted.length).toBe(1))
   expect(posted[0]).toMatchObject({ id: 'rev', role: 'Reviewer' })
+})
+
+test('the Model and Access cards edit in place and each saves only its own fields', async () => {
+  const { CodingOverview } = await import('./CodingAgent.tsx')
+  let agent = personaAgent({ model: 'sonnet' }) as Record<string, unknown>
+  const patches: Record<string, unknown>[] = []
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>
+      patches.push(body)
+      agent = { ...agent, ...body }
+      return json(agent)
+    }
+    if (path.endsWith('/quota')) return json({ quota: null })
+    if (path.includes('/models')) return json({ models: [], source: 'none' })
+    if (path.endsWith('/backend'))
+      return json({
+        kind: 'unit',
+        note: 'Runs as a service.',
+        checks: [],
+        checkedAt: '2026-10-17T00:00:00.000Z',
+      })
+    if (path.endsWith('/runtimes')) return json({ items: runtimes })
+    return json({ items: [agent] })
+  })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <CodingOverview agent={{ id: 'builder' } as never} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  const model = await screen.findByRole('region', { name: 'Model' })
+  expect(model.textContent).toContain('sonnet')
+  fireEvent.click(within(model).getByRole('button', { name: 'Change model' }))
+  const field = await within(model).findByRole('textbox', { name: /^Model/ })
+  fireEvent.change(field, { target: { value: 'opus' } })
+  fireEvent.click(within(model).getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(patches).toEqual([{ model: 'opus' }]))
+
+  const access = screen.getByRole('region', { name: 'Access' })
+  expect(access.textContent).toContain('Workspace write')
+  fireEvent.click(within(access).getByRole('button', { name: 'Change access' }))
+  fireEvent.click(within(access).getByRole('radio', { name: /Read only/ }))
+  fireEvent.click(within(access).getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(patches).toHaveLength(2))
+  expect(patches[1]).toEqual({ permission: 'read-only', quotaFloorPercent: 10 })
+  await waitFor(() =>
+    expect(screen.getByRole('region', { name: 'Access' }).textContent).toContain('Read only'),
+  )
+  // Cancel leaves the card as it was.
+  fireEvent.click(
+    within(screen.getByRole('region', { name: 'Access' })).getByRole('button', {
+      name: 'Change access',
+    }),
+  )
+  fireEvent.click(
+    within(screen.getByRole('region', { name: 'Access' })).getByRole('button', { name: 'Cancel' }),
+  )
+  expect(patches).toHaveLength(2)
 })
