@@ -46,6 +46,13 @@ const CONTROL_TEXT: Record<string, string> = {
   recovered_unknown: 'After a restart a step run is not confirmed as ended',
 }
 
+interface QuotaHistory {
+  stepId: string
+  agentId: string
+  leftPercent?: number
+  resetsAt?: string
+}
+
 const CAUSE_TEXT: Record<string, string> = {
   step_blocked: 'blocked',
   step_unknown: 'not confirmed as ended',
@@ -246,7 +253,29 @@ export function timelineOf(sqlite: DatabaseSync, o: OrchRow): OrchEvent[] {
   const history = sqlite
     .prepare('SELECT id, kind, detail, at FROM orc_history WHERE orchestration_id = ? ORDER BY id')
     .all(o.id) as { id: number; kind: string; detail: string; at: string }[]
+  const quotaText: Record<string, (detail: QuotaHistory) => string> = {
+    quota_held: (d) =>
+      `${d.stepId} held: limit low (${d.leftPercent}% left, resets ${(d.resetsAt ?? '').replace('T', ' ').slice(0, 16)} UTC)`,
+    quota_override: (d) => `You chose to use ${d.agentId} anyway for ${d.stepId}`,
+    quota_wait: (d) => `You chose to wait until ${d.agentId}'s limit resets for ${d.stepId}`,
+    quota_waited: (d) => `${d.stepId} started after ${d.agentId}'s limit reset`,
+    quota_released: (d) => `${d.stepId} is no longer held: ${d.agentId} has room again`,
+    quota_stopped: (d) => `You stopped the run while ${d.stepId} was held for a low limit`,
+  }
   for (const h of history) {
+    const quota = quotaText[h.kind]
+    if (quota) {
+      const detail = JSON.parse(h.detail) as QuotaHistory
+      add({
+        id: `hist:${h.id}`,
+        at: h.at,
+        kind: 'step_state',
+        stepId: detail.stepId,
+        verdict: h.kind,
+        summary: clip(quota(detail)),
+      })
+      continue
+    }
     if (!(h.kind in CONTROL_TEXT)) continue
     let text = CONTROL_TEXT[h.kind]!
     if (h.kind === 'ended') {

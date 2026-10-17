@@ -136,6 +136,10 @@ describe('at assignment', () => {
     expect(h.cliCalls()).toHaveLength(1)
     expect(holdState()).toBe('override')
     expect(history('quota_override')).toHaveLength(1)
+    // The run's timeline tells the story in plain words.
+    const lines = h.orch.events(id).events.map((event) => event.summary)
+    expect(lines).toContainEqual(expect.stringMatching(/^s1 held: limit low \(6% left, resets /))
+    expect(lines).toContain('You chose to use coder anyway for s1')
     expect(h.errors).toEqual([])
   })
 
