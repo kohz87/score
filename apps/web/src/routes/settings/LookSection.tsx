@@ -143,7 +143,11 @@ function ThemeCard() {
       <div className="look-shared">
         <label>
           Theme for every device
-          <select value={shownShared} onChange={(event) => setSharedChoice(event.target.value)}>
+          <select
+            className="score-select"
+            value={shownShared}
+            onChange={(event) => setSharedChoice(event.target.value)}
+          >
             {look.themes.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -154,6 +158,7 @@ function ThemeCard() {
         <label>
           Colours for every device
           <select
+            className="score-select"
             value={shownMode}
             onChange={(event) => setSharedMode(event.target.value as ThemeChoice)}
           >
