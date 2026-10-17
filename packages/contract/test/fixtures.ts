@@ -365,6 +365,7 @@ export const memory = {
   text: 'Use neutral agent names',
   source: { kind: 'room', roomId: 'room-1' },
 } satisfies Contract.MemorySaved
+export const lookChanged = { activeTheme: 'paper', mode: 'dark' } satisfies Contract.LookSettings
 
 export const event = {
   seq: 1,
