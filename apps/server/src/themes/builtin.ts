@@ -5,7 +5,7 @@ import { BUILTIN_THEME_IDS, THEME_FORMAT, type ThemeManifest } from '@score/cont
 const NAMES: Record<(typeof BUILTIN_THEME_IDS)[number], string> = {
   score: 'Score',
   paper: 'Paper',
-  night: 'Night',
+  night: 'Night shift',
   dense: 'Dense',
 }
 export const BUILTIN_UPDATED_AT = '2026-10-17T00:00:00.000Z'
