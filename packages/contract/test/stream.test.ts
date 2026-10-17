@@ -54,6 +54,7 @@ const eventData = {
   'log.line': f.log,
   'watch.frame': f.watch,
   'memory.saved': f.memory,
+  'look.changed': f.lookChanged,
 } satisfies { [Type in StreamEvent['type']]: Extract<StreamEvent, { type: Type }>['data'] }
 
 describe.each(Object.entries(eventData))('%s', (type, data) => {

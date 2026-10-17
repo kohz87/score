@@ -258,7 +258,20 @@
   text-decoration: none;
   border-radius: var(--radius-8);
 }
+.command-options .command-run {
+  display: block;
+  width: 100%;
+  padding: 10px var(--space-4);
+  color: var(--ink);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-8);
+  cursor: pointer;
+}
 .command-options a:hover,
+.command-options .command-run:hover,
+.command-options .command-run:focus-visible,
 .command-options a:focus-visible {
   background: var(--subtle);
 }

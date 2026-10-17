@@ -138,7 +138,12 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
   const unknown = (data?.goAhead ?? []).filter((rule) => rule.readOnly)
 
   return (
-    <section id="rules" className="settings-card rules-card" aria-labelledby="settings-rules">
+    <section
+      id="rules"
+      className="settings-card rules-card"
+      aria-labelledby="settings-rules"
+      data-protected="block"
+    >
       <div>
         <h2 id="settings-rules">Rules and approvals</h2>
         <p className="rules-lead">

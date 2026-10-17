@@ -159,7 +159,28 @@ const journeyFixture = {
     },
   ],
 }
+// What 9.1's server answers when nothing but the built-in themes exists (API-CONTRACT § 16).
+const builtinTheme = (id: string, name: string) => ({
+  id,
+  name,
+  version: '1.0.0',
+  author: null,
+  description: null,
+  source: 'builtin',
+  updatedAt: '2026-10-17T00:00:00.000Z',
+  hasCss: false,
+})
 export const visualFixtures: Record<string, unknown> = {
+  '/api/themes': {
+    items: [
+      builtinTheme('score', 'Score'),
+      builtinTheme('paper', 'Paper'),
+      builtinTheme('night', 'Night shift'),
+      builtinTheme('dense', 'Dense'),
+    ],
+    active: 'score',
+    mode: 'system',
+  },
   '/api/session/security': {
     passwordSet: false,
     origins: [],

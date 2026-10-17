@@ -1,0 +1,68 @@
+/* Theme variants (PLAN 9.2): the shape settings of a manifest, written once. They act only when a custom theme sets
+   `data-look='custom'` (themes/engine.ts); the built-in packs and the Score default never match, so they stay exactly
+   as they were. Minimal on purpose: cards and panels. 9.3 extends this to every component. */
+:root[data-look='custom'] {
+  --theme-card-shadow: none;
+  --theme-card-border: 0 solid transparent;
+}
+
+/* Corners */
+:root[data-look='custom'][data-radius='sharp'] {
+  --radius-xs: 0;
+  --radius-s: 0;
+  --radius-m: 2px;
+  --radius-l: 3px;
+  --radius-card: 4px;
+}
+:root[data-look='custom'][data-radius='round'] {
+  --radius-xs: 8px;
+  --radius-s: 10px;
+  --radius-m: 18px;
+  --radius-l: 26px;
+  --radius-card: 36px;
+}
+
+/* Spacing */
+:root[data-look='custom'][data-density='compact'] {
+  --density: 0.85;
+}
+:root[data-look='custom'][data-density='airy'] {
+  --density: 1.2;
+}
+
+/* Cards and panels */
+:root[data-look='custom'][data-elevation='flat'] {
+  --theme-card-shadow: none;
+}
+:root[data-look='custom'][data-elevation='raised'] {
+  --theme-card-shadow: 0 2px 8px rgb(var(--shadow-rgb) / 12%);
+}
+:root[data-look='custom'][data-elevation='floating'] {
+  --theme-card-shadow: 0 14px 36px rgb(var(--shadow-rgb) / 20%);
+}
+:root[data-look='custom'][data-border='none'] {
+  --theme-card-border: 0 solid transparent;
+}
+:root[data-look='custom'][data-border='hairline'] {
+  --theme-card-border: 1px solid var(--hairline);
+}
+:root[data-look='custom'][data-border='strong'] {
+  --theme-card-border: 2px solid var(--line-strong);
+}
+:root[data-look='custom'][data-elevation]
+  :is(.now-card, .settings-card, .team-card, .reports-card, .pair-card, .tasks-board):not(
+    [data-protected]
+  ) {
+  box-shadow: var(--theme-card-shadow);
+}
+:root[data-look='custom'][data-border]
+  :is(.now-card, .settings-card, .team-card, .reports-card, .pair-card, .tasks-board):not(
+    [data-protected]
+  ) {
+  border: var(--theme-card-border);
+}
+:root[data-look='custom'][data-surface='glass']
+  :is(.now-card, .settings-card, .team-card, .reports-card, .pair-card):not([data-protected]) {
+  background: color-mix(in srgb, var(--card) 62%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+}

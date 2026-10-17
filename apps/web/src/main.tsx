@@ -12,6 +12,8 @@ import './styles/packs/paper.css'
 import './styles/packs/night.css'
 import './styles/packs/dense.css'
 import './styles/select.css'
+import './styles/protected.css'
+import './themes/variants.css'
 import './shell/shell.css'
 
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -23,13 +25,11 @@ import { createQueryClient, StreamContext } from './data/query-client.ts'
 import { createStreamClient } from './data/stream.ts'
 import { createStreamQueryRegistry } from './data/resync.ts'
 import { clearBrowserSession } from './data/session.ts'
-import { applyPack, readPackId } from './data/pack.ts'
 import { applyTheme, readTheme } from './data/theme.ts'
-import { findPack } from './styles/packs.ts'
+import { LookRuntime } from './themes/LookRuntime.tsx'
 import { registerServiceWorker } from './pwa/service-worker.ts'
 
 applyTheme(readTheme())
-applyPack(findPack(readPackId()))
 registerServiceWorker()
 
 const queryClient = createQueryClient()
@@ -55,6 +55,7 @@ createRoot(root).render(
     <QueryClientProvider client={queryClient}>
       <StreamContext value={streamContext}>
         <App router={router} />
+        <LookRuntime router={router} />
       </StreamContext>
     </QueryClientProvider>
   </StrictMode>,

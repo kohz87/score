@@ -4,6 +4,18 @@ import { Link, useNavigate } from 'react-router'
 import { SearchSnippet } from '../components/SearchSnippet.tsx'
 import { messageHref, useMessageSearch } from '../data/message-search.ts'
 import { destinations } from './destinations.ts'
+import { clearDeviceLook, lookStore } from '../themes/look-store.ts'
+
+// Commands that run something instead of opening a page. "Reset look" is one of the ways back from a theme.
+const commands = [
+  {
+    title: 'Reset look on this device',
+    run: () => {
+      clearDeviceLook()
+      lookStore.setFailure(null)
+    },
+  },
+]
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [search, setSearch] = useState('')
@@ -12,6 +24,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const titleId = useId()
   const navigate = useNavigate()
   const options = destinations.filter(({ title }) =>
+    title.toLowerCase().includes(search.trim().toLowerCase()),
+  )
+  const matchingCommands = commands.filter(({ title }) =>
     title.toLowerCase().includes(search.trim().toLowerCase()),
   )
   const messages = useMessageSearch(search, 8)
@@ -36,6 +51,15 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     } else if (event.key === 'Enter' && event.target === inputRef.current && options[0]) {
       event.preventDefault()
       void navigate(options[0].path)
+      onClose()
+    } else if (
+      event.key === 'Enter' &&
+      event.target === inputRef.current &&
+      matchingCommands[0] &&
+      search.trim()
+    ) {
+      event.preventDefault()
+      matchingCommands[0].run()
       onClose()
     }
   }
@@ -83,7 +107,30 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             </li>
           ))}
         </ul>
-        {options.length === 0 && !messages.data?.length && <p>No destinations found.</p>}
+        {matchingCommands.length > 0 && search.trim() && (
+          <section aria-label="Commands">
+            <h3 className="command-section">Commands</h3>
+            <ul className="command-options">
+              {matchingCommands.map((command) => (
+                <li key={command.title}>
+                  <button
+                    type="button"
+                    className="command-run"
+                    onClick={() => {
+                      command.run()
+                      onClose()
+                    }}
+                  >
+                    {command.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {options.length === 0 && matchingCommands.length === 0 && !messages.data?.length && (
+          <p>No destinations found.</p>
+        )}
         {messages.data && messages.data.length > 0 && (
           <section aria-label="Messages">
             <h3 className="command-section">Messages</h3>

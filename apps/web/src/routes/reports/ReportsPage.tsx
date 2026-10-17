@@ -237,7 +237,11 @@ function Approvals({ approvals }: { approvals: Reports['approvals'] }) {
   const { asked, approved, denied } = approvals
   const share = (n: number) => (asked > 0 ? (n / asked) * 100 : 0)
   return (
-    <section className="reports-approvals" aria-labelledby="reports-approvals-title">
+    <section
+      className="reports-approvals"
+      aria-labelledby="reports-approvals-title"
+      data-protected="block"
+    >
       <h2 id="reports-approvals-title">Your approvals</h2>
       <div className="reports-approvals__stats">
         <div className="reports-approvals__stat">

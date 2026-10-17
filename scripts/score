@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Score launcher: score start|stop|status|logs|pair|password|tls. State lives in $SCORE_HOME (default ~/.score).
+# Score launcher: score start|stop|status|logs|pair|password|look|tls. State lives in $SCORE_HOME (default ~/.score).
 set -euo pipefail
 
 script="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -17,7 +17,7 @@ port="${SCORE_PORT:-8740}"
 host="${SCORE_HOST:-127.0.0.1}"
 
 usage() {
-  echo "Usage: score start|stop|status|logs [-f]|pair|password|restore <backup>|installation status|confirm-move|confirm-copy|reset-history|tls [--new-ca]|tailscale" >&2
+  echo "Usage: score start|stop|status|logs [-f]|pair|password|look reset|restore <backup>|installation status|confirm-move|confirm-copy|reset-history|tls [--new-ca]|tailscale" >&2
   exit 2
 }
 
@@ -308,6 +308,8 @@ case "${1:-}" in
   tls) shift; cmd_tls "${1:-}" ;;
   tailscale) cmd_tailscale ;;
   password) SCORE_HOME="$home" exec node "$root/scripts/set-password.mjs" ;;
+  # 9.1: the way back to the default look if a theme makes Score hard to use (works with Score stopped).
+  look) shift; SCORE_HOME="$home" exec node "$root/scripts/look.mjs" "$@" ;;
   # The only supported way to restore the home (7.5): sets the global admission fence for the next start.
   restore) shift; SCORE_HOME="$home" exec node "$root/scripts/restore.mjs" "$@" ;;
   # 7.7a: tell Score a home at a new path is a moved folder (confirm-move) or a copy (confirm-copy); reset-history starts a

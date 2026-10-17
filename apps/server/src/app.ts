@@ -28,6 +28,7 @@ import { registerTaskRoutes } from './http/tasks.ts'
 import { registerRoutineRoutes } from './http/routines.ts'
 import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
+import { registerThemeRoutes } from './http/themes.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
 import { registerOutsideSessionRoutes } from './http/outside-sessions.ts'
 import { registerShareRoutes } from './http/shares.ts'
@@ -281,6 +282,13 @@ export function buildApp({
     })
   registerRoutineRoutes(app, port, db, clock)
   registerSettingsRoutes(app, port, db, clock)
+  if (db)
+    registerThemeRoutes(app, {
+      db,
+      home: config.home,
+      ...(ingest ? { ingest } : {}),
+      ...(clock ? { clock } : {}),
+    })
   registerCurrencyRoutes(app, db)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {

@@ -4,6 +4,7 @@ exports[`circle-dot matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
   class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
 >
@@ -34,6 +35,7 @@ exports[`cross matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
   class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
 >
@@ -55,6 +57,7 @@ exports[`diamond matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
   class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
 >
@@ -76,6 +79,7 @@ exports[`hexagon matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
   class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
 >
@@ -97,6 +101,7 @@ exports[`pill matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
   class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
 >
@@ -118,6 +123,7 @@ exports[`square matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
   class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
 >
@@ -143,6 +149,7 @@ exports[`star matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
   class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
 >
@@ -164,6 +171,7 @@ exports[`triangle matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
   class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
 >

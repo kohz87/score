@@ -6,12 +6,19 @@ import { useNeedsYou } from './use-needs-you.ts'
 // Only mounted where the query client exists (the pairing page renders outside it).
 export function HermesCheckDot() {
   return needsHermesCheck(useSystemStatus().data) ? (
-    <span className="needs-you-dot" role="img" aria-label="Hermes version needs a check" />
+    <span
+      className="needs-you-dot"
+      role="img"
+      aria-label="Hermes version needs a check"
+      data-protected="block"
+    />
   ) : null
 }
 
 export function NeedsYouDot() {
-  return useNeedsYou() ? <span className="needs-you-dot" role="img" aria-label="Needs you" /> : null
+  return useNeedsYou() ? (
+    <span className="needs-you-dot" role="img" aria-label="Needs you" data-protected="block" />
+  ) : null
 }
 
 export function MainNav() {

@@ -20,6 +20,11 @@ export function useStream() {
   return context.client
 }
 
+/** The stream when one is provided (the look runtime also works in tests without it). */
+export function useOptionalStream() {
+  return useContext(StreamContext)?.client ?? null
+}
+
 export function useStreamQuery<T>(definition: StreamQueryDefinition<T>) {
   const context = useContext(StreamContext)
   if (!context) throw new Error('StreamContext is missing')

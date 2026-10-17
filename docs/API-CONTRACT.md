@@ -296,6 +296,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `log.line`           | `LogLine`                                                                                     | Flow live log, Watch "What she's doing"                  |
 | `watch.frame`        | `WatchFrame`                                                                                  | Watch                                                    |
 | `memory.saved`       | `{ agentIds: AgentId[], text, source: Ref \| null }`                                          | Chat "Learned here", Team memory                         |
+| `look.changed`       | `{ activeTheme, mode }` (`LookSettings`, §16)                                                 | Every open device: switch to the shared look             |
 
 ## 3. System and search
 
