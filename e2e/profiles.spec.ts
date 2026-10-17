@@ -16,8 +16,8 @@ test('add an agent, observe setup and readiness, then export and delete with its
   await expect(dialog.getByRole('heading', { name: 'Review changes' })).toBeVisible()
   await dialog.getByRole('button', { name: 'Create agent' }).click()
   await expect(dialog.getByRole('heading', { name: 'Setting up' })).toBeVisible()
-  await expect(dialog.getByRole('heading', { name: 'Ready', exact: true })).toBeVisible()
-  await dialog.getByRole('link', { name: 'View agent' }).click()
+  await expect(dialog.getByRole('heading', { name: / joined the team$/ })).toBeVisible()
+  await dialog.getByRole('link', { name: /^Open / }).click()
   await expect(
     page.getByRole('heading', { name: 'profile-test-helper', exact: true }),
   ).toBeVisible()

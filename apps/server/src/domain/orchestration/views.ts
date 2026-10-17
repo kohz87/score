@@ -13,6 +13,7 @@ import { workerPoliciesOf } from './coding-policy.ts'
 import { lifecycleOf } from '../agent-lifecycle.ts'
 import { budgetView } from './budget.ts'
 import { isFenced } from './fence.ts'
+import { holdView, holdsOf, type HoldRow } from './quota-guard.ts'
 import {
   attemptsOf,
   gatesOf,
@@ -123,6 +124,23 @@ export function needsYouOf(
       else if (step.disposition === 'coding_limit')
         result.push({ kind: 'coding_limit', stepId: step.id })
     }
+    // 8.6: a step held because its coding agent is below its quota floor asks for one of three answers. A hold the
+    // person already answered (waiting, override) asks nothing.
+    const holds = holdsOf(sqlite, o.id)
+    for (const step of stepsOf(sqlite, o.id)) {
+      const hold = holds.find((row) => row.step_id === step.id)
+      if (!hold || hold.state !== 'held' || !['queued', 'pending_gate'].includes(step.status))
+        continue
+      result.push({
+        kind: 'quota_low',
+        stepId: step.id,
+        agentId: hold.agent_id,
+        window: hold.window,
+        group: hold.group_name,
+        leftPercent: hold.left_percent,
+        resetsAt: hold.resets_at,
+      })
+    }
     const mapped = sqlite
       .prepare(
         'SELECT agent_id, role, incarnation FROM orc_agent_map WHERE orchestration_id = ? ORDER BY role DESC, agent_id',
@@ -212,7 +230,12 @@ export function gateView(g: GateRow): GateView {
   }
 }
 
-export const stepViewOf = (s: StepRow, gates: GateRow[], attempts: AttemptRow[]): StepView => ({
+export const stepViewOf = (
+  s: StepRow,
+  gates: GateRow[],
+  attempts: AttemptRow[],
+  holds: HoldRow[] = [],
+): StepView => ({
   id: s.id,
   agentId: s.agent_id,
   instruction: s.instruction,
@@ -227,7 +250,15 @@ export const stepViewOf = (s: StepRow, gates: GateRow[], attempts: AttemptRow[])
   attemptId: attempts.findLast((a) => a.step_id === s.id)?.id ?? null,
   createdAt: s.created_at,
   updatedAt: s.updated_at,
+  quotaHold: quotaHoldOf(s, holds),
 })
+
+/** A step that hasn't started and has a hold row shows it; a started or finished step never does. */
+function quotaHoldOf(s: StepRow, holds: HoldRow[]): StepView['quotaHold'] {
+  if (!['queued', 'pending_gate'].includes(s.status)) return null
+  const row = holds.find((hold) => hold.step_id === s.id)
+  return row ? holdView(row) : null
+}
 
 export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail {
   const steps = stepsOf(sqlite, o.id)
@@ -254,7 +285,7 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     leadTurnEstimateUsd: o.lead_turn_estimate_usd,
     stepEstimateUsd: o.step_estimate_usd,
     budget: budgetView(sqlite, o),
-    stepsList: steps.map((s) => stepViewOf(s, gates, attempts)),
+    stepsList: steps.map((s) => stepViewOf(s, gates, attempts, holdsOf(sqlite, o.id))),
     attempts: attempts.map(attemptViewOf),
     gates: gates.map(gateView),
     inquiries: inquiryViews,
@@ -275,6 +306,7 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     acknowledgedAt: (JSON.parse(o.acknowledgement) as { at: string }).at,
     endReason: o.end_reason,
     storage: { reserveBytes: o.reserve_bytes, storedBytes: o.stored_bytes },
+    quotaFloorPercent: o.quota_floor_percent,
     coding: {
       stepLimit: o.coding_steps,
       acceptedUnknownCost: o.accepted_unknown_cost.filter(

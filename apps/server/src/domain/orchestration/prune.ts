@@ -86,6 +86,7 @@ export function pruneOrchestrationRows(tx: DatabaseSync, o: OrchRow, nowIso: str
     'wf_runs',
     'orc_agent_map',
     'orc_worker_policies',
+    'orc_quota_holds',
     'orc_commands',
     'orc_causes',
     'orc_gates',

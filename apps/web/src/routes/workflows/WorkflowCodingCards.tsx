@@ -4,6 +4,7 @@ import { Arrival } from '../../motion/Arrival.tsx'
 import {
   CodingLimitCard,
   PolicyChangedCard,
+  QuotaLowCard,
   type PreflightWorker,
 } from '../orchestrations/CodingCards.tsx'
 import { ErrorLine } from '../orchestrations/decision-parts.tsx'
@@ -49,6 +50,36 @@ export function CodingAgentChangedCard({
             expectedNodeRevision: view.revision,
             orchestrationRevision: run.revision,
           },
+        })
+      }
+    />
+  )
+}
+
+/** A coding step is held because its agent's limit is low: use it anyway, wait for the reset, or stop the run (8.6). */
+export function QuotaHeldCard({
+  run,
+  item,
+  agents,
+  actions,
+}: {
+  run: WorkflowRunDetail
+  item: Extract<WorkflowNeedsYou, { kind: 'quota_low' }>
+  agents: AgentSummary[]
+  actions: Pick<WorkflowRunActions, 'quota'>
+}) {
+  return (
+    <QuotaLowCard
+      arrivalKey={item.nodeId}
+      what={labelOf(run, item.nodeId)}
+      hold={item}
+      agents={agents}
+      pending={actions.quota.isPending}
+      error={actions.quota.error}
+      onAnswer={(answer) =>
+        actions.quota.mutate({
+          nodeId: item.nodeId,
+          body: { answer, orchestrationRevision: run.revision },
         })
       }
     />

@@ -142,6 +142,11 @@ export function NewOrchestrationDialog({
   const [ack, setAck] = useState(false)
   const [codingSteps, setCodingSteps] = useState<number>(ORCH_DEFAULTS.codingSteps)
   const [unknownCost, setUnknownCost] = useState<CostSource[]>([])
+  // 8.6: blank = each coding agent's own floor.
+  const [quotaFloor, setQuotaFloor] = useState('')
+  const quotaFloorValid =
+    quotaFloor.trim() === '' ||
+    (Number.isInteger(Number(quotaFloor)) && Number(quotaFloor) >= 0 && Number(quotaFloor) <= 50)
   // The policy ids the person accepted the reach of. A changed id is not covered: it has to be accepted again.
   const [reachAccepted, setReachAccepted] = useState<string[]>([])
   const create = useCreateOrchestration()
@@ -189,6 +194,9 @@ export function NewOrchestrationDialog({
                 ),
               ),
               codingSteps,
+              ...(quotaFloor.trim() !== '' && quotaFloorValid
+                ? { quotaFloorPercent: Number(quotaFloor) }
+                : {}),
               ...(reachIds.length > 0 ? { acknowledgeCodingReach: { policyIds: reachIds } } : {}),
               ...(unknownCost.length > 0 ? { acceptUnknownCost: unknownCost } : {}),
             }
@@ -369,6 +377,20 @@ export function NewOrchestrationDialog({
                   />
                 </label>
               )}
+              {workers.length > 0 && (
+                <label className="orch-field">
+                  <span>Quota floor (%): leave blank to use each coding agent’s own</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    inputMode="numeric"
+                    value={quotaFloor}
+                    aria-invalid={!quotaFloorValid}
+                    onChange={(event) => setQuotaFloor(event.target.value)}
+                  />
+                </label>
+              )}
               <label className="orch-field">
                 <span>Estimate per step (USD)</span>
                 <input
@@ -454,6 +476,7 @@ export function NewOrchestrationDialog({
               goal.trim() === '' ||
               allowedFor.length === 0 ||
               blocked ||
+              !quotaFloorValid ||
               !reachCovered
             }
           >

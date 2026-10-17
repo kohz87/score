@@ -160,6 +160,9 @@ export function registerCodingAgentRoutes(
         permission: body.permission,
         model: body.model ?? null,
         style: body.style,
+        ...(body.quotaFloorPercent !== undefined
+          ? { quotaFloorPercent: body.quotaFloorPercent }
+          : {}),
         createdAt,
       }),
     )
@@ -198,6 +201,9 @@ export function registerCodingAgentRoutes(
         ...(body.permission !== undefined ? { permission: body.permission } : {}),
         ...(body.model !== undefined ? { model: body.model } : {}),
         ...(workspace !== undefined ? { workspace } : {}),
+        ...(body.quotaFloorPercent !== undefined
+          ? { quotaFloorPercent: body.quotaFloorPercent }
+          : {}),
       })
     })
     await publish(agentId)

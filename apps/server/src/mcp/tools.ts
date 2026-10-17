@@ -288,7 +288,7 @@ export function createMcpServer(
     )
     orch(
       'orch.assign',
-      'Queue a step for a team agent. Score validates it against the run limits, budget and gates; the step starts when its "after" steps succeeded. Use replaces to retry or replace a failed or stopped step.',
+      'Queue a step for a team agent. Score validates it against the run limits, budget and gates; the step starts when its "after" steps succeeded. Use replaces to retry or replace a failed or stopped step. A coding agent that is low on its usage limit is refused with quota_low and the agents that still have room: choose another agent, or call again with ifQuotaLow "ask_owner" when no other agent can do the step, and the person decides.',
       withoutBase(OrchAssignArgsSchema.shape),
     )
     orch(

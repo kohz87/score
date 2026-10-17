@@ -369,6 +369,33 @@ test('full access needs the security password, and lowering it never does', asyn
   expect(raise.statusCode).toBe(403)
 })
 
+test('8.6: the quota floor defaults to 10, is set at creation and by PATCH, and stays within 0–50', async () => {
+  const created = await addAgent()
+  expect(created.quotaFloorPercent).toBe(10)
+  const patched = await request('PATCH', '/api/coding-agents/coder', { quotaFloorPercent: 25 })
+  expect(patched.statusCode, patched.body).toBe(200)
+  expect(patched.json().quotaFloorPercent).toBe(25)
+  const off = await request('PATCH', '/api/coding-agents/coder', { quotaFloorPercent: 0 })
+  expect(off.json().quotaFloorPercent).toBe(0)
+  expect(
+    (await request('PATCH', '/api/coding-agents/coder', { quotaFloorPercent: 51 })).statusCode,
+  ).toBe(400)
+  expect(
+    (await request('PATCH', '/api/coding-agents/coder', { quotaFloorPercent: 1.5 })).statusCode,
+  ).toBe(400)
+  const listed = await request('GET', '/api/coding-agents')
+  expect(listed.json().items[0].quotaFloorPercent).toBe(0)
+  const second = await request('POST', '/api/coding-agents', {
+    id: 'coder2',
+    name: 'Coder two',
+    runtime: 'claude-code',
+    workspace,
+    style,
+    quotaFloorPercent: 30,
+  })
+  expect(second.json().quotaFloorPercent).toBe(30)
+})
+
 test('audit5 S5-001: a stale PATCH cannot turn a fresh downgrade back into full without a password', async () => {
   await new SecurityPassword(home).set('correct horse battery', undefined)
   const created = await request('POST', '/api/coding-agents', {

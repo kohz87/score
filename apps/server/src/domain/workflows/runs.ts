@@ -169,6 +169,10 @@ export function insertWorkflowRun(
       // and send (and a later limits decision can revoke it).
       body.unknownSpend === 'continue' ? 1 : 0,
     )
+  if (body.quotaFloorPercent !== undefined)
+    sqlite
+      .prepare('UPDATE orchestrations SET quota_floor_percent = ? WHERE id = ?')
+      .run(body.quotaFloorPercent, id)
   if (coding) {
     // The partition is set here, once, from the planner's own item constant (7.7c §5); `setLimits` grows it the same way.
     sqlite

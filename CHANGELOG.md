@@ -3,6 +3,27 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.0] — 2026-10-17
+
+### Added
+- **Quota guard for coding agents:** a coding agent whose 5-hour or weekly limit is below its floor (default 10%, set on
+  the agent's page or per run) gets no new steps. In an orchestration the lead is told why and picks another agent; if
+  it can't, the step waits with "Use it anyway", "Wait until it resets" or "Stop the run" (also in the chat-first
+  view). Workflows wait with the same card. Steps already running are never interrupted, and a missing or expired
+  reading never blocks. The quota bars mark the floor.
+
+### Changed
+- Adding or importing an agent ends on a clear "<name> joined the team" view with Open, Add another and Close, instead
+  of a status line under the form.
+
+## [1.4.1] — 2026-10-17
+
+### Fixed
+- **Adding an agent with a capital letter in its name** (often added by a phone keyboard) showed "Couldn't read that
+  request". The name fields of Add agent and Add coding agent now turn what you type into lowercase, don't
+  auto-capitalise, and say "lowercase" in their label; the browser's own check on these fields and on the model name
+  works again (its pattern was silently ignored by current browsers).
+
 ## [1.4.0] — 2026-10-16
 
 Phase 8: a chat-first view, theme packs, quota meters, a model picker for coding agents and memory notes from compaction.

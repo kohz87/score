@@ -16,6 +16,7 @@ import {
   CodingAgentChangedCard,
   CodingHeldBackCard,
   InputsWithdrawnCard,
+  QuotaHeldCard,
   WorkflowCodingLimitCard,
 } from './WorkflowCodingCards.tsx'
 import type { PreflightWorker } from '../orchestrations/CodingCards.tsx'
@@ -487,6 +488,16 @@ export function WorkflowNeeds({
                 item={item}
                 agents={agents}
                 preflightWorker={preflightWorker}
+                actions={actions}
+              />
+            )
+          case 'quota_low':
+            return (
+              <QuotaHeldCard
+                key={`ql${item.nodeId}`}
+                run={run}
+                item={item}
+                agents={agents}
                 actions={actions}
               />
             )

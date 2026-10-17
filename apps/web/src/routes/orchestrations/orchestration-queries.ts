@@ -17,6 +17,7 @@ import {
   type OrchestrationDetail,
   type OrchestrationSummary,
   type PolicyRemapDecision,
+  type QuotaDecision,
   type RunControl,
   type RemapDecision,
   type WaiverDecision,
@@ -276,6 +277,10 @@ export function useRunActions(id: string) {
     remap: useRunPost<RemapDecision>(id, plain('remap')),
     policyRemap: useRunPost<{ stepId: string; body: PolicyRemapDecision }>(id, (v) => ({
       path: `steps/${encodeURIComponent(v.stepId)}/remap`,
+      body: v.body,
+    })),
+    quota: useRunPost<{ stepId: string; body: QuotaDecision }>(id, (v) => ({
+      path: `steps/${encodeURIComponent(v.stepId)}/quota`,
       body: v.body,
     })),
     abandon: useRunPost<AbandonDecision>(id, plain('abandon')),

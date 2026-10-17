@@ -21,6 +21,7 @@ import {
   type AbandonDecision,
   type RunControl,
   type PolicyRemapDecision,
+  type QuotaDecision,
   type RemapDecision,
   type WaiverDecision,
   type ValidationResult,
@@ -75,6 +76,7 @@ import {
   grantWaiver,
   remapAgent,
   pauseRun,
+  answerQuota,
   policyRemapStep,
   resumeRun,
   setLimits,
@@ -84,6 +86,8 @@ import { applyJournalEvidence, fenceView, isFenced, type GlobalFenceStore } from
 import { journalDispatches } from './journal.ts'
 import { readWorkerPolicy, storeWorkerPolicy } from './coding-policy.ts'
 import { admissionDenial, recoveredOnly } from './admission.ts'
+import { holdOf, quotaAdmits } from './quota-guard.ts'
+import { getCodingAgent } from '../../runtimes/coding/store.ts'
 import {
   MAX_GENERATIONS,
   applyClosure,
@@ -417,6 +421,9 @@ export class Orchestrator {
         listOrchs(sqlite).some((o) => !isTerminalStatus(o.status)),
       )
       if (live) await this.mutate((ctx) => this.sweep(ctx))
+      // Not awaited unless a queued Antigravity step needs a fresh reading (tests rely on the cycle's tick order).
+      const refreshing = this.refreshQuota()
+      if (refreshing) await refreshing
       const jobs = await this.mutate((ctx) => this.admit(ctx))
       for (const id of jobs) progressed = (await this.dispatch(id)) || progressed
       progressed = (await this.serviceStops()) || progressed
@@ -451,6 +458,7 @@ export class Orchestrator {
           journal: this.options.fence.journal,
           touched: new Set(),
           events: [],
+          ...(this.options.codingFacts?.quota ? { quota: this.options.codingFacts.quota } : {}),
         }
         result = fn(ctx)
         const events = [...ctx.events, ...this.finalize(ctx, staged)]
@@ -994,6 +1002,10 @@ export class Orchestrator {
               codingUnsentBytes(body.maxSteps, body.maxConcurrentSteps)
           : 0,
       )
+    if (body.quotaFloorPercent !== undefined)
+      sqlite
+        .prepare('UPDATE orchestrations SET quota_floor_percent = ? WHERE id = ?')
+        .run(body.quotaFloorPercent, id)
     // The policy each coding worker is approved with, and the acknowledgement that covered it (stored in the history).
     for (const [agentId, report] of reports) {
       storeWorkerPolicy(
@@ -1106,6 +1118,11 @@ export class Orchestrator {
     this.db.read((sqlite) => requireLeadOrch(sqlite, id))
     const report = await this.options.codingFacts?.report(body.agentId)
     return this.decide(id, (ctx) => policyRemapStep(ctx, id, stepId, body, report))
+  }
+
+  /** The answer to a step held because its coding agent is below its quota floor (8.6). */
+  quotaDecision(id: string, stepId: string, body: QuotaDecision) {
+    return this.decide(id, (ctx) => answerQuota(ctx, id, stepId, body))
   }
 
   waiver(id: string, body: WaiverDecision) {
@@ -1365,7 +1382,8 @@ export class Orchestrator {
       (body.codingPolicies !== undefined ||
         body.acknowledgeCodingReach !== undefined ||
         body.acceptUnknownCost !== undefined ||
-        body.codingSteps !== undefined)
+        body.codingSteps !== undefined ||
+        body.quotaFloorPercent !== undefined)
     )
       throw new HttpError(
         400,
@@ -1545,6 +1563,16 @@ export class Orchestrator {
       )
     })
   }
+  /** The answer to a held coding node (8.6): the node's step is the one the decision names. */
+  wfQuotaDecision(id: string, nodeId: string, body: QuotaDecision) {
+    return this.decideWf(id, (ctx) => {
+      const node = nodesOf(ctx.sqlite, id).find((n) => n.node_id === nodeId)
+      if (!node) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
+      if (node.step_id === null)
+        throw new HttpError(409, 'conflict', 'This step isn’t held for a low limit.')
+      answerQuota(ctx, id, node.step_id, body)
+    })
+  }
   wfLimits(id: string, body: LimitsDecision) {
     return this.decideWf(id, (ctx) => setLimits(ctx, id, body, this.storageFits))
   }
@@ -1611,6 +1639,12 @@ export class Orchestrator {
           tool,
         },
       }
+    if (tool === 'orch.assign' && typeof parsed.args.agent === 'string') {
+      const isAntigravity = this.db.read(
+        (sqlite) => getCodingAgent(sqlite, parsed.args.agent as string)?.runtime === 'antigravity',
+      )
+      if (isAntigravity) await this.options.codingFacts?.quota?.refresh().catch(() => undefined)
+    }
     const outcome = await this.mutate((ctx) =>
       runCommand(ctx, agentId, tool, parsed.args, {
         commandsPerAttempt: ORCH_LIMITS.commandsPerLeadAttempt,
@@ -2186,6 +2220,12 @@ export class Orchestrator {
       if ((counts.perRun.get(o.id) ?? 0) >= o.max_concurrent_steps) continue
       if (counts.total >= ORCH_CAPACITY.concurrentSteps) continue
       if ((counts.perAgent.get(step.agent_id) ?? 0) >= ORCH_CAPACITY.stepsPerAgent) continue
+      // The quota guard (8.6): a coding agent below its floor takes no new step; the step is held and the person asked.
+      // Missing or expired readings never hold; a step that already runs is never touched.
+      if (!quotaAdmits(ctx, this.options.codingFacts?.quota, o, step)) {
+        this.wakeAtReset(ctx, o.id, step.id)
+        continue
+      }
       const dependencies = step.after_steps.map((id) => byId.get(id)!)
       // A workflow step's instruction already is the final, validated payload (it is never re-rendered or clipped).
       const input =
@@ -2265,6 +2305,24 @@ export class Orchestrator {
       counts.total++
       touch(ctx, o.id)
     }
+  }
+
+  /** Antigravity's quota is read from its CLI: refresh it (at most once a minute) when a queued step would use it. */
+  private refreshQuota(): Promise<unknown> | undefined {
+    const quota = this.options.codingFacts?.quota
+    if (!quota) return undefined
+    const needed = this.db.read((sqlite) =>
+      listOrchs(sqlite).some(
+        (o) =>
+          o.status === 'running' &&
+          stepsOf(sqlite, o.id).some(
+            (step) =>
+              step.status === 'queued' &&
+              getCodingAgent(sqlite, step.agent_id)?.runtime === 'antigravity',
+          ),
+      ),
+    )
+    return needed ? quota.refresh().catch(() => undefined) : undefined
   }
 
   private insertAttempt(ctx: Ctx, o: OrchRow, a: NewAttempt): void {
@@ -2806,6 +2864,18 @@ export class Orchestrator {
       this.options.releaseChecks?.policy?.(sqlite, subject) ??
       this.options.releaseChecks?.limits?.(sqlite, subject)
     return refused === undefined ? { allowed: true } : no(refused)
+  }
+
+  /** A step the person chose to wait for is looked at again when its window resets (once per reset time). */
+  private readonly resetWakes = new Set<string>()
+  private wakeAtReset(ctx: Ctx, orchId: string, stepId: string): void {
+    const hold = holdOf(ctx.sqlite, orchId, stepId)
+    if (hold?.state !== 'waiting') return
+    const key = `${orchId}:${stepId}:${hold.resets_at}`
+    if (this.resetWakes.has(key)) return
+    this.resetWakes.add(key)
+    const delay = Math.max(0, Date.parse(hold.resets_at) - Date.parse(ctx.now))
+    this.wakeAfter(Math.min(delay + 50, 2_000_000_000))
   }
 
   /** A pump after a pause, so a held-back attempt is tried again without waiting for the next sweep. */
