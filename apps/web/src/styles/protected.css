@@ -21,6 +21,10 @@
     direction: ltr !important;
     unicode-bidi: normal !important;
     text-indent: 0 !important;
+    /* Text made invisible without touching its colour, or a painted image behind it that the guard can't measure. */
+    -webkit-text-fill-color: currentcolor !important;
+    -webkit-text-stroke-width: 0 !important;
+    background-image: none !important;
   }
   /* No generated text or boxes (a fake "Approve" laid over the real one): none of these surfaces draws any. */
   html[data-look='custom'] [data-protected]::before,

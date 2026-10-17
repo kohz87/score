@@ -1,3 +1,4 @@
+import { contrastRatio, over, parseColor, type Rgba } from './color.ts'
 import { appliedThemeElements, appliedThemeSheets } from './engine.ts'
 
 // The last line of defence for protected surfaces (design §4.3). styles/protected.css re-asserts what CSS can
@@ -15,6 +16,8 @@ type Snapshot = {
   covered: boolean
   themeFont: boolean
   fontSize: number
+  /** The text's contrast with what is painted behind it; null when that can't be measured (an image, an odd colour). */
+  contrast: number | null
 }
 
 const TEXT_PARTS =
@@ -24,6 +27,24 @@ function chain(element: Element): Element[] {
   const out: Element[] = []
   for (let node: Element | null = element; node; node = node.parentElement) out.push(node)
   return out
+}
+
+// Colours set through the theme's tokens or its own rules (white on white, transparent text) leave a surface in place
+// but unreadable: measured against the backgrounds stacked behind the text, up to the first opaque one.
+function textContrast(element: HTMLElement): number | null {
+  const text = parseColor(getComputedStyle(element).color)
+  if (!text) return null
+  const layers: Rgba[] = []
+  for (const node of chain(element)) {
+    const computed = getComputedStyle(node)
+    if (computed.backgroundImage !== 'none') return null
+    const background = parseColor(computed.backgroundColor)
+    if (!background) return null
+    if (background[3] > 0) layers.push(background)
+    if (background[3] >= 1) break
+  }
+  const behind = layers.reduceRight<Rgba>((base, layer) => over(layer, base), [1, 1, 1, 1])
+  return contrastRatio(text, behind)
 }
 
 function snapshot(element: HTMLElement): Snapshot {
@@ -61,6 +82,7 @@ function snapshot(element: HTMLElement): Snapshot {
     covered,
     themeFont: /theme-[a-z0-9-]+-/i.test(style.fontFamily),
     fontSize: Number.parseFloat(style.fontSize) || 0,
+    contrast: textContrast(element),
   }
 }
 
@@ -75,6 +97,8 @@ function worse(on: Snapshot, off: Snapshot): string | null {
   if (on.covered && !off.covered) return 'is covered'
   if (on.themeFont && !off.themeFont) return 'is set in the theme’s font'
   if (off.fontSize > 0 && on.fontSize < off.fontSize * 0.5) return 'has tiny text'
+  if (on.contrast !== null && off.contrast !== null && off.contrast >= 3 && on.contrast < 3)
+    return 'has unreadable text'
   return null
 }
 

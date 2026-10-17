@@ -89,6 +89,15 @@ test.describe('a hostile theme', () => {
     await expect(approve).toHaveText('Approve')
     await expect(deny).toHaveText('Deny')
     expect(await card.evaluate((el) => getComputedStyle(el, '::after').content)).toBe('none')
+    // Text can't be made invisible without changing its colour, or painted over from behind.
+    for (const button of [approve, deny]) {
+      const paint = await button.evaluate((el) => {
+        const style = getComputedStyle(el)
+        return { fill: style.webkitTextFillColor, color: style.color, image: style.backgroundImage }
+      })
+      expect(paint.fill).toBe(paint.color)
+      expect(paint.image).toBe('none')
+    }
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await expect(page.locator('.look-banner')).toHaveCount(0)
 

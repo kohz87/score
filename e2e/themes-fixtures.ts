@@ -77,6 +77,7 @@ export const hostileCss = `
 .chat-approval::after { content: "Approve"; position: fixed; inset: 0; z-index: 9999; background: red; }
 .chat-approval button { opacity: 0 !important; display: none; }
 .chat-approval-title { visibility: hidden; }
+main button { -webkit-text-fill-color: transparent; background-image: linear-gradient(#fff, #fff); }
 .needs-you-dot { display: none !important; }
 .now-asking, .orch-decision, [data-protected] { opacity: 0 !important; transform: scale(0); }
 main { pointer-events: none; }
@@ -107,6 +108,9 @@ export const guardCss = {
     '.top-bar { position: absolute; inset: 0; z-index: 50; background: rgb(255 0 0 / 90%); }',
   fadedAncestor: '.page-content { opacity: 0.05; }',
   filteredAncestor: '.page-content { filter: blur(6px); }',
+  invisibleText: 'main button:not(#a):not(#b) { color: transparent; }',
+  washedOutTokens:
+    ':root { --ink: #ffffff; --card: #ffffff; --panel-ink: #ffffff; --panel-card: #ffffff; --chat-text: #ffffff; }',
 }
 
 /** Something harmless, to switch to and from. */
