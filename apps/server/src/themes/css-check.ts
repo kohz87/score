@@ -57,9 +57,11 @@ const RULES: { reason: string; test: RegExp }[] = [
   { reason: 'vbscript: is not allowed', test: /vbscript\s*:/i },
   // These load an address from a bare string, which the url() rule cannot see.
   {
-    reason: 'image-set(), src() and paint() are not allowed',
-    test: /(?:image-set|src|paint)\s*\(/i,
+    reason: 'image-set(), image(), cross-fade(), src() and paint() are not allowed',
+    test: /(?:image-set|image|cross-fade|src|paint)\s*\(/i,
   },
+  // Firefox's element() paints a live copy of another element (an Approve button, say) wherever the theme likes.
+  { reason: 'element() is not allowed', test: /(?:^|[^a-z-])(?:-moz-)?element\s*\(/i },
 ]
 
 /** The argument of every `url(` in `text`, or `null` for one that is not a plain `asset:` reference. */

@@ -49,6 +49,13 @@ describe('rejected CSS', () => {
     ['url asset svg', `a{background:url(asset:img/x.svg)}`],
     ['image-set with a bare string', `a{background:image-set("http://x/y.png" 1x)}`],
     ['-webkit-image-set', `a{background:-webkit-image-set("http://x/y.png" 1x)}`],
+    ['image() with a bare string', `a{background:image("http://x/y.png")}`],
+    [
+      'cross-fade()',
+      `a{background:cross-fade(url(asset:img/a.png), image("http://x/y.png"), 50%)}`,
+    ],
+    ['-moz-element() copies another element', `a{background:-moz-element(#approve)}`],
+    ['element() escaped', `a{background:\\65 lement(#approve)}`],
     ['expression()', `a{width:expression(alert(1))}`],
     ['expression comment split', `a{width:expr/**/ession(alert(1))}`],
     ['behavior', `a{behavior:url(asset:img/x.png)}`],

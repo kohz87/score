@@ -24,7 +24,7 @@ afterEach(() => {
 const manifest = (id: string, extra: object = {}) =>
   ThemeManifestSchema.parse({ format: 1, id, name: id.toUpperCase(), ...extra })
 
-test('migration 0071 creates the themes table and the look defaults', () => {
+test('migration 0072 creates the themes table and the look defaults', () => {
   const table = db.sqlite.prepare("SELECT name FROM sqlite_schema WHERE name = 'themes'").get()
   expect(table).toBeDefined()
   expect(readLook(db.sqlite)).toEqual({ activeTheme: 'score', mode: 'system' })
