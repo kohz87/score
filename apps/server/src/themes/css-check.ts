@@ -31,10 +31,9 @@ export function stripComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?(?:\*\/|$)/g, '')
 }
 
-/**
- * The text the rules run on. Both orders are used: resolving escapes before comments would let `/\* … */ ;` hide real
- * code (the parser does not see that as a comment), and the other order misses ` /*` produced by an escape.
- */
+// The text the rules run on. Both orders are used: resolving escapes before comments would let a backslash-star opener
+// hide real code (the parser does not see that as a comment), and the other order misses a comment opener that an
+// escape produces.
 function forms(css: string): string[] {
   return [...new Set([unescapeCss(stripComments(css)), stripComments(unescapeCss(css))])]
 }

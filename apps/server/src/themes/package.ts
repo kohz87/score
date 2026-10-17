@@ -247,7 +247,7 @@ export async function readThemePackage(bytes: Buffer): Promise<ThemePackage> {
     try {
       css = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false })
         .decode(cssBytes)
-        .replace(/^﻿/, '')
+        .replace(/^\uFEFF/, '')
     } catch {
       reasons.add('style.css isn’t valid UTF-8 text')
     }
