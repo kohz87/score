@@ -66,6 +66,11 @@ test('Chat: a turn that used a sub-agent ends cleanly and nests the sub-agent’
     await card.locator('.chat-subagent-calls details').first().locator('summary').click()
     await reply.screenshot({ path: `${shots}/chat.png` })
   }
+  // Clean up so other specs see the usual team.
+  await page.goto(`/team/${encodeURIComponent(id)}`)
+  page.once('dialog', (confirm) => void confirm.accept())
+  await page.getByRole('button', { name: 'Remove agent' }).click()
+  await expect(page).toHaveURL(/\/team$/)
 })
 
 test.describe('Flow', () => {
