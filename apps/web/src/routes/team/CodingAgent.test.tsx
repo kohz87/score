@@ -57,7 +57,7 @@ test('Antigravity: warning, quota, unverified level disabled, no read acknowledg
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <AddCodingAgentForm close={() => undefined} />
+        <AddCodingAgentForm onAdded={() => undefined} />
       </MemoryRouter>
     </QueryClientProvider>,
   )

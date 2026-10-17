@@ -9,8 +9,8 @@ import {
 } from '@score/contract'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
 import { AGENT_ID_PATTERN, agentIdInput } from './agent-id.ts'
+import { AgentAdded } from './AgentAdded.tsx'
 import { ModelPicker } from '../../components/ModelPicker.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
@@ -38,19 +38,24 @@ export function AddAgent({ agents }: { agents: AgentSummary[] }) {
     </>
   )
 }
+const emptyInput: AgentCreateInput = {
+  id: '',
+  name: '',
+  role: '',
+  model: '',
+  style: { color: '#19C39A', shape: 'triangle' },
+}
+
+type AgentAddedInfo = { id: string; name: string; style: AgentCreateInput['style'] }
+
 function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const [input, setInput] = useState<AgentCreateInput>({
-    id: '',
-    name: '',
-    role: '',
-    model: '',
-    style: { color: '#19C39A', shape: 'triangle' },
-  })
+  const [input, setInput] = useState<AgentCreateInput>(emptyInput)
   const [kind, setKind] = useState<'hermes' | 'coding'>('hermes')
   const [preview, setPreview] = useState<AgentPreview | null>(null)
   const [confirmed, setConfirmed] = useState(false)
   const [accepted, setAccepted] = useState<AgentOperation | null>(null)
+  const [added, setAdded] = useState<{ agent: AgentAddedInfo; detail: string } | null>(null)
   const status = useProfileOperation(accepted?.id ?? null)
   const operation = status.data ?? accepted
   useEffect(() => {
@@ -85,6 +90,15 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
       setConfirmed(false)
     },
   })
+  const another = () => {
+    setInput(emptyInput)
+    setPreview(null)
+    setConfirmed(false)
+    setAccepted(null)
+    setAdded(null)
+    review.reset()
+    create.reset()
+  }
   const change = (patch: Partial<AgentCreateInput>) => {
     setInput((current) => {
       const next = { ...current, ...patch }
@@ -107,219 +121,235 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
         close()
       }}
     >
-      <div className="team-card-heading">
-        <h2 id="add-agent-title">Add agent</h2>
-        <button type="button" className="team-pill-button" onClick={close}>
-          Close
-        </button>
-      </div>
-      {!operation && (
-        <fieldset className="team-add-kind">
-          <legend>Kind of agent</legend>
-          <label>
-            <input
-              type="radio"
-              name="agent-kind"
-              checked={kind === 'hermes'}
-              onChange={() => setKind('hermes')}
-            />{' '}
-            Hermes agent
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="agent-kind"
-              checked={kind === 'coding'}
-              onChange={() => setKind('coding')}
-            />{' '}
-            Coding agent (Claude Code, Codex, Antigravity)
-          </label>
-        </fieldset>
-      )}
-      {kind === 'coding' && !operation ? (
-        <AddCodingAgentForm close={close} />
-      ) : operation ? (
-        <>
-          <ProfileOperation operation={operation} />
-          {status.isError && (
-            <p role="alert">
-              Couldn’t refresh progress.{' '}
-              <button onClick={() => void status.refetch()}>Try again</button>
-            </p>
-          )}
-          {operation.state === 'completed' && (
-            <Link to={`/team/${encodeURIComponent(operation.targetName)}`} onClick={close}>
-              View agent
-            </Link>
-          )}
-        </>
-      ) : (
-        <form
-          className="team-routine-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (preview) create.mutate()
-            else review.mutate()
+      {added ? (
+        <AgentAdded agent={added.agent} detail={added.detail} onAnother={another} onClose={close} />
+      ) : operation?.state === 'completed' ? (
+        <AgentAdded
+          agent={{
+            id: operation.targetName,
+            name: input.name || operation.targetName,
+            style: input.style,
           }}
-        >
-          <label>
-            Agent name (lowercase letters, digits, - and _)
-            <input
-              autoFocus
-              required
-              pattern={AGENT_ID_PATTERN}
-              title="Lowercase letters, digits, - and _"
-              maxLength={64}
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              value={input.id}
-              onChange={(event) => {
-                const id = agentIdInput(event.target.value)
-                change({ id, name: id })
-              }}
-            />
-          </label>
-          <label>
-            Role or description
-            <textarea
-              required
-              maxLength={2000}
-              value={input.role}
-              onChange={(event) => change({ role: event.target.value })}
-            />
-          </label>
-          <label>
-            Start from
-            <select
-              value={input.cloneFrom ?? ''}
-              onChange={(event) => {
-                const source = agents.find((agent) => agent.id === event.target.value)
-                change({
-                  cloneFrom: source?.id,
-                  model: source?.model?.id ?? input.model,
-                  provider: source?.model?.id ? undefined : input.provider,
-                })
-              }}
-            >
-              <option value="">Blank</option>
-              {agents
-                .filter((agent) => !agent.lifecycle || agent.lifecycle.state === 'ready')
-                .map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    Copy from {agent.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <ModelPicker
-            label="Model"
-            required
-            value={{ model: input.model, provider: input.provider ?? null }}
-            onChange={(choice) => {
-              change({ model: choice.model, provider: choice.provider ?? undefined })
-            }}
-          />
-          <div className="team-profile-appearance">
-            <AgentGlyph
-              agent={{ id: input.id || 'new', name: input.id || 'New agent', style: input.style }}
-              describeShape
-              contrast="high"
-            />
-            <label>
-              Colour
-              <input
-                type="color"
-                value={input.style.color}
-                onChange={(event) =>
-                  change({ style: { ...input.style, color: event.target.value } })
-                }
-              />
-            </label>
-            <label>
-              Shape
-              <select
-                aria-label="Shape"
-                value={input.style.shape}
-                onChange={(event) =>
-                  change({
-                    style: { ...input.style, shape: ShapeSchema.parse(event.target.value) },
-                  })
-                }
-              >
-                {ShapeSchema.options.map((shape) => (
-                  <option key={shape}>{shape}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {preview && (
-            <section className="team-card">
-              <h3>Review changes</h3>
-              <ul>
-                {preview.effects.map((effect) => (
-                  <li key={effect}>{effect}</li>
-                ))}
-              </ul>
-              {input.cloneFrom && (
-                <>
-                  <dl className="team-facts">
-                    {Object.entries(preview.inherited).map(([key, values]) => (
-                      <div key={key}>
-                        <dt>
-                          {
-                            {
-                              memories: 'Memories',
-                              skills: 'Skills',
-                              plugins: 'Plugins',
-                              approvalSettings: 'Approval settings',
-                              credentialsPresent: 'Credentials present (names only)',
-                            }[key]
-                          }
-                        </dt>
-                        <dd>{values.join(', ') || 'None'}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <label className="team-profile-confirm">
-                    <input
-                      type="checkbox"
-                      checked={confirmed}
-                      onChange={(event) => setConfirmed(event.target.checked)}
-                    />
-                    I’ve checked what this agent inherits.
-                  </label>
-                </>
-              )}
-              {preview.blockers.map((blocker) => (
-                <p role="alert" key={blocker}>
-                  {blocker}
-                </p>
-              ))}
-            </section>
-          )}
-          {(review.error || create.error) && (
-            <p role="alert">{(review.error ?? create.error)?.message}</p>
-          )}
-          <div className="team-file-actions">
-            <button
-              className="team-primary"
-              disabled={
-                review.isPending ||
-                create.isPending ||
-                Boolean(preview && (preview.blockers.length || (input.cloneFrom && !confirmed)))
-              }
-            >
-              {review.isPending
-                ? 'Loading preview…'
-                : create.isPending
-                  ? 'Creating…'
-                  : preview
-                    ? 'Create agent'
-                    : 'Preview changes'}
+          detail={['Hermes agent', input.model].filter(Boolean).join(' · ')}
+          onAnother={another}
+          onClose={close}
+        />
+      ) : (
+        <>
+          <div className="team-card-heading">
+            <h2 id="add-agent-title">Add agent</h2>
+            <button type="button" className="team-pill-button" onClick={close}>
+              Close
             </button>
           </div>
-        </form>
+          {!operation && (
+            <fieldset className="team-add-kind">
+              <legend>Kind of agent</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="agent-kind"
+                  checked={kind === 'hermes'}
+                  onChange={() => setKind('hermes')}
+                />{' '}
+                Hermes agent
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="agent-kind"
+                  checked={kind === 'coding'}
+                  onChange={() => setKind('coding')}
+                />{' '}
+                Coding agent (Claude Code, Codex, Antigravity)
+              </label>
+            </fieldset>
+          )}
+          {kind === 'coding' && !operation ? (
+            <AddCodingAgentForm onAdded={(agent, detail) => setAdded({ agent, detail })} />
+          ) : operation ? (
+            <>
+              <ProfileOperation operation={operation} />
+              {status.isError && (
+                <p role="alert">
+                  Couldn’t refresh progress.{' '}
+                  <button onClick={() => void status.refetch()}>Try again</button>
+                </p>
+              )}
+            </>
+          ) : (
+            <form
+              className="team-routine-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (preview) create.mutate()
+                else review.mutate()
+              }}
+            >
+              <label>
+                Agent name (lowercase letters, digits, - and _)
+                <input
+                  autoFocus
+                  required
+                  pattern={AGENT_ID_PATTERN}
+                  title="Lowercase letters, digits, - and _"
+                  maxLength={64}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={input.id}
+                  onChange={(event) => {
+                    const id = agentIdInput(event.target.value)
+                    change({ id, name: id })
+                  }}
+                />
+              </label>
+              <label>
+                Role or description
+                <textarea
+                  required
+                  maxLength={2000}
+                  value={input.role}
+                  onChange={(event) => change({ role: event.target.value })}
+                />
+              </label>
+              <label>
+                Start from
+                <select
+                  value={input.cloneFrom ?? ''}
+                  onChange={(event) => {
+                    const source = agents.find((agent) => agent.id === event.target.value)
+                    change({
+                      cloneFrom: source?.id,
+                      model: source?.model?.id ?? input.model,
+                      provider: source?.model?.id ? undefined : input.provider,
+                    })
+                  }}
+                >
+                  <option value="">Blank</option>
+                  {agents
+                    .filter((agent) => !agent.lifecycle || agent.lifecycle.state === 'ready')
+                    .map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        Copy from {agent.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <ModelPicker
+                label="Model"
+                required
+                value={{ model: input.model, provider: input.provider ?? null }}
+                onChange={(choice) => {
+                  change({ model: choice.model, provider: choice.provider ?? undefined })
+                }}
+              />
+              <div className="team-profile-appearance">
+                <AgentGlyph
+                  agent={{
+                    id: input.id || 'new',
+                    name: input.id || 'New agent',
+                    style: input.style,
+                  }}
+                  describeShape
+                  contrast="high"
+                />
+                <label>
+                  Colour
+                  <input
+                    type="color"
+                    value={input.style.color}
+                    onChange={(event) =>
+                      change({ style: { ...input.style, color: event.target.value } })
+                    }
+                  />
+                </label>
+                <label>
+                  Shape
+                  <select
+                    aria-label="Shape"
+                    value={input.style.shape}
+                    onChange={(event) =>
+                      change({
+                        style: { ...input.style, shape: ShapeSchema.parse(event.target.value) },
+                      })
+                    }
+                  >
+                    {ShapeSchema.options.map((shape) => (
+                      <option key={shape}>{shape}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {preview && (
+                <section className="team-card">
+                  <h3>Review changes</h3>
+                  <ul>
+                    {preview.effects.map((effect) => (
+                      <li key={effect}>{effect}</li>
+                    ))}
+                  </ul>
+                  {input.cloneFrom && (
+                    <>
+                      <dl className="team-facts">
+                        {Object.entries(preview.inherited).map(([key, values]) => (
+                          <div key={key}>
+                            <dt>
+                              {
+                                {
+                                  memories: 'Memories',
+                                  skills: 'Skills',
+                                  plugins: 'Plugins',
+                                  approvalSettings: 'Approval settings',
+                                  credentialsPresent: 'Credentials present (names only)',
+                                }[key]
+                              }
+                            </dt>
+                            <dd>{values.join(', ') || 'None'}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <label className="team-profile-confirm">
+                        <input
+                          type="checkbox"
+                          checked={confirmed}
+                          onChange={(event) => setConfirmed(event.target.checked)}
+                        />
+                        I’ve checked what this agent inherits.
+                      </label>
+                    </>
+                  )}
+                  {preview.blockers.map((blocker) => (
+                    <p role="alert" key={blocker}>
+                      {blocker}
+                    </p>
+                  ))}
+                </section>
+              )}
+              {(review.error || create.error) && (
+                <p role="alert">{(review.error ?? create.error)?.message}</p>
+              )}
+              <div className="team-file-actions">
+                <button
+                  className="team-primary"
+                  disabled={
+                    review.isPending ||
+                    create.isPending ||
+                    Boolean(preview && (preview.blockers.length || (input.cloneFrom && !confirmed)))
+                  }
+                >
+                  {review.isPending
+                    ? 'Loading preview…'
+                    : create.isPending
+                      ? 'Creating…'
+                      : preview
+                        ? 'Create agent'
+                        : 'Preview changes'}
+                </button>
+              </div>
+            </form>
+          )}
+        </>
       )}
     </dialog>
   )
