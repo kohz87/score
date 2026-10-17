@@ -174,3 +174,10 @@ One entry per completed task: what landed, review results, and any **rejected re
   exact PID (memory 0.16 → 2.5 GB free). The fork's own 8.6/8.7 builders were stopped by the fork.
 - Agreement: this session is the single integrator (merges, deploys); the fork owns only 9.2 and reports to it. Max two
   heavy runs at once (memory note `vm-capacity`). 8.6/8.7 builders must review uncommitted changes they didn't make.
+- **8.6 quota guard** merged (lead renumbered its migration 0072 → 0071, merged before themes). Lead review: the 120 s
+  freshness rule applies only to Antigravity's live `/usage`; Claude Code/Codex use the stored last-turn reading.
+  Full check: 3 timing tests failed under load, 66/66 alone. Lead fixes merged with it: "joined the team" finished view
+  for Add/Import agent (owner: the old status line was messy), quota floor field left-aligned, dialogs keep a fixed
+  accessible name (the e2e caught the lost name). Full e2e 342/349 → the 3 profile specs (my change) + 3 count cascades
+  + the known user-view flake; after the fix the affected specs 17/17, Reports alone 2/2.
+- **Release 1.5.0**: 8.6 + the agent dialogs.
