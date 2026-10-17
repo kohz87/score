@@ -241,7 +241,7 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
         </section>
         <section aria-label="Budget and limits">
           <h3>Budget and limits</h3>
-          <BudgetBlock run={detail} coding={orchCoding(detail.coding)} />
+          <BudgetBlock run={detail} coding={orchCoding(detail.coding, detail.quotaFloorPercent)} />
         </section>
       </div>
       <FinishBlock run={detail} />

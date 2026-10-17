@@ -84,7 +84,10 @@ export function RoomRunPanel({
               <FinishBlock run={detail} />
               <details>
                 <summary>Budget and limits</summary>
-                <BudgetBlock run={detail} coding={orchCoding(detail.coding)} />
+                <BudgetBlock
+                  run={detail}
+                  coding={orchCoding(detail.coding, detail.quotaFloorPercent)}
+                />
               </details>
             </div>
           )}

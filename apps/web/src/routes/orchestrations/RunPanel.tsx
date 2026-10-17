@@ -18,6 +18,7 @@ import {
 } from './orch-model.ts'
 import { describeOrchError, type DecisionActions } from './orchestration-queries.ts'
 import type { RunCoding } from './CodingCards.tsx'
+import { heldLine } from './quota-text.ts'
 import { AgentChip, sourceName } from './decision-parts.tsx'
 import { LiveCount } from '../../live/LiveCount.tsx'
 import { RunSummary } from '../../live/RunSummary.tsx'
@@ -247,6 +248,19 @@ export function BudgetBlock({
           </dd>
         </>
       )}
+      {coding && (
+        <>
+          <dt>Quota floor</dt>
+          <dd>
+            {coding.quotaFloorPercent === null || coding.quotaFloorPercent === undefined
+              ? 'Each coding agent’s own'
+              : coding.quotaFloorPercent === 0
+                ? 'Off for this run'
+                : `${coding.quotaFloorPercent}% for this run`}
+            ; a coding agent with less of a limit left than that gets no new steps
+          </dd>
+        </>
+      )}
       <dt>Complete</dt>
       <dd>
         {b.complete ? 'Yes: all spend is settled' : 'No: some spend isn’t settled yet'}
@@ -274,6 +288,7 @@ export function dispositionText(disposition: string): string {
   if (disposition === 'permission_forbidden')
     return 'Blocked: the agent has full access, which orchestration and workflow steps can’t use.'
   if (disposition === 'coding_limit') return 'Blocked: the run reached its limit of coding steps.'
+  if (disposition === 'quota_low') return 'Held: the agent’s limit is low.'
   return `Handled as: ${disposition}.`
 }
 
@@ -347,7 +362,11 @@ export function StepCard({
       <p className="orch-muted">
         {step.after.length > 0 && <>After {step.after.join(', ')}. </>}
         {step.replaces && <>Replaces {step.replaces}. </>}
-        {step.disposition && <>{dispositionText(step.disposition)} </>}
+        {step.quotaHold ? (
+          <>{heldLine(step.quotaHold)} </>
+        ) : (
+          step.disposition && <>{dispositionText(step.disposition)} </>
+        )}
         {step.gateId && <>Gate {step.gateId}. </>}
         Estimate {usd(step.estimateUsd)}.
       </p>

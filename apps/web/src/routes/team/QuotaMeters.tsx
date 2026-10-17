@@ -44,7 +44,7 @@ const windowLabel = (window: CodingQuotaWindow): string =>
 const level = (left: number | null): 'plenty' | 'low' | 'out' =>
   left === null || left > 25 ? 'plenty' : left > 10 ? 'low' : 'out'
 
-function Meter({ window }: { window: CodingQuotaWindow }) {
+function Meter({ window, floor }: { window: CodingQuotaWindow; floor?: number | undefined }) {
   const left = leftPercent(window)
   const resets = resetText(window.resetsAt)
   return (
@@ -57,9 +57,10 @@ function Meter({ window }: { window: CodingQuotaWindow }) {
         aria-valuemin={0}
         aria-valuemax={100}
         {...(left === null ? {} : { 'aria-valuenow': left })}
-        aria-valuetext={left === null ? 'unknown' : `${left}% left`}
+        aria-valuetext={`${left === null ? 'unknown' : `${left}% left`}${floor ? `, runs stop using this agent below ${floor}%` : ''}`}
       >
         <span className="quota-fill" data-level={level(left)} style={{ width: `${left ?? 0}%` }} />
+        {floor ? <span className="quota-floor" style={{ left: `${floor}%` }} aria-hidden /> : null}
       </span>
       <span className="quota-left">{left === null ? '?' : `${left}%`} left</span>
       <span className="quota-reset">{resets ? `resets ${resets}` : ''}</span>
@@ -71,9 +72,12 @@ function Meter({ window }: { window: CodingQuotaWindow }) {
 export function QuotaMeters({
   runtime,
   quota,
+  floor,
 }: {
   runtime: CodingRuntime
   quota: CodingQuota | null
+  /** The agent's floor (PLAN 8.6): marked on each bar. */
+  floor?: number
 }) {
   const name = runtimeLabel(runtime) ?? runtime
   if (quota === null)
@@ -90,9 +94,14 @@ export function QuotaMeters({
     <div className="quota" role="group" aria-label={`${name} limits`}>
       <ul className="quota-list">
         {quota.windows.map((window) => (
-          <Meter key={`${window.group ?? ''}|${window.name}`} window={window} />
+          <Meter key={`${window.group ?? ''}|${window.name}`} window={window} floor={floor} />
         ))}
       </ul>
+      {floor ? (
+        <p className="team-muted quota-seen">
+          The red mark is the floor: runs stop giving this agent new steps below {floor}% left.
+        </p>
+      ) : null}
       {quota.source !== 'usage' && (
         <p className="team-muted quota-seen">As of {seenText(quota.seenAt)}.</p>
       )}
@@ -121,12 +130,20 @@ export function useCodingQuota(path: string, key: readonly unknown[]) {
 }
 
 /** The meters of one coding agent (its page). */
-export function AgentQuota({ agentId, runtime }: { agentId: string; runtime: CodingRuntime }) {
+export function AgentQuota({
+  agentId,
+  runtime,
+  floor,
+}: {
+  agentId: string
+  runtime: CodingRuntime
+  floor?: number
+}) {
   const quota = useCodingQuota(`coding-agents/${encodeURIComponent(agentId)}/quota`, [agentId])
   if (quota.isPending) return <p className="team-muted">Reading the limits…</p>
   if (quota.error)
     return <p className="team-muted">Couldn’t read the limits: {quota.error.message}</p>
-  return <QuotaMeters runtime={runtime} quota={quota.data} />
+  return <QuotaMeters runtime={runtime} quota={quota.data} {...(floor ? { floor } : {})} />
 }
 
 /** The compact line in the add-agent form: the latest reading for the chosen kind of coding agent. */

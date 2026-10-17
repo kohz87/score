@@ -72,6 +72,11 @@ export function StartWorkflowDialog({
   // The coding fields. Nothing carries over from an earlier run, so a rerun starts with none of them accepted.
   const [codingSteps, setCodingSteps] = useState<number | null>(null)
   const [unknownCost, setUnknownCost] = useState<CostSource[]>([])
+  // 8.6: blank = each coding agent's own quota floor.
+  const [quotaFloor, setQuotaFloor] = useState('')
+  const quotaFloorValid =
+    quotaFloor.trim() === '' ||
+    (Number.isInteger(Number(quotaFloor)) && Number(quotaFloor) >= 0 && Number(quotaFloor) <= 50)
   // The policy ids the person accepted the reach of. A changed id is not covered: it has to be accepted again.
   const [reachAccepted, setReachAccepted] = useState<string[]>([])
   useEffect(() => {
@@ -128,6 +133,9 @@ export function StartWorkflowDialog({
                 ),
               ),
               codingSteps: stepLimit,
+              ...(quotaFloor.trim() !== '' && quotaFloorValid
+                ? { quotaFloorPercent: Number(quotaFloor) }
+                : {}),
               ...(reachIds.length > 0 ? { acknowledgeCodingReach: { policyIds: reachIds } } : {}),
               ...(unknownSpend === 'pause' && unknownCost.length > 0
                 ? { acceptUnknownCost: unknownCost }
@@ -327,6 +335,20 @@ export function StartWorkflowDialog({
                 />
               </label>
             )}
+            {workers.length > 0 && (
+              <label className="orch-field">
+                <span>Quota floor (%): leave blank to use each coding agent’s own</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={50}
+                  inputMode="numeric"
+                  value={quotaFloor}
+                  aria-invalid={!quotaFloorValid}
+                  onChange={(event) => setQuotaFloor(event.target.value)}
+                />
+              </label>
+            )}
           </div>
           <p className="orch-muted">
             {data?.maxSteps === undefined
@@ -416,6 +438,7 @@ export function StartWorkflowDialog({
               !definition ||
               blocked ||
               missing.length > 0 ||
+              !quotaFloorValid ||
               !reachCovered
             }
           >

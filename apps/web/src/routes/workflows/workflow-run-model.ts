@@ -12,6 +12,7 @@ import type {
 import { NodeStateSchema } from '@score/contract'
 import type { Effect, GraphEdge, GraphNode, NodeVisual } from '../orchestrations/orch-model.ts'
 import { describeCondition } from './workflow-model.ts'
+import { heldNeedsText } from '../orchestrations/quota-text.ts'
 
 // How a workflow run looks (PLAN 7.1b): the definition's graph with the run's node states, the tokens as edge states and
 // moving dots, and what each event of the run's history shows. Pure; the page reads the server's state and events and
@@ -62,6 +63,7 @@ export const waitingText: Record<WaitingFor, string> = {
   coding_settings: 'waiting for your decision on the agent’s new settings',
   coding_limit: 'waiting for a higher coding step limit',
   held_back: 'waiting for you to try again',
+  quota_low: 'held: the agent’s limit is low',
   coding_room:
     'waiting for room: other coding steps of this run hold their inputs until they are sent or finished',
 }
@@ -332,6 +334,8 @@ export function workflowNeedsText(
       return `${item.agentId}’s settings changed: decide whether ${nodeLabel(item.nodeId)} uses the new ones`
     case 'coding_limit':
       return `${item.used} of ${item.limit} coding steps are used: raise the limit to go on`
+    case 'quota_low':
+      return heldNeedsText(nodeLabel(item.nodeId), item.agentId)
     case 'coding_held_back':
       return `${nodeLabel(item.nodeId)} was held back 20 times: try again or stop`
     case 'node_inputs_withdrawn':

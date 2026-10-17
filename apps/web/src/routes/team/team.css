@@ -1058,6 +1058,25 @@ a.team-pill-button {
   padding: 0;
 }
 
+/* The quota floor field (PLAN 8.6). */
+.team-quota-floor label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.team-quota-floor-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.team-quota-floor-input input {
+  width: 4.5rem;
+}
+.team-quota-floor p {
+  margin: 4px 0 0;
+}
+
 /* CLI quota meters (PLAN 8.1): a bar per window; the figure beside it always says the same thing as the fill. */
 .quota {
   text-align: left;
@@ -1081,6 +1100,7 @@ a.team-pill-button {
   overflow-wrap: anywhere;
 }
 .quota-bar {
+  position: relative;
   display: block;
   height: 8px;
   border-radius: var(--radius-pill);
@@ -1092,6 +1112,16 @@ a.team-pill-button {
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--ink);
+}
+/* The floor (PLAN 8.6): runs stop giving this agent new steps below it. */
+.quota-floor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--agent-coral);
+  box-shadow: 0 0 0 1px var(--card);
 }
 .quota-fill[data-level='low'] {
   background: var(--agent-saffron);
