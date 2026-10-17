@@ -70,8 +70,15 @@ function assignOnce(
 describe('at assignment', () => {
   test('a coding agent below its floor is refused with the reason and who else has room; the lead picks another', async () => {
     const receipts: { status: string; code?: string; result?: Record<string, unknown> }[] = []
+    const inputs: string[] = []
+    const inner = assignOnce('coder', {}, receipts, { agent: 'second' })
     h = await workerHarness({
-      lead: { script: assignOnce('coder', {}, receipts, { agent: 'second' }) },
+      lead: {
+        script: async (t) => {
+          inputs.push(t.input)
+          return inner(t)
+        },
+      },
     })
     h.addAgent('coder')
     h.addAgent('second')
@@ -84,6 +91,8 @@ describe('at assignment', () => {
       result: { agent: 'coder', window: '5 hours', leftPercent: 6, otherAgents: ['second'] },
     })
     expect(receipts[1]).toMatchObject({ status: 'ok' })
+    // The lead is told about the refusal and the way out in its own instructions.
+    expect(inputs[0]).toContain('ifQuotaLow: "ask_owner"')
     expect(steps()).toMatchObject([{ agent_id: 'second', status: 'succeeded' }])
     expect(h.errors).toEqual([])
   })
