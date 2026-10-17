@@ -83,6 +83,13 @@ Score holds approvals, permissions and the security password; a shared theme mus
   zips), and keeps the CSS sanitiser's output as given by the browser **only after re-checking the cheap rules
   server-side** (`url(`, `@import`, `content`, `!important`, `position: fixed`) after unescaping — belt and braces.
 
+**Import flow (v1.1):** the server unpacks and validates the zip and **rejects** (422 `theme_rejected` with the reasons)
+any package whose CSS still contains, after unescaping, `@import`, a non-`asset:` `url(`, `content`, `!important`,
+`position: fixed|sticky`, `expression(`, `behavior`, `-moz-binding` or `javascript:`; it never stores CSS it had to change.
+The browser sanitiser (§4.1) runs on every apply and drops what only the browser can judge reliably (protected selectors,
+`:has()` reaching protected elements, `z-index` > 50, `pointer-events`, unknown at-rules); its report is shown in the
+install preview and the Customizer. `asset:` references in CSS are rewritten by the server when it serves the stylesheet.
+
 ## 6. Applying (web)
 - `ThemeEngine`: turns a manifest into `<html>` attributes (`data-nav`, `data-width`, `data-radius`, `data-elevation`,
   `data-surface`, `data-border`, `data-chat`), a generated token stylesheet (layer `theme`), font-faces, the theme CSS

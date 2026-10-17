@@ -2164,3 +2164,23 @@ ten-minute timer are the same for orchestration step attempts (the executor owns
 refused as proven unsent) and `[fake:lose:N]` (added in 7.1b: the first N runs of the node are reported cancelled, which is not
 termination evidence, so the attempt is "not confirmed ended" and the abandon → Retry path can be exercised). The fake adapter reports complete spend evidence, so its runs settle. E2E specs never use a live
 Hermes or tokens.
+
+## 16. Themes (PLAN 9; schemas in `packages/contract/src/themes.ts`; design docs/briefs/9-themes.md, decision 90)
+
+A theme is a declarative package: `theme.json` (`ThemeManifest`, format `1`), an optional `style.css` and `assets/`
+(woff2 fonts, png/jpg/webp/avif images). No theme code runs. Built-in ids `score`, `paper`, `night`, `dense`.
+- `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`).
+- `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`.
+- `GET /api/themes/:id/style.css` → `text/css` with `asset:` references rewritten to the asset URLs below.
+- `GET /api/themes/:id/assets/<fonts|img>/<file>` → the file with its exact type, `nosniff`, `cache-control: private`.
+- `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
+  `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
+  `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5).
+- `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult`; stored, **not** activated.
+  `409 theme_exists` (same id; `?replace=1` replaces an imported or custom theme, never a built-in);
+  `422 theme_rejected { reasons[] }` (bad manifest, newer `format`, bad paths, sizes, file types, CSS checks).
+- `GET /api/themes/:id/export` → `application/zip` (the same layout as import).
+- `DELETE /api/themes/:id` → `204`; `409 builtin_theme`, `409 theme_active`.
+- `PUT /api/look` `LookSettings` → `204`; `404` for an unknown theme. Emits `look.changed { activeTheme, mode }` on the
+  stream so other open devices switch.
+Per-device overrides live in the browser (localStorage) and never reach the server.
