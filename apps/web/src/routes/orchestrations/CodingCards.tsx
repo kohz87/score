@@ -220,6 +220,7 @@ export function QuotaLowCard({
   return (
     <Arrival
       arrivalId={`quota-${arrivalKey}`}
+      data-protected="block"
       className="orch-decision"
       aria-label={`${hold.agentId}’s limit is low`}
     >
