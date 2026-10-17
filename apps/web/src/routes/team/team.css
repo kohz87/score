@@ -1059,7 +1059,11 @@ a.team-pill-button {
 }
 
 /* The quota floor field (PLAN 8.6). */
+.team-quota-floor {
+  text-align: left;
+}
 .team-quota-floor label {
+  justify-content: flex-start;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1159,4 +1163,38 @@ a.team-pill-button {
 }
 .coding-reach p:last-child {
   margin-bottom: 0;
+}
+
+/* "<name> joined the team": the end of Add agent and Import agent. */
+.team-added {
+  display: grid;
+  gap: var(--space-4);
+}
+.team-added-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.team-added-head h2 {
+  margin: 0;
+}
+.team-added-head p {
+  margin: var(--space-1) 0 0;
+}
+.team-added-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.team-added-actions .team-primary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--card);
+  font-weight: 700;
+  text-decoration: none;
 }

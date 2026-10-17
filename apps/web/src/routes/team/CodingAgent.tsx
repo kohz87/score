@@ -11,7 +11,7 @@ import {
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
@@ -131,7 +131,18 @@ function PermissionPicker({
   )
 }
 
-export function AddCodingAgentForm({ close }: { close: () => void }) {
+const shortPermission: Record<CodingPermission, string> = {
+  'read-only': 'read only',
+  'workspace-write': 'workspace write',
+  full: 'full access',
+}
+
+export function AddCodingAgentForm({
+  onAdded,
+}: {
+  /** The agent and one line about it, for the dialog's "joined the team" view. */
+  onAdded: (agent: CodingAgent, detail: string) => void
+}) {
   const queryClient = useQueryClient()
   const runtimes = useQuery(codingRuntimesQuery)
   const [runtime, setRuntime] = useState<CodingRuntime>('claude-code')
@@ -165,20 +176,20 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
           }),
         }),
       ),
-    onSuccess: () => {
+    onSuccess: (agent) => {
       void queryClient.invalidateQueries({ queryKey: ['coding'] })
       void queryClient.invalidateQueries({ queryKey: ['team'] })
+      onAdded(
+        agent,
+        [
+          'Coding agent',
+          info?.label ?? runtime,
+          agent.model ?? 'the CLI’s default model',
+          shortPermission[agent.permission],
+        ].join(' · '),
+      )
     },
   })
-  if (create.data)
-    return (
-      <>
-        <p role="status">{create.data.name} joined the team.</p>
-        <Link to={`/team/${encodeURIComponent(create.data.id)}`} onClick={close}>
-          View agent
-        </Link>
-      </>
-    )
   return (
     <form
       className="team-routine-form"
