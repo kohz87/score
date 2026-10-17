@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.4.1] — 2026-10-17
+
+### Fixed
+- **Adding an agent with a capital letter in its name** (often added by a phone keyboard) showed "Couldn't read that
+  request". The name fields of Add agent and Add coding agent now turn what you type into lowercase, don't
+  auto-capitalise, and say "lowercase" in their label; the browser's own check on these fields and on the model name
+  works again (its pattern was silently ignored by current browsers).
+
 ## [1.4.0] — 2026-10-16
 
 Phase 8: a chat-first view, theme packs, quota meters, a model picker for coding agents and memory notes from compaction.
