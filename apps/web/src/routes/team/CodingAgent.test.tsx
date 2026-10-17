@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AddCodingAgentForm } from './CodingAgent.tsx'
+import { CodingPersonality } from './CodingPersonality.tsx'
 
 const runtime = (name: string, label: string, extra: object = {}) => ({
   runtime: name,
@@ -96,6 +97,8 @@ test('Release: shown only for groups Score can’t attribute, posts once and nam
     id: 'coder',
     name: 'Coder',
     role: '',
+    instructions: '',
+    instructionsEtag: 'e0',
     runtime: 'claude-code',
     workspace: '/w',
     permission: 'workspace-write',
@@ -156,6 +159,8 @@ test('Release: a supervised run is named by its service, not by a process group'
               id: 'coder',
               name: 'Coder',
               role: '',
+              instructions: '',
+              instructionsEtag: 'e0',
               runtime: 'claude-code',
               workspace: '/w',
               permission: 'workspace-write',
@@ -273,6 +278,8 @@ test('the quota floor field: "stop using this agent in runs below N%", saved wit
     id: 'coder',
     name: 'Coder',
     role: '',
+    instructions: '',
+    instructionsEtag: 'e0',
     runtime: 'claude-code',
     workspace: '/w',
     permission: 'workspace-write',
@@ -319,4 +326,134 @@ test('the quota floor field: "stop using this agent in runs below N%", saved wit
   fireEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(patches).toHaveLength(1))
   expect(patches[0]).toMatchObject({ quotaFloorPercent: 25 })
+})
+
+const personaAgent = (over: object = {}) => ({
+  id: 'builder',
+  name: 'Builder',
+  role: 'Reviews build scripts',
+  instructions: '## Style\n\nBe **brief**.',
+  instructionsEtag: 'etag-1',
+  runtime: 'claude-code',
+  workspace: '/w',
+  permission: 'workspace-write',
+  model: null,
+  style: { color: '#6B4EFF', shape: 'hexagon' },
+  quota: 'q',
+  quotaFloorPercent: 10,
+  cli: { state: 'ready', version: '1.0.0', testedVersions: ['1.0.0'], confirmed: false },
+  heldGroups: [],
+  createdAt: '2026-10-17T00:00:00.000Z',
+  ...over,
+})
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+
+function renderPersonality(onChanged = () => undefined) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <CodingPersonality coding={personaAgent() as never} onChanged={onChanged} />
+    </QueryClientProvider>,
+  )
+}
+
+test('Personality card: role line and rendered instructions; Edit opens the editor, Cancel closes it unsaved', async () => {
+  renderPersonality()
+  expect(screen.getByText('Reviews build scripts')).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Style' })).toBeDefined()
+  expect(screen.getByText('brief').tagName).toBe('STRONG')
+  fireEvent.click(screen.getByRole('button', { name: 'Edit personality' }))
+  const text = screen.getByLabelText('Personality and instructions') as HTMLTextAreaElement
+  expect(text.value).toContain('Be **brief**.')
+  fireEvent.change(text, { target: { value: 'changed' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByLabelText('Personality and instructions')).toBeNull()
+  expect(screen.getByRole('heading', { name: 'Style' })).toBeDefined()
+})
+
+test('Personality editor: Save sends the role, the text and the etag it started from', async () => {
+  const patches: unknown[] = []
+  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+    patches.push(JSON.parse(String(init?.body)))
+    return json(personaAgent({ instructions: 'Be bold.', instructionsEtag: 'etag-2' }))
+  })
+  const changed = vi.fn()
+  renderPersonality(changed)
+  fireEvent.click(screen.getByRole('button', { name: 'Edit personality' }))
+  const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+  // Nothing changed yet.
+  expect(save.disabled).toBe(true)
+  fireEvent.change(screen.getByLabelText('Personality and instructions'), {
+    target: { value: 'Be bold.' },
+  })
+  fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'Lead builder' } })
+  fireEvent.click(save)
+  await waitFor(() => expect(changed).toHaveBeenCalled())
+  expect(patches).toEqual([
+    { role: 'Lead builder', instructions: 'Be bold.', instructionsEtag: 'etag-1' },
+  ])
+})
+
+test('Personality editor: only the role changed sends no instructions', async () => {
+  const patches: unknown[] = []
+  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+    patches.push(JSON.parse(String(init?.body)))
+    return json(personaAgent({ role: 'Lead builder' }))
+  })
+  renderPersonality()
+  fireEvent.click(screen.getByRole('button', { name: 'Edit personality' }))
+  fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'Lead builder' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(patches.length).toBe(1))
+  expect(patches[0]).toEqual({ role: 'Lead builder' })
+})
+
+test('Personality editor: a stale save says so in plain words, and Overwrite with mine resends against the newest etag', async () => {
+  const patches: { instructionsEtag?: string }[] = []
+  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as { instructionsEtag?: string }
+    patches.push(body)
+    if (body.instructionsEtag === 'etag-1')
+      return json(
+        {
+          error: {
+            code: 'conflict',
+            message: 'These instructions were changed somewhere else.',
+            details: { etag: 'etag-9', instructions: 'Their text.' },
+          },
+        },
+        409,
+      )
+    return json(personaAgent({ instructions: 'Mine.', instructionsEtag: 'etag-10' }))
+  })
+  const changed = vi.fn()
+  renderPersonality(changed)
+  fireEvent.click(screen.getByRole('button', { name: 'Edit personality' }))
+  fireEvent.change(screen.getByLabelText('Personality and instructions'), {
+    target: { value: 'Mine.' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  expect(await screen.findByText('These instructions changed while you were editing')).toBeDefined()
+  expect(screen.queryByText(/409|etag/i)).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Overwrite with mine' }))
+  await waitFor(() => expect(changed).toHaveBeenCalled())
+  expect(patches.map((patch) => patch.instructionsEtag)).toEqual(['etag-1', 'etag-9'])
+})
+
+test('Add form: the optional role is sent only when filled in', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <AddCodingAgentForm onAdded={() => undefined} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  await screen.findByRole('option', { name: 'Claude Code' }, { timeout: 10_000 })
+  fireEvent.change(screen.getByLabelText(/Agent name/), { target: { value: 'rev' } })
+  fireEvent.change(screen.getByLabelText('Role (optional)'), { target: { value: 'Reviewer' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add coding agent' }))
+  await waitFor(() => expect(posted.length).toBe(1))
+  expect(posted[0]).toMatchObject({ id: 'rev', role: 'Reviewer' })
 })

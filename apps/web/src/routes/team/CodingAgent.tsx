@@ -16,6 +16,7 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { CodingBackend } from './CodingBackend.tsx'
+import { CodingPersonality } from './CodingPersonality.tsx'
 import { AGENT_ID_PATTERN, agentIdInput } from './agent-id.ts'
 import { ModelPicker } from './ModelPicker.tsx'
 import { ReleaseHeld } from './ReleaseHeld.tsx'
@@ -148,6 +149,7 @@ export function AddCodingAgentForm({
   const [runtime, setRuntime] = useState<CodingRuntime>('claude-code')
   const [id, setId] = useState('')
   const [name, setName] = useState('')
+  const [role, setRole] = useState('')
   const [workspace, setWorkspace] = useState('')
   const [model, setModel] = useState('')
   const [permission, setPermission] = useState<CodingPermission>('workspace-write')
@@ -166,6 +168,7 @@ export function AddCodingAgentForm({
           body: JSON.stringify({
             id,
             name: name || id,
+            ...(role.trim() ? { role: role.trim() } : {}),
             runtime,
             permission,
             style,
@@ -261,6 +264,15 @@ export function AddCodingAgentForm({
             setId(next)
             setName(next)
           }}
+        />
+      </label>
+      <label>
+        Role (optional)
+        <input
+          maxLength={2000}
+          placeholder="For example: reviews build scripts"
+          value={role}
+          onChange={(event) => setRole(event.target.value)}
         />
       </label>
       <label>
@@ -364,20 +376,28 @@ export function CodingOverview({ agent }: { agent: AgentDetail }) {
         <p>This coding agent is no longer available.</p>
       </section>
     )
+  const changed = () => {
+    void queryClient.invalidateQueries({ queryKey: ['coding'] })
+    void queryClient.invalidateQueries({ queryKey: ['team'] })
+  }
   return (
-    <CodingSettings
-      key={`${coding.permission}:${coding.model}:${coding.quotaFloorPercent}:${coding.cli.confirmed}:${coding.heldGroups.length}`}
-      coding={coding}
-      onChanged={() => {
-        void queryClient.invalidateQueries({ queryKey: ['coding'] })
-        void queryClient.invalidateQueries({ queryKey: ['team'] })
-      }}
-      onRemoved={() => {
-        void queryClient.invalidateQueries({ queryKey: ['coding'] })
-        void queryClient.invalidateQueries({ queryKey: ['team'] })
-        void navigate('/team')
-      }}
-    />
+    <>
+      {/* Keyed by the stored text: a save elsewhere starts a fresh editor instead of rebasing an old draft. */}
+      <CodingPersonality
+        key={`${coding.instructionsEtag}:${coding.role}`}
+        coding={coding}
+        onChanged={changed}
+      />
+      <CodingSettings
+        key={`${coding.permission}:${coding.model}:${coding.quotaFloorPercent}:${coding.cli.confirmed}:${coding.heldGroups.length}`}
+        coding={coding}
+        onChanged={changed}
+        onRemoved={() => {
+          changed()
+          void navigate('/team')
+        }}
+      />
+    </>
   )
 }
 
