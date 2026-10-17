@@ -3,6 +3,28 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.6.0] — 2026-10-17
+
+### Added
+- **Themes, part 1 (Phase 9):** Score stores themes and can import and export them as `.zip` packages (`theme.json`,
+  sanitised CSS, woff2 fonts, images; no scripts). Settings › Look always shows the style cards; pick a theme for every
+  device, or a different one for this device only. Approvals, decisions, password prompts, permission settings, the
+  Needs-you items and agent shapes can't be hidden, covered, relabelled or made unreadable by a theme. Ways back from a
+  broken theme: `?look=safe`, Ctrl+Shift+0, "Reset look on this device" in the command palette, and
+  `scripts/score look reset` on the host. The Customizer and the new layouts follow in the next releases.
+- **Sub-agents of coding agents:** a Claude Code turn that used its own sub-agent no longer ends as "not cleanly
+  finished"; the sub-agent's steps show nested under its card in Chat and Flow ("Sub-agent · List files · 1 tool call ·
+  done"), and Watch marks them.
+- **Role and personality for coding agents:** a Personality card on the coding agent's page (role and Markdown
+  instructions). Score hands it to the CLI each session (Claude Code as an added system prompt; Codex and Antigravity at
+  the start of a session, again only after you change it). Nothing is written into the agent's workspace.
+
+### Changed
+- Claude Code **2.1.302** is a tested version.
+
+### Upgrade notes
+- Three database migrations (0072 themes, 0073 sub-agent nesting, 0074 coding-agent instructions); back up first.
+
 ## [1.5.0] — 2026-10-17
 
 ### Added

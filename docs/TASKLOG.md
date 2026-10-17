@@ -188,3 +188,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   server built-in name "Night" → "Night shift" (combined e2e caught it). Combined run: check green after the fixes;
   e2e 353/365 → every failure explained (2 real, fixed; coding-agent/phone timing; count cascades; user-view flake),
   failing specs 21/21 alone.
+- **8.7 sub-agents** merged: lead re-ran the three real captures (sub-agent, 2.1.301, agy) with `loss: null`; lead fix:
+  the card shows the sub-agent's report without Claude Code's hand-back preamble. Full check green; e2e 364/370 with
+  live-feel 6/6 alone.
+- **8.8 role and personality** merged: lead verified `--system-prompt-snapshot`/`--append-system-prompt` in the help of
+  2.1.300–302 (decision 96). Full check green; e2e 370/371 (Night shift dark Chat screenshot 4/4 alone).
+- **Release 1.6.0**: themes part 1 (9.1 + 9.2), 8.7, 8.8, Claude Code 2.1.302 tested.
