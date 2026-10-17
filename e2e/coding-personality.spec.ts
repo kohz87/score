@@ -27,7 +27,7 @@ test('edit a coding agent’s personality, then the fake CLI reports that it rec
 }) => {
   test.setTimeout(120_000)
   const suffix = Date.now().toString(36)
-  const id = `builder-${suffix}`
+  const id = `persona-agent-${suffix}`
   const roomName = `persona-${suffix}`
   await pair(page)
   await page.goto('/team')
@@ -75,4 +75,10 @@ test('edit a coding agent’s personality, then the fake CLI reports that it rec
   await expect(reply).toBeVisible({ timeout: 30_000 })
   await expect(reply).toContainText('Your role: Lead builder')
   await expect(reply).toContainText('Never touch the lockfile.')
+
+  // Leave the shared fake team as it was: the other specs count agents and Reports rows.
+  page.once('dialog', (dialog) => void dialog.accept())
+  await page.goto(`/team/${encodeURIComponent(id)}`)
+  await page.getByRole('button', { name: 'Remove agent' }).click()
+  await expect(page).toHaveURL(/\/team$/)
 })
