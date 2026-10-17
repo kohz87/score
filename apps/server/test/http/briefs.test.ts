@@ -529,6 +529,31 @@ test('node detail and the log describe a step', async () => {
     gapped.items.some((line) => line.kind === 'system' && line.text.includes('not recorded')),
   ).toBe(true)
   db.sqlite.prepare('DELETE FROM gaps').run()
+  // PLAN 8.7: a coding agent's nesting reaches the log; a stored summary that can't be read is left out.
+  const subagent = JSON.stringify({
+    status: 'done',
+    description: 'Look',
+    subagentType: null,
+    toolCalls: 1,
+    durationMs: 5,
+    totalTokens: null,
+  })
+  db.sqlite
+    .prepare(
+      "UPDATE tool_calls SET call_id = 'c1', subagent = ? WHERE run_id = ? AND tool = 'terminal'",
+    )
+    .run(subagent, runId)
+  db.sqlite
+    .prepare(
+      "UPDATE tool_calls SET call_id = 'c2', parent_call_id = 'c1', subagent = 'garbage' WHERE run_id = ? AND tool = 'edit_file'",
+    )
+    .run(runId)
+  const nested = BriefLogPageSchema.parse(
+    (await get(`/api/briefs/${turnId}/log?kind=tool`)).json(),
+  ).items
+  expect(nested[0]).toMatchObject({ callId: 'c1', subagent: { status: 'done', toolCalls: 1 } })
+  expect(nested[1]).toMatchObject({ callId: 'c2', parentCallId: 'c1' })
+  expect(nested[1]).not.toHaveProperty('subagent')
   const tools = BriefLogPageSchema.parse((await get(`/api/briefs/${turnId}/log?kind=tool`)).json())
   expect(tools.items.map((line) => line.text)).toEqual(['Used terminal', 'Used edit_file'])
   expect(

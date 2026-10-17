@@ -600,6 +600,22 @@
   color: var(--card);
   font-weight: 600;
 }
+.flow-log__sub > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.flow-log__sub-label {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--chat-card-border, rgba(18, 19, 26, 0.08));
+  font-size: 11px;
+  font-weight: 600;
+}
+.flow-log__line--nested {
+  margin-left: 20px;
+  padding-left: 10px;
+  border-left: 2px solid var(--chat-card-border, rgba(18, 19, 26, 0.08));
+}
 .flow-log__lines {
   font-family: var(--font-code);
   font-size: 13px;

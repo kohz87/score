@@ -274,6 +274,17 @@ export const LaneBlockSchema = z.object({
 })
 export type LaneBlock = z.infer<typeof LaneBlockSchema>
 
+/** What a coding agent's sub-agent did, on the Agent tool call that started it (PLAN 8.7). Counts are the CLI's own. */
+export const SubagentSummarySchema = z.object({
+  status: z.enum(['running', 'done', 'failed']),
+  description: z.string().max(300).nullable(),
+  subagentType: z.string().max(100).nullable(),
+  toolCalls: z.int().nonnegative().nullable(),
+  durationMs: z.int().nonnegative().nullable(),
+  totalTokens: z.int().nonnegative().nullable(),
+})
+export type SubagentSummary = z.infer<typeof SubagentSummarySchema>
+
 export const MessagePartSchema = z.discriminatedUnion('kind', [
   // `via: 'mcp'` marks a message an agent posted through Score's MCP server (PLAN 7.4d); the UI shows a "via MCP" tag.
   z.object({ kind: z.literal('text'), text: z.string(), via: z.literal('mcp').optional() }),
@@ -284,12 +295,16 @@ export const MessagePartSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('tools'), summary: z.string(), runId: z.string().min(1) }),
   // One tool call of a run (PLAN 5.25). `args` and `result` are redacted previews, bounded by the server.
+  // PLAN 8.7: a coding agent's sub-agent calls carry `parentCallId` (the Agent call's `callId`); the Agent call carries `subagent`.
   z.object({
     kind: z.literal('tool'),
     tool: z.string().min(1).max(200),
     args: z.string().max(2048),
     result: z.string().max(2048).nullable(),
     status: z.enum(['running', 'ok', 'error']),
+    callId: z.string().min(1).max(200).optional(),
+    parentCallId: z.string().min(1).max(200).optional(),
+    subagent: SubagentSummarySchema.optional(),
   }),
   // The model's reasoning text, redacted and bounded; shown collapsed.
   z.object({ kind: z.literal('thinking'), text: z.string().max(8192) }),
@@ -428,6 +443,10 @@ export const LogLineSchema = z.object({
   agentId: AgentIdSchema,
   kind: z.enum(['tool', 'message', 'handoff', 'approval', 'system']),
   text: z.string(),
+  // PLAN 8.7: only on `kind: 'tool'` lines of a coding agent that used sub-agents.
+  callId: z.string().min(1).max(200).optional(),
+  parentCallId: z.string().min(1).max(200).optional(),
+  subagent: SubagentSummarySchema.optional(),
 })
 export type LogLine = z.infer<typeof LogLineSchema>
 

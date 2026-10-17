@@ -12,13 +12,36 @@ export type CodingEvent =
       kind: 'tool_start'
       /** The CLI's own call id; pairs a start with its end. */
       callId: string
+      /** The Agent tool call this call ran under (a sub-agent's own tool call), when the CLI says so. */
+      parentCallId?: string
       tool: string
       /** A short, human-readable summary of the arguments (redacted by the translator). */
       preview: string
       /** What a Watch frame can be built from. */
       detail?: ToolDetail
     }
-  | { kind: 'tool_end'; callId: string; ok: boolean; preview: string; exitCode?: number | null }
+  | {
+      kind: 'tool_end'
+      callId: string
+      parentCallId?: string
+      ok: boolean
+      preview: string
+      exitCode?: number | null
+    }
+  | {
+      /**
+       * A sub-agent's progress (Claude Code `task_*` records), keyed by the Agent tool call that started it. Only the
+       * sub-agent's own status: it never decides the turn (the result record does).
+       */
+      kind: 'subagent'
+      callId: string
+      status: 'running' | 'done' | 'failed'
+      description?: string
+      subagentType?: string
+      toolCalls?: number
+      durationMs?: number
+      totalTokens?: number
+    }
   | { kind: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number }
   | {
       kind: 'result'

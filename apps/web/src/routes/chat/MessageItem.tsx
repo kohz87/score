@@ -17,6 +17,7 @@ import { SaveToKnowledge, saveCandidates } from '../knowledge/SaveToKnowledge.ts
 import { approvalsQuery } from './queries.ts'
 import { StatusLine } from '../../live/StatusLine.tsx'
 import { useStatusLine } from '../../live/use-activity.ts'
+import { nestSubagentCalls, subagentLine, subagentReport } from '../../components/subagent.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { MODEL_DIDNT_ANSWER, formatElapsed, isNotProcessedNotice, stalledFor } from './stall.ts'
 
@@ -25,14 +26,21 @@ type Expansion = { open: boolean; version: number }
 
 const STATUS_LABEL = { running: 'Running', ok: 'Done', error: 'Failed' } as const
 
+type ToolPart = Extract<MessagePart, { kind: 'tool' }>
+
 function ToolCard({
   part,
   expansion,
   live,
+  nested = [],
+  agent,
 }: {
-  part: Extract<MessagePart, { kind: 'tool' }>
+  part: ToolPart
   expansion: Expansion
   live: boolean
+  /** The calls a sub-agent made under this Agent call (PLAN 8.7), shown inside the card. */
+  nested?: ToolPart[]
+  agent?: AgentSummary | undefined
 }) {
   const [open, setOpen] = useState(false)
   const [seen, setSeen] = useState(expansion.version)
@@ -43,25 +51,53 @@ function ToolCard({
   }
   // A tool that never reported back in a finished reply is not "running" any more.
   const status = part.status === 'running' && !live ? 'ok' : part.status
+  const sub = part.subagent
   return (
     <details
-      className={`chat-card chat-tool chat-tool--${status}`}
+      className={`chat-card chat-tool chat-tool--${status}${sub ? ' chat-tool--subagent' : ''}`}
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>
-        <code className="chat-tool-name">{part.tool}</code>
-        <span className="chat-tool-args">{part.args}</span>
+        {sub ? (
+          <>
+            {agent && <AgentGlyph agent={agent} size="xs" decorative />}
+            <span className="chat-subagent-label">sub-agent</span>
+            <span className="chat-tool-args">
+              {subagentLine(
+                sub.status === 'running' && !live ? { ...sub, status: 'done' } : sub,
+                nested.length,
+              )}
+            </span>
+          </>
+        ) : (
+          <>
+            <code className="chat-tool-name">{part.tool}</code>
+            <span className="chat-tool-args">{part.args}</span>
+          </>
+        )}
         <span className="chat-tool-status">{STATUS_LABEL[status]}</span>
       </summary>
-      {part.args && (
+      {sub && part.args && (
+        <p className="chat-subagent-task">
+          <code className="chat-tool-name">{part.tool}</code> {part.args}
+        </p>
+      )}
+      {nested.length > 0 && (
+        <div className="chat-subagent-calls" aria-label="Sub-agent tool calls">
+          {nested.map((call, index) => (
+            <ToolCard key={call.callId ?? index} part={call} expansion={expansion} live={live} />
+          ))}
+        </div>
+      )}
+      {!sub && part.args && (
         <pre className="chat-tool-body" aria-label="Arguments">
           {part.args}
         </pre>
       )}
       {part.result && (
         <pre className="chat-tool-body" aria-label="Result">
-          {part.result}
+          {sub ? subagentReport(part.result) : part.result}
         </pre>
       )}
     </details>
@@ -93,8 +129,10 @@ function Part({
   expansion,
   authorName,
   readOnly,
+  nested,
 }: {
   part: MessagePart
+  nested: ToolPart[]
   agents: AgentSummary[]
   message: Message
   expansion: Expansion
@@ -127,7 +165,19 @@ function Part({
         </>
       )
     case 'tool':
-      return <ToolCard part={part} expansion={expansion} live={message.streaming} />
+      return (
+        <ToolCard
+          part={part}
+          expansion={expansion}
+          live={message.streaming}
+          nested={nested}
+          agent={
+            message.author.kind === 'agent'
+              ? agents.find((item) => item.id === (message.author as { agentId: string }).agentId)
+              : undefined
+          }
+        />
+      )
     case 'thinking':
       return <Thinking text={part.text} streaming={message.streaming} />
     case 'tools':
@@ -462,6 +512,12 @@ export function MessageItem({
     !message.id.startsWith('pending-') &&
     !message.parts.some((part) => part.kind === 'summary')
   const cards = message.parts.filter((part) => part.kind === 'tool').length
+  // PLAN 8.7: a sub-agent's calls are drawn inside its Agent card, not beside it.
+  const nesting = (() => {
+    const tools = message.parts.filter((part): part is ToolPart => part.kind === 'tool')
+    const { top, children } = nestSubagentCalls(tools)
+    return { children, hidden: new Set(tools.filter((tool) => !top.includes(tool))) }
+  })()
   const writing = message.streaming && !you && !readOnly && !message.id.startsWith('pending-')
   const status = useStatusLine(author.kind === 'agent' ? author.agentId : null, {
     working: writing,
@@ -508,17 +564,25 @@ export function MessageItem({
               {expansion.version > 0 && expansion.open ? 'Collapse all' : 'Expand all'}
             </button>
           )}
-          {message.parts.map((part, index) => (
-            <Part
-              key={partKey(message.parts, index)}
-              part={part}
-              agents={agents}
-              message={message}
-              expansion={expansion}
-              authorName={name}
-              readOnly={readOnly}
-            />
-          ))}
+          {message.parts.map((part, index) => {
+            if (part.kind === 'tool' && nesting.hidden.has(part)) return null
+            return (
+              <Part
+                key={partKey(message.parts, index)}
+                nested={
+                  part.kind === 'tool' && part.callId
+                    ? (nesting.children.get(part.callId) ?? [])
+                    : []
+                }
+                part={part}
+                agents={agents}
+                message={message}
+                expansion={expansion}
+                authorName={name}
+                readOnly={readOnly}
+              />
+            )
+          })}
         </div>
         {writing && <StatusLine line={status} live />}
         {!readOnly && message.streaming && !you && !message.id.startsWith('pending-') && (
