@@ -51,6 +51,45 @@ test('a tool part is a collapsed card that opens to its arguments and result', (
   expect(screen.getByLabelText('Result').textContent).toBe('terminal result')
 })
 
+test('a sub-agent card nests the sub-agent’s calls, collapsed, with a one-line summary', () => {
+  const agentCard: MessagePart = {
+    kind: 'tool',
+    tool: 'Agent',
+    args: 'List all files',
+    result: null,
+    status: 'ok',
+    callId: 'c1',
+    subagent: {
+      status: 'done',
+      description: 'List files in folder',
+      subagentType: 'general-purpose',
+      toolCalls: 1,
+      durationMs: 7550,
+      totalTokens: 19455,
+    },
+  }
+  const inner: MessagePart = {
+    ...(tool('Bash') as object),
+    callId: 'c2',
+    parentCallId: 'c1',
+  } as MessagePart
+  const orphan: MessagePart = {
+    ...(tool('Read') as object),
+    callId: 'c3',
+    parentCallId: 'gone',
+  } as MessagePart
+  render(<MessageItem message={make([agentCard, inner, orphan])} agents={[]} />)
+  const line = screen.getByText('Sub-agent · List files in folder · 1 tool call · done')
+  const details = line.closest('details')!
+  expect(details.open).toBe(false)
+  expect(screen.getByText('sub-agent')).toBeTruthy()
+  // The nested call lives inside the Agent card; the orphan stays beside it.
+  expect(details.textContent).toContain('Bash')
+  expect(screen.getByText('Read').closest('details')).not.toBe(details)
+  expect(details.contains(screen.getByText('Read'))).toBe(false)
+  expect(screen.getAllByText('Bash')).toHaveLength(1)
+})
+
 test('a failed tool says so, and a running one only counts as running while the reply streams', () => {
   const { rerender } = render(
     <MessageItem message={make([tool('a', 'error'), tool('b', 'running')], true)} agents={[]} />,

@@ -82,6 +82,52 @@ const SystemNotice = z.object({
   subtype: z.string().min(1),
   is_error: z.boolean().optional(),
 })
+// Sub-agent records (Claude Code 2.1.302, real capture 2026-10-17). Exactly the captured shapes; a record that does not
+// match falls through to the system-notice rule and is loss. They describe the sub-agent only, never the turn.
+const Count = z.number().finite().nonnegative()
+const SubUsage = z.object({ total_tokens: Count, tool_uses: Count, duration_ms: Count }).loose()
+const TaskStarted = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('task_started'),
+  task_id: z.string().min(1),
+  tool_use_id: z.string().min(1),
+  description: z.string(),
+  subagent_type: z.string().optional(),
+  is_error: z.boolean().optional(),
+})
+const TaskProgress = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('task_progress'),
+  task_id: z.string().min(1),
+  tool_use_id: z.string().min(1),
+  description: z.string().optional(),
+  subagent_type: z.string().optional(),
+  usage: SubUsage,
+  is_error: z.boolean().optional(),
+})
+const TaskUpdated = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('task_updated'),
+  task_id: z.string().min(1),
+  patch: z.object({ status: z.string().min(1).optional() }).loose(),
+  is_error: z.boolean().optional(),
+})
+const TaskNotification = z.object({
+  type: z.literal('system'),
+  subtype: z.literal('task_notification'),
+  task_id: z.string().min(1),
+  tool_use_id: z.string().min(1),
+  status: z.string().min(1),
+  usage: SubUsage.optional(),
+  is_error: z.boolean().optional(),
+})
+// Only `completed` is a clean end; a status Score has not seen reads as failed for the sub-agent (visible, not the turn).
+const subStatus = (status: string): 'running' | 'done' | 'failed' =>
+  status === 'completed'
+    ? 'done'
+    : status === 'running' || status === 'pending'
+      ? 'running'
+      : 'failed'
 const IGNORABLE_BLOCKS = new Set(['image', 'redacted_thinking', 'document'])
 
 const PATH_KEYS = ['file_path', 'path', 'notebook_path']
@@ -90,6 +136,11 @@ function preview(tool: string, input: unknown): string {
   const record = input as Record<string, unknown>
   const pick = (key: string) => (typeof record[key] === 'string' ? (record[key] as string) : null)
   if (tool === 'Bash') return pick('command') ?? ''
+  // A sub-agent's card says what it was asked to do, in a few words, not the whole prompt (PLAN 8.7).
+  if (tool === 'Agent' || tool === 'Task') {
+    const description = pick('description')
+    if (description) return description
+  }
   for (const key of [...PATH_KEYS, 'pattern', 'url', 'query']) {
     const value = pick(key)
     if (value) return value
@@ -152,8 +203,60 @@ function createInnerClaudeParser(cwd?: string): LineParser {
     lossNote ??= note
   }
   let resultSeen = false
+  // task_updated names the task, not the Agent tool call: remembered from the other task_* records.
+  const taskCalls = new Map<string, string>()
   // The latest rate-limit windows of the stream (8.1): kept for the meters, never part of a verdict.
   let quota: CodingQuotaWindow[] | null = null
+  const subagentEvent = (value: unknown): CodingEvent | null => {
+    const started = TaskStarted.safeParse(value)
+    if (started.success && started.data.is_error !== true) {
+      taskCalls.set(started.data.task_id, started.data.tool_use_id)
+      return {
+        kind: 'subagent',
+        callId: started.data.tool_use_id,
+        status: 'running',
+        description: started.data.description,
+        ...(started.data.subagent_type ? { subagentType: started.data.subagent_type } : {}),
+      }
+    }
+    const progress = TaskProgress.safeParse(value)
+    if (progress.success && progress.data.is_error !== true) {
+      taskCalls.set(progress.data.task_id, progress.data.tool_use_id)
+      return {
+        kind: 'subagent',
+        callId: progress.data.tool_use_id,
+        status: 'running',
+        toolCalls: progress.data.usage.tool_uses,
+        durationMs: progress.data.usage.duration_ms,
+        totalTokens: progress.data.usage.total_tokens,
+      }
+    }
+    const note = TaskNotification.safeParse(value)
+    if (note.success && note.data.is_error !== true) {
+      taskCalls.set(note.data.task_id, note.data.tool_use_id)
+      const usage = note.data.usage
+      return {
+        kind: 'subagent',
+        callId: note.data.tool_use_id,
+        status: subStatus(note.data.status),
+        ...(usage
+          ? {
+              toolCalls: usage.tool_uses,
+              durationMs: usage.duration_ms,
+              totalTokens: usage.total_tokens,
+            }
+          : {}),
+      }
+    }
+    const updated = TaskUpdated.safeParse(value)
+    const callId = updated.success ? taskCalls.get(updated.data.task_id) : undefined
+    // An update for a task Score never saw start cannot be placed: it stays unrecognised (loss).
+    if (updated.success && updated.data.is_error !== true && callId) {
+      const status = updated.data.patch.status
+      return { kind: 'subagent', callId, status: status ? subStatus(status) : 'running' }
+    }
+    return null
+  }
   return {
     stats,
     quota: () => quota,
@@ -198,6 +301,8 @@ function createInnerClaudeParser(cwd?: string): LineParser {
       }
       if (message.success) {
         const content = message.data.message.content
+        const rawParent = (value as { parent_tool_use_id?: unknown }).parent_tool_use_id
+        const parent = typeof rawParent === 'string' && rawParent ? rawParent : undefined
         // Anything the model or its tools did after the result contradicts the verdict already given (A2).
         if (resultSeen && (typeof content === 'string' ? content !== '' : content.length > 0))
           lose('Claude Code reported activity after its result')
@@ -213,6 +318,9 @@ function createInnerClaudeParser(cwd?: string): LineParser {
           const thinking = ThinkingBlock.safeParse(block)
           const use = ToolUseBlock.safeParse(block)
           const result = ToolResultBlock.safeParse(block)
+          // A sub-agent's own prose is its report to the Agent tool, not part of the turn's reply.
+          if (parent && (text.success || thinking.success) && message.data.type === 'assistant')
+            continue
           if (text.success && message.data.type === 'assistant') {
             if (!text.data.text) continue
             events.push({ kind: 'text', text: spoke ? `\n\n${text.data.text}` : text.data.text })
@@ -225,6 +333,7 @@ function createInnerClaudeParser(cwd?: string): LineParser {
             events.push({
               kind: 'tool_start',
               callId: use.data.id,
+              ...(parent ? { parentCallId: parent } : {}),
               tool: use.data.name,
               preview: preview(use.data.name, use.data.input),
               ...(toolDetail ? { detail: toolDetail } : {}),
@@ -233,16 +342,17 @@ function createInnerClaudeParser(cwd?: string): LineParser {
             events.push({
               kind: 'tool_end',
               callId: result.data.tool_use_id,
+              ...(parent ? { parentCallId: parent } : {}),
               ok: result.data.is_error !== true,
               preview: resultText(result.data.content),
             })
           } else {
-            stats.unknown++
             // A block of a known kind that fails its schema, or one nobody allow-listed, may have been the answer or a
             // tool outcome. (Text and thinking inside a user message are echoes: nothing depends on them.)
             const kind = ContentBlock.safeParse(block)
             const type = kind.success ? kind.data.type : ''
             const echo = message.data.type === 'user' && (type === 'text' || type === 'thinking')
+            if (!echo) stats.unknown++
             if (!echo && !IGNORABLE_BLOCKS.has(type))
               lose('Claude Code sent a record Score could not validate')
           }
@@ -301,7 +411,20 @@ function createInnerClaudeParser(cwd?: string): LineParser {
         })
         return events
       }
-      if (envelopeType === 'rate_limit_event') quota = claudeQuotaFromRecord(value) ?? quota
+      if (envelopeType === 'rate_limit_event') {
+        const windows = claudeQuotaFromRecord(value)
+        quota = windows ?? quota
+        // A record that carries windows is understood; an odd one still counts.
+        if (windows) return events
+      }
+      if (envelopeType === 'system' && !resultSeen) {
+        const sub = subagentEvent(value)
+        if (sub) {
+          events.push(sub)
+          return events
+        }
+        if ((value as { subtype?: unknown }).subtype === 'commands_changed') return events
+      }
       // Known envelope without meaning for us: only the allow-listed notices (and non-init system records, hooks…) may be
       // ignored. A `result` that failed validation is exactly what must not vanish.
       stats.unknown++

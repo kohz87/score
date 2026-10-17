@@ -28,6 +28,7 @@ import {
   type BriefRow,
   type TurnRow,
 } from './briefs.ts'
+import { readSubagent } from './message-runs.ts'
 import { messageFromRow } from './rooms.ts'
 import { taskWithApproval } from './tasks.ts'
 import {
@@ -768,12 +769,20 @@ export function readBriefLog(
     if (!profile) continue
     for (const tool of z
       .array(
-        z.object({ seq: z.int(), tool: z.string(), started_at: z.string(), status: z.string() }),
+        z.object({
+          seq: z.int(),
+          tool: z.string(),
+          started_at: z.string(),
+          status: z.string(),
+          call_id: z.string().nullable(),
+          parent_call_id: z.string().nullable(),
+          subagent: z.string().nullable(),
+        }),
       )
       .parse(
         sqlite
           .prepare(
-            'SELECT seq, tool, started_at, status FROM tool_calls WHERE run_id = ? ORDER BY seq',
+            'SELECT seq, tool, started_at, status, call_id, parent_call_id, subagent FROM tool_calls WHERE run_id = ? ORDER BY seq',
           )
           .all(runId),
       ))
@@ -783,6 +792,9 @@ export function readBriefLog(
         agentId: profile,
         kind: 'tool',
         text: tool.status === 'error' ? `${tool.tool} failed` : `Used ${tool.tool}`,
+        ...(tool.call_id ? { callId: tool.call_id.slice(0, 200) } : {}),
+        ...(tool.parent_call_id ? { parentCallId: tool.parent_call_id.slice(0, 200) } : {}),
+        ...(readSubagent(tool.subagent) ? { subagent: readSubagent(tool.subagent)! } : {}),
       })
     for (const gap of z
       .array(z.object({ id: z.int(), from_ts: z.string(), reason: z.string() }))
