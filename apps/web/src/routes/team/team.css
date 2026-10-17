@@ -1165,6 +1165,28 @@ a.team-pill-button {
   margin-bottom: 0;
 }
 
+/* A coding agent's personality card (PLAN 8.8): the role as a line, the instructions rendered below it. */
+.team-routine-form .team-file-text {
+  font-family: var(--font-code);
+  font-size: 13px;
+  min-height: 260px;
+}
+.coding-role {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+}
+.coding-instructions {
+  padding: 14px var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+  max-height: 320px;
+  overflow: auto;
+}
+
 /* "<name> joined the team": the end of Add agent and Import agent. */
 .team-added {
   display: grid;

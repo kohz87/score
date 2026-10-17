@@ -1634,6 +1634,8 @@ const cases = [
       id: 'coder',
       name: 'Coder',
       role: '',
+      instructions: 'Be brief.',
+      instructionsEtag: '0123456789abcdef',
       runtime: 'codex',
       workspace: '/work/coder',
       permission: 'read-only',
@@ -1664,6 +1666,7 @@ const cases = [
       id: 'coder',
       name: 'Coder',
       role: '',
+      instructions: '',
       runtime: 'claude-code',
       permission: 'workspace-write',
       style: { color: '#19C39A', shape: 'hexagon' },
@@ -2044,4 +2047,17 @@ test('Knowledge notes may be 8 MiB; embedded images are 1.5 MiB and never SVG (P
     contract.KnowledgeWriteRequestSchema.safeParse({ body, etag: null })
   expect(write('a'.repeat(contract.KNOWLEDGE_NOTE_MAX_BYTES)).success).toBe(true)
   expect(write('a'.repeat(contract.KNOWLEDGE_NOTE_MAX_BYTES + 1)).success).toBe(false)
+})
+
+// PLAN 8.8: an instructions edit names the text it started from, and the text is bounded.
+test('CodingAgentPatchSchema: instructions need their etag and stay within the limit', () => {
+  const patch = contract.CodingAgentPatchSchema
+  expect(patch.safeParse({ instructions: 'Be bold.', instructionsEtag: 'e1' }).success).toBe(true)
+  expect(patch.safeParse({ instructions: 'Be bold.' }).success).toBe(false)
+  expect(patch.safeParse({ instructionsEtag: 'e1' }).success).toBe(false)
+  expect(patch.safeParse({ role: 'Builder' }).success).toBe(true)
+  const text = (length: number) => ({ instructions: 'x'.repeat(length), instructionsEtag: 'e1' })
+  expect(patch.safeParse(text(contract.CODING_INSTRUCTIONS_MAX)).success).toBe(true)
+  expect(patch.safeParse(text(contract.CODING_INSTRUCTIONS_MAX + 1)).success).toBe(false)
+  expect(contract.CODING_INSTRUCTIONS_MAX).toBe(8000)
 })

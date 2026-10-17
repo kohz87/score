@@ -4,7 +4,14 @@
 // `[fixture:subagent]` (claude-code) prints a recorded turn that used a sub-agent (PLAN 8.7).
 // Usage: node fake-cli.mjs <claude-code|codex|opencode> <the real CLI's arguments…>
 import { spawn } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -29,6 +36,24 @@ else {
   for await (const chunk of process.stdin) prompt += chunk
 }
 
+// Claude Code reads the owner's instructions from a file (PLAN 8.8): remember what was in it and how it was protected.
+const appendedPath = args[args.indexOf('--append-system-prompt-file') + 1]
+const appended =
+  args.includes('--append-system-prompt-file') && appendedPath
+    ? {
+        path: appendedPath,
+        mode: (statSync(appendedPath).mode & 0o777).toString(8),
+        content: readFileSync(appendedPath, 'utf8'),
+      }
+    : null
+const SEPARATOR = '\n\n---\n\n'
+// What this launch was given as the owner's instructions: the file, or the block in front of the first message.
+const received =
+  appended?.content ??
+  (prompt.includes(SEPARATOR) && /^Your (name in this team|instructions were updated)/.test(prompt)
+    ? prompt.slice(0, prompt.indexOf(SEPARATOR))
+    : '')
+
 const log = process.env.SCORE_CODING_FAKE_LOG
 if (log)
   appendFileSync(
@@ -38,6 +63,7 @@ if (log)
       args,
       cwd: process.cwd(),
       prompt,
+      appended,
       env: Object.keys(process.env).sort(),
       pid: process.pid,
     })}\n`,
@@ -125,6 +151,8 @@ for (const line of lines) {
   // `{{PAD:n}}` stands for n filler characters, so a fixture can carry a very large tool result.
   else
     process.stdout.write(
-      `${line.replace(/\{\{PAD:(\d+)\}\}/g, (_, count) => 'v'.repeat(Number(count)))}\n`,
+      `${line
+        .replace(/\{\{PAD:(\d+)\}\}/g, (_, count) => 'v'.repeat(Number(count)))
+        .replaceAll('{{RECEIVED}}', () => JSON.stringify(received || 'none').slice(1, -1))}\n`,
     )
 }

@@ -15,6 +15,7 @@ const RowSchema = z.object({
   id: z.string(),
   name: z.string(),
   role: z.string(),
+  instructions: z.string(),
   runtime: CodingRuntimeSchema,
   workspace: z.string(),
   permission: CodingPermissionSchema,
@@ -30,6 +31,8 @@ export interface StoredCodingAgent {
   id: string
   name: string
   role: string
+  /** The owner's "Personality and instructions" (PLAN 8.8). */
+  instructions: string
   runtime: CodingRuntime
   workspace: string
   permission: CodingPermission
@@ -46,6 +49,7 @@ const toAgent = (value: unknown): StoredCodingAgent => {
     id: row.id,
     name: row.name,
     role: row.role,
+    instructions: row.instructions,
     runtime: row.runtime,
     workspace: row.workspace,
     permission: row.permission,
@@ -83,19 +87,24 @@ export function isCodingAgent(sqlite: DatabaseSync, id: string): boolean {
 }
 export function insertCodingAgent(
   sqlite: DatabaseSync,
-  agent: Omit<StoredCodingAgent, 'confirmedVersion' | 'removedAt' | 'quotaFloorPercent'> & {
+  agent: Omit<
+    StoredCodingAgent,
+    'confirmedVersion' | 'removedAt' | 'quotaFloorPercent' | 'instructions'
+  > & {
     quotaFloorPercent?: number
+    instructions?: string
   },
 ): void {
   sqlite
     .prepare(
-      `INSERT INTO coding_agents (id, name, role, runtime, workspace, permission, model, color, shape, created_at, quota_floor_percent)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO coding_agents (id, name, role, instructions, runtime, workspace, permission, model, color, shape, created_at, quota_floor_percent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       agent.id,
       agent.name,
       agent.role,
+      agent.instructions ?? '',
       agent.runtime,
       agent.workspace,
       agent.permission,
@@ -114,6 +123,7 @@ export function updateCodingAgent(
       StoredCodingAgent,
       | 'name'
       | 'role'
+      | 'instructions'
       | 'permission'
       | 'model'
       | 'workspace'
@@ -125,6 +135,7 @@ export function updateCodingAgent(
   const columns: Record<string, string> = {
     name: 'name',
     role: 'role',
+    instructions: 'instructions',
     permission: 'permission',
     model: 'model',
     workspace: 'workspace',
@@ -165,6 +176,27 @@ export function rememberCliSession(
        ON CONFLICT (room_id, agent_id) DO UPDATE SET session_id = excluded.session_id, updated_at = excluded.updated_at`,
     )
     .run(roomId, agentId, sessionId, now)
+}
+/** The hash of the role/instructions block this session last received ('' = none; also for sessions from before 8.8). */
+export function cliSessionInstructions(
+  sqlite: DatabaseSync,
+  roomId: string,
+  agentId: string,
+): string {
+  const row = sqlite
+    .prepare('SELECT instructions_hash FROM coding_sessions WHERE room_id = ? AND agent_id = ?')
+    .get(roomId, agentId) as { instructions_hash: string | null } | undefined
+  return row?.instructions_hash ?? ''
+}
+export function rememberCliInstructions(
+  sqlite: DatabaseSync,
+  roomId: string,
+  agentId: string,
+  hash: string,
+): void {
+  sqlite
+    .prepare('UPDATE coding_sessions SET instructions_hash = ? WHERE room_id = ? AND agent_id = ?')
+    .run(hash === '' ? null : hash, roomId, agentId)
 }
 export function forgetCliSession(sqlite: DatabaseSync, roomId: string, agentId: string): void {
   sqlite
