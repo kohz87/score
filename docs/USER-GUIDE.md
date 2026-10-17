@@ -237,6 +237,13 @@ works in rooms only (@mention it like any other); it cannot take Tasks, and its 
 routines and so on) do not apply. One turn runs at a time (others show as queued), a turn is stopped after 30
 minutes, and **Stop** works as for other agents.
 
+**Sub-agents.** At workspace write and full access, Claude Code can hand part of a job to its own sub-agent. The sub-agent
+works in the same folder, under the same sandbox, blocked folders and plan quota as the agent, and you only get the
+agent’s final answer. In Chat and in Flow's live log, the sub-agent’s tool calls appear inside the Agent card (closed until you
+open it, summary like “Sub-agent · List files in folder · 1 tool call · done”), and Watch captions its steps with
+“Sub-agent ·”. A sub-agent that fails is marked failed on its card; the step still follows the agent’s own final result.
+Read only can’t start sub-agents. Antigravity sub-agents aren’t shown yet.
+
 ## Knowledge
 
 A shared folder (the Knowledge folder, default `~/score-vault`) of Markdown notes and files that you and your agents use. Notes
