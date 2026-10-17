@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react'
-import type { AgentSummary, BriefFlow } from '@score/contract'
+import type { AgentSummary, BriefFlow, LogLine } from '@score/contract'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../../components/AgentGlyph.tsx'
+import { nestSubagentCalls, subagentLine } from '../../../components/subagent.ts'
 import { agentTextColor } from '../../chat/agent-text-color.ts'
 import { duration } from './FlowInspector.tsx'
 import { useBriefLog } from './flow-queries.ts'
@@ -15,6 +16,7 @@ export function FlowLog({ briefId, agents }: { briefId: string; agents: AgentSum
       log.data?.pages.flatMap((page) => page.items).map((line) => [line.id, line]),
     ).values(),
   ]
+  const { top, children } = nestSubagentCalls(lines)
   return (
     <section className="flow-log" aria-label="Live log">
       <div className="flow-log__heading">
@@ -53,29 +55,76 @@ export function FlowLog({ briefId, agents }: { briefId: string; agents: AgentSum
         aria-live="polite"
         aria-relevant="additions text"
       >
-        {lines.map((line) => {
-          const agent =
-            agents.find((item) => item.id === line.agentId) ??
-            (line.agentId && line.agentId !== 'you'
-              ? {
-                  id: line.agentId,
-                  name: line.agentId,
-                  style: { color: '#9AA0AB', shape: 'circle-dot' as const },
-                }
-              : undefined)
-          return (
-            <div key={line.id} className="flow-log__line">
-              <time dateTime={line.at}>
-                {new Date(line.at).toLocaleTimeString([], { hour12: false })}
-              </time>
+        {top.map((line) => {
+          const nested = line.callId ? (children.get(line.callId) ?? []) : []
+          const row = (item: LogLine) => {
+            const agent =
+              agents.find((candidate) => candidate.id === item.agentId) ??
+              (item.agentId && item.agentId !== 'you'
+                ? {
+                    id: item.agentId,
+                    name: item.agentId,
+                    style: { color: '#9AA0AB', shape: 'circle-dot' as const },
+                  }
+                : undefined)
+            const who = (
               <span
                 className="flow-log__agent"
                 style={{ color: agentTextColor(agent?.style.color ?? '#9AA0AB') }}
               >
                 {agent && <AgentGlyph agent={agent} size="xs" decorative />}
-                {agent?.name ?? line.agentId ?? 'System'}
+                {agent?.name ?? item.agentId ?? 'System'}
               </span>
-              <span>{line.text}</span>
+            )
+            const when = (
+              <time dateTime={item.at}>
+                {new Date(item.at).toLocaleTimeString([], { hour12: false })}
+              </time>
+            )
+            return { who, when }
+          }
+          const { who, when } = row(line)
+          // PLAN 8.7: a sub-agent's calls sit inside its Agent line, collapsed.
+          if (line.subagent)
+            return (
+              <details key={line.id} className="flow-log__sub">
+                <summary className="flow-log__line">
+                  {when}
+                  {who}
+                  <span>
+                    <span className="flow-log__sub-label">sub-agent</span>{' '}
+                    {subagentLine(line.subagent, nested.length)}
+                  </span>
+                </summary>
+                {nested.map((item) => {
+                  const inner = row(item)
+                  return (
+                    <div key={item.id} className="flow-log__line flow-log__line--nested">
+                      {inner.when}
+                      {inner.who}
+                      <span>{item.text}</span>
+                    </div>
+                  )
+                })}
+              </details>
+            )
+          return (
+            <div key={line.id} className="flow-log__group">
+              <div className="flow-log__line">
+                {when}
+                {who}
+                <span>{line.text}</span>
+              </div>
+              {nested.map((item) => {
+                const inner = row(item)
+                return (
+                  <div key={item.id} className="flow-log__line flow-log__line--nested">
+                    {inner.when}
+                    {inner.who}
+                    <span>{item.text}</span>
+                  </div>
+                )
+              })}
             </div>
           )
         })}

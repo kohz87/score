@@ -169,6 +169,57 @@ test('selects the waiting node and renders its checklist, approval, facts, Chat 
   expect(new Headers(decision.init?.headers).get('Idempotency-Key')).toBeTruthy()
 })
 
+test('the log nests a sub-agent’s tool calls under its Agent line', async () => {
+  setup()
+  const log = await screen.findByRole('region', { name: 'Live log' })
+  await within(log).findByText('Reading api/events.py')
+  fixture.log.items.push(
+    {
+      id: 'sub-1',
+      at: '2026-10-08T21:31:01.000Z',
+      agentId: 'builder',
+      kind: 'tool',
+      text: 'Used Agent',
+      callId: 'c1',
+      subagent: {
+        status: 'done',
+        description: 'List files in folder',
+        subagentType: null,
+        toolCalls: 1,
+        durationMs: null,
+        totalTokens: null,
+      },
+    },
+    {
+      id: 'sub-2',
+      at: '2026-10-08T21:31:02.000Z',
+      agentId: 'builder',
+      kind: 'tool',
+      text: 'Used Bash',
+      callId: 'c2',
+      parentCallId: 'c1',
+    },
+  )
+  act(() =>
+    Source.current.dispatchEvent(
+      new MessageEvent('log.line', {
+        data: JSON.stringify({
+          seq: 2,
+          ts: '2026-10-08T21:31:02.000Z',
+          type: 'log.line',
+          data: fixture.log.items.at(-1),
+        }),
+        lastEventId: '2',
+      }),
+    ),
+  )
+  const line = await within(log).findByText(/Sub-agent · List files in folder · 1 tool call · done/)
+  const details = line.closest('details')!
+  expect(details.open).toBe(false)
+  expect(within(details).getByText('Used Bash')).toBeTruthy()
+  expect(within(log).getAllByText('Used Bash')).toHaveLength(1)
+})
+
 test('filters the log by agent and tools, then refreshes streaming text from events and resets', async () => {
   setup()
   const log = await screen.findByRole('region', { name: 'Live log' })

@@ -1224,6 +1224,32 @@
 .chat-tool--error .chat-tool-status {
   color: var(--agent-coral-text);
 }
+.chat-subagent-label {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--chat-card-border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.chat-tool--subagent > summary .chat-tool-args {
+  font-family: inherit;
+}
+.chat-subagent-task {
+  margin: 0;
+  padding: var(--space-2) 14px 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.chat-subagent-calls {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 14px 10px 24px;
+  padding-left: 12px;
+  border-left: 2px solid var(--chat-card-border);
+}
 .chat-tool-body {
   margin: 0;
   padding: var(--space-2) 14px 10px;
