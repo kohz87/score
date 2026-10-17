@@ -6,6 +6,7 @@ import {
   LimitsDecisionSchema,
   OrchestrationCreateSchema,
   PolicyRemapDecisionSchema,
+  QuotaDecisionSchema,
   RunControlSchema,
   RemapDecisionSchema,
   WaiverDecisionSchema,
@@ -118,6 +119,10 @@ export function registerOrchestrationRoutes(
   app.post('/api/orchestrations/:id/steps/:stepId/remap', mutation, async (request) => {
     const { id, stepId } = StepParams.parse(request.params)
     return orchestrator.policyRemap(id, stepId, PolicyRemapDecisionSchema.parse(request.body))
+  })
+  app.post('/api/orchestrations/:id/steps/:stepId/quota', mutation, async (request) => {
+    const { id, stepId } = StepParams.parse(request.params)
+    return orchestrator.quotaDecision(id, stepId, QuotaDecisionSchema.parse(request.body))
   })
   app.post('/api/orchestrations/:id/abandon', mutation, async (request) => {
     const { id } = IdParams.parse(request.params)

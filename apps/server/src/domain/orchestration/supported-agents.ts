@@ -1,6 +1,7 @@
 import type { AgentSummary, WorkerReadiness } from '@score/contract'
 import type { WorkerPolicy } from '../../runtimes/coding/policy.ts'
 import { HttpError } from '../../errors.ts'
+import type { QuotaSource } from './quota-guard.ts'
 
 /**
  * Orchestrations and workflows run Hermes agents only until PLAN 7.7 adds coding agents as workers: the executor still
@@ -33,6 +34,8 @@ export interface CodingWorkerFacts {
   report(agentId: string): Promise<WorkerReport>
   /** The policy id of what would run now for a stored policy, every identity read again (sync; never throws on a mismatch). */
   checkPolicy(agentId: string, policy: WorkerPolicy): PolicyCheck
+  /** Antigravity's quota for the quota guard (8.6); Claude Code and Codex readings are in the database. */
+  quota?: QuotaSource
 }
 
 export interface WorkerReport {

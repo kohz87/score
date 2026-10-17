@@ -5,6 +5,7 @@ import type {
   InquiryAnswer,
   LimitsDecision,
   PolicyRemapDecision,
+  QuotaDecision,
   RemapDecision,
   RunControl,
   WaiverDecision,
@@ -40,6 +41,7 @@ import {
   type OrchRow,
 } from './store.ts'
 import { cancelFenceAttempts } from './views.ts'
+import { holdOf } from './quota-guard.ts'
 import { createHash } from 'node:crypto'
 import { readWorkerPolicy, storeWorkerPolicy } from './coding-policy.ts'
 import {
@@ -161,7 +163,9 @@ export function setLimits(
   // A workflow without coding agents has no coding settings to change (7.7c §1).
   if (
     o.planner === 'workflow' &&
-    (body.codingSteps !== undefined || body.acceptUnknownCost !== undefined) &&
+    (body.codingSteps !== undefined ||
+      body.acceptUnknownCost !== undefined ||
+      body.quotaFloorPercent !== undefined) &&
     sqlite
       .prepare('SELECT 1 FROM orc_worker_policies WHERE orchestration_id = ? LIMIT 1')
       .get(orchId) === undefined
@@ -175,6 +179,11 @@ export function setLimits(
     sqlite
       .prepare('UPDATE orchestrations SET budget_usd = ? WHERE id = ?')
       .run(body.budgetUsd, orchId)
+  // 8.6: the quota floor. Admission judges every held step again against the new floor (a lower one lets it go on).
+  if (body.quotaFloorPercent !== undefined)
+    sqlite
+      .prepare('UPDATE orchestrations SET quota_floor_percent = ? WHERE id = ?')
+      .run(body.quotaFloorPercent, orchId)
   if (body.deadlineAt !== undefined)
     sqlite
       .prepare('UPDATE orchestrations SET deadline_at = ? WHERE id = ?')
@@ -253,6 +262,56 @@ export function setLimits(
       acceptUnknownCost: after.accepted_unknown_cost,
     }),
   )
+  touch(ctx, orchId)
+}
+
+/**
+ * 8.6: the answer to a held step. "Use it anyway" admits this step once (the hold stays as the person's override, so the
+ * step isn't held again); "Wait until it resets" keeps it queued, quietly, until the window has reset and a fresh check
+ * passes; "Stop the run" stops the run. The step must still be held and not started.
+ */
+export function answerQuota(ctx: Ctx, orchId: string, stepId: string, body: QuotaDecision): void {
+  const { sqlite, now } = ctx
+  const o = requireOrch(sqlite, orchId)
+  expectRevision(o, body.orchestrationRevision)
+  mustBeLive(o)
+  const step = readStep(sqlite, orchId, stepId)
+  if (!step) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
+  const hold = holdOf(sqlite, orchId, stepId)
+  if (!hold || hold.state !== 'held' || !['queued', 'pending_gate'].includes(step.status))
+    throw new HttpError(409, 'conflict', 'This step isn’t held for a low limit.')
+  if (body.answer === 'stop') {
+    addHistory(sqlite, orchId, 'quota_stopped', { stepId, agentId: hold.agent_id }, now)
+    stopRun(ctx, orchId)
+    return
+  }
+  if (body.answer === 'use_anyway') {
+    sqlite
+      .prepare(
+        "UPDATE orc_quota_holds SET state = 'override' WHERE orchestration_id = ? AND step_id = ?",
+      )
+      .run(orchId, stepId)
+    sqlite
+      .prepare(
+        "UPDATE orc_steps SET disposition = NULL, updated_at = ? WHERE orchestration_id = ? AND id = ? AND disposition = 'quota_low'",
+      )
+      .run(now, orchId, stepId)
+    addHistory(sqlite, orchId, 'quota_override', { stepId, agentId: hold.agent_id }, now)
+  } else {
+    sqlite
+      .prepare(
+        "UPDATE orc_quota_holds SET state = 'waiting' WHERE orchestration_id = ? AND step_id = ?",
+      )
+      .run(orchId, stepId)
+    addHistory(
+      sqlite,
+      orchId,
+      'quota_wait',
+      { stepId, agentId: hold.agent_id, resetsAt: hold.resets_at },
+      now,
+    )
+  }
+  bumpAdmission(sqlite)
   touch(ctx, orchId)
 }
 

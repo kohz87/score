@@ -17,6 +17,7 @@ import { storeMessage } from '../rooms.ts'
 import { redact } from '../../redact.ts'
 import { budgetView, canReserve, unknownCostBlocks } from './budget.ts'
 import { readWorkerPolicy } from './coding-policy.ts'
+import { agentsWithRoom, holdStep, quotaCheck, windowPhrase } from './quota-guard.ts'
 import { containsCapability, hashCapability } from './capability.ts'
 import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
@@ -326,6 +327,30 @@ const HANDLERS: Record<ToolName, Handler> = {
     }
     if (!agentAdmits(sqlite, agent))
       return refuse('agent_unavailable', `${agent} is not ready for new work`)
+    // The quota guard (8.6): a coding agent below its floor is not given a new step. The lead is told why and who else
+    // has room; with `ifQuotaLow: "ask_owner"` the step is created held instead and the person decides.
+    const below = quotaCheck(sqlite, ctx.quota, o, agent, Date.parse(now))
+    const ifQuotaLow = args.ifQuotaLow === 'ask_owner' ? 'ask_owner' : undefined
+    if (below && !ifQuotaLow) {
+      const others = agentsWithRoom(sqlite, ctx.quota, o, agent, Date.parse(now))
+      return {
+        status: 'refused',
+        code: 'quota_low',
+        message: `${agent} has ${below.leftPercent}% of ${windowPhrase(below.window, below.group)} left until ${below.resetsAt}, which is under its floor. ${
+          others.length
+            ? `Assign the step to another agent that has room (${others.join(', ')}). `
+            : 'No other allowed agent has room. '
+        }If only ${agent} can do this step, call orch.assign again with ifQuotaLow: "ask_owner" and the person will decide.`,
+        result: {
+          agent,
+          window: below.window,
+          group: below.group,
+          leftPercent: below.leftPercent,
+          resetsAt: below.resetsAt,
+          otherAgents: others,
+        },
+      }
+    }
     if (o.steps_created >= o.max_steps)
       return refuse('step_limit', `The run is limited to ${o.max_steps} steps`)
     const steps = stepsOf(sqlite, o.id)
@@ -431,10 +456,12 @@ const HANDLERS: Record<ToolName, Handler> = {
         )
     }
     addStored(sqlite, o.id, bytes)
+    if (below) holdStep(ctx, o, { id, agent_id: agent }, below, { tellLead: false })
     return ok({
       stepId: id,
       ...(gateId ? { gateId } : {}),
       status: policyGate ? 'pending_gate' : 'queued',
+      ...(below ? { held: 'quota_low' } : {}),
     })
   },
 

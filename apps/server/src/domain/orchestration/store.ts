@@ -51,6 +51,7 @@ export const OrchRowSchema = z.object({
   waiver_at: z.string().nullable(),
   accepted_unknown_spend: bool,
   coding_steps: z.int(),
+  quota_floor_percent: z.int().min(0).max(50).nullable(),
   accepted_unknown_cost: jsonArray,
   acknowledgement: z.string(),
   preflight: z.string(),
