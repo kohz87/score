@@ -17,7 +17,7 @@ import { SaveToKnowledge, saveCandidates } from '../knowledge/SaveToKnowledge.ts
 import { approvalsQuery } from './queries.ts'
 import { StatusLine } from '../../live/StatusLine.tsx'
 import { useStatusLine } from '../../live/use-activity.ts'
-import { nestSubagentCalls, subagentLine } from '../../components/subagent.ts'
+import { nestSubagentCalls, subagentLine, subagentReport } from '../../components/subagent.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { MODEL_DIDNT_ANSWER, formatElapsed, isNotProcessedNotice, stalledFor } from './stall.ts'
 
@@ -97,7 +97,7 @@ function ToolCard({
       )}
       {part.result && (
         <pre className="chat-tool-body" aria-label="Result">
-          {part.result}
+          {sub ? subagentReport(part.result) : part.result}
         </pre>
       )}
     </details>

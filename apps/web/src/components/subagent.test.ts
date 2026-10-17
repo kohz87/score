@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { nestSubagentCalls, subagentLine } from './subagent.ts'
+import { nestSubagentCalls, subagentLine, subagentReport } from './subagent.ts'
 
 test('sub-agent calls nest under their Agent call; orphans stay flat, order is kept', () => {
   const items = [
@@ -28,4 +28,12 @@ test('the one-line summary reads in plain words', () => {
     'Sub-agent · 3 tool calls · working',
   )
   expect(subagentLine({ ...base, status: 'failed' }, 0)).toContain('failed')
+})
+
+test('the sub-agent report drops Claude Code’s hand-back preamble and keeps the report', () => {
+  const result =
+    '[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model ' +
+    'output.\nThe harness indents every line of the report. The report follows:\n  The directory has one file.\n  README.txt'
+  expect(subagentReport(result)).toBe('The directory has one file.\nREADME.txt')
+  expect(subagentReport('Plain result')).toBe('Plain result')
 })

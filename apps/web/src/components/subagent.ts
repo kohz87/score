@@ -37,3 +37,12 @@ export function subagentLine(summary: SubagentSummary, nestedCalls: number): str
     .filter((part) => part !== null && part !== '')
     .join(' · ')
 }
+
+// Claude Code wraps a sub-agent's answer in a fixed hand-back preamble for the main agent; people only need the report.
+const HAND_BACK = /^\[Subagent hand-back\][\s\S]*?The report follows:\s*\n/
+
+/** The sub-agent's report without Claude Code's hand-back preamble (unchanged when there is none). */
+export function subagentReport(result: string): string {
+  const stripped = result.replace(HAND_BACK, '')
+  return stripped === result ? result : stripped.replace(/^ {2}/gm, '').trim()
+}
