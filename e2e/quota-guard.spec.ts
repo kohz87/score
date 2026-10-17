@@ -191,7 +191,7 @@ test('coding agent page: the floor is a setting, marked on the limit bars, and i
   ).toBeVisible({ timeout: 30_000 })
 
   await page.goto(`/team/${encodeURIComponent(id)}`)
-  const card = page.getByRole('region', { name: 'Coding agent' })
+  const card = page.getByRole('tabpanel')
   const meters = card.getByRole('group', { name: 'Claude Code limits' })
   await expect(meters.getByRole('meter', { name: '5 hours left' })).toHaveAttribute(
     'aria-valuenow',
@@ -199,19 +199,19 @@ test('coding agent page: the floor is a setting, marked on the limit bars, and i
   )
   await expect(meters.locator('.quota-floor')).toHaveCount(2)
   await expect(meters.locator('.quota-floor').first()).toHaveAttribute('style', /left: 10%/)
+  await card.getByRole('button', { name: 'Change access' }).click()
   const field = card.getByLabel(/Stop using this agent in runs when a limit is below/)
   await expect(field).toHaveValue('10')
   await field.fill('25')
   await card.getByRole('button', { name: 'Save' }).click()
   await expect(meters.locator('.quota-floor').first()).toHaveAttribute('style', /left: 25%/)
   await page.reload()
-  await expect(
-    page
-      .getByRole('region', { name: 'Coding agent' })
-      .getByLabel(/Stop using this agent in runs when a limit is below/),
-  ).toHaveValue('25')
+  await card.getByRole('button', { name: 'Change access' }).click()
+  await expect(card.getByLabel(/Stop using this agent in runs when a limit is below/)).toHaveValue(
+    '25',
+  )
   await page.evaluate(() => document.fonts.ready)
-  await shot(page, 'agent', 'section[aria-label="Coding agent"]')
+  await shot(page, 'agent', '.team-overview-grid')
 
   // Clean up so other specs see the usual team.
   page.once('dialog', (confirm) => void confirm.accept())

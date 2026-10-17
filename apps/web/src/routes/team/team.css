@@ -1196,11 +1196,9 @@ a.team-pill-button {
   text-align: left;
 }
 .team-quota-floor label {
-  justify-content: flex-start;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  /* .team-routine-form label is a column; align-items: center on it is what centred the field (8.9). */
+  align-items: flex-start;
+  gap: var(--space-2);
 }
 .team-quota-floor-input {
   display: inline-flex;

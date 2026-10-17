@@ -42,9 +42,12 @@ export function readsOutsideWorkspace(
 export function ReadAccessWarning({
   runtime,
   permission,
+  brief = false,
 }: {
   runtime: CodingRuntime
   permission: CodingPermission
+  /** Only what the CLI can read: the agent's page shows the "follow instructions" line where it is edited. */
+  brief?: boolean
 }) {
   const reach =
     runtime === 'claude-code'
@@ -59,10 +62,12 @@ export function ReadAccessWarning({
   return (
     <div className="team-muted-strong coding-reach" role="note">
       <p>{reach}</p>
-      <p>
-        Coding agents follow instructions they find in files and messages, so connect only
-        workspaces and rooms you trust.
-      </p>
+      {!brief && (
+        <p>
+          Coding agents follow instructions they find in files and messages, so connect only
+          workspaces and rooms you trust.
+        </p>
+      )}
     </div>
   )
 }
@@ -664,7 +669,7 @@ function CodingAccessCard({ coding, onChanged }: { coding: CodingAgent; onChange
               ? `Runs stop using it below ${coding.quotaFloorPercent}% of a limit left.`
               : 'Runs keep using it whatever its limits show.'}
           </p>
-          <ReadAccessWarning runtime={coding.runtime} permission={coding.permission} />
+          <ReadAccessWarning runtime={coding.runtime} permission={coding.permission} brief />
           <button type="button" className="team-text-action" onClick={() => setEditing(true)}>
             Change access
           </button>
