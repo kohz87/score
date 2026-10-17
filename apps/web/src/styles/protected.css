@@ -1,0 +1,108 @@
+/* Protected surfaces (PLAN 9.2, design §4.3): approval and decision cards, password screens, permission and sandbox
+   settings, the Needs-you markers, agent glyphs, error toasts and the way back (Reset look). A custom theme can
+   restyle the app but never hide, cover, relabel or fake these. Theme CSS can't use !important (the sanitiser drops
+   it) and a layered !important beats every unlayered declaration, so what is re-asserted here stays asserted.
+   Everything is scoped to html[data-look='custom'], which only the engine sets for a custom theme: the Score default
+   and the built-in packs are untouched (and keep their entrance motion). styles/protected.test.ts keeps this file and
+   the markup in step. */
+@layer score-protected {
+  /* The surface itself: always rendered, flat, on top, with its own display. */
+  html[data-look='custom'] [data-protected],
+  html[data-look='custom'] [data-protected]:not(svg) *:not(svg *) {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    filter: none !important;
+    clip-path: none !important;
+    mask: none !important;
+    mix-blend-mode: normal !important;
+    backdrop-filter: none !important;
+    pointer-events: auto !important;
+    direction: ltr !important;
+    unicode-bidi: normal !important;
+    text-indent: 0 !important;
+  }
+  /* A disabled control keeps looking disabled, but never invisible. */
+  html[data-look='custom'] [data-protected] :is(:disabled, [aria-disabled='true']) {
+    opacity: 0.5 !important;
+  }
+  html[data-look='custom']
+    [data-protected]:not([data-protected='inline']):not([data-protected='inline-flex']):not(
+      [data-protected='any']
+    ) {
+    position: relative !important;
+    z-index: 100 !important;
+  }
+  html[data-look='custom'] [data-protected] {
+    isolation: isolate !important;
+    /* The theme's fonts never reach these surfaces. */
+    --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif !important;
+    --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif !important;
+    --font-code: 'JetBrains Mono', ui-monospace, monospace !important;
+  }
+  html[data-look='custom'] [data-protected='block'] {
+    display: block !important;
+  }
+  html[data-look='custom'] [data-protected='flex'] {
+    display: flex !important;
+  }
+  html[data-look='custom'] [data-protected='grid'] {
+    display: grid !important;
+  }
+  html[data-look='custom'] [data-protected='inline'] {
+    display: inline !important;
+  }
+  html[data-look='custom'] [data-protected='inline-flex'] {
+    display: inline-flex !important;
+  }
+
+  /* Contrast: when a theme's colour pair fails WCAG AA (the engine checks, data-contrast-fallback) the surface wears
+     Score's own colours. Approval-style panels keep their own panel pair, as in tokens.css. */
+  html[data-contrast-fallback] [data-protected] {
+    --ground: #eceef2 !important;
+    --ink-muted: #5e626c !important;
+    --muted: #626670 !important;
+    --hairline: #dfe2e8 !important;
+    --subtle: #f4f5f8 !important;
+    --line-strong: #9a9ea7 !important;
+    --panel-ink: #12131a !important;
+    --panel-card: #ffffff !important;
+  }
+  html[data-contrast-fallback]
+    [data-protected]:not(.chat-approval, .now-asking, .reports-approvals, .rules-card) {
+    --ink: #12131a !important;
+    --card: #ffffff !important;
+  }
+  html[data-contrast-fallback][data-theme='dark'] [data-protected] {
+    --ground: #0f1116 !important;
+    --ink-muted: #a9adb8 !important;
+    --muted: #9fa3ae !important;
+    --hairline: #2b2e38 !important;
+    --subtle: #20232c !important;
+    --line-strong: #7b808c !important;
+    --panel-ink: #242733 !important;
+    --panel-card: #ffffff !important;
+  }
+  html[data-contrast-fallback][data-theme='dark']
+    [data-protected]:not(.chat-approval, .now-asking, .reports-approvals, .rules-card) {
+    --ink: #eceef2 !important;
+    --card: #181a21 !important;
+  }
+  @media (prefers-color-scheme: dark) {
+    html[data-contrast-fallback]:not([data-theme]) [data-protected] {
+      --ground: #0f1116 !important;
+      --ink-muted: #a9adb8 !important;
+      --muted: #9fa3ae !important;
+      --hairline: #2b2e38 !important;
+      --subtle: #20232c !important;
+      --line-strong: #7b808c !important;
+      --panel-ink: #242733 !important;
+      --panel-card: #ffffff !important;
+    }
+    html[data-contrast-fallback]:not([data-theme])
+      [data-protected]:not(.chat-approval, .now-asking, .reports-approvals, .rules-card) {
+      --ink: #eceef2 !important;
+      --card: #181a21 !important;
+    }
+  }
+}

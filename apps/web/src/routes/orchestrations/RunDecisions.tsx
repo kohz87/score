@@ -58,6 +58,7 @@ export function GateCard({
   return (
     <Arrival
       arrivalId={`gate-${gateId}`}
+      data-protected="block"
       className="orch-decision orch-decision--gate"
       aria-label={`Approve ${name}`}
     >
@@ -148,6 +149,7 @@ export function InquiryCard({
   return (
     <Arrival
       arrivalId={`inquiry-${inquiryId}`}
+      data-protected="block"
       className="orch-decision orch-decision--inquiry"
       aria-label="Question from the lead"
     >
@@ -213,6 +215,7 @@ export function LimitsCard({
   return (
     <Arrival
       arrivalId={`limits-${reason}`}
+      data-protected="block"
       className="orch-decision"
       aria-label="Budget or deadline"
     >
@@ -313,6 +316,7 @@ export function UnknownCard({
   return (
     <Arrival
       arrivalId={`unknown-${attemptId}`}
+      data-protected="block"
       className="orch-decision"
       aria-label="Not confirmed as ended"
     >
@@ -388,6 +392,7 @@ export function CancelFenceCard({
   return (
     <Arrival
       arrivalId={`cancel-${stepId}`}
+      data-protected="block"
       className="orch-decision"
       aria-label="Stopped step may still run"
     >
@@ -432,6 +437,7 @@ export function RemapCard({
   return (
     <Arrival
       arrivalId={`remap-${item.agentId}`}
+      data-protected="block"
       className="orch-decision"
       aria-label={`Replaced ${item.agentId}`}
     >
@@ -509,7 +515,7 @@ export function RunNeeds({
     return fence?.kind === 'cancel_fence' ? { fenceStepId: fence.stepId } : {}
   }
   return (
-    <div className="orch-needs" aria-label="Needs you">
+    <div className="orch-needs" aria-label="Needs you" data-protected="grid">
       <ResolvedList items={decided} />
       {run.needsYou.map((item) => {
         switch (item.kind) {
@@ -615,6 +621,7 @@ export function RunNeeds({
               <Arrival
                 arrivalId={`paused-${item.reason}`}
                 key={`p${item.reason}`}
+                data-protected="block"
                 className="orch-decision"
                 aria-label="Paused"
               >
@@ -626,6 +633,7 @@ export function RunNeeds({
               <Arrival
                 arrivalId={'fence'}
                 key="fence"
+                data-protected="block"
                 className="orch-decision"
                 aria-label="Blocked"
               >

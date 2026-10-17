@@ -94,6 +94,7 @@ export function CodingHeldBackCard({
   return (
     <Arrival
       arrivalId={`held-back-${nodeId}-${view?.renewals ?? 0}`}
+      data-protected="block"
       className="orch-decision"
       aria-label={`${label} was held back`}
     >
@@ -150,6 +151,7 @@ export function InputsWithdrawnCard({
   return (
     <Arrival
       arrivalId={`withdrawn-${nodeId}-${view?.revision ?? 0}`}
+      data-protected="block"
       className="orch-decision"
       aria-label={`${label} lost its input`}
     >

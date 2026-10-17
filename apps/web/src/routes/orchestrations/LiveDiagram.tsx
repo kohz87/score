@@ -629,7 +629,11 @@ export function LiveDiagram({
                   )}
                 </span>
                 {cli && <span className="orch-node__cli">{cli}</span>}
-                {visual === 'gate' && <span className="orch-node__flag">Needs you</span>}
+                {visual === 'gate' && (
+                  <span className="orch-node__flag" data-protected="inline">
+                    Needs you
+                  </span>
+                )}
                 {visual === 'unknown' && (
                   <span className="orch-node__q" aria-hidden="true">
                     ?

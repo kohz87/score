@@ -48,7 +48,8 @@ function AdminPasswordDialog({ onDone, onClose }: { onDone: () => void; onClose:
     <dialog
       ref={dialog}
       open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
-      className="user-dialog"
+      className="user-dialog admin-password"
+      data-protected="any"
       aria-labelledby="user-admin-title"
       onCancel={(event) => {
         event.preventDefault()

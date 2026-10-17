@@ -61,6 +61,7 @@ export function NodeGateCard({
   return (
     <Arrival
       arrivalId={`gate-${gateId}`}
+      data-protected="block"
       className="orch-decision orch-decision--gate"
       aria-label={`Decide on ${label}`}
     >
@@ -135,6 +136,7 @@ export function RetryCard({
   return (
     <Arrival
       arrivalId={`retry-${nodeId}-${attemptsLeft}`}
+      data-protected="block"
       className="orch-decision"
       aria-label={`Retry ${label}`}
     >
@@ -207,6 +209,7 @@ export function RefusalCard({
   return (
     <Arrival
       arrivalId={`refused-${nodeId}-${refusals}`}
+      data-protected="block"
       className="orch-decision"
       aria-label={`Hermes refused ${label}`}
     >
@@ -265,6 +268,7 @@ export function WorkflowRemapCard({
   return (
     <Arrival
       arrivalId={`remap-${item.agentId}`}
+      data-protected="block"
       className="orch-decision"
       aria-label={`Replaced ${item.agentId}`}
     >
@@ -396,7 +400,7 @@ export function WorkflowNeeds({
     return fence?.kind === 'cancel_fence' ? { fenceStepId: fence.stepId } : {}
   }
   return (
-    <div className="orch-needs" aria-label="Needs you">
+    <div className="orch-needs" aria-label="Needs you" data-protected="grid">
       <ResolvedList items={decided} />
       {items.map((item) => {
         switch (item.kind) {
@@ -515,6 +519,7 @@ export function WorkflowNeeds({
               <Arrival
                 arrivalId={`paused-${item.reason}`}
                 key={`p${item.reason}`}
+                data-protected="block"
                 className="orch-decision"
                 aria-label="Paused"
               >
@@ -526,6 +531,7 @@ export function WorkflowNeeds({
               <Arrival
                 arrivalId={'fence'}
                 key="fence"
+                data-protected="block"
                 className="orch-decision"
                 aria-label="Blocked"
               >

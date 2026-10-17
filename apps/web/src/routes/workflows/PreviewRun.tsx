@@ -130,6 +130,7 @@ export function WorkflowPreview({
       <div className="wf-preview__ask" role="status" aria-live="polite">
         {pause?.kind === 'gate' && (
           <div
+            data-protected="block"
             className="orch-decision wf-preview__card"
             aria-label={`Preview: ${label(pause.nodeId)}`}
           >
@@ -154,6 +155,7 @@ export function WorkflowPreview({
         )}
         {pause?.kind === 'branch' && (
           <div
+            data-protected="block"
             className="orch-decision wf-preview__card"
             aria-label={`Preview: ${label(pause.nodeId)}`}
           >

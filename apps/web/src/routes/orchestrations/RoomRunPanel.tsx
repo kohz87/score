@@ -46,7 +46,11 @@ export function RoomRunPanel({
         <span className={`orch-badge orch-badge--${summary.status}`}>
           {statusLabel[summary.status]}
         </span>
-        {needs > 0 && <span className="orch-pill">Needs you ({needs})</span>}
+        {needs > 0 && (
+          <span className="orch-pill" data-protected="inline">
+            Needs you ({needs})
+          </span>
+        )}
         {detail && <RunControls run={detail} actions={actions} />}
       </div>
       {open && (

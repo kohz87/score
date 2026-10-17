@@ -705,7 +705,11 @@ export function EditorCanvas({
                       </span>
                     </span>
                     {cli && <span className="orch-node__cli">{cli}</span>}
-                    {live?.visual === 'gate' && <span className="orch-node__flag">Needs you</span>}
+                    {live?.visual === 'gate' && (
+                      <span className="orch-node__flag" data-protected="inline">
+                        Needs you
+                      </span>
+                    )}
                   </button>
                   {mine.length > 0 && (
                     <span className={`wf-node__flag wf-node__flag--${worst}`} aria-hidden="true">
