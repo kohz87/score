@@ -1,4 +1,4 @@
-import type { WatchFrame } from '@score/contract'
+import { SubagentSummarySchema, type SubagentSummary, type WatchFrame } from '@score/contract'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { z } from 'zod'
 import {
@@ -29,6 +29,7 @@ import { rememberCliSession } from './store.ts'
 import type { CodingEvent, ToolDetail } from './types.ts'
 
 const MAX_THINKING_CHARS = 4096
+const boundCallId = (id: string) => id.slice(0, 200)
 
 /** Per-run state the translator keeps between events (the process owns it, not the DB). */
 export interface RunTranslation {
@@ -38,7 +39,7 @@ export interface RunTranslation {
   /** An orchestration- or workflow-owned run (7.7b §6): it never writes Chat's (room, agent) session cache. */
   owned: boolean
   seq: number
-  calls: Map<string, { seq: number; startedAt: string; detail?: ToolDetail }>
+  calls: Map<string, { seq: number; startedAt: string; detail?: ToolDetail; sub?: true }>
   usage: { input: number; output: number; costUsd: number | null } | null
 }
 /** Bytes the translator's per-run state holds (call ids and the tool details kept for their frames). */
@@ -105,6 +106,7 @@ function frameDrafts(
   callKey: string,
   at: string,
   draft: FrameDraft,
+  sub = false,
 ): DomainEventDraft[] {
   try {
     const frame: WatchFrame = recordFrame(sqlite, {
@@ -114,7 +116,8 @@ function frameDrafts(
       callKey: `${translation.runId}:${callKey}${draft.suffix}`,
       surface: draft.surface,
       payload: draft.payload,
-      caption: draft.caption,
+      // A sub-agent's frames say so (PLAN 8.7): Watch has no tree, only the caption.
+      caption: sub ? `Sub-agent · ${draft.caption}` : draft.caption,
     })
     return [{ type: 'watch.frame', data: frame }]
   } catch (error) {
@@ -132,6 +135,7 @@ function framesFor(
   at: string,
   detail: ToolDetail,
   phase: { hook: 'pre' } | { hook: 'post'; ok: boolean; output: string; exitCode: number | null },
+  sub = false,
 ): DomainEventDraft[] {
   const base = { watch: null, status: phase.hook === 'pre' ? ('running' as const) : null }
   if (detail.type === 'command') {
@@ -145,17 +149,24 @@ function framesFor(
       watch: base.watch,
       lastBrowser: null,
     })
-    return drafts.flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft))
+    return drafts.flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft, sub))
   }
   if (detail.type === 'file') {
     if (phase.hook === 'pre') return []
     const verb = { add: 'Added', update: 'Edited', delete: 'Deleted' }[detail.change]
-    return frameDrafts(sqlite, translation, callId, at, {
-      suffix: '',
-      surface: 'editor',
-      payload: { path: detail.path, diff: `${verb} ${detail.path}`, language: null },
-      caption: `${verb} ${detail.path}`,
-    })
+    return frameDrafts(
+      sqlite,
+      translation,
+      callId,
+      at,
+      {
+        suffix: '',
+        surface: 'editor',
+        payload: { path: detail.path, diff: `${verb} ${detail.path}`, language: null },
+        caption: `${verb} ${detail.path}`,
+      },
+      sub,
+    )
   }
   if (detail.type === 'browser') {
     if (phase.hook === 'pre') return []
@@ -167,7 +178,7 @@ function framesFor(
       status: phase.ok ? 'ok' : 'error',
       watch: null,
       lastBrowser: null,
-    }).flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft))
+    }).flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft, sub))
   }
   if (phase.hook === 'pre') return []
   if (!phase.ok) return []
@@ -189,7 +200,7 @@ function framesFor(
     status: 'ok',
     watch: null,
     lastBrowser: null,
-  }).flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft))
+  }).flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft, sub))
 }
 
 /**
@@ -249,6 +260,7 @@ export function eventObservation(
             seq,
             startedAt: now,
             ...(event.detail ? { detail: event.detail } : {}),
+            ...(event.parentCallId ? { sub: true as const } : {}),
           })
           // CLI metadata is redacted before it is bounded or stored: tool names and what is derived from them (#12).
           const toolName = redactNote(event.tool, 200)
@@ -256,9 +268,17 @@ export function eventObservation(
           if (chargeObservation(sqlite, runId, 2048 + 2000 + 256)) {
             sqlite
               .prepare(
-                `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES (?, ?, ?, ?, 'running', ?) ON CONFLICT DO NOTHING`,
+                `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at, call_id, parent_call_id) VALUES (?, ?, ?, ?, 'running', ?, ?, ?) ON CONFLICT DO NOTHING`,
               )
-              .run(runId, seq, toolName, redactBounded(event.preview, 2048), now)
+              .run(
+                runId,
+                seq,
+                toolName,
+                redactBounded(event.preview, 2048),
+                now,
+                event.callId,
+                event.parentCallId ?? null,
+              )
             const tools = z
               .array(z.object({ tool: z.string() }))
               .parse(
@@ -278,12 +298,22 @@ export function eventObservation(
               agentId,
               kind: 'tool',
               text: redactBounded(`${toolName}: ${event.preview}`, 2048),
+              callId: boundCallId(event.callId),
+              ...(event.parentCallId ? { parentCallId: boundCallId(event.parentCallId) } : {}),
             },
           })
           drafts.push(...liveActivityDraft(sqlite, runId))
           if (event.detail)
             drafts.push(
-              ...framesFor(sqlite, translation, event.callId, now, event.detail, { hook: 'pre' }),
+              ...framesFor(
+                sqlite,
+                translation,
+                event.callId,
+                now,
+                event.detail,
+                { hook: 'pre' },
+                !!event.parentCallId,
+              ),
             )
           break
         }
@@ -306,13 +336,21 @@ export function eventObservation(
           drafts.push(...liveActivityDraft(sqlite, runId))
           if (call.detail)
             drafts.push(
-              ...framesFor(sqlite, translation, event.callId, now, call.detail, {
-                hook: 'post',
-                ok: event.ok,
-                // Redact the whole result first: a tail cut can remove the label that marks the value as secret.
-                output: tailBytes(redact(event.preview), OUTPUT_BYTES - 40).text,
-                exitCode: event.exitCode ?? null,
-              }),
+              ...framesFor(
+                sqlite,
+                translation,
+                event.callId,
+                now,
+                call.detail,
+                {
+                  hook: 'post',
+                  ok: event.ok,
+                  // Redact the whole result first: a tail cut can remove the label that marks the value as secret.
+                  output: tailBytes(redact(event.preview), OUTPUT_BYTES - 40).text,
+                  exitCode: event.exitCode ?? null,
+                },
+                call.sub === true,
+              ),
             )
           break
         }
@@ -324,13 +362,72 @@ export function eventObservation(
           }
           break
         case 'subagent':
-          // Stored with the nesting in the next item of PLAN 8.7; recognised here so the turn is not marked lost.
+          // The sub-agent's own status lands on the Agent call's row (PLAN 8.7); it never changes the run.
+          if (chargeObservation(sqlite, runId, 512)) {
+            const row = sqlite
+              .prepare('SELECT seq, subagent FROM tool_calls WHERE run_id = ? AND call_id = ?')
+              .get(runId, event.callId) as { seq: number; subagent: string | null } | undefined
+            if (row) {
+              const next = mergeSubagent(row.subagent, event)
+              sqlite
+                .prepare('UPDATE tool_calls SET subagent = ? WHERE run_id = ? AND seq = ?')
+                .run(JSON.stringify(next), runId, row.seq)
+              drafts.push(...liveActivityDraft(sqlite, runId))
+              // Flow's step log refreshes on log lines; this one carries the new summary.
+              drafts.push({
+                type: 'log.line',
+                data: {
+                  id: `coding:${runId}:${row.seq}:sub:${seq}`,
+                  at: now,
+                  agentId,
+                  kind: 'tool',
+                  text: `Sub-agent ${next.status === 'running' ? 'working' : next.status}`,
+                  callId: boundCallId(event.callId),
+                  subagent: next,
+                },
+              })
+            }
+          }
           break
         case 'result':
           break
       }
       return drafts
     },
+  }
+}
+
+/** Folds one sub-agent event into the stored summary; an unreadable stored value counts as absent. */
+function mergeSubagent(
+  stored: string | null,
+  event: Extract<CodingEvent, { kind: 'subagent' }>,
+): SubagentSummary {
+  let before: SubagentSummary | null = null
+  try {
+    const parsed = SubagentSummarySchema.safeParse(stored === null ? null : JSON.parse(stored))
+    before = parsed.success ? parsed.data : null
+  } catch {
+    before = null
+  }
+  const count = (value: number | undefined, old: number | null | undefined) =>
+    value === undefined ? (old ?? null) : Math.max(0, Math.round(value))
+  return {
+    // A finished sub-agent is not reopened by a late progress record.
+    status:
+      before && before.status !== 'running' && event.status === 'running'
+        ? before.status
+        : event.status,
+    description:
+      event.description === undefined
+        ? (before?.description ?? null)
+        : redactBounded(event.description, 300),
+    subagentType:
+      event.subagentType === undefined
+        ? (before?.subagentType ?? null)
+        : redactBounded(event.subagentType, 100),
+    toolCalls: count(event.toolCalls, before?.toolCalls),
+    durationMs: count(event.durationMs, before?.durationMs),
+    totalTokens: count(event.totalTokens, before?.totalTokens),
   }
 }
 

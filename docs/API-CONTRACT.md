@@ -133,11 +133,17 @@ type Room = {
   channels: { platform: string; label: string }[]
 }
 
+type SubagentSummary = { status: 'running' | 'done' | 'failed'; description: string | null; subagentType: string | null; toolCalls: number | null; durationMs: number | null; totalTokens: number | null }
+/* PLAN 8.7, coding agents' sub-agents: a coding agent's own tool calls carry `callId` (the CLI's call id). A call a sub-agent
+   made carries `parentCallId` = the `callId` of the Agent call that started it, and the Agent call carries `subagent` (its status
+   is the sub-agent's own, never the turn's). All three are optional: Hermes agents and older rows omit them and render flat.
+   `parentCallId` is trusted only when a part with that `callId` exists in the same reply; otherwise the part renders flat.
+   `LogLine` (Flow's step log, §briefs) gains the same three optional fields on `kind: 'tool'` lines. */
 type MessagePart =
   | { kind: 'text'; text: string; via?: 'mcp' }   // via: posted by an agent through Score's MCP server (§13); the UI tags it "via MCP"
   | { kind: 'plan'; lanes: { agentId: AgentId; blocks: LaneBlock[] }[]; briefId: string }
   | { kind: 'tools'; summary: string /* "Ran 6 commands and edited 2 files" */; runId: string }
-  | { kind: 'tool'; tool: string; args: string; result: string | null; status: 'running' | 'ok' | 'error' } // one tool call (5.25)
+  | { kind: 'tool'; tool: string; args: string; result: string | null; status: 'running' | 'ok' | 'error'; callId?: string; parentCallId?: string; subagent?: SubagentSummary } // one tool call (5.25); 8.7: see below
   | { kind: 'thinking'; text: string } // reasoning text, collapsed in the UI (5.25)
   | { kind: 'file'; path: string; added: number; removed: number }
   | { kind: 'image'; mediaId: string } // an uploaded image, served by GET /api/media/:mediaId
@@ -513,7 +519,7 @@ run: RunSummary | null; model: string | null; tools: string[] | null; attempts?:
   attempts on) lists the step's attempts of the board lineage Score follows, by `order`. With any attempt in the brief
   `stats.spendUsd` is `null`: an attempt's cost is unknown, so the total would be partial.
 - **S** `GET /api/briefs/:briefId/log?agent=&kind=tool|all&cursor=` → `{ items: LogLine[]; nextCursor }`
-  `type LogLine = { id; at; agentId; kind: 'tool' | 'message' | 'handoff' | 'approval' | 'system'; text }`
+  `type LogLine = { id; at; agentId; kind: 'tool' | 'message' | 'handoff' | 'approval' | 'system'; text; callId?; parentCallId?; subagent? }` (the last three: PLAN 8.7, on `kind: 'tool'` lines of coding agents that used sub-agents; same meaning as on the tool message part)
 - **H** `POST /api/briefs/:briefId/pause` / `/resume` → `BriefSummary`. Pause holds Score's queue for the brief and blocks
   its not-started tasks (`hermes kanban block`); running steps finish. Resume unblocks only what Score blocked.
 - **H** `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`: stops that node's active run (409 when nothing is running; 501 `unsupported` with a message when the active run was not started by Score, e.g. a Kanban or gateway run). A Kanban attempt is never stoppable from Score (Hermes has no stop that targets one attempt): a step whose task has an attempt that is still observed running, or a run id `kr_…`, answers the same 501 before any profile or run lookup.

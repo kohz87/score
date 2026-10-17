@@ -1,6 +1,12 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { ORCH_LIMITS, type Message, type MessagePart } from '@score/contract'
+import {
+  ORCH_LIMITS,
+  SubagentSummarySchema,
+  type Message,
+  type MessagePart,
+  type SubagentSummary,
+} from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
@@ -451,7 +457,21 @@ const ActivityRowSchema = z.object({
   preview: z.string().nullable(),
   status: z.enum(['running', 'ok', 'error']).nullable(),
   result_preview: z.string().nullable(),
+  call_id: z.string().nullable(),
+  parent_call_id: z.string().nullable(),
+  subagent: z.string().nullable(),
 })
+
+/** The stored sub-agent summary; anything unreadable is absent (PLAN 8.7). */
+export function readSubagent(stored: string | null): SubagentSummary | undefined {
+  if (stored === null) return undefined
+  try {
+    const parsed = SubagentSummarySchema.safeParse(JSON.parse(stored))
+    return parsed.success ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * The tool calls and reasoning of a run as message parts (PLAN 5.25), in the order Hermes sent them. Stored previews were
@@ -464,8 +484,8 @@ export function activityParts(
   const rows = z.array(ActivityRowSchema).parse(
     sqlite
       .prepare(
-        `SELECT seq, tool, NULL AS text, preview, status, result_preview FROM tool_calls WHERE run_id = ?1
-         UNION ALL SELECT seq, NULL, text, NULL, NULL, NULL FROM run_thinking WHERE run_id = ?1 ORDER BY seq`,
+        `SELECT seq, tool, NULL AS text, preview, status, result_preview, call_id, parent_call_id, subagent FROM tool_calls WHERE run_id = ?1
+         UNION ALL SELECT seq, NULL, text, NULL, NULL, NULL, NULL, NULL, NULL FROM run_thinking WHERE run_id = ?1 ORDER BY seq`,
       )
       .all(runId),
   )
@@ -486,6 +506,9 @@ export function activityParts(
         args: redactBounded(row.preview ?? '', 400),
         result: row.result_preview === null ? null : redactBounded(row.result_preview, 500),
         status: row.status,
+        ...(row.call_id ? { callId: row.call_id.slice(0, 200) } : {}),
+        ...(row.parent_call_id ? { parentCallId: row.parent_call_id.slice(0, 200) } : {}),
+        ...(readSubagent(row.subagent) ? { subagent: readSubagent(row.subagent)! } : {}),
       })
     } else if (row.text && thoughts < MAX_THINKING_PARTS) {
       thoughts++

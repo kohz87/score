@@ -23,6 +23,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
+import { activityParts } from '../../src/domain/message-runs.ts'
 import { messageFromRow } from '../../src/domain/rooms.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
@@ -544,6 +545,43 @@ test('Codex: tokens without cost are shown as unknown, never zero; sandbox flags
   expect(
     reply!.parts.some((part) => part.kind === 'text' && part.text.includes('Updated notes.txt')),
   ).toBe(true)
+})
+
+test('8.7: a turn with a sub-agent keeps its success; the sub-agent calls nest under the Agent card', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:subagent] list the files')
+  await finished()
+  const [run] = runs()
+  expect(run).toMatchObject({ status: 'completed' })
+  const [reply] = replies()
+  const tools = reply!.parts.filter((part) => part.kind === 'tool')
+  expect(tools).toHaveLength(2)
+  const agent = tools.find((part) => part.tool === 'Agent')!
+  const inner = tools.find((part) => part.tool === 'Bash')!
+  expect(agent.callId).toBeTruthy()
+  expect(agent.parentCallId).toBeUndefined()
+  expect(inner.parentCallId).toBe(agent.callId)
+  expect(agent.subagent).toEqual({
+    status: 'done',
+    description: 'List files in folder',
+    subagentType: 'general-purpose',
+    toolCalls: 1,
+    durationMs: 7550,
+    totalTokens: 19455,
+  })
+  // An unreadable stored summary is treated as absent, never an error.
+  db.sqlite.prepare("UPDATE tool_calls SET subagent = '{nope' WHERE tool = 'Agent'").run()
+  expect(
+    activityParts(db.sqlite, run!.id).parts.find(
+      (part) => part.kind === 'tool' && part.tool === 'Agent',
+    ),
+  ).not.toHaveProperty('subagent')
+  // Watch frames of the sub-agent's command say so.
+  const captions = db.sqlite.prepare('SELECT caption FROM watch_frames').all() as {
+    caption: string
+  }[]
+  expect(captions.some((frame) => frame.caption.startsWith('Sub-agent · '))).toBe(true)
 })
 
 test('hand-offs: a coding agent can @mention a Hermes agent and be mentioned by one', async () => {
