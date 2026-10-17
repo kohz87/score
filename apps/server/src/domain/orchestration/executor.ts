@@ -421,7 +421,9 @@ export class Orchestrator {
         listOrchs(sqlite).some((o) => !isTerminalStatus(o.status)),
       )
       if (live) await this.mutate((ctx) => this.sweep(ctx))
-      await this.refreshQuota()
+      // Not awaited unless a queued Antigravity step needs a fresh reading (tests rely on the cycle's tick order).
+      const refreshing = this.refreshQuota()
+      if (refreshing) await refreshing
       const jobs = await this.mutate((ctx) => this.admit(ctx))
       for (const id of jobs) progressed = (await this.dispatch(id)) || progressed
       progressed = (await this.serviceStops()) || progressed
@@ -2306,9 +2308,9 @@ export class Orchestrator {
   }
 
   /** Antigravity's quota is read from its CLI: refresh it (at most once a minute) when a queued step would use it. */
-  private async refreshQuota(): Promise<void> {
+  private refreshQuota(): Promise<unknown> | undefined {
     const quota = this.options.codingFacts?.quota
-    if (!quota) return
+    if (!quota) return undefined
     const needed = this.db.read((sqlite) =>
       listOrchs(sqlite).some(
         (o) =>
@@ -2320,7 +2322,7 @@ export class Orchestrator {
           ),
       ),
     )
-    if (needed) await quota.refresh().catch(() => undefined)
+    return needed ? quota.refresh().catch(() => undefined) : undefined
   }
 
   private insertAttempt(ctx: Ctx, o: OrchRow, a: NewAttempt): void {

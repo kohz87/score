@@ -280,7 +280,6 @@ test('the quota floor field: "stop using this agent in runs below N%", saved wit
     style: { color: '#6B4EFF', shape: 'hexagon' },
     quota: 'q',
     quotaFloorPercent: 10,
-    quotaFloorPercent: 10,
     cli: { state: 'ready', version: '1.0.0', testedVersions: ['1.0.0'], confirmed: false },
     heldGroups: [],
     createdAt: '2026-10-11T00:00:00.000Z',
