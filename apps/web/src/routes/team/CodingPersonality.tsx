@@ -111,7 +111,7 @@ function PersonalityEditor({
       : null
   return (
     <form
-      className="team-file-editor"
+      className="team-file-editor team-routine-form"
       onSubmit={(event) => {
         event.preventDefault()
         save.mutate(etag)

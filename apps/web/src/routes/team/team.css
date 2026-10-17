@@ -1166,6 +1166,11 @@ a.team-pill-button {
 }
 
 /* A coding agent's personality card (PLAN 8.8): the role as a line, the instructions rendered below it. */
+.team-routine-form .team-file-text {
+  font-family: var(--font-code);
+  font-size: 13px;
+  min-height: 260px;
+}
 .coding-role {
   font-family: var(--font-heading);
   font-size: 20px;
