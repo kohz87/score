@@ -31,6 +31,7 @@ import type { WorkerPolicy } from '../../runtimes/coding/policy.ts'
 import { isFenced } from '../orchestration/fence.ts'
 import { activeStepCounts, codingUnsentSlots } from '../orchestration/ops.ts'
 import { runtimeOfAgent } from '../orchestration/coding-attempts.ts'
+import { holdsOf } from '../orchestration/quota-guard.ts'
 import {
   attemptsOf,
   gatesOf,
@@ -159,6 +160,11 @@ function waitingFor(
         ? 'held_back'
         : 'coding_settings'
   if (attempt?.needs_person) return 'refusal_limit'
+  if (
+    ['queued', 'pending_gate'].includes(step.status) &&
+    holdsOf(sqlite, o.id).some((hold) => hold.step_id === step.id && hold.state !== 'override')
+  )
+    return 'quota_low'
   if (attempt && attempt.state === 'created' && attempt.next_try_at && attempt.next_try_at > now)
     return 'hermes_unavailable'
   if (!['queued', 'admitted'].includes(step.status)) return null
@@ -265,6 +271,22 @@ function needsYouOf(
         attemptsLeft: node.attempts_max - node.attempts_used,
       })
   if (!isTerminalStatus(o.status) && o.status !== 'stopping' && o.status !== 'finishing') {
+    // 8.6: a coding step held because its agent is below its quota floor (the step stays queued; the node keeps it).
+    const holds = holdsOf(sqlite, o.id)
+    for (const hold of holds) {
+      const step = stepById.get(hold.step_id)
+      if (hold.state !== 'held' || !step || !['queued', 'pending_gate'].includes(step.status))
+        continue
+      result.push({
+        kind: 'quota_low',
+        nodeId: stepNode.get(step.id) ?? '',
+        agentId: hold.agent_id,
+        window: hold.window,
+        group: hold.group_name,
+        leftPercent: hold.left_percent,
+        resetsAt: hold.resets_at,
+      })
+    }
     // 7.7c: coding steps held for the person. Each keeps its node's step and its one suspended attempt.
     const suspended = new Set(
       attempts.filter((a) => a.suspended && a.step_id !== null).map((a) => a.step_id),
@@ -392,6 +414,7 @@ export function codingBlockOf(sqlite: DatabaseSync, o: OrchRow): WorkflowCodingB
         source === 'hermes' || source === 'claude-code' || source === 'codex',
     ),
     unknownSpend: o.accepted_unknown_spend ? 'continue' : 'pause',
+    quotaFloorPercent: o.quota_floor_percent,
   }
 }
 
@@ -722,7 +745,7 @@ export function workflowDetailOf(
     consumed,
     nodeGates,
     assignmentGates,
-    steps: steps.map((s) => stepViewOf(s, gates, attempts)),
+    steps: steps.map((s) => stepViewOf(s, gates, attempts, holdsOf(sqlite, o.id))),
     attempts: attempts.map(attemptViewOf),
     deadlineAt: o.deadline_at,
     maxSteps: o.max_steps,

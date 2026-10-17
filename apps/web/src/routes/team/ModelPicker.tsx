@@ -9,7 +9,7 @@ import { apiFetch } from '../../data/api.ts'
 
 const OTHER = '__other__'
 // What the server accepts for a model name (CodingAgentCreateSchema).
-const MODEL_PATTERN = '[A-Za-z0-9][A-Za-z0-9._:/@+\\-]*'
+export const MODEL_PATTERN = '[A-Za-z0-9][A-Za-z0-9._:\\/@+\\-]*'
 
 export interface ModelChoices {
   /** Models that share a family ("Gemini 4 Argon (Low)", "… (High)") sit together under that family's name. */

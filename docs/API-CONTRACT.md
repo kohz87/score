@@ -1005,16 +1005,16 @@ room's CLI session (`skipped: no_session`).
   'ready'|'not_installed'|'not_supported'|'untested_version'; version: string|null; testedVersions: string[]; quota: string; message:
   string|null; unverifiedPermissions: ('read-only'|'workspace-write'|'full')[]; warning: string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
 - `GET /api/coding-agents` → `{ items: CodingAgent[] }`: `{ id; name; role; runtime; workspace; permission: 'read-only'|'workspace-write'|'full';
-  model: string|null; style; quota; cli: { state; version; testedVersions; confirmed: boolean }; heldGroups: { runId; pgid: number; canRelease: boolean }[]; createdAt }`. `heldGroups` lists process groups of this agent that Score could not prove ended (the agent takes no new turn while there are any); `canRelease` is true when the cause is that Score cannot tell whether the processes are its own.
+  model: string|null; style; quota; quotaFloorPercent: number; cli: { state; version; testedVersions; confirmed: boolean }; heldGroups: { runId; pgid: number; canRelease: boolean }[]; createdAt }`. `quotaFloorPercent` (0–50, default **10**, 0 = off; PLAN 8.6, decision 91) is the agent's quota floor: runs stop giving it new steps while a limit window of its quota reading has less than that left (see "Quota guard" in §14). `heldGroups` lists process groups of this agent that Score could not prove ended (the agent takes no new turn while there are any); `canRelease` is true when the cause is that Score cannot tell whether the processes are its own.
 - `GET /api/coding-agents/backend` → `CodingBackend` `{ kind: 'unit'|'process-group'; note: string; checks: { name; ok; detail }[]; checkedAt }` (7.7a): how coding runs launch now. `unit` = each run is a supervised systemd user service whose end Score proves from the service's cgroup; `process-group` = the fallback (the CLI dies with Score, tools it started may keep running until Score restarts and stops them). `checks` is the capability check behind the choice (manager reachable, cgroup v2, linger, socket path, unit properties accepted, Python, notify socket). **H** `POST /api/coding-agents/backend/check` `{}` → the same shape after rerunning the check ("Check again"); new runs follow it, a run already started keeps its backend. In `heldGroups`, a held supervised run has `pgid: 0` and `unit` set; `canRelease` is true once Score cannot read the service at all (releasing records a waiver, signals nothing).
 - A Chat reply from a coding agent is **eligible** only when the pinned driver's rule holds (7.7a §6): Claude Code an explicit `success` result with text; Codex a validated final `agent_message` before `turn.completed`, nothing dropped; Antigravity `SUCCESS` with a response; plus a clean exit, a complete record and (supervised) proof the service ended. Otherwise the run is `failed` with a sentence; @mention hand-offs and plan checklists read only the eligible reply. `422 coding_paused` = coding runs are paused: an unreadable journal, a service Score can't account for, a restore or journal fence awaiting review, or (decision 69) the host check failing on an installation that already passed it once — Score pauses instead of falling back to the process-group engine; the coding agent's card says why and offers Check again.
 - `423 execution_frozen` (decisions 71–72): while Score holds all agent work (a copied or unresolved home, a lost or unreadable execution journal), every action that would send a run or a Chat reply to an agent, deliver a Stop (a message's, a Flow's or a person's) or deliver an approval answers `423` with the sentence that says why, and sends nothing. Chat replies stay queued. The only way out is `scripts/score installation reset-history`.
-- **H** `POST /api/coding-agents` `{ id; name; role?; runtime; workspace?; permission?; model?; style; password?; acknowledgeReads? }` → `201 CodingAgent`. A Codex or Antigravity agent needs `acknowledgeReads: true` (`400 acknowledgement_required`): Codex can read every file the owner's user can (live-checked 2026-10-10), and Antigravity is treated the same. A `permission` listed in the runtime's `unverifiedPermissions` is `422 permission_unverified` (also on PATCH).
+- **H** `POST /api/coding-agents` `{ id; name; role?; runtime; workspace?; permission?; model?; style; quotaFloorPercent?; password?; acknowledgeReads? }` → `201 CodingAgent`. A Codex or Antigravity agent needs `acknowledgeReads: true` (`400 acknowledgement_required`): Codex can read every file the owner's user can (live-checked 2026-10-10), and Antigravity is treated the same. A `permission` listed in the runtime's `unverifiedPermissions` is `422 permission_unverified` (also on PATCH).
   `id` is a profile-style name (`^[a-z0-9][a-z0-9_-]{0,63}$`), unique among all agents (`409 conflict`). `workspace` defaults to
   `~/score-workspaces/<id>` (created) and follows the Workspace folder rules (no home folder, `~/.hermes`, `~/.score`, `~/.ssh`;
   `422 workspace_unavailable`). A CLI that is not installed/supported is `422 cli_not_installed`. `permission: 'full'` needs
   `password` (the security password; `409 password_not_set`, `403 wrong_password`, `429`).
-- **H** `PATCH /api/coding-agents/:id` `{ name?; role?; permission?; model?: string|null; workspace?; password? }` → `CodingAgent`. Raising to
+- **H** `PATCH /api/coding-agents/:id` `{ name?; role?; permission?; model?: string|null; workspace?; quotaFloorPercent?: 0–50; password? }` → `CodingAgent`. Raising to
   `full` needs the password; lowering never does.
 - **H** `POST /api/coding-agents/:id/confirm-version` `{ version }` → `CodingAgent`: lets an `untested_version` CLI run for this agent. `version`
   must equal the version Score reads right now (`409 conflict` otherwise).
@@ -1655,6 +1655,7 @@ Controls and accounting cover observed, Score-started work only.
   `409 reach_not_acknowledged`; stored in the run history), `acceptUnknownCost?: ('hermes'|'claude-code'|'codex')[]` and
   `codingSteps?` (1–100, default 10: how many coding launches the run may **release**; counted from the coding journal, not
   from the database). A coding worker on a host without units → `422 coding_workers_need_units`.
+  **Quota guard (8.6):** `quotaFloorPercent?` (0–50) overrides every coding agent's own floor for this run; omitted = each agent's own.
 - **S** `GET /api/orchestrations` → `OrchestrationList`; **S** `GET /api/orchestrations/:id` → `OrchestrationSnapshot`.
   Lists are not paginated (≤ 200 runs; finished runs are kept 90 days).
 - Decisions (all **H**, all carry `orchestrationRevision` = the run `revision` the page showed; a stale one → `409
@@ -1666,7 +1667,8 @@ conflict`; gates and inquiries also carry their own `expectedRevision`; the resp
   - `POST …/:id/limits` `LimitsDecision` — raise/clear the budget or deadline, or `acceptUnknownSpend`. 7.7b adds
     `codingSteps` (raising it lets steps blocked `coding_limit` go on) and `acceptUnknownCost: { add?, remove? }` (unknown cost
     accepted per source, journaled as the full resulting authorisation and verified after a restore). An unaccepted source
-    with unknown cost pauses the run only when a dollar budget is set.
+    with unknown cost pauses the run only when a dollar budget is set. 8.6 adds `quotaFloorPercent` (0–50, or `null` = back to each
+    agent's own floor): a lower floor lets a held step go on at the next admission.
   - `POST …/:id/pause`, `…/resume`, `…/stop` `RunControl`. Resume never lifts a cancel fence, an unknown-attempt fence or the
     global fence. **Stop ignores a stale `orchestrationRevision`** (it can only reduce risk); it is an admission barrier: one
     transaction fences all further admissions, retires queued steps (`not_started: stopped`), withdraws gates and inquiries,
@@ -1692,6 +1694,10 @@ conflict`; gates and inquiries also carry their own `expectedRevision`; the resp
     step's one suspended attempt is unsuspended and admitted again; no second attempt is created. `POST …/:id/remap` to a
     different agent keeps its rules and, for a coding worker, also carries `policyId` and `acknowledgeCodingReach` for the
     new agent's policy.
+  - `POST …/:id/steps/:stepId/quota` `QuotaDecision` `{ answer: 'use_anyway'|'wait'|'stop', orchestrationRevision }` (PLAN 8.6) — answers a
+    `quota_low` item for a step that is held because its coding agent is below its quota floor (see "Quota guard"). `use_anyway`
+    admits this step once; `wait` admits it automatically once the window's reset time passes and a fresh check passes; `stop`
+    stops the run. A step that isn't held → `409 conflict`.
   - `POST …/:id/abandon` `AbandonDecision` — releases capacity and reservations of the listed unresolved attempts, keeps
     their owed stops, records that late results are ignored; the run then pauses (`pauseReason: abandonment`) until Resume.
 - `GET /api/orchestrations/:id/events` → `OrchestrationEvents` `{ asOfSeq, events[] }` (PLAN 7.5b, additive). The run's event
@@ -1712,6 +1718,31 @@ conflict`; gates and inquiries also carry their own `expectedRevision`; the resp
 acceptedUnknownCost, workers[] }`; `needsYou` gains `policy_changed` and `coding_limit` items; a gate's payload carries the
 worker's `policyId`.
 
+### Quota guard (PLAN 8.6, decision 91; schemas in `packages/contract/src/orchestration.ts`)
+
+A coding agent whose quota is nearly used up is not given new steps. **Floor**: `quotaFloorPercent` 0–50 (0 = off), per coding agent
+(default 10, §8) and per run (`OrchestrationCreate`, `LimitsDecision`; omitted/`null` = each agent's own floor). An agent is **below its
+floor** when any window of its latest `CodingQuota` (§8) has a known `usedPercent` with `100 − usedPercent < floor` **and** a `resetsAt` still
+in the future (a window whose reset time has passed counts as reset). A missing reading, an unknown share or reset time, or a failed read
+**never blocks**. Antigravity: only windows of the model group the agent's model belongs to count (`gemini-4-argon-*` → "Gemini 4 Argon",
+other `gemini-*` and "CLI default" → "Gemini Models", `claude-*` and `gpt-*` → "Claude and GPT models"; an unknown model → all groups); its
+reading is the 60 s cached `/usage`, refreshed before a decision when older. **Running steps are never interrupted.**
+
+- **At assignment** (`orch.assign` for a coding worker below its floor): the call is refused `quota_low` (receipt `result`: `{ agent, window,
+  group, leftPercent, resetsAt, otherAgents[] }`, the allowed agents not below their floor). The lead picks one of them, or calls again with
+  `ifQuotaLow: "ask_owner"` when no other agent can do the step. With `ask_owner` the step is created **held** (status stays `queued`,
+  `disposition: 'quota_low'`, `StepView.quotaHold`) and Needs you gets `quota_low`.
+- **At admission** (a step queued earlier whose agent has dropped below the floor): the step is held the same way and the lead gets a cause
+  `step_held` ("s3 is held: builder-claude has 6% of its 5-hour limit left until 3:40 pm") so it can cancel or reassign the step.
+- `NeedsYou` `{ kind: 'quota_low', stepId, agentId, window: '5 hours'|'week', group: string|null, leftPercent, resetsAt }` (workflow runs:
+  `WorkflowNeedsYou` `{ kind: 'quota_low', nodeId, agentId, window, group, leftPercent, resetsAt }`, and `waitingFor: 'quota_low'` on the node).
+  Answers: **Use it anyway** (`use_anyway`, this step once), **Wait until it resets** (`wait`; no card while waiting), **Stop the run** (`stop`).
+  Workflow runs: `POST /api/workflow-runs/:id/nodes/:nodeId/quota` with the same body.
+- `StepView.quotaHold?: { agentId; window; group; leftPercent; resetsAt; state: 'held'|'waiting'|'override' } | null`; `OrchestrationDetail.quotaFloorPercent?: number|null`.
+- **Workflows:** a coding step is checked when it would start; below the floor it waits with the same Needs-you item (no lead to re-plan).
+- History kinds: `quota_held`, `quota_override`, `quota_waited`.
+- `OrchAssignArgs` gains `ifQuotaLow?: 'ask_owner'`; `WorkflowRunCreate` gains `quotaFloorPercent?`.
+
 A stale revision answers `409 conflict` with `details.currentRevision`. `GET /api/orchestrations/:id` also carries, per
 attempt, `state`, `evidence`, `unknownReason`, owed-Stop timestamps and spend, so the page can show "not confirmed ended".
 Not in stage A: the Watch replay scoped to an attempt's session (design v3 "Watch scope"); orchestration frames stay in the
@@ -1727,7 +1758,7 @@ agent incarnation; the capability binds (run, lead attempt, generation). Replies
 | Tool                                                            | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `orch.plan { entries[] ≤ 30 × 500 B }`                          | Replaces the visible plan; executes nothing                                                                                                                                                                                                                                                                                                                                                                                  |
-| `orch.assign { agent, instruction ≤ 8 KiB, after?, replaces? }` | Queues a step → `{ stepId, gateId? }`. Refusals: `agent_not_allowed`, `agent_unavailable`, `step_limit`, `bad_dependency`, `budget_exceeded`, `deadline_passed`, `bad_replaces`, `quota`, `sealed`. `after` must name existing earlier steps of the run. Under `every-step` the gate is created in the same transaction and freezes agent + incarnation, instruction, dependencies, estimate and dependency result revisions |
+| `orch.assign { agent, instruction ≤ 8 KiB, after?, replaces?, ifQuotaLow? }` | Queues a step → `{ stepId, gateId? }`. Refusals: `quota_low` (coding worker below its quota floor; `ifQuotaLow: "ask_owner"` creates the step held instead), `agent_not_allowed`, `agent_unavailable`, `step_limit`, `bad_dependency`, `budget_exceeded`, `deadline_passed`, `bad_replaces`, `quota`, `sealed`. `after` must name existing earlier steps of the run. Under `every-step` the gate is created in the same transaction and freezes agent + incarnation, instruction, dependencies, estimate and dependency result revisions |
 | `orch.requestApproval { stepId }`                               | Under `lead-asks`: creates the same assignment-bound gate for a queued, not yet admitted step. Steps under `lead-asks` are not admitted while the lead attempt that created them runs; one with no gate is admitted afterwards                                                                                                                                                                                               |
 | `orch.cancel { stepId }`                                        | Retires the step. If it was admitted: stop is owed and **all admissions in the run are fenced** until that attempt is terminated, abandoned or the person records a waiver                                                                                                                                                                                                                                                   |
 | `orch.ask { question ≤ 2 KiB }`                                 | Opens an inquiry (Needs you); the answer arrives in the next lead input as data                                                                                                                                                                                                                                                                                                                                              |
@@ -2004,6 +2035,12 @@ executor's one admission function, the coding step limit counted from the launch
   generation)`: a late result of an earlier generation never replaces the current one, and late proof, `interrupted` or
   `unknown` never give a verdict. The row and the node's own copy of the output are charged to the coding partition.
 
+- **Quota guard (PLAN 8.6, "Quota guard" in §14).** `WorkflowRunCreate.quotaFloorPercent?` (0–50) overrides each coding agent's own floor
+  for the run (`POST …/limits` takes it too). A coding step whose agent is below its floor when the step would start stays `queued`
+  with its node `running`, shows `waitingFor: 'quota_low'` and lists `quota_low { nodeId, agentId, window, group, leftPercent, resetsAt }`
+  in `needsYou`. `POST /api/workflow-runs/:id/nodes/:nodeId/quota` `{ answer: 'use_anyway'|'wait'|'stop', orchestrationRevision }`
+  answers it (`use_anyway` once for this step; `wait` goes on by itself after the reset; `stop` stops the run). Steps already
+  running are never interrupted; a missing or expired reading never holds a step.
 - **A blocked coding node keeps its step.** When a coding step is blocked for a decision (`agent_changed`, `coding_limit`, or
   held back 20 times) its attempt is **suspended** (holds no slot, keeps its reservation) and the node stays `running` with
   `waitingFor` `coding_settings | coding_limit | held_back`; the planner never clears the node's step or assigns a replacement.

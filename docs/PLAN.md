@@ -406,6 +406,9 @@ when: the brief's tests pass; e2e in fake mode; `pnpm check`.
 **8.7 Coding agents' sub-agents** · (owner 2026-10-17; decision 92; brief docs/briefs/8.7-subagents.md) fix: a Claude
 Code turn that used a sub-agent ended with `loss` (unknown `task_*` system records); sub-agent activity nests under the
 Agent tool card in Chat, Flow and Watch. Done when: the real captured turn replays with `loss: null`; e2e in fake mode.
+**8.8 Role and personality for coding agents** · (owner 2026-10-17; decision 94; brief docs/briefs/8.8-coding-personality.md)
+role + "Personality and instructions" stored in Score, handed to the CLI each session (Claude Code via
+`--append-system-prompt-file`, Codex/Antigravity as the session's opening instructions); nothing written to the workspace.
 
 ## Phase 9: Themes and the Customizer (owner 2026-10-17; design docs/briefs/9-themes.md; decision 90)
 

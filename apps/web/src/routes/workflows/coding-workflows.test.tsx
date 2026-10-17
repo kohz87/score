@@ -180,6 +180,37 @@ test('held back 20 times: Try again renews the step, and says how many chances a
   await waitFor(() => expect(posted('/workflow-runs/wfrun-1/stop')).toBeTruthy())
 })
 
+test('a held step: the card names the agent’s low limit and posts the three answers to the node', async () => {
+  snapshot = codingRunSnapshot(
+    [
+      {
+        kind: 'quota_low',
+        nodeId: 'draft',
+        agentId: 'coder-a',
+        window: '5 hours',
+        group: null,
+        leftPercent: 6,
+        resetsAt: '2099-01-01T05:40:00.000Z',
+      },
+    ],
+    { waitingFor: 'quota_low' },
+  )
+  live()
+  const card = await screen.findByRole('region', { name: 'coder-a’s limit is low' })
+  expect(within(card).getByText(/Draft the notes is held:/)).toBeTruthy()
+  expect(within(card).getByText(/has 6% of its 5-hour limit left/)).toBeTruthy()
+  fireEvent.click(within(card).getByRole('button', { name: 'Wait until it resets' }))
+  await waitFor(() => expect(posted('/nodes/draft/quota')).toBeTruthy())
+  expect(body('/nodes/draft/quota')).toEqual({ answer: 'wait', orchestrationRevision: 14 })
+  fireEvent.click(within(card).getByRole('button', { name: 'Use it anyway' }))
+  fireEvent.click(within(card).getByRole('button', { name: 'Stop the run' }))
+  await waitFor(() =>
+    expect(
+      requests.filter((r) => r.init?.method === 'POST' && r.url.endsWith('/nodes/draft/quota')),
+    ).toHaveLength(3),
+  )
+})
+
 test('lost input: the card says nothing ran, and Retry posts the step’s retry', async () => {
   snapshot = codingRunSnapshot([{ kind: 'node_inputs_withdrawn', nodeId: 'draft' }], {
     state: 'unresolved',

@@ -3,7 +3,9 @@ import { ORCH_LIMITS } from '@score/contract'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Arrival } from '../../motion/Arrival.tsx'
+import { resetText } from '../team/QuotaMeters.tsx'
 import { readinessText } from './orch-model.ts'
+import { limitPhrase } from './quota-text.ts'
 import { AgentChip, ErrorLine } from './decision-parts.tsx'
 import './orchestrations.css'
 
@@ -22,6 +24,8 @@ export interface RunCoding {
   acceptedUnknownCost: readonly CostSource[]
   /** `continue` = every source's unknown cost is already accepted. */
   unknownSpend?: 'pause' | 'continue'
+  /** 8.6: the run's own quota floor; null or absent = each coding agent's own. */
+  quotaFloorPercent?: number | null | undefined
 }
 
 /** The run's own check of one coding agent: what it can do now. Orchestrations ask with their lead, workflows without. */
@@ -172,6 +176,75 @@ export function CodingLimitCard({
           onClick={() => onRaise(next)}
         >
           Raise the limit and continue
+        </button>
+      </div>
+      <ErrorLine error={error} />
+    </Arrival>
+  )
+}
+
+/** What a held step's card needs from the run: the numbers behind the hold. */
+export interface QuotaHoldFacts {
+  agentId: string
+  window: '5 hours' | 'week'
+  group: string | null
+  leftPercent: number
+  resetsAt: string
+}
+
+/**
+ * A coding agent has less of its limit left than the level set for it, so a step that hasn't started is held (8.6). The
+ * three answers are the same for an orchestration step and a workflow step.
+ */
+export function QuotaLowCard({
+  arrivalKey,
+  what,
+  hold,
+  agents,
+  onAnswer,
+  pending,
+  error,
+}: {
+  arrivalKey: string
+  /** What the card calls the held step (an orchestration's step id, a workflow's node title). */
+  what: string
+  hold: QuotaHoldFacts
+  agents: AgentSummary[]
+  onAnswer: (answer: 'use_anyway' | 'wait' | 'stop') => void
+  pending: boolean
+  error: unknown
+}) {
+  const resets = resetText(hold.resetsAt)
+  return (
+    <Arrival
+      arrivalId={`quota-${arrivalKey}`}
+      className="orch-decision"
+      aria-label={`${hold.agentId}’s limit is low`}
+    >
+      <h3>
+        {what} is held: <AgentChip agentId={hold.agentId} agents={agents} />
+        ’s limit is low
+      </h3>
+      <p>
+        {hold.agentId} has {Math.round(hold.leftPercent)}% of {limitPhrase(hold.window, hold.group)}{' '}
+        left
+        {resets ? `, and it resets at ${resets}` : ''}. That is under the level set for this agent,
+        so {what} hasn’t started. Steps that are already running carry on.
+      </p>
+      <div className="orch-actions">
+        <button
+          type="button"
+          className="orch-primary"
+          disabled={pending}
+          onClick={() => onAnswer('use_anyway')}
+        >
+          Use it anyway
+        </button>
+        <button type="button" disabled={pending} onClick={() => onAnswer('wait')}>
+          Wait until it resets
+        </button>
+        <button type="button" disabled={pending} onClick={() => onAnswer('stop')}>
+          Stop the run
         </button>
       </div>
       <ErrorLine error={error} />

@@ -10,10 +10,10 @@ import {
 } from '@score/contract'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
+import { AgentAdded } from './AgentAdded.tsx'
 import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
 
 const MiB = 1024 * 1024
@@ -120,177 +120,183 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
       ref={dialog}
       open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
       className="team-profile-dialog"
-      aria-labelledby="import-agent-title"
+      aria-label="Import agent"
       onCancel={(event) => {
         event.preventDefault()
         leave()
       }}
     >
-      <div className="team-card-heading">
-        <h2 id="import-agent-title">Import agent</h2>
-        <button type="button" className="team-pill-button" onClick={leave}>
-          {operation ? 'Close' : 'Cancel'}
-        </button>
-      </div>
-      {operation ? (
-        <>
-          <ProfileOperation operation={operation} />
-          {status.isError && (
-            <p role="alert">
-              Couldn’t refresh progress.{' '}
-              <button onClick={() => void status.refetch()}>Try again</button>
-            </p>
-          )}
-          {operation.state === 'completed' && (
-            <Link to={`/team/${encodeURIComponent(operation.targetName)}`} onClick={close}>
-              View agent
-            </Link>
-          )}
-        </>
-      ) : !inspection ? (
-        <div className="team-routine-form">
-          <p>
-            Choose an archive made by <code>hermes profile export</code> (a .tar.gz, up to 200 MB).
-            Score reads what is inside without unpacking it into your Hermes profiles.
-          </p>
-          <label>
-            Archive
-            <input
-              type="file"
-              accept=".gz,.tgz,application/gzip,application/x-gzip"
-              disabled={upload.isPending}
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (file) upload.mutate(file)
-              }}
-            />
-          </label>
-          {upload.isPending && <p aria-live="polite">Reading the archive…</p>}
-          {upload.error && <p role="alert">{upload.error.message}</p>}
-        </div>
+      {operation?.state === 'completed' ? (
+        <AgentAdded
+          agent={{ id: operation.targetName, name: name || operation.targetName, style }}
+          detail="Hermes agent, imported from an archive"
+          onClose={close}
+        />
       ) : (
-        <form
-          className="team-routine-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!blocked) start.mutate()
-          }}
-        >
-          <section className="team-card">
-            <h3>In this archive</h3>
-            <dl className="team-facts">
-              <div>
-                <dt>Exported as</dt>
-                <dd>{inspection.archiveRoot}</dd>
-              </div>
-              <div>
-                <dt>Model</dt>
-                <dd>{inspection.model ?? 'Not set in the archive'}</dd>
-              </div>
-              <List label="Skills" values={inspection.skills} />
-              <List label="Plugins" values={inspection.plugins} />
-              <div>
-                <dt>Memory</dt>
-                <dd>{size(inspection.memoryBytes)}</dd>
-              </div>
-              <div>
-                <dt>Hermes config version</dt>
-                <dd>{inspection.configVersion ?? 'Unknown'}</dd>
-              </div>
-              <div>
-                <dt>Contents</dt>
-                <dd>
-                  {inspection.fileCount} files, {size(inspection.totalBytes)} unpacked
-                </dd>
-              </div>
-              <List label="Credential files (names only)" values={inspection.credentialFiles} />
-            </dl>
-            {inspection.warnings.map((warning) => (
-              <p role="alert" key={warning}>
-                {warning}
-              </p>
-            ))}
-            <p>
-              Hermes also adds a small launcher script for the new profile in{' '}
-              <code>~/.local/bin</code>.
-            </p>
-          </section>
-          <label>
-            New agent id
-            <input
-              autoFocus
-              required
-              pattern="[a-z0-9][a-z0-9_\-]{0,63}"
-              maxLength={64}
-              value={id}
-              aria-invalid={taken || (id !== '' && !idValid)}
-              onChange={(event) => {
-                setId(event.target.value)
-                setName(event.target.value)
-              }}
-            />
-          </label>
-          {taken && (
-            <p role="alert">
-              An agent with this id already exists. Import never overwrites it: pick another id, or
-              delete that agent first (Score keeps a private export when you do).
-            </p>
-          )}
-          <label>
-            Role or description
-            <textarea
-              required
-              maxLength={2000}
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-            />
-          </label>
-          <div className="team-profile-appearance">
-            <AgentGlyph
-              agent={{ id: id || 'new', name: id || 'New agent', style }}
-              describeShape
-              contrast="high"
-            />
-            <label>
-              Colour
-              <input
-                type="color"
-                value={style.color}
-                onChange={(event) => setStyle({ ...style, color: event.target.value })}
-              />
-            </label>
-            <label>
-              Shape
-              <select
-                aria-label="Shape"
-                value={style.shape}
-                onChange={(event) =>
-                  setStyle({ ...style, shape: ShapeSchema.parse(event.target.value) })
-                }
-              >
-                {ShapeSchema.options.map((shape) => (
-                  <option key={shape}>{shape}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {inspection.credentialFiles.length > 0 && (
-            <label className="team-profile-confirm">
-              <input
-                type="checkbox"
-                checked={credentialsOk}
-                onChange={(event) => setCredentialsOk(event.target.checked)}
-              />
-              I know the archive contains credential files and want them copied into the new agent.
-            </label>
-          )}
-          {start.error && <p role="alert">{start.error.message}</p>}
-          <div className="team-file-actions">
-            <button className="team-primary" disabled={blocked}>
-              {start.isPending ? 'Starting…' : 'Import agent'}
+        <>
+          <div className="team-card-heading">
+            <h2 id="import-agent-title">Import agent</h2>
+            <button type="button" className="team-pill-button" onClick={leave}>
+              {operation ? 'Close' : 'Cancel'}
             </button>
           </div>
-        </form>
+          {operation ? (
+            <>
+              <ProfileOperation operation={operation} />
+              {status.isError && (
+                <p role="alert">
+                  Couldn’t refresh progress.{' '}
+                  <button onClick={() => void status.refetch()}>Try again</button>
+                </p>
+              )}
+            </>
+          ) : !inspection ? (
+            <div className="team-routine-form">
+              <p>
+                Choose an archive made by <code>hermes profile export</code> (a .tar.gz, up to 200
+                MB). Score reads what is inside without unpacking it into your Hermes profiles.
+              </p>
+              <label>
+                Archive
+                <input
+                  type="file"
+                  accept=".gz,.tgz,application/gzip,application/x-gzip"
+                  disabled={upload.isPending}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) upload.mutate(file)
+                  }}
+                />
+              </label>
+              {upload.isPending && <p aria-live="polite">Reading the archive…</p>}
+              {upload.error && <p role="alert">{upload.error.message}</p>}
+            </div>
+          ) : (
+            <form
+              className="team-routine-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!blocked) start.mutate()
+              }}
+            >
+              <section className="team-card">
+                <h3>In this archive</h3>
+                <dl className="team-facts">
+                  <div>
+                    <dt>Exported as</dt>
+                    <dd>{inspection.archiveRoot}</dd>
+                  </div>
+                  <div>
+                    <dt>Model</dt>
+                    <dd>{inspection.model ?? 'Not set in the archive'}</dd>
+                  </div>
+                  <List label="Skills" values={inspection.skills} />
+                  <List label="Plugins" values={inspection.plugins} />
+                  <div>
+                    <dt>Memory</dt>
+                    <dd>{size(inspection.memoryBytes)}</dd>
+                  </div>
+                  <div>
+                    <dt>Hermes config version</dt>
+                    <dd>{inspection.configVersion ?? 'Unknown'}</dd>
+                  </div>
+                  <div>
+                    <dt>Contents</dt>
+                    <dd>
+                      {inspection.fileCount} files, {size(inspection.totalBytes)} unpacked
+                    </dd>
+                  </div>
+                  <List label="Credential files (names only)" values={inspection.credentialFiles} />
+                </dl>
+                {inspection.warnings.map((warning) => (
+                  <p role="alert" key={warning}>
+                    {warning}
+                  </p>
+                ))}
+                <p>
+                  Hermes also adds a small launcher script for the new profile in{' '}
+                  <code>~/.local/bin</code>.
+                </p>
+              </section>
+              <label>
+                New agent id
+                <input
+                  autoFocus
+                  required
+                  pattern="[a-z0-9][a-z0-9_\-]{0,63}"
+                  maxLength={64}
+                  value={id}
+                  aria-invalid={taken || (id !== '' && !idValid)}
+                  onChange={(event) => {
+                    setId(event.target.value)
+                    setName(event.target.value)
+                  }}
+                />
+              </label>
+              {taken && (
+                <p role="alert">
+                  An agent with this id already exists. Import never overwrites it: pick another id,
+                  or delete that agent first (Score keeps a private export when you do).
+                </p>
+              )}
+              <label>
+                Role or description
+                <textarea
+                  required
+                  maxLength={2000}
+                  value={role}
+                  onChange={(event) => setRole(event.target.value)}
+                />
+              </label>
+              <div className="team-profile-appearance">
+                <AgentGlyph
+                  agent={{ id: id || 'new', name: id || 'New agent', style }}
+                  describeShape
+                  contrast="high"
+                />
+                <label>
+                  Colour
+                  <input
+                    type="color"
+                    value={style.color}
+                    onChange={(event) => setStyle({ ...style, color: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Shape
+                  <select
+                    aria-label="Shape"
+                    value={style.shape}
+                    onChange={(event) =>
+                      setStyle({ ...style, shape: ShapeSchema.parse(event.target.value) })
+                    }
+                  >
+                    {ShapeSchema.options.map((shape) => (
+                      <option key={shape}>{shape}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {inspection.credentialFiles.length > 0 && (
+                <label className="team-profile-confirm">
+                  <input
+                    type="checkbox"
+                    checked={credentialsOk}
+                    onChange={(event) => setCredentialsOk(event.target.checked)}
+                  />
+                  I know the archive contains credential files and want them copied into the new
+                  agent.
+                </label>
+              )}
+              {start.error && <p role="alert">{start.error.message}</p>}
+              <div className="team-file-actions">
+                <button className="team-primary" disabled={blocked}>
+                  {start.isPending ? 'Starting…' : 'Import agent'}
+                </button>
+              </div>
+            </form>
+          )}
+        </>
       )}
     </dialog>
   )

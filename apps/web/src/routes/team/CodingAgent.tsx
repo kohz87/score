@@ -11,11 +11,12 @@ import {
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { CodingBackend } from './CodingBackend.tsx'
+import { AGENT_ID_PATTERN, agentIdInput } from './agent-id.ts'
 import { ModelPicker } from './ModelPicker.tsx'
 import { ReleaseHeld } from './ReleaseHeld.tsx'
 import { AgentQuota, RuntimeQuotaLine } from './QuotaMeters.tsx'
@@ -130,7 +131,18 @@ function PermissionPicker({
   )
 }
 
-export function AddCodingAgentForm({ close }: { close: () => void }) {
+const shortPermission: Record<CodingPermission, string> = {
+  'read-only': 'read only',
+  'workspace-write': 'workspace write',
+  full: 'full access',
+}
+
+export function AddCodingAgentForm({
+  onAdded,
+}: {
+  /** The agent and one line about it, for the dialog's "joined the team" view. */
+  onAdded: (agent: CodingAgent, detail: string) => void
+}) {
   const queryClient = useQueryClient()
   const runtimes = useQuery(codingRuntimesQuery)
   const [runtime, setRuntime] = useState<CodingRuntime>('claude-code')
@@ -164,20 +176,20 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
           }),
         }),
       ),
-    onSuccess: () => {
+    onSuccess: (agent) => {
       void queryClient.invalidateQueries({ queryKey: ['coding'] })
       void queryClient.invalidateQueries({ queryKey: ['team'] })
+      onAdded(
+        agent,
+        [
+          'Coding agent',
+          info?.label ?? runtime,
+          agent.model ?? 'the CLI’s default model',
+          shortPermission[agent.permission],
+        ].join(' · '),
+      )
     },
   })
-  if (create.data)
-    return (
-      <>
-        <p role="status">{create.data.name} joined the team.</p>
-        <Link to={`/team/${encodeURIComponent(create.data.id)}`} onClick={close}>
-          View agent
-        </Link>
-      </>
-    )
   return (
     <form
       className="team-routine-form"
@@ -234,15 +246,20 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
       )}
       {usable && <RuntimeQuotaLine runtime={runtime} />}
       <label>
-        Agent name (letters, digits, - and _)
+        Agent name (lowercase letters, digits, - and _)
         <input
           required
-          pattern="[a-z0-9][a-z0-9_-]{0,63}"
+          pattern={AGENT_ID_PATTERN}
+          title="Lowercase letters, digits, - and _"
           maxLength={64}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           value={id}
           onChange={(event) => {
-            setId(event.target.value)
-            setName(event.target.value)
+            const next = agentIdInput(event.target.value)
+            setId(next)
+            setName(next)
           }}
         />
       </label>
@@ -349,7 +366,7 @@ export function CodingOverview({ agent }: { agent: AgentDetail }) {
     )
   return (
     <CodingSettings
-      key={`${coding.permission}:${coding.model}:${coding.cli.confirmed}:${coding.heldGroups.length}`}
+      key={`${coding.permission}:${coding.model}:${coding.quotaFloorPercent}:${coding.cli.confirmed}:${coding.heldGroups.length}`}
       coding={coding}
       onChanged={() => {
         void queryClient.invalidateQueries({ queryKey: ['coding'] })
@@ -383,6 +400,10 @@ function CodingSettings({
   const [permission, setPermission] = useState(coding.permission)
   const [model, setModel] = useState(coding.model ?? '')
   const [password, setPassword] = useState('')
+  const [floor, setFloor] = useState(String(coding.quotaFloorPercent))
+  const floorValue = Number(floor)
+  const floorValid =
+    floor.trim() !== '' && Number.isInteger(floorValue) && floorValue >= 0 && floorValue <= 50
   const runtimes = useQuery(codingRuntimesQuery)
   const unverified =
     runtimes.data?.find((item) => item.runtime === coding.runtime)?.unverifiedPermissions ?? []
@@ -395,6 +416,7 @@ function CodingSettings({
           body: JSON.stringify({
             permission,
             model: model.trim() || null,
+            quotaFloorPercent: floorValue,
             ...(needsPassword ? { password } : {}),
           }),
         }),
@@ -435,7 +457,11 @@ function CodingSettings({
         <div>
           <dt>Limits left</dt>
           <dd>
-            <AgentQuota agentId={coding.id} runtime={coding.runtime} />
+            <AgentQuota
+              agentId={coding.id}
+              runtime={coding.runtime}
+              floor={coding.quotaFloorPercent}
+            />
           </dd>
         </div>
         <div>
@@ -498,6 +524,28 @@ function CodingSettings({
             />
           </label>
         )}
+        <div className="team-quota-floor">
+          <label>
+            Stop using this agent in runs when a limit is below
+            <span className="team-quota-floor-input">
+              <input
+                type="number"
+                min={0}
+                max={50}
+                step={1}
+                inputMode="numeric"
+                value={floor}
+                aria-invalid={!floorValid}
+                onChange={(event) => setFloor(event.target.value)}
+              />
+              <span aria-hidden>%</span>
+            </span>
+          </label>
+          <p className="team-muted">
+            Orchestrations and workflows don’t give it new steps while a limit has less than this
+            left. Steps already running carry on. Enter 0 to turn this off.
+          </p>
+        </div>
         <ReadAccessWarning runtime={coding.runtime} permission={permission} />
         {(save.error || confirm.error || remove.error) && (
           <p role="alert">{(save.error ?? confirm.error ?? remove.error)?.message}</p>
@@ -507,6 +555,7 @@ function CodingSettings({
             className="team-primary"
             disabled={
               save.isPending ||
+              !floorValid ||
               (permission !== coding.permission && unverified.includes(permission))
             }
           >

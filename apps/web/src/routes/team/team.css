@@ -1058,6 +1058,29 @@ a.team-pill-button {
   padding: 0;
 }
 
+/* The quota floor field (PLAN 8.6). */
+.team-quota-floor {
+  text-align: left;
+}
+.team-quota-floor label {
+  justify-content: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.team-quota-floor-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.team-quota-floor-input input {
+  width: 4.5rem;
+}
+.team-quota-floor p {
+  margin: 4px 0 0;
+}
+
 /* CLI quota meters (PLAN 8.1): a bar per window; the figure beside it always says the same thing as the fill. */
 .quota {
   text-align: left;
@@ -1081,6 +1104,7 @@ a.team-pill-button {
   overflow-wrap: anywhere;
 }
 .quota-bar {
+  position: relative;
   display: block;
   height: 8px;
   border-radius: var(--radius-pill);
@@ -1092,6 +1116,16 @@ a.team-pill-button {
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--ink);
+}
+/* The floor (PLAN 8.6): runs stop giving this agent new steps below it. */
+.quota-floor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--agent-coral);
+  box-shadow: 0 0 0 1px var(--card);
 }
 .quota-fill[data-level='low'] {
   background: var(--agent-saffron);
@@ -1129,4 +1163,38 @@ a.team-pill-button {
 }
 .coding-reach p:last-child {
   margin-bottom: 0;
+}
+
+/* "<name> joined the team": the end of Add agent and Import agent. */
+.team-added {
+  display: grid;
+  gap: var(--space-4);
+}
+.team-added-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.team-added-head h2 {
+  margin: 0;
+}
+.team-added-head p {
+  margin: var(--space-1) 0 0;
+}
+.team-added-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.team-added-actions .team-primary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--card);
+  font-weight: 700;
+  text-decoration: none;
 }

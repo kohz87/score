@@ -26,8 +26,8 @@ test('pick a model from the connected providers in Add agent and on the Model ta
   await dialog.getByRole('button', { name: 'Preview changes' }).click()
   await expect(dialog.getByText('Set the model to gpt-6.1-sol via ChatGPT (Codex).')).toBeVisible()
   await dialog.getByRole('button', { name: 'Create agent' }).click()
-  await expect(dialog.getByRole('heading', { name: 'Ready', exact: true })).toBeVisible()
-  await dialog.getByRole('link', { name: 'View agent' }).click()
+  await expect(dialog.getByRole('heading', { name: / joined the team$/ })).toBeVisible()
+  await dialog.getByRole('link', { name: /^Open / }).click()
 
   await page.getByRole('tab', { name: 'Model' }).click()
   const panel = page.getByRole('tabpanel')
