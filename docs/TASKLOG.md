@@ -194,3 +194,13 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **8.8 role and personality** merged: lead verified `--system-prompt-snapshot`/`--append-system-prompt` in the help of
   2.1.300–302 (decision 96). Full check green; e2e 370/371 (Night shift dark Chat screenshot 4/4 alone).
 - **Release 1.6.0**: themes part 1 (9.1 + 9.2), 8.7, 8.8, Claude Code 2.1.302 tested.
+
+## Paused at a safe point (owner, 2026-10-17 ~21:10 GMT+8)
+- Live: **v1.6.0** (schema 74), healthy. Main = v1.6.0 + docs; everything pushed.
+- **8.9 agent page cleanup**: branch `task/8.9` in `../score-worktrees/shots`, commits #1 (layout) and #2 (floor field,
+  e2e) done; builder stopped during its final e2e. Untracked: `e2e/agent-page-visual.spec.ts-snapshots/` (new baselines,
+  unreviewed). To resume: review the branch + screenshots (none taken yet), run `pnpm check` and e2e once, then merge.
+- Queued next: test hardening (fix the timing-flaky tests: coding-process S2-005, audit2-t S2-021, live-port
+  "starts idempotently", live-feel/user-view e2e, Now 1px, the user-view password-guard repeat), then 9.3 → 9.4 → 9.5.
+- Test policy (owner): targeted tests while building, one full run per builder, full e2e once per release,
+  `TMPDIR=$HOME/.cache/score-tmp` for heavy runs; max 2 heavy runs at once.
