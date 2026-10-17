@@ -165,3 +165,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   (2) the user-view guard spec's two wrong guesses count toward the server's password attempt limit, so repeats fail
   with 429 — use its own paired browser or fewer wrong guesses; (3) user-view orchestration spec timed out once under
   load (4/4 alone). The long-description spec first left its agent behind (team counts 6 ≠ 5): fixed, it removes it.
+
+## 2026-10-17 incident: VM overload and a forked duplicate lead
+- After a session restart a forked copy of the lead session ("Score multi-agent workspace (2)") ran alongside this one
+  and started its own builders in 8.6 and 8.7 next to this session's, plus a `git merge main` + `pnpm check` in 9.1.
+  With four builders, the lead's check and the fork, the VM (7.4 GB RAM, RAM-backed /tmp) filled RAM and swap; load 61;
+  ~12 processes in disk wait including the live Score. The lead stopped the leftover 9.1 and 8.7 test/build processes by
+  exact PID (memory 0.16 → 2.5 GB free). The fork's own 8.6/8.7 builders were stopped by the fork.
+- Agreement: this session is the single integrator (merges, deploys); the fork owns only 9.2 and reports to it. Max two
+  heavy runs at once (memory note `vm-capacity`). 8.6/8.7 builders must review uncommitted changes they didn't make.

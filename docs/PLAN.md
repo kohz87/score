@@ -399,6 +399,13 @@ own model cache `$CODEX_HOME/models_cache.json` (only `models[].slug/display_nam
 supported_reasoning_levels`; nothing else from that file, never `auth.json`); Claude Code from its documented aliases
 (no list command); every list keeps "CLI default" and "Other…" (free text). Lists cached for a few minutes, refreshed on
 open; unknown/unreadable ⇒ free text as today. Builds on 8.1's coding-agent page.
+**8.6 Quota guard for coding agents** · (owner 2026-10-17; decision 91; brief docs/briefs/8.6-quota-guard.md) a coding
+worker whose limit is below a floor (default 10%) isn't given new steps: the lead is told and re-plans; if it can't, the
+step is held with a Needs-you card (use anyway / wait for the reset / stop). Workflows wait with the same card. Done
+when: the brief's tests pass; e2e in fake mode; `pnpm check`.
+**8.7 Coding agents' sub-agents** · (owner 2026-10-17; decision 92; brief docs/briefs/8.7-subagents.md) fix: a Claude
+Code turn that used a sub-agent ended with `loss` (unknown `task_*` system records); sub-agent activity nests under the
+Agent tool card in Chat, Flow and Watch. Done when: the real captured turn replays with `loss: null`; e2e in fake mode.
 
 ## Phase 9: Themes and the Customizer (owner 2026-10-17; design docs/briefs/9-themes.md; decision 90)
 
