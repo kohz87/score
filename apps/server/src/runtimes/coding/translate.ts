@@ -397,18 +397,21 @@ export function eventObservation(
   }
 }
 
+function readStoredSubagent(stored: string | null): SubagentSummary | null {
+  try {
+    const parsed = SubagentSummarySchema.safeParse(stored === null ? null : JSON.parse(stored))
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
+  }
+}
+
 /** Folds one sub-agent event into the stored summary; an unreadable stored value counts as absent. */
 function mergeSubagent(
   stored: string | null,
   event: Extract<CodingEvent, { kind: 'subagent' }>,
 ): SubagentSummary {
-  let before: SubagentSummary | null = null
-  try {
-    const parsed = SubagentSummarySchema.safeParse(stored === null ? null : JSON.parse(stored))
-    before = parsed.success ? parsed.data : null
-  } catch {
-    before = null
-  }
+  const before = readStoredSubagent(stored)
   const count = (value: number | undefined, old: number | null | undefined) =>
     value === undefined ? (old ?? null) : Math.max(0, Math.round(value))
   return {
