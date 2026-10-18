@@ -168,7 +168,7 @@ describe('a sync that fails stops the swap and keeps the old theme (K2 X5)', () 
 // otherwise a power cut can keep the erased note and lose the restoration (old row, new bytes, no note to recover from).
 describe('a rollback settles its note only after the restored folder is synced', () => {
   test('a replacement whose row commit fails: restore, sync the root, then erase the note durably', () => {
-    const store = new ThemeStore(
+    const store: ThemeStore = new ThemeStore(
       db,
       home,
       undefined,

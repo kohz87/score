@@ -1,5 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
+import { holdLockPerTest } from './locks.ts'
+
+// These count the team's agents: not while model-picker.spec.ts has one added (locks.ts).
+holdLockPerTest('roster')
 
 test('reports show the numbers, switch range and export the table as CSV', async ({ page }) => {
   await page.goto('/reports')
@@ -25,7 +29,9 @@ test('reports show the numbers, switch range and export the table as CSV', async
     'Cache hits',
     'Spend',
   ])
-  await expect(table.getByRole('row')).toHaveCount(5)
+  // Right after the server starts the agent list is still filling: the page refetches on agent.updated, throttled to
+  // one fetch per 5 s, so the rows can arrive just after the default 5 s expect timeout.
+  await expect(table.getByRole('row')).toHaveCount(5, { timeout: 15_000 })
   await expect(table.locator('tbody th', { hasText: 'builder' })).toBeVisible()
 
   await page.getByRole('button', { name: '30 days' }).click()

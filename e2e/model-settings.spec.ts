@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { withLock } from './locks.ts'
 import { pair } from './pair.ts'
 
 // 5.31 on the fake adapter: fallback chain, aliases and speech models on the Model tab, and the chosen-models list in
@@ -40,31 +41,44 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
   await page.getByRole('tab', { name: 'Model' }).click()
   await expect(page.getByLabel('Voice')).toHaveValue('nova')
 
-  // Settings: choose one model; the pickers list only it until Show all.
-  await page.goto('/settings')
-  const chosen = page.getByRole('group', { name: 'Chosen models' })
-  await chosen.getByLabel('Search models').fill('local-gpt-mini')
-  await chosen.getByRole('checkbox', { name: /local-gpt-mini/ }).check()
-  await chosen.getByRole('button', { name: 'Save chosen models' }).click()
-  await expect(chosen.getByText('1 chosen. Pickers list only these.')).toBeVisible()
-  await page.goto('/team/designer')
-  await page.getByRole('tab', { name: 'Model' }).click()
-  const picker = page.getByRole('tabpanel').getByRole('combobox', { name: 'Model', exact: true })
-  await picker.fill('')
-  await picker.focus()
-  const list = page.getByRole('listbox', { name: 'Model suggestions' })
-  await expect(list.getByRole('option')).toHaveCount(1)
-  await page.getByRole('button', { name: /^Show all \(\d+ more\)$/ }).click()
-  await expect(list.getByRole('option').nth(1)).toBeVisible()
+  // The list is server-wide: hold the lock from narrowing to clearing so no picker-reading spec sees it narrowed.
+  await withLock('model-lists', async () => {
+    try {
+      // Settings: choose one model; the pickers list only it until Show all.
+      await page.goto('/settings')
+      const chosen = page.getByRole('group', { name: 'Chosen models' })
+      await chosen.getByLabel('Search models').fill('local-gpt-mini')
+      await chosen.getByRole('checkbox', { name: /local-gpt-mini/ }).check()
+      await chosen.getByRole('button', { name: 'Save chosen models' }).click()
+      await expect(chosen.getByText('1 chosen. Pickers list only these.')).toBeVisible()
+      await page.goto('/team/designer')
+      await page.getByRole('tab', { name: 'Model' }).click()
+      const picker = page
+        .getByRole('tabpanel')
+        .getByRole('combobox', { name: 'Model', exact: true })
+      await picker.fill('')
+      await picker.focus()
+      const list = page.getByRole('listbox', { name: 'Model suggestions' })
+      await expect(list.getByRole('option')).toHaveCount(1)
+      await page.getByRole('button', { name: /^Show all \(\d+ more\)$/ }).click()
+      await expect(list.getByRole('option').nth(1)).toBeVisible()
 
-  // Undo.
-  await page.goto('/settings')
-  await page
-    .getByRole('group', { name: 'Chosen models' })
-    .getByRole('button', { name: 'Clear (show all)' })
-    .click()
-  await page.getByRole('button', { name: 'Save chosen models' }).click()
-  await expect(page.getByText('None chosen: pickers list every model.')).toBeVisible()
+      // Undo.
+      await page.goto('/settings')
+      await page
+        .getByRole('group', { name: 'Chosen models' })
+        .getByRole('button', { name: 'Clear (show all)' })
+        .click()
+      await page.getByRole('button', { name: 'Save chosen models' }).click()
+      await expect(page.getByText('None chosen: pickers list every model.')).toBeVisible()
+    } finally {
+      // Whatever failed above, the server-wide list must not stay narrowed for the specs that follow.
+      await page.request.put('/api/settings/model-visibility', {
+        headers: { 'x-score-client': 'web' },
+        data: { items: [] },
+      })
+    }
+  })
   await page.goto('/team/designer')
   await page.getByRole('tab', { name: 'Model' }).click()
   const undo = page.getByRole('tabpanel')
