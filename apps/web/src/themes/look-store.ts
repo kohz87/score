@@ -25,7 +25,12 @@ export function readDeviceOverride(): string | null {
   }
 }
 
+/**
+ * The in-memory state is what the page applies; storage only carries the choice to the next visit. So the state changes
+ * first and a storage that throws (blocked, private window, full) can't stop a choice or a reset (gate finding #9).
+ */
 export function writeDeviceOverride(id: string | null): void {
+  state = { ...state, device: id }
   try {
     if (id === null) {
       window.localStorage.removeItem(DEVICE_KEY)
@@ -73,6 +78,7 @@ export function readCachedLayout(view: 'admin' | 'user'): unknown {
  * shared theme is (a harmful shared theme must not come straight back). Settings › Look offers "Use the shared theme".
  */
 export function clearDeviceLook(): void {
+  state = { ...state, device: 'score', failure: null }
   try {
     window.localStorage.removeItem(CACHE_KEY)
     window.localStorage.removeItem(LEGACY_PACK_KEY)
@@ -80,7 +86,6 @@ export function clearDeviceLook(): void {
   } catch {
     // Nothing stored: the reset still holds for this visit.
   }
-  state = { ...state, failure: null }
   emit()
 }
 
@@ -104,7 +109,6 @@ let state: LookState = { safe: safeFromUrl(), failure: null, device: readDeviceO
 const listeners = new Set<() => void>()
 
 function emit() {
-  state = { ...state, device: readDeviceOverride() }
   listeners.forEach((listener) => listener())
 }
 

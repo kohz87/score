@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from 'vitest'
+import { beforeEach, expect, test, vi } from 'vitest'
 import {
   clearDeviceLook,
   lookStore,
@@ -31,4 +31,30 @@ test('reset sends this device to Score’s own look and drops the cache', () => 
   clearDeviceLook()
   expect(readDeviceOverride()).toBe('score')
   expect(window.localStorage.getItem('score.look.cache')).toBeNull()
+})
+
+// Gate finding #9: blocked storage must not stop the reset; the in-memory state decides what is applied.
+test('reset works when localStorage throws on every read and write', () => {
+  writeDeviceOverride('hostile')
+  expect(lookStore.get().device).toBe('hostile')
+  const blocked = () => {
+    throw new DOMException('blocked', 'SecurityError')
+  }
+  const spies = [
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked),
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked),
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(blocked),
+  ]
+  try {
+    clearDeviceLook()
+    expect(lookStore.get().device).toBe('score')
+    writeDeviceOverride('paper')
+    expect(lookStore.get().device).toBe('paper')
+    writeDeviceOverride(null)
+    expect(lookStore.get().device).toBeNull()
+    clearDeviceLook()
+    expect(lookStore.get().device).toBe('score')
+  } finally {
+    spies.forEach((spy) => spy.mockRestore())
+  }
 })
