@@ -3,6 +3,11 @@ import { Link } from 'react-router'
 import { TodoItems, todoProgress, useAgentTodos } from '../../components/TodoList.tsx'
 import '../../components/todo.css'
 
+// The overview is a summary: long lists show their start and "Show all N" opens the tab that has everything.
+const SKILLS_SHOWN = 10
+const TOOLS_SHOWN = 6
+const MEMORY_SHOWN = 3
+
 const permissionLabels = { allowed: 'Allowed', asks: 'Asks you', never: 'Never' } as const
 
 export function AgentOverview({
@@ -17,7 +22,7 @@ export function AgentOverview({
   const todos = useAgentTodos(agent.id, agent.status === 'working').data
   const manager = agents.find((item) => item.id === agent.reportsTo)
   return (
-    <div className="team-grid">
+    <div className="team-overview-grid">
       <section className="team-card team-personality" aria-labelledby="team-personality">
         <div className="team-personality-text">
           <div className="team-card-heading">
@@ -65,7 +70,7 @@ export function AgentOverview({
       </section>
 
       {todos && todos.todos.length > 0 && (
-        <section className="team-card" aria-labelledby="team-todo">
+        <section className="team-card team-wide" aria-labelledby="team-todo">
           <div className="team-card-heading">
             <h2 id="team-todo">To do</h2>
             <span className="team-muted">{todoProgress(todos.todos)}</span>
@@ -98,7 +103,7 @@ export function AgentOverview({
         </div>
         {agent.skills.length ? (
           <ul className="team-skills">
-            {agent.skills.map((skill) => (
+            {agent.skills.slice(0, SKILLS_SHOWN).map((skill) => (
               <li key={skill.name} data-enabled={skill.enabled}>
                 {skill.name}
                 {!skill.enabled && ' · Disabled'}
@@ -107,6 +112,11 @@ export function AgentOverview({
           </ul>
         ) : (
           <p className="team-muted-strong">No skills configured.</p>
+        )}
+        {agent.skills.length > SKILLS_SHOWN && (
+          <button type="button" className="team-text-action" onClick={() => selectTab('Skills')}>
+            Show all {agent.skills.length}
+          </button>
         )}
       </section>
 
@@ -117,7 +127,7 @@ export function AgentOverview({
             Search all
           </button>
         </div>
-        {agent.memory.map((memory) => (
+        {agent.memory.slice(0, MEMORY_SHOWN).map((memory) => (
           <p className="team-memory" key={memory.id}>
             {memory.text}
             <span>{memory.source}</span>
@@ -129,7 +139,7 @@ export function AgentOverview({
       <section className="team-card" aria-labelledby="team-tools">
         <h2 id="team-tools">Tools</h2>
         <ul className="team-rows">
-          {agent.tools.map((tool) => (
+          {agent.tools.slice(0, TOOLS_SHOWN).map((tool) => (
             <li key={tool.id}>
               <span>
                 {tool.label}
@@ -148,6 +158,11 @@ export function AgentOverview({
             <strong>{agent.helpersMax === null ? 'Not set' : `Up to ${agent.helpersMax}`}</strong>
           </li>
         </ul>
+        {agent.tools.length > TOOLS_SHOWN && (
+          <button type="button" className="team-text-action" onClick={() => selectTab('Tools')}>
+            Show all {agent.tools.length}
+          </button>
+        )}
       </section>
 
       <section className="team-card" aria-labelledby="team-routines">

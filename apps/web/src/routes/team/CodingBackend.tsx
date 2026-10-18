@@ -41,34 +41,40 @@ export function CodingBackend() {
   // Services that worked before and no longer do: Score pauses coding runs rather than falling back (decision 69).
   const paused = kind === 'unit' && failed.length > 0
   return (
-    <div className="team-muted" aria-label="How this agent runs">
-      <p data-backend={paused ? 'paused' : kind} role={paused ? 'status' : undefined}>
-        {note}
-      </p>
-      {kind === 'unit' && !paused && (
-        <p>
-          If Score stops, the service stops this agent and everything running inside it, and Score
-          confirms that before it calls a run finished. Work the agent hands to another service, a
-          scheduler or a background daemon isn’t covered.
-        </p>
-      )}
-      {checks.length > 0 && (
-        <details>
-          <summary>Host check{failed.length > 0 ? ` (${failed.length} not met)` : ''}</summary>
-          <ul>
-            {checks.map((check) => (
-              <li key={check.name}>
-                {checkLabels[check.name] ?? check.name}: {check.ok ? 'OK' : 'not met'}.{' '}
-                {check.detail}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+    <div className="coding-backend" aria-label="How this agent runs">
+      {/* Open on its own when something is wrong: a paused installation must not hide behind a click. */}
+      <details open={paused}>
+        <summary>How it runs</summary>
+        <div className="team-muted">
+          <p data-backend={paused ? 'paused' : kind} role={paused ? 'status' : undefined}>
+            {note}
+          </p>
+          {kind === 'unit' && !paused && (
+            <p>
+              If Score stops, the service stops this agent and everything running inside it, and
+              Score confirms that before it calls a run finished. Work the agent hands to another
+              service, a scheduler or a background daemon isn’t covered.
+            </p>
+          )}
+          {checks.length > 0 && (
+            <details>
+              <summary>Host check{failed.length > 0 ? ` (${failed.length} not met)` : ''}</summary>
+              <ul>
+                {checks.map((check) => (
+                  <li key={check.name}>
+                    {checkLabels[check.name] ?? check.name}: {check.ok ? 'OK' : 'not met'}.{' '}
+                    {check.detail}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      </details>
       {recheck.error && <p role="alert">{recheck.error.message}</p>}
       <button
         type="button"
-        className="team-pill-button"
+        className="team-text-action"
         disabled={recheck.isPending}
         onClick={() => recheck.mutate()}
       >

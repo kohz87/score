@@ -1,6 +1,6 @@
 import { CODING_INSTRUCTIONS_MAX, CodingAgentSchema, type CodingAgent } from '@score/contract'
 import { useMutation } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { Markdown } from '../chat/Markdown.tsx'
 import '../chat/chat.css'
@@ -21,48 +21,54 @@ function conflictOf(details: unknown): Conflict | null {
 export function CodingPersonality({
   coding,
   onChanged,
+  facts,
 }: {
   coding: CodingAgent
   onChanged: () => void
+  /** The facts column on the right (CLI, workspace, quota source), like a Hermes agent's card. */
+  facts?: ReactNode
 }) {
   const [editing, setEditing] = useState(false)
   return (
-    <section className="team-card" aria-labelledby="coding-personality" data-protected="block">
-      <div className="team-card-heading">
-        <h2 id="coding-personality">Personality</h2>
-        {!editing && (
-          <button type="button" className="team-pill-button" onClick={() => setEditing(true)}>
-            Edit personality
-          </button>
+    <section
+      className="team-card team-personality"
+      aria-labelledby="coding-personality"
+      data-protected="block"
+    >
+      <div className="team-personality-text">
+        <div className="team-card-heading">
+          <h2 id="coding-personality">Personality</h2>
+          <span className="team-muted">Given to the CLI at the start of each session</span>
+        </div>
+        {editing ? (
+          <PersonalityEditor
+            coding={coding}
+            onDone={() => {
+              setEditing(false)
+              onChanged()
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <>
+            <p className="coding-role">{coding.role || 'No role yet'}</p>
+            {coding.instructions.trim() ? (
+              <div className="coding-instructions" aria-label="Instructions">
+                <Markdown text={coding.instructions} />
+              </div>
+            ) : (
+              <p className="team-muted-strong">
+                No instructions yet. Use Edit personality to add how this agent should work and
+                talk.
+              </p>
+            )}
+            <button type="button" className="team-text-action" onClick={() => setEditing(true)}>
+              Edit personality
+            </button>
+          </>
         )}
       </div>
-      <p className="team-muted-strong">
-        Who this agent is and how it works. Score hands this to the CLI at the start of each
-        session; it never writes it into the workspace.
-      </p>
-      {editing ? (
-        <PersonalityEditor
-          coding={coding}
-          onDone={() => {
-            setEditing(false)
-            onChanged()
-          }}
-          onCancel={() => setEditing(false)}
-        />
-      ) : (
-        <>
-          <p className="coding-role">{coding.role || 'No role set'}</p>
-          {coding.instructions.trim() ? (
-            <div className="coding-instructions" aria-label="Instructions">
-              <Markdown text={coding.instructions} />
-            </div>
-          ) : (
-            <p className="team-muted-strong">
-              No instructions yet. Use Edit personality to add how this agent should work and talk.
-            </p>
-          )}
-        </>
-      )}
+      {facts}
     </section>
   )
 }
