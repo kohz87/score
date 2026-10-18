@@ -68,7 +68,7 @@ describe('theme engine', () => {
     expect(themeAttributes({ shape: { radius: 12 } })['data-radius']).toBe('custom')
   })
 
-  test('tokens are generated for both modes from the 40 public tokens only', () => {
+  test('tokens are generated for both modes from the public tokens only', () => {
     const css = tokenCss(
       {
         colors: {
@@ -83,7 +83,7 @@ describe('theme engine', () => {
     expect(css).toContain('@media (prefers-color-scheme: dark)')
     expect(css).not.toContain('agent-violet')
     expect(css).not.toContain('rules-never')
-    expect(THEME_COLOR_TOKENS).toHaveLength(40)
+    expect(THEME_COLOR_TOKENS).toHaveLength(38)
   })
 
   test('a colour that is not a plain colour is ignored (no url(), no var())', () => {

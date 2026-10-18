@@ -41,7 +41,7 @@ describe('a valid package', () => {
         'assets/img/d.jpeg': JPEG,
       }),
     )
-    expect(pkg.manifest).toMatchObject({ id: 'harbour', version: '1.0.0' })
+    expect(pkg.manifest).toMatchObject({ id: 'seaside', version: '1.0.0' })
     expect(pkg.css).toBe('.a{background:url(asset:img/a.png)}')
     expect([...pkg.assets.keys()].sort()).toEqual([
       'fonts/brand.woff2',
@@ -51,6 +51,22 @@ describe('a valid package', () => {
       'img/c.jpg',
       'img/d.jpeg',
     ])
+  })
+
+  test('LICENSE and OFL.txt at the root are read, kept and exported', async () => {
+    const pkg = await readThemePackage(
+      await zipOf({ ...base, LICENSE: 'MIT\r\nCopyright © Me\n', 'OFL.txt': '\uFEFFSIL OFL é\n' }),
+    )
+    expect(pkg.licenses).toEqual({ LICENSE: 'MIT\r\nCopyright © Me\n', 'OFL.txt': 'SIL OFL é\n' })
+    const exported = await JSZip.loadAsync(
+      await buildThemePackage(pkg.manifest, pkg.css, pkg.assets, pkg.licenses),
+    )
+    expect(await exported.file('OFL.txt')!.async('string')).toBe('SIL OFL é\n')
+    expect(await exported.file('LICENSE')!.async('string')).toBe('MIT\r\nCopyright © Me\n')
+    expect(
+      (await readThemePackage(await exported.generateAsync({ type: 'nodebuffer' }))).licenses,
+    ).toEqual(pkg.licenses)
+    expect((await readThemePackage(await zipOf(base))).licenses).toEqual({})
   })
 
   test('theme.json alone is a theme, and folder entries are tolerated', async () => {
@@ -196,6 +212,29 @@ describe('adversarial packages', () => {
 
   test('duplicate names that differ only in case', async () => {
     await rejected({ ...base, 'assets/img/a.png': PNG, 'assets/img/A.png': PNG }, /duplicate name/)
+  })
+
+  test('licence files are bounded text, and only those two names are allowed', async () => {
+    await rejected(
+      { ...base, 'OFL.txt': 'x'.repeat(64 * 1024 + 1) },
+      /OFL\.txt: file too large|larger than the zip/,
+    )
+    await readThemePackage(await zipOf({ ...base, LICENSE: 'x'.repeat(64 * 1024) }))
+    await rejected(
+      { ...base, LICENSE: Buffer.from([0x4d, 0x49, 0xff, 0xfe, 0x54]) },
+      /LICENSE isn’t valid UTF-8/,
+    )
+    await rejected({ ...base, 'OFL.txt': 'text\u0000more' }, /OFL\.txt isn’t plain text/)
+    for (const name of [
+      'LICENSE.md',
+      'license',
+      'COPYING',
+      'README.txt',
+      'assets/OFL.txt',
+      'assets/img/OFL.txt',
+      'sub/LICENSE',
+    ])
+      await rejected({ ...base, [name]: 'text' }, /not part of a theme package/)
   })
 
   test('more than 41 files', async () => {

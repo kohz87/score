@@ -48,8 +48,6 @@ export const THEME_COLOR_TOKENS = [
   'tasks-note',
   'profile-dashed',
   'profile-add-ink',
-  'halo-glow',
-  'halo-ring',
   'watch-stage',
   'watch-window',
   'watch-text',
@@ -185,8 +183,19 @@ const ThemeLookSchema = z
   .strict()
 
 export const ThemeIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/)
-/** Ids of the built-in themes; an import can't take them. */
-export const BUILTIN_THEME_IDS = ['score', 'paper', 'night', 'dense'] as const
+/**
+ * Ids of the built-in themes; an import can't take them. The first four are the 8.3 packs (CSS in the web app); the
+ * last three (9.5) are packages shipped with the server, in the same format as an import.
+ */
+export const BUILTIN_THEME_IDS = [
+  'score',
+  'paper',
+  'night',
+  'dense',
+  'harbour',
+  'ledger',
+  'studio',
+] as const
 
 /** `theme.json`. Everything but `format`, `id` and `name` is optional; left-out settings use the Score default. */
 export const ThemeManifestSchema = ThemeLookSchema.extend({

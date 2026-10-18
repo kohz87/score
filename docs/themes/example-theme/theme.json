@@ -1,0 +1,64 @@
+{
+  "format": 1,
+  "id": "sandbar",
+  "name": "Sandbar",
+  "version": "1.0.0",
+  "author": "Your name",
+  "description": "Warm sand and deep teal, soft corners, a quiet picture behind the page and a menu in your own words.",
+  "colors": {
+    "light": {
+      "ground": "#f7f1e5",
+      "card": "#fffdf8",
+      "ink": "#16302f",
+      "ink-muted": "#3a4b47",
+      "muted": "#3f504b",
+      "hairline": "#ddd2bd",
+      "line-strong": "#7f8575",
+      "subtle": "#f6efe2",
+      "subtle-2": "#f0e7d6",
+      "link-hover": "#0f6b66",
+      "chat-soft": "#f6efe2",
+      "chat-card-border": "#ddd2bd",
+      "tasks-ground": "#e6dcc9",
+      "tasks-border": "#ddd2bd",
+      "tasks-done": "#f6efe2"
+    },
+    "dark": {
+      "ground": "#14110d",
+      "card": "#1d1913",
+      "ink": "#f1e9da",
+      "ink-muted": "#b7ad9b",
+      "muted": "#ada391",
+      "hairline": "#332d22",
+      "line-strong": "#7d7565",
+      "subtle": "#25201a",
+      "subtle-2": "#2a251d",
+      "link-hover": "#8fd3c9",
+      "chat-soft": "#221e17",
+      "chat-card-border": "#332d22",
+      "tasks-ground": "#17140f",
+      "tasks-border": "#332d22",
+      "tasks-done": "#1f1b15"
+    }
+  },
+  "shape": {
+    "radius": "soft",
+    "density": "comfortable",
+    "border": "hairline",
+    "elevation": "raised",
+    "surface": "solid"
+  },
+  "layout": {
+    "nav": "left",
+    "contentWidth": "wide",
+    "menu": [
+      { "to": "/now", "label": "Today" },
+      { "to": "/chat", "label": "Talk" },
+      { "to": "/tasks" },
+      { "to": "/team" },
+      { "to": "/knowledge" },
+      { "to": "/reports", "label": "Numbers" }
+    ]
+  },
+  "background": { "image": "asset:img/sand.png", "fit": "cover", "dim": 80 }
+}

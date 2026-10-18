@@ -1,0 +1,16 @@
+/* Sandbar: a little type on top of what theme.json already does. */
+:root {
+  --h1-size: 52px;
+}
+h1 {
+  letter-spacing: -0.04em;
+}
+.now-card h2,
+.settings-card h2 {
+  letter-spacing: -0.01em;
+}
+@media (width < 700px) {
+  :root {
+    --h1-size: 34px;
+  }
+}

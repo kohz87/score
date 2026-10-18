@@ -1,0 +1,91 @@
+{
+  "format": 1,
+  "id": "ledger",
+  "name": "Ledger",
+  "version": "1.0.0",
+  "author": "Score",
+  "description": "Flat and exact: sharp corners, hairline rules, tight spacing, a monospace accent and the whole width of the screen.",
+  "colors": {
+    "light": {
+      "ground": "#f3f3ef",
+      "card": "#ffffff",
+      "ink": "#141613",
+      "ink-muted": "#4b4f48",
+      "muted": "#575b53",
+      "hairline": "#cdcec6",
+      "line-strong": "#7d8076",
+      "subtle": "#f7f7f3",
+      "subtle-2": "#efefe9",
+      "track": "#e4e5de",
+      "track-2": "#d7d8cf",
+      "link-hover": "#1d5c3a",
+      "chat-text": "#23261f",
+      "chat-secondary": "#3a3d36",
+      "chat-soft": "#f7f7f3",
+      "chat-card-border": "#cdcec6",
+      "tasks-ground": "#e9eae3",
+      "tasks-border": "#cdcec6",
+      "tasks-done": "#f7f7f3",
+      "tasks-note": "#2b2e28",
+      "flow-canvas": "#f7f7f3",
+      "flow-canvas-dot": "#cfd0c7",
+      "flow-edge": "#7a7d72",
+      "flow-log-border": "#e6e7e0",
+      "profile-dashed": "#b4b6ab",
+      "profile-add-ink": "#3a3d36"
+    },
+    "dark": {
+      "ground": "#0d0f0c",
+      "card": "#151813",
+      "ink": "#e9ebe4",
+      "ink-muted": "#a4a89c",
+      "muted": "#9a9e92",
+      "hairline": "#2a2e26",
+      "line-strong": "#767a6e",
+      "subtle": "#1b1e18",
+      "subtle-2": "#20231c",
+      "track": "#262a22",
+      "track-2": "#30342a",
+      "link-hover": "#8fd3a8",
+      "chat-text": "#d6d9cf",
+      "chat-secondary": "#bcc0b3",
+      "chat-soft": "#1a1d17",
+      "chat-card-border": "#2a2e26",
+      "tasks-ground": "#10120f",
+      "tasks-border": "#2a2e26",
+      "tasks-done": "#191c16",
+      "tasks-note": "#d6d9cf",
+      "flow-canvas": "#10120f",
+      "flow-canvas-dot": "#2a2e26",
+      "flow-edge": "#767a6e",
+      "flow-log-border": "#232620",
+      "profile-dashed": "#454940",
+      "profile-add-ink": "#c4c8bb"
+    }
+  },
+  "fonts": {
+    "heading": "JetBrains Mono",
+    "faces": [
+      {
+        "family": "JetBrains Mono",
+        "src": "asset:fonts/jetbrains-mono-latin-500.woff2",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "JetBrains Mono",
+        "src": "asset:fonts/jetbrains-mono-latin-700.woff2",
+        "weight": "700",
+        "style": "normal"
+      }
+    ]
+  },
+  "shape": {
+    "radius": "sharp",
+    "density": "compact",
+    "border": "hairline",
+    "elevation": "flat",
+    "surface": "solid"
+  },
+  "layout": { "nav": "launcher", "contentWidth": "full" }
+}
