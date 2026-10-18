@@ -253,3 +253,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   fixed at their causes with before/after rates (e.g. fix-l 0/8 → 20/20, release-test race 0/20 → 20/20, audit2-t 0/15 →
   15/15), plus an e2e teardown guard that fails a run leaving agents behind. Server suite on main after the merge:
   **4288 passed, 0 failed** (128 s). Not reproduced, left: Now 1 px jitter, workspace-390 jitter.
+- **9.4 Customizer** merged (Sonnet high). Codex cross-check: 6 findings (docs/reviews/2026-10-18-9.4-codex-crosscheck.md)
+  — 5 fixed as found, 1 partly (decision 100: in-use theme saves as "Save and apply"); server/contract change:
+  `If-Match` on theme import replace. Lead verified the glass-contrast fix with a revert: the e2e fails on the old
+  parser and passes with the fix. Follow-up noted: guard.ts (protected surfaces) still uses the plain colour parser —
+  protected surfaces are forced solid, so no gap today.
