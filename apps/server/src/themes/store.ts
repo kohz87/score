@@ -36,6 +36,7 @@ const RowSchema = z.object({
   manifest_json: z.string(),
   css: z.string(),
   licenses_json: z.string(),
+  revision: z.number().int(),
   source: z.enum(['imported', 'custom']),
   created_at: z.string(),
   updated_at: z.string(),
@@ -52,14 +53,25 @@ export interface StoredTheme {
   updatedAt: string
   /** Licence files of the package (`LICENSE`, `OFL.txt`) -> text; put back into its export. */
   licenses: Record<string, string>
+  /** Persisted write counter of the row (0 for a built-in); asset bytes can't be hashed cheaply, so it stands for them. */
+  revision: number
 }
 
-/** Hash of what a save changes (manifest and CSS), for `If`-style conflict checks. */
-export function themeEtag(manifest: ThemeManifest, css: string): string {
+/**
+ * Conflict-check token for a whole package: the row's write number (every write bumps it, and it is what changes when
+ * only assets or licence files change) together with the manifest, CSS and licence texts the row holds.
+ */
+export function themeEtag(
+  theme: Pick<StoredTheme, 'manifest' | 'css' | 'licenses' | 'revision'>,
+): string {
   return createHash('sha256')
-    .update(JSON.stringify(manifest))
+    .update(String(theme.revision))
     .update('\0')
-    .update(css)
+    .update(JSON.stringify(theme.manifest))
+    .update('\0')
+    .update(theme.css)
+    .update('\0')
+    .update(JSON.stringify(theme.licenses))
     .digest('hex')
 }
 
@@ -99,6 +111,7 @@ export class ThemeStore {
       source: row.source,
       updatedAt: row.updated_at,
       licenses: LicensesSchema.parse(JSON.parse(row.licenses_json)),
+      revision: row.revision,
     }
   }
 
@@ -111,6 +124,7 @@ export class ThemeStore {
         source: 'builtin',
         updatedAt: BUILTIN_UPDATED_AT,
         licenses: builtinLicenses(id),
+        revision: 0,
       }
     const row = this.row(id)
     return row ? this.parse(row) : null
@@ -165,7 +179,7 @@ export class ThemeStore {
       manifest: theme.manifest,
       css: theme.css,
       assets: this.assets(id),
-      etag: themeEtag(theme.manifest, theme.css),
+      etag: themeEtag(theme),
     }
   }
 
@@ -178,13 +192,14 @@ export class ThemeStore {
     licenses?: Record<string, string>,
   ): void {
     const at = this.now()
+    const revision = this.nextRevision(sqlite)
     sqlite
       .prepare(
-        `INSERT INTO themes (id, name, version, manifest_json, css, source, created_at, updated_at, licenses_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO themes (id, name, version, manifest_json, css, source, created_at, updated_at, licenses_json, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET name = excluded.name, version = excluded.version,
            manifest_json = excluded.manifest_json, css = excluded.css, source = excluded.source,
-           updated_at = excluded.updated_at,
+           updated_at = excluded.updated_at, revision = excluded.revision,
            licenses_json = CASE WHEN ? THEN excluded.licenses_json ELSE themes.licenses_json END`,
       )
       .run(
@@ -197,8 +212,21 @@ export class ThemeStore {
         at,
         at,
         JSON.stringify(licenses ?? {}),
+        revision,
         licenses === undefined ? 0 : 1,
       )
+  }
+
+  /** The next number of the one counter every theme write takes (inside the writer's transaction). */
+  private nextRevision(sqlite: DatabaseSync): number {
+    const row = sqlite
+      .prepare(
+        `INSERT INTO meta (key, value) VALUES ('themes.revision', '1')
+         ON CONFLICT (key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + 1
+         RETURNING CAST(value AS INTEGER) AS n`,
+      )
+      .get() as { n: number }
+    return row.n
   }
 
   /** Saves a custom theme's manifest and CSS in one transaction (assets already on disk are kept). */
@@ -283,9 +311,9 @@ export class ThemeStore {
         }
         sqlite
           .prepare(
-            'UPDATE themes SET id = ?, name = ?, manifest_json = ?, updated_at = ? WHERE id = ?',
+            'UPDATE themes SET id = ?, name = ?, manifest_json = ?, updated_at = ?, revision = ? WHERE id = ?',
           )
-          .run(to, name, manifestJson, this.now(), row.id)
+          .run(to, name, manifestJson, this.now(), this.nextRevision(sqlite), row.id)
         sqlite
           .prepare("UPDATE meta SET value = ? WHERE key = 'look.activeTheme' AND value = ?")
           .run(to, row.id)

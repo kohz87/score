@@ -79,6 +79,29 @@ test('the etag changes with the manifest and with the CSS', () => {
   expect(new Set([first, second, store.detail('mine')!.etag]).size).toBe(3)
 })
 
+test('the etag covers asset bytes and licence files, and never repeats after a delete', () => {
+  const etag = () => store.detail('seaside')!.etag
+  const install = (asset: string, licence?: string) =>
+    store.storeImported(
+      manifest('seaside'),
+      'a{color:red}',
+      new Map([['img/a.png', Buffer.from(asset)]]),
+      licence === undefined ? {} : { LICENSE: licence },
+    )
+  install('one', 'MIT')
+  const seen = [etag()]
+  install('two', 'MIT') // asset bytes only
+  seen.push(etag())
+  install('two', 'MIT 2') // licence only
+  seen.push(etag())
+  install('two', 'MIT 2') // identical content is still a new revision
+  seen.push(etag())
+  store.remove('seaside')
+  install('one', 'MIT') // same content as the first install, after a delete
+  seen.push(etag())
+  expect(new Set(seen).size).toBe(seen.length)
+})
+
 test('look settings round-trip and a damaged row falls back to the default', () => {
   writeLook(db.sqlite, { activeTheme: 'paper', mode: 'dark' })
   expect(readLook(db.sqlite)).toEqual({ activeTheme: 'paper', mode: 'dark' })
