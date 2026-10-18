@@ -528,11 +528,26 @@ export function markSaved(history: History, saved: Draft = history.present): His
  * out. The draft on screen stays as it is (so those edits aren't lost and "Unsaved changes" stays on if it differs from
  * what was saved); only the address the theme now has (and, if nothing changed meanwhile, its stored form) is followed.
  */
-export function afterSave(history: History, submitted: Draft, stored: ThemeManifest): History {
-  const untouched = sameDraft(history.present, submitted)
+export function afterSave(
+  history: History,
+  submitted: Draft,
+  stored: ThemeManifest,
+  /** The draft on screen when the request started; `submitted` differs from it by the name and id a copy was given. */
+  before: Draft = submitted,
+): History {
+  const untouched = sameDraft(history.present, before)
+  const typedName = history.present.manifest.name !== before.manifest.name
   const present: Draft = untouched
     ? { ...history.present, manifest: stored }
-    : { ...history.present, manifest: { ...history.present.manifest, id: stored.id } }
+    : {
+        ...history.present,
+        // The address always follows; the name does unless it was edited while the request was out.
+        manifest: {
+          ...history.present.manifest,
+          id: stored.id,
+          ...(typedName ? {} : { name: stored.name }),
+        },
+      }
   const next = edit(history, present)
   return markSaved(next, { ...submitted, manifest: stored })
 }

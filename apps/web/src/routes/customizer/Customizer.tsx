@@ -444,7 +444,9 @@ export function Customizer() {
       setProblem(describeSaveError(error))
       return null
     }
-    setHistory((current) => (current ? afterSave(current, submitted, detail.manifest) : current))
+    setHistory((current) =>
+      current ? afterSave(current, submitted, detail.manifest, draft) : current,
+    )
     setTarget({
       id: detail.manifest.id,
       exists: true,
