@@ -6,7 +6,7 @@ import { RoomVersionSchema } from './versions.ts'
 import { RoomDeletedSchema, SessionCompactedSchema } from './compaction.ts'
 import { GlobalFenceSchema, OrchestrationSummarySchema } from './orchestration.ts'
 import { WorkflowRunSummarySchema } from './workflows.ts'
-import { LookSettingsSchema } from './themes.ts'
+import { LookChangedSchema } from './themes.ts'
 import {
   AgentIdSchema,
   AgentSummarySchema,
@@ -181,7 +181,7 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('watch.frame'), data: WatchFrameSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('memory.saved'), data: MemorySavedSchema }),
   // Themes (PLAN 9.1): the shared look changed, so other open devices switch.
-  StreamEnvelopeSchema.extend({ type: z.literal('look.changed'), data: LookSettingsSchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('look.changed'), data: LookChangedSchema }),
 ])
 export type StreamEvent = z.infer<typeof StreamEventSchema>
 

@@ -6,6 +6,8 @@ import { useSyncExternalStore } from 'react'
 const DEVICE_KEY = 'score.look.device'
 const CACHE_KEY = 'score.look.cache'
 const LEGACY_PACK_KEY = 'score.look'
+// The server's reset generation (contract § 16) this device's override and cache were last checked against.
+const GENERATION_KEY = 'score.look.generation'
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/
 
@@ -25,7 +27,12 @@ export function readDeviceOverride(): string | null {
   }
 }
 
+/**
+ * The in-memory state is what the page applies; storage only carries the choice to the next visit. So the state changes
+ * first and a storage that throws (blocked, private window, full) can't stop a choice or a reset (gate finding #9).
+ */
 export function writeDeviceOverride(id: string | null): void {
+  state = { ...state, device: id }
   try {
     if (id === null) {
       window.localStorage.removeItem(DEVICE_KEY)
@@ -73,6 +80,7 @@ export function readCachedLayout(view: 'admin' | 'user'): unknown {
  * shared theme is (a harmful shared theme must not come straight back). Settings › Look offers "Use the shared theme".
  */
 export function clearDeviceLook(): void {
+  state = { ...state, device: 'score', failure: null }
   try {
     window.localStorage.removeItem(CACHE_KEY)
     window.localStorage.removeItem(LEGACY_PACK_KEY)
@@ -80,7 +88,34 @@ export function clearDeviceLook(): void {
   } catch {
     // Nothing stored: the reset still holds for this visit.
   }
-  state = { ...state, failure: null }
+  emit()
+}
+
+function readStoredGeneration(): number {
+  try {
+    const value = Number(window.localStorage.getItem(GENERATION_KEY) ?? 0)
+    return Number.isInteger(value) && value >= 0 ? value : 0
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * `scripts/score look reset` bumps the server's reset generation. A device that last saw another number drops its own
+ * theme and the boot cache and remembers the new number, so the host reset reaches browsers that kept an override
+ * (gate finding #10). The in-memory state changes first, like every reset here (finding #9).
+ */
+export function applyResetGeneration(generation: number): void {
+  if (generation === state.generation) return
+  state = { ...state, device: null, generation }
+  try {
+    window.localStorage.removeItem(DEVICE_KEY)
+    window.localStorage.removeItem(LEGACY_PACK_KEY)
+    window.localStorage.removeItem(CACHE_KEY)
+    window.localStorage.setItem(GENERATION_KEY, String(generation))
+  } catch {
+    // The drop still holds for this visit.
+  }
   emit()
 }
 
@@ -98,13 +133,19 @@ export type LookState = {
   /** Why the theme was skipped (it threw, was refused or damaged a protected surface); null when all is well. */
   failure: string | null
   device: string | null
+  /** The server reset generation this device's saved look was last checked against. */
+  generation: number
 }
 
-let state: LookState = { safe: safeFromUrl(), failure: null, device: readDeviceOverride() }
+let state: LookState = {
+  safe: safeFromUrl(),
+  failure: null,
+  device: readDeviceOverride(),
+  generation: readStoredGeneration(),
+}
 const listeners = new Set<() => void>()
 
 function emit() {
-  state = { ...state, device: readDeviceOverride() }
   listeners.forEach((listener) => listener())
 }
 
@@ -123,7 +164,12 @@ export const lookStore = {
   },
   /** Tests: back to a fresh page load. */
   reset(safe = false) {
-    state = { safe, failure: null, device: readDeviceOverride() }
+    state = {
+      safe,
+      failure: null,
+      device: readDeviceOverride(),
+      generation: readStoredGeneration(),
+    }
     listeners.forEach((listener) => listener())
   },
 }

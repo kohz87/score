@@ -28,6 +28,7 @@ import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { multipart } from '../media-fixtures.ts'
+import { resetLook } from '../../src/themes/look.ts'
 import { checkThemeCss } from '../../src/themes/css-check.ts'
 import { manifestAssets, readThemePackage } from '../../src/themes/package.ts'
 import { AVIF, JPEG, PNG, WEBP, WOFF2, manifestJson, rawZip, zipOf, type Entry } from './helpers.ts'
@@ -638,7 +639,25 @@ test('PUT /api/look: 204, persisted, list reflects it, and look.changed is emitt
   })
   await ingest.flushListeners()
   expect(events.filter((event) => event.type === 'look.changed').map((e) => e.data)).toEqual([
-    { activeTheme: 'night', mode: 'dark' },
+    { activeTheme: 'night', mode: 'dark', resetGeneration: 0 },
+  ])
+})
+
+test('a host reset bumps resetGeneration: GET /api/themes shows it and look.changed carries it', async () => {
+  expect(ThemeListSchema.parse((await call('GET', '/api/themes')).json()).resetGeneration).toBe(0)
+  await call('PUT', '/api/look', { activeTheme: 'night', mode: 'dark' })
+  // `scripts/score look reset` runs this function (Score may be stopped, so there is no event for it).
+  db.tx((sqlite) => resetLook(sqlite))
+  expect(ThemeListSchema.parse((await call('GET', '/api/themes')).json())).toMatchObject({
+    active: 'score',
+    mode: 'system',
+    resetGeneration: 1,
+  })
+  await call('PUT', '/api/look', { activeTheme: 'paper', mode: 'light' })
+  await ingest.flushListeners()
+  expect(events.filter((event) => event.type === 'look.changed').map((e) => e.data)).toEqual([
+    { activeTheme: 'night', mode: 'dark', resetGeneration: 0 },
+    { activeTheme: 'paper', mode: 'light', resetGeneration: 1 },
   ])
 })
 

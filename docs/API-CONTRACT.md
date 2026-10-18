@@ -302,7 +302,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `log.line`           | `LogLine`                                                                                     | Flow live log, Watch "What she's doing"                  |
 | `watch.frame`        | `WatchFrame`                                                                                  | Watch                                                    |
 | `memory.saved`       | `{ agentIds: AgentId[], text, source: Ref \| null }`                                          | Chat "Learned here", Team memory                         |
-| `look.changed`       | `{ activeTheme, mode }` (`LookSettings`, §16)                                                 | Every open device: switch to the shared look             |
+| `look.changed`       | `{ activeTheme, mode, resetGeneration }` (§16)                                               | Every open device: switch to the shared look             |
 
 ## 3. System and search
 
@@ -2231,7 +2231,11 @@ move, and every replace of a theme's asset folder, is written down (`theme_swaps
 and erased in the transaction that commits the row. After a failed or interrupted replace the previous folder is back
 (at once, or at the next start); an interrupted move is finished with the recorded id, never one guessed from which
 folders exist; a folder that already exists is never a free id.
-- `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`).
+- `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`, and `resetGeneration`: a
+  non-negative integer, `0` until the first host reset). `scripts/score look reset` sets the shared look to Score /
+  system **and increments `resetGeneration`** (setting `look.resetGeneration` in `meta`, no migration). A browser keeps the
+  generation it last saw next to its device override and boot cache; when the server's number differs it drops that
+  override and cache (so the shared Score look shows), then stores the new number. A server without the field counts as `0`.
 - `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`. The `etag` covers the
   whole package: manifest, CSS, licence files and, through a persisted write counter (migration 0076) that every write
   of the theme takes, every asset's bytes. A change to any of them, an identical re-import included, gives a new etag,
@@ -2252,6 +2256,7 @@ folders exist; a folder that already exists is never a free id.
   `422 theme_rejected { reasons[] }` (bad manifest, newer `format`, bad paths, sizes, file types, CSS checks).
 - `GET /api/themes/:id/export` → `application/zip` (the same layout as import).
 - `DELETE /api/themes/:id` → `204`; `409 builtin_theme`, `409 theme_active`.
-- `PUT /api/look` `LookSettings` → `204`; `404` for an unknown theme. Emits `look.changed { activeTheme, mode }` on the
-  stream so other open devices switch.
+- `PUT /api/look` `LookSettings` → `204`; `404` for an unknown theme. Emits `look.changed { activeTheme, mode,
+  resetGeneration }` on the stream so other open devices switch (`resetGeneration` is the current value; the host command
+  itself sends no event, devices see the new number on their next `GET /api/themes`, which they repeat on focus).
 Per-device overrides live in the browser (localStorage) and never reach the server.

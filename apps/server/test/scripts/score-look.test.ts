@@ -19,6 +19,17 @@ beforeEach(() => {
 })
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 const env = () => ({ PATH: process.env.PATH!, HOME: root, SCORE_HOME: home })
+const generation = () => {
+  const db = openDatabase(join(home, 'score.db'))
+  try {
+    const row = db.sqlite
+      .prepare("SELECT value FROM meta WHERE key = 'look.resetGeneration'")
+      .get() as { value: string } | undefined
+    return row === undefined ? 0 : Number(row.value)
+  } finally {
+    db.close()
+  }
+}
 const look = () => {
   const db = openDatabase(join(home, 'score.db'))
   try {
@@ -67,4 +78,17 @@ test('anything but `look reset` is a usage error and changes nothing', () => {
     expect(result.status, args.join(' ')).toBe(2)
   }
   expect(look()).toEqual({ activeTheme: 'harbour', mode: 'dark' })
+})
+
+// Gate finding #10: the shared look alone can't recover a browser that keeps its own override, so each run also bumps
+// the reset generation that devices compare against (contract § 16).
+test('every reset run bumps the reset generation, even when the shared look was already the default', () => {
+  const db = openDatabase(join(home, 'score.db'))
+  migrate(db, fileURLToPath(new URL('../../migrations/', import.meta.url)))
+  db.close()
+  expect(generation()).toBe(0)
+  execFileSync(launcher, ['look', 'reset'], { env: env() })
+  expect(generation()).toBe(1)
+  execFileSync(launcher, ['look', 'reset'], { env: env() })
+  expect(generation()).toBe(2)
 })

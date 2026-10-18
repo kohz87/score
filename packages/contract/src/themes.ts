@@ -215,6 +215,9 @@ export type ThemeManifest = z.infer<typeof ThemeManifestSchema>
 
 export const ThemeSourceSchema = z.enum(['builtin', 'imported', 'custom'])
 
+/** Counts the host's `score look reset` runs (`meta` setting `look.resetGeneration`); a server without it says `0`. */
+export const ResetGenerationSchema = z.number().int().min(0)
+
 /** `GET /api/themes` items. */
 export const ThemeSummarySchema = z.object({
   id: ThemeIdSchema,
@@ -231,6 +234,8 @@ export const ThemeListSchema = z.object({
   items: z.array(ThemeSummarySchema),
   active: ThemeIdSchema,
   mode: z.enum(['light', 'dark', 'system']),
+  /** Bumped by `scripts/score look reset`: a device whose saved override or boot cache saw an older number drops them. */
+  resetGeneration: ResetGenerationSchema.default(0),
 })
 export type ThemeList = z.infer<typeof ThemeListSchema>
 
@@ -288,3 +293,9 @@ export const LookSettingsSchema = z
   .object({ activeTheme: ThemeIdSchema, mode: z.enum(['light', 'dark', 'system']) })
   .strict()
 export type LookSettings = z.infer<typeof LookSettingsSchema>
+
+/** The `look.changed` event: the new shared look and the reset generation at that moment. */
+export const LookChangedSchema = LookSettingsSchema.extend({
+  resetGeneration: ResetGenerationSchema.default(0),
+})
+export type LookChanged = z.infer<typeof LookChangedSchema>
