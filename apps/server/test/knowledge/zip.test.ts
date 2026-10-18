@@ -146,7 +146,8 @@ describe('unzip', () => {
     for (let i = 0; i < 1000; i += 1) files[`f${i}.md`] = `n${i}`
     const result = await h.vault.docs.unzip(await makeZip(files), 'ok.zip', 'ok', 'ask')
     expect(result.written).toHaveLength(1000)
-  })
+    // 1,000 files written and indexed is real work (4 s idle, 14 s on a fifth of a core): its own budget, not 30 s.
+  }, 120_000)
 
   test('a header that lies about the size is caught while inflating', async () => {
     const zip = await makeZip({ 'a.md': 'x'.repeat(500) }, 'STORE')

@@ -140,7 +140,11 @@ test.describe('navigation', () => {
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     await expect(page.getByRole('dialog', { name: 'Menu' })).toBeHidden()
     await expect(page.locator('.shell-content')).not.toHaveAttribute('inert', '')
-    expect(await page.evaluate(() => document.body.classList.contains('scroll-locked'))).toBe(false)
+    // The lock is released by the drawer's effect cleanup, a moment after the commit that removes `inert`: wait for it
+    // rather than sampling once (the product does end up unlocked; this only checks that it does).
+    await expect
+      .poll(() => page.evaluate(() => document.body.classList.contains('scroll-locked')))
+      .toBe(false)
     // The page works again: Score's own top bar, and a click lands.
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chat' }).click()
     await expect(page).toHaveURL(/\/chat/)

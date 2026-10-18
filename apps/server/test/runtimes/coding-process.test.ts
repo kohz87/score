@@ -43,6 +43,7 @@ process.on('SIGINT', () => process.exit(0))
 setInterval(() => {}, 1000)
 `,
   )
+  const noted = new Set<number>()
   const run = spawnCli({
     file: process.execPath,
     args: [leader],
@@ -52,6 +53,7 @@ setInterval(() => {}, 1000)
     parser: { parse: () => [], stats: { unknown: 0, malformed: 0 } },
     onEvent: async () => undefined,
     graceMs: 150,
+    onMembers: (members) => members.forEach((member) => noted.add(member.pid)),
   })
   await vi.waitFor(
     () => expect(existsSync(pidFile) && readFileSync(pidFile, 'utf8')).toBeTruthy(),
@@ -61,6 +63,9 @@ setInterval(() => {}, 1000)
   )
   const descendantPid = Number(readFileSync(pidFile, 'utf8'))
   expect(alive(descendantPid)).toBe(true)
+  // Score only signals what it saw while the CLI lived (the member scan runs every 100 ms). Stop before that scan and
+  // the descendant is, rightly, not ours to kill: so Stop only once Score has noted it.
+  await vi.waitFor(() => expect(noted.has(descendantPid)).toBe(true))
   try {
     run.stop('user')
     const outcome = await run.done
@@ -86,9 +91,15 @@ const waitGone = async (pid: number) => {
   await vi.waitFor(() => expect(alive(pid)).toBe(false), { timeout: 30_000 })
 }
 
-/** A leader that starts a harmless worker (its pid goes to a file) and exits at once; `stdio` is the worker's. */
+/**
+ * A leader that starts a harmless worker (its pid goes to a file) and exits once Score has noted that worker. The note
+ * is awaited, not guessed: Score only treats a process as its own if it saw it while the leader lived, so a leader that
+ * left after a fixed delay left a race on a busy machine. `seen` is the `onMembers` the test passes to `spawnCli`
+ * (a test with its own `onMembers` calls it first). `stdio` is the worker's.
+ */
 function leaderAndWorker(stdio: 'inherit' | 'ignore') {
   const pidFile = join(dir, `worker-${stdio}.pid`)
+  const seenFile = join(dir, `worker-${stdio}.seen`)
   const worker = join(dir, 'worker.mjs')
   writeFileSync(
     worker,
@@ -103,11 +114,20 @@ setInterval(() => {}, 1000)
     `import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 spawn(process.execPath, [${JSON.stringify(worker)}, ${JSON.stringify(pidFile)}], { stdio: ${JSON.stringify(stdio)} })
-// Leave only once the worker is really running and Score has had time to see it (it scans while the leader lives).
-const wait = setInterval(() => { if (existsSync(${JSON.stringify(pidFile)})) setTimeout(() => process.exit(0), 400) }, 10)
+const wait = setInterval(() => { if (existsSync(${JSON.stringify(seenFile)})) setTimeout(() => process.exit(0), 50) }, 10)
 `,
   )
-  return { leader, pidFile }
+  // Score reports a member once, and it may do so before the worker has written its pid file: keep every pid reported.
+  const reported = new Set<number>()
+  const seen = (members: { pid: number }[]) => members.forEach((member) => reported.add(member.pid))
+  /** The worker's pid, once the worker runs and Score has noted it; this is also what lets the leader go. */
+  const workerSeen = async () => {
+    const pid = await workerPid(pidFile)
+    await vi.waitFor(() => expect(reported.has(pid)).toBe(true))
+    writeFileSync(seenFile, '')
+    return pid
+  }
+  return { leader, pidFile, seen, workerSeen }
 }
 const workerPid = async (pidFile: string) => {
   await vi.waitFor(
@@ -140,23 +160,58 @@ test('S2-004: when onSpawn throws, the child group is killed and the error propa
   }
 })
 
+// The limit is a real timer armed at spawn, and how long a loaded machine takes to start the launcher, the leader and
+// the worker decides whether a few hundred ms is "before" or "after" the leader's exit. So the test takes the timer
+// itself: spawnCli's limit has a recognisable value, setTimeout hands its callback to the test instead of arming it, and
+// the test fires it once the worker really outlives its leader. Nothing here depends on how fast anything runs; if the
+// limit were not armed, or did not stop the group, the test would fail.
+const LIMIT_MS = 987_654_321
+function captureLimitTimer() {
+  const captured: { fire?: () => void } = {}
+  const real = globalThis.setTimeout
+  const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+    callback: () => void,
+    ms?: number,
+    ...rest: never[]
+  ) => {
+    if (ms !== LIMIT_MS)
+      return (real as (...args: unknown[]) => NodeJS.Timeout)(callback, ms, ...rest)
+    captured.fire = callback
+    // A real, inert timer: the code under test clears it like its own.
+    return real(() => undefined, 0)
+  }) as typeof setTimeout)
+  return { captured, restore: () => spy.mockRestore() }
+}
+
 test.each(['inherit', 'ignore'] as const)(
   'S2-005: the wall-clock limit stops a worker that outlives its leader (worker stdio %s)',
   async (stdio) => {
-    const { leader, pidFile } = leaderAndWorker(stdio)
-    const run = spawnCli({
-      ...baseOptions([leader]),
-      maxMs: 400,
-      graceMs: 3_000,
-    })
-    const pid = await workerPid(pidFile)
+    const { leader, seen, workerSeen } = leaderAndWorker(stdio)
+    const limit = captureLimitTimer()
+    let pid = 0
     try {
+      const run = spawnCli({
+        ...baseOptions([leader]),
+        maxMs: LIMIT_MS,
+        graceMs: 3_000,
+        onMembers: seen,
+      })
+      expect(limit.captured.fire, 'the limit timer is armed with the given limit').toBeTypeOf(
+        'function',
+      )
+      pid = await workerSeen()
+      // The leader exits on its own once the worker runs; only then does the limit run out.
+      const leaderPid = run.pid!
+      await vi.waitFor(() => expect(alive(leaderPid)).toBe(false))
+      expect(alive(pid)).toBe(true)
+      limit.captured.fire!()
       const outcome = await run.done
       expect(outcome.stopped).toBe('timeout')
       expect(outcome.groupGone).toBe(true)
       expect(alive(pid)).toBe(false)
     } finally {
-      if (alive(pid)) process.kill(pid, 'SIGKILL')
+      limit.restore()
+      if (pid && alive(pid)) process.kill(pid, 'SIGKILL')
     }
   },
   60_000,
@@ -165,11 +220,12 @@ test.each(['inherit', 'ignore'] as const)(
 test.each(['inherit', 'ignore'] as const)(
   'S2-005: Stop reaches a worker after its leader has exited (worker stdio %s)',
   async (stdio) => {
-    const { leader, pidFile } = leaderAndWorker(stdio)
-    const run = spawnCli({ ...baseOptions([leader]), graceMs: 3_000 })
-    const pid = await workerPid(pidFile)
+    const { leader, seen, workerSeen } = leaderAndWorker(stdio)
+    const run = spawnCli({ ...baseOptions([leader]), graceMs: 3_000, onMembers: seen })
+    const pid = await workerSeen()
     // The leader is gone; the worker is not.
-    await new Promise((r) => setTimeout(r, 300))
+    const leaderPid = run.pid!
+    await vi.waitFor(() => expect(alive(leaderPid)).toBe(false))
     expect(alive(pid)).toBe(true)
     try {
       run.stop('user')
@@ -184,10 +240,10 @@ test.each(['inherit', 'ignore'] as const)(
 )
 
 test('S2-005: a leader that exits cleanly with a worker running gets the grace period, then the group is stopped and noted', async () => {
-  const { leader, pidFile } = leaderAndWorker('ignore')
+  const { leader, seen, workerSeen } = leaderAndWorker('ignore')
   const started = Date.now()
-  const run = spawnCli({ ...baseOptions([leader]), graceMs: 500 })
-  const pid = await workerPid(pidFile)
+  const run = spawnCli({ ...baseOptions([leader]), graceMs: 500, onMembers: seen })
+  const pid = await workerSeen()
   try {
     const outcome = await run.done
     expect(outcome.exitCode).toBe(0)
@@ -203,14 +259,17 @@ test('S2-005: a leader that exits cleanly with a worker running gets the grace p
 }, 60_000)
 
 test('N4: the identity of a worker that outlives its leader is reported while the group is supervised', async () => {
-  const { leader, pidFile } = leaderAndWorker('ignore')
+  const { leader, seen, workerSeen } = leaderAndWorker('ignore')
   const reported: { pid: number; startTime: string }[] = []
   const run = spawnCli({
     ...baseOptions([leader]),
     graceMs: 300,
-    onMembers: (members) => reported.push(...members),
+    onMembers: (members) => {
+      reported.push(...members)
+      seen(members)
+    },
   })
-  const pid = await workerPid(pidFile)
+  const pid = await workerSeen()
   try {
     await run.done
     expect(reported.map((member) => member.pid)).toContain(pid)
@@ -221,7 +280,7 @@ test('N4: the identity of a worker that outlives its leader is reported while th
 }, 60_000)
 
 test('S3-005: members whose first recording failed are offered again and recorded by a later scan', async () => {
-  const { leader, pidFile } = leaderAndWorker('ignore')
+  const { leader, seen, workerSeen } = leaderAndWorker('ignore')
   const recorded = new Set<number>()
   const errors: unknown[] = []
   let calls = 0
@@ -229,13 +288,14 @@ test('S3-005: members whose first recording failed are offered again and recorde
     ...baseOptions([leader]),
     graceMs: 600,
     onMembers: (members) => {
+      seen(members)
       // The very first save fails (a busy database); nothing is kept from it.
       if (calls++ === 0) throw new Error('database is busy')
       for (const member of members) recorded.add(member.pid)
     },
     onMembersError: (error) => errors.push(error),
   })
-  const pid = await workerPid(pidFile)
+  const pid = await workerSeen()
   try {
     await run.done
     expect(calls).toBeGreaterThan(1)

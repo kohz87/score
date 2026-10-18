@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
+import { makeRoom, openRoom } from './rooms.ts'
 
 // 1x1 transparent PNG.
 const PNG = Buffer.from(
@@ -11,13 +12,11 @@ test('the composer attaches an image, rejects a non-image, and the sent message 
   page,
 }) => {
   await pair(page)
-  await page.goto('/chat')
-  await page
-    .getByRole('navigation', { name: 'Rooms' })
-    .getByRole('link', { name: /#activity-feed/ })
-    .click({ timeout: 15_000 })
+  // Its own room: the shared #activity-feed is capped at one page and other specs post in it, which could push the
+  // agent's reply out of the page this spec is watching.
+  const room = await makeRoom(page, 'att')
+  await openRoom(page, room.label)
   const history = page.getByRole('region', { name: 'Message history' })
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
   const composer = page.getByRole('combobox', { name: /^Message/ })
   const attach = page.getByRole('button', { name: 'Attach files' })
   await expect(attach).toBeEnabled()

@@ -420,7 +420,17 @@ export function buildApp({
   // The same origin the console prints in its pairing link.
   // The web terminal (PLAN 7.3): not registered at all unless SCORE_TERMINAL=1. A missing native module (node-pty is
   // built at install time) leaves it off and says why, rather than stopping Score.
-  const securityPassword = security ?? (db ? new SecurityPassword(config.home, clock) : undefined)
+  const securityPassword =
+    security ??
+    (db
+      ? new SecurityPassword(
+          config.home,
+          clock,
+          undefined,
+          // Fake mode guards no real credential, and its e2e specs make wrong guesses on every run from one paired browser.
+          config.mode === 'fake' ? { perSession: 1000, overall: 1000 } : undefined,
+        )
+      : undefined)
   if (db && ingest && coding)
     registerCodingAgentRoutes(app, {
       coding,

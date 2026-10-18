@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ORCH_ACKNOWLEDGEMENT_TEXT, type OrchestrationCreate } from '@score/contract'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -296,8 +296,12 @@ describe('every external identity is read again before the release', () => {
 
   test('the workspace replaced by another folder ⇒ "agent changed"', async () => {
     await revokedBy(() => {
-      rmSync(h.workspace, { recursive: true })
-      mkdirSync(h.workspace)
+      // Another folder under the same name. Removing and recreating it in place can hand the new folder the old one's
+      // inode number (ext4 does), which is the identity Score compares: the new folder is made while the old one still
+      // exists, so the two can never share one.
+      mkdirSync(`${h.workspace}.next`)
+      renameSync(h.workspace, `${h.workspace}.replaced`)
+      renameSync(`${h.workspace}.next`, h.workspace)
     })
   })
 })
