@@ -70,7 +70,8 @@ export function PairPage() {
   return (
     <>
       <h1>Pair this browser</h1>
-      <div className="pair-card" role="status">
+      {/* Pairing grants a browser control of Score: the card is one protected decision (X1). */}
+      <div className="pair-card" role="status" data-decision data-protected="block">
         {status === 'consent' && (
           <>
             <p>

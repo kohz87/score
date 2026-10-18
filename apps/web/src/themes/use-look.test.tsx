@@ -1,7 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { lookStore, writeDeviceOverride, writeLookCache } from './look-store.ts'
+import {
+  applyResetGeneration,
+  clearDeviceLook,
+  lookStore,
+  writeDeviceOverride,
+  writeLookCache,
+} from './look-store.ts'
 import { resetForgottenTheme } from '../data/theme.ts'
 import { useLook } from './use-look.ts'
 
@@ -18,9 +24,9 @@ const item = (id: string) => ({
   updatedAt: '2026-10-17T00:00:00.000Z',
   hasCss: true,
 })
-const themes = (resetGeneration?: number) => ({
+const themes = (resetGeneration?: number, active = 'score') => ({
   items: ['score', 'paper', 'hostile'].map(item),
-  active: 'score',
+  active,
   mode: 'system',
   ...(resetGeneration === undefined ? {} : { resetGeneration }),
 })
@@ -52,7 +58,9 @@ afterEach(() => {
 })
 
 test('a device override from before a host reset is dropped, with the boot cache', async () => {
-  writeDeviceOverride('hostile')
+  // Saved by an earlier visit: it is in storage when the page starts, not chosen on this page.
+  window.localStorage.setItem('score.look.device', 'hostile')
+  lookStore.reset()
   writeLookCache({ id: 'hostile', attributes: { 'data-look': 'custom' }, css: 'body{}' })
   mount(themes(1))
   await waitFor(() => expect(screen.getByTestId('effective').textContent).toBe('score'))
@@ -78,7 +86,8 @@ test('a server that never reset (generation 0 or absent) leaves overrides alone'
 })
 
 test('the reset also holds when storage is blocked: the override is dropped in memory', async () => {
-  writeDeviceOverride('hostile')
+  window.localStorage.setItem('score.look.device', 'hostile')
+  lookStore.reset()
   const blocked = () => {
     throw new DOMException('blocked', 'SecurityError')
   }
@@ -138,4 +147,30 @@ test('a colour mode chosen after the reset (same generation) stays', async () =>
   window.localStorage.setItem('score.theme', 'dark')
   mountMode(themes(1))
   await waitFor(() => expect(screen.getByTestId('mode').textContent).toBe('dark'))
+})
+
+// Cross-audit X15: a reset made on this page before the theme list arrives (Ctrl+Shift+0, or the guard's fallback)
+// is newer than anything the host's reset generation can say about, so the late list must not undo it.
+test('Ctrl+Shift+0 before the list arrives survives a list whose reset generation is ahead of this device’s', async () => {
+  clearDeviceLook()
+  mount(themes(1, 'hostile'))
+  await waitFor(() => expect(window.localStorage.getItem('score.look.generation')).toBe('1'))
+  expect(screen.getByTestId('effective').textContent).toBe('score')
+  expect(window.localStorage.getItem('score.look.device')).toBe('score')
+})
+
+test('the guard’s fallback before the list arrives survives it too', async () => {
+  writeDeviceOverride('score')
+  mount(themes(3, 'hostile'))
+  await waitFor(() => expect(window.localStorage.getItem('score.look.generation')).toBe('3'))
+  expect(screen.getByTestId('effective').textContent).toBe('score')
+})
+
+test('a host reset that comes after the list was read still reaches a device that chose its own theme', () => {
+  writeDeviceOverride('paper')
+  applyResetGeneration(1)
+  expect(lookStore.get().device).toBe('paper')
+  applyResetGeneration(2)
+  expect(lookStore.get().device).toBeNull()
+  expect(window.localStorage.getItem('score.look.generation')).toBe('2')
 })

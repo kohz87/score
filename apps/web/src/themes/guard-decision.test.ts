@@ -143,3 +143,21 @@ test('a field of the decision set in the theme’s own font refuses the commit; 
   expect(decisionProblem(document.getElementById('go')!)).toBeNull()
   vi.restoreAllMocks()
 })
+
+// Cross-audit X1: a decision with no protected surface of its own (a form whose only protected part is not on the page
+// right now) still vets its fields; the early return used to skip them.
+test('a decision with no protected surface inside it still refuses a commit when a field was hidden', () => {
+  document.body.innerHTML = `
+    <form data-decision id="form">
+      <label data-themed-hide>Budget <input id="budget" /></label>
+      <button id="go">Start</button>
+    </form>`
+  expect(decisionProblem(document.getElementById('go')!)).toMatch(/is not shown/)
+  expect(decisionProblem(document.getElementById('form')!)).toMatch(/is not shown/)
+})
+
+test('a decision with no protected surface and nothing hidden goes through', () => {
+  document.body.innerHTML = `
+    <form data-decision id="form"><label>Budget <input /></label><button id="go">Start</button></form>`
+  expect(decisionProblem(document.getElementById('go')!)).toBeNull()
+})

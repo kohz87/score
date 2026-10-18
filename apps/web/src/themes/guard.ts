@@ -390,12 +390,13 @@ function withoutTheme<T>(run: () => T): T {
 
 function violationIn(surfaces: HTMLElement[], decision: HTMLElement | null = null): string | null {
   const live = surfaces.filter((el) => !el.closest('[hidden]'))
-  if (live.length === 0) return null
-  // Everything else inside the decision (its labelled fields, labels, selects and text), judged less strictly.
+  // Everything else inside the decision (its labelled fields, labels, selects and text), judged less strictly. A decision
+  // with no protected surface on the page right now still has its fields vetted (cross-audit X1).
   const rest =
     decision && !decision.closest('[hidden]')
       ? parts(decision).filter((el) => !el.closest('[data-protected]'))
       : []
+  if (live.length === 0 && rest.length === 0) return null
   const targets = [...live.flatMap(parts), ...rest]
   const loose = new Set<HTMLElement>(rest)
   const glyphShapes = live.flatMap(shapes)

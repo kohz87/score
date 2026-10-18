@@ -183,7 +183,9 @@ export function StartWorkflowDialog({
           Couldn’t load this workflow.
         </p>
       )}
-      <form onSubmit={submit} className="orch-form">
+      {/* One decision (X1): the inputs, the approval policy, the spend choices, the limits, the agents, the reach of
+          coding agents and the button that starts the run are measured together, with the theme and without it. */}
+      <form onSubmit={submit} className="orch-form" data-decision>
         {definition && definition.inputs.length > 0 && (
           <fieldset className="orch-field wf-fieldset">
             <legend>Inputs</legend>
@@ -210,7 +212,7 @@ export function StartWorkflowDialog({
           </fieldset>
         )}
 
-        <fieldset className="orch-field">
+        <fieldset className="orch-field orch-approvals" data-protected="flex">
           <legend>Approvals</legend>
           {POLICIES.map((item) => (
             <label key={item.id} className="orch-check orch-policy">
@@ -228,7 +230,7 @@ export function StartWorkflowDialog({
           ))}
         </fieldset>
 
-        <div className="orch-row">
+        <div className="orch-row orch-limits" data-protected="flex">
           <label className="orch-field">
             <span>Budget in USD (optional)</span>
             <input
@@ -247,7 +249,7 @@ export function StartWorkflowDialog({
           </label>
         </div>
 
-        <fieldset className="orch-field">
+        <fieldset className="orch-field orch-spend" data-protected="flex">
           <legend>When Hermes doesn’t say what a step cost</legend>
           <label className="orch-check">
             <input
@@ -300,7 +302,7 @@ export function StartWorkflowDialog({
           )}
         </fieldset>
 
-        <details>
+        <details className="orch-limits" data-protected="block">
           <summary>Limits and estimates</summary>
           <div className="orch-row">
             <label className="orch-field">
@@ -427,7 +429,7 @@ export function StartWorkflowDialog({
             {failedChecks && <PreflightList checks={failedChecks} />}
           </div>
         )}
-        <div className="orch-actions">
+        <div className="orch-actions orch-start" data-protected="flex">
           <button
             type="submit"
             className="orch-primary"

@@ -19,7 +19,13 @@ export function McpAccessSection({ agent }: { agent: AgentDetail }) {
     void copyText(value).then((ok) => setCopied(ok ? what : null))
   }
   return (
-    <section className="team-card" aria-labelledby="team-mcp-heading">
+    // Read and write access for an agent is a consent: the switches and what they mean are one protected decision (X1).
+    <section
+      className="team-card team-mcp-access"
+      aria-labelledby="team-mcp-heading"
+      data-decision
+      data-protected="flex"
+    >
       <h2 id="team-mcp-heading">MCP access</h2>
       <p className="team-muted-strong">
         Lets {agent.name} use Score’s rooms, tasks and Knowledge as MCP tools. Off by default.

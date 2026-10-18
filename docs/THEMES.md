@@ -304,12 +304,17 @@ tokens apply inside them, and only while their contrast holds.
 - The Needs-you marker and card.
 - The security-password dialogs and the permission and sandbox settings (Rules, Team permissions and the permission,
   warning and password fields when you add a coding agent).
+- The consent forms (v1.8.1): starting an orchestration or a workflow run (what each coding agent can read and the risk
+  text, the approval-policy choices, the spend confirmations, the budget, quota and limit fields, and the start button),
+  MCP read and write access on a team agent’s Tools tab, the whole of Settings › Remote access (the security password
+  field, pairing links, paired browsers with Renew, End and End all, passkeys), and the card on the pair page.
 - Agent shapes (`AgentGlyph`) and error toasts.
 - The way back: the Settings link, the menu and search buttons with the command palette (and its “Reset look” entry),
   “Reset look” itself and the banner that appears when a theme is skipped. The chat-first view (`/u`) has the same
   palette and Ctrl+K, the avatar menu and the conversations button are protected there, and while a theme from outside
   Score (imported or made in the Customizer) is on, a “Way back” bar with Search, Admin view, Settings and Reset look is always on the page, whatever the layout (a hidden
-  sidebar included).
+  sidebar included). The full-screen Customizer, which has no shell around it, protects its Settings link the same way and
+  opens the command palette (Settings, and “Reset look on this device” when you type it) with Ctrl+K or ⌘K.
 
 **None of your rules match inside these.** Every selector of your CSS is applied as if it ended in
 `:where(:not([data-protected], [data-protected] *))`, so `button`, `span`, `svg path`, `[role=alert]` or `div > div` never
@@ -331,7 +336,10 @@ unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can�
 stranger), Score refuses the action, switches the theme off and says nothing was sent. A decision is vetted as a whole:
 an approval’s request and its buttons, or the add-coding-agent form (its context, warnings, permission and password
 fields, the button, and also every other label and field of the form: kind, name, role, workspace, model) count as one,
-so hiding, fading, clipping, covering or blanking any part of it refuses the click or the submit. (The fields and labels
+so hiding, fading, clipping, covering or blanking any part of it refuses the click or the submit. The start-orchestration
+and start-workflow forms, MCP access, Remote access and the pair card are decisions in the same way: a form whose
+protected parts are not on the page right now (a plain workflow without coding agents) still has every field and label
+vetted. (The fields and labels
 that are not protected surfaces may still be set in a theme’s own type; only being unreadable or unreachable counts.) Every
 measurement is made against the same page with the theme’s own CSS gone (its sheets and its cached copy lifted; the
 layout options of the manifest stay, because Score renders those itself). Text over a picture has to read against
@@ -344,9 +352,14 @@ If a theme makes Score hard to use, any of these returns to Score’s own look:
 
 - Open any address with `?look=safe` (for this visit only).
 - Press **Ctrl+Shift+0** on any page.
-- Press Ctrl+K (or ⌘K) and run **Reset look on this device** (also in the chat-first view, or use its “Way back” bar).
+- Press Ctrl+K (or ⌘K) and run **Reset look on this device** (also in the chat-first view and in the Customizer, or use the “Way back” bar).
 - Settings › Look › **Reset look on this device**; Settings can’t be hidden by a theme.
 - On the computer Score runs on, `scripts/score look reset` (works with Score stopped; it also clears the theme every browser chose for itself, which each one drops the next time it reloads or regains focus).
+
+A reset you make on a page (Ctrl+Shift+0, the palette, or Score switching a damaging theme off) holds even when the
+theme list is slow: the list that arrives later can say the host has reset since this browser last looked, but that
+can’t undo a choice made after the page opened. A reset the host makes while the page is open still reaches it. On the
+chat-first view the “Way back” bar is on the page from the start, not after the list arrives.
 
 A theme that fails validation, can’t be loaded or throws while it is applied is skipped, and a banner says so.
 

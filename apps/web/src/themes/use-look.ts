@@ -99,7 +99,10 @@ export function useLook(): Look {
   useEffect(() => {
     if (serverGeneration !== undefined) applyResetGeneration(serverGeneration)
   }, [serverGeneration])
-  const deviceStale = serverGeneration !== undefined && serverGeneration !== state.generation
+  // (A choice made on this page before the first reading is not stale: applyResetGeneration adopts the number.)
+  const keepsChoice = state.choseBeforeList && !state.generationSeen
+  const deviceStale =
+    serverGeneration !== undefined && serverGeneration !== state.generation && !keepsChoice
 
   const themes = list.data?.items.length ? list.data.items : builtinSummaries
   const sharedId = list.data?.active ?? 'score'

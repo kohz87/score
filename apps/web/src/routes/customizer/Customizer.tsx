@@ -57,6 +57,7 @@ import {
   type PreviewDevice,
   type PreviewPage,
 } from './preview-pages.ts'
+import { WayBackPalette } from './WayBackPalette.tsx'
 import { SectionBackground } from './SectionBackground.tsx'
 import { SectionColours } from './SectionColours.tsx'
 import { SectionCss } from './SectionCss.tsx'
@@ -564,12 +565,14 @@ export function Customizer() {
         <Link className="cz-btn" to="/settings#look">
           Back to Settings
         </Link>
+        <WayBackPalette />
       </div>
     )
   if (!history || !draft || !target || !previewDraft)
     return (
       <div className="cz cz-empty">
         <p role="status">Opening the Customizer…</p>
+        <WayBackPalette />
       </div>
     )
 
@@ -598,7 +601,7 @@ export function Customizer() {
   return (
     <div className="cz" data-pane={pane}>
       <header className="cz-bar">
-        <Link className="cz-back" to="/settings#look">
+        <Link className="cz-back" to="/settings#look" data-protected="raised">
           <svg
             width="16"
             height="16"
@@ -925,6 +928,8 @@ export function Customizer() {
           }}
         />
       )}
+
+      <WayBackPalette />
 
       {blocker.state === 'blocked' && (
         <Modal title="Leave without saving?" onClose={() => blocker.reset()}>

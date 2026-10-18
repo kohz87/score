@@ -214,6 +214,17 @@ test('Score’s own looks and the default need no way-back bar', async () => {
   expect(screen.queryByRole('navigation', { name: 'Way back' })).toBeNull()
 })
 
+// Cross-audit X15: the way back must not wait for the theme list. A slow or failed list leaves the boot cache's custom
+// look on the page, and the bar's own CSS gates its display.
+test('the way back is on the page while the theme list has not arrived (or failed)', async () => {
+  // No /api/themes fixture: the list answers 404.
+  window.localStorage.setItem('score.look.device', 'gate')
+  lookStore.reset()
+  open('/u/rooms/room-activity-feed')
+  const way = await screen.findByRole('navigation', { name: 'Way back' })
+  expect(way.getAttribute('data-protected')).toBe('flex')
+})
+
 test('the way back (palette, admin view, settings, reset look) is on the user view and protected', async () => {
   wearOutsideTheme()
   open('/u/rooms/room-activity-feed')

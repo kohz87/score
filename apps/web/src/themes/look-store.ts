@@ -33,7 +33,7 @@ export function readDeviceOverride(): string | null {
  * first and a storage that throws (blocked, private window, full) can't stop a choice or a reset (gate finding #9).
  */
 export function writeDeviceOverride(id: string | null): void {
-  state = { ...state, device: id }
+  state = { ...state, device: id, choseBeforeList: state.choseBeforeList || !state.generationSeen }
   try {
     if (id === null) {
       window.localStorage.removeItem(DEVICE_KEY)
@@ -81,7 +81,12 @@ export function readCachedLayout(view: 'admin' | 'user'): unknown {
  * shared theme is (a harmful shared theme must not come straight back). Settings › Look offers "Use the shared theme".
  */
 export function clearDeviceLook(): void {
-  state = { ...state, device: 'score', failure: null }
+  state = {
+    ...state,
+    device: 'score',
+    failure: null,
+    choseBeforeList: state.choseBeforeList || !state.generationSeen,
+  }
   try {
     window.localStorage.removeItem(CACHE_KEY)
     window.localStorage.removeItem(LEGACY_PACK_KEY)
@@ -108,7 +113,22 @@ function readStoredGeneration(): number {
  * choice (`score.theme`) goes with them, or a stored "dark" would override the mode the host reset to (re-gate #9).
  */
 export function applyResetGeneration(generation: number): void {
+  const first = !state.generationSeen
+  if (first) state = { ...state, generationSeen: true }
   if (generation === state.generation) return
+  // A choice made on this page before the server's number was known (Ctrl+Shift+0, the guard's fallback) is newer than
+  // any host reset the number can speak of: the device adopts the number and keeps the choice (cross-audit X15). A reset
+  // that comes after this first reading is a real one and still drops it.
+  if (first && state.choseBeforeList) {
+    state = { ...state, generation }
+    try {
+      window.localStorage.setItem(GENERATION_KEY, String(generation))
+    } catch {
+      // The choice still holds for this visit.
+    }
+    emit()
+    return
+  }
   state = { ...state, device: null, generation }
   forgetStoredTheme()
   try {
@@ -138,6 +158,10 @@ export type LookState = {
   device: string | null
   /** The server reset generation this device's saved look was last checked against. */
   generation: number
+  /** This page has read the server's reset generation at least once (not persisted). */
+  generationSeen: boolean
+  /** The device's look was chosen on this page before the server's generation was known (not persisted). */
+  choseBeforeList: boolean
 }
 
 let state: LookState = {
@@ -145,6 +169,8 @@ let state: LookState = {
   failure: null,
   device: readDeviceOverride(),
   generation: readStoredGeneration(),
+  generationSeen: false,
+  choseBeforeList: false,
 }
 const listeners = new Set<() => void>()
 
@@ -172,6 +198,8 @@ export const lookStore = {
       failure: null,
       device: readDeviceOverride(),
       generation: readStoredGeneration(),
+      generationSeen: false,
+      choseBeforeList: false,
     }
     listeners.forEach((listener) => listener())
   },
