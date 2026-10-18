@@ -315,3 +315,8 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v1.8.0 deployed** (2026-10-18 15:47 UTC): idle check clean, backup `score-pre-1.8.0-20261018.db` (0600) + journal,
   live start, gateway restarted, both producers (default, scoretesta) re-registered, health 200 on LAN and Tailscale,
   migrations at 0077.
+- **Cross-audit of v1.8.0** (owner's request): Codex gpt-6.1-sol max + Gemini 4 Argon high (agy plan mode, sandbox, file
+  tools only — the first agy run stopped because headless mode denies shell commands; rerun with the diff and log as
+  files). 16 distinct findings (X1–X16), 2 found by both, none rejected; lead verified the single-source ones in code or
+  left them "reproduce first". Fixes: J1 (+X3, X10, X13), K1 protection coverage, K2 theme storage, K3 small items.
+  Review: `docs/reviews/2026-10-19-xaudit-1.8.0.md`.
