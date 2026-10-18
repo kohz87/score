@@ -301,3 +301,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   when the composer grew after the first paint (ResizeObserver follow + layout-clamp guard in `ChatThread.tsx`; 8
   baselines that had captured the hidden last lines updated). Not reproduced in hundreds of loaded runs (no change):
   ledger chat phone, workspace 390 jitter, kanban audit5f, the Agents listbox.
+- **Third-gate fix I1** merged: the whole `data-decision` is vetted (every field and label; type styling still free),
+  pseudo-elements other than ::before/::after/::placeholder/::marker refused in theme selectors (+ trusted ::selection
+  and ::target-text on protected parts), plates for bare agent glyphs and an ink edge for the Needs-you dot under custom
+  looks with a 3:1 non-text guard check, visible-character menu labels with a trusted Settings name. Lead resolved a
+  contract test conflict with C4. Merged main: contract 1403, server themes 515, web themes/shell 913. Fourth gate
+  (scoped, decision 103) and the v1.8.0 release run started.
