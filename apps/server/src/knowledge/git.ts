@@ -131,14 +131,17 @@ export class VaultGit {
       .filter((entry) => !skip.has(entry))
   }
 
-  /** True when the path differs from Git's last commit (modified, deleted or untracked); false when it cannot say. */
-  async pathDirty(path: string): Promise<boolean> {
-    if (!this.available) return false
+  /**
+   * Whether the path matches Git's last commit: `dirty` (modified, deleted or untracked), `clean`, or `unknown` when
+   * Git failed (a corrupt index, a lock). Callers must not read unknown as clean: that hides a history failure.
+   */
+  async pathState(path: string): Promise<'clean' | 'dirty' | 'unknown'> {
+    if (!this.available) return 'unknown'
     try {
       const out = await this.git(['status', '--porcelain=v1', '-z', '--no-renames', '--', path])
-      return out.length > 0
+      return out.length > 0 ? 'dirty' : 'clean'
     } catch {
-      return false
+      return 'unknown'
     }
   }
 
