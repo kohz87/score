@@ -7,6 +7,7 @@ import {
   orchestrationEvents,
   orchestrationFixtures,
 } from '../../../../../e2e/orchestration-fixtures.ts'
+import { workflowFixtures } from '../../../../../e2e/workflow-fixtures.ts'
 import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry, immediateFrameScheduler } from '../../data/resync.ts'
@@ -157,4 +158,22 @@ test('/ opens the user view in a browser that was left there', async () => {
   window.localStorage.setItem('score.view', 'user')
   const router = open('/')
   await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/u/))
+})
+
+test('a workflow room shows the compact header, not the admin panel, and details switch views', async () => {
+  Object.assign(fixtures, workflowFixtures, {
+    '/api/orchestrations': { asOfSeq: 0, items: [] },
+  })
+  const router = open('/u/rooms/room-activity-feed')
+  const header = await screen.findByRole('region', { name: 'Workflow' })
+  expect(within(header).getByText('Release notes: the 2.4 release')).toBeTruthy()
+  expect(within(header).getByText('2 of 7 steps done')).toBeTruthy()
+  expect(await within(header).findByRole('button', { name: 'Pause' })).toBeTruthy()
+  // The admin panel and its link to the live diagram are not part of this view.
+  expect(screen.queryByRole('region', { name: 'Workflow run' })).toBeNull()
+  expect(screen.queryByRole('link', { name: 'Open the live diagram' })).toBeNull()
+  // What needs the person is still answerable in the conversation.
+  expect(await screen.findByRole('region', { name: /approve/i })).toBeTruthy()
+  fireEvent.click(within(header).getByRole('button', { name: 'See full details' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/now/flow/brief-wfrun-1'))
 })
