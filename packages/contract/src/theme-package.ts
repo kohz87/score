@@ -162,6 +162,13 @@ export function readZipDirectory(bytes: Uint8Array): ZipEntryInfo[] {
     if ((flags & 0x41) !== 0) throw new ThemePackageError('That zip file is encrypted')
     if (packed === 0xffffffff || size === 0xffffffff || localOffset === 0xffffffff)
       throw new ThemePackageError('Zip64 packages are not allowed')
+    // JSZip (the server's inflater) and other readers honour the Unix directory mode (0x4000 of the mode) and the
+    // DOS directory bit (0x10 of the attributes) whatever the name says, while the trailing slash is what this reader
+    // goes by. A file that is marked as a folder is read differently by each, so it is refused.
+    const unixFolder = madeBy >> 8 === 3 && ((external >>> 16) & 0x4000) !== 0
+    const markedAsFolder = (external & 0x10) !== 0 || unixFolder
+    if (markedAsFolder && !name.endsWith('/'))
+      throw new ThemePackageError(`${name.slice(0, 60)}: a file marked as a folder`)
     const key = name.replace(/\/$/, '')
     if (names.has(key))
       throw new ThemePackageError(`${name.slice(0, 60)}: appears twice in the zip (duplicate name)`)

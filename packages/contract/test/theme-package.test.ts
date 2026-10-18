@@ -8,6 +8,7 @@ import {
   reviewPackageEntries,
   uploadProblem,
 } from '../src/theme-package.ts'
+import { cssAssetPaths } from '../src/theme-css-assets.ts'
 import { ThemeAssetRefSchema } from '../src/themes.ts'
 import { corpus } from './theme-package-corpus.ts'
 import { buildZip, unicodeCommentExtra, unicodePathExtra } from './theme-package-zip.ts'
@@ -28,6 +29,11 @@ function verdict(bytes: Uint8Array): { ok: true } | { ok: false; why: string } {
     const content = reviewPackageContent(files)
     if (content.reasons.length > 0) return { ok: false, why: content.reasons[0]! }
     if (!files.has('theme.json')) return { ok: false, why: 'theme.json is missing' }
+    // The stylesheet's own references (CSS-aware, shared by both readers) must be in the package.
+    const css = files.get('style.css')
+    for (const path of css ? cssAssetPaths(new TextDecoder().decode(css)) : [])
+      if (!files.has(`assets/${path}`))
+        return { ok: false, why: `asset:${path} is not in the package` }
     return { ok: true }
   } catch (error) {
     if (error instanceof ThemePackageError) return { ok: false, why: error.message }

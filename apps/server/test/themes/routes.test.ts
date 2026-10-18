@@ -376,18 +376,84 @@ test('an id with an unsettled swap note answers 409 theme_recovering until it is
   db.sqlite.exec(
     "CREATE TRIGGER keep_notes BEFORE DELETE ON theme_swaps BEGIN SELECT RAISE(ABORT, 'injected'); END;",
   )
-  const before = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
   const replaced = await upload(await fullPackage('seaside', '.b{color:red}'), '?replace=1')
   expect(replaced.statusCode).toBe(409)
   expect(replaced.json()).toMatchObject({ error: { code: 'theme_recovering' } })
   expect((await call('DELETE', '/api/themes/seaside')).json()).toMatchObject({
     error: { code: 'theme_recovering' },
   })
-  expect(ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())).toEqual(before)
   db.sqlite.exec('DROP TRIGGER keep_notes')
   expect(
     (await upload(await fullPackage('seaside', '.b{color:red}'), '?replace=1')).statusCode,
   ).toBe(201)
+})
+
+// Third gate finding 4: package reads of an id with an unsettled note are refused, never mixed.
+test('detail, style.css, assets and export answer 409 theme_recovering while a note is unsettled', async () => {
+  await upload(await fullPackage())
+  const asset = '/api/themes/seaside/assets/img/a.png'
+  expect((await call('GET', asset)).statusCode).toBe(200)
+  db.sqlite
+    .prepare(
+      "INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES ('dead', 'swap', 'seaside', NULL, 1, 'x')",
+    )
+    .run()
+  db.sqlite.exec(
+    "CREATE TRIGGER keep_notes BEFORE DELETE ON theme_swaps BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+  )
+  for (const path of [
+    '/api/themes/seaside',
+    '/api/themes/seaside/style.css',
+    asset,
+    '/api/themes/seaside/export',
+  ]) {
+    const res = await call('GET', path)
+    expect([path, res.statusCode]).toEqual([path, 409])
+    expect(res.json()).toMatchObject({ error: { code: 'theme_recovering' } })
+  }
+  // Other themes and the list keep working.
+  expect((await call('GET', '/api/themes/harbour')).statusCode).toBe(200)
+  expect((await call('GET', '/api/themes')).statusCode).toBe(200)
+  db.sqlite.exec('DROP TRIGGER keep_notes')
+  expect((await call('GET', '/api/themes/seaside')).statusCode).toBe(200)
+  expect((await call('GET', asset)).statusCode).toBe(200)
+})
+
+// Third gate finding 4: a start that cannot settle a note still comes up; only that id is refused.
+test('a start that keeps a failed note logs it, serves the other themes, and refuses reads of that id', async () => {
+  await upload(await fullPackage())
+  db.sqlite
+    .prepare(
+      "INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES ('dead', 'swap', 'seaside', NULL, 1, 'x')",
+    )
+    .run()
+  db.sqlite.exec(
+    "CREATE TRIGGER keep_notes BEFORE DELETE ON theme_swaps BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+  )
+  const warnings: unknown[] = []
+  const second = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake', SCORE_HOME: dir }),
+    logger: { level: 'warn', stream: { write: (line: string) => warnings.push(JSON.parse(line)) } },
+    db,
+    ingest,
+    port,
+  })
+  try {
+    const pairedAgain = await second.inject({
+      method: 'POST',
+      url: '/api/session/pair',
+      headers: { 'x-score-client': 'web' },
+      payload: { token: second.pairing.createToken() },
+    })
+    const cookie = pairedAgain.headers['set-cookie']!.toString().split(';')[0]!
+    const get = (url: string) =>
+      second.inject({ method: 'GET', url, headers: { 'x-score-client': 'web', cookie } })
+    expect((await get('/api/themes/harbour')).statusCode).toBe(200)
+    expect((await get('/api/themes/seaside')).statusCode).toBe(409)
+    expect(JSON.stringify(warnings)).toContain('seaside')
+  } finally {
+    await second.close()
+  }
 })
 
 // Re-gate finding 7: the import answers with the version it committed, etag included.
