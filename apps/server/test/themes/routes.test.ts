@@ -29,7 +29,7 @@ import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { multipart } from '../media-fixtures.ts'
 import { checkThemeCss } from '../../src/themes/css-check.ts'
 import { manifestAssets, readThemePackage } from '../../src/themes/package.ts'
-import { AVIF, JPEG, PNG, WEBP, WOFF2, manifestJson, zipOf, type Entry } from './helpers.ts'
+import { AVIF, JPEG, PNG, WEBP, WOFF2, manifestJson, rawZip, zipOf, type Entry } from './helpers.ts'
 
 let dir: string
 let db: ScoreDb
@@ -310,6 +310,29 @@ test('import: ?replace=1 with If-Match replaces only a theme whose etag still ma
   expect(gone.statusCode).toBe(409)
   expect(gone.json()).toMatchObject({ error: { code: 'etag_mismatch', details: { etag: null } } })
   expect((await call('GET', '/api/themes/seaside')).statusCode).toBe(404)
+})
+
+// Gate finding #1: the Customizer previews the central directory; the server must not install what the local headers say.
+test('import: a package whose local headers and central directory disagree changes no theme', async () => {
+  await upload(await fullPackage())
+  const before = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  const shown = manifestJson({ name: 'Shown' })
+  const hidden = manifestJson({ name: 'Installed' })
+  const attack = rawZip([
+    { name: 'theme.json', localName: 'style.css', data: shown },
+    { name: 'style.css', localName: 'theme.json', data: hidden },
+  ])
+  const res = await upload(attack, '?replace=1', { ...headers, 'if-match': before.etag })
+  expect(res.statusCode).toBe(422)
+  expect(reasons(res)).toMatch(/headers don.t match/)
+  const after = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  expect(after).toEqual(before)
+  const dup = rawZip([
+    { name: 'theme.json', data: shown },
+    { name: 'theme.json', data: hidden },
+  ])
+  expect((await upload(dup, '?replace=1')).statusCode).toBe(422)
+  expect(ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())).toEqual(before)
 })
 
 test('import: a rejected package stores nothing', async () => {

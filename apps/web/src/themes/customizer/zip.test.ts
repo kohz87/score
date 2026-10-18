@@ -78,4 +78,77 @@ describe('zip', () => {
       /too large/,
     )
   })
+
+  // Gate finding #1: the preview reads the central directory, the server reads the local headers. They must agree.
+  describe('local headers and the central directory must agree', () => {
+    const swapLocalNames = (zip: Uint8Array): Uint8Array => {
+      // Two stored entries with names of the same length: exchange the names in their local headers only.
+      const out = Uint8Array.from(zip)
+      const view = new DataView(out.buffer)
+      const nameLength = view.getUint16(26, true)
+      const second = 30 + nameLength + view.getUint32(18, true)
+      const a = out.slice(30, 30 + nameLength)
+      const b = out.slice(second + 30, second + 30 + nameLength)
+      out.set(b, 30)
+      out.set(a, second + 30)
+      return out
+    }
+
+    it('refuses a package whose local names are swapped against the central directory', async () => {
+      const zip = writeZip([
+        ['theme.json', text('{"description":"reviewed"}')],
+        ['style.json', text('{"description":"installed"}')],
+      ])
+      await expect(readZip(zip)).resolves.toBeDefined()
+      await expect(readZip(swapLocalNames(zip))).rejects.toThrow(ZipError)
+      await expect(readZip(swapLocalNames(zip))).rejects.toThrow(/don.t match/)
+    })
+
+    it('refuses a local header whose size or method differs from the central directory', async () => {
+      const zip = writeZip([['theme.json', text('{"a":1}')]])
+      const size = Uint8Array.from(zip)
+      new DataView(size.buffer).setUint32(22, 3, true)
+      await expect(readZip(size)).rejects.toThrow(/don.t match/)
+      const method = Uint8Array.from(zip)
+      new DataView(method.buffer).setUint16(8, 8, true)
+      await expect(readZip(method)).rejects.toThrow(/don.t match/)
+    })
+
+    it('refuses duplicate names, also when they differ only in case', async () => {
+      await expect(
+        readZip(
+          writeZip([
+            ['theme.json', text('a')],
+            ['theme.json', text('b')],
+          ]),
+        ),
+      ).rejects.toThrow(/twice/)
+      await expect(
+        readZip(
+          writeZip([
+            ['theme.json', text('a')],
+            ['Theme.json', text('b')],
+          ]),
+        ),
+      ).rejects.toThrow(/twice/)
+    })
+
+    it('refuses a duplicate that hides behind a folder entry of the same name', async () => {
+      await expect(
+        readZip(
+          writeZip([
+            ['assets/', new Uint8Array()],
+            ['assets', text('b')],
+          ]),
+        ),
+      ).rejects.toThrow(/twice/)
+    })
+
+    it('refuses an end record with data after it', async () => {
+      const zip = writeZip([['theme.json', text('{}')]])
+      const padded = new Uint8Array(zip.length + 4)
+      padded.set(zip)
+      await expect(readZip(padded)).rejects.toThrow(ZipError)
+    })
+  })
 })

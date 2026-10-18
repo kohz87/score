@@ -37,3 +37,63 @@ export async function zipOf(
     compression: generate.compression ?? 'DEFLATE',
   })
 }
+
+export interface RawEntry {
+  /** Name in the local header (defaults to `name`). */
+  localName?: string
+  /** Name in the central directory. */
+  name: string
+  data: string | Buffer
+  /** Size written into the local header instead of the real one. */
+  localSize?: number
+  /** Method in the local header instead of 0 (stored). */
+  localMethod?: number
+}
+
+/** A stored zip written by hand so the local headers and the central directory can disagree. */
+export function rawZip(entries: RawEntry[]): Buffer {
+  const chunks: Buffer[] = []
+  const central: Buffer[] = []
+  let offset = 0
+  for (const entry of entries) {
+    const data = Buffer.from(entry.data)
+    const localName = Buffer.from(entry.localName ?? entry.name)
+    const centralName = Buffer.from(entry.name)
+    let crc = 0xffffffff
+    for (const byte of data) {
+      crc ^= byte
+      for (let k = 0; k < 8; k += 1) crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1
+    }
+    crc = (crc ^ 0xffffffff) >>> 0
+    const local = Buffer.alloc(30 + localName.length)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt16LE(entry.localMethod ?? 0, 8)
+    local.writeUInt32LE(crc, 14)
+    local.writeUInt32LE(entry.localSize ?? data.length, 18)
+    local.writeUInt32LE(entry.localSize ?? data.length, 22)
+    local.writeUInt16LE(localName.length, 26)
+    localName.copy(local, 30)
+    const head = Buffer.alloc(46 + centralName.length)
+    head.writeUInt32LE(0x02014b50, 0)
+    head.writeUInt16LE(20, 4)
+    head.writeUInt16LE(20, 6)
+    head.writeUInt32LE(crc, 16)
+    head.writeUInt32LE(data.length, 20)
+    head.writeUInt32LE(data.length, 24)
+    head.writeUInt16LE(centralName.length, 28)
+    head.writeUInt32LE(offset, 42)
+    centralName.copy(head, 46)
+    chunks.push(local, data)
+    central.push(head)
+    offset += local.length + data.length
+  }
+  const size = central.reduce((sum, item) => sum + item.length, 0)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(entries.length, 8)
+  end.writeUInt16LE(entries.length, 10)
+  end.writeUInt32LE(size, 12)
+  end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...chunks, ...central, end])
+}
