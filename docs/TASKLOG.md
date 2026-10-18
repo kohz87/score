@@ -266,3 +266,10 @@ One entry per completed task: what landed, review results, and any **rejected re
   theme motion dropped, a decision-time check that refuses an action on a damaged protected surface (custom looks only),
   Settings links/palette/reset protected. Lead resolved a contract-doc conflict between G2 and G3 by keeping both notes.
   All findings reproduced failing-first by the builders. Next: re-gate at max.
+- **Re-gate fixes H1 + H2** merged (decision 102). H1: one shared visual-only CSS allowlist (`packages/contract/src/
+  theme-css.ts`) for the browser sanitiser and the server check, trusted typography and opaque way-back backgrounds on
+  protected parts, guard measures clipping and painted hits, page pictures worst-case; ledger/studio lost letter-spacing
+  and line-height (6 baselines). H2: one shared package rule set (`theme-package.ts`) for both readers with a 42-case
+  corpus, Unicode-path extra field refused, writes locked while a recovery note is unsettled, import returns the
+  committed detail. Lead combined both sides of two conflicts (contract § 16, contract index). Contract 1306, server
+  themes 472, web themes 655 green on the merged main.
