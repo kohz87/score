@@ -27,12 +27,15 @@ export function UserShell() {
   // A theme from outside Score (imported or made in the Customizer) can rearrange or hide the sidebar and its avatar menu:
   // while one is on, the way back sits on the page. Score's own looks need no extra bar.
   const look = useLook()
-  // (Decided once the theme list is known, so Score's own looks never flash the bar while it loads.)
+  // Until the list is known (slow, or failed) the bar is on the page anyway: the page may already wear a cached custom
+  // look, and the bar shows only under html[data-look='custom'] (user.css), so Score's own looks never flash it
+  // (cross-audit X15).
   const outsideTheme =
-    look.fromServer &&
-    look.effectiveId !== null &&
+    !look.safe &&
     look.failure === null &&
-    look.themes.find((item) => item.id === look.effectiveId)?.source !== 'builtin'
+    (!look.fromServer ||
+      (look.effectiveId !== null &&
+        look.themes.find((item) => item.id === look.effectiveId)?.source !== 'builtin'))
   useEffect(() => {
     // The Customizer's preview is a picture of this shell: its shortcuts belong to the page around it.
     if (preview) return
