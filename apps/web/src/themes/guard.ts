@@ -20,8 +20,8 @@ type Snapshot = {
   contrast: number | null
 }
 
-const TEXT_PARTS =
-  'button, a[href], input:not([type=hidden]), select, textarea, h1, h2, h3, h4, p, dt, dd, strong, code, label'
+const CONTROLS =
+  'button, a[href], input:not([type=hidden]), select, textarea, summary, [role=button]'
 
 function chain(element: Element): Element[] {
   const out: Element[] = []
@@ -102,13 +102,22 @@ function worse(on: Snapshot, off: Snapshot): string | null {
   return null
 }
 
+// Every element that shows text of its own (whatever its tag: the approval's title and description are spans) or is a
+// control, not a fixed list of tags (gate finding #3).
+function carriesText(el: Element): boolean {
+  for (const node of Array.from(el.childNodes))
+    if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '') return true
+  return false
+}
+
 function parts(surface: HTMLElement): HTMLElement[] {
-  return [
-    surface,
-    ...Array.from(surface.querySelectorAll<HTMLElement>(TEXT_PARTS)).filter(
-      (el) => !el.closest('[hidden], [inert], details:not([open])') && !el.hidden,
-    ),
-  ]
+  const found: HTMLElement[] = [surface]
+  for (const el of Array.from(surface.querySelectorAll<HTMLElement>('*'))) {
+    if (el.closest('svg') || el.closest('[hidden], [inert], details:not([open])') || el.hidden)
+      continue
+    if (el.matches(CONTROLS) || carriesText(el)) found.push(el)
+  }
+  return found
 }
 
 /** Runs with the theme's own sheets lifted, then puts them back before anything is painted. */

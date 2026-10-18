@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { sanitiseCss, splitDeclarations } from './sanitise.ts'
+import { OUTSIDE_PROTECTED, confineSelector, sanitiseCss, splitDeclarations } from './sanitise.ts'
 
 const reasons = (css: string) => sanitiseCss(css).report.dropped.map((item) => item.reason)
 
@@ -107,5 +107,41 @@ describe('splitDeclarations', () => {
       'b: "x;y"',
       'c: d',
     ])
+  })
+})
+
+describe('confining theme rules to the outside of protected subtrees (gate #3, #5)', () => {
+  const guard = OUTSIDE_PROTECTED
+
+  test('every selector of a list gets the guard, before a pseudo-element', () => {
+    expect(confineSelector('.a')).toBe(`.a${guard}`)
+    expect(confineSelector('.a > b, c d')).toBe(`.a > b${guard}, c d${guard}`)
+    expect(confineSelector('.a::before')).toBe(`.a${guard}::before`)
+    expect(confineSelector('.a:hover::after, b:first-line')).toBe(
+      `.a:hover${guard}::after, b${guard}:first-line`,
+    )
+    // Commas, colons and brackets inside attribute values and functions are not separators.
+    expect(confineSelector('a[href="x,y::z"], :is(b, c) d')).toBe(
+      `a[href="x,y::z"]${guard}, :is(b, c) d${guard}`,
+    )
+  })
+
+  test('the guard has no specificity of its own', () => {
+    expect(guard.startsWith(':where(')).toBe(true)
+  })
+
+  test('sanitiseCss confines on request only, and nested rules too', () => {
+    const css = 'svg path { fill: red } .card { color: blue; & .x { color: red } }'
+    expect(sanitiseCss(css).css).not.toContain('data-protected')
+    const confined = sanitiseCss(css, { confine: true }).css
+    expect(confined).toContain(`svg path${guard} {`)
+    expect(confined).toContain(`.card${guard} {`)
+  })
+
+  test('media and layer blocks are confined inside', () => {
+    const confined = sanitiseCss('@media (min-width: 1px) { .a b { color: red } }', {
+      confine: true,
+    }).css
+    expect(confined).toContain(`.a b${guard} { color: red; }`)
   })
 })

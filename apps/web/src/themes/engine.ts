@@ -358,7 +358,7 @@ export function applyCustom(
     const admin = lookParts(detail.manifest, detail.id, mode, 'admin')
     const user = lookParts(detail.manifest, detail.id, mode, 'user')
     const main = view === 'user' ? user : admin
-    const { css: cleaned, report } = sanitiseCss(detail.css, { themeId: detail.id })
+    const { css: cleaned, report } = sanitiseCss(detail.css, { themeId: detail.id, confine: true })
     applied = setAdopted([main.css, cleaned].filter(Boolean))
     for (const [name, value] of Object.entries(main.attributes)) root.setAttribute(name, value)
     loadBuiltinFonts(main.look)
