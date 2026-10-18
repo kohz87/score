@@ -299,7 +299,10 @@ tokens apply inside them, and only while their contrast holds.
   warning and password fields when you add a coding agent).
 - Agent shapes (`AgentGlyph`) and error toasts.
 - The way back: the Settings link, the menu and search buttons with the command palette (and its “Reset look” entry),
-  “Reset look” itself and the banner that appears when a theme is skipped.
+  “Reset look” itself and the banner that appears when a theme is skipped. The chat-first view (`/u`) has the same
+  palette and Ctrl+K, the avatar menu and the conversations button are protected there, and while a theme from outside
+  Score (imported or made in the Customizer) is on, a “Way back” bar with Search, Admin view, Settings and Reset look is always on the page, whatever the layout (a hidden
+  sidebar included).
 
 **None of your rules match inside these.** Every selector of your CSS is applied as if it ended in
 `:where(:not([data-protected], [data-protected] *))`, so `button`, `span`, `svg path`, `[role=alert]` or `div > div` never
@@ -317,11 +320,13 @@ It checks when the page changes, on hover, focus and press, when an animation en
 approval, an answer, a permission or a password: if the decision is hidden, clipped away by a box around it,
 unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can’t measure) or covered at that moment
 (the thing painted on it must be the control itself, something inside it or its own label, never a parent or a
-stranger), Score refuses the action, switches the theme off and says nothing was sent. Every measurement is made
-against the same page with the theme’s own CSS gone (its sheets and its cached copy lifted; the layout options of the
-manifest stay, because Score renders those itself). Text over a picture has to read against anything from black to white behind it, the page’s own
-picture included, through whatever veil (`dim`) or glass the theme puts over it. Score’s own sticky bars, drawers and
-banners are the only things allowed to sit on top of a decision.
+stranger), Score refuses the action, switches the theme off and says nothing was sent. A decision is vetted as a whole:
+an approval’s request and its buttons, or the add-coding-agent form (its context, warnings, permission and password
+fields, and the “Add coding agent” button) count as one, so hiding any part of it refuses the click or the submit. Every
+measurement is made against the same page with the theme’s own CSS gone (its sheets and its cached copy lifted; the
+layout options of the manifest stay, because Score renders those itself). Text over a picture has to read against
+anything from black to white behind it, the page’s own picture included, through whatever veil (`dim`) or glass the
+theme puts over it. Score’s own sticky bars, drawers and banners are the only things allowed to sit on top of a decision.
 
 ## Getting back
 
@@ -329,7 +334,7 @@ If a theme makes Score hard to use, any of these returns to Score’s own look:
 
 - Open any address with `?look=safe` (for this visit only).
 - Press **Ctrl+Shift+0** on any page.
-- Press Ctrl+K (or ⌘K) and run **Reset look on this device**.
+- Press Ctrl+K (or ⌘K) and run **Reset look on this device** (also in the chat-first view, or use its “Way back” bar).
 - Settings › Look › **Reset look on this device**; Settings can’t be hidden by a theme.
 - On the computer Score runs on, `scripts/score look reset` (works with Score stopped; it also clears the theme every browser chose for itself, which each one drops the next time it reloads or regains focus).
 

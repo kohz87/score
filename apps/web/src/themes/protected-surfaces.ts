@@ -24,6 +24,8 @@ export const protectedClasses = [
   'team-coding-permission',
   'coding-reach',
   'coding-acknowledge',
+  'coding-add-context',
+  'coding-add-commit',
   'terminal-auth',
   'admin-password',
   'guard-form',
@@ -36,6 +38,9 @@ export const protectedClasses = [
   'command-palette',
   'command-trigger',
   'menu-trigger',
+  'user-way-back',
+  'user-way-link',
+  'user-menu-button',
   'look-reset',
   'look-banner',
 ] as const

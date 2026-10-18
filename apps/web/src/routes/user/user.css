@@ -378,3 +378,29 @@
     display: block;
   }
 }
+
+/* The way back from a custom theme (UserShell, re-gate #8): on the page in every layout, but only while a custom look is
+   on; the Score default is unchanged. protected.css keeps it displayed under a custom look. */
+.user-way-back {
+  display: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+}
+html[data-look='custom'] .user-way-back {
+  display: flex;
+}
+.user-way-back button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}

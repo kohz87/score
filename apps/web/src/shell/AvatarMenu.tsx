@@ -42,6 +42,7 @@ export function AvatarMenu({
       <button
         type="button"
         className="avatar"
+        data-protected="any"
         aria-label="Your account"
         aria-haspopup="menu"
         aria-expanded={open}

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { lookStore, writeDeviceOverride, writeLookCache } from './look-store.ts'
+import { resetForgottenTheme } from '../data/theme.ts'
 import { useLook } from './use-look.ts'
 
 // Gate finding #10: `scripts/score look reset` bumps the server's reset generation; a browser that kept its own
@@ -42,6 +43,7 @@ function mount(body: unknown) {
 
 beforeEach(() => {
   window.localStorage.clear()
+  resetForgottenTheme()
   lookStore.reset()
 })
 afterEach(() => {
@@ -91,4 +93,49 @@ test('the reset also holds when storage is blocked: the override is dropped in m
   } finally {
     spies.forEach((spy) => spy.mockRestore())
   }
+})
+
+// Gate re-check finding #9: the host reset also clears the device's light/dark choice (`score.theme`), or a stored
+// "dark" overrides the shared mode the host just reset to "system".
+function ModeProbe() {
+  const look = useLook()
+  return <p data-testid="mode">{look.mode}</p>
+}
+function mountMode(body: unknown) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(Response.json(body))),
+  )
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ModeProbe />
+    </QueryClientProvider>,
+  )
+}
+
+test('a host reset clears the device’s light/dark choice too (storage and memory)', async () => {
+  window.localStorage.setItem('score.theme', 'dark')
+  mountMode(themes(1))
+  await waitFor(() => expect(screen.getByTestId('mode').textContent).toBe('system'))
+  expect(window.localStorage.getItem('score.theme')).toBeNull()
+})
+
+test('the colour-mode drop holds for this visit when storage refuses the removal', async () => {
+  window.localStorage.setItem('score.theme', 'dark')
+  const remove = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+    throw new Error('blocked')
+  })
+  try {
+    mountMode(themes(2))
+    await waitFor(() => expect(screen.getByTestId('mode').textContent).toBe('system'))
+  } finally {
+    remove.mockRestore()
+  }
+})
+
+test('a colour mode chosen after the reset (same generation) stays', async () => {
+  window.localStorage.setItem('score.look.generation', '1')
+  window.localStorage.setItem('score.theme', 'dark')
+  mountMode(themes(1))
+  await waitFor(() => expect(screen.getByTestId('mode').textContent).toBe('dark'))
 })

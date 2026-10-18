@@ -2242,7 +2242,9 @@ startup id move skips the row, until recovery succeeds. Other ids are unaffected
   non-negative integer, `0` until the first host reset). `scripts/score look reset` sets the shared look to Score /
   system **and increments `resetGeneration`** (setting `look.resetGeneration` in `meta`, no migration). A browser keeps the
   generation it last saw next to its device override and boot cache; when the server's number differs it drops that
-  override and cache (so the shared Score look shows), then stores the new number. A server without the field counts as `0`.
+  override and cache (so the shared Score look shows) **and its own light/dark choice (`score.theme`)**, in memory as
+  well as in storage (so the shared colour mode the host reset to applies), then stores the new number. A server without
+  the field counts as `0`.
 - `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`. The `etag` covers the
   whole package: manifest, CSS, licence files and, through a persisted write counter (migration 0076) that every write
   of the theme takes, every asset's bytes. A change to any of them, an identical re-import included, gives a new etag,

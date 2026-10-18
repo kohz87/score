@@ -199,8 +199,11 @@ export function AddCodingAgentForm({
     },
   })
   return (
+    // One decision: the runtime's message and warning, the permission and read-access context, the fields that carry
+    // consent and the button that commits it. Vetting any click or the submit measures all of them (data-decision).
     <form
       className="team-routine-form"
+      data-decision
       onSubmit={(event) => {
         event.preventDefault()
         create.mutate()
@@ -242,13 +245,13 @@ export function AddCodingAgentForm({
         </select>
       </label>
       {info && (
-        <p className="team-muted-strong">
+        <p className="team-muted-strong coding-add-context" data-protected="block">
           {info.message ?? (info.version ? `Version ${info.version}. ` : '')}
           {info.quota}
         </p>
       )}
       {info?.warning && (
-        <p className="team-muted-strong" role="note">
+        <p className="team-muted-strong coding-add-context" role="note" data-protected="block">
           {info.warning}
         </p>
       )}
@@ -353,7 +356,8 @@ export function AddCodingAgentForm({
       {create.error && <p role="alert">{create.error.message}</p>}
       <div className="team-file-actions">
         <button
-          className="team-primary"
+          className="team-primary coding-add-commit"
+          data-protected="inline-flex"
           disabled={
             create.isPending ||
             !usable ||
