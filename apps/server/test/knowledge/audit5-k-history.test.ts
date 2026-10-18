@@ -91,3 +91,41 @@ describe('S5-003 / S5-004 history status of a note save', () => {
     expect(noop.history).toBe('not_versioned')
   })
 })
+
+describe('C2 reading a note says what its history is', () => {
+  test('no git: versioned is false and history is git_unavailable', async () => {
+    const before = process.env.PATH
+    process.env.PATH = path.join(os.tmpdir(), 'score-no-git-here')
+    try {
+      h = await makeVault({})
+    } finally {
+      process.env.PATH = before
+    }
+    await h.vault.writeNote('a.md', { body: 'one', etag: null })
+    const note = await h.vault.readNote('a.md')
+    expect(note).toMatchObject({ versioned: false, history: 'git_unavailable' })
+  })
+
+  test('a save whose commit failed is still pending after a reload, until it is repaired', async () => {
+    h = await makeVault({ log: { warn: () => undefined } })
+    const first = await h.vault.writeNote('a.md', { body: 'one', etag: null })
+    expect(await h.vault.readNote('a.md')).toMatchObject({ versioned: true, history: 'unchanged' })
+    const lock = path.join(h.vaultDir, '.git', 'index.lock')
+    fs.writeFileSync(lock, '')
+    const failed = await h.vault.writeNote('a.md', { body: 'two', etag: first.etag })
+    expect(failed.history).toBe('failed')
+    expect(await h.vault.readNote('a.md')).toMatchObject({ versioned: true, history: 'failed' })
+    fs.rmSync(lock)
+    await h.vault.writeNote('a.md', { body: 'two', etag: failed.etag })
+    expect(await h.vault.readNote('a.md')).toMatchObject({ versioned: true, history: 'unchanged' })
+  })
+
+  test('an ignored, untracked note reads as not_versioned', async () => {
+    h = await makeVault({ files: { '.gitignore': 'private/\n' } })
+    await h.vault.writeNote('private/n.md', { body: 'x', etag: null })
+    expect(await h.vault.readNote('private/n.md')).toMatchObject({
+      versioned: false,
+      history: 'not_versioned',
+    })
+  })
+})

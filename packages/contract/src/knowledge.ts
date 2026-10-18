@@ -145,6 +145,12 @@ export const KnowledgeNoteSchema = z.object({
   lastAuthor: KnowledgeAuthorSchema.nullable(),
   /** False when the note's path is Git-ignored and untracked: saved, but never kept in history (decision 80). */
   versioned: z.boolean().default(true),
+  /**
+   * Where the note's current content stands in history, so the editor can show "Save to history again" after a reload:
+   * `failed` = the file differs from Git's last commit (a save's commit did not land), `git_unavailable`, `not_versioned`,
+   * else `unchanged` (already in history).
+   */
+  history: KnowledgeHistoryStatusSchema.default('unchanged'),
 })
 /** A note may be 8 MiB (PLAN 6.8: images are embedded as data URIs); the server counts bytes and answers 413. */
 export const KNOWLEDGE_NOTE_MAX_BYTES = 8 * 1024 * 1024
