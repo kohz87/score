@@ -1017,7 +1017,7 @@ async function putSnap(page: Page, id: string, name: string, etag: string | null
   return (await res.json()) as { etag: string }
 }
 
-test('Save as new refuses to pair one version’s settings with another’s picture and licence', async ({
+test('Save as new keeps one version whole: its settings with its own picture and licence', async ({
   page,
 }) => {
   test.setTimeout(120_000)
@@ -1042,40 +1042,89 @@ test('Save as new refuses to pair one version’s settings with another’s pict
     const fresh = await page.request.get(`/api/themes/e2e-snapa/assets/img/b.png?rev=${b.etag}`)
     expect(Buffer.from(await fresh.body()).equals(second)).toBe(true)
 
-    const puts: string[] = []
-    page.on('request', (request) => {
-      if (request.method() !== 'GET' && request.url().includes('/api/themes/'))
-        puts.push(`${request.method()} ${new URL(request.url()).pathname}`)
-    })
+    // The editor read its version's files when it opened the theme: the copy is that version, not a mixture.
     await page.getByLabel('Author').fill('Me')
     await page.getByRole('button', { name: 'Save as new…' }).click()
     await page.getByRole('dialog').getByLabel('Name').fill('E2E Snap copy')
     await page.getByRole('dialog').getByRole('button', { name: 'Save as new' }).click()
-    await expect(page.getByRole('alert')).toContainText(
-      'This theme changed while you were copying it. Reload and try again.',
+    await expect(page.getByRole('status').filter({ hasText: 'Saved “E2E Snap copy”' })).toBeVisible(
       { timeout: 20_000 },
     )
-    expect(puts).toEqual([])
-    expect((await page.request.get('/api/themes/e2e-snap-copy')).status()).toBe(404)
+    const copy = await (await page.request.get('/api/themes/e2e-snap-copy')).json()
+    expect(copy.manifest.author).toBe('Me')
+    const bytes = await page.request.get(
+      `/api/themes/e2e-snap-copy/assets/img/b.png?rev=${copy.etag}`,
+    )
+    expect(Buffer.from(await bytes.body()).equals(first)).toBe(true)
+    const zip = await readZip(
+      new Uint8Array(await (await page.request.get('/api/themes/e2e-snap-copy/export')).body()),
+    )
+    expect(new TextDecoder().decode(zip.get('LICENSE'))).toBe('licence of E2E Snap')
   } finally {
     await cleanUp(page)
   }
 })
 
-test('Start from and Export stop when the theme they copied changed meanwhile', async ({
+// L1 (1.8.1 verification, problem 4): the conflict banner promises "use Save as new to keep your version". The files
+// of the version on screen are read once, when the theme is opened, so that promise holds even when the other editor
+// replaced a picture or removed it.
+test('Save as new after a conflict keeps the picture and licence the editor was opened with', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  made.add('e2e-keep')
+  made.add('e2e-keep-copy')
+  try {
+    const first = makePng(40, 40, () => [255, 0, 0])
+    const a = await putSnap(page, 'e2e-keep', 'E2E Keep', null, first)
+    await openCustomizer(page, '/settings/look/customize/e2e-keep')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('E2E Keep')
+    // Another editor replaces the theme and drops the picture and the licence.
+    const gone = await page.request.put('/api/themes/e2e-keep', {
+      headers: web,
+      data: {
+        manifest: { format: 1, id: 'e2e-keep', name: 'E2E Keep elsewhere', version: '1.0.0' },
+        css: '',
+        etag: a.etag,
+        keep: [],
+        assets: {},
+      },
+    })
+    expect(gone.status()).toBe(200)
+    await page.getByLabel('Author').fill('Me')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText('changed somewhere else')
+    await page.getByRole('alert').getByRole('button', { name: 'Save as new…' }).click()
+    await page.getByRole('dialog').getByLabel('Name').fill('E2E Keep copy')
+    await page.getByRole('dialog').getByRole('button', { name: 'Save as new' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved “E2E Keep copy”' })).toBeVisible(
+      { timeout: 20_000 },
+    )
+    const copy = await (await page.request.get('/api/themes/e2e-keep-copy')).json()
+    expect(copy.assets).toEqual(['img/b.png'])
+    const bytes = await page.request.get(
+      `/api/themes/e2e-keep-copy/assets/img/b.png?rev=${copy.etag}`,
+    )
+    expect(Buffer.from(await bytes.body()).equals(first)).toBe(true)
+    const zip = await readZip(
+      new Uint8Array(await (await page.request.get('/api/themes/e2e-keep-copy/export')).body()),
+    )
+    expect(new TextDecoder().decode(zip.get('LICENSE'))).toBe('licence of E2E Keep')
+  } finally {
+    await cleanUp(page)
+  }
+})
+
+test('Start from and Export keep the version they copied when the theme changed meanwhile', async ({
   page,
 }) => {
   test.setTimeout(120_000)
   await pair(page)
   made.add('e2e-snapb')
   try {
-    const a = await putSnap(
-      page,
-      'e2e-snapb',
-      'E2E Snapb',
-      null,
-      makePng(40, 40, () => [255, 0, 0]),
-    )
+    const red = makePng(40, 40, () => [255, 0, 0])
+    const a = await putSnap(page, 'e2e-snapb', 'E2E Snapb', null, red)
     await openCustomizer(page)
     await tab(page, 'Theme').click()
     await page.getByLabel('Start from a theme').selectOption({ label: 'E2E Snapb' })
@@ -1089,24 +1138,60 @@ test('Start from and Export stop when the theme they copied changed meanwhile', 
       a.etag,
       makePng(40, 40, () => [0, 0, 255]),
     )
-    const downloads: string[] = []
-    page.on('download', (download) => downloads.push(download.suggestedFilename()))
+    // The copy was read whole when it was started: the export is that version, picture included.
+    const exported = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Export', exact: true }).click()
-    await expect(page.getByRole('alert')).toContainText(
-      'This theme changed while you were copying it. Reload and try again.',
-      { timeout: 20_000 },
-    )
-    expect(downloads).toEqual([])
-    // A copy started afterwards reads the new version whole.
-    await page.getByLabel('Start from a theme').selectOption({ label: 'E2E Snapb' })
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Started from “E2E Snapb”' }),
-    ).toBeVisible()
-    await page.getByRole('button', { name: 'Export', exact: true }).click()
+    const download = await exported
     await expect(page.getByRole('status').filter({ hasText: 'Exported' })).toBeVisible({
       timeout: 20_000,
     })
-    expect(downloads.length).toBe(1)
+    const zip = await readZip(new Uint8Array(readFileSync((await download.path())!)))
+    expect(Buffer.from(zip.get('assets/img/b.png')!).equals(red)).toBe(true)
+    expect(new TextDecoder().decode(zip.get('LICENSE'))).toBe('licence of E2E Snapb')
+    // A copy started afterwards reads the new version whole.
+    await page.getByLabel('Start from a theme').selectOption({ label: 'E2E Snapb' })
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('E2E Snapb elsewhere copy')
+    const again = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export', exact: true }).click()
+    const second = await readZip(new Uint8Array(readFileSync((await (await again).path())!)))
+    expect(Buffer.from(second.get('assets/img/b.png')!).equals(red)).toBe(false)
+    expect(new TextDecoder().decode(second.get('LICENSE'))).toBe('licence of E2E Snapb elsewhere')
+  } finally {
+    await cleanUp(page)
+  }
+})
+
+// L1: a theme replaced while the editor reads its files (409) is read again once; a second miss is said plainly.
+test('opening a theme that changes under the read reloads it once, then says so', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  made.add('e2e-open')
+  try {
+    await putSnap(
+      page,
+      'e2e-open',
+      'E2E Open',
+      null,
+      makePng(40, 40, () => [255, 0, 0]),
+    )
+    let refuse = 1
+    await page.route('**/api/themes/e2e-open/assets/**', (route) => {
+      if (refuse === 0) return route.fallback()
+      refuse--
+      return route.fulfill({
+        status: 409,
+        json: { error: { code: 'etag_mismatch', message: 'changed' } },
+      })
+    })
+    await openCustomizer(page, '/settings/look/customize/e2e-open')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('E2E Open')
+    refuse = 2
+    await page.goto('/settings/look/customize/e2e-open')
+    await expect(page.getByRole('alert')).toContainText(
+      'This theme changed while you were copying it. Reload and try again.',
+    )
   } finally {
     await cleanUp(page)
   }

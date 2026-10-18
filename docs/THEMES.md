@@ -43,6 +43,11 @@ LICENSE, OFL.txt       optional: licence texts for what you ship (see “Licence
 - Import a package with `POST /api/themes/import` (the Customizer adds the buttons for it in Settings › Look). It is
   stored but not switched on. An id that
   belongs to a built-in theme (`score`, `paper`, `night`, `dense`, `harbour`, `ledger`, `studio`) is refused.
+- The Customizer reads a theme’s pictures, fonts and licence texts once, when it opens or copies the theme, and keeps
+  them in memory (a package is at most 5 MB). “Save as new”, “Export” and a save that rebuilds the package use those
+  bytes, so if another editor replaces the theme or removes a picture meanwhile, the save of your version is refused as
+  changed elsewhere, and “Save as new” still keeps your version whole, picture and licence included. If the theme
+  changes while it is being opened, the Customizer reads it again once and otherwise says so.
 - An import, a replace and a delete are all-or-nothing, also across a crash or power cut: after a restart the theme is
   either the old one or the new one (a delete that was cut off is undone; delete it again). Score syncs the files and
   its note to disk before it moves folders, so this holds on a disk and file system that honour `fsync`.

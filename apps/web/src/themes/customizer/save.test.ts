@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { emptyManifest, setBackgroundImage, setCss, type Draft } from './draft.ts'
 import { buildFromDraft, filesForSave, saveRoute } from './save.ts'
-import { THEME_CHANGED_TEXT, ThemeChangedError } from './snapshot.ts'
+import { readSnapshot, THEME_CHANGED_TEXT, ThemeChangedError } from './snapshot.ts'
 
 const draft = (): Draft => ({ manifest: emptyManifest('mine', 'Mine'), css: '', uploads: {} })
 const never = () => Promise.reject(new Error('no fetch expected'))
@@ -227,5 +227,76 @@ describe('one coherent snapshot', () => {
       },
     )
     expect(built).toEqual({ ok: false, problems: [THEME_CHANGED_TEXT], changed: true })
+  })
+})
+
+// L1 (1.8.1 verification, problem 4): the files read when the draft was opened are what "Save as new" and "Export" use.
+describe('the snapshot read at open', () => {
+  const css = '.a{background:url(asset:img/bg.png)}'
+  const gone = async () => {
+    throw new ThemeChangedError() // the theme was replaced: its old revision is no longer served
+  }
+
+  it('builds from its own files after the theme was replaced or lost the file', async () => {
+    const d = setCss(draft(), css)
+    const built = await buildFromDraft(
+      d,
+      d.manifest,
+      {
+        id: 'src',
+        assets: ['img/bg.png'],
+        rev: 'a',
+        snapshot: { assets: { 'img/bg.png': Uint8Array.from([1]) }, licenses: { LICENSE: 'A' } },
+      },
+      gone,
+      gone,
+    )
+    expect(built.ok && [...built.pkg.assets.values()].map((b) => b[0])).toEqual([1])
+    expect(built.ok && built.pkg.licenses).toEqual({ LICENSE: 'A' })
+  })
+
+  it('still prefers a file added in this session, and a snapshot without licences has none', async () => {
+    const d = { ...setCss(draft(), css), uploads: { 'img/bg.png': Uint8Array.from([9]) } }
+    const built = await buildFromDraft(
+      d,
+      d.manifest,
+      {
+        id: 'src',
+        assets: ['img/bg.png'],
+        rev: 'a',
+        licenseFiles: ['LICENSE'],
+        snapshot: { assets: { 'img/bg.png': Uint8Array.from([1]) }, licenses: {} },
+      },
+      gone,
+      gone,
+    )
+    expect(built.ok && [...built.pkg.assets.values()].map((b) => b[0])).toEqual([9])
+    expect(built.ok && built.pkg.licenses).toEqual({})
+  })
+
+  it('readSnapshot reads every file and licence at the revision, and stops when it is no longer current', async () => {
+    const seen: string[] = []
+    const snap = await readSnapshot(
+      'src',
+      'r1',
+      { assets: ['img/a.png', 'img/b.png'], licenseFiles: ['LICENSE'] },
+      async (_id, path, rev) => {
+        seen.push(`${path}@${rev}`)
+        return Uint8Array.from([path.length])
+      },
+      async (_id, rev) => ({ LICENSE: `licence@${rev}` }),
+    )
+    expect(seen.sort()).toEqual(['img/a.png@r1', 'img/b.png@r1'])
+    expect(snap.licenses).toEqual({ LICENSE: 'licence@r1' })
+    expect(Object.keys(snap.assets).sort()).toEqual(['img/a.png', 'img/b.png'])
+    await expect(
+      readSnapshot('src', 'r1', { assets: ['img/a.png'], licenseFiles: [] }, gone, gone),
+    ).rejects.toBeInstanceOf(ThemeChangedError)
+    const none = vi.fn()
+    expect(await readSnapshot('src', 'r1', { assets: [], licenseFiles: [] }, none, none)).toEqual({
+      assets: {},
+      licenses: {},
+    })
+    expect(none).not.toHaveBeenCalled()
   })
 })
