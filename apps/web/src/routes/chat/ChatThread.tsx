@@ -337,7 +337,12 @@ export function ChatThread({
   const [params] = useSearchParams()
   const seek = params.get('message')
   const seekRef = useRef<{ id: string | null; done: string | null }>({ id: seek, done: null })
-  const position = useRef({ height: 0, pinned: !seek, prepend: false })
+  const position = useRef({ height: 0, top: 0, pinned: !seek, prepend: false })
+  // When the person last used the wheel, touch, keyboard or pointer on the thread.
+  const intent = useRef(-Infinity)
+  const markIntent = useCallback(() => {
+    intent.current = performance.now()
+  }, [])
   const onPrepend = useCallback(() => {
     position.current.prepend = true
     if (document.activeElement?.classList.contains('chat-history')) {
@@ -366,23 +371,15 @@ export function ChatThread({
   }, [])
   // The thread's size changes after it was pinned to its end: the composer grows (the context ring and pickers settle a
   // moment after the first paint) or a message grows (code highlighting, fonts, images). Neither fires a scroll event,
-  // so the last lines would stay hidden: follow the end while the person is at the end. A layout that flips back and
-  // forth inside one frame can clamp the offset without any notification, so the end is checked again for a few frames.
+  // so the last lines would stay hidden: follow the end while the person is at the end.
   const hasRoom = Boolean(room)
   useEffect(() => {
     const element = viewport.current
     if (!hasRoom || !element || typeof ResizeObserver === 'undefined') return
-    let frame = 0
-    const settle = (frames: number) => {
-      if (!position.current.pinned) return
-      if (element.scrollHeight - element.scrollTop - element.clientHeight > 1)
-        element.scrollTop = element.scrollHeight
-      position.current.height = element.scrollHeight
-      if (frames > 1) frame = requestAnimationFrame(() => settle(frames - 1))
-    }
     const follow = () => {
-      cancelAnimationFrame(frame)
-      settle(8)
+      if (!position.current.pinned) return
+      element.scrollTop = element.scrollHeight
+      position.current.height = element.scrollHeight
     }
     const resize = new ResizeObserver(follow)
     const watch = () => {
@@ -393,7 +390,6 @@ export function ChatThread({
     const children = new MutationObserver(watch)
     children.observe(element, { childList: true })
     return () => {
-      cancelAnimationFrame(frame)
       resize.disconnect()
       children.disconnect()
     }
@@ -508,11 +504,24 @@ export function ChatThread({
           tabIndex={0}
           role="region"
           aria-label="Message history"
+          onWheel={markIntent}
+          onTouchMove={markIntent}
+          onPointerDown={markIntent}
+          onKeyDown={markIntent}
           onScroll={() => {
             const element = viewport.current!
-            position.current.pinned =
-              element.scrollHeight - element.scrollTop - element.clientHeight < 80
-            position.current.height = element.scrollHeight
+            const state = position.current
+            const distance = element.scrollHeight - element.scrollTop - element.clientHeight
+            // A layout that flips back and forth inside one frame (the composer settling) clamps the offset up the
+            // thread without any resize notification. Nobody touched the thread and it is still next to its end:
+            // that was the layout, not the person, so stay at the end.
+            const moved =
+              state.pinned && distance > 1 && distance < 80 && element.scrollTop < state.top
+            if (moved && performance.now() - intent.current > 600)
+              element.scrollTop = element.scrollHeight
+            else state.pinned = distance < 80
+            state.top = element.scrollTop
+            state.height = element.scrollHeight
           }}
         >
           {orchestration &&
