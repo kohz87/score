@@ -16,8 +16,14 @@ async function leftoverAgents(dir: string): Promise<string[]> {
       headers: { cookie: cookies.map((c) => `${c.name}=${c.value}`).join('; ') },
     })
     if (!response.ok) return []
-    const body = (await response.json()) as { items?: { id: string }[] }
-    return (body.items ?? []).map((agent) => agent.id).filter((id) => !SEEDED_AGENTS.has(id))
+    const body = (await response.json()) as {
+      items?: { id: string; lifecycle?: { state?: string } }[]
+    }
+    // A removed agent stays in the list (its history is kept) but is gone from the team.
+    return (body.items ?? [])
+      .filter((agent) => agent.lifecycle?.state !== 'removed')
+      .map((agent) => agent.id)
+      .filter((id) => !SEEDED_AGENTS.has(id))
   } catch {
     return []
   }
