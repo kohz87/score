@@ -53,6 +53,17 @@ function textContrast(element: HTMLElement): number | null {
   return worstContrast(text, stack)
 }
 
+// Score's own overlays (the composer, the menu drawer, toasts) are fixed or sticky and sit over scrolled content by
+// design; where the content ends up under them depends on the theme's type and spacing, so being under one is not
+// "covered". A theme can't make anything fixed or sticky (the sanitiser drops it), so this is never a theme's doing.
+function isFloatingOverlay(element: Element): boolean {
+  for (const node of chain(element)) {
+    const position = getComputedStyle(node).position
+    if (position === 'fixed' || position === 'sticky') return true
+  }
+  return false
+}
+
 function snapshot(element: HTMLElement): Snapshot {
   const rects = element.getClientRects()
   const rendered = rects.length > 0
@@ -78,7 +89,7 @@ function snapshot(element: HTMLElement): Snapshot {
     const top = document.elementFromPoint(x, y)
     // Something else on top of the centre of a visible surface (a modal is not "something else": it has its own
     // top layer, so the surface is covered in both measurements and does not count).
-    covered = !!top && !element.contains(top) && !top.contains(element)
+    covered = !!top && !element.contains(top) && !top.contains(element) && !isFloatingOverlay(top)
   }
   return {
     rendered,
@@ -325,7 +336,12 @@ export function watchProtectedSurfaces(
   let frame = 0
   let timer = 0
   let done = false
-  const check = () => {
+  // A problem about where something is (covered, pushed off screen, shrunk) is confirmed once more a moment later
+  // before the theme is dropped: a resize or a list measuring itself can overlap things for a frame. The others are
+  // acted on at once (measuring lifts the theme's sheets, which restarts a theme animation, so a second look at a faded
+  // page would see it unfaded). A decision is vetted at once, without waiting (decisionProblem).
+  const transient = /is (covered|pushed off screen|shrunk)$/
+  const confirm = () => {
     frame = 0
     if (done || document.documentElement.getAttribute('data-look') !== 'custom') return
     const problem = measure()
@@ -333,6 +349,21 @@ export function watchProtectedSurfaces(
       done = true
       onViolation(problem)
     }
+  }
+  const check = () => {
+    frame = 0
+    if (done || document.documentElement.getAttribute('data-look') !== 'custom') return
+    const problem = measure()
+    if (!problem) return
+    if (!transient.test(problem)) {
+      done = true
+      onViolation(problem)
+      return
+    }
+    timer = window.setTimeout(() => {
+      timer = 0
+      frame = requestAnimationFrame(confirm)
+    }, 250)
   }
   const schedule = () => {
     if (done || frame || timer) return

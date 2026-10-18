@@ -73,10 +73,42 @@ describe('watchProtectedSurfaces (gate #6)', () => {
     vi.advanceTimersByTime(500)
     answer = 'the card is faded'
     document.getElementById('go')!.dispatchEvent(new Event('pointerover', { bubbles: true }))
-    vi.advanceTimersByTime(500)
+    vi.advanceTimersByTime(1000)
     document.getElementById('go')!.dispatchEvent(new Event('pointerover', { bubbles: true }))
-    vi.advanceTimersByTime(500)
+    vi.advanceTimersByTime(1000)
     expect(seen).toEqual(['the card is faded'])
+    stop()
+  })
+
+  test('a problem about position that is gone a moment later (a layout still settling) is not reported', () => {
+    let answer: string | null = null
+    const seen: string[] = []
+    const stop = watchProtectedSurfaces((what) => seen.push(what), {
+      check: () => {
+        const now = answer
+        answer = null // only the first look sees it
+        return now
+      },
+    })
+    vi.advanceTimersByTime(500)
+    answer = 'a span is covered'
+    document.getElementById('go')!.dispatchEvent(new Event('pointerover', { bubbles: true }))
+    vi.advanceTimersByTime(2000)
+    expect(seen).toEqual([])
+    stop()
+  })
+
+  test('a faded page is reported at once, not confirmed (measuring would restart a theme animation)', () => {
+    let calls = 0
+    const seen: string[] = []
+    const stop = watchProtectedSurfaces((what) => seen.push(what), {
+      check: () => (++calls > 1 ? 'the card is faded' : null),
+    })
+    vi.advanceTimersByTime(500)
+    document.getElementById('go')!.dispatchEvent(new Event('animationend', { bubbles: true }))
+    vi.advanceTimersByTime(300)
+    expect(seen).toEqual(['the card is faded'])
+    expect(calls).toBe(2)
     stop()
   })
 
