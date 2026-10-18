@@ -295,6 +295,7 @@ export class ThemeStore {
       manifest: theme.manifest,
       css: theme.css,
       assets: this.assets(id),
+      licenseFiles: Object.keys(theme.licenses).sort(),
       etag: themeEtag(theme),
     }
   }

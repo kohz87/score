@@ -7,6 +7,7 @@ import {
   ThemeIdSchema,
   ThemeImportResultSchema,
   ThemeListSchema,
+  ThemeRevSchema,
   ThemeSaveSchema,
 } from '@score/contract'
 import { humanGuard } from '../auth/human.ts'
@@ -25,7 +26,7 @@ import {
   buildThemePackage,
   readThemePackage,
 } from '../themes/package.ts'
-import { ThemeLockedError, ThemeStore } from '../themes/store.ts'
+import { ThemeLockedError, ThemeStore, themeEtag } from '../themes/store.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 const IdParams = z.object({ id: ThemeIdSchema })
@@ -35,6 +36,10 @@ const AssetParams = z.object({
     .string()
     .regex(/^(?:fonts|img)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(?:woff2|png|jpg|jpeg|webp|avif)$/),
 })
+// File URLs name the package revision they were made for (contract § 16, J1). Assets require it; the stylesheet and the
+// export accept it, and a revision that isn't current is refused whichever route it arrives on.
+const RevQuery = z.object({ rev: ThemeRevSchema })
+const OptionalRevQuery = z.object({ rev: ThemeRevSchema.optional() })
 const ImportQuery = z.object({ replace: z.enum(['1']).optional() })
 
 const notFound = () => new HttpError(404, 'not_found', 'Couldn’t find that theme.')
@@ -47,6 +52,18 @@ const unlessLocked = <T>(work: () => T): T => {
       throw new HttpError(409, 'theme_recovering', error.message, { id: error.themeId })
     throw error
   }
+}
+/** `409 etag_mismatch` when `rev` names an older (or any other) package revision than the one stored now. */
+function assertCurrentRevision(theme: NonNullable<ReturnType<ThemeStore['get']>>, rev?: string) {
+  const current = themeEtag(theme)
+  if (rev !== undefined && rev !== current)
+    throw new HttpError(
+      409,
+      'etag_mismatch',
+      'This theme changed since you loaded it. Reload it and try again.',
+      { etag: current },
+    )
+  return current
 }
 const rejected = (reasons: string[]) =>
   new HttpError(422, 'theme_rejected', 'That theme can’t be used: ' + reasons[0], { reasons })
@@ -83,6 +100,24 @@ export function registerThemeRoutes(
     queue = run.catch(() => undefined)
     return run
   }
+  // The theme that is the shared look was saved or replaced: other open devices refetch it (contract § 16, X13).
+  // Announced after the write has committed; a failed write never gets here.
+  const announceIfActive = async (id: string) => {
+    if (!ingest || db.read((sqlite) => readLook(sqlite)).activeTheme !== id) return
+    await ingest.submit({
+      source: 'look',
+      identity: randomUUID(),
+      apply: ({ sqlite }) => {
+        const look = readLook(sqlite)
+        return [
+          {
+            type: 'look.changed',
+            data: { ...look, resetGeneration: readResetGeneration(sqlite) },
+          },
+        ]
+      },
+    })
+  }
   const detail = (id: string) => ThemeDetailSchema.parse(unlessLocked(() => store.detail(id)))
 
   // A custom save that carries files (C4 #2): the theme it would end up as is built in memory and read back by the very
@@ -115,7 +150,9 @@ export function registerThemeRoutes(
     unlessLocked(() =>
       store.storeImported(pkg.manifest, pkg.css, pkg.assets, pkg.licenses, 'custom'),
     )
-    return detail(id)
+    const saved = detail(id)
+    await announceIfActive(id)
+    return saved
   }
 
   app.get('/api/themes', guard, async () => {
@@ -139,14 +176,16 @@ export function registerThemeRoutes(
 
   app.get('/api/themes/:id/style.css', guard, async (request, reply) => {
     const { id } = IdParams.parse(request.params)
+    const { rev } = OptionalRevQuery.parse(request.query)
     const theme = store.get(id)
     if (!theme) throw notFound()
     unlessLocked(() => store.assertReadable(id))
+    const current = assertCurrentRevision(theme, rev)
     return reply
       .header('Content-Type', 'text/css; charset=utf-8')
       .header('X-Content-Type-Options', 'nosniff')
       .header('Cache-Control', 'private, no-cache')
-      .send(rewriteAssetUrls(theme.css, id))
+      .send(rewriteAssetUrls(theme.css, id, current))
   })
 
   app.get('/api/themes/:id/assets/*', guard, async (request, reply) => {
@@ -154,8 +193,11 @@ export function registerThemeRoutes(
     if (!parsed.success) throw notFound()
     const { id, '*': path } = parsed.data
     // A folder left on disk for an id with no row is not a theme (K2 X14).
-    if (!store.exists(id)) throw notFound()
+    const theme = store.get(id)
+    if (!theme) throw notFound()
     unlessLocked(() => store.assertReadable(id))
+    // Row and folder are read in this one synchronous step, so the revision checked is the one whose bytes are sent.
+    assertCurrentRevision(theme, RevQuery.parse(request.query).rev)
     // One safe reader: a symlink anywhere on the path, or anything but a regular file, is not served.
     const bytes = store.readAsset(id, path)
     if (!bytes) throw notFound()
@@ -190,7 +232,9 @@ export function registerThemeRoutes(
       if (body.assets !== undefined || body.keep !== undefined || body.licenses !== undefined)
         return saveWithFiles(id, body)
       unlessLocked(() => store.saveCustom(body.manifest, body.css))
-      return detail(id)
+      const saved = detail(id)
+      await announceIfActive(id)
+      return saved
     })
   })
 
@@ -248,7 +292,9 @@ export function registerThemeRoutes(
           if (existing && (replace === undefined || existing.source === 'builtin'))
             throw new HttpError(409, 'theme_exists', 'A theme with this id is already installed.')
           unlessLocked(() => store.storeImported(pkg.manifest, pkg.css, pkg.assets, pkg.licenses))
-          // Replacing a theme that is the shared look keeps it active: the row changed, not the choice.
+          // Replacing a theme that is the shared look keeps it active: the row changed, not the choice. Other open
+          // devices are told, so they refetch it (X13).
+          await announceIfActive(pkg.manifest.id)
           return ThemeImportResultSchema.parse({
             theme: store.summary(store.get(pkg.manifest.id)!),
             report: { dropped: [] },
@@ -263,9 +309,11 @@ export function registerThemeRoutes(
 
   app.get('/api/themes/:id/export', guard, async (request, reply) => {
     const { id } = IdParams.parse(request.params)
+    const { rev } = OptionalRevQuery.parse(request.query)
     const theme = store.get(id)
     if (!theme) throw notFound()
     unlessLocked(() => store.assertReadable(id))
+    assertCurrentRevision(theme, rev)
     const assets = new Map<string, Buffer>()
     for (const path of store.assets(id)) {
       const bytes = store.readAsset(id, path)

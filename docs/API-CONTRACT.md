@@ -2252,12 +2252,26 @@ it and still serves the other themes.
   override and cache (so the shared Score look shows) **and its own light/dark choice (`score.theme`)**, in memory as
   well as in storage (so the shared colour mode the host reset to applies), then stores the new number. A server without
   the field counts as `0`.
-- `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`. The `etag` covers the
+- `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `licenseFiles` (the names of the package's licence files, J1), `etag`). `404 not_found`. The `etag` covers the
   whole package: manifest, CSS, licence files and, through a persisted write counter (migration 0076) that every write
   of the theme takes, every asset's bytes. A change to any of them, an identical re-import included, gives a new etag,
   and so does deleting and re-creating the theme.
-- `GET /api/themes/:id/style.css` → `text/css` with `asset:` references rewritten to the asset URLs below.
-- `GET /api/themes/:id/assets/<fonts|img>/<file>` → the file with its exact type, `nosniff`, `cache-control: private`.
+- **Revision-bound files (J1, fourth-gate finding 2; 1.8.1).** The package `etag` above is the package's **revision**.
+  A file URL names the revision its client holds: `/api/themes/:id/assets/<fonts|img>/<file>?rev=<etag>`
+  (`themeAssetUrl` in `packages/contract/src/themes.ts` builds it; the engine, the sanitiser, the Customizer and the
+  server's `style.css` rewrite all use that one function). The server **enforces** it: a request whose `rev` is not the
+  theme's current etag is `409 etag_mismatch` (`details.etag` = the current etag), never the newer bytes, so an editor
+  holding an old manifest, stylesheet or etag can't read a later replacement's file at the same path, and a copy can't
+  pair one version's manifest and CSS with another's files. Built-in themes are constants, so their etag is fixed for a
+  server build; their URLs carry it like any other. The check runs after `404` (unknown theme or file name) and
+  `409 theme_recovering`, and in the same synchronous step as the read of the file.
+- `GET /api/themes/:id/style.css[?rev=<etag>]` → `text/css` with `asset:` references rewritten to the asset URLs below
+  (each carries `?rev=` of the etag this response was made from). `rev` is optional here; when present and not
+  current it is `409 etag_mismatch`.
+- `GET /api/themes/:id/assets/<fonts|img>/<file>?rev=<etag>` → the file with its exact type, `nosniff`,
+  `cache-control: private`. **`rev` is required** (nothing depends on unversioned asset URLs): without it, or with
+  characters outside `[A-Za-z0-9_-]` (1–128), `400 bad_request`; a well-formed one that is not current is `409 etag_mismatch` as above. A page that kept a cached look from before 1.8.1 (URLs without
+  `rev`) shows the theme's fallback fonts and pictures until the theme is loaded again, which rewrites the cache.
   `404` for an id with no theme row (a folder left on disk is not a theme), and for any path with a symlink on any step
   of it, folders included (K2 X4); detail, serving and export all read through one reader that applies that rule.
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
@@ -2332,7 +2346,20 @@ it and still serves the other themes.
   answers `409 etag_mismatch` (`details.etag` = the current etag, `null` when the theme is gone) when it differs, leaving
   the theme unchanged. Without the header replace works as before (manual imports). The Customizer always sends it;
   `422 theme_rejected { reasons[] }` (bad manifest, newer `format`, bad paths, sizes, file types, CSS checks).
-- `GET /api/themes/:id/export` → `application/zip` (the same layout as import).
+- `GET /api/themes/:id/export[?rev=<etag>]` → `application/zip` (the same layout as import). Licence texts are not part
+  of `ThemeDetail`; the Customizer reads them from the export and **always sends `rev`**, so a licence is never paired
+  with another version's manifest: a stale `rev` is `409 etag_mismatch`. Without `rev` (a plain download link) the
+  current package is returned.
+- **Saving the theme in use tells the other devices (X13).** A successful `PUT /api/themes/:id` or `POST
+  /api/themes/import?replace=1` of the theme that is the **shared** look (`look.activeTheme`) emits `look.changed
+  { activeTheme, mode, resetGeneration }` once the write has committed, so every open device refetches the theme
+  (`themesKey`) and re-applies it; the asset URLs it then builds carry the new revision, so a picture or font replaced at
+  the same path is fetched again instead of served from a cache. A failed write, or a theme that isn't the shared look,
+  emits nothing (a device that wears it as its own choice refetches on focus).
+- **Copies are one snapshot (J1).** The Customizer remembers the etag of the `ThemeDetail` a draft was opened or copied
+  from (Start from, Save as new, export of a draft, a save that keeps files) and reads every file and licence it pairs
+  with that draft's manifest and CSS at exactly that `rev`. Any `409 etag_mismatch` on those reads stops the operation
+  with “This theme changed while you were copying it. Reload and try again.”; nothing is saved or downloaded.
 - `DELETE /api/themes/:id` → `204`; `409 builtin_theme`, `409 theme_active`. Journaled like a replace (note, folder moved
   aside, row and note removed together, then the old folder deleted): a stop leaves the theme whole or gone, and a start
   deletes theme folders that have no row. Swap and delete commits are flushed to disk before the next file step

@@ -4,10 +4,12 @@ import {
   type ThemeDetail,
   type ThemeImportResult,
   type ThemeManifest,
+  themeAssetUrl,
 } from '@score/contract'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { LICENSE_FILES } from './package.ts'
 import type { SaveFiles } from './save.ts'
+import { ThemeChangedError } from './snapshot.ts'
 import { readZip } from './zip.ts'
 
 // The theme API the Customizer uses (contract §16) and nothing else. Failures are put into words here.
@@ -47,10 +49,20 @@ export async function installThemeZip(
   )
 }
 
-export async function fetchThemeAsset(id: string, path: string): Promise<Uint8Array> {
-  const response = await fetch(`/api/themes/${encodeURIComponent(id)}/assets/${path}`, {
+/**
+ * A file of an installed theme at the revision the draft was taken from. A theme replaced since then answers 409, which
+ * stops the copy (ThemeChangedError) instead of delivering the newer file.
+ */
+export async function fetchThemeAsset(
+  id: string,
+  path: string,
+  rev: string | null,
+): Promise<Uint8Array> {
+  if (!rev) throw new Error(`Couldn’t read ${path}`)
+  const response = await fetch(themeAssetUrl(encodeURIComponent(id), path, rev), {
     credentials: 'same-origin',
   })
+  if (response.status === 409) throw new ThemeChangedError()
   if (!response.ok) throw new Error(`Couldn’t read ${path}`)
   return new Uint8Array(await response.arrayBuffer())
 }
@@ -60,14 +72,16 @@ export type SaveProblem = {
   text: string
 }
 
+/** The theme was saved by someone else after this editor opened it (a stale etag, or a stale file read). */
+export const CHANGED_ELSEWHERE: SaveProblem = {
+  kind: 'conflict',
+  text: 'This theme was changed somewhere else (another tab or device) after you opened it. Reload it to see the latest, or use Save as new to keep your version.',
+}
+
 /** What went wrong, and what to do next, without codes. */
 export function describeSaveError(error: unknown): SaveProblem {
   if (error instanceof ApiError) {
-    if (error.code === 'etag_mismatch')
-      return {
-        kind: 'conflict',
-        text: 'This theme was changed somewhere else (another tab or device) after you opened it. Reload it to see the latest, or use Save as new to keep your version.',
-      }
+    if (error.code === 'etag_mismatch') return CHANGED_ELSEWHERE
     if (error.code === 'builtin_theme')
       return {
         kind: 'locked',
@@ -105,10 +119,15 @@ export function describeSaveError(error: unknown): SaveProblem {
 }
 
 /** The licence texts of a theme, read from its export (they aren't part of its detail). */
-export async function fetchThemeLicenses(id: string): Promise<Record<string, string>> {
-  const response = await fetch(`/api/themes/${encodeURIComponent(id)}/export`, {
+export async function fetchThemeLicenses(
+  id: string,
+  rev: string | null,
+): Promise<Record<string, string>> {
+  if (!rev) throw new Error('export')
+  const response = await fetch(`/api/themes/${encodeURIComponent(id)}/export?rev=${rev}`, {
     credentials: 'same-origin',
   })
+  if (response.status === 409) throw new ThemeChangedError()
   if (!response.ok) throw new Error('export')
   const files = await readZip(new Uint8Array(await response.arrayBuffer()))
   const out: Record<string, string> = {}

@@ -117,6 +117,9 @@ const save = (id: string, etag: string | null, css = '', extra: object = {}) =>
     css,
     etag,
   })
+/** A theme file URL bound to the theme's current revision (contract § 16, J1). */
+const fileUrl = async (id: string, path: string) =>
+  `/api/themes/${id}/${path}?rev=${ThemeDetailSchema.parse((await call('GET', `/api/themes/${id}`)).json()).etag}`
 const reasons = (res: { json(): unknown }) =>
   (
     res.json() as { error: { code: string; details: { reasons: string[] } } }
@@ -194,7 +197,8 @@ test('style.css rewrites asset: references and is served as nosniff text/css', a
   expect(res.statusCode).toBe(200)
   expect(res.headers['content-type']).toBe('text/css; charset=utf-8')
   expect(res.headers['x-content-type-options']).toBe('nosniff')
-  expect(res.body).toBe('.a{background:url(/api/themes/seaside/assets/img/a.png)}')
+  const rev = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json()).etag
+  expect(res.body).toBe(`.a{background:url(/api/themes/seaside/assets/img/a.png?rev=${rev})}`)
   expect((await call('GET', '/api/themes/nope/style.css')).statusCode).toBe(404)
   expect((await call('GET', '/api/themes/score/style.css')).body).toBe('')
 })
@@ -211,7 +215,7 @@ test('assets are served with their exact type, nosniff, inline and private', asy
   for (const [name, [data]] of Object.entries(bytes)) entries[name] = data
   expect((await upload(await zipOf(entries))).statusCode).toBe(201)
   for (const [name, [data, type]] of Object.entries(bytes)) {
-    const res = await call('GET', `/api/themes/seaside/${name}`)
+    const res = await call('GET', await fileUrl('seaside', name))
     expect(res.statusCode, name).toBe(200)
     expect(res.headers['content-type']).toBe(type)
     expect(res.headers['x-content-type-options']).toBe('nosniff')
@@ -233,7 +237,7 @@ test('assets: unknown files, odd paths and a symlink planted on disk are 404', a
     '/api/themes/seaside/assets/',
     '/api/themes/nope/assets/img/a.png',
   ]) {
-    const res = await call('GET', url)
+    const res = await call('GET', `${url}?rev=${'a'.repeat(64)}`)
     expect(res.statusCode, url).toBeGreaterThanOrEqual(400)
     expect(res.statusCode, url).toBeLessThan(500)
   }
@@ -241,7 +245,7 @@ test('assets: unknown files, odd paths and a symlink planted on disk are 404', a
   writeFileSync(target, PNG)
   const link = join(dir, 'themes/seaside/assets/img/link.png')
   symlinkSync(target, link)
-  expect((await call('GET', '/api/themes/seaside/assets/img/link.png')).statusCode).toBe(404)
+  expect((await call('GET', await fileUrl('seaside', 'assets/img/link.png'))).statusCode).toBe(404)
   unlinkSync(link)
 })
 
@@ -250,8 +254,11 @@ test('assets: a symlinked asset folder is neither listed, served nor exported (K
   const outside = join(dir, 'outside')
   renameSync(join(dir, 'themes/seaside/assets/img'), outside)
   symlinkSync(outside, join(dir, 'themes/seaside/assets/img'))
-  expect((await call('GET', '/api/themes/seaside/assets/img/a.png')).statusCode).toBe(404)
   const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  // With the current revision (J1), so only the symlink rule can refuse it.
+  expect(
+    (await call('GET', `/api/themes/seaside/assets/img/a.png?rev=${detail.etag}`)).statusCode,
+  ).toBe(404)
   expect(detail.assets.filter((path) => path.startsWith('img/'))).toEqual([])
   const exported = await call('GET', '/api/themes/seaside/export')
   expect(exported.statusCode).toBe(200)
@@ -406,7 +413,7 @@ test('an id with an unsettled swap note answers 409 theme_recovering until it is
 // Third gate finding 4: package reads of an id with an unsettled note are refused, never mixed.
 test('detail, style.css, assets and export answer 409 theme_recovering while a note is unsettled', async () => {
   await upload(await fullPackage())
-  const asset = '/api/themes/seaside/assets/img/a.png'
+  const asset = await fileUrl('seaside', 'assets/img/a.png')
   expect((await call('GET', asset)).statusCode).toBe(200)
   db.sqlite
     .prepare(
@@ -730,7 +737,7 @@ test('PUT can add assets and licence files to a custom theme; they are served an
   const first = ThemeDetailSchema.parse(res.json())
   expect(first.summary.source).toBe('custom')
   expect(first.assets).toEqual(['fonts/f.woff2', 'img/a.png'])
-  const asset = await call('GET', '/api/themes/mine/assets/img/a.png')
+  const asset = await call('GET', await fileUrl('mine', 'assets/img/a.png'))
   expect(asset.statusCode).toBe(200)
   expect(asset.rawPayload.equals(PNG)).toBe(true)
   const exported = await JSZip.loadAsync((await call('GET', '/api/themes/mine/export')).rawPayload)
@@ -788,9 +795,9 @@ test('PUT: keep, assets and licenses decide the files; none of them leaves the f
     {},
   )
   expect(ThemeDetailSchema.parse(replaced.json()).assets).toEqual(['img/a.png', 'img/b.webp'])
-  expect((await call('GET', '/api/themes/mine/assets/img/a.png')).rawPayload.equals(PNG2)).toBe(
-    true,
-  )
+  expect(
+    (await call('GET', await fileUrl('mine', 'assets/img/a.png'))).rawPayload.equals(PNG2),
+  ).toBe(true)
   // keep: [] drops them all.
   const cleared = await saveFiles('mine', (await detailOf('mine')).etag, { keep: [] })
   expect(ThemeDetailSchema.parse(cleared.json()).assets).toEqual([])
@@ -1036,7 +1043,7 @@ test.each(['harbour', 'ledger', 'studio'])(
     for (const path of named) expect(detail.assets, path).toContain(path)
     expect(detail.assets.length).toBeGreaterThan(0)
     for (const path of detail.assets) {
-      const file = await call('GET', `/api/themes/${id}/assets/${path}`)
+      const file = await call('GET', await fileUrl(id, `assets/${path}`))
       expect(file.statusCode, path).toBe(200)
       expect(file.headers['x-content-type-options']).toBe('nosniff')
       expect(file.headers['content-type']).toBe(
@@ -1110,7 +1117,7 @@ test('the example theme of docs/themes/example-theme zips up and imports through
   expect(detail.assets).toEqual(['img/sand.png'])
   expect(detail.manifest.background?.image).toBe('asset:img/sand.png')
   expect(detail.css).toContain('font-weight')
-  const picture = await call('GET', '/api/themes/sandbar/assets/img/sand.png')
+  const picture = await call('GET', await fileUrl('sandbar', 'assets/img/sand.png'))
   expect(picture.statusCode).toBe(200)
   expect(picture.headers['content-type']).toBe('image/png')
 })
@@ -1160,7 +1167,9 @@ test('starting Score after an upgrade moves a theme that has a now built-in id, 
     const mine = ThemeDetailSchema.parse((await get('/api/themes/ledger-mine')).json())
     expect(mine.assets).toEqual(['fonts/f.woff2', 'img/a.png'])
     expect(mine.manifest.id).toBe('ledger-mine')
-    expect((await get('/api/themes/ledger-mine/assets/img/a.png')).statusCode).toBe(200)
+    expect(
+      (await get(`/api/themes/ledger-mine/assets/img/a.png?rev=${mine.etag}`)).statusCode,
+    ).toBe(200)
     const builtin = ThemeDetailSchema.parse((await get('/api/themes/ledger')).json())
     expect(builtin.summary.source).toBe('builtin')
     // It can be edited and deleted again (the look moves off it first).
@@ -1192,4 +1201,128 @@ test('a folder left on disk for an id with no row is not served or exported (K2 
     '/api/themes/ghost',
   ])
     expect((await call('GET', url)).statusCode, url).toBe(404)
+})
+
+// J1 (fourth-gate finding 2): file URLs are bound to the package revision, and the server enforces it.
+test("J1: read A, replace with B at the same paths: A's file and licence URLs never return B's bytes", async () => {
+  const created = await saveFiles(
+    'mine',
+    null,
+    { assets: { 'img/a.png': b64(PNG) }, licenses: { LICENSE: 'licence A' } },
+    '.a{background:url(asset:img/a.png)}',
+  )
+  expect(created.statusCode, created.body).toBe(200)
+  const a = ThemeDetailSchema.parse(created.json())
+  const replaced = await saveFiles(
+    'mine',
+    a.etag,
+    { assets: { 'img/a.png': b64(PNG2) }, licenses: { LICENSE: 'licence B' } },
+    '.a{background:url(asset:img/a.png)}',
+  )
+  expect(replaced.statusCode, replaced.body).toBe(200)
+  const b = ThemeDetailSchema.parse(replaced.json())
+  expect(b.etag).not.toBe(a.etag)
+  expect(a.licenseFiles).toEqual(['LICENSE'])
+
+  const stale = await call('GET', `/api/themes/mine/assets/img/a.png?rev=${a.etag}`)
+  expect(stale.statusCode).toBe(409)
+  expect((stale.json() as { error: { code: string } }).error.code).toBe('etag_mismatch')
+  expect((stale.json() as { error: { details: { etag: string } } }).error.details.etag).toBe(b.etag)
+  expect(stale.rawPayload.equals(PNG2)).toBe(false)
+  const current = await call('GET', `/api/themes/mine/assets/img/a.png?rev=${b.etag}`)
+  expect(current.statusCode).toBe(200)
+  expect(current.rawPayload.equals(PNG2)).toBe(true)
+  // An unversioned asset URL is not served at all.
+  expect((await call('GET', '/api/themes/mine/assets/img/a.png')).statusCode).toBe(400)
+  expect((await call('GET', '/api/themes/mine/assets/img/a.png?rev=nope')).statusCode).toBe(409)
+  expect((await call('GET', '/api/themes/mine/assets/img/a.png?rev=a%20b')).statusCode).toBe(400)
+
+  // Licence texts travel in the export: a stale revision is refused, the current one (or none) is served.
+  expect((await call('GET', `/api/themes/mine/export?rev=${a.etag}`)).statusCode).toBe(409)
+  const exported = await call('GET', `/api/themes/mine/export?rev=${b.etag}`)
+  expect(exported.statusCode).toBe(200)
+  expect(await (await JSZip.loadAsync(exported.rawPayload)).files['LICENSE']!.async('string')).toBe(
+    'licence B',
+  )
+  expect((await call('GET', '/api/themes/mine/export')).statusCode).toBe(200)
+
+  // The stylesheet names the revision it was made from, and refuses a stale one.
+  expect((await call('GET', `/api/themes/mine/style.css?rev=${a.etag}`)).statusCode).toBe(409)
+  const css = await call('GET', `/api/themes/mine/style.css?rev=${b.etag}`)
+  expect(css.body).toBe(`.a{background:url(/api/themes/mine/assets/img/a.png?rev=${b.etag})}`)
+  expect((await call('GET', '/api/themes/mine/style.css')).body).toBe(css.body)
+})
+
+test('J1: an identical re-import is a new revision, so the earlier URL is refused', async () => {
+  const first = await upload(await fullPackage())
+  const a = ThemeDetailSchema.parse((first.json() as { detail: object }).detail)
+  const again = await upload(await fullPackage(), '?replace=1')
+  expect(again.statusCode, again.body).toBe(201)
+  expect((await call('GET', `/api/themes/seaside/assets/img/a.png?rev=${a.etag}`)).statusCode).toBe(
+    409,
+  )
+})
+
+test('J1: built-in themes serve their files at their fixed revision', async () => {
+  const detail = await detailOf('harbour')
+  const url = `/api/themes/harbour/assets/${detail.assets[0]}`
+  expect((await call('GET', url)).statusCode).toBe(400)
+  expect((await call('GET', `${url}?rev=${detail.etag}`)).statusCode).toBe(200)
+  expect((await call('GET', `${url}?rev=${'0'.repeat(64)}`)).statusCode).toBe(409)
+})
+
+// X13 (cross-audit): saving or replacing the theme that is the shared look tells the other open devices.
+test('X13: saving or replacing the theme in use emits look.changed; any other theme does not', async () => {
+  const created = ThemeDetailSchema.parse(
+    (await saveFiles('mine', null, { assets: { 'img/a.png': b64(PNG) } })).json(),
+  )
+  expect((await save('other', null)).statusCode).toBe(200)
+  expect((await call('PUT', '/api/look', { activeTheme: 'mine', mode: 'dark' })).statusCode).toBe(
+    204,
+  )
+  const looks = () => events.filter((event) => event.type === 'look.changed').map((e) => e.data)
+  events.length = 0
+  // Not the theme in use: nothing is announced.
+  expect((await save('other', (await detailOf('other')).etag, '.a{color:red}')).statusCode).toBe(
+    200,
+  )
+  expect(looks()).toEqual([])
+  // A custom save of the theme in use.
+  const saved = await save('mine', created.etag, '.a{color:red}')
+  expect(saved.statusCode, saved.body).toBe(200)
+  expect(looks()).toEqual([{ activeTheme: 'mine', mode: 'dark', resetGeneration: 0 }])
+  // A replace by import (an imported theme in use).
+  expect((await upload(await fullPackage())).statusCode).toBe(201)
+  expect(
+    (await call('PUT', '/api/look', { activeTheme: 'seaside', mode: 'dark' })).statusCode,
+  ).toBe(204)
+  events.length = 0
+  expect((await upload(await fullPackage(), '?replace=1')).statusCode).toBe(201)
+  expect(looks()).toEqual([{ activeTheme: 'seaside', mode: 'dark', resetGeneration: 0 }])
+  // A failed save announces nothing.
+  events.length = 0
+  expect((await save('seaside', 'stale')).statusCode).toBeGreaterThanOrEqual(400)
+  expect(looks()).toEqual([])
+})
+
+// Argon's note on X2: a newer version that dropped the file must answer a stale revision with the conflict, not a bare
+// 404, so a copy from the stale draft stops with the plain "changed" message instead of "couldn't read the file".
+test('X2: a file the newer version removed answers the old revision with 409, not 404', async () => {
+  const a = ThemeDetailSchema.parse(
+    (
+      await saveFiles('mine', null, { assets: { 'img/a.png': b64(PNG), 'img/b.png': b64(PNG2) } })
+    ).json(),
+  )
+  const b = ThemeDetailSchema.parse(
+    (await saveFiles('mine', a.etag, { keep: ['img/a.png'] })).json(),
+  )
+  expect(b.assets).toEqual(['img/a.png'])
+  const stale = await call('GET', `/api/themes/mine/assets/img/b.png?rev=${a.etag}`)
+  expect(stale.statusCode).toBe(409)
+  expect(stale.json()).toMatchObject({
+    error: { code: 'etag_mismatch', details: { etag: b.etag } },
+  })
+  expect((await call('GET', `/api/themes/mine/assets/img/b.png?rev=${b.etag}`)).statusCode).toBe(
+    404,
+  )
 })

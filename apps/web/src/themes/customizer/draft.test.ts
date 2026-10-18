@@ -29,6 +29,7 @@ import {
   setCss,
   setNowColumns,
   setNowSpan,
+  setDetails,
   setShape,
   startHistory,
   startNow,
@@ -268,6 +269,46 @@ describe('uploads and saving', () => {
     h = edit(h, setShape(h.present, 'border', 'strong'))
     h = afterSave(h, submitted, submitted.manifest)
     expect(h.present.manifest.id).toBe('copy')
+    expect(h.present.manifest.shape).toEqual({ border: 'strong' })
+    expect(isDirty(h)).toBe(true)
+  })
+
+  // X10: Save as new renames the draft; nothing else was typed, so the screen follows and is not dirty.
+  it('Save as new adopts the new name and address and leaves nothing unsaved', () => {
+    const before: Draft = {
+      ...blank(),
+      manifest: { ...blank().manifest, id: 'old', name: 'Old' },
+    }
+    const h = startHistory(before)
+    const submitted: Draft = { ...before, manifest: { ...before.manifest, id: 'new', name: 'New' } }
+    const saved = afterSave(h, submitted, submitted.manifest, before)
+    expect(saved.present.manifest).toMatchObject({ id: 'new', name: 'New' })
+    expect(isDirty(saved)).toBe(false)
+  })
+
+  it('Save as new keeps a name typed while the request was out, and stays unsaved', () => {
+    const before: Draft = {
+      ...blank(),
+      manifest: { ...blank().manifest, id: 'old', name: 'Old' },
+    }
+    let h = startHistory(before)
+    const submitted: Draft = { ...before, manifest: { ...before.manifest, id: 'new', name: 'New' } }
+    h = edit(h, setDetails(h.present, { name: 'Typed meanwhile' }))
+    h = afterSave(h, submitted, submitted.manifest, before)
+    expect(h.present.manifest).toMatchObject({ id: 'new', name: 'Typed meanwhile' })
+    expect(isDirty(h)).toBe(true)
+  })
+
+  it('Save as new adopts the new name when only another field was typed meanwhile', () => {
+    const before: Draft = {
+      ...blank(),
+      manifest: { ...blank().manifest, id: 'old', name: 'Old' },
+    }
+    let h = startHistory(before)
+    const submitted: Draft = { ...before, manifest: { ...before.manifest, id: 'new', name: 'New' } }
+    h = edit(h, setShape(h.present, 'border', 'strong'))
+    h = afterSave(h, submitted, submitted.manifest, before)
+    expect(h.present.manifest).toMatchObject({ id: 'new', name: 'New' })
     expect(h.present.manifest.shape).toEqual({ border: 'strong' })
     expect(isDirty(h)).toBe(true)
   })

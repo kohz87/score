@@ -1,12 +1,13 @@
 import type { ThemeSummary } from '@score/contract'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MAX_ASSET_BYTES, mimeForPath, toDataUrl } from '../../themes/customizer/asset-types.ts'
-import { describeSaveError, installThemeZip } from '../../themes/customizer/api.ts'
+import { describeSaveError, installThemeZip, loadTheme } from '../../themes/customizer/api.ts'
 import { describeChanges } from '../../themes/customizer/describe.ts'
 import { describeDropped, reportSummary } from '../../themes/customizer/report-text.ts'
 import type { ThemePackage } from '../../themes/customizer/package.ts'
 import { isReservedId } from '../../themes/customizer/draft.ts'
 import { sanitiseCss } from '../../themes/sanitise.ts'
+import { ApiError } from '../../data/api.ts'
 import { Modal, Segmented } from './controls.tsx'
 import { PreviewFrame } from './PreviewFrame.tsx'
 import { previewDevices, previewPages } from './preview-pages.ts'
@@ -81,6 +82,9 @@ function Review({
   const [replace, setReplace] = useState(false)
   const [state, setState] = useState<'review' | 'installing' | 'done'>('review')
   const [problem, setProblem] = useState('')
+  // The version of the installed theme this window shows (its etag). Replace is conditional on it (If-Match), so a
+  // version that landed while the window was open is never overwritten; after a conflict the window must be reopened.
+  const [shown, setShown] = useState<{ etag: string } | 'loading' | 'failed' | 'stale'>('loading')
   const [mode, setMode] = useState<'light' | 'dark'>('light')
   const changes = useMemo(() => describeChanges(manifest, pkg.css), [manifest, pkg.css])
   const sanitised = useMemo(() => sanitiseCss(pkg.css), [pkg.css])
@@ -106,15 +110,36 @@ function Review({
   const blocked = reserved || existing?.source === 'builtin'
   const mustReplace = !!existing && !blocked
 
+  useEffect(() => {
+    if (!mustReplace) return
+    let alive = true
+    loadTheme(manifest.id).then(
+      (detail) => alive && setShown({ etag: detail.etag }),
+      () => alive && setShown('failed'),
+    )
+    return () => {
+      alive = false
+    }
+  }, [mustReplace, manifest.id])
+
   async function install() {
+    if (mustReplace && (typeof shown === 'string' || !replace)) return
     setState('installing')
     setProblem('')
     try {
-      await installThemeZip(candidate.bytes, { replace: mustReplace && replace })
+      await installThemeZip(candidate.bytes, {
+        replace: mustReplace && replace,
+        ifMatch: mustReplace && typeof shown !== 'string' ? shown.etag : null,
+      })
       setState('done')
       onInstalled()
     } catch (error) {
-      setProblem(describeSaveError(error).text)
+      if (error instanceof ApiError && error.code === 'etag_mismatch') {
+        setShown('stale')
+        setProblem(
+          'The theme that would be replaced changed while this window was open, so nothing was replaced. Close this window and open the file again to review it.',
+        )
+      } else setProblem(describeSaveError(error).text)
       setState('review')
     }
   }
@@ -205,6 +230,12 @@ function Review({
               </span>
             </label>
           )}
+          {mustReplace && shown === 'failed' && (
+            <p className="cz-problem" role="alert">
+              Couldn’t read the installed theme, so it can’t be replaced safely. Close this window
+              and try again.
+            </p>
+          )}
           {problem && (
             <p className="cz-problem" role="alert">
               {problem}
@@ -238,7 +269,11 @@ function Review({
         <button
           type="button"
           className="cz-btn cz-btn--primary"
-          disabled={state === 'installing' || blocked || (mustReplace && !replace)}
+          disabled={
+            state === 'installing' ||
+            blocked ||
+            (mustReplace && (!replace || typeof shown === 'string'))
+          }
           onClick={() => void install()}
         >
           {state === 'installing' ? 'Installing…' : 'Install'}

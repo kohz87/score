@@ -6,6 +6,8 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   applyBuiltin,
   applyCustom,
+  assetResolver,
+  assetUrl,
   backgroundCss,
   clearLook,
   defaultColorPairs,
@@ -53,6 +55,8 @@ const manifest = {
     chat: { messages: 'bubbles' as const },
   },
 }
+
+const REV = 'ab'.repeat(32)
 
 describe('theme engine', () => {
   test('a manifest becomes the attributes the stylesheets read', () => {
@@ -103,9 +107,9 @@ describe('theme engine', () => {
     const css = tokenCss(manifest, 'harbour')
     expect(css).toContain('--font-heading:"theme-harbour-Fraunces"')
     expect(css).toContain('--font-body:"Georgia"')
-    const faces = fontFaceCss(manifest, 'harbour')
+    const faces = fontFaceCss(manifest, 'harbour', assetResolver('harbour', REV))
     expect(faces).toContain('font-family:"theme-harbour-Fraunces"')
-    expect(faces).toContain('url("/api/themes/harbour/assets/fonts/f.woff2")')
+    expect(faces).toContain(`url("/api/themes/harbour/assets/fonts/f.woff2?rev=${REV}")`)
     expect(
       fontFaceCss(
         {
@@ -121,6 +125,7 @@ describe('theme engine', () => {
           },
         },
         'evil',
+        assetResolver('evil', REV),
       ),
     ).toContain('font-family:"theme-evil-Hanken-Grotesk"')
     expect(
@@ -141,8 +146,9 @@ describe('theme engine', () => {
     const css = backgroundCss(
       { background: { image: 'asset:img/bg.webp', fit: 'tile', dim: 40 } },
       'harbour',
+      assetResolver('harbour', REV),
     )
-    expect(css).toContain('url("/api/themes/harbour/assets/img/bg.webp")')
+    expect(css).toContain(`url("/api/themes/harbour/assets/img/bg.webp?rev=${REV}")`)
     expect(css).toContain('40%')
     expect(css).toContain('repeat')
     expect(
@@ -191,6 +197,31 @@ describe('theme engine', () => {
         // Tokens the dark block leaves alone keep their light value.
         expect(found ?? new RegExp(`--${token}: (#[0-9a-f]{6});`).exec(light)?.[1]).toBe(value)
       }
+  })
+
+  // J1: a file URL always names the revision it was loaded for; with none, there is no URL at all.
+  test('asset URLs carry the package revision, and without one nothing unversioned is painted', () => {
+    const look = {
+      background: { image: 'asset:img/bg.webp' as const, fit: 'cover' as const, dim: 0 },
+    }
+    expect(assetUrl('harbour', 'asset:img/bg.webp', REV)).toBe(
+      `/api/themes/harbour/assets/img/bg.webp?rev=${REV}`,
+    )
+    for (const rev of [null, undefined, '', 'a b', 'x/y', 'a'.repeat(200)])
+      expect(assetUrl('harbour', 'asset:img/bg.webp', rev)).toBeNull()
+    expect(backgroundCss(look, 'harbour')).toBe('')
+    expect(fontFaceCss(manifest, 'harbour')).toBe('')
+    const applied = applyCustom(
+      { id: 'harbour', manifest: { ...look, ...manifest }, css: '', etag: REV },
+      'light',
+    )
+    expect(applied.cache.css).toContain(`url("/api/themes/harbour/assets/img/bg.webp?rev=${REV}")`)
+    expect(applied.cache.css).toContain(`/api/themes/harbour/assets/fonts/f.woff2?rev=${REV}`)
+    const without = applyCustom(
+      { id: 'harbour', manifest: { ...look, ...manifest }, css: '' },
+      'light',
+    )
+    expect(without.cache.css).not.toContain('/api/themes/')
   })
 
   test('applying sets attributes and sheets, switching cleans up, a built-in pack restores the pack look', () => {

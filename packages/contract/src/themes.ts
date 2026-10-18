@@ -263,6 +263,8 @@ export const ThemeDetailSchema = z.object({
   manifest: ThemeManifestSchema,
   css: z.string().max(262_144),
   assets: z.array(z.string()),
+  /** Names of the licence files the package carries (`LICENSE`, `OFL.txt`); their texts are read from the export. */
+  licenseFiles: z.array(z.string()).default([]),
   etag: z.string().min(1),
 })
 export type ThemeDetail = z.infer<typeof ThemeDetailSchema>
@@ -294,6 +296,20 @@ export const ThemeAssetPathSchema = z
   .string()
   .max(160)
   .regex(/^(fonts|img)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(woff2|png|jpg|jpeg|webp|avif)$/)
+
+/**
+ * A package revision: the `etag` of a `ThemeDetail` (the server's is a sha256 hex digest), carried by file URLs as
+ * `?rev=`. The shape only has to be safe to put in a URL and a stylesheet; the server decides whether it is current.
+ */
+export const ThemeRevSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
+
+/**
+ * The one spelling of a theme file's URL (contract § 16, J1): it names the revision the caller holds, and the server
+ * refuses (409 etag_mismatch) a revision that is not current. `path` is `fonts/x.woff2`, not `asset:fonts/x.woff2`.
+ */
+export function themeAssetUrl(themeId: string, path: string, rev: string): string {
+  return `/api/themes/${themeId}/assets/${path}?rev=${rev}`
+}
 
 /**
  * `PUT /api/themes/:id` (custom themes only). `css` is the browser-sanitised text; the server re-checks it.

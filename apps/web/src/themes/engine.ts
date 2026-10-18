@@ -3,6 +3,8 @@ import {
   ThemeAssetRefSchema,
   ThemeColorSchema,
   ThemeIdSchema,
+  ThemeRevSchema,
+  themeAssetUrl,
   type ThemeColorToken,
 } from '@score/contract'
 import { applyPack } from '../data/pack.ts'
@@ -92,14 +94,32 @@ export function faceFamily(themeId: string, family: string): string {
   return `theme-${themeId}-${family.replace(/ /g, '-')}`
 }
 
-export function assetUrl(themeId: string, ref: string): string | null {
-  if (!ThemeIdSchema.safeParse(themeId).success || !ThemeAssetRefSchema.safeParse(ref).success)
+/**
+ * The URL of a theme's file for the package revision the caller holds (contract § 16, J1: the server refuses a stale
+ * one). Without a valid revision there is no URL, so nothing unversioned is ever painted.
+ */
+export function assetUrl(
+  themeId: string,
+  ref: string,
+  rev: string | null | undefined,
+): string | null {
+  if (
+    !ThemeIdSchema.safeParse(themeId).success ||
+    !ThemeAssetRefSchema.safeParse(ref).success ||
+    !ThemeRevSchema.safeParse(rev).success
+  )
     return null
-  return `/api/themes/${themeId}/assets/${ref.slice('asset:'.length)}`
+  return themeAssetUrl(themeId, ref.slice('asset:'.length), rev as string)
 }
 
 /** Where an `asset:` reference points. The Customizer's draft answers with pictures and fonts not saved yet. */
 export type AssetResolver = (ref: string) => string | null
+
+/** The resolver for an installed theme at the revision (its etag) the caller loaded. */
+export const assetResolver =
+  (themeId: string, rev: string | null | undefined): AssetResolver =>
+  (ref) =>
+    assetUrl(themeId, ref, rev)
 
 function fontStack(look: Look, themeId: string, key: 'heading' | 'body' | 'code'): string | null {
   const family = look.fonts?.[key]
@@ -146,7 +166,7 @@ export function tokenCss(look: Look, themeId: string): string {
 export function fontFaceCss(
   look: Look,
   themeId: string,
-  resolve: AssetResolver = (ref) => assetUrl(themeId, ref),
+  resolve: AssetResolver = assetResolver(themeId, null),
 ): string {
   const faces = look.fonts?.faces ?? []
   return faces
@@ -165,7 +185,7 @@ export function fontFaceCss(
 export function backgroundCss(
   look: Look,
   themeId: string,
-  resolve: AssetResolver = (ref) => assetUrl(themeId, ref),
+  resolve: AssetResolver = assetResolver(themeId, null),
 ): string {
   const image = look.background?.image
   const url = image && ThemeAssetRefSchema.safeParse(image).success ? resolve(image) : null
@@ -193,7 +213,7 @@ export function themeAttributes(look: Look): Record<string, string> {
     out['data-rooms'] =
       layout.chat.roomList === 'hidden-until-opened' ? 'hidden' : layout.chat.roomList
   // Full-bleed containers that paint the ground over the page (the user view) let the picture through.
-  if (look.background?.image && assetUrl('x', look.background.image))
+  if (look.background?.image && ThemeAssetRefSchema.safeParse(look.background.image).success)
     out['data-backdrop'] = look.background.fit === 'tile' ? 'tile' : 'cover'
   return out
 }
@@ -300,7 +320,8 @@ export function applyBuiltin(id: string): void {
   applyPack(findPack(id))
 }
 
-export type LookDetail = { id: string; manifest: Look; css: string }
+/** `etag` is the revision the files are asked for; without it a theme's fonts and pictures are not loaded. */
+export type LookDetail = { id: string; manifest: Look; css: string; etag?: string }
 /** What the boot script paints before React starts: the <html> attributes and the generated token sheet. */
 export type CachedLook = { attributes: Record<string, string>; css: string; layout: Look['layout'] }
 export type AppliedLook = {
@@ -356,10 +377,15 @@ export function applyCustom(
   try {
     if (!ThemeIdSchema.safeParse(detail.id).success) throw new Error('Invalid theme id')
     const root = document.documentElement
-    const admin = lookParts(detail.manifest, detail.id, mode, 'admin')
-    const user = lookParts(detail.manifest, detail.id, mode, 'user')
+    const resolve = assetResolver(detail.id, detail.etag)
+    const admin = lookParts(detail.manifest, detail.id, mode, 'admin', resolve)
+    const user = lookParts(detail.manifest, detail.id, mode, 'user', resolve)
     const main = view === 'user' ? user : admin
-    const { css: cleaned, report } = sanitiseCss(detail.css, { themeId: detail.id, confine: true })
+    const { css: cleaned, report } = sanitiseCss(detail.css, {
+      themeId: detail.id,
+      rev: detail.etag,
+      confine: true,
+    })
     applied = setAdopted([main.css, cleaned].filter(Boolean))
     for (const [name, value] of Object.entries(main.attributes)) root.setAttribute(name, value)
     loadBuiltinFonts(main.look)

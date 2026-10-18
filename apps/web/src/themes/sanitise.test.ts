@@ -50,9 +50,12 @@ describe('sanitiseCss', () => {
   test('keeps asset: urls and rewrites them for the theme', () => {
     const css = 'a { background-image: url(asset:img/bg.webp) }'
     expect(sanitiseCss(css).css).toContain('url("asset:img/bg.webp")')
-    expect(sanitiseCss(css, { themeId: 'harbour' }).css).toContain(
-      'url("/api/themes/harbour/assets/img/bg.webp")',
+    const rev = 'cd'.repeat(32)
+    expect(sanitiseCss(css, { themeId: 'harbour', rev }).css).toContain(
+      `url("/api/themes/harbour/assets/img/bg.webp?rev=${rev}")`,
     )
+    // No revision, no URL: the reference stays an `asset:` one rather than becoming an unversioned address.
+    expect(sanitiseCss(css, { themeId: 'harbour' }).css).toContain('url("asset:img/bg.webp")')
     expect(reasons('a { background: url(asset:../../etc/passwd) }')).toEqual(['external_url'])
     expect(reasons('a { background: url(asset:img/a.svg) }')).toEqual(['external_url'])
   })
