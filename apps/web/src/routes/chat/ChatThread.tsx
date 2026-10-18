@@ -364,6 +364,40 @@ export function ChatThread({
     state.height = element.scrollHeight
     state.prepend = false
   }, [])
+  // The thread's size changes after it was pinned to its end: the composer grows (the context ring and pickers settle a
+  // moment after the first paint) or a message grows (code highlighting, fonts, images). Neither fires a scroll event,
+  // so the last lines would stay hidden: follow the end while the person is at the end. A layout that flips back and
+  // forth inside one frame can clamp the offset without any notification, so the end is checked again for a few frames.
+  const hasRoom = Boolean(room)
+  useEffect(() => {
+    const element = viewport.current
+    if (!hasRoom || !element || typeof ResizeObserver === 'undefined') return
+    let frame = 0
+    const settle = (frames: number) => {
+      if (!position.current.pinned) return
+      if (element.scrollHeight - element.scrollTop - element.clientHeight > 1)
+        element.scrollTop = element.scrollHeight
+      position.current.height = element.scrollHeight
+      if (frames > 1) frame = requestAnimationFrame(() => settle(frames - 1))
+    }
+    const follow = () => {
+      cancelAnimationFrame(frame)
+      settle(8)
+    }
+    const resize = new ResizeObserver(follow)
+    const watch = () => {
+      resize.observe(element)
+      for (const child of element.children) resize.observe(child)
+    }
+    watch()
+    const children = new MutationObserver(watch)
+    children.observe(element, { childList: true })
+    return () => {
+      cancelAnimationFrame(frame)
+      resize.disconnect()
+      children.disconnect()
+    }
+  }, [hasRoom])
   // Opening another hit in the same room.
   useEffect(() => {
     seekRef.current.id = seek
