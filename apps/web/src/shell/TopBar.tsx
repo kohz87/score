@@ -1,6 +1,7 @@
 import type { Ref } from 'react'
 import { NAV_DRAWER_ID } from './NavDrawer.tsx'
-import { MainNav } from './MainNav.tsx'
+import { MainNav, NeedsYouDot } from './MainNav.tsx'
+import { useLayout } from '../themes/layout.ts'
 import { TerminalButton } from './TerminalButton.tsx'
 import { AvatarMenu } from './AvatarMenu.tsx'
 
@@ -23,26 +24,35 @@ export function TopBar({
   menuOpen,
   terminalOffered,
 }: TopBarProps) {
+  // The launcher layout hides the links, so the Needs-you marker rides on the menu button.
+  const launcher = useLayout().nav === 'launcher'
   return (
     <header className="top-bar">
-      <button
-        ref={menuButtonRef}
-        className="menu-trigger"
-        type="button"
-        onClick={onToggleMenu}
-        aria-expanded={menuOpen}
-        aria-controls={NAV_DRAWER_ID}
-        aria-label="Menu"
-      >
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path
-            d="M3 5 H15 M3 9 H15 M3 13 H15"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-        </svg>
-      </button>
+      <span className="menu-slot">
+        <button
+          ref={menuButtonRef}
+          className="menu-trigger"
+          type="button"
+          onClick={onToggleMenu}
+          aria-expanded={menuOpen}
+          aria-controls={NAV_DRAWER_ID}
+          aria-label="Menu"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path
+              d="M3 5 H15 M3 9 H15 M3 13 H15"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+        {launcher && !menuOpen && (
+          <span className="menu-slot-badge">
+            <NeedsYouDot />
+          </span>
+        )}
+      </span>
       <div className="brand">
         <svg
           className="brand-mark"

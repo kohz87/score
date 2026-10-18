@@ -11,6 +11,8 @@ type ResponsiveDrawerProps = {
   onClose: () => void
   /** Stays a normal block even on narrow screens (for example the conversation list when no room is open). */
   inline?: boolean
+  /** Behaves as the narrow-screen drawer at every width (a theme's "room list: hidden until opened"). */
+  always?: boolean
   as?: 'aside' | 'nav'
   children: ReactNode
 }
@@ -25,10 +27,11 @@ export function ResponsiveDrawer({
   open,
   onClose,
   inline = false,
+  always = false,
   as: Tag = 'aside',
   children,
 }: ResponsiveDrawerProps) {
-  const narrow = useMediaQuery(NARROW_QUERY)
+  const narrow = useMediaQuery(NARROW_QUERY) || always
   const modal = narrow && !inline && open
   const panelRef = useRef<HTMLElement>(null)
   const { pathname } = useLocation()
@@ -83,7 +86,7 @@ export function ResponsiveDrawer({
       <Tag
         ref={panelRef}
         aria-label={label}
-        className={`responsive-drawer ${className}${open ? ' is-open' : ''}${inline ? ' is-inline' : ''}`}
+        className={`responsive-drawer ${className}${open ? ' is-open' : ''}${inline ? ' is-inline' : ''}${always ? ' is-always' : ''}`}
         role={modal ? 'dialog' : undefined}
         tabIndex={modal ? -1 : undefined}
         aria-modal={modal ? true : undefined}

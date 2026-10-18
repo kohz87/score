@@ -4,6 +4,7 @@ import { ResponsiveDrawer } from '../../components/ResponsiveDrawer.tsx'
 import { useActivityFeed } from '../../live/use-activity.ts'
 import { NotificationBridge } from '../../notifications/NotificationBridge.tsx'
 import { UpdateBanner } from '../../pwa/UpdateBanner.tsx'
+import { useLayout } from '../../themes/layout.ts'
 import '../chat/chat.css'
 import { UserSidebar } from './UserSidebar.tsx'
 import './user.css'
@@ -14,11 +15,22 @@ export function UserShell() {
   useActivityFeed()
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
+  // The theme's room list position for this view (views.user overrides the shared setting).
+  const roomList = useLayout().chat.roomList
+  const sidebar = (
+    <ResponsiveDrawer
+      label="Conversations"
+      className="user-sidebar"
+      open={open}
+      onClose={close}
+      always={roomList === 'hidden-until-opened'}
+    >
+      <UserSidebar />
+    </ResponsiveDrawer>
+  )
   return (
     <div className="user-view">
-      <ResponsiveDrawer label="Conversations" className="user-sidebar" open={open} onClose={close}>
-        <UserSidebar />
-      </ResponsiveDrawer>
+      {roomList !== 'right' && sidebar}
       <div className="user-main">
         <header className="user-top">
           <button
@@ -41,6 +53,7 @@ export function UserShell() {
         </header>
         <Outlet />
       </div>
+      {roomList === 'right' && sidebar}
       <NotificationBridge />
       <UpdateBanner />
     </div>

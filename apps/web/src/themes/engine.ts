@@ -4,11 +4,11 @@ import {
   ThemeColorSchema,
   ThemeIdSchema,
   type ThemeColorToken,
-  type ThemeManifest,
 } from '@score/contract'
 import { applyPack } from '../data/pack.ts'
 import { findPack, packs } from '../styles/packs.ts'
 import { contrastRatio, parseColor } from './color.ts'
+import { lookForView, resolveLayout, type Look, type LookView } from './layout.ts'
 import { sanitiseCss } from './sanitise.ts'
 
 // The theme engine (PLAN 9.2, design docs/briefs/9-themes.md §6): a manifest becomes <html> attributes, a generated
@@ -17,7 +17,6 @@ import { sanitiseCss } from './sanitise.ts'
 // and the default look stays exactly as it was. Only the 40 public colour tokens are ever written.
 
 export type ColorMode = 'light' | 'dark'
-type Look = Pick<ThemeManifest, 'colors' | 'fonts' | 'shape' | 'layout' | 'background'>
 
 /** Attributes the engine owns on <html>; boot-look.js restores the same set from the cache. */
 export const LOOK_ATTRIBUTES = [
@@ -28,6 +27,8 @@ export const LOOK_ATTRIBUTES = [
   'data-nav',
   'data-width',
   'data-chat',
+  'data-rooms',
+  'data-backdrop',
   'data-look',
   'data-contrast-fallback',
 ] as const
@@ -177,6 +178,12 @@ export function themeAttributes(look: Look): Record<string, string> {
   if (layout?.nav) out['data-nav'] = layout.nav
   if (layout?.contentWidth) out['data-width'] = layout.contentWidth
   if (layout?.chat?.messages) out['data-chat'] = layout.chat.messages
+  if (layout?.chat?.roomList)
+    out['data-rooms'] =
+      layout.chat.roomList === 'hidden-until-opened' ? 'hidden' : layout.chat.roomList
+  // Full-bleed containers that paint the ground over the page (the user view) let the picture through.
+  if (look.background?.image && assetUrl('x', look.background.image))
+    out['data-backdrop'] = look.background.fit === 'tile' ? 'tile' : 'cover'
   return out
 }
 
@@ -259,51 +266,73 @@ export function applyBuiltin(id: string): void {
 }
 
 export type LookDetail = { id: string; manifest: Look; css: string }
+/** What the boot script paints before React starts: the <html> attributes and the generated token sheet. */
+export type CachedLook = { attributes: Record<string, string>; css: string; layout: Look['layout'] }
 export type AppliedLook = {
   report: ReturnType<typeof sanitiseCss>['report']
   contrastFallback: boolean
-  cache: { attributes: Record<string, string>; css: string }
+  cache: CachedLook
+  /** The same for the chat-first user view (`views.user` laid over the theme), which lives at /u. */
+  userCache: CachedLook
+  layout: ReturnType<typeof resolveLayout>
+}
+
+/** Everything the page wears for one view of a theme: the attributes, the generated sheet and the layout. */
+export function lookParts(
+  manifest: Look,
+  themeId: string,
+  mode: ColorMode,
+  view: LookView,
+): { attributes: Record<string, string>; css: string; contrastFallback: boolean; look: Look } {
+  const look = lookForView(manifest, view)
+  const contrastFallback = failsProtectedContrast(look, mode)
+  const nav = look.layout?.nav
+  const attributes: Record<string, string> = {
+    ...themeAttributes(look),
+    // Score's own layout/density attributes: a custom theme starts from the default pack. Both rails use the side
+    // layout; the right one is mirrored by data-nav (shell.css).
+    'data-pack': 'score',
+    'data-layout': nav === 'left' || nav === 'right' ? 'side' : 'top',
+    'data-density': look.shape?.density ?? 'comfortable',
+    ...(contrastFallback ? { 'data-contrast-fallback': '' } : {}),
+  }
+  const css = [tokenCss(look, themeId), fontFaceCss(look, themeId), backgroundCss(look, themeId)]
+    .filter(Boolean)
+    .join('\n')
+  return { attributes, css, contrastFallback, look }
 }
 
 /**
  * Applies a custom theme: attributes, token sheet, font faces, background and the sanitised theme CSS, in that
  * cascade order. Throws when something is wrong; the caller skips the theme (the engine leaves the look cleared).
+ * `view` is which front end this page is: the user view wears `views.user` over the theme.
  */
-export function applyCustom(detail: LookDetail, mode: ColorMode): AppliedLook {
+export function applyCustom(
+  detail: LookDetail,
+  mode: ColorMode,
+  view: LookView = 'admin',
+): AppliedLook {
   clearLook()
   try {
     if (!ThemeIdSchema.safeParse(detail.id).success) throw new Error('Invalid theme id')
     const root = document.documentElement
-    const attributes = themeAttributes(detail.manifest)
-    const contrastFallback = failsProtectedContrast(detail.manifest, mode)
-    // The look of Score's own layout/density attributes: a custom theme starts from the default pack.
-    root.setAttribute('data-pack', 'score')
-    root.setAttribute('data-layout', detail.manifest.layout?.nav === 'left' ? 'side' : 'top')
-    root.setAttribute('data-density', detail.manifest.shape?.density ?? 'comfortable')
-    const generated = [
-      tokenCss(detail.manifest, detail.id),
-      fontFaceCss(detail.manifest, detail.id),
-      backgroundCss(detail.manifest, detail.id),
-    ]
-      .filter(Boolean)
-      .join('\n')
+    const admin = lookParts(detail.manifest, detail.id, mode, 'admin')
+    const user = lookParts(detail.manifest, detail.id, mode, 'user')
+    const main = view === 'user' ? user : admin
     const { css: cleaned, report } = sanitiseCss(detail.css, { themeId: detail.id })
-    applied = setAdopted([generated, cleaned].filter(Boolean))
-    for (const [name, value] of Object.entries(attributes)) root.setAttribute(name, value)
-    if (contrastFallback) root.setAttribute('data-contrast-fallback', '')
+    applied = setAdopted([main.css, cleaned].filter(Boolean))
+    for (const [name, value] of Object.entries(main.attributes)) root.setAttribute(name, value)
+    const asCache = (parts: typeof main): CachedLook => ({
+      attributes: parts.attributes,
+      css: parts.css,
+      layout: parts.look.layout,
+    })
     return {
       report,
-      contrastFallback,
-      cache: {
-        attributes: {
-          ...attributes,
-          'data-pack': 'score',
-          'data-layout': root.getAttribute('data-layout') ?? 'top',
-          'data-density': root.getAttribute('data-density') ?? 'comfortable',
-          ...(contrastFallback ? { 'data-contrast-fallback': '' } : {}),
-        },
-        css: generated,
-      },
+      contrastFallback: main.contrastFallback,
+      cache: asCache(admin),
+      userCache: asCache(user),
+      layout: resolveLayout(main.look),
     }
   } catch (error) {
     clearLook()

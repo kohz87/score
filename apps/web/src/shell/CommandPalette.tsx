@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { SearchSnippet } from '../components/SearchSnippet.tsx'
 import { messageHref, useMessageSearch } from '../data/message-search.ts'
-import { destinations } from './destinations.ts'
+import { useMenu } from '../themes/layout.ts'
 import { clearDeviceLook, lookStore } from '../themes/look-store.ts'
 
 // Commands that run something instead of opening a page. "Reset look" is one of the ways back from a theme.
@@ -23,6 +23,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const navigate = useNavigate()
+  const destinations = useMenu()
   const options = destinations.filter(({ title }) =>
     title.toLowerCase().includes(search.trim().toLowerCase()),
   )

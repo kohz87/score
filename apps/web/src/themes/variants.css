@@ -1,6 +1,7 @@
-/* Theme variants (PLAN 9.2): the shape settings of a manifest, written once. They act only when a custom theme sets
-   `data-look='custom'` (themes/engine.ts); the built-in packs and the Score default never match, so they stay exactly
-   as they were. Minimal on purpose: cards and panels. 9.3 extends this to every component. */
+/* Theme variants (PLAN 9.2, 9.3): the shape settings of a manifest, written once for every card and panel family.
+   They act only when a custom theme sets `data-look='custom'` (themes/engine.ts); the built-in packs and the Score
+   default never match, so they stay exactly as they were. Protected surfaces (`data-protected`) are never matched:
+   they keep their own look (styles/protected.css), and a surface that contains one keeps its solid background. */
 :root[data-look='custom'] {
   --theme-card-shadow: none;
   --theme-card-border: 0 solid transparent;
@@ -50,19 +51,219 @@
   --theme-card-border: 2px solid var(--line-strong);
 }
 :root[data-look='custom'][data-elevation]
-  :is(.now-card, .settings-card, .team-card, .reports-card, .pair-card, .tasks-board):not(
-    [data-protected]
-  ) {
+  :is(
+    .now-card,
+    .now-score,
+    .now-group-list,
+    .chat-thread,
+    .chat-side-card,
+    .chat-usage-card,
+    .chat-composer-box,
+    .user-run,
+    .kn-left,
+    .kn-main,
+    .kn-panel,
+    .kn-toolbar,
+    .flow-panel,
+    .flow-inspector,
+    .flow-log,
+    .flow-stats,
+    .orch-head,
+    .orch-diagram,
+    .orch-log,
+    .orch-selected,
+    .orch-finish,
+    .orch-room-head,
+    .reports-card,
+    .reports-table-card,
+    .settings-card,
+    .settings-jump,
+    .settings-jump-list,
+    .task-card,
+    .tasks-board,
+    .task-placeholder,
+    .team-card,
+    .team-agent-card,
+    .plugins-card,
+    .wf-card,
+    .wf-side,
+    .wf-canvas,
+    .watch-panel,
+    .watch-replay,
+    .attempt-card,
+    .pair-card,
+    .pop-section
+  ):not([data-protected]) {
   box-shadow: var(--theme-card-shadow);
 }
 :root[data-look='custom'][data-border]
-  :is(.now-card, .settings-card, .team-card, .reports-card, .pair-card, .tasks-board):not(
-    [data-protected]
-  ) {
+  :is(
+    .now-card,
+    .now-score,
+    .now-group-list,
+    .chat-thread,
+    .chat-side-card,
+    .chat-usage-card,
+    .chat-composer-box,
+    .user-run,
+    .kn-left,
+    .kn-main,
+    .kn-panel,
+    .kn-toolbar,
+    .flow-panel,
+    .flow-inspector,
+    .flow-log,
+    .flow-stats,
+    .orch-head,
+    .orch-diagram,
+    .orch-log,
+    .orch-selected,
+    .orch-finish,
+    .orch-room-head,
+    .reports-card,
+    .reports-table-card,
+    .settings-card,
+    .settings-jump,
+    .settings-jump-list,
+    .task-card,
+    .tasks-board,
+    .task-placeholder,
+    .team-card,
+    .team-agent-card,
+    .plugins-card,
+    .wf-card,
+    .wf-side,
+    .wf-canvas,
+    .watch-panel,
+    .watch-replay,
+    .attempt-card,
+    .pair-card,
+    .pop-section
+  ):not([data-protected]) {
   border: var(--theme-card-border);
 }
+
+/* Glass: the card colour, translucent, over a blur of what is behind it. A surface that holds a protected element
+   without a solid background of its own stays solid, so a picture never lies behind that text. */
 :root[data-look='custom'][data-surface='glass']
-  :is(.now-card, .settings-card, .team-card, .reports-card, .pair-card):not([data-protected]) {
-  background: color-mix(in srgb, var(--card) 62%, transparent);
+  :is(
+    .now-card,
+    .now-score,
+    .now-group-list,
+    .chat-thread,
+    .chat-side-card,
+    .chat-usage-card,
+    .chat-composer-box,
+    .user-run,
+    .kn-left,
+    .kn-main,
+    .kn-panel,
+    .kn-toolbar,
+    .flow-panel,
+    .flow-inspector,
+    .flow-log,
+    .flow-stats,
+    .orch-head,
+    .orch-diagram,
+    .orch-log,
+    .orch-selected,
+    .orch-finish,
+    .orch-room-head,
+    .reports-card,
+    .reports-table-card,
+    .settings-card,
+    .settings-jump,
+    .settings-jump-list,
+    .task-card,
+    .tasks-board,
+    .task-placeholder,
+    .team-card,
+    .team-agent-card,
+    .plugins-card,
+    .wf-card,
+    .wf-side,
+    .wf-canvas,
+    .watch-panel,
+    .watch-replay,
+    .attempt-card,
+    .pair-card,
+    .pop-section
+  ):not([data-protected]):not(
+    :has([data-protected]:not(.agent-glyph, .needs-you-dot, .chat-approval, .chat-toast))
+  ) {
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
   backdrop-filter: blur(14px) saturate(1.2);
+}
+/* No backdrop blur available: nearly opaque, so the text stays readable. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-look='custom'][data-surface='glass']
+    :is(
+      .now-card,
+      .now-score,
+      .now-group-list,
+      .chat-thread,
+      .chat-side-card,
+      .chat-usage-card,
+      .chat-composer-box,
+      .user-run,
+      .kn-left,
+      .kn-main,
+      .kn-panel,
+      .kn-toolbar,
+      .flow-panel,
+      .flow-inspector,
+      .flow-log,
+      .flow-stats,
+      .orch-head,
+      .orch-diagram,
+      .orch-log,
+      .orch-selected,
+      .orch-finish,
+      .orch-room-head,
+      .reports-card,
+      .reports-table-card,
+      .settings-card,
+      .settings-jump,
+      .settings-jump-list,
+      .task-card,
+      .tasks-board,
+      .task-placeholder,
+      .team-card,
+      .team-agent-card,
+      .plugins-card,
+      .wf-card,
+      .wf-side,
+      .wf-canvas,
+      .watch-panel,
+      .watch-replay,
+      .attempt-card,
+      .pair-card,
+      .pop-section
+    ):not([data-protected]):not(
+      :has([data-protected]:not(.agent-glyph, .needs-you-dot, .chat-approval, .chat-toast))
+    ) {
+    background: color-mix(in srgb, var(--card) 94%, transparent);
+  }
+}
+
+/* The side rail is a card of its own (shell.css), on the desktop widths where it is shown. */
+@media (width >= 1100px) {
+  :root[data-look='custom'][data-layout='side'][data-elevation] .top-bar {
+    box-shadow: var(--theme-card-shadow);
+  }
+  :root[data-look='custom'][data-layout='side'][data-border] .top-bar {
+    border: var(--theme-card-border);
+  }
+  :root[data-look='custom'][data-layout='side'][data-surface='glass'] .top-bar {
+    background: color-mix(in srgb, var(--card) 70%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    backdrop-filter: blur(14px) saturate(1.2);
+  }
+}
+
+/* A picture behind the page (backgroundCss, engine.ts): full-bleed containers that paint the ground let it through. */
+:root[data-backdrop] .user-view,
+:root[data-backdrop] .user-main {
+  background: transparent;
 }
