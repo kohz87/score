@@ -301,6 +301,10 @@ tokens apply inside them, and only while their contrast holds.
 - The Needs-you marker and card.
 - The security-password dialogs and the permission and sandbox settings (Rules, Team permissions and the permission,
   warning and password fields when you add a coding agent).
+- The consent forms (v1.8.1): starting an orchestration or a workflow run (what each coding agent can read and the risk
+  text, the approval-policy choices, the spend confirmations, the budget, quota and limit fields, and the start button),
+  MCP read and write access on a team agent’s Tools tab, the whole of Settings › Remote access (the security password
+  field, pairing links, paired browsers with Renew, End and End all, passkeys), and the card on the pair page.
 - Agent shapes (`AgentGlyph`) and error toasts.
 - The way back: the Settings link, the menu and search buttons with the command palette (and its “Reset look” entry),
   “Reset look” itself and the banner that appears when a theme is skipped. The chat-first view (`/u`) has the same
@@ -328,7 +332,10 @@ unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can�
 stranger), Score refuses the action, switches the theme off and says nothing was sent. A decision is vetted as a whole:
 an approval’s request and its buttons, or the add-coding-agent form (its context, warnings, permission and password
 fields, the button, and also every other label and field of the form: kind, name, role, workspace, model) count as one,
-so hiding, fading, clipping, covering or blanking any part of it refuses the click or the submit. (The fields and labels
+so hiding, fading, clipping, covering or blanking any part of it refuses the click or the submit. The start-orchestration
+and start-workflow forms, MCP access, Remote access and the pair card are decisions in the same way: a form whose
+protected parts are not on the page right now (a plain workflow without coding agents) still has every field and label
+vetted. (The fields and labels
 that are not protected surfaces may still be set in a theme’s own type; only being unreadable or unreachable counts.) Every
 measurement is made against the same page with the theme’s own CSS gone (its sheets and its cached copy lifted; the
 layout options of the manifest stay, because Score renders those itself). Text over a picture has to read against

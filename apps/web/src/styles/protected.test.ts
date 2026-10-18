@@ -112,3 +112,44 @@ test('the way back wears an opaque background of its own (re-gate finding 5: a t
     /\[data-protected='raised'\]:not\(\[aria-current='page'\]\) \{[^}]*background-color: var\(--card\) !important/,
   )
 })
+
+// Cross-audit X1: a form that posts a consent can't lose its markers unnoticed. Each of these is one decision
+// (`data-decision`) and wears the protected surfaces listed for it; a new consent form is added here.
+const consentForms: Record<string, { decisions: number; markers: string[] }> = {
+  'routes/orchestrations/NewOrchestrationDialog.tsx': {
+    decisions: 1,
+    markers: ['orch-workers', 'orch-approvals', 'orch-spend', 'orch-limits', 'orch-start'],
+  },
+  'routes/workflows/StartWorkflowDialog.tsx': {
+    decisions: 1,
+    markers: ['orch-approvals', 'orch-spend', 'orch-limits', 'orch-start'],
+  },
+  'routes/team/McpAccessSection.tsx': { decisions: 1, markers: ['team-mcp-access'] },
+  'routes/settings/RemoteSection.tsx': { decisions: 1, markers: ['settings-remote'] },
+  'routes/pair/PairPage.tsx': { decisions: 1, markers: ['pair-card'] },
+  'routes/team/CodingAgent.tsx': { decisions: 1, markers: ['coding-acknowledge'] },
+  'routes/tasks/TaskDrawer.tsx': { decisions: 1, markers: ['task-drawer-approval'] },
+}
+
+test('every form that posts a consent is a data-decision and wears its protected surfaces', () => {
+  const problems: string[] = []
+  for (const [file, { decisions, markers }] of Object.entries(consentForms)) {
+    const text = readFileSync(join(root, file), 'utf8')
+    // The attribute, not a comment's "(data-decision)".
+    const found = text.match(/(?<![(\w-])data-decision(?![\w)-])/g)?.length ?? 0
+    if (found !== decisions) problems.push(`${file}: ${found} data-decision, expected ${decisions}`)
+    for (const marker of markers) {
+      if (!(protectedClasses as readonly string[]).includes(marker))
+        problems.push(`${file}: ${marker} is not a protected class`)
+      const pattern = new RegExp(`className=(?:"|\\{\`)[^"\`]*\\b${marker}(?![\\w-])`)
+      const at = pattern.exec(text)
+      if (!at) problems.push(`${file}: no element wears ${marker}`)
+      else {
+        const start = text.lastIndexOf('<', at.index)
+        if (!text.slice(Math.max(0, start - 200), at.index + 700).includes('data-protected'))
+          problems.push(`${file}: ${marker} is not data-protected`)
+      }
+    }
+  }
+  expect(problems).toEqual([])
+})

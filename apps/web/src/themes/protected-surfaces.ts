@@ -11,6 +11,15 @@ export const protectedClasses = [
   'reports-approvals',
   'watch-approval',
   'orch-ack',
+  // The consent forms: starting a run (policy, reach, spend, limits, the button), MCP access, remote access, pairing
+  'orch-workers',
+  'orch-approvals',
+  'orch-spend',
+  'orch-limits',
+  'orch-start',
+  'team-mcp-access',
+  'settings-remote',
+  'pair-card',
   // Needs-you markers
   'needs-you-dot',
   'orch-pill',

@@ -32,9 +32,15 @@ export async function drawn(part: Locator) {
   await expect(part).toBeVisible()
   const style = await part.evaluate((element) => {
     const computed = getComputedStyle(element)
-    return { opacity: computed.opacity, color: computed.color, display: computed.display }
+    return {
+      opacity: computed.opacity,
+      color: computed.color,
+      display: computed.display,
+      // A disabled control keeps looking disabled (protected.css), but never invisible.
+      disabled: element.matches(':disabled, [aria-disabled=true]'),
+    }
   })
-  expect(style.opacity).toBe('1')
+  expect(style.opacity).toBe(style.disabled ? '0.5' : '1')
   expect(style.color).not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/)
   expect(style.display).not.toBe('none')
 }

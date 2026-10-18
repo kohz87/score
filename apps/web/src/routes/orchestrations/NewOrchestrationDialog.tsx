@@ -53,7 +53,8 @@ export function CodingWorkers({
 }) {
   const wide = workers.some((worker) => worker.reachBeyondWorkspace)
   return (
-    <section aria-label="Coding agents in this run" className="orch-workers">
+    // The reach of each coding agent, the risk in plain words and the acknowledgement are one protected surface (X1).
+    <section aria-label="Coding agents in this run" className="orch-workers" data-protected="block">
       <h3>Coding agents in this run</h3>
       <p className="orch-muted">
         Claude Code and Codex work on this computer, in the workspace you gave them. This is what
@@ -239,7 +240,9 @@ export function NewOrchestrationDialog({
           ? 'A lead agent works through the goal with the agents you pick, and the updates arrive in this chat.'
           : 'A lead agent decides the steps while it works, hands them to team agents and asks you when it needs to. Score checks every request the lead makes.'}
       </p>
-      <form onSubmit={submit} className="orch-form">
+      {/* One decision: the approval policy, the reach and risk of the coding agents, the spend choices, the limits and
+          the button that commits them (data-decision), so a theme can't hide one while the person starts the run. */}
+      <form onSubmit={submit} className="orch-form" data-decision>
         <label className="orch-field">
           <span>Goal</span>
           <textarea
@@ -289,7 +292,7 @@ export function NewOrchestrationDialog({
           </small>
         </fieldset>
         {!compact && (
-          <fieldset className="orch-field">
+          <fieldset className="orch-field orch-approvals" data-protected="flex">
             <legend>Approvals</legend>
             {POLICIES.map((item) => (
               <label key={item.id} className="orch-check orch-policy">
@@ -307,7 +310,7 @@ export function NewOrchestrationDialog({
             ))}
           </fieldset>
         )}
-        <div className="orch-row">
+        <div className="orch-row orch-limits" data-protected="flex">
           <label className="orch-field">
             <span>Budget in USD (optional)</span>
             <input
@@ -328,7 +331,7 @@ export function NewOrchestrationDialog({
           )}
         </div>
         {!compact && (
-          <details>
+          <details className="orch-limits" data-protected="block">
             <summary>Limits and estimates</summary>
             <p className="orch-muted">
               Estimates are per lead turn and per step. Score reserves them against the budget
@@ -425,7 +428,7 @@ export function NewOrchestrationDialog({
             />
           )}
           {workers.length > 0 && (
-            <fieldset className="orch-field">
+            <fieldset className="orch-field orch-spend" data-protected="flex">
               <legend>If the cost of some work can’t be worked out</legend>
               <small className="orch-muted">
                 This only matters when you set a budget. Without it, the run goes on either way.
@@ -466,7 +469,7 @@ export function NewOrchestrationDialog({
             {failed && <PreflightList checks={failed} />}
           </div>
         )}
-        <div className="orch-actions">
+        <div className="orch-actions orch-start" data-protected="flex">
           <button
             type="submit"
             className="orch-primary"

@@ -217,7 +217,15 @@ export function RemoteSection() {
     ''
   const busy = revoke.isPending || revokeOthers.isPending || renew.isPending || invite.isPending
   return (
-    <section id="remote-access" className="settings-card" aria-labelledby="settings-remote-access">
+    // Pairing, the security password, paired browsers and passkeys decide who can control Score: the whole card is one
+    // protected decision, so a theme can't hide a password field or a pairing button while one is used (X1).
+    <section
+      id="remote-access"
+      className="settings-card settings-remote"
+      aria-labelledby="settings-remote-access"
+      data-decision
+      data-protected="flex"
+    >
       <h2 id="settings-remote-access">Remote access</h2>
       <p>
         Paired browsers can read all conversations and control Score. Pair only browsers you trust.
