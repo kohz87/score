@@ -411,6 +411,8 @@ role + "Personality and instructions" stored in Score, handed to the CLI each se
 `--append-system-prompt-file`, Codex/Antigravity as the session's opening instructions); nothing written to the workspace.
 **8.9 Agent page cleanup** · (owner 2026-10-17; decision 97; brief docs/briefs/8.9-agent-page.md) one layout for Hermes
 and coding agents following docs/design/team.png: header actions, 3-column grid, capped lists, coding cards edited in place.
+**T1 Fix the load-flaky tests** · (lead 2026-10-18; brief docs/briefs/T1-flaky-tests.md) fix the timing-flaky unit and
+e2e tests at their cause; 20/20 under load.
 
 ## Phase 9: Themes and the Customizer (owner 2026-10-17; design docs/briefs/9-themes.md; decision 90)
 
