@@ -82,10 +82,10 @@ describe('helpers', () => {
     expect(
       rewriteAssetUrls(
         `a{background:url(asset:img/bg.webp)} @font-face{src:url("asset:fonts/x.woff2")} b{color:red}`,
-        'harbour',
+        'seaside',
       ),
     ).toBe(
-      `a{background:url(/api/themes/harbour/assets/img/bg.webp)} @font-face{src:url("/api/themes/harbour/assets/fonts/x.woff2")} b{color:red}`,
+      `a{background:url(/api/themes/seaside/assets/img/bg.webp)} @font-face{src:url("/api/themes/seaside/assets/fonts/x.woff2")} b{color:red}`,
     )
   })
 })

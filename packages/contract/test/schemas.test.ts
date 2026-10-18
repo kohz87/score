@@ -2061,3 +2061,18 @@ test('CodingAgentPatchSchema: instructions need their etag and stay within the l
   expect(patch.safeParse(text(contract.CODING_INSTRUCTIONS_MAX + 1)).success).toBe(false)
   expect(contract.CODING_INSTRUCTIONS_MAX).toBe(8000)
 })
+
+test('the colour tokens a theme may set are colours: the halo sizes are not on the list', () => {
+  // `--halo-ring` and `--halo-glow` are px sizes in tokens.css; a colour there would break the running-step halo.
+  expect(contract.THEME_COLOR_TOKENS).not.toContain('halo-glow')
+  expect(contract.THEME_COLOR_TOKENS).not.toContain('halo-ring')
+  for (const token of ['halo-glow', 'halo-ring'])
+    expect(
+      contract.ThemeManifestSchema.safeParse({
+        format: 1,
+        id: 'x',
+        name: 'X',
+        colors: { light: { [token]: '#ffffff' } },
+      }).success,
+    ).toBe(false)
+})

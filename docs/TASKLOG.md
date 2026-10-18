@@ -243,3 +243,8 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **Release 1.7.0** (9.3 layouts + S1 + worker-policy cap). Haiku monitor: contract 1253, web 1454, plugin 323,
   license green; server 3 known failures (T1: release-test race, fix-l); e2e 454/465 — chat-attach and live-feel load
   only, chat-composer "@" race (T1, pre-existing), themes-layout launcher reset passes alone (→ T1).
+- **9.5 themes and guide** merged: Harbour / Ledger / Studio as server-shipped packages, `docs/THEMES.md` with a
+  schema-checked field list, the Sandbar example. Codex cross-check: 3 real findings fixed in a round (upgrade rename of
+  user themes on now-built-in ids — migration 0075 + startup step; Harbour agent-text contrast; OFL licence text now kept
+  through import/export). Lead: removed `halo-*` from the colour tokens (sizes), labelled renamed themes "(yours)",
+  verified the upgrade test fails without the rename step.

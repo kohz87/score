@@ -20,7 +20,14 @@ import {
   type ThemeSummary,
 } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
-import { BUILTIN_UPDATED_AT, builtinManifest } from './builtin.ts'
+import {
+  BUILTIN_UPDATED_AT,
+  builtinAssetRoot,
+  builtinCss,
+  builtinLicenses,
+  builtinManifest,
+  isBuiltinThemeId,
+} from './builtin.ts'
 
 const RowSchema = z.object({
   id: z.string(),
@@ -28,11 +35,13 @@ const RowSchema = z.object({
   version: z.string(),
   manifest_json: z.string(),
   css: z.string(),
+  licenses_json: z.string(),
   source: z.enum(['imported', 'custom']),
   created_at: z.string(),
   updated_at: z.string(),
 })
 type Row = z.infer<typeof RowSchema>
+const LicensesSchema = z.record(z.string(), z.string())
 
 export const ASSET_DIRS = ['fonts', 'img'] as const
 
@@ -41,6 +50,8 @@ export interface StoredTheme {
   css: string
   source: ThemeSummary['source']
   updatedAt: string
+  /** Licence files of the package (`LICENSE`, `OFL.txt`) -> text; put back into its export. */
+  licenses: Record<string, string>
 }
 
 /** Hash of what a save changes (manifest and CSS), for `If`-style conflict checks. */
@@ -52,7 +63,7 @@ export function themeEtag(manifest: ThemeManifest, css: string): string {
     .digest('hex')
 }
 
-/** Rows and asset folders of imported and custom themes; built-ins are constants. */
+/** Rows and asset folders of imported and custom themes; built-ins are constants or shipped packages. */
 export class ThemeStore {
   readonly root: string
 
@@ -87,12 +98,20 @@ export class ThemeStore {
       css: row.css,
       source: row.source,
       updatedAt: row.updated_at,
+      licenses: LicensesSchema.parse(JSON.parse(row.licenses_json)),
     }
   }
 
   get(id: string): StoredTheme | null {
     const manifest = builtinManifest(id)
-    if (manifest) return { manifest, css: '', source: 'builtin', updatedAt: BUILTIN_UPDATED_AT }
+    if (manifest)
+      return {
+        manifest,
+        css: builtinCss(id),
+        source: 'builtin',
+        updatedAt: BUILTIN_UPDATED_AT,
+        licenses: builtinLicenses(id),
+      }
     const row = this.row(id)
     return row ? this.parse(row) : null
   }
@@ -120,11 +139,16 @@ export class ThemeStore {
     return [...builtins, ...this.rows().map((row) => this.parse(row))].map((t) => this.summary(t))
   }
 
+  /** The folder an id's `fonts/` and `img/` are in: the shipped package for a built-in, else Score's own home. */
+  assetRoot(id: string): string {
+    return builtinAssetRoot(id) ?? join(this.root, id, 'assets')
+  }
+
   /** Asset paths as `fonts/x.woff2`, sorted; only regular files (a symlink planted on disk is never listed). */
   assets(id: string): string[] {
     const found: string[] = []
     for (const dir of ASSET_DIRS) {
-      const folder = join(this.root, id, 'assets', dir)
+      const folder = join(this.assetRoot(id), dir)
       if (!existsSync(folder)) continue
       for (const name of readdirSync(folder).sort()) {
         if (lstatSync(join(folder, name)).isFile()) found.push(`${dir}/${name}`)
@@ -151,15 +175,17 @@ export class ThemeStore {
     manifest: ThemeManifest,
     css: string,
     source: 'imported' | 'custom',
+    licenses?: Record<string, string>,
   ): void {
     const at = this.now()
     sqlite
       .prepare(
-        `INSERT INTO themes (id, name, version, manifest_json, css, source, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO themes (id, name, version, manifest_json, css, source, created_at, updated_at, licenses_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET name = excluded.name, version = excluded.version,
            manifest_json = excluded.manifest_json, css = excluded.css, source = excluded.source,
-           updated_at = excluded.updated_at`,
+           updated_at = excluded.updated_at,
+           licenses_json = CASE WHEN ? THEN excluded.licenses_json ELSE themes.licenses_json END`,
       )
       .run(
         manifest.id,
@@ -170,6 +196,8 @@ export class ThemeStore {
         source,
         at,
         at,
+        JSON.stringify(licenses ?? {}),
+        licenses === undefined ? 0 : 1,
       )
   }
 
@@ -182,7 +210,12 @@ export class ThemeStore {
    * Stores an imported theme: the assets are staged in a private folder, swapped in, then the row is written; if the
    * row fails the previous folder comes back. Files are 0600, folders 0700.
    */
-  storeImported(manifest: ThemeManifest, css: string, assets: Map<string, Buffer>): void {
+  storeImported(
+    manifest: ThemeManifest,
+    css: string,
+    assets: Map<string, Buffer>,
+    licenses: Record<string, string> = {},
+  ): void {
     mkdirSync(this.root, { recursive: true, mode: 0o700 })
     chmodSync(this.root, 0o700)
     const token = randomUUID()
@@ -201,7 +234,7 @@ export class ThemeStore {
       if (hadOld) renameSync(target, old)
       renameSync(staged, target)
       try {
-        this.db.tx((sqlite) => this.upsert(sqlite, manifest, css, 'imported'))
+        this.db.tx((sqlite) => this.upsert(sqlite, manifest, css, 'imported', licenses))
       } catch (error) {
         rmSync(target, { recursive: true, force: true })
         if (hadOld) renameSync(old, target)
@@ -211,6 +244,55 @@ export class ThemeStore {
     } finally {
       rmSync(staged, { recursive: true, force: true })
     }
+  }
+
+  /**
+   * Before 9.5 an import or a custom theme could be called harbour, ledger or studio; those ids now belong to built-in
+   * themes, which would shadow it (the list would show two, and detail, export, edit and delete would all reach the
+   * built-in). Run at start: such a row gets a free id (`harbour-mine`, `harbour-mine-2`, …), its asset folder moves
+   * with it, and the shared look follows if it pointed at the old id. Safe to run again after a crash: the folder moves
+   * first, and a half-moved theme is finished on the next start.
+   */
+  reclaimBuiltinIds(): { from: string; to: string }[] {
+    const moved: { from: string; to: string }[] = []
+    for (const row of this.rows().filter((item) => isBuiltinThemeId(item.id))) {
+      const taken = new Set(this.rows().map((item) => item.id))
+      const oldFolder = join(this.root, row.id)
+      let to = ''
+      for (let n = 1; ; n += 1) {
+        const candidate = n === 1 ? `${row.id}-mine` : `${row.id}-mine-${n}`
+        if (taken.has(candidate) || isBuiltinThemeId(candidate)) continue
+        // A folder already there only blocks when there is something to move into it (else it is a half-done move).
+        if (existsSync(join(this.root, candidate)) && existsSync(oldFolder)) continue
+        to = candidate
+        break
+      }
+      try {
+        if (existsSync(oldFolder)) renameSync(oldFolder, join(this.root, to))
+      } catch {
+        continue // leave it as it was; the next start tries again
+      }
+      this.db.tx((sqlite) => {
+        let manifestJson = row.manifest_json
+        // "(yours)" tells it apart from the built-in of the same name in the picker.
+        const name = `${row.name.slice(0, 52)} (yours)`
+        try {
+          manifestJson = JSON.stringify({ ...JSON.parse(row.manifest_json), id: to, name })
+        } catch {
+          // A manifest that can't be read keeps its text; the row is still renamed.
+        }
+        sqlite
+          .prepare(
+            'UPDATE themes SET id = ?, name = ?, manifest_json = ?, updated_at = ? WHERE id = ?',
+          )
+          .run(to, name, manifestJson, this.now(), row.id)
+        sqlite
+          .prepare("UPDATE meta SET value = ? WHERE key = 'look.activeTheme' AND value = ?")
+          .run(to, row.id)
+      })
+      moved.push({ from: row.id, to })
+    }
+    return moved
   }
 
   /** Removes the row and the folder; the caller has already refused built-ins and the active theme. */

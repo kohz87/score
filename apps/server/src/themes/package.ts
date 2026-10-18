@@ -2,6 +2,7 @@ import type { Readable } from 'node:stream'
 import JSZip from 'jszip'
 import { ThemeManifestSchema, THEME_FORMAT, type ThemeManifest } from '@score/contract'
 import { isBuiltinThemeId } from './builtin.ts'
+import { LICENSE_FILES, MAX_LICENSE_BYTES } from './license-files.ts'
 import { ASSET_PATH, checkThemeCss, MAX_THEME_CSS_BYTES } from './css-check.ts'
 
 // Theme packages: `theme.json`, optional `style.css`, `assets/fonts/*.woff2`, `assets/img/*`. The zip guards follow the
@@ -31,6 +32,8 @@ export interface ThemePackage {
   css: string
   /** `fonts/x.woff2` -> bytes */
   assets: Map<string, Buffer>
+  /** `LICENSE` or `OFL.txt` -> its text */
+  licenses: Record<string, string>
 }
 
 const hasPrefix = (bytes: Buffer, at: number, text: string) =>
@@ -80,6 +83,15 @@ function declaredEntryCount(bytes: Buffer): number {
   return 0
 }
 
+/** NUL and the other control characters, except tab and the line breaks. */
+function hasControlCharacter(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i)
+    if ((code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127) return true
+  }
+  return false
+}
+
 function pathProblem(raw: string): string | null {
   if (raw.includes('\\')) return 'backslash in the path'
   if (raw.includes('\0')) return 'unsafe path'
@@ -94,6 +106,7 @@ const NESTED_ARCHIVE_NAME = /\.(?:zip|tar|gz|tgz|bz2|xz|7z|rar|jar)$/i
 
 function allowed(path: string): boolean {
   if (path === 'theme.json' || path === 'style.css') return true
+  if ((LICENSE_FILES as readonly string[]).includes(path)) return true
   const match = /^assets\/(fonts|img)\/(.+)$/.exec(path)
   if (!match || !ASSET_PATH.test(`${match[1]}/${match[2]}`)) return false
   return match[1] === 'fonts' ? path.endsWith('.woff2') : !path.endsWith('.woff2')
@@ -192,7 +205,9 @@ export async function readThemePackage(bytes: Buffer): Promise<ThemePackage> {
         ? MAX_THEME_CSS_BYTES
         : raw === 'theme.json'
           ? MAX_JSON_BYTES
-          : MAX_ASSET_BYTES
+          : (LICENSE_FILES as readonly string[]).includes(raw)
+            ? MAX_LICENSE_BYTES
+            : MAX_ASSET_BYTES
     if (size !== null && size > cap) {
       reasons.add(`${shown}: file too large`)
       continue
@@ -218,7 +233,9 @@ export async function readThemePackage(bytes: Buffer): Promise<ThemePackage> {
         ? MAX_THEME_CSS_BYTES
         : name === 'theme.json'
           ? MAX_JSON_BYTES
-          : MAX_ASSET_BYTES
+          : (LICENSE_FILES as readonly string[]).includes(name)
+            ? MAX_LICENSE_BYTES
+            : MAX_ASSET_BYTES
     const data = await inflate(entry.file, name, entry.size, entry.packed, cap)
     total += data.length
     if (total > MAX_UNPACKED_BYTES)
@@ -235,6 +252,20 @@ export async function readThemePackage(bytes: Buffer): Promise<ThemePackage> {
     }
     if (name.startsWith('assets/') && !MAGIC[assetExtension(name)]?.(data))
       reasons.add(`${name}: the file isn’t really a ${assetExtension(name)} file`)
+  }
+
+  const licenses: Record<string, string> = {}
+  for (const name of LICENSE_FILES) {
+    const bytes = content.get(name)
+    if (!bytes) continue
+    try {
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '')
+      // Plain text only: no NUL or other control characters besides tab and line breaks.
+      if (hasControlCharacter(text)) reasons.add(`${name} isn’t plain text`)
+      else licenses[name] = text
+    } catch {
+      reasons.add(`${name} isn’t valid UTF-8 text`)
+    }
   }
 
   const json = content.get('theme.json')
@@ -263,7 +294,7 @@ export async function readThemePackage(bytes: Buffer): Promise<ThemePackage> {
   const assets = new Map<string, Buffer>()
   for (const [name, data] of content)
     if (name.startsWith('assets/')) assets.set(name.slice(7), data)
-  return { manifest, css, assets }
+  return { manifest, css, assets, licenses }
 }
 
 function parseManifest(json: Buffer, reasons: Set<string>): ThemeManifest | null {
@@ -307,16 +338,19 @@ export function manifestAssets(manifest: ThemeManifest): string[] {
 
 const EPOCH = new Date('2000-01-01T00:00:00Z')
 
-/** Export: `theme.json`, `style.css` (when there is CSS), then assets sorted by path, fixed dates and modes. */
+/** Export: `theme.json`, `style.css` (when there is CSS), the licence files, then assets sorted by path, fixed dates and modes. */
 export async function buildThemePackage(
   manifest: ThemeManifest,
   css: string,
   assets: Map<string, Buffer>,
+  licenses: Record<string, string> = {},
 ): Promise<Buffer> {
   const zip = new JSZip()
   const options = { date: EPOCH, unixPermissions: 0o644, createFolders: false }
   zip.file('theme.json', `${JSON.stringify(manifest, null, 2)}\n`, options)
   if (css.length > 0) zip.file('style.css', css, options)
+  for (const name of LICENSE_FILES)
+    if (licenses[name] !== undefined) zip.file(name, licenses[name], options)
   for (const path of [...assets.keys()].sort())
     zip.file(`assets/${path}`, assets.get(path)!, { ...options, compression: 'STORE' })
   return zip.generateAsync({
