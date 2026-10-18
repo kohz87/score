@@ -208,3 +208,24 @@ test('an active look on a theme that is not affected is left alone', () => {
   expect(store.reclaimBuiltinIds()).toEqual([])
   expect(readLook(db.sqlite)).toEqual({ activeTheme: 'mine', mode: 'light' })
 })
+
+// K2 X12: ids that name properties every object has are ordinary ids, not built-ins.
+test.each(['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'])(
+  'the id %s is an ordinary id: no built-in answers for it',
+  (id) => {
+    expect(store.get(id)).toBeNull()
+    expect(store.exists(id)).toBe(false)
+    expect(store.detail(id)).toBeNull()
+    expect(store.list().map((item) => item.id)).not.toContain(id)
+  },
+)
+
+test('a stored theme with the id constructor is listed, read and removed like any other', () => {
+  store.storeImported(manifest('constructor'), 'a{}', new Map())
+  expect(store.get('constructor')).toMatchObject({ source: 'imported', css: 'a{}' })
+  expect(store.list().find((item) => item.id === 'constructor')).toMatchObject({
+    source: 'imported',
+  })
+  store.remove('constructor')
+  expect(store.get('constructor')).toBeNull()
+})
