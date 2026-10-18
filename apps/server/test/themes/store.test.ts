@@ -33,13 +33,16 @@ test('migration 0072 creates the themes table and the look defaults', () => {
   })
 })
 
-test('built-ins come from a constant: listed first, empty CSS, no rows', () => {
+test('built-ins come from constants and shipped packages: listed first, no rows', () => {
   const items = store.list()
   expect(items.map((item) => [item.id, item.source, item.hasCss])).toEqual([
     ['score', 'builtin', false],
     ['paper', 'builtin', false],
     ['night', 'builtin', false],
     ['dense', 'builtin', false],
+    ['harbour', 'builtin', true],
+    ['ledger', 'builtin', true],
+    ['studio', 'builtin', true],
   ])
   expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM themes').get()).toEqual({ n: 0 })
   expect(store.detail('night')).toMatchObject({ css: '', assets: [] })
@@ -47,24 +50,24 @@ test('built-ins come from a constant: listed first, empty CSS, no rows', () => {
 
 test('an imported theme keeps its assets in 0700/0600 folders and disappears with its folder', () => {
   const assets = new Map([['img/bg.webp', Buffer.from('x')]])
-  store.storeImported(manifest('harbour'), 'a{color:red}', assets)
-  expect(store.list().map((item) => item.id)).toContain('harbour')
-  expect(store.assets('harbour')).toEqual(['img/bg.webp'])
-  expect(statSync(join(store.root, 'harbour')).mode & 0o777).toBe(0o700)
-  expect(statSync(join(store.root, 'harbour/assets/img')).mode & 0o777).toBe(0o700)
-  expect(statSync(join(store.root, 'harbour/assets/img/bg.webp')).mode & 0o777).toBe(0o600)
+  store.storeImported(manifest('seaside'), 'a{color:red}', assets)
+  expect(store.list().map((item) => item.id)).toContain('seaside')
+  expect(store.assets('seaside')).toEqual(['img/bg.webp'])
+  expect(statSync(join(store.root, 'seaside')).mode & 0o777).toBe(0o700)
+  expect(statSync(join(store.root, 'seaside/assets/img')).mode & 0o777).toBe(0o700)
+  expect(statSync(join(store.root, 'seaside/assets/img/bg.webp')).mode & 0o777).toBe(0o600)
   // Replacing swaps the whole folder.
-  store.storeImported(manifest('harbour'), '', new Map())
-  expect(store.assets('harbour')).toEqual([])
-  store.remove('harbour')
-  expect(store.get('harbour')).toBeNull()
-  expect(existsSync(join(store.root, 'harbour'))).toBe(false)
+  store.storeImported(manifest('seaside'), '', new Map())
+  expect(store.assets('seaside')).toEqual([])
+  store.remove('seaside')
+  expect(store.get('seaside')).toBeNull()
+  expect(existsSync(join(store.root, 'seaside'))).toBe(false)
 })
 
 test('a symlink planted in an asset folder is never listed', () => {
-  store.storeImported(manifest('harbour'), '', new Map([['img/a.png', Buffer.from('x')]]))
-  symlinkSync('/etc/hostname', join(store.root, 'harbour/assets/img/link.png'))
-  expect(store.assets('harbour')).toEqual(['img/a.png'])
+  store.storeImported(manifest('seaside'), '', new Map([['img/a.png', Buffer.from('x')]]))
+  symlinkSync('/etc/hostname', join(store.root, 'seaside/assets/img/link.png'))
+  expect(store.assets('seaside')).toEqual(['img/a.png'])
 })
 
 test('the etag changes with the manifest and with the CSS', () => {
@@ -87,8 +90,8 @@ test('look settings round-trip and a damaged row falls back to the default', () 
 })
 
 test('a failed row write brings the previous asset folder back', () => {
-  store.storeImported(manifest('harbour'), '', new Map([['img/a.png', Buffer.from('x')]]))
+  store.storeImported(manifest('seaside'), '', new Map([['img/a.png', Buffer.from('x')]]))
   db.sqlite.exec('DROP TABLE themes')
-  expect(() => store.storeImported(manifest('harbour'), '', new Map())).toThrow()
-  expect(existsSync(join(store.root, 'harbour/assets/img/a.png'))).toBe(true)
+  expect(() => store.storeImported(manifest('seaside'), '', new Map())).toThrow()
+  expect(existsSync(join(store.root, 'seaside/assets/img/a.png'))).toBe(true)
 })

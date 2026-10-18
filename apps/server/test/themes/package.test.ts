@@ -41,7 +41,7 @@ describe('a valid package', () => {
         'assets/img/d.jpeg': JPEG,
       }),
     )
-    expect(pkg.manifest).toMatchObject({ id: 'harbour', version: '1.0.0' })
+    expect(pkg.manifest).toMatchObject({ id: 'seaside', version: '1.0.0' })
     expect(pkg.css).toBe('.a{background:url(asset:img/a.png)}')
     expect([...pkg.assets.keys()].sort()).toEqual([
       'fonts/brand.woff2',

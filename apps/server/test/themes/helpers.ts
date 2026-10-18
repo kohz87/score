@@ -17,7 +17,7 @@ export const AVIF = Buffer.concat([
 ])
 export const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])
 export const manifestJson = (extra: object = {}) =>
-  JSON.stringify({ format: 1, id: 'harbour', name: 'Harbour', ...extra })
+  JSON.stringify({ format: 1, id: 'seaside', name: 'Seaside', ...extra })
 
 export type Entry = string | Buffer | { data: string | Buffer; unixPermissions?: number }
 /** Builds a zip from raw names, so traversal and odd paths survive into the archive. */

@@ -1,0 +1,6 @@
+/* Studio: the airy spacing, the serif and the right-hand rail come from theme.json; this adds the finishing touches. */
+h1 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.04;
+}

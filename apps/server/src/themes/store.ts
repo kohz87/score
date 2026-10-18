@@ -20,7 +20,7 @@ import {
   type ThemeSummary,
 } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
-import { BUILTIN_UPDATED_AT, builtinManifest } from './builtin.ts'
+import { BUILTIN_UPDATED_AT, builtinAssetRoot, builtinCss, builtinManifest } from './builtin.ts'
 
 const RowSchema = z.object({
   id: z.string(),
@@ -52,7 +52,7 @@ export function themeEtag(manifest: ThemeManifest, css: string): string {
     .digest('hex')
 }
 
-/** Rows and asset folders of imported and custom themes; built-ins are constants. */
+/** Rows and asset folders of imported and custom themes; built-ins are constants or shipped packages. */
 export class ThemeStore {
   readonly root: string
 
@@ -92,7 +92,8 @@ export class ThemeStore {
 
   get(id: string): StoredTheme | null {
     const manifest = builtinManifest(id)
-    if (manifest) return { manifest, css: '', source: 'builtin', updatedAt: BUILTIN_UPDATED_AT }
+    if (manifest)
+      return { manifest, css: builtinCss(id), source: 'builtin', updatedAt: BUILTIN_UPDATED_AT }
     const row = this.row(id)
     return row ? this.parse(row) : null
   }
@@ -120,11 +121,16 @@ export class ThemeStore {
     return [...builtins, ...this.rows().map((row) => this.parse(row))].map((t) => this.summary(t))
   }
 
+  /** The folder an id's `fonts/` and `img/` are in: the shipped package for a built-in, else Score's own home. */
+  assetRoot(id: string): string {
+    return builtinAssetRoot(id) ?? join(this.root, id, 'assets')
+  }
+
   /** Asset paths as `fonts/x.woff2`, sorted; only regular files (a symlink planted on disk is never listed). */
   assets(id: string): string[] {
     const found: string[] = []
     for (const dir of ASSET_DIRS) {
-      const folder = join(this.root, id, 'assets', dir)
+      const folder = join(this.assetRoot(id), dir)
       if (!existsSync(folder)) continue
       for (const name of readdirSync(folder).sort()) {
         if (lstatSync(join(folder, name)).isFile()) found.push(`${dir}/${name}`)

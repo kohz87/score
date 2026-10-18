@@ -92,7 +92,7 @@ export function registerThemeRoutes(
     const parsed = AssetParams.safeParse(request.params)
     if (!parsed.success) throw notFound()
     const { id, '*': path } = parsed.data
-    const file = join(store.root, id, 'assets', ...path.split('/'))
+    const file = join(store.assetRoot(id), ...path.split('/'))
     // A symlink or anything but a regular file is not served, whatever is on disk.
     let bytes: Buffer
     try {
@@ -187,7 +187,7 @@ export function registerThemeRoutes(
     const theme = store.get(id)
     if (!theme) throw notFound()
     const assets = new Map(
-      store.assets(id).map((path) => [path, readFileSync(join(store.root, id, 'assets', path))]),
+      store.assets(id).map((path) => [path, readFileSync(join(store.assetRoot(id), path))]),
     )
     const zip = await buildThemePackage(theme.manifest, theme.css, assets)
     return reply

@@ -48,3 +48,11 @@ SOFTWARE.
 - Bricolage Grotesque: Copyright 2022 The Bricolage Grotesque Project Authors
 - Hanken Grotesk: Copyright 2021 The Hanken Grotesk Project Authors
 - JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors
+
+Some of these fonts' `woff2` files are also copied, unmodified, into the built-in themes of PLAN 9.5 (taken from the
+installed @fontsource packages), so a theme served by Score can load them itself:
+- `apps/server/themes/ledger/assets/fonts/jetbrains-mono-latin-{500,700}.woff2`: JetBrains Mono, licence text in
+  `apps/server/themes/ledger/OFL.txt`.
+- `apps/server/themes/studio/assets/fonts/source-serif-4-latin-{400,600}.woff2`: Source Serif 4 (Copyright 2014-2021
+  Adobe, with Reserved Font Name "Source"; distributed through fontsource by Google Inc.), licence text in
+  `apps/server/themes/studio/OFL.txt`.

@@ -17,6 +17,8 @@ import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { multipart } from '../media-fixtures.ts'
+import { checkThemeCss } from '../../src/themes/css-check.ts'
+import { manifestAssets, readThemePackage } from '../../src/themes/package.ts'
 import { AVIF, JPEG, PNG, WEBP, WOFF2, manifestJson, zipOf, type Entry } from './helpers.ts'
 
 let dir: string
@@ -88,7 +90,7 @@ function upload(zip: Buffer, query = '', extra: Record<string, string> | null = 
     payload: body,
   })
 }
-const fullPackage = (id = 'harbour', css = '.a{background:url(asset:img/a.png)}') =>
+const fullPackage = (id = 'seaside', css = '.a{background:url(asset:img/a.png)}') =>
   zipOf({
     'theme.json': manifestJson({ id, name: id }),
     'style.css': css,
@@ -137,12 +139,20 @@ test('every route needs a paired browser, and changes need the web-client header
 
 test('GET /api/themes lists the built-ins, imports, the active theme and the mode', async () => {
   const list = ThemeListSchema.parse((await call('GET', '/api/themes')).json())
-  expect(list.items.map((item) => item.id)).toEqual(['score', 'paper', 'night', 'dense'])
+  expect(list.items.map((item) => item.id)).toEqual([
+    'score',
+    'paper',
+    'night',
+    'dense',
+    'harbour',
+    'ledger',
+    'studio',
+  ])
   expect(list).toMatchObject({ active: 'score', mode: 'system' })
   await upload(await fullPackage())
   const after = ThemeListSchema.parse((await call('GET', '/api/themes')).json())
   expect(after.items.map((item) => [item.id, item.source, item.hasCss])).toContainEqual([
-    'harbour',
+    'seaside',
     'imported',
     true,
   ])
@@ -150,7 +160,7 @@ test('GET /api/themes lists the built-ins, imports, the active theme and the mod
 
 test('GET /api/themes/:id: detail, built-in detail and 404', async () => {
   await upload(await fullPackage())
-  const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/harbour')).json())
+  const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
   expect(detail.assets).toEqual(['fonts/f.woff2', 'img/a.png'])
   expect(detail.css).toBe('.a{background:url(asset:img/a.png)}')
   expect(
@@ -166,11 +176,11 @@ test('GET /api/themes/:id: detail, built-in detail and 404', async () => {
 
 test('style.css rewrites asset: references and is served as nosniff text/css', async () => {
   await upload(await fullPackage())
-  const res = await call('GET', '/api/themes/harbour/style.css')
+  const res = await call('GET', '/api/themes/seaside/style.css')
   expect(res.statusCode).toBe(200)
   expect(res.headers['content-type']).toBe('text/css; charset=utf-8')
   expect(res.headers['x-content-type-options']).toBe('nosniff')
-  expect(res.body).toBe('.a{background:url(/api/themes/harbour/assets/img/a.png)}')
+  expect(res.body).toBe('.a{background:url(/api/themes/seaside/assets/img/a.png)}')
   expect((await call('GET', '/api/themes/nope/style.css')).statusCode).toBe(404)
   expect((await call('GET', '/api/themes/score/style.css')).body).toBe('')
 })
@@ -187,7 +197,7 @@ test('assets are served with their exact type, nosniff, inline and private', asy
   for (const [name, [data]] of Object.entries(bytes)) entries[name] = data
   expect((await upload(await zipOf(entries))).statusCode).toBe(201)
   for (const [name, [data, type]] of Object.entries(bytes)) {
-    const res = await call('GET', `/api/themes/harbour/${name}`)
+    const res = await call('GET', `/api/themes/seaside/${name}`)
     expect(res.statusCode, name).toBe(200)
     expect(res.headers['content-type']).toBe(type)
     expect(res.headers['x-content-type-options']).toBe('nosniff')
@@ -200,13 +210,13 @@ test('assets are served with their exact type, nosniff, inline and private', asy
 test('assets: unknown files, odd paths and a symlink planted on disk are 404', async () => {
   await upload(await fullPackage())
   for (const url of [
-    '/api/themes/harbour/assets/img/missing.png',
-    '/api/themes/harbour/assets/img/a.svg',
-    '/api/themes/harbour/assets/other/a.png',
-    '/api/themes/harbour/assets/img/../../../../etc/hostname',
-    '/api/themes/harbour/assets/img/%2e%2e/a.png',
-    '/api/themes/harbour/assets/img%2f..%2f..%2fx.png',
-    '/api/themes/harbour/assets/',
+    '/api/themes/seaside/assets/img/missing.png',
+    '/api/themes/seaside/assets/img/a.svg',
+    '/api/themes/seaside/assets/other/a.png',
+    '/api/themes/seaside/assets/img/../../../../etc/hostname',
+    '/api/themes/seaside/assets/img/%2e%2e/a.png',
+    '/api/themes/seaside/assets/img%2f..%2f..%2fx.png',
+    '/api/themes/seaside/assets/',
     '/api/themes/nope/assets/img/a.png',
   ]) {
     const res = await call('GET', url)
@@ -215,9 +225,9 @@ test('assets: unknown files, odd paths and a symlink planted on disk are 404', a
   }
   const target = join(dir, 'secret.png')
   writeFileSync(target, PNG)
-  const link = join(dir, 'themes/harbour/assets/img/link.png')
+  const link = join(dir, 'themes/seaside/assets/img/link.png')
   symlinkSync(target, link)
-  expect((await call('GET', '/api/themes/harbour/assets/img/link.png')).statusCode).toBe(404)
+  expect((await call('GET', '/api/themes/seaside/assets/img/link.png')).statusCode).toBe(404)
   unlinkSync(link)
 })
 
@@ -225,10 +235,10 @@ test('import: 201, stored not activated, assets on disk with private modes', asy
   const res = await upload(await fullPackage())
   expect(res.statusCode).toBe(201)
   const result = ThemeImportResultSchema.parse(res.json())
-  expect(result.theme).toMatchObject({ id: 'harbour', source: 'imported' })
+  expect(result.theme).toMatchObject({ id: 'seaside', source: 'imported' })
   expect(result.report).toEqual({ dropped: [] })
   expect(ThemeListSchema.parse((await call('GET', '/api/themes')).json()).active).toBe('score')
-  const assets = join(dir, 'themes/harbour/assets')
+  const assets = join(dir, 'themes/seaside/assets')
   expect(statSync(assets).mode & 0o777).toBe(0o700)
   expect(statSync(join(assets, 'img/a.png')).mode & 0o777).toBe(0o600)
   expect(events.filter((event) => event.type === 'look.changed')).toEqual([])
@@ -239,10 +249,10 @@ test('import: 409 theme_exists, ?replace=1 replaces an imported or custom theme,
   const again = await upload(await fullPackage())
   expect(again.statusCode).toBe(409)
   expect(again.json()).toMatchObject({ error: { code: 'theme_exists' } })
-  const next = await zipOf({ 'theme.json': manifestJson({ name: 'Harbour 2', version: '2.0.0' }) })
+  const next = await zipOf({ 'theme.json': manifestJson({ name: 'Seaside 2', version: '2.0.0' }) })
   expect((await upload(next, '?replace=1')).statusCode).toBe(201)
-  const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/harbour')).json())
-  expect(detail.summary).toMatchObject({ name: 'Harbour 2', version: '2.0.0' })
+  const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  expect(detail.summary).toMatchObject({ name: 'Seaside 2', version: '2.0.0' })
   expect(detail.assets).toEqual([])
   // A custom theme can be replaced too.
   expect((await save('mine', null)).statusCode).toBe(200)
@@ -271,8 +281,8 @@ test('import: a rejected package stores nothing', async () => {
   expect(res.statusCode).toBe(422)
   expect(res.json()).toMatchObject({ error: { code: 'theme_rejected' } })
   expect(reasons(res)).toMatch(/content property/)
-  expect((await call('GET', '/api/themes/harbour')).statusCode).toBe(404)
-  expect(() => statSync(join(dir, 'themes/harbour'))).toThrow()
+  expect((await call('GET', '/api/themes/seaside')).statusCode).toBe(404)
+  expect(() => statSync(join(dir, 'themes/seaside'))).toThrow()
 })
 
 test('import: adversarial packages answer 422 theme_rejected', async () => {
@@ -335,7 +345,7 @@ test('import: adversarial packages answer 422 theme_rejected', async () => {
     expect(res.json(), name).toMatchObject({ error: { code: 'theme_rejected' } })
     expect(reasons(res), name).toMatch(match)
   }
-  expect(ThemeListSchema.parse((await call('GET', '/api/themes')).json()).items).toHaveLength(4)
+  expect(ThemeListSchema.parse((await call('GET', '/api/themes')).json()).items).toHaveLength(7)
 })
 
 test('import: bad uploads are 400, and an oversize body is refused', async () => {
@@ -392,7 +402,7 @@ test('PUT creates a custom theme, etag guards updates, and the manifest id must 
 
 test('PUT: built-in and imported ids are 409 builtin_theme', async () => {
   await upload(await fullPackage())
-  for (const id of ['score', 'night', 'harbour']) {
+  for (const id of ['score', 'night', 'seaside']) {
     const res = await save(id, null)
     expect(res.statusCode, id).toBe(409)
     expect(res.json(), id).toMatchObject({ error: { code: 'builtin_theme' } })
@@ -437,10 +447,10 @@ test('PUT: CSS just over 256 KB that passes the body schema is still 422', async
 
 test('export is a zip in the import layout and round-trips through import', async () => {
   await upload(await fullPackage())
-  const res = await call('GET', '/api/themes/harbour/export')
+  const res = await call('GET', '/api/themes/seaside/export')
   expect(res.statusCode).toBe(200)
   expect(res.headers['content-type']).toBe('application/zip')
-  expect(res.headers['content-disposition']).toBe('attachment; filename="harbour.zip"')
+  expect(res.headers['content-disposition']).toBe('attachment; filename="seaside.zip"')
   expect(res.headers['x-content-type-options']).toBe('nosniff')
   const zip = await JSZip.loadAsync(res.rawPayload)
   expect(Object.keys(zip.files)).toEqual([
@@ -449,11 +459,11 @@ test('export is a zip in the import layout and round-trips through import', asyn
     'assets/fonts/f.woff2',
     'assets/img/a.png',
   ])
-  expect((await call('DELETE', '/api/themes/harbour')).statusCode).toBe(204)
+  expect((await call('DELETE', '/api/themes/seaside')).statusCode).toBe(204)
   expect((await upload(res.rawPayload)).statusCode).toBe(201)
-  const again = await call('GET', '/api/themes/harbour/export')
+  const again = await call('GET', '/api/themes/seaside/export')
   expect(again.rawPayload.equals(res.rawPayload)).toBe(true)
-  const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/harbour')).json())
+  const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
   expect(detail.assets).toEqual(['fonts/f.woff2', 'img/a.png'])
   expect(detail.css).toBe('.a{background:url(asset:img/a.png)}')
   expect((await call('GET', '/api/themes/nope/export')).statusCode).toBe(404)
@@ -468,15 +478,15 @@ test('DELETE: 204 and the folder goes; built-ins and the active theme are 409; u
   })
   expect((await call('DELETE', '/api/themes/nope')).statusCode).toBe(404)
   expect(
-    (await call('PUT', '/api/look', { activeTheme: 'harbour', mode: 'dark' })).statusCode,
+    (await call('PUT', '/api/look', { activeTheme: 'seaside', mode: 'dark' })).statusCode,
   ).toBe(204)
-  const active = await call('DELETE', '/api/themes/harbour')
+  const active = await call('DELETE', '/api/themes/seaside')
   expect(active.statusCode).toBe(409)
   expect(active.json()).toMatchObject({ error: { code: 'theme_active' } })
   await call('PUT', '/api/look', { activeTheme: 'score', mode: 'dark' })
-  expect((await call('DELETE', '/api/themes/harbour')).statusCode).toBe(204)
-  expect(() => statSync(join(dir, 'themes/harbour'))).toThrow()
-  expect((await call('GET', '/api/themes/harbour')).statusCode).toBe(404)
+  expect((await call('DELETE', '/api/themes/seaside')).statusCode).toBe(204)
+  expect(() => statSync(join(dir, 'themes/seaside'))).toThrow()
+  expect((await call('GET', '/api/themes/seaside')).statusCode).toBe(404)
 })
 
 test('PUT /api/look: 204, persisted, list reflects it, and look.changed is emitted', async () => {
@@ -511,3 +521,52 @@ test('PUT /api/look: unknown theme is 404, bad bodies are 400, and nothing chang
   await ingest.flushListeners()
   expect(events.filter((event) => event.type === 'look.changed')).toEqual([])
 })
+
+test.each(['harbour', 'ledger', 'studio'])(
+  'built-in %s is a real package: detail, assets, export, and a copy imports under a new id',
+  async (id) => {
+    const detail = ThemeDetailSchema.parse((await call('GET', `/api/themes/${id}`)).json())
+    expect(detail.summary).toMatchObject({ id, source: 'builtin', author: 'Score', hasCss: true })
+    expect(detail.manifest.description).toBeTruthy()
+    // The CSS passes the checks an import would make, and every file the manifest or the CSS names is shipped.
+    expect(checkThemeCss(detail.css).reasons).toEqual([])
+    const named = [...manifestAssets(detail.manifest), ...checkThemeCss(detail.css).assets]
+    for (const path of named) expect(detail.assets, path).toContain(path)
+    expect(detail.assets.length).toBeGreaterThan(0)
+    for (const path of detail.assets) {
+      const file = await call('GET', `/api/themes/${id}/assets/${path}`)
+      expect(file.statusCode, path).toBe(200)
+      expect(file.headers['x-content-type-options']).toBe('nosniff')
+      expect(file.headers['content-type']).toBe(
+        path.endsWith('.woff2') ? 'font/woff2' : 'image/png',
+      )
+      expect(file.rawPayload.length).toBeGreaterThan(1000)
+    }
+    expect((await call('GET', `/api/themes/${id}/style.css`)).body).not.toContain('asset:')
+    // Built-ins can't be changed or removed, nor taken by an import.
+    expect((await save(id, detail.etag)).json()).toMatchObject({ error: { code: 'builtin_theme' } })
+    expect((await call('DELETE', `/api/themes/${id}`)).json()).toMatchObject({
+      error: { code: 'builtin_theme' },
+    })
+    expect((await upload(await fullPackage(id))).statusCode).toBe(422)
+    // Export, rename and import: the way to start a theme from a built-in one.
+    const exported = await call('GET', `/api/themes/${id}/export`)
+    const zip = await JSZip.loadAsync(exported.rawPayload)
+    expect(
+      Object.keys(zip.files)
+        .filter((name) => !name.endsWith('/'))
+        .sort(),
+    ).toEqual(['theme.json', 'style.css', ...detail.assets.map((path) => `assets/${path}`)].sort())
+    const manifest = JSON.parse(await zip.file('theme.json')!.async('string')) as { id: string }
+    manifest.id = `${id}-copy`
+    zip.file('theme.json', JSON.stringify(manifest))
+    const copy = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+    expect((await readThemePackage(copy)).manifest.id).toBe(`${id}-copy`)
+    const imported = await upload(copy)
+    expect(imported.statusCode).toBe(201)
+    expect(ThemeImportResultSchema.parse(imported.json()).theme).toMatchObject({
+      id: `${id}-copy`,
+      source: 'imported',
+    })
+  },
+)

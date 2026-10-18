@@ -2220,7 +2220,9 @@ Hermes or tokens.
 ## 16. Themes (PLAN 9; schemas in `packages/contract/src/themes.ts`; design docs/briefs/9-themes.md, decision 90)
 
 A theme is a declarative package: `theme.json` (`ThemeManifest`, format `1`), an optional `style.css` and `assets/`
-(woff2 fonts, png/jpg/webp/avif images). No theme code runs. Built-in ids `score`, `paper`, `night`, `dense`.
+(woff2 fonts, png/jpg/webp/avif images). No theme code runs. Built-in ids `score`, `paper`, `night`, `dense` (the 8.3 packs, which have no manifest content) and
+`harbour`, `ledger`, `studio` (9.5: real packages shipped with the server, so their detail carries a manifest, CSS and
+assets, and `export` returns a zip that can be edited and imported under a new id).
 - `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`).
 - `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`.
 - `GET /api/themes/:id/style.css` → `text/css` with `asset:` references rewritten to the asset URLs below.

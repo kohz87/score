@@ -1,0 +1,106 @@
+{
+  "format": 1,
+  "id": "studio",
+  "name": "Studio",
+  "version": "1.0.0",
+  "author": "Score",
+  "description": "Calm and airy: serif headings, soft sage tones, a narrow column of work, navigation on the right.",
+  "colors": {
+    "light": {
+      "ground": "#e8ece6",
+      "card": "#fbfcf9",
+      "ink": "#1c2a22",
+      "ink-muted": "#4d5c53",
+      "muted": "#56655c",
+      "hairline": "#d3dbd2",
+      "line-strong": "#7f8f85",
+      "subtle": "#f1f4ee",
+      "subtle-2": "#ebefe7",
+      "track": "#dfe5dc",
+      "track-2": "#d2dacf",
+      "link-hover": "#2f6f4f",
+      "chat-text": "#26352c",
+      "chat-secondary": "#36463c",
+      "chat-soft": "#f4f7f1",
+      "chat-card-border": "#d3dbd2",
+      "tasks-ground": "#dde4da",
+      "tasks-border": "#d3dbd2",
+      "tasks-done": "#f4f7f1",
+      "tasks-note": "#2b3a31",
+      "flow-canvas": "#f4f7f1",
+      "flow-canvas-dot": "#ccd5ca",
+      "flow-edge": "#728278",
+      "flow-log-border": "#e4eae1",
+      "profile-dashed": "#b3c0b7",
+      "profile-add-ink": "#36463c"
+    },
+    "dark": {
+      "ground": "#0f1511",
+      "card": "#171e19",
+      "ink": "#e8efe9",
+      "ink-muted": "#a6b3a9",
+      "muted": "#9eaba2",
+      "hairline": "#28332b",
+      "line-strong": "#72827a",
+      "subtle": "#1d251f",
+      "subtle-2": "#222b24",
+      "track": "#27312a",
+      "track-2": "#313d34",
+      "link-hover": "#8fd0aa",
+      "chat-text": "#d5e0d8",
+      "chat-secondary": "#bccac0",
+      "chat-soft": "#1b231d",
+      "chat-card-border": "#28332b",
+      "tasks-ground": "#121914",
+      "tasks-border": "#28332b",
+      "tasks-done": "#1a221c",
+      "tasks-note": "#d5e0d8",
+      "flow-canvas": "#121914",
+      "flow-canvas-dot": "#28332b",
+      "flow-edge": "#72827a",
+      "flow-log-border": "#222c25",
+      "profile-dashed": "#44524a",
+      "profile-add-ink": "#c3d1c8"
+    }
+  },
+  "fonts": {
+    "heading": "Source Serif 4",
+    "faces": [
+      {
+        "family": "Source Serif 4",
+        "src": "asset:fonts/source-serif-4-latin-600.woff2",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Source Serif 4",
+        "src": "asset:fonts/source-serif-4-latin-400.woff2",
+        "weight": "400",
+        "style": "normal"
+      }
+    ]
+  },
+  "shape": {
+    "radius": 22,
+    "density": "airy",
+    "border": "none",
+    "elevation": "floating",
+    "surface": "solid"
+  },
+  "layout": {
+    "nav": "right",
+    "contentWidth": "narrow",
+    "now": {
+      "columns": 2,
+      "cards": [
+        { "card": "needs-you", "span": 2 },
+        { "card": "room", "span": 2 },
+        { "card": "timeline", "span": 2 },
+        { "card": "made-today", "span": 1 },
+        { "card": "todo", "span": 1 },
+        { "card": "composer", "span": 2 }
+      ]
+    },
+    "chat": { "messages": "plain", "roomList": "hidden-until-opened" }
+  }
+}

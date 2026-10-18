@@ -134,8 +134,8 @@ export const layoutThemes = {
     shape: { surface: 'glass', elevation: 'floating' },
     background: { image: 'asset:img/bg.png', fit: 'tile', dim: 40 },
   }),
-  /** Everything at once, with the user view overriding some of it. */
-  harbour: theme('harbour', {
+  /** Everything at once, with the user view overriding some of it (not the built-in Harbour of 9.5). */
+  harbour: theme('everything', {
     colors: { light: { 'bubble-own': '#1f4e79', 'bubble-own-ink': '#ffffff' } },
     shape: { surface: 'glass', elevation: 'raised', border: 'hairline', radius: 'round' },
     layout: {
