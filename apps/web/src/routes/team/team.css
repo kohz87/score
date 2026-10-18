@@ -222,6 +222,10 @@
   opacity: 0.6;
   cursor: default;
 }
+.team-band-primary[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: default;
+}
 .team-band-primary:focus-visible,
 .team-band-secondary:focus-visible,
 .team-band-link:focus-visible,
