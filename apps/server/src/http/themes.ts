@@ -169,6 +169,19 @@ export function registerThemeRoutes(
             throw error
           }
           const existing = store.get(pkg.manifest.id)
+          // A conditional replace (the Customizer's): checked here, inside the same serialised step as the swap, so
+          // no other theme change can land between the check and the write.
+          const ifMatch = request.headers['if-match']
+          if (replace !== undefined && typeof ifMatch === 'string') {
+            const current = existing ? (store.detail(pkg.manifest.id)?.etag ?? null) : null
+            if (existing?.source !== 'builtin' && current !== ifMatch.trim().replace(/^"|"$/g, ''))
+              throw new HttpError(
+                409,
+                'etag_mismatch',
+                'This theme changed elsewhere. Reload it first.',
+                { etag: current },
+              )
+          }
           if (existing && (replace === undefined || existing.source === 'builtin'))
             throw new HttpError(409, 'theme_exists', 'A theme with this id is already installed.')
           store.storeImported(pkg.manifest, pkg.css, pkg.assets, pkg.licenses)

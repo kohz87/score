@@ -49,6 +49,14 @@ function StubPage({ title }: { title: string }) {
 export const appRoutes: RouteObject[] = [
   // 7.4b: one agent's compact view for its own browser window; no shell around it.
   { path: '/agents/:agentId/pop', Component: PopOutPage },
+  // 9.4: the theme Customizer is a full-screen editor with no shell around it. It brings CodeMirror and the preview
+  // machinery, so it loads on first visit.
+  ...['/settings/look/customize', '/settings/look/customize/:themeId'].map((path): RouteObject => ({
+    path,
+    lazy: async () => ({
+      Component: (await import('./routes/customizer/Customizer.tsx')).Customizer,
+    }),
+  })),
   // 8.4: the chat-first user view has its own shell; the admin view's routes stay as they were.
   {
     path: '/u',

@@ -4,6 +4,7 @@ import { ResponsiveDrawer } from '../../components/ResponsiveDrawer.tsx'
 import { useActivityFeed } from '../../live/use-activity.ts'
 import { NotificationBridge } from '../../notifications/NotificationBridge.tsx'
 import { UpdateBanner } from '../../pwa/UpdateBanner.tsx'
+import { usePreview } from '../../themes/preview-context.ts'
 import { useLayout } from '../../themes/layout.ts'
 import '../chat/chat.css'
 import { UserSidebar } from './UserSidebar.tsx'
@@ -13,6 +14,7 @@ import './user.css'
 export function UserShell() {
   // Listens from the start, so the status lines know what is going on even in a room opened later.
   useActivityFeed()
+  const preview = usePreview()
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   // The theme's room list position for this view (views.user overrides the shared setting).
@@ -54,8 +56,8 @@ export function UserShell() {
         <Outlet />
       </div>
       {roomList === 'right' && sidebar}
-      <NotificationBridge />
-      <UpdateBanner />
+      {!preview && <NotificationBridge />}
+      {!preview && <UpdateBanner />}
     </div>
   )
 }

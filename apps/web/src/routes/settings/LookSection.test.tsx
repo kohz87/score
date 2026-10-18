@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { LookSection } from './LookSection.tsx'
 
@@ -21,7 +22,9 @@ test('Display currency saves the typed code and rate', async () => {
   vi.stubGlobal('fetch', fetch)
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <LookSection />
+      <MemoryRouter>
+        <LookSection />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
   const save = screen.getByRole('button', { name: 'Save' })
@@ -44,7 +47,9 @@ test('"Send messages with" is a per-device choice between Enter and Ctrl+Enter',
   )
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <LookSection />
+      <MemoryRouter>
+        <LookSection />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
   const ctrl = screen.getByRole('radio', { name: 'Ctrl+Enter' })
@@ -60,7 +65,9 @@ function mountLook(fetch: ReturnType<typeof vi.fn>) {
   vi.stubGlobal('fetch', fetch)
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <LookSection />
+      <MemoryRouter>
+        <LookSection />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -139,7 +146,9 @@ function guardFetch(answer: Response) {
   vi.stubGlobal('fetch', fetch)
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <LookSection />
+      <MemoryRouter>
+        <LookSection />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
   return fetch

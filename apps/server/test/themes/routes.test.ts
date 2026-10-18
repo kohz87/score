@@ -281,6 +281,37 @@ test('import: 409 theme_exists, ?replace=1 replaces an imported or custom theme,
   }
 })
 
+test('import: ?replace=1 with If-Match replaces only a theme whose etag still matches', async () => {
+  await upload(await fullPackage())
+  const first = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  const next = (name: string) => zipOf({ 'theme.json': manifestJson({ name }) })
+  const withEtag = (etag: string, quoted = false) => ({
+    ...headers,
+    'if-match': quoted ? `"${etag}"` : etag,
+  })
+  // A matching etag (quotes allowed) replaces.
+  expect(
+    (await upload(await next('Seaside B'), '?replace=1', withEtag(first.etag, true))).statusCode,
+  ).toBe(201)
+  const second = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  expect(second.summary.name).toBe('Seaside B')
+  // The stale etag of the first read no longer matches: 409 with the current etag, and the theme is unchanged.
+  const stale = await upload(await next('Seaside C'), '?replace=1', withEtag(first.etag))
+  expect(stale.statusCode).toBe(409)
+  expect(stale.json()).toMatchObject({
+    error: { code: 'etag_mismatch', details: { etag: second.etag } },
+  })
+  const after = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  expect(after).toEqual(second)
+  // Without the header replace works as before; a theme that is gone doesn't match any etag.
+  expect((await upload(await next('Seaside D'), '?replace=1')).statusCode).toBe(201)
+  await call('DELETE', '/api/themes/seaside')
+  const gone = await upload(await next('Seaside E'), '?replace=1', withEtag(second.etag))
+  expect(gone.statusCode).toBe(409)
+  expect(gone.json()).toMatchObject({ error: { code: 'etag_mismatch', details: { etag: null } } })
+  expect((await call('GET', '/api/themes/seaside')).statusCode).toBe(404)
+})
+
 test('import: a rejected package stores nothing', async () => {
   const bad = await zipOf({
     'theme.json': manifestJson(),
