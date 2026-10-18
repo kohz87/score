@@ -2253,6 +2253,20 @@ startup id move skips the row, until recovery succeeds. Other ids are unaffected
 - `GET /api/themes/:id/assets/<fonts|img>/<file>` → the file with its exact type, `nosniff`, `cache-control: private`.
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
+  **files (C4 #2).** `ThemeSave` may also carry `assets` (`{ "<fonts|img>/<file>": "<base64>" }`, files to add or
+  replace), `keep` (an array of the paths of files the theme already has) and `licenses` (`{ "LICENSE"?: text,
+  "OFL.txt"?: text }`). A save with none of the three leaves the theme's files exactly as they are (the behaviour before
+  C4). A save with any of them stores the files the theme ends up with: the paths in `keep` (all the current files when
+  `keep` is omitted, none when it is `[]`) plus those in `assets` (which win over a kept file of the same path); the
+  licence texts replace the stored ones when `licenses` is present and are kept when it is omitted. A path in `keep` the
+  theme doesn't have is `422 theme_rejected`. The `etag` field is the `If-Match` of this route, compared inside the same
+  serialised step as the write (`409 etag_mismatch`; a new theme sends `null`), and a save that stores files takes the
+  next theme revision like an import, so the new `etag` changes. The server builds the resulting package in memory and
+  runs it through **the same reader as `POST /api/themes/import`** (zip structure, names, types by folder, magic bytes,
+  file count and size caps, licence text rules, `asset:` references that must exist, the CSS checks), so `422
+  theme_rejected { reasons[] }` names the same problems an import would; the files are swapped in with the same recorded,
+  recoverable folder swap (`theme_recovering` applies), so a failed save leaves the previous files. The theme stays
+  `custom`. The JSON body may be up to 8 MB when it carries files (a package is at most 5 MB, base64 adds a third);
   `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5). **Theme CSS is visual-only
   (decision 102):** a declaration is accepted only if its property is on the allowlist in
   `packages/contract/src/theme-css.ts` (colours, `background-*` with images only as `asset:img/…`, `border-*`

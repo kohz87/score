@@ -4,6 +4,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -194,6 +195,16 @@ export class ThemeStore {
     return found
   }
 
+  /** The bytes of one stored asset; null when it isn't a regular file (a symlink planted on disk is never read). */
+  readAsset(id: string, path: string): Buffer | null {
+    const file = join(this.assetRoot(id), ...path.split('/'))
+    try {
+      return lstatSync(file).isFile() ? readFileSync(file) : null
+    } catch {
+      return null
+    }
+  }
+
   detail(id: string): ThemeDetail | null {
     const theme = this.get(id)
     if (!theme) return null
@@ -292,6 +303,8 @@ export class ThemeStore {
     css: string,
     assets: Map<string, Buffer>,
     licenses: Record<string, string> = {},
+    /** A custom theme saved with files (C4 #2) takes the same swap but stays `custom`. */
+    source: 'imported' | 'custom' = 'imported',
   ): void {
     mkdirSync(this.root, { recursive: true, mode: 0o700 })
     chmodSync(this.root, 0o700)
@@ -317,7 +330,7 @@ export class ThemeStore {
         if (hadOld) this.fs.rename(target, old)
         this.fs.rename(staged, target)
         this.db.tx((sqlite) => {
-          this.upsert(sqlite, manifest, css, 'imported', licenses)
+          this.upsert(sqlite, manifest, css, source, licenses)
           this.eraseNote(sqlite, token)
         })
       } catch (error) {

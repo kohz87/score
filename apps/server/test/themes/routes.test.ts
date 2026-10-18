@@ -621,6 +621,184 @@ test('PUT: built-in and imported ids are 409 builtin_theme', async () => {
   }
 })
 
+// C4 #2: a custom save can carry files (the Customizer saves a picture or a font without the import-replace route).
+const PNG2 = Buffer.concat([PNG, Buffer.from(' changed')])
+const b64 = (bytes: Buffer) => bytes.toString('base64')
+const saveFiles = (id: string, etag: string | null, files: object, css = '', extra: object = {}) =>
+  call('PUT', `/api/themes/${id}`, {
+    manifest: { format: 1, id, name: id, ...extra },
+    css,
+    etag,
+    ...files,
+  })
+const detailOf = async (id: string) =>
+  ThemeDetailSchema.parse((await call('GET', `/api/themes/${id}`)).json())
+
+test('PUT can add assets and licence files to a custom theme; they are served and exported', async () => {
+  const OFL = 'SIL Open Font License text'
+  const res = await saveFiles(
+    'mine',
+    null,
+    {
+      assets: { 'img/a.png': b64(PNG), 'fonts/f.woff2': b64(WOFF2) },
+      licenses: { 'OFL.txt': OFL },
+    },
+    '.a{background:url(asset:img/a.png)}',
+  )
+  expect(res.statusCode, res.body).toBe(200)
+  const first = ThemeDetailSchema.parse(res.json())
+  expect(first.summary.source).toBe('custom')
+  expect(first.assets).toEqual(['fonts/f.woff2', 'img/a.png'])
+  const asset = await call('GET', '/api/themes/mine/assets/img/a.png')
+  expect(asset.statusCode).toBe(200)
+  expect(asset.rawPayload.equals(PNG)).toBe(true)
+  const exported = await JSZip.loadAsync((await call('GET', '/api/themes/mine/export')).rawPayload)
+  expect(Object.keys(exported.files).sort()).toEqual([
+    'OFL.txt',
+    'assets/fonts/f.woff2',
+    'assets/img/a.png',
+    'style.css',
+    'theme.json',
+  ])
+  expect(await exported.files['OFL.txt']!.async('string')).toBe(OFL)
+})
+
+test('PUT: keep, assets and licenses decide the files; none of them leaves the files alone', async () => {
+  const created = await saveFiles(
+    'mine',
+    null,
+    {
+      assets: { 'img/a.png': b64(PNG), 'fonts/f.woff2': b64(WOFF2) },
+      licenses: { LICENSE: 'MIT' },
+    },
+    '.a{background:url(asset:img/a.png)}',
+  )
+  const first = ThemeDetailSchema.parse(created.json())
+  // No file fields: the files stay, licences included (the behaviour before C4).
+  const plain = ThemeDetailSchema.parse((await save('mine', first.etag, '.a{color:red}')).json())
+  expect(plain.assets).toEqual(['fonts/f.woff2', 'img/a.png'])
+  // keep + one new file: the kept file stays, the unnamed one goes, the licence is kept (omitted).
+  const next = await saveFiles(
+    'mine',
+    plain.etag,
+    { keep: ['img/a.png'], assets: { 'img/b.webp': b64(WEBP) } },
+    '.a{background:url(asset:img/a.png)}',
+  )
+  expect(next.statusCode, next.body).toBe(200)
+  const second = ThemeDetailSchema.parse(next.json())
+  expect(second.assets).toEqual(['img/a.png', 'img/b.webp'])
+  expect(second.etag).not.toBe(plain.etag)
+  const exported = await JSZip.loadAsync((await call('GET', '/api/themes/mine/export')).rawPayload)
+  expect(await exported.files['LICENSE']!.async('string')).toBe('MIT')
+  // Only assets: every current file is kept (keep omitted) and a file of the same path is replaced.
+  const replaced = await saveFiles(
+    'mine',
+    second.etag,
+    { assets: { 'img/a.png': b64(PNG2) } },
+    '',
+    {},
+  )
+  expect(ThemeDetailSchema.parse(replaced.json()).assets).toEqual(['img/a.png', 'img/b.webp'])
+  expect((await call('GET', '/api/themes/mine/assets/img/a.png')).rawPayload.equals(PNG2)).toBe(
+    true,
+  )
+  // keep: [] drops them all.
+  const cleared = await saveFiles('mine', (await detailOf('mine')).etag, { keep: [] })
+  expect(ThemeDetailSchema.parse(cleared.json()).assets).toEqual([])
+})
+
+test('PUT with files runs the import checks: same reasons, and nothing changes when it fails', async () => {
+  const first = ThemeDetailSchema.parse(
+    (await saveFiles('mine', null, { assets: { 'img/a.png': b64(PNG) } })).json(),
+  )
+  const before = await detailOf('mine')
+  const fakeFont = Buffer.from('not a font at all')
+  const attempts: [string, object, string, RegExp][] = [
+    ['bytes that are not the type', { assets: { 'fonts/f.woff2': b64(fakeFont) } }, '', /woff2/],
+    [
+      'a used file that is missing',
+      { keep: ['img/a.png'] },
+      '.a{background:url(asset:img/gone.png)}',
+      /gone\.png/,
+    ],
+    ['a kept file the theme lacks', { keep: ['img/gone.png'] }, '', /img\/gone\.png/],
+    [
+      'a manifest picture that is missing',
+      { keep: ['img/a.png'] },
+      '',
+      /asset:img\/nope\.png is used but not in the package/,
+    ],
+  ]
+  for (const [name, files, css, expected] of attempts) {
+    const extra =
+      name === 'a manifest picture that is missing'
+        ? { background: { image: 'asset:img/nope.png' } }
+        : {}
+    const res = await saveFiles('mine', first.etag, files, css, extra)
+    expect(res.statusCode, name).toBe(422)
+    expect(res.json(), name).toMatchObject({ error: { code: 'theme_rejected' } })
+    expect(reasons(res), name).toMatch(expected)
+    expect(await detailOf('mine'), name).toEqual(before)
+  }
+  // The reasons are the import's own: the same bytes in a zip say the same thing.
+  const imported = await upload(
+    await zipOf({
+      'theme.json': manifestJson({ id: 'viaimport' }),
+      'assets/fonts/f.woff2': fakeFont,
+    }),
+  )
+  expect(imported.statusCode).toBe(422)
+  const viaPut = await saveFiles('viaput', null, { assets: { 'fonts/f.woff2': b64(fakeFont) } })
+  expect(reasons(viaPut)).toBe(reasons(imported))
+})
+
+test('PUT with files: stale etag is 409 and the files stay; bad base64 or paths are 400', async () => {
+  const first = ThemeDetailSchema.parse(
+    (await saveFiles('mine', null, { assets: { 'img/a.png': b64(PNG) } })).json(),
+  )
+  const stale = await saveFiles('mine', 'stale', { assets: { 'img/b.png': b64(PNG) } })
+  expect(stale.statusCode).toBe(409)
+  expect(stale.json()).toMatchObject({ error: { code: 'etag_mismatch' } })
+  expect((await detailOf('mine')).assets).toEqual(['img/a.png'])
+  // A second writer that lands first makes the next file save stale too.
+  await save('mine', first.etag, '.x{color:red}')
+  expect((await saveFiles('mine', first.etag, { keep: [] })).statusCode).toBe(409)
+  expect((await detailOf('mine')).assets).toEqual(['img/a.png'])
+  for (const files of [
+    { assets: { 'img/a.png': 'not base64!' } },
+    { assets: { 'img/a.png': 'abc' } },
+    { assets: { '../x.png': b64(PNG) } },
+    { assets: { 'img/a.svg': b64(PNG) } },
+    { keep: ['css/a.png'] },
+    { licenses: { 'NOTICE.txt': 'x' } },
+  ])
+    expect((await saveFiles('mine', (await detailOf('mine')).etag, files)).statusCode).toBe(400)
+})
+
+test('PUT with files cannot touch built-in or imported themes, and waits for an unsettled swap', async () => {
+  await upload(await fullPackage())
+  for (const id of ['paper', 'seaside']) {
+    const res = await saveFiles(id, null, { assets: { 'img/a.png': b64(PNG) } })
+    expect(res.statusCode, id).toBe(409)
+    expect(res.json(), id).toMatchObject({ error: { code: 'builtin_theme' } })
+  }
+  const mine = ThemeDetailSchema.parse(
+    (await saveFiles('mine', null, { assets: { 'img/a.png': b64(PNG) } })).json(),
+  )
+  db.sqlite
+    .prepare(
+      "INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES ('dead', 'swap', 'mine', NULL, 1, 'x')",
+    )
+    .run()
+  db.sqlite.exec(
+    "CREATE TRIGGER keep_notes BEFORE DELETE ON theme_swaps BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+  )
+  const res = await saveFiles('mine', mine.etag, { assets: { 'img/b.png': b64(PNG) } })
+  expect(res.statusCode).toBe(409)
+  expect(res.json()).toMatchObject({ error: { code: 'theme_recovering' } })
+  expect((await detailOf('mine')).assets).toEqual(['img/a.png'])
+})
+
 test.each([
   ['@import', '@import "x.css";'],
   ['escaped content', 'a::before{\\63 ontent:"x"}'],

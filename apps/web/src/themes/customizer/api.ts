@@ -7,6 +7,7 @@ import {
 } from '@score/contract'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { LICENSE_FILES } from './package.ts'
+import type { SaveFiles } from './save.ts'
 import { readZip } from './zip.ts'
 
 // The theme API the Customizer uses (contract §16) and nothing else. Failures are put into words here.
@@ -15,11 +16,12 @@ export async function saveCustomTheme(
   manifest: ThemeManifest,
   css: string,
   etag: string | null,
+  files: SaveFiles = {},
 ): Promise<ThemeDetail> {
   return ThemeDetailSchema.parse(
     await apiFetch(`themes/${encodeURIComponent(manifest.id)}`, {
       method: 'PUT',
-      body: JSON.stringify({ manifest, css, etag }),
+      body: JSON.stringify({ manifest, css, etag, ...files }),
     }),
   )
 }
