@@ -32,7 +32,7 @@ export function TopBar({
         <button
           ref={menuButtonRef}
           className="menu-trigger"
-          data-protected="raised"
+          data-protected="any"
           type="button"
           onClick={onToggleMenu}
           aria-expanded={menuOpen}
@@ -76,7 +76,7 @@ export function TopBar({
       <button
         ref={commandButtonRef}
         className="command-trigger"
-        data-protected="raised"
+        data-protected="any"
         type="button"
         onClick={onOpenCommand}
         aria-haspopup="dialog"
