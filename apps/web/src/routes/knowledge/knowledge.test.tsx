@@ -38,6 +38,8 @@ let failNoteReads: boolean
 let controls: Set<(control: StreamControl) => void>
 let unversioned: Set<string>
 let historyUpdated: boolean
+// The server's view after the last save: its commit did not land, so a later read says `failed`.
+let historyPending: boolean
 
 const builder: AgentSummary = {
   id: 'builder',
@@ -69,6 +71,7 @@ function noteJson(path: string) {
     backlinks: [{ path: 'Home.md', title: 'Home' }],
     lastAuthor: n.lastAuthor,
     versioned: !unversioned.has(path),
+    history: historyPending ? 'failed' : 'unchanged',
   }
 }
 
@@ -135,6 +138,7 @@ function respond(input: string, init: RequestInit = {}): Response {
     if (write.etag === null && notes.has(path))
       return json({ error: { code: 'exists', message: 'exists' } }, 409)
     nextEtag += 1
+    historyPending = !historyUpdated
     notes.set(path, {
       body: write.body,
       etag: `e${nextEtag}`,
@@ -166,6 +170,7 @@ beforeEach(() => {
   putStatus = 200
   unversioned = new Set()
   historyUpdated = true
+  historyPending = false
   listeners = new Set()
   info = { vault: '/vault', notes: 3, gitAvailable: true, agentAccess: true, memoryNotes: true }
   const base = { lastAuthor: 'you', mtime: '2026-01-01T00:00:00Z' }
@@ -834,4 +839,24 @@ test('after a failed history update, "Save to history again" retries without any
   await waitFor(() => expect(screen.queryByTestId('history-missed')).toBeNull(), { timeout: 3000 })
   expect(writes()).toBe(before + 1)
   expect(screen.queryByRole('button', { name: 'Save to history again' })).toBeNull()
+})
+
+test('the "Save to history again" banner survives a reload while the note is still not in history', async () => {
+  const view = await openEditor()
+  historyUpdated = false
+  type(view, 'more')
+  await screen.findByTestId('history-missed', {}, { timeout: 3000 })
+  cleanup()
+  mount('/knowledge/projects/Plan.md')
+  await screen.findByLabelText('Contents of projects/Plan.md')
+  expect(await screen.findByTestId('history-missed')).toBeTruthy()
+  historyUpdated = true
+  const writes = puts().length
+  fireEvent.click(screen.getByRole('button', { name: 'Save to history again' }))
+  await waitFor(() => expect(screen.queryByTestId('history-missed')).toBeNull(), { timeout: 3000 })
+  expect(puts().length).toBe(writes + 1)
+  cleanup()
+  mount('/knowledge/projects/Plan.md')
+  await screen.findByLabelText('Contents of projects/Plan.md')
+  expect(screen.queryByTestId('history-missed')).toBeNull()
 })

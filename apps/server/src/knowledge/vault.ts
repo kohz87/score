@@ -920,7 +920,7 @@ export class KnowledgeVault {
       links,
       backlinks,
       lastAuthor: authorFromColumn(row.last_author),
-      versioned: await this.isVersioned(rel),
+      ...(await this.historyOf(rel)),
     }
   }
 
@@ -1064,9 +1064,18 @@ export class KnowledgeVault {
     }
   }
 
-  /** False when the note's path is Git-ignored and untracked, so it has no history. */
-  private async isVersioned(rel: string): Promise<boolean> {
-    return !(await this.git.ignoredUntracked([rel])).has(rel)
+  /**
+   * Where a note stands in history, as a read finds it: no working git is `git_unavailable` (never "versioned"); a
+   * Git-ignored, untracked path is `not_versioned`; a file that differs from the last commit is `failed` (the editor
+   * keeps offering "Save to history again" across a reload); otherwise the content is already in history.
+   */
+  private async historyOf(
+    rel: string,
+  ): Promise<{ versioned: boolean; history: KnowledgeHistoryStatus }> {
+    if (!this.git.available) return { versioned: false, history: 'git_unavailable' }
+    if ((await this.git.ignoredUntracked([rel])).has(rel))
+      return { versioned: false, history: 'not_versioned' }
+    return { versioned: true, history: (await this.git.pathDirty(rel)) ? 'failed' : 'unchanged' }
   }
 
   /** Save a note (create with `etag: null`). `author` is `'you'` for the browser; 6.4 passes the calling agent. */

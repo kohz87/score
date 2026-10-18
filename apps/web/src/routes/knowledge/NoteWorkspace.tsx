@@ -146,9 +146,14 @@ function Pane({
   const [status, setStatus] = useState<Status>(orphan ? 'dirty' : 'saved')
   const [changedElsewhere, setChangedElsewhere] = useState(false)
   const [saveError, setSaveError] = useState<unknown>(null)
-  // The last save landed but git refused to record it (other than an ignore rule).
-  // What the last save did to history; `failed` offers a retry, `git_unavailable` explains why there is none.
-  const [historyStatus, setHistoryStatus] = useState<KnowledgeHistoryStatus>('committed')
+  // What the last save did to history; `failed` offers a retry, `git_unavailable` explains why there is none. It
+  // starts from the note's own history status, so a failed commit is still shown after a reload.
+  const [historyStatus, setHistoryStatus] = useState<KnowledgeHistoryStatus>(note.history)
+  const [seenHistory, setSeenHistory] = useState(note.history)
+  if (note.history !== seenHistory) {
+    setSeenHistory(note.history)
+    setHistoryStatus(note.history)
+  }
   const [conflict, setConflict] = useState<{ etag: string | null } | null>(
     orphan && orphan.etag !== session.etag ? { etag: session.etag } : null,
   )

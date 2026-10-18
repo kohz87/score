@@ -131,6 +131,17 @@ export class VaultGit {
       .filter((entry) => !skip.has(entry))
   }
 
+  /** True when the path differs from Git's last commit (modified, deleted or untracked); false when it cannot say. */
+  async pathDirty(path: string): Promise<boolean> {
+    if (!this.available) return false
+    try {
+      const out = await this.git(['status', '--porcelain=v1', '-z', '--no-renames', '--', path])
+      return out.length > 0
+    } catch {
+      return false
+    }
+  }
+
   /**
    * `git add -A`, except that git refuses the whole call when a pathspec sits in an ignored folder, even for a file
    * it already tracks. Then the tracked files are staged with `-u` and the not-ignored new ones separately, so a
