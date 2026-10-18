@@ -19,6 +19,10 @@ test('the Score view matches the design with fixed data', async ({ page }) => {
   await pair(page)
   await stubNow(page)
   await page.goto('/now')
+  // Orchestration and workflow runs that need the person come from the shared server and the live stream: a run another
+  // spec has open puts a card above the Score, and its fractional height moves the Score by a sub-pixel, which rounds
+  // the screenshot to 440 or 441 px. The design shows none, so they stay out of the page.
+  await page.addStyleTag({ content: '.orch-now { display: none !important; }' })
   const score = page.getByRole('region', { name: /^Score:/ })
   await expect(score.getByRole('button', { name: /builder: Stream, working now/ })).toBeVisible()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
