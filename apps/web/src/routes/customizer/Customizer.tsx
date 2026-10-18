@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { Link, useBlocker, useNavigate, useParams } from 'react-router'
-import type { ThemeColorToken, ThemeSanitiseReport } from '@score/contract'
+import { themeAssetUrl, type ThemeColorToken, type ThemeSanitiseReport } from '@score/contract'
 import { ApiError } from '../../data/api.ts'
 import { dataUrlFor } from '../../themes/customizer/asset-types.ts'
 import {
@@ -79,6 +79,10 @@ type Target = {
   /** Where files that aren't in the draft come from, and which there are. */
   assetSource: string | null
   assets: string[]
+  /** The package revision (etag) `assets` and the draft's manifest and CSS were read at; every file is fetched at it. */
+  assetRev: string | null
+  /** The licence files the source package has; with none, a copy has no licence to read. */
+  licenseFiles: string[]
 }
 
 const tabs = [
@@ -181,6 +185,8 @@ export function Customizer() {
           etag: null,
           assetSource: id,
           assets: detail.assets,
+          assetRev: detail.etag,
+          licenseFiles: detail.licenseFiles,
         },
       }
     },
@@ -203,7 +209,16 @@ export function Customizer() {
           setHistory(
             startHistory({ manifest: emptyManifest(id, 'My theme'), css: '', uploads: {} }),
           )
-          setTarget({ id, exists: false, source: 'new', etag: null, assetSource: null, assets: [] })
+          setTarget({
+            id,
+            exists: false,
+            source: 'new',
+            etag: null,
+            assetSource: null,
+            assets: [],
+            assetRev: null,
+            licenseFiles: [],
+          })
           return
         }
         const detail = await loadTheme(themeId)
@@ -223,6 +238,8 @@ export function Customizer() {
           etag: detail.etag,
           assetSource: themeId,
           assets: detail.assets,
+          assetRev: detail.etag,
+          licenseFiles: detail.licenseFiles,
         })
       } catch (error) {
         if (!alive) return
@@ -271,8 +288,8 @@ export function Customizer() {
       const path = ref.slice('asset:'.length)
       const bytes = uploads?.[path]
       if (bytes) return dataUrlFor(bytes, path)
-      if (target?.assetSource && target.assets.includes(path))
-        return `/api/themes/${target.assetSource}/assets/${path}`
+      if (target?.assetSource && target.assetRev && target.assets.includes(path))
+        return themeAssetUrl(target.assetSource, path, target.assetRev)
       return null
     },
     [uploads, target],
@@ -378,7 +395,12 @@ export function Customizer() {
     const built = await buildFromDraft(
       draft,
       manifest,
-      { id: target.assetSource, assets: target.assets },
+      {
+        id: target.assetSource,
+        assets: target.assets,
+        rev: target.assetRev,
+        licenseFiles: target.licenseFiles,
+      },
       fetchThemeAsset,
       licenceReader,
     )
@@ -426,6 +448,8 @@ export function Customizer() {
       etag: detail.etag,
       assetSource: detail.manifest.id,
       assets: detail.assets,
+      assetRev: detail.etag,
+      licenseFiles: detail.licenseFiles,
     })
     await queryClient.invalidateQueries({ queryKey: themesKey })
     if (detail.manifest.id !== themeId) {
@@ -455,7 +479,12 @@ export function Customizer() {
       const built = await buildFromDraft(
         draft,
         draft.manifest,
-        { id: target.assetSource, assets: target.assets },
+        {
+          id: target.assetSource,
+          assets: target.assets,
+          rev: target.assetRev,
+          licenseFiles: target.licenseFiles,
+        },
         fetchThemeAsset,
         licenceReader,
       )

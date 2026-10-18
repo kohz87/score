@@ -129,7 +129,7 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
     let stopWatching: (() => void) | undefined
     try {
       const applied = applyCustom(
-        { id, manifest: detail.data.manifest, css: detail.data.css },
+        { id, manifest: detail.data.manifest, css: detail.data.css, etag: detail.data.etag },
         mode,
         view,
       )

@@ -2,6 +2,7 @@ import type { ThemeManifest } from '@score/contract'
 import { sanitiseCss } from '../sanitise.ts'
 import { manifestProblems, referencedAssets, type Draft } from './draft.ts'
 import { buildThemePackage, MAX_PACKAGE_BYTES, type ThemePackage } from './package.ts'
+import { THEME_CHANGED_TEXT, ThemeChangedError } from './snapshot.ts'
 
 // Turning a draft into something that can be saved or exported: the CSS is sanitised again (the stored CSS is always the
 // sanitiser's own output, design §4.1), the files the draft points at are gathered, and the way to save is chosen.
@@ -11,16 +12,27 @@ export type Built = { ok: true; pkg: ThemePackage } | { ok: false; problems: str
 export const MAX_CSS_BYTES = 262_144
 
 /**
- * `source` says where files that weren't added in this session live (an installed theme's asset folder).
- * `fetchAsset` reads one of them.
+ * `source` says where files that weren't added in this session live (an installed theme's asset folder) and the
+ * package revision (`rev`, the etag of the detail the draft was opened or copied from) they belong to. Every file and
+ * licence is read at that revision, so the package is one snapshot; if the theme changed meanwhile the server refuses
+ * the read and the whole build stops with one sentence (contract § 16, J1).
  */
 export async function buildFromDraft(
   draft: Draft,
   manifest: ThemeManifest,
-  source: { id: string | null; assets: readonly string[] },
-  fetchAsset: (id: string, path: string) => Promise<Uint8Array>,
+  source: {
+    id: string | null
+    assets: readonly string[]
+    rev: string | null
+    /** The licence files the source package has (its detail's `licenseFiles`); with none there is nothing to read. */
+    licenseFiles?: readonly string[]
+  },
+  fetchAsset: (id: string, path: string, rev: string | null) => Promise<Uint8Array>,
   /** The licence texts of the theme the draft was opened or copied from (read through its export). */
-  fetchLicenses: (id: string) => Promise<Record<string, string>> = async () => ({}),
+  fetchLicenses: (
+    id: string,
+    rev: string | null,
+  ) => Promise<Record<string, string>> = async () => ({}),
 ): Promise<Built> {
   const problems = manifestProblems(manifest)
   const css = sanitiseCss(draft.css).css
@@ -32,17 +44,19 @@ export async function buildFromDraft(
     if (added) assets.set(path, added)
     else if (source.id && source.assets.includes(path)) {
       try {
-        assets.set(path, await fetchAsset(source.id, path))
-      } catch {
+        assets.set(path, await fetchAsset(source.id, path, source.rev))
+      } catch (error) {
+        if (error instanceof ThemeChangedError) return { ok: false, problems: [THEME_CHANGED_TEXT] }
         problems.push(`Couldn’t read the file “${path}”. Try again.`)
       }
     } else problems.push(`The file “${path}” is used but isn’t there. Add it again or remove it.`)
   }
   let licenses: Record<string, string> = { ...draft.licenses }
-  if (source.id && Object.keys(licenses).length === 0) {
+  if (source.id && Object.keys(licenses).length === 0 && source.licenseFiles?.length !== 0) {
     try {
-      licenses = await fetchLicenses(source.id)
-    } catch {
+      licenses = await fetchLicenses(source.id, source.rev)
+    } catch (error) {
+      if (error instanceof ThemeChangedError) return { ok: false, problems: [THEME_CHANGED_TEXT] }
       problems.push('Couldn’t read the licence files of the theme this one comes from. Try again.')
     }
   }

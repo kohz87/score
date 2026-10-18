@@ -3,10 +3,12 @@ import {
   THEME_CSS_NOT_ON_PROTECTED_ANCESTORS,
   ThemeAssetRefSchema,
   ThemeIdSchema,
+  ThemeRevSchema,
   checkThemeDeclaration,
   checkThemeSelector,
   isAllowedThemeProperty,
   normaliseThemeProperty,
+  themeAssetUrl,
 } from '@score/contract'
 import { protectedClasses, protectedCustomPropertyPrefixes } from './protected-surfaces.ts'
 
@@ -126,6 +128,8 @@ function insertGuard(selector: string, extraGuard: string): string {
 type Context = {
   confine: boolean
   themeId: string | null
+  /** The package revision (etag) the asset URLs name; without a valid one `asset:` references stay as they are. */
+  rev: string | null
   resolve?: (ref: string) => string | null
   report: ThemeSanitiseReport['dropped']
 }
@@ -153,9 +157,13 @@ function cleanUrls(value: string, context: Context): string | null {
       }
       const resolved = context.resolve?.(ref)
       if (resolved) return `url("${resolved}")`
-      if (!context.themeId || !ThemeIdSchema.safeParse(context.themeId).success)
+      if (
+        !context.themeId ||
+        !ThemeIdSchema.safeParse(context.themeId).success ||
+        !ThemeRevSchema.safeParse(context.rev).success
+      )
         return `url("${ref}")`
-      return `url("/api/themes/${context.themeId}/assets/${ref.slice('asset:'.length)}")`
+      return `url("${themeAssetUrl(context.themeId, ref.slice('asset:'.length), context.rev as string)}")`
     },
   )
   if (!ok || /url\(/i.test(rewritten.replace(/url\("[^"]*"\)/gi, ''))) return null
@@ -278,6 +286,8 @@ export function sanitiseCss(
   text: string,
   options: {
     themeId?: string
+    /** The theme's package revision (its etag), named by the asset URLs (contract § 16). */
+    rev?: string
     resolve?: (ref: string) => string | null
     /** Keep every rule out of protected subtrees (what the engine applies); the stored text stays plain. */
     confine?: boolean
@@ -286,6 +296,7 @@ export function sanitiseCss(
   const context: Context = {
     confine: options.confine ?? false,
     themeId: options.themeId ?? null,
+    rev: options.rev ?? null,
     ...(options.resolve ? { resolve: options.resolve } : {}),
     report: [],
   }
