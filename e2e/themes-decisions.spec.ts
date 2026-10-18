@@ -206,3 +206,18 @@ test.describe('the chat-first view keeps a protected way back (re-gate #8)', () 
     })
   }
 })
+
+test('#9: a host reset also clears the device’s light/dark choice', async ({ page }) => {
+  const look: Look = { active: 'score', mode: 'system', resetGeneration: 0 }
+  await mockThemes(page, [], look)
+  await pair(page)
+  await page.goto('/now')
+  await page.evaluate(() => window.localStorage.setItem('score.theme', 'dark'))
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  // `scripts/score look reset`: the shared look goes back to system and the generation moves on.
+  look.resetGeneration = 1
+  await page.reload()
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/)
+  expect(await page.evaluate(() => window.localStorage.getItem('score.theme'))).toBeNull()
+})
