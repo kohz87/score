@@ -1,9 +1,12 @@
+import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import { useNow, useTeamPause } from './now-queries.ts'
 import { AskingCard, MadeTodayCard, NowComposer, ThreadCard, TodoCard } from './NowCards.tsx'
 import { FlowView } from './flow/FlowView.tsx'
 import { RoutinesView } from './RoutinesView.tsx'
 import { ScoreTimeline } from './ScoreTimeline.tsx'
+import { useLayout, type NowCardKind } from '../../themes/layout.ts'
+import type { NowSnapshot } from '@score/contract'
 import { WatchPage } from '../watch/WatchPage.tsx'
 import { OrchestrationNow } from '../orchestrations/OrchestrationNow.tsx'
 import './now.css'
@@ -14,8 +17,62 @@ const views = [
   { to: '/now/routines', label: 'Routines', end: false },
 ] as const
 
+/**
+ * The Score view with the cards the theme arranged (PLAN 9.3): a grid with the theme's columns and spans, the same
+ * card components as the default arrangement. Needs-you is always among them (layout.ts adds it when a theme left it
+ * out); the orchestration cards above stay full-width, as in the default.
+ */
+function NowArrangement({
+  snapshot,
+  columns,
+  cards,
+}: {
+  snapshot: NowSnapshot
+  columns: number
+  cards: { card: NowCardKind; span: number }[]
+}) {
+  const agents = snapshot.lanes.map((lane) => lane.agent)
+  const working = snapshot.lanes.filter((lane) => lane.agent.status === 'working').slice(0, 2)
+  const slot = (key: string, span: number, children: ReactNode) => (
+    <div key={key} className="now-slot" data-span={span}>
+      {children}
+    </div>
+  )
+  return (
+    <div className="now-arrangement" data-columns={columns}>
+      {cards.flatMap(({ card, span }) => {
+        switch (card) {
+          case 'timeline':
+            return [slot(card, span, <ScoreTimeline snapshot={snapshot} />)]
+          case 'room':
+            return [slot(card, span, <ThreadCard thread={snapshot.thread} agents={agents} />)]
+          case 'needs-you':
+            return [
+              slot(card, span, <AskingCard approval={snapshot.focusApproval} agents={agents} />),
+            ]
+          case 'made-today':
+            return [slot(card, span, <MadeTodayCard items={snapshot.madeToday} agents={agents} />)]
+          case 'todo':
+            return working.map((lane) =>
+              slot(`${card}-${lane.agent.id}`, span, <TodoCard agent={lane.agent} />),
+            )
+          case 'composer':
+            return [
+              slot(
+                card,
+                span,
+                <NowComposer roomId={snapshot.thread?.roomId ?? null} agents={agents} />,
+              ),
+            ]
+        }
+      })}
+    </div>
+  )
+}
+
 export function NowPage() {
   const { pathname } = useLocation()
+  const arrangement = useLayout().now
   const now = useNow()
   const pause = useTeamPause()
   const snapshot = now.data
@@ -79,7 +136,13 @@ export function NowPage() {
       {view === 'flow' && <FlowView />}
       {view === 'routines' && <RoutinesView agents={snapshot?.lanes.map((lane) => lane.agent)} />}
       {view === 'score' &&
-        (snapshot ? (
+        (snapshot && arrangement ? (
+          <NowArrangement
+            snapshot={snapshot}
+            columns={arrangement.columns}
+            cards={arrangement.cards}
+          />
+        ) : snapshot ? (
           <>
             <ScoreTimeline snapshot={snapshot} />
             <div className="now-cards">
