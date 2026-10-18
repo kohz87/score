@@ -154,7 +154,17 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
       lookStore.setFailure('Your theme couldn’t be applied, so Score is showing its own look.')
     }
     return () => stopWatching?.()
-  }, [look.safe, look.loading, id, custom, detail.isPending, detail.isError, detail.data, mode, view])
+  }, [
+    look.safe,
+    look.loading,
+    id,
+    custom,
+    detail.isPending,
+    detail.isError,
+    detail.data,
+    mode,
+    view,
+  ])
 
   return <LookBanner router={router} safe={look.safe} failure={look.failure} />
 }
