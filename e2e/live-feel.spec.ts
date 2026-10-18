@@ -46,7 +46,10 @@ test('a running reply shows its status line in Chat (under the reply and in the 
 
   // The same agent on Now: its lane says it too.
   await page.goto('/now')
-  const lane = page.locator('.now-lane-label').filter({ hasText: 'builder' })
+  // By the agent's own link, not by text: another spec's agent can have "builder" in its role while it runs.
+  const lane = page
+    .locator('.now-lane-label')
+    .filter({ has: page.getByRole('link', { name: 'builder', exact: true }) })
   await expect(lane.locator('.live-status')).not.toHaveText('', { timeout: 30_000 })
 
   // End the run so it doesn't linger for the other specs.
