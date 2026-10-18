@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -181,4 +183,14 @@ test('a wrong password and too many attempts are shown', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
   expect((await screen.findByRole('alert')).textContent).toContain('Too many wrong passwords')
   expect(window.localStorage.getItem('score.view.guard')).toBeNull()
+})
+
+test('the currency inputs are styled like the other Settings fields', () => {
+  const css = readFileSync(join(import.meta.dirname, 'settings.css'), 'utf8')
+  const rule = /\.plugins-currency input \{([^}]*)\}/.exec(css)?.[1] ?? ''
+  expect(rule).toMatch(/border:\s*1px solid var\(--hairline\)/)
+  expect(rule).toMatch(/border-radius:\s*var\(--radius-14\)/)
+  expect(rule).toMatch(/background:\s*var\(--card\)/)
+  expect(rule).toMatch(/height:\s*40px/)
+  expect(rule).not.toMatch(/#[0-9a-f]{3,8}\b/i)
 })

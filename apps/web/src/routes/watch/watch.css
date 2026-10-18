@@ -690,6 +690,19 @@
   margin: 0;
   padding: 0;
 }
+.watch-doing__group {
+  padding: 6px 0 2px;
+}
+.watch-doing__group-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.watch-doing--nested {
+  margin: 2px 0 0 4px;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--hairline);
+}
 .watch-doing__item {
   all: unset;
   box-sizing: border-box;

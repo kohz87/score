@@ -4,6 +4,7 @@ import {
   activityItems,
   addMarker,
   backFrom,
+  groupActivity,
   markerPositions,
   nearestMarker,
   parseDiff,
@@ -130,4 +131,25 @@ test('open in terminal resumes the agent session through its profile', () => {
   expect(resumeCommand('builder', 'sess-1')).toBe('hermes -p builder --resume sess-1')
   expect(resumeCommand('builder', null)).toBe('hermes -p builder --continue')
   expect(resumeCommand('my agent', "it's")).toBe("hermes -p 'my agent' --resume 'it'\\''s'")
+})
+
+test('a sub-agent’s steps are grouped, without the caption prefix; frames without it stay flat', () => {
+  const sub = (seq: number, seconds: number): WatchFrame => ({
+    ...terminal(seq, seconds),
+    caption: `Sub-agent · Ran step ${seq}`,
+  })
+  const items = activityItems([terminal(1, 0), sub(2, 1), sub(3, 2), terminal(4, 3)], [])
+  expect(items.map((item) => item.text)).toEqual([
+    'Ran step 4',
+    'Ran step 3',
+    'Ran step 2',
+    'Ran step 1',
+  ])
+  const entries = groupActivity(items)
+  expect(entries.map((entry) => entry.type)).toEqual(['item', 'sub-agent', 'item'])
+  const group = entries[1]!
+  expect(group.type === 'sub-agent' && group.items.map((item) => item.seq)).toEqual([3, 2])
+  expect(
+    groupActivity(activityItems([terminal(1, 0), terminal(2, 1)], [])).map((e) => e.type),
+  ).toEqual(['item', 'item'])
 })

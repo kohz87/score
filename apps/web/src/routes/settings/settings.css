@@ -806,9 +806,24 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  font-size: 13px;
+  font-weight: 600;
 }
+/* Same field look as .settings-form input and .look-guard-form input. */
 .plugins-currency input {
   min-width: 0;
+  height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+.plugins-currency input:disabled {
+  background: var(--subtle);
+  color: var(--muted);
 }
 .plugins-currency .settings-pill {
   align-self: flex-start;

@@ -64,6 +64,32 @@ test('while replaying, the replayed step is the highlighted one and nothing says
   expect(screen.queryByText(/, now/)).toBeNull()
 })
 
+test('a sub-agent’s steps sit in one group under a Sub-agent label', () => {
+  const at = (n: number) => new Date(Date.UTC(2026, 9, 8, 21, 30, n)).toISOString()
+  const list: ActivityItem[] = [
+    { key: 'frame-4', kind: 'command', text: 'Ran the tests', at: at(4), seq: 4 },
+    { key: 'frame-3', kind: 'file', text: 'Edited a.ts', at: at(3), seq: 3, sub: true },
+    { key: 'frame-2', kind: 'command', text: 'Ran ls', at: at(2), seq: 2, sub: true },
+    { key: 'frame-1', kind: 'command', text: 'Ran git status', at: at(1), seq: 1 },
+  ]
+  render(
+    <WhatTheyAreDoing
+      agent={{ name: 'builder' }}
+      items={list}
+      currentKey="frame-4"
+      live
+      onSelect={vi.fn()}
+    />,
+  )
+  expect(screen.getByText('Sub-agent · 2 steps')).toBeTruthy()
+  const nested = screen.getByRole('list', { name: 'Sub-agent steps' })
+  expect(within(nested).getAllByRole('listitem')).toHaveLength(2)
+  expect(within(nested).getByRole('button', { name: /Edited a\.ts/ })).toBeTruthy()
+  expect(screen.queryByText(/Sub-agent · Edited/)).toBeNull()
+  // The group is one entry in the list of five, so nothing here is hidden.
+  expect(screen.queryByRole('button', { name: 'Full history' })).toBeNull()
+})
+
 const agent = (id: string, color: string, shape: AgentSummary['style']['shape']): AgentSummary => ({
   id,
   name: id,

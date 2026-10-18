@@ -52,6 +52,7 @@
       "message": "The lead sees every orch.* tool"
     }
   ],
+  "workers": [],
   "gatePolicyNotes": {
     "every-step": "You approve every assignment before it starts.",
     "lead-asks": "A step starts without approval unless the lead asks you. Steps wait until the lead has finished its turn so it can ask first.",
@@ -63,7 +64,8 @@
     "maxLeadTurns": 20,
     "maxConcurrentSteps": 2,
     "leadTurnEstimateUsd": 0.25,
-    "stepEstimateUsd": 0.5
+    "stepEstimateUsd": 0.5,
+    "codingSteps": 10
   },
   "reserveBytes": 2621440
 }
