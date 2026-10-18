@@ -218,3 +218,59 @@ describe('the list of Score’s own fixed and sticky things', () => {
     expect(missing).toEqual([])
   })
 })
+
+// Third gate, finding 3: graphics that stand alone are measured too (WCAG 1.4.11, 3:1), against what is painted around
+// them: a bare glyph's colour against its own plate or what the theme painted behind it; a Needs-you dot against the
+// edge it wears, or the page behind it when it has none.
+describe('third gate finding 3: non-text contrast of glyphs and Needs-you dots', () => {
+  const glyph = (extra = '') =>
+    `<div id="row"><svg id="g" class="agent-glyph" data-protected="inline-flex" aria-label="lead, circle-dot" style="--glyph-color: #6b4eff; ${extra}"></svg></div>`
+
+  test('a bare glyph on a background of its own colour is reported', () => {
+    document.body.innerHTML = glyph()
+    rects = { row: [0, 0, 60, 20], g: [0, 0, 12, 12] }
+    stage({ row: { backgroundColor: 'rgb(107, 78, 255)' } })
+    expect(findProtectedViolation()).toBe(
+      'lead, circle-dot can’t be told apart from its background',
+    )
+  })
+
+  test('the same glyph on a plate of its own (Score’s protected layer) is fine, whatever the row paints', () => {
+    document.body.innerHTML = glyph('background-color: #ffffff')
+    rects = { row: [0, 0, 60, 20], g: [0, 0, 12, 12] }
+    stage({ row: { backgroundColor: 'rgb(107, 78, 255)' } })
+    expect(findProtectedViolation()).toBeNull()
+  })
+
+  test('a glyph on a picture the theme painted is reported too (anything from black to white)', () => {
+    document.body.innerHTML = glyph()
+    rects = { row: [0, 0, 60, 20], g: [0, 0, 12, 12] }
+    stage({ row: { backgroundImage: 'url("x.png")' } })
+    expect(findProtectedViolation()).toBe(
+      'lead, circle-dot can’t be told apart from its background',
+    )
+  })
+
+  const dot = (style = '') =>
+    `<div id="link"><span id="d" class="needs-you-dot" role="img" aria-label="Needs you" data-protected="block" style="background-color: rgb(255, 107, 138); ${style}"></span></div>`
+
+  test('a Needs-you dot on a background of its own colour is reported', () => {
+    document.body.innerHTML = dot()
+    rects = { link: [0, 0, 80, 30], d: [70, 10, 7, 7] }
+    stage({ link: { backgroundColor: 'rgb(255, 107, 138)' } })
+    expect(findProtectedViolation()).toBe('Needs you can’t be told apart from its background')
+  })
+
+  test('with Score’s ink edge it is read against that edge, whatever is behind it', () => {
+    document.body.innerHTML = dot('border: 1.5px solid #12131a')
+    rects = { link: [0, 0, 80, 30], d: [70, 10, 10, 10] }
+    stage({ link: { backgroundColor: 'rgb(255, 107, 138)' } })
+    expect(findProtectedViolation()).toBeNull()
+  })
+
+  test('the default page behind it (no theme paint) is not a violation', () => {
+    document.body.innerHTML = dot()
+    rects = { link: [0, 0, 80, 30], d: [70, 10, 7, 7] }
+    expect(findProtectedViolation()).toBeNull()
+  })
+})

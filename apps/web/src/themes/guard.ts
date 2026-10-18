@@ -1,4 +1,4 @@
-import { parseComputedColor } from './color.ts'
+import { parseComputedColor, type Rgba } from './color.ts'
 import { backgroundLayers, hidesWhatIsBelow, worstContrast, type Layer } from './contrast.ts'
 import { appliedThemeElements, appliedThemeSheets } from './engine.ts'
 
@@ -24,6 +24,8 @@ type Snapshot = {
   contrast: number | null
   /** WCAG "large text": 3:1 is enough, otherwise 4.5:1. */
   large: boolean
+  /** A graphic that stands alone (a bare glyph, a Needs-you dot): `contrast` is then its non-text contrast, 3:1. */
+  graphic: boolean
 }
 
 const CONTROLS =
@@ -37,11 +39,15 @@ function chain(element: Element): Element[] {
 
 // Colours set through the theme's tokens or its own rules (white on white, transparent text) leave a surface in place
 // but unreadable: measured against the backgrounds stacked behind the text, up to the first opaque one.
-function textContrast(element: HTMLElement): number | null {
+function textContrast(element: Element): number | null {
   const text = parseComputedColor(getComputedStyle(element).color)
-  if (!text) return null
+  return text ? contrastOver(text, chain(element)) : null
+}
+
+// What a colour is read against: the layers painted behind it, from the first node down to the first opaque one.
+function contrastOver(colour: Rgba, nodes: Element[]): number | null {
   const stack: Layer[] = []
-  for (const node of chain(element)) {
+  for (const node of nodes) {
     const computed = getComputedStyle(node)
     // A picture counts as anything from black to white wherever it is, the page's own included (re-gate finding 5: a
     // translucent rail over a picture with no dimming). The theme's veil over it is a layer of its own in this stack.
@@ -50,7 +56,35 @@ function textContrast(element: HTMLElement): number | null {
     stack.push(...layers)
     if (hidesWhatIsBelow(layers)) break
   }
-  return worstContrast(text, stack)
+  return worstContrast(colour, stack)
+}
+
+/**
+ * The non-text contrast of a graphic that stands alone (third gate, finding 3; WCAG 1.4.11), or `undefined` when the
+ * element is not one. A glyph is its colour read against its own plate and what is painted below it; a Needs-you dot is
+ * read against the edge it wears (Score's ink, protected.css) or, without one, what is painted behind it. A graphic whose
+ * surroundings can't be measured is null, as for text.
+ */
+function graphicContrast(element: Element): number | null | undefined {
+  const style = getComputedStyle(element)
+  if (element.matches('.agent-glyph')) {
+    const colour = parseComputedColor(style.getPropertyValue('--glyph-color'))
+    return colour ? contrastOver(colour, chain(element)) : null
+  }
+  if (element.matches('.needs-you-dot')) {
+    const colour = parseComputedColor(style.backgroundColor)
+    if (!colour) return null
+    const edge = parseComputedColor(style.borderTopColor)
+    if (
+      edge &&
+      edge[3] >= 1 &&
+      Number.parseFloat(style.borderTopWidth) > 0 &&
+      style.borderTopStyle !== 'none'
+    )
+      return worstContrast(colour, [[edge]])
+    return contrastOver(colour, element.parentElement ? chain(element.parentElement) : [])
+  }
+  return undefined
 }
 
 // Score's own overlays and sticky bars: the menu drawer, banners, the sticky rails and headers, and the backdrops of
@@ -164,6 +198,7 @@ function paintedBy(element: Element, hit: Element | null): boolean {
 }
 
 function snapshot(element: HTMLElement): Snapshot {
+  const graphic = graphicContrast(element)
   const rects = element.getClientRects()
   const rendered = rects.length > 0
   const style = getComputedStyle(element)
@@ -205,8 +240,9 @@ function snapshot(element: HTMLElement): Snapshot {
     fontSize: Number.parseFloat(style.fontSize) || 0,
     // Words need 4.5:1; a control with only an icon is a graphic, 3:1. A surface with no text of its own (a card, a
     // dot) has nothing to measure: its words are separate targets.
-    contrast: ownText || control ? textContrast(element) : null,
+    contrast: ownText || control ? textContrast(element) : (graphic ?? null),
     large: isLargeText(style) || !ownText,
+    graphic: graphic !== undefined && !(ownText || control),
   }
 }
 
@@ -224,15 +260,26 @@ export function contrastVerdict(
   on: number | null,
   off: number | null,
   large: boolean,
+  graphic = false,
 ): string | null {
   const needed = large ? 3 : 4.5
-  if (on === null) return off === null ? null : 'has text whose colours can’t be checked'
+  if (on === null)
+    return off === null
+      ? null
+      : graphic
+        ? 'has a background whose colours can’t be checked'
+        : 'has text whose colours can’t be checked'
   if (on >= needed) return null
-  if (off === null || on < off - 0.05) return 'has unreadable text'
+  if (off === null || on < off - 0.05)
+    return graphic ? 'can’t be told apart from its background' : 'has unreadable text'
   return null
 }
 
-function worse(on: Snapshot, off: Snapshot): string | null {
+/**
+ * `context` is a decision's own fields and labels (third gate, finding 1): they are not protected surfaces, so a theme
+ * may set them in its own type and sizes, but not hide, fade, cut, cover or blank them. Typography is not judged there.
+ */
+function worse(on: Snapshot, off: Snapshot, context = false): string | null {
   if (off.rendered && !on.rendered) return 'is not shown'
   if (!off.rendered) return null
   if (on.chainOpacity < off.chainOpacity - 0.02) return 'is faded'
@@ -242,9 +289,9 @@ function worse(on: Snapshot, off: Snapshot): string | null {
   if (off.onScreen && !on.onScreen) return 'is pushed off screen'
   if (off.visible > 0.5 && on.visible < off.visible * 0.5) return 'is clipped'
   if (on.covered && !off.covered) return 'is covered'
-  if (on.themeFont && !off.themeFont) return 'is set in the theme’s font'
-  if (off.fontSize > 0 && on.fontSize < off.fontSize * 0.5) return 'has tiny text'
-  return contrastVerdict(on.contrast, off.contrast, on.large)
+  if (!context && on.themeFont && !off.themeFont) return 'is set in the theme’s font'
+  if (!context && off.fontSize > 0 && on.fontSize < off.fontSize * 0.5) return 'has tiny text'
+  return contrastVerdict(on.contrast, off.contrast, on.large, on.graphic)
 }
 
 // Every element that shows text of its own (whatever its tag: the approval's title and description are spans) or is a
@@ -339,10 +386,16 @@ function withoutTheme<T>(run: () => T): T {
   }
 }
 
-function violationIn(surfaces: HTMLElement[]): string | null {
+function violationIn(surfaces: HTMLElement[], decision: HTMLElement | null = null): string | null {
   const live = surfaces.filter((el) => !el.closest('[hidden]'))
   if (live.length === 0) return null
-  const targets = live.flatMap(parts)
+  // Everything else inside the decision (its labelled fields, labels, selects and text), judged less strictly.
+  const rest =
+    decision && !decision.closest('[hidden]')
+      ? parts(decision).filter((el) => !el.closest('[data-protected]'))
+      : []
+  const targets = [...live.flatMap(parts), ...rest]
+  const loose = new Set<HTMLElement>(rest)
   const glyphShapes = live.flatMap(shapes)
   const on = targets.map(snapshot)
   const shapesOn = glyphShapes.map(shapeSignature)
@@ -356,7 +409,7 @@ function violationIn(surfaces: HTMLElement[]): string | null {
       return `${owner ?? 'an agent glyph'} changed shape`
     }
   for (let i = 0; i < targets.length; i++) {
-    const problem = worse(on[i]!, off[i]!)
+    const problem = worse(on[i]!, off[i]!, loose.has(targets[i]!))
     if (problem) {
       const name = targets[i]!.getAttribute('aria-label') ?? targets[i]!.tagName.toLowerCase()
       return `${name} ${problem}`
@@ -397,11 +450,14 @@ function controlProblem(control: HTMLElement): string | null {
  * that commits are separate surfaces, and a click on one is a click on the whole decision (re-gate finding #6).
  * Elsewhere it is the control's nearest protected surface.
  */
-function decisionSurfaces(control: HTMLElement): HTMLElement[] {
+function decisionSurfaces(control: HTMLElement): {
+  surfaces: HTMLElement[]
+  whole: HTMLElement | null
+} {
   const decision = control.closest<HTMLElement>('[data-decision]')
   if (!decision) {
     const surface = control.closest<HTMLElement>('[data-protected]')
-    return surface ? [surface] : []
+    return { surfaces: surface ? [surface] : [], whole: null }
   }
   const marked = [
     decision,
@@ -411,7 +467,8 @@ function decisionSurfaces(control: HTMLElement): HTMLElement[] {
   const outer = marked.filter((el) => !marked.some((other) => other !== el && other.contains(el)))
   // A decision inside a protected surface (a dialog) is measured as part of it.
   const around = decision.parentElement?.closest<HTMLElement>('[data-protected]')
-  return around ? [around] : outer
+  // A decision is judged whole: the surfaces above and every field and label between them (finding 1).
+  return around ? { surfaces: [around], whole: null } : { surfaces: outer, whole: decision }
 }
 
 /**
@@ -424,16 +481,16 @@ function decisionSurfaces(control: HTMLElement): HTMLElement[] {
  */
 export function decisionProblem(control: HTMLElement): string | null {
   if (document.documentElement.getAttribute('data-look') !== 'custom') return null
-  const surfaces = decisionSurfaces(control)
-  if (surfaces.length === 0 || control.closest(WAY_BACK)) return null
-  let problem = violationIn(surfaces)
+  const { surfaces, whole } = decisionSurfaces(control)
+  if ((surfaces.length === 0 && !whole) || control.closest(WAY_BACK)) return null
+  let problem = violationIn(surfaces, whole)
   if (!problem) {
     const own = controlProblem(control)
     if (own && withoutTheme(() => controlProblem(control)) === null) problem = own
   }
   if (!problem) return null
   const name =
-    surfaces[0]!.getAttribute('aria-label') ?? control.getAttribute('aria-label') ?? 'A decision'
+    surfaces[0]?.getAttribute('aria-label') ?? control.getAttribute('aria-label') ?? 'A decision'
   return problem.startsWith(name) ? problem : `${name} ${problem}`
 }
 

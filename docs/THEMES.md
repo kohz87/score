@@ -96,7 +96,7 @@ The table lists every field. Arrays are written `field[]`, and `views.user` take
 | `layout.menu`            | up to 7 entries                                                               | The order, names and visibility of the destinations. Anything left out is hidden.             |
 | `layout.menu[]`          | an object                                                                     | One entry of the menu.                                                                        |
 | `layout.menu[].to`       | `/now` · `/chat` · `/tasks` · `/team` · `/knowledge` · `/reports` · `/settings` | The destination.                                                                            |
-| `layout.menu[].label`    | 1–24 characters                                                               | Your own name for it.                                                                         |
+| `layout.menu[].label`    | 1–24 characters, at least one of them visible (not only spaces, zero-width or other invisible characters) | Your own name for it. Settings keeps “Settings” in its accessible name; an empty-looking label falls back to the destination’s own name. |
 | `layout.now`             | an object                                                                     | The cards on Now, in a grid.                                                                  |
 | `layout.now.columns`     | a whole number, 1–4                                                           | How many columns the grid has.                                                                |
 | `layout.now.cards`       | up to 12 cards                                                                | The cards, in order.                                                                          |
@@ -281,6 +281,7 @@ drops these before it is applied, and keeps a report of what was dropped.
 | any `url()` that isn’t `asset:img/…`, `image-set()`, `src()`, `element()`        | Nothing is fetched from, or sent to, another site.                                        |
 | any rule with `!important`                                                       | Protected surfaces win with `!important` in their own layer; a theme can’t compete.       |
 | selectors that name a protected surface (`[data-protected]`, `.chat-approval`, …) | See below.                                                                                |
+| selectors ending in a pseudo-element other than `::before`, `::after`, `::placeholder`, `::marker` (`::selection`, `::highlight()`, `::target-text`, `::spelling-error`, `::grammar-error`, `::first-line`, `::first-letter`, …) | Highlight styles inherit into approvals from a rule on any ancestor; nothing else may reach in that way. |
 | custom properties starting `--agent-`, `--rules-`, `--glyph-` and `--watch-live` | Agent identity and the Rules colours carry meaning.                                       |
 | `@keyframes` and any other at-rule than `@media`, `@supports`, `@container`, `@layer` | Not needed by a theme; motion that starts later is how a rule could hide an approval.    |
 
@@ -313,7 +314,8 @@ reach an approval’s words, its buttons or a glyph’s shape, whatever you writ
 specificity.) Your manifest’s colour tokens still reach them, and what a parent hands down by inheritance does: the
 fonts and colours of their parents. The things that could change how a decision *reads or sits*, such as size, spacing,
 transforms, clipping, positioning and fading, are not on the CSS allowlist at all, so no rule can do them to a parent.
-As a second wall, protected surfaces re-assert their own word spacing, writing direction, text shadows and (below the
+A glyph that stands alone (the small agent shapes in lists and the timeline) sits on a plate of Score’s own, white behind a dark agent colour and Score’s ink behind a light one (always at least 3:1, WCAG 1.4.11), and the Needs-you dot is edged in Score’s ink, so a background of the agent’s own colour, or a picture, can’t make either disappear; the run-time check measures that non-text contrast too (3:1 against what is painted around the graphic) and switches the theme off if it can’t hold.
+As a second wall, selected text (and a found-text match) in a protected surface is always the system’s own highlight colours, and protected surfaces re-assert their own word spacing, writing direction, text shadows and (below the
 components’ own rules) size, line height, letter spacing, case and wrapping, and the Settings link wears the card colour
 as an opaque background of its own, so a translucent rail over a picture can’t take its contrast away.
 
@@ -325,7 +327,9 @@ unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can�
 (the thing painted on it must be the control itself, something inside it or its own label, never a parent or a
 stranger), Score refuses the action, switches the theme off and says nothing was sent. A decision is vetted as a whole:
 an approval’s request and its buttons, or the add-coding-agent form (its context, warnings, permission and password
-fields, and the “Add coding agent” button) count as one, so hiding any part of it refuses the click or the submit. Every
+fields, the button, and also every other label and field of the form: kind, name, role, workspace, model) count as one,
+so hiding, fading, clipping, covering or blanking any part of it refuses the click or the submit. (The fields and labels
+that are not protected surfaces may still be set in a theme’s own type; only being unreadable or unreachable counts.) Every
 measurement is made against the same page with the theme’s own CSS gone (its sheets and its cached copy lifted; the
 layout options of the manifest stay, because Score renders those itself). Text over a picture has to read against
 anything from black to white behind it, the page’s own picture included, through whatever veil (`dim`) or glass the
