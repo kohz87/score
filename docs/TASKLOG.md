@@ -354,3 +354,10 @@ One entry per completed task: what landed, review results, and any **rejected re
   owner (not changed): the ring's subject flips lead → last replier after messages load (extra fetch, 50px shift on
   phones, an open popover closes); at 390px ring + Send don't fit one row although the CSS comment says they should.
   T3 started: `model-picker.spec.ts` fails ~2/3 alone and leaves "picker-helper" behind (cascades into reports/team).
+- **L1** merged (V1, V4): `watchWhileCustom()` starts protection the moment `html[data-look='custom']` is set (before
+  the list or detail arrives), restarts on every re-apply; the Customizer keeps a file+licence snapshot of the opened
+  revision in memory, so Save as new / Export after a conflict keep the opened version whole. Failing-first Chromium
+  specs for both; two older specs that asserted the old refusal now assert the kept version.
+- **Lead:** typed the rollback test's `store` (a missed typecheck error from the V2 fix — caught by the release build);
+  packs-visual Chat shots now use T2's `chatSettled()`. That wait exposed a real race: night pack, phone, Chat stays
+  50px above its end in ~1 of 3 runs (thread not re-pinned after the composer grows) → T4.
