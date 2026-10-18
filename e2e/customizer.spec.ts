@@ -882,6 +882,29 @@ test('a copy of Ledger keeps its font and OFL.txt through save, export and impor
   }
 })
 
+test('a copy of Paper starts from its real manifest and saves it', async ({ page }) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  made.add('paper-copy')
+  try {
+    await openCustomizer(page, '/settings/look/customize/paper')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Paper copy')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved “Paper copy”' })).toBeVisible({
+      timeout: 30_000,
+    })
+    const saved = await (await page.request.get('/api/themes/paper-copy')).json()
+    const original = await (await page.request.get('/api/themes/paper')).json()
+    expect(saved.manifest.colors).toEqual(original.manifest.colors)
+    expect(saved.manifest.fonts).toEqual({ heading: 'Source Serif 4' })
+    expect(saved.manifest.shape).toEqual(original.manifest.shape)
+    expect(saved.css).toBe(original.css)
+  } finally {
+    await page.goto('/settings')
+    await cleanUp(page)
+  }
+})
+
 test('small text on a translucent glass layer is measured against what is behind it', async ({
   page,
 }) => {

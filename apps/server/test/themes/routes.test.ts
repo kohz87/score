@@ -680,7 +680,9 @@ test('export is a zip in the import layout and round-trips through import', asyn
   expect(detail.css).toBe('.a{background:url(asset:img/a.png)}')
   expect((await call('GET', '/api/themes/nope/export')).statusCode).toBe(404)
   const builtin = await JSZip.loadAsync((await call('GET', '/api/themes/paper/export')).rawPayload)
-  expect(Object.keys(builtin.files)).toEqual(['theme.json'])
+  expect(Object.keys(builtin.files)).toEqual(['theme.json', 'style.css'])
+  const manifest = JSON.parse(await builtin.files['theme.json']!.async('string'))
+  expect(manifest).toMatchObject({ id: 'paper', fonts: { heading: 'Source Serif 4' } })
 })
 
 test('DELETE: 204 and the folder goes; built-ins and the active theme are 409; unknown is 404', async () => {

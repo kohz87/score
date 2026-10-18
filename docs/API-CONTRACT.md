@@ -2226,9 +2226,11 @@ Hermes or tokens.
 A theme is a declarative package: `theme.json` (`ThemeManifest`, format `1`), an optional `style.css`, `assets/`
 (woff2 fonts, png/jpg/webp/avif images) and up to two licence texts at the root, `LICENSE` and `OFL.txt` (UTF-8 plain
 text, each at most 64 KB; any other root file is refused). Licence files are stored with the theme, returned by
-`export` and kept when an export is imported again; the built-in themes that ship a font carry its `OFL.txt`. No theme code runs. Built-in ids `score`, `paper`, `night`, `dense` (the 8.3 packs, which have no manifest content) and
-`harbour`, `ledger`, `studio` (9.5: real packages shipped with the server, so their detail carries a manifest, CSS and
-assets, and `export` returns a zip that can be edited and imported under a new id). Themes installed before 9.5 under
+`export` and kept when an export is imported again; the built-in themes that ship a font carry its `OFL.txt`. No theme code runs. Built-in ids `score` (the default look, which has no manifest content) and
+`paper`, `night`, `dense` (C4: the 8.3 packs, now real packages too; the browser still wears them through its own CSS
+packs, and a test keeps the two in step), `harbour`, `ledger`, `studio` (9.5): the packages are shipped with the server, so
+their detail carries a manifest, CSS (when the package has any) and assets, and `export` returns a zip that can be edited
+and imported under a new id. Themes installed before 9.5 under
 one of these three ids are renamed at the first start (migration 0075 and a startup step) to `<id>-mine`, then
 `<id>-mine-2` and so on, with their assets; the shared look follows if it pointed at the old id. The id chosen for such a
 move, and every replace of a theme's asset folder, is written down (`theme_swaps`, migration 0076) before any file moves

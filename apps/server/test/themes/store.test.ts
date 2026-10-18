@@ -37,15 +37,34 @@ test('built-ins come from constants and shipped packages: listed first, no rows'
   const items = store.list()
   expect(items.map((item) => [item.id, item.source, item.hasCss])).toEqual([
     ['score', 'builtin', false],
-    ['paper', 'builtin', false],
+    ['paper', 'builtin', true],
     ['night', 'builtin', false],
-    ['dense', 'builtin', false],
+    ['dense', 'builtin', true],
     ['harbour', 'builtin', true],
     ['ledger', 'builtin', true],
     ['studio', 'builtin', true],
   ])
   expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM themes').get()).toEqual({ n: 0 })
   expect(store.detail('night')).toMatchObject({ css: '', assets: [] })
+})
+
+// C4 #1: the three original packs are full packages, so "Start from" copies a manifest, not a guess.
+test.each([
+  ['paper', { fonts: { heading: 'Source Serif 4' }, shape: { radius: 12 } }],
+  ['night', { layout: { nav: 'left' }, shape: { radius: 16 } }],
+  [
+    'dense',
+    {
+      fonts: { heading: 'Inter', body: 'Inter' },
+      layout: { nav: 'left' },
+      shape: { radius: 8, density: 'compact' },
+    },
+  ],
+])('the built-in %s carries a full manifest with both colour sets', (id, expected) => {
+  const detail = store.detail(id)!
+  expect(detail.manifest).toMatchObject({ id, author: 'Score', ...expected })
+  expect(Object.keys(detail.manifest.colors?.light ?? {}).length).toBeGreaterThan(20)
+  expect(Object.keys(detail.manifest.colors?.dark ?? {}).length).toBeGreaterThan(20)
 })
 
 test('an imported theme keeps its assets in 0700/0600 folders and disappears with its folder', () => {

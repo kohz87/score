@@ -1,0 +1,4 @@
+/* Paper: the serif heading and the corners come from theme.json; this sets the page title size. */
+:root {
+  --h1-size: 48px;
+}

@@ -22,7 +22,7 @@ import {
   type SaveProblem,
 } from '../../themes/customizer/api.ts'
 import { colourFindings, pairProblems, type Finding } from '../../themes/customizer/checks.ts'
-import { defaultColor, manifestFromPack } from '../../themes/customizer/defaults.ts'
+import { defaultColor } from '../../themes/customizer/defaults.ts'
 import {
   afterSave,
   canRedo,
@@ -171,9 +171,7 @@ export function Customizer() {
       const nextId = freshId(name, takenIds)
       const manifest = hasSettings(detail.manifest)
         ? { ...structuredClone(detail.manifest), id: nextId, name, version: '1.0.0' }
-        : probe && themes.find((theme) => theme.id === id)?.source === 'builtin'
-          ? manifestFromPack(probe, id, nextId, name)
-          : { ...emptyManifest(nextId, name) }
+        : { ...emptyManifest(nextId, name) }
       return {
         draft: { manifest, css: detail.css, uploads: {} },
         target: {
@@ -186,7 +184,7 @@ export function Customizer() {
         },
       }
     },
-    [probe, takenIds, themes],
+    [takenIds],
   )
 
   // Open the theme named in the address: a custom or installed theme is edited in place, a built-in one is copied.
