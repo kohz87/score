@@ -1,20 +1,25 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
   chmodSync,
+  closeSync,
+  constants,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import {
   BUILTIN_THEME_IDS,
+  THEME_ASSET_PATH,
   ThemeManifestSchema,
   type ThemeDetail,
   type ThemeManifest,
@@ -182,14 +187,41 @@ export class ThemeStore {
     return builtinAssetRoot(id) ?? join(this.root, id, 'assets')
   }
 
-  /** Asset paths as `fonts/x.woff2`, sorted; only regular files (a symlink planted on disk is never listed). */
+  /**
+   * The one place asset paths are resolved (K2 X4). Walks the folders from the theme's own folder down (`<id>`, `assets`,
+   * then `tail`), and refuses the path (null) if any step is a symlink, a missing entry, or the wrong kind, so a link
+   * planted anywhere on the way (a folder as much as the file) is never followed. The themes root and Score's home are
+   * the owner's own and may be links. Built-ins are walked from their shipped folder the same way.
+   */
+  private safeAssetPath(id: string, tail: string[], want: 'file' | 'dir'): string | null {
+    const shipped = builtinAssetRoot(id)
+    let current = shipped ? dirname(shipped) : this.root
+    const steps = shipped ? ['assets', ...tail] : [id, 'assets', ...tail]
+    for (const [index, step] of steps.entries()) {
+      current = join(current, step)
+      let info
+      try {
+        info = lstatSync(current)
+      } catch {
+        return null
+      }
+      const last = index === steps.length - 1
+      if (info.isSymbolicLink() || !(last && want === 'file' ? info.isFile() : info.isDirectory()))
+        return null
+    }
+    return current
+  }
+
+  /** Asset paths as `fonts/x.woff2`, sorted; only regular files, with no symlink on the way (see `safeAssetPath`). */
   assets(id: string): string[] {
     const found: string[] = []
     for (const dir of ASSET_DIRS) {
-      const folder = join(this.assetRoot(id), dir)
-      if (!existsSync(folder)) continue
+      const folder = this.safeAssetPath(id, [dir], 'dir')
+      if (!folder) continue
       for (const name of readdirSync(folder).sort()) {
-        if (lstatSync(join(folder, name)).isFile()) found.push(`${dir}/${name}`)
+        const path = `${dir}/${name}`
+        if (THEME_ASSET_PATH.test(path) && this.safeAssetPath(id, [dir, name], 'file'))
+          found.push(path)
       }
     }
     return found
@@ -207,13 +239,23 @@ export class ThemeStore {
     this.assertSettled(id)
   }
 
-  /** The bytes of one stored asset; null when it isn't a regular file (a symlink planted on disk is never read). */
+  /**
+   * The bytes of one stored asset, or null when the path isn't a well-formed asset path or isn't a regular file with no
+   * symlink on the way. Routes (serve, export) and the save-with-files path all read through here.
+   */
   readAsset(id: string, path: string): Buffer | null {
-    const file = join(this.assetRoot(id), ...path.split('/'))
+    if (!THEME_ASSET_PATH.test(path)) return null
+    const file = this.safeAssetPath(id, path.split('/'), 'file')
+    if (!file) return null
+    let fd: number | null = null
     try {
-      return lstatSync(file).isFile() ? readFileSync(file) : null
+      // O_NOFOLLOW closes the gap between the check and the open for the file itself.
+      fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW)
+      return fstatSync(fd).isFile() ? readFileSync(fd) : null
     } catch {
       return null
+    } finally {
+      if (fd !== null) closeSync(fd)
     }
   }
 

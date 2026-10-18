@@ -245,6 +245,20 @@ test('assets: unknown files, odd paths and a symlink planted on disk are 404', a
   unlinkSync(link)
 })
 
+test('assets: a symlinked asset folder is neither listed, served nor exported (K2 X4)', async () => {
+  await upload(await fullPackage())
+  const outside = join(dir, 'outside')
+  renameSync(join(dir, 'themes/seaside/assets/img'), outside)
+  symlinkSync(outside, join(dir, 'themes/seaside/assets/img'))
+  expect((await call('GET', '/api/themes/seaside/assets/img/a.png')).statusCode).toBe(404)
+  const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  expect(detail.assets.filter((path) => path.startsWith('img/'))).toEqual([])
+  const exported = await call('GET', '/api/themes/seaside/export')
+  expect(exported.statusCode).toBe(200)
+  const zip = await JSZip.loadAsync(exported.rawPayload)
+  expect(Object.keys(zip.files).filter((name) => name.startsWith('assets/img/'))).toEqual([])
+})
+
 test('import: 201, stored not activated, assets on disk with private modes', async () => {
   const res = await upload(await fullPackage())
   expect(res.statusCode).toBe(201)
