@@ -64,6 +64,22 @@ function isFloatingOverlay(element: Element): boolean {
   return false
 }
 
+/**
+ * The middle of the element, if that point is inside the window and inside every scrolling box around the element:
+ * what has been scrolled out of its pane isn't covered, it is just not in view.
+ */
+function visiblePoint(element: Element, box: DOMRect): { x: number; y: number } | null {
+  const x = Math.min(window.innerWidth - 1, Math.max(0, box.left + box.width / 2))
+  const y = Math.min(window.innerHeight - 1, Math.max(0, box.top + box.height / 2))
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const style = getComputedStyle(node)
+    if (style.overflowX === 'visible' && style.overflowY === 'visible') continue
+    const pane = node.getBoundingClientRect()
+    if (x < pane.left || x > pane.right || y < pane.top || y > pane.bottom) return null
+  }
+  return { x, y }
+}
+
 function snapshot(element: HTMLElement): Snapshot {
   const rects = element.getClientRects()
   const rendered = rects.length > 0
@@ -82,11 +98,18 @@ function snapshot(element: HTMLElement): Snapshot {
   const box = element.getBoundingClientRect()
   const inViewport =
     box.right > 0 && box.bottom > 0 && box.left < window.innerWidth && box.top < window.innerHeight
+  // "Pushed off screen" means out of the page, where scrolling can't bring it back. Below the fold doesn't count: a
+  // theme's own type and spacing move content up and down the page.
+  const inPage =
+    box.right + window.scrollX > 0 &&
+    box.bottom + window.scrollY > 0 &&
+    box.left + window.scrollX < document.documentElement.scrollWidth &&
+    box.top + window.scrollY < document.documentElement.scrollHeight
   let covered = false
-  if (rendered && inViewport && box.width > 0 && box.height > 0) {
-    const x = Math.min(window.innerWidth - 1, Math.max(0, box.left + box.width / 2))
-    const y = Math.min(window.innerHeight - 1, Math.max(0, box.top + box.height / 2))
-    const top = document.elementFromPoint(x, y)
+  const point =
+    rendered && inViewport && box.width > 0 && box.height > 0 ? visiblePoint(element, box) : null
+  if (point) {
+    const top = document.elementFromPoint(point.x, point.y)
     // Something else on top of the centre of a visible surface (a modal is not "something else": it has its own
     // top layer, so the surface is covered in both measurements and does not count).
     covered = !!top && !element.contains(top) && !top.contains(element) && !isFloatingOverlay(top)
@@ -97,7 +120,7 @@ function snapshot(element: HTMLElement): Snapshot {
     chainFilter,
     chainClip,
     size: box.width * box.height,
-    onScreen: inViewport,
+    onScreen: inPage,
     covered,
     themeFont: /theme-[a-z0-9-]+-/i.test(style.fontFamily),
     fontSize: Number.parseFloat(style.fontSize) || 0,
