@@ -338,3 +338,10 @@ One entry per completed task: what landed, review results, and any **rejected re
   row + revision check + K2's safe reader; export = revision + safe reader; contract § 16 both sides) and gave K2's
   symlink test the revision. Merged main: contract 1405, server themes 550, web themes 915, theme/Customizer e2e
   234/235 (themes-decisions #1 failed once under parallel load, 39/39 repeated).
+- **K1** merged (X1, X7, X15): new-orchestration/start-workflow forms, MCP access, Settings › Remote access and the pair
+  card are `data-decision` with their consent parts protected; `violationIn` vets a decision's fields even without a
+  live protected child; inventory test lists every consent form; Customizer `.cz-back` protected + Ctrl+K palette; a
+  reset made before the first theme list survives a late reset-generation reading; chat-first way back renders before
+  the list. 13+2+2 new e2e, all failing first. Merged main: web 2158 unit tests. Note: decision/protection e2e specs
+  failed once each under 4-builder load (themes-decisions #1, themes-protection:462), all pass repeated — watch in the
+  release run. Codex (high) verification of v1.8.0..main started.
