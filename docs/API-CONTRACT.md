@@ -2252,6 +2252,14 @@ startup id move skips the row, until recovery succeeds. Other ids are unaffected
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
   `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5).
+- **One rule set for packages** (`packages/contract/src/theme-package.ts`, pure, no Node or browser APIs): the browser's
+  reader (Customizer preview and import dialog) and the server's reader run the same code for the zip's structure
+  (central directory against local headers, names, **extra fields: a Unicode Path field, 0x7075, is refused**, flags,
+  symlink metadata, Zip64, overlapping data), for the entries (layout, types by folder, at most 41 files, per-file and
+  total caps, compression ratio) and for the inflated bytes (magic bytes per asset type, nested archives, licence texts
+  as plain UTF-8). A package the browser previews is therefore one the server's package rules accept; what remains
+  different is by design (CSS: the browser sanitises, the server refuses; a built-in id is a naming conflict). A shared
+  accept/reject corpus (`packages/contract/test/theme-package-corpus.ts`) runs against both readers.
 - `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult` `{ theme, report, detail }`; stored, **not**
   activated. `detail` is the `ThemeDetail` (manifest, CSS, assets, `etag`) exactly as this import committed it, read in the
   same serialised step as the write; the Customizer adopts it instead of fetching the theme again, so another writer's

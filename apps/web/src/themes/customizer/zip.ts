@@ -2,7 +2,7 @@
 // before anything is sent, and can export a draft that isn't saved. Writing stores files uncompressed; reading
 // handles stored and deflated entries (the browser's own DecompressionStream does the inflating). No dependency.
 
-import { extraFieldProblem } from '@score/contract'
+import { readZipDirectory, ThemePackageError, type ZipEntryInfo } from '@score/contract'
 
 const crcTable = (() => {
   const table = new Uint32Array(256)
@@ -86,6 +86,9 @@ export function writeZip(files: [string, Uint8Array][]): Uint8Array {
 
 export class ZipError extends Error {}
 
+/** A plain sentence for the person: the shared rules' messages, with a full stop. */
+const sentence = (message: string) => (/[.!?]$/.test(message) ? message : `${message}.`)
+
 export type ZipLimits = { entries: number; fileBytes: number; totalBytes: number }
 const DEFAULT_LIMITS: ZipLimits = {
   entries: 60,
@@ -128,6 +131,44 @@ async function inflate(data: Uint8Array, limit: number): Promise<Uint8Array> {
 }
 
 /**
+ * The entries of a zip as the shared package rules read them (the same code the server runs): the central directory
+ * against the local headers, names, extra fields, flags, symlink metadata. Nothing is inflated.
+ */
+export function listZip(bytes: Uint8Array): ZipEntryInfo[] {
+  try {
+    return readZipDirectory(bytes)
+  } catch (error) {
+    if (error instanceof ThemePackageError) throw new ZipError(sentence(error.message))
+    throw error
+  }
+}
+
+/** Inflates the files of already-listed entries (folders skipped), judging real bytes against the declared sizes. */
+export async function extractZip(
+  bytes: Uint8Array,
+  entries: readonly ZipEntryInfo[],
+  limits: Pick<ZipLimits, 'fileBytes' | 'totalBytes'> = DEFAULT_LIMITS,
+): Promise<Map<string, Uint8Array>> {
+  const files = new Map<string, Uint8Array>()
+  let total = 0
+  for (const entry of entries) {
+    if (entry.isDir) continue
+    if (entry.size > limits.fileBytes)
+      throw new ZipError(`“${entry.name.slice(0, 60)}” is too large.`)
+    total += entry.size
+    if (total > limits.totalBytes)
+      throw new ZipError('The zip unpacks to more than a theme can hold.')
+    const raw = bytes.subarray(entry.dataStart, entry.dataStart + entry.packed)
+    if (raw.length !== entry.packed) throw new ZipError('That zip file is cut short.')
+    const data = entry.method === 0 ? raw : await inflate(raw, entry.size)
+    if (data.length !== entry.size)
+      throw new ZipError(`“${entry.name.slice(0, 60)}” doesn’t match its size.`)
+    files.set(entry.name, data)
+  }
+  return files
+}
+
+/**
  * The files of a zip by name. Folders are skipped. Anything odd (a path that leaves the folder, too many files, a size
  * that lies) throws a ZipError with a plain message; the server checks again when the file is sent.
  */
@@ -135,102 +176,23 @@ export async function readZip(
   bytes: Uint8Array,
   limits: ZipLimits = DEFAULT_LIMITS,
 ): Promise<Map<string, Uint8Array>> {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  let end = -1
-  for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 0xffff); at--) {
-    if (view.getUint32(at, true) === 0x06054b50) {
-      end = at
-      break
-    }
-  }
-  if (end < 0) throw new ZipError('That isn’t a zip file.')
-  // Anything after the end record could hide a second one that another reader would pick instead.
-  if (end + 22 + view.getUint16(end + 20, true) !== bytes.length)
-    throw new ZipError('That zip file couldn’t be read.')
-  const count = view.getUint16(end + 10, true)
-  if (count > limits.entries) throw new ZipError('The zip holds more files than a theme can.')
-  let at = view.getUint32(end + 16, true)
-  const decoder = new TextDecoder('utf-8')
-  const files = new Map<string, Uint8Array>()
-  // Every name seen, folders included and case ignored: the server refuses such a package, so the preview must too.
-  const seen = new Set<string>()
-  const ranges: [number, number][] = []
-  let total = 0
-  for (let index = 0; index < count; index++) {
-    if (at + 46 > bytes.length || view.getUint32(at, true) !== 0x02014b50)
-      throw new ZipError('That zip file couldn’t be read.')
-    const flags = view.getUint16(at + 8, true)
-    const method = view.getUint16(at + 10, true)
-    const packed = view.getUint32(at + 20, true)
-    const size = view.getUint32(at + 24, true)
-    const nameLength = view.getUint16(at + 28, true)
-    const extraLength = view.getUint16(at + 30, true)
-    const commentLength = view.getUint16(at + 32, true)
-    const local = view.getUint32(at + 42, true)
-    const name = decoder.decode(bytes.subarray(at + 46, at + 46 + nameLength))
-    const nameBytes = bytes.subarray(at + 46, at + 46 + nameLength)
-    const crc = view.getUint32(at + 16, true)
-    // A Unicode path field gives the entry another name for readers that honour it (gate finding #1, again).
-    const centralExtra = extraFieldProblem(
-      bytes.subarray(at + 46 + nameLength, at + 46 + nameLength + extraLength),
-    )
-    if (centralExtra) throw new ZipError(`“${name.slice(0, 60)}”: ${centralExtra}.`)
-    at += 46 + nameLength + extraLength + commentLength
-    if (flags & 1) throw new ZipError('That zip file is encrypted.')
-    const key = name.replace(/\/$/, '').toLowerCase()
-    if (seen.has(key)) throw new ZipError(`“${name.slice(0, 60)}” appears twice.`)
-    seen.add(key)
-    // The server reads the local headers: they must say what the central directory says (gate finding #1).
-    if (local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50)
-      throw new ZipError('That zip file couldn’t be read.')
-    const localName = bytes.subarray(local + 30, local + 30 + view.getUint16(local + 26, true))
-    const localFlags = view.getUint16(local + 6, true)
-    const sameSizes =
-      (localFlags & 8) !== 0 ||
-      (view.getUint32(local + 14, true) === crc &&
-        view.getUint32(local + 18, true) === packed &&
-        view.getUint32(local + 22, true) === size)
+  const entries = listZip(bytes)
+  if (entries.length > limits.entries)
+    throw new ZipError('The zip holds more files than a theme can.')
+  for (const { name, isDir } of entries) {
+    if (isDir) continue
     if (
-      localName.length !== nameBytes.length ||
-      localName.some((byte, i) => byte !== nameBytes[i]) ||
-      view.getUint16(local + 8, true) !== method ||
-      (localFlags & 0x801) !== (flags & 0x801) ||
-      !sameSizes
-    )
-      throw new ZipError(`“${name.slice(0, 60)}”: the zip’s headers don’t match each other.`)
-    const localExtraLength = view.getUint16(local + 28, true)
-    const localExtra = extraFieldProblem(
-      bytes.subarray(
-        local + 30 + localName.length,
-        local + 30 + localName.length + localExtraLength,
-      ),
-    )
-    if (localExtra) throw new ZipError(`“${name.slice(0, 60)}”: ${localExtra}.`)
-    const dataStart = local + 30 + localName.length + localExtraLength
-    ranges.push([local, dataStart + packed])
-    if (name.endsWith('/')) continue
-    if (
-      name.includes('\\') ||
       name.startsWith('/') ||
+      name.includes('\\') ||
       name.split('/').some((part) => part === '..' || part === '.' || part === '')
     )
       throw new ZipError(`“${name.slice(0, 60)}” isn’t a safe file name.`)
-    if (size > limits.fileBytes) throw new ZipError(`“${name.slice(0, 60)}” is too large.`)
-    total += size
-    if (total > limits.totalBytes)
-      throw new ZipError('The zip unpacks to more than a theme can hold.')
-    const raw = bytes.subarray(dataStart, dataStart + packed)
-    if (raw.length !== packed) throw new ZipError('That zip file is cut short.')
-    let data: Uint8Array
-    if (method === 0) data = raw
-    else if (method === 8) data = await inflate(raw, size)
-    else throw new ZipError('That zip file uses a method Score can’t read.')
-    if (data.length !== size) throw new ZipError(`“${name.slice(0, 60)}” doesn’t match its size.`)
-    files.set(name, data)
   }
-  // Two entries sharing stored bytes would let one file stand in for another.
-  ranges.sort((a, b) => a[0] - b[0])
-  for (let i = 1; i < ranges.length; i++)
-    if (ranges[i]![0] < ranges[i - 1]![1]) throw new ZipError('That zip file couldn’t be read.')
-  return files
+  const seen = new Set<string>()
+  for (const { name } of entries) {
+    const key = name.replace(/\/$/, '').toLowerCase()
+    if (seen.has(key)) throw new ZipError(`“${name.slice(0, 60)}” appears twice.`)
+    seen.add(key)
+  }
+  return extractZip(bytes, entries, limits)
 }

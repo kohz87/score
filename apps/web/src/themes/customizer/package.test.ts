@@ -9,7 +9,7 @@ const manifest = { ...emptyManifest('harbour', 'Harbour'), shape: { radius: 'rou
 
 describe('theme packages', () => {
   it('round-trips what the server’s layout holds', async () => {
-    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 1])
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1])
     const zip = buildThemePackage({
       manifest: { ...manifest, background: { image: 'asset:img/b.png', fit: 'cover', dim: 10 } },
       css: '.a { color: red }',
@@ -51,11 +51,9 @@ describe('theme packages', () => {
       )
       return read.ok ? [] : read.reasons
     }
-    expect(await bad([['COPYING', text('x')]])).toEqual([
-      '“COPYING” isn’t part of a theme package.',
-    ])
+    expect(await bad([['COPYING', text('x')]])).toEqual(['COPYING: not part of a theme package.'])
     expect(await bad([['OFL.txt', new Uint8Array(64 * 1024 + 1).fill(97)]])).toEqual([
-      'OFL.txt is larger than 64 KB.',
+      'OFL.txt: file too large.',
     ])
     expect(await bad([['LICENSE', Uint8Array.from([0xff, 0xfe, 0xfd])]])).toEqual([
       'LICENSE isn’t valid UTF-8 text.',
@@ -78,7 +76,7 @@ describe('theme packages', () => {
         ['theme.json', text(JSON.stringify(manifest))],
         ['notes.txt', text('x')],
       ]),
-    ).toEqual(['“notes.txt” isn’t part of a theme package.'])
+    ).toEqual(['notes.txt: not part of a theme package.'])
     expect(
       await bad([
         ['theme.json', text(JSON.stringify(manifest))],
