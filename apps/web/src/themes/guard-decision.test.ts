@@ -33,6 +33,9 @@ let rects: typeof Element.prototype.getClientRects
 
 beforeEach(() => {
   theme.on = true
+  // jsdom has no hit testing; every simulated box sits at the same spot, so nothing counts as painted there with or
+  // without the theme (the guard compares the two, so this alone never refuses).
+  document.elementFromPoint = () => null
   // jsdom has no constructable sheets.
   Object.defineProperty(document, 'adoptedStyleSheets', {
     value: [],
