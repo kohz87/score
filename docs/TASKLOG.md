@@ -231,3 +231,8 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **Release 1.6.1** (8.9 + Tasks filter race + worker caps + 2.1.302 declaration). Release run by a Haiku monitor
   (check 258 s, e2e 143 s): contract/web/plugin/license green, e2e 378/381 (2 chat specs pass alone); server: `fix-l`
   (T1 item) and an in-file race in `coding-workers-release.test.ts` (passes alone; handed to T1). No product cause.
+- **9.3 layout model** merged (Sonnet high). No existing baseline changed; 41 new layout baselines; hostile e2e
+  extended with 7 layout combinations. Codex cross-check: 3 real findings (composer remount on theme switch, inert
+  shell after resetting an open launcher, long menu labels overflowing) fixed in 9.3 #11
+  (docs/reviews/2026-10-18-9.3-codex-crosscheck.md). Its "policy snapshot larger than 4 KB" server failures led to a
+  real fix on main: real snapshots were ~3.5 KB, so longer home/workspace paths broke coding workers; cap now 64 KB.
