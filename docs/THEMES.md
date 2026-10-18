@@ -322,7 +322,9 @@ unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can�
 (the thing painted on it must be the control itself, something inside it or its own label, never a parent or a
 stranger), Score refuses the action, switches the theme off and says nothing was sent. A decision is vetted as a whole:
 an approval’s request and its buttons, or the add-coding-agent form (its context, warnings, permission and password
-fields, and the “Add coding agent” button) count as one, so hiding any part of it refuses the click or the submit. Every
+fields, the button, and also every other label and field of the form: kind, name, role, workspace, model) count as one,
+so hiding, fading, clipping, covering or blanking any part of it refuses the click or the submit. (The fields and labels
+that are not protected surfaces may still be set in a theme’s own type; only being unreadable or unreachable counts.) Every
 measurement is made against the same page with the theme’s own CSS gone (its sheets and its cached copy lifted; the
 layout options of the manifest stay, because Score renders those itself). Text over a picture has to read against
 anything from black to white behind it, the page’s own picture included, through whatever veil (`dim`) or glass the

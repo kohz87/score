@@ -89,6 +89,91 @@ test.describe('the add-coding-agent form is one decision (re-gate #6)', () => {
   }
 })
 
+// Third gate, finding 1: the theme CSS below is accepted by the sanitiser (it is ordinary opacity and colour on the
+// form's own labels), so nothing slips in afterwards and the periodic check has no protected surface to notice. Only
+// the decision's vetting at the commit can stop the submit.
+test.describe('every field of the add-coding-agent form is part of the decision (third gate #1)', () => {
+  for (const [name, css] of [
+    ['faded labels and their fields', '.team-routine-form > label { opacity: 0; }'],
+    [
+      'transparent label text',
+      '.team-routine-form > label { color: transparent; text-shadow: none; }',
+    ],
+  ] as const) {
+    test(`#1: ${name} refuse the real submit and send nothing`, async ({ page }) => {
+      test.setTimeout(90_000)
+      await wear(page, `.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); } ${css}`)
+      const id = `gate-${Date.now().toString(36)}`
+      const posts: string[] = []
+      page.on('request', (request) => {
+        if (request.method() === 'POST' && /\/api\/coding-agents$/.test(request.url()))
+          posts.push(request.url())
+      })
+      try {
+        const dialog = await openAddCodingAgent(page, id)
+        // The accepted rule really is on the page (sanitised, not slipped in).
+        const property = name.startsWith('faded') ? 'opacity' : 'color'
+        const applied = await dialog
+          .locator('form.team-routine-form > label')
+          .first()
+          .evaluate((label, prop) => getComputedStyle(label).getPropertyValue(prop), property)
+        expect(applied).toMatch(property === 'opacity' ? /^0$/ : /^rgba\(0, 0, 0, 0\)$/)
+        await dialog.getByRole('button', { name: 'Add coding agent' }).click()
+        await expect(page.locator('.look-banner')).toContainText('Nothing was sent', {
+          timeout: 15_000,
+        })
+        await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
+        expect(posts).toEqual([])
+        // Score’s own look is back and the same form commits for real.
+        await dialog.getByRole('button', { name: 'Add coding agent' }).click()
+        await expect(dialog.getByRole('heading', { name: `${id} joined the team` })).toBeVisible({
+          timeout: 15_000,
+        })
+        expect(posts).toHaveLength(1)
+      } finally {
+        if (posts.length > 0) {
+          await page.goto(`/team/${encodeURIComponent(id)}`)
+          page.once('dialog', (confirm) => void confirm.accept())
+          await page.getByRole('button', { name: 'Remove agent' }).click()
+          await expect(page).toHaveURL(/\/team$/)
+        }
+      }
+    })
+  }
+})
+
+test('#1: a theme that only restyles the form’s labels (type, colour, corners) still lets it commit', async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  await wear(
+    page,
+    '.team-routine-form > label { font-family: "Georgia", serif; font-weight: 700; color: #2a2a3a; } .team-routine-form input { border-radius: 2px; }',
+  )
+  const id = `gate-${Date.now().toString(36)}`
+  const posts: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && /\/api\/coding-agents$/.test(request.url()))
+      posts.push(request.url())
+  })
+  try {
+    const dialog = await openAddCodingAgent(page, id)
+    await dialog.getByRole('button', { name: 'Add coding agent' }).click()
+    await expect(dialog.getByRole('heading', { name: `${id} joined the team` })).toBeVisible({
+      timeout: 15_000,
+    })
+    expect(posts).toHaveLength(1)
+    await expect(page.locator('.look-banner')).toHaveCount(0)
+  } finally {
+    if (posts.length > 0) {
+      await page.goto(`/team/${encodeURIComponent(id)}`)
+      page.once('dialog', (confirm) => void confirm.accept())
+      await page.getByRole('button', { name: 'Remove agent' }).click()
+      await expect(page).toHaveURL(/\/team$/)
+    }
+  }
+})
+
 test.describe('the task drawer’s request and its buttons are one decision (re-gate #6)', () => {
   test('#6: Approve is refused when the request text above it was hidden', async ({ page }) => {
     test.setTimeout(240_000)

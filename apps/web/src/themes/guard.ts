@@ -232,7 +232,11 @@ export function contrastVerdict(
   return null
 }
 
-function worse(on: Snapshot, off: Snapshot): string | null {
+/**
+ * `context` is a decision's own fields and labels (third gate, finding 1): they are not protected surfaces, so a theme
+ * may set them in its own type and sizes, but not hide, fade, cut, cover or blank them. Typography is not judged there.
+ */
+function worse(on: Snapshot, off: Snapshot, context = false): string | null {
   if (off.rendered && !on.rendered) return 'is not shown'
   if (!off.rendered) return null
   if (on.chainOpacity < off.chainOpacity - 0.02) return 'is faded'
@@ -242,8 +246,8 @@ function worse(on: Snapshot, off: Snapshot): string | null {
   if (off.onScreen && !on.onScreen) return 'is pushed off screen'
   if (off.visible > 0.5 && on.visible < off.visible * 0.5) return 'is clipped'
   if (on.covered && !off.covered) return 'is covered'
-  if (on.themeFont && !off.themeFont) return 'is set in the theme’s font'
-  if (off.fontSize > 0 && on.fontSize < off.fontSize * 0.5) return 'has tiny text'
+  if (!context && on.themeFont && !off.themeFont) return 'is set in the theme’s font'
+  if (!context && off.fontSize > 0 && on.fontSize < off.fontSize * 0.5) return 'has tiny text'
   return contrastVerdict(on.contrast, off.contrast, on.large)
 }
 
@@ -339,10 +343,16 @@ function withoutTheme<T>(run: () => T): T {
   }
 }
 
-function violationIn(surfaces: HTMLElement[]): string | null {
+function violationIn(surfaces: HTMLElement[], decision: HTMLElement | null = null): string | null {
   const live = surfaces.filter((el) => !el.closest('[hidden]'))
   if (live.length === 0) return null
-  const targets = live.flatMap(parts)
+  // Everything else inside the decision (its labelled fields, labels, selects and text), judged less strictly.
+  const rest =
+    decision && !decision.closest('[hidden]')
+      ? parts(decision).filter((el) => !el.closest('[data-protected]'))
+      : []
+  const targets = [...live.flatMap(parts), ...rest]
+  const loose = new Set<HTMLElement>(rest)
   const glyphShapes = live.flatMap(shapes)
   const on = targets.map(snapshot)
   const shapesOn = glyphShapes.map(shapeSignature)
@@ -356,7 +366,7 @@ function violationIn(surfaces: HTMLElement[]): string | null {
       return `${owner ?? 'an agent glyph'} changed shape`
     }
   for (let i = 0; i < targets.length; i++) {
-    const problem = worse(on[i]!, off[i]!)
+    const problem = worse(on[i]!, off[i]!, loose.has(targets[i]!))
     if (problem) {
       const name = targets[i]!.getAttribute('aria-label') ?? targets[i]!.tagName.toLowerCase()
       return `${name} ${problem}`
@@ -397,11 +407,14 @@ function controlProblem(control: HTMLElement): string | null {
  * that commits are separate surfaces, and a click on one is a click on the whole decision (re-gate finding #6).
  * Elsewhere it is the control's nearest protected surface.
  */
-function decisionSurfaces(control: HTMLElement): HTMLElement[] {
+function decisionSurfaces(control: HTMLElement): {
+  surfaces: HTMLElement[]
+  whole: HTMLElement | null
+} {
   const decision = control.closest<HTMLElement>('[data-decision]')
   if (!decision) {
     const surface = control.closest<HTMLElement>('[data-protected]')
-    return surface ? [surface] : []
+    return { surfaces: surface ? [surface] : [], whole: null }
   }
   const marked = [
     decision,
@@ -411,7 +424,8 @@ function decisionSurfaces(control: HTMLElement): HTMLElement[] {
   const outer = marked.filter((el) => !marked.some((other) => other !== el && other.contains(el)))
   // A decision inside a protected surface (a dialog) is measured as part of it.
   const around = decision.parentElement?.closest<HTMLElement>('[data-protected]')
-  return around ? [around] : outer
+  // A decision is judged whole: the surfaces above and every field and label between them (finding 1).
+  return around ? { surfaces: [around], whole: null } : { surfaces: outer, whole: decision }
 }
 
 /**
@@ -424,16 +438,16 @@ function decisionSurfaces(control: HTMLElement): HTMLElement[] {
  */
 export function decisionProblem(control: HTMLElement): string | null {
   if (document.documentElement.getAttribute('data-look') !== 'custom') return null
-  const surfaces = decisionSurfaces(control)
-  if (surfaces.length === 0 || control.closest(WAY_BACK)) return null
-  let problem = violationIn(surfaces)
+  const { surfaces, whole } = decisionSurfaces(control)
+  if ((surfaces.length === 0 && !whole) || control.closest(WAY_BACK)) return null
+  let problem = violationIn(surfaces, whole)
   if (!problem) {
     const own = controlProblem(control)
     if (own && withoutTheme(() => controlProblem(control)) === null) problem = own
   }
   if (!problem) return null
   const name =
-    surfaces[0]!.getAttribute('aria-label') ?? control.getAttribute('aria-label') ?? 'A decision'
+    surfaces[0]?.getAttribute('aria-label') ?? control.getAttribute('aria-label') ?? 'A decision'
   return problem.startsWith(name) ? problem : `${name} ${problem}`
 }
 

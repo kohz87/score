@@ -95,3 +95,24 @@ test('a clean decision goes through, and a theme-free page is never vetted', () 
   document.documentElement.removeAttribute('data-look')
   expect(decisionProblem(document.getElementById('x')!)).toBeNull()
 })
+
+// Third gate, finding 1: the fields of a form are part of the decision whether or not each one is marked protected.
+test('an unmarked field or label of the decision, hidden by the theme, refuses the commit button', () => {
+  document.body.innerHTML = `
+    <form data-decision id="form">
+      <label data-themed-hide>Agent name <input id="name" /></label>
+      <p data-protected="block">Full access turns the sandbox off.</p>
+      <div data-protected="flex"><button id="go">Add coding agent</button></div>
+    </form>`
+  expect(decisionProblem(document.getElementById('go')!)).toMatch(/is not shown/)
+  expect(decisionProblem(document.getElementById('form')!)).toMatch(/is not shown/)
+})
+
+test('the same fields shown by the theme, or hidden by Score’s own look too, do not refuse', () => {
+  document.body.innerHTML = `
+    <form data-decision id="form">
+      <label>Role <input /></label>
+      <div data-protected="flex"><button id="go">Add coding agent</button></div>
+    </form>`
+  expect(decisionProblem(document.getElementById('go')!)).toBeNull()
+})
