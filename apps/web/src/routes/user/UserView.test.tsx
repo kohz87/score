@@ -177,3 +177,45 @@ test('a workflow room shows the compact header, not the admin panel, and details
   fireEvent.click(within(header).getByRole('button', { name: 'See full details' }))
   await waitFor(() => expect(router.state.location.pathname).toBe('/now/flow/brief-wfrun-1'))
 })
+
+// Phase 9 re-gate #8: the chat-first view has the same protected way back as the admin view.
+test('the way back (palette, admin view, settings, reset look) is on the user view and protected', async () => {
+  open('/u/rooms/room-activity-feed')
+  const way = await screen.findByRole('navigation', { name: 'Way back' })
+  expect(way.getAttribute('data-protected')).toBe('flex')
+  for (const name of ['Search or run a command', 'Admin view', 'Settings', 'Reset look'])
+    expect(within(way).getByRole('button', { name })).toBeTruthy()
+  // The conversations opener and the avatar are protected too, so a theme that hides them is switched off.
+  expect(document.querySelector('.user-menu-button')!.getAttribute('data-protected')).not.toBeNull()
+  expect(document.querySelector('.avatar')!.getAttribute('data-protected')).not.toBeNull()
+})
+
+test('Ctrl+K opens the palette on the user view; Settings goes through the view switch', async () => {
+  const router = open('/u/rooms/room-activity-feed')
+  await screen.findByRole('navigation', { name: 'Way back' })
+  fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
+  const palette = await screen.findByRole('dialog', { name: 'Search or run a command' })
+  // No admin destinations of its own: the way back only.
+  expect(within(palette).queryByRole('link')).toBeNull()
+  fireEvent.change(within(palette).getByRole('searchbox'), { target: { value: 'sett' } })
+  fireEvent.click(within(palette).getByRole('button', { name: 'Settings' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/settings'))
+  expect(window.localStorage.getItem('score.view')).toBeNull()
+})
+
+test('with the admin password guard on, the way back asks for the password first', async () => {
+  window.localStorage.setItem('score.view.guard', '1')
+  const router = open('/u/rooms/room-activity-feed')
+  const way = await screen.findByRole('navigation', { name: 'Way back' })
+  fireEvent.click(within(way).getByRole('button', { name: 'Settings' }))
+  await screen.findByLabelText('Security password')
+  expect(router.state.location.pathname).toBe('/u/rooms/room-activity-feed')
+})
+
+test('Reset look in the way back clears this device’s look', async () => {
+  window.localStorage.setItem('score.look.device', 'paper')
+  open('/u/rooms/room-activity-feed')
+  const way = await screen.findByRole('navigation', { name: 'Way back' })
+  fireEvent.click(within(way).getByRole('button', { name: 'Reset look' }))
+  expect(window.localStorage.getItem('score.look.device')).toBe('score')
+})

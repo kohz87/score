@@ -38,6 +38,9 @@ export const protectedClasses = [
   'command-palette',
   'command-trigger',
   'menu-trigger',
+  'user-way-back',
+  'user-way-link',
+  'user-menu-button',
   'look-reset',
   'look-banner',
 ] as const

@@ -283,7 +283,7 @@ export function findProtectedViolation(root: ParentNode = document): string | nu
 // The way back must always work, so an action on one of these is never refused: if its surroundings are damaged the
 // periodic guard drops the theme, and the action goes ahead.
 const WAY_BACK =
-  '.look-reset, .look-banner, .command-run, .command-palette, .command-trigger, .menu-trigger, .main-nav-link, .nav-drawer-link, .needs-you-dot, .chat-toast'
+  '.look-reset, .look-banner, .command-run, .command-palette, .command-trigger, .menu-trigger, .user-way-back, .main-nav-link, .nav-drawer-link, .needs-you-dot, .chat-toast'
 const ACTIONABLE =
   'button, a[href], input, select, textarea, summary, [role=button], [role=menuitem], [role=radio], [role=checkbox], [role=switch]'
 

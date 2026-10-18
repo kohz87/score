@@ -17,20 +17,36 @@ const commands = [
   },
 ]
 
-export function CommandPalette({ onClose }: { onClose: () => void }) {
+/**
+ * `userView` is the chat-first view's palette (re-gate #8): no admin destinations or message hits of its own, only the
+ * way back, which goes through the view switch (the security password, when this browser asks for it).
+ */
+export function CommandPalette({
+  onClose,
+  userView,
+}: {
+  onClose: () => void
+  userView?: { toAdmin: (path: string) => void }
+}) {
   const [search, setSearch] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const navigate = useNavigate()
-  const destinations = useMenu()
+  const menu = useMenu()
+  const destinations = userView
+    ? [
+        { path: '/now', title: 'Admin view' },
+        { path: '/settings', title: 'Settings' },
+      ]
+    : menu
   const options = destinations.filter(({ title }) =>
     title.toLowerCase().includes(search.trim().toLowerCase()),
   )
   const matchingCommands = commands.filter(({ title }) =>
     title.toLowerCase().includes(search.trim().toLowerCase()),
   )
-  const messages = useMessageSearch(search, 8)
+  const messages = useMessageSearch(userView ? '' : search, 8)
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
@@ -51,7 +67,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       }
     } else if (event.key === 'Enter' && event.target === inputRef.current && options[0]) {
       event.preventDefault()
-      void navigate(options[0].path)
+      if (userView) userView.toAdmin(options[0].path)
+      else void navigate(options[0].path)
       onClose()
     } else if (
       event.key === 'Enter' &&
@@ -103,9 +120,23 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         <ul className="command-options">
           {options.map(({ path, title }) => (
             <li key={path}>
-              <Link to={path} onClick={onClose}>
-                {title}
-              </Link>
+              {userView ? (
+                <button
+                  type="button"
+                  className="command-run"
+                  data-protected="any"
+                  onClick={() => {
+                    userView.toAdmin(path)
+                    onClose()
+                  }}
+                >
+                  {title}
+                </button>
+              ) : (
+                <Link to={path} onClick={onClose}>
+                  {title}
+                </Link>
+              )}
             </li>
           ))}
         </ul>
