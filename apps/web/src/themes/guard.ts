@@ -1,6 +1,8 @@
 import { parseComputedColor } from './color.ts'
 import { backgroundLayers, hidesWhatIsBelow, worstContrast, type Layer } from './contrast.ts'
-import { appliedThemeElements, appliedThemeSheets } from './engine.ts'
+import { readPackId } from '../data/pack.ts'
+import { findPack } from '../styles/packs.ts'
+import { LOOK_ATTRIBUTES, appliedThemeElements, appliedThemeSheets } from './engine.ts'
 
 // The last line of defence for protected surfaces (design §4.3). styles/protected.css re-asserts what CSS can
 // re-assert; what a theme can still do from the outside (hide a button by its tag name, fade an ancestor, cover the
@@ -14,6 +16,8 @@ type Snapshot = {
   chainClip: boolean
   size: number
   onScreen: boolean
+  /** The share of the element's box that no hidden/clip ancestor cuts away (1 = all of it). */
+  visible: number
   covered: boolean
   themeFont: boolean
   fontSize: number
@@ -40,12 +44,9 @@ function textContrast(element: HTMLElement): number | null {
   const stack: Layer[] = []
   for (const node of chain(element)) {
     const computed = getComputedStyle(node)
-    const page = node === document.body || node === document.documentElement
-    const layers = backgroundLayers(
-      computed.backgroundImage,
-      computed.backgroundColor,
-      page ? 'ignore' : 'worst',
-    )
+    // A picture counts as anything from black to white wherever it is, the page's own included (re-gate finding 5: a
+    // translucent rail over a picture with no dimming). The theme's veil over it is a layer of its own in this stack.
+    const layers = backgroundLayers(computed.backgroundImage, computed.backgroundColor)
     if (!layers) return null
     stack.push(...layers)
     if (hidesWhatIsBelow(layers)) break
@@ -53,31 +54,103 @@ function textContrast(element: HTMLElement): number | null {
   return worstContrast(text, stack)
 }
 
-// Score's own overlays (the composer, the menu drawer, toasts) are fixed or sticky and sit over scrolled content by
-// design; where the content ends up under them depends on the theme's type and spacing, so being under one is not
-// "covered". A theme can't make anything fixed or sticky (the sanitiser drops it), so this is never a theme's doing.
-function isFloatingOverlay(element: Element): boolean {
-  for (const node of chain(element)) {
-    const position = getComputedStyle(node).position
-    if (position === 'fixed' || position === 'sticky') return true
-  }
-  return false
-}
+// Score's own overlays and sticky bars: the menu drawer, banners, dialogs' backdrops, the sticky rails and headers.
+// Content scrolled under one is not "covered". A theme can't make anything fixed, sticky or positioned (the
+// allowlist), so none of these can be a theme's doing; they are named here by Score's own classes (a theme's CSS cannot
+// add a class), not found by looking at `position`, which any rule could have set (re-gate finding 4).
+// themes/guard.test.ts keeps this list in step with the position: fixed / sticky rules in the stylesheets.
+export const KNOWN_OVERLAYS = [
+  '.drawer-backdrop',
+  '.responsive-drawer',
+  '.command-backdrop',
+  '.nav-drawer',
+  '.update-banner',
+  '.look-banner',
+  '.top-bar',
+  '.now-lane-label',
+  '.now-axis-spacer',
+  '.user-sidebar',
+  '.user-sidebar-foot',
+  '.user-run',
+  '.orch-room-head',
+  '.kn-left',
+  '.kn-backdrop',
+  '.kn-drop-hint',
+  '.kn-toolbar',
+  '.cz-backdrop',
+  '.chat-version-bar',
+  '.chat-doc-table',
+  '.task-drawer',
+  '.chat-toast',
+  '[role=dialog]',
+].join(', ')
+
+type Box = { left: number; top: number; right: number; bottom: number }
 
 /**
- * The middle of the element, if that point is inside the window and inside every scrolling box around the element:
- * what has been scrolled out of its pane isn't covered, it is just not in view.
+ * What of the element can be seen: its first line box, cut down by every ancestor that clips without letting anyone
+ * scroll (`overflow: hidden` or `clip`). A box with nothing left is clipped away entirely, which `getClientRects()`
+ * alone can't tell (re-gate finding 4). `fraction` is what share of the box survives that; `view` is the box also cut
+ * to the scrolling panes around it (what has been scrolled out of its pane is not covered, just not in view), the
+ * part where a hit test means something.
  */
-function visiblePoint(element: Element, box: DOMRect): { x: number; y: number } | null {
-  const x = Math.min(window.innerWidth - 1, Math.max(0, box.left + box.width / 2))
-  const y = Math.min(window.innerHeight - 1, Math.max(0, box.top + box.height / 2))
+function visibleBox(element: Element): { view: Box | null; fraction: number } {
+  const first = element.getClientRects()[0] ?? element.getBoundingClientRect()
+  if (first.width <= 0 || first.height <= 0) return { view: null, fraction: 1 }
+  const hard = { left: first.left, top: first.top, right: first.right, bottom: first.bottom }
+  const view = { ...hard }
+  const cut = (box: Box, pane: DOMRect, x: boolean, y: boolean) => {
+    if (x) {
+      box.left = Math.max(box.left, pane.left)
+      box.right = Math.min(box.right, pane.right)
+    }
+    if (y) {
+      box.top = Math.max(box.top, pane.top)
+      box.bottom = Math.min(box.bottom, pane.bottom)
+    }
+  }
   for (let node = element.parentElement; node; node = node.parentElement) {
     const style = getComputedStyle(node)
-    if (style.overflowX === 'visible' && style.overflowY === 'visible') continue
-    const pane = node.getBoundingClientRect()
-    if (x < pane.left || x > pane.right || y < pane.top || y > pane.bottom) return null
+    const stops = (value: string) => value === 'hidden' || value === 'clip'
+    const scrolls = (value: string) => value === 'auto' || value === 'scroll'
+    const hardX = stops(style.overflowX)
+    const hardY = stops(style.overflowY)
+    const softX = hardX || scrolls(style.overflowX)
+    const softY = hardY || scrolls(style.overflowY)
+    if (softX || softY) {
+      const pane = node.getBoundingClientRect()
+      cut(hard, pane, hardX, hardY)
+      cut(view, pane, softX, softY)
+    }
+    // A fixed box is cut by nothing above it.
+    if (style.position === 'fixed') break
   }
-  return { x, y }
+  const area = first.width * first.height
+  const kept = Math.max(0, hard.right - hard.left) * Math.max(0, hard.bottom - hard.top)
+  return { view, fraction: Math.min(1, kept / area) }
+}
+
+/** The middle of the visible part of the box, inside the window; null when nothing of it is visible. */
+function visiblePoint(box: Box | null): { x: number; y: number } | null {
+  if (!box) return null
+  const left = Math.max(0, box.left)
+  const top = Math.max(0, box.top)
+  const right = Math.min(window.innerWidth, box.right)
+  const bottom = Math.min(window.innerHeight, box.bottom)
+  if (right - left <= 0 || bottom - top <= 0) return null
+  return { x: (left + right) / 2, y: (top + bottom) / 2 }
+}
+
+/** Is what is painted at this point the element, something inside it, or (for a control) its own label? */
+function paintedBy(element: Element, hit: Element | null): boolean {
+  if (!hit) return true
+  if (element.contains(hit)) return true
+  if (element instanceof HTMLElement && 'labels' in element) {
+    const labels = (element as HTMLInputElement).labels
+    if (labels && Array.from(labels).some((label) => label.contains(hit))) return true
+  }
+  // Score's own overlay on top (a sticky bar, a drawer, a banner): not a theme's doing.
+  return !!hit.closest(KNOWN_OVERLAYS)
 }
 
 function snapshot(element: HTMLElement): Snapshot {
@@ -96,8 +169,6 @@ function snapshot(element: HTMLElement): Snapshot {
   const control = element.matches(CONTROLS)
   const ownText = carriesText(element) || (control && (element.textContent ?? '').trim() !== '')
   const box = element.getBoundingClientRect()
-  const inViewport =
-    box.right > 0 && box.bottom > 0 && box.left < window.innerWidth && box.top < window.innerHeight
   // "Pushed off screen" means out of the page, where scrolling can't bring it back. Below the fold doesn't count: a
   // theme's own type and spacing move content up and down the page.
   const inPage =
@@ -105,15 +176,12 @@ function snapshot(element: HTMLElement): Snapshot {
     box.bottom + window.scrollY > 0 &&
     box.left + window.scrollX < document.documentElement.scrollWidth &&
     box.top + window.scrollY < document.documentElement.scrollHeight
-  let covered = false
-  const point =
-    rendered && inViewport && box.width > 0 && box.height > 0 ? visiblePoint(element, box) : null
-  if (point) {
-    const top = document.elementFromPoint(point.x, point.y)
-    // Something else on top of the centre of a visible surface (a modal is not "something else": it has its own
-    // top layer, so the surface is covered in both measurements and does not count).
-    covered = !!top && !element.contains(top) && !top.contains(element) && !isFloatingOverlay(top)
-  }
+  const { view: seen, fraction } = rendered ? visibleBox(element) : { view: null, fraction: 1 }
+  // Something else on top of the visible part of a surface (a modal is not "something else": it has its own top layer,
+  // so the surface is covered in both measurements and does not count). Only the element, what is inside it or its
+  // label may be painted there (re-gate finding 4: an ancestor answering the hit test is a covered control).
+  const point = visiblePoint(seen)
+  const covered = !!point && !paintedBy(element, document.elementFromPoint(point.x, point.y))
   return {
     rendered,
     chainOpacity,
@@ -121,6 +189,7 @@ function snapshot(element: HTMLElement): Snapshot {
     chainClip,
     size: box.width * box.height,
     onScreen: inPage,
+    visible: fraction,
     covered,
     themeFont: /theme-[a-z0-9-]+-/i.test(style.fontFamily),
     fontSize: Number.parseFloat(style.fontSize) || 0,
@@ -161,6 +230,7 @@ function worse(on: Snapshot, off: Snapshot): string | null {
   if (on.chainClip && !off.chainClip) return 'is clipped'
   if (off.size > 0 && on.size < off.size * 0.5) return 'is shrunk'
   if (off.onScreen && !on.onScreen) return 'is pushed off screen'
+  if (off.visible > 0.5 && on.visible < off.visible * 0.5) return 'is clipped'
   if (on.covered && !off.covered) return 'is covered'
   if (on.themeFont && !off.themeFont) return 'is set in the theme’s font'
   if (off.fontSize > 0 && on.fontSize < off.fontSize * 0.5) return 'has tiny text'
@@ -229,20 +299,41 @@ function shapeSignature(el: SVGGraphicsElement): string {
   ].join('|')
 }
 
-/** Runs with the theme's own sheets lifted, then puts them back before anything is painted. */
+// What a theme puts on <html>: the engine's attributes and the pack/layout/density it starts from.
+const THEME_ATTRIBUTES = [...LOOK_ATTRIBUTES, 'data-pack', 'data-layout', 'data-density'] as const
+
+/**
+ * Runs with the theme gone: its sheets and boot copy lifted and its attributes taken off <html>, the document as Score
+ * itself draws it (the pack this device would show without the theme), not just the same attributes with other CSS
+ * (re-gate finding 4/5). Everything is put back before anything is painted.
+ */
 function withoutTheme<T>(run: () => T): T {
+  const root = document.documentElement
   const sheets = appliedThemeSheets()
-  const elements = appliedThemeElements()
-  const before = [...document.adoptedStyleSheets]
+  const elements = [
+    ...appliedThemeElements(),
+    ...Array.from(document.querySelectorAll<HTMLStyleElement>('style#score-look-boot')),
+  ]
+  const adopted = Array.isArray(document.adoptedStyleSheets)
+  const before = adopted ? [...document.adoptedStyleSheets] : []
   const disabled = elements.map((el) => el.disabled)
-  document.adoptedStyleSheets = before.filter((sheet) => !sheets.includes(sheet))
+  const attributes = THEME_ATTRIBUTES.map((name) => [name, root.getAttribute(name)] as const)
+  if (adopted) document.adoptedStyleSheets = before.filter((sheet) => !sheets.includes(sheet))
   elements.forEach((el) => {
     el.disabled = true
   })
+  for (const name of THEME_ATTRIBUTES) root.removeAttribute(name)
+  const pack = findPack(readPackId())
+  root.setAttribute('data-pack', pack.id)
+  root.setAttribute('data-layout', pack.layout)
+  root.setAttribute('data-density', pack.density)
   try {
     return run()
   } finally {
-    document.adoptedStyleSheets = before
+    for (const [name, value] of attributes)
+      if (value === null) root.removeAttribute(name)
+      else root.setAttribute(name, value)
+    if (adopted) document.adoptedStyleSheets = before
     elements.forEach((el, i) => {
       el.disabled = disabled[i] ?? false
     })
@@ -294,29 +385,29 @@ function controlProblem(control: HTMLElement): string | null {
     const style = getComputedStyle(node)
     if (style.visibility !== 'visible') return 'is hidden'
   }
-  const box = control.getBoundingClientRect()
-  const inViewport =
-    box.right > 0 && box.bottom > 0 && box.left < window.innerWidth && box.top < window.innerHeight
-  if (inViewport && box.width > 0 && box.height > 0) {
-    const x = Math.min(window.innerWidth - 1, Math.max(0, box.left + box.width / 2))
-    const y = Math.min(window.innerHeight - 1, Math.max(0, box.top + box.height / 2))
-    const top = document.elementFromPoint(x, y)
-    if (top && !control.contains(top) && !top.contains(control)) return 'is covered'
-  }
+  const { view, fraction } = visibleBox(control)
+  if (fraction < 0.5) return 'is clipped'
+  const point = visiblePoint(view)
+  if (point && !paintedBy(control, document.elementFromPoint(point.x, point.y))) return 'is covered'
   return null
 }
 
 /**
  * Checked at the moment a person acts on a control inside a protected surface (an approval, an answer, a permission, a
  * password), when a theme is on: the whole surface is measured with and without the theme, and the control itself must
- * be shown, visible and on top. Whatever a theme does later or on hover can't leave a decision hidden when it's made
- * (gate finding #6). Returns what is wrong, or null.
+ * be shown, visible, not clipped and the thing painted where it is (not an ancestor or a stranger). What Score's own
+ * look already did (the same problem with the theme gone) is not the theme's. Whatever a theme does later or on hover
+ * can't leave a decision hidden when it's made (gate finding #6). Returns what is wrong, or null.
  */
 export function decisionProblem(control: HTMLElement): string | null {
   if (document.documentElement.getAttribute('data-look') !== 'custom') return null
   const surface = control.closest<HTMLElement>('[data-protected]')
   if (!surface || control.closest(WAY_BACK)) return null
-  const problem = violationIn([surface]) ?? controlProblem(control)
+  let problem = violationIn([surface])
+  if (!problem) {
+    const own = controlProblem(control)
+    if (own && withoutTheme(() => controlProblem(control)) === null) problem = own
+  }
   if (!problem) return null
   const name =
     surface.getAttribute('aria-label') ?? control.getAttribute('aria-label') ?? 'A decision'

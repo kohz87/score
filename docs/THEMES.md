@@ -313,10 +313,14 @@ as an opaque background of its own, so a translucent rail over a picture can’t
 Beyond the sanitiser, Score re-asserts these in a protected cascade layer, and at run time it watches them: a theme
 that hides, fades, covers or blurs one of them from outside is switched off on that device, with a banner that says why.
 It checks when the page changes, on hover, focus and press, when an animation ends, and at the moment you act on an
-approval, an answer, a permission or a password: if the decision is hidden, unreadable (below 4.5:1, or 3:1 for large
-text and icons, or a colour Score can’t measure) or covered at that moment, Score refuses the action, switches the
-theme off and says nothing was sent. Text over a picture has to read against anything from black to white behind it,
-except the page’s own picture, which is measured through its veil.
+approval, an answer, a permission or a password: if the decision is hidden, clipped away by a box around it,
+unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can’t measure) or covered at that moment
+(the thing painted on it must be the control itself, something inside it or its own label, never a parent or a
+stranger), Score refuses the action, switches the theme off and says nothing was sent. Every measurement is made
+against the same page with the theme really gone (its sheets and its `data-*` attributes lifted), never against the
+theme’s own layout. Text over a picture has to read against anything from black to white behind it, the page’s own
+picture included, through whatever veil (`dim`) or glass the theme puts over it. Score’s own sticky bars, drawers and
+banners are the only things allowed to sit on top of a decision.
 
 ## Getting back
 
