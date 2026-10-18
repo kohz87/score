@@ -2767,3 +2767,6 @@
 :root[data-width='full'] .chat-messages {
   max-width: none;
 }
+:root[data-width='full'] .user-view .chat-messages {
+  max-width: var(--user-measure);
+}
