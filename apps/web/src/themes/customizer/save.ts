@@ -57,16 +57,53 @@ export async function buildFromDraft(
 }
 
 /**
- * Which route saves a draft. A theme without files goes through PUT (custom themes only, with the etag check);
- * a theme with files has to travel as a zip, which stores it as an installed theme (PUT can't carry files).
+ * Which route saves a draft. A new or custom theme goes through PUT, files included (C4 #2: the server takes the
+ * theme's pictures and fonts in the same request, with the etag check). A theme installed from a zip can't be changed by
+ * PUT, so a draft that replaces it travels as a zip.
  */
 export function saveRoute(options: {
   asNew: boolean
   exists: boolean
   source: 'new' | 'builtin' | 'imported' | 'custom'
-  hasFiles: boolean
 }): 'put' | 'zip' {
   const creating = options.asNew || !options.exists
-  if (options.hasFiles) return 'zip'
   return creating || options.source === 'custom' ? 'put' : 'zip'
+}
+
+/** Standard base64 without `String.fromCharCode(...bytes)`, which overflows the stack on a picture. */
+function toBase64(bytes: Uint8Array): string {
+  let out = ''
+  const step = 0x8000
+  for (let i = 0; i < bytes.length; i += step)
+    out += String.fromCharCode(...bytes.subarray(i, i + step))
+  return btoa(out)
+}
+
+/** The file fields of a PUT save (contract § 16), or `{}` when the theme has and needs no files. */
+export type SaveFiles = {
+  keep?: string[]
+  assets?: Record<string, string>
+  licenses?: Record<string, string>
+}
+
+/**
+ * What a PUT must carry for `pkg`. `held` are the files the server already has for the theme being replaced (none for
+ * a new theme or a copy); one of them that the draft didn't touch is kept instead of sent again. A theme that still has
+ * files on the server but uses none now sends `keep: []`, so the unused ones are removed. Licence texts the draft holds
+ * are sent; with none, the server keeps what it has.
+ */
+export function filesForSave(
+  pkg: ThemePackage,
+  held: readonly string[],
+  uploads: Record<string, Uint8Array>,
+): SaveFiles {
+  const licenses = Object.keys(pkg.licenses).length > 0 ? { licenses: { ...pkg.licenses } } : {}
+  if (pkg.assets.size === 0 && held.length === 0) return licenses
+  const keep: string[] = []
+  const assets: Record<string, string> = {}
+  for (const [path, bytes] of pkg.assets) {
+    if (held.includes(path) && !uploads[path]) keep.push(path)
+    else assets[path] = toBase64(bytes)
+  }
+  return { keep, assets, ...licenses }
 }

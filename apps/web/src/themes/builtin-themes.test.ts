@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { BUILTIN_THEME_IDS, THEME_COLOR_TOKENS, ThemeManifestSchema } from '@score/contract'
@@ -6,11 +6,12 @@ import { baseTokens, contrast, pairs, resolve } from '../styles/contrast-pairs.t
 import { failsProtectedContrast, tokenCss } from './engine.ts'
 import { sanitiseCss } from './sanitise.ts'
 
-// The built-in themes of 9.5 (Harbour, Ledger, Studio) are packages in apps/server/themes. Whatever they look like,
+// The built-in themes (Paper, Night shift, Dense since C4; Harbour, Ledger, Studio since 9.5) are packages in
+// apps/server/themes. Whatever they look like,
 // they must pass WCAG AA in both modes, keep Score's protected-surface guarantees and carry nothing the sanitiser
 // would drop.
 const root = join(import.meta.dirname, '../../../..')
-const ids = BUILTIN_THEME_IDS.slice(4)
+const ids = BUILTIN_THEME_IDS.slice(1)
 // The example theme of the author guide (docs/themes/example-theme) has to be just as safe: people start from it.
 const folders: Record<string, string> = {
   ...Object.fromEntries(ids.map((id) => [id, join(root, 'apps/server/themes', id)])),
@@ -21,7 +22,8 @@ function load(id: string) {
   const manifest = ThemeManifestSchema.parse(
     JSON.parse(readFileSync(join(folders[id]!, 'theme.json'), 'utf8')),
   )
-  const css = readFileSync(join(folders[id]!, 'style.css'), 'utf8')
+  const cssFile = join(folders[id]!, 'style.css')
+  const css = existsSync(cssFile) ? readFileSync(cssFile, 'utf8') : ''
   return { manifest, css }
 }
 
@@ -35,8 +37,8 @@ function tokensFor(id: string, mode: 'light' | 'dark'): Record<string, string> {
 }
 
 describe('the built-in themes of 9.5 and the example theme', () => {
-  it('are the three ids after the four packs', () => {
-    expect(ids).toEqual(['harbour', 'ledger', 'studio'])
+  it('are every built-in id after Score', () => {
+    expect(ids).toEqual(['paper', 'night', 'dense', 'harbour', 'ledger', 'studio'])
   })
 
   describe.each(Object.keys(folders))('%s', (id) => {

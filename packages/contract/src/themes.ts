@@ -270,12 +270,40 @@ export const ThemeSanitiseReportSchema = z.object({
 })
 export type ThemeSanitiseReport = z.infer<typeof ThemeSanitiseReportSchema>
 
-/** `PUT /api/themes/:id` (custom themes only). `css` is the browser-sanitised text; the server re-checks it. */
+/** `fonts/x.woff2`, `img/bg.webp`: where a file lives inside a theme (the part of `asset:<path>` after the colon). */
+export const ThemeAssetPathSchema = z
+  .string()
+  .max(160)
+  .regex(/^(fonts|img)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(woff2|png|jpg|jpeg|webp|avif)$/)
+
+/**
+ * `PUT /api/themes/:id` (custom themes only). `css` is the browser-sanitised text; the server re-checks it.
+ * C4 #2: `assets` (base64 by path), `keep` (paths the theme already has) and `licenses` let a save carry the theme's
+ * files too; with none of the three the files stay as they are. See contract § 16.
+ */
 export const ThemeSaveSchema = z
   .object({
     manifest: ThemeManifestSchema,
     css: z.string().max(262_144).default(''),
     etag: z.string().min(1).nullable(),
+    assets: z
+      .record(
+        ThemeAssetPathSchema,
+        z
+          .string()
+          .max(7_000_000)
+          .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+          .refine((text) => text.length % 4 === 0, 'Not valid base64'),
+      )
+      .optional(),
+    keep: z.array(ThemeAssetPathSchema).max(40).optional(),
+    licenses: z
+      .object({
+        LICENSE: z.string().max(65_536).optional(),
+        'OFL.txt': z.string().max(65_536).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
 export type ThemeSave = z.infer<typeof ThemeSaveSchema>

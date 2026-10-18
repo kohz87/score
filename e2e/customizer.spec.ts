@@ -680,6 +680,67 @@ test('a package save never overwrites a newer version (If-Match)', async ({ page
   }
 })
 
+test('a custom theme with a picture saves through PUT and never overwrites a newer version', async ({
+  page,
+}) => {
+  await pair(page)
+  made.add('e2e-put')
+  try {
+    const png = busyPicture()
+    const manifest = (name: string) => ({
+      format: 1,
+      id: 'e2e-put',
+      name,
+      version: '1.0.0',
+      background: { image: 'asset:img/b.png', fit: 'cover', dim: 0 },
+    })
+    const put = (name: string, etag: string | null) =>
+      page.request.put('/api/themes/e2e-put', {
+        headers: web,
+        data: {
+          manifest: manifest(name),
+          css: '',
+          etag,
+          assets: { 'img/b.png': png.toString('base64') },
+        },
+      })
+    const first = await put('E2E Put', null)
+    expect(first.status()).toBe(200)
+    expect((await first.json()).summary.source).toBe('custom')
+    await openCustomizer(page, '/settings/look/customize/e2e-put')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('E2E Put')
+    const methods: string[] = []
+    page.on('request', (request) => {
+      if (request.url().includes('/api/themes/'))
+        methods.push(`${request.method()} ${new URL(request.url()).pathname}`)
+    })
+    // The picture stays through a plain save, without being sent again.
+    await page.getByLabel('Author').fill('Me')
+    const sent = page.waitForRequest((request) => request.method() === 'PUT')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    const body = (await sent).postDataJSON()
+    expect(body.keep).toEqual(['img/b.png'])
+    expect(body.assets).toEqual({})
+    await expect(page.getByRole('status').filter({ hasText: 'Saved “E2E Put”' })).toBeVisible({
+      timeout: 20_000,
+    })
+    expect(methods.some((entry) => entry.includes('/import'))).toBe(false)
+    const stored = await (await page.request.get('/api/themes/e2e-put')).json()
+    expect(stored.manifest.author).toBe('Me')
+    expect(stored.assets).toEqual(['img/b.png'])
+    // Someone else saves after the editor loaded; the next save is refused.
+    expect((await put('E2E Put elsewhere', stored.etag)).status()).toBe(200)
+    await page.getByLabel('Author').fill('Me again')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText('changed somewhere else')
+    expect((await (await page.request.get('/api/themes/e2e-put')).json()).manifest.name).toBe(
+      'E2E Put elsewhere',
+    )
+  } finally {
+    await cleanUp(page)
+  }
+})
+
 // Re-gate finding 7: the etag the editor holds after a package save must be the one of the version it just wrote, not
 // whatever a read-back finds. Another writer lands between the save and anything the client does next.
 test('a writer landing right after a package save is not overwritten by the next save', async ({
@@ -876,6 +937,31 @@ test('a copy of Ledger keeps its font and OFL.txt through save, export and impor
       new Uint8Array(await (await page.request.get('/api/themes/ledger-copy/export')).body()),
     )
     expect(back.has('OFL.txt')).toBe(true)
+  } finally {
+    await page.goto('/settings')
+    await cleanUp(page)
+  }
+})
+
+test('a copy of Paper starts from its real manifest and saves it', async ({ page }) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  made.add('paper-copy')
+  try {
+    await openCustomizer(page, '/settings/look/customize/paper')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Paper copy')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved “Paper copy”' })).toBeVisible({
+      timeout: 30_000,
+    })
+    const saved = await (await page.request.get('/api/themes/paper-copy')).json()
+    const original = await (await page.request.get('/api/themes/paper')).json()
+    expect(saved.manifest.colors).toEqual(original.manifest.colors)
+    expect(saved.manifest.fonts).toEqual({ heading: 'Source Serif 4' })
+    expect(saved.manifest.shape).toEqual(original.manifest.shape)
+    // The stored CSS is the sanitiser's own text: the same declaration, written its way.
+    expect(saved.css.replace(/\s+/g, '')).toContain('--h1-size:48px')
+    expect(original.css).toContain('--h1-size: 48px')
   } finally {
     await page.goto('/settings')
     await cleanUp(page)

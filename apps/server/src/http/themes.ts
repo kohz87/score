@@ -86,6 +86,39 @@ export function registerThemeRoutes(
   }
   const detail = (id: string) => ThemeDetailSchema.parse(unlessLocked(() => store.detail(id)))
 
+  // A custom save that carries files (C4 #2): the theme it would end up as is built in memory and read back by the very
+  // reader an import uses, so the checks are the import's; the files are then swapped in like an import's, and the
+  // theme stays custom. The checks and the write run in one serialised step with the etag test.
+  const saveWithFiles = async (id: string, body: z.infer<typeof ThemeSaveSchema>) => {
+    const existing = store.exists(id) ? store.assets(id) : []
+    const keep = body.keep ?? existing
+    const missing = keep.filter((path) => !existing.includes(path))
+    if (missing.length > 0)
+      throw rejected(missing.map((path) => `${path} isn’t one of this theme’s files`))
+    const files = new Map<string, Buffer>()
+    for (const path of keep) {
+      const bytes = store.readAsset(id, path)
+      if (!bytes) throw rejected([`${path} couldn’t be read`])
+      files.set(path, bytes)
+    }
+    for (const [path, text] of Object.entries(body.assets ?? {}))
+      files.set(path, Buffer.from(text, 'base64'))
+    const licenses = body.licenses ?? store.get(id)?.licenses ?? {}
+    let pkg
+    try {
+      pkg = await readThemePackage(
+        await buildThemePackage(body.manifest, body.css, files, licenses, false),
+      )
+    } catch (error) {
+      if (error instanceof ThemeRejected) throw rejected(error.reasons)
+      throw error
+    }
+    unlessLocked(() =>
+      store.storeImported(pkg.manifest, pkg.css, pkg.assets, pkg.licenses, 'custom'),
+    )
+    return detail(id)
+  }
+
   app.get('/api/themes', guard, async () => {
     const { look, resetGeneration } = db.read((sqlite) => ({
       look: readLook(sqlite),
@@ -139,14 +172,16 @@ export function registerThemeRoutes(
       .send(bytes)
   })
 
-  app.put('/api/themes/:id', { ...mutation, bodyLimit: 1024 * 1024 }, async (request) => {
+  // 1 MB of JSON, or up to a package's worth of base64 when the save carries files (contract § 16).
+  const putLimit = Math.ceil((MAX_UPLOAD_BYTES * 4) / 3) + 1024 * 1024
+  app.put('/api/themes/:id', { ...mutation, bodyLimit: putLimit }, async (request) => {
     const { id } = IdParams.parse(request.params)
     const body = ThemeSaveSchema.parse(request.body)
     if (body.manifest.id !== id)
       throw new HttpError(400, 'bad_request', 'The theme’s id doesn’t match the address.')
     const checked = checkThemeCss(body.css)
     if (checked.reasons.length > 0) throw rejected(checked.reasons)
-    return serial(() => {
+    return serial(async () => {
       const current = store.get(id)
       if (isBuiltinThemeId(id) || (current && current.source !== 'custom'))
         throw new HttpError(
@@ -157,6 +192,8 @@ export function registerThemeRoutes(
       const currentEtag = unlessLocked(() => store.detail(id))?.etag ?? null
       if (body.etag !== currentEtag)
         throw new HttpError(409, 'etag_mismatch', 'This theme changed elsewhere. Reload it first.')
+      if (body.assets !== undefined || body.keep !== undefined || body.licenses !== undefined)
+        return saveWithFiles(id, body)
       unlessLocked(() => store.saveCustom(body.manifest, body.css))
       return detail(id)
     })

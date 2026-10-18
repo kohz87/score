@@ -1492,6 +1492,7 @@ const cases = [
   ['ThemeColorTokenSchema', 'ground', 'agent-jade'],
   ['ThemeColorSchema', 'oklch(0.7 0.1 200 / 0.5)', 'url(https://example.com/x)'],
   ['ThemeAssetRefSchema', 'asset:img/bg.webp', 'asset:img/../../x.svg'],
+  ['ThemeAssetPathSchema', 'img/bg.webp', 'img/../../x.svg'],
   [
     'ThemeFontFaceSchema',
     { family: 'Serif', src: 'asset:fonts/s.woff2', weight: '400', style: 'italic' },
@@ -2106,4 +2107,24 @@ test('C1: a Watch frame may carry the Agent call id its sub-agent step ran under
   expect(contract.WatchFrameSchema.parse(sub)).toHaveProperty('parentCallId', 'toolu_agent_1')
   expect(contract.WatchFrameSchema.parse(f.watch)).not.toHaveProperty('parentCallId')
   expect(contract.WatchFrameSchema.safeParse({ ...f.watch, parentCallId: '' }).success).toBe(false)
+})
+
+test('C4: a theme save may carry assets, keep and licences, and nothing unsafe', () => {
+  const base = { manifest: { format: 1, id: 'mine', name: 'Mine' }, css: '', etag: 'abc' }
+  const ok = contract.ThemeSaveSchema.safeParse({
+    ...base,
+    assets: { 'img/a.png': 'iVBORw0KGgo=' },
+    keep: ['fonts/f.woff2'],
+    licenses: { 'OFL.txt': 'text' },
+  })
+  expect(ok.success).toBe(true)
+  for (const extra of [
+    { assets: { 'img/a.svg': 'iVBORw0KGgo=' } },
+    { assets: { '../a.png': 'iVBORw0KGgo=' } },
+    { assets: { 'img/a.png': 'not base64!' } },
+    { assets: { 'img/a.png': 'abc' } },
+    { keep: ['css/x.png'] },
+    { licenses: { 'NOTICE.txt': 'x' } },
+  ])
+    expect(contract.ThemeSaveSchema.safeParse({ ...base, ...extra }).success).toBe(false)
 })

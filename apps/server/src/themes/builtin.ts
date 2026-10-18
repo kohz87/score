@@ -9,16 +9,20 @@ import {
 } from '@score/contract'
 import { LICENSE_FILES } from './license-files.ts'
 
-// The 8.3 packs (score, paper, night, dense) look the way the web app's CSS says; the server only needs their identity,
-// so the list and the export have something honest to say. Harbour, Ledger and Studio (9.5) are real theme packages in
-// the same layout an import uses, kept in `apps/server/themes/<id>/` and read from there.
-const PACK_NAMES: Record<string, string> = {
-  score: 'Score',
-  paper: 'Paper',
-  night: 'Night shift',
-  dense: 'Dense',
-}
-export const PACKAGED_THEME_IDS = ['harbour', 'ledger', 'studio'] as const
+// Score is the default look the web app's CSS defines (tokens.css), so it has no manifest content; the server only needs
+// its identity. Every other built-in is a real theme package in the same layout an import uses, kept in
+// `apps/server/themes/<id>/` and read from there: Paper, Night shift and Dense (C4: the Customizer's "Start from"
+// copies their manifest exactly; the browser still wears them through the packs in `styles/packs/`, which are
+// the look of record and are checked against these manifests by a test) and Harbour, Ledger and Studio (9.5).
+const PACK_NAMES: Record<string, string> = { score: 'Score' }
+export const PACKAGED_THEME_IDS = [
+  'paper',
+  'night',
+  'dense',
+  'harbour',
+  'ledger',
+  'studio',
+] as const
 export const BUILTIN_UPDATED_AT = '2026-10-18T00:00:00.000Z'
 /** Where the shipped packages live. */
 export const BUILTIN_THEMES_DIR = fileURLToPath(new URL('../../themes/', import.meta.url))
@@ -43,7 +47,8 @@ function loadPackaged(id: string): Packaged | null {
     JSON.parse(readFileSync(join(dir, 'theme.json'), 'utf8')),
   )
   if (manifest.id !== id) throw new Error(`Built-in theme ${id} has the id ${manifest.id}`)
-  const css = readFileSync(join(dir, 'style.css'), 'utf8')
+  const cssFile = join(dir, 'style.css')
+  const css = existsSync(cssFile) ? readFileSync(cssFile, 'utf8') : ''
   const licenses: Record<string, string> = {}
   for (const name of LICENSE_FILES)
     if (existsSync(join(dir, name))) licenses[name] = readFileSync(join(dir, name), 'utf8')
@@ -66,7 +71,7 @@ export function builtinManifest(id: string): ThemeManifest | null {
   } satisfies ThemeManifest
 }
 
-/** The stylesheet of a shipped package; the packs have none. */
+/** The stylesheet of a shipped package ('' for a package without one and for Score). */
 export function builtinCss(id: string): string {
   return loadPackaged(id)?.css ?? ''
 }

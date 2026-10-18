@@ -7,6 +7,7 @@ import { okValidation, unfinishedValidation, workflowFixtures } from '../workflo
 import { visualFixtures, visualHello } from '../visual-fixtures.ts'
 import { taskDetailFixture, tasksFixture } from './tasks-fixture.ts'
 import { watchApprovalFixture, watchFixture, watchOverviewFixture } from '../watch-fixture.ts'
+import { mockThemes, type MockTheme } from '../themes-fixtures.ts'
 
 // Regenerates docs/screenshots/*.png for the README: `pnpm screenshots`. Every /api call is answered from the e2e
 // fixtures (the neutral demo team lead, builder, reviewer, designer), so nothing here can show a real profile, host
@@ -232,4 +233,72 @@ test('dark mode', async ({ page }) => {
   await visit(page, '/now', '.now-cards')
   expect(await page.locator('html').getAttribute('data-theme')).toBe('dark')
   await shot(page, 'now-dark')
+})
+
+// Harbour, Ledger and Studio as the server ships them (apps/server/themes/<id>/), read from disk, so the pictures show
+// what a real install lists next to the four packs (which the mock lists itself). Harbour's picture is served from its
+// folder too.
+const themeDir = fileURLToPath(new URL('../../apps/server/themes/', import.meta.url))
+const shippedThemes: MockTheme[] = ['harbour', 'ledger', 'studio'].map((id) => {
+  const manifest = JSON.parse(readFileSync(`${themeDir}${id}/theme.json`, 'utf8')) as {
+    name: string
+  }
+  const css = readFileSync(`${themeDir}${id}/style.css`, 'utf8')
+  return {
+    id,
+    name: manifest.name,
+    description: manifest.description,
+    source: 'builtin',
+    manifest,
+    css,
+  }
+})
+
+async function withShippedThemes(page: Page, active: string) {
+  await mockThemes(page, shippedThemes, { active, mode: 'light' })
+  await page.route('**/api/themes/harbour/assets/img/harbour.png', (route) =>
+    route.fulfill({
+      body: readFileSync(`${themeDir}harbour/assets/img/harbour.png`),
+      contentType: 'image/png',
+    }),
+  )
+}
+
+test('look', async ({ page }) => {
+  await withShippedThemes(page, 'score')
+  await visit(page, '/settings', 'text=Models and keys')
+  await page.getByRole('link', { name: 'Look' }).first().click()
+  await settle(page, '.look-packs')
+  await page.getByRole('heading', { name: 'Look', level: 2 }).evaluate((element) => {
+    window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 40)
+  })
+  await shot(page, 'look')
+})
+
+test('theme Harbour', async ({ page }) => {
+  await withShippedThemes(page, 'harbour')
+  await visit(page, '/now', '.now-cards')
+  await shot(page, 'theme-harbour')
+})
+
+test('customizer', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await withShippedThemes(page, 'score')
+  await visit(page, '/settings/look/customize/harbour', 'h1:has-text("Customize")')
+  await expect(
+    page.frameLocator('iframe[title="Preview of your theme"]').locator('.page-content').first(),
+  ).toBeVisible({ timeout: 20_000 })
+  await page.waitForTimeout(800)
+  // The contrast bar at the foot is left out of the picture: it is a live check, not part of the layout to show.
+  await page
+    .locator('.cz-checks')
+    .evaluate((element) => ((element as HTMLElement).style.display = 'none'))
+  await shot(page, 'customizer')
+})
+
+test('chat-first view', async ({ page }) => {
+  withOrchestration = true
+  await withShippedThemes(page, 'score')
+  await visit(page, '/u/rooms/room-activity-feed', '.user-needs .orch-decision')
+  await shot(page, 'chat-first')
 })

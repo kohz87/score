@@ -22,7 +22,7 @@ import {
   type SaveProblem,
 } from '../../themes/customizer/api.ts'
 import { colourFindings, pairProblems, type Finding } from '../../themes/customizer/checks.ts'
-import { defaultColor, manifestFromPack } from '../../themes/customizer/defaults.ts'
+import { defaultColor } from '../../themes/customizer/defaults.ts'
 import {
   afterSave,
   canRedo,
@@ -44,7 +44,7 @@ import { createProbe, type Probe } from '../../themes/customizer/frame-document.
 import { textFindingWords } from './text-findings.ts'
 import type { TextFinding } from '../../themes/customizer/measure.ts'
 import { buildThemePackage, readThemePackage } from '../../themes/customizer/package.ts'
-import { buildFromDraft, saveRoute } from '../../themes/customizer/save.ts'
+import { buildFromDraft, filesForSave, saveRoute } from '../../themes/customizer/save.ts'
 import { themesKey } from '../../themes/queries.ts'
 import { useLook } from '../../themes/use-look.ts'
 import { ImportDialog, type ImportCandidate } from './ImportDialog.tsx'
@@ -171,9 +171,7 @@ export function Customizer() {
       const nextId = freshId(name, takenIds)
       const manifest = hasSettings(detail.manifest)
         ? { ...structuredClone(detail.manifest), id: nextId, name, version: '1.0.0' }
-        : probe && themes.find((theme) => theme.id === id)?.source === 'builtin'
-          ? manifestFromPack(probe, id, nextId, name)
-          : { ...emptyManifest(nextId, name) }
+        : { ...emptyManifest(nextId, name) }
       return {
         draft: { manifest, css: detail.css, uploads: {} },
         target: {
@@ -186,7 +184,7 @@ export function Customizer() {
         },
       }
     },
-    [probe, takenIds, themes],
+    [takenIds],
   )
 
   // Open the theme named in the address: a custom or installed theme is edited in place, a built-in one is copied.
@@ -361,8 +359,8 @@ export function Customizer() {
     }
   }
 
-  // A theme made here (PUT) never has licence texts; one installed from a package, or a copy of one, may.
-  const licenceReader = target && target.source !== 'custom' ? fetchThemeLicenses : undefined
+  // A theme may carry licence texts whatever its source (a copy of Ledger saved through PUT keeps OFL.txt).
+  const licenceReader = fetchThemeLicenses
 
   /** Saves the draft; returns the id it was saved under, or null (the problem is shown). */
   async function persist(options: { asNew?: boolean; name?: string } = {}): Promise<string | null> {
@@ -392,13 +390,19 @@ export function Customizer() {
       asNew,
       exists: target.exists,
       source: target.source,
-      hasFiles: built.pkg.assets.size > 0,
     })
     const replacing = target.exists && !asNew
     let detail
     try {
       if (route === 'put') {
-        detail = await saveCustomTheme(manifest, built.pkg.css, replacing ? target.etag : null)
+        // Files the server already holds for this very theme are kept, not sent again.
+        const held = replacing && target.assetSource === target.id ? target.assets : []
+        detail = await saveCustomTheme(
+          manifest,
+          built.pkg.css,
+          replacing ? target.etag : null,
+          filesForSave(built.pkg, held, draft.uploads),
+        )
       } else {
         // The server compares the etag with the stored theme's in the same step as the replace (If-Match).
         // The result carries the committed version and its etag, so nothing is read back (another writer could land

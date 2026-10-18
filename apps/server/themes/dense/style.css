@@ -1,0 +1,5 @@
+/* Dense: the font, corners, spacing and rail come from theme.json; this sets the type scale. */
+:root {
+  --h1-size: 40px;
+  --body-size: 14px;
+}

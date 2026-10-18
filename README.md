@@ -259,7 +259,10 @@ channels, permissions and history.
 
 Claude Code, Codex and Antigravity (`agy`) can join the team next to your Hermes agents. Pick the CLI, a
 workspace folder and a permission level (read only, workspace write or full access); the agent then works in rooms like
-any other member. They use your own CLI login and plan quota (Codex and Antigravity show the limits left). For Claude
+any other member. They use your own CLI login and plan quota (every CLI shows the limits left, and a **quota guard**
+stops runs from giving an agent new steps once a limit falls below its floor, 10% by default). Each has a Personality
+card (a role and instructions that Score hands to the CLI) and Claude Code can use sub-agents, whose steps show nested
+in Chat and Flow. For Claude
 Code and Codex the permission level limits what they can change, not what they can read; Antigravity's sandbox also keeps
 reads inside the workspace below full access.
 
@@ -288,6 +291,34 @@ do), notifications, Knowledge, shares, every Hermes setting under Advanced, back
 ![Now in dark mode](docs/screenshots/now-dark.png)
 
 Settings › Look switches between light and dark.
+
+### Themes and the Customizer
+
+![Settings › Look: seven theme cards in their own colours, the Customize button and the way back from a theme](docs/screenshots/look.png)
+
+Score ships seven themes (Score, Paper, Night shift, Dense, Harbour, Ledger and Studio). Pick one for this device or
+save one for every device. A theme changes colours, fonts, corners and spacing, where the navigation sits, what Now
+shows and how chat looks, but it is only data: **no theme code runs**, and approvals, decisions, password screens and
+the way back to the default look can't be hidden or made unreadable. If a theme gets in the way, press Ctrl+Shift+0,
+search for "Reset look" in the command palette, open Score with `?look=safe`, or run `scripts/score look reset` on the
+host.
+
+![Now wearing the Harbour theme: frosted glass cards over a harbour picture, the navigation on the left](docs/screenshots/theme-harbour.png)
+
+![The Customizer: a live preview of the app on the left, the theme's settings on the right](docs/screenshots/customizer.png)
+
+**Customize…** opens the Customizer: a live preview of any page (light or dark, desktop, tablet or phone) next to the
+controls for colours, fonts, shape, layout, the Now cards, chat, a background picture and custom CSS. It checks contrast
+as you go, **Start from** copies any built-in theme exactly, and themes can be saved with their pictures and fonts,
+exported as a `.zip` and imported again. The guide for writing a theme is [docs/THEMES.md](docs/THEMES.md).
+
+### The chat-first view
+
+![The chat-first view: rooms and agents in a sidebar, a running orchestration shown as status lines between the messages, Pause and Stop at the top](docs/screenshots/chat-first.png)
+
+For a conversation instead of a dashboard, choose **Switch to user view** in the avatar menu (or open `/u`). One room at a
+time with a large message box; start an orchestration with the plus button or `/orchestrate <goal>`, and answer
+everything it needs (approvals, questions, limits) right in the chat. Reports, Team and Settings stay in the admin view.
 
 ### Terminal
 

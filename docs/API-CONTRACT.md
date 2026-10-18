@@ -2226,9 +2226,11 @@ Hermes or tokens.
 A theme is a declarative package: `theme.json` (`ThemeManifest`, format `1`), an optional `style.css`, `assets/`
 (woff2 fonts, png/jpg/webp/avif images) and up to two licence texts at the root, `LICENSE` and `OFL.txt` (UTF-8 plain
 text, each at most 64 KB; any other root file is refused). Licence files are stored with the theme, returned by
-`export` and kept when an export is imported again; the built-in themes that ship a font carry its `OFL.txt`. No theme code runs. Built-in ids `score`, `paper`, `night`, `dense` (the 8.3 packs, which have no manifest content) and
-`harbour`, `ledger`, `studio` (9.5: real packages shipped with the server, so their detail carries a manifest, CSS and
-assets, and `export` returns a zip that can be edited and imported under a new id). Themes installed before 9.5 under
+`export` and kept when an export is imported again; the built-in themes that ship a font carry its `OFL.txt`. No theme code runs. Built-in ids `score` (the default look, which has no manifest content) and
+`paper`, `night`, `dense` (C4: the 8.3 packs, now real packages too; the browser still wears them through its own CSS
+packs, and a test keeps the two in step), `harbour`, `ledger`, `studio` (9.5): the packages are shipped with the server, so
+their detail carries a manifest, CSS (when the package has any) and assets, and `export` returns a zip that can be edited
+and imported under a new id. Themes installed before 9.5 under
 one of these three ids are renamed at the first start (migration 0075 and a startup step) to `<id>-mine`, then
 `<id>-mine-2` and so on, with their assets; the shared look follows if it pointed at the old id. The id chosen for such a
 move, and every replace of a theme's asset folder, is written down (`theme_swaps`, migration 0076) before any file moves
@@ -2258,6 +2260,20 @@ it and still serves the other themes.
 - `GET /api/themes/:id/assets/<fonts|img>/<file>` → the file with its exact type, `nosniff`, `cache-control: private`.
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
+  **files (C4 #2).** `ThemeSave` may also carry `assets` (`{ "<fonts|img>/<file>": "<base64>" }`, files to add or
+  replace), `keep` (an array of the paths of files the theme already has) and `licenses` (`{ "LICENSE"?: text,
+  "OFL.txt"?: text }`). A save with none of the three leaves the theme's files exactly as they are (the behaviour before
+  C4). A save with any of them stores the files the theme ends up with: the paths in `keep` (all the current files when
+  `keep` is omitted, none when it is `[]`) plus those in `assets` (which win over a kept file of the same path); the
+  licence texts replace the stored ones when `licenses` is present and are kept when it is omitted. A path in `keep` the
+  theme doesn't have is `422 theme_rejected`. The `etag` field is the `If-Match` of this route, compared inside the same
+  serialised step as the write (`409 etag_mismatch`; a new theme sends `null`), and a save that stores files takes the
+  next theme revision like an import, so the new `etag` changes. The server builds the resulting package in memory and
+  runs it through **the same reader as `POST /api/themes/import`** (zip structure, names, types by folder, magic bytes,
+  file count and size caps, licence text rules, `asset:` references that must exist, the CSS checks), so `422
+  theme_rejected { reasons[] }` names the same problems an import would; the files are swapped in with the same recorded,
+  recoverable folder swap (`theme_recovering` applies), so a failed save leaves the previous files. The theme stays
+  `custom`. The JSON body may be up to 8 MB when it carries files (a package is at most 5 MB, base64 adds a third);
   `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5). **Theme CSS is visual-only
   (decision 102):** a declaration is accepted only if its property is on the allowlist in
   `packages/contract/src/theme-css.ts` (colours, `background-*` with images only as `asset:img/…`, `border-*`

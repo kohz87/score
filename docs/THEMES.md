@@ -6,9 +6,12 @@ person writing one. The rules behind it are in `docs/briefs/9-themes.md` (design
 (routes); the fields below are checked against the schema in `packages/contract/src/themes.ts` by a test
 (`apps/server/test/themes/guide.test.ts`), so this page can’t drift from what Score accepts.
 
-Score ships seven themes: Score, Paper, Night shift and Dense (the original four) and **Harbour**, **Ledger** and
-**Studio**. The last three are ordinary theme packages, so you can export one from `GET /api/themes/<id>/export`, read
-it and start from it.
+Score ships seven themes: Score (the default, which is the unthemed look and has no manifest) and six ordinary theme
+packages, **Paper**, **Night shift**, **Dense**, **Harbour**, **Ledger** and **Studio**. You can export any of the six
+from `GET /api/themes/<id>/export`, read it and start from it; the Customizer’s “Start from” copies the same manifest.
+(Paper, Night shift and Dense are worn through Score’s own CSS, which is exactly what their packages say, except that a
+package can only state a density of `compact` where Dense tightens spacing a little further, and cannot move the rail’s
+width; their small corners follow the card radius.)
 
 ## What a theme is, and isn’t
 
