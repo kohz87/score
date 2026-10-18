@@ -248,8 +248,8 @@ tokens apply inside them, and only while their contrast holds.
 - Agent shapes (`AgentGlyph`) and error toasts.
 - The way back: the Settings link, the menu and search buttons with the command palette (and its “Reset look” entry),
   “Reset look” itself and the banner that appears when a theme is skipped. The chat-first view (`/u`) has the same
-  palette and Ctrl+K, the avatar menu and the conversations button are protected there, and while a custom theme is on a
-  “Way back” bar with Search, Admin view, Settings and Reset look is always on the page, whatever the layout (a hidden
+  palette and Ctrl+K, the avatar menu and the conversations button are protected there, and while a theme from outside
+  Score (imported or made in the Customizer) is on, a “Way back” bar with Search, Admin view, Settings and Reset look is always on the page, whatever the layout (a hidden
   sidebar included).
 
 **None of your rules match inside these.** Every selector of your CSS is applied as if it ended in

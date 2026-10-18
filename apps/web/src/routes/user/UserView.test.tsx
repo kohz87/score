@@ -12,6 +12,7 @@ import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry, immediateFrameScheduler } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
+import { lookStore } from '../../themes/look-store.ts'
 
 // PLAN 8.4 in the browser: the user view's room shows a run's progress as Score status lines between the messages,
 // answers what needs the person inline, keeps Pause and Stop, and opens the admin view's Flow for the details.
@@ -42,6 +43,7 @@ const disposers: (() => void)[] = []
 beforeEach(() => {
   posts = []
   window.localStorage.clear()
+  lookStore.reset()
   vi.stubGlobal(
     'matchMedia',
     (query: string) =>
@@ -178,8 +180,42 @@ test('a workflow room shows the compact header, not the admin panel, and details
   await waitFor(() => expect(router.state.location.pathname).toBe('/now/flow/brief-wfrun-1'))
 })
 
-// Phase 9 re-gate #8: the chat-first view has the same protected way back as the admin view.
+// Phase 9 re-gate #8: the chat-first view has the same protected way back as the admin view. It sits on the page while
+// a theme from outside Score is on (the sidebar and its avatar menu are what a theme can rearrange).
+const themeSummary = (id: string, source: string) => ({
+  id,
+  name: id,
+  version: '1.0.0',
+  author: null,
+  description: null,
+  source,
+  updatedAt: '2026-10-17T00:00:00.000Z',
+  hasCss: true,
+})
+function wear(id: string, source: 'builtin' | 'imported') {
+  fixtures['/api/themes'] = {
+    items: [themeSummary('score', 'builtin'), themeSummary(id, source)],
+    active: id,
+    mode: 'system',
+  }
+  window.localStorage.setItem('score.look.device', id)
+  lookStore.reset()
+}
+const wearOutsideTheme = () => wear('gate', 'imported')
+afterEach(() => {
+  delete fixtures['/api/themes']
+})
+
+test('Score’s own looks and the default need no way-back bar', async () => {
+  wear('harbour', 'builtin')
+  open('/u/rooms/room-activity-feed')
+  await screen.findByRole('link', { name: 'New chat' })
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  expect(screen.queryByRole('navigation', { name: 'Way back' })).toBeNull()
+})
+
 test('the way back (palette, admin view, settings, reset look) is on the user view and protected', async () => {
+  wearOutsideTheme()
   open('/u/rooms/room-activity-feed')
   const way = await screen.findByRole('navigation', { name: 'Way back' })
   expect(way.getAttribute('data-protected')).toBe('flex')
@@ -191,6 +227,7 @@ test('the way back (palette, admin view, settings, reset look) is on the user vi
 })
 
 test('Ctrl+K opens the palette on the user view; Settings goes through the view switch', async () => {
+  wearOutsideTheme()
   const router = open('/u/rooms/room-activity-feed')
   await screen.findByRole('navigation', { name: 'Way back' })
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
@@ -204,6 +241,7 @@ test('Ctrl+K opens the palette on the user view; Settings goes through the view 
 })
 
 test('with the admin password guard on, the way back asks for the password first', async () => {
+  wearOutsideTheme()
   window.localStorage.setItem('score.view.guard', '1')
   const router = open('/u/rooms/room-activity-feed')
   const way = await screen.findByRole('navigation', { name: 'Way back' })
@@ -213,7 +251,7 @@ test('with the admin password guard on, the way back asks for the password first
 })
 
 test('Reset look in the way back clears this device’s look', async () => {
-  window.localStorage.setItem('score.look.device', 'paper')
+  wearOutsideTheme()
   open('/u/rooms/room-activity-feed')
   const way = await screen.findByRole('navigation', { name: 'Way back' })
   fireEvent.click(within(way).getByRole('button', { name: 'Reset look' }))
