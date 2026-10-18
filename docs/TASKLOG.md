@@ -348,3 +348,9 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **1.8.1 verification** (Codex high): 11 findings closed, 5 partly; V1 (startup guard gap) and V4 (Save as new keeps
   the draft's files) → L1; V2, V5, V6 fixed by the lead; V3 (parent-symlink race) rejected — same-uid only, nothing
   gained. Verdicts appended to `docs/reviews/2026-10-19-xaudit-1.8.0.md`.
+- **T2** merged (test-side): Chat phone shots were taken before the context ring arrived (at 390px it wraps Send to a
+  third row, composer 166→216px); `e2e/chat-settled.ts` waits for the final ring and the thread at its end. With
+  `/context` delayed 500ms: 8/16 → 0/16. No baselines changed; C3's follow logic verified working. Product notes for the
+  owner (not changed): the ring's subject flips lead → last replier after messages load (extra fetch, 50px shift on
+  phones, an open popover closes); at 390px ring + Send don't fit one row although the CSS comment says they should.
+  T3 started: `model-picker.spec.ts` fails ~2/3 alone and leaves "picker-helper" behind (cascades into reports/team).
