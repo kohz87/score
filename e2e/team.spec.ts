@@ -1,4 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { holdLockPerTest } from './locks.ts'
+
+// These count the team's agents: not while model-picker.spec.ts has one added (locks.ts).
+holdLockPerTest('roster')
 
 test('team list opens an agent profile with tabs and a style popover', async ({ page }) => {
   await page.goto('/team')
