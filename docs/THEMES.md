@@ -353,6 +353,11 @@ If a theme makes Score hard to use, any of these returns to Score’s own look:
 - Settings › Look › **Reset look on this device**; Settings can’t be hidden by a theme.
 - On the computer Score runs on, `scripts/score look reset` (works with Score stopped; it also clears the theme every browser chose for itself, which each one drops the next time it reloads or regains focus).
 
+A reset you make on a page (Ctrl+Shift+0, the palette, or Score switching a damaging theme off) holds even when the
+theme list is slow: the list that arrives later can say the host has reset since this browser last looked, but that
+can’t undo a choice made after the page opened. A reset the host makes while the page is open still reaches it. On the
+chat-first view the “Way back” bar is on the page from the start, not after the list arrives.
+
 A theme that fails validation, can’t be loaded or throws while it is applied is skipped, and a banner says so.
 
 ## Example: Sandbar
