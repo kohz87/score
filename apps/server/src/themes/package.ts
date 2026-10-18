@@ -167,7 +167,12 @@ export async function readThemePackage(bytes: Buffer): Promise<ThemePackage> {
   } catch {
     throw new ThemeRejected(['That zip file couldn’t be read'])
   }
-  if (Object.keys(zip.files).length !== listed.length)
+  // Every name JSZip will use must be one the structure check listed (whatever else could rename an entry).
+  const listedNames = new Set(listed.map((entry) => entry.name))
+  const readNames = Object.values(zip.files).map(
+    (file) => (file as unknown as { unsafeOriginalName?: string }).unsafeOriginalName ?? file.name,
+  )
+  if (readNames.length !== listed.length || readNames.some((name) => !listedNames.has(name)))
     throw new ThemeRejected(['That zip file couldn’t be read'])
 
   const reasons = new Set<string>()

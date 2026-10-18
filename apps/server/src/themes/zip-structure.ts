@@ -4,6 +4,8 @@
 // the two lists must agree on name, method, flags that change how the name is read, and sizes; names are unique (case is judged by the
 // layout check in package.ts); and the stored data of two files never overlaps.
 
+import { extraFieldProblem } from '@score/contract'
+
 export class ZipStructureError extends Error {}
 
 const EOCD = 0x06054b50
@@ -64,6 +66,11 @@ export function checkZipStructure(bytes: Buffer): ZipEntryInfo[] {
     const name = nameBytes.toString('utf8')
     const next = at + 46 + nameLength + extraLength + commentLength
     if (next > end) throw new ZipStructureError('That zip file couldn’t be read')
+    // Re-gate finding 1: an extra field that gives the entry another name is read by JSZip but not by this check.
+    const centralExtra = extraFieldProblem(
+      bytes.subarray(at + 46 + nameLength, at + 46 + nameLength + extraLength),
+    )
+    if (centralExtra) throw new ZipStructureError(`${name.slice(0, 60)}: ${centralExtra}`)
     at = next
 
     const key = name.replace(/\/$/, '')
@@ -89,6 +96,13 @@ export function checkZipStructure(bytes: Buffer): ZipEntryInfo[] {
       )
         throw mismatch(name)
     }
+    const localExtra = extraFieldProblem(
+      bytes.subarray(
+        localOffset + 30 + localNameLength,
+        localOffset + 30 + localNameLength + localExtraLength,
+      ),
+    )
+    if (localExtra) throw new ZipStructureError(`${name.slice(0, 60)}: ${localExtra}`)
     const dataStart = localOffset + 30 + localNameLength + localExtraLength
     const dataEnd = dataStart + packed
     if (dataEnd > centralStart) throw new ZipStructureError('That zip file is cut short')

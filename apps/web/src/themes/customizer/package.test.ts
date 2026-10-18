@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildZip, unicodePathExtra } from '@score/contract/test/theme-package-zip'
 import { emptyManifest } from './draft.ts'
 import { buildThemePackage, readThemePackage } from './package.ts'
 import { readZip, writeZip } from './zip.ts'
@@ -87,5 +88,26 @@ describe('theme packages', () => {
     expect(await bad([['theme.json', text(JSON.stringify({ ...manifest, name: '' }))]])).toEqual([
       'Give the theme a name (1–60 characters).',
     ])
+  })
+
+  // Re-gate finding 1: the Customizer previews `theme.json` as the reviewed manifest while a reader that honours
+  // Info-ZIP Unicode Path fields would install the other file as `theme.json`.
+  it('refuses a package whose Unicode path fields rename its entries', async () => {
+    const crafted = buildZip([
+      {
+        name: 'theme.json',
+        data: JSON.stringify(manifest),
+        centralExtra: unicodePathExtra('theme.json', 'LICENSE'),
+        localExtra: unicodePathExtra('theme.json', 'LICENSE'),
+      },
+      {
+        name: 'OFL.txt',
+        data: JSON.stringify({ ...manifest, id: 'other-theme' }),
+        centralExtra: unicodePathExtra('OFL.txt', 'theme.json'),
+        localExtra: unicodePathExtra('OFL.txt', 'theme.json'),
+      },
+    ])
+    const read = await readThemePackage(crafted)
+    expect(read.ok).toBe(false)
   })
 })

@@ -5,7 +5,8 @@
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test/theme-package-zip": "./test/theme-package-zip.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

@@ -2,6 +2,8 @@
 // before anything is sent, and can export a draft that isn't saved. Writing stores files uncompressed; reading
 // handles stored and deflated entries (the browser's own DecompressionStream does the inflating). No dependency.
 
+import { extraFieldProblem } from '@score/contract'
+
 const crcTable = (() => {
   const table = new Uint32Array(256)
   for (let n = 0; n < 256; n++) {
@@ -168,6 +170,11 @@ export async function readZip(
     const name = decoder.decode(bytes.subarray(at + 46, at + 46 + nameLength))
     const nameBytes = bytes.subarray(at + 46, at + 46 + nameLength)
     const crc = view.getUint32(at + 16, true)
+    // A Unicode path field gives the entry another name for readers that honour it (gate finding #1, again).
+    const centralExtra = extraFieldProblem(
+      bytes.subarray(at + 46 + nameLength, at + 46 + nameLength + extraLength),
+    )
+    if (centralExtra) throw new ZipError(`“${name.slice(0, 60)}”: ${centralExtra}.`)
     at += 46 + nameLength + extraLength + commentLength
     if (flags & 1) throw new ZipError('That zip file is encrypted.')
     const key = name.replace(/\/$/, '').toLowerCase()
@@ -191,7 +198,15 @@ export async function readZip(
       !sameSizes
     )
       throw new ZipError(`“${name.slice(0, 60)}”: the zip’s headers don’t match each other.`)
-    const dataStart = local + 30 + localName.length + view.getUint16(local + 28, true)
+    const localExtraLength = view.getUint16(local + 28, true)
+    const localExtra = extraFieldProblem(
+      bytes.subarray(
+        local + 30 + localName.length,
+        local + 30 + localName.length + localExtraLength,
+      ),
+    )
+    if (localExtra) throw new ZipError(`“${name.slice(0, 60)}”: ${localExtra}.`)
+    const dataStart = local + 30 + localName.length + localExtraLength
     ranges.push([local, dataStart + packed])
     if (name.endsWith('/')) continue
     if (

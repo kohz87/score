@@ -31,6 +31,7 @@ import { multipart } from '../media-fixtures.ts'
 import { resetLook } from '../../src/themes/look.ts'
 import { checkThemeCss } from '../../src/themes/css-check.ts'
 import { manifestAssets, readThemePackage } from '../../src/themes/package.ts'
+import { buildZip, unicodePathExtra } from '@score/contract/test/theme-package-zip'
 import { AVIF, JPEG, PNG, WEBP, WOFF2, manifestJson, rawZip, zipOf, type Entry } from './helpers.ts'
 
 let dir: string
@@ -335,6 +336,32 @@ test('import: a package whose local headers and central directory disagree chang
   ])
   expect((await upload(dup, '?replace=1')).statusCode).toBe(422)
   expect(ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())).toEqual(before)
+})
+
+// Re-gate finding 1: Unicode path extra fields rename entries for JSZip only; the replace must not reach the store.
+test('import: a package whose Unicode path fields rename its entries changes no theme', async () => {
+  await upload(await fullPackage())
+  const before = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  const attack = Buffer.from(
+    buildZip([
+      {
+        name: 'theme.json',
+        data: manifestJson({ id: 'reviewed', name: 'Reviewed' }),
+        centralExtra: unicodePathExtra('theme.json', 'LICENSE'),
+        localExtra: unicodePathExtra('theme.json', 'LICENSE'),
+      },
+      {
+        name: 'OFL.txt',
+        data: manifestJson({ id: 'seaside', name: 'Installed instead' }),
+        centralExtra: unicodePathExtra('OFL.txt', 'theme.json'),
+        localExtra: unicodePathExtra('OFL.txt', 'theme.json'),
+      },
+    ]),
+  )
+  const res = await upload(attack, '?replace=1', { ...headers, 'if-match': before.etag })
+  expect(res.statusCode).toBe(422)
+  expect(ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())).toEqual(before)
+  expect((await call('GET', '/api/themes/reviewed')).statusCode).toBe(404)
 })
 
 // Gate finding #7: the etag must change with every byte of the package, not only the manifest and the CSS.
