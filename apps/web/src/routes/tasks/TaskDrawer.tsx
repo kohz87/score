@@ -193,7 +193,12 @@ function Actions({ task, agents }: { task: TaskDetail; agents: AgentSummary[] })
   const agentName =
     approval && (agents.find((a) => a.id === approval.agentId)?.name ?? approval.agentId)
   return (
-    <section className="task-drawer-section task-drawer-actions" aria-label="Task actions">
+    // The request and its buttons are separate surfaces but one decision: a click on the button vets both (data-decision).
+    <section
+      className="task-drawer-section task-drawer-actions"
+      aria-label="Task actions"
+      data-decision
+    >
       {approval && (
         <div className="task-drawer-approval" data-protected="flex">
           <p className="task-drawer-approval-title">

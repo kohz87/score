@@ -24,6 +24,8 @@ export const protectedClasses = [
   'team-coding-permission',
   'coding-reach',
   'coding-acknowledge',
+  'coding-add-context',
+  'coding-add-commit',
   'terminal-auth',
   'admin-password',
   'guard-form',
