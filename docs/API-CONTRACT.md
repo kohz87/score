@@ -2252,7 +2252,7 @@ it and still serves the other themes.
   override and cache (so the shared Score look shows) **and its own light/dark choice (`score.theme`)**, in memory as
   well as in storage (so the shared colour mode the host reset to applies), then stores the new number. A server without
   the field counts as `0`.
-- `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`. The `etag` covers the
+- `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `licenseFiles` (the names of the package's licence files, J1), `etag`). `404 not_found`. The `etag` covers the
   whole package: manifest, CSS, licence files and, through a persisted write counter (migration 0076) that every write
   of the theme takes, every asset's bytes. A change to any of them, an identical re-import included, gives a new etag,
   and so does deleting and re-creating the theme.
@@ -2269,8 +2269,8 @@ it and still serves the other themes.
   (each carries `?rev=` of the etag this response was made from). `rev` is optional here; when present and not
   current it is `409 etag_mismatch`.
 - `GET /api/themes/:id/assets/<fonts|img>/<file>?rev=<etag>` → the file with its exact type, `nosniff`,
-  `cache-control: private`. **`rev` is required** (nothing depends on unversioned asset URLs): without it
-  `400 bad_request`; stale `409 etag_mismatch` as above. A page that kept a cached look from before 1.8.1 (URLs without
+  `cache-control: private`. **`rev` is required** (nothing depends on unversioned asset URLs): without it, or with
+  characters outside `[A-Za-z0-9_-]` (1–128), `400 bad_request`; a well-formed one that is not current is `409 etag_mismatch` as above. A page that kept a cached look from before 1.8.1 (URLs without
   `rev`) shows the theme's fallback fonts and pictures until the theme is loaded again, which rewrites the cache.
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);

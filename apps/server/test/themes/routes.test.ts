@@ -1193,6 +1193,7 @@ test("J1: read A, replace with B at the same paths: A's file and licence URLs ne
   expect(replaced.statusCode, replaced.body).toBe(200)
   const b = ThemeDetailSchema.parse(replaced.json())
   expect(b.etag).not.toBe(a.etag)
+  expect(a.licenseFiles).toEqual(['LICENSE'])
 
   const stale = await call('GET', `/api/themes/mine/assets/img/a.png?rev=${a.etag}`)
   expect(stale.statusCode).toBe(409)
@@ -1204,7 +1205,8 @@ test("J1: read A, replace with B at the same paths: A's file and licence URLs ne
   expect(current.rawPayload.equals(PNG2)).toBe(true)
   // An unversioned asset URL is not served at all.
   expect((await call('GET', '/api/themes/mine/assets/img/a.png')).statusCode).toBe(400)
-  expect((await call('GET', '/api/themes/mine/assets/img/a.png?rev=nope')).statusCode).toBe(400)
+  expect((await call('GET', '/api/themes/mine/assets/img/a.png?rev=nope')).statusCode).toBe(409)
+  expect((await call('GET', '/api/themes/mine/assets/img/a.png?rev=a%20b')).statusCode).toBe(400)
 
   // Licence texts travel in the export: a stale revision is refused, the current one (or none) is served.
   expect((await call('GET', `/api/themes/mine/export?rev=${a.etag}`)).statusCode).toBe(409)
