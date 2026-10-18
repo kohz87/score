@@ -1035,6 +1035,7 @@ const cases = [
       backlinks: [],
       lastAuthor: 'you',
       versioned: false,
+      history: 'not_versioned',
     },
     { path: 'a.md' },
   ],
