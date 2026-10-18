@@ -248,3 +248,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   user themes on now-built-in ids — migration 0075 + startup step; Harbour agent-text contrast; OFL licence text now kept
   through import/export). Lead: removed `halo-*` from the colour tokens (sizes), labelled renamed themes "(yours)",
   verified the upgrade test fails without the rename step.
+- **T1 flaky tests** merged (Sonnet high; no Codex check — test-infrastructure work, lead reviewed the 4 product-code
+  changes: fake-mode-only password attempt limits, 60 s version probe for the fake CLI, composer caret guard). 13 items
+  fixed at their causes with before/after rates (e.g. fix-l 0/8 → 20/20, release-test race 0/20 → 20/20, audit2-t 0/15 →
+  15/15), plus an e2e teardown guard that fails a run leaving agents behind. Server suite on main after the merge:
+  **4288 passed, 0 failed** (128 s). Not reproduced, left: Now 1 px jitter, workspace-390 jitter.
