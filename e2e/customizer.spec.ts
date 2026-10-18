@@ -1150,3 +1150,34 @@ test('a look cached before 1.8.1 (file URLs without a revision) still loads and 
     await cleanUp(page)
   }
 })
+
+// X3 (cross-audit): the import dialog's Replace is conditional on the theme it showed.
+test('Replace in the install preview never overwrites a version that landed after it opened', async ({
+  page,
+}) => {
+  await pair(page)
+  made.add('e2e-imp')
+  try {
+    const pkg = (name: string) => writeZip([['theme.json', manifestOf('e2e-imp', name)]])
+    expect((await importZip(page, pkg('E2E Imp'))).status()).toBe(201)
+    await openCustomizer(page)
+    await page.locator('input[aria-label="Theme file to import"]').setInputFiles({
+      name: 'imp.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from(pkg('E2E Imp from file')),
+    })
+    const dialog = page.getByRole('dialog', { name: 'Install “E2E Imp from file”?' })
+    await dialog.getByRole('checkbox').check()
+    await expect(dialog.getByRole('button', { name: 'Install' })).toBeEnabled()
+    // Someone else replaces the theme while the dialog is open.
+    expect((await importZip(page, pkg('E2E Imp elsewhere'), '?replace=1')).status()).toBe(201)
+    await dialog.getByRole('button', { name: 'Install' }).click()
+    await expect(dialog.getByRole('alert')).toContainText('changed')
+    const stored = await (await page.request.get('/api/themes/e2e-imp')).json()
+    expect(stored.manifest.name).toBe('E2E Imp elsewhere')
+    // The person is asked to look again: the dialog does not install on a second click.
+    await expect(dialog.getByRole('button', { name: 'Install' })).toBeDisabled()
+  } finally {
+    await cleanUp(page)
+  }
+})
