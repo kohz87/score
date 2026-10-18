@@ -445,7 +445,7 @@ export class ThemeStore {
         // Whatever failed, the old state comes back; if even that can't be done, the note stays for the next start.
         try {
           this.undoSwap(token, manifest.id, hadOld)
-          this.db.tx((sqlite) => this.eraseNote(sqlite, token))
+          this.settleNote(token)
         } catch {
           // left to recoverInterrupted
         }
@@ -489,6 +489,15 @@ export class ThemeStore {
   }
   private eraseNote(sqlite: DatabaseSync, token: string): void {
     sqlite.prepare('DELETE FROM theme_swaps WHERE token = ?').run(token)
+  }
+
+  /**
+   * After a rollback or a recovery step: the folder moves it made are synced before the note goes, and the erase is
+   * durable, so a power cut can't keep the erase and lose the restoration (old row, new bytes, no note to recover from).
+   */
+  private settleNote(token: string): void {
+    if (existsSync(this.root)) this.sync(this.root)
+    this.db.durableTx((sqlite) => this.eraseNote(sqlite, token))
   }
 
   /** Puts a swap that did not commit back as it was. Safe to repeat. */
@@ -535,7 +544,7 @@ export class ThemeStore {
         if (note.kind === 'swap') this.undoSwap(note.token, note.theme_id, note.had_folder === 1)
         else
           this.settleReclaim(note.token, note.theme_id, note.other_id ?? '', note.had_folder === 1)
-        this.db.tx((sqlite) => this.eraseNote(sqlite, note.token))
+        this.settleNote(note.token)
       } catch {
         kept.add(note.token)
       }
@@ -598,7 +607,7 @@ export class ThemeStore {
       } catch {
         // Nothing moved: forget the plan and leave the theme as it was; the next start tries again.
         try {
-          this.db.tx((sqlite) => this.eraseNote(sqlite, token))
+          this.settleNote(token)
         } catch {
           // a note left over is settled at the next start
         }
@@ -609,7 +618,7 @@ export class ThemeStore {
       } catch (error) {
         try {
           if (hadFolder) this.fs.rename(newFolder, oldFolder)
-          this.db.tx((sqlite) => this.eraseNote(sqlite, token))
+          this.settleNote(token)
         } catch {
           // left to recoverInterrupted, which follows the note
         }
@@ -666,7 +675,7 @@ export class ThemeStore {
     } catch (error) {
       try {
         this.undoSwap(token, id, hadOld)
-        this.db.tx((sqlite) => this.eraseNote(sqlite, token))
+        this.settleNote(token)
       } catch {
         // left to recoverInterrupted
       }

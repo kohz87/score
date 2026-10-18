@@ -153,9 +153,34 @@ describe('a sync that fails stops the swap and keeps the old theme (K2 X5)', () 
     new ThemeStore(db, home).storeImported(manifest('seaside'), 'old', asset('old'))
     const store = failing((path) => path === join(home, 'themes'))
     expect(() => store.storeImported(manifest('seaside'), 'new', asset('new'))).toThrow(/EIO/)
-    expect(notes()).toBe(0)
     expect(store.get('seaside')!.css).toBe('old')
     expect(readFileSync(join(store.root, 'seaside/assets/img/a.png'), 'utf8')).toBe('old')
+    // The restoration can't be proved on disk while syncs fail, so its note stays for the next start, which settles it.
+    expect(notes()).toBe(1)
+    new ThemeStore(db, home).recoverInterrupted()
+    expect(notes()).toBe(0)
+    expect(readFileSync(join(store.root, 'seaside/assets/img/a.png'), 'utf8')).toBe('old')
     expect(leftovers()).toEqual([])
+  })
+})
+
+// 1.8.1 verification #2: a rollback puts the old folder back, and the note may only go once that move is on disk;
+// otherwise a power cut can keep the erased note and lose the restoration (old row, new bytes, no note to recover from).
+describe('a rollback settles its note only after the restored folder is synced', () => {
+  test('a replacement whose row commit fails: restore, sync the root, then erase the note durably', () => {
+    const store = new ThemeStore(
+      db,
+      home,
+      undefined,
+      recorder(() => store.root),
+    )
+    store.storeImported(manifest('seaside'), '', asset('A'))
+    db.sqlite.exec(
+      "CREATE TRIGGER no_row_update BEFORE UPDATE ON themes BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+    )
+    events = []
+    expect(() => store.storeImported(manifest('seaside'), '', asset('B'))).toThrow(/injected/)
+    expect(order().slice(-3)).toEqual(['rename:in', 'sync:root', 'commit:sync=2'])
+    expect(readFileSync(join(home, 'themes/seaside/assets/img/a.png'), 'utf8')).toBe('A')
   })
 })

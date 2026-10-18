@@ -2263,8 +2263,9 @@ it and still serves the other themes.
   theme's current etag is `409 etag_mismatch` (`details.etag` = the current etag), never the newer bytes, so an editor
   holding an old manifest, stylesheet or etag can't read a later replacement's file at the same path, and a copy can't
   pair one version's manifest and CSS with another's files. Built-in themes are constants, so their etag is fixed for a
-  server build; their URLs carry it like any other. The check runs after `404` (unknown theme or file name) and
-  `409 theme_recovering`, and in the same synchronous step as the read of the file.
+  server build; their URLs carry it like any other. The check runs after `404` for an unknown theme and `409 theme_recovering`, and
+  **before** the file is looked up, in the same synchronous step as its read: an old revision whose file the newer
+  version removed is `409 etag_mismatch` (it is stale), not `404`.
 - `GET /api/themes/:id/style.css[?rev=<etag>]` → `text/css` with `asset:` references rewritten to the asset URLs below
   (each carries `?rev=` of the etag this response was made from). `rev` is optional here; when present and not
   current it is `409 etag_mismatch`.

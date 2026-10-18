@@ -49,6 +49,7 @@ export const protectedClasses = [
   'menu-trigger',
   'user-way-back',
   'cz-back',
+  'cz-error-back',
   'user-way-link',
   'user-menu-button',
   'look-reset',

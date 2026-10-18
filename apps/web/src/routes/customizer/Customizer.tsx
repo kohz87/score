@@ -562,7 +562,7 @@ export function Customizer() {
     return (
       <div className="cz cz-empty">
         <p role="alert">{loadProblem}</p>
-        <Link className="cz-btn" to="/settings#look">
+        <Link className="cz-btn cz-error-back" to="/settings#look" data-protected="raised">
           Back to Settings
         </Link>
         <WayBackPalette />
