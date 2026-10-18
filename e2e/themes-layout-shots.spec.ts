@@ -24,6 +24,11 @@ async function shot(
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   await page.evaluate(() => document.fonts.ready)
   await options.after?.(page)
+  if (path.startsWith('/chat'))
+    await page
+      .locator('.chat-scroll')
+      .evaluate((el) => (el.scrollTop = 0))
+      .catch(() => undefined)
   await page.waitForTimeout(400)
   await page.screenshot({ path: `${dir}/${name}.png`, fullPage: true })
 }
