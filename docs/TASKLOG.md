@@ -258,3 +258,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   `If-Match` on theme import replace. Lead verified the glass-contrast fix with a revert: the e2e fails on the old
   parser and passes with the fix. Follow-up noted: guard.ts (protected surfaces) still uses the plain colour parser —
   protected surfaces are forced solid, so no gap today.
+- **Phase 9 gate fixes G1–G3** merged (decision 101). G2: zip local/central agreement on both readers, whole-package
+  revision etag (migration 0076), journaled asset swaps and id moves with startup recovery. G3: in-memory device reset,
+  server reset generation that clears device overrides and boot caches. G1: theme rules confined with
+  `:where(:not([data-protected], [data-protected] *))` on every selector (works in all browsers, unlike `@scope` donut),
+  guard inspects every text/control element, glyph geometry and paint, computed colours with AA and fail-closed,
+  theme motion dropped, a decision-time check that refuses an action on a damaged protected surface (custom looks only),
+  Settings links/palette/reset protected. Lead resolved a contract-doc conflict between G2 and G3 by keeping both notes.
+  All findings reproduced failing-first by the builders. Next: re-gate at max.
