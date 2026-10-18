@@ -29,7 +29,7 @@ export type Look = {
   failure: string | null
   /** What the applied theme asks of the components (menu, Now cards, chat); Score's default when none is applied. */
   layout: LayoutConfig
-  /** True until the shared theme and reset generation are known (the list is still loading). */
+  /** True until the shared theme is known (the list is still loading and this device has no choice of its own). */
   loading: boolean
   /** False while the theme list could not be read (older server): only the built-in themes are offered. */
   fromServer: boolean
@@ -136,9 +136,7 @@ export function useLook(): Look {
     safe: state.safe,
     failure: state.failure,
     layout,
-    // The override isn't trusted until the list is known (a host reset may have retired it), so the boot cache's look
-    // stays until then. If the server can't be read at all, the override applies as before.
-    loading: list.isPending,
+    loading: list.isPending && deviceId === null,
     fromServer: !!list.data,
     chooseForDevice: (id) => {
       writeDeviceOverride(id)
