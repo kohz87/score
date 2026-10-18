@@ -373,3 +373,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   second after switch-off) — to investigate after the release run.
 - **Release 1.8.1**: release run on main — check green (contract 1405, web 2164, server 4497 +14 skipped), e2e 618/618,
   0 failed. No migration.
+- **v1.8.1 deployed** (2026-10-18 18:03 UTC): idle check clean, backup `score-pre-1.8.1-20261018.db` + journal, live
+  start, gateway restarted (pid 3901613), both producers re-registered, health 200 on LAN and Tailscale. Morning
+  summary: `docs/MORNING-2026-10-19.md`. T5 started: themes-protection #6 hover-rule flake.
