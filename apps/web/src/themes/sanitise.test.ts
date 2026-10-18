@@ -34,6 +34,11 @@ describe('sanitiseCss', () => {
     ])
     expect(reasons('.watch-approval button { display: none }')).toEqual(['protected_selector'])
     expect(reasons('.orch-ack { display: none }')).toEqual(['protected_selector'])
+    // Gate #8: the way back.
+    expect(reasons('.command-run, .command-palette { display: none }')).toEqual([
+      'protected_selector',
+    ])
+    expect(reasons('.menu-trigger { display: none }')).toEqual(['protected_selector'])
     expect(reasons('.settings-card { color: red }')).toEqual([])
     expect(reasons('@font-face { font-family: x; src: url(a.woff2) }')).toEqual(['font_face'])
   })

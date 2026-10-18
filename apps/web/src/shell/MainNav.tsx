@@ -30,7 +30,14 @@ export function MainNav() {
   return (
     <nav className="main-nav" aria-label="Main">
       {menu.map(({ path, title }) => (
-        <NavLink key={path} to={path} className="main-nav-link" title={renamed ? title : undefined}>
+        <NavLink
+          key={path}
+          to={path}
+          className="main-nav-link"
+          title={renamed ? title : undefined}
+          // Settings is the way back from a theme (gate #8): no theme rule reaches it.
+          {...(path === '/settings' ? { 'data-protected': 'any' } : {})}
+        >
           <span className="main-nav-label">{title}</span>
           {path === dotOn && pathname !== '/pair' && <NeedsYouDot />}
           {path === '/settings' && pathname !== '/pair' && <HermesCheckDot />}

@@ -32,6 +32,10 @@ export const protectedClasses = [
   'agent-glyph',
   'chat-toast',
   // The way back
+  'command-run',
+  'command-palette',
+  'command-trigger',
+  'menu-trigger',
   'look-reset',
   'look-banner',
 ] as const

@@ -110,7 +110,12 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
         <nav aria-label="Pages" className="nav-drawer-nav">
           {menu.map(({ path, title }) => (
             <div key={path} className="nav-drawer-group">
-              <NavLink to={path} className="nav-drawer-link">
+              <NavLink
+                to={path}
+                className="nav-drawer-link"
+                // Settings is the way back from a theme (gate #8): no theme rule reaches it.
+                {...(path === '/settings' ? { 'data-protected': 'any' } : {})}
+              >
                 {title}
                 {path === dotOn && !pairing && <NeedsYouDot />}
                 {path === '/settings' && !pairing && <HermesCheckDot />}

@@ -74,6 +74,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       <div
         ref={dialogRef}
         className="command-palette"
+        data-protected="any"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -117,6 +118,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     className="command-run"
+                    data-protected="any"
                     onClick={() => {
                       command.run()
                       onClose()

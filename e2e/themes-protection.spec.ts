@@ -281,3 +281,54 @@ test.describe('every decision surface is protected, not only the chat card', () 
     await expect(dialog.getByRole('note').first()).toBeVisible()
   })
 })
+
+test.describe('the way back is always reachable (gate #8)', () => {
+  const hideSettings =
+    'a[href="/settings"], .command-run { display: none; }' +
+    'nav[aria-label="Main"] a:last-child, nav[aria-label="Pages"] a:last-child { visibility: hidden; }' +
+    '[role=dialog] button, [role=dialog] input { display: none; }'
+
+  test('#8: Settings stays in the menu and “Reset look” in the palette', async ({ page }) => {
+    await wear(page, hideSettings)
+    await page.goto('/now')
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    await settle(page)
+    const settings = page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Settings' })
+    await expect(settings).toBeVisible()
+    expect(await unreadable(settings)).toEqual([])
+    await page.keyboard.press('Control+k')
+    const palette = page.getByRole('dialog', { name: 'Search or run a command' })
+    await expect(palette).toBeVisible()
+    await palette.getByRole('searchbox').fill('reset look')
+    const reset = palette.getByRole('button', { name: 'Reset look on this device' })
+    await expect(reset).toBeVisible()
+    expect(await unreadable(reset)).toEqual([])
+    await reset.click()
+    await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
+  })
+
+  test('#8: the launcher menu keeps Settings', async ({ page }) => {
+    await wear(page, hideSettings, { layout: { nav: 'launcher' } })
+    await page.goto('/now')
+    await expect(page.locator('html')).toHaveAttribute('data-nav', 'launcher')
+    await page.getByRole('button', { name: 'Menu' }).click()
+    const menu = page.getByRole('dialog', { name: 'Menu' })
+    await expect(menu.getByRole('link', { name: 'Settings' })).toBeVisible()
+    expect(await unreadable(menu.getByRole('link', { name: 'Settings' }))).toEqual([])
+  })
+
+  test('#8: a theme can’t hide the palette itself', async ({ page }) => {
+    await wear(page, '.command-palette { display: none; } .command-backdrop { display: none; }')
+    await page.goto('/now')
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    await page.keyboard.press('Control+k')
+    const palette = page.getByRole('dialog', { name: 'Search or run a command' })
+    // Either the theme never reached it, or Score noticed and put its own look back.
+    await expect(palette).toBeVisible({ timeout: 10_000 })
+    await settle(page)
+    await expect(palette).toBeVisible()
+    await expect(palette.getByRole('searchbox')).toBeVisible()
+  })
+})
