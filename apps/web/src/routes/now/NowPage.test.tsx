@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import {
+  act,
   cleanup,
   configure,
   fireEvent,
@@ -15,6 +16,7 @@ import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
 import { NowPage } from './NowPage.tsx'
+import { DEFAULT_LAYOUT, resolveLayout, setLayout } from '../../themes/layout.ts'
 
 // Several workers share the machine; the default 1 s is tight for a page that fetches four things.
 configure({ asyncUtilTimeout: 5000 })
@@ -487,4 +489,53 @@ test('Escape closes the group list and returns focus to the group', async () => 
   fireEvent.keyDown(first, { key: 'Escape' })
   expect(within(timeline).queryByRole('list', { name: 'lead: 3 tasks' })).toBeNull()
   expect(document.activeElement).toBe(group)
+})
+
+test('a theme change moves the composer without losing what was chosen in it', async () => {
+  renderNow()
+  const composer = () => document.querySelector('.now-composer') as HTMLElement
+  await waitFor(() => expect(composer()?.querySelector('textarea')).toBeTruthy())
+  const before = composer()
+  const box = before.querySelector('textarea')
+  // A recipient and a plan-first choice: state that only lives in the composer.
+  fireEvent.click(within(before).getByRole('button', { name: 'Add someone' }))
+  fireEvent.click(within(screen.getByRole('list', { name: 'Add someone' })).getByText('builder'))
+  fireEvent.click(within(before).getByRole('button', { name: 'Plan first' }))
+  const arranged = resolveLayout({
+    layout: {
+      now: {
+        columns: 2,
+        cards: [
+          { card: 'composer', span: 2 },
+          { card: 'room', span: 1 },
+          { card: 'needs-you', span: 1 },
+        ],
+      },
+    },
+  })
+  try {
+    // Default -> theme arrangement -> the theme without a composer -> default.
+    for (const next of [
+      arranged,
+      resolveLayout({ layout: { now: { columns: 1, cards: [{ card: 'room', span: 1 }] } } }),
+      DEFAULT_LAYOUT,
+    ]) {
+      act(() => setLayout(next))
+      await waitFor(() =>
+        expect(!!document.querySelector('.now-arrangement')).toBe(next !== DEFAULT_LAYOUT),
+      )
+      expect(document.querySelector('.now-composer')).toBe(before)
+      expect(before.querySelector('textarea')).toBe(box)
+      expect(
+        within(before).getByRole('button', { name: 'Remove builder', hidden: true }),
+      ).toBeTruthy()
+      expect(
+        within(before)
+          .getByRole('button', { name: 'Plan first', hidden: true })
+          .getAttribute('aria-pressed'),
+      ).toBe('true')
+    }
+  } finally {
+    act(() => setLayout(DEFAULT_LAYOUT))
+  }
 })

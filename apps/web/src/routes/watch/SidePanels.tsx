@@ -2,7 +2,7 @@ import type { AgentSummary, WatchOverviewItem } from '@score/contract'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { clockSeconds, markerLabels, type ActivityItem } from './watch-model.ts'
+import { clockSeconds, groupActivity, markerLabels, type ActivityItem } from './watch-model.ts'
 
 const INITIAL = 5
 
@@ -23,7 +23,35 @@ export function WhatTheyAreDoing({
   onSelect,
 }: WhatTheyAreDoingProps) {
   const [all, setAll] = useState(false)
-  const shown = all ? items : items.slice(0, INITIAL)
+  const entries = groupActivity(items)
+  const shown = all ? entries : entries.slice(0, INITIAL)
+  const row = (item: ActivityItem) => {
+    const current = item.key === currentKey
+    return (
+      <li key={item.key}>
+        <button
+          type="button"
+          className={`watch-doing__item${current ? ' watch-doing__item--current' : ''}`}
+          aria-current={current ? 'true' : undefined}
+          disabled={item.seq === null}
+          onClick={() => onSelect(item)}
+        >
+          <span
+            className={`watch-doing__dot watch-marker--${item.kind}`}
+            role="img"
+            aria-label={markerLabels[item.kind]}
+          />
+          <span className="watch-doing__body">
+            <span className="watch-doing__text">{item.text}</span>
+            <time className="watch-doing__time" dateTime={item.at}>
+              {clockSeconds(item.at)}
+              {live && item === items[0] && current ? ', now' : ''}
+            </time>
+          </span>
+        </button>
+      </li>
+    )
+  }
   return (
     <section className="watch-panel" aria-labelledby="watch-doing">
       <h2 id="watch-doing">What {agent.name} is doing</h2>
@@ -31,35 +59,22 @@ export function WhatTheyAreDoing({
         <p className="watch-panel__empty">Nothing yet. Steps show up here as they happen.</p>
       )}
       <ol className="watch-doing">
-        {shown.map((item, index) => {
-          const current = item.key === currentKey
-          return (
-            <li key={item.key}>
-              <button
-                type="button"
-                className={`watch-doing__item${current ? ' watch-doing__item--current' : ''}`}
-                aria-current={current ? 'true' : undefined}
-                disabled={item.seq === null}
-                onClick={() => onSelect(item)}
-              >
-                <span
-                  className={`watch-doing__dot watch-marker--${item.kind}`}
-                  role="img"
-                  aria-label={markerLabels[item.kind]}
-                />
-                <span className="watch-doing__body">
-                  <span className="watch-doing__text">{item.text}</span>
-                  <time className="watch-doing__time" dateTime={item.at}>
-                    {clockSeconds(item.at)}
-                    {live && index === 0 && current ? ', now' : ''}
-                  </time>
-                </span>
-              </button>
+        {shown.map((entry) =>
+          entry.type === 'item' ? (
+            row(entry.item)
+          ) : (
+            <li key={entry.key} className="watch-doing__group">
+              <span className="watch-doing__group-label">
+                Sub-agent · {entry.items.length} {entry.items.length === 1 ? 'step' : 'steps'}
+              </span>
+              <ol className="watch-doing watch-doing--nested" aria-label="Sub-agent steps">
+                {entry.items.map(row)}
+              </ol>
             </li>
-          )
-        })}
+          ),
+        )}
       </ol>
-      {items.length > INITIAL && (
+      {entries.length > INITIAL && (
         <button
           type="button"
           className="watch-panel__more"

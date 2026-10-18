@@ -3,6 +3,46 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.7.0] — 2026-10-18
+
+### Added
+- **Theme layouts (Phase 9, part 2):** a theme can now change Score's whole layout, not only its colours —
+  navigation at the **top**, as a **left** or **right** rail, or as a single **launcher** menu button (⌘K stays);
+  content width **narrow / wide / full**; the **menu** order, labels and hidden pages (Settings always stays); the
+  **Now** cards' arrangement (columns, spans; Needs you is always there); **chat** as bubbles or plain, and the room
+  list left, right or hidden until opened; card **elevation**, **glass** surfaces, borders, corner radius and
+  density; a **background image** with fit and dim; and separate settings for the chat-first view. Approvals,
+  decisions and other protected parts stay solid and readable in every combination. Phones keep a simple top bar.
+- **Watch** groups a coding agent's sub-agent steps under "Sub-agent · N steps".
+- The chat-first view shows a **workflow header** (title, steps done, Pause, Stop, See full details) and answers a
+  workflow's questions in the chat.
+
+### Fixed
+- **Coding workers with long home or workspace paths** could fail to start in orchestrations ("policy snapshot larger
+  than 4 KB"); the limit is now 64 KB.
+- Settings › Look's display-currency fields match the other inputs.
+- Unsent text, attachments and recipients in Now's message box survive a theme change.
+
+## [1.6.1] — 2026-10-18
+
+### Changed
+- **Agent pages share one cleaner layout** for Hermes and coding agents, following the design: a header with
+  **Message** and **Pause/Resume** (Watch and pop-out beside them), consistent gaps between cards, a three-column card
+  grid, long lists capped with "Show all N". A coding agent's page has a Personality card with its CLI, workspace and
+  quota, then **Limits left**, **Model** and **Access** cards that are edited in place. The limit-floor field is
+  left-aligned.
+
+### Fixed
+- Cancelling an edit of a coding agent's access no longer keeps the chosen level and the typed security password for a
+  later save; a save sends only what changed.
+- If pausing an agent partly failed, the retry button repeats the pause instead of offering Resume.
+- **Tasks:** choosing two filters quickly (for example Needs you, then a room) no longer drops the first.
+- Claude Code 2.1.302 is listed in the coding-worker safety declaration.
+
+### Internal
+- Test runs cap their worker processes (`SCORE_TEST_WORKERS`, `SCORE_E2E_WORKERS`, default 4) so parallel runs can't
+  exhaust the machine's memory.
+
 ## [1.6.0] — 2026-10-17
 
 ### Added

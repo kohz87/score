@@ -13,6 +13,7 @@ import { ShareDialog } from './ShareDialog.tsx'
 import { OutsideSessions } from './OutsideSessions.tsx'
 import { RoomLink } from './RoomLink.tsx'
 import { RoomList } from './RoomList.tsx'
+import { useLayout } from '../../themes/layout.ts'
 import { NewOrchestrationDialog } from '../orchestrations/NewOrchestrationDialog.tsx'
 import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
 import { workflowRunsQuery } from '../workflows/workflow-queries.ts'
@@ -28,6 +29,7 @@ export function ChatPage() {
   const [starting, setStarting] = useState(false)
   const [creatingRoom, setCreatingRoom] = useState(false)
   const navigate = useNavigate()
+  const roomList = useLayout().chat.roomList
   const [listOpen, setListOpen] = useState(false)
   const closeList = useCallback(() => setListOpen(false), [])
   // A room that disappears from the list (deleted here or in another tab) takes its page with it.
@@ -46,6 +48,70 @@ export function ChatPage() {
     ...(orchestrationRoomList ?? []).map((run) => run.roomId),
     ...workflowRooms,
   ])
+  const list = (
+    <ResponsiveDrawer
+      label="Rooms"
+      className="chat-conversations"
+      open={listOpen}
+      onClose={closeList}
+      inline={!roomId}
+      always={roomList === 'hidden-until-opened'}
+    >
+      <div className="chat-new-row">
+        <button className="chat-new" type="button" onClick={() => setCreatingRoom(true)}>
+          ＋ New room
+        </button>
+        <button
+          className="chat-new chat-new--secondary"
+          type="button"
+          onClick={() => setStarting(true)}
+        >
+          ＋ New orchestration
+        </button>
+      </div>
+      {rooms.status === 'pending' && !rooms.data && <p role="status">Loading rooms…</p>}
+      {rooms.status === 'error' && (
+        <QueryError
+          text="Couldn’t load rooms."
+          retry={() => void context.queries.register(roomsQuery).refetch()}
+        />
+      )}
+      {agents.status === 'error' && (
+        <QueryError
+          text="Couldn’t load agents."
+          retry={() => void context.queries.register(agentsQuery).refetch()}
+        />
+      )}
+      <ConversationSearch
+        rooms={[...(rooms.data?.rooms ?? []), ...(rooms.data?.directs ?? [])]}
+        agents={agents.data ?? []}
+      />
+      <nav aria-label="Rooms">
+        {rooms.data && (
+          <RoomList
+            rooms={rooms.data.rooms}
+            projects={rooms.data.projects}
+            selected={roomId}
+            agents={agents.data ?? []}
+            orchestrationRooms={orchestrationRooms}
+            workflowRooms={workflowRooms}
+            onShare={setSharing}
+            onDelete={setDeleting}
+          />
+        )}
+        <div className="chat-room-group">
+          <h2>Direct rooms</h2>
+          {rooms.data?.directs.map((room) => (
+            <RoomLink key={room.id} room={room} selected={roomId} agents={agents.data ?? []} />
+          ))}
+          {rooms.data && !rooms.data.directs.length && (
+            <p className="chat-list-empty">No direct rooms yet.</p>
+          )}
+        </div>
+        <OutsideSessions agents={agents.data ?? []} />
+      </nav>
+    </ResponsiveDrawer>
+  )
   return (
     <div className="chat-layout">
       {roomId && (
@@ -67,67 +133,7 @@ export function ChatPage() {
           Rooms
         </button>
       )}
-      <ResponsiveDrawer
-        label="Rooms"
-        className="chat-conversations"
-        open={listOpen}
-        onClose={closeList}
-        inline={!roomId}
-      >
-        <div className="chat-new-row">
-          <button className="chat-new" type="button" onClick={() => setCreatingRoom(true)}>
-            ＋ New room
-          </button>
-          <button
-            className="chat-new chat-new--secondary"
-            type="button"
-            onClick={() => setStarting(true)}
-          >
-            ＋ New orchestration
-          </button>
-        </div>
-        {rooms.status === 'pending' && !rooms.data && <p role="status">Loading rooms…</p>}
-        {rooms.status === 'error' && (
-          <QueryError
-            text="Couldn’t load rooms."
-            retry={() => void context.queries.register(roomsQuery).refetch()}
-          />
-        )}
-        {agents.status === 'error' && (
-          <QueryError
-            text="Couldn’t load agents."
-            retry={() => void context.queries.register(agentsQuery).refetch()}
-          />
-        )}
-        <ConversationSearch
-          rooms={[...(rooms.data?.rooms ?? []), ...(rooms.data?.directs ?? [])]}
-          agents={agents.data ?? []}
-        />
-        <nav aria-label="Rooms">
-          {rooms.data && (
-            <RoomList
-              rooms={rooms.data.rooms}
-              projects={rooms.data.projects}
-              selected={roomId}
-              agents={agents.data ?? []}
-              orchestrationRooms={orchestrationRooms}
-              workflowRooms={workflowRooms}
-              onShare={setSharing}
-              onDelete={setDeleting}
-            />
-          )}
-          <div className="chat-room-group">
-            <h2>Direct rooms</h2>
-            {rooms.data?.directs.map((room) => (
-              <RoomLink key={room.id} room={room} selected={roomId} agents={agents.data ?? []} />
-            ))}
-            {rooms.data && !rooms.data.directs.length && (
-              <p className="chat-list-empty">No direct rooms yet.</p>
-            )}
-          </div>
-          <OutsideSessions agents={agents.data ?? []} />
-        </nav>
-      </ResponsiveDrawer>
+      {roomList !== 'right' && list}
       {roomId ? (
         <ChatThread key={`thread:${roomId}`} roomId={roomId} agents={agents.data ?? []} />
       ) : (
@@ -137,6 +143,7 @@ export function ChatPage() {
         </section>
       )}
       {roomId && <RoomPanels key={`panels:${roomId}`} roomId={roomId} agents={agents.data ?? []} />}
+      {roomList === 'right' && list}
       {deleting && (
         <DeleteRoomDialog
           room={deleting}

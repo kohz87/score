@@ -33,7 +33,12 @@ import {
 import { useShowDeleted } from './deleted-toggle.ts'
 import { roomLabel } from './room-label.ts'
 import { orchestrationsQuery, useRun } from '../orchestrations/orchestration-queries.ts'
-import { UserRunNeeds, UserRunPanel } from '../user/UserRun.tsx'
+import {
+  UserRunNeeds,
+  UserRunPanel,
+  UserWorkflowNeeds,
+  UserWorkflowPanel,
+} from '../user/UserRun.tsx'
 import { StatusMessageItem } from '../user/StatusMessageItem.tsx'
 import { statusMessages } from '../user/status-messages.ts'
 import { RoomRunPanel } from '../orchestrations/RoomRunPanel.tsx'
@@ -482,7 +487,12 @@ export function ChatThread({
             ) : (
               <RoomRunPanel summary={orchestration} agents={agents} />
             ))}
-          {workflowRun && <WorkflowRoomPanel summary={workflowRun} agents={agents} />}
+          {workflowRun &&
+            (userView ? (
+              <UserWorkflowPanel summary={workflowRun} />
+            ) : (
+              <WorkflowRoomPanel summary={workflowRun} agents={agents} />
+            ))}
           <div className="chat-messages">
             <MessagePage
               roomId={roomId}
@@ -496,6 +506,7 @@ export function ChatThread({
               extras={extras}
             />
             {userView && orchestration && <UserRunNeeds summary={orchestration} agents={agents} />}
+            {userView && workflowRun && <UserWorkflowNeeds summary={workflowRun} agents={agents} />}
           </div>
         </div>
       )}

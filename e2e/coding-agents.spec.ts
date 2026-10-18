@@ -62,7 +62,7 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Repor
   await dialog.getByRole('button', { name: 'Add coding agent' }).click()
   await expect(dialog.getByRole('heading', { name: `${id} joined the team` })).toBeVisible()
   await dialog.getByRole('link', { name: /^Open / }).click()
-  const card = page.getByRole('region', { name: 'Coding agent' })
+  const card = page.getByRole('tabpanel')
   await expect(card).toContainText('Claude Code 2.1.295 · Ready')
   await expect(page.getByRole('tab', { name: 'Skills' })).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('coding-overview.png') })
@@ -109,7 +109,7 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Repor
 
   // Quota meters (PLAN 8.1): the turn's own rate-limit record, as "% left" with when Score saw it.
   await page.goto(`/team/${encodeURIComponent(id)}`)
-  const meters = page.getByRole('region', { name: 'Coding agent' }).getByRole('group', {
+  const meters = page.getByRole('tabpanel').getByRole('group', {
     name: 'Claude Code limits',
   })
   await expect(meters.getByRole('meter', { name: '5 hours left' })).toHaveAttribute(
@@ -187,7 +187,7 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await add.click()
   await expect(dialog.getByRole('heading', { name: `${id} joined the team` })).toBeVisible()
   await dialog.getByRole('link', { name: /^Open / }).click()
-  const card = page.getByRole('region', { name: 'Coding agent' })
+  const card = page.getByRole('tabpanel')
   await expect(card).toContainText('Antigravity 1.3.3 · Ready')
   await expect(card).toContainText('Gemini Models')
   const agyMeters = card.getByRole('group', { name: 'Antigravity limits' })
@@ -201,6 +201,7 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await shot(agyMeters, 'meters-antigravity.png')
 
   // The chosen model is the agent's setting; an unknown one comes back as Other… with its name.
+  await card.getByRole('button', { name: 'Change model' }).click()
   const settingsModel = card.getByRole('combobox', { name: 'Model' })
   await expect(settingsModel).toHaveValue('gemini-4-argon-high')
   await settingsModel.selectOption('__other__')
@@ -208,9 +209,7 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await card.getByRole('button', { name: 'Save' }).click()
   await expect(async () => {
     await page.reload()
-    await expect(
-      page.getByRole('region', { name: 'Coding agent' }).getByLabel('Model name'),
-    ).toHaveValue('retired-model-1')
+    await expect(page.getByRole('region', { name: 'Model' })).toContainText('retired-model-1')
   }).toPass({ timeout: 15_000 })
 
   await api(page, 'rooms', { name: roomName, leadAgentId: 'lead' })
@@ -261,7 +260,7 @@ test('Codex: the meters come from the log of the run Score started, and say noth
   })
   expect(created).toMatchObject({ id })
   await page.goto(`/team/${encodeURIComponent(id)}`)
-  const card = page.getByRole('region', { name: 'Coding agent' })
+  const card = page.getByRole('tabpanel')
   await expect(card).toContainText('Codex reports its limits after its first reply')
   await api(page, 'rooms', { name: `codex-${suffix}`, leadAgentId: 'lead' })
   await page.goto('/chat')
@@ -307,7 +306,7 @@ test('Release: a coding agent held for programs Score can’t attribute is relea
   await dialog.getByRole('button', { name: 'Add coding agent' }).click()
   await expect(dialog.getByRole('heading', { name: `${id} joined the team` })).toBeVisible()
   await dialog.getByRole('link', { name: /^Open / }).click()
-  const card = page.getByRole('region', { name: 'Coding agent' })
+  const card = page.getByRole('tabpanel')
   await expect(card).toContainText('Ready')
   await expect(card.getByRole('button', { name: 'Release agent' })).toHaveCount(0)
 

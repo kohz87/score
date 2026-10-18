@@ -36,17 +36,22 @@ const fixtures: Record<string, unknown> = {
   '/api/watch/overview': watchOverviewFixture,
   '/api/coding-agents/runtimes': codingRuntimes,
   '/api/coding-agents': { items: [] },
+  // No reading yet, so the form shows no limits line.
+  '/api/coding-agents/runtimes/claude-code/quota': { quota: null },
   '/api/tasks': tasksFixture,
   '/api/tasks/task-docs': taskDetailFixture,
 }
 
 test.use({ timezoneId: 'UTC', locale: 'en-GB', viewport: { width: 1440, height: 900 } })
 
-// Only the orchestration pictures show a run; everywhere else the team has none.
+// Only the orchestration pictures show a run, and only the workflow-run picture a workflow run; everywhere else the
+// team has none (a run in the fixtures would add "Workflow runs need you" to Now and a run panel to the room).
 let withOrchestration = false
+let withWorkflowRun = false
 
 test.beforeEach(async ({ page }) => {
   withOrchestration = false
+  withWorkflowRun = false
   await page.clock.setFixedTime(new Date(fixtureNow))
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.route('**/api/**', async (route) => {
@@ -76,7 +81,9 @@ test.beforeEach(async ({ page }) => {
     const fixture =
       withOrchestration && key in orchestrationFixtures
         ? orchestrationFixtures[key]
-        : (workflowFixtures[key] ?? fixtures[key])
+        : ((key.startsWith('/api/workflow-runs') && !withWorkflowRun
+            ? undefined
+            : workflowFixtures[key]) ?? fixtures[key])
     if (fixture === undefined) {
       await route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'none' } } })
       return
@@ -130,7 +137,7 @@ test('new orchestration dialog', async ({ page }) => {
   await dialog.getByRole('checkbox', { name: 'reviewer' }).check()
   await dialog.getByLabel('Budget in USD (optional)').fill('5')
   await dialog.getByRole('heading', { name: 'New orchestration' }).click()
-  await expect(dialog.getByRole('list', { name: 'Preflight checks' })).toBeVisible()
+  await expect(dialog.getByRole('list', { name: 'Checks before starting' })).toBeVisible()
   await shot(page, 'new-orchestration')
 })
 
@@ -142,6 +149,7 @@ test('workflow editor', async ({ page }) => {
 })
 
 test('workflow run', async ({ page }) => {
+  withWorkflowRun = true
   await page.setViewportSize({ width: 1440, height: 1300 })
   await visit(page, '/now/flow/brief-wfrun-1', '[data-node="approve"]')
   await shot(page, 'workflow-run')
@@ -192,7 +200,7 @@ test('add coding agent', async ({ page }) => {
   await page.getByRole('button', { name: 'Add agent' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('radio', { name: /Coding agent/ }).check()
-  await expect(dialog.getByLabel('Coding CLI')).toHaveValue('claude-code')
+  await expect(dialog.getByLabel('Kind of coding agent')).toHaveValue('claude-code')
   await dialog.getByLabel(/Agent name/).fill('coder')
   await dialog.getByRole('heading', { name: 'Add agent' }).click()
   await shot(page, 'coding-agent')

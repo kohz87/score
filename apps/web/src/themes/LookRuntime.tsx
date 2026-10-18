@@ -1,14 +1,38 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { DataRouter } from 'react-router'
 import { applyTheme } from '../data/theme.ts'
 import { applyBuiltin, applyCustom, clearLook, isBuiltinTheme, type ColorMode } from './engine.ts'
 import { watchProtectedSurfaces } from './guard.ts'
-import { clearDeviceLook, lookStore, writeDeviceOverride, writeLookCache } from './look-store.ts'
+import {
+  clearDeviceLook,
+  lookStore,
+  readCachedLayout,
+  writeDeviceOverride,
+  writeLookCache,
+} from './look-store.ts'
+import { DEFAULT_LAYOUT, layoutFromCache, setLayout, viewOfPath, type LookView } from './layout.ts'
 import { themeDetailQuery } from './queries.ts'
 import { useLook } from './use-look.ts'
 import { packs } from '../styles/packs.ts'
 import './look.css'
+
+// The layout of the last applied theme, before the first render: the menu and the Now cards start where they were.
+try {
+  setLayout(layoutFromCache(readCachedLayout(viewOfPath(window.location.pathname))))
+} catch {
+  // No window (tests of other modules): the Score default.
+}
+
+/** Which front end this page is (the user view lives at /u), following the router. */
+function useView(router?: DataRouter): LookView {
+  const path = useSyncExternalStore(
+    (notify) => router?.subscribe(notify) ?? (() => undefined),
+    () => router?.state.location.pathname ?? window.location.pathname,
+    () => '/',
+  )
+  return viewOfPath(path)
+}
 
 function systemMode(): ColorMode {
   try {
@@ -64,6 +88,7 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
   const custom = id !== null && !isBuiltinTheme(id)
   const detail = useQuery({ ...themeDetailQuery(id ?? 'score'), enabled: custom })
   const mode = useResolvedMode(look.mode)
+  const view = useView(router)
 
   // Colour mode: this device's choice, else the shared one.
   useEffect(() => {
@@ -71,12 +96,16 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
   }, [look.mode])
 
   useEffect(() => {
+    // The shared theme isn't known yet: the boot cache's look (attributes, token sheet, layout) stays until it is.
+    if (look.loading && !look.safe) return
     if (look.safe || id === null) {
       applyBuiltin('score')
+      setLayout(DEFAULT_LAYOUT)
       return
     }
     if (!custom) {
       applyBuiltin(id)
+      setLayout(DEFAULT_LAYOUT)
       const pack = packs.find((item) => item.id === id) ?? packs[0]
       writeLookCache({
         id,
@@ -92,6 +121,7 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
     if (detail.isPending) return // the boot cache keeps the last look until the theme arrives
     if (detail.isError || !detail.data) {
       applyBuiltin('score')
+      setLayout(DEFAULT_LAYOUT)
       writeLookCache(null)
       lookStore.setFailure('Your theme couldn’t be loaded, so Score is showing its own look.')
       return
@@ -101,13 +131,16 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
       const applied = applyCustom(
         { id, manifest: detail.data.manifest, css: detail.data.css },
         mode,
+        view,
       )
-      writeLookCache({ id, attributes: applied.cache.attributes, css: applied.cache.css })
+      writeLookCache({ id, ...applied.cache, user: applied.userCache })
+      setLayout(applied.layout)
       lookStore.setFailure(null)
       stopWatching = watchProtectedSurfaces(() => {
         // Sticky on this device: reloading must not bring the same theme straight back.
         clearLook()
         applyBuiltin('score')
+        setLayout(DEFAULT_LAYOUT)
         writeLookCache(null)
         writeDeviceOverride('score')
         lookStore.setFailure(
@@ -116,11 +149,22 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
       })
     } catch {
       applyBuiltin('score')
+      setLayout(DEFAULT_LAYOUT)
       writeLookCache(null)
       lookStore.setFailure('Your theme couldn’t be applied, so Score is showing its own look.')
     }
     return () => stopWatching?.()
-  }, [look.safe, id, custom, detail.isPending, detail.isError, detail.data, mode])
+  }, [
+    look.safe,
+    look.loading,
+    id,
+    custom,
+    detail.isPending,
+    detail.isError,
+    detail.data,
+    mode,
+    view,
+  ])
 
   return <LookBanner router={router} safe={look.safe} failure={look.failure} />
 }

@@ -222,3 +222,24 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Fix: per-package `vitest run --maxWorkers=${SCORE_TEST_WORKERS:-4}`, Playwright `workers: SCORE_E2E_WORKERS ?? 4`;
   builders told to check `free -m` (≥ 15 GB) before heavy runs and to cap load generation. After the reboot: live Score
   restarted, then the Hermes gateway (it had parked its connections), both producers re-registered.
+- **8.9 agent page cleanup** merged (Sonnet high builder; first branch through the decision-99 flow). Lead review of
+  the screenshots against docs/design/team.png; Pause for coding agents verified (chat turns and orchestration steps
+  respect `agent_pauses`). **Codex cross-check found 3 real P2s** (docs/reviews/2026-10-18-8.9-codex-crosscheck.md):
+  Cancel kept access/password drafts so a floor-only save could switch to full access; partial pause 502 offered the
+  opposite action; Message linked to /chat before rooms loaded — all fixed in 8.9 #4 with tests failing first.
+  Also fixed on main meanwhile: Tasks filter race (two quick filter changes lost the first; exposed by the faster VM).
+- **Release 1.6.1** (8.9 + Tasks filter race + worker caps + 2.1.302 declaration). Release run by a Haiku monitor
+  (check 258 s, e2e 143 s): contract/web/plugin/license green, e2e 378/381 (2 chat specs pass alone); server: `fix-l`
+  (T1 item) and an in-file race in `coding-workers-release.test.ts` (passes alone; handed to T1). No product cause.
+- **9.3 layout model** merged (Sonnet high). No existing baseline changed; 41 new layout baselines; hostile e2e
+  extended with 7 layout combinations. Codex cross-check: 3 real findings (composer remount on theme switch, inert
+  shell after resetting an open launcher, long menu labels overflowing) fixed in 9.3 #11
+  (docs/reviews/2026-10-18-9.3-codex-crosscheck.md). Its "policy snapshot larger than 4 KB" server failures led to a
+  real fix on main: real snapshots were ~3.5 KB, so longer home/workspace paths broke coding workers; cap now 64 KB.
+- **S1 small design items** merged (no Codex check: small fixes). Watch groups sub-agent steps by the "Sub-agent · "
+  caption prefix (Watch frames carry no parent id; two back-to-back sub-agents can merge into one group — accepted).
+  `pnpm screenshots` repaired (stale fixtures/selectors) and 14 README images refreshed (many were stale since earlier
+  phases). 14 Settings baselines updated (currency inputs 40px). chat-composer "@" menu race found on main → T1.
+- **Release 1.7.0** (9.3 layouts + S1 + worker-policy cap). Haiku monitor: contract 1253, web 1454, plugin 323,
+  license green; server 3 known failures (T1: release-test race, fix-l); e2e 454/465 — chat-attach and live-feel load
+  only, chat-composer "@" race (T1, pre-existing), themes-layout launcher reset passes alone (→ T1).

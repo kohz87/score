@@ -2721,3 +2721,49 @@
   color: var(--ink);
   font-weight: 600;
 }
+
+/* Room list of a theme (PLAN 9.3, html[data-rooms]): `right` is a DOM change (ChatPage), `hidden` shows the Rooms
+   button at every width and opens the list as the drawer the narrow layout uses. */
+:root[data-rooms='hidden'] .chat-list-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 100%;
+  justify-content: center;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+:root[data-rooms='hidden'] .chat-conversations nav {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+/* Message bubbles of a theme (PLAN 9.3, html[data-chat='bubbles']): yours on the right in --bubble-own, the agents'
+   on the left beside their glyph. Plain (Score's own look) never matches. */
+:root[data-chat='bubbles'] .chat-message--you .chat-text {
+  background: var(--bubble-own, var(--ink));
+  color: var(--bubble-own-ink, var(--card));
+}
+:root[data-chat='bubbles'] .chat-message:not(.chat-message--you) > .chat-message-body {
+  flex: 0 1 auto;
+  max-width: min(100%, 720px);
+  padding: var(--space-3) var(--space-4);
+  background: var(--subtle);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-key) var(--radius-22) var(--radius-22) var(--radius-22);
+}
+:root[data-chat='bubbles'] .chat-message:not(.chat-message--you) .chat-message-meta {
+  margin-bottom: var(--space-2);
+}
+:root[data-width='full'] .chat-messages {
+  max-width: none;
+}
+:root[data-width='full'] .user-view .chat-messages {
+  max-width: var(--user-measure);
+}

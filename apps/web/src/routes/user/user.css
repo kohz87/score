@@ -4,6 +4,8 @@
   min-height: 100dvh;
   background: var(--ground);
   color: var(--ink);
+  /* The width of the conversation column; a theme's content width changes it (below). */
+  --user-measure: 820px;
 }
 .user-sidebar {
   flex: 0 0 290px;
@@ -93,10 +95,13 @@
   border-radius: 0;
   background: transparent;
 }
+.user-view .chat-messages {
+  max-width: var(--user-measure);
+}
 .user-view .chat-thread-header {
   border-bottom: 0;
   padding: var(--space-5) 28px var(--space-2);
-  max-width: 820px;
+  max-width: var(--user-measure);
   width: 100%;
   box-sizing: border-box;
   margin: 0 auto;
@@ -106,7 +111,7 @@
 }
 .user-view .chat-composer {
   box-sizing: border-box;
-  max-width: 820px;
+  max-width: var(--user-measure);
   padding: 0 28px var(--space-5);
 }
 .user-view .chat-composer-box {
@@ -118,7 +123,7 @@
   min-height: 3em;
 }
 .user-view .chat-composer-locked {
-  max-width: 820px;
+  max-width: var(--user-measure);
   width: 100%;
   box-sizing: border-box;
   margin: 0 auto;
@@ -132,7 +137,7 @@
   justify-content: center;
   gap: var(--space-5);
   width: 100%;
-  max-width: 820px;
+  max-width: var(--user-measure);
   box-sizing: border-box;
   margin: 0 auto;
   padding: var(--space-6);
@@ -297,7 +302,7 @@
   position: sticky;
   top: var(--space-2);
   z-index: 2;
-  max-width: 764px;
+  max-width: calc(var(--user-measure) - 56px);
   box-sizing: border-box;
   margin: 0 auto var(--space-3);
   width: calc(100% - 56px);
@@ -353,5 +358,23 @@
   /* Full width, so the messages scrolling underneath don't show beside it. */
   .user-view .user-run {
     width: 100%;
+  }
+}
+
+/* A theme's layout for this view (PLAN 9.3: views.user over the shared settings). */
+:root[data-width='narrow'] .user-view {
+  --user-measure: 680px;
+}
+:root[data-width='full'] .user-view {
+  --user-measure: 100%;
+}
+:root[data-rooms='right'] .user-sidebar {
+  border-right: 0;
+  border-left: 1px solid var(--hairline);
+}
+@media (width >= 1024px) {
+  /* Hidden until opened: the Conversations button is on the page at every width. */
+  :root[data-rooms='hidden'] .user-top {
+    display: block;
   }
 }

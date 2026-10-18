@@ -78,7 +78,7 @@ export function ProfileSettings({ agent }: { agent: AgentDetail }) {
       </div>
     )
   return (
-    <div className="team-stack">
+    <div className="team-stack team-section-gap">
       <section className="team-card">
         <h2>Agent details</h2>
         <form
