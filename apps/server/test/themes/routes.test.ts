@@ -663,7 +663,7 @@ test('starting Score after an upgrade moves a theme that has a now built-in id, 
     expect(list.items.find((item) => item.id === 'ledger')!.source).toBe('builtin')
     expect(list.items.find((item) => item.id === 'ledger-mine')).toMatchObject({
       source: 'imported',
-      name: 'seaside',
+      name: 'seaside (yours)',
     })
     const mine = ThemeDetailSchema.parse((await get('/api/themes/ledger-mine')).json())
     expect(mine.assets).toEqual(['fonts/f.woff2', 'img/a.png'])

@@ -274,14 +274,18 @@ export class ThemeStore {
       }
       this.db.tx((sqlite) => {
         let manifestJson = row.manifest_json
+        // "(yours)" tells it apart from the built-in of the same name in the picker.
+        const name = `${row.name.slice(0, 52)} (yours)`
         try {
-          manifestJson = JSON.stringify({ ...JSON.parse(row.manifest_json), id: to })
+          manifestJson = JSON.stringify({ ...JSON.parse(row.manifest_json), id: to, name })
         } catch {
           // A manifest that can't be read keeps its text; the row is still renamed.
         }
         sqlite
-          .prepare('UPDATE themes SET id = ?, manifest_json = ?, updated_at = ? WHERE id = ?')
-          .run(to, manifestJson, this.now(), row.id)
+          .prepare(
+            'UPDATE themes SET id = ?, name = ?, manifest_json = ?, updated_at = ? WHERE id = ?',
+          )
+          .run(to, name, manifestJson, this.now(), row.id)
         sqlite
           .prepare("UPDATE meta SET value = ? WHERE key = 'look.activeTheme' AND value = ?")
           .run(to, row.id)
