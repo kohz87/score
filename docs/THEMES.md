@@ -3,8 +3,8 @@
 A theme changes how Score looks and how its pages are arranged: colours, fonts, corners, spacing, where the navigation
 sits, what Now shows and in which order, how chat messages look, and a picture behind the page. This guide is for the
 person writing one. The rules behind it are in `docs/briefs/9-themes.md` (design) and `docs/API-CONTRACT.md` § 16
-(routes); the fields below are checked against the schema in `packages/contract/src/themes.ts` by a test, so this
-page can’t drift from what Score accepts.
+(routes); the fields below are checked against the schema in `packages/contract/src/themes.ts` by a test
+(`apps/server/test/themes/guide.test.ts`), so this page can’t drift from what Score accepts.
 
 Score ships seven themes: Score, Paper, Night shift and Dense (the original four) and **Harbour**, **Ledger** and
 **Studio**. The last three are ordinary theme packages, so you can export one from `GET /api/themes/<id>/export`, read

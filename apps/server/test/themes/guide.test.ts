@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { z } from 'zod'
-import { THEME_COLOR_TOKENS, ThemeManifestSchema } from '../src/themes.ts'
+import { THEME_COLOR_TOKENS, ThemeManifestSchema } from '@score/contract'
 
 // docs/THEMES.md documents every manifest field and every colour token. This compares the page with the schema, so a
 // field added to (or dropped from) packages/contract/src/themes.ts without a matching row in the guide fails here.
-const root = join(import.meta.dirname, '../../..')
+const root = join(import.meta.dirname, '../../../..')
 const guide = readFileSync(join(root, 'docs/THEMES.md'), 'utf8')
 
 function section(name: string): string {
