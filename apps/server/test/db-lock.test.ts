@@ -68,7 +68,10 @@ test('release leaves a replacement owner intact, including a different acquisiti
 })
 
 test('permission denial on kill does not count as a stale lock', () => {
-  writeFileSync(join(home, 'score.lock'), JSON.stringify({ pid: stalePid, startedAt }))
+  // Started after this boot: a lock older than the boot is stale before the pid is ever checked (a fixed date only
+  // passed on a machine that had been up since before it).
+  const sinceBoot = new Date().toISOString()
+  writeFileSync(join(home, 'score.lock'), JSON.stringify({ pid: stalePid, startedAt: sinceBoot }))
   vi.spyOn(process, 'kill').mockImplementation(() => {
     throw Object.assign(new Error('permission denied'), { code: 'EPERM' })
   })
