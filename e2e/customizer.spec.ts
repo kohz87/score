@@ -510,8 +510,8 @@ test('roles, names and focus order', async ({ page }) => {
       }),
     )
   }
-  // Nothing is changed yet, so Undo, Redo, Discard and Save are off and skipped.
-  expect(order.slice(0, 4)).toEqual(['Settings', 'Save as new…', 'Export', 'Import…'])
+  // Nothing is changed yet, so Undo, Redo and Discard are off and skipped; a new theme can be saved as it is.
+  expect(order.slice(0, 4)).toEqual(['Settings', 'Save', 'Save as new…', 'Export'])
   const unnamed = async () => {
     const snapshot = await page.locator('.cz').ariaSnapshot()
     return snapshot
@@ -580,4 +580,274 @@ test('phone: one pane at a time, nothing wider than the screen', async ({ page }
   await expect(page.getByRole('region', { name: 'Preview' })).toBeVisible()
   await expect(frame(page).locator('.page-content')).toBeVisible({ timeout: 30_000 })
   expect(await over()).toBeLessThanOrEqual(1)
+})
+
+// ---------------------------------------------------------------------------------------------------------------
+// Fix round (Codex cross-check of 9.4)
+
+const importZip = (page: Page, zip: Uint8Array, query = '') =>
+  page.request.post(`/api/themes/import${query}`, {
+    headers: web,
+    multipart: {
+      file: { name: 'theme.zip', mimeType: 'application/zip', buffer: Buffer.from(zip) },
+    },
+  })
+const textOf = (value: string) => new TextEncoder().encode(value)
+const manifestOf = (id: string, name: string, extra: object = {}) =>
+  textOf(JSON.stringify({ format: 1, id, name, version: '1.0.0', ...extra }))
+
+test('edits made while a save is out are kept and stay unsaved', async ({ page }) => {
+  await pair(page)
+  made.add('e2e-slow')
+  try {
+    const manifest = { format: 1, id: 'e2e-slow', name: 'E2E Slow', version: '1.0.0' }
+    expect(
+      (
+        await page.request.put('/api/themes/e2e-slow', {
+          headers: web,
+          data: { manifest, css: '', etag: null },
+        })
+      ).status(),
+    ).toBe(200)
+    await openCustomizer(page, '/settings/look/customize/e2e-slow')
+    await page.route('**/api/themes/e2e-slow', async (route) => {
+      if (route.request().method() === 'PUT')
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      await route.continue()
+    })
+    await tab(page, 'Shape').click()
+    await page
+      .getByRole('radiogroup', { name: 'Borders' })
+      .getByRole('radio', { name: 'Strong' })
+      .click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Saving…' })).toBeVisible()
+    // While the request is out, the person keeps editing.
+    await page
+      .getByRole('radiogroup', { name: 'Shadows' })
+      .getByRole('radio', { name: 'Flat' })
+      .click()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved “E2E Slow”' })).toBeVisible({
+      timeout: 20_000,
+    })
+    await expect(page.getByText('Unsaved changes')).toBeVisible()
+    await expect(
+      page.getByRole('radiogroup', { name: 'Shadows' }).getByRole('radio', { name: 'Flat' }),
+    ).toBeChecked()
+    let stored = await (await page.request.get('/api/themes/e2e-slow')).json()
+    expect(stored.manifest.shape).toEqual({ border: 'strong' })
+    // The edit is still there to save.
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0, { timeout: 20_000 })
+    stored = await (await page.request.get('/api/themes/e2e-slow')).json()
+    expect(stored.manifest.shape).toEqual({ border: 'strong', elevation: 'flat' })
+  } finally {
+    await cleanUp(page)
+  }
+})
+
+test('a package save never overwrites a newer version (If-Match)', async ({ page }) => {
+  await pair(page)
+  made.add('e2e-zip')
+  try {
+    const png = busyPicture()
+    const pkg = (name: string) =>
+      writeZip([
+        [
+          'theme.json',
+          manifestOf('e2e-zip', name, {
+            background: { image: 'asset:img/b.png', fit: 'cover', dim: 0 },
+          }),
+        ],
+        ['assets/img/b.png', new Uint8Array(png)],
+      ])
+    expect((await importZip(page, pkg('E2E Zip'))).status()).toBe(201)
+    await openCustomizer(page, '/settings/look/customize/e2e-zip')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('E2E Zip')
+    // Someone else replaces the theme after it was opened.
+    expect((await importZip(page, pkg('E2E Zip elsewhere'), '?replace=1')).status()).toBe(201)
+    await page.getByLabel('Author').fill('Me')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText('changed somewhere else')
+    const stored = await (await page.request.get('/api/themes/e2e-zip')).json()
+    expect(stored.manifest.name).toBe('E2E Zip elsewhere')
+    expect(stored.manifest.author).toBeUndefined()
+  } finally {
+    await cleanUp(page)
+  }
+})
+
+test('a theme in use says so: Save and apply, with a note', async ({ page }) => {
+  await pair(page)
+  made.add('e2e-inuse')
+  made.add('e2e-idle')
+  try {
+    for (const [id, name] of [
+      ['e2e-inuse', 'E2E In use'],
+      ['e2e-idle', 'E2E Idle'],
+    ])
+      expect(
+        (
+          await page.request.put(`/api/themes/${id}`, {
+            headers: web,
+            data: { manifest: { format: 1, id, name, version: '1.0.0' }, css: '', etag: null },
+          })
+        ).status(),
+      ).toBe(200)
+    const note = page.getByText(/^This theme is in use\./)
+    const save = page.getByRole('button', { name: /^Save( and apply)?$/ })
+    // Not in use: plain Save, no note.
+    await openCustomizer(page, '/settings/look/customize/e2e-idle')
+    await expect(save).toHaveText('Save')
+    await expect(note).toHaveCount(0)
+    // This device uses it.
+    await page.evaluate(() => window.localStorage.setItem('score.look.device', 'e2e-inuse'))
+    await openCustomizer(page, '/settings/look/customize/e2e-inuse')
+    await expect(save).toHaveText('Save and apply')
+    await expect(note).toHaveText('This theme is in use. Saving changes it on this device.')
+    await openCustomizer(page, '/settings/look/customize/e2e-idle')
+    await expect(save).toHaveText('Save')
+    await expect(note).toHaveCount(0)
+    // Every device uses it (the shared theme).
+    await page.evaluate(() => window.localStorage.removeItem('score.look.device'))
+    await page.route('**/api/themes', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue()
+      const response = await route.fetch()
+      const body = await response.json()
+      await route.fulfill({ response, json: { ...body, active: 'e2e-inuse' } })
+    })
+    await openCustomizer(page, '/settings/look/customize/e2e-inuse')
+    await expect(save).toHaveText('Save and apply')
+    await expect(note).toHaveText(
+      'This theme is in use. Saving changes it on every device that uses it.',
+    )
+    // A built-in theme being copied is not "in use": it is a new theme.
+    await openCustomizer(page, '/settings/look/customize/score')
+    await expect(save).toHaveText('Save')
+    await expect(note).toHaveCount(0)
+  } finally {
+    await page.evaluate(() => window.localStorage.removeItem('score.look.device'))
+    await cleanUp(page)
+  }
+})
+
+test('a picture replaced at the same path is a change and is saved', async ({ page }) => {
+  await pair(page)
+  made.add('e2e-swap')
+  try {
+    const first = makePng(40, 40, () => [255, 0, 0])
+    const second = makePng(40, 40, () => [0, 0, 255])
+    await openCustomizer(page)
+    await page.getByLabel('Name', { exact: true }).fill('E2E Swap')
+    await tab(page, 'Background').click()
+    const choose = page.getByRole('tabpanel').locator('input[type=file]')
+    await choose.setInputFiles({ name: 'a.png', mimeType: 'image/png', buffer: first })
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0, { timeout: 20_000 })
+    await tab(page, 'Background').click()
+    await page
+      .getByRole('tabpanel')
+      .locator('input[type=file]')
+      .setInputFiles({ name: 'b.png', mimeType: 'image/png', buffer: second })
+    await expect(page.getByText('Unsaved changes')).toBeVisible()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0, { timeout: 20_000 })
+    const served = await page.request.get('/api/themes/e2e-swap/assets/img/background.png')
+    expect(Buffer.from(await served.body()).equals(second)).toBe(true)
+  } finally {
+    await cleanUp(page)
+  }
+})
+
+test('a copy of Ledger keeps its font and OFL.txt through save, export and import', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  made.add('ledger-copy')
+  try {
+    await openCustomizer(page, '/settings/look/customize/ledger')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Ledger copy')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved “Ledger copy”' })).toBeVisible({
+      timeout: 30_000,
+    })
+    const exported = await page.request.get('/api/themes/ledger-copy/export')
+    const files = await readZip(new Uint8Array(await exported.body()))
+    expect(files.has('OFL.txt')).toBe(true)
+    expect([...files.keys()].filter((name) => name.startsWith('assets/fonts/')).length).toBe(2)
+    const ofl = new TextDecoder().decode(files.get('OFL.txt'))
+    expect(ofl).toBe(
+      new TextDecoder().decode(
+        await (async () => {
+          const original = await readZip(
+            new Uint8Array(await (await page.request.get('/api/themes/ledger/export')).body()),
+          )
+          return original.get('OFL.txt')!
+        })(),
+      ),
+    )
+    // Export from the Customizer carries it too.
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Export' }).click(),
+    ])
+    const fromButton = await readZip(new Uint8Array(readFileSync((await download.path())!)))
+    expect(fromButton.has('OFL.txt')).toBe(true)
+    // Saving again (replace) doesn't drop it.
+    await tab(page, 'Shape').click()
+    await page
+      .getByRole('radiogroup', { name: 'Borders' })
+      .getByRole('radio', { name: 'Strong' })
+      .click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0, { timeout: 30_000 })
+    const again = await readZip(
+      new Uint8Array(await (await page.request.get('/api/themes/ledger-copy/export')).body()),
+    )
+    expect(again.has('OFL.txt')).toBe(true)
+    // The Import dialog accepts a package with OFL.txt.
+    expect((await page.request.delete('/api/themes/ledger-copy', { headers: web })).status()).toBe(
+      204,
+    )
+    await page
+      .locator('input[aria-label="Theme file to import"]')
+      .setInputFiles(await download.path())
+    const dialog = page.getByRole('dialog', { name: /Install “Ledger copy”\?/ })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: 'Install' }).click()
+    await expect(page.getByRole('dialog', { name: 'Ledger copy is installed' })).toBeVisible({
+      timeout: 20_000,
+    })
+    const back = await readZip(
+      new Uint8Array(await (await page.request.get('/api/themes/ledger-copy/export')).body()),
+    )
+    expect(back.has('OFL.txt')).toBe(true)
+  } finally {
+    await page.goto('/settings')
+    await cleanUp(page)
+  }
+})
+
+test('small text on a translucent glass layer is measured against what is behind it', async ({
+  page,
+}) => {
+  await pair(page)
+  await openCustomizer(page)
+  await page
+    .getByRole('radiogroup', { name: 'Preview colours' })
+    .first()
+    .getByRole('radio', { name: 'Dark' })
+    .click()
+  await tab(page, 'Colours').click()
+  await page.getByRole('textbox', { name: 'Page background, colour value' }).fill('#000000')
+  const checks = page.getByRole('region', { name: 'Contrast checks' })
+  // 70% white glass over black, with #b0b0b0 text on it: a computed color(srgb …) background.
+  await tab(page, 'Custom CSS').click()
+  await page.locator('.cm-content').click()
+  await page.keyboard.type(
+    '.top-bar { background: color-mix(in srgb, white 70%, transparent) } .brand-subtitle { color: #b0b0b0 }',
+  )
+  await expect(checks).toContainText('“for Hermes”', { timeout: 20_000 })
+  await expect(checks).toContainText('hard to read over its background')
 })

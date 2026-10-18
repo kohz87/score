@@ -42,6 +42,41 @@ describe('buildFromDraft', () => {
   })
 })
 
+describe('licence files', () => {
+  it('takes the licences of the theme a draft was copied from', async () => {
+    const d = setCss(draft(), '.a { background: url(asset:fonts/f.woff2) }')
+    const built = await buildFromDraft(
+      d,
+      d.manifest,
+      { id: 'ledger', assets: ['fonts/f.woff2'] },
+      async () => Uint8Array.from([1]),
+      async (id) => {
+        expect(id).toBe('ledger')
+        return { 'OFL.txt': 'Open Font License' }
+      },
+    )
+    expect(built.ok && built.pkg.licenses).toEqual({ 'OFL.txt': 'Open Font License' })
+  })
+  it('keeps the licences a draft already holds without asking again', async () => {
+    const d: Draft = { ...draft(), licenses: { LICENSE: 'MIT' } }
+    const built = await buildFromDraft(d, d.manifest, { id: 'x', assets: [] }, never, never)
+    expect(built.ok && built.pkg.licenses).toEqual({ LICENSE: 'MIT' })
+  })
+  it('says so when the licences can’t be read', async () => {
+    const built = await buildFromDraft(
+      draft(),
+      draft().manifest,
+      { id: 'x', assets: [] },
+      never,
+      never,
+    )
+    expect(built).toEqual({
+      ok: false,
+      problems: ['Couldn’t read the licence files of the theme this one comes from. Try again.'],
+    })
+  })
+})
+
 describe('saveRoute', () => {
   const base = { asNew: false, exists: true, source: 'custom' as const, hasFiles: false }
   it('uses PUT for a new or custom theme without files', () => {

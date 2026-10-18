@@ -15,6 +15,7 @@ import { dataUrlFor } from '../../themes/customizer/asset-types.ts'
 import {
   describeSaveError,
   fetchThemeAsset,
+  fetchThemeLicenses,
   installThemeZip,
   loadTheme,
   saveCustomTheme,
@@ -23,6 +24,7 @@ import {
 import { colourFindings, pairProblems, type Finding } from '../../themes/customizer/checks.ts'
 import { defaultColor, manifestFromPack } from '../../themes/customizer/defaults.ts'
 import {
+  afterSave,
   canRedo,
   canUndo,
   discard,
@@ -30,7 +32,6 @@ import {
   emptyManifest,
   freshId,
   isDirty,
-  markSaved,
   redo,
   referencedAssets,
   startHistory,
@@ -360,6 +361,9 @@ export function Customizer() {
     }
   }
 
+  // A theme made here (PUT) never has licence texts; one installed from a package, or a copy of one, may.
+  const licenceReader = target && target.source !== 'custom' ? fetchThemeLicenses : undefined
+
   /** Saves the draft; returns the id it was saved under, or null (the problem is shown). */
   async function persist(options: { asNew?: boolean; name?: string } = {}): Promise<string | null> {
     if (!draft || !target || !history) return null
@@ -371,11 +375,14 @@ export function Customizer() {
     } else if (!target.exists && takenIds.includes(manifest.id)) {
       manifest = { ...manifest, id: freshId(manifest.name, takenIds) }
     }
+    // What is being saved. Whatever is typed while the request is out stays on screen, and stays unsaved.
+    const submitted: Draft = { ...draft, manifest }
     const built = await buildFromDraft(
       draft,
       manifest,
       { id: target.assetSource, assets: target.assets },
       fetchThemeAsset,
+      licenceReader,
     )
     if (!built.ok) {
       setProblem({ kind: 'rejected', text: built.problems.join(' ') })
@@ -393,25 +400,18 @@ export function Customizer() {
       if (route === 'put') {
         detail = await saveCustomTheme(manifest, built.pkg.css, replacing ? target.etag : null)
       } else {
-        if (replacing) {
-          const current = await loadTheme(manifest.id)
-          if (current.etag !== target.etag)
-            throw new ApiError(409, 'etag_mismatch', 'The theme changed elsewhere.')
-        }
-        await installThemeZip(buildThemePackage(built.pkg), { replace: replacing })
+        // The server compares the etag with the stored theme's in the same step as the replace (If-Match).
+        await installThemeZip(buildThemePackage(built.pkg), {
+          replace: replacing,
+          ifMatch: replacing ? target.etag : null,
+        })
         detail = await loadTheme(manifest.id)
       }
     } catch (error) {
       setProblem(describeSaveError(error))
       return null
     }
-    const saved: Draft = { manifest: detail.manifest, css: draft.css, uploads: draft.uploads }
-    setHistory((current) => {
-      if (!current) return current
-      // What was saved may differ from the draft in id and name (Save as new): the draft follows.
-      const followed: Draft = { ...current.present, manifest: detail.manifest }
-      return markSaved(editHistory(current, followed), { ...saved, manifest: detail.manifest })
-    })
+    setHistory((current) => (current ? afterSave(current, submitted, detail.manifest) : current))
     setTarget({
       id: detail.manifest.id,
       exists: true,
@@ -437,7 +437,7 @@ export function Customizer() {
       undo: () => setHistory((h) => (h ? undo(h) : h)),
       redo: () => setHistory((h) => (h ? redo(h) : h)),
       save: () => {
-        if (dirty && !busy) save()
+        if ((dirty || !target?.exists) && !busy) save()
       },
     }
   })
@@ -450,6 +450,7 @@ export function Customizer() {
         draft.manifest,
         { id: target.assetSource, assets: target.assets },
         fetchThemeAsset,
+        licenceReader,
       )
       if (!built.ok) {
         setProblem({ kind: 'rejected', text: built.problems.join(' ') })
@@ -486,6 +487,8 @@ export function Customizer() {
     }
     const bytes = new Uint8Array(await file.arrayBuffer())
     const read = await readThemePackage(bytes)
+    // The dialog says whether a theme with this address exists: ask the server, not a list read a while ago.
+    await queryClient.invalidateQueries({ queryKey: themesKey })
     setCandidate(
       read.ok
         ? { ok: true, name: file.name, bytes, pkg: read.pkg }
@@ -539,6 +542,14 @@ export function Customizer() {
     announce: setStatus,
     report,
   }
+  // Saving a theme that is in use changes it where it is used, like publishing: the bar says so.
+  const inUseShared = target.exists && look.sharedId === target.id
+  const inUseDevice = target.exists && look.deviceId === target.id
+  const inUseNote = inUseShared
+    ? 'This theme is in use. Saving changes it on every device that uses it.'
+    : inUseDevice
+      ? 'This theme is in use. Saving changes it on this device.'
+      : ''
   const shownFindings = findings
   const filesUsed = referencedAssets(draft).length
 
@@ -566,77 +577,86 @@ export function Customizer() {
           <p className="cz-theme-name">
             {draft.manifest.name}
             {dirty && <span className="cz-unsaved"> · Unsaved changes</span>}
+            {!dirty && !target.exists && <span className="cz-unsaved"> · Not saved yet</span>}
           </p>
         </div>
-        <div className="cz-actions" role="toolbar" aria-label="Theme actions">
-          <button
-            type="button"
-            className="cz-btn"
-            disabled={!canUndo(history)}
-            onClick={() => setHistory(undo(history))}
-          >
-            Undo
-          </button>
-          <button
-            type="button"
-            className="cz-btn"
-            disabled={!canRedo(history)}
-            onClick={() => setHistory(redo(history))}
-          >
-            Redo
-          </button>
-          <button
-            type="button"
-            className="cz-btn"
-            disabled={!dirty}
-            onClick={() => {
-              setHistory(discard(history))
-              setStatus('Went back to the saved theme. Undo brings your changes back.')
-            }}
-          >
-            Discard
-          </button>
-          <span className="cz-sep" aria-hidden="true" />
-          <button
-            type="button"
-            className="cz-btn cz-btn--primary"
-            disabled={!dirty || !!busy}
-            onClick={save}
-          >
-            {busy === 'save' ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            type="button"
-            className="cz-btn"
-            disabled={!!busy}
-            onClick={() => setSaveAs(`${draft.manifest.name} copy`.slice(0, 60))}
-          >
-            Save as new…
-          </button>
-          <span className="cz-sep" aria-hidden="true" />
-          <button type="button" className="cz-btn" disabled={!!busy} onClick={exportZip}>
-            Export
-          </button>
-          <button
-            type="button"
-            className="cz-btn"
-            disabled={!!busy}
-            onClick={() => fileInput.current?.click()}
-          >
-            Import…
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".zip,application/zip"
-            hidden
-            aria-label="Theme file to import"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              void pickFile(file)
-            }}
-          />
+        <div className="cz-actions-wrap">
+          {inUseNote && (
+            <p className="cz-inuse" id="cz-inuse">
+              {inUseNote}
+            </p>
+          )}
+          <div className="cz-actions" role="toolbar" aria-label="Theme actions">
+            <button
+              type="button"
+              className="cz-btn"
+              disabled={!canUndo(history)}
+              onClick={() => setHistory(undo(history))}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              className="cz-btn"
+              disabled={!canRedo(history)}
+              onClick={() => setHistory(redo(history))}
+            >
+              Redo
+            </button>
+            <button
+              type="button"
+              className="cz-btn"
+              disabled={!dirty}
+              onClick={() => {
+                setHistory(discard(history))
+                setStatus('Went back to the saved theme. Undo brings your changes back.')
+              }}
+            >
+              Discard
+            </button>
+            <span className="cz-sep" aria-hidden="true" />
+            <button
+              type="button"
+              className="cz-btn cz-btn--primary"
+              disabled={!(dirty || !target.exists) || !!busy}
+              aria-describedby={inUseNote ? 'cz-inuse' : undefined}
+              onClick={save}
+            >
+              {busy === 'save' ? 'Saving…' : inUseNote ? 'Save and apply' : 'Save'}
+            </button>
+            <button
+              type="button"
+              className="cz-btn"
+              disabled={!!busy}
+              onClick={() => setSaveAs(`${draft.manifest.name} copy`.slice(0, 60))}
+            >
+              Save as new…
+            </button>
+            <span className="cz-sep" aria-hidden="true" />
+            <button type="button" className="cz-btn" disabled={!!busy} onClick={exportZip}>
+              Export
+            </button>
+            <button
+              type="button"
+              className="cz-btn"
+              disabled={!!busy}
+              onClick={() => fileInput.current?.click()}
+            >
+              Import…
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".zip,application/zip"
+              hidden
+              aria-label="Theme file to import"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                void pickFile(file)
+              }}
+            />
+          </div>
         </div>
       </header>
 

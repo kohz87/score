@@ -19,6 +19,8 @@ export async function buildFromDraft(
   manifest: ThemeManifest,
   source: { id: string | null; assets: readonly string[] },
   fetchAsset: (id: string, path: string) => Promise<Uint8Array>,
+  /** The licence texts of the theme the draft was opened or copied from (read through its export). */
+  fetchLicenses: (id: string) => Promise<Record<string, string>> = async () => ({}),
 ): Promise<Built> {
   const problems = manifestProblems(manifest)
   const css = sanitiseCss(draft.css).css
@@ -36,8 +38,16 @@ export async function buildFromDraft(
       }
     } else problems.push(`The file “${path}” is used but isn’t there. Add it again or remove it.`)
   }
+  let licenses: Record<string, string> = { ...draft.licenses }
+  if (source.id && Object.keys(licenses).length === 0) {
+    try {
+      licenses = await fetchLicenses(source.id)
+    } catch {
+      problems.push('Couldn’t read the licence files of the theme this one comes from. Try again.')
+    }
+  }
   if (problems.length > 0) return { ok: false, problems }
-  const pkg: ThemePackage = { manifest, css, assets }
+  const pkg: ThemePackage = { manifest, css, assets, licenses }
   if (buildThemePackage(pkg).length > MAX_PACKAGE_BYTES)
     return {
       ok: false,

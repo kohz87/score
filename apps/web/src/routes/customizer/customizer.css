@@ -85,8 +85,19 @@
   color: var(--ink);
   font-weight: 600;
 }
-.cz-actions {
+.cz-actions-wrap {
   margin-left: auto;
+  display: grid;
+  justify-items: end;
+  gap: var(--space-1);
+}
+.cz-inuse {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--agent-saffron-text);
+}
+.cz-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -805,6 +816,11 @@
   }
   .cz-title h1 {
     font-size: 22px;
+  }
+  .cz-actions-wrap {
+    margin-left: 0;
+    width: 100%;
+    justify-items: start;
   }
   .cz-actions {
     margin-left: 0;

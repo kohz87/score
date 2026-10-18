@@ -11,6 +11,8 @@ export type Draft = {
   css: string
   /** Files added in this session, by asset path (`fonts/a.woff2`, `img/background.webp`). */
   uploads: Readonly<Record<string, Uint8Array>>
+  /** Licence texts (`LICENSE`, `OFL.txt`) of the theme this one was opened or copied from; they travel with it. */
+  licenses?: Readonly<Record<string, string>>
 }
 
 type Mutable = ThemeManifest
@@ -378,11 +380,34 @@ export function referencedAssets(draft: Draft): string[] {
   return [...found].sort()
 }
 
+const hashes = new WeakMap<Uint8Array, string>()
+/** A fingerprint of a file's bytes (length and two cheap sums), so a replacement at the same path is a change. */
+export function fingerprint(bytes: Uint8Array): string {
+  let known = hashes.get(bytes)
+  if (known === undefined) {
+    let fnv = 0x811c9dc5
+    let sum = 0
+    for (let i = 0; i < bytes.length; i++) {
+      fnv = Math.imul(fnv ^ bytes[i]!, 0x01000193) >>> 0
+      sum = (sum + bytes[i]! * ((i % 251) + 1)) >>> 0
+    }
+    known = `${bytes.length}:${fnv.toString(16)}:${sum.toString(16)}`
+    hashes.set(bytes, known)
+  }
+  return known
+}
+
+const uploadsKey = (uploads: Draft['uploads']) =>
+  Object.keys(uploads)
+    .sort()
+    .map((path) => `${path}=${fingerprint(uploads[path]!)}`)
+    .join('|')
+
 export function sameDraft(a: Draft, b: Draft): boolean {
   return (
     a.css === b.css &&
     JSON.stringify(a.manifest) === JSON.stringify(b.manifest) &&
-    Object.keys(a.uploads).sort().join('|') === Object.keys(b.uploads).sort().join('|')
+    uploadsKey(a.uploads) === uploadsKey(b.uploads)
   )
 }
 
@@ -494,6 +519,20 @@ export function discard(history: History): History {
 /** The saved theme is now this draft (after Save): the history stays, so Undo still works. */
 export function markSaved(history: History, saved: Draft = history.present): History {
   return { ...history, baseline: saved }
+}
+
+/**
+ * A save finished. `submitted` is what was sent: that is what is saved now, whatever was typed while the request was
+ * out. The draft on screen stays as it is (so those edits aren't lost and "Unsaved changes" stays on if it differs from
+ * what was saved); only the address the theme now has (and, if nothing changed meanwhile, its stored form) is followed.
+ */
+export function afterSave(history: History, submitted: Draft, stored: ThemeManifest): History {
+  const untouched = sameDraft(history.present, submitted)
+  const present: Draft = untouched
+    ? { ...history.present, manifest: stored }
+    : { ...history.present, manifest: { ...history.present.manifest, id: stored.id } }
+  const next = edit(history, present)
+  return markSaved(next, { ...submitted, manifest: stored })
 }
 
 export const canUndo = (history: History) => history.past.length > 0

@@ -10,7 +10,12 @@ export type ThemePackage = {
   css: string
   /** `fonts/x.woff2` -> bytes */
   assets: Map<string, Uint8Array>
+  /** `LICENSE` and `OFL.txt` at the root of the package -> their text (the licence of a font or picture it carries). */
+  licenses: Record<string, string>
 }
+
+export const LICENSE_FILES = ['LICENSE', 'OFL.txt'] as const
+export const MAX_LICENSE_BYTES = 64 * 1024
 export type ReadResult = { ok: true; pkg: ThemePackage } | { ok: false; reasons: string[] }
 
 const ASSET_FILE =
@@ -30,6 +35,7 @@ export async function readThemePackage(bytes: Uint8Array): Promise<ReadResult> {
   const assets = new Map<string, Uint8Array>()
   for (const [name, data] of files) {
     if (name === 'theme.json' || name === 'style.css') continue
+    if ((LICENSE_FILES as readonly string[]).includes(name)) continue
     if (ASSET_FILE.test(name)) assets.set(name.slice('assets/'.length), data)
     else reasons.push(`“${name.slice(0, 60)}” isn’t part of a theme package.`)
   }
@@ -51,6 +57,18 @@ export async function readThemePackage(bytes: Uint8Array): Promise<ReadResult> {
       reasons.push('theme.json isn’t valid JSON.')
     }
   }
+  const licenses: Record<string, string> = {}
+  for (const name of LICENSE_FILES) {
+    const bytes = files.get(name)
+    if (!bytes) continue
+    if (bytes.length > MAX_LICENSE_BYTES) reasons.push(`${name} is larger than 64 KB.`)
+    else
+      try {
+        licenses[name] = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+      } catch {
+        reasons.push(`${name} isn’t valid UTF-8 text.`)
+      }
+  }
   let css = ''
   const cssBytes = files.get('style.css')
   if (cssBytes) {
@@ -65,7 +83,7 @@ export async function readThemePackage(bytes: Uint8Array): Promise<ReadResult> {
       if (!assets.has(path)) reasons.push(`asset:${path} is used but isn’t in the package.`)
   }
   if (reasons.length > 0 || !manifest) return { ok: false, reasons: reasons.slice(0, 8) }
-  return { ok: true, pkg: { manifest, css, assets } }
+  return { ok: true, pkg: { manifest, css, assets, licenses } }
 }
 
 const encoder = new TextEncoder()
@@ -76,6 +94,8 @@ export function buildThemePackage(pkg: ThemePackage): Uint8Array {
     ['theme.json', encoder.encode(`${JSON.stringify(pkg.manifest, null, 2)}\n`)],
   ]
   if (pkg.css.length > 0) files.push(['style.css', encoder.encode(pkg.css)])
+  for (const name of LICENSE_FILES)
+    if (pkg.licenses[name] !== undefined) files.push([name, encoder.encode(pkg.licenses[name])])
   for (const path of [...pkg.assets.keys()].sort())
     files.push([`assets/${path}`, pkg.assets.get(path)!])
   return writeZip(files)

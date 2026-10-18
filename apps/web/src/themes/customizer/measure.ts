@@ -1,4 +1,4 @@
-import { parseColor, type Rgba } from '../color.ts'
+import { parseComputedColor as parseColor, type Rgba } from '../color.ts'
 import { worstRatio } from './checks.ts'
 
 // Measures the text that is really drawn in the preview (PLAN 9.4, lead note 2026-10-18): small text over a picture or

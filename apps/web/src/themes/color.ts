@@ -105,3 +105,112 @@ export function contrastRatio(text: Rgba, background: Rgba): number {
   const [light, dark] = [luminance(fg), luminance(bg)].sort((a, b) => b - a) as [number, number]
   return (light + 0.05) / (dark + 0.05)
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Computed colours
+//
+// getComputedStyle gives back more than the forms a theme may write: a `color-mix()` comes out as `color(srgb r g b / a)`,
+// `oklch()` and `lab()` stay as they are, and so on. The contrast measurement of the Customizer reads these, so a glass
+// card (a translucent colour-mix) is composited instead of skipped.
+
+function encodeSrgb(v: number): number {
+  const x = clamp01(v)
+  return x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055
+}
+function decodeSrgb(v: number): number {
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+}
+type Triple = [number, number, number]
+const mul = (m: number[][], v: Triple): Triple => [
+  m[0]![0]! * v[0] + m[0]![1]! * v[1] + m[0]![2]! * v[2],
+  m[1]![0]! * v[0] + m[1]![1]! * v[1] + m[1]![2]! * v[2],
+  m[2]![0]! * v[0] + m[2]![1]! * v[1] + m[2]![2]! * v[2],
+]
+const XYZ_D65_TO_LINEAR_SRGB = [
+  [3.2409699419, -1.5373831776, -0.4986107603],
+  [-0.9692436363, 1.8759675015, 0.0415550574],
+  [0.0556300797, -0.2039769589, 1.0569715142],
+]
+const LINEAR_P3_TO_XYZ_D65 = [
+  [0.4865709486, 0.2656676932, 0.1982172852],
+  [0.2289745641, 0.6917385218, 0.0792869141],
+  [0, 0.0451133819, 1.0439443689],
+]
+const BRADFORD_D50_TO_D65 = [
+  [0.9554734527, -0.0230985368, 0.0632593086],
+  [-0.0283697069, 1.009995458, 0.0210413989],
+  [0.0123140016, -0.0205076964, 1.3303659366],
+]
+
+function oklabToRgb(l: number, a: number, b: number): Triple {
+  return oklchToRgb(l, Math.hypot(a, b), (Math.atan2(b, a) * 180) / Math.PI)
+}
+
+function labToRgb(l: number, a: number, b: number): Triple {
+  // CIE Lab (D50) -> XYZ (D50) -> D65 -> linear sRGB.
+  const fy = (l + 16) / 116
+  const fx = fy + a / 500
+  const fz = fy - b / 200
+  const inv = (t: number) => (t ** 3 > 216 / 24389 ? t ** 3 : (116 * t - 16) / (24389 / 27))
+  const xyz50: Triple = [
+    (0.3457 / 0.3585) * inv(fx),
+    inv(fy),
+    ((1 - 0.3457 - 0.3585) / 0.3585) * inv(fz),
+  ]
+  const lin = mul(XYZ_D65_TO_LINEAR_SRGB, mul(BRADFORD_D50_TO_D65, xyz50))
+  return [encodeSrgb(lin[0]), encodeSrgb(lin[1]), encodeSrgb(lin[2])]
+}
+
+function hwbToRgb(h: number, w: number, b: number): Triple {
+  if (w + b >= 1) {
+    const grey = w / (w + b)
+    return [grey, grey, grey]
+  }
+  const pure = hslToRgb(h, 1, 0.5)
+  return pure.map((v) => v * (1 - w - b) + w) as Triple
+}
+
+/** Like parseColor, and also reads what the browser reports for computed colours: `color()`, `oklab()`, `lab()`, `lch()`, `hwb()`. */
+export function parseComputedColor(input: string): Rgba | null {
+  const basic = parseColor(input)
+  if (basic) return basic
+  const text = input.trim().toLowerCase()
+  const fn = /^(color|oklab|lab|lch|hwb)\(([^)]*)\)$/.exec(text)
+  if (!fn?.[1] || fn[2] === undefined) return null
+  const parts = fn[2]
+    .replace('/', ' ')
+    .split(/[\s,]+/)
+    .filter(Boolean)
+  const kind = fn[1]
+  let space = ''
+  if (kind === 'color') space = parts.shift() ?? ''
+  if (parts.length < 3 || parts.length > 4) return null
+  const alpha = parts[3] === undefined ? 1 : clamp01(numberOf(parts[3], 1))
+  const num = (i: number, percentScale: number) => {
+    const part = parts[i] ?? '0'
+    return part === 'none' ? 0 : numberOf(part, percentScale)
+  }
+  let rgb: Triple
+  if (kind === 'color') {
+    const c: Triple = [num(0, 1), num(1, 1), num(2, 1)]
+    if (space === 'srgb') rgb = c
+    else if (space === 'srgb-linear') rgb = [encodeSrgb(c[0]), encodeSrgb(c[1]), encodeSrgb(c[2])]
+    else if (space === 'display-p3') {
+      const lin = mul(
+        XYZ_D65_TO_LINEAR_SRGB,
+        mul(LINEAR_P3_TO_XYZ_D65, [decodeSrgb(c[0]), decodeSrgb(c[1]), decodeSrgb(c[2])]),
+      )
+      rgb = [encodeSrgb(lin[0]), encodeSrgb(lin[1]), encodeSrgb(lin[2])]
+    } else return null
+  } else if (kind === 'oklab') rgb = oklabToRgb(clamp01(num(0, 1)), num(1, 0.4), num(2, 0.4))
+  else if (kind === 'lab') rgb = labToRgb(num(0, 100), num(1, 125), num(2, 125))
+  else if (kind === 'lch')
+    rgb = labToRgb(
+      num(0, 100),
+      num(1, 150) * Math.cos((num(2, 360) * Math.PI) / 180),
+      num(1, 150) * Math.sin((num(2, 360) * Math.PI) / 180),
+    )
+  else rgb = hwbToRgb(num(0, 360), clamp01(num(1, 1)), clamp01(num(2, 1)))
+  if (rgb.some((v) => Number.isNaN(v)) || Number.isNaN(alpha)) return null
+  return [clamp01(rgb[0]), clamp01(rgb[1]), clamp01(rgb[2]), alpha]
+}

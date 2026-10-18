@@ -6,6 +6,8 @@ import {
   type ThemeManifest,
 } from '@score/contract'
 import { ApiError, apiFetch } from '../../data/api.ts'
+import { LICENSE_FILES } from './package.ts'
+import { readZip } from './zip.ts'
 
 // The theme API the Customizer uses (contract §16) and nothing else. Failures are put into words here.
 
@@ -29,7 +31,7 @@ export async function loadTheme(id: string): Promise<ThemeDetail> {
 /** Sends a theme zip. `replace` overwrites an installed or custom theme with the same id (never a built-in). */
 export async function installThemeZip(
   bytes: Uint8Array,
-  options: { replace?: boolean } = {},
+  options: { replace?: boolean; ifMatch?: string | null } = {},
 ): Promise<ThemeImportResult> {
   const form = new FormData()
   form.append('file', new Blob([bytes as BlobPart], { type: 'application/zip' }), 'theme.zip')
@@ -37,6 +39,8 @@ export async function installThemeZip(
     await apiFetch(`themes/import${options.replace ? '?replace=1' : ''}`, {
       method: 'POST',
       body: form,
+      // A replace that must not overwrite a newer version: the server compares this with the stored theme's etag.
+      ...(options.replace && options.ifMatch ? { headers: { 'If-Match': options.ifMatch } } : {}),
     }),
   )
 }
@@ -91,4 +95,19 @@ export function describeSaveError(error: unknown): SaveProblem {
       return { kind: 'other', text: 'The theme is too large. Themes can be up to 5 MB.' }
   }
   return { kind: 'other', text: 'Couldn’t reach Score. Check the connection and try again.' }
+}
+
+/** The licence texts of a theme, read from its export (they aren't part of its detail). */
+export async function fetchThemeLicenses(id: string): Promise<Record<string, string>> {
+  const response = await fetch(`/api/themes/${encodeURIComponent(id)}/export`, {
+    credentials: 'same-origin',
+  })
+  if (!response.ok) throw new Error('export')
+  const files = await readZip(new Uint8Array(await response.arrayBuffer()))
+  const out: Record<string, string> = {}
+  for (const name of LICENSE_FILES) {
+    const bytes = files.get(name)
+    if (bytes) out[name] = new TextDecoder('utf-8').decode(bytes)
+  }
+  return out
 }

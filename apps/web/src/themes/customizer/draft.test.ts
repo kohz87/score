@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addFace,
+  afterSave,
   addNowCard,
   canRedo,
   canUndo,
@@ -218,5 +219,50 @@ describe('history', () => {
   it('ignores an edit that changes nothing', () => {
     const h = startHistory(blank())
     expect(edit(h, setColor(h.present, 'light', 'ground', undefined))).toBe(h)
+  })
+})
+
+describe('uploads and saving', () => {
+  it('a file replaced at the same path is a change', () => {
+    const a = setBackgroundImage(blank(), 'asset:img/background.png', Uint8Array.from([1, 2, 3]))
+    let h = startHistory(a)
+    expect(isDirty(h)).toBe(false)
+    const b = setBackgroundImage(h.present, 'asset:img/background.png', Uint8Array.from([1, 2, 4]))
+    h = edit(h, b)
+    expect(isDirty(h)).toBe(true)
+    // The same bytes in a new array are not.
+    h = edit(
+      h,
+      setBackgroundImage(h.present, 'asset:img/background.png', Uint8Array.from([1, 2, 3])),
+    )
+    expect(isDirty(h)).toBe(false)
+  })
+
+  it('edits made while a save was out stay, and stay unsaved', () => {
+    let h = startHistory(blank())
+    h = edit(h, setColor(h.present, 'light', 'ground', '#111111'))
+    const submitted = h.present
+    // The person keeps typing while the request is in flight.
+    h = edit(h, setColor(h.present, 'light', 'card', '#222222'))
+    h = afterSave(h, submitted, submitted.manifest)
+    expect(h.present.manifest.colors?.light).toEqual({ ground: '#111111', card: '#222222' })
+    expect(h.baseline.manifest.colors?.light).toEqual({ ground: '#111111' })
+    expect(isDirty(h)).toBe(true)
+    // With nothing typed meanwhile the draft is simply saved.
+    const clean = afterSave(startHistory(blank()), blank(), blank().manifest)
+    expect(isDirty(clean)).toBe(false)
+  })
+
+  it('a new address is followed even when the draft changed meanwhile', () => {
+    let h = startHistory(blank())
+    const submitted: Draft = {
+      ...h.present,
+      manifest: { ...h.present.manifest, id: 'copy', name: 'Copy' },
+    }
+    h = edit(h, setShape(h.present, 'border', 'strong'))
+    h = afterSave(h, submitted, submitted.manifest)
+    expect(h.present.manifest.id).toBe('copy')
+    expect(h.present.manifest.shape).toEqual({ border: 'strong' })
+    expect(isDirty(h)).toBe(true)
   })
 })
