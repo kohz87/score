@@ -64,6 +64,17 @@ async function unreadable(root: Locator): Promise<string[]> {
       )
       const control = el.matches('button, a[href], input, select, textarea')
       if (!own && !control) continue
+      // Closed on purpose: the content of a collapsed <details> (outside its summary) is not on screen, whatever the
+      // theme does. Chrome gives it no layout box, or none until something forces one, which made this check flaky.
+      const collapsed = (() => {
+        for (let n: Element | null = el; n; n = n.parentElement) {
+          const parent = n.parentElement
+          if (parent instanceof HTMLDetailsElement && !parent.open && n.tagName !== 'SUMMARY')
+            return true
+        }
+        return false
+      })()
+      if (collapsed) continue
       const name = `${el.tagName.toLowerCase()}.${String((el as HTMLElement).className).split(' ')[0]}`
       let opacity = 1
       for (let n: Element | null = el; n; n = n.parentElement) {
