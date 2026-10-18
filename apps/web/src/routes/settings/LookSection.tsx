@@ -1,12 +1,19 @@
-import { useState, type FormEvent } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { DisplayCurrencySchema, type ThemeSummary } from '@score/contract'
+import { useState, type CSSProperties, type FormEvent } from 'react'
+import { Link } from 'react-router'
+import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query'
+import {
+  DisplayCurrencySchema,
+  THEME_COLOR_TOKENS,
+  type ThemeManifest,
+  type ThemeSummary,
+} from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { currencyKey, useDisplayCurrency } from '../../data/currency.ts'
 import '../../components/plugin-cards.css'
 import { isTouchDevice, readSendKey, saveSendKey, type SendKey } from '../../data/send-key.ts'
 import { saveTheme, themeChoices, type ThemeChoice } from '../../data/theme.ts'
 import { packs } from '../../styles/packs.ts'
+import { themeDetailQuery } from '../../themes/queries.ts'
 import { useLook } from '../../themes/use-look.ts'
 import { checkSecurityPassword, passwordCheckProblem } from '../user/ViewSwitch.tsx'
 import { readGuard, saveGuard } from '../user/user-view.ts'
@@ -23,6 +30,21 @@ function previewMode(theme: ThemeChoice): 'light' | 'dark' {
   }
 }
 
+/** The colours a theme sets, as inline custom properties, so its card shows the theme's own look (9.2 follow-up). */
+function ownColours(
+  colors: ThemeManifest['colors'],
+  mode: 'light' | 'dark',
+): CSSProperties | undefined {
+  const set = colors?.[mode] as Record<string, string> | undefined
+  if (!set) return undefined
+  const style: Record<string, string> = {}
+  for (const token of THEME_COLOR_TOKENS) if (set[token]) style[`--${token}`] = set[token]
+  // The accent of the swatch: the theme's own highlight colour, else its bubble colour, else its ink.
+  const accent = set['link-hover'] ?? set['bubble-own'] ?? set['ink']
+  if (accent) style['--look-accent'] = accent
+  return Object.keys(style).length ? (style as CSSProperties) : undefined
+}
+
 function StylePanel({
   mode,
   themes,
@@ -34,10 +56,21 @@ function StylePanel({
   selectedId: string
   onPick: (id: string) => void
 }) {
+  // Themes added to this Score (installed or made in the Customizer) have no pack: their cards read their colours.
+  const own = useQueries({
+    queries: themes
+      .filter((theme) => !packs.some((item) => item.id === theme.id))
+      .map((theme) => themeDetailQuery(theme.id)),
+  })
+  const manifests = new Map(own.map((query) => [query.data?.manifest.id, query.data?.manifest]))
   return (
     <div role="radiogroup" aria-label="Style" className="look-packs">
       {themes.map((theme) => {
         const pack = packs.find((item) => item.id === theme.id)
+        const manifest = manifests.get(theme.id)
+        const themed = ownColours(manifest?.colors, previewMode(mode))
+        const nav = manifest?.layout?.nav
+        const layout = pack?.layout ?? (nav === 'left' || nav === 'right' ? 'side' : 'top')
         return (
           <button
             key={theme.id}
@@ -52,7 +85,8 @@ function StylePanel({
               className="look-pack-preview"
               data-pack={pack?.id ?? 'score'}
               data-theme={previewMode(mode)}
-              data-layout={pack?.layout ?? 'top'}
+              data-layout={layout}
+              style={themed}
               aria-hidden="true"
             >
               <span className="look-pack-nav" />
@@ -126,6 +160,18 @@ function ThemeCard() {
         ))}
       </div>
       <span className="plugins-card-name">Style on this device</span>
+      <div className="look-customize">
+        <Link
+          className="settings-pill look-customize-link"
+          to={`/settings/look/customize/${look.deviceId ?? look.sharedId}`}
+        >
+          Customize…
+        </Link>
+        <span className="settings-muted">
+          Change colours, fonts, layout and more with a live preview. A built-in style is copied
+          first, so it stays as it is.
+        </span>
+      </div>
       <StylePanel
         mode={look.mode}
         themes={look.themes}

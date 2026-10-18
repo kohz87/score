@@ -1048,6 +1048,7 @@
   min-width: 0;
 }
 .look-pack-title {
+  color: var(--look-accent, inherit);
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 15px;
@@ -1076,7 +1077,7 @@
   width: 34px;
   height: 8px;
   border-radius: var(--radius-pill);
-  background: var(--ink);
+  background: var(--look-accent, var(--ink));
 }
 
 .look-check {
@@ -1107,4 +1108,17 @@
   background: var(--card);
   color: var(--ink);
   font: inherit;
+}
+
+/* Look: the way into the Customizer (PLAN 9.4). */
+.look-customize {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.look-customize-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
