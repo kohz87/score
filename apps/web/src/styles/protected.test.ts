@@ -52,7 +52,9 @@ test('every data-protected kind in the markup is one protected.css handles', () 
     for (const match of readFileSync(file, 'utf8').matchAll(/data-protected(?:="([a-z-]*)")?/g))
       kinds.add(match[1] ?? 'any')
   for (const kind of kinds) {
-    if (kind === 'any') continue
+    // `any` and `raised` have no display of their own to assert: raised is lifted above the page like the cards
+    // (position and z-index) without changing how it is laid out.
+    if (kind === 'any' || kind === 'raised') continue
     expect(css, kind).toContain(`[data-protected='${kind}']`)
   }
   expect(kinds.size).toBeGreaterThan(3)

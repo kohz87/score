@@ -82,7 +82,8 @@ main button { -webkit-text-fill-color: transparent; background-image: linear-gra
 .now-asking, .orch-decision, [data-protected] { opacity: 0 !important; transform: scale(0); }
 main { pointer-events: none; }
 body { background: #ffe0e0; }
-.top-bar { position: absolute; inset: 0; z-index: 9999; background: red; }
+/* Pulling the top bar over the page is guardCss.coveringBar: it buries the Settings link, the guard switches it off. */
+.top-bar { z-index: 9999; background: red; }
 `
 
 export const hostileManifest = {

@@ -36,7 +36,7 @@ export function MainNav() {
           className="main-nav-link"
           title={renamed ? title : undefined}
           // Settings is the way back from a theme (gate #8): no theme rule reaches it.
-          {...(path === '/settings' ? { 'data-protected': 'any' } : {})}
+          {...(path === '/settings' ? { 'data-protected': 'raised' } : {})}
         >
           <span className="main-nav-label">{title}</span>
           {path === dotOn && pathname !== '/pair' && <NeedsYouDot />}

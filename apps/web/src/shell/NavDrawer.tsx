@@ -114,7 +114,7 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
                 to={path}
                 className="nav-drawer-link"
                 // Settings is the way back from a theme (gate #8): no theme rule reaches it.
-                {...(path === '/settings' ? { 'data-protected': 'any' } : {})}
+                {...(path === '/settings' ? { 'data-protected': 'raised' } : {})}
               >
                 {title}
                 {path === dotOn && !pairing && <NeedsYouDot />}

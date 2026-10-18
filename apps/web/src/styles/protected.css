@@ -51,6 +51,8 @@
   html[data-look='custom'] [data-protected] :is(:disabled, [aria-disabled='true']) {
     opacity: 0.5 !important;
   }
+  /* Cards sit above the page; `raised` (the Settings link, the menu and palette buttons) gets the same lift without a
+     display of its own, so a theme that drags the top bar over the page can't bury them. */
   html[data-look='custom']
     [data-protected]:not([data-protected='inline']):not([data-protected='inline-flex']):not(
       [data-protected='any']
