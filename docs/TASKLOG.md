@@ -376,3 +376,6 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v1.8.1 deployed** (2026-10-18 18:03 UTC): idle check clean, backup `score-pre-1.8.1-20261018.db` + journal, live
   start, gateway restarted (pid 3901613), both producers re-registered, health 200 on LAN and Tailscale. Morning
   summary: `docs/MORNING-2026-10-19.md`. T5 started: themes-protection #6 hover-rule flake.
+- **T5** merged (test-side): themes-protection #6 hover flake — `unreadable()` measured the first `li` inside the rules
+  card's collapsed `<details>`, which Chrome sometimes leaves without a box; content of a collapsed `<details>` (not its
+  summary) is skipped. 2/20 → 0/20; full e2e 618/618. No product change, no redeploy.
