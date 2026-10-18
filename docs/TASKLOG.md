@@ -345,3 +345,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   the list. 13+2+2 new e2e, all failing first. Merged main: web 2158 unit tests. Note: decision/protection e2e specs
   failed once each under 4-builder load (themes-decisions #1, themes-protection:462), all pass repeated — watch in the
   release run. Codex (high) verification of v1.8.0..main started.
+- **1.8.1 verification** (Codex high): 11 findings closed, 5 partly; V1 (startup guard gap) and V4 (Save as new keeps
+  the draft's files) → L1; V2, V5, V6 fixed by the lead; V3 (parent-symlink race) rejected — same-uid only, nothing
+  gained. Verdicts appended to `docs/reviews/2026-10-19-xaudit-1.8.0.md`.
