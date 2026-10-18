@@ -116,3 +116,30 @@ test('the same fields shown by the theme, or hidden by Score’s own look too, d
     </form>`
   expect(decisionProblem(document.getElementById('go')!)).toBeNull()
 })
+
+// Fourth gate, finding 1: a theme's own font (blank or substituted glyphs) on a field of the decision erases it while
+// its box, colour and contrast stay normal. The decision reads in Score's fonts (protected.css); a theme rule that puts
+// its font back on a field is refused like on a protected surface. A system font is still the theme's choice.
+test('a field of the decision set in the theme’s own font refuses the commit; a system font does not', () => {
+  document.body.innerHTML = `
+    <form data-decision id="form">
+      <label id="label">Agent name <input /></label>
+      <div data-protected="flex"><button id="go">Add coding agent</button></div>
+    </form>`
+  const computed = window.getComputedStyle
+  const fontOf = (family: string) =>
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+      const style = computed.call(window, el, pseudo)
+      if (!theme.on || (el as Element).id !== 'label') return style
+      return new Proxy(style, {
+        get: (target, key) =>
+          key === 'fontFamily' ? family : (Reflect.get(target, key, target) as unknown),
+      })
+    })
+  fontOf('"theme-probe-Blank", "Hanken Grotesk", sans-serif')
+  expect(decisionProblem(document.getElementById('go')!)).toMatch(/theme’s font/)
+  vi.restoreAllMocks()
+  fontOf('Georgia, serif')
+  expect(decisionProblem(document.getElementById('go')!)).toBeNull()
+  vi.restoreAllMocks()
+})

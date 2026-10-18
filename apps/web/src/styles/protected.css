@@ -124,6 +124,15 @@
     position: relative !important;
     z-index: 100 !important;
   }
+  /* A decision's own fields and labels (fourth gate, finding 1) read in Score's fonts too: a font the theme ships could
+     draw blank or different glyphs. Size and weight stay the theme's; a rule aimed at a field with the theme's own font
+     is refused by the guard. */
+  html[data-look='custom'] [data-decision] {
+    font-family: var(--font-body) !important;
+    --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif !important;
+    --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif !important;
+    --font-code: 'JetBrains Mono', ui-monospace, monospace !important;
+  }
   html[data-look='custom'] [data-protected] {
     isolation: isolate !important;
     font-family: var(--font-body) !important;

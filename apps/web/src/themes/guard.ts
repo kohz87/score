@@ -277,7 +277,9 @@ export function contrastVerdict(
 
 /**
  * `context` is a decision's own fields and labels (third gate, finding 1): they are not protected surfaces, so a theme
- * may set them in its own type and sizes, but not hide, fade, cut, cover or blank them. Typography is not judged there.
+ * may set their size, weight and a system font, but not hide, fade, cut, cover or blank them. A font the theme ships is
+ * judged there too (fourth gate, finding 1: blank or substituted glyphs erase a field while its box and contrast stay
+ * normal); the decision reads in Score's fonts (protected.css), so only a theme rule aimed at a field puts one back.
  */
 function worse(on: Snapshot, off: Snapshot, context = false): string | null {
   if (off.rendered && !on.rendered) return 'is not shown'
@@ -289,7 +291,7 @@ function worse(on: Snapshot, off: Snapshot, context = false): string | null {
   if (off.onScreen && !on.onScreen) return 'is pushed off screen'
   if (off.visible > 0.5 && on.visible < off.visible * 0.5) return 'is clipped'
   if (on.covered && !off.covered) return 'is covered'
-  if (!context && on.themeFont && !off.themeFont) return 'is set in the theme’s font'
+  if (on.themeFont && !off.themeFont) return 'is set in the theme’s font'
   if (!context && off.fontSize > 0 && on.fontSize < off.fontSize * 0.5) return 'has tiny text'
   return contrastVerdict(on.contrast, off.contrast, on.large, on.graphic)
 }
