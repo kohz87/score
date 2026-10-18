@@ -49,6 +49,23 @@
     text-transform: none;
     white-space: normal;
   }
+  /* Highlights (third gate, finding 2). A highlight pseudo-element inherits down the tree separately from ordinary
+     styles, so a rule on an ancestor's ::selection reaches selected text in here although the ancestor is outside.
+     The sanitiser and the server refuse every highlight selector (themes/sanitise.ts, theme-css.ts); this is the second
+     wall: selected text in a protected surface is always the system's own highlight pair, on every element of it. */
+  html[data-look='custom'] [data-protected]::selection,
+  html[data-look='custom'] [data-protected] *::selection {
+    color: HighlightText !important;
+    -webkit-text-fill-color: HighlightText !important;
+    background-color: Highlight !important;
+    text-shadow: none !important;
+  }
+  html[data-look='custom'] [data-protected]::target-text,
+  html[data-look='custom'] [data-protected] *::target-text {
+    color: MarkText !important;
+    background-color: Mark !important;
+    text-shadow: none !important;
+  }
   /* The way back and the other controls that sit on a surface a theme paints (a translucent rail over a picture) wear
      an opaque background of their own: measured contrast can't depend on what is behind them. The pair is the
      theme's card and its muted text, which the engine checks at AA and replaces with Score's own when they fail

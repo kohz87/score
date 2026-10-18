@@ -114,3 +114,69 @@ test('re-gate 5: a translucent rail over a black picture leaves the Settings lin
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   await expect(page.locator('.look-banner')).toHaveCount(0)
 })
+
+// Third gate, finding 2: highlight pseudo-elements inherit through the tree separately from ordinary styles, so a rule on
+// the root's ::selection would reach selected approval text although the root is outside every protected surface.
+for (const [name, rule] of [
+  [
+    'the root alone (inherited down)',
+    ':root::selection { color: transparent; background-color: transparent; }',
+  ],
+  [
+    'every element',
+    ':root::selection, body::selection, :root *::selection { color: transparent; background-color: transparent; }',
+  ],
+  [
+    'the text colour as its own background',
+    ':root *::selection { color: #ffffff; background-color: #ffffff; }',
+  ],
+] as const) {
+  test(`third gate 2: a ::selection rule on ${name} can’t blank selected text inside a decision`, async ({
+    page,
+  }) => {
+    await wear(page, { css: '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
+    const card = await startApproval(page)
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    // As if the sanitiser had missed it: an unlayered sheet after it.
+    await page.addStyleTag({ content: rule })
+    const read = await card.evaluate((surface) => {
+      const target = surface.querySelector<HTMLElement>('p, span, b') ?? surface
+      getSelection()!.selectAllChildren(surface)
+      const highlight = getComputedStyle(target, '::selection')
+      const own = getComputedStyle(surface, '::selection')
+      return {
+        text: highlight.color,
+        back: highlight.backgroundColor,
+        surfaceText: own.color,
+        surfaceBack: own.backgroundColor,
+      }
+    })
+    const clear = (value: string) =>
+      /^rgba\(\d+, \d+, \d+, 0\)$/.test(value) || value === 'transparent'
+    expect(clear(read.text)).toBe(false)
+    expect(clear(read.surfaceText)).toBe(false)
+    // The words differ from what is painted behind them while selected.
+    expect(read.text).not.toBe(read.back)
+    expect(read.surfaceText).not.toBe(read.surfaceBack)
+  })
+}
+
+test('third gate 2: the same rule in the theme’s own CSS is dropped by the sanitiser, anywhere on the page', async ({
+  page,
+}) => {
+  await wear(page, {
+    css: '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); } :root::selection, body::selection { color: transparent; background-color: transparent; }',
+  })
+  const card = await startApproval(page)
+  await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+  const read = await card.evaluate((surface) => {
+    getSelection()!.selectAllChildren(document.body)
+    const clear = (value: string) => /^rgba\(\d+, \d+, \d+, 0\)$/.test(value)
+    return {
+      root: clear(getComputedStyle(document.documentElement, '::selection').color),
+      body: clear(getComputedStyle(document.body, '::selection').color),
+      card: clear(getComputedStyle(surface, '::selection').color),
+    }
+  })
+  expect(read).toEqual({ root: false, body: false, card: false })
+})

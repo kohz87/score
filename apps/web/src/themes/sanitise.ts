@@ -4,6 +4,7 @@ import {
   ThemeAssetRefSchema,
   ThemeIdSchema,
   checkThemeDeclaration,
+  checkThemeSelector,
   isAllowedThemeProperty,
   normaliseThemeProperty,
 } from '@score/contract'
@@ -230,6 +231,11 @@ function walkRules(rules: ArrayLike<RuleLike>, context: Context): string[] {
       const selector = rule.selectorText ?? ''
       if (selectorReaches(selector)) {
         drop(context, selector, 'protected_selector')
+        continue
+      }
+      // Highlight pseudo-elements and the other pseudo-elements off the shared list (decision 102, third gate finding 2).
+      if (!checkThemeSelector(selector).ok) {
+        drop(context, selector, 'selector_not_allowed')
         continue
       }
       const { kept, important } = cleanDeclarations(rule.style?.cssText ?? '', context, selector)

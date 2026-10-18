@@ -15,6 +15,8 @@ const reasons: Record<Reason, string> = {
   important: 'A rule using !important was removed.',
   protected_selector:
     'A rule that reaches approvals, security screens or other protected parts was removed.',
+  selector_not_allowed:
+    'A rule on a pseudo-element a theme may not style (such as ::selection) was removed.',
   font_face: '@font-face rules were removed. Add fonts in the Fonts section instead.',
   other_at_rule: 'A rule Score doesn’t support in themes was removed.',
 }

@@ -592,13 +592,86 @@ export function checkThemeDeclaration(name: string, rawValue: string): ThemeDecl
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Selectors: which pseudo-elements a theme may style
+
+/**
+ * The only pseudo-elements a theme's selector may end in (third gate, finding 2). Everything else is refused, named,
+ * including every highlight pseudo (`::selection`, `::highlight()`, `::target-text`, `::spelling-error`,
+ * `::grammar-error`), which inherits down the tree separately from ordinary styles and so reaches selected text inside
+ * a protected surface from a rule on the root, and `::first-line` / `::first-letter`, which a block ancestor lends to
+ * the first line of its descendants. What stays, and why:
+ * - `::before`, `::after`: `content` is not on the allowlist, so a theme's rule can only paint boxes that Score's own
+ *   rules generate; the protected layer turns them off inside protected surfaces.
+ * - `::placeholder`: a field's own hint text; it is not inherited by anything, and the field itself stays vetted.
+ * - `::marker`: a list item's bullet or number; it is not inherited either.
+ * A pseudo-element name that is not listed (a future one included) is refused.
+ */
+export const THEME_CSS_PSEUDO_ELEMENTS: readonly string[] = [
+  'before',
+  'after',
+  'placeholder',
+  'marker',
+]
+
+/** Written with one colon in old CSS; they are pseudo-elements all the same. */
+const LEGACY_PSEUDO_ELEMENTS = new Set(['before', 'after', 'first-line', 'first-letter'])
+
+export type ThemeSelectorVerdict = { ok: true } | { ok: false; pseudo: string; message: string }
+
+/**
+ * Is this selector (a list, or one compound) free of pseudo-elements outside `THEME_CSS_PSEUDO_ELEMENTS`? Strings and
+ * attribute brackets are skipped and a backslash escapes the next character, so only a real `:name` / `::name`
+ * counts. Used by the browser's sanitiser (on the parser's own serialisation) and by the server's scan (on text whose
+ * escapes were already resolved: a refusal there is always safe).
+ */
+export function checkThemeSelector(selector: string): ThemeSelectorVerdict {
+  let quote = ''
+  let bracket = 0
+  for (let i = 0; i < selector.length; i++) {
+    const ch = selector[i]!
+    if (quote) {
+      if (ch === '\\') i++
+      else if (ch === quote) quote = ''
+    } else if (ch === '\\') i++
+    else if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '[') bracket++
+    else if (ch === ']') bracket = Math.max(0, bracket - 1)
+    else if (ch === ':' && bracket === 0) {
+      const double = selector[i + 1] === ':'
+      const start = i + (double ? 2 : 1)
+      const name = /^-?[A-Za-z_\u0080-\uffff][\w\u0080-\uffff-]*/.exec(selector.slice(start))?.[0]
+      if (double) i++
+      if (name === undefined) {
+        // `::` followed by nothing a name can start with: not a selector the parser accepts.
+        if (double) return refusedPseudo('::')
+        continue
+      }
+      const lower = name.toLowerCase()
+      const isElement = double || LEGACY_PSEUDO_ELEMENTS.has(lower)
+      if (isElement && !THEME_CSS_PSEUDO_ELEMENTS.includes(lower))
+        return refusedPseudo(`${double ? '::' : ':'}${lower}`)
+      i = start + name.length - 1
+    }
+  }
+  return { ok: true }
+}
+
+function refusedPseudo(pseudo: string): ThemeSelectorVerdict {
+  return {
+    ok: false,
+    pseudo,
+    message: `${pseudo} can’t be styled by a theme (only ${THEME_CSS_PSEUDO_ELEMENTS.map((name) => `::${name}`).join(', ')})`,
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // Scanning raw CSS text (the server has no CSS engine)
 
 export type ThemeCssFinding = {
   rule: string
   /** The property (normalised) or the at-rule (`@keyframes`) that was refused. */
   property: string
-  reason: ThemeCssRejection | 'at_rule'
+  reason: ThemeCssRejection | 'at_rule' | 'selector_not_allowed'
   message: string
 }
 
@@ -701,7 +774,17 @@ export function scanThemeCss(css: string): ThemeCssFinding[] {
               message: `@${name} isn’t allowed in a theme`,
             })
           }
-        } else block(text)
+        } else {
+          const verdict = checkThemeSelector(text)
+          if (!verdict.ok)
+            findings.push({
+              rule: label(text),
+              property: verdict.pseudo,
+              reason: 'selector_not_allowed',
+              message: verdict.message,
+            })
+          block(text)
+        }
       } else {
         if (text.startsWith('@')) {
           const name = /^@([A-Za-z-]+)/.exec(text)?.[1]?.toLowerCase() ?? ''

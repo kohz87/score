@@ -46,3 +46,60 @@ describe('what stays', () => {
     expect(lines[1]!.why).toMatch(/value isn’t/)
   })
 })
+
+// Third gate, finding 2: highlight pseudo-elements inherit through the tree separately, so a rule on the root's
+// ::selection reaches selected text inside a decision. The shared allowlist refuses them (and every pseudo-element not
+// on its list); a protected cascade layer asserts the trusted colours as the second wall (protected.css).
+describe('third gate finding 2: pseudo-elements', () => {
+  test.each([
+    ':root::selection',
+    'body::selection',
+    ':is(:root, html):has(body)::selection',
+    '*::selection',
+    '.chat-message::selection',
+    ':root::target-text',
+    'textarea::spelling-error',
+    'textarea::grammar-error',
+    ':root::highlight(find)',
+    'body::first-line',
+    'body:first-letter',
+    'div::-webkit-scrollbar',
+    '::file-selector-button',
+  ])('%s is dropped, with its own reason', (selector) => {
+    const css = `${selector} { color: transparent; background-color: transparent; }`
+    const result = sanitiseCss(css, { confine: true })
+    expect(result.css).toBe('')
+    expect(result.report.dropped.map((item) => item.reason)).toEqual(['selector_not_allowed'])
+  })
+
+  test('also inside @media and @layer, and in a list with an ordinary selector', () => {
+    for (const css of [
+      '@media (min-width: 1px) { :root::selection { color: transparent } }',
+      '@layer a { @supports (color: red) { :root::selection { color: transparent } } }',
+      'p, :root::selection { color: transparent }',
+    ]) {
+      const result = sanitiseCss(css, { confine: true })
+      expect(result.css, css).toBe('')
+      expect(
+        result.report.dropped.map((item) => item.reason),
+        css,
+      ).toEqual(['selector_not_allowed'])
+    }
+  })
+
+  test('::before, ::after, ::placeholder and ::marker still pass, kept out of protected subtrees', () => {
+    const result = sanitiseCss(
+      'a::before { color: red } input::placeholder { color: red } li::marker { color: red }',
+      { confine: true },
+    )
+    expect(result.report.dropped).toEqual([])
+    expect(result.css).toContain(`a${OUTSIDE_PROTECTED}::before`)
+    expect(result.css).toContain(`input${OUTSIDE_PROTECTED}::placeholder`)
+    expect(result.css).toContain(`li${OUTSIDE_PROTECTED}::marker`)
+  })
+
+  test('the Customizer explains the removal', () => {
+    const [line] = describeDropped(sanitiseCss(':root::selection { color: red }').report)
+    expect(line!.why).toMatch(/pseudo-element/)
+  })
+})

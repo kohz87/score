@@ -278,6 +278,7 @@ drops these before it is applied, and keeps a report of what was dropped.
 | any `url()` that isn’t `asset:img/…`, `image-set()`, `src()`, `element()`        | Nothing is fetched from, or sent to, another site.                                        |
 | any rule with `!important`                                                       | Protected surfaces win with `!important` in their own layer; a theme can’t compete.       |
 | selectors that name a protected surface (`[data-protected]`, `.chat-approval`, …) | See below.                                                                                |
+| selectors ending in a pseudo-element other than `::before`, `::after`, `::placeholder`, `::marker` (`::selection`, `::highlight()`, `::target-text`, `::spelling-error`, `::grammar-error`, `::first-line`, `::first-letter`, …) | Highlight styles inherit into approvals from a rule on any ancestor; nothing else may reach in that way. |
 | custom properties starting `--agent-`, `--rules-`, `--glyph-` and `--watch-live` | Agent identity and the Rules colours carry meaning.                                       |
 | `@keyframes` and any other at-rule than `@media`, `@supports`, `@container`, `@layer` | Not needed by a theme; motion that starts later is how a rule could hide an approval.    |
 
@@ -310,7 +311,7 @@ reach an approval’s words, its buttons or a glyph’s shape, whatever you writ
 specificity.) Your manifest’s colour tokens still reach them, and what a parent hands down by inheritance does: the
 fonts and colours of their parents. The things that could change how a decision *reads or sits*, such as size, spacing,
 transforms, clipping, positioning and fading, are not on the CSS allowlist at all, so no rule can do them to a parent.
-As a second wall, protected surfaces re-assert their own word spacing, writing direction, text shadows and (below the
+As a second wall, selected text (and a found-text match) in a protected surface is always the system’s own highlight colours, and protected surfaces re-assert their own word spacing, writing direction, text shadows and (below the
 components’ own rules) size, line height, letter spacing, case and wrapping, and the Settings link wears the card colour
 as an opaque background of its own, so a translucent rail over a picture can’t take its contrast away.
 

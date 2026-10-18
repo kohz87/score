@@ -4,6 +4,8 @@ import {
   checkThemeDeclaration,
   isAllowedThemeProperty,
   scanThemeCss,
+  checkThemeSelector,
+  THEME_CSS_PSEUDO_ELEMENTS,
 } from '../src/index.ts'
 
 const ok = (name: string, value: string) =>
@@ -154,5 +156,67 @@ describe('scanThemeCss', () => {
       const found = [...new Set(refused(item.css))].sort()
       expect(found, item.name).toEqual([...item.refused].sort())
     }
+  })
+})
+
+// Third gate, finding 2: pseudo-elements a theme may style are an explicit list; anything else is refused by name.
+describe('theme selectors: pseudo-elements', () => {
+  const pseudo = (selector: string) => {
+    const verdict = checkThemeSelector(selector)
+    return verdict.ok ? null : verdict.pseudo
+  }
+
+  test.each([
+    ['::selection', ':root::selection'],
+    ['::selection', 'p::SELECTION'],
+    ['::selection', ':is(:root, html):has(body)::selection'],
+    ['::highlight', ':root::highlight(mark)'],
+    ['::target-text', '.a::target-text'],
+    ['::spelling-error', 'textarea::spelling-error'],
+    ['::grammar-error', 'textarea::grammar-error'],
+    ['::first-line', 'body::first-line'],
+    [':first-line', 'body:first-line'],
+    [':first-letter', 'p:FIRST-LETTER'],
+    ['::first-letter', 'p::first-letter'],
+    ['::backdrop', 'dialog::backdrop'],
+    ['::-webkit-scrollbar', 'div::-webkit-scrollbar'],
+    ['::part', 'x-y::part(z)'],
+    ['::future-thing', 'a::future-thing'],
+    ['::selection', 'a:not(.b)::selection'],
+    ['::selection', 'a,\nb::selection'],
+  ])('%s is refused in %s', (expected, selector) => {
+    expect(pseudo(selector)).toBe(expected)
+  })
+
+  test('the listed pseudo-elements, pseudo-classes and attribute strings pass', () => {
+    for (const name of THEME_CSS_PSEUDO_ELEMENTS) expect(pseudo(`a::${name}`)).toBeNull()
+    for (const selector of [
+      'a:hover',
+      'a:before',
+      'a:after',
+      'input::placeholder',
+      'li::marker',
+      'a:is(.b, .c):not(:focus)',
+      '[data-x="::selection"]',
+      "a[href='::selection']",
+      '.a\\:\\:selection',
+      ':root',
+    ])
+      expect(pseudo(selector), selector).toBeNull()
+  })
+
+  test('the scan refuses rules by their decoded selector, at any depth', () => {
+    const found = (css: string) =>
+      scanThemeCss(css)
+        .filter((finding) => finding.reason === 'selector_not_allowed')
+        .map((finding) => finding.property)
+    expect(found(':root::selection { color: red }')).toEqual(['::selection'])
+    expect(found(':root::selec\\74 ion { color: red }')).toEqual(['::selection'])
+    expect(
+      found('@media (min-width: 1px) { @layer x { a::highlight(b) { color: red } } }'),
+    ).toEqual(['::highlight'])
+    expect(found('.a { color: red; &::selection { color: red } }')).toEqual(['::selection'])
+    expect(found('a::before { color: red } a::placeholder { color: red }')).toEqual([])
+    expect(found('/* ::selection */ a { color: red }')).toEqual([])
   })
 })

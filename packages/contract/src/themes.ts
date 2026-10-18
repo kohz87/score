@@ -262,6 +262,7 @@ export const ThemeSanitiseReportSchema = z.object({
         'value_not_allowed',
         'important',
         'protected_selector',
+        'selector_not_allowed',
         'font_face',
         'other_at_rule',
       ]),
