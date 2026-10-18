@@ -51,6 +51,29 @@ async function open(page: Page, target: (typeof pages)[number], width: number) {
   await expect(page.getByText(/^Loading/)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await expect(page.locator('html[data-motion]')).toHaveCount(0)
+  if (target.name === 'chat') await settleThread(page)
+}
+
+/**
+ * The thread opens scrolled to its end, and the composer and fonts settle a moment later. Wait until the offset and
+ * the sizes stop moving, and require the thread to be at its very end: the last lines must not sit behind the composer.
+ */
+async function settleThread(page: Page) {
+  const thread = page.locator('.chat-scroll').first()
+  let last = ''
+  await expect
+    .poll(async () => {
+      const now = await thread.evaluate(
+        (el) => `${el.scrollTop}/${el.scrollHeight}/${el.clientHeight}`,
+      )
+      await page.waitForTimeout(100)
+      const steady = now === last
+      last = now
+      return steady
+    })
+    .toBe(true)
+  const hidden = await thread.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)
+  expect(hidden).toBeLessThanOrEqual(1)
 }
 
 for (const pack of packs) {

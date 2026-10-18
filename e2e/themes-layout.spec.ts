@@ -251,7 +251,8 @@ test.describe('content width', () => {
     expect(narrow.width).toBeLessThanOrEqual(962)
     expect(Math.abs(narrow.x - (1440 - narrow.x - narrow.width))).toBeLessThanOrEqual(2)
     await open(page, t.full)
-    expect((await box(page, 'main')).width).toBeGreaterThan(1400)
+    // The page is already in a custom look from the narrow theme, so `open` cannot tell when the full theme has replaced it.
+    await expect.poll(async () => (await box(page, 'main')).width).toBeGreaterThan(1400)
   })
 
   test('wide is today’s width', async ({ browser }) => {
