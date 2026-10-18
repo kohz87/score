@@ -191,6 +191,14 @@ async function answer(page: Page, posts: { path: string; body: unknown }[] = [])
     url.searchParams.delete('fresh')
     const key = `${url.pathname}${url.search}`
     const fixture = fixtures[key]
+    // Tabs of the agent are only opened here, not shot: they may fail to load without upsetting the test.
+    if (fixture === undefined && /^\/api\/agents\/builder\//.test(key)) {
+      await route.fulfill({
+        status: 404,
+        json: { error: { code: 'not_found', message: 'Not in this test' } },
+      })
+      return
+    }
     expect(fixture, `Missing fixture: ${key}`).toBeDefined()
     await route.fulfill({ json: fixture })
   })
