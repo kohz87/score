@@ -21,7 +21,6 @@ const MAX_RATIO = 100
 const RATIO_FLOOR_BYTES = 64 * 1024
 const FOLDERS = new Set(['assets', 'assets/fonts', 'assets/img'])
 
-
 export class ThemeRejected extends Error {
   constructor(readonly reasons: string[]) {
     super(reasons.join('; '))
@@ -82,6 +81,15 @@ function declaredEntryCount(bytes: Buffer): number {
   for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 0xffff); at -= 1)
     if (bytes.readUInt32LE(at) === 0x06054b50) return bytes.readUInt16LE(at + 10)
   return 0
+}
+
+/** NUL and the other control characters, except tab and the line breaks. */
+function hasControlCharacter(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i)
+    if ((code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127) return true
+  }
+  return false
 }
 
 function pathProblem(raw: string): string | null {
@@ -253,8 +261,7 @@ export async function readThemePackage(bytes: Buffer): Promise<ThemePackage> {
     try {
       const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '')
       // Plain text only: no NUL or other control characters besides tab and line breaks.
-      if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text))
-        reasons.add(`${name} isn’t plain text`)
+      if (hasControlCharacter(text)) reasons.add(`${name} isn’t plain text`)
       else licenses[name] = text
     } catch {
       reasons.add(`${name} isn’t valid UTF-8 text`)
