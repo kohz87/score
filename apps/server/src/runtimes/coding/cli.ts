@@ -12,6 +12,11 @@ export interface CliLocatorOptions {
   /** How long a version reading is reused. */
   cacheMs?: number
   clock?: () => number
+  /**
+   * How long `--version` may take before the CLI counts as not reporting one (default 10 s; 60 s with a fake CLI,
+   * which is a Node script whose start-up alone can take seconds on a machine busy with other test runs).
+   */
+  probeTimeoutMs?: number
   /** Fake mode without a fake CLI: no CLI is ever started; every one reports this reason. */
   disabled?: string
 }
@@ -120,7 +125,12 @@ export class CliLocator {
       execFile(
         file,
         [...args, '--version'],
-        { env: this.childEnv(), timeout: 10_000, maxBuffer: 64 * 1024, windowsHide: true },
+        {
+          env: this.childEnv(),
+          timeout: this.options.probeTimeoutMs ?? (this.fake ? 60_000 : 10_000),
+          maxBuffer: 64 * 1024,
+          windowsHide: true,
+        },
         (error, stdout) => {
           if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT')
             return resolve({
