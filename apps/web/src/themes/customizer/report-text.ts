@@ -8,9 +8,10 @@ const reasons: Record<Reason, string> = {
   external_url:
     'A web address in url() was removed. Only the theme’s own files (asset:…) can be used.',
   content: 'The content property was removed.',
-  fixed_position: 'position: fixed and sticky were removed.',
-  z_index: 'A z-index above 50 was removed.',
-  pointer_events: 'A property that changes how the page reacts to clicks or typing was removed.',
+  property_not_allowed:
+    'This property isn’t on the list a theme may change (colours, backgrounds, borders, shadows, fonts and a few more), so it was removed. Layout comes from the Layout section.',
+  value_not_allowed:
+    'The property is allowed, but this value isn’t, so the declaration was removed.',
   important: 'A rule using !important was removed.',
   protected_selector:
     'A rule that reaches approvals, security screens or other protected parts was removed.',
@@ -20,8 +21,20 @@ const reasons: Record<Reason, string> = {
 
 export type DroppedLine = { rule: string; why: string }
 
+/** The property a dropped declaration named (`.a { word-spacing }` or `.a { color: url(x) }`), if the label has one. */
+function propertyOf(rule: string): string | null {
+  const match = /\{\s*(--[\w-]+|[a-z-]+)\s*(?::[^}]*)?\}\s*$/i.exec(rule)
+  return match ? match[1]! : null
+}
+
 export function describeDropped(report: ThemeSanitiseReport): DroppedLine[] {
-  return report.dropped.map((item) => ({ rule: item.rule, why: reasons[item.reason] }))
+  return report.dropped.map((item) => {
+    const property = item.reason === 'property_not_allowed' ? propertyOf(item.rule) : null
+    return {
+      rule: item.rule,
+      why: property ? `\`${property}\`: ${reasons[item.reason]}` : reasons[item.reason],
+    }
+  })
 }
 
 export function reportSummary(report: ThemeSanitiseReport): string {

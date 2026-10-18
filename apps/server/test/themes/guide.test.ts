@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { z } from 'zod'
-import { THEME_COLOR_TOKENS, ThemeManifestSchema } from '@score/contract'
+import { THEME_COLOR_TOKENS, THEME_CSS_ALLOWED, ThemeManifestSchema } from '@score/contract'
 
 // docs/THEMES.md documents every manifest field and every colour token. This compares the page with the schema, so a
 // field added to (or dropped from) packages/contract/src/themes.ts without a matching row in the guide fails here.
@@ -112,5 +112,14 @@ describe('the example in docs/THEMES.md', () => {
     expect(blocks.some((block) => JSON.stringify(JSON.parse(block)) === JSON.stringify(file))).toBe(
       true,
     )
+  })
+})
+
+describe('the CSS allowlist section', () => {
+  test('names every property of the allowlist, so the guide and the checks stay the same', () => {
+    const missing = THEME_CSS_ALLOWED.flatMap((group) => group.properties).filter(
+      (name) => !guide.includes(`\`${name}\``),
+    )
+    expect(missing).toEqual([])
   })
 })

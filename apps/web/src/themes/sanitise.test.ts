@@ -14,11 +14,15 @@ describe('sanitiseCss', () => {
     expect(reasons('@import url("https://x.test/a.css"); a { color: red }')).toEqual(['import'])
     expect(reasons('a { background: url(https://x.test/a.png) }')).toEqual(['external_url'])
     expect(reasons('a::after { content: "Approve" }')).toEqual(['content'])
-    expect(reasons('a { position: fixed }')).toEqual(['fixed_position'])
-    expect(reasons('a { position: sticky; top: 0 }')).toEqual(['fixed_position'])
-    expect(reasons('a { z-index: 51 }')).toEqual(['z_index'])
-    expect(reasons('a { z-index: var(--x) }')).toEqual(['z_index'])
-    expect(reasons('a { pointer-events: none }')).toEqual(['pointer_events'])
+    expect(reasons('a { position: fixed }')).toEqual(['property_not_allowed'])
+    expect(reasons('a { position: sticky; top: 0 }')).toEqual([
+      'property_not_allowed',
+      'property_not_allowed',
+    ])
+    expect(reasons('a { z-index: 51 }')).toEqual(['property_not_allowed'])
+    expect(reasons('a { z-index: var(--x) }')).toEqual(['property_not_allowed'])
+    expect(reasons('a { pointer-events: none }')).toEqual(['property_not_allowed'])
+    expect(reasons('a { color: var(--x) }')).toEqual(['value_not_allowed'])
     expect(reasons('a { color: red !important }')).toEqual(['important'])
     expect(reasons('[data-protected] { opacity: 0 }')).toEqual(['protected_selector'])
     expect(reasons('.chat-approval button { display: none }')).toEqual(['protected_selector'])
@@ -56,7 +60,7 @@ describe('sanitiseCss', () => {
   test('keeps the safe declarations of a rule and drops the rest', () => {
     const result = sanitiseCss('.x { color: blue; z-index: 999; margin: 4px }')
     expect(result.css).toContain('color: blue')
-    expect(result.css).toContain('margin: 4px')
+    expect(result.css).not.toContain('margin')
     expect(result.css).not.toContain('z-index')
   })
 
@@ -77,8 +81,8 @@ describe('sanitiseCss', () => {
     expect(result.css).not.toContain('pointer-events')
     expect(result.css).toContain('.b { color: green; }')
     expect(result.report.dropped.map((item) => item.reason).sort()).toEqual([
-      'fixed_position',
-      'pointer_events',
+      'property_not_allowed',
+      'property_not_allowed',
       'protected_selector',
     ])
   })
@@ -94,9 +98,13 @@ describe('sanitiseCss', () => {
 
   test('refuses the protected layer and agent identity or rules colours', () => {
     expect(reasons('@layer score-protected { a { color: red } }')).toEqual(['protected_selector'])
-    expect(reasons(':root { --agent-violet: #fff; --rules-never: #fff; --ground: #fff }')).toEqual([
-      'protected_selector',
-      'protected_selector',
+    expect(
+      reasons(':root { --agent-violet: #fff; --rules-never: #fff; --link-hover: #fff }'),
+    ).toEqual(['protected_selector', 'protected_selector'])
+    // The pairs a protected surface draws are set in the manifest, where the contrast check sees them.
+    expect(reasons(':root { --ground: #fff; --ink: #000 }')).toEqual([
+      'property_not_allowed',
+      'property_not_allowed',
     ])
   })
 
@@ -145,7 +153,7 @@ describe('confining theme rules to the outside of protected subtrees (gate #3, #
   })
 
   test('sanitiseCss confines on request only, and nested rules too', () => {
-    const css = 'svg path { fill: red } .card { color: blue; & .x { color: red } }'
+    const css = 'svg path { color: red } .card { color: blue; & .x { color: red } }'
     expect(sanitiseCss(css).css).not.toContain('data-protected')
     const confined = sanitiseCss(css, { confine: true }).css
     expect(confined).toContain(`svg path${guard} {`)
@@ -161,18 +169,18 @@ describe('confining theme rules to the outside of protected subtrees (gate #3, #
 
   test('animation, transition and keyframes are dropped (gate #6)', () => {
     expect(reasons('@keyframes fade { to { opacity: 0 } }')).toEqual(['other_at_rule'])
-    expect(reasons('.a { animation: fade 1s 3s forwards }')).toEqual(['other_at_rule'])
+    expect(reasons('.a { animation: fade 1s 3s forwards }')).toEqual(['property_not_allowed'])
     expect(reasons('.a { animation-name: score-fade-in; animation-delay: 3s }')).toEqual([
-      'other_at_rule',
-      'other_at_rule',
+      'property_not_allowed',
+      'property_not_allowed',
     ])
     expect(reasons('.a { -webkit-animation: x 1s; transition: opacity 1s }')).toEqual([
-      'other_at_rule',
-      'other_at_rule',
+      'property_not_allowed',
+      'property_not_allowed',
     ])
     expect(reasons('.a { transition-property: opacity; transition-delay: 2s }')).toEqual([
-      'other_at_rule',
-      'other_at_rule',
+      'property_not_allowed',
+      'property_not_allowed',
     ])
     const kept = sanitiseCss(
       '.a { animation: fade 1s; color: red } @keyframes fade { to { opacity: 0 } }',
@@ -182,6 +190,6 @@ describe('confining theme rules to the outside of protected subtrees (gate #3, #
   })
 
   test('a theme can’t replace the geometry of a path', () => {
-    expect(reasons('path { d: path("M0 0 L1 1") }')).toEqual(['pointer_events'])
+    expect(reasons('path { d: path("M0 0 L1 1") }')).toEqual(['property_not_allowed'])
   })
 })

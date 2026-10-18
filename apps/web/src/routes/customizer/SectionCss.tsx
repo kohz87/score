@@ -1,3 +1,4 @@
+import { THEME_CSS_ALLOWED } from '@score/contract'
 import { CodeEditor } from '../../components/CodeEditor.tsx'
 import { describeDropped, reportSummary } from '../../themes/customizer/report-text.ts'
 import { setCss } from '../../themes/customizer/draft.ts'
@@ -13,8 +14,20 @@ export function SectionCss({ draft, edit, report }: SectionContext) {
       <p className="cz-note">
         Free CSS for anything the other sections can’t reach. It goes through the same checks as an
         installed theme: the checks run as you type, and whatever they remove is listed below. A
-        theme’s CSS can’t reach approvals or security screens.
+        theme’s CSS can’t reach approvals or security screens, and it can only change how things
+        look: colours, backgrounds, borders, shadows, fonts and opacity. Where things sit and how
+        big they are comes from the Layout section.
       </p>
+      <details className="cz-note cz-allowed">
+        <summary>What a declaration may set</summary>
+        <ul>
+          {THEME_CSS_ALLOWED.map((group) => (
+            <li key={group.group}>
+              <strong>{group.group}:</strong> <code>{group.properties.join(', ')}</code>
+            </li>
+          ))}
+        </ul>
+      </details>
       <div className="cz-code">
         <CodeEditor
           value={draft.css}

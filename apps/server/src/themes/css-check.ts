@@ -3,6 +3,8 @@
 // CSS that matches is rejected, never edited. Escapes and comments are resolved first so `\63 ontent`, `u\72l(` and
 // `con/**/tent` are caught.
 
+import { scanThemeCss } from '@score/contract'
+
 export const MAX_THEME_CSS_BYTES = 262_144
 
 /** `asset:` paths a stylesheet may name: the same shape as `ThemeAssetRefSchema`, without the prefix. */
@@ -44,12 +46,7 @@ const PROPERTY = (name: string, value = '') => new RegExp(`(?:^|[{};\\s])${name}
 const RULES: { reason: string; test: RegExp }[] = [
   { reason: '@import is not allowed', test: /@import/i },
   { reason: '@namespace is not allowed', test: /@namespace/i },
-  { reason: 'the content property is not allowed', test: PROPERTY('content') },
   { reason: '!important is not allowed', test: /!\s*important/i },
-  {
-    reason: 'position: fixed and sticky are not allowed',
-    test: PROPERTY('position', '\\s*(?:-webkit-)?(?:fixed|sticky)'),
-  },
   { reason: 'expression() is not allowed', test: /expression\s*\(/i },
   { reason: 'behavior is not allowed', test: PROPERTY('behavior') },
   { reason: '-moz-binding is not allowed', test: /-moz-binding/i },
@@ -92,6 +89,8 @@ export interface CssCheck {
 
 export function checkThemeCss(css: string): CssCheck {
   const reasons = new Set<string>()
+  // The visual-only allowlist (decision 102), shared with the browser's sanitiser: anything off it is refused, named.
+  for (const finding of scanThemeCss(css)) reasons.add(`${finding.message} (${finding.rule})`)
   const assets = new Set<string>()
   if (Buffer.byteLength(css) > MAX_THEME_CSS_BYTES)
     reasons.add(`style.css is larger than ${MAX_THEME_CSS_BYTES / 1024} KB`)

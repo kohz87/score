@@ -309,7 +309,7 @@ describe('manifest and CSS in a package', () => {
   test('CSS the server refuses rejects the package, with the file named', async () => {
     await rejected(
       { ...base, 'style.css': 'a::before{\\63 ontent:"x"}' },
-      /style.css: the content property/,
+      /style.css: content can’t be set by a theme/,
     )
     await rejected({ ...base, 'style.css': '@import "x.css";' }, /style.css: @import/)
   })
