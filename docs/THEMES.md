@@ -163,8 +163,6 @@ can’t change them.
 | `tasks-note`          | Notes on a finished task.                                                                        |
 | `profile-dashed`      | The dashed outline of the “Add agent” tile.                                                      |
 | `profile-add-ink`     | The text of that tile.                                                                           |
-| `halo-glow`           | Reserved. Score draws the halo round a running step with a size, not a colour: leave it out.     |
-| `halo-ring`           | Reserved, as `halo-glow`.                                                                        |
 | `watch-stage`         | The stage behind a Watch replay.                                                                 |
 | `watch-window`        | The replayed window, and the terminal.                                                           |
 | `watch-text`          | Text inside a Watch replay.                                                                      |

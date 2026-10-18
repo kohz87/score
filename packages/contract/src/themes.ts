@@ -48,8 +48,6 @@ export const THEME_COLOR_TOKENS = [
   'tasks-note',
   'profile-dashed',
   'profile-add-ink',
-  'halo-glow',
-  'halo-ring',
   'watch-stage',
   'watch-window',
   'watch-text',

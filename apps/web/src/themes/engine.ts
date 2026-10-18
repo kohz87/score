@@ -14,7 +14,7 @@ import { sanitiseCss } from './sanitise.ts'
 // The theme engine (PLAN 9.2, design docs/briefs/9-themes.md §6): a manifest becomes <html> attributes, a generated
 // token sheet, namespaced @font-face rules, a background and the theme's own sanitised CSS. Everything lands in
 // adopted style sheets, which the cascade orders after every stylesheet of the app, so Score's CSS stays unlayered
-// and the default look stays exactly as it was. Only the 40 public colour tokens are ever written.
+// and the default look stays exactly as it was. Only the public colour tokens are ever written.
 
 export type ColorMode = 'light' | 'dark'
 
