@@ -7,6 +7,7 @@ import { ThemeManifestSchema } from '@score/contract'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { ThemeRejected, readThemePackage } from '../../src/themes/package.ts'
 import { ThemeStore } from '../../src/themes/store.ts'
+import { buildZip, unicodePathExtra } from '@score/contract/test/theme-package-zip'
 import { manifestJson, rawZip } from './helpers.ts'
 
 // Gate finding #1: the central directory names the files a reader previews; the local headers are what JSZip reads.
@@ -76,6 +77,48 @@ describe('local headers and the central directory must agree', () => {
       { name: 'Theme.json', data: swapped },
     ])
     expect(await reasonsOf(bytes)).toMatch(/twice|duplicate|not part/i)
+  })
+})
+
+// Gate re-gate finding 1: an Info-ZIP Unicode Path extra field (0x7075) renames an entry for JSZip while the raw header
+// names stay as they were, so the structure check passed and the installed theme was not the one that was reviewed.
+describe('Unicode path extra fields cannot rename an entry', () => {
+  const other = manifestJson({ id: 'other-theme', name: 'Other' })
+  // The raw names are `theme.json` (reviewed) and `OFL.txt` (a second manifest, valid licence text). A reader that
+  // honours the overrides sees `LICENSE` and `theme.json` (other-theme) instead, so the two readers disagreed.
+  const crafted = () =>
+    Buffer.from(
+      buildZip([
+        {
+          name: 'theme.json',
+          data: manifestJson({ id: 'reviewed', name: 'Reviewed' }),
+          centralExtra: unicodePathExtra('theme.json', 'LICENSE'),
+          localExtra: unicodePathExtra('theme.json', 'LICENSE'),
+        },
+        {
+          name: 'OFL.txt',
+          data: other,
+          centralExtra: unicodePathExtra('OFL.txt', 'theme.json'),
+          localExtra: unicodePathExtra('OFL.txt', 'theme.json'),
+        },
+      ]),
+    )
+
+  test('the server reader refuses the package', async () => {
+    expect(await reasonsOf(crafted())).toMatch(/extra|name/i)
+  })
+
+  test('an override that only appears in the local header is refused too', async () => {
+    const bytes = Buffer.from(
+      buildZip([
+        {
+          name: 'theme.json',
+          data: reviewed,
+          localExtra: unicodePathExtra('theme.json', 'theme.json'),
+        },
+      ]),
+    )
+    expect(await reasonsOf(bytes)).toMatch(/extra|name/i)
   })
 })
 

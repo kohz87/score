@@ -677,6 +677,56 @@ test('a package save never overwrites a newer version (If-Match)', async ({ page
   }
 })
 
+// Re-gate finding 7: the etag the editor holds after a package save must be the one of the version it just wrote, not
+// whatever a read-back finds. Another writer lands between the save and anything the client does next.
+test('a writer landing right after a package save is not overwritten by the next save', async ({
+  page,
+}) => {
+  await pair(page)
+  made.add('e2e-race')
+  try {
+    const png = busyPicture()
+    const pkg = (name: string) =>
+      writeZip([
+        [
+          'theme.json',
+          manifestOf('e2e-race', name, {
+            background: { image: 'asset:img/b.png', fit: 'cover', dim: 0 },
+          }),
+        ],
+        ['assets/img/b.png', new Uint8Array(png)],
+      ])
+    expect((await importZip(page, pkg('E2E Race'))).status()).toBe(201)
+    await openCustomizer(page, '/settings/look/customize/e2e-race')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('E2E Race')
+    let intervened = false
+    await page.route('**/api/themes/import**', async (route) => {
+      const response = await route.fetch()
+      // The save has committed; now another writer replaces the package, before the editor does anything else.
+      if (!intervened) {
+        intervened = true
+        expect((await importZip(page, pkg('E2E Race elsewhere'), '?replace=1')).status()).toBe(201)
+      }
+      await route.fulfill({ response })
+    })
+    await page.getByLabel('Author').fill('Me')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Saved “' })).toBeVisible({
+      timeout: 20_000,
+    })
+    expect(intervened).toBe(true)
+    // The next save must be refused: the editor never loaded the other writer's version.
+    await page.getByLabel('Author').fill('Me again')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText('changed somewhere else')
+    const stored = await (await page.request.get('/api/themes/e2e-race')).json()
+    expect(stored.manifest.name).toBe('E2E Race elsewhere')
+    expect(stored.manifest.author).toBeUndefined()
+  } finally {
+    await cleanUp(page)
+  }
+})
+
 test('a theme in use says so: Save and apply, with a note', async ({ page }) => {
   await pair(page)
   made.add('e2e-inuse')

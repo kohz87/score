@@ -2234,7 +2234,10 @@ one of these three ids are renamed at the first start (migration 0075 and a star
 move, and every replace of a theme's asset folder, is written down (`theme_swaps`, migration 0076) before any file moves
 and erased in the transaction that commits the row. After a failed or interrupted replace the previous folder is back
 (at once, or at the next start); an interrupted move is finished with the recorded id, never one guessed from which
-folders exist; a folder that already exists is never a free id.
+folders exist; a folder that already exists is never a free id. While a theme id has such a note that recovery could
+not settle (it is retried before every write of the id), the id is **not written**: replace (`POST /api/themes/import`),
+custom save (`PUT /api/themes/:id`) and delete answer `409 theme_recovering` (`details.id`) with a plain message, and the
+startup id move skips the row, until recovery succeeds. Other ids are unaffected.
 - `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`, and `resetGeneration`: a
   non-negative integer, `0` until the first host reset). `scripts/score look reset` sets the shared look to Score /
   system **and increments `resetGeneration`** (setting `look.resetGeneration` in `meta`, no migration). A browser keeps the
@@ -2249,7 +2252,18 @@ folders exist; a folder that already exists is never a free id.
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
   `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5).
-- `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult`; stored, **not** activated. A zip whose
+- **One rule set for packages** (`packages/contract/src/theme-package.ts`, pure, no Node or browser APIs): the browser's
+  reader (Customizer preview and import dialog) and the server's reader run the same code for the zip's structure
+  (central directory against local headers, names, **extra fields: a Unicode Path field, 0x7075, is refused**, flags,
+  symlink metadata, Zip64, overlapping data), for the entries (layout, types by folder, at most 41 files, per-file and
+  total caps, compression ratio) and for the inflated bytes (magic bytes per asset type, nested archives, licence texts
+  as plain UTF-8). A package the browser previews is therefore one the server's package rules accept; what remains
+  different is by design (CSS: the browser sanitises, the server refuses; a built-in id is a naming conflict). A shared
+  accept/reject corpus (`packages/contract/test/theme-package-corpus.ts`) runs against both readers.
+- `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult` `{ theme, report, detail }`; stored, **not**
+  activated. `detail` is the `ThemeDetail` (manifest, CSS, assets, `etag`) exactly as this import committed it, read in the
+  same serialised step as the write; the Customizer adopts it instead of fetching the theme again, so another writer's
+  version landing a moment later can never be paired with the draft that was saved. A zip whose
   local file headers and central directory disagree (name, method, sizes), that lists a name twice, or whose stored
   data overlaps is `422 theme_rejected`; the Customizer's reader applies the same rule to what it previews.
   `409 theme_exists` (same id; `?replace=1` replaces an imported or custom theme, never a built-in);

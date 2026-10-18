@@ -27,7 +27,7 @@ import {
   buildThemePackage,
   readThemePackage,
 } from '../themes/package.ts'
-import { ThemeStore } from '../themes/store.ts'
+import { ThemeLockedError, ThemeStore } from '../themes/store.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 const IdParams = z.object({ id: ThemeIdSchema })
@@ -40,6 +40,16 @@ const AssetParams = z.object({
 const ImportQuery = z.object({ replace: z.enum(['1']).optional() })
 
 const notFound = () => new HttpError(404, 'not_found', 'Couldn’t find that theme.')
+/** An id whose earlier swap or move is not settled yet is not written (re-gate finding 2). */
+const unlessLocked = <T>(work: () => T): T => {
+  try {
+    return work()
+  } catch (error) {
+    if (error instanceof ThemeLockedError)
+      throw new HttpError(409, 'theme_recovering', error.message, { id: error.themeId })
+    throw error
+  }
+}
 const rejected = (reasons: string[]) =>
   new HttpError(422, 'theme_rejected', 'That theme can’t be used: ' + reasons[0], { reasons })
 
@@ -138,7 +148,7 @@ export function registerThemeRoutes(
       const currentEtag = store.detail(id)?.etag ?? null
       if (body.etag !== currentEtag)
         throw new HttpError(409, 'etag_mismatch', 'This theme changed elsewhere. Reload it first.')
-      store.saveCustom(body.manifest, body.css)
+      unlessLocked(() => store.saveCustom(body.manifest, body.css))
       return detail(id)
     })
   })
@@ -194,11 +204,13 @@ export function registerThemeRoutes(
           }
           if (existing && (replace === undefined || existing.source === 'builtin'))
             throw new HttpError(409, 'theme_exists', 'A theme with this id is already installed.')
-          store.storeImported(pkg.manifest, pkg.css, pkg.assets, pkg.licenses)
+          unlessLocked(() => store.storeImported(pkg.manifest, pkg.css, pkg.assets, pkg.licenses))
           // Replacing a theme that is the shared look keeps it active: the row changed, not the choice.
           return ThemeImportResultSchema.parse({
             theme: store.summary(store.get(pkg.manifest.id)!),
             report: { dropped: [] },
+            // Read in this same serialised step: the version this import wrote, with the etag a later save must send.
+            detail: detail(pkg.manifest.id),
           })
         })
         return reply.code(201).send(result)
@@ -234,7 +246,7 @@ export function registerThemeRoutes(
           'theme_active',
           'This theme is in use. Switch to another one first.',
         )
-      store.remove(id)
+      unlessLocked(() => store.remove(id))
     })
     return reply.code(204).send()
   })

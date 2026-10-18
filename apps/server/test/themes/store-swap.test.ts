@@ -258,3 +258,80 @@ describe('moving a theme to a free id (#12)', () => {
     expect(fileOf('harbour-mine')).toBe('unrelated')
   })
 })
+
+// Re-gate finding 2: a note that recovery could not settle still stands for an old folder that will be put back. Until
+// it is settled nothing else may write that id, or the later recovery would put an old folder under a newer row.
+describe('an unsettled note blocks its id (re-gate #2)', () => {
+  const brokenReplace = () => {
+    store.storeImported(manifest('seaside'), 'A', asset('A'))
+    // B fails to land and the way back fails too: A's folder stays aside under .old-*.
+    expect(() =>
+      withFs(faulty(intoPlace, true)).storeImported(manifest('seaside'), 'B', asset('B')),
+    ).toThrow(/injected/)
+  }
+  const recoveryDown = () =>
+    faulty((op) => op.op === 'rename' && basename(op.from).startsWith('.old-'))
+
+  test('a retry that runs before recovery succeeds is refused, and the later recovery restores A whole', () => {
+    brokenReplace()
+    expect(() =>
+      withFs(recoveryDown()).storeImported(manifest('seaside'), 'C', asset('C')),
+    ).toThrow(/put back|recover/i)
+    expect(store.get('seaside')!.css).toBe('A')
+    restart()
+    expect(store.get('seaside')!.css).toBe('A')
+    expect(fileOf('seaside')).toBe('A')
+    expect(leftovers()).toEqual([])
+    // Once recovery succeeded, the id is free again.
+    store.storeImported(manifest('seaside'), 'C', asset('C'))
+    expect(store.get('seaside')!.css).toBe('C')
+    expect(fileOf('seaside')).toBe('C')
+  })
+
+  test('deleting the id is refused too, instead of leaving A’s folder to come back without a row', () => {
+    brokenReplace()
+    expect(() => withFs(recoveryDown()).remove('seaside')).toThrow(/put back|recover/i)
+    expect(store.get('seaside')).not.toBeNull()
+    restart()
+    expect(fileOf('seaside')).toBe('A')
+  })
+
+  test('a custom save of the id is refused as well', () => {
+    brokenReplace()
+    expect(() => withFs(recoveryDown()).saveCustom(manifest('seaside'), 'X')).toThrow(
+      /put back|recover/i,
+    )
+  })
+
+  test('other ids are not held up', () => {
+    brokenReplace()
+    withFs(recoveryDown()).storeImported(manifest('other'), 'O', asset('O'))
+    expect(store.get('other')!.css).toBe('O')
+  })
+
+  test('reclaiming a built-in id leaves a row alone while its note is unsettled, then moves it', () => {
+    store.storeImported(manifest('harbour'), '', asset('harbour picture'))
+    // The move planned harbour -> harbour-mine; the folder moved, the row write failed and nothing could undo it.
+    blockRowWrites()
+    const crashing = withFs(
+      faulty((op) => op.op === 'rename' && basename(op.from) !== 'harbour', true),
+    )
+    expect(() => crashing.reclaimBuiltinIds()).toThrow()
+    unblockRowWrites()
+    // Recovery cannot settle that note (erasing it fails), so the row keeps its id and nothing is planned again.
+    db.sqlite.exec(
+      "CREATE TRIGGER keep_notes BEFORE DELETE ON theme_swaps BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+    )
+    expect(restart().reclaimBuiltinIds()).toEqual([])
+    expect(rowSource('harbour')).toBe('imported')
+    expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM theme_swaps').get()).toEqual({ n: 1 })
+    db.sqlite.exec('DROP TRIGGER keep_notes')
+    const fresh = restart()
+    expect(fresh.reclaimBuiltinIds()).toEqual([])
+    expect(rowSource('harbour')).toBeNull()
+    expect(fresh.get('harbour-mine')).toMatchObject({ source: 'imported' })
+    expect(readFileSync(join(store.root, 'harbour-mine/assets/img/a.png'), 'utf8')).toBe(
+      'harbour picture',
+    )
+  })
+})

@@ -1,6 +1,15 @@
-import { ThemeManifestSchema, THEME_FORMAT, type ThemeManifest } from '@score/contract'
+import {
+  ThemeManifestSchema,
+  THEME_FORMAT,
+  THEME_LICENSE_FILES,
+  THEME_PACKAGE_LIMITS,
+  reviewPackageContent,
+  reviewPackageEntries,
+  uploadProblem,
+  type ThemeManifest,
+} from '@score/contract'
 import { manifestProblems, referencedAssets } from './draft.ts'
-import { readZip, writeZip, ZipError } from './zip.ts'
+import { extractZip, listZip, writeZip, ZipError } from './zip.ts'
 
 // Theme packages on the web side (design §1): the layout the server reads and writes, so a draft can be exported
 // without saving it and an import can be looked at before it is sent.
@@ -14,31 +23,38 @@ export type ThemePackage = {
   licenses: Record<string, string>
 }
 
-export const LICENSE_FILES = ['LICENSE', 'OFL.txt'] as const
-export const MAX_LICENSE_BYTES = 64 * 1024
+export const LICENSE_FILES = THEME_LICENSE_FILES
+export const MAX_LICENSE_BYTES = THEME_PACKAGE_LIMITS.licenseBytes
 export type ReadResult = { ok: true; pkg: ThemePackage } | { ok: false; reasons: string[] }
 
-const ASSET_FILE =
-  /^assets\/(fonts|img)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(woff2|png|jpg|jpeg|webp|avif)$/
+/** A plain sentence for the person: the shared rules' messages, with a full stop. */
+const sentence = (message: string) => (/[.!?]$/.test(message) ? message : `${message}.`)
 
+/**
+ * Reads a package the way the server will: the shared rules (packages/contract, re-gate finding 10) judge the zip's
+ * structure, the entries and the inflated bytes; what is left here is the manifest and the files that belong to it.
+ */
 export async function readThemePackage(bytes: Uint8Array): Promise<ReadResult> {
+  const upload = uploadProblem(bytes)
+  if (upload) return { ok: false, reasons: [sentence(upload)] }
   let files: Map<string, Uint8Array>
   try {
-    files = await readZip(bytes)
+    const entries = listZip(bytes)
+    const entryReasons = reviewPackageEntries(entries)
+    if (entryReasons.length > 0)
+      return { ok: false, reasons: entryReasons.slice(0, 8).map(sentence) }
+    files = await extractZip(bytes, entries)
   } catch (error) {
     return {
       ok: false,
       reasons: [error instanceof ZipError ? error.message : 'That zip file couldn’t be read.'],
     }
   }
-  const reasons: string[] = []
+  const content = reviewPackageContent(files)
+  const reasons: string[] = content.reasons.map(sentence)
   const assets = new Map<string, Uint8Array>()
-  for (const [name, data] of files) {
-    if (name === 'theme.json' || name === 'style.css') continue
-    if ((LICENSE_FILES as readonly string[]).includes(name)) continue
-    if (ASSET_FILE.test(name)) assets.set(name.slice('assets/'.length), data)
-    else reasons.push(`“${name.slice(0, 60)}” isn’t part of a theme package.`)
-  }
+  for (const [name, data] of files)
+    if (name.startsWith('assets/')) assets.set(name.slice('assets/'.length), data)
   const json = files.get('theme.json')
   if (!json) reasons.push('theme.json is missing.')
   let manifest: ThemeManifest | null = null
@@ -57,18 +73,6 @@ export async function readThemePackage(bytes: Uint8Array): Promise<ReadResult> {
       reasons.push('theme.json isn’t valid JSON.')
     }
   }
-  const licenses: Record<string, string> = {}
-  for (const name of LICENSE_FILES) {
-    const bytes = files.get(name)
-    if (!bytes) continue
-    if (bytes.length > MAX_LICENSE_BYTES) reasons.push(`${name} is larger than 64 KB.`)
-    else
-      try {
-        licenses[name] = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-      } catch {
-        reasons.push(`${name} isn’t valid UTF-8 text.`)
-      }
-  }
   let css = ''
   const cssBytes = files.get('style.css')
   if (cssBytes) {
@@ -83,7 +87,7 @@ export async function readThemePackage(bytes: Uint8Array): Promise<ReadResult> {
       if (!assets.has(path)) reasons.push(`asset:${path} is used but isn’t in the package.`)
   }
   if (reasons.length > 0 || !manifest) return { ok: false, reasons: reasons.slice(0, 8) }
-  return { ok: true, pkg: { manifest, css, assets, licenses } }
+  return { ok: true, pkg: { manifest, css, assets, licenses: content.licenses } }
 }
 
 const encoder = new TextEncoder()
@@ -101,4 +105,4 @@ export function buildThemePackage(pkg: ThemePackage): Uint8Array {
   return writeZip(files)
 }
 
-export const MAX_PACKAGE_BYTES = 5 * 1024 * 1024
+export const MAX_PACKAGE_BYTES = THEME_PACKAGE_LIMITS.uploadBytes

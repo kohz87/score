@@ -31,6 +31,7 @@ import { multipart } from '../media-fixtures.ts'
 import { resetLook } from '../../src/themes/look.ts'
 import { checkThemeCss } from '../../src/themes/css-check.ts'
 import { manifestAssets, readThemePackage } from '../../src/themes/package.ts'
+import { buildZip, unicodePathExtra } from '@score/contract/test/theme-package-zip'
 import { AVIF, JPEG, PNG, WEBP, WOFF2, manifestJson, rawZip, zipOf, type Entry } from './helpers.ts'
 
 let dir: string
@@ -335,6 +336,77 @@ test('import: a package whose local headers and central directory disagree chang
   ])
   expect((await upload(dup, '?replace=1')).statusCode).toBe(422)
   expect(ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())).toEqual(before)
+})
+
+// Re-gate finding 1: Unicode path extra fields rename entries for JSZip only; the replace must not reach the store.
+test('import: a package whose Unicode path fields rename its entries changes no theme', async () => {
+  await upload(await fullPackage())
+  const before = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  const attack = Buffer.from(
+    buildZip([
+      {
+        name: 'theme.json',
+        data: manifestJson({ id: 'reviewed', name: 'Reviewed' }),
+        centralExtra: unicodePathExtra('theme.json', 'LICENSE'),
+        localExtra: unicodePathExtra('theme.json', 'LICENSE'),
+      },
+      {
+        name: 'OFL.txt',
+        data: manifestJson({ id: 'seaside', name: 'Installed instead' }),
+        centralExtra: unicodePathExtra('OFL.txt', 'theme.json'),
+        localExtra: unicodePathExtra('OFL.txt', 'theme.json'),
+      },
+    ]),
+  )
+  const res = await upload(attack, '?replace=1', { ...headers, 'if-match': before.etag })
+  expect(res.statusCode).toBe(422)
+  expect(ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())).toEqual(before)
+  expect((await call('GET', '/api/themes/reviewed')).statusCode).toBe(404)
+})
+
+// Re-gate finding 2: while a swap note can't be settled, the id is not written (replace, custom save, delete).
+test('an id with an unsettled swap note answers 409 theme_recovering until it is settled', async () => {
+  await upload(await fullPackage())
+  db.sqlite
+    .prepare(
+      "INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES ('dead', 'swap', 'seaside', NULL, 1, 'x')",
+    )
+    .run()
+  // Erasing the note fails, so recovery keeps it, as it would after a failed move back.
+  db.sqlite.exec(
+    "CREATE TRIGGER keep_notes BEFORE DELETE ON theme_swaps BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+  )
+  const before = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  const replaced = await upload(await fullPackage('seaside', '.b{color:red}'), '?replace=1')
+  expect(replaced.statusCode).toBe(409)
+  expect(replaced.json()).toMatchObject({ error: { code: 'theme_recovering' } })
+  expect((await call('DELETE', '/api/themes/seaside')).json()).toMatchObject({
+    error: { code: 'theme_recovering' },
+  })
+  expect(ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())).toEqual(before)
+  db.sqlite.exec('DROP TRIGGER keep_notes')
+  expect(
+    (await upload(await fullPackage('seaside', '.b{color:red}'), '?replace=1')).statusCode,
+  ).toBe(201)
+})
+
+// Re-gate finding 7: the import answers with the version it committed, etag included.
+test('import: the result carries the committed ThemeDetail, new and replaced', async () => {
+  const first = ThemeImportResultSchema.parse((await upload(await fullPackage())).json())
+  expect(first.detail).toEqual(
+    ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json()),
+  )
+  const again = await upload(await fullPackage('seaside', '.b{color:red}'), '?replace=1', {
+    ...headers,
+    'if-match': first.detail.etag,
+  })
+  expect(again.statusCode).toBe(201)
+  const second = ThemeImportResultSchema.parse(again.json())
+  expect(second.detail.etag).not.toBe(first.detail.etag)
+  expect(second.detail.css).toBe('.b{color:red}')
+  expect(second.detail).toEqual(
+    ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json()),
+  )
 })
 
 // Gate finding #7: the etag must change with every byte of the package, not only the manifest and the CSS.
