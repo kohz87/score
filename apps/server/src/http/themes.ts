@@ -51,6 +51,8 @@ export function registerThemeRoutes(
 ): ThemeStore {
   const { db, ingest } = options
   const store = new ThemeStore(db, options.home, options.clock)
+  // Finish or undo swaps and id moves that a stop left half done, then the 9.5 id move (gate findings #11, #12).
+  store.recoverInterrupted()
   store.reclaimBuiltinIds()
   const guard = { preHandler: [humanGuard(app.pairing)] }
   const receipts = requestIdempotency(db, options.clock)

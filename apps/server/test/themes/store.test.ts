@@ -1,4 +1,4 @@
-import { mkdtempSync, renameSync, rmSync, statSync, existsSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync, existsSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -181,14 +181,6 @@ test('an upgrade moves a theme whose id is now built in to a free id, with its a
   store.saveCustom(manifest('ledger-mine'), 'c{color:green}')
   store.remove('ledger-mine')
   expect(store.get('ledger-mine')).toBeNull()
-})
-
-test('a move that stopped after the folder moved is finished on the next start', () => {
-  store.storeImported(manifest('studio'), '', new Map([['img/a.png', Buffer.from('picture')]]))
-  renameSync(join(store.root, 'studio'), join(store.root, 'studio-mine'))
-  expect(store.reclaimBuiltinIds()).toEqual([{ from: 'studio', to: 'studio-mine' }])
-  expect(store.assets('studio-mine')).toEqual(['img/a.png'])
-  expect(store.get('studio-mine')!.source).toBe('imported')
 })
 
 test('an active look on a theme that is not affected is left alone', () => {

@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import {
+  mkdirSync,
   mkdtempSync,
   renameSync,
   readFileSync,
@@ -383,6 +384,30 @@ test('import: If-Match covers asset bytes and licence files, so a stale replace 
     (await upload(await pkg(other, 'MIT two'), '?replace=1', conditional(e3))).statusCode,
   ).toBe(201)
   expect(await etagOf()).not.toBe(e3)
+})
+
+test('start-up undoes a swap that stopped before its row was committed', async () => {
+  await upload(await fullPackage())
+  // A stop after the old folder went aside and the new one was moved in, before the row was written.
+  db.sqlite
+    .prepare(
+      "INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES ('t1', 'swap', 'seaside', NULL, 1, 'now')",
+    )
+    .run()
+  renameSync(join(dir, 'themes/seaside'), join(dir, 'themes/.old-t1'))
+  mkdirSync(join(dir, 'themes/seaside/assets/img'), { recursive: true })
+  writeFileSync(join(dir, 'themes/seaside/assets/img/a.png'), 'half-written')
+  const second = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake', SCORE_HOME: dir }),
+    logger: false,
+    db,
+    ingest,
+    port,
+  })
+  await second.ready()
+  expect(readFileSync(join(dir, 'themes/seaside/assets/img/a.png'))).toEqual(PNG)
+  expect(readdirSync(join(dir, 'themes')).filter((name) => name.startsWith('.'))).toEqual([])
+  await second.close()
 })
 
 test('import: a rejected package stores nothing', async () => {
