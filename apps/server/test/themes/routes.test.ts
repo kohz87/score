@@ -1181,3 +1181,15 @@ test('starting Score after an upgrade moves a theme that has a now built-in id, 
     await restarted.close()
   }
 })
+
+test('a folder left on disk for an id with no row is not served or exported (K2 X14)', async () => {
+  mkdirSync(join(dir, 'themes/ghost/assets/img'), { recursive: true })
+  writeFileSync(join(dir, 'themes/ghost/assets/img/a.png'), PNG)
+  for (const url of [
+    '/api/themes/ghost/assets/img/a.png',
+    '/api/themes/ghost/export',
+    '/api/themes/ghost/style.css',
+    '/api/themes/ghost',
+  ])
+    expect((await call('GET', url)).statusCode, url).toBe(404)
+})

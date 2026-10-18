@@ -64,6 +64,7 @@ export function registerThemeRoutes(
   try {
     store.recoverInterrupted()
     store.reclaimBuiltinIds()
+    store.sweepOrphanFolders()
   } catch (error) {
     app.log.error({ err: error }, 'theme recovery failed; other themes are served')
   }
@@ -152,6 +153,8 @@ export function registerThemeRoutes(
     const parsed = AssetParams.safeParse(request.params)
     if (!parsed.success) throw notFound()
     const { id, '*': path } = parsed.data
+    // A folder left on disk for an id with no row is not a theme (K2 X14).
+    if (!store.exists(id)) throw notFound()
     unlessLocked(() => store.assertReadable(id))
     // One safe reader: a symlink anywhere on the path, or anything but a regular file, is not served.
     const bytes = store.readAsset(id, path)

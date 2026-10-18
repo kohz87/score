@@ -20,6 +20,7 @@ import { z } from 'zod'
 import {
   BUILTIN_THEME_IDS,
   THEME_ASSET_PATH,
+  ThemeIdSchema,
   ThemeManifestSchema,
   type ThemeDetail,
   type ThemeManifest,
@@ -347,6 +348,9 @@ export class ThemeStore {
   /** Saves a custom theme's manifest and CSS in one transaction (assets already on disk are kept). */
   saveCustom(manifest: ThemeManifest, css: string): void {
     this.assertSettled(manifest.id)
+    // A folder with no row is a leftover of a theme that was deleted; this new one must not inherit its files.
+    if (!this.row(manifest.id) && presentOnDisk(join(this.root, manifest.id)))
+      this.fs.rm(join(this.root, manifest.id))
     this.db.tx((sqlite) => this.upsert(sqlite, manifest, css, 'custom'))
   }
 
@@ -588,10 +592,59 @@ export class ThemeStore {
     this.eraseNote(sqlite, token)
   }
 
-  /** Removes the row and the folder; the caller has already refused built-ins and the active theme. */
+  /**
+   * Removes the row and the folder; the caller has already refused built-ins and the active theme. Journaled like a
+   * swap whose new folder is nothing (K2 X14): the note is committed, the folder moves aside, the row and the note go in
+   * one transaction, and only then is the old folder deleted. After any failure, or a stop between two steps, the theme
+   * is whole (an interrupted delete is undone by `recoverInterrupted`; delete it again) or gone (what is left is swept).
+   * It is never a row with no folder, nor a folder with no row.
+   */
   remove(id: string): void {
     this.assertSettled(id)
-    this.db.tx((sqlite) => sqlite.prepare('DELETE FROM themes WHERE id = ?').run(id))
-    rmSync(join(this.root, id), { recursive: true, force: true })
+    const token = randomUUID()
+    const target = join(this.root, id)
+    const old = this.asidePath(token)
+    const hadOld = presentOnDisk(target)
+    this.writeDown(token, 'swap', id, null, hadOld)
+    try {
+      if (hadOld) this.fs.rename(target, old)
+      this.db.tx((sqlite) => {
+        sqlite.prepare('DELETE FROM themes WHERE id = ?').run(id)
+        this.eraseNote(sqlite, token)
+      })
+    } catch (error) {
+      try {
+        this.undoSwap(token, id, hadOld)
+        this.db.tx((sqlite) => this.eraseNote(sqlite, token))
+      } catch {
+        // left to recoverInterrupted
+      }
+      throw error
+    }
+    this.tryRemove(old)
+  }
+
+  /**
+   * Run at start: a folder under the themes root whose id has no row (and no standing note) is what a stop or a failed
+   * delete left behind; a theme later given that id would inherit its files, and the asset routes would serve them.
+   * Dot-folders (`.staging-*`, `.old-*`) belong to `recoverInterrupted`.
+   */
+  sweepOrphanFolders(): void {
+    if (!existsSync(this.root)) return
+    const keep = new Set([...this.rows().map((row) => row.id), ...this.lockedIds()])
+    for (const name of readdirSync(this.root)) {
+      if (name.startsWith('.') || keep.has(name) || !ThemeIdSchema.safeParse(name).success) continue
+      this.tryRemove(join(this.root, name))
+    }
+  }
+}
+
+/** True for anything on disk at the path, a dangling symlink included. */
+function presentOnDisk(path: string): boolean {
+  try {
+    lstatSync(path)
+    return true
+  } catch {
+    return false
   }
 }
