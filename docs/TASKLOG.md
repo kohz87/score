@@ -240,3 +240,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   caption prefix (Watch frames carry no parent id; two back-to-back sub-agents can merge into one group — accepted).
   `pnpm screenshots` repaired (stale fixtures/selectors) and 14 README images refreshed (many were stale since earlier
   phases). 14 Settings baselines updated (currency inputs 40px). chat-composer "@" menu race found on main → T1.
+- **Release 1.7.0** (9.3 layouts + S1 + worker-policy cap). Haiku monitor: contract 1253, web 1454, plugin 323,
+  license green; server 3 known failures (T1: release-test race, fix-l); e2e 454/465 — chat-attach and live-feel load
+  only, chat-composer "@" race (T1, pre-existing), themes-layout launcher reset passes alone (→ T1).

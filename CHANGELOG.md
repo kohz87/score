@@ -3,6 +3,26 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.7.0] — 2026-10-18
+
+### Added
+- **Theme layouts (Phase 9, part 2):** a theme can now change Score's whole layout, not only its colours —
+  navigation at the **top**, as a **left** or **right** rail, or as a single **launcher** menu button (⌘K stays);
+  content width **narrow / wide / full**; the **menu** order, labels and hidden pages (Settings always stays); the
+  **Now** cards' arrangement (columns, spans; Needs you is always there); **chat** as bubbles or plain, and the room
+  list left, right or hidden until opened; card **elevation**, **glass** surfaces, borders, corner radius and
+  density; a **background image** with fit and dim; and separate settings for the chat-first view. Approvals,
+  decisions and other protected parts stay solid and readable in every combination. Phones keep a simple top bar.
+- **Watch** groups a coding agent's sub-agent steps under "Sub-agent · N steps".
+- The chat-first view shows a **workflow header** (title, steps done, Pause, Stop, See full details) and answers a
+  workflow's questions in the chat.
+
+### Fixed
+- **Coding workers with long home or workspace paths** could fail to start in orchestrations ("policy snapshot larger
+  than 4 KB"); the limit is now 64 KB.
+- Settings › Look's display-currency fields match the other inputs.
+- Unsent text, attachments and recipients in Now's message box survive a theme change.
+
 ## [1.6.1] — 2026-10-18
 
 ### Changed
