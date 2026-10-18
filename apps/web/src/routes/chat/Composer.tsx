@@ -304,6 +304,13 @@ export function Composer({
     setActive(0)
     setClosed(false)
   }
+  // After a pick the caret goes to the end of what was inserted, once React has written the value. A frame later the
+  // person may already have typed on (the next "@" of a fast typist): then the text differs and the caret is theirs.
+  function restoreCaret(area: HTMLTextAreaElement | null, expected: string, position: number) {
+    requestAnimationFrame(() => {
+      if (area && area.value === expected) area.setSelectionRange(position, position)
+    })
+  }
   function select(position: number) {
     const area = textarea.current
     if (menu === 'slash') {
@@ -311,13 +318,13 @@ export function Composer({
       if (!command) return
       const next = `/${command.name} `
       edit(next, next.length)
-      requestAnimationFrame(() => area?.setSelectionRange(next.length, next.length))
+      restoreCaret(area, next, next.length)
     } else if (menu === 'mention' && mention) {
       const agent = mentionItems[position]
       if (!agent) return
       const next = insertMention(text, caret, mention.start, agent.id)
       edit(next.text, next.caret)
-      requestAnimationFrame(() => area?.setSelectionRange(next.caret, next.caret))
+      restoreCaret(area, next.text, next.caret)
     }
   }
 

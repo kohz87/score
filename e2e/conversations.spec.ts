@@ -74,7 +74,7 @@ test('pin, archive, project and tags organise the room list', async ({ page }) =
   // Tags: set explicitly; clicking the chip filters the list.
   await rowMenu(page, room.label).click()
   await page.getByRole('menuitem', { name: 'Edit tags…' }).click()
-  await page.getByLabel(/^Tags/).fill('q4 urgent')
+  await page.getByRole('textbox', { name: /^Tags/ }).fill('q4 urgent')
   await page.getByRole('button', { name: 'Save' }).click()
   const filter = list.getByRole('list', { name: 'Filter by tag' })
   await filter.getByRole('button', { name: '#urgent' }).click()

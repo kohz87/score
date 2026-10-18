@@ -146,12 +146,19 @@ describe('S2-020 code inside containers is literal', () => {
 })
 
 describe('S2-021 linear scaling', () => {
+  // CPU time of this process, not wall time: a loaded machine descheduling the test mid-run adds wall time but no CPU
+  // time, so the ratio keeps measuring the algorithm. The best of several runs drops the GC and cache outliers.
+  const cpuMs = (): number => {
+    const usage = process.cpuUsage()
+    return (usage.user + usage.system) / 1000
+  }
   const best = (work: () => void): number => {
+    work() // warm-up: the first run pays for JIT compilation
     let min = Infinity
-    for (let i = 0; i < 3; i++) {
-      const t = performance.now()
+    for (let i = 0; i < 5; i++) {
+      const t = cpuMs()
       work()
-      min = Math.min(min, performance.now() - t)
+      min = Math.min(min, cpuMs() - t)
     }
     return Math.max(min, 1)
   }

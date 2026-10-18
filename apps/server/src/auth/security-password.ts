@@ -36,6 +36,15 @@ const WINDOW_MS = 15 * 60 * 1000
 const MAX_FAILURES_PER_SESSION = 5
 const MAX_FAILURES = 20
 
+export interface AttemptLimits {
+  perSession: number
+  overall: number
+}
+const DEFAULT_LIMITS: AttemptLimits = {
+  perSession: MAX_FAILURES_PER_SESSION,
+  overall: MAX_FAILURES,
+}
+
 function storeError(): HttpError {
   return new HttpError(
     503,
@@ -62,6 +71,8 @@ export class SecurityPassword {
     private readonly clock: () => number = Date.now,
     /** Test seam: runs under the lock after the final comparison, right before the files are written. */
     private readonly beforePublish?: () => Promise<void>,
+    /** Fake mode only (app.ts): the e2e suite repeats wrong guesses from one paired browser and must not lock itself out. */
+    private readonly limits: AttemptLimits = DEFAULT_LIMITS,
   ) {}
 
   /**
@@ -124,7 +135,7 @@ export class SecurityPassword {
     const now = this.clock()
     this.#failures = this.#failures.filter((failure) => now - failure.at < WINDOW_MS)
     const mine = this.#failures.filter((failure) => failure.session === session).length
-    if (mine >= MAX_FAILURES_PER_SESSION || this.#failures.length >= MAX_FAILURES)
+    if (mine >= this.limits.perSession || this.#failures.length >= this.limits.overall)
       throw new HttpError(
         429,
         'too_many_attempts',

@@ -372,7 +372,7 @@ describe('the decision itself: every rule of authorise() on an attempt that is r
   async function ready() {
     hooks = {}
     h = await workerHarness({
-      // The run never finishes, so the orchestration stays `running` while the attempt is put back in a releasable state.
+      // The run never finishes (turn 2 only waits); the executor may still pause it as having no wake source.
       lead: {
         script: byTurn({
           1: async (t) => {
@@ -397,6 +397,12 @@ describe('the decision itself: every rule of authorise() on an attempt that is r
       "UPDATE orc_attempts SET state = 'running', evidence = NULL, retired = 0, stop_requested_at = NULL",
     )
     sql('UPDATE orc_generations SET closed_cause = NULL, closed_at = NULL')
+    // The run is `running` here by construction, not by luck: once the step ended, the executor may have found nothing
+    // to wake the lead for and paused the run itself (`no_wake_source`), whenever its pump got to it. Put it back in the
+    // same synchronous stretch as the rest, so that no pump can run between this and the decisions below.
+    sql(
+      "UPDATE orchestrations SET status = 'running', pause_reason = NULL, manual_paused_at = NULL",
+    )
     subject = {
       orchestrationId: id,
       attemptId: attempt()['id'] as string,
