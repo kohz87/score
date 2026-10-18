@@ -604,3 +604,42 @@ export function watchProtectedSurfaces(
     cancelAnimationFrame(frame)
   }
 }
+
+/**
+ * Keeps `watchProtectedSurfaces` running for as long as the page wears a custom theme, from the first moment: the boot
+ * script paints the last visit's theme before React has the theme list or the theme itself, and those decisions are
+ * the theme's to damage just the same (1.8.1 verification, L1). Follows `html[data-look='custom']`: the watch starts when
+ * it is set (again), stops when it goes, and starts afresh when a theme is worn again after a violation (a watch is one-shot).
+ */
+export function watchWhileCustom(
+  onViolation: (what: string, refused?: boolean) => void,
+  options: WatchOptions = {},
+): () => void {
+  const root = document.documentElement
+  let stop: (() => void) | undefined
+  let violated = false
+  const sync = () => {
+    const custom = root.getAttribute('data-look') === 'custom'
+    if (!custom) {
+      stop?.()
+      stop = undefined
+      violated = false
+      return
+    }
+    // Every write of the attribute is a theme (re)applied: a fresh watch also checks the new look at once.
+    stop?.()
+    stop = undefined
+    if (violated) return
+    stop = watchProtectedSurfaces((what, refused) => {
+      violated = true
+      onViolation(what, refused)
+    }, options)
+  }
+  const observer = new MutationObserver(sync)
+  observer.observe(root, { attributes: true, attributeFilter: ['data-look'] })
+  sync()
+  return () => {
+    observer.disconnect()
+    stop?.()
+  }
+}

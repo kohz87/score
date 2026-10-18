@@ -329,7 +329,7 @@ as an opaque background of its own, so a translucent rail over a picture can’t
 
 Beyond the sanitiser, Score re-asserts these in a protected cascade layer, and at run time it watches them: a theme
 that hides, fades, covers or blurs one of them from outside is switched off on that device, with a banner that says why.
-It checks when the page changes, on hover, focus and press, when an animation ends, and at the moment you act on an
+It does so from the first moment a custom theme is on the page, which includes the last visit’s look that the browser paints before the theme list or the theme itself has arrived. It checks when the page changes, on hover, focus and press, when an animation ends, and at the moment you act on an
 approval, an answer, a permission or a password: if the decision is hidden, clipped away by a box around it,
 unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can’t measure) or covered at that moment
 (the thing painted on it must be the control itself, something inside it or its own label, never a parent or a

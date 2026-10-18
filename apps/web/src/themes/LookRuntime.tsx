@@ -3,7 +3,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react
 import type { DataRouter } from 'react-router'
 import { applyTheme } from '../data/theme.ts'
 import { applyBuiltin, applyCustom, clearLook, isBuiltinTheme, type ColorMode } from './engine.ts'
-import { watchProtectedSurfaces } from './guard.ts'
+import { watchWhileCustom } from './guard.ts'
 import {
   clearDeviceLook,
   lookStore,
@@ -95,6 +95,26 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
     applyTheme(look.mode)
   }, [look.mode])
 
+  // Decisions are vetted whenever the page wears a custom theme (html[data-look='custom']), from the first moment: the
+  // boot script's cached look is on the page before the theme list or the theme has arrived (L1).
+  useEffect(
+    () =>
+      watchWhileCustom((_what, refused) => {
+        // Sticky on this device: reloading must not bring the same theme straight back.
+        clearLook()
+        applyBuiltin('score')
+        setLayout(DEFAULT_LAYOUT)
+        writeLookCache(null)
+        writeDeviceOverride('score')
+        lookStore.setFailure(
+          refused
+            ? 'Score switched your theme off because it hid part of an approval or a security screen. Nothing was sent. Look at it again and try once more.'
+            : 'Score switched your theme off because it hid part of an approval or a security screen.',
+        )
+      }),
+    [],
+  )
+
   useEffect(() => {
     // The shared theme isn't known yet: the boot cache's look (attributes, token sheet, layout) stays until it is.
     if (look.loading && !look.safe) return
@@ -126,7 +146,6 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
       lookStore.setFailure('Your theme couldn’t be loaded, so Score is showing its own look.')
       return
     }
-    let stopWatching: (() => void) | undefined
     try {
       const applied = applyCustom(
         { id, manifest: detail.data.manifest, css: detail.data.css, etag: detail.data.etag },
@@ -136,26 +155,12 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
       writeLookCache({ id, ...applied.cache, user: applied.userCache })
       setLayout(applied.layout)
       lookStore.setFailure(null)
-      stopWatching = watchProtectedSurfaces((_what, refused) => {
-        // Sticky on this device: reloading must not bring the same theme straight back.
-        clearLook()
-        applyBuiltin('score')
-        setLayout(DEFAULT_LAYOUT)
-        writeLookCache(null)
-        writeDeviceOverride('score')
-        lookStore.setFailure(
-          refused
-            ? 'Score switched your theme off because it hid part of an approval or a security screen. Nothing was sent. Look at it again and try once more.'
-            : 'Score switched your theme off because it hid part of an approval or a security screen.',
-        )
-      })
     } catch {
       applyBuiltin('score')
       setLayout(DEFAULT_LAYOUT)
       writeLookCache(null)
       lookStore.setFailure('Your theme couldn’t be applied, so Score is showing its own look.')
     }
-    return () => stopWatching?.()
   }, [
     look.safe,
     look.loading,
