@@ -75,6 +75,18 @@ export function themeEtag(
     .digest('hex')
 }
 
+/**
+ * An earlier swap or id move of this theme is not settled yet: its note still stands for an old folder that recovery
+ * will put back. Writing the id now would let that later step put old files under a newer row (re-gate finding 2).
+ */
+export class ThemeLockedError extends Error {
+  constructor(readonly themeId: string) {
+    super(
+      'This theme is still being put back after an interrupted change. Try again in a moment, or restart Score.',
+    )
+  }
+}
+
 /** The two file-system moves a theme swap is made of; tests replace them to fail at a chosen step. */
 export interface ThemeFs {
   rename(from: string, to: string): void
@@ -240,8 +252,31 @@ export class ThemeStore {
     return row.n
   }
 
+  /** Ids named by a note that recovery could not settle (the theme, and the id a move was going to give it). */
+  private lockedIds(): Set<string> {
+    const found = new Set<string>()
+    const rows = this.db.read((sqlite) =>
+      sqlite.prepare('SELECT theme_id, other_id FROM theme_swaps').all(),
+    ) as { theme_id: string; other_id: string | null }[]
+    for (const row of rows) {
+      found.add(row.theme_id)
+      if (row.other_id) found.add(row.other_id)
+    }
+    return found
+  }
+
+  /**
+   * Tries to settle what a stop left half done, then refuses (`ThemeLockedError`) if a note for this id is still
+   * standing. Every write of an id goes through here: replace, custom save, delete (and reclaim, per row).
+   */
+  assertSettled(id: string): void {
+    this.recoverInterrupted()
+    if (this.lockedIds().has(id)) throw new ThemeLockedError(id)
+  }
+
   /** Saves a custom theme's manifest and CSS in one transaction (assets already on disk are kept). */
   saveCustom(manifest: ThemeManifest, css: string): void {
+    this.assertSettled(manifest.id)
     this.db.tx((sqlite) => this.upsert(sqlite, manifest, css, 'custom'))
   }
 
@@ -261,8 +296,9 @@ export class ThemeStore {
     mkdirSync(this.root, { recursive: true, mode: 0o700 })
     chmodSync(this.root, 0o700)
     // Nothing is in flight here (this method is synchronous), so anything still written down is left over: settle it
-    // before it can be mistaken for part of this swap.
-    this.recoverInterrupted()
+    // before it can be mistaken for part of this swap. If this id's note can't be settled, stop: a later recovery would
+    // put the old folder over whatever this swap installs.
+    this.assertSettled(manifest.id)
     const token = randomUUID()
     const staged = this.stagingPath(token)
     const target = join(this.root, manifest.id)
@@ -413,8 +449,12 @@ export class ThemeStore {
    */
   reclaimBuiltinIds(): { from: string; to: string }[] {
     const moved: { from: string; to: string }[] = []
+    this.recoverInterrupted()
     for (const row of this.rows().filter((item) => isBuiltinThemeId(item.id))) {
-      const taken = new Set(this.rows().map((item) => item.id))
+      // A note still standing for this row (or for an id it would take) is settled first; until then nothing is planned.
+      const locked = this.lockedIds()
+      if (locked.has(row.id)) continue
+      const taken = new Set([...this.rows().map((item) => item.id), ...locked])
       const oldFolder = join(this.root, row.id)
       let to = ''
       for (let n = 1; ; n += 1) {
@@ -478,6 +518,7 @@ export class ThemeStore {
 
   /** Removes the row and the folder; the caller has already refused built-ins and the active theme. */
   remove(id: string): void {
+    this.assertSettled(id)
     this.db.tx((sqlite) => sqlite.prepare('DELETE FROM themes WHERE id = ?').run(id))
     rmSync(join(this.root, id), { recursive: true, force: true })
   }

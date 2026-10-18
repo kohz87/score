@@ -2234,7 +2234,10 @@ one of these three ids are renamed at the first start (migration 0075 and a star
 move, and every replace of a theme's asset folder, is written down (`theme_swaps`, migration 0076) before any file moves
 and erased in the transaction that commits the row. After a failed or interrupted replace the previous folder is back
 (at once, or at the next start); an interrupted move is finished with the recorded id, never one guessed from which
-folders exist; a folder that already exists is never a free id.
+folders exist; a folder that already exists is never a free id. While a theme id has such a note that recovery could
+not settle (it is retried before every write of the id), the id is **not written**: replace (`POST /api/themes/import`),
+custom save (`PUT /api/themes/:id`) and delete answer `409 theme_recovering` (`details.id`) with a plain message, and the
+startup id move skips the row, until recovery succeeds. Other ids are unaffected.
 - `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`, and `resetGeneration`: a
   non-negative integer, `0` until the first host reset). `scripts/score look reset` sets the shared look to Score /
   system **and increments `resetGeneration`** (setting `look.resetGeneration` in `meta`, no migration). A browser keeps the

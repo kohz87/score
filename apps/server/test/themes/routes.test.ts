@@ -364,6 +364,32 @@ test('import: a package whose Unicode path fields rename its entries changes no 
   expect((await call('GET', '/api/themes/reviewed')).statusCode).toBe(404)
 })
 
+// Re-gate finding 2: while a swap note can't be settled, the id is not written (replace, custom save, delete).
+test('an id with an unsettled swap note answers 409 theme_recovering until it is settled', async () => {
+  await upload(await fullPackage())
+  db.sqlite
+    .prepare(
+      "INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES ('dead', 'swap', 'seaside', NULL, 1, 'x')",
+    )
+    .run()
+  // Erasing the note fails, so recovery keeps it, as it would after a failed move back.
+  db.sqlite.exec(
+    "CREATE TRIGGER keep_notes BEFORE DELETE ON theme_swaps BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+  )
+  const before = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  const replaced = await upload(await fullPackage('seaside', '.b{color:red}'), '?replace=1')
+  expect(replaced.statusCode).toBe(409)
+  expect(replaced.json()).toMatchObject({ error: { code: 'theme_recovering' } })
+  expect((await call('DELETE', '/api/themes/seaside')).json()).toMatchObject({
+    error: { code: 'theme_recovering' },
+  })
+  expect(ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())).toEqual(before)
+  db.sqlite.exec('DROP TRIGGER keep_notes')
+  expect(
+    (await upload(await fullPackage('seaside', '.b{color:red}'), '?replace=1')).statusCode,
+  ).toBe(201)
+})
+
 // Gate finding #7: the etag must change with every byte of the package, not only the manifest and the CSS.
 test('import: If-Match covers asset bytes and licence files, so a stale replace is refused', async () => {
   const pkg = (png: Buffer, licence?: string) =>

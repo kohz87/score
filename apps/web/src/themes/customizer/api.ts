@@ -86,6 +86,11 @@ export function describeSaveError(error: unknown): SaveProblem {
         text: `Score can’t use this theme: ${list.slice(0, 3).join(' ') || error.message}`,
       }
     }
+    if (error.code === 'theme_recovering')
+      return {
+        kind: 'other',
+        text: 'Score is still putting this theme back after an interrupted change. Try again in a moment, or restart Score.',
+      }
     if (error.status === 401)
       return {
         kind: 'other',
