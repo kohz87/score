@@ -1,5 +1,5 @@
 // Draws the pictures the built-in themes ship (PLAN 9.5). Made here, from maths: no stock art, nothing fetched.
-// `pnpm --filter @score/server exec tsx scripts/theme-art.ts` rewrites apps/server/themes/*/assets/img; a test checks
+// `pnpm --filter @score/server exec tsx scripts/theme-art.ts` rewrites the pictures under apps/server/themes and docs/themes; a test checks
 // the files on disk are exactly what this script draws.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -107,13 +107,45 @@ export function renderHarbour(): Uint8Array {
 
 export const harbourPng = () => encodePng(HARBOUR.width, HARBOUR.height, renderHarbour())
 
-/** Every picture, by its path under apps/server/themes. */
+export const SAND = { width: 800, height: 500 } as const
+
+/** The example theme of docs/themes/example-theme: two soft dunes under a pale evening sky. */
+export function renderSand(): Uint8Array {
+  const { width, height } = SAND
+  const out = new Uint8Array(width * height * 3)
+  const skyTop: Rgb = [150, 176, 190]
+  const skyLow: Rgb = [232, 196, 150]
+  const far: Rgb = [196, 150, 104]
+  const near: Rgb = [150, 104, 70]
+  for (let y = 0; y < height; y += 1) {
+    const v = y / height
+    for (let x = 0; x < width; x += 1) {
+      const u = x / width
+      let c = mix(skyTop, skyLow, smooth(clamp01(v / 0.62)))
+      const farLine = 0.56 - 0.07 * Math.sin(u * 4.1 + 0.4) - 0.02 * Math.sin(u * 11 + 1.3)
+      const nearLine = 0.74 - 0.09 * Math.sin(u * 3 + 2.4) - 0.025 * Math.sin(u * 9 + 0.2)
+      c = mix(c, far, smooth(clamp01((v - farLine) / 0.012)))
+      c = mix(c, near, smooth(clamp01((v - nearLine) / 0.012)))
+      const dither = (BAYER[(y % 4) * 4 + (x % 4)]! - 7.5) / 16
+      const at = (y * width + x) * 3
+      out[at] = Math.round(c[0] + dither)
+      out[at + 1] = Math.round(c[1] + dither)
+      out[at + 2] = Math.round(c[2] + dither)
+    }
+  }
+  return out
+}
+
+export const sandPng = () => encodePng(SAND.width, SAND.height, renderSand())
+
+/** Every picture, by its path from the repository root. */
 export const themeArt: Record<string, () => Buffer> = {
-  'harbour/assets/img/harbour.png': harbourPng,
+  'apps/server/themes/harbour/assets/img/harbour.png': harbourPng,
+  'docs/themes/example-theme/assets/img/sand.png': sandPng,
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const root = fileURLToPath(new URL('../themes/', import.meta.url))
+  const root = fileURLToPath(new URL('../../../', import.meta.url))
   for (const [path, draw] of Object.entries(themeArt)) {
     const file = join(root, path)
     mkdirSync(join(file, '..'), { recursive: true })

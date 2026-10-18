@@ -3,13 +3,15 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { ThemeManifestSchema } from '@score/contract'
 import { BUILTIN_THEMES_DIR } from '../../src/themes/builtin.ts'
-import { HARBOUR, renderHarbour, themeArt } from '../../scripts/theme-art.ts'
+import { HARBOUR, SAND, renderHarbour, renderSand, themeArt } from '../../scripts/theme-art.ts'
+
+const ROOT = join(BUILTIN_THEMES_DIR, '../../..')
 
 // The pictures the built-in themes ship are drawn by apps/server/scripts/theme-art.ts: the files are exactly what the
 // script draws, and text stays readable on them (a theme's own colours are only judged against flat colours elsewhere;
 // over a picture the ground is the picture, dimmed).
 test.each(Object.entries(themeArt))('%s is exactly what the script draws', (path, draw) => {
-  expect(readFileSync(join(BUILTIN_THEMES_DIR, path)).equals(draw())).toBe(true)
+  expect(readFileSync(join(ROOT, path)).equals(draw())).toBe(true)
 })
 
 type Rgb = [number, number, number]
@@ -46,18 +48,26 @@ function extremes(pixels: Uint8Array, ground: Rgb, dim: number): { dark: Rgb; li
   return { dark, light }
 }
 
-describe('harbour', () => {
+describe.each([
+  ['harbour (built in)', 'apps/server/themes/harbour', renderHarbour, HARBOUR],
+  ['sandbar (the example theme)', 'docs/themes/example-theme', renderSand, SAND],
+] as const)('%s', (_name, folder, render, size) => {
   const manifest = ThemeManifestSchema.parse(
-    JSON.parse(readFileSync(join(BUILTIN_THEMES_DIR, 'harbour/theme.json'), 'utf8')),
+    JSON.parse(readFileSync(join(ROOT, folder, 'theme.json'), 'utf8')),
   )
-  const pixels = renderHarbour()
-  expect(pixels.length).toBe(HARBOUR.width * HARBOUR.height * 3)
+  const pixels = render()
+  expect(pixels.length).toBe(size.width * size.height * 3)
   const dim = manifest.background?.dim ?? 0
   // Text tokens drawn straight on the page (headings, hints, room lists) and inside cards.
   const texts = ['ink', 'ink-muted', 'muted', 'chat-text', 'chat-secondary'] as const
 
   describe.each(['light', 'dark'] as const)('%s', (mode) => {
-    const colors = manifest.colors![mode]!
+    // What a theme leaves out is Score's own (tokens.css).
+    const defaults = {
+      light: { 'chat-text': '#2a2c33', 'chat-secondary': '#3a3d45', card: '#ffffff' },
+      dark: { 'chat-text': '#d6d8de', 'chat-secondary': '#c0c3cc', card: '#181a21' },
+    }[mode]
+    const colors = { ...defaults, ...manifest.colors![mode]! } as Record<string, string>
     const ground = hex(colors.ground!)
     const { dark, light } = extremes(pixels, ground, dim)
 
@@ -67,7 +77,7 @@ describe('harbour', () => {
       expect(ratio(text, light)).toBeGreaterThanOrEqual(4.5)
     })
 
-    test.each(texts)(
+    test.skipIf(manifest.shape?.surface !== 'glass').each(texts)(
       '%s is readable on a glass card over the picture (AA, worst spot)',
       (token) => {
         // Glass: the card colour at 70 % over what is behind it (the blur only averages, so the extremes bound it).

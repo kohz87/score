@@ -1,5 +1,14 @@
 import JSZip from 'jszip'
-import { mkdtempSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -570,3 +579,28 @@ test.each(['harbour', 'ledger', 'studio'])(
     })
   },
 )
+
+test('the example theme of docs/themes/example-theme zips up and imports through the real route', async () => {
+  const folder = fileURLToPath(new URL('../../../../docs/themes/example-theme/', import.meta.url))
+  const entries: Record<string, Buffer> = {}
+  const walk = (path: string) => {
+    for (const name of readdirSync(join(folder, path))) {
+      const relative = path ? `${path}/${name}` : name
+      if (statSync(join(folder, relative)).isDirectory()) walk(relative)
+      else entries[relative] = readFileSync(join(folder, relative))
+    }
+  }
+  walk('')
+  expect(Object.keys(entries).sort()).toEqual(['assets/img/sand.png', 'style.css', 'theme.json'])
+  const res = await upload(await zipOf(entries))
+  expect(res.statusCode, res.body).toBe(201)
+  const result = ThemeImportResultSchema.parse(res.json())
+  expect(result.theme).toMatchObject({ id: 'sandbar', name: 'Sandbar', source: 'imported' })
+  const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/sandbar')).json())
+  expect(detail.assets).toEqual(['img/sand.png'])
+  expect(detail.manifest.background?.image).toBe('asset:img/sand.png')
+  expect(detail.css).toContain('--h1-size')
+  const picture = await call('GET', '/api/themes/sandbar/assets/img/sand.png')
+  expect(picture.statusCode).toBe(200)
+  expect(picture.headers['content-type']).toBe('image/png')
+})
