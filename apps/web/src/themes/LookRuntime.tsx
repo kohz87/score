@@ -11,13 +11,7 @@ import {
   writeDeviceOverride,
   writeLookCache,
 } from './look-store.ts'
-import {
-  DEFAULT_LAYOUT,
-  layoutFromCache,
-  setLayout,
-  viewOfPath,
-  type LookView,
-} from './layout.ts'
+import { DEFAULT_LAYOUT, layoutFromCache, setLayout, viewOfPath, type LookView } from './layout.ts'
 import { themeDetailQuery } from './queries.ts'
 import { useLook } from './use-look.ts'
 import { packs } from '../styles/packs.ts'

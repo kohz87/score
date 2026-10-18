@@ -370,103 +370,107 @@ body.scroll-locked {
   }
   .nav-drawer {
     display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 40;
   }
-  .nav-drawer-backdrop {
-    position: absolute;
-    inset: 0;
-    background: color-mix(in srgb, var(--ink) 40%, transparent);
-    animation: drawer-fade 200ms ease-out;
-  }
-  .nav-drawer-panel {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: min(320px, calc(100vw - 48px));
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    padding: 20px 16px max(20px, env(safe-area-inset-bottom));
-    background: var(--card);
-    border-radius: 0 var(--radius-card) var(--radius-card) 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    animation: drawer-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-  .nav-drawer--closing .nav-drawer-backdrop {
-    animation: drawer-fade 200ms ease-in reverse forwards;
-  }
-  .nav-drawer--closing .nav-drawer-panel {
-    animation: drawer-in 200ms ease-in reverse forwards;
-  }
-  .nav-drawer-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 var(--space-1) 0 var(--space-3);
-  }
-  .nav-drawer-close {
-    width: 44px;
-    height: 44px;
-    display: grid;
-    place-items: center;
-    border-radius: var(--radius-pill);
-    border: 1px solid var(--hairline);
-    background: var(--card);
-    color: var(--ink-muted);
-    cursor: pointer;
-  }
-  .nav-drawer-nav {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .nav-drawer-link {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 48px;
-    padding: 0 var(--space-4);
-    border-radius: var(--radius-16);
-    color: var(--ink-muted);
-    font-weight: 500;
-    text-decoration: none;
-  }
-  .nav-drawer-link[aria-current='page'] {
-    background: var(--ink);
-    color: var(--card);
-    font-weight: 600;
-  }
-  .nav-drawer-sub {
-    display: flex;
-    flex-direction: column;
-    margin: 2px 0 6px 28px;
-    padding-left: var(--space-3);
-    border-left: 2px solid var(--hairline);
-  }
-  .nav-drawer-sublink {
-    display: flex;
-    align-items: center;
-    min-height: 40px;
-    padding: 0 var(--space-3);
-    border-radius: var(--radius-14);
-    color: var(--muted);
-    font-size: 14px;
-    text-decoration: none;
-  }
-  .nav-drawer-sublink[aria-current='page'] {
-    color: var(--ink);
-    font-weight: 600;
-    background: var(--subtle);
-  }
-  .nav-drawer-link:focus-visible,
-  .nav-drawer-sublink:focus-visible {
-    outline: 2px solid var(--ink);
-    outline-offset: -2px;
-  }
+}
+/* The drawer's own rules hold at every width: the launcher navigation (PLAN 9.3) opens it on desktop too. It is only
+   displayed below 1024px or for the launcher. */
+.nav-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.nav-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+  animation: drawer-fade 200ms ease-out;
+}
+.nav-drawer-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(320px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 20px 16px max(20px, env(safe-area-inset-bottom));
+  background: var(--card);
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: drawer-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.nav-drawer--closing .nav-drawer-backdrop {
+  animation: drawer-fade 200ms ease-in reverse forwards;
+}
+.nav-drawer--closing .nav-drawer-panel {
+  animation: drawer-in 200ms ease-in reverse forwards;
+}
+.nav-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-1) 0 var(--space-3);
+}
+.nav-drawer-close {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.nav-drawer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-drawer-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-16);
+  color: var(--ink-muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+.nav-drawer-link[aria-current='page'] {
+  background: var(--ink);
+  color: var(--card);
+  font-weight: 600;
+}
+.nav-drawer-sub {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 6px 28px;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--hairline);
+}
+.nav-drawer-sublink {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-14);
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+.nav-drawer-sublink[aria-current='page'] {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--subtle);
+}
+.nav-drawer-link:focus-visible,
+.nav-drawer-sublink:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
 }
 @media (width < 600px) {
   .app-shell {
@@ -635,5 +639,70 @@ body.scroll-locked {
     bottom: calc(100% + 8px);
     right: auto;
     left: 0;
+  }
+}
+
+/* Navigation positions of a theme (PLAN 9.3, html[data-nav], set only by a custom theme). `top` is Score's own bar and
+   `left` the 8.3 rail (the engine also sets data-layout='side' for both rails). Same elements and order in every
+   position, so keyboard and screen-reader behaviour is unchanged. Below 1100px every position falls back to today's
+   top bar, and below 1024px to the bar with the drawer. */
+@media (width >= 1100px) {
+  /* Right rail: the left rail, mirrored. */
+  :root[data-layout='side'][data-nav='right'] .app-shell {
+    padding-left: var(--space-6);
+    padding-right: var(--space-4);
+  }
+  :root[data-layout='side'][data-nav='right'] .shell-content {
+    grid-template-columns: minmax(0, 1fr) var(--rail-width);
+  }
+  :root[data-layout='side'][data-nav='right'] .top-bar {
+    grid-column: 2;
+  }
+  :root[data-layout='side'][data-nav='right'] .page-content {
+    grid-column: 1;
+  }
+  :root[data-layout='side'][data-nav='right'] .avatar-popover {
+    left: auto;
+    right: 0;
+  }
+}
+@media (width >= 1024px) {
+  /* Launcher: one menu button opens the drawer; the page gets the whole width. */
+  :root[data-nav='launcher'] .menu-trigger {
+    display: grid;
+  }
+  :root[data-nav='launcher'] .main-nav,
+  :root[data-nav='launcher'] .brand-subtitle {
+    display: none;
+  }
+  :root[data-nav='launcher'] .nav-drawer {
+    display: block;
+  }
+}
+/* The wrapper adds nothing to Score's own bar; in the launcher it carries the Needs-you marker. */
+.menu-slot {
+  display: contents;
+}
+:root[data-nav='launcher'] .menu-slot {
+  display: block;
+  position: relative;
+  flex: 0 0 44px;
+}
+.menu-slot-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+}
+
+/* Content width. `wide` is Score's own (no cap); `narrow` caps the page, `full` trims the gutters and lets the
+   capped columns (the chat column, the composer) use the room. Desktop only: phones keep today's gutters. */
+@media (width >= 1024px) {
+  :root[data-width='narrow'] .page-content {
+    max-width: 960px;
+    width: 100%;
+    margin-inline: auto;
+  }
+  :root[data-width='full'][data-layout] .app-shell {
+    padding-inline: var(--space-2);
   }
 }

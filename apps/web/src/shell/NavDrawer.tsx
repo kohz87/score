@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import { prefersReducedMotion } from '../data/use-media.ts'
-import { destinations } from './destinations.ts'
+import { useLayout, useMenu } from '../themes/layout.ts'
 import { HermesCheckDot, NeedsYouDot } from './MainNav.tsx'
 
 export const NAV_DRAWER_ID = 'nav-drawer'
@@ -21,6 +21,9 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
   const [shown, setShown] = useState(open)
   const panelRef = useRef<HTMLElement>(null)
   const { pathname } = useLocation()
+  const menu = useMenu()
+  // The launcher layout opens this drawer at every width; the others only below the desktop breakpoint.
+  const persistent = useLayout().nav === 'launcher'
   const pairing = pathname === '/pair'
   if (open && !shown) setShown(true)
   const closing = shown && !open
@@ -43,7 +46,7 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
     lastPath.current = pathname
   }, [pathname, onClose])
   useEffect(() => {
-    if (!open) return
+    if (!open || persistent) return
     if (typeof window.matchMedia !== 'function') return
     const query = window.matchMedia('(min-width: 1024px)')
     const onChange = () => {
@@ -51,7 +54,7 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
     }
     query.addEventListener('change', onChange)
     return () => query.removeEventListener('change', onChange)
-  }, [open, onClose])
+  }, [open, persistent, onClose])
   if (!shown) return null
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') {
@@ -101,7 +104,7 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
           </button>
         </div>
         <nav aria-label="Pages" className="nav-drawer-nav">
-          {destinations.map(({ path, title }) => (
+          {menu.map(({ path, title }) => (
             <div key={path} className="nav-drawer-group">
               <NavLink to={path} className="nav-drawer-link">
                 {title}

@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router'
-import { destinations } from './destinations.ts'
 import { needsHermesCheck, useSystemStatus } from '../routes/settings/settings-queries.ts'
+import { useMenu } from '../themes/layout.ts'
 import { useNeedsYou } from './use-needs-you.ts'
 
 // Only mounted where the query client exists (the pairing page renders outside it).
@@ -23,9 +23,10 @@ export function NeedsYouDot() {
 
 export function MainNav() {
   const { pathname } = useLocation()
+  const menu = useMenu()
   return (
     <nav className="main-nav" aria-label="Main">
-      {destinations.map(({ path, title }) => (
+      {menu.map(({ path, title }) => (
         <NavLink key={path} to={path} className="main-nav-link">
           {title}
           {path === '/now' && pathname !== '/pair' && <NeedsYouDot />}
