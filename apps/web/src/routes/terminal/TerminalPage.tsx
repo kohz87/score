@@ -199,7 +199,12 @@ export function TerminalPage() {
         jobs.
       </p>
       {phase === 'auth' && (
-        <form className="terminal-auth" onSubmit={submit} aria-label="Confirm it’s you">
+        <form
+          className="terminal-auth"
+          onSubmit={submit}
+          aria-label="Confirm it’s you"
+          data-protected="any"
+        >
           <label>
             Security password
             <input

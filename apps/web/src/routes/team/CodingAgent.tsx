@@ -60,7 +60,7 @@ export function ReadAccessWarning({
             : 'Antigravity’s sandbox keeps it inside its workspace: it can’t read or change files elsewhere.'
           : 'This agent runs as your user.'
   return (
-    <div className="team-muted-strong coding-reach" role="note">
+    <div className="team-muted-strong coding-reach" role="note" data-protected="any">
       <p>{reach}</p>
       {!brief && (
         <p>
@@ -101,7 +101,7 @@ function PermissionPicker({
   unverified: readonly CodingPermission[]
 }) {
   return (
-    <fieldset className="team-coding-permission">
+    <fieldset className="team-coding-permission" data-protected="any">
       <legend>Permission</legend>
       {(Object.keys(permissionLabels) as CodingPermission[]).map((level) => (
         <label key={level}>
@@ -297,7 +297,7 @@ export function AddCodingAgentForm({
         unverified={unverified}
       />
       {needsAck && (
-        <label className="coding-acknowledge">
+        <label className="coding-acknowledge" data-protected="any">
           <input
             type="checkbox"
             required
@@ -309,7 +309,7 @@ export function AddCodingAgentForm({
         </label>
       )}
       {permission === 'full' && (
-        <label>
+        <label data-protected="any">
           Security password
           <input
             type="password"

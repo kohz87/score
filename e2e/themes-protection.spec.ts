@@ -212,3 +212,72 @@ test.describe('theme CSS stays out of protected subtrees', () => {
     expect(await isOnTop(page.locator('.agent-glyph').first())).toBe(true)
   })
 })
+
+test.describe('every decision surface is protected, not only the chat card', () => {
+  test('#2: the task drawer’s approval text and its Approve button stay shown', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await wear(
+      page,
+      '.task-drawer-approval { display: none; }' +
+        'section[aria-label="Task actions"] div, section[aria-label="Task actions"] button { display: none; }' +
+        'section[aria-label="Task actions"] p, section[aria-label="Task actions"] b, section[aria-label="Task actions"] code { color: transparent; }',
+    )
+    let taskId: string | undefined
+    await expect
+      .poll(
+        async () => {
+          const response = await page.request.get('/api/approvals?status=pending')
+          const { items } = (await response.json()) as {
+            items: { id: string; actionable: boolean; refs: { kind: string; taskId?: string }[] }[]
+          }
+          taskId = items
+            .find((item) => item.id.startsWith('approval-docs') && item.actionable)
+            ?.refs.find((ref) => ref.kind === 'task')?.taskId
+          return taskId
+        },
+        { timeout: 200_000, intervals: [1_000, 2_000, 5_000] },
+      )
+      .toBeTruthy()
+    await page.goto(`/tasks/${taskId}`)
+    const drawer = page.getByRole('complementary', { name: 'Task details' })
+    const actions = drawer.getByRole('region', { name: 'Task actions' })
+    await expect(actions).toBeAttached({ timeout: 20_000 })
+    await settle(page)
+    const request = actions.locator('.task-drawer-approval')
+    const buttons = actions.locator('.task-drawer-buttons')
+    await expect(request).toContainText('asks:')
+    await expect(actions.getByRole('button', { name: /^Approve/ })).toBeVisible()
+    expect(await unreadable(request)).toEqual([])
+    expect(await unreadable(buttons)).toEqual([])
+  })
+
+  test('#2: the add-coding-agent form keeps its permission controls, warning and password field', async ({
+    page,
+  }) => {
+    await wear(
+      page,
+      '.team-coding-permission, .coding-reach, .coding-acknowledge { display: none; }' +
+        '[role=dialog] fieldset, [role=dialog] legend, [role=dialog] [role=alert], [role=dialog] [role=note] { display: none; }' +
+        '[role=dialog] input[type=password], [role=dialog] input[type=radio] { opacity: 0; }' +
+        '[role=dialog] label { visibility: hidden; color: transparent; }',
+    )
+    await page.goto('/team')
+    await page.getByRole('button', { name: 'Add agent' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('radio', { name: /Coding agent/ }).check()
+    await dialog.getByRole('radio', { name: /Full access/ }).check()
+    await settle(page)
+    const permission = dialog.getByRole('group', { name: 'Permission' })
+    await expect(permission).toBeVisible()
+    await expect(permission.getByRole('radio', { name: /Workspace write/ })).toBeVisible()
+    await expect(permission.getByRole('alert')).toContainText(
+      'Full access turns the CLI’s own sandbox off',
+    )
+    await expect(dialog.getByLabel('Security password')).toBeVisible()
+    expect(await unreadable(permission)).toEqual([])
+    expect(await unreadable(dialog.locator('label', { hasText: 'Security password' }))).toEqual([])
+    await expect(dialog.getByRole('note').first()).toBeVisible()
+  })
+})

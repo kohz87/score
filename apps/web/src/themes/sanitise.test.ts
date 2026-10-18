@@ -25,6 +25,13 @@ describe('sanitiseCss', () => {
     expect(reasons('.orch-decision--gate { color: red }')).toEqual(['protected_selector'])
     expect(reasons('.agent-glyph__ring { fill: none }')).toEqual(['protected_selector'])
     expect(reasons('.orch-decisions { color: red }')).toEqual(['protected_selector'])
+    // Gate #2: the task drawer's approval and the add-coding-agent permission controls are protected too.
+    expect(reasons('.task-drawer-approval { display: none }')).toEqual(['protected_selector'])
+    expect(reasons('.task-drawer-buttons button { display: none }')).toEqual(['protected_selector'])
+    expect(reasons('.team-coding-permission { display: none }')).toEqual(['protected_selector'])
+    expect(reasons('.coding-reach, .coding-acknowledge { display: none }')).toEqual([
+      'protected_selector',
+    ])
     expect(reasons('.settings-card { color: red }')).toEqual([])
     expect(reasons('@font-face { font-family: x; src: url(a.woff2) }')).toEqual(['font_face'])
   })
