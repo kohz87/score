@@ -53,17 +53,17 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
 
 export const HARBOUR = { width: 1280, height: 800 } as const
 
-/** Harbour: a dusk sky over still water, a warm glow near the horizon, low hills. Mid-tones only, so glass cards read in both modes. */
+/** Harbour: a dusk sky over still water, a warm glow near the horizon, low hills. Light mid-tones only, under a strong veil of the theme's ground: the page behind text stays light in light mode and dark in dark mode, for every agent colour. */
 export function renderHarbour(): Uint8Array {
   const { width, height } = HARBOUR
   const out = new Uint8Array(width * height * 3)
   const horizon = 0.58
-  const top: Rgb = [46, 82, 128]
-  const mid: Rgb = [92, 150, 178]
-  const glow: Rgb = [244, 188, 138]
-  const deep: Rgb = [22, 62, 92]
-  const shallow: Rgb = [58, 120, 146]
-  const hill: Rgb = [38, 78, 106]
+  const top: Rgb = [104, 148, 190]
+  const mid: Rgb = [146, 192, 212]
+  const glow: Rgb = [244, 196, 150]
+  const deep: Rgb = [112, 160, 188]
+  const shallow: Rgb = [126, 178, 200]
+  const hill: Rgb = [116, 154, 184]
   const sunX = 0.66
   for (let y = 0; y < height; y += 1) {
     const v = y / height
@@ -113,10 +113,10 @@ export const SAND = { width: 800, height: 500 } as const
 export function renderSand(): Uint8Array {
   const { width, height } = SAND
   const out = new Uint8Array(width * height * 3)
-  const skyTop: Rgb = [150, 176, 190]
-  const skyLow: Rgb = [232, 196, 150]
-  const far: Rgb = [196, 150, 104]
-  const near: Rgb = [150, 104, 70]
+  const skyTop: Rgb = [176, 198, 210]
+  const skyLow: Rgb = [240, 214, 178]
+  const far: Rgb = [222, 188, 146]
+  const near: Rgb = [200, 160, 120]
   for (let y = 0; y < height; y += 1) {
     const v = y / height
     for (let x = 0; x < width; x += 1) {

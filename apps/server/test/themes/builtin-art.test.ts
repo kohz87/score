@@ -48,44 +48,60 @@ function extremes(pixels: Uint8Array, ground: Rgb, dim: number): { dark: Rgb; li
   return { dark, light }
 }
 
+/** Custom properties declared in the rule that starts with `selector` (the same reader the web contrast tests use). */
+function declared(css: string, selector: string): Record<string, string> {
+  const at = css.indexOf(`${selector} {`)
+  const body = css.slice(css.indexOf('{', at) + 1, css.indexOf('}', at))
+  return Object.fromEntries(
+    [...body.matchAll(/--([\w-]+):\s*([^;]+);/g)].map((match) => [match[1]!, match[2]!.trim()]),
+  )
+}
+const tokens = readFileSync(join(ROOT, 'apps/web/src/styles/tokens.css'), 'utf8')
+// What a theme leaves out is Score's own: the agent colours are never a theme's to set, so every theme inherits them.
+const scoreColors = {
+  light: declared(tokens, ":root,\n[data-pack='score']"),
+  dark: {
+    ...declared(tokens, ":root,\n[data-pack='score']"),
+    ...declared(tokens, ":root[data-theme='dark'],\n[data-pack='score'][data-theme='dark']"),
+  },
+}
+const agents = ['violet', 'jade', 'saffron', 'coral'].map((name) => `agent-${name}-text`)
+// Text drawn straight on the page (headings, hints, room lists, agent status lines) and inside cards.
+const texts = ['ink', 'ink-muted', 'muted', 'chat-text', 'chat-secondary', ...agents]
+
 describe.each([
-  ['harbour (built in)', 'apps/server/themes/harbour', renderHarbour, HARBOUR],
+  ['harbour', 'apps/server/themes/harbour', renderHarbour, HARBOUR],
+  ['ledger', 'apps/server/themes/ledger', null, null],
+  ['studio', 'apps/server/themes/studio', null, null],
   ['sandbar (the example theme)', 'docs/themes/example-theme', renderSand, SAND],
 ] as const)('%s', (_name, folder, render, size) => {
   const manifest = ThemeManifestSchema.parse(
     JSON.parse(readFileSync(join(ROOT, folder, 'theme.json'), 'utf8')),
   )
-  const pixels = render()
-  expect(pixels.length).toBe(size.width * size.height * 3)
+  const pixels = render ? render() : null
+  if (pixels && size) expect(pixels.length).toBe(size.width * size.height * 3)
+  expect(Boolean(manifest.background)).toBe(Boolean(pixels))
   const dim = manifest.background?.dim ?? 0
-  // Text tokens drawn straight on the page (headings, hints, room lists) and inside cards.
-  const texts = ['ink', 'ink-muted', 'muted', 'chat-text', 'chat-secondary'] as const
+  const glass = manifest.shape?.surface === 'glass'
 
   describe.each(['light', 'dark'] as const)('%s', (mode) => {
-    // What a theme leaves out is Score's own (tokens.css).
-    const defaults = {
-      light: { 'chat-text': '#2a2c33', 'chat-secondary': '#3a3d45', card: '#ffffff' },
-      dark: { 'chat-text': '#d6d8de', 'chat-secondary': '#c0c3cc', card: '#181a21' },
-    }[mode]
-    const colors = { ...defaults, ...manifest.colors![mode]! } as Record<string, string>
+    const colors = { ...scoreColors[mode], ...manifest.colors![mode]! } as Record<string, string>
     const ground = hex(colors.ground!)
-    const { dark, light } = extremes(pixels, ground, dim)
+    const card = hex(colors.card!)
+    // The page behind the text at its worst spots: the picture under its veil, or the flat ground.
+    const open = pixels ? extremes(pixels, ground, dim) : { dark: ground, light: ground }
+    const spots = [open.dark, open.light]
 
-    test.each(texts)('%s is readable on the open picture (AA, worst spot)', (token) => {
-      const text = hex(colors[token]!)
-      expect(ratio(text, dark)).toBeGreaterThanOrEqual(4.5)
-      expect(ratio(text, light)).toBeGreaterThanOrEqual(4.5)
+    test.each(texts)('%s is readable on the open page (AA, worst spot)', (token) => {
+      for (const spot of spots) expect(ratio(hex(colors[token]!), spot)).toBeGreaterThanOrEqual(4.5)
     })
 
-    test.skipIf(manifest.shape?.surface !== 'glass').each(texts)(
-      '%s is readable on a glass card over the picture (AA, worst spot)',
-      (token) => {
-        // Glass: the card colour at 70 % over what is behind it (the blur only averages, so the extremes bound it).
-        const card = hex(colors.card!)
-        const text = hex(colors[token]!)
-        expect(ratio(text, over(card, 0.7, dark))).toBeGreaterThanOrEqual(4.5)
-        expect(ratio(text, over(card, 0.7, light))).toBeGreaterThanOrEqual(4.5)
-      },
-    )
+    // A card is solid, or with glass the card colour at 70 % over what is behind it (the blur only averages, so the
+    // extremes bound it).
+    test.each(texts)('%s is readable on a card (AA, worst spot)', (token) => {
+      const behind = glass ? spots.map((spot) => over(card, 0.7, spot)) : [card]
+      for (const spot of behind)
+        expect(ratio(hex(colors[token]!), spot)).toBeGreaterThanOrEqual(4.5)
+    })
   })
 })

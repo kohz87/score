@@ -123,7 +123,9 @@ Two rules the table can’t show:
 
 A picture lies behind the page, so text drawn straight on it (headings, the room list, hints) must stay readable
 wherever the picture is dark or light. `dim` lays your `ground` colour over the picture to calm it down. Check the
-darkest and the lightest spot of the picture with your text colours, in both modes; Harbour’s test
+darkest and the lightest spot of the picture with your text colours **and with Score’s four agent text colours** (they
+appear in room lists and status lines, and a theme can’t change them), in both modes. In practice that means a
+picture with no dark spots in light mode and no light spots in dark mode, under a strong veil (`dim` 80); Harbour’s test
 (`apps/server/test/themes/builtin-art.test.ts`) does exactly that and is a good one to copy. With `shape.surface:
 glass`, cards are the card colour at 70 % over the blurred picture, so check that too.
 
@@ -304,7 +306,7 @@ The whole manifest of the example:
   "description": "Warm sand and deep teal, soft corners, a quiet picture behind the page and a menu in your own words.",
   "colors": {
     "light": {
-      "ground": "#efe6d6",
+      "ground": "#f7f1e5",
       "card": "#fffdf8",
       "ink": "#16302f",
       "ink-muted": "#3a4b47",

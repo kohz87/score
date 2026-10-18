@@ -7,7 +7,7 @@
   "description": "Frosted glass cards over a dusk-blue harbour, navigation on the left, chat in bubbles.",
   "colors": {
     "light": {
-      "ground": "#dfeaf1",
+      "ground": "#f1f6f9",
       "card": "#fbfdfe",
       "ink": "#0d2130",
       "ink-muted": "#34495a",
@@ -79,5 +79,5 @@
     "contentWidth": "wide",
     "chat": { "messages": "bubbles", "roomList": "left" }
   },
-  "background": { "image": "asset:img/harbour.png", "fit": "cover", "dim": 72 }
+  "background": { "image": "asset:img/harbour.png", "fit": "cover", "dim": 80 }
 }
