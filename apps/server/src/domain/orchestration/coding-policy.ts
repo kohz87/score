@@ -59,6 +59,8 @@ export const workerPoliciesOf = (sqlite: DatabaseSync, orchId: string): StoredWo
     .all(orchId)
     .map(parse)
 
+export const MAX_POLICY_SNAPSHOT_BYTES = 64 * 1024
+
 export function storeWorkerPolicy(
   sqlite: DatabaseSync,
   orchId: string,
@@ -73,9 +75,11 @@ export function storeWorkerPolicy(
   now: string,
 ): void {
   const text = JSON.stringify(value.policy)
-  // A policy snapshot stays small (identities and hashes): well under the 4 KB the run's reserve charges for it.
-  if (Buffer.byteLength(text) > 4096)
-    throw new Error('A worker policy snapshot is larger than 4 KB')
+  // A sanity bound only: the snapshot holds identities, hashes and paths (the workspace path alone may be 4096
+  // characters), and its real size is charged to the run's allowance below. Real snapshots were ~3.5 KB with ordinary
+  // home paths, so the former 4 KB cap failed coding workers for longer paths.
+  if (Buffer.byteLength(text) > MAX_POLICY_SNAPSHOT_BYTES)
+    throw new Error('A worker policy snapshot is larger than 64 KB')
   // The snapshot is retained with the run, so it is charged to the run's allowance (design §11).
   addStored(sqlite, orchId, Buffer.byteLength(text) + Buffer.byteLength(value.reach))
   sqlite
