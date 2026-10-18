@@ -1,5 +1,5 @@
 import { ThemeManifestSchema, type ThemeManifest } from '@score/contract'
-import { useSyncExternalStore } from 'react'
+import { createContext, useContext, useSyncExternalStore } from 'react'
 import { destinations } from '../shell/destinations.ts'
 
 // The layout model (PLAN 9.3, design docs/briefs/9-themes.md §7): what a theme's `layout` asks of the components that
@@ -149,9 +149,16 @@ export function getLayout(): LayoutConfig {
   return current
 }
 
+/**
+ * The Customizer's preview (PLAN 9.4) renders the app in a frame of its own with a draft layout. The draft never goes
+ * through setLayout(): it lives in this context, so the page around the preview keeps the look that is applied.
+ */
+export const LayoutOverride = createContext<LayoutConfig | null>(null)
+
 /** The layout of the look that is applied now (Score's default when no custom theme is). */
 export function useLayout(): LayoutConfig {
-  return useSyncExternalStore(
+  const override = useContext(LayoutOverride)
+  const applied = useSyncExternalStore(
     (listener) => {
       listeners.add(listener)
       return () => {
@@ -161,6 +168,7 @@ export function useLayout(): LayoutConfig {
     getLayout,
     () => DEFAULT_LAYOUT,
   )
+  return override ?? applied
 }
 
 export function useMenu(): MenuItem[] {

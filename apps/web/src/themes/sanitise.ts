@@ -52,7 +52,11 @@ export function splitDeclarations(block: string): string[] {
   return out.map((part) => part.trim()).filter(Boolean)
 }
 
-type Context = { themeId: string | null; report: ThemeSanitiseReport['dropped'] }
+type Context = {
+  themeId: string | null
+  resolve?: (ref: string) => string | null
+  report: ThemeSanitiseReport['dropped']
+}
 
 function drop(context: Context, rule: string, reason: Reason): void {
   context.report.push({ rule: rule.replace(/\s+/g, ' ').slice(0, 200), reason })
@@ -75,6 +79,8 @@ function cleanUrls(value: string, context: Context): string | null {
         ok = false
         return ''
       }
+      const resolved = context.resolve?.(ref)
+      if (resolved) return `url("${resolved}")`
       if (!context.themeId || !ThemeIdSchema.safeParse(context.themeId).success)
         return `url("${ref}")`
       return `url("/api/themes/${context.themeId}/assets/${ref.slice('asset:'.length)}")`
@@ -194,8 +200,15 @@ function walkRules(rules: ArrayLike<RuleLike>, context: Context): string[] {
  * Cleans theme CSS. With `themeId`, `asset:` references become the theme's own asset URLs; without it they stay
  * `asset:` (what is stored and exported).
  */
-export function sanitiseCss(text: string, options: { themeId?: string } = {}): SanitiseResult {
-  const context: Context = { themeId: options.themeId ?? null, report: [] }
+export function sanitiseCss(
+  text: string,
+  options: { themeId?: string; resolve?: (ref: string) => string | null } = {},
+): SanitiseResult {
+  const context: Context = {
+    themeId: options.themeId ?? null,
+    ...(options.resolve ? { resolve: options.resolve } : {}),
+    report: [],
+  }
   if (!text.trim()) return { css: '', report: { dropped: [] } }
   if (typeof CSSStyleSheet === 'undefined' || !('replaceSync' in CSSStyleSheet.prototype)) {
     return { css: '', report: { dropped: [{ rule: '(all CSS)', reason: 'other_at_rule' }] } }

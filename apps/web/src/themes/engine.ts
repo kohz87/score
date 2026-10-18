@@ -98,6 +98,9 @@ export function assetUrl(themeId: string, ref: string): string | null {
   return `/api/themes/${themeId}/assets/${ref.slice('asset:'.length)}`
 }
 
+/** Where an `asset:` reference points. The Customizer's draft answers with pictures and fonts not saved yet. */
+export type AssetResolver = (ref: string) => string | null
+
 function fontStack(look: Look, themeId: string, key: 'heading' | 'body' | 'code'): string | null {
   const family = look.fonts?.[key]
   if (typeof family !== 'string' || !SAFE_FAMILY.test(family)) return null
@@ -140,11 +143,15 @@ export function tokenCss(look: Look, themeId: string): string {
   return parts.join('\n')
 }
 
-export function fontFaceCss(look: Look, themeId: string): string {
+export function fontFaceCss(
+  look: Look,
+  themeId: string,
+  resolve: AssetResolver = (ref) => assetUrl(themeId, ref),
+): string {
   const faces = look.fonts?.faces ?? []
   return faces
     .flatMap((face) => {
-      const url = assetUrl(themeId, face.src)
+      const url = ThemeAssetRefSchema.safeParse(face.src).success ? resolve(face.src) : null
       if (!url || !SAFE_FAMILY.test(face.family)) return []
       const weight = /^[1-9]00( [1-9]00)?$/.test(face.weight) ? face.weight : '400'
       const style = face.style === 'italic' ? 'italic' : 'normal'
@@ -155,9 +162,13 @@ export function fontFaceCss(look: Look, themeId: string): string {
     .join('\n')
 }
 
-export function backgroundCss(look: Look, themeId: string): string {
+export function backgroundCss(
+  look: Look,
+  themeId: string,
+  resolve: AssetResolver = (ref) => assetUrl(themeId, ref),
+): string {
   const image = look.background?.image
-  const url = image ? assetUrl(themeId, image) : null
+  const url = image && ThemeAssetRefSchema.safeParse(image).success ? resolve(image) : null
   if (!url) return ''
   const dim = Math.min(80, Math.max(0, Math.round(look.background?.dim ?? 0)))
   const veil = `color-mix(in srgb, var(--ground) ${dim}%, transparent)`
@@ -246,6 +257,29 @@ function setAdopted(texts: string[]): {
   return { sheets, fallbackElements: [] }
 }
 
+// Source Serif 4 and Inter ship with the packs that use them and load on first use. A custom theme (a copy of Paper,
+// say) may name them too, so they load for it as well.
+const packFontFamilies: Record<string, string> = { 'Source Serif 4': 'paper', Inter: 'dense' }
+export const builtinFontFamilies = [
+  'Bricolage Grotesque',
+  'Hanken Grotesk',
+  'JetBrains Mono',
+  ...Object.keys(packFontFamilies),
+] as const
+
+export function loadBuiltinFonts(look: Look): void {
+  for (const key of ['heading', 'body', 'code'] as const) {
+    const family = look.fonts?.[key]
+    const packId = family ? packFontFamilies[family] : undefined
+    if (packId)
+      void findPack(packId)
+        .fonts?.()
+        .catch(() => {
+          // The fallback font shows.
+        })
+  }
+}
+
 /** Removes the sheets and attributes of a custom theme; the document is back at the unthemed Score look. */
 export function clearLook(): void {
   const root = document.documentElement
@@ -283,6 +317,7 @@ export function lookParts(
   themeId: string,
   mode: ColorMode,
   view: LookView,
+  resolve?: AssetResolver,
 ): { attributes: Record<string, string>; css: string; contrastFallback: boolean; look: Look } {
   const look = lookForView(manifest, view)
   const contrastFallback = failsProtectedContrast(look, mode)
@@ -296,7 +331,11 @@ export function lookParts(
     'data-density': look.shape?.density ?? 'comfortable',
     ...(contrastFallback ? { 'data-contrast-fallback': '' } : {}),
   }
-  const css = [tokenCss(look, themeId), fontFaceCss(look, themeId), backgroundCss(look, themeId)]
+  const css = [
+    tokenCss(look, themeId),
+    fontFaceCss(look, themeId, resolve),
+    backgroundCss(look, themeId, resolve),
+  ]
     .filter(Boolean)
     .join('\n')
   return { attributes, css, contrastFallback, look }
@@ -322,6 +361,7 @@ export function applyCustom(
     const { css: cleaned, report } = sanitiseCss(detail.css, { themeId: detail.id })
     applied = setAdopted([main.css, cleaned].filter(Boolean))
     for (const [name, value] of Object.entries(main.attributes)) root.setAttribute(name, value)
+    loadBuiltinFonts(main.look)
     const asCache = (parts: typeof main): CachedLook => ({
       attributes: parts.attributes,
       css: parts.css,

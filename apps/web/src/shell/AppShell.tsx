@@ -7,10 +7,12 @@ import { NavDrawer } from './NavDrawer.tsx'
 import { useTerminalAvailable } from './TerminalButton.tsx'
 import { TopBar } from './TopBar.tsx'
 import { useActivityFeed } from '../live/use-activity.ts'
+import { usePreview } from '../themes/preview-context.ts'
 
 export function AppShell() {
   // Listens from the start, so the status lines know what is going on even on a page opened later.
   useActivityFeed()
+  const preview = usePreview()
   const [commandOpen, setCommandOpen] = useState(false)
   const commandButtonRef = useRef<HTMLButtonElement>(null)
   const wasOpen = useRef(false)
@@ -34,6 +36,8 @@ export function AppShell() {
     menuWasOpen.current = menuOpen
   }, [menuOpen])
   useEffect(() => {
+    // The Customizer's preview is a picture of this shell: its shortcuts belong to the page around it.
+    if (preview) return
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
@@ -42,7 +46,7 @@ export function AppShell() {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [preview])
   return (
     <div className="app-shell">
       <div inert={commandOpen || menuOpen} className="shell-content">
@@ -60,8 +64,8 @@ export function AppShell() {
         </main>
       </div>
       <NavDrawer open={menuOpen} onClose={closeMenu} terminalOffered={terminalOffered} />
-      <NotificationBridge />
-      <UpdateBanner />
+      {!preview && <NotificationBridge />}
+      {!preview && <UpdateBanner />}
       {commandOpen && <CommandPalette onClose={closeCommand} />}
     </div>
   )
