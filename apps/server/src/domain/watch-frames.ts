@@ -246,7 +246,9 @@ const FrameRowSchema = z.object({
   surface: z.enum(['terminal', 'editor', 'browser']),
   payload: z.string(),
   caption: z.string(),
+  parent_call_id: z.string().nullable(),
 })
+const FRAME_COLUMNS = 'agent_id, seq, at, run_id, surface, payload, caption, parent_call_id'
 
 function toFrame(row: z.infer<typeof FrameRowSchema>): WatchFrame {
   return WatchFrameSchema.parse({
@@ -257,6 +259,7 @@ function toFrame(row: z.infer<typeof FrameRowSchema>): WatchFrame {
     surface: row.surface,
     [row.surface]: JSON.parse(row.payload) as unknown,
     caption: row.caption,
+    ...(row.parent_call_id ? { parentCallId: row.parent_call_id } : {}),
   })
 }
 
@@ -291,6 +294,8 @@ export function recordFrame(
     payload: FrameDraft['payload']
     caption: string
     marker?: MarkerKind
+    /** A coding agent's sub-agent step: the Agent call it ran under (C1). */
+    parentCallId?: string | null
   },
 ): WatchFrame {
   const { payload, caption } = scrubPayload(input)
@@ -304,9 +309,16 @@ export function recordFrame(
     seq = z.object({ seq: z.int().positive() }).parse(existing).seq
     sqlite
       .prepare(
-        'UPDATE watch_frames SET run_id = COALESCE(?, run_id), payload = ?, caption = ? WHERE agent_id = ? AND seq = ?',
+        'UPDATE watch_frames SET run_id = COALESCE(?, run_id), payload = ?, caption = ?, parent_call_id = COALESCE(?, parent_call_id) WHERE agent_id = ? AND seq = ?',
       )
-      .run(input.runId, JSON.stringify(payload), caption, input.agentId, seq)
+      .run(
+        input.runId,
+        JSON.stringify(payload),
+        caption,
+        input.parentCallId ?? null,
+        input.agentId,
+        seq,
+      )
   } else {
     seq =
       z
@@ -318,8 +330,8 @@ export function recordFrame(
         ).seq + 1
     sqlite
       .prepare(
-        `INSERT INTO watch_frames (agent_id, seq, at, run_id, surface, payload, caption, marker_kind, call_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO watch_frames (agent_id, seq, at, run_id, surface, payload, caption, marker_kind, call_key, parent_call_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.agentId,
@@ -331,14 +343,13 @@ export function recordFrame(
         caption,
         input.marker ?? markerFor[input.surface],
         input.callKey,
+        input.parentCallId ?? null,
       )
   }
   return toFrame(
     FrameRowSchema.parse(
       sqlite
-        .prepare(
-          'SELECT agent_id, seq, at, run_id, surface, payload, caption FROM watch_frames WHERE agent_id = ? AND seq = ?',
-        )
+        .prepare(`SELECT ${FRAME_COLUMNS} FROM watch_frames WHERE agent_id = ? AND seq = ?`)
         .get(input.agentId, seq),
     ),
   )
@@ -459,13 +470,13 @@ export function readWatch(
     from === undefined
       ? sqlite
           .prepare(
-            `SELECT agent_id, seq, at, run_id, surface, payload, caption FROM
+            `SELECT ${FRAME_COLUMNS} FROM
                (SELECT * FROM watch_frames WHERE agent_id = ? ORDER BY seq DESC LIMIT ?) ORDER BY seq`,
           )
           .all(agentId, limit)
       : sqlite
           .prepare(
-            `SELECT agent_id, seq, at, run_id, surface, payload, caption FROM watch_frames
+            `SELECT ${FRAME_COLUMNS} FROM watch_frames
              WHERE agent_id = ? AND seq >= ? ORDER BY seq LIMIT ?`,
           )
           .all(agentId, from, limit),

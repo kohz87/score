@@ -2083,3 +2083,10 @@ test('the colour tokens a theme may set are colours: the halo sizes are not on t
       }).success,
     ).toBe(false)
 })
+
+test('C1: a Watch frame may carry the Agent call id its sub-agent step ran under', () => {
+  const sub = { ...f.watch, parentCallId: 'toolu_agent_1' }
+  expect(contract.WatchFrameSchema.parse(sub)).toHaveProperty('parentCallId', 'toolu_agent_1')
+  expect(contract.WatchFrameSchema.parse(f.watch)).not.toHaveProperty('parentCallId')
+  expect(contract.WatchFrameSchema.safeParse({ ...f.watch, parentCallId: '' }).success).toBe(false)
+})

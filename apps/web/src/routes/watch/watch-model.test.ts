@@ -153,3 +153,40 @@ test('a sub-agent’s steps are grouped, without the caption prefix; frames with
     groupActivity(activityItems([terminal(1, 0), terminal(2, 1)], [])).map((e) => e.type),
   ).toEqual(['item', 'item'])
 })
+
+test('C1: sub-agent steps group by their Agent call id, so back-to-back sub-agents stay apart', () => {
+  const sub = (seq: number, seconds: number, parentCallId: string): WatchFrame => ({
+    ...terminal(seq, seconds),
+    caption: `Sub-agent · Ran step ${seq}`,
+    parentCallId,
+  })
+  const items = activityItems(
+    [
+      terminal(1, 0),
+      sub(2, 1, 'agent-a'),
+      sub(3, 2, 'agent-a'),
+      sub(4, 3, 'agent-b'),
+      terminal(5, 4),
+    ],
+    [],
+  )
+  const entries = groupActivity(items)
+  expect(entries.map((entry) => entry.type)).toEqual(['item', 'sub-agent', 'sub-agent', 'item'])
+  const groups = entries.flatMap((entry) => (entry.type === 'sub-agent' ? [entry] : []))
+  expect(groups.map((group) => group.items.map((item) => item.seq))).toEqual([[4], [3, 2]])
+  expect(items.find((item) => item.seq === 4)!.text).toBe('Ran step 4')
+})
+
+test('C1: a sub-agent step whose frame has an id but lost the caption prefix still nests; interleaved steps join their group', () => {
+  const sub = (seq: number, seconds: number, parentCallId: string): WatchFrame => ({
+    ...terminal(seq, seconds),
+    parentCallId,
+  })
+  const entries = groupActivity(
+    activityItems([sub(1, 0, 'a'), sub(2, 1, 'b'), sub(3, 2, 'a'), terminal(4, 3)], []),
+  )
+  expect(entries.map((entry) => entry.type)).toEqual(['item', 'sub-agent', 'sub-agent'])
+  const [, first, second] = entries
+  expect(first!.type === 'sub-agent' && first!.items.map((item) => item.seq)).toEqual([3, 1])
+  expect(second!.type === 'sub-agent' && second!.items.map((item) => item.seq)).toEqual([2])
+})

@@ -542,7 +542,11 @@ run: RunSummary | null; model: string | null; tools: string[] | null; attempts?:
     terminal?: { cwd: string; command: string; output: string /* tail, ≤64 KB */; status: 'running' | 'ok' | 'error' | 'paused' }
     editor?: { path: string; diff: string /* unified */; language: string | null }
     browser?: { url: string; title: string | null; imageUrl: string | null /* /api/media/:id */ }
-    caption: string /* "Checked the latest ws version" */ }
+    caption: string /* "Checked the latest ws version" */
+    parentCallId?: string /* C1: coding agents only. The `callId` of the Agent call whose sub-agent made this step (the same id as
+      `parentCallId` on tool parts and log lines, 8.7). Watch groups steps with the same `parentCallId` into one sub-agent group, so
+      two sub-agents run back to back stay two groups. Absent on the main agent's own steps, on Hermes agents' frames and on frames
+      stored before C1: those are grouped by the "Sub-agent · " caption prefix (the fallback), or stay flat. */ }
   ```
 - `GET /api/media/:mediaId` → image bytes (screenshots).
 - **S** `GET /api/watch/overview` → `{ items: { agent: AgentSummary; thumbnail: string | null; status: string; live: boolean
