@@ -31,6 +31,8 @@ export default defineConfig({
   testDir: './e2e',
   globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: true,
+  // Several builders share one machine: each e2e run takes a bounded share (SCORE_E2E_WORKERS overrides).
+  workers: Number(process.env['SCORE_E2E_WORKERS'] ?? 4),
   forbidOnly: !!process.env.CI,
   reporter: [['list']],
   use: { baseURL, trace: 'on-first-retry' },

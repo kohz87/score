@@ -214,3 +214,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   processes left. Resume: re-measure disk, merge task/test-workers, resume the three builders with the caps.
 - Live: v1.6.0 stopped cleanly for the shutdown. After boot: start Score, then restart the Hermes gateway (it parks its
   Score connections if it starts first), and check both producers reconnect.
+
+## 2026-10-18 out-of-memory crash on the new VM
+- 08:03 UTC the kernel OOM-killed processes (tailscaled first) and the VM went down: three Sonnet builders (8.9, T1,
+  9.3) ran full checks concurrently — `pnpm -r test` runs the packages in parallel and each vitest used a worker per core
+  (14) — and T1 added deliberate load to reproduce flaky tests; anon memory reached ~41 GB, page tables 3.9 GB.
+- Fix: per-package `vitest run --maxWorkers=${SCORE_TEST_WORKERS:-4}`, Playwright `workers: SCORE_E2E_WORKERS ?? 4`;
+  builders told to check `free -m` (≥ 15 GB) before heavy runs and to cap load generation. After the reboot: live Score
+  restarted, then the Hermes gateway (it had parked its connections), both producers re-registered.

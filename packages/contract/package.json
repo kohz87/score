@@ -9,7 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run --maxWorkers=${SCORE_TEST_WORKERS:-4}"
   },
   "dependencies": {
     "zod": "4.6.5"
