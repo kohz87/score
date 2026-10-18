@@ -228,3 +228,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   Cancel kept access/password drafts so a floor-only save could switch to full access; partial pause 502 offered the
   opposite action; Message linked to /chat before rooms loaded — all fixed in 8.9 #4 with tests failing first.
   Also fixed on main meanwhile: Tasks filter race (two quick filter changes lost the first; exposed by the faster VM).
+- **Release 1.6.1** (8.9 + Tasks filter race + worker caps + 2.1.302 declaration). Release run by a Haiku monitor
+  (check 258 s, e2e 143 s): contract/web/plugin/license green, e2e 378/381 (2 chat specs pass alone); server: `fix-l`
+  (T1 item) and an in-file race in `coding-workers-release.test.ts` (passes alone; handed to T1). No product cause.
