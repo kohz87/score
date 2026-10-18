@@ -310,7 +310,8 @@ tokens apply inside them, and only while their contrast holds.
   “Reset look” itself and the banner that appears when a theme is skipped. The chat-first view (`/u`) has the same
   palette and Ctrl+K, the avatar menu and the conversations button are protected there, and while a theme from outside
   Score (imported or made in the Customizer) is on, a “Way back” bar with Search, Admin view, Settings and Reset look is always on the page, whatever the layout (a hidden
-  sidebar included).
+  sidebar included). The full-screen Customizer, which has no shell around it, protects its Settings link the same way and
+  opens the command palette (Settings, and “Reset look on this device” when you type it) with Ctrl+K or ⌘K.
 
 **None of your rules match inside these.** Every selector of your CSS is applied as if it ended in
 `:where(:not([data-protected], [data-protected] *))`, so `button`, `span`, `svg path`, `[role=alert]` or `div > div` never
@@ -348,7 +349,7 @@ If a theme makes Score hard to use, any of these returns to Score’s own look:
 
 - Open any address with `?look=safe` (for this visit only).
 - Press **Ctrl+Shift+0** on any page.
-- Press Ctrl+K (or ⌘K) and run **Reset look on this device** (also in the chat-first view, or use its “Way back” bar).
+- Press Ctrl+K (or ⌘K) and run **Reset look on this device** (also in the chat-first view and in the Customizer, or use the “Way back” bar).
 - Settings › Look › **Reset look on this device**; Settings can’t be hidden by a theme.
 - On the computer Score runs on, `scripts/score look reset` (works with Score stopped; it also clears the theme every browser chose for itself, which each one drops the next time it reloads or regains focus).
 
