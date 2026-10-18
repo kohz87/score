@@ -424,7 +424,9 @@ test('the install preview lists what the checks removed, and Cancel stores nothi
   await expect(removed).toContainText('2 rules were removed')
   await expect(removed).toContainText('approvals, security screens')
   await expect(removed).toContainText('.brand-subtitle { z-index }')
-  await expect(removed).toContainText('`z-index`: This property isn’t on the list a theme may change')
+  await expect(removed).toContainText(
+    '`z-index`: This property isn’t on the list a theme may change',
+  )
   await expect(dialog.getByRole('region', { name: 'What it changes' })).toContainText('Custom CSS')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   await expect(dialog).toHaveCount(0)
