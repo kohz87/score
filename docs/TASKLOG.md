@@ -361,3 +361,13 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **Lead:** typed the rollback test's `store` (a missed typecheck error from the V2 fix — caught by the release build);
   packs-visual Chat shots now use T2's `chatSettled()`. That wait exposed a real race: night pack, phone, Chat stays
   50px above its end in ~1 of 3 runs (thread not re-pinned after the composer grows) → T4.
+- **T4** merged (product): ChatThread's own scroll writes (`onChange`, the ResizeObserver `follow`) now update
+  `position.top`, so a layout clamp that lands before the write's own scroll event is recognised and re-pinned (it left
+  the thread 50px above its end on phones when the context ring flipped lead → replier). Controlled e2e 20/20 → 0/20;
+  packs-visual phone chat 1/30 → 0/30.
+- **T3** merged (test-side): `model-picker` raced `model-settings` narrowing the server-wide model list; repeats hit
+  "name retired"; a failed run left `picker-helper` and broke reports/team. Cross-process locks (`e2e/locks.ts`:
+  `model-lists`, `roster`), per-repeat helper names, afterEach cleanup, model list restored in `finally`; reports'
+  by-agent wait 15 s (mechanism unproven). Picker ×10 alone 1/10 → 10/10.
+- Still flaky on main: themes-protection #6 "hover rule fades the page" (1/8 alone: `li.: no box` in the rules card a
+  second after switch-off) — to investigate after the release run.
