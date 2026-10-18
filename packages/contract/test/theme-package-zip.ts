@@ -20,6 +20,23 @@ export interface ZipSpec {
   localSize?: number
   /** Method written into the local header instead of 0 (stored). */
   localMethod?: number
+  /**
+   * Raw deflate bytes to store instead of `data` (method 8 in both headers; crc and size still describe `data`, the
+   * inflated text). Lets a case put bytes after the end of the deflate stream, inside the entry's stored extent.
+   */
+  deflated?: Uint8Array
+}
+
+/** A raw deflate stream of one final "stored" block holding `data` (no compressor needed; data under 64 KB). */
+export function deflateStored(data: Uint8Array | string): Uint8Array {
+  const bytes = bytesOf(data)
+  const out = new Uint8Array(5 + bytes.length)
+  const view = new DataView(out.buffer)
+  out[0] = 1
+  view.setUint16(1, bytes.length, true)
+  view.setUint16(3, ~bytes.length & 0xffff, true)
+  out.set(bytes, 5)
+  return out
 }
 
 const text = new TextEncoder()
@@ -66,21 +83,22 @@ export function buildZip(entries: ZipSpec[]): Uint8Array {
   const central: Uint8Array[] = []
   let offset = 0
   for (const entry of entries) {
-    const data = bytesOf(entry.data)
+    const real = bytesOf(entry.data)
+    const data = entry.deflated ?? real
     const centralName = text.encode(entry.name)
     const localName = text.encode(entry.localName ?? entry.name)
     const localExtra = entry.localExtra ?? new Uint8Array()
     const centralExtra = entry.centralExtra ?? new Uint8Array()
-    const crc = crc32(data)
+    const crc = crc32(real)
     const local = new Uint8Array(30 + localName.length + localExtra.length)
     const lv = new DataView(local.buffer)
     lv.setUint32(0, 0x04034b50, true)
     lv.setUint16(4, 20, true)
     lv.setUint16(6, entry.localFlags ?? entry.flags ?? 0x800, true)
-    lv.setUint16(8, entry.localMethod ?? 0, true)
+    lv.setUint16(8, entry.localMethod ?? (entry.deflated ? 8 : 0), true)
     lv.setUint32(14, crc, true)
     lv.setUint32(18, entry.localSize ?? data.length, true)
-    lv.setUint32(22, entry.localSize ?? data.length, true)
+    lv.setUint32(22, entry.localSize ?? real.length, true)
     lv.setUint16(26, localName.length, true)
     lv.setUint16(28, localExtra.length, true)
     local.set(localName, 30)
@@ -91,9 +109,10 @@ export function buildZip(entries: ZipSpec[]): Uint8Array {
     hv.setUint16(4, entry.unixMode === undefined ? 20 : (3 << 8) | 20, true)
     hv.setUint16(6, 20, true)
     hv.setUint16(8, entry.flags ?? 0x800, true)
+    hv.setUint16(10, entry.deflated ? 8 : 0, true)
     hv.setUint32(16, crc, true)
     hv.setUint32(20, data.length, true)
-    hv.setUint32(24, data.length, true)
+    hv.setUint32(24, real.length, true)
     hv.setUint16(28, centralName.length, true)
     hv.setUint16(30, centralExtra.length, true)
     const external = ((entry.unixMode ?? 0) << 16) | (entry.dosAttributes ?? 0)

@@ -42,9 +42,10 @@ function verdict(bytes: Uint8Array): { ok: true } | { ok: false; why: string } {
 }
 
 describe('shared theme package rules', () => {
-  // Cases the manifest decides (schema, format, referenced assets) are judged by the readers, not by these layers.
+  // Cases the manifest decides (schema, format, referenced assets) or that need inflating (deflated entries) are judged
+  // by the readers, not by these layers.
   const readerOnly =
-    /theme\.json that|a newer format|an asset the manifest names|no theme\.json|stylesheet that is not|manifest over/
+    /theme\.json that|a newer format|an asset the manifest names|no theme\.json|stylesheet that is not|manifest over|deflated entry/
   test.each(corpus.filter((item) => !readerOnly.test(item.name)))('$name', (item) => {
     expect(verdict(item.bytes).ok).toBe(item.accept)
   })

@@ -43,6 +43,9 @@ LICENSE, OFL.txt       optional: licence texts for what you ship (see “Licence
 - Import a package with `POST /api/themes/import` (the Customizer adds the buttons for it in Settings › Look). It is
   stored but not switched on. An id that
   belongs to a built-in theme (`score`, `paper`, `night`, `dense`, `harbour`, `ledger`, `studio`) is refused.
+- An import, a replace and a delete are all-or-nothing, also across a crash or power cut: after a restart the theme is
+  either the old one or the new one (a delete that was cut off is undone; delete it again). Score syncs the files and
+  its note to disk before it moves folders, so this holds on a disk and file system that honour `fsync`.
 
 ### Licence files
 

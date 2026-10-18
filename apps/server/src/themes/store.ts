@@ -1,20 +1,27 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
   chmodSync,
+  closeSync,
+  constants,
   existsSync,
+  fstatSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import {
   BUILTIN_THEME_IDS,
+  THEME_ASSET_PATH,
+  ThemeIdSchema,
   ThemeManifestSchema,
   type ThemeDetail,
   type ThemeManifest,
@@ -92,10 +99,31 @@ export class ThemeLockedError extends Error {
 export interface ThemeFs {
   rename(from: string, to: string): void
   rm(path: string): void
+  /** Flushes a file or folder to disk (fsync); default: the real one. Tests record or fail it. */
+  sync?(path: string): void
 }
 const realFs: ThemeFs = {
   rename: renameSync,
   rm: (path) => rmSync(path, { recursive: true, force: true }),
+  sync: fsyncPath,
+}
+
+/**
+ * fsync of a file or folder. A folder is opened read-only and synced to make the names in it (a rename, a new file)
+ * durable. Some systems refuse to sync a folder (EINVAL, ENOTSUP, EPERM); that is not a failure of the swap, the
+ * guarantee is then only what the system gives. Any other error (EIO, ENOSPC) is real and propagates.
+ */
+function fsyncPath(path: string): void {
+  let fd: number | null = null
+  try {
+    fd = openSync(path, constants.O_RDONLY)
+    fsyncSync(fd)
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    if (code !== 'EINVAL' && code !== 'ENOTSUP' && code !== 'EPERM') throw error
+  } finally {
+    if (fd !== null) closeSync(fd)
+  }
 }
 
 /** Rows and asset folders of imported and custom themes; built-ins are constants or shipped packages. */
@@ -109,6 +137,10 @@ export class ThemeStore {
     private readonly fs: ThemeFs = realFs,
   ) {
     this.root = join(home, 'themes')
+  }
+
+  private sync(path: string): void {
+    ;(this.fs.sync ?? fsyncPath)(path)
   }
 
   private now(): string {
@@ -182,14 +214,41 @@ export class ThemeStore {
     return builtinAssetRoot(id) ?? join(this.root, id, 'assets')
   }
 
-  /** Asset paths as `fonts/x.woff2`, sorted; only regular files (a symlink planted on disk is never listed). */
+  /**
+   * The one place asset paths are resolved (K2 X4). Walks the folders from the theme's own folder down (`<id>`, `assets`,
+   * then `tail`), and refuses the path (null) if any step is a symlink, a missing entry, or the wrong kind, so a link
+   * planted anywhere on the way (a folder as much as the file) is never followed. The themes root and Score's home are
+   * the owner's own and may be links. Built-ins are walked from their shipped folder the same way.
+   */
+  private safeAssetPath(id: string, tail: string[], want: 'file' | 'dir'): string | null {
+    const shipped = builtinAssetRoot(id)
+    let current = shipped ? dirname(shipped) : this.root
+    const steps = shipped ? ['assets', ...tail] : [id, 'assets', ...tail]
+    for (const [index, step] of steps.entries()) {
+      current = join(current, step)
+      let info
+      try {
+        info = lstatSync(current)
+      } catch {
+        return null
+      }
+      const last = index === steps.length - 1
+      if (info.isSymbolicLink() || !(last && want === 'file' ? info.isFile() : info.isDirectory()))
+        return null
+    }
+    return current
+  }
+
+  /** Asset paths as `fonts/x.woff2`, sorted; only regular files, with no symlink on the way (see `safeAssetPath`). */
   assets(id: string): string[] {
     const found: string[] = []
     for (const dir of ASSET_DIRS) {
-      const folder = join(this.assetRoot(id), dir)
-      if (!existsSync(folder)) continue
+      const folder = this.safeAssetPath(id, [dir], 'dir')
+      if (!folder) continue
       for (const name of readdirSync(folder).sort()) {
-        if (lstatSync(join(folder, name)).isFile()) found.push(`${dir}/${name}`)
+        const path = `${dir}/${name}`
+        if (THEME_ASSET_PATH.test(path) && this.safeAssetPath(id, [dir, name], 'file'))
+          found.push(path)
       }
     }
     return found
@@ -207,13 +266,23 @@ export class ThemeStore {
     this.assertSettled(id)
   }
 
-  /** The bytes of one stored asset; null when it isn't a regular file (a symlink planted on disk is never read). */
+  /**
+   * The bytes of one stored asset, or null when the path isn't a well-formed asset path or isn't a regular file with no
+   * symlink on the way. Routes (serve, export) and the save-with-files path all read through here.
+   */
   readAsset(id: string, path: string): Buffer | null {
-    const file = join(this.assetRoot(id), ...path.split('/'))
+    if (!THEME_ASSET_PATH.test(path)) return null
+    const file = this.safeAssetPath(id, path.split('/'), 'file')
+    if (!file) return null
+    let fd: number | null = null
     try {
-      return lstatSync(file).isFile() ? readFileSync(file) : null
+      // O_NOFOLLOW closes the gap between the check and the open for the file itself.
+      fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW)
+      return fstatSync(fd).isFile() ? readFileSync(fd) : null
     } catch {
       return null
+    } finally {
+      if (fd !== null) closeSync(fd)
     }
   }
 
@@ -305,6 +374,9 @@ export class ThemeStore {
   /** Saves a custom theme's manifest and CSS in one transaction (assets already on disk are kept). */
   saveCustom(manifest: ThemeManifest, css: string): void {
     this.assertSettled(manifest.id)
+    // A folder with no row is a leftover of a theme that was deleted; this new one must not inherit its files.
+    if (!this.row(manifest.id) && presentOnDisk(join(this.root, manifest.id)))
+      this.fs.rm(join(this.root, manifest.id))
     this.db.tx((sqlite) => this.upsert(sqlite, manifest, css, 'custom'))
   }
 
@@ -314,6 +386,15 @@ export class ThemeStore {
    * between two steps, the theme is either wholly the old one or wholly the new one: a failure here puts the old folder
    * back, and one that also stops the way back is finished by `recoverInterrupted` at the next start. Files are 0600,
    * folders 0700.
+   *
+   * After a power cut or kernel crash (K2 X5) the same holds, because each step is on disk before the next one starts:
+   * the staged files and folders are fsynced, then the note is committed at `synchronous = FULL`, then each folder move
+   * is followed by an fsync of the themes folder, then the row and the note's erasure are committed at FULL, and only
+   * then is the old folder deleted. So a note that survives always has the old folder (or none, for a new theme) to go
+   * back to, and an old folder is never deleted while the old row could still come back. Not guaranteed: a disk or file
+   * system that lies about fsync, and a system that refuses to sync folders (the swap then relies on that system's own
+   * ordering of renames); any such state is repaired at the next start the same way, but the newest import may be lost.
+   * The cost is a handful of fsyncs per import or delete, and nothing else on the connection runs at FULL.
    */
   storeImported(
     manifest: ThemeManifest,
@@ -340,13 +421,22 @@ export class ThemeStore {
         const file = join(staged, 'assets', ...path.split('/'))
         writeFileSync(file, bytes, { mode: 0o600, flag: 'wx' })
         chmodSync(file, 0o600)
+        this.sync(file)
       }
+      // The staged tree is on disk before the swap is written down, so a note never stands for files that were lost.
+      for (const dir of ASSET_DIRS) this.sync(join(staged, 'assets', dir))
+      this.sync(join(staged, 'assets'))
+      this.sync(staged)
       const hadOld = existsSync(target)
       this.writeDown(token, 'swap', manifest.id, null, hadOld)
       try {
-        if (hadOld) this.fs.rename(target, old)
+        if (hadOld) {
+          this.fs.rename(target, old)
+          this.sync(this.root)
+        }
         this.fs.rename(staged, target)
-        this.db.tx((sqlite) => {
+        this.sync(this.root)
+        this.db.durableTx((sqlite) => {
           this.upsert(sqlite, manifest, css, source, licenses)
           this.eraseNote(sqlite, token)
         })
@@ -388,7 +478,7 @@ export class ThemeStore {
     otherId: string | null,
     hadFolder: boolean,
   ): void {
-    this.db.tx((sqlite) =>
+    this.db.durableTx((sqlite) =>
       sqlite
         .prepare(
           'INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -500,7 +590,10 @@ export class ThemeStore {
       mkdirSync(this.root, { recursive: true, mode: 0o700 })
       this.writeDown(token, 'reclaim', row.id, to, hadFolder)
       try {
-        if (hadFolder) this.fs.rename(oldFolder, newFolder)
+        if (hadFolder) {
+          this.fs.rename(oldFolder, newFolder)
+          this.sync(this.root)
+        }
       } catch {
         // Nothing moved: forget the plan and leave the theme as it was; the next start tries again.
         try {
@@ -511,7 +604,7 @@ export class ThemeStore {
         continue
       }
       try {
-        this.db.tx((sqlite) => this.commitReclaim(sqlite, row, to, token))
+        this.db.durableTx((sqlite) => this.commitReclaim(sqlite, row, to, token))
       } catch (error) {
         try {
           if (hadFolder) this.fs.rename(newFolder, oldFolder)
@@ -546,10 +639,62 @@ export class ThemeStore {
     this.eraseNote(sqlite, token)
   }
 
-  /** Removes the row and the folder; the caller has already refused built-ins and the active theme. */
+  /**
+   * Removes the row and the folder; the caller has already refused built-ins and the active theme. Journaled like a
+   * swap whose new folder is nothing (K2 X14): the note is committed, the folder moves aside, the row and the note go in
+   * one transaction, and only then is the old folder deleted. After any failure, or a stop between two steps, the theme
+   * is whole (an interrupted delete is undone by `recoverInterrupted`; delete it again) or gone (what is left is swept).
+   * It is never a row with no folder, nor a folder with no row.
+   */
   remove(id: string): void {
     this.assertSettled(id)
-    this.db.tx((sqlite) => sqlite.prepare('DELETE FROM themes WHERE id = ?').run(id))
-    rmSync(join(this.root, id), { recursive: true, force: true })
+    const token = randomUUID()
+    const target = join(this.root, id)
+    const old = this.asidePath(token)
+    const hadOld = presentOnDisk(target)
+    this.writeDown(token, 'swap', id, null, hadOld)
+    try {
+      if (hadOld) {
+        this.fs.rename(target, old)
+        this.sync(this.root)
+      }
+      this.db.durableTx((sqlite) => {
+        sqlite.prepare('DELETE FROM themes WHERE id = ?').run(id)
+        this.eraseNote(sqlite, token)
+      })
+    } catch (error) {
+      try {
+        this.undoSwap(token, id, hadOld)
+        this.db.tx((sqlite) => this.eraseNote(sqlite, token))
+      } catch {
+        // left to recoverInterrupted
+      }
+      throw error
+    }
+    this.tryRemove(old)
+  }
+
+  /**
+   * Run at start: a folder under the themes root whose id has no row (and no standing note) is what a stop or a failed
+   * delete left behind; a theme later given that id would inherit its files, and the asset routes would serve them.
+   * Dot-folders (`.staging-*`, `.old-*`) belong to `recoverInterrupted`.
+   */
+  sweepOrphanFolders(): void {
+    if (!existsSync(this.root)) return
+    const keep = new Set([...this.rows().map((row) => row.id), ...this.lockedIds()])
+    for (const name of readdirSync(this.root)) {
+      if (name.startsWith('.') || keep.has(name) || !ThemeIdSchema.safeParse(name).success) continue
+      this.tryRemove(join(this.root, name))
+    }
+  }
+}
+
+/** True for anything on disk at the path, a dangling symlink included. */
+function presentOnDisk(path: string): boolean {
+  try {
+    lstatSync(path)
+    return true
+  } catch {
+    return false
   }
 }

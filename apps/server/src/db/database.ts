@@ -9,6 +9,20 @@ export class ScoreDb {
     return this.transaction('IMMEDIATE', fn)
   }
 
+  /**
+   * A write transaction whose commit is on disk before it returns. The connection runs `synchronous = NORMAL` (WAL,
+   * fast), where a commit can still be lost in a power cut; this one transaction runs at FULL, which syncs the log at
+   * commit. For writes a file-system step depends on, such as a note that must survive a power cut before folders move.
+   */
+  durableTx<T>(fn: (sqlite: DatabaseSync) => T): T {
+    this.sqlite.exec('PRAGMA synchronous = FULL')
+    try {
+      return this.tx(fn)
+    } finally {
+      this.sqlite.exec('PRAGMA synchronous = NORMAL')
+    }
+  }
+
   read<T>(fn: (sqlite: DatabaseSync) => T): T {
     return this.transaction('DEFERRED', fn)
   }

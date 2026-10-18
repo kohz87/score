@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { lstatSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
@@ -66,6 +64,7 @@ export function registerThemeRoutes(
   try {
     store.recoverInterrupted()
     store.reclaimBuiltinIds()
+    store.sweepOrphanFolders()
   } catch (error) {
     app.log.error({ err: error }, 'theme recovery failed; other themes are served')
   }
@@ -154,16 +153,12 @@ export function registerThemeRoutes(
     const parsed = AssetParams.safeParse(request.params)
     if (!parsed.success) throw notFound()
     const { id, '*': path } = parsed.data
+    // A folder left on disk for an id with no row is not a theme (K2 X14).
+    if (!store.exists(id)) throw notFound()
     unlessLocked(() => store.assertReadable(id))
-    const file = join(store.assetRoot(id), ...path.split('/'))
-    // A symlink or anything but a regular file is not served, whatever is on disk.
-    let bytes: Buffer
-    try {
-      if (!lstatSync(file).isFile()) throw new Error('not a file')
-      bytes = readFileSync(file)
-    } catch {
-      throw notFound()
-    }
+    // One safe reader: a symlink anywhere on the path, or anything but a regular file, is not served.
+    const bytes = store.readAsset(id, path)
+    if (!bytes) throw notFound()
     return reply
       .header('Content-Type', ASSET_TYPES[assetExtension(path)]!)
       .header('X-Content-Type-Options', 'nosniff')
@@ -271,9 +266,11 @@ export function registerThemeRoutes(
     const theme = store.get(id)
     if (!theme) throw notFound()
     unlessLocked(() => store.assertReadable(id))
-    const assets = new Map(
-      store.assets(id).map((path) => [path, readFileSync(join(store.assetRoot(id), path))]),
-    )
+    const assets = new Map<string, Buffer>()
+    for (const path of store.assets(id)) {
+      const bytes = store.readAsset(id, path)
+      if (bytes) assets.set(path, bytes)
+    }
     const zip = await buildThemePackage(theme.manifest, theme.css, assets, theme.licenses)
     return reply
       .header('Content-Type', 'application/zip')

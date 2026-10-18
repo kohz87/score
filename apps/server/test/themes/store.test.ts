@@ -1,8 +1,17 @@
-import { mkdtempSync, rmSync, statSync, existsSync, symlinkSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { ThemeManifestSchema } from '@score/contract'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { readLook, resetLook, writeLook } from '../../src/themes/look.ts'
@@ -207,4 +216,51 @@ test('an active look on a theme that is not affected is left alone', () => {
   writeLook(db.sqlite, { activeTheme: 'mine', mode: 'light' })
   expect(store.reclaimBuiltinIds()).toEqual([])
   expect(readLook(db.sqlite)).toEqual({ activeTheme: 'mine', mode: 'light' })
+})
+
+// K2 X12: ids that name properties every object has are ordinary ids, not built-ins.
+test.each(['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'])(
+  'the id %s is an ordinary id: no built-in answers for it',
+  (id) => {
+    expect(store.get(id)).toBeNull()
+    expect(store.exists(id)).toBe(false)
+    expect(store.detail(id)).toBeNull()
+    expect(store.list().map((item) => item.id)).not.toContain(id)
+  },
+)
+
+test('a stored theme with the id constructor is listed, read and removed like any other', () => {
+  store.storeImported(manifest('constructor'), 'a{}', new Map())
+  expect(store.get('constructor')).toMatchObject({ source: 'imported', css: 'a{}' })
+  expect(store.list().find((item) => item.id === 'constructor')).toMatchObject({
+    source: 'imported',
+  })
+  store.remove('constructor')
+  expect(store.get('constructor')).toBeNull()
+})
+
+// K2 X4: a symlink anywhere on an asset path (the folder levels too, not only the file) is never listed, read or exported.
+describe.each([
+  ['the img folder', 'seaside/assets/img'],
+  ['the assets folder', 'seaside/assets'],
+  ['the theme folder', 'seaside'],
+])('a symlink in place of %s', (_name, linked) => {
+  test('is neither listed nor read', () => {
+    store.storeImported(manifest('seaside'), '', new Map([['img/a.png', Buffer.from('mine')]]))
+    // The same layout somewhere else, as an attacker with write access to the themes folder would point at.
+    const outside = join(home, 'elsewhere')
+    mkdirSync(outside, { recursive: true })
+    renameSync(join(store.root, linked), join(outside, 'moved'))
+    symlinkSync(join(outside, 'moved'), join(store.root, linked))
+    expect(store.assets('seaside')).toEqual([])
+    expect(store.readAsset('seaside', 'img/a.png')).toBeNull()
+  })
+})
+
+test('a symlinked img folder is not followed, but the same theme with real folders is read', () => {
+  store.storeImported(manifest('seaside'), '', new Map([['img/a.png', Buffer.from('mine')]]))
+  expect(store.assets('seaside')).toEqual(['img/a.png'])
+  expect(store.readAsset('seaside', 'img/a.png')?.toString()).toBe('mine')
+  writeFileSync(join(home, 'loose.png'), 'x')
+  expect(store.readAsset('seaside', 'img/../../../loose.png')).toBeNull()
 })

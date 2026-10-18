@@ -7,6 +7,7 @@
 
 import {
   buildZip,
+  deflateStored,
   unicodeCommentExtra,
   unicodePathExtra,
   type ZipSpec,
@@ -255,6 +256,38 @@ export const corpus: CorpusCase[] = [
     ],
     { css: '.x{background-image:url(asset\\3a img/a.png)}', assets: ['img/a.png'] },
   ),
+  // K2 X11: the compressed extent must be consumed exactly. The browser's inflater refuses bytes after the end of the
+  // deflate stream; the server's did not, so a package could install that the Customizer shows as broken.
+  ok(
+    'a deflated entry that ends exactly where its extent ends',
+    [base, { name: 'style.css', data: '.x{color:red}', deflated: deflateStored('.x{color:red}') }],
+    { css: '.x{color:red}' },
+  ),
+  bad('a deflated entry with one trailing byte inside its extent', [
+    base,
+    {
+      name: 'style.css',
+      data: '.x{color:red}',
+      deflated: concat(deflateStored('.x{color:red}'), bytesOf(0)),
+    },
+  ]),
+  bad('a deflated entry with trailing text inside its extent', [
+    base,
+    {
+      name: 'style.css',
+      data: '.x{color:red}',
+      deflated: concat(deflateStored('.x{color:red}'), text('PK-hidden-payload')),
+    },
+  ]),
+  bad('a deflated entry followed by a second deflate stream', [
+    base,
+    {
+      name: 'style.css',
+      data: '.x{color:red}',
+      deflated: concat(deflateStored('.x{color:red}'), deflateStored('.y{}')),
+    },
+  ]),
+
   bad('not a zip', text('this is not a zip file')),
   bad('a truncated zip', buildZip([base]).subarray(0, 40)),
 ]

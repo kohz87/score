@@ -2258,6 +2258,8 @@ it and still serves the other themes.
   and so does deleting and re-creating the theme.
 - `GET /api/themes/:id/style.css` → `text/css` with `asset:` references rewritten to the asset URLs below.
 - `GET /api/themes/:id/assets/<fonts|img>/<file>` → the file with its exact type, `nosniff`, `cache-control: private`.
+  `404` for an id with no theme row (a folder left on disk is not a theme), and for any path with a symlink on any step
+  of it, folders included (K2 X4); detail, serving and export all read through one reader that applies that rule.
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
   **files (C4 #2).** `ThemeSave` may also carry `assets` (`{ "<fonts|img>/<file>": "<base64>" }`, files to add or
@@ -2315,7 +2317,9 @@ it and still serves the other themes.
   comment such as `/* asset:img/x.png */` does not). The browser's draft check and the server's import check both use
   it to decide which files the package must contain, and `GET …/style.css` rewrites every such reference to its asset URL
   (escaped spellings included). A shared
-  accept/reject corpus (`packages/contract/test/theme-package-corpus.ts`) runs against both readers.
+  accept/reject corpus (`packages/contract/test/theme-package-corpus.ts`) runs against both readers. A deflated entry
+  must end exactly where its stored extent ends: bytes after the end of the deflate stream are refused by both
+  readers (K2 X11).
 - `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult` `{ theme, report, detail }`; stored, **not**
   activated. `detail` is the `ThemeDetail` (manifest, CSS, assets, `etag`) exactly as this import committed it, read in the
   same serialised step as the write; the Customizer adopts it instead of fetching the theme again, so another writer's
@@ -2329,7 +2333,10 @@ it and still serves the other themes.
   the theme unchanged. Without the header replace works as before (manual imports). The Customizer always sends it;
   `422 theme_rejected { reasons[] }` (bad manifest, newer `format`, bad paths, sizes, file types, CSS checks).
 - `GET /api/themes/:id/export` → `application/zip` (the same layout as import).
-- `DELETE /api/themes/:id` → `204`; `409 builtin_theme`, `409 theme_active`.
+- `DELETE /api/themes/:id` → `204`; `409 builtin_theme`, `409 theme_active`. Journaled like a replace (note, folder moved
+  aside, row and note removed together, then the old folder deleted): a stop leaves the theme whole or gone, and a start
+  deletes theme folders that have no row. Swap and delete commits are flushed to disk before the next file step
+  (K2 X5); a delete that was cut off before its row went is undone at the next start.
 - `PUT /api/look` `LookSettings` → `204`; `404` for an unknown theme. Emits `look.changed { activeTheme, mode,
   resetGeneration }` on the stream so other open devices switch (`resetGeneration` is the current value; the host command
   itself sends no event, devices see the new number on their next `GET /api/themes`, which they repeat on focus).

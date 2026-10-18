@@ -14,7 +14,8 @@ import { LICENSE_FILES } from './license-files.ts'
 // `apps/server/themes/<id>/` and read from there: Paper, Night shift and Dense (C4: the Customizer's "Start from"
 // copies their manifest exactly; the browser still wears them through the packs in `styles/packs/`, which are
 // the look of record and are checked against these manifests by a test) and Harbour, Ledger and Studio (9.5).
-const PACK_NAMES: Record<string, string> = { score: 'Score' }
+// A Map: an id such as `constructor` or `__proto__` must not find an inherited property (K2 X12).
+const PACK_NAMES = new Map<string, string>([['score', 'Score']])
 export const PACKAGED_THEME_IDS = [
   'paper',
   'night',
@@ -60,7 +61,7 @@ function loadPackaged(id: string): Packaged | null {
 export function builtinManifest(id: string): ThemeManifest | null {
   const real = loadPackaged(id)
   if (real) return real.manifest
-  const name = PACK_NAMES[id]
+  const name = PACK_NAMES.get(id)
   if (name === undefined) return null
   return {
     format: THEME_FORMAT,
