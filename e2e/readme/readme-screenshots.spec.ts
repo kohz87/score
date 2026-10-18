@@ -244,7 +244,14 @@ const shippedThemes: MockTheme[] = ['harbour', 'ledger', 'studio'].map((id) => {
     name: string
   }
   const css = readFileSync(`${themeDir}${id}/style.css`, 'utf8')
-  return { id, name: manifest.name, source: 'builtin', manifest, css }
+  return {
+    id,
+    name: manifest.name,
+    description: manifest.description,
+    source: 'builtin',
+    manifest,
+    css,
+  }
 })
 
 async function withShippedThemes(page: Page, active: string) {

@@ -9,6 +9,8 @@ export type MockTheme = {
   source?: 'builtin' | 'imported' | 'custom'
   manifest?: Record<string, unknown>
   css?: string
+  /** The line under the name in the picker (the manifest's `description` on a real server). */
+  description?: string
 }
 export type Look = {
   active: string
@@ -29,8 +31,7 @@ const summary = (theme: MockTheme) => ({
   name: theme.name,
   version: '1.0.0',
   author: null,
-  // Like the server: the card's line is the manifest's description.
-  description: typeof theme.manifest?.description === 'string' ? theme.manifest.description : null,
+  description: theme.description ?? null,
   source: theme.source ?? 'imported',
   updatedAt: '2026-10-17T00:00:00.000Z',
   hasCss: !!theme.css,
