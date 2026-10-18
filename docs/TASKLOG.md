@@ -278,3 +278,10 @@ One entry per completed task: what landed, review results, and any **rejected re
   guard.ts conflict (H3's whole-decision surfaces + H1's no-theme baseline for the control) and the THEMES.md conflict,
   and stubbed hit testing in H3's jsdom tests. Merged main: web 1886 unit tests; themes/user-view/Customizer e2e 241/241.
   Third gate run started.
+- **Third-gate fix I2** merged: package reads (detail, style.css, assets, export) of an id with an unsettled swap note
+  answer 409 `theme_recovering`; a start that can't settle a note logs it and serves the other themes; the shared zip
+  rules refuse folder-marked files; one CSS-aware asset-reference function (comments skipped, escapes decoded) for the
+  browser draft check, the server check and serving; 19 corpus cases. Merged main: contract 1355, server themes 499.
+- **Lead fix (from C4's report):** Chat's "Start plan" button drew white on `--ink` (near-white in dark mode, 1.1:1);
+  now `--card`. The Customizer's "Text on the main buttons" check measured `on-dark` on `ink` instead of `card` on
+  `ink` (false warning for themes with a light dark-mode ink). Failing-first unit test; chat + visual e2e 134/134.
