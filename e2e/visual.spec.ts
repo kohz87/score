@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { chatSettled } from './chat-settled.ts'
 import { fixtureNow } from './now-fixture.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
@@ -44,6 +45,7 @@ async function open(page: Page, destination: (typeof destinations)[number], widt
   if (destination.name === 'chat' && width < 1100)
     await page.getByRole('button', { name: 'Show room details' }).click()
   await expect(page.locator(destination.ready).first()).toBeVisible()
+  if (destination.name === 'chat') await chatSettled(page)
   await expect(page.getByText(/^Loading/)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   // Script-driven motion (count-ups, an entrance that waits for its library) marks the page until it has landed.

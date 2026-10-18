@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { chatSettled } from './chat-settled.ts'
 import { fixtureNow } from './now-fixture.ts'
 import { orchestrationFixtures } from './orchestration-fixtures.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
@@ -78,6 +79,7 @@ async function open(page: Page, where: Where, width: number, height = 900) {
   await page.setViewportSize({ width, height })
   await page.goto(where.path)
   await expect(page.locator(where.ready).first()).toBeVisible()
+  if (where.name === 'chat-room') await chatSettled(page)
   await expect(page.getByText(/^Loading/)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
