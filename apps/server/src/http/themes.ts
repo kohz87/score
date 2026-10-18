@@ -62,8 +62,15 @@ export function registerThemeRoutes(
   const { db, ingest } = options
   const store = new ThemeStore(db, options.home, options.clock)
   // Finish or undo swaps and id moves that a stop left half done, then the 9.5 id move (gate findings #11, #12).
-  store.recoverInterrupted()
-  store.reclaimBuiltinIds()
+  // A note that can't be settled is logged and its id answers 409 theme_recovering; every other theme keeps being served.
+  try {
+    store.recoverInterrupted()
+    store.reclaimBuiltinIds()
+  } catch (error) {
+    app.log.error({ err: error }, 'theme recovery failed; other themes are served')
+  }
+  for (const id of store.unsettledIds())
+    app.log.warn({ themeId: id }, 'theme has an unsettled swap note; its package reads are refused')
   const guard = { preHandler: [humanGuard(app.pairing)] }
   const receipts = requestIdempotency(db, options.clock)
   const mutation = {
@@ -77,7 +84,7 @@ export function registerThemeRoutes(
     queue = run.catch(() => undefined)
     return run
   }
-  const detail = (id: string) => ThemeDetailSchema.parse(store.detail(id))
+  const detail = (id: string) => ThemeDetailSchema.parse(unlessLocked(() => store.detail(id)))
 
   app.get('/api/themes', guard, async () => {
     const { look, resetGeneration } = db.read((sqlite) => ({
@@ -102,6 +109,7 @@ export function registerThemeRoutes(
     const { id } = IdParams.parse(request.params)
     const theme = store.get(id)
     if (!theme) throw notFound()
+    unlessLocked(() => store.assertReadable(id))
     return reply
       .header('Content-Type', 'text/css; charset=utf-8')
       .header('X-Content-Type-Options', 'nosniff')
@@ -113,6 +121,7 @@ export function registerThemeRoutes(
     const parsed = AssetParams.safeParse(request.params)
     if (!parsed.success) throw notFound()
     const { id, '*': path } = parsed.data
+    unlessLocked(() => store.assertReadable(id))
     const file = join(store.assetRoot(id), ...path.split('/'))
     // A symlink or anything but a regular file is not served, whatever is on disk.
     let bytes: Buffer
@@ -145,7 +154,7 @@ export function registerThemeRoutes(
           'builtin_theme',
           'Built-in and imported themes can’t be changed. Save a copy under a new name.',
         )
-      const currentEtag = store.detail(id)?.etag ?? null
+      const currentEtag = unlessLocked(() => store.detail(id))?.etag ?? null
       if (body.etag !== currentEtag)
         throw new HttpError(409, 'etag_mismatch', 'This theme changed elsewhere. Reload it first.')
       unlessLocked(() => store.saveCustom(body.manifest, body.css))
@@ -193,7 +202,9 @@ export function registerThemeRoutes(
           // no other theme change can land between the check and the write.
           const ifMatch = request.headers['if-match']
           if (replace !== undefined && typeof ifMatch === 'string') {
-            const current = existing ? (store.detail(pkg.manifest.id)?.etag ?? null) : null
+            const current = existing
+              ? (unlessLocked(() => store.detail(pkg.manifest.id))?.etag ?? null)
+              : null
             if (existing?.source !== 'builtin' && current !== ifMatch.trim().replace(/^"|"$/g, ''))
               throw new HttpError(
                 409,
@@ -222,6 +233,7 @@ export function registerThemeRoutes(
     const { id } = IdParams.parse(request.params)
     const theme = store.get(id)
     if (!theme) throw notFound()
+    unlessLocked(() => store.assertReadable(id))
     const assets = new Map(
       store.assets(id).map((path) => [path, readFileSync(join(store.assetRoot(id), path))]),
     )

@@ -2237,7 +2237,12 @@ and erased in the transaction that commits the row. After a failed or interrupte
 folders exist; a folder that already exists is never a free id. While a theme id has such a note that recovery could
 not settle (it is retried before every write of the id), the id is **not written**: replace (`POST /api/themes/import`),
 custom save (`PUT /api/themes/:id`) and delete answer `409 theme_recovering` (`details.id`) with a plain message, and the
-startup id move skips the row, until recovery succeeds. Other ids are unaffected.
+startup id move skips the row, until recovery succeeds. **Package reads are refused the same way** (third gate): while such
+a note stands, `GET /api/themes/:id`, `…/style.css`, `…/assets/*` and `…/export` of that id answer `409 theme_recovering`
+(`details.id`) instead of mixing the row's CSS and etag with another version's asset bytes; every read first retries
+recovery, so the answer turns back into `200` as soon as the note is settled. `GET /api/themes` stays available (its
+summaries come from the row alone), built-ins and other ids are unaffected, and a start that cannot settle a note logs
+it and still serves the other themes.
 - `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`, and `resetGeneration`: a
   non-negative integer, `0` until the first host reset). `scripts/score look reset` sets the shared look to Score /
   system **and increments `resetGeneration`** (setting `look.resetGeneration` in `meta`, no migration). A browser keeps the

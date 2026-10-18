@@ -194,7 +194,20 @@ export class ThemeStore {
     return found
   }
 
+  /**
+   * Package reads (detail, `style.css`, assets, export) of an id with an unsettled note are refused with
+   * `ThemeLockedError` (409 `theme_recovering`), because the folder and the row may then be different versions: the
+   * old row with the new folder's bytes. One of the two coherent answers (the other would be reading the journal's old
+   * folder); this one needs no extra state. A read tries to settle the note first, so a transient fault heals itself.
+   * Built-ins are shipped constants and never locked. Cheap when nothing is pending: one query on a table that is normally empty.
+   */
+  assertReadable(id: string): void {
+    if (isBuiltinThemeId(id) || !this.lockedIds().has(id)) return
+    this.assertSettled(id)
+  }
+
   detail(id: string): ThemeDetail | null {
+    this.assertReadable(id)
     const theme = this.get(id)
     if (!theme) return null
     return {
@@ -252,7 +265,7 @@ export class ThemeStore {
     return row.n
   }
 
-  /** Ids named by a note that recovery could not settle (the theme, and the id a move was going to give it). */
+  /** Ids named by a note that is still standing (recovery could not settle it) (the theme, and the id a move was going to give it). */
   private lockedIds(): Set<string> {
     const found = new Set<string>()
     const rows = this.db.read((sqlite) =>
@@ -263,6 +276,10 @@ export class ThemeStore {
       if (row.other_id) found.add(row.other_id)
     }
     return found
+  }
+
+  unsettledIds(): string[] {
+    return [...this.lockedIds()]
   }
 
   /**

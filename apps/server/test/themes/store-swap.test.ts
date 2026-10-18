@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { ThemeManifestSchema } from '@score/contract'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
-import { ThemeStore, type ThemeFs } from '../../src/themes/store.ts'
+import { ThemeLockedError, ThemeStore, type ThemeFs } from '../../src/themes/store.ts'
 import { rmSync as realRm, renameSync as realRename } from 'node:fs'
 
 // Gate findings #11 and #12: every step of a folder swap and of an id move can fail, or the process can stop between
@@ -333,5 +333,52 @@ describe('an unsettled note blocks its id (re-gate #2)', () => {
     expect(readFileSync(join(store.root, 'harbour-mine/assets/img/a.png'), 'utf8')).toBe(
       'harbour picture',
     )
+  })
+})
+
+// Third gate finding 4: reads of an id whose note is unsettled must not mix versions (CSS and etag of A, asset bytes of
+// B). They answer ThemeLockedError (409 theme_recovering over HTTP) until recovery settles the id.
+describe('reads while a note is unsettled (third gate #4)', () => {
+  const recoveryDown = () =>
+    faulty((op) => op.op === 'rename' && basename(op.from).startsWith('.old-'))
+  beforeEach(() => {
+    store.storeImported(manifest('seaside'), 'A', asset('A'))
+    // B's files are in place, the row commit failed and the way back is blocked: row A, folder B.
+    blockRowWrites()
+    expect(() =>
+      withFs(faulty(intoPlace, true)).storeImported(manifest('seaside'), 'B', asset('B')),
+    ).toThrow(/injected/)
+    unblockRowWrites()
+  })
+
+  test('the setup really is a mixed state (row A, assets not A)', () => {
+    expect(store.get('seaside')!.css).toBe('A')
+    expect(store.assets('seaside')).toEqual([])
+  })
+
+  test('detail refuses', () => {
+    expect(() => withFs(recoveryDown()).detail('seaside')).toThrow(ThemeLockedError)
+  })
+
+  test('the asset listing used by export refuses', () => {
+    expect(() => withFs(recoveryDown()).assertReadable('seaside')).toThrow(ThemeLockedError)
+  })
+
+  test('other ids are still readable', () => {
+    withFs(recoveryDown()).storeImported(manifest('other'), 'O', asset('O'))
+    expect(withFs(recoveryDown()).detail('other')!.css).toBe('O')
+  })
+
+  test('once recovery succeeds the id reads again, wholly A', () => {
+    const fresh = restart()
+    expect(fresh.detail('seaside')!.css).toBe('A')
+    expect(fresh.assets('seaside')).toEqual(['img/a.png'])
+    expect(fileOf('seaside')).toBe('A')
+  })
+
+  test('a read tries recovery itself, so a transient fault heals on the next read', () => {
+    expect(() => withFs(recoveryDown()).detail('seaside')).toThrow(ThemeLockedError)
+    expect(store.detail('seaside')!.assets).toEqual(['img/a.png'])
+    expect(fileOf('seaside')).toBe('A')
   })
 })
