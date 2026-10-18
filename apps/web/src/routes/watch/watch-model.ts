@@ -132,8 +132,10 @@ export type ActivityItem = {
   at: string
   /** The frame to replay when the item is chosen. */
   seq: number | null
-  /** A coding agent's sub-agent did this (Score prefixes its captions); `text` is then without the prefix. */
+  /** A coding agent's sub-agent did this; `text` is then without Score's caption prefix. */
   sub?: true
+  /** The Agent call the sub-agent ran under (C1); absent on frames stored before it, which group by the caption prefix. */
+  parentCallId?: string
 }
 
 /** What the server puts in front of a sub-agent's frame captions (PLAN 8.7). */
@@ -149,7 +151,8 @@ export function activityItems(frames: WatchFrame[], approvals: Approval[]): Acti
       : frame.caption,
     at: frame.at,
     seq: frame.seq,
-    ...(frame.caption.startsWith(SUB_PREFIX) ? { sub: true as const } : {}),
+    ...(frame.parentCallId || frame.caption.startsWith(SUB_PREFIX) ? { sub: true as const } : {}),
+    ...(frame.parentCallId ? { parentCallId: frame.parentCallId } : {}),
   }))
   for (const approval of approvals) {
     const before = [...frames].reverse().find((frame) => frame.at <= approval.createdAt)
@@ -165,19 +168,35 @@ export function activityItems(frames: WatchFrame[], approvals: Approval[]): Acti
 }
 
 export type ActivityEntry =
-  { type: 'item'; item: ActivityItem } | { type: 'sub-agent'; key: string; items: ActivityItem[] }
+  | { type: 'item'; item: ActivityItem }
+  | { type: 'sub-agent'; key: string; items: ActivityItem[]; parentCallId?: string }
 
 /**
- * Runs of a sub-agent's steps become one group (like Chat and Flow nest them under the Agent call). Frames carry no
- * parent id, so a run of consecutive sub-agent steps is the best grouping Watch has; old rows without the caption
+ * A sub-agent's steps become one group (like Chat and Flow nest them under the Agent call). Steps with a parent id join
+ * the group of that Agent call, wherever they sit, so two sub-agents run back to back stay two groups. Frames stored
+ * before C1 have no id: a run of consecutive prefixed steps is their best grouping, and rows without the caption
  * prefix stay flat.
  */
 export function groupActivity(items: ActivityItem[]): ActivityEntry[] {
   const entries: ActivityEntry[] = []
+  const byParent = new Map<string, Extract<ActivityEntry, { type: 'sub-agent' }>>()
   for (const item of items) {
     const last = entries.at(-1)
     if (!item.sub) entries.push({ type: 'item', item })
-    else if (last?.type === 'sub-agent') last.items.push(item)
+    else if (item.parentCallId) {
+      const group = byParent.get(item.parentCallId)
+      if (group) group.items.push(item)
+      else {
+        const created = {
+          type: 'sub-agent' as const,
+          key: `sub-${item.key}`,
+          items: [item],
+          parentCallId: item.parentCallId,
+        }
+        byParent.set(item.parentCallId, created)
+        entries.push(created)
+      }
+    } else if (last?.type === 'sub-agent' && !last.parentCallId) last.items.push(item)
     else entries.push({ type: 'sub-agent', key: `sub-${item.key}`, items: [item] })
   }
   return entries

@@ -90,6 +90,31 @@ test('a sub-agent’s steps sit in one group under a Sub-agent label', () => {
   expect(screen.queryByRole('button', { name: 'Full history' })).toBeNull()
 })
 
+test('C1: two back-to-back sub-agents show as two groups', () => {
+  const at = (n: number) => new Date(Date.UTC(2026, 9, 8, 21, 30, n)).toISOString()
+  const step = (seq: number, parentCallId: string): ActivityItem => ({
+    key: `frame-${seq}`,
+    kind: 'command',
+    text: `Ran step ${seq}`,
+    at: at(seq),
+    seq,
+    sub: true,
+    parentCallId,
+  })
+  render(
+    <WhatTheyAreDoing
+      agent={{ name: 'builder' }}
+      items={[step(3, 'agent-b'), step(2, 'agent-a'), step(1, 'agent-a')]}
+      currentKey="frame-3"
+      live
+      onSelect={vi.fn()}
+    />,
+  )
+  expect(screen.getByText('Sub-agent · 1 step')).toBeTruthy()
+  expect(screen.getByText('Sub-agent · 2 steps')).toBeTruthy()
+  expect(screen.getAllByRole('list', { name: 'Sub-agent steps' })).toHaveLength(2)
+})
+
 const agent = (id: string, color: string, shape: AgentSummary['style']['shape']): AgentSummary => ({
   id,
   name: id,

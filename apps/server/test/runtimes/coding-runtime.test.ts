@@ -25,6 +25,7 @@ import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { activityParts } from '../../src/domain/message-runs.ts'
 import { messageFromRow } from '../../src/domain/rooms.ts'
+import { readWatch } from '../../src/domain/watch-frames.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { McpAccessStore } from '../../src/mcp/access.ts'
@@ -609,6 +610,21 @@ test('8.7: a turn with a sub-agent keeps its success; the sub-agent calls nest u
     caption: string
   }[]
   expect(captions.some((frame) => frame.caption.startsWith('Sub-agent · '))).toBe(true)
+  // C1: and they carry the Agent call's id, in the table and in what Watch reads back.
+  const stored = db.sqlite
+    .prepare('SELECT caption, parent_call_id AS parent FROM watch_frames ORDER BY seq')
+    .all() as { caption: string; parent: string | null }[]
+  expect(stored.filter((frame) => frame.parent !== null)).toEqual(
+    stored.filter((frame) => frame.caption.startsWith('Sub-agent · ')),
+  )
+  expect(stored.find((frame) => frame.parent !== null)!.parent).toBe(agent.callId)
+  const watched = readWatch(db.sqlite, 'coder', { limit: 50 }).frames
+  expect(watched.find((frame) => frame.caption.startsWith('Sub-agent · '))).toMatchObject({
+    parentCallId: agent.callId,
+  })
+  expect(watched.filter((frame) => frame.parentCallId === undefined).length).toBe(
+    watched.filter((frame) => !frame.caption.startsWith('Sub-agent · ')).length,
+  )
 })
 
 test('hand-offs: a coding agent can @mention a Hermes agent and be mentioned by one', async () => {

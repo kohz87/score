@@ -39,14 +39,18 @@ export interface RunTranslation {
   /** An orchestration- or workflow-owned run (7.7b §6): it never writes Chat's (room, agent) session cache. */
   owned: boolean
   seq: number
-  calls: Map<string, { seq: number; startedAt: string; detail?: ToolDetail; sub?: true }>
+  calls: Map<string, { seq: number; startedAt: string; detail?: ToolDetail; parentCallId?: string }>
   usage: { input: number; output: number; costUsd: number | null } | null
 }
 /** Bytes the translator's per-run state holds (call ids and the tool details kept for their frames). */
 export function translationBytes(translation: RunTranslation): number {
   let bytes = 0
   for (const [id, call] of translation.calls)
-    bytes += Buffer.byteLength(id) + detailBytes(call.detail) + 64
+    bytes +=
+      Buffer.byteLength(id) +
+      Buffer.byteLength(call.parentCallId ?? '') +
+      detailBytes(call.detail) +
+      64
   return bytes
 }
 /** Bytes a result waiting to be saved holds: the translator's state plus the texts of the terminal record. */
@@ -106,7 +110,7 @@ function frameDrafts(
   callKey: string,
   at: string,
   draft: FrameDraft,
-  sub = false,
+  parentCallId: string | null = null,
 ): DomainEventDraft[] {
   try {
     const frame: WatchFrame = recordFrame(sqlite, {
@@ -116,8 +120,9 @@ function frameDrafts(
       callKey: `${translation.runId}:${callKey}${draft.suffix}`,
       surface: draft.surface,
       payload: draft.payload,
-      // A sub-agent's frames say so (PLAN 8.7): Watch has no tree, only the caption.
-      caption: sub ? `Sub-agent · ${draft.caption}` : draft.caption,
+      // A sub-agent's frames say so (PLAN 8.7) and, since C1, name the Agent call; the caption prefix serves older readers.
+      caption: parentCallId ? `Sub-agent · ${draft.caption}` : draft.caption,
+      parentCallId,
     })
     return [{ type: 'watch.frame', data: frame }]
   } catch (error) {
@@ -135,7 +140,7 @@ function framesFor(
   at: string,
   detail: ToolDetail,
   phase: { hook: 'pre' } | { hook: 'post'; ok: boolean; output: string; exitCode: number | null },
-  sub = false,
+  parentCallId: string | null = null,
 ): DomainEventDraft[] {
   const base = { watch: null, status: phase.hook === 'pre' ? ('running' as const) : null }
   if (detail.type === 'command') {
@@ -149,7 +154,9 @@ function framesFor(
       watch: base.watch,
       lastBrowser: null,
     })
-    return drafts.flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft, sub))
+    return drafts.flatMap((draft) =>
+      frameDrafts(sqlite, translation, callId, at, draft, parentCallId),
+    )
   }
   if (detail.type === 'file') {
     if (phase.hook === 'pre') return []
@@ -165,7 +172,7 @@ function framesFor(
         payload: { path: detail.path, diff: `${verb} ${detail.path}`, language: null },
         caption: `${verb} ${detail.path}`,
       },
-      sub,
+      parentCallId,
     )
   }
   if (detail.type === 'browser') {
@@ -178,7 +185,7 @@ function framesFor(
       status: phase.ok ? 'ok' : 'error',
       watch: null,
       lastBrowser: null,
-    }).flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft, sub))
+    }).flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft, parentCallId))
   }
   if (phase.hook === 'pre') return []
   if (!phase.ok) return []
@@ -200,7 +207,7 @@ function framesFor(
     status: 'ok',
     watch: null,
     lastBrowser: null,
-  }).flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft, sub))
+  }).flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft, parentCallId))
 }
 
 /**
@@ -260,7 +267,7 @@ export function eventObservation(
             seq,
             startedAt: now,
             ...(event.detail ? { detail: event.detail } : {}),
-            ...(event.parentCallId ? { sub: true as const } : {}),
+            ...(event.parentCallId ? { parentCallId: boundCallId(event.parentCallId) } : {}),
           })
           // CLI metadata is redacted before it is bounded or stored: tool names and what is derived from them (#12).
           const toolName = redactNote(event.tool, 200)
@@ -312,7 +319,7 @@ export function eventObservation(
                 now,
                 event.detail,
                 { hook: 'pre' },
-                !!event.parentCallId,
+                event.parentCallId ? boundCallId(event.parentCallId) : null,
               ),
             )
           break
@@ -349,7 +356,7 @@ export function eventObservation(
                   output: tailBytes(redact(event.preview), OUTPUT_BYTES - 40).text,
                   exitCode: event.exitCode ?? null,
                 },
-                call.sub === true,
+                call.parentCallId ?? null,
               ),
             )
           break

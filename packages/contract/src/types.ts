@@ -475,6 +475,8 @@ export const WatchFrameSchema = z
       .object({ url: z.string(), title: z.string().nullable(), imageUrl: z.string().nullable() })
       .optional(),
     caption: z.string(),
+    // C1: a coding agent's sub-agent step carries the callId of the Agent call that started it (as on tool parts, PLAN 8.7).
+    parentCallId: z.string().min(1).max(200).optional(),
   })
   .refine((frame) => frame[frame.surface] !== undefined, {
     message: 'The payload for the selected surface is required',
