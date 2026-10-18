@@ -110,7 +110,8 @@ export function useLook(): Look {
     state.device && !deviceStale && (!list.data || themes.some((item) => item.id === state.device))
       ? state.device
       : null
-  const stored = readStoredTheme()
+  // Like the override, a colour mode saved before a host reset is ignored at once; the effect above deletes it.
+  const stored = deviceStale ? null : readStoredTheme()
   const layout = useLayout()
 
   const saveShared = useCallback(

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { forgetStoredTheme } from '../data/theme.ts'
 
 // Where this device's look choices live (per browser, never sent to the server) and the in-memory state of the
 // escape hatches. Storage is wrapped everywhere: private windows and blocked storage must never break the page.
@@ -103,11 +104,13 @@ function readStoredGeneration(): number {
 /**
  * `scripts/score look reset` bumps the server's reset generation. A device that last saw another number drops its own
  * theme and the boot cache and remembers the new number, so the host reset reaches browsers that kept an override
- * (gate finding #10). The in-memory state changes first, like every reset here (finding #9).
+ * (gate finding #10). The in-memory state changes first, like every reset here (finding #9). The device's light/dark
+ * choice (`score.theme`) goes with them, or a stored "dark" would override the mode the host reset to (re-gate #9).
  */
 export function applyResetGeneration(generation: number): void {
   if (generation === state.generation) return
   state = { ...state, device: null, generation }
+  forgetStoredTheme()
   try {
     window.localStorage.removeItem(DEVICE_KEY)
     window.localStorage.removeItem(LEGACY_PACK_KEY)
