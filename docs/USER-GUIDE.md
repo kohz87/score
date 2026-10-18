@@ -1,13 +1,14 @@
 # Score user guide
 
 This guide walks through the destinations along the top of Score: **Now, Chat, Tasks, Team, Knowledge, Reports, Settings**
-(plus the optional **Terminal**).
+(plus the optional **Terminal**), then the chat-first view, themes and the Customizer. A theme can move the navigation
+to the side or into one menu button; the names in this guide stay the same.
 For installing and starting Score, see the [README](../README.md). The examples use the demo team (`lead`,
 `builder`, `reviewer`, `designer`); your own agents will show up under their own names.
 
 ## Ideas that appear everywhere
 
-- **Agents.** Each agent is a Hermes profile. Score shows every agent with a color and a shape, never color alone, so
+- **Agents.** Each agent is a Hermes profile. Score shows every agent with a colour and a shape, never colour alone, so
   you can tell them apart in a black-and-white screenshot. You choose them on the agent's page (Team).
 - **Needs you.** Anything an agent cannot do alone, such as a command that needs approval, is marked "Needs you" or
   "Waiting on you" and shown in a dark card. The top-level Needs you filter in Tasks and the Now page both surface it.
@@ -167,6 +168,27 @@ Rooms with your team. The list on the left has **Rooms** (several agents togethe
   (facts saved to an agent's memory from this room, with **Open memory**) and **Also reachable on** (messaging
   channels the room is mirrored to; **Manage channels** goes to Settings).
 
+## The chat-first view
+
+A second way to use Score for people who want a conversation and not a dashboard. Open it from the avatar menu
+(top right, **Switch to user view**), or go to `/u`. **Switch to admin view** in the same menu brings the full Score
+back; Reports, Team and Settings only exist there.
+
+- **The screen.** A sidebar lists your **Rooms** and **Agents** (a direct room with each). The main area shows one
+  conversation at a time with a large message box. With no room open it asks "What would you like to work on?", lets
+  you pick who to ask (**Ask**) and offers a few suggestions.
+- **Start an orchestration from the chat.** Use the plus button, or type `/orchestrate <goal>`. The run follows as
+  short status lines between the messages, and everything it needs from you appears in the conversation: step
+  approvals, the lead's questions and limits (see "Quota guard"), each with its buttons. **Pause** and **Stop** sit at
+  the top. A workflow run shows a header with the workflow's title, the steps done, **Pause**, **Stop** and **See full
+  details**, and answers a workflow's questions in the chat too.
+- **Approvals are never hidden.** An approval or a question that needs you always shows, whatever the theme looks like.
+- **Password check for the admin view.** In Settings › Look, **Ask for the security password to open the admin view**
+  makes this browser ask before it opens the admin view. It is a convenience for a shared screen, not access control:
+  anyone who can reach Score can still open it from another browser.
+- **A theme can change this view separately.** The Customizer's preview has a "Chat-first view" page, and a theme can
+  give `/u` its own colours, fonts and layout.
+
 ## Tasks
 
 A board of the team's tasks in five columns: **Planned, Working, In review, Needs you, Done**.
@@ -237,11 +259,29 @@ works in rooms only (@mention it like any other); it cannot take Tasks, and its 
 routines and so on) do not apply. One turn runs at a time (others show as queued), a turn is stopped after 30
 minutes, and **Stop** works as for other agents.
 
+**Quota guard.** A coding agent runs on your own CLI plan, so Score watches its limits and stops handing it new work
+before it runs dry. Each coding agent has a **floor**: on its page, **Stop using this agent in runs when a limit is
+below** (a whole percentage from 0 to 50, 10 by default; 0 turns the guard off). An orchestration or workflow can set a
+different floor for one run. While any of the agent's 5-hour or weekly limits has less than the floor left, runs don't
+give it new steps. The red mark on the agent's limit bars shows where the floor is. Steps that are already running are
+never interrupted, and a reading that is missing or out of date never blocks anything.
+
+- In an **orchestration**, the lead is told why and picks another agent. If it can't, the step waits and a card
+  ("<agent>’s limit is low") asks you: **Use it anyway**, **Wait until it resets** or **Stop the run**. The same card
+  appears in the chat-first view.
+- A **workflow** step waits with the same card.
+
+**Personality.** The **Personality** card on a coding agent's page holds its role (one line, for example "reviews build
+scripts") and its instructions, written in Markdown. **Edit personality** opens the editor, with **Save** and **Cancel**. If the
+instructions were saved somewhere else meanwhile you see that, and choose **Reload theirs** or **Overwrite with mine**. Score gives the text to the CLI each session: Claude Code gets it as an added system
+prompt; Codex and Antigravity get it at the start of a session, and again only after you change it. Nothing is written
+into the agent's workspace.
+
 **Sub-agents.** At workspace write and full access, Claude Code can hand part of a job to its own sub-agent. The sub-agent
 works in the same folder, under the same sandbox, blocked folders and plan quota as the agent, and you only get the
 agent’s final answer. In Chat and in Flow's live log, the sub-agent’s tool calls appear inside the Agent card (closed until you
 open it, summary like “Sub-agent · List files in folder · 1 tool call · done”), and Watch captions its steps with
-“Sub-agent ·”. A sub-agent that fails is marked failed on its card; the step still follows the agent’s own final result.
+“Sub-agent ·” (a run of them is grouped as “Sub-agent · N steps”). A sub-agent that fails is marked failed on its card; the step still follows the agent’s own final result.
 Read only can’t start sub-agents. Antigravity sub-agents aren’t shown yet.
 
 ## Knowledge
@@ -290,12 +330,95 @@ A navigation list on the left, one card per section. Settings for a single agent
   changes** shows the difference and **Save for the whole team** applies it. Never rules are guardrails, not a
   security boundary: they match command text and can be bypassed by clever wording, so keep real secrets out of
   reach in other ways.
-- **Look.** Choose the theme (Light, Dark or System). Hermes plugins are per agent: turn them on or off in Team › the agent › **Plugins** (the Score bridge stays on; a change applies on the agent's next session).
+- **Look.** Colours (Light, Dark or System), the style of Score on this device and for every device, the Customizer
+  and the way back from a theme (see "Look, themes and the Customizer" below), plus how messages are sent, the
+  password check for the admin view and the display currency. Hermes plugins are per agent: turn them on or off in
+  Team › the agent › **Plugins** (the Score bridge stays on; a change applies on the agent's next session).
 - **Advanced.** Search every Hermes setting. **Stage change** collects edits in a tray (**Pending changes**); you
   preview the difference, apply, and Score says whether the gateway needs a restart for the change to take effect.
   Changes go through the `hermes` command only.
 - **Remote access** (only visible in remote mode): how to set up TLS, the list of **Paired browsers** with a
   revoke button for each, and **Log out this browser**. See the README for pairing and remote mode.
+
+## Look, themes and the Customizer
+
+A **theme** changes how Score looks and how its pages are arranged: colours, fonts, corners, spacing, where the
+navigation sits, what Now shows and in which order, how chat messages look and a picture behind the page. A theme is
+only data (a settings file, some CSS and a few fonts or pictures): **no theme code runs**, it can't read your agents',
+rooms' or tasks' data, and it can't press anything for you. This section is for using themes; the people who write them
+have `docs/THEMES.md`.
+
+### Settings › Look
+
+- **Theme** is the colour mode: **Light**, **Dark** or **System** (follows your device). It is also in the avatar menu.
+- **Style on this device** shows every theme as a card in its own colours. Click one to use it **on this device only**;
+  it is remembered in this browser and applied before the page appears. **Use the shared theme** (shown under the
+  cards when this device has its own) puts the device back in step with everyone else.
+- **Theme for every device** and **Colours for every device** set the shared look; **Save for every device** applies it
+  to every browser that hasn't chosen its own. Devices that have their own choice keep it.
+- **Customize…** opens the Customizer.
+- **If a theme gets in the way** has the button that resets the look (see "Ways back from a broken theme").
+
+Score ships seven themes: **Score** (the default), **Paper** (warm off-white, serif headings), **Night shift** (deep
+blue-black, navigation on the left), **Dense** (neutral greys, Inter, tight spacing), **Harbour** (frosted glass over a
+dusk harbour, left navigation, chat bubbles), **Ledger** (flat, sharp, compact, monospace headlines, one menu button)
+and **Studio** (airy, serif, right navigation, Needs you first). All of them have light and dark variants and pass the
+contrast checks. Built-in themes can't be changed or deleted; the Customizer copies one first. A theme you install from
+a file or make yourself appears next to them.
+
+Some things never change with a theme, so you can always see and answer an approval and always get back: approvals and
+other decisions, password and permission screens, the Needs you marker, agent shapes and the way back to the default
+look. Phones keep a simple top bar whatever the theme says.
+
+### The Customizer
+
+**Settings › Look › Customize…** is a workshop: the controls are on one side and a live preview of the real app on the
+other. Nothing is saved until you save, and nothing you do in the preview sends anything to your agents.
+
+- **Preview.** Pick the page to preview (Now, Chat, Tasks, Team, Knowledge, Reports, Settings or the chat-first view),
+  **Light** or **Dark**, and **Desktop**, **Tablet** or **Phone** width. On a phone the Customizer shows **Edit** and
+  **Preview** one at a time.
+- **Sections.** **Theme** (name, author, version, description and **Start from**, which copies another theme into this
+  one; the built-in themes are copied exactly, with every colour), **Colours** (every public colour in plain words,
+  for light and dark), **Fonts** (including fonts you add), **Shape** (corner radius, spacing, borders, shadows, glass
+  or solid cards), **Layout** (where the navigation is, content width and a menu editor for the order, names and
+  visibility of the pages; Settings always stays), **Now** (the cards on Now, their order and width; Needs you is
+  always there), **Chat** (bubbles or plain messages, where the room list sits), **Background** (a picture, fitted or
+  tiled, with a veil to calm it down) and **Custom CSS**.
+- **Custom CSS** is for finishing touches of appearance only. Score checks it and lists what it dropped and why:
+  anything that would move, hide or resize things, scripts, links to other sites, `!important`.
+- **Pictures and fonts.** Add them in the Background and Fonts sections (pictures: png, jpg, webp or avif; fonts:
+  woff2). They travel with the theme when you save, and a picture you replace under the same name counts as a change.
+- **Checks while you work.** Score names every pairing that is hard to read, including text over a picture and over
+  glass, and shows what is wrong beside the control. Protected parts such as approvals stay readable whatever you pick.
+- **Undo, Redo and Discard** work as you expect; **Discard** goes back to the saved theme and Undo brings your
+  changes back. Reordering works with the mouse or the keyboard.
+- **Save** stores the theme on this Score. If the theme is in use, the button says **Save and apply** and the note
+  beside it says who will see the change (this device, or every device). If someone else changed the theme after you
+  opened it, Score tells you and doesn't overwrite it: reload it, or **Save as new…** to keep your version. **Save as
+  new…** keeps the original as it is.
+- **Use on this device** and **Use for every device** save (when needed) and switch to the theme.
+- **Export** downloads a `.zip` of the theme, with the licence text of any font or picture it ships. **Import…** reads a
+  `.zip` and shows an install preview first (what it contains and what the checks removed); Cancel stores nothing. A
+  package that can't be used is explained in plain words.
+- Leaving with unsaved changes asks first.
+
+### Ways back from a broken theme
+
+A theme can't hide the way back, but a bad colour choice can still make a page hard to use. Any of these takes this
+device back to Score's own look, and none needs the page to be readable:
+
+1. **Press Ctrl+Shift+0** on any page.
+2. **Search for "Reset look"** with Ctrl+K (Cmd+K) and run **Reset look on this device**.
+3. **Open Score with `?look=safe`** at the end of the address, for example `http://127.0.0.1:8740/?look=safe`. Theme and
+   device choice are off for that visit only; reload without it to go back.
+4. **Settings › Look › Reset look on this device.**
+5. **On the machine Score runs on**, `scripts/score look reset` sets the shared look to Score with the system colour
+   mode, even with Score stopped. Every browser also drops its own theme the next time it reads the theme list (focus
+   the tab or reload).
+
+If a theme fails to load, fails while it is applied or damages one of the protected parts (an approval, say), Score skips
+that theme, shows a banner saying so and uses its own look.
 
 ## Terminal
 
