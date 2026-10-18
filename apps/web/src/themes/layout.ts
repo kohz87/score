@@ -120,6 +120,14 @@ export function resolveMenu(menu: LayoutConfig['menu']): MenuItem[] {
   return items
 }
 
+/**
+ * Where the Needs-you dot sits: on Now, wherever the theme put it; when the theme left Now out, on the first entry, so
+ * the marker is never missing from the navigation.
+ */
+export function needsYouPath(menu: MenuItem[]): string | undefined {
+  return menu.some((item) => item.path === '/now') ? '/now' : menu[0]?.path
+}
+
 /** The user view is `/u` and everything below it. */
 export function viewOfPath(pathname: string): LookView {
   return pathname === '/u' || pathname.startsWith('/u/') ? 'user' : 'admin'

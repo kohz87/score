@@ -47,7 +47,7 @@ export function TopBar({
             />
           </svg>
         </button>
-        {launcher && (
+        {launcher && !menuOpen && (
           <span className="menu-slot-badge">
             <NeedsYouDot />
           </span>

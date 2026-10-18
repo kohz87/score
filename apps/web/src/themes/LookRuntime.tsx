@@ -96,6 +96,8 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
   }, [look.mode])
 
   useEffect(() => {
+    // The shared theme isn't known yet: the boot cache's look (attributes, token sheet, layout) stays until it is.
+    if (look.loading && !look.safe) return
     if (look.safe || id === null) {
       applyBuiltin('score')
       setLayout(DEFAULT_LAYOUT)
@@ -152,7 +154,7 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
       lookStore.setFailure('Your theme couldn’t be applied, so Score is showing its own look.')
     }
     return () => stopWatching?.()
-  }, [look.safe, id, custom, detail.isPending, detail.isError, detail.data, mode, view])
+  }, [look.safe, look.loading, id, custom, detail.isPending, detail.isError, detail.data, mode, view])
 
   return <LookBanner router={router} safe={look.safe} failure={look.failure} />
 }

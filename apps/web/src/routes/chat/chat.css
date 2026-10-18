@@ -2743,9 +2743,6 @@
   flex-direction: column;
   flex-wrap: nowrap;
 }
-:root[data-rooms='hidden'] .chat-thread {
-  flex-basis: 100%;
-}
 
 /* Message bubbles of a theme (PLAN 9.3, html[data-chat='bubbles']): yours on the right in --bubble-own, the agents'
    on the left beside their glyph. Plain (Score's own look) never matches. */

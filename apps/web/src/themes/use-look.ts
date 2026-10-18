@@ -23,6 +23,8 @@ export type Look = {
   failure: string | null
   /** What the applied theme asks of the components (menu, Now cards, chat); Score's default when none is applied. */
   layout: LayoutConfig
+  /** True until the shared theme is known (the list is still loading and this device has no choice of its own). */
+  loading: boolean
   /** False while the theme list could not be read (older server): only the built-in themes are offered. */
   fromServer: boolean
   chooseForDevice: (id: string | null) => void
@@ -115,6 +117,7 @@ export function useLook(): Look {
     safe: state.safe,
     failure: state.failure,
     layout,
+    loading: list.isPending && deviceId === null,
     fromServer: !!list.data,
     chooseForDevice: (id) => {
       writeDeviceOverride(id)

@@ -129,3 +129,11 @@ describe('layout model', () => {
     for (const name of ['data-pack', 'data-layout', 'data-density']) root.removeAttribute(name)
   })
 })
+
+test('the Needs-you dot is on Now, or on the first entry when the theme left Now out', async () => {
+  const { needsYouPath } = await import('./layout.ts')
+  expect(needsYouPath(resolveMenu(null))).toBe('/now')
+  expect(needsYouPath(resolveMenu([{ to: '/chat' }, { to: '/now' }]))).toBe('/now')
+  expect(needsYouPath(resolveMenu([{ to: '/chat' }, { to: '/tasks' }]))).toBe('/chat')
+  expect(needsYouPath(resolveMenu([]))).toBe('/settings')
+})

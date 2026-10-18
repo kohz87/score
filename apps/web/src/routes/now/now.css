@@ -895,6 +895,7 @@
 }
 .now-slot {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
 /* A todo card with nothing to show (or a card that is not on this page). */

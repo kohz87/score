@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import { prefersReducedMotion } from '../data/use-media.ts'
-import { useLayout, useMenu } from '../themes/layout.ts'
+import { needsYouPath, useLayout, useMenu } from '../themes/layout.ts'
 import { HermesCheckDot, NeedsYouDot } from './MainNav.tsx'
 
 export const NAV_DRAWER_ID = 'nav-drawer'
@@ -22,6 +22,7 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
   const panelRef = useRef<HTMLElement>(null)
   const { pathname } = useLocation()
   const menu = useMenu()
+  const dotOn = needsYouPath(menu)
   // The launcher layout opens this drawer at every width; the others only below the desktop breakpoint.
   const persistent = useLayout().nav === 'launcher'
   const pairing = pathname === '/pair'
@@ -108,7 +109,7 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
             <div key={path} className="nav-drawer-group">
               <NavLink to={path} className="nav-drawer-link">
                 {title}
-                {path === '/now' && !pairing && <NeedsYouDot />}
+                {path === dotOn && !pairing && <NeedsYouDot />}
                 {path === '/settings' && !pairing && <HermesCheckDot />}
               </NavLink>
               {path === '/now' && (
