@@ -295,3 +295,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   spacing and 232px rail have no manifest option (compact = 0.85, rail 248); fixing needs a manifest corner-scale and
   density option (contract change), documented in THEMES.md meanwhile. Lead resolved the store.ts conflict with I2 and
   updated C4's unsettled-swap test for I2's refused reads. Merged main: contract 1358, server themes 508, web themes 874.
+- **C3** merged: flakes fixed at their causes — live-feel lane matched "Lead builder" (exact link now), now.spec 1px
+  jitter from other specs' `.orch-now` cards, chat-composer reply stopped by chat-stalled in the shared room (own room
+  now), themes-layout measured before the theme swap (polls). **Product race:** Chat's thread didn't re-pin to its end
+  when the composer grew after the first paint (ResizeObserver follow + layout-clamp guard in `ChatThread.tsx`; 8
+  baselines that had captured the hidden last lines updated). Not reproduced in hundreds of loaded runs (no change):
+  ledger chat phone, workspace 390 jitter, kanban audit5f, the Agents listbox.
