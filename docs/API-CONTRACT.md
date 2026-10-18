@@ -2236,6 +2236,10 @@ one of these three ids are renamed at the first start (migration 0075 and a star
   `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5).
 - `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult`; stored, **not** activated.
   `409 theme_exists` (same id; `?replace=1` replaces an imported or custom theme, never a built-in);
+  with `?replace=1` an `If-Match: <etag>` header (the `etag` of `GET /api/themes/:id`, quotes allowed) makes the replace
+  conditional: the server compares it with the stored theme's etag inside the same serialised step as the replace and
+  answers `409 etag_mismatch` (`details.etag` = the current etag, `null` when the theme is gone) when it differs, leaving
+  the theme unchanged. Without the header replace works as before (manual imports). The Customizer always sends it;
   `422 theme_rejected { reasons[] }` (bad manifest, newer `format`, bad paths, sizes, file types, CSS checks).
 - `GET /api/themes/:id/export` → `application/zip` (the same layout as import).
 - `DELETE /api/themes/:id` → `204`; `409 builtin_theme`, `409 theme_active`.
