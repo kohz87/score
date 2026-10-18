@@ -42,9 +42,12 @@ export function readsOutsideWorkspace(
 export function ReadAccessWarning({
   runtime,
   permission,
+  brief = false,
 }: {
   runtime: CodingRuntime
   permission: CodingPermission
+  /** Only what the CLI can read: the agent's page shows the "follow instructions" line where it is edited. */
+  brief?: boolean
 }) {
   const reach =
     runtime === 'claude-code'
@@ -59,10 +62,12 @@ export function ReadAccessWarning({
   return (
     <div className="team-muted-strong coding-reach" role="note">
       <p>{reach}</p>
-      <p>
-        Coding agents follow instructions they find in files and messages, so connect only
-        workspaces and rooms you trust.
-      </p>
+      {!brief && (
+        <p>
+          Coding agents follow instructions they find in files and messages, so connect only
+          workspaces and rooms you trust.
+        </p>
+      )}
     </div>
   )
 }
@@ -381,23 +386,39 @@ export function CodingOverview({ agent }: { agent: AgentDetail }) {
     void queryClient.invalidateQueries({ queryKey: ['team'] })
   }
   return (
-    <>
+    <div className="team-stack">
       {/* Keyed by the stored text: a save elsewhere starts a fresh editor instead of rebasing an old draft. */}
       <CodingPersonality
         key={`${coding.instructionsEtag}:${coding.role}`}
         coding={coding}
         onChanged={changed}
+        facts={<CodingFacts coding={coding} />}
       />
-      <CodingSettings
-        key={`${coding.permission}:${coding.model}:${coding.quotaFloorPercent}:${coding.cli.confirmed}:${coding.heldGroups.length}`}
+      <CodingAlerts coding={coding} onChanged={changed} />
+      <div className="team-overview-grid">
+        <section className="team-card" aria-labelledby="coding-limits" data-protected="block">
+          <h2 id="coding-limits">Limits left</h2>
+          <AgentQuota
+            agentId={coding.id}
+            runtime={coding.runtime}
+            floor={coding.quotaFloorPercent}
+          />
+        </section>
+        <CodingModelCard key={`model:${coding.model ?? ''}`} coding={coding} onChanged={changed} />
+        <CodingAccessCard
+          key={`access:${coding.permission}:${coding.quotaFloorPercent}`}
+          coding={coding}
+          onChanged={changed}
+        />
+      </div>
+      <CodingDanger
         coding={coding}
-        onChanged={changed}
         onRemoved={() => {
           changed()
           void navigate('/team')
         }}
       />
-    </>
+    </div>
   )
 }
 
@@ -408,41 +429,35 @@ const cliStates = {
   untested_version: 'Untested version',
 } as const
 
-function CodingSettings({
-  coding,
-  onChanged,
-  onRemoved,
-}: {
-  coding: CodingAgent
-  onChanged: () => void
-  onRemoved: () => void
-}) {
-  const [permission, setPermission] = useState(coding.permission)
-  const [model, setModel] = useState(coding.model ?? '')
-  const [password, setPassword] = useState('')
-  const [floor, setFloor] = useState(String(coding.quotaFloorPercent))
-  const floorValue = Number(floor)
-  const floorValid =
-    floor.trim() !== '' && Number.isInteger(floorValue) && floorValue >= 0 && floorValue <= 50
-  const runtimes = useQuery(codingRuntimesQuery)
-  const unverified =
-    runtimes.data?.find((item) => item.runtime === coding.runtime)?.unverifiedPermissions ?? []
-  const needsPassword = permission === 'full' && coding.permission !== 'full'
-  const save = useMutation({
-    mutationFn: async () =>
-      CodingAgentSchema.parse(
-        await apiFetch(`coding-agents/${encodeURIComponent(coding.id)}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            permission,
-            model: model.trim() || null,
-            quotaFloorPercent: floorValue,
-            ...(needsPassword ? { password } : {}),
-          }),
-        }),
-      ),
-    onSuccess: onChanged,
-  })
+/** The right-hand column of the Personality card: what runs this agent and where. */
+function CodingFacts({ coding }: { coding: CodingAgent }) {
+  return (
+    <dl className="team-facts team-facts-stacked">
+      <div>
+        <dt>CLI</dt>
+        <dd>
+          {runtimeLabel(coding.runtime) ?? coding.runtime} {coding.cli.version ?? ''} ·{' '}
+          {cliStates[coding.cli.state]}
+          {coding.cli.state === 'untested_version' && coding.cli.confirmed && ' (you confirmed it)'}
+          <CodingBackend />
+        </dd>
+      </div>
+      <div>
+        <dt>Workspace</dt>
+        <dd>
+          <code>{coding.workspace}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>Quota source</dt>
+        <dd className="team-facts-plain">{coding.quota}</dd>
+      </div>
+    </dl>
+  )
+}
+
+/** Things that stop the agent working: held programs and an untested CLI version. Shown only when they apply. */
+function CodingAlerts({ coding, onChanged }: { coding: CodingAgent; onChanged: () => void }) {
   const confirm = useMutation({
     mutationFn: async () =>
       apiFetch(`coding-agents/${encodeURIComponent(coding.id)}/confirm-version`, {
@@ -451,48 +466,12 @@ function CodingSettings({
       }),
     onSuccess: onChanged,
   })
-  const remove = useMutation({
-    mutationFn: () =>
-      apiFetch(`coding-agents/${encodeURIComponent(coding.id)}`, { method: 'DELETE' }),
-    onSuccess: onRemoved,
-  })
+  const held = coding.heldGroups.length > 0
+  const untested = coding.cli.state === 'untested_version' && !coding.cli.confirmed
+  if (!held && !untested) return null
   return (
-    <section className="team-card" aria-label="Coding agent" data-protected="block">
-      <h2>Coding agent</h2>
-      <dl className="team-facts">
-        <div>
-          <dt>CLI</dt>
-          <dd>
-            {runtimeLabel(coding.runtime) ?? coding.runtime} {coding.cli.version ?? ''} ·{' '}
-            {cliStates[coding.cli.state]}
-            {coding.cli.state === 'untested_version' &&
-              coding.cli.confirmed &&
-              ' (you confirmed it)'}
-          </dd>
-        </div>
-        <div>
-          <dt>Quota</dt>
-          <dd>{coding.quota}</dd>
-        </div>
-        <div>
-          <dt>Limits left</dt>
-          <dd>
-            <AgentQuota
-              agentId={coding.id}
-              runtime={coding.runtime}
-              floor={coding.quotaFloorPercent}
-            />
-          </dd>
-        </div>
-        <div>
-          <dt>Workspace</dt>
-          <dd>
-            <code>{coding.workspace}</code>
-          </dd>
-        </div>
-      </dl>
-      <CodingBackend />
-      {coding.heldGroups.length > 0 && (
+    <section className="team-card" aria-label="Needs attention" data-protected="block">
+      {held && (
         <div role="alert">
           <p className="team-muted-strong">
             Some programs this agent started couldn’t be proven ended. Score keeps trying to stop
@@ -501,7 +480,7 @@ function CodingSettings({
           <ReleaseHeld agentId={coding.id} />
         </div>
       )}
-      {coding.cli.state === 'untested_version' && !coding.cli.confirmed && (
+      {untested && (
         <div role="alert">
           <p className="team-muted-strong">
             Score was tested with {coding.cli.testedVersions.join(', ')}. The installed{' '}
@@ -515,85 +494,250 @@ function CodingSettings({
           >
             Run with {coding.cli.version} anyway
           </button>
+          {confirm.error && <p role="alert">{confirm.error.message}</p>}
         </div>
       )}
-      <form
-        className="team-routine-form"
-        onSubmit={(event) => {
-          event.preventDefault()
-          save.mutate()
-        }}
-      >
-        <ModelPicker runtime={coding.runtime} value={model} onChange={setModel} />
-        <PermissionPicker
-          value={permission}
-          onChange={setPermission}
-          name="coding-permission-edit"
-          runtime={coding.runtime}
-          unverified={unverified}
-        />
-        {needsPassword && (
-          <label>
-            Security password
-            <input
-              type="password"
-              required
-              autoComplete="off"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
-        )}
-        <div className="team-quota-floor">
-          <label>
-            Stop using this agent in runs when a limit is below
-            <span className="team-quota-floor-input">
-              <input
-                type="number"
-                min={0}
-                max={50}
-                step={1}
-                inputMode="numeric"
-                value={floor}
-                aria-invalid={!floorValid}
-                onChange={(event) => setFloor(event.target.value)}
-              />
-              <span aria-hidden>%</span>
-            </span>
-          </label>
-          <p className="team-muted">
-            Orchestrations and workflows don’t give it new steps while a limit has less than this
-            left. Steps already running carry on. Enter 0 to turn this off.
+    </section>
+  )
+}
+
+function useCodingPatch(coding: CodingAgent, onChanged: () => void, done: () => void) {
+  return useMutation({
+    mutationFn: async (patch: Record<string, unknown>) =>
+      CodingAgentSchema.parse(
+        await apiFetch(`coding-agents/${encodeURIComponent(coding.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        }),
+      ),
+    onSuccess: () => {
+      onChanged()
+      done()
+    },
+  })
+}
+
+/** The model, large like a Hermes agent's Model card; "Change model" opens the picker right here. */
+function CodingModelCard({ coding, onChanged }: { coding: CodingAgent; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false)
+  return (
+    <section className="team-card" aria-labelledby="coding-model" data-protected="block">
+      <h2 id="coding-model">Model</h2>
+      {editing ? (
+        // The drafts live in the editor, so Cancel and a saved change unmount them: nothing stale is kept.
+        <ModelEditor coding={coding} onChanged={onChanged} onClose={() => setEditing(false)} />
+      ) : (
+        <>
+          <p className="team-model-name">{coding.model ?? 'CLI default'}</p>
+          <p className="team-muted-strong">
+            {coding.model
+              ? `Set for this agent. ${runtimeLabel(coding.runtime) ?? coding.runtime} uses it for every turn.`
+              : 'The CLI picks its own model.'}
           </p>
-        </div>
-        <ReadAccessWarning runtime={coding.runtime} permission={permission} />
-        {(save.error || confirm.error || remove.error) && (
-          <p role="alert">{(save.error ?? confirm.error ?? remove.error)?.message}</p>
-        )}
-        <div className="team-file-actions">
-          <button
-            className="team-primary"
-            disabled={
-              save.isPending ||
-              !floorValid ||
-              (permission !== coding.permission && unverified.includes(permission))
-            }
-          >
-            Save
+          <button type="button" className="team-text-action" onClick={() => setEditing(true)}>
+            Change model
           </button>
-          <button
-            type="button"
-            className="team-pill-button"
-            disabled={remove.isPending}
-            onClick={() => {
-              if (window.confirm(`Remove ${coding.name} from the team? Past work stays in rooms.`))
-                remove.mutate()
-            }}
-          >
-            Remove agent
+        </>
+      )}
+    </section>
+  )
+}
+
+function ModelEditor({
+  coding,
+  onChanged,
+  onClose,
+}: {
+  coding: CodingAgent
+  onChanged: () => void
+  onClose: () => void
+}) {
+  const [model, setModel] = useState(coding.model ?? '')
+  const save = useCodingPatch(coding, onChanged, onClose)
+  return (
+    <form
+      className="team-routine-form"
+      onSubmit={(event) => {
+        event.preventDefault()
+        save.mutate({ model: model.trim() || null })
+      }}
+    >
+      <ModelPicker runtime={coding.runtime} value={model} onChange={setModel} />
+      {save.error && <p role="alert">{save.error.message}</p>}
+      <div className="team-file-actions">
+        <button className="team-primary" disabled={save.isPending}>
+          Save
+        </button>
+        <button type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
+const permissionNames: Record<CodingPermission, string> = {
+  'read-only': 'Read only',
+  'workspace-write': 'Workspace write',
+  full: 'Full access',
+}
+const permissionMeaning: Record<CodingPermission, string> = {
+  'read-only': 'Looks at files, changes nothing.',
+  'workspace-write': 'Edits files in its own workspace.',
+  full: 'No sandbox: runs anything as you.',
+}
+
+/** What the agent may do and when runs stop using it. Edited in place, with its own Save. */
+function CodingAccessCard({ coding, onChanged }: { coding: CodingAgent; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false)
+  return (
+    <section className="team-card" aria-labelledby="coding-access" data-protected="block">
+      <h2 id="coding-access">Access</h2>
+      {editing ? (
+        // Drafts, the typed password and a failed save's error live in the editor and go when it closes.
+        <AccessEditor coding={coding} onChanged={onChanged} onClose={() => setEditing(false)} />
+      ) : (
+        <>
+          <p className="team-model-name">{permissionNames[coding.permission]}</p>
+          <p className="team-muted-strong">
+            {permissionMeaning[coding.permission]}{' '}
+            {coding.quotaFloorPercent > 0
+              ? `Runs stop using it below ${coding.quotaFloorPercent}% of a limit left.`
+              : 'Runs keep using it whatever its limits show.'}
+          </p>
+          <ReadAccessWarning runtime={coding.runtime} permission={coding.permission} brief />
+          <button type="button" className="team-text-action" onClick={() => setEditing(true)}>
+            Change access
           </button>
-        </div>
-      </form>
+        </>
+      )}
+    </section>
+  )
+}
+
+function AccessEditor({
+  coding,
+  onChanged,
+  onClose,
+}: {
+  coding: CodingAgent
+  onChanged: () => void
+  onClose: () => void
+}) {
+  const [permission, setPermission] = useState(coding.permission)
+  const [password, setPassword] = useState('')
+  const [floor, setFloor] = useState(String(coding.quotaFloorPercent))
+  const floorValue = Number(floor)
+  const floorValid =
+    floor.trim() !== '' && Number.isInteger(floorValue) && floorValue >= 0 && floorValue <= 50
+  const runtimes = useQuery(codingRuntimesQuery)
+  const unverified =
+    runtimes.data?.find((item) => item.runtime === coding.runtime)?.unverifiedPermissions ?? []
+  const needsPassword = permission === 'full' && coding.permission !== 'full'
+  const save = useCodingPatch(coding, onChanged, onClose)
+  return (
+    <form
+      className="team-routine-form"
+      onSubmit={(event) => {
+        event.preventDefault()
+        save.mutate({
+          // Only what changed: an unchanged level is never re-sent with a password.
+          ...(permission !== coding.permission ? { permission } : {}),
+          quotaFloorPercent: floorValue,
+          ...(needsPassword ? { password } : {}),
+        })
+      }}
+    >
+      <PermissionPicker
+        value={permission}
+        onChange={setPermission}
+        name="coding-permission-edit"
+        runtime={coding.runtime}
+        unverified={unverified}
+      />
+      {needsPassword && (
+        <label>
+          Security password
+          <input
+            type="password"
+            required
+            autoComplete="off"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+      )}
+      <div className="team-quota-floor">
+        <label>
+          Stop using this agent in runs when a limit is below
+          <span className="team-quota-floor-input">
+            <input
+              type="number"
+              min={0}
+              max={50}
+              step={1}
+              inputMode="numeric"
+              value={floor}
+              aria-invalid={!floorValid}
+              onChange={(event) => setFloor(event.target.value)}
+            />
+            <span aria-hidden>%</span>
+          </span>
+        </label>
+        <p className="team-muted">
+          Orchestrations and workflows don’t give it new steps while a limit has less than this
+          left. Steps already running carry on. Enter 0 to turn this off.
+        </p>
+      </div>
+      <ReadAccessWarning runtime={coding.runtime} permission={permission} />
+      {save.error && <p role="alert">{save.error.message}</p>}
+      <div className="team-file-actions">
+        <button
+          className="team-primary"
+          disabled={
+            save.isPending ||
+            !floorValid ||
+            (permission !== coding.permission && unverified.includes(permission))
+          }
+        >
+          Save
+        </button>
+        <button type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
+/** At the bottom, apart from the cards, like a Hermes agent's Danger zone. */
+function CodingDanger({ coding, onRemoved }: { coding: CodingAgent; onRemoved: () => void }) {
+  const remove = useMutation({
+    mutationFn: () =>
+      apiFetch(`coding-agents/${encodeURIComponent(coding.id)}`, { method: 'DELETE' }),
+    onSuccess: onRemoved,
+  })
+  return (
+    <section
+      className="team-card team-profile-danger team-section-gap"
+      aria-labelledby="coding-danger"
+      data-protected="block"
+    >
+      <h2 id="coding-danger">Danger zone</h2>
+      <p>Removing {coding.name} takes it off the team. Past work stays in rooms.</p>
+      {remove.error && <p role="alert">{remove.error.message}</p>}
+      <div className="team-file-actions">
+        <button
+          type="button"
+          disabled={remove.isPending}
+          onClick={() => {
+            if (window.confirm(`Remove ${coding.name} from the team? Past work stays in rooms.`))
+              remove.mutate()
+          }}
+        >
+          Remove agent
+        </button>
+      </div>
     </section>
   )
 }

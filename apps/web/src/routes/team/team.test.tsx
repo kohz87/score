@@ -1365,3 +1365,171 @@ test('the Model tab saves only the speech fields that changed', async () => {
     speech: { tts: { voice: 'nova' } },
   })
 })
+
+test('the band has Message (to the direct room) and Pause, which pauses and shows Resume once paused', async () => {
+  const base = respond
+  const posts: string[] = []
+  let paused = false
+  respond = (path, init) => {
+    if (path === '/api/rooms')
+      return json({
+        asOfSeq: 0,
+        rooms: [],
+        directs: [
+          {
+            id: 'room-direct-builder',
+            name: 'builder',
+            kind: 'direct',
+            leadAgentId: 'builder',
+            members: ['builder'],
+            unread: 0,
+            activeAgents: [],
+            channels: [],
+          },
+        ],
+        projects: [],
+      })
+    if (path === '/api/agents/builder/pause' || path === '/api/agents/builder/resume') {
+      posts.push(path)
+      paused = path.endsWith('/pause')
+      return json({ ...builder, status: paused ? 'paused' : 'idle' })
+    }
+    if (path === '/api/agents/builder' && paused)
+      return json({ ...builderDetail, status: 'paused' })
+    if (path === '/api/agents' && paused)
+      return json({ asOfSeq: 0, items: [lead, { ...builder, status: 'paused' }] })
+    return base(path, init)
+  }
+  const source = renderTeam('/team/builder')
+  const message = await screen.findByRole('link', { name: 'Message Builder' })
+  await waitFor(() => expect(message.getAttribute('href')).toBe('/chat/room-direct-builder'))
+  fireEvent.click(screen.getByRole('button', { name: 'Pause' }))
+  await waitFor(() => expect(posts).toEqual(['/api/agents/builder/pause']))
+  // The server announces the change on the stream; the band follows it.
+  agentUpdated(source, 1, { ...builder, status: 'paused' })
+  fireEvent.click(await screen.findByRole('button', { name: 'Resume' }))
+  await waitFor(() =>
+    expect(posts).toEqual(['/api/agents/builder/pause', '/api/agents/builder/resume']),
+  )
+  expect(screen.getByRole('link', { name: 'Watch Builder work' })).toBeDefined()
+})
+
+test('long overview lists are capped and Show all N opens the tab that has everything', async () => {
+  const base = respond
+  const skills = Array.from({ length: 14 }, (_, index) => ({
+    name: `skill-${index + 1}`,
+    enabled: true,
+  }))
+  const tools = Array.from({ length: 9 }, (_, index) => ({
+    id: `tool-${index + 1}`,
+    label: `Tool ${index + 1}`,
+    kind: 'builtin' as const,
+    enabled: true,
+  }))
+  const memory = Array.from({ length: 5 }, (_, index) => ({
+    id: `m${index + 1}`,
+    text: `Note ${index + 1}`,
+    source: 'Agent notes',
+    at: '2026-01-01T00:00:00.000Z',
+  }))
+  respond = (path, init) =>
+    path === '/api/agents/builder'
+      ? json({ ...builderDetail, skills, tools, memory })
+      : base(path, init)
+  renderTeam('/team/builder')
+  const skillsCard = await screen.findByRole('region', { name: 'Skills' })
+  expect(within(skillsCard).getAllByRole('listitem')).toHaveLength(10)
+  expect(within(skillsCard).queryByText('skill-11')).toBeNull()
+  const toolsCard = screen.getByRole('region', { name: 'Tools' })
+  // Six tools and the helpers row.
+  expect(within(toolsCard).getAllByRole('listitem')).toHaveLength(7)
+  expect(
+    within(screen.getByRole('region', { name: 'Memory' })).getAllByText(/^Note /),
+  ).toHaveLength(3)
+  fireEvent.click(within(toolsCard).getByRole('button', { name: 'Show all 9' }))
+  expect(screen.getByRole('tab', { name: 'Tools', selected: true })).toBeDefined()
+  fireEvent.click(screen.getByRole('tab', { name: 'Overview' }))
+  fireEvent.click(
+    within(await screen.findByRole('region', { name: 'Skills' })).getByRole('button', {
+      name: 'Show all 14',
+    }),
+  )
+  expect(screen.getByRole('tab', { name: 'Skills', selected: true })).toBeDefined()
+})
+
+const directRoom = {
+  id: 'room-direct-builder',
+  name: 'builder',
+  kind: 'direct',
+  leadAgentId: 'builder',
+  members: ['builder'],
+  unread: 0,
+  activeAgents: [],
+  channels: [],
+}
+
+test('Message waits for the rooms: disabled while they load, /chat only when none is a direct room', async () => {
+  const base = respond
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  respond = async (path, init) => {
+    if (path === '/api/rooms') {
+      await gate
+      return json({ asOfSeq: 0, rooms: [], directs: [directRoom], projects: [] })
+    }
+    return base(path, init)
+  }
+  renderTeam('/team/builder')
+  const pending = await screen.findByRole('link', { name: 'Message Builder, loading' })
+  expect(pending.getAttribute('aria-disabled')).toBe('true')
+  expect(pending.getAttribute('href')).toBeNull()
+  release()
+  const ready = await screen.findByRole('link', { name: 'Message Builder' })
+  await waitFor(() => expect(ready.getAttribute('href')).toBe('/chat/room-direct-builder'))
+  cleanup()
+  // A rooms error falls back to Chat.
+  respond = (path, init) =>
+    path === '/api/rooms' ? json({ error: { code: 'x', message: 'no' } }, 500) : base(path, init)
+  renderTeam('/team/builder')
+  const fallback = await screen.findByRole('link', { name: 'Message Builder' })
+  await waitFor(() => expect(fallback.getAttribute('href')).toBe('/chat'))
+})
+
+test.each([
+  ['pause', 'Pause', 'Pause again', 'paused'],
+  ['resume', 'Resume', 'Resume again', 'idle'],
+] as const)(
+  'a %s that the server commits but answers with an error offers the same action again',
+  async (action, first, again, statusAfter) => {
+    const base = respond
+    const posts: string[] = []
+    respond = (path, init) => {
+      if (path === '/api/agents/builder/pause' || path === '/api/agents/builder/resume') {
+        posts.push(path)
+        return posts.length === 1
+          ? json(
+              { error: { code: 'hermes_unavailable', message: `Some tasks couldn’t be held.` } },
+              502,
+            )
+          : json({ ...builder, status: statusAfter })
+      }
+      return base(path, init)
+    }
+    // Start from the state the first click acts on.
+    const source = renderTeam('/team/builder')
+    await screen.findByRole('button', { name: 'Pause' })
+    if (action === 'resume') agentUpdated(source, 1, { ...builder, status: 'paused' })
+    fireEvent.click(await screen.findByRole('button', { name: first }))
+    await screen.findByRole('alert')
+    // The server did commit it: the stream flips the status the other way.
+    agentUpdated(source, 2, {
+      ...builder,
+      status: action === 'pause' ? 'paused' : 'idle',
+    })
+    const retry = await screen.findByRole('button', { name: again })
+    fireEvent.click(retry)
+    await waitFor(() =>
+      expect(posts).toEqual([`/api/agents/builder/${action}`, `/api/agents/builder/${action}`]),
+    )
+  },
+)

@@ -45,13 +45,18 @@ export function TasksPage() {
     wasCreating.current = creating
   }, [creating])
 
+  // React Router hands a setSearchParams updater the params of the last render, so two quick changes (Needs you, then
+  // Room) lost the first. Each change builds on the latest params instead.
+  const latestParams = useRef(params)
+  useEffect(() => {
+    latestParams.current = params
+  }, [params])
   function setFilter(key: string, value: string) {
-    setParams((current) => {
-      const next = new URLSearchParams(current)
-      if (value) next.set(key, value)
-      else next.delete(key)
-      return next
-    })
+    const next = new URLSearchParams(latestParams.current)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    latestParams.current = next
+    setParams(next)
   }
 
   function moveFocus(event: KeyboardEvent<HTMLAnchorElement>, columnIndex: number, row: number) {

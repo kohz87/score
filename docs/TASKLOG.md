@@ -222,3 +222,12 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Fix: per-package `vitest run --maxWorkers=${SCORE_TEST_WORKERS:-4}`, Playwright `workers: SCORE_E2E_WORKERS ?? 4`;
   builders told to check `free -m` (≥ 15 GB) before heavy runs and to cap load generation. After the reboot: live Score
   restarted, then the Hermes gateway (it had parked its connections), both producers re-registered.
+- **8.9 agent page cleanup** merged (Sonnet high builder; first branch through the decision-99 flow). Lead review of
+  the screenshots against docs/design/team.png; Pause for coding agents verified (chat turns and orchestration steps
+  respect `agent_pauses`). **Codex cross-check found 3 real P2s** (docs/reviews/2026-10-18-8.9-codex-crosscheck.md):
+  Cancel kept access/password drafts so a floor-only save could switch to full access; partial pause 502 offered the
+  opposite action; Message linked to /chat before rooms loaded — all fixed in 8.9 #4 with tests failing first.
+  Also fixed on main meanwhile: Tasks filter race (two quick filter changes lost the first; exposed by the faster VM).
+- **Release 1.6.1** (8.9 + Tasks filter race + worker caps + 2.1.302 declaration). Release run by a Haiku monitor
+  (check 258 s, e2e 143 s): contract/web/plugin/license green, e2e 378/381 (2 chat specs pass alone); server: `fix-l`
+  (T1 item) and an in-file race in `coding-workers-release.test.ts` (passes alone; handed to T1). No product cause.
