@@ -2251,7 +2251,19 @@ startup id move skips the row, until recovery succeeds. Other ids are unaffected
 - `GET /api/themes/:id/assets/<fonts|img>/<file>` → the file with its exact type, `nosniff`, `cache-control: private`.
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
-  `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5).
+  `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5). **Theme CSS is visual-only
+  (decision 102):** a declaration is accepted only if its property is on the allowlist in
+  `packages/contract/src/theme-css.ts` (colours, `background-*` with images only as `asset:img/…`, `border-*`
+  colour/style/width ≤ 8px/radius, `outline-color`/`outline-style`, `box-shadow`/`text-shadow` within small bounds,
+  `font-family`/`font-weight`/`font-style`, `text-decoration-line|color|style`, `accent-color`, `caret-color`, `opacity`
+  0–1, and the public colour tokens, the corner scale and the bounded type-scale `--h1-size`/`--body-size` custom properties) **and** its value passes that module's grammar
+  (no `var()` except of a public colour token inside a colour, no `calc()`/`attr()`/`env()`). Anything else (`position`,
+  `inset`, `transform`, `overflow`, `clip*`, `mask*`, sizes, `margin`/`padding`, `display`, `flex*`/`grid*`, `z-index`,
+  `content`, `filter`, `backdrop-filter`, `font-size`, `line-height`, `letter-spacing`, `word-spacing`, `text-indent`,
+  `text-transform`, `writing-mode`, `direction`, `visibility`, `pointer-events`, motion, other custom properties) and
+  every at-rule other than `@media`, `@supports`, `@container` and `@layer` is rejected here, with a reason naming the
+  property or at-rule; the browser's sanitiser drops the same declarations (`ThemeSanitiseReport` reasons
+  `property_not_allowed` and `value_not_allowed`, with the declaration in `rule`). Both sides run one shared corpus.
 - **One rule set for packages** (`packages/contract/src/theme-package.ts`, pure, no Node or browser APIs): the browser's
   reader (Customizer preview and import dialog) and the server's reader run the same code for the zip's structure
   (central directory against local headers, names, **extra fields: a Unicode Path field, 0x7075, is refused**, flags,

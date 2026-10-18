@@ -194,45 +194,97 @@ approval unreadable. It doesn’t fix the rest of your theme, so check it yourse
 
 ## Custom CSS, `style.css`
 
-CSS is for what the manifest can’t say. It loads after Score’s own CSS and the token sheet, as a separate stylesheet,
-so ordinary cascade rules apply: write the selector you want and, if needed, a more specific one. There is **no
-`!important`** (it is refused), so keep your selectors specific instead.
+CSS is for finishing touches of **appearance**. Where things sit, how big they are and how text is spaced come from the
+manifest (`shape`, `layout`, `fonts`, `background`), which Score renders itself. It loads after Score’s own CSS and the
+token sheet, as a separate stylesheet, so ordinary cascade rules apply: write the selector you want and, if needed, a
+more specific one. There is **no `!important`** (it is refused), so keep your selectors specific instead.
 
 What you can use:
 
 - Score’s own class names, such as `.now-card`, `.chat-thread`, `.chat-message`, `.chat-composer-box`, `.settings-card`,
   `.task-card`, `.team-card`, `.top-bar` and `.page-content`. They are not a stable interface: open the browser’s
   inspector to find the one you want, and expect to adjust when Score changes.
-- Custom properties: the colour tokens above (`--ground`, `--ink`, …), the corner scale (`--radius-xs`, `--radius-s`,
-  `--radius-m`, `--radius-l`, `--radius-card`), `--density`, `--h1-size`, `--body-size`, `--rail-width`, and the font
-  families `--font-heading`, `--font-body` and `--font-code`. Colours set here aren’t checked for contrast.
 - Attribute selectors for the current look: `:root[data-theme='dark']` (dark mode; unset when the mode is System, where
   `@media (prefers-color-scheme: dark)` applies), `:root[data-nav='left']`, `:root[data-chat='bubbles']` and the
   other `data-*` attributes the manifest turns on.
 - `@media`, `@supports`, `@container`, `@layer`, and nested rules. There is no animation: see below.
-- `url(asset:img/name.webp)` for your own files.
+- `url(asset:img/name.webp)` for your own images, in `background-image` and `background`.
 
-What is removed, and why. The browser reads your CSS with its own parser (so `\63 ontent` is `content`), and drops
-these before it is applied, and keeps a report of what was dropped.
+### The allowlist: what a declaration may set
 
-| Dropped                                                                             | Why                                                                                       |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `@import`, `@namespace`                                                              | They load other files; everything must be in the package.                                 |
-| `@font-face`                                                                         | Use `fonts.faces` in the manifest, so the family name can’t replace one of Score’s own.   |
-| any `url()` that isn’t `asset:`, `image-set()`, `src()`, `element()`                | Nothing is fetched from, or sent to, another site.                                        |
-| the `content` property                                                               | A theme could write a fake “Approve” label.                                               |
-| `position: fixed` and `sticky`                                                       | A theme could cover an approval.                                                          |
-| `z-index` above 50                                                                   | The same.                                                                                 |
-| `pointer-events`, `-webkit-user-modify`, `behavior`, `-moz-binding`                  | A theme could make a button impossible to press, or run something.                        |
-| any rule with `!important`                                                           | Protected surfaces win with `!important` in their own layer; a theme can’t compete.       |
-| selectors that name a protected surface (`[data-protected]`, `.chat-approval`, …)    | See below.                                                                                |
-| custom properties starting `--agent-`, `--rules-`, `--glyph-` and `--watch-live`      | Agent identity and the Rules colours carry meaning.                                       |
-| `animation`, `transition` (and their longhands) and `@keyframes`                      | Motion that starts later is how a rule could hide an approval after the checks ran.       |
-| any other at-rule                                                                    | Not needed by a theme.                                                                    |
+A declaration is kept only if its property is on this list **and** its value is one the list accepts (a colour, a
+gradient, a length in range). Everything else is dropped by the browser and the Customizer’s Custom CSS section lists it
+with the reason; the server **refuses** a package or save that contains one (`422 theme_rejected`, naming the property).
+The browser and the server read the same list (`packages/contract/src/theme-css.ts`).
 
-When you import a package or save a theme, the **server** is stricter: it refuses (rather than edits) CSS that still
-contains, after resolving escapes and comments, `@import`, `@namespace`, a `url()` that isn’t `asset:`, `content`,
-`!important`, `position: fixed` or `sticky`, `expression(`, `behavior`, `-moz-binding`, `javascript:`, `image-set()`
+- Colours: `color`, `background-color`, `accent-color`, `caret-color`. A colour is `#rgb`/`#rrggbb`/`#rrggbbaa`, a
+  keyword, `rgb()`, `hsl()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` or `color-mix()`; `var(--token)` of
+  a public colour token also works (`var(--card)`), `calc()`, `attr()` and every other `var()` do not.
+- Background: `background-image`, `background-position`, `background-size`, `background-repeat`,
+  `background-attachment`, `background-origin`, `background-clip`, `background-blend-mode` and the `background`
+  shorthand. Pictures only as `url(asset:img/…)`; gradients of colours.
+- Borders: `border`, `border-top`, `border-right`, `border-bottom`, `border-left`, `border-block`, `border-inline`,
+  `border-block-start`, `border-block-end`, `border-inline-start`, `border-inline-end`, the same with `-color`, `-style`
+  and `-width` (`border-color`, `border-style`, `border-width`, `border-top-color`, `border-left-width`, …, at most 8px
+  wide), and `border-radius`, `border-top-left-radius`, `border-top-right-radius`, `border-bottom-left-radius`,
+  `border-bottom-right-radius`, `border-start-start-radius`, `border-start-end-radius`, `border-end-start-radius`,
+  `border-end-end-radius` (at most 999px).
+- Outline: `outline-color` and `outline-style` (not its width or offset).
+- Shadows: `box-shadow` and `text-shadow`, kept small (offset up to 32px, blur up to 64px, spread up to 8px) because a
+  shadow paints outside its element.
+- Type: `font-family`, `font-weight`, `font-style` (not the size, line height, spacing or case).
+- Text decoration: `text-decoration-line` (`none` or `underline`), `text-decoration-color`, `text-decoration-style`
+  and the `text-decoration` shorthand of those.
+- `opacity` from 0 to 1, on elements **without a protected element inside them** (the sanitiser adds that condition to
+  the selector).
+- Custom properties: the public colour tokens `--hairline`, `--line-strong`, `--subtle`, `--subtle-2`, `--track`,
+  `--track-2`, `--link-hover`, `--on-dark`, `--chat-text`, `--chat-secondary`, `--chat-soft`, `--chat-card-border`,
+  `--chat-dark-border`, `--bubble-own`, `--bubble-own-ink`, `--flow-canvas`, `--flow-canvas-dot`, `--flow-edge`,
+  `--flow-edge-planned`, `--flow-edge-sent-back`, `--flow-done-border`, `--flow-log-border`, `--tasks-ground`,
+  `--tasks-border`, `--tasks-done`, `--tasks-note`, `--profile-dashed`, `--profile-add-ink`, `--watch-stage`,
+  `--watch-window`, `--watch-text` (a plain colour), and the corner scale `--radius-xs`, `--radius-s`, `--radius-m`,
+  `--radius-l`, `--radius-card` (0 to 40px), and the type scale `--h1-size` (28 to 72px, the page title) and `--body-size`
+  (13 to 18px, the body text). The pairs a protected surface draws (`--ground`, `--card`, `--ink`,
+  `--ink-muted`, `--muted`, `--panel-ink`, `--panel-card`) are set in the manifest, where the contrast check sees them.
+
+The complete list, exactly as Score checks it (a test keeps this section and the code the same):
+
+- Colours: `color`, `background-color`, `accent-color`, `caret-color`
+- Background: `background-image`, `background-position`, `background-size`, `background-repeat`, `background-attachment`, `background-origin`, `background-clip`, `background-blend-mode`, `background`
+- Borders: `border`, `border-top`, `border-right`, `border-bottom`, `border-left`, `border-block`, `border-inline`, `border-block-start`, `border-block-end`, `border-inline-start`, `border-inline-end`, `border-color`, `border-top-color`, `border-right-color`, `border-bottom-color`, `border-left-color`, `border-block-color`, `border-inline-color`, `border-block-start-color`, `border-block-end-color`, `border-inline-start-color`, `border-inline-end-color`, `border-style`, `border-top-style`, `border-right-style`, `border-bottom-style`, `border-left-style`, `border-block-style`, `border-inline-style`, `border-block-start-style`, `border-block-end-style`, `border-inline-start-style`, `border-inline-end-style`, `border-width`, `border-top-width`, `border-right-width`, `border-bottom-width`, `border-left-width`, `border-block-width`, `border-inline-width`, `border-block-start-width`, `border-block-end-width`, `border-inline-start-width`, `border-inline-end-width`, `border-radius`, `border-top-left-radius`, `border-top-right-radius`, `border-bottom-left-radius`, `border-bottom-right-radius`, `border-start-start-radius`, `border-start-end-radius`, `border-end-start-radius`, `border-end-end-radius`
+- Outline: `outline-color`, `outline-style`
+- Shadows: `box-shadow`, `text-shadow`
+- Type: `font-family`, `font-weight`, `font-style`
+- Text decoration: `text-decoration-line`, `text-decoration-color`, `text-decoration-style`, `text-decoration`
+- Opacity: `opacity`
+- Custom properties: `--hairline`, `--line-strong`, `--subtle`, `--subtle-2`, `--track`, `--track-2`, `--link-hover`, `--on-dark`, `--chat-text`, `--chat-secondary`, `--chat-soft`, `--chat-card-border`, `--chat-dark-border`, `--bubble-own`, `--bubble-own-ink`, `--flow-canvas`, `--flow-canvas-dot`, `--flow-edge`, `--flow-edge-planned`, `--flow-edge-sent-back`, `--flow-done-border`, `--flow-log-border`, `--tasks-ground`, `--tasks-border`, `--tasks-done`, `--tasks-note`, `--profile-dashed`, `--profile-add-ink`, `--watch-stage`, `--watch-window`, `--watch-text`, `--radius-xs`, `--radius-s`, `--radius-m`, `--radius-l`, `--radius-card`, `--h1-size`, `--body-size`
+
+Not on the list, so dropped: `position`, `inset`, `top`/`left`/`right`/`bottom`, `transform`, `translate`, `rotate`,
+`scale`, `overflow*`, `clip*`, `mask*`, `width`/`height`/`min-*`/`max-*`, `margin`, `padding`, `display`, `flex*`,
+`grid*`, `z-index`, `content`, `filter`, `backdrop-filter`, `font-size`, `font`, `line-height`, `letter-spacing`,
+`word-spacing`, `text-indent`, `text-transform`, `writing-mode`, `direction`, `visibility`, `pointer-events`,
+`animation*`, `transition*`, `outline`, `outline-width`, `outline-offset`, other custom properties, and anything else not
+named above. Why: ancestors’ layout, spacing, transforms and clipping reach decisions through inheritance and
+containment, so the only guarantee that a theme cannot hide an approval is that CSS cannot do those things at all.
+Sizes, spacing and layout are manifest options (`shape.density`, `layout.*`), which Score renders itself.
+
+Other things that are dropped, and why. The browser reads your CSS with its own parser (so `\63 ontent` is `content`),
+drops these before it is applied, and keeps a report of what was dropped.
+
+| Dropped                                                                          | Why                                                                                       |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `@import`, `@namespace`                                                          | They load other files; everything must be in the package.                                 |
+| `@font-face`                                                                     | Use `fonts.faces` in the manifest, so the family name can’t replace one of Score’s own.   |
+| any `url()` that isn’t `asset:img/…`, `image-set()`, `src()`, `element()`        | Nothing is fetched from, or sent to, another site.                                        |
+| any rule with `!important`                                                       | Protected surfaces win with `!important` in their own layer; a theme can’t compete.       |
+| selectors that name a protected surface (`[data-protected]`, `.chat-approval`, …) | See below.                                                                                |
+| custom properties starting `--agent-`, `--rules-`, `--glyph-` and `--watch-live` | Agent identity and the Rules colours carry meaning.                                       |
+| `@keyframes` and any other at-rule than `@media`, `@supports`, `@container`, `@layer` | Not needed by a theme; motion that starts later is how a rule could hide an approval.    |
+
+When you import a package or save a theme, the **server** is stricter in form: it refuses (rather than edits) CSS that
+contains, after resolving escapes and comments, a declaration off the allowlist (naming the property), a value the
+list does not accept, an at-rule other than `@media`, `@supports`, `@container` and `@layer`, `@import`, `@namespace`,
+a `url()` that isn’t `asset:`, `!important`, `expression(`, `behavior`, `-moz-binding`, `javascript:`, `image-set()`
 and similar, so a hand-made upload can’t get around the browser’s checks.
 
 ## Protected surfaces
@@ -252,16 +304,24 @@ tokens apply inside them, and only while their contrast holds.
 **None of your rules match inside these.** Every selector of your CSS is applied as if it ended in
 `:where(:not([data-protected], [data-protected] *))`, so `button`, `span`, `svg path`, `[role=alert]` or `div > div` never
 reach an approval’s words, its buttons or a glyph’s shape, whatever you write. (This doesn’t change your selectors’
-specificity.) Your colour tokens still reach them, and inheritance does: if you fade or blur something *around* them, or
-set the colours of their parents, the next check catches it.
+specificity.) Your manifest’s colour tokens still reach them, and what a parent hands down by inheritance does: the
+fonts and colours of their parents. The things that could change how a decision *reads or sits*, such as size, spacing,
+transforms, clipping, positioning and fading, are not on the CSS allowlist at all, so no rule can do them to a parent.
+As a second wall, protected surfaces re-assert their own word spacing, writing direction, text shadows and (below the
+components’ own rules) size, line height, letter spacing, case and wrapping, and the Settings link wears the card colour
+as an opaque background of its own, so a translucent rail over a picture can’t take its contrast away.
 
 Beyond the sanitiser, Score re-asserts these in a protected cascade layer, and at run time it watches them: a theme
 that hides, fades, covers or blurs one of them from outside is switched off on that device, with a banner that says why.
 It checks when the page changes, on hover, focus and press, when an animation ends, and at the moment you act on an
-approval, an answer, a permission or a password: if the decision is hidden, unreadable (below 4.5:1, or 3:1 for large
-text and icons, or a colour Score can’t measure) or covered at that moment, Score refuses the action, switches the
-theme off and says nothing was sent. Text over a picture has to read against anything from black to white behind it,
-except the page’s own picture, which is measured through its veil.
+approval, an answer, a permission or a password: if the decision is hidden, clipped away by a box around it,
+unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can’t measure) or covered at that moment
+(the thing painted on it must be the control itself, something inside it or its own label, never a parent or a
+stranger), Score refuses the action, switches the theme off and says nothing was sent. Every measurement is made
+against the same page with the theme’s own CSS gone (its sheets and its cached copy lifted; the layout options of the
+manifest stay, because Score renders those itself). Text over a picture has to read against anything from black to white behind it, the page’s own
+picture included, through whatever veil (`dim`) or glass the theme puts over it. Score’s own sticky bars, drawers and
+banners are the only things allowed to sit on top of a decision.
 
 ## Getting back
 
@@ -297,7 +357,7 @@ content; and a menu in your own words (Settings is added for you).
 **5. Add a picture.** Put `sand.png` in `assets/img/` and point at it with `asset:img/sand.png`. Use `dim` to calm it
 down, then check your text colours against the picture’s darkest and lightest spot.
 
-**6. Add a little CSS.** Larger headings, tighter letter spacing, and a smaller heading on phones.
+**6. Add a little CSS.** Heavier headings, and a lighter weight on phones.
 
 **7. Zip it** from inside the folder, so `theme.json` is at the top of the zip (not inside a `sandbar/` folder):
 

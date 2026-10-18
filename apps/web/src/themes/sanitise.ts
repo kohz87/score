@@ -1,5 +1,12 @@
 import type { ThemeSanitiseReport } from '@score/contract'
-import { ThemeAssetRefSchema, ThemeIdSchema } from '@score/contract'
+import {
+  THEME_CSS_NOT_ON_PROTECTED_ANCESTORS,
+  ThemeAssetRefSchema,
+  ThemeIdSchema,
+  checkThemeDeclaration,
+  isAllowedThemeProperty,
+  normaliseThemeProperty,
+} from '@score/contract'
 import { protectedClasses, protectedCustomPropertyPrefixes } from './protected-surfaces.ts'
 
 // The theme CSS sanitiser (design §4.1). The browser's own parser reads the text (escapes are resolved by it, so
@@ -17,13 +24,6 @@ const GROUPING = new Set([
   'CSSLayerBlockRule',
   'CSSContainerRule',
 ])
-// `d` replaces the geometry of an SVG path (an agent glyph's shape).
-// A theme can't animate or transition (gate finding #6): time-based CSS is how a rule hides a decision after the checks
-// have run. Score's own keyframes could be named too, so the properties go, not just `@keyframes`.
-const MOTION_PROPERTY = /^(-webkit-)?(animation|transition)(-|$)/
-const DANGEROUS_PROPERTIES = new Set(['-moz-binding', 'behavior', '-webkit-user-modify', 'd'])
-const MAX_Z_INDEX = 50
-
 function selectorReaches(text: string): boolean {
   const lower = text.toLowerCase()
   return (
@@ -65,8 +65,14 @@ export function splitDeclarations(block: string): string[] {
  */
 export const OUTSIDE_PROTECTED = ':where(:not([data-protected], [data-protected] *))'
 
+/**
+ * `opacity` is the one allowed property that also dims everything inside (re-gate finding 3/4): it only applies to
+ * elements that have no protected element inside them.
+ */
+export const WITHOUT_PROTECTED_INSIDE = ':where(:not(:has([data-protected])))'
+
 /** Where the guard goes: before the pseudo-element of the last compound, else at the end. */
-export function confineSelector(selectorText: string): string {
+export function confineSelector(selectorText: string, extraGuard = ''): string {
   const parts: string[] = []
   let depth = 0
   let quote = ''
@@ -89,11 +95,11 @@ export function confineSelector(selectorText: string): string {
   return parts
     .map((part) => part.trim())
     .filter(Boolean)
-    .map(insertGuard)
+    .map((part) => insertGuard(part, extraGuard))
     .join(', ')
 }
 
-function insertGuard(selector: string): string {
+function insertGuard(selector: string, extraGuard: string): string {
   let depth = 0
   let quote = ''
   for (let i = 0; i < selector.length; i++) {
@@ -111,9 +117,9 @@ function insertGuard(selector: string): string {
       (selector[i + 1] === ':' ||
         /^:(before|after|first-line|first-letter)(?![\w-])/i.test(selector.slice(i)))
     )
-      return `${selector.slice(0, i)}${OUTSIDE_PROTECTED}${selector.slice(i)}`
+      return `${selector.slice(0, i)}${OUTSIDE_PROTECTED}${extraGuard}${selector.slice(i)}`
   }
-  return `${selector}${OUTSIDE_PROTECTED}`
+  return `${selector}${OUTSIDE_PROTECTED}${extraGuard}`
 }
 
 type Context = {
@@ -168,30 +174,27 @@ function cleanDeclarations(
   for (const declaration of splitDeclarations(cssText)) {
     const colon = declaration.indexOf(':')
     if (colon < 0) continue
-    const name = declaration.slice(0, colon).trim().toLowerCase()
+    const name = normaliseThemeProperty(declaration.slice(0, colon))
     let value = declaration.slice(colon + 1).trim()
     if (/!\s*important\s*$/i.test(value)) {
       important = true
       value = value.replace(/!\s*important\s*$/i, '').trim()
     }
-    if (MOTION_PROPERTY.test(name)) drop(context, `${label} { ${name} }`, 'other_at_rule')
-    else if (name === 'content') drop(context, `${label} { content }`, 'content')
-    else if (name === 'position' && /^(fixed|sticky|-webkit-sticky)$/i.test(value))
-      drop(context, `${label} { position: ${value} }`, 'fixed_position')
-    else if (name === 'z-index' && !/^(auto|-?\d+)$/.test(value))
-      drop(context, `${label} { z-index: ${value} }`, 'z_index')
-    else if (name === 'z-index' && Number(value) > MAX_Z_INDEX)
-      drop(context, `${label} { z-index: ${value} }`, 'z_index')
-    else if (name === 'pointer-events' || DANGEROUS_PROPERTIES.has(name))
-      drop(context, `${label} { ${name} }`, 'pointer_events')
-    else if (
+    if (
       name.startsWith('--') &&
       protectedCustomPropertyPrefixes.some((prefix) => name.startsWith(prefix))
     )
       drop(context, `${label} { ${name} }`, 'protected_selector')
-    else {
+    else if (name === 'content') drop(context, `${label} { content }`, 'content')
+    else if (!isAllowedThemeProperty(name)) {
+      // The allowlist (decision 102): a property that is not on it never reaches the page. The shared module is also
+      // what the server's import check asks.
+      drop(context, `${label} { ${name} }`, 'property_not_allowed')
+    } else {
       const cleaned = cleanUrls(value, context)
       if (cleaned === null) drop(context, `${label} { ${name}: ${value} }`, 'external_url')
+      else if (!checkThemeDeclaration(name, value).ok)
+        drop(context, `${label} { ${name}: ${value} }`, 'value_not_allowed')
       else kept.push({ name, value: cleaned })
     }
   }
@@ -236,10 +239,17 @@ function walkRules(rules: ArrayLike<RuleLike>, context: Context): string[] {
       }
       const nested = rule.cssRules ? walkRules(rule.cssRules, context) : []
       if (kept.length === 0 && nested.length === 0) continue
-      const body = kept.map(({ name, value }) => `${name}: ${value};`).join(' ')
-      out.push(
-        `${context.confine ? confineSelector(selector) : selector} { ${[body, ...nested].filter(Boolean).join(' ')} }`,
-      )
+      // `opacity` dims what is inside: it applies only where nothing protected is inside (see WITHOUT_PROTECTED_INSIDE).
+      const guarded = (name: string) =>
+        context.confine && THEME_CSS_NOT_ON_PROTECTED_ANCESTORS.includes(name)
+      const text = (declarations: Kept[]) =>
+        declarations.map(({ name, value }) => `${name}: ${value};`).join(' ')
+      const body = text(kept.filter(({ name }) => !guarded(name)))
+      const dimming = text(kept.filter(({ name }) => guarded(name)))
+      const target = context.confine ? confineSelector(selector) : selector
+      if (body || nested.length > 0)
+        out.push(`${target} { ${[body, ...nested].filter(Boolean).join(' ')} }`)
+      if (dimming) out.push(`${confineSelector(selector, WITHOUT_PROTECTED_INSIDE)} { ${dimming} }`)
     } else if (kind === 'CSSKeyframesRule') {
       drop(context, label, 'other_at_rule')
     } else if (GROUPING.has(kind) && rule.cssRules) {

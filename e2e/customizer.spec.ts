@@ -88,7 +88,7 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
 
     await tab(page, 'Custom CSS').click()
     await page.locator('.cm-content').click()
-    await page.keyboard.type('.now-score { content: "x" } .brand-subtitle { letter-spacing: 1px }')
+    await page.keyboard.type('.now-score { content: "x" } .brand-subtitle { font-weight: 600 }')
     await expect(page.getByRole('region', { name: 'What the checks removed' })).toContainText(
       '1 rule was removed',
     )
@@ -411,7 +411,7 @@ test('the install preview lists what the checks removed, and Cancel stores nothi
     ],
     [
       'style.css',
-      text('.chat-approval { color: red } .brand-subtitle { z-index: 999; letter-spacing: 1px }'),
+      text('.chat-approval { color: red } .brand-subtitle { z-index: 999; font-weight: 600 }'),
     ],
   ])
   await page.locator('input[aria-label="Theme file to import"]').setInputFiles({
@@ -423,7 +423,10 @@ test('the install preview lists what the checks removed, and Cancel stores nothi
   const removed = dialog.getByRole('region', { name: 'What the checks removed' })
   await expect(removed).toContainText('2 rules were removed')
   await expect(removed).toContainText('approvals, security screens')
-  await expect(removed).toContainText('z-index above 50')
+  await expect(removed).toContainText('.brand-subtitle { z-index }')
+  await expect(removed).toContainText(
+    '`z-index`: This property isn’t on the list a theme may change',
+  )
   await expect(dialog.getByRole('region', { name: 'What it changes' })).toContainText('Custom CSS')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   await expect(dialog).toHaveCount(0)

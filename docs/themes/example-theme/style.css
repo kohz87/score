@@ -1,16 +1,14 @@
-/* Sandbar: a little type on top of what theme.json already does. */
-:root {
-  --h1-size: 52px;
-}
+/* Sandbar: a little weight and colour on top of what theme.json already does. */
 h1 {
-  letter-spacing: -0.04em;
+  font-weight: 700;
 }
 .now-card h2,
 .settings-card h2 {
-  letter-spacing: -0.01em;
+  font-weight: 600;
 }
 @media (width < 700px) {
-  :root {
-    --h1-size: 34px;
+  .now-card h2,
+  .settings-card h2 {
+    font-weight: 500;
   }
 }

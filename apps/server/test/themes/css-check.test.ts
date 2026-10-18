@@ -8,11 +8,12 @@ describe('accepted CSS', () => {
   test('ordinary rules, comments and asset urls pass', () => {
     accepts(`/* the content and position: fixed words in a comment are fine */ a{color:red}`)
     accepts(`.card { color: red; background: url(asset:img/bg.webp); border-radius: 4px }`)
-    accepts(`@font-face { font-family: X; src: url("asset:fonts/x.woff2") format("woff2") }`)
-    accepts(`.content:hover { position: relative } .a-content { color: red } .b { z-index: 3 }`)
+    accepts(`.content:hover { color: red } .a-content { color: red } .b { opacity: .5 }`)
     expect(
-      checkThemeCss(`a{background:url('asset:img/a.png')} b{src2:url(asset:fonts/f.woff2)}`).assets,
-    ).toEqual(['fonts/f.woff2', 'img/a.png'])
+      checkThemeCss(
+        `a{background:url('asset:img/a.png')} b{background-image:url(asset:img/f.webp)}`,
+      ).assets,
+    ).toEqual(['img/a.png', 'img/f.webp'])
   })
 })
 
@@ -64,6 +65,13 @@ describe('rejected CSS', () => {
     ['escaped javascript:', `a{x:\\6a avascript:1}`],
     ['a fake comment opener the parser does not see', `/\\* */ a::before{content:"x"} /* */`],
     ['an unterminated comment does not hide earlier code', `a{content:"x"} /* never closed`],
+    [
+      '@font-face (fonts belong to the manifest)',
+      `@font-face { font-family: X; src: url("asset:fonts/x.woff2") }`,
+    ],
+    ['a property off the allowlist', `a{z-index:3}`],
+    ['nested off the allowlist', `@media (width<1px){ a{ b{ word-spacing:-9px } } }`],
+    ['escaped property off the allowlist', `a{\\77 ord-spacing:-9px}`],
     ['too large', `a{color:red}${' '.repeat(262_145)}`],
   ])('%s', (_name, css) => rejects(css))
 })

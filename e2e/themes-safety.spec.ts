@@ -181,10 +181,18 @@ test.describe('a hostile theme', () => {
     test(`is switched off when it damages a protected surface from outside (${name})`, async ({
       page,
     }) => {
+      // The allowlist drops these rules before they apply (the next test); the guard is the second wall, so each is
+      // slipped into the theme's sheet after the sanitiser, as if it had missed one.
       const look: Look = { active: 'sneaky', mode: 'light' }
-      await mockThemes(page, [{ id: 'sneaky', name: 'Sneaky', manifest: {}, css }], look)
+      await mockThemes(page, [{ ...tidyTheme, id: 'sneaky', name: 'Sneaky' }], look)
       await pair(page)
       const { card } = await startApproval(page)
+      await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+      await page.evaluate((text) => {
+        const sheet = document.adoptedStyleSheets.at(-1)!
+        sheet.insertRule(text, sheet.cssRules.length)
+        document.body.append(document.createElement('i'))
+      }, css)
       const banner = page.locator('.look-banner')
       await expect(banner).toContainText('Score switched your theme off', { timeout: 15_000 })
       await expect(banner).toContainText('hid part of an approval or a security screen')
@@ -199,6 +207,21 @@ test.describe('a hostile theme', () => {
       await expect(card.getByRole('button', { name: 'Approve' })).toBeVisible()
       await card.getByRole('button', { name: 'Approve' }).click()
       await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+    })
+
+    test(`never gets that far: the allowlist drops it (${name})`, async ({ page }) => {
+      const look: Look = { active: 'sneaky', mode: 'light' }
+      await mockThemes(page, [{ id: 'sneaky', name: 'Sneaky', manifest: {}, css }], look)
+      await pair(page)
+      const { card } = await startApproval(page)
+      await page.waitForTimeout(1500)
+      // The theme stays on, nothing was applied that moves or fades anything, and the approval reads as Score draws it.
+      await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+      await expect(page.locator('.look-banner')).toHaveCount(0)
+      const approve = card.getByRole('button', { name: 'Approve' })
+      await expect(approve).toBeVisible()
+      expect(await isOnTop(approve)).toBe(true)
+      expect(await card.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
     })
   }
 

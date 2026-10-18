@@ -492,7 +492,7 @@ test('import: a rejected package stores nothing', async () => {
   const res = await upload(bad)
   expect(res.statusCode).toBe(422)
   expect(res.json()).toMatchObject({ error: { code: 'theme_rejected' } })
-  expect(reasons(res)).toMatch(/content property/)
+  expect(reasons(res)).toMatch(/content can’t be set by a theme/)
   expect((await call('GET', '/api/themes/seaside')).statusCode).toBe(404)
   expect(() => statSync(join(dir, 'themes/seaside'))).toThrow()
 })
@@ -533,12 +533,12 @@ test('import: adversarial packages answer 422 theme_rejected', async () => {
     [
       'escaped CSS',
       await zipOf({ 'theme.json': manifestJson(), 'style.css': 'a::before{\\63 ontent:"x"}' }),
-      /content property/,
+      /content can’t be set by a theme/,
     ],
     [
       'comment-split keyword',
       await zipOf({ 'theme.json': manifestJson(), 'style.css': 'a::before{con/**/tent:"x"}' }),
-      /content property/,
+      /can’t be set by a theme/,
     ],
     [
       'escaped url(',
@@ -837,7 +837,7 @@ test('the example theme of docs/themes/example-theme zips up and imports through
   const detail = ThemeDetailSchema.parse((await call('GET', '/api/themes/sandbar')).json())
   expect(detail.assets).toEqual(['img/sand.png'])
   expect(detail.manifest.background?.image).toBe('asset:img/sand.png')
-  expect(detail.css).toContain('--h1-size')
+  expect(detail.css).toContain('font-weight')
   const picture = await call('GET', '/api/themes/sandbar/assets/img/sand.png')
   expect(picture.statusCode).toBe(200)
   expect(picture.headers['content-type']).toBe('image/png')

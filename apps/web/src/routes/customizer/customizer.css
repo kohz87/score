@@ -703,6 +703,24 @@
   overflow-wrap: anywhere;
 }
 
+/* The allowlist help in the Custom CSS section. */
+.cz-allowed summary {
+  cursor: pointer;
+}
+.cz-allowed ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.cz-allowed code {
+  display: block;
+  font-family: var(--font-code);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 /* Dialogs */
 .cz-backdrop {
   position: fixed;
