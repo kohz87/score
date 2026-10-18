@@ -4,8 +4,9 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { DRIVERS } from '../../src/runtimes/coding/drivers.ts'
+import { CodingRuntime } from '../../src/runtimes/coding/service.ts'
 import {
   claudeQuotaFromRecord,
   codexQuotaFromTail,
@@ -189,4 +190,40 @@ test('Antigravity: "remaining" becomes "used" per model group; a reset that is n
     },
     { name: '5 hours', group: 'Other', usedPercent: null, resetsAt: null },
   ])
+})
+
+test('K3 X9: a failed /usage refresh stops the guard trusting the cached reading at once', async () => {
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date('2026-10-19T00:00:00Z'))
+    const runtime = new CodingRuntime({} as never)
+    vi.spyOn(runtime, 'agents').mockReturnValue([{ runtime: 'antigravity' }] as never)
+    const reading: CodingUsage = {
+      runtime: 'antigravity',
+      fetchedAt: new Date().toISOString(),
+      groups: [
+        {
+          name: 'Gemini Models',
+          fiveHourRemainingPercent: 4,
+          fiveHourResets: '2026-10-19T03:00:00Z',
+          weeklyRemainingPercent: 80,
+          weeklyResets: '2026-10-25T00:00:00Z',
+        },
+      ],
+      text: 't',
+    }
+    ;(runtime as unknown as { usageCache: Map<string, unknown> }).usageCache.set('antigravity', {
+      at: Date.now(),
+      value: reading,
+    })
+    const source = runtime.quotaSource()
+    expect(source.antigravity()?.windows.length).toBeGreaterThan(0)
+    // 61 s later the cache is too old to reuse; the refresh fails.
+    vi.setSystemTime(new Date('2026-10-19T00:01:01Z'))
+    vi.spyOn(runtime, 'usage').mockRejectedValue(new Error('usage_unavailable'))
+    await source.refresh()
+    expect(source.antigravity()).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
 })

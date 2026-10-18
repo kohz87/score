@@ -129,3 +129,22 @@ describe('C2 reading a note says what its history is', () => {
     })
   })
 })
+
+describe('K3 X8 a Git failure is not "clean"', () => {
+  test('a note whose commit failed still reads as failed when the status check itself fails', async () => {
+    h = await makeVault()
+    const first = await h.vault.writeNote('a.md', { body: 'one', etag: null })
+    const lock = path.join(h.vaultDir, '.git', 'index.lock')
+    fs.writeFileSync(lock, '')
+    const failed = await h.vault.writeNote('a.md', { body: 'two', etag: first.etag })
+    expect(failed.history).toBe('failed')
+    fs.rmSync(lock)
+    // Git now fails on every status call (corrupt index) while the note is still not in history.
+    const index = path.join(h.vaultDir, '.git', 'index')
+    const good = fs.readFileSync(index)
+    fs.writeFileSync(index, 'corrupt index')
+    expect((await h.vault.readNote('a.md')).history).toBe('failed')
+    fs.writeFileSync(index, good)
+    expect((await h.vault.readNote('a.md')).history).toBe('failed')
+  })
+})

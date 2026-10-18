@@ -391,9 +391,10 @@ export function CodingOverview({ agent }: { agent: AgentDetail }) {
   }
   return (
     <div className="team-stack">
-      {/* Keyed by the stored text: a save elsewhere starts a fresh editor instead of rebasing an old draft. */}
+      {/* Keyed by the agent, not the stored text: a refresh must not unmount an open editor. The editor keeps its
+          draft and base etag and shows a change saved elsewhere as the conflict choices. */}
       <CodingPersonality
-        key={`${coding.instructionsEtag}:${coding.role}`}
+        key={coding.id}
         coding={coding}
         onChanged={changed}
         facts={<CodingFacts coding={coding} />}

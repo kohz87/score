@@ -390,8 +390,9 @@ export class CodingRuntime {
   private readonly usageCache = new Map<string, { at: number; value: CodingUsage }>()
 
   /**
-   * What the quota guard reads (PLAN 8.6): Antigravity's cached `/usage`, refreshed when older than a minute. A reading
-   * that couldn't be refreshed for two minutes is dropped, so a failed read never holds a step.
+   * What the quota guard reads (PLAN 8.6): Antigravity's cached `/usage`, refreshed when older than a minute. A
+   * refresh that fails drops the reading at once (and so does age past two minutes), so a failed read never holds a
+   * step (docs/API-CONTRACT.md "Quota guard"). The Quota card calls `usage()`, which throws then, so nothing shows it.
    */
   quotaSource(): QuotaSource {
     return {
@@ -401,7 +402,7 @@ export class CodingRuntime {
       },
       refresh: async () => {
         if (!this.agents().some((agent) => agent.runtime === 'antigravity')) return
-        await this.usage('antigravity').catch(() => undefined)
+        await this.usage('antigravity').catch(() => this.usageCache.delete('antigravity'))
       },
     }
   }
