@@ -367,6 +367,9 @@ export function ChatThread({
     } else if (state.prepend) element.scrollTop += element.scrollHeight - state.height
     else if (state.pinned) element.scrollTop = element.scrollHeight
     state.height = element.scrollHeight
+    // Our own write queued a scroll event that arrives a frame later; until then `top` must already say where we put
+    // the thread, or a layout clamp in between cannot be told apart from where the thread stood (see onScroll).
+    state.top = element.scrollTop
     state.prepend = false
   }, [])
   // The thread's size changes after it was pinned to its end: the composer grows (the context ring and pickers settle a
@@ -380,6 +383,7 @@ export function ChatThread({
       if (!position.current.pinned) return
       element.scrollTop = element.scrollHeight
       position.current.height = element.scrollHeight
+      position.current.top = element.scrollTop
     }
     const resize = new ResizeObserver(follow)
     const watch = () => {
@@ -514,7 +518,8 @@ export function ChatThread({
             const distance = element.scrollHeight - element.scrollTop - element.clientHeight
             // A layout that flips back and forth inside one frame (the composer settling) clamps the offset up the
             // thread without any resize notification. Nobody touched the thread and it is still next to its end:
-            // that was the layout, not the person, so stay at the end.
+            // that was the layout, not the person, so stay at the end. `top` is where the last scroll event or our own
+            // write left the thread, so a clamp below it is seen even when it happens before that write's event.
             const moved =
               state.pinned && distance > 1 && distance < 80 && element.scrollTop < state.top
             if (moved && performance.now() - intent.current > 600)
