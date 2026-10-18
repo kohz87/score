@@ -40,7 +40,7 @@ export const THEME_CSS_CORPUS: readonly ThemeCssCase[] = [
   { name: 'opacity', css: '.a { opacity: 0.8 }', refused: [] },
   {
     name: 'public tokens',
-    css: ':root { --link-hover: #123456; --radius-m: 12px; --flow-edge: rgb(1 2 3) }',
+    css: ':root { --link-hover: #123456; --radius-m: 12px; --flow-edge: rgb(1 2 3); --h1-size: 38px; --body-size: 14px }',
     refused: [],
   },
   {
@@ -159,8 +159,8 @@ export const THEME_CSS_CORPUS: readonly ThemeCssCase[] = [
   },
   {
     name: 'custom properties of Score',
-    css: ':root { --agent-violet: red; --rules-never: red; --h1-size: 90px; --density: 0 }',
-    refused: ['--agent-violet', '--rules-never', '--h1-size', '--density'],
+    css: ':root { --agent-violet: red; --rules-never: red; --h1-size: 90px; --body-size: 4px; --density: 0 }',
+    refused: ['--agent-violet', '--rules-never', '--h1-size', '--body-size', '--density'],
   },
   {
     name: 'at-rules with a body',

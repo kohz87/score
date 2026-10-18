@@ -243,7 +243,8 @@ The browser and the server read the same list (`packages/contract/src/theme-css.
   `--flow-edge-planned`, `--flow-edge-sent-back`, `--flow-done-border`, `--flow-log-border`, `--tasks-ground`,
   `--tasks-border`, `--tasks-done`, `--tasks-note`, `--profile-dashed`, `--profile-add-ink`, `--watch-stage`,
   `--watch-window`, `--watch-text` (a plain colour), and the corner scale `--radius-xs`, `--radius-s`, `--radius-m`,
-  `--radius-l`, `--radius-card` (0 to 40px). The pairs a protected surface draws (`--ground`, `--card`, `--ink`,
+  `--radius-l`, `--radius-card` (0 to 40px), and the type scale `--h1-size` (28 to 72px, the page title) and `--body-size`
+  (13 to 18px, the body text). The pairs a protected surface draws (`--ground`, `--card`, `--ink`,
   `--ink-muted`, `--muted`, `--panel-ink`, `--panel-card`) are set in the manifest, where the contrast check sees them.
 
 The complete list, exactly as Score checks it (a test keeps this section and the code the same):
@@ -256,7 +257,7 @@ The complete list, exactly as Score checks it (a test keeps this section and the
 - Type: `font-family`, `font-weight`, `font-style`
 - Text decoration: `text-decoration-line`, `text-decoration-color`, `text-decoration-style`, `text-decoration`
 - Opacity: `opacity`
-- Custom properties: `--hairline`, `--line-strong`, `--subtle`, `--subtle-2`, `--track`, `--track-2`, `--link-hover`, `--on-dark`, `--chat-text`, `--chat-secondary`, `--chat-soft`, `--chat-card-border`, `--chat-dark-border`, `--bubble-own`, `--bubble-own-ink`, `--flow-canvas`, `--flow-canvas-dot`, `--flow-edge`, `--flow-edge-planned`, `--flow-edge-sent-back`, `--flow-done-border`, `--flow-log-border`, `--tasks-ground`, `--tasks-border`, `--tasks-done`, `--tasks-note`, `--profile-dashed`, `--profile-add-ink`, `--watch-stage`, `--watch-window`, `--watch-text`, `--radius-xs`, `--radius-s`, `--radius-m`, `--radius-l`, `--radius-card`
+- Custom properties: `--hairline`, `--line-strong`, `--subtle`, `--subtle-2`, `--track`, `--track-2`, `--link-hover`, `--on-dark`, `--chat-text`, `--chat-secondary`, `--chat-soft`, `--chat-card-border`, `--chat-dark-border`, `--bubble-own`, `--bubble-own-ink`, `--flow-canvas`, `--flow-canvas-dot`, `--flow-edge`, `--flow-edge-planned`, `--flow-edge-sent-back`, `--flow-done-border`, `--flow-log-border`, `--tasks-ground`, `--tasks-border`, `--tasks-done`, `--tasks-note`, `--profile-dashed`, `--profile-add-ink`, `--watch-stage`, `--watch-window`, `--watch-text`, `--radius-xs`, `--radius-s`, `--radius-m`, `--radius-l`, `--radius-card`, `--h1-size`, `--body-size`
 
 Not on the list, so dropped: `position`, `inset`, `top`/`left`/`right`/`bottom`, `transform`, `translate`, `rotate`,
 `scale`, `overflow*`, `clip*`, `mask*`, `width`/`height`/`min-*`/`max-*`, `margin`, `padding`, `display`, `flex*`,
@@ -317,8 +318,8 @@ approval, an answer, a permission or a password: if the decision is hidden, clip
 unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can’t measure) or covered at that moment
 (the thing painted on it must be the control itself, something inside it or its own label, never a parent or a
 stranger), Score refuses the action, switches the theme off and says nothing was sent. Every measurement is made
-against the same page with the theme really gone (its sheets and its `data-*` attributes lifted), never against the
-theme’s own layout. Text over a picture has to read against anything from black to white behind it, the page’s own
+against the same page with the theme’s own CSS gone (its sheets and its cached copy lifted; the layout options of the
+manifest stay, because Score renders those itself). Text over a picture has to read against anything from black to white behind it, the page’s own
 picture included, through whatever veil (`dim`) or glass the theme puts over it. Score’s own sticky bars, drawers and
 banners are the only things allowed to sit on top of a decision.
 

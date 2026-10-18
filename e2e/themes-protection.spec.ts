@@ -435,8 +435,11 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
   test('#6: a hover rule that fades the page is caught on the first pointer move', async ({
     page,
   }) => {
-    await wear(page, '.page-content:hover { opacity: 0; }')
+    // The allowlist keeps `filter` and a faded ancestor out; the guard is the second wall, so the rule is slipped in
+    // behind the sanitiser, as if it had missed it.
+    await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
     const rules = await quietSettings(page)
+    await slipIn(page, '.page-content:hover { opacity: 0; }')
     await page.mouse.move(5, 300)
     await page.mouse.move(400, 400)
     await switchedOff(page)
@@ -447,8 +450,9 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
   test('#6: a focus rule that hides the page is caught when something takes focus', async ({
     page,
   }) => {
-    await wear(page, '.page-content:focus-within { filter: blur(8px); opacity: 0.1; }')
+    await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
     const rules = await quietSettings(page)
+    await slipIn(page, '.page-content:focus-within { filter: blur(8px); opacity: 0.1; }')
     await page.locator('.page-content :is(button, input, select, a[href])').first().focus()
     await switchedOff(page)
     await settle(page, 1000)

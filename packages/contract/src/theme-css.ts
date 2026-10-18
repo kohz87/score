@@ -55,6 +55,8 @@ export const THEME_CSS_CUSTOM_RADII = [
   '--radius-l',
   '--radius-card',
 ] as const
+/** Type-scale tokens, in bounded lengths: Score sizes the page title and the body from them (tokens.css). */
+export const THEME_CSS_CUSTOM_SIZES = { '--h1-size': [28, 72], '--body-size': [13, 18] } as const
 const COLOR_VARS = new Set<string>(THEME_COLOR_TOKENS.map((token) => `--${token}`))
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -523,6 +525,11 @@ allow('Text decoration', ['text-decoration'], decoration)
 allow('Opacity', ['opacity'], opacity)
 for (const name of THEME_CSS_CUSTOM_COLORS)
   allow('Custom properties', [name], (v) => colors(v, 1, 1, false))
+for (const [name, [min, max]] of Object.entries(THEME_CSS_CUSTOM_SIZES))
+  allow('Custom properties', [name], (v) => {
+    const length = parseLength(v.trim())
+    return !!length && length.unit !== '%' && pixels(length) >= min && pixels(length) <= max
+  })
 allow('Custom properties', THEME_CSS_CUSTOM_RADII, (v) => {
   const length = parseLength(v.trim())
   return !!length && length.unit !== '%' && length.value >= 0 && pixels(length) <= 40

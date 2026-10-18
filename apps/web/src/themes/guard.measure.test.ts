@@ -2,7 +2,12 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { applyCustom, appliedThemeElements, clearLook } from './engine.ts'
-import { KNOWN_OVERLAYS, decisionProblem, findProtectedViolation } from './guard.ts'
+import {
+  KNOWN_BACKDROPS,
+  KNOWN_OVERLAYS,
+  decisionProblem,
+  findProtectedViolation,
+} from './guard.ts'
 
 // Re-gate findings 4 and 5 (decision 102): clipping, painted hits and the page picture, measured against a real
 // no-theme baseline. jsdom has no layout, so geometry and the theme's effect are staged: the "theme" is the engine's
@@ -119,9 +124,21 @@ describe('re-gate finding 4: clipping and the painted hit', () => {
     document.body.innerHTML =
       '<div class="top-bar" id="bar"></div><div id="card" data-protected><button id="go">Approve</button></div>'
     rects = { card: [0, 0, 300, 40], go: [10, 0, 100, 40], bar: [0, 0, 300, 40] }
+    stage({ bar: { position: 'sticky' } })
     hit = () => (themeOn() ? document.getElementById('bar') : document.getElementById('go'))
     expect(decisionProblem(document.getElementById('go')!)).toBeNull()
   })
+
+  for (const position of ['absolute', 'sticky']) {
+    test(`a known bar stretched over the page is the cover it looks like (${position})`, () => {
+      document.body.innerHTML =
+        '<div class="top-bar" id="bar"></div><div id="card" data-protected><button id="go">Approve</button></div>'
+      rects = { card: [0, 0, 300, 40], go: [10, 0, 100, 40], bar: [0, 0, 1024, 768] }
+      stage({ bar: { position } })
+      hit = () => (themeOn() ? document.getElementById('bar') : document.getElementById('go'))
+      expect(findProtectedViolation()).toMatch(/covered/)
+    })
+  }
 
   test('a fixed element is no longer exempt just because it is fixed', () => {
     document.body.innerHTML =
@@ -149,24 +166,28 @@ describe('re-gate finding 5: text over a page picture', () => {
   })
 })
 
-describe('the baseline is the document without the theme', () => {
-  test('the theme’s attributes are off <html> while the baseline is measured, and back afterwards', () => {
+describe('the baseline is the page with the theme’s own CSS gone', () => {
+  test('the boot copy of the theme is lifted while the baseline is measured, the layout attributes stay, and all is back afterwards', () => {
     document.body.innerHTML = '<div id="card" data-protected><button id="go">Approve</button></div>'
     rects = { card: [0, 0, 300, 40], go: [10, 0, 100, 40] }
-    const seen: (string | null)[] = []
+    const boot = document.createElement('style')
+    boot.id = 'score-look-boot'
+    document.head.append(boot)
+    const seen: boolean[] = []
     const real = window.getComputedStyle.bind(window)
     vi.spyOn(window, 'getComputedStyle').mockImplementation(
       (element: Element, pseudo?: string | null) => {
-        seen.push(document.documentElement.getAttribute('data-look'))
+        seen.push(boot.disabled)
+        expect(document.documentElement.getAttribute('data-nav')).toBe('left')
         return real(element, pseudo)
       },
     )
     document.documentElement.setAttribute('data-nav', 'left')
     findProtectedViolation()
-    expect(seen).toContain('custom')
-    expect(seen).toContain(null)
-    expect(document.documentElement.getAttribute('data-look')).toBe('custom')
-    expect(document.documentElement.getAttribute('data-nav')).toBe('left')
+    expect(seen).toContain(true)
+    expect(seen).toContain(false)
+    expect(boot.disabled).toBe(false)
+    boot.remove()
   })
 })
 
@@ -181,7 +202,7 @@ describe('the list of Score’s own fixed and sticky things', () => {
   }
 
   test('names the class of every rule that makes something fixed or sticky', () => {
-    const known = new Set(KNOWN_OVERLAYS.match(/\.[a-z][\w-]*/g))
+    const known = new Set(`${KNOWN_OVERLAYS} ${KNOWN_BACKDROPS}`.match(/\.[a-z][\w-]*/g))
     const missing: string[] = []
     for (const file of css(root)) {
       const text = readFileSync(file, 'utf8')

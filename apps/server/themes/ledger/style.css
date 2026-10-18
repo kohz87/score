@@ -1,4 +1,8 @@
-/* Ledger: the shape, the width and the launcher come from theme.json; this sets the weight of the headings. */
+/* Ledger: the shape, the width and the launcher come from theme.json; this sets the type scale and the heading weight. */
+:root {
+  --h1-size: 38px;
+  --body-size: 14px;
+}
 h1,
 h2,
 h3 {

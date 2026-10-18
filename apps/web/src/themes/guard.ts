@@ -54,15 +54,15 @@ function textContrast(element: HTMLElement): number | null {
   return worstContrast(text, stack)
 }
 
-// Score's own overlays and sticky bars: the menu drawer, banners, dialogs' backdrops, the sticky rails and headers.
-// Content scrolled under one is not "covered". A theme can't make anything fixed, sticky or positioned (the
+// Score's own overlays and sticky bars: the menu drawer, banners, the sticky rails and headers, and the backdrops of
+// dialogs. Content scrolled under one is not "covered". A theme can't make anything fixed, sticky or positioned (the
 // allowlist), so none of these can be a theme's doing; they are named here by Score's own classes (a theme's CSS cannot
-// add a class), not found by looking at `position`, which any rule could have set (re-gate finding 4).
-// themes/guard.test.ts keeps this list in step with the position: fixed / sticky rules in the stylesheets.
+// add a class), not found by looking at `position`, which any rule could have set (re-gate finding 4). A bar or panel
+// only counts while it is still fixed or sticky and small: one that has been stretched over the page (an injected
+// `position: absolute; inset: 0`) is the cover it looks like. themes/guard.test.ts keeps this list in step with the
+// position: fixed / sticky rules in the stylesheets.
 export const KNOWN_OVERLAYS = [
-  '.drawer-backdrop',
   '.responsive-drawer',
-  '.command-backdrop',
   '.nav-drawer',
   '.update-banner',
   '.look-banner',
@@ -74,16 +74,27 @@ export const KNOWN_OVERLAYS = [
   '.user-run',
   '.orch-room-head',
   '.kn-left',
-  '.kn-backdrop',
   '.kn-drop-hint',
   '.kn-toolbar',
-  '.cz-backdrop',
   '.chat-version-bar',
   '.chat-doc-table',
   '.task-drawer',
   '.chat-toast',
-  '[role=dialog]',
 ].join(', ')
+/** Dialog backdrops cover the page by design. */
+export const KNOWN_BACKDROPS =
+  '.drawer-backdrop, .command-backdrop, .kn-backdrop, .cz-backdrop, [role=dialog]'
+const MAX_OVERLAY_SHARE = 0.6
+
+function isScoreOverlay(hit: Element): boolean {
+  if (hit.closest(KNOWN_BACKDROPS)) return true
+  const overlay = hit.closest(KNOWN_OVERLAYS)
+  if (!overlay) return false
+  const position = getComputedStyle(overlay).position
+  if (position !== 'fixed' && position !== 'sticky') return false
+  const box = overlay.getBoundingClientRect()
+  return box.width * box.height <= window.innerWidth * window.innerHeight * MAX_OVERLAY_SHARE
+}
 
 type Box = { left: number; top: number; right: number; bottom: number }
 
@@ -150,7 +161,7 @@ function paintedBy(element: Element, hit: Element | null): boolean {
     if (labels && Array.from(labels).some((label) => label.contains(hit))) return true
   }
   // Score's own overlay on top (a sticky bar, a drawer, a banner): not a theme's doing.
-  return !!hit.closest(KNOWN_OVERLAYS)
+  return isScoreOverlay(hit)
 }
 
 function snapshot(element: HTMLElement): Snapshot {
@@ -299,16 +310,14 @@ function shapeSignature(el: SVGGraphicsElement): string {
   ].join('|')
 }
 
-// What a theme puts on <html>: the engine's attributes and the pack/layout/density it starts from.
-const THEME_ATTRIBUTES = [...LOOK_ATTRIBUTES, 'data-pack', 'data-layout', 'data-density'] as const
-
 /**
- * Runs with the theme gone: its sheets and boot copy lifted and its attributes taken off <html>, the document as Score
- * itself draws it (the pack this device would show without the theme), not just the same attributes with other CSS
- * (re-gate finding 4/5). Everything is put back before anything is painted.
+ * Runs with the theme's own CSS gone: its adopted sheets, its style elements and the boot copy the page painted from
+ * its cache are lifted, then put back before anything is painted. The `data-*` attributes stay: they are the manifest's
+ * layout, shape and density options, which Score renders itself (a left rail hides the search shortcut, a launcher
+ * moves the menu into a drawer), so what they change is Score's doing and not part of what is judged. What is judged is
+ * what the theme's CSS and tokens did on top of them.
  */
 function withoutTheme<T>(run: () => T): T {
-  const root = document.documentElement
   const sheets = appliedThemeSheets()
   const elements = [
     ...appliedThemeElements(),
@@ -317,22 +326,13 @@ function withoutTheme<T>(run: () => T): T {
   const adopted = Array.isArray(document.adoptedStyleSheets)
   const before = adopted ? [...document.adoptedStyleSheets] : []
   const disabled = elements.map((el) => el.disabled)
-  const attributes = THEME_ATTRIBUTES.map((name) => [name, root.getAttribute(name)] as const)
   if (adopted) document.adoptedStyleSheets = before.filter((sheet) => !sheets.includes(sheet))
   elements.forEach((el) => {
     el.disabled = true
   })
-  for (const name of THEME_ATTRIBUTES) root.removeAttribute(name)
-  const pack = findPack(readPackId())
-  root.setAttribute('data-pack', pack.id)
-  root.setAttribute('data-layout', pack.layout)
-  root.setAttribute('data-density', pack.density)
   try {
     return run()
   } finally {
-    for (const [name, value] of attributes)
-      if (value === null) root.removeAttribute(name)
-      else root.setAttribute(name, value)
     if (adopted) document.adoptedStyleSheets = before
     elements.forEach((el, i) => {
       el.disabled = disabled[i] ?? false

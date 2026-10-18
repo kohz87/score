@@ -2249,7 +2249,7 @@ folders exist; a folder that already exists is never a free id.
   `packages/contract/src/theme-css.ts` (colours, `background-*` with images only as `asset:img/…`, `border-*`
   colour/style/width ≤ 8px/radius, `outline-color`/`outline-style`, `box-shadow`/`text-shadow` within small bounds,
   `font-family`/`font-weight`/`font-style`, `text-decoration-line|color|style`, `accent-color`, `caret-color`, `opacity`
-  0–1, and the public colour tokens and corner-scale custom properties) **and** its value passes that module's grammar
+  0–1, and the public colour tokens, the corner scale and the bounded type-scale `--h1-size`/`--body-size` custom properties) **and** its value passes that module's grammar
   (no `var()` except of a public colour token inside a colour, no `calc()`/`attr()`/`env()`). Anything else (`position`,
   `inset`, `transform`, `overflow`, `clip*`, `mask*`, sizes, `margin`/`padding`, `display`, `flex*`/`grid*`, `z-index`,
   `content`, `filter`, `backdrop-filter`, `font-size`, `line-height`, `letter-spacing`, `word-spacing`, `text-indent`,
