@@ -4,6 +4,17 @@
     from color-mix(in srgb, var(--glyph-color) 55%, #12131a 45%) round(down, r, 1) round(down, g, 1)
       round(down, b, 1)
   );
+  /* The backplate a bare glyph wears where a theme paints the page (protected.css): white behind a dark agent colour,
+     Score's ink behind a light one, switched at the luminance (gamma 2.2) where both read about equally well, 0.1935.
+     Always at least 3:1 against the colour (WCAG 1.4.11); a test walks the colour cube with these constants. */
+  --glyph-lum: (
+    0.2126 * pow(r / 255, 2.2) + 0.7152 * pow(g / 255, 2.2) + 0.0722 * pow(b / 255, 2.2)
+  );
+  --glyph-dark: clamp(0, (0.1935 - var(--glyph-lum)) * 1000, 1);
+  --glyph-plate: rgb(
+    from var(--glyph-color) calc(18 + 237 * var(--glyph-dark)) calc(19 + 236 * var(--glyph-dark))
+      calc(26 + 229 * var(--glyph-dark))
+  );
   display: inline-flex;
   flex: none;
   vertical-align: middle;

@@ -311,6 +311,7 @@ reach an approval’s words, its buttons or a glyph’s shape, whatever you writ
 specificity.) Your manifest’s colour tokens still reach them, and what a parent hands down by inheritance does: the
 fonts and colours of their parents. The things that could change how a decision *reads or sits*, such as size, spacing,
 transforms, clipping, positioning and fading, are not on the CSS allowlist at all, so no rule can do them to a parent.
+A glyph that stands alone (the small agent shapes in lists and the timeline) sits on a plate of Score’s own, white behind a dark agent colour and Score’s ink behind a light one (always at least 3:1, WCAG 1.4.11), and the Needs-you dot is edged in Score’s ink, so a background of the agent’s own colour, or a picture, can’t make either disappear; the run-time check measures that non-text contrast too (3:1 against what is painted around the graphic) and switches the theme off if it can’t hold.
 As a second wall, selected text (and a found-text match) in a protected surface is always the system’s own highlight colours, and protected surfaces re-assert their own word spacing, writing direction, text shadows and (below the
 components’ own rules) size, line height, letter spacing, case and wrapping, and the Settings link wears the card colour
 as an opaque background of its own, so a translucent rail over a picture can’t take its contrast away.

@@ -74,6 +74,18 @@
     background-color: var(--card) !important;
     background-image: none !important;
   }
+  /* Graphics that stand alone (third gate, finding 3). A bare glyph is an agent's colour on whatever a theme paints
+     behind it, and a Needs-you dot is Score's coral on the same: a background of that colour erased either. A bare glyph
+     now sits on a plate of Score's own (white or ink, whichever contrasts with the agent's colour, agent-glyph.css), and
+     a dot is edged in Score's ink, so each is always read against a colour Score chose. (Tiles carry their own tint.) */
+  html[data-look='custom'] svg.agent-glyph[data-protected] {
+    background-color: var(--glyph-plate) !important;
+    border-radius: 3px !important;
+  }
+  html[data-look='custom'] .needs-you-dot[data-protected] {
+    box-sizing: content-box !important;
+    border: 1.5px solid #12131a !important;
+  }
   /* Glyph shapes: a path stays visible, unfiltered and unclipped. (Transforms are left alone: Score's own glyph CSS
      may use them. The `d` geometry can't be re-asserted from CSS, `d: none` removes the path: the sanitiser drops
      the property instead, and theme rules never match in here.) */
