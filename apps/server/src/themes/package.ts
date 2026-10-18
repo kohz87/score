@@ -4,6 +4,7 @@ import { ThemeManifestSchema, THEME_FORMAT, type ThemeManifest } from '@score/co
 import { isBuiltinThemeId } from './builtin.ts'
 import { LICENSE_FILES, MAX_LICENSE_BYTES } from './license-files.ts'
 import { ASSET_PATH, checkThemeCss, MAX_THEME_CSS_BYTES } from './css-check.ts'
+import { checkZipStructure, ZipStructureError } from './zip-structure.ts'
 
 // Theme packages: `theme.json`, optional `style.css`, `assets/fonts/*.woff2`, `assets/img/*`. The zip guards follow the
 // Knowledge importer's (apps/server/src/knowledge/extract-worker.ts): declared sizes are untrusted, so inflation counts
@@ -152,12 +153,22 @@ export async function readThemePackage(bytes: Buffer): Promise<ThemePackage> {
   if (!hasPrefix(bytes, 0, 'PK\x03\x04')) throw new ThemeRejected(['That isn’t a zip file'])
   if (declaredEntryCount(bytes) > MAX_DECLARED_ENTRIES)
     throw new ThemeRejected([`The zip holds more than ${MAX_FILES} files`])
+  // Before JSZip: the local headers and the central directory must name and size the same files (gate finding #1).
+  let listed
+  try {
+    listed = checkZipStructure(bytes)
+  } catch (error) {
+    if (error instanceof ZipStructureError) throw new ThemeRejected([error.message])
+    throw error
+  }
   let zip: JSZip
   try {
     zip = await JSZip.loadAsync(bytes, { createFolders: false })
   } catch {
     throw new ThemeRejected(['That zip file couldn’t be read'])
   }
+  if (Object.keys(zip.files).length !== listed.length)
+    throw new ThemeRejected(['That zip file couldn’t be read'])
 
   const reasons = new Set<string>()
   const files = new Map<

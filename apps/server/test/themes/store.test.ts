@@ -1,4 +1,4 @@
-import { mkdtempSync, renameSync, rmSync, statSync, existsSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync, existsSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -77,6 +77,29 @@ test('the etag changes with the manifest and with the CSS', () => {
   const second = store.detail('mine')!.etag
   store.saveCustom(manifest('mine', { description: 'x' }), 'a{color:red}')
   expect(new Set([first, second, store.detail('mine')!.etag]).size).toBe(3)
+})
+
+test('the etag covers asset bytes and licence files, and never repeats after a delete', () => {
+  const etag = () => store.detail('seaside')!.etag
+  const install = (asset: string, licence?: string) =>
+    store.storeImported(
+      manifest('seaside'),
+      'a{color:red}',
+      new Map([['img/a.png', Buffer.from(asset)]]),
+      licence === undefined ? {} : { LICENSE: licence },
+    )
+  install('one', 'MIT')
+  const seen = [etag()]
+  install('two', 'MIT') // asset bytes only
+  seen.push(etag())
+  install('two', 'MIT 2') // licence only
+  seen.push(etag())
+  install('two', 'MIT 2') // identical content is still a new revision
+  seen.push(etag())
+  store.remove('seaside')
+  install('one', 'MIT') // same content as the first install, after a delete
+  seen.push(etag())
+  expect(new Set(seen).size).toBe(seen.length)
 })
 
 test('look settings round-trip and a damaged row falls back to the default', () => {
@@ -158,14 +181,6 @@ test('an upgrade moves a theme whose id is now built in to a free id, with its a
   store.saveCustom(manifest('ledger-mine'), 'c{color:green}')
   store.remove('ledger-mine')
   expect(store.get('ledger-mine')).toBeNull()
-})
-
-test('a move that stopped after the folder moved is finished on the next start', () => {
-  store.storeImported(manifest('studio'), '', new Map([['img/a.png', Buffer.from('picture')]]))
-  renameSync(join(store.root, 'studio'), join(store.root, 'studio-mine'))
-  expect(store.reclaimBuiltinIds()).toEqual([{ from: 'studio', to: 'studio-mine' }])
-  expect(store.assets('studio-mine')).toEqual(['img/a.png'])
-  expect(store.get('studio-mine')!.source).toBe('imported')
 })
 
 test('an active look on a theme that is not affected is left alone', () => {

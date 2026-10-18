@@ -2226,15 +2226,24 @@ text, each at most 64 KB; any other root file is refused). Licence files are sto
 `harbour`, `ledger`, `studio` (9.5: real packages shipped with the server, so their detail carries a manifest, CSS and
 assets, and `export` returns a zip that can be edited and imported under a new id). Themes installed before 9.5 under
 one of these three ids are renamed at the first start (migration 0075 and a startup step) to `<id>-mine`, then
-`<id>-mine-2` and so on, with their assets; the shared look follows if it pointed at the old id.
+`<id>-mine-2` and so on, with their assets; the shared look follows if it pointed at the old id. The id chosen for such a
+move, and every replace of a theme's asset folder, is written down (`theme_swaps`, migration 0076) before any file moves
+and erased in the transaction that commits the row. After a failed or interrupted replace the previous folder is back
+(at once, or at the next start); an interrupted move is finished with the recorded id, never one guessed from which
+folders exist; a folder that already exists is never a free id.
 - `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`).
-- `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`.
+- `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`. The `etag` covers the
+  whole package: manifest, CSS, licence files and, through a persisted write counter (migration 0076) that every write
+  of the theme takes, every asset's bytes. A change to any of them, an identical re-import included, gives a new etag,
+  and so does deleting and re-creating the theme.
 - `GET /api/themes/:id/style.css` → `text/css` with `asset:` references rewritten to the asset URLs below.
 - `GET /api/themes/:id/assets/<fonts|img>/<file>` → the file with its exact type, `nosniff`, `cache-control: private`.
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
   `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5).
-- `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult`; stored, **not** activated.
+- `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult`; stored, **not** activated. A zip whose
+  local file headers and central directory disagree (name, method, sizes), that lists a name twice, or whose stored
+  data overlaps is `422 theme_rejected`; the Customizer's reader applies the same rule to what it previews.
   `409 theme_exists` (same id; `?replace=1` replaces an imported or custom theme, never a built-in);
   with `?replace=1` an `If-Match: <etag>` header (the `etag` of `GET /api/themes/:id`, quotes allowed) makes the replace
   conditional: the server compares it with the stored theme's etag inside the same serialised step as the replace and

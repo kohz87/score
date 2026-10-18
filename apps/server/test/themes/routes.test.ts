@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import {
+  mkdirSync,
   mkdtempSync,
   renameSync,
   readFileSync,
@@ -29,7 +30,7 @@ import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { multipart } from '../media-fixtures.ts'
 import { checkThemeCss } from '../../src/themes/css-check.ts'
 import { manifestAssets, readThemePackage } from '../../src/themes/package.ts'
-import { AVIF, JPEG, PNG, WEBP, WOFF2, manifestJson, zipOf, type Entry } from './helpers.ts'
+import { AVIF, JPEG, PNG, WEBP, WOFF2, manifestJson, rawZip, zipOf, type Entry } from './helpers.ts'
 
 let dir: string
 let db: ScoreDb
@@ -310,6 +311,103 @@ test('import: ?replace=1 with If-Match replaces only a theme whose etag still ma
   expect(gone.statusCode).toBe(409)
   expect(gone.json()).toMatchObject({ error: { code: 'etag_mismatch', details: { etag: null } } })
   expect((await call('GET', '/api/themes/seaside')).statusCode).toBe(404)
+})
+
+// Gate finding #1: the Customizer previews the central directory; the server must not install what the local headers say.
+test('import: a package whose local headers and central directory disagree changes no theme', async () => {
+  await upload(await fullPackage())
+  const before = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  const shown = manifestJson({ name: 'Shown' })
+  const hidden = manifestJson({ name: 'Installed' })
+  const attack = rawZip([
+    { name: 'theme.json', localName: 'style.css', data: shown },
+    { name: 'style.css', localName: 'theme.json', data: hidden },
+  ])
+  const res = await upload(attack, '?replace=1', { ...headers, 'if-match': before.etag })
+  expect(res.statusCode).toBe(422)
+  expect(reasons(res)).toMatch(/headers don.t match/)
+  const after = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())
+  expect(after).toEqual(before)
+  const dup = rawZip([
+    { name: 'theme.json', data: shown },
+    { name: 'theme.json', data: hidden },
+  ])
+  expect((await upload(dup, '?replace=1')).statusCode).toBe(422)
+  expect(ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json())).toEqual(before)
+})
+
+// Gate finding #7: the etag must change with every byte of the package, not only the manifest and the CSS.
+test('import: If-Match covers asset bytes and licence files, so a stale replace is refused', async () => {
+  const pkg = (png: Buffer, licence?: string) =>
+    zipOf({
+      'theme.json': manifestJson(),
+      'style.css': '.a{background:url(asset:img/a.png)}',
+      'assets/img/a.png': png,
+      ...(licence === undefined ? {} : { LICENSE: licence }),
+    })
+  const etagOf = async () =>
+    ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json()).etag
+  const conditional = (etag: string) => ({ ...headers, 'if-match': etag })
+  expect((await upload(await pkg(PNG, 'MIT one'))).statusCode).toBe(201)
+  const e1 = await etagOf()
+
+  // Asset-only change: two clients start from e1; the first wins, the second must be refused.
+  const other = Buffer.concat([PNG, Buffer.from('different pixels')])
+  expect(
+    (await upload(await pkg(other, 'MIT one'), '?replace=1', conditional(e1))).statusCode,
+  ).toBe(201)
+  const e2 = await etagOf()
+  expect(e2).not.toBe(e1)
+  const staleAsset = await upload(await pkg(PNG, 'MIT one'), '?replace=1', conditional(e1))
+  expect(staleAsset.statusCode).toBe(409)
+  expect(staleAsset.json()).toMatchObject({
+    error: { code: 'etag_mismatch', details: { etag: e2 } },
+  })
+  expect(readFileSync(join(dir, 'themes/seaside/assets/img/a.png'))).toEqual(other)
+
+  // Licence-only change.
+  expect(
+    (await upload(await pkg(other, 'MIT two'), '?replace=1', conditional(e2))).statusCode,
+  ).toBe(201)
+  const e3 = await etagOf()
+  expect(e3).not.toBe(e2)
+  const staleLicence = await upload(await pkg(other, 'MIT three'), '?replace=1', conditional(e2))
+  expect(staleLicence.statusCode).toBe(409)
+  const exported = await readThemePackage(
+    (await call('GET', '/api/themes/seaside/export')).rawPayload,
+  )
+  expect(exported.licenses).toEqual({ LICENSE: 'MIT two' })
+  expect((await call('GET', '/api/themes/seaside')).json()).toMatchObject({ etag: e3 })
+
+  // An identical re-import is a new revision too: whoever read before it must reload.
+  expect(
+    (await upload(await pkg(other, 'MIT two'), '?replace=1', conditional(e3))).statusCode,
+  ).toBe(201)
+  expect(await etagOf()).not.toBe(e3)
+})
+
+test('start-up undoes a swap that stopped before its row was committed', async () => {
+  await upload(await fullPackage())
+  // A stop after the old folder went aside and the new one was moved in, before the row was written.
+  db.sqlite
+    .prepare(
+      "INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES ('t1', 'swap', 'seaside', NULL, 1, 'now')",
+    )
+    .run()
+  renameSync(join(dir, 'themes/seaside'), join(dir, 'themes/.old-t1'))
+  mkdirSync(join(dir, 'themes/seaside/assets/img'), { recursive: true })
+  writeFileSync(join(dir, 'themes/seaside/assets/img/a.png'), 'half-written')
+  const second = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake', SCORE_HOME: dir }),
+    logger: false,
+    db,
+    ingest,
+    port,
+  })
+  await second.ready()
+  expect(readFileSync(join(dir, 'themes/seaside/assets/img/a.png'))).toEqual(PNG)
+  expect(readdirSync(join(dir, 'themes')).filter((name) => name.startsWith('.'))).toEqual([])
+  await second.close()
 })
 
 test('import: a rejected package stores nothing', async () => {

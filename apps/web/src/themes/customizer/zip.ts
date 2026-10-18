@@ -142,11 +142,17 @@ export async function readZip(
     }
   }
   if (end < 0) throw new ZipError('That isn’t a zip file.')
+  // Anything after the end record could hide a second one that another reader would pick instead.
+  if (end + 22 + view.getUint16(end + 20, true) !== bytes.length)
+    throw new ZipError('That zip file couldn’t be read.')
   const count = view.getUint16(end + 10, true)
   if (count > limits.entries) throw new ZipError('The zip holds more files than a theme can.')
   let at = view.getUint32(end + 16, true)
   const decoder = new TextDecoder('utf-8')
   const files = new Map<string, Uint8Array>()
+  // Every name seen, folders included and case ignored: the server refuses such a package, so the preview must too.
+  const seen = new Set<string>()
+  const ranges: [number, number][] = []
   let total = 0
   for (let index = 0; index < count; index++) {
     if (at + 46 > bytes.length || view.getUint32(at, true) !== 0x02014b50)
@@ -160,8 +166,33 @@ export async function readZip(
     const commentLength = view.getUint16(at + 32, true)
     const local = view.getUint32(at + 42, true)
     const name = decoder.decode(bytes.subarray(at + 46, at + 46 + nameLength))
+    const nameBytes = bytes.subarray(at + 46, at + 46 + nameLength)
+    const crc = view.getUint32(at + 16, true)
     at += 46 + nameLength + extraLength + commentLength
     if (flags & 1) throw new ZipError('That zip file is encrypted.')
+    const key = name.replace(/\/$/, '').toLowerCase()
+    if (seen.has(key)) throw new ZipError(`“${name.slice(0, 60)}” appears twice.`)
+    seen.add(key)
+    // The server reads the local headers: they must say what the central directory says (gate finding #1).
+    if (local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50)
+      throw new ZipError('That zip file couldn’t be read.')
+    const localName = bytes.subarray(local + 30, local + 30 + view.getUint16(local + 26, true))
+    const localFlags = view.getUint16(local + 6, true)
+    const sameSizes =
+      (localFlags & 8) !== 0 ||
+      (view.getUint32(local + 14, true) === crc &&
+        view.getUint32(local + 18, true) === packed &&
+        view.getUint32(local + 22, true) === size)
+    if (
+      localName.length !== nameBytes.length ||
+      localName.some((byte, i) => byte !== nameBytes[i]) ||
+      view.getUint16(local + 8, true) !== method ||
+      (localFlags & 0x801) !== (flags & 0x801) ||
+      !sameSizes
+    )
+      throw new ZipError(`“${name.slice(0, 60)}”: the zip’s headers don’t match each other.`)
+    const dataStart = local + 30 + localName.length + view.getUint16(local + 28, true)
+    ranges.push([local, dataStart + packed])
     if (name.endsWith('/')) continue
     if (
       name.includes('\\') ||
@@ -173,18 +204,18 @@ export async function readZip(
     total += size
     if (total > limits.totalBytes)
       throw new ZipError('The zip unpacks to more than a theme can hold.')
-    if (local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50)
-      throw new ZipError('That zip file couldn’t be read.')
-    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true)
-    const raw = bytes.subarray(start, start + packed)
+    const raw = bytes.subarray(dataStart, dataStart + packed)
     if (raw.length !== packed) throw new ZipError('That zip file is cut short.')
     let data: Uint8Array
     if (method === 0) data = raw
     else if (method === 8) data = await inflate(raw, size)
     else throw new ZipError('That zip file uses a method Score can’t read.')
     if (data.length !== size) throw new ZipError(`“${name.slice(0, 60)}” doesn’t match its size.`)
-    if (files.has(name)) throw new ZipError(`“${name.slice(0, 60)}” appears twice.`)
     files.set(name, data)
   }
+  // Two entries sharing stored bytes would let one file stand in for another.
+  ranges.sort((a, b) => a[0] - b[0])
+  for (let i = 1; i < ranges.length; i++)
+    if (ranges[i]![0] < ranges[i - 1]![1]) throw new ZipError('That zip file couldn’t be read.')
   return files
 }
