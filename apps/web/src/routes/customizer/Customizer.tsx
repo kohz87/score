@@ -13,6 +13,7 @@ import { themeAssetUrl, type ThemeColorToken, type ThemeSanitiseReport } from '@
 import { ApiError } from '../../data/api.ts'
 import { dataUrlFor } from '../../themes/customizer/asset-types.ts'
 import {
+  CHANGED_ELSEWHERE,
   describeSaveError,
   fetchThemeAsset,
   fetchThemeLicenses,
@@ -405,7 +406,10 @@ export function Customizer() {
       licenceReader,
     )
     if (!built.ok) {
-      setProblem({ kind: 'rejected', text: built.problems.join(' ') })
+      // Replacing the theme this draft was opened from: the file read at the old revision is the same conflict the
+      // etag check would report (with Save as new offered). A copy stops with the plain sentence instead.
+      if (built.changed && target.exists && !asNew) setProblem(CHANGED_ELSEWHERE)
+      else setProblem({ kind: 'rejected', text: built.problems.join(' ') })
       return null
     }
     const route = saveRoute({

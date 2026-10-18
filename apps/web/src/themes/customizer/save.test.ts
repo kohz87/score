@@ -178,7 +178,7 @@ describe('one coherent snapshot', () => {
       server.asset,
       server.licences,
     )
-    expect(built).toEqual({ ok: false, problems: [THEME_CHANGED_TEXT] })
+    expect(built).toEqual({ ok: false, problems: [THEME_CHANGED_TEXT], changed: true })
   })
 
   it('refuses a copy whose replacement lands between two of its reads', async () => {
@@ -196,7 +196,7 @@ describe('one coherent snapshot', () => {
       },
       server.licences,
     )
-    expect(built).toEqual({ ok: false, problems: [THEME_CHANGED_TEXT] })
+    expect(built).toEqual({ ok: false, problems: [THEME_CHANGED_TEXT], changed: true })
   })
 
   it('does not read licences from a package that has none, so a changed source still copies', async () => {
@@ -226,6 +226,6 @@ describe('one coherent snapshot', () => {
         return server.licences(id, rev)
       },
     )
-    expect(built).toEqual({ ok: false, problems: [THEME_CHANGED_TEXT] })
+    expect(built).toEqual({ ok: false, problems: [THEME_CHANGED_TEXT], changed: true })
   })
 })

@@ -7,7 +7,10 @@ import { THEME_CHANGED_TEXT, ThemeChangedError } from './snapshot.ts'
 // Turning a draft into something that can be saved or exported: the CSS is sanitised again (the stored CSS is always the
 // sanitiser's own output, design §4.1), the files the draft points at are gathered, and the way to save is chosen.
 
-export type Built = { ok: true; pkg: ThemePackage } | { ok: false; problems: string[] }
+export type Built =
+  | { ok: true; pkg: ThemePackage }
+  /** `changed`: the source theme was replaced after the draft took its revision (nothing else is wrong with it). */
+  | { ok: false; problems: string[]; changed?: true }
 
 export const MAX_CSS_BYTES = 262_144
 
@@ -46,7 +49,8 @@ export async function buildFromDraft(
       try {
         assets.set(path, await fetchAsset(source.id, path, source.rev))
       } catch (error) {
-        if (error instanceof ThemeChangedError) return { ok: false, problems: [THEME_CHANGED_TEXT] }
+        if (error instanceof ThemeChangedError)
+          return { ok: false, problems: [THEME_CHANGED_TEXT], changed: true }
         problems.push(`Couldn’t read the file “${path}”. Try again.`)
       }
     } else problems.push(`The file “${path}” is used but isn’t there. Add it again or remove it.`)
@@ -56,7 +60,8 @@ export async function buildFromDraft(
     try {
       licenses = await fetchLicenses(source.id, source.rev)
     } catch (error) {
-      if (error instanceof ThemeChangedError) return { ok: false, problems: [THEME_CHANGED_TEXT] }
+      if (error instanceof ThemeChangedError)
+        return { ok: false, problems: [THEME_CHANGED_TEXT], changed: true }
       problems.push('Couldn’t read the licence files of the theme this one comes from. Try again.')
     }
   }

@@ -72,14 +72,16 @@ export type SaveProblem = {
   text: string
 }
 
+/** The theme was saved by someone else after this editor opened it (a stale etag, or a stale file read). */
+export const CHANGED_ELSEWHERE: SaveProblem = {
+  kind: 'conflict',
+  text: 'This theme was changed somewhere else (another tab or device) after you opened it. Reload it to see the latest, or use Save as new to keep your version.',
+}
+
 /** What went wrong, and what to do next, without codes. */
 export function describeSaveError(error: unknown): SaveProblem {
   if (error instanceof ApiError) {
-    if (error.code === 'etag_mismatch')
-      return {
-        kind: 'conflict',
-        text: 'This theme was changed somewhere else (another tab or device) after you opened it. Reload it to see the latest, or use Save as new to keep your version.',
-      }
+    if (error.code === 'etag_mismatch') return CHANGED_ELSEWHERE
     if (error.code === 'builtin_theme')
       return {
         kind: 'locked',
