@@ -17,7 +17,8 @@ const GROUPING = new Set([
   'CSSLayerBlockRule',
   'CSSContainerRule',
 ])
-const DANGEROUS_PROPERTIES = new Set(['-moz-binding', 'behavior', '-webkit-user-modify'])
+// `d` replaces the geometry of an SVG path (an agent glyph's shape).
+const DANGEROUS_PROPERTIES = new Set(['-moz-binding', 'behavior', '-webkit-user-modify', 'd'])
 const MAX_Z_INDEX = 50
 
 function selectorReaches(text: string): boolean {

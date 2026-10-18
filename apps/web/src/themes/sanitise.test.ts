@@ -144,4 +144,8 @@ describe('confining theme rules to the outside of protected subtrees (gate #3, #
     }).css
     expect(confined).toContain(`.a b${guard} { color: red; }`)
   })
+
+  test('a theme can’t replace the geometry of a path', () => {
+    expect(reasons('path { d: path("M0 0 L1 1") }')).toEqual(['pointer_events'])
+  })
 })

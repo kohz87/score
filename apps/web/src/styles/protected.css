@@ -26,6 +26,19 @@
     -webkit-text-stroke-width: 0 !important;
     background-image: none !important;
   }
+  /* Glyph shapes: a path stays visible, unfiltered and unclipped. (Transforms are left alone: Score's own glyph CSS
+     may use them. The `d` geometry can't be re-asserted from CSS, `d: none` removes the path: the sanitiser drops
+     the property instead, and theme rules never match in here.) */
+  html[data-look='custom'] [data-protected] svg,
+  html[data-look='custom'] [data-protected] svg *,
+  html[data-look='custom'] svg[data-protected] * {
+    opacity: 1 !important;
+    visibility: visible !important;
+    filter: none !important;
+    clip-path: none !important;
+    mask: none !important;
+    mix-blend-mode: normal !important;
+  }
   /* No generated text or boxes (a fake "Approve" laid over the real one): none of these surfaces draws any. */
   html[data-look='custom'] [data-protected]::before,
   html[data-look='custom'] [data-protected]::after,
@@ -65,8 +78,12 @@
   html[data-look='custom'] [data-protected='inline'] {
     display: inline !important;
   }
-  html[data-look='custom'] [data-protected='inline-flex'] {
+  html[data-look='custom'] [data-protected='inline-flex']:not(svg) {
     display: inline-flex !important;
+  }
+  /* A bare glyph is an svg: as a flex container it would blockify its own shapes. */
+  html[data-look='custom'] svg[data-protected='inline-flex'] {
+    display: inline-block !important;
   }
 
   /* Contrast: when a theme's colour pair fails WCAG AA (the engine checks, data-contrast-fallback) the surface wears

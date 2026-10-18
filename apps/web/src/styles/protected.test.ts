@@ -73,3 +73,10 @@ test('the protected layer re-asserts what a hostile theme would change, with !im
     expect(css).toContain(`${property} !important`)
   expect(css).toContain('--font-body')
 })
+
+test('glyph shapes are re-asserted too, and the bare glyph svg is not a flex container', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  expect(css).toContain("html[data-look='custom'] [data-protected] svg *")
+  expect(css).toContain("svg[data-protected='inline-flex']")
+  expect(css).toContain("[data-protected='inline-flex']:not(svg)")
+})

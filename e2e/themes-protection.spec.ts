@@ -100,6 +100,43 @@ async function unreadable(root: Locator): Promise<string[]> {
   })
 }
 
+async function isOnTop(target: Locator): Promise<boolean> {
+  return target.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    if (box.width === 0 || box.height === 0) return false
+    const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+    return !!top && (element === top || element.contains(top))
+  })
+}
+
+/** How each shape of a glyph is painted, as a string: geometry, paint and visibility. */
+async function glyphPaint(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('.agent-glyph')).flatMap((glyph) =>
+      Array.from(glyph.querySelectorAll('path, circle, rect, polygon')).map((shape) => {
+        const s = getComputedStyle(shape)
+        const box = (shape as SVGGraphicsElement).getBBox()
+        return [
+          shape.tagName,
+          s.opacity,
+          s.visibility,
+          s.display,
+          s.transform,
+          s.fill,
+          s.stroke,
+          s.strokeWidth,
+          s.getPropertyValue('d'),
+          s.clipPath,
+          s.mask,
+          s.filter,
+          Math.round(box.width),
+          Math.round(box.height),
+        ].join('|')
+      }),
+    ),
+  )
+}
+
 test.describe('theme CSS stays out of protected subtrees', () => {
   test('#3: approval title and description can’t be made invisible by position or tag', async ({
     page,
@@ -135,5 +172,43 @@ test.describe('theme CSS stays out of protected subtrees', () => {
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     await settle(page, 1000) // Score’s own entrance motion
     expect(await unreadable(card)).toEqual([])
+  })
+
+  test('#5: the guard compares what glyph shapes paint, not just their wrapper', async ({
+    page,
+  }) => {
+    await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
+    await startApproval(page)
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    // As if a rule had slipped through the sanitiser: every path takes another shape (the wrapper stays exactly as it was).
+    await page.evaluate(() => {
+      document.adoptedStyleSheets.at(-1)!.insertRule('svg path { d: path("M1 1 L2 2"); }')
+      document.body.append(document.createElement('i'))
+    })
+    await expect(page.locator('.look-banner')).toContainText('Score switched your theme off', {
+      timeout: 15_000,
+    })
+    await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
+  })
+
+  test('#5: a theme can’t erase or reshape agent glyph shapes', async ({ page }) => {
+    await wear(
+      page,
+      ':root svg path, :root svg circle, :root svg rect { opacity: 0; fill: transparent; stroke: transparent; }' +
+        'svg path { d: path("M0 0 L1 1"); transform: scale(0); }' +
+        'svg { visibility: hidden; filter: blur(4px); clip-path: inset(100%); }',
+    )
+    const { url } = await startApproval(page)
+    await settle(page)
+    const worn = await glyphPaint(page)
+    expect(worn.length).toBeGreaterThan(0)
+    // The same page without the theme.
+    await page.goto(`${url}?look=safe`)
+    await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
+    await expect(page.locator('.agent-glyph').first()).toBeVisible()
+    const plain = await glyphPaint(page)
+    // (The room may have gained a message between the two loads: compare what the glyphs look like, not how many.)
+    expect([...new Set(worn)].sort()).toEqual([...new Set(plain)].sort())
+    expect(await isOnTop(page.locator('.agent-glyph').first())).toBe(true)
   })
 })

@@ -120,6 +120,45 @@ function parts(surface: HTMLElement): HTMLElement[] {
   return found
 }
 
+// Glyph shapes (finding #5): an agent is told apart by its shape, so what the shapes paint is compared, not just
+// whether their wrapper is shown: geometry (`d`, size), paint and everything that can hide or move a path.
+const SHAPES = 'path, circle, rect, ellipse, polygon, polyline, line'
+
+function shapes(surface: HTMLElement): SVGGraphicsElement[] {
+  return Array.from(surface.querySelectorAll<SVGGraphicsElement>(SHAPES)).filter(
+    (el) => !el.closest('[hidden]'),
+  )
+}
+
+function shapeSignature(el: SVGGraphicsElement): string {
+  const style = getComputedStyle(el)
+  let box = { width: 0, height: 0 }
+  try {
+    box = el.getBBox()
+  } catch {
+    // Not rendered: the zero size says so.
+  }
+  const parent = el.ownerSVGElement ? getComputedStyle(el.ownerSVGElement) : style
+  return [
+    style.getPropertyValue('d'),
+    style.opacity,
+    style.visibility,
+    style.display,
+    style.transform,
+    style.fill,
+    style.stroke,
+    style.strokeWidth,
+    style.clipPath,
+    style.maskImage,
+    style.filter,
+    parent.opacity,
+    parent.visibility,
+    parent.filter,
+    Math.round(box.width * 10),
+    Math.round(box.height * 10),
+  ].join('|')
+}
+
 /** Runs with the theme's own sheets lifted, then puts them back before anything is painted. */
 function withoutTheme<T>(run: () => T): T {
   const sheets = appliedThemeSheets()
@@ -147,8 +186,18 @@ export function findProtectedViolation(root: ParentNode = document): string | nu
   )
   if (surfaces.length === 0) return null
   const targets = surfaces.flatMap(parts)
+  const glyphShapes = surfaces.flatMap(shapes)
   const on = targets.map(snapshot)
-  const off = withoutTheme(() => targets.map(snapshot))
+  const shapesOn = glyphShapes.map(shapeSignature)
+  const { off, shapesOff } = withoutTheme(() => ({
+    off: targets.map(snapshot),
+    shapesOff: glyphShapes.map(shapeSignature),
+  }))
+  for (let i = 0; i < glyphShapes.length; i++)
+    if (shapesOn[i] !== shapesOff[i]) {
+      const owner = glyphShapes[i]!.closest('[aria-label]')?.getAttribute('aria-label')
+      return `${owner ?? 'an agent glyph'} changed shape`
+    }
   for (let i = 0; i < targets.length; i++) {
     const problem = worse(on[i]!, off[i]!)
     if (problem) {
