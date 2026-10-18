@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -7,6 +7,7 @@ import {
   ThemeManifestSchema,
   type ThemeManifest,
 } from '@score/contract'
+import { LICENSE_FILES } from './license-files.ts'
 
 // The 8.3 packs (score, paper, night, dense) look the way the web app's CSS says; the server only needs their identity,
 // so the list and the export have something honest to say. Harbour, Ledger and Studio (9.5) are real theme packages in
@@ -29,6 +30,7 @@ export function isBuiltinThemeId(id: string): boolean {
 interface Packaged {
   manifest: ThemeManifest
   css: string
+  licenses: Record<string, string>
 }
 const packaged = new Map<string, Packaged>()
 
@@ -42,7 +44,10 @@ function loadPackaged(id: string): Packaged | null {
   )
   if (manifest.id !== id) throw new Error(`Built-in theme ${id} has the id ${manifest.id}`)
   const css = readFileSync(join(dir, 'style.css'), 'utf8')
-  const loaded = { manifest, css }
+  const licenses: Record<string, string> = {}
+  for (const name of LICENSE_FILES)
+    if (existsSync(join(dir, name))) licenses[name] = readFileSync(join(dir, name), 'utf8')
+  const loaded = { manifest, css, licenses }
   packaged.set(id, loaded)
   return loaded
 }
@@ -64,6 +69,11 @@ export function builtinManifest(id: string): ThemeManifest | null {
 /** The stylesheet of a shipped package; the packs have none. */
 export function builtinCss(id: string): string {
   return loadPackaged(id)?.css ?? ''
+}
+
+/** The licence files a shipped package carries (`OFL.txt` for the ones that ship a font). */
+export function builtinLicenses(id: string): Record<string, string> {
+  return loadPackaged(id)?.licenses ?? {}
 }
 
 /** The folder holding a shipped package's `fonts/` and `img/`, or null for a theme that has no files. */

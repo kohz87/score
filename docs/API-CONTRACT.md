@@ -2219,10 +2219,14 @@ Hermes or tokens.
 
 ## 16. Themes (PLAN 9; schemas in `packages/contract/src/themes.ts`; design docs/briefs/9-themes.md, decision 90)
 
-A theme is a declarative package: `theme.json` (`ThemeManifest`, format `1`), an optional `style.css` and `assets/`
-(woff2 fonts, png/jpg/webp/avif images). No theme code runs. Built-in ids `score`, `paper`, `night`, `dense` (the 8.3 packs, which have no manifest content) and
+A theme is a declarative package: `theme.json` (`ThemeManifest`, format `1`), an optional `style.css`, `assets/`
+(woff2 fonts, png/jpg/webp/avif images) and up to two licence texts at the root, `LICENSE` and `OFL.txt` (UTF-8 plain
+text, each at most 64 KB; any other root file is refused). Licence files are stored with the theme, returned by
+`export` and kept when an export is imported again; the built-in themes that ship a font carry its `OFL.txt`. No theme code runs. Built-in ids `score`, `paper`, `night`, `dense` (the 8.3 packs, which have no manifest content) and
 `harbour`, `ledger`, `studio` (9.5: real packages shipped with the server, so their detail carries a manifest, CSS and
-assets, and `export` returns a zip that can be edited and imported under a new id).
+assets, and `export` returns a zip that can be edited and imported under a new id). Themes installed before 9.5 under
+one of these three ids are renamed at the first start (migration 0075 and a startup step) to `<id>-mine`, then
+`<id>-mine-2` and so on, with their assets; the shared look follows if it pointed at the old id.
 - `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`).
 - `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`.
 - `GET /api/themes/:id/style.css` → `text/css` with `asset:` references rewritten to the asset URLs below.

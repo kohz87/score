@@ -29,6 +29,7 @@ theme.json          required: the manifest
 style.css           optional, at most 256 KB: your CSS
 assets/fonts/*.woff2   optional: fonts
 assets/img/*           optional: pictures (png, jpg, webp or avif)
+LICENSE, OFL.txt       optional: licence texts for what you ship (see “Licence files”)
 ```
 
 - At most 40 files. No SVG, HTML, scripts, archives inside the zip, links or absolute paths; Score refuses the whole
@@ -39,6 +40,15 @@ assets/img/*           optional: pictures (png, jpg, webp or avif)
 - Import a package with `POST /api/themes/import` (the Customizer adds the buttons for it in Settings › Look). It is
   stored but not switched on. An id that
   belongs to a built-in theme (`score`, `paper`, `night`, `dense`, `harbour`, `ledger`, `studio`) is refused.
+
+### Licence files
+
+If your package ships a font or a picture that has a licence, put its text in the package. Score accepts at most two
+files at the root for this, named exactly `LICENSE` and `OFL.txt` (the SIL Open Font License that most open fonts
+come with). Each is plain UTF-8 text of at most 64 KB; anything else at the root, or a file with these names
+anywhere else, is refused. Score keeps them with the theme, puts them back into its export and keeps them when you
+import that export again. Ledger and Studio carry the `OFL.txt` of the fonts they ship, so an export of either one is
+a complete, redistributable starting point.
 
 ## The manifest, `theme.json`
 

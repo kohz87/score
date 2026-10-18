@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync, existsSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, renameSync, rmSync, statSync, existsSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -94,4 +94,83 @@ test('a failed row write brings the previous asset folder back', () => {
   db.sqlite.exec('DROP TABLE themes')
   expect(() => store.storeImported(manifest('seaside'), '', new Map())).toThrow()
   expect(existsSync(join(store.root, 'seaside/assets/img/a.png'))).toBe(true)
+})
+
+test('licence files are stored with an imported theme and survive a save of the same theme', () => {
+  store.storeImported(manifest('seaside'), '', new Map(), { 'OFL.txt': 'SIL OFL text\n' })
+  expect(store.get('seaside')!.licenses).toEqual({ 'OFL.txt': 'SIL OFL text\n' })
+  store.saveCustom(manifest('seaside', { description: 'edited' }), 'a{color:red}')
+  expect(store.get('seaside')!.licenses).toEqual({ 'OFL.txt': 'SIL OFL text\n' })
+  store.storeImported(manifest('seaside'), '', new Map())
+  expect(store.get('seaside')!.licenses).toEqual({})
+  // The shipped built-ins carry theirs.
+  expect(Object.keys(store.get('ledger')!.licenses)).toEqual(['OFL.txt'])
+  expect(Object.keys(store.get('studio')!.licenses)).toEqual(['OFL.txt'])
+  expect(store.get('harbour')!.licenses).toEqual({})
+})
+
+// Before 9.5 harbour, ledger and studio were free ids: a theme with one of them, installed earlier, must not be
+// shadowed by the built-in of the same name after an upgrade.
+test('an upgrade moves a theme whose id is now built in to a free id, with its assets and the active look', () => {
+  store.storeImported(
+    manifest('harbour', { description: 'mine' }),
+    'a{background:url(asset:img/a.png)}',
+    new Map([['img/a.png', Buffer.from('picture')]]),
+    { LICENSE: 'MIT' },
+  )
+  store.storeImported(manifest('harbour-mine'), '', new Map([['img/b.png', Buffer.from('b')]]))
+  store.saveCustom(manifest('ledger'), 'b{color:blue}')
+  writeLook(db.sqlite, { activeTheme: 'harbour', mode: 'dark' })
+  // The clash, as it is before the fix: two entries called harbour and the built-in answers for the id.
+  expect(store.list().filter((item) => item.id === 'harbour')).toHaveLength(2)
+  expect(store.get('harbour')!.source).toBe('builtin')
+
+  expect(store.reclaimBuiltinIds()).toEqual([
+    { from: 'harbour', to: 'harbour-mine-2' },
+    { from: 'ledger', to: 'ledger-mine' },
+  ])
+
+  expect(store.list().map((item) => [item.id, item.source])).toEqual([
+    ['score', 'builtin'],
+    ['paper', 'builtin'],
+    ['night', 'builtin'],
+    ['dense', 'builtin'],
+    ['harbour', 'builtin'],
+    ['ledger', 'builtin'],
+    ['studio', 'builtin'],
+    ['harbour-mine', 'imported'],
+    ['harbour-mine-2', 'imported'],
+    ['ledger-mine', 'custom'],
+  ])
+  const moved = store.get('harbour-mine-2')!
+  expect(moved.manifest).toMatchObject({ id: 'harbour-mine-2', description: 'mine' })
+  expect(moved.css).toBe('a{background:url(asset:img/a.png)}')
+  expect(moved.licenses).toEqual({ LICENSE: 'MIT' })
+  expect(store.assets('harbour-mine-2')).toEqual(['img/a.png'])
+  expect(existsSync(join(store.root, 'harbour'))).toBe(false)
+  // The other theme's files are untouched, the built-in is the built-in again, and the look follows.
+  expect(store.assets('harbour-mine')).toEqual(['img/b.png'])
+  expect(store.detail('harbour')!.manifest.author).toBe('Score')
+  expect(store.assets('harbour')).toEqual(['img/harbour.png'])
+  expect(readLook(db.sqlite)).toEqual({ activeTheme: 'harbour-mine-2', mode: 'dark' })
+  // Nothing is left to do, and the moved theme can be edited and deleted like any other.
+  expect(store.reclaimBuiltinIds()).toEqual([])
+  store.saveCustom(manifest('ledger-mine'), 'c{color:green}')
+  store.remove('ledger-mine')
+  expect(store.get('ledger-mine')).toBeNull()
+})
+
+test('a move that stopped after the folder moved is finished on the next start', () => {
+  store.storeImported(manifest('studio'), '', new Map([['img/a.png', Buffer.from('picture')]]))
+  renameSync(join(store.root, 'studio'), join(store.root, 'studio-mine'))
+  expect(store.reclaimBuiltinIds()).toEqual([{ from: 'studio', to: 'studio-mine' }])
+  expect(store.assets('studio-mine')).toEqual(['img/a.png'])
+  expect(store.get('studio-mine')!.source).toBe('imported')
+})
+
+test('an active look on a theme that is not affected is left alone', () => {
+  store.saveCustom(manifest('mine'), '')
+  writeLook(db.sqlite, { activeTheme: 'mine', mode: 'light' })
+  expect(store.reclaimBuiltinIds()).toEqual([])
+  expect(readLook(db.sqlite)).toEqual({ activeTheme: 'mine', mode: 'light' })
 })

@@ -51,6 +51,7 @@ export function registerThemeRoutes(
 ): ThemeStore {
   const { db, ingest } = options
   const store = new ThemeStore(db, options.home, options.clock)
+  store.reclaimBuiltinIds()
   const guard = { preHandler: [humanGuard(app.pairing)] }
   const receipts = requestIdempotency(db, options.clock)
   const mutation = {
@@ -170,7 +171,7 @@ export function registerThemeRoutes(
           const existing = store.get(pkg.manifest.id)
           if (existing && (replace === undefined || existing.source === 'builtin'))
             throw new HttpError(409, 'theme_exists', 'A theme with this id is already installed.')
-          store.storeImported(pkg.manifest, pkg.css, pkg.assets)
+          store.storeImported(pkg.manifest, pkg.css, pkg.assets, pkg.licenses)
           // Replacing a theme that is the shared look keeps it active: the row changed, not the choice.
           return ThemeImportResultSchema.parse({
             theme: store.summary(store.get(pkg.manifest.id)!),
@@ -189,7 +190,7 @@ export function registerThemeRoutes(
     const assets = new Map(
       store.assets(id).map((path) => [path, readFileSync(join(store.assetRoot(id), path))]),
     )
-    const zip = await buildThemePackage(theme.manifest, theme.css, assets)
+    const zip = await buildThemePackage(theme.manifest, theme.css, assets, theme.licenses)
     return reply
       .header('Content-Type', 'application/zip')
       .header('X-Content-Type-Options', 'nosniff')

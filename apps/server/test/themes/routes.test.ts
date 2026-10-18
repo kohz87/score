@@ -1,6 +1,7 @@
 import JSZip from 'jszip'
 import {
   mkdtempSync,
+  renameSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -565,7 +566,18 @@ test.each(['harbour', 'ledger', 'studio'])(
       Object.keys(zip.files)
         .filter((name) => !name.endsWith('/'))
         .sort(),
-    ).toEqual(['theme.json', 'style.css', ...detail.assets.map((path) => `assets/${path}`)].sort())
+    ).toEqual(
+      [
+        'theme.json',
+        'style.css',
+        ...(id === 'harbour' ? [] : ['OFL.txt']),
+        ...detail.assets.map((path) => `assets/${path}`),
+      ].sort(),
+    )
+    // The fonts' licence text travels with them.
+    const licence = zip.file('OFL.txt')
+    if (id === 'harbour') expect(licence).toBeNull()
+    else expect(await licence!.async('string')).toContain('SIL OPEN FONT LICENSE Version 1.1')
     const manifest = JSON.parse(await zip.file('theme.json')!.async('string')) as { id: string }
     manifest.id = `${id}-copy`
     zip.file('theme.json', JSON.stringify(manifest))
@@ -577,6 +589,12 @@ test.each(['harbour', 'ledger', 'studio'])(
       id: `${id}-copy`,
       source: 'imported',
     })
+    // The copy keeps the licence file: exporting it again still has it, byte for byte.
+    const again = await JSZip.loadAsync(
+      (await call('GET', `/api/themes/${id}-copy/export`)).rawPayload,
+    )
+    if (id === 'harbour') expect(again.file('OFL.txt')).toBeNull()
+    else expect(await again.file('OFL.txt')!.async('string')).toBe(await licence!.async('string'))
   },
 )
 
@@ -603,4 +621,71 @@ test('the example theme of docs/themes/example-theme zips up and imports through
   const picture = await call('GET', '/api/themes/sandbar/assets/img/sand.png')
   expect(picture.statusCode).toBe(200)
   expect(picture.headers['content-type']).toBe('image/png')
+})
+
+test('starting Score after an upgrade moves a theme that has a now built-in id, and the look follows it', async () => {
+  // As an earlier Score left it: a theme called "ledger" with assets, active for every device.
+  const first = await upload(await fullPackage('seaside'))
+  expect(first.statusCode).toBe(201)
+  const folder = join(dir, 'themes')
+  const row = db.sqlite.prepare('SELECT manifest_json FROM themes WHERE id = ?').get('seaside') as {
+    manifest_json: string
+  }
+  db.sqlite
+    .prepare("UPDATE themes SET id = 'ledger', manifest_json = ? WHERE id = 'seaside'")
+    .run(JSON.stringify({ ...JSON.parse(row.manifest_json), id: 'ledger' }))
+  renameSync(join(folder, 'seaside'), join(folder, 'ledger'))
+  db.sqlite.prepare("UPDATE meta SET value = 'ledger' WHERE key = 'look.activeTheme'").run()
+
+  // A fresh start of the app on that data.
+  const restarted = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake', SCORE_HOME: dir }),
+    logger: false,
+    db,
+    ingest,
+    port,
+  })
+  try {
+    const paired = await restarted.inject({
+      method: 'POST',
+      url: '/api/session/pair',
+      headers: { 'x-score-client': 'web' },
+      payload: { token: restarted.pairing.createToken() },
+    })
+    const h = {
+      'x-score-client': 'web',
+      cookie: paired.headers['set-cookie']!.toString().split(';')[0]!,
+    }
+    const get = (url: string) => restarted.inject({ method: 'GET', url, headers: h })
+    const list = ThemeListSchema.parse((await get('/api/themes')).json())
+    expect(list.active).toBe('ledger-mine')
+    expect(list.items.filter((item) => item.id === 'ledger')).toHaveLength(1)
+    expect(list.items.find((item) => item.id === 'ledger')!.source).toBe('builtin')
+    expect(list.items.find((item) => item.id === 'ledger-mine')).toMatchObject({
+      source: 'imported',
+      name: 'seaside',
+    })
+    const mine = ThemeDetailSchema.parse((await get('/api/themes/ledger-mine')).json())
+    expect(mine.assets).toEqual(['fonts/f.woff2', 'img/a.png'])
+    expect(mine.manifest.id).toBe('ledger-mine')
+    expect((await get('/api/themes/ledger-mine/assets/img/a.png')).statusCode).toBe(200)
+    const builtin = ThemeDetailSchema.parse((await get('/api/themes/ledger')).json())
+    expect(builtin.summary.source).toBe('builtin')
+    // It can be edited and deleted again (the look moves off it first).
+    const put = await restarted.inject({
+      method: 'PUT',
+      url: '/api/look',
+      headers: h,
+      payload: { activeTheme: 'score', mode: 'system' },
+    })
+    expect(put.statusCode).toBe(204)
+    const del = await restarted.inject({
+      method: 'DELETE',
+      url: '/api/themes/ledger-mine',
+      headers: h,
+    })
+    expect(del.statusCode).toBe(204)
+  } finally {
+    await restarted.close()
+  }
 })
