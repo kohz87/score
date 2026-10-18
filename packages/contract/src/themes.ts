@@ -295,6 +295,17 @@ export const ThemeAssetPathSchema = z
   .max(160)
   .regex(/^(fonts|img)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(woff2|png|jpg|jpeg|webp|avif)$/)
 
+/** A package revision: the `etag` of a `ThemeDetail` (a sha256 hex digest), carried by file URLs as `?rev=`. */
+export const ThemeRevSchema = z.string().regex(/^[0-9a-f]{64}$/)
+
+/**
+ * The one spelling of a theme file's URL (contract § 16, J1): it names the revision the caller holds, and the server
+ * refuses (409 etag_mismatch) a revision that is not current. `path` is `fonts/x.woff2`, not `asset:fonts/x.woff2`.
+ */
+export function themeAssetUrl(themeId: string, path: string, rev: string): string {
+  return `/api/themes/${themeId}/assets/${path}?rev=${rev}`
+}
+
 /**
  * `PUT /api/themes/:id` (custom themes only). `css` is the browser-sanitised text; the server re-checks it.
  * C4 #2: `assets` (base64 by path), `keep` (paths the theme already has) and `licenses` let a save carry the theme's

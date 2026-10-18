@@ -91,9 +91,10 @@ describe('helpers', () => {
       rewriteAssetUrls(
         `a{background:url(asset:img/bg.webp)} @font-face{src:url("asset:fonts/x.woff2")} b{color:red}`,
         'seaside',
+        'f'.repeat(64),
       ),
     ).toBe(
-      `a{background:url(/api/themes/seaside/assets/img/bg.webp)} @font-face{src:url("/api/themes/seaside/assets/fonts/x.woff2")} b{color:red}`,
+      `a{background:url(/api/themes/seaside/assets/img/bg.webp?rev=${'f'.repeat(64)})} @font-face{src:url("/api/themes/seaside/assets/fonts/x.woff2?rev=${'f'.repeat(64)}")} b{color:red}`,
     )
   })
 
@@ -113,9 +114,10 @@ describe('helpers', () => {
       rewriteAssetUrls(
         'a{background-image:url(asset\\3a img/a.png)} /* url(asset:img/b.png) is a note */',
         'seaside',
+        'f'.repeat(64),
       ),
     ).toBe(
-      'a{background-image:url(/api/themes/seaside/assets/img/a.png)} /* url(asset:img/b.png) is a note */',
+      `a{background-image:url(/api/themes/seaside/assets/img/a.png?rev=${'f'.repeat(64)})} /* url(asset:img/b.png) is a note */`,
     )
   })
 })

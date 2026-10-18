@@ -9,6 +9,7 @@ import {
   ThemeIdSchema,
   ThemeImportResultSchema,
   ThemeListSchema,
+  ThemeRevSchema,
   ThemeSaveSchema,
 } from '@score/contract'
 import { humanGuard } from '../auth/human.ts'
@@ -27,7 +28,7 @@ import {
   buildThemePackage,
   readThemePackage,
 } from '../themes/package.ts'
-import { ThemeLockedError, ThemeStore } from '../themes/store.ts'
+import { ThemeLockedError, ThemeStore, themeEtag } from '../themes/store.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 const IdParams = z.object({ id: ThemeIdSchema })
@@ -37,6 +38,10 @@ const AssetParams = z.object({
     .string()
     .regex(/^(?:fonts|img)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(?:woff2|png|jpg|jpeg|webp|avif)$/),
 })
+// File URLs name the package revision they were made for (contract § 16, J1). Assets require it; the stylesheet and the
+// export accept it, and a revision that isn't current is refused whichever route it arrives on.
+const RevQuery = z.object({ rev: ThemeRevSchema })
+const OptionalRevQuery = z.object({ rev: ThemeRevSchema.optional() })
 const ImportQuery = z.object({ replace: z.enum(['1']).optional() })
 
 const notFound = () => new HttpError(404, 'not_found', 'Couldn’t find that theme.')
@@ -49,6 +54,18 @@ const unlessLocked = <T>(work: () => T): T => {
       throw new HttpError(409, 'theme_recovering', error.message, { id: error.themeId })
     throw error
   }
+}
+/** `409 etag_mismatch` when `rev` names an older (or any other) package revision than the one stored now. */
+function assertCurrentRevision(theme: NonNullable<ReturnType<ThemeStore['get']>>, rev?: string) {
+  const current = themeEtag(theme)
+  if (rev !== undefined && rev !== current)
+    throw new HttpError(
+      409,
+      'etag_mismatch',
+      'This theme changed since you loaded it. Reload it and try again.',
+      { etag: current },
+    )
+  return current
 }
 const rejected = (reasons: string[]) =>
   new HttpError(422, 'theme_rejected', 'That theme can’t be used: ' + reasons[0], { reasons })
@@ -140,21 +157,27 @@ export function registerThemeRoutes(
 
   app.get('/api/themes/:id/style.css', guard, async (request, reply) => {
     const { id } = IdParams.parse(request.params)
+    const { rev } = OptionalRevQuery.parse(request.query)
     const theme = store.get(id)
     if (!theme) throw notFound()
     unlessLocked(() => store.assertReadable(id))
+    const current = assertCurrentRevision(theme, rev)
     return reply
       .header('Content-Type', 'text/css; charset=utf-8')
       .header('X-Content-Type-Options', 'nosniff')
       .header('Cache-Control', 'private, no-cache')
-      .send(rewriteAssetUrls(theme.css, id))
+      .send(rewriteAssetUrls(theme.css, id, current))
   })
 
   app.get('/api/themes/:id/assets/*', guard, async (request, reply) => {
     const parsed = AssetParams.safeParse(request.params)
     if (!parsed.success) throw notFound()
     const { id, '*': path } = parsed.data
+    const theme = store.get(id)
+    if (!theme) throw notFound()
     unlessLocked(() => store.assertReadable(id))
+    // Row and folder are read in this one synchronous step, so the revision checked is the one whose bytes are sent.
+    assertCurrentRevision(theme, RevQuery.parse(request.query).rev)
     const file = join(store.assetRoot(id), ...path.split('/'))
     // A symlink or anything but a regular file is not served, whatever is on disk.
     let bytes: Buffer
@@ -268,9 +291,11 @@ export function registerThemeRoutes(
 
   app.get('/api/themes/:id/export', guard, async (request, reply) => {
     const { id } = IdParams.parse(request.params)
+    const { rev } = OptionalRevQuery.parse(request.query)
     const theme = store.get(id)
     if (!theme) throw notFound()
     unlessLocked(() => store.assertReadable(id))
+    assertCurrentRevision(theme, rev)
     const assets = new Map(
       store.assets(id).map((path) => [path, readFileSync(join(store.assetRoot(id), path))]),
     )
