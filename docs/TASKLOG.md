@@ -320,3 +320,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   files). 16 distinct findings (X1–X16), 2 found by both, none rejected; lead verified the single-source ones in code or
   left them "reproduce first". Fixes: J1 (+X3, X10, X13), K1 protection coverage, K2 theme storage, K3 small items.
   Review: `docs/reviews/2026-10-19-xaudit-1.8.0.md`.
+- **K3** merged: X8 `pathState()` → clean/dirty/unknown, unknown keeps `failed`; X9 a failed quota refresh drops the
+  cached reading; X6 personality editor keyed by agent id, keeps its draft and offers the conflict choices; X16 preview
+  contrast per view. X16's docs half rejected with evidence: THEMES.md's 999px is the `border-radius*` cap (matches
+  `MAX_RADIUS_PX`), the `--radius-*` text already says 40px. T2 started: Chat 390px screenshots flaky since C3.
