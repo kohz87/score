@@ -285,3 +285,13 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **Lead fix (from C4's report):** Chat's "Start plan" button drew white on `--ink` (near-white in dark mode, 1.1:1);
   now `--card`. The Customizer's "Text on the main buttons" check measured `on-dark` on `ink` instead of `card` on
   `ink` (false warning for themes with a light dark-mode ink). Failing-first unit test; chat + visual e2e 134/134.
+- **C4** merged: Paper, Night shift and Dense are full built-in packages ("Start from" copies the manifest; pack look
+  unchanged, no baseline moved); `PUT /api/themes/:id` carries `assets`/`keep`/`licenses`, checked by the import's
+  reader and swapped in with the recoverable swap; USER-GUIDE sections for Look, themes, Customizer, ways back,
+  chat-first view, quota guard, coding personality; 4 new README screenshots (neutral team). Codex cross-check (high):
+  #1 accepted, fixed by the lead (the in-memory package for a save with files is uncompressed, so repetitive valid CSS no
+  longer trips the zip-ratio rule; failing-first route test). #2 partly accepted, **deferred to 1.8.x**: copies of
+  Paper/Night/Dense get the engine's derived corner scale (Paper 2/4/6/8 vs the pack's 4/6/8/10) and Dense's 0.75
+  spacing and 232px rail have no manifest option (compact = 0.85, rail 248); fixing needs a manifest corner-scale and
+  density option (contract change), documented in THEMES.md meanwhile. Lead resolved the store.ts conflict with I2 and
+  updated C4's unsettled-swap test for I2's refused reads. Merged main: contract 1358, server themes 508, web themes 874.
