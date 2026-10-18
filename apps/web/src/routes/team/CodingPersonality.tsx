@@ -83,11 +83,22 @@ function PersonalityEditor({
   onCancel: () => void
 }) {
   const [role, setRole] = useState(coding.role)
-  const [text, setText] = useState(coding.instructions)
-  // The etag the text was loaded with; replaced only by choosing "Overwrite with mine".
-  const [etag, setEtag] = useState(coding.instructionsEtag)
-  const [conflict, setConflict] = useState<Conflict | null>(null)
-  const unchanged = role === coding.role && text === coding.instructions
+  // Untouched instructions follow the stored text; the first edit pins the etag the draft was started from, which
+  // changes only by choosing "Reload theirs" or "Overwrite with mine".
+  const [draft, setDraft] = useState<string | null>(null)
+  const [baseEtag, setBaseEtag] = useState<string | null>(null)
+  // Stored etags the editor has already dealt with; any other one arriving from a refresh is a change to decide on.
+  const [seen, setSeen] = useState<string[]>([])
+  const [saveConflict, setSaveConflict] = useState<Conflict | null>(null)
+  const text = draft ?? coding.instructions
+  const etag = baseEtag ?? coding.instructionsEtag
+  // A change saved elsewhere that reached this page through a refresh while the draft was open.
+  const incoming: Conflict | null =
+    draft !== null && !seen.includes(coding.instructionsEtag)
+      ? { etag: coding.instructionsEtag, instructions: coding.instructions }
+      : null
+  const conflict = saveConflict ?? incoming
+  const unchanged = role === coding.role && draft === null
   const save = useMutation({
     mutationFn: async (base: string) =>
       CodingAgentSchema.parse(
@@ -95,9 +106,7 @@ function PersonalityEditor({
           method: 'PATCH',
           body: JSON.stringify({
             role,
-            ...(text !== coding.instructions || base !== coding.instructionsEtag
-              ? { instructions: text, instructionsEtag: base }
-              : {}),
+            ...(draft !== null ? { instructions: draft, instructionsEtag: base } : {}),
           }),
         }),
       ),
@@ -105,12 +114,12 @@ function PersonalityEditor({
     onError(error) {
       if (error instanceof ApiError && error.status === 409) {
         const details = conflictOf(error.details)
-        if (details) setConflict(details)
+        if (details) setSaveConflict(details)
       }
     },
   })
   const failure =
-    save.isError && !conflict
+    save.isError && !saveConflict
       ? save.error instanceof ApiError && save.error.code === 'not_paired'
         ? 'Pair this browser using the link in the server terminal to save changes.'
         : 'Couldn’t save. Check the length and try again.'
@@ -139,7 +148,13 @@ function PersonalityEditor({
         spellCheck={false}
         maxLength={CODING_INSTRUCTIONS_MAX}
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          if (draft === null) {
+            setBaseEtag(coding.instructionsEtag)
+            setSeen([coding.instructionsEtag])
+          }
+          setDraft(event.target.value)
+        }}
       />
       <p className="team-muted">
         Markdown. {text.length.toLocaleString('en-GB')} of{' '}
@@ -157,9 +172,11 @@ function PersonalityEditor({
             <button
               type="button"
               onClick={() => {
-                setText(conflict.instructions)
-                setEtag(conflict.etag)
-                setConflict(null)
+                // Theirs replaces the draft: from here on it follows the stored text again unless edited.
+                setDraft(saveConflict ? conflict.instructions : null)
+                setBaseEtag(saveConflict ? conflict.etag : null)
+                setSeen((list) => [...list, conflict.etag])
+                setSaveConflict(null)
                 save.reset()
               }}
             >
@@ -170,8 +187,9 @@ function PersonalityEditor({
               className="team-primary"
               disabled={save.isPending}
               onClick={() => {
-                setEtag(conflict.etag)
-                setConflict(null)
+                setBaseEtag(conflict.etag)
+                setSeen((list) => [...list, conflict.etag])
+                setSaveConflict(null)
                 save.mutate(conflict.etag)
               }}
             >
@@ -184,7 +202,7 @@ function PersonalityEditor({
         <button
           type="submit"
           className="team-primary"
-          disabled={save.isPending || (unchanged && etag === coding.instructionsEtag)}
+          disabled={save.isPending || unchanged || incoming !== null}
         >
           {save.isPending ? 'Saving…' : 'Save'}
         </button>
