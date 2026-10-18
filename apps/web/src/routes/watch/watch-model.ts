@@ -132,16 +132,24 @@ export type ActivityItem = {
   at: string
   /** The frame to replay when the item is chosen. */
   seq: number | null
+  /** A coding agent's sub-agent did this (Score prefixes its captions); `text` is then without the prefix. */
+  sub?: true
 }
+
+/** What the server puts in front of a sub-agent's frame captions (PLAN 8.7). */
+const SUB_PREFIX = 'Sub-agent · '
 
 /** Newest first: the agent's frame captions plus the questions it put to the person. */
 export function activityItems(frames: WatchFrame[], approvals: Approval[]): ActivityItem[] {
   const items: ActivityItem[] = frames.map((frame) => ({
     key: `frame-${frame.seq}`,
     kind: surfaceMarker[frame.surface],
-    text: frame.caption,
+    text: frame.caption.startsWith(SUB_PREFIX)
+      ? frame.caption.slice(SUB_PREFIX.length)
+      : frame.caption,
     at: frame.at,
     seq: frame.seq,
+    ...(frame.caption.startsWith(SUB_PREFIX) ? { sub: true as const } : {}),
   }))
   for (const approval of approvals) {
     const before = [...frames].reverse().find((frame) => frame.at <= approval.createdAt)
@@ -154,6 +162,25 @@ export function activityItems(frames: WatchFrame[], approvals: Approval[]): Acti
     })
   }
   return items.sort((a, b) => b.at.localeCompare(a.at) || b.key.localeCompare(a.key))
+}
+
+export type ActivityEntry =
+  { type: 'item'; item: ActivityItem } | { type: 'sub-agent'; key: string; items: ActivityItem[] }
+
+/**
+ * Runs of a sub-agent's steps become one group (like Chat and Flow nest them under the Agent call). Frames carry no
+ * parent id, so a run of consecutive sub-agent steps is the best grouping Watch has; old rows without the caption
+ * prefix stay flat.
+ */
+export function groupActivity(items: ActivityItem[]): ActivityEntry[] {
+  const entries: ActivityEntry[] = []
+  for (const item of items) {
+    const last = entries.at(-1)
+    if (!item.sub) entries.push({ type: 'item', item })
+    else if (last?.type === 'sub-agent') last.items.push(item)
+    else entries.push({ type: 'sub-agent', key: `sub-${item.key}`, items: [item] })
+  }
+  return entries
 }
 
 export type DiffLine = { kind: 'add' | 'del' | 'ctx' | 'hunk'; text: string; number: number | null }
