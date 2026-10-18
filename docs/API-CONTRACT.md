@@ -2346,6 +2346,12 @@ it and still serves the other themes.
   of `ThemeDetail`; the Customizer reads them from the export and **always sends `rev`**, so a licence is never paired
   with another version's manifest: a stale `rev` is `409 etag_mismatch`. Without `rev` (a plain download link) the
   current package is returned.
+- **Saving the theme in use tells the other devices (X13).** A successful `PUT /api/themes/:id` or `POST
+  /api/themes/import?replace=1` of the theme that is the **shared** look (`look.activeTheme`) emits `look.changed
+  { activeTheme, mode, resetGeneration }` once the write has committed, so every open device refetches the theme
+  (`themesKey`) and re-applies it; the asset URLs it then builds carry the new revision, so a picture or font replaced at
+  the same path is fetched again instead of served from a cache. A failed write, or a theme that isn't the shared look,
+  emits nothing (a device that wears it as its own choice refetches on focus).
 - **Copies are one snapshot (J1).** The Customizer remembers the etag of the `ThemeDetail` a draft was opened or copied
   from (Start from, Save as new, export of a draft, a save that keeps files) and reads every file and licence it pairs
   with that draft's manifest and CSS at exactly that `rev`. Any `409 etag_mismatch` on those reads stops the operation

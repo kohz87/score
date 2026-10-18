@@ -101,6 +101,24 @@ export function registerThemeRoutes(
     queue = run.catch(() => undefined)
     return run
   }
+  // The theme that is the shared look was saved or replaced: other open devices refetch it (contract § 16, X13).
+  // Announced after the write has committed; a failed write never gets here.
+  const announceIfActive = async (id: string) => {
+    if (!ingest || db.read((sqlite) => readLook(sqlite)).activeTheme !== id) return
+    await ingest.submit({
+      source: 'look',
+      identity: randomUUID(),
+      apply: ({ sqlite }) => {
+        const look = readLook(sqlite)
+        return [
+          {
+            type: 'look.changed',
+            data: { ...look, resetGeneration: readResetGeneration(sqlite) },
+          },
+        ]
+      },
+    })
+  }
   const detail = (id: string) => ThemeDetailSchema.parse(unlessLocked(() => store.detail(id)))
 
   // A custom save that carries files (C4 #2): the theme it would end up as is built in memory and read back by the very
@@ -133,7 +151,9 @@ export function registerThemeRoutes(
     unlessLocked(() =>
       store.storeImported(pkg.manifest, pkg.css, pkg.assets, pkg.licenses, 'custom'),
     )
-    return detail(id)
+    const saved = detail(id)
+    await announceIfActive(id)
+    return saved
   }
 
   app.get('/api/themes', guard, async () => {
@@ -218,7 +238,9 @@ export function registerThemeRoutes(
       if (body.assets !== undefined || body.keep !== undefined || body.licenses !== undefined)
         return saveWithFiles(id, body)
       unlessLocked(() => store.saveCustom(body.manifest, body.css))
-      return detail(id)
+      const saved = detail(id)
+      await announceIfActive(id)
+      return saved
     })
   })
 
@@ -276,7 +298,9 @@ export function registerThemeRoutes(
           if (existing && (replace === undefined || existing.source === 'builtin'))
             throw new HttpError(409, 'theme_exists', 'A theme with this id is already installed.')
           unlessLocked(() => store.storeImported(pkg.manifest, pkg.css, pkg.assets, pkg.licenses))
-          // Replacing a theme that is the shared look keeps it active: the row changed, not the choice.
+          // Replacing a theme that is the shared look keeps it active: the row changed, not the choice. Other open
+          // devices are told, so they refetch it (X13).
+          await announceIfActive(pkg.manifest.id)
           return ThemeImportResultSchema.parse({
             theme: store.summary(store.get(pkg.manifest.id)!),
             report: { dropped: [] },

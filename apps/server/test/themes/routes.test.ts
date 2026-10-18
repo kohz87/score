@@ -1241,3 +1241,59 @@ test('J1: built-in themes serve their files at their fixed revision', async () =
   expect((await call('GET', `${url}?rev=${detail.etag}`)).statusCode).toBe(200)
   expect((await call('GET', `${url}?rev=${'0'.repeat(64)}`)).statusCode).toBe(409)
 })
+
+// X13 (cross-audit): saving or replacing the theme that is the shared look tells the other open devices.
+test('X13: saving or replacing the theme in use emits look.changed; any other theme does not', async () => {
+  const created = ThemeDetailSchema.parse(
+    (await saveFiles('mine', null, { assets: { 'img/a.png': b64(PNG) } })).json(),
+  )
+  expect((await save('other', null)).statusCode).toBe(200)
+  expect((await call('PUT', '/api/look', { activeTheme: 'mine', mode: 'dark' })).statusCode).toBe(
+    204,
+  )
+  const looks = () => events.filter((event) => event.type === 'look.changed').map((e) => e.data)
+  events.length = 0
+  // Not the theme in use: nothing is announced.
+  expect((await save('other', (await detailOf('other')).etag, '.a{color:red}')).statusCode).toBe(
+    200,
+  )
+  expect(looks()).toEqual([])
+  // A custom save of the theme in use.
+  const saved = await save('mine', created.etag, '.a{color:red}')
+  expect(saved.statusCode, saved.body).toBe(200)
+  expect(looks()).toEqual([{ activeTheme: 'mine', mode: 'dark', resetGeneration: 0 }])
+  // A replace by import (an imported theme in use).
+  expect((await upload(await fullPackage())).statusCode).toBe(201)
+  expect(
+    (await call('PUT', '/api/look', { activeTheme: 'seaside', mode: 'dark' })).statusCode,
+  ).toBe(204)
+  events.length = 0
+  expect((await upload(await fullPackage(), '?replace=1')).statusCode).toBe(201)
+  expect(looks()).toEqual([{ activeTheme: 'seaside', mode: 'dark', resetGeneration: 0 }])
+  // A failed save announces nothing.
+  events.length = 0
+  expect((await save('seaside', 'stale')).statusCode).toBeGreaterThanOrEqual(400)
+  expect(looks()).toEqual([])
+})
+
+// Argon's note on X2: a newer version that dropped the file must answer a stale revision with the conflict, not a bare
+// 404, so a copy from the stale draft stops with the plain "changed" message instead of "couldn't read the file".
+test('X2: a file the newer version removed answers the old revision with 409, not 404', async () => {
+  const a = ThemeDetailSchema.parse(
+    (
+      await saveFiles('mine', null, { assets: { 'img/a.png': b64(PNG), 'img/b.png': b64(PNG2) } })
+    ).json(),
+  )
+  const b = ThemeDetailSchema.parse(
+    (await saveFiles('mine', a.etag, { keep: ['img/a.png'] })).json(),
+  )
+  expect(b.assets).toEqual(['img/a.png'])
+  const stale = await call('GET', `/api/themes/mine/assets/img/b.png?rev=${a.etag}`)
+  expect(stale.statusCode).toBe(409)
+  expect(stale.json()).toMatchObject({
+    error: { code: 'etag_mismatch', details: { etag: b.etag } },
+  })
+  expect((await call('GET', `/api/themes/mine/assets/img/b.png?rev=${b.etag}`)).statusCode).toBe(
+    404,
+  )
+})

@@ -1181,3 +1181,40 @@ test('Replace in the install preview never overwrites a version that landed afte
     await cleanUp(page)
   }
 })
+
+// X13 (cross-audit): a picture replaced at the same path reaches the device that saved it, through its new revision.
+test('a replaced picture at the same path is fetched again on the saving device', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  made.add('e2e-livea')
+  try {
+    const first = makePng(40, 40, () => [255, 0, 0])
+    const second = makePng(40, 40, () => [0, 0, 255])
+    const a = await putSnap(page, 'e2e-livea', 'E2E Live', null, first)
+    await page.goto('/settings')
+    await page.evaluate(() => window.localStorage.setItem('score.look.device', 'e2e-livea'))
+    await openCustomizer(page, '/settings/look/customize/e2e-livea')
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundImage)
+    await expect.poll(background).toContain(`/assets/img/b.png?rev=${a.etag}`)
+    await tab(page, 'Background').click()
+    await page
+      .getByRole('tabpanel')
+      .locator('input[type=file]')
+      .setInputFiles({ name: 'b.png', mimeType: 'image/png', buffer: second })
+    await page.getByRole('button', { name: 'Save and apply' }).click()
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0, { timeout: 20_000 })
+    const stored = await (await page.request.get('/api/themes/e2e-livea')).json()
+    expect(stored.etag).not.toBe(a.etag)
+    await expect.poll(background).toContain(`/assets/img/background.png?rev=${stored.etag}`)
+    const url = /url\("([^"]+background\.png[^"]*)"\)/.exec(await background())![1]!
+    const served = await page.request.get(url)
+    expect(served.status()).toBe(200)
+    expect(Buffer.from(await served.body()).equals(second)).toBe(true)
+  } finally {
+    await page.evaluate(() => window.localStorage.removeItem('score.look.device'))
+    await cleanUp(page)
+  }
+})
