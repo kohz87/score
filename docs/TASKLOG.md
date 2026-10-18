@@ -371,3 +371,5 @@ One entry per completed task: what landed, review results, and any **rejected re
   by-agent wait 15 s (mechanism unproven). Picker ×10 alone 1/10 → 10/10.
 - Still flaky on main: themes-protection #6 "hover rule fades the page" (1/8 alone: `li.: no box` in the rules card a
   second after switch-off) — to investigate after the release run.
+- **Release 1.8.1**: release run on main — check green (contract 1405, web 2164, server 4497 +14 skipped), e2e 618/618,
+  0 failed. No migration.

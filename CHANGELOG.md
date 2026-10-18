@@ -3,6 +3,40 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.8.1] — 2026-10-19
+
+Fixes from an overnight cross-audit of 1.8.0 (Codex and Gemini 4 Argon) and a verification pass.
+
+### Fixed
+- **More consent screens are protected from themes:** starting an orchestration or a workflow (approval policy, spend
+  confirmations, what each coding agent can reach), MCP access, Settings › Remote access (password, pairing, paired
+  browsers, passkeys) and the pair page. Each is checked as a whole when you act on it.
+- Protection starts the moment a custom theme is on the page, before the theme list has loaded.
+- The Customizer has a protected way back to Settings (also on its error page) and the command palette (Ctrl+K).
+- A reset you make (Ctrl+Shift+0) before the theme list loads is kept; the chat-first view shows its way back at once.
+- **Two windows editing one theme:** pictures and fonts are tied to the theme's version, so a stale window can't mix
+  two versions; "Save as new" after a conflict keeps the version you had open, pictures and licence included.
+- Import › Replace no longer overwrites a newer save made elsewhere.
+- "Save as new" takes its new name and isn't left marked unsaved.
+- Saving the theme in use updates other open devices; a replaced picture or font reloads.
+- Theme storage: no symlink is followed anywhere on a theme file's path; deleting a theme is journaled and leftover
+  folders are swept at start; swaps and rollbacks are flushed to disk in a safe order; a zip entry with extra bytes is
+  refused, as in the browser; a theme may be called `constructor`.
+- Knowledge: a Git failure no longer reads as "saved to history".
+- A failed quota refresh no longer holds work on an old reading.
+- A coding agent's personality draft survives a refresh of its settings, with "Reload theirs / Overwrite with mine".
+- The Customizer checks chat-first contrast against that view's own background.
+- **Chat on phones** keeps the newest lines in view when the context ring appears.
+
+### Internal
+- Flaky tests fixed at their causes (Chat phone screenshots, the model picker racing the model-list test).
+
+### Known issues
+- A Customizer copy of Paper or Dense differs slightly from the original (corner sizes, Dense's spacing and rail).
+
+### Upgrade notes
+- No database migration.
+
 ## [1.8.0] — 2026-10-18
 
 Phase 9 is complete: a CMS-style theme system with no theme code running.
