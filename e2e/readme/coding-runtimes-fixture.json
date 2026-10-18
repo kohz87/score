@@ -7,7 +7,9 @@
       "version": "2.1.295",
       "testedVersions": ["2.1.295"],
       "quota": "Uses your Claude plan quota (the CLI’s own login).",
-      "message": null
+      "message": null,
+      "unverifiedPermissions": [],
+      "warning": null
     },
     {
       "runtime": "codex",
@@ -16,7 +18,20 @@
       "version": "0.160.1",
       "testedVersions": ["0.160.1"],
       "quota": "Uses your ChatGPT plan quota, shared with other Codex work on that account.",
-      "message": null
+      "message": null,
+      "unverifiedPermissions": [],
+      "warning": null
+    },
+    {
+      "runtime": "antigravity",
+      "label": "Antigravity",
+      "state": "ready",
+      "version": "1.0.0",
+      "testedVersions": ["1.0.0"],
+      "quota": "Uses your Google plan quota (the CLI’s own login).",
+      "message": null,
+      "unverifiedPermissions": [],
+      "warning": null
     },
     {
       "runtime": "opencode",
@@ -25,7 +40,9 @@
       "version": null,
       "testedVersions": [],
       "quota": "Uses whichever provider OpenCode is signed in to.",
-      "message": "OpenCode is not supported by this version of Score yet."
+      "message": "OpenCode is not supported by this version of Score yet.",
+      "unverifiedPermissions": [],
+      "warning": null
     }
   ]
 }
