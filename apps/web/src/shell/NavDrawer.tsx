@@ -53,6 +53,9 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
     const onChange = () => {
       if (query.matches) onClose()
     }
+    // Also now: the launcher layout going away (a reset, another device's theme) can leave the drawer open at a width
+    // where it is not shown, with the page behind it inert.
+    onChange()
     query.addEventListener('change', onChange)
     return () => query.removeEventListener('change', onChange)
   }, [open, persistent, onClose])

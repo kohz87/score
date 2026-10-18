@@ -1,6 +1,6 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import type { MockTheme } from './themes-fixtures.ts'
-import { layoutThemes as t, openWithTheme } from './themes-layout-fixtures.ts'
+import { layoutThemes as t, openWithTheme, theme } from './themes-layout-fixtures.ts'
 
 // The layout model (PLAN 9.3, design docs/briefs/9-themes.md § 7): every layout, shape and background option of a
 // theme manifest changes the real app. Frozen fixture data, mocked theme routes (contract § 16); the default look's
@@ -126,6 +126,62 @@ test.describe('navigation', () => {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
       ).toBeLessThanOrEqual(1)
+    })
+  }
+
+  test('resetting the look with the launcher drawer open leaves nothing inert or scroll-locked', async ({
+    page,
+  }) => {
+    await open(page, t.navLauncher)
+    await page.getByRole('button', { name: 'Menu' }).click()
+    await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible()
+    await expect(page.locator('.shell-content')).toHaveAttribute('inert', '')
+    await page.keyboard.press('Control+Shift+Digit0')
+    await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
+    await expect(page.getByRole('dialog', { name: 'Menu' })).toBeHidden()
+    await expect(page.locator('.shell-content')).not.toHaveAttribute('inert', '')
+    expect(await page.evaluate(() => document.body.classList.contains('scroll-locked'))).toBe(false)
+    // The page works again: Score's own top bar, and a click lands.
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chat' }).click()
+    await expect(page).toHaveURL(/\/chat/)
+  })
+
+  for (const width of [1440, 1100]) {
+    test(`seven 24-character labels keep Settings and the controls on screen at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      // The widest letters, 24 of them: Now, Chat, ... each padded with W.
+      const labels = ['Now', 'Chat', 'Tasks', 'Team', 'Knowledge', 'Reports', 'Settings'].map(
+        (name) => (name + 'W'.repeat(24)).slice(0, 24),
+      )
+      expect(labels.every((label) => label.length === 24)).toBe(true)
+      const paths = ['/now', '/chat', '/tasks', '/team', '/knowledge', '/reports', '/settings']
+      await open(
+        page,
+        theme('long-labels', {
+          layout: { menu: paths.map((to, index) => ({ to, label: labels[index] })) },
+        }),
+      )
+      const nav = page.getByRole('navigation', { name: 'Main' })
+      const settings = nav.getByRole('link', { name: labels[6]! })
+      await expect(settings).toBeVisible()
+      // The full name is still the link's text and its tooltip.
+      await expect(settings).toHaveAttribute('title', labels[6]!)
+      await expect(settings).toHaveText(labels[6]!)
+      const fits = async (locator: Locator) => {
+        const rect = (await locator.boundingBox())!
+        expect(rect.x).toBeGreaterThanOrEqual(0)
+        expect(rect.x + rect.width).toBeLessThanOrEqual(width + 0.5)
+      }
+      await fits(settings)
+      await fits(page.getByRole('button', { name: 'Search or run a command' }))
+      await fits(page.locator('.avatar').first())
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+      ).toBeLessThanOrEqual(1)
+      await settings.click()
+      await expect(page).toHaveURL(/\/settings/)
     })
   }
 

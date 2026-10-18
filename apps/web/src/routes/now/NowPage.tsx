@@ -5,7 +5,7 @@ import { AskingCard, MadeTodayCard, NowComposer, ThreadCard, TodoCard } from './
 import { FlowView } from './flow/FlowView.tsx'
 import { RoutinesView } from './RoutinesView.tsx'
 import { ScoreTimeline } from './ScoreTimeline.tsx'
-import { useLayout, type NowCardKind } from '../../themes/layout.ts'
+import { useLayout, type NowArrangement as NowArrangementConfig } from '../../themes/layout.ts'
 import type { NowSnapshot } from '@score/contract'
 import { WatchPage } from '../watch/WatchPage.tsx'
 import { OrchestrationNow } from '../orchestrations/OrchestrationNow.tsx'
@@ -18,54 +18,81 @@ const views = [
 ] as const
 
 /**
- * The Score view with the cards the theme arranged (PLAN 9.3): a grid with the theme's columns and spans, the same
- * card components as the default arrangement. Needs-you is always among them (layout.ts adds it when a theme left it
- * out); the orchestration cards above stay full-width, as in the default.
+ * The Score view: Score's own arrangement, or the cards a theme arranged (PLAN 9.3): a grid with the theme's columns
+ * and spans, the same card components. Needs-you is always among them (layout.ts adds it when a theme left it out); the
+ * orchestration cards above stay full-width, as in the default.
+ *
+ * Both arrangements are one `div` at one tree position, and the composer is one keyed child of it, so a theme change
+ * (another device's `look.changed`, a reset) moves the composer without remounting it: attachments, recipients and a
+ * pending send survive. In the default the wrapper and the composer's slot are `display: contents`, so the page is
+ * laid out exactly as before; a theme that leaves the composer out only hides it.
  */
-function NowArrangement({
+function NowScore({
   snapshot,
-  columns,
-  cards,
+  arrangement,
 }: {
   snapshot: NowSnapshot
-  columns: number
-  cards: { card: NowCardKind; span: number }[]
+  arrangement: NowArrangementConfig | null
 }) {
   const agents = snapshot.lanes.map((lane) => lane.agent)
   const working = snapshot.lanes.filter((lane) => lane.agent.status === 'working').slice(0, 2)
+  const composer = (span: number | undefined, hidden: boolean) => (
+    <div key="composer" className="now-slot" data-span={span} hidden={hidden}>
+      <NowComposer roomId={snapshot.thread?.roomId ?? null} agents={agents} />
+    </div>
+  )
+  if (!arrangement)
+    return (
+      <div className="now-body">
+        {[
+          <ScoreTimeline key="timeline" snapshot={snapshot} />,
+          <div key="cards" className="now-cards">
+            <ThreadCard thread={snapshot.thread} agents={agents} />
+            {working.map((lane) => (
+              <TodoCard key={lane.agent.id} agent={lane.agent} />
+            ))}
+            <AskingCard approval={snapshot.focusApproval} agents={agents} />
+            <MadeTodayCard items={snapshot.madeToday} agents={agents} />
+          </div>,
+          composer(undefined, false),
+        ]}
+      </div>
+    )
   const slot = (key: string, span: number, children: ReactNode) => (
     <div key={key} className="now-slot" data-span={span}>
       {children}
     </div>
   )
   return (
-    <div className="now-arrangement" data-columns={columns}>
-      {cards.flatMap(({ card, span }) => {
-        switch (card) {
-          case 'timeline':
-            return [slot(card, span, <ScoreTimeline snapshot={snapshot} />)]
-          case 'room':
-            return [slot(card, span, <ThreadCard thread={snapshot.thread} agents={agents} />)]
-          case 'needs-you':
-            return [
-              slot(card, span, <AskingCard approval={snapshot.focusApproval} agents={agents} />),
-            ]
-          case 'made-today':
-            return [slot(card, span, <MadeTodayCard items={snapshot.madeToday} agents={agents} />)]
-          case 'todo':
-            return working.map((lane) =>
-              slot(`${card}-${lane.agent.id}`, span, <TodoCard agent={lane.agent} />),
-            )
-          case 'composer':
-            return [
-              slot(
-                card,
-                span,
-                <NowComposer roomId={snapshot.thread?.roomId ?? null} agents={agents} />,
-              ),
-            ]
-        }
-      })}
+    <div className="now-body now-arrangement" data-columns={arrangement.columns}>
+      {[
+        ...arrangement.cards.flatMap(({ card, span }) => {
+          switch (card) {
+            case 'timeline':
+              return [slot(card, span, <ScoreTimeline snapshot={snapshot} />)]
+            case 'room':
+              return [slot(card, span, <ThreadCard thread={snapshot.thread} agents={agents} />)]
+            case 'needs-you':
+              return [
+                slot(card, span, <AskingCard approval={snapshot.focusApproval} agents={agents} />),
+              ]
+            case 'made-today':
+              return [
+                slot(card, span, <MadeTodayCard items={snapshot.madeToday} agents={agents} />),
+              ]
+            case 'todo':
+              return working.map((lane) =>
+                slot(`${card}-${lane.agent.id}`, span, <TodoCard agent={lane.agent} />),
+              )
+            case 'composer':
+              return [composer(span, false)]
+          }
+        }),
+        // A theme that leaves the composer out hides it; it stays mounted, so nothing typed or attached is lost.
+        ...(arrangement.cards.some((entry) => entry.card === 'composer')
+          ? []
+          : [composer(undefined, true)]),
+      ]}
     </div>
   )
 }
@@ -136,40 +163,8 @@ export function NowPage() {
       {view === 'flow' && <FlowView />}
       {view === 'routines' && <RoutinesView agents={snapshot?.lanes.map((lane) => lane.agent)} />}
       {view === 'score' &&
-        (snapshot && arrangement ? (
-          <NowArrangement
-            snapshot={snapshot}
-            columns={arrangement.columns}
-            cards={arrangement.cards}
-          />
-        ) : snapshot ? (
-          <>
-            <ScoreTimeline snapshot={snapshot} />
-            <div className="now-cards">
-              <ThreadCard
-                thread={snapshot.thread}
-                agents={snapshot.lanes.map((lane) => lane.agent)}
-              />
-              {snapshot.lanes
-                .filter((lane) => lane.agent.status === 'working')
-                .slice(0, 2)
-                .map((lane) => (
-                  <TodoCard key={lane.agent.id} agent={lane.agent} />
-                ))}
-              <AskingCard
-                approval={snapshot.focusApproval}
-                agents={snapshot.lanes.map((lane) => lane.agent)}
-              />
-              <MadeTodayCard
-                items={snapshot.madeToday}
-                agents={snapshot.lanes.map((lane) => lane.agent)}
-              />
-            </div>
-            <NowComposer
-              roomId={snapshot.thread?.roomId ?? null}
-              agents={snapshot.lanes.map((lane) => lane.agent)}
-            />
-          </>
+        (snapshot ? (
+          <NowScore snapshot={snapshot} arrangement={arrangement} />
         ) : now.isError ? (
           <p className="now-error" role="alert">
             Couldn’t load the score.{' '}

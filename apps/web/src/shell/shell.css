@@ -706,3 +706,20 @@ body.scroll-locked {
     padding-inline: var(--space-2);
   }
 }
+
+/* Long labels of a theme's menu (PLAN 9.3): up to 24 characters each, seven of them. The bar gives way instead of
+   pushing Settings and the controls off the screen: each label is cut short with an ellipsis (the full name is the
+   link's text and its tooltip). Score's own labels never needed this, so only custom themes get it. */
+:root[data-look='custom'] .main-nav {
+  flex-shrink: 1;
+  min-width: 0;
+}
+:root[data-look='custom'] .main-nav-link {
+  min-width: 0;
+}
+:root[data-look='custom'] .main-nav-label {
+  min-width: 4ch;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
