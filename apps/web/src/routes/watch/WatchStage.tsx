@@ -141,7 +141,7 @@ function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSumm
   const { busy, error, posted, decide } = useApprovalDecision(approval.id)
   const answered = posted !== null && posted.status !== 'pending'
   return (
-    <div className="watch-approval" role="group" aria-label="Approval needed">
+    <div className="watch-approval" role="group" aria-label="Approval needed" data-protected="any">
       <span className="watch-approval__text">
         {agent.name} stopped
         {approval.command ? (

@@ -32,6 +32,8 @@ describe('sanitiseCss', () => {
     expect(reasons('.coding-reach, .coding-acknowledge { display: none }')).toEqual([
       'protected_selector',
     ])
+    expect(reasons('.watch-approval button { display: none }')).toEqual(['protected_selector'])
+    expect(reasons('.orch-ack { display: none }')).toEqual(['protected_selector'])
     expect(reasons('.settings-card { color: red }')).toEqual([])
     expect(reasons('@font-face { font-family: x; src: url(a.woff2) }')).toEqual(['font_face'])
   })

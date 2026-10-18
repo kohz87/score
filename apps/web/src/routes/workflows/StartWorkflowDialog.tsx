@@ -416,7 +416,7 @@ export function StartWorkflowDialog({
           </p>
         </section>
 
-        <label className="orch-check orch-ack">
+        <label className="orch-check orch-ack" data-protected="any">
           <input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />
           <span>{ORCH_ACKNOWLEDGEMENT_TEXT}</span>
         </label>

@@ -9,6 +9,8 @@ export const protectedClasses = [
   'orch-needs',
   'orch-fence',
   'reports-approvals',
+  'watch-approval',
+  'orch-ack',
   // Needs-you markers
   'needs-you-dot',
   'orch-pill',

@@ -95,7 +95,7 @@ export function PolicyChangedCard({
         </p>
       )}
       {wide && ready && (
-        <label className="orch-check orch-ack">
+        <label className="orch-check orch-ack" data-protected="any">
           <input
             type="checkbox"
             checked={accepted === policyId}
