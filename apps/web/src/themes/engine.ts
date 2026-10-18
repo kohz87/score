@@ -7,7 +7,7 @@ import {
 } from '@score/contract'
 import { applyPack } from '../data/pack.ts'
 import { findPack, packs } from '../styles/packs.ts'
-import { contrastRatio, parseColor } from './color.ts'
+import { contrastRatio, parseComputedColor } from './color.ts'
 import { lookForView, resolveLayout, type Look, type LookView } from './layout.ts'
 import { sanitiseCss } from './sanitise.ts'
 
@@ -204,7 +204,7 @@ export function themeAttributes(look: Look): Record<string, string> {
  */
 export function failsProtectedContrast(look: Look, mode: ColorMode): boolean {
   const colors = { ...defaultColors[mode], ...colorsFor(look, mode) }
-  const rgba = (token: ThemeColorToken) => parseColor(colors[token] ?? '')
+  const rgba = (token: ThemeColorToken) => parseComputedColor(colors[token] ?? '')
   const pairs: [ThemeColorToken, ThemeColorToken][] = [
     ['ink', 'card'],
     ['ink-muted', 'card'],

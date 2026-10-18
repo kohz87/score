@@ -332,3 +332,41 @@ test.describe('the way back is always reachable (gate #8)', () => {
     await expect(palette.getByRole('searchbox')).toBeVisible()
   })
 })
+
+test.describe('the guard measures contrast the way the Customizer does (gate #4)', () => {
+  /** A rule that slipped past the sanitiser, written into the theme's own sheet; the guard must switch the theme off. */
+  async function slipIn(page: Page, rule: string) {
+    await page.evaluate((text) => {
+      document.adoptedStyleSheets.at(-1)!.insertRule(text)
+      document.body.append(document.createElement('i'))
+    }, rule)
+  }
+
+  const cases: Record<string, string> = {
+    // The finding's own reproduction: a valid computed colour the old parser could not read.
+    'white in color() on white':
+      'div[aria-label^="Approval:"] button { color: color(srgb 1 1 1); background-color: white; }',
+    // A colour space the measurement can't read must not pass as readable.
+    'a colour that can’t be measured':
+      'div[aria-label^="Approval:"] button { color: color(rec2020 0.9 0.9 0.9); background-color: white; }',
+    'oklch grey on white':
+      'div[aria-label^="Approval:"] button { color: oklch(0.99 0 0); background-color: white; }',
+    // Measured, but below AA (4.5:1) while above the old 3:1 floor: 3.7:1.
+    'grey text below AA':
+      'div[aria-label^="Approval:"] button { color: #858585; background-color: white; }',
+    'grey title below AA': 'div[aria-label^="Approval:"] .chat-approval-title { color: #6b7080; }',
+  }
+  for (const [name, rule] of Object.entries(cases)) {
+    test(`#4: ${name} is switched off`, async ({ page }) => {
+      await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
+      const { card } = await startApproval(page)
+      await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+      await slipIn(page, rule)
+      await expect(page.locator('.look-banner')).toContainText('Score switched your theme off', {
+        timeout: 15_000,
+      })
+      await settle(page, 1000)
+      expect(await unreadable(card)).toEqual([])
+    })
+  }
+})
