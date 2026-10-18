@@ -29,7 +29,7 @@ export const tokenGroups: TokenGroup[] = [
       t('track', 'Track', 'Empty part of bars and switches'),
       t('track-2', 'Darker track', 'Track edge and handles'),
       t('link-hover', 'Link hover', 'Links when pointed at'),
-      t('on-dark', 'Text on dark fills', 'Text on the main buttons'),
+      t('on-dark', 'Text on dark fills', 'Text on coloured and dark panels'),
     ],
   },
   {

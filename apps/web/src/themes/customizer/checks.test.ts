@@ -46,6 +46,17 @@ describe('colour checks', () => {
     expect(findings.some((f) => f.where === 'Dark')).toBe(false)
   })
 
+  it('measures the main buttons as Score draws them: card-coloured text on ink', () => {
+    // A light dark-mode ink is normal (Score's own is #eceef2); white text never sits on it.
+    const d = setColor(blank(), 'dark', 'ink', '#e8eaee')
+    const findings = colourFindings(d.manifest, defaults)
+    expect(findings.filter((f) => f.text.startsWith('Text on the main buttons'))).toEqual([])
+    const faint = setColor(blank(), 'dark', 'ink', '#2a2d36')
+    expect(
+      colourFindings(faint.manifest, defaults).some((f) => f.id === 'pair:dark:card:ink'),
+    ).toBe(true)
+  })
+
   it('puts a short warning on each colour of a faint pair', () => {
     const d = setColor(blank(), 'dark', 'ground', '#e0e0e0')
     const warnings = tokenWarnings(pairProblems(d.manifest, defaults), 'dark')

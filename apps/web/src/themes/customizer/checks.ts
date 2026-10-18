@@ -38,7 +38,7 @@ const pairs: Pair[] = [
     what: 'Secondary text on the page background',
   },
   { text: 'muted', background: 'ground', minimum: 4.5, what: 'Quiet text on the page background' },
-  { text: 'on-dark', background: 'ink', minimum: 4.5, what: 'Text on the main buttons' },
+  { text: 'card', background: 'ink', minimum: 4.5, what: 'Text on the main buttons' },
   { text: 'panel-ink', background: 'panel-card', minimum: 4.5, what: 'Text on approval panels' },
   { text: 'chat-text', background: 'chat-soft', minimum: 4.5, what: 'Text on message cards' },
   {
