@@ -303,8 +303,12 @@ tokens apply inside them, and only while their contrast holds.
 **None of your rules match inside these.** Every selector of your CSS is applied as if it ended in
 `:where(:not([data-protected], [data-protected] *))`, so `button`, `span`, `svg path`, `[role=alert]` or `div > div` never
 reach an approval’s words, its buttons or a glyph’s shape, whatever you write. (This doesn’t change your selectors’
-specificity.) Your colour tokens still reach them, and inheritance does: if you fade or blur something *around* them, or
-set the colours of their parents, the next check catches it.
+specificity.) Your manifest’s colour tokens still reach them, and what a parent hands down by inheritance does: the
+fonts and colours of their parents. The things that could change how a decision *reads or sits*, such as size, spacing,
+transforms, clipping, positioning and fading, are not on the CSS allowlist at all, so no rule can do them to a parent.
+As a second wall, protected surfaces re-assert their own word spacing, writing direction, text shadows and (below the
+components’ own rules) size, line height, letter spacing, case and wrapping, and the Settings link wears the card colour
+as an opaque background of its own, so a translucent rail over a picture can’t take its contrast away.
 
 Beyond the sanitiser, Score re-asserts these in a protected cascade layer, and at run time it watches them: a theme
 that hides, fades, covers or blurs one of them from outside is switched off on that device, with a banner that says why.

@@ -217,7 +217,8 @@ export function failsProtectedContrast(look: Look, mode: ColorMode): boolean {
   return pairs.some(([text, background]) => {
     const fg = rgba(text)
     const bg = rgba(background)
-    return !fg || !bg || contrastRatio(fg, bg) < 4.5
+    // A translucent pair is no pair: protected controls wear the card colour as an opaque background.
+    return !fg || !bg || fg[3] < 1 || bg[3] < 1 || contrastRatio(fg, bg) < 4.5
   })
 }
 

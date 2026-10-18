@@ -82,3 +82,33 @@ test('glyph shapes are re-asserted too, and the bare glyph svg is not a flex con
   expect(css).toContain("svg[data-protected='inline-flex']")
   expect(css).toContain("[data-protected='inline-flex']:not(svg)")
 })
+
+test('trusted typography on protected surfaces: spacing, orientation and shadows are re-asserted (re-gate finding 3)', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  for (const declaration of [
+    'word-spacing: normal',
+    'writing-mode: horizontal-tb',
+    'text-shadow: none',
+    'translate: none',
+    'rotate: none',
+    'scale: none',
+  ])
+    expect(css, declaration).toContain(`${declaration} !important`)
+  // Size, line height and the rest sit below the components' own rules: only an inherited value is replaced.
+  const base =
+    /html\[data-look='custom'\] \[data-protected\] \{[^}]*font-size: var\(--body-size\);[^}]*\}/.exec(
+      css,
+    )
+  expect(base?.[0]).toContain('line-height: 1.5')
+  expect(base?.[0]).toContain('letter-spacing: normal')
+  expect(base?.[0]).toContain('text-transform: none')
+  expect(base?.[0]).toContain('white-space: normal')
+  expect(base?.[0]).not.toContain('!important')
+})
+
+test('the way back wears an opaque background of its own (re-gate finding 5: a translucent rail over a picture)', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  expect(css).toMatch(
+    /\[data-protected='raised'\]:not\(\[aria-current='page'\]\) \{[^}]*background-color: var\(--card\) !important/,
+  )
+})

@@ -167,6 +167,17 @@ describe('theme engine', () => {
     expect(failsProtectedContrast({}, 'dark')).toBe(false)
   })
 
+  test('a translucent card or text colour on a protected surface asks for the default pair (opaque nav backgrounds)', () => {
+    // The Settings link wears the card colour as an opaque background (styles/protected.css): it must be opaque.
+    expect(failsProtectedContrast({ colors: { light: { card: '#ffffff80' } } }, 'light')).toBe(true)
+    expect(
+      failsProtectedContrast(
+        { colors: { dark: { 'ink-muted': 'rgba(255,255,255,0.5)' } } },
+        'dark',
+      ),
+    ).toBe(true)
+  })
+
   test('the default pairs match tokens.css', () => {
     const css = readFileSync(join(__dirname, '../styles/tokens.css'), 'utf8')
     const light = /^:root,\n\[data-pack='score'\] \{([^}]*)\}/m.exec(css)?.[1] ?? ''

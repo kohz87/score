@@ -26,6 +26,37 @@
     -webkit-text-stroke-width: 0 !important;
     background-image: none !important;
   }
+  /* Trusted typography (decision 102, re-gate finding 3). Whatever an ancestor hands down, these surfaces read the way
+     Score draws them. Spacing, orientation and shadows are re-asserted outright (no Score surface uses another value
+     on the surface's own element); size, line height and the rest are set below the components' own rules (no
+     !important), so a component that sets its own still wins and only what would be inherited is replaced. Theme CSS
+     can't set any of these (the allowlist) and can't reach in here; this is the second wall. */
+  html[data-look='custom'] [data-protected],
+  html[data-look='custom'] [data-protected]:not(svg) *:not(svg *) {
+    word-spacing: normal !important;
+    writing-mode: horizontal-tb !important;
+    text-orientation: mixed !important;
+    text-shadow: none !important;
+    text-decoration-thickness: auto !important;
+    translate: none !important;
+    rotate: none !important;
+    scale: none !important;
+  }
+  html[data-look='custom'] [data-protected] {
+    font-size: var(--body-size);
+    line-height: 1.5;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: normal;
+  }
+  /* The way back and the other controls that sit on a surface a theme paints (a translucent rail over a picture) wear
+     an opaque background of their own: measured contrast can't depend on what is behind them. The pair is the
+     theme's card and its muted text, which the engine checks at AA and replaces with Score's own when they fail
+     (and when either is translucent). The current page's link keeps its ink pill. */
+  html[data-look='custom'] [data-protected='raised']:not([aria-current='page']) {
+    background-color: var(--card) !important;
+    background-image: none !important;
+  }
   /* Glyph shapes: a path stays visible, unfiltered and unclipped. (Transforms are left alone: Score's own glyph CSS
      may use them. The `d` geometry can't be re-asserted from CSS, `d: none` removes the path: the sanitiser drops
      the property instead, and theme rules never match in here.) */
@@ -38,6 +69,9 @@
     clip-path: none !important;
     mask: none !important;
     mix-blend-mode: normal !important;
+    translate: none !important;
+    rotate: none !important;
+    scale: none !important;
   }
   /* No generated text or boxes (a fake "Approve" laid over the real one): none of these surfaces draws any. */
   html[data-look='custom'] [data-protected]::before,
