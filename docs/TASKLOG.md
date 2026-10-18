@@ -312,3 +312,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   main: contract 1403, web 2134, server 4455 (+14 skipped; one worker SIGSEGV in knowledge/audit4, file 3/3 on rerun),
   e2e 589/590 (responsive 390 chat-room screenshot, 123/123 on rerun). Flakes noted for the audit round: that screenshot,
   the SIGSEGV, the new glyph-pixel test (1 in 245 under load).
+- **v1.8.0 deployed** (2026-10-18 15:47 UTC): idle check clean, backup `score-pre-1.8.0-20261018.db` (0600) + journal,
+  live start, gateway restarted, both producers (default, scoretesta) re-registered, health 200 on LAN and Tailscale,
+  migrations at 0077.
