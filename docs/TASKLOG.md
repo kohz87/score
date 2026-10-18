@@ -307,3 +307,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   looks with a 3:1 non-text guard check, visible-character menu labels with a trusted Settings name. Lead resolved a
   contract test conflict with C4. Merged main: contract 1403, server themes 515, web themes/shell 913. Fourth gate
   (scoped, decision 103) and the v1.8.0 release run started.
+- **Fourth gate (scoped)**: third-review findings 2–6 closed; #1 residual (theme fonts on decision fields) fixed by the
+  lead; new P2 (stale editor + asset bytes after a successful replace) deferred to 1.8.1 (decision 104). Release run on
+  main: contract 1403, web 2134, server 4455 (+14 skipped; one worker SIGSEGV in knowledge/audit4, file 3/3 on rerun),
+  e2e 589/590 (responsive 390 chat-room screenshot, 123/123 on rerun). Flakes noted for the audit round: that screenshot,
+  the SIGSEGV, the new glyph-pixel test (1 in 245 under load).

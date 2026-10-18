@@ -3,6 +3,70 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.8.0] — 2026-10-18
+
+Phase 9 is complete: a CMS-style theme system with no theme code running.
+
+### Added
+- **Customizer** (Settings › Look › Customize…): build a theme live next to a preview of the real app (any page,
+  light or dark, desktop/tablet/phone). Sections for colours (every public colour, in plain words), fonts, shape, layout
+  (navigation, width, a menu editor), the Now arrangement, chat, a background picture and custom CSS (with what the
+  safety filter dropped). Drag or use the keyboard to reorder; undo and redo; Save, Save as new, Export and Import (an
+  install preview before anything changes); **Use on this device** or **for every device**. Live contrast checks name
+  every hard-to-read pairing — including text over pictures and glass — and approvals stay readable regardless.
+- **Three new built-in themes:** **Harbour** (frosted glass over a dusk harbour, left navigation, chat bubbles),
+  **Ledger** (flat, sharp, compact, monospace headlines, one menu button), **Studio** (airy, serif, right navigation,
+  Needs you first). The style picker shows every theme in its own colours.
+- **Theme author guide** `docs/THEMES.md` and an example theme in `docs/themes/example-theme/`.
+- Theme packages may carry their font licence (`LICENSE`, `OFL.txt`); exports keep it.
+- **Paper, Night shift and Dense** are full theme packages too, so the Customizer's "Start from" copies them.
+- The Customizer saves a theme with a picture or a font in place (no re-import needed).
+- **Ways back** from a broken theme: `?look=safe`, Ctrl+Shift+0, the command palette, Settings › Look › Reset and
+  `scripts/score look reset` (which also clears each device's own choice, including light/dark). The chat-first view
+  has the command palette and its own protected way back.
+- User guide sections for Look and themes, the Customizer, the chat-first view, the quota guard and coding agents'
+  personality and sub-agents.
+
+### Changed
+- **Theme CSS is visual-only** (decision 102): colours, backgrounds, borders, corners, shadows, font family/weight/
+  style, underlines and opacity. Anything that moves, sizes, clips, hides, animates or changes text spacing is dropped
+  by the Customizer and refused on import, with the reason shown. Layout comes from the theme's options instead.
+  Ledger and Studio lost their letter-spacing and line-height tweaks.
+- Approvals, answers, permissions, passwords, the Settings link and the ways back are **protected**: a theme can't
+  hide, fade, cover, clip or make them unreadable. If one does at the moment you act, Score refuses the action, turns the
+  theme off and says nothing was sent. A decision (an approval's request and its buttons, the add-coding-agent form)
+  is checked as a whole, every field and label included, and reads in Score's own fonts. Theme CSS can't style text selection or other highlights, and
+  agent glyphs and Needs-you dots keep a contrasting plate or edge under a theme.
+- Theme menu labels must show something: a blank or invisible label falls back to the destination's own name.
+- The browser and the server check theme packages with one shared rule set.
+- Saving a theme that is already in use says **Save and apply**: it changes every device that uses it.
+- Replacing a theme from a file checks it wasn't changed meanwhile (`If-Match`), so two editors can't overwrite each
+  other.
+- A theme you installed under the name Harbour, Ledger or Studio is kept as "… (yours)".
+
+### Fixed
+- Chat keeps the newest lines in view when the message box finishes laying out after the page loads.
+- Watch nests a sub-agent's steps under the right Agent call even when two calls have the same caption.
+- Knowledge keeps showing "Save to history again" after a reload until the note really is in history, and says a note
+  isn't versioned when Git isn't available.
+- Dark mode: Chat's "Start plan" button was white on near-white; the Customizer no longer warns about the main buttons
+  of themes with a light dark-mode text colour.
+- Replacing or deleting a theme while an interrupted swap is still being recovered is refused instead of mixing two
+  versions; so is reading it.
+
+### Internal
+- Flaky tests fixed at their causes; a test run that leaves a test agent behind now fails.
+- Test workers are capped (`SCORE_TEST_WORKERS`, `SCORE_E2E_WORKERS`, default 4) so parallel runs can't exhaust memory.
+
+### Known issues
+- Two editors on the same theme: after one saves new pictures under the same file names, the other's preview and
+  "Save as new" can pick up the newer pictures. Fixed in 1.8.1; until then edit a theme in one window at a time.
+- A Customizer copy of Paper or Dense differs slightly from the original (corner sizes, Dense's spacing and rail).
+
+### Upgrade notes
+- Three database migrations (0075 theme licence files, 0076 theme revisions and the swap journal, 0077 Watch
+  sub-agent parents); back up first.
+
 ## [1.7.0] — 2026-10-18
 
 ### Added
