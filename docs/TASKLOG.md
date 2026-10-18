@@ -273,3 +273,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   corpus, Unicode-path extra field refused, writes locked while a recovery note is unsettled, import returns the
   committed detail. Lead combined both sides of two conflicts (contract § 16, contract index). Contract 1306, server
   themes 472, web themes 655 green on the merged main.
+- **Re-gate fix H3** merged: decisions vetted as a whole (`data-decision`; add-coding-agent form, task drawer), chat-first
+  view mounts the palette and a protected way back, host reset clears the device colour choice. Lead resolved the
+  guard.ts conflict (H3's whole-decision surfaces + H1's no-theme baseline for the control) and the THEMES.md conflict,
+  and stubbed hit testing in H3's jsdom tests. Merged main: web 1886 unit tests; themes/user-view/Customizer e2e 241/241.
+  Third gate run started.
