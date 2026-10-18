@@ -2273,6 +2273,13 @@ startup id move skips the row, until recovery succeeds. Other ids are unaffected
   included: highlight pseudo-elements inherit into protected surfaces from a rule on an ancestor. The server's reason
   names the pseudo-element; the sanitiser reports `selector_not_allowed` (a `ThemeSanitiseReport` reason added in this
   change).
+- **Menu labels (third gate, finding 5):** a manifest's `layout.menu[].label` is 1–24 characters and must contain at
+  least one visible character (`hasVisibleCharacter` in `packages/contract/src/themes.ts`): spaces, controls, zero-width
+  and other invisible formatting characters (U+200B–U+200F, U+2060–U+2064, U+FEFF, soft hyphen, bidi marks and
+  overrides, tags), lone combining marks, variation selectors and blank fillers (Braille blank, Hangul fillers) do not
+  count, so `422 theme_rejected` / a failed manifest parse names the field. The web app additionally never renders a
+  label with nothing visible (it shows the destination's own name) and gives Settings an accessible name that starts
+  with “Settings” whatever the label.
 - **One rule set for packages** (`packages/contract/src/theme-package.ts`, pure, no Node or browser APIs): the browser's
   reader (Customizer preview and import dialog) and the server's reader run the same code for the zip's structure
   (central directory against local headers, names, **extra fields: a Unicode Path field, 0x7075, is refused**, flags,

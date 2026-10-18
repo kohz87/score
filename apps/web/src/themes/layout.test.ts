@@ -28,13 +28,36 @@ describe('layout model', () => {
     expect(resolveMenu([{ to: '/chat', label: 'Talk' }, { to: '/now' }, { to: '/chat' }])).toEqual([
       { path: '/chat', title: 'Talk' },
       { path: '/now', title: 'Now' },
-      { path: '/settings', title: 'Settings' },
+      { path: '/settings', title: 'Settings', name: 'Settings' },
     ])
     expect(resolveMenu([{ to: '/settings', label: 'Setup' }, { to: '/now' }])).toEqual([
-      { path: '/settings', title: 'Setup' },
+      { path: '/settings', title: 'Setup', name: 'Settings (Setup)' },
       { path: '/now', title: 'Now' },
     ])
-    expect(resolveMenu([])).toEqual([{ path: '/settings', title: 'Settings' }])
+    expect(resolveMenu([])).toEqual([{ path: '/settings', title: 'Settings', name: 'Settings' }])
+  })
+
+  test('a label with nothing to see never reaches the menu (a stale cache, an old manifest): the destination keeps its name', () => {
+    expect(
+      resolveMenu([
+        { to: '/settings', label: ' \u200b ' },
+        { to: '/now', label: '\u2060' },
+      ]),
+    ).toEqual([
+      { path: '/settings', title: 'Settings', name: 'Settings' },
+      { path: '/now', title: 'Now' },
+    ])
+  })
+
+  test('Settings keeps a trusted name that holds whatever the theme calls it', () => {
+    expect(resolveMenu([{ to: '/settings', label: 'Setup' }])).toEqual([
+      { path: '/settings', title: 'Setup', name: 'Settings (Setup)' },
+    ])
+    expect(resolveMenu(null).find((item) => item.path === '/settings')).toEqual({
+      path: '/settings',
+      title: 'Settings',
+      name: 'Settings',
+    })
   })
 
   test('Needs-you is always on Now, each card once, spans never wider than the grid', () => {

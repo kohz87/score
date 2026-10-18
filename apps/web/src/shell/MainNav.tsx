@@ -29,12 +29,14 @@ export function MainNav() {
   const renamed = useLayout().menu !== null
   return (
     <nav className="main-nav" aria-label="Main">
-      {menu.map(({ path, title }) => (
+      {menu.map(({ path, title, name }) => (
         <NavLink
           key={path}
           to={path}
           className="main-nav-link"
           title={renamed ? title : undefined}
+          // Settings keeps Score's own word in its accessible name, whatever the theme calls it.
+          aria-label={name !== undefined && name !== title ? name : undefined}
           // Settings is the way back from a theme (gate #8): no theme rule reaches it.
           {...(path === '/settings' ? { 'data-protected': 'raised' } : {})}
         >

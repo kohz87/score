@@ -107,6 +107,20 @@ export const ThemeNowCardSchema = z.enum([
   'composer',
 ])
 
+/**
+ * Characters that show nothing by themselves: separators and spaces, controls, invisible formatting (zero-width
+ * spaces and joiners, direction marks, word joiner, byte order mark, soft hyphen, invisible operators, tags), unassigned
+ * and private-use code points, combining marks and variation selectors (they need a base), and the blank fillers that
+ * are letters or symbols in Unicode but paint nothing (Hangul fillers, the Braille blank, the Khmer inherent vowels).
+ */
+const INVISIBLE =
+  /^[\p{Z}\p{Cc}\p{Cf}\p{Cn}\p{Co}\p{Cs}\p{M}\u115f\u1160\u17b4\u17b5\u2800\u3164\uffa0]$/u
+
+/** Does the text contain a character that paints something? (A menu label of only spaces would blank a destination.) */
+export function hasVisibleCharacter(text: string): boolean {
+  return Array.from(text).some((character) => !INVISIBLE.test(character))
+}
+
 const ThemeLayoutSchema = z
   .object({
     nav: z.enum(['top', 'left', 'right', 'launcher']).optional(),
@@ -117,7 +131,12 @@ const ThemeLayoutSchema = z
         z
           .object({
             to: ThemeDestinationSchema,
-            label: z.string().min(1).max(24).optional(),
+            label: z
+              .string()
+              .min(1)
+              .max(24)
+              .refine(hasVisibleCharacter, 'The label needs at least one visible character')
+              .optional(),
           })
           .strict(),
       )

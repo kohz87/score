@@ -40,8 +40,8 @@ export function CommandPalette({
         { path: '/settings', title: 'Settings' },
       ]
     : menu
-  const options = destinations.filter(({ title }) =>
-    title.toLowerCase().includes(search.trim().toLowerCase()),
+  const options = destinations.filter(({ title, name }) =>
+    `${title} ${name ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()),
   )
   const matchingCommands = commands.filter(({ title }) =>
     title.toLowerCase().includes(search.trim().toLowerCase()),
@@ -118,7 +118,7 @@ export function CommandPalette({
           onChange={(event) => setSearch(event.target.value)}
         />
         <ul className="command-options">
-          {options.map(({ path, title }) => (
+          {options.map(({ path, title, name }) => (
             <li key={path}>
               {userView ? (
                 <button
@@ -133,7 +133,11 @@ export function CommandPalette({
                   {title}
                 </button>
               ) : (
-                <Link to={path} onClick={onClose}>
+                <Link
+                  to={path}
+                  onClick={onClose}
+                  aria-label={name !== undefined && name !== title ? name : undefined}
+                >
                   {title}
                 </Link>
               )}

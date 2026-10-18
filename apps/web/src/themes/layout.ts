@@ -1,4 +1,4 @@
-import { ThemeManifestSchema, type ThemeManifest } from '@score/contract'
+import { ThemeManifestSchema, hasVisibleCharacter, type ThemeManifest } from '@score/contract'
 import { createContext, useContext, useSyncExternalStore } from 'react'
 import { destinations } from '../shell/destinations.ts'
 
@@ -101,23 +101,35 @@ export function resolveLayout(look: Look): LayoutConfig {
   }
 }
 
-export type MenuItem = { path: string; title: string }
+export type MenuItem = {
+  path: string
+  title: string
+  /** Settings only: the accessible name, which says “Settings” whatever the theme calls it. */
+  name?: string
+}
 
 /**
  * The destinations as the menu shows them: the theme's order and labels, the ones it left out hidden. Settings is
  * never hidden: it is added last when the theme forgot it (a broken theme must not lock the owner out).
  */
 export function resolveMenu(menu: LayoutConfig['menu']): MenuItem[] {
-  if (!menu) return destinations.map(({ path, title }) => ({ path, title }))
   const items: MenuItem[] = []
-  for (const entry of menu) {
+  if (!menu) items.push(...destinations.map(({ path, title }) => ({ path, title })))
+  for (const entry of menu ?? []) {
     if (items.some((item) => item.path === entry.to)) continue
     const known = destinations.find((destination) => destination.path === entry.to)
-    if (known) items.push({ path: known.path, title: entry.label ?? known.title })
+    // A label with nothing to see (an old cache, a hand-edited look) would blank the destination: it keeps its own name.
+    const label = entry.label !== undefined && hasVisibleCharacter(entry.label) ? entry.label : null
+    if (known) items.push({ path: known.path, title: label?.trim() || known.title })
   }
   if (!items.some((item) => item.path === '/settings'))
     items.push({ path: '/settings', title: 'Settings' })
-  return items
+  // Settings is the way back from a theme: its accessible name is Score's own word, with the theme's label after it.
+  return items.map((item) =>
+    item.path === '/settings'
+      ? { ...item, name: item.title === 'Settings' ? 'Settings' : `Settings (${item.title})` }
+      : item,
+  )
 }
 
 /**

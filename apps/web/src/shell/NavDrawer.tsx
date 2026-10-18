@@ -108,11 +108,12 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
           </button>
         </div>
         <nav aria-label="Pages" className="nav-drawer-nav">
-          {menu.map(({ path, title }) => (
+          {menu.map(({ path, title, name }) => (
             <div key={path} className="nav-drawer-group">
               <NavLink
                 to={path}
                 className="nav-drawer-link"
+                aria-label={name !== undefined && name !== title ? name : undefined}
                 // Settings is the way back from a theme (gate #8): no theme rule reaches it.
                 {...(path === '/settings' ? { 'data-protected': 'raised' } : {})}
               >

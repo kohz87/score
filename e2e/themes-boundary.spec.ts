@@ -324,3 +324,23 @@ test('third gate 3: every agent colour gets a plate of at least 3:1, computed by
   })
   expect(worst.ratio, worst.colour).toBeGreaterThanOrEqual(3)
 })
+
+// Third gate, finding 5: a manifest can't blank the Settings destination with an empty-looking label.
+for (const [name, label] of [
+  ['a space', ' '],
+  ['zero-width characters', '​⁠﻿'],
+] as const) {
+  test(`third gate 5: a Settings label of ${name} still shows a readable Settings link`, async ({
+    page,
+  }) => {
+    await wear(page, {
+      manifest: { layout: { menu: [{ to: '/now' }, { to: '/settings', label }] } },
+      css: '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
+    })
+    await page.goto('/now')
+    const link = page.locator('a.main-nav-link[href="/settings"]')
+    await expect(link).toBeVisible()
+    await expect(link).toHaveAccessibleName(/Settings/)
+    expect((await link.innerText()).trim()).toMatch(/\S/)
+  })
+}
