@@ -142,7 +142,9 @@ export function PreviewFrame({ draft, mode, page, device, onPainted, onText }: P
     let timer = 0
     const run = async () => {
       const { doc, win } = state
-      const image = draft.manifest.background?.image
+      // The picture the page really wears: `/u` lays `views.user.background` over the theme's own.
+      const background = lookForView(draft.manifest, pageRef.current.view).background
+      const image = background?.image
       const url = image ? draft.resolve(image) : null
       const ground = parseColor(
         win.getComputedStyle(doc.documentElement).getPropertyValue('--ground'),
@@ -151,8 +153,8 @@ export function PreviewFrame({ draft, mode, page, device, onPainted, onText }: P
         url && ground
           ? await pictureSampler({
               url,
-              fit: draft.manifest.background?.fit ?? 'cover',
-              dim: draft.manifest.background?.dim ?? 0,
+              fit: background?.fit ?? 'cover',
+              dim: background?.dim ?? 0,
               ground: ground as Rgba,
               width: win.innerWidth,
               height: win.innerHeight,
