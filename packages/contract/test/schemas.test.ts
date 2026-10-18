@@ -1571,8 +1571,9 @@ const cases = [
       ],
       active: 'score',
       mode: 'system',
+      resetGeneration: 3,
     },
-    { items: [], active: 'score', mode: 'sepia' },
+    { items: [], active: 'score', mode: 'system', resetGeneration: -1 },
   ],
   [
     'ThemeDetailSchema',
@@ -1622,6 +1623,12 @@ const cases = [
     { theme: null, report: { dropped: [] } },
   ],
   ['LookSettingsSchema', { activeTheme: 'night', mode: 'dark' }, { activeTheme: 'night' }],
+  ['ResetGenerationSchema', 0, -1],
+  [
+    'LookChangedSchema',
+    { activeTheme: 'night', mode: 'dark', resetGeneration: 1 },
+    { activeTheme: 'night', mode: 'dark', resetGeneration: 1.5 },
+  ],
   [
     'CodingModelsResponseSchema',
     { models: [{ id: 'opus', name: 'Opus' }], source: 'aliases' },

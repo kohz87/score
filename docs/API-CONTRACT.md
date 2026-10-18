@@ -302,7 +302,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `log.line`           | `LogLine`                                                                                     | Flow live log, Watch "What she's doing"                  |
 | `watch.frame`        | `WatchFrame`                                                                                  | Watch                                                    |
 | `memory.saved`       | `{ agentIds: AgentId[], text, source: Ref \| null }`                                          | Chat "Learned here", Team memory                         |
-| `look.changed`       | `{ activeTheme, mode }` (`LookSettings`, §16)                                                 | Every open device: switch to the shared look             |
+| `look.changed`       | `{ activeTheme, mode, resetGeneration }` (§16)                                               | Every open device: switch to the shared look             |
 
 ## 3. System and search
 
@@ -2227,7 +2227,11 @@ text, each at most 64 KB; any other root file is refused). Licence files are sto
 assets, and `export` returns a zip that can be edited and imported under a new id). Themes installed before 9.5 under
 one of these three ids are renamed at the first start (migration 0075 and a startup step) to `<id>-mine`, then
 `<id>-mine-2` and so on, with their assets; the shared look follows if it pointed at the old id.
-- `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`).
+- `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`, and `resetGeneration`: a
+  non-negative integer, `0` until the first host reset). `scripts/score look reset` sets the shared look to Score /
+  system **and increments `resetGeneration`** (setting `look.resetGeneration` in `meta`, no migration). A browser keeps the
+  generation it last saw next to its device override and boot cache; when the server's number differs it drops that
+  override and cache (so the shared Score look shows), then stores the new number. A server without the field counts as `0`.
 - `GET /api/themes/:id` → `ThemeDetail` (manifest, stored CSS, asset paths, `etag`). `404 not_found`.
 - `GET /api/themes/:id/style.css` → `text/css` with `asset:` references rewritten to the asset URLs below.
 - `GET /api/themes/:id/assets/<fonts|img>/<file>` → the file with its exact type, `nosniff`, `cache-control: private`.
@@ -2243,6 +2247,7 @@ one of these three ids are renamed at the first start (migration 0075 and a star
   `422 theme_rejected { reasons[] }` (bad manifest, newer `format`, bad paths, sizes, file types, CSS checks).
 - `GET /api/themes/:id/export` → `application/zip` (the same layout as import).
 - `DELETE /api/themes/:id` → `204`; `409 builtin_theme`, `409 theme_active`.
-- `PUT /api/look` `LookSettings` → `204`; `404` for an unknown theme. Emits `look.changed { activeTheme, mode }` on the
-  stream so other open devices switch.
+- `PUT /api/look` `LookSettings` → `204`; `404` for an unknown theme. Emits `look.changed { activeTheme, mode,
+  resetGeneration }` on the stream so other open devices switch (`resetGeneration` is the current value; the host command
+  itself sends no event, devices see the new number on their next `GET /api/themes`, which they repeat on focus).
 Per-device overrides live in the browser (localStorage) and never reach the server.

@@ -10,7 +10,12 @@ export type MockTheme = {
   manifest?: Record<string, unknown>
   css?: string
 }
-export type Look = { active: string; mode: 'light' | 'dark' | 'system' }
+export type Look = {
+  active: string
+  mode: 'light' | 'dark' | 'system'
+  /** Bumped by the host's `score look reset` (contract § 16); absent means 0. */
+  resetGeneration?: number
+}
 
 const builtins: MockTheme[] = [
   { id: 'score', name: 'Score', source: 'builtin' },
@@ -48,7 +53,12 @@ export async function mockThemes(page: Page, themes: MockTheme[], look: Look) {
     if (route.request().method() !== 'GET') return route.fulfill({ status: 405 })
     if (!id)
       return route.fulfill({
-        json: { items: all.map(summary), active: look.active, mode: look.mode },
+        json: {
+          items: all.map(summary),
+          active: look.active,
+          mode: look.mode,
+          resetGeneration: look.resetGeneration ?? 0,
+        },
       })
     const theme = all.find((item) => item.id === id)
     if (!theme)

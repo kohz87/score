@@ -18,7 +18,7 @@ import type { Ingest } from '../hub/ingest.ts'
 import { parseSingleFile } from '../media/multipart.ts'
 import { isBuiltinThemeId } from '../themes/builtin.ts'
 import { checkThemeCss, rewriteAssetUrls } from '../themes/css-check.ts'
-import { readLook, writeLook } from '../themes/look.ts'
+import { readLook, readResetGeneration, writeLook } from '../themes/look.ts'
 import {
   ASSET_TYPES,
   MAX_UPLOAD_BYTES,
@@ -68,8 +68,16 @@ export function registerThemeRoutes(
   const detail = (id: string) => ThemeDetailSchema.parse(store.detail(id))
 
   app.get('/api/themes', guard, async () => {
-    const look = db.read((sqlite) => readLook(sqlite))
-    return ThemeListSchema.parse({ items: store.list(), active: look.activeTheme, mode: look.mode })
+    const { look, resetGeneration } = db.read((sqlite) => ({
+      look: readLook(sqlite),
+      resetGeneration: readResetGeneration(sqlite),
+    }))
+    return ThemeListSchema.parse({
+      items: store.list(),
+      active: look.activeTheme,
+      mode: look.mode,
+      resetGeneration,
+    })
   })
 
   app.get('/api/themes/:id', guard, async (request) => {
@@ -240,7 +248,12 @@ export function registerThemeRoutes(
           identity: randomUUID(),
           apply: ({ sqlite }) => {
             writeLook(sqlite, look)
-            return [{ type: 'look.changed', data: look }]
+            return [
+              {
+                type: 'look.changed',
+                data: { ...look, resetGeneration: readResetGeneration(sqlite) },
+              },
+            ]
           },
         })
       else db.tx((sqlite) => writeLook(sqlite, look))

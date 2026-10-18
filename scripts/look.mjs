@@ -1,6 +1,8 @@
 // `scripts/score look reset`: the host's way back to the default look (design 9 §4.5). Sets the shared theme to `score`
-// and the colour mode to `system`, with Score stopped or running. It opens Score's database directly, like the other
-// host commands; a browser that is already open picks the change up on its next reload (no stream event is sent).
+// and the colour mode to `system`, with Score stopped or running, and bumps the reset generation so browsers that kept
+// their own theme or boot cache (gate finding #10) drop them too. It opens Score's database directly, like the other
+// host commands; a browser that is already open picks the change up when it next reads the theme list (on focus or
+// reload; no stream event is sent).
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -34,7 +36,7 @@ try {
     resetLook(sqlite)
     sqlite.exec('COMMIT')
     console.log(
-      'The look is back to the Score theme with the system colour mode. Reload open browsers.',
+      'The look is back to the Score theme with the system colour mode, on every device. Open browsers pick it up when you reload them.',
     )
   }
 } catch (error) {

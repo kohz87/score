@@ -1,11 +1,17 @@
 import type { ThemeSummary } from '@score/contract'
-import { LookSettingsSchema } from '@score/contract'
+import { LookChangedSchema } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
 import { readStoredTheme, THEME_CHANGED, type ThemeChoice } from '../data/theme.ts'
 import { useOptionalStream } from '../data/query-client.ts'
 import { builtinSummaries, saveSharedLook, themeListQuery, themesKey } from './queries.ts'
-import { clearDeviceLook, lookStore, useLookState, writeDeviceOverride } from './look-store.ts'
+import {
+  applyResetGeneration,
+  clearDeviceLook,
+  lookStore,
+  useLookState,
+  writeDeviceOverride,
+} from './look-store.ts'
 import { useLayout, type LayoutConfig } from './layout.ts'
 
 export type Look = {
@@ -23,7 +29,7 @@ export type Look = {
   failure: string | null
   /** What the applied theme asks of the components (menu, Now cards, chat); Score's default when none is applied. */
   layout: LayoutConfig
-  /** True until the shared theme is known (the list is still loading and this device has no choice of its own). */
+  /** True until the shared theme and reset generation are known (the list is still loading). */
   loading: boolean
   /** False while the theme list could not be read (older server): only the built-in themes are offered. */
   fromServer: boolean
@@ -64,11 +70,16 @@ export function useLook(): Look {
   useEffect(() => {
     if (!stream) return
     const apply = (data: unknown) => {
-      const parsed = LookSettingsSchema.safeParse(data)
+      const parsed = LookChangedSchema.safeParse(data)
       if (!parsed.success) return
       queryClient.setQueryData(themesKey, (old: unknown) =>
         old && typeof old === 'object'
-          ? { ...old, active: parsed.data.activeTheme, mode: parsed.data.mode }
+          ? {
+              ...old,
+              active: parsed.data.activeTheme,
+              mode: parsed.data.mode,
+              resetGeneration: parsed.data.resetGeneration,
+            }
           : old,
       )
       void queryClient.invalidateQueries({ queryKey: themesKey })
@@ -83,12 +94,20 @@ export function useLook(): Look {
     }
   }, [stream, queryClient])
 
+  // A host reset (contract § 16) invalidates the override and boot cache saved before it. Drop them once the list says so.
+  const serverGeneration = list.data?.resetGeneration
+  useEffect(() => {
+    if (serverGeneration !== undefined) applyResetGeneration(serverGeneration)
+  }, [serverGeneration])
+  const deviceStale = serverGeneration !== undefined && serverGeneration !== state.generation
+
   const themes = list.data?.items.length ? list.data.items : builtinSummaries
   const sharedId = list.data?.active ?? 'score'
   const sharedMode = list.data?.mode ?? 'system'
   // A device override naming a theme the server no longer has is ignored (once the list is known).
+  // A stale override (saved before a host reset) is ignored at once; the effect above then deletes it.
   const deviceId =
-    state.device && (!list.data || themes.some((item) => item.id === state.device))
+    state.device && !deviceStale && (!list.data || themes.some((item) => item.id === state.device))
       ? state.device
       : null
   const stored = readStoredTheme()
@@ -117,7 +136,9 @@ export function useLook(): Look {
     safe: state.safe,
     failure: state.failure,
     layout,
-    loading: list.isPending && deviceId === null,
+    // The override isn't trusted until the list is known (a host reset may have retired it), so the boot cache's look
+    // stays until then. If the server can't be read at all, the override applies as before.
+    loading: list.isPending,
     fromServer: !!list.data,
     chooseForDevice: (id) => {
       writeDeviceOverride(id)

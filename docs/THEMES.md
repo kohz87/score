@@ -256,7 +256,7 @@ If a theme makes Score hard to use, any of these returns to Score’s own look:
 - Press **Ctrl+Shift+0** on any page.
 - Press Ctrl+K (or ⌘K) and run **Reset look on this device**.
 - Settings › Look › **Reset look on this device**; Settings can’t be hidden by a theme.
-- On the computer Score runs on, `scripts/score look reset` (works with Score stopped; reload open browsers).
+- On the computer Score runs on, `scripts/score look reset` (works with Score stopped; it also clears the theme every browser chose for itself, which each one drops the next time it reloads or regains focus).
 
 A theme that fails validation, can’t be loaded or throws while it is applied is skipped, and a banner says so.
 
