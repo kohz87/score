@@ -194,3 +194,23 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **8.8 role and personality** merged: lead verified `--system-prompt-snapshot`/`--append-system-prompt` in the help of
   2.1.300–302 (decision 96). Full check green; e2e 370/371 (Night shift dark Chat screenshot 4/4 alone).
 - **Release 1.6.0**: themes part 1 (9.1 + 9.2), 8.7, 8.8, Claude Code 2.1.302 tested.
+
+## Paused at a safe point (owner, 2026-10-17 ~21:10 GMT+8)
+- Live: **v1.6.0** (schema 74), healthy. Main = v1.6.0 + docs; everything pushed.
+- **8.9 agent page cleanup**: branch `task/8.9` in `../score-worktrees/shots`, commits #1 (layout) and #2 (floor field,
+  e2e) done; builder stopped during its final e2e. Untracked: `e2e/agent-page-visual.spec.ts-snapshots/` (new baselines,
+  unreviewed). To resume: review the branch + screenshots (none taken yet), run `pnpm check` and e2e once, then merge.
+- Queued next: test hardening (fix the timing-flaky tests: coding-process S2-005, audit2-t S2-021, live-port
+  "starts idempotently", live-feel/user-view e2e, Now 1px, the user-view password-guard repeat), then 9.3 → 9.4 → 9.5.
+- Test policy (owner): targeted tests while building, one full run per builder, full e2e once per release,
+  `TMPDIR=$HOME/.cache/score-tmp` for heavy runs; max 2 heavy runs at once.
+
+## Paused again for VM maintenance (owner, 2026-10-18 ~10:15 GMT+8: switching the VirtualBox disk to SSD)
+- New host since 2026-10-18: 14 cores / 46 GB / tmpfs /tmp 24 GB; virtual disk measured slow (~70 fsync/s, 43 MB/s,
+  reported rotational) → owner is enabling SSD + host I/O cache. Re-measure after the restart.
+- Branches (all local, nothing merged): `task/test-workers` (optional SCORE_TEST_WORKERS / SCORE_E2E_WORKERS caps +
+  briefs 9.3 and T1; contract tests pass with it; merge first), `task/8.9` (worktree `shots`, 3 more commits, final
+  e2e pending), `task/T1` (1 commit + WIP commit), `task/9.3` (WIP commit, 17 files). Builders were stopped, no
+  processes left. Resume: re-measure disk, merge task/test-workers, resume the three builders with the caps.
+- Live: v1.6.0 stopped cleanly for the shutdown. After boot: start Score, then restart the Hermes gateway (it parks its
+  Score connections if it starts first), and check both producers reconnect.
