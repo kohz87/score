@@ -209,7 +209,7 @@ What you can use:
 - Attribute selectors for the current look: `:root[data-theme='dark']` (dark mode; unset when the mode is System, where
   `@media (prefers-color-scheme: dark)` applies), `:root[data-nav='left']`, `:root[data-chat='bubbles']` and the
   other `data-*` attributes the manifest turns on.
-- `@media`, `@supports`, `@container`, `@layer`, `@keyframes`, and nested rules.
+- `@media`, `@supports`, `@container`, `@layer`, and nested rules. There is no animation: see below.
 - `url(asset:img/name.webp)` for your own files.
 
 What is removed, and why. The browser reads your CSS with its own parser (so `\63 ontent` is `content`), and drops
@@ -227,6 +227,7 @@ these before it is applied, and keeps a report of what was dropped.
 | any rule with `!important`                                                           | Protected surfaces win with `!important` in their own layer; a theme can’t compete.       |
 | selectors that name a protected surface (`[data-protected]`, `.chat-approval`, …)    | See below.                                                                                |
 | custom properties starting `--agent-`, `--rules-`, `--glyph-` and `--watch-live`      | Agent identity and the Rules colours carry meaning.                                       |
+| `animation`, `transition` (and their longhands) and `@keyframes`                      | Motion that starts later is how a rule could hide an approval after the checks ran.       |
 | any other at-rule                                                                    | Not needed by a theme.                                                                    |
 
 When you import a package or save a theme, the **server** is stricter: it refuses (rather than edits) CSS that still
@@ -239,14 +240,28 @@ and similar, so a hand-made upload can’t get around the browser’s checks.
 These keep their own look and can’t be hidden, covered, relabelled or restyled by a theme. Only the public colour
 tokens apply inside them, and only while their contrast holds.
 
-- Approval and decision cards (tool approvals, gates, limits, unknown spend, coding-agent reach).
+- Approval and decision cards (tool approvals in Chat, Now, Watch and the task drawer; gates, limits, unknown spend,
+  coding-agent reach and the acknowledgements before a run).
 - The Needs-you marker and card.
-- The security-password dialogs and the permission and sandbox settings (Rules and Team permissions).
+- The security-password dialogs and the permission and sandbox settings (Rules, Team permissions and the permission,
+  warning and password fields when you add a coding agent).
 - Agent shapes (`AgentGlyph`) and error toasts.
-- “Reset look” and the banner that appears when a theme is skipped.
+- The way back: the Settings link, the menu and search buttons with the command palette (and its “Reset look” entry),
+  “Reset look” itself and the banner that appears when a theme is skipped.
+
+**None of your rules match inside these.** Every selector of your CSS is applied as if it ended in
+`:where(:not([data-protected], [data-protected] *))`, so `button`, `span`, `svg path`, `[role=alert]` or `div > div` never
+reach an approval’s words, its buttons or a glyph’s shape, whatever you write. (This doesn’t change your selectors’
+specificity.) Your colour tokens still reach them, and inheritance does: if you fade or blur something *around* them, or
+set the colours of their parents, the next check catches it.
 
 Beyond the sanitiser, Score re-asserts these in a protected cascade layer, and at run time it watches them: a theme
 that hides, fades, covers or blurs one of them from outside is switched off on that device, with a banner that says why.
+It checks when the page changes, on hover, focus and press, when an animation ends, and at the moment you act on an
+approval, an answer, a permission or a password: if the decision is hidden, unreadable (below 4.5:1, or 3:1 for large
+text and icons, or a colour Score can’t measure) or covered at that moment, Score refuses the action, switches the
+theme off and says nothing was sent. Text over a picture has to read against anything from black to white behind it,
+except the page’s own picture, which is measured through its veil.
 
 ## Getting back
 

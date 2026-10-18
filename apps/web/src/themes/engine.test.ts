@@ -1,3 +1,4 @@
+import { OUTSIDE_PROTECTED } from './sanitise.ts'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { THEME_COLOR_TOKENS } from '@score/contract'
@@ -196,7 +197,8 @@ describe('theme engine', () => {
     const texts = [...document.head.querySelectorAll('style[data-score-look]')].map(
       (s) => s.textContent,
     )
-    expect(texts.join('\n')).toContain('.now-card { color: red; }')
+    // Every theme rule is kept out of protected subtrees (G1 #3).
+    expect(texts.join('\n')).toContain(`.now-card${OUTSIDE_PROTECTED} { color: red; }`)
 
     applyBuiltin('night')
     for (const name of LOOK_ATTRIBUTES) expect(root.hasAttribute(name)).toBe(false)

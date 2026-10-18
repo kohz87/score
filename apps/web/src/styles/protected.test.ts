@@ -52,7 +52,9 @@ test('every data-protected kind in the markup is one protected.css handles', () 
     for (const match of readFileSync(file, 'utf8').matchAll(/data-protected(?:="([a-z-]*)")?/g))
       kinds.add(match[1] ?? 'any')
   for (const kind of kinds) {
-    if (kind === 'any') continue
+    // `any` and `raised` have no display of their own to assert: raised is lifted above the page like the cards
+    // (position and z-index) without changing how it is laid out.
+    if (kind === 'any' || kind === 'raised') continue
     expect(css, kind).toContain(`[data-protected='${kind}']`)
   }
   expect(kinds.size).toBeGreaterThan(3)
@@ -72,4 +74,11 @@ test('the protected layer re-asserts what a hostile theme would change, with !im
   ])
     expect(css).toContain(`${property} !important`)
   expect(css).toContain('--font-body')
+})
+
+test('glyph shapes are re-asserted too, and the bare glyph svg is not a flex container', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  expect(css).toContain("html[data-look='custom'] [data-protected] svg *")
+  expect(css).toContain("svg[data-protected='inline-flex']")
+  expect(css).toContain("[data-protected='inline-flex']:not(svg)")
 })

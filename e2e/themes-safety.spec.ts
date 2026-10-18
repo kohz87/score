@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import {
+  containedCss,
   guardCss,
   hostileCss,
   hostileManifest,
@@ -44,13 +45,16 @@ async function isOnTop(target: Locator): Promise<boolean> {
   })
 }
 
+// The engine confines every theme rule to the outside of protected subtrees (G1 #3); that guard names data-protected
+// and is not part of what the theme wrote, so it is taken out before the text is judged.
 async function sheetsText(page: Page): Promise<string> {
-  return page.evaluate(() =>
+  const text = await page.evaluate(() =>
     [
       ...document.adoptedStyleSheets.flatMap((sheet) => [...sheet.cssRules].map((r) => r.cssText)),
       ...[...document.querySelectorAll('style[data-score-look]')].map((s) => s.textContent ?? ''),
     ].join('\n'),
   )
+  return text.replaceAll(':where(:not([data-protected], [data-protected] *))', '')
 }
 
 test.describe('a hostile theme', () => {
@@ -194,6 +198,27 @@ test.describe('a hostile theme', () => {
       await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
       await expect(card.getByRole('button', { name: 'Approve' })).toBeVisible()
       await card.getByRole('button', { name: 'Approve' }).click()
+      await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+    })
+  }
+
+  for (const [name, css] of Object.entries(containedCss)) {
+    test(`can’t reach inside a protected surface (${name})`, async ({ page }) => {
+      const look: Look = { active: 'sneaky', mode: 'light' }
+      await mockThemes(page, [{ id: 'sneaky', name: 'Sneaky', manifest: {}, css }], look)
+      await pair(page)
+      const { card } = await startApproval(page)
+      await page.waitForTimeout(1500)
+      // The theme stays on, and the approval is exactly as Score draws it.
+      await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+      await expect(page.locator('.look-banner')).toHaveCount(0)
+      const approve = card.getByRole('button', { name: 'Approve' })
+      await expect(approve).toBeVisible()
+      expect(await isOnTop(approve)).toBe(true)
+      expect(await approve.evaluate((el) => getComputedStyle(el).color)).not.toBe(
+        'rgba(0, 0, 0, 0)',
+      )
+      await approve.click()
       await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
     })
   }
@@ -550,10 +575,9 @@ test.describe('layout options never weaken a protected surface', () => {
       await pair(page)
       const { card, roomId } = await startApproval(page)
       if (name === 'glassPale') {
-        // Pale text on a pale glass card: the guard switches this theme off, and the card is Score's own.
-        await expect(page.locator('.look-banner')).toContainText('switched your theme off', {
-          timeout: 15_000,
-        })
+        // Pale text on a pale glass card: the protected surfaces wear Score's own colours (the contrast fallback), so
+        // the card stays readable whether or not the guard also switches the theme off.
+        await page.waitForTimeout(1500)
         await assertProtectedHolds(card)
         await card.getByRole('button', { name: 'Approve' }).click()
         await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })

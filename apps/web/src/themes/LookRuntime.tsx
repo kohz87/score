@@ -136,7 +136,7 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
       writeLookCache({ id, ...applied.cache, user: applied.userCache })
       setLayout(applied.layout)
       lookStore.setFailure(null)
-      stopWatching = watchProtectedSurfaces(() => {
+      stopWatching = watchProtectedSurfaces((_what, refused) => {
         // Sticky on this device: reloading must not bring the same theme straight back.
         clearLook()
         applyBuiltin('score')
@@ -144,7 +144,9 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
         writeLookCache(null)
         writeDeviceOverride('score')
         lookStore.setFailure(
-          'Score switched your theme off because it hid part of an approval or a security screen.',
+          refused
+            ? 'Score switched your theme off because it hid part of an approval or a security screen. Nothing was sent. Look at it again and try once more.'
+            : 'Score switched your theme off because it hid part of an approval or a security screen.',
         )
       })
     } catch {

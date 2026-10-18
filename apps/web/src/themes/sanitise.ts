@@ -17,7 +17,11 @@ const GROUPING = new Set([
   'CSSLayerBlockRule',
   'CSSContainerRule',
 ])
-const DANGEROUS_PROPERTIES = new Set(['-moz-binding', 'behavior', '-webkit-user-modify'])
+// `d` replaces the geometry of an SVG path (an agent glyph's shape).
+// A theme can't animate or transition (gate finding #6): time-based CSS is how a rule hides a decision after the checks
+// have run. Score's own keyframes could be named too, so the properties go, not just `@keyframes`.
+const MOTION_PROPERTY = /^(-webkit-)?(animation|transition)(-|$)/
+const DANGEROUS_PROPERTIES = new Set(['-moz-binding', 'behavior', '-webkit-user-modify', 'd'])
 const MAX_Z_INDEX = 50
 
 function selectorReaches(text: string): boolean {
@@ -52,7 +56,68 @@ export function splitDeclarations(block: string): string[] {
   return out.map((part) => part.trim()).filter(Boolean)
 }
 
+/**
+ * Theme rules never match inside a protected subtree (design §4.3, gate finding #3/#5): every selector of the cleaned
+ * sheet gets this zero-specificity guard, so the theme can't restyle an approval's text, a glyph's paths or a
+ * button inside a decision surface by tag, attribute or position. It is the "donut scope" of `@scope (:root) to
+ * ([data-protected])`, spelled in selectors every browser understands (`@scope` would also stop `html …` rules from
+ * matching and needs Firefox 146+); `:where()` keeps the specificity the author wrote.
+ */
+export const OUTSIDE_PROTECTED = ':where(:not([data-protected], [data-protected] *))'
+
+/** Where the guard goes: before the pseudo-element of the last compound, else at the end. */
+export function confineSelector(selectorText: string): string {
+  const parts: string[] = []
+  let depth = 0
+  let quote = ''
+  let start = 0
+  for (let i = 0; i < selectorText.length; i++) {
+    const ch = selectorText[i]
+    if (quote) {
+      if (ch === '\\') i++
+      else if (ch === quote) quote = ''
+    } else if (ch === '\\') i++
+    else if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
+    else if (ch === ',' && depth === 0) {
+      parts.push(selectorText.slice(start, i))
+      start = i + 1
+    }
+  }
+  parts.push(selectorText.slice(start))
+  return parts
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map(insertGuard)
+    .join(', ')
+}
+
+function insertGuard(selector: string): string {
+  let depth = 0
+  let quote = ''
+  for (let i = 0; i < selector.length; i++) {
+    const ch = selector[i]
+    if (quote) {
+      if (ch === '\\') i++
+      else if (ch === quote) quote = ''
+    } else if (ch === '\\') i++
+    else if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
+    else if (
+      ch === ':' &&
+      depth === 0 &&
+      (selector[i + 1] === ':' ||
+        /^:(before|after|first-line|first-letter)(?![\w-])/i.test(selector.slice(i)))
+    )
+      return `${selector.slice(0, i)}${OUTSIDE_PROTECTED}${selector.slice(i)}`
+  }
+  return `${selector}${OUTSIDE_PROTECTED}`
+}
+
 type Context = {
+  confine: boolean
   themeId: string | null
   resolve?: (ref: string) => string | null
   report: ThemeSanitiseReport['dropped']
@@ -109,7 +174,8 @@ function cleanDeclarations(
       important = true
       value = value.replace(/!\s*important\s*$/i, '').trim()
     }
-    if (name === 'content') drop(context, `${label} { content }`, 'content')
+    if (MOTION_PROPERTY.test(name)) drop(context, `${label} { ${name} }`, 'other_at_rule')
+    else if (name === 'content') drop(context, `${label} { content }`, 'content')
     else if (name === 'position' && /^(fixed|sticky|-webkit-sticky)$/i.test(value))
       drop(context, `${label} { position: ${value} }`, 'fixed_position')
     else if (name === 'z-index' && !/^(auto|-?\d+)$/.test(value))
@@ -171,19 +237,11 @@ function walkRules(rules: ArrayLike<RuleLike>, context: Context): string[] {
       const nested = rule.cssRules ? walkRules(rule.cssRules, context) : []
       if (kept.length === 0 && nested.length === 0) continue
       const body = kept.map(({ name, value }) => `${name}: ${value};`).join(' ')
-      out.push(`${selector} { ${[body, ...nested].filter(Boolean).join(' ')} }`)
+      out.push(
+        `${context.confine ? confineSelector(selector) : selector} { ${[body, ...nested].filter(Boolean).join(' ')} }`,
+      )
     } else if (kind === 'CSSKeyframesRule') {
-      const frames: string[] = []
-      for (const frame of Array.from(rule.cssRules ?? [])) {
-        const { kept, important } = cleanDeclarations(frame.style?.cssText ?? '', context, label)
-        if (important) drop(context, label, 'important')
-        else if (kept.length)
-          frames.push(
-            `${frame.keyText ?? ''} { ${kept.map(({ name, value }) => `${name}: ${value};`).join(' ')} }`,
-          )
-      }
-      if (frames.length && !selectorReaches(String(rule.name ?? '')))
-        out.push(`${label} { ${frames.join(' ')} }`)
+      drop(context, label, 'other_at_rule')
     } else if (GROUPING.has(kind) && rule.cssRules) {
       if (selectorReaches(label)) {
         drop(context, label, 'protected_selector')
@@ -202,9 +260,15 @@ function walkRules(rules: ArrayLike<RuleLike>, context: Context): string[] {
  */
 export function sanitiseCss(
   text: string,
-  options: { themeId?: string; resolve?: (ref: string) => string | null } = {},
+  options: {
+    themeId?: string
+    resolve?: (ref: string) => string | null
+    /** Keep every rule out of protected subtrees (what the engine applies); the stored text stays plain. */
+    confine?: boolean
+  } = {},
 ): SanitiseResult {
   const context: Context = {
+    confine: options.confine ?? false,
     themeId: options.themeId ?? null,
     ...(options.resolve ? { resolve: options.resolve } : {}),
     report: [],

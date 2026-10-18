@@ -195,7 +195,7 @@ function Actions({ task, agents }: { task: TaskDetail; agents: AgentSummary[] })
   return (
     <section className="task-drawer-section task-drawer-actions" aria-label="Task actions">
       {approval && (
-        <div className="task-drawer-approval">
+        <div className="task-drawer-approval" data-protected="flex">
           <p className="task-drawer-approval-title">
             <b>{agentName}</b> asks: {approval.title}
           </p>
@@ -206,7 +206,7 @@ function Actions({ task, agents }: { task: TaskDetail; agents: AgentSummary[] })
           )}
         </div>
       )}
-      <div className="task-drawer-buttons">
+      <div className="task-drawer-buttons" data-protected="flex">
         {canApprove && approval && !waiting && (
           <button
             type="button"

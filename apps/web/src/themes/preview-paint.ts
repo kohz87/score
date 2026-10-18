@@ -43,6 +43,7 @@ export function paintPreview(doc: Document, input: PreviewInput): PreviewResult 
   const { css, report } = sanitiseCss(input.css, {
     themeId: input.themeId,
     resolve: input.resolve,
+    confine: true,
   })
   const root = doc.documentElement
   for (const name of OWN_ATTRIBUTES) root.removeAttribute(name)

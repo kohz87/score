@@ -9,13 +9,22 @@ export const protectedClasses = [
   'orch-needs',
   'orch-fence',
   'reports-approvals',
+  'watch-approval',
+  'orch-ack',
   // Needs-you markers
   'needs-you-dot',
   'orch-pill',
   'orch-node__flag',
+  // The task drawer's approval and its buttons
+  'task-drawer-approval',
+  'task-drawer-buttons',
   // Permission, sandbox and password screens
   'rules-card',
   'team-permissions',
+  'team-coding-permission',
+  'coding-reach',
+  'coding-acknowledge',
+  'terminal-auth',
   'admin-password',
   'guard-form',
   'security-password',
@@ -23,6 +32,10 @@ export const protectedClasses = [
   'agent-glyph',
   'chat-toast',
   // The way back
+  'command-run',
+  'command-palette',
+  'command-trigger',
+  'menu-trigger',
   'look-reset',
   'look-banner',
 ] as const

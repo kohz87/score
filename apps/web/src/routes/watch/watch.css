@@ -438,9 +438,11 @@
 /* Approval bar */
 .watch-approval {
   position: absolute;
-  left: 50%;
+  /* Centred without a transform: protected surfaces never take one from a theme (styles/protected.css). */
+  left: 0;
+  right: 0;
+  margin: 0 auto;
   bottom: 18px;
-  transform: translateX(-50%);
   z-index: 10;
   width: min(680px, calc(100% - 32px));
   background: rgba(255, 255, 255, 0.96);

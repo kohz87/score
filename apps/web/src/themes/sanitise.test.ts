@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { sanitiseCss, splitDeclarations } from './sanitise.ts'
+import { OUTSIDE_PROTECTED, confineSelector, sanitiseCss, splitDeclarations } from './sanitise.ts'
 
 const reasons = (css: string) => sanitiseCss(css).report.dropped.map((item) => item.reason)
 
@@ -25,6 +25,20 @@ describe('sanitiseCss', () => {
     expect(reasons('.orch-decision--gate { color: red }')).toEqual(['protected_selector'])
     expect(reasons('.agent-glyph__ring { fill: none }')).toEqual(['protected_selector'])
     expect(reasons('.orch-decisions { color: red }')).toEqual(['protected_selector'])
+    // Gate #2: the task drawer's approval and the add-coding-agent permission controls are protected too.
+    expect(reasons('.task-drawer-approval { display: none }')).toEqual(['protected_selector'])
+    expect(reasons('.task-drawer-buttons button { display: none }')).toEqual(['protected_selector'])
+    expect(reasons('.team-coding-permission { display: none }')).toEqual(['protected_selector'])
+    expect(reasons('.coding-reach, .coding-acknowledge { display: none }')).toEqual([
+      'protected_selector',
+    ])
+    expect(reasons('.watch-approval button { display: none }')).toEqual(['protected_selector'])
+    expect(reasons('.orch-ack { display: none }')).toEqual(['protected_selector'])
+    // Gate #8: the way back.
+    expect(reasons('.command-run, .command-palette { display: none }')).toEqual([
+      'protected_selector',
+    ])
+    expect(reasons('.menu-trigger { display: none }')).toEqual(['protected_selector'])
     expect(reasons('.settings-card { color: red }')).toEqual([])
     expect(reasons('@font-face { font-family: x; src: url(a.woff2) }')).toEqual(['font_face'])
   })
@@ -107,5 +121,67 @@ describe('splitDeclarations', () => {
       'b: "x;y"',
       'c: d',
     ])
+  })
+})
+
+describe('confining theme rules to the outside of protected subtrees (gate #3, #5)', () => {
+  const guard = OUTSIDE_PROTECTED
+
+  test('every selector of a list gets the guard, before a pseudo-element', () => {
+    expect(confineSelector('.a')).toBe(`.a${guard}`)
+    expect(confineSelector('.a > b, c d')).toBe(`.a > b${guard}, c d${guard}`)
+    expect(confineSelector('.a::before')).toBe(`.a${guard}::before`)
+    expect(confineSelector('.a:hover::after, b:first-line')).toBe(
+      `.a:hover${guard}::after, b${guard}:first-line`,
+    )
+    // Commas, colons and brackets inside attribute values and functions are not separators.
+    expect(confineSelector('a[href="x,y::z"], :is(b, c) d')).toBe(
+      `a[href="x,y::z"]${guard}, :is(b, c) d${guard}`,
+    )
+  })
+
+  test('the guard has no specificity of its own', () => {
+    expect(guard.startsWith(':where(')).toBe(true)
+  })
+
+  test('sanitiseCss confines on request only, and nested rules too', () => {
+    const css = 'svg path { fill: red } .card { color: blue; & .x { color: red } }'
+    expect(sanitiseCss(css).css).not.toContain('data-protected')
+    const confined = sanitiseCss(css, { confine: true }).css
+    expect(confined).toContain(`svg path${guard} {`)
+    expect(confined).toContain(`.card${guard} {`)
+  })
+
+  test('media and layer blocks are confined inside', () => {
+    const confined = sanitiseCss('@media (min-width: 1px) { .a b { color: red } }', {
+      confine: true,
+    }).css
+    expect(confined).toContain(`.a b${guard} { color: red; }`)
+  })
+
+  test('animation, transition and keyframes are dropped (gate #6)', () => {
+    expect(reasons('@keyframes fade { to { opacity: 0 } }')).toEqual(['other_at_rule'])
+    expect(reasons('.a { animation: fade 1s 3s forwards }')).toEqual(['other_at_rule'])
+    expect(reasons('.a { animation-name: score-fade-in; animation-delay: 3s }')).toEqual([
+      'other_at_rule',
+      'other_at_rule',
+    ])
+    expect(reasons('.a { -webkit-animation: x 1s; transition: opacity 1s }')).toEqual([
+      'other_at_rule',
+      'other_at_rule',
+    ])
+    expect(reasons('.a { transition-property: opacity; transition-delay: 2s }')).toEqual([
+      'other_at_rule',
+      'other_at_rule',
+    ])
+    const kept = sanitiseCss(
+      '.a { animation: fade 1s; color: red } @keyframes fade { to { opacity: 0 } }',
+    )
+    expect(kept.css).toContain('.a { color: red; }')
+    expect(kept.css).not.toMatch(/animation|keyframes|fade/)
+  })
+
+  test('a theme can’t replace the geometry of a path', () => {
+    expect(reasons('path { d: path("M0 0 L1 1") }')).toEqual(['pointer_events'])
   })
 })

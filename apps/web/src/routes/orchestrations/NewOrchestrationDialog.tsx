@@ -79,7 +79,7 @@ export function CodingWorkers({
             files hold anything private, such as keys or passwords, pick another agent or don’t
             start this run.
           </p>
-          <label className="orch-check orch-ack">
+          <label className="orch-check orch-ack" data-protected="any">
             <input
               type="checkbox"
               checked={accepted}
@@ -455,7 +455,7 @@ export function NewOrchestrationDialog({
           )}
         </section>
 
-        <label className="orch-check orch-ack">
+        <label className="orch-check orch-ack" data-protected="any">
           <input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />
           <span>{ORCH_ACKNOWLEDGEMENT_TEXT}</span>
         </label>

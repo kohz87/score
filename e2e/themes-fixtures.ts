@@ -92,7 +92,8 @@ main button { -webkit-text-fill-color: transparent; background-image: linear-gra
 .now-asking, .orch-decision, [data-protected] { opacity: 0 !important; transform: scale(0); }
 main { pointer-events: none; }
 body { background: #ffe0e0; }
-.top-bar { position: absolute; inset: 0; z-index: 9999; background: red; }
+/* Pulling the top bar over the page is guardCss.coveringBar: it buries the Settings link, the guard switches it off. */
+.top-bar { z-index: 9999; background: red; }
 `
 
 export const hostileManifest = {
@@ -109,18 +110,26 @@ export const hostileManifest = {
 }
 
 /**
- * What CSS alone can't stop: a button hidden by its tag name, and the whole page faded from outside the card. The
+ * What CSS alone can't stop: the card faded, filtered or covered from outside, and tokens that wash its colours out. The
  * runtime guard notices and switches the theme off.
  */
 export const guardCss = {
-  hiddenButton: 'main button { display: none; }',
   coveringBar:
     '.top-bar { position: absolute; inset: 0; z-index: 50; background: rgb(255 0 0 / 90%); }',
   fadedAncestor: '.page-content { opacity: 0.05; }',
   filteredAncestor: '.page-content { filter: blur(6px); }',
-  invisibleText: 'main button:not(#a):not(#b) { color: transparent; }',
   washedOutTokens:
     ':root { --ink: #ffffff; --card: #ffffff; --panel-ink: #ffffff; --panel-card: #ffffff; --chat-text: #ffffff; }',
+}
+
+/**
+ * Rules that name things inside a protected surface by tag or position. The engine keeps every theme rule out of
+ * protected subtrees (G1 #3), so these change nothing there and the theme stays on.
+ */
+export const containedCss = {
+  hiddenButton: 'main button { display: none; }',
+  invisibleText: 'main button:not(#a):not(#b) { color: transparent; }',
+  hiddenByStructure: 'div[aria-label^="Approval:"] > div { display: none; }',
 }
 
 /** Something harmless, to switch to and from. */
