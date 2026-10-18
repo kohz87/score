@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   renameSync,
@@ -870,7 +871,10 @@ test('PUT with files cannot touch built-in or imported themes, and waits for an 
   const res = await saveFiles('mine', mine.etag, { assets: { 'img/b.png': b64(PNG) } })
   expect(res.statusCode).toBe(409)
   expect(res.json()).toMatchObject({ error: { code: 'theme_recovering' } })
-  expect((await detailOf('mine')).assets).toEqual(['img/a.png'])
+  // Reads are refused too while the note stands (I2); the files on disk are still the first save's.
+  expect((await call('GET', '/api/themes/mine')).statusCode).toBe(409)
+  expect(existsSync(join(dir, 'themes', 'mine', 'assets', 'img', 'a.png'))).toBe(true)
+  expect(existsSync(join(dir, 'themes', 'mine', 'assets', 'img', 'b.png'))).toBe(false)
 })
 
 test.each([
