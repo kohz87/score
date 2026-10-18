@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run --maxWorkers=${SCORE_TEST_WORKERS:-4}"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.3",
