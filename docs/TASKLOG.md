@@ -324,3 +324,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   cached reading; X6 personality editor keyed by agent id, keeps its draft and offers the conflict choices; X16 preview
   contrast per view. X16's docs half rejected with evidence: THEMES.md's 999px is the `border-radius*` cap (matches
   `MAX_RADIUS_PX`), the `--radius-*` text already says 40px. T2 started: Chat 390px screenshots flaky since C3.
+- **K2** merged: X12 `PACK_NAMES` → Map; X11 server inflates each entry's exact extent (`inflateRawSync`, consumed ==
+  stored, output capped at the declared size) — 4 shared-corpus cases; X4 one `safeAssetPath()` (lstat walk, no
+  symlink anywhere, `O_NOFOLLOW`) for listing, serving and export; X14 `remove()` journaled (aside-move, row delete +
+  note erase in one tx, rollback on restart), start sweeps row-less folders, asset route 404 without a row; X5
+  `durableTx()` (synchronous=FULL for that tx) + fsync of staged files, folders and the themes root in a fixed order,
+  guarantee documented in THEMES.md. Lead reviewed inflate bounds and durableTx. Merged: server themes+db 624.
