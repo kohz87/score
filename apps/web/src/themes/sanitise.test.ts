@@ -159,6 +159,28 @@ describe('confining theme rules to the outside of protected subtrees (gate #3, #
     expect(confined).toContain(`.a b${guard} { color: red; }`)
   })
 
+  test('animation, transition and keyframes are dropped (gate #6)', () => {
+    expect(reasons('@keyframes fade { to { opacity: 0 } }')).toEqual(['other_at_rule'])
+    expect(reasons('.a { animation: fade 1s 3s forwards }')).toEqual(['other_at_rule'])
+    expect(reasons('.a { animation-name: score-fade-in; animation-delay: 3s }')).toEqual([
+      'other_at_rule',
+      'other_at_rule',
+    ])
+    expect(reasons('.a { -webkit-animation: x 1s; transition: opacity 1s }')).toEqual([
+      'other_at_rule',
+      'other_at_rule',
+    ])
+    expect(reasons('.a { transition-property: opacity; transition-delay: 2s }')).toEqual([
+      'other_at_rule',
+      'other_at_rule',
+    ])
+    const kept = sanitiseCss(
+      '.a { animation: fade 1s; color: red } @keyframes fade { to { opacity: 0 } }',
+    )
+    expect(kept.css).toContain('.a { color: red; }')
+    expect(kept.css).not.toMatch(/animation|keyframes|fade/)
+  })
+
   test('a theme can’t replace the geometry of a path', () => {
     expect(reasons('path { d: path("M0 0 L1 1") }')).toEqual(['pointer_events'])
   })

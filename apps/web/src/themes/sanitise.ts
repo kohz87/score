@@ -18,6 +18,9 @@ const GROUPING = new Set([
   'CSSContainerRule',
 ])
 // `d` replaces the geometry of an SVG path (an agent glyph's shape).
+// A theme can't animate or transition (gate finding #6): time-based CSS is how a rule hides a decision after the checks
+// have run. Score's own keyframes could be named too, so the properties go, not just `@keyframes`.
+const MOTION_PROPERTY = /^(-webkit-)?(animation|transition)(-|$)/
 const DANGEROUS_PROPERTIES = new Set(['-moz-binding', 'behavior', '-webkit-user-modify', 'd'])
 const MAX_Z_INDEX = 50
 
@@ -171,7 +174,8 @@ function cleanDeclarations(
       important = true
       value = value.replace(/!\s*important\s*$/i, '').trim()
     }
-    if (name === 'content') drop(context, `${label} { content }`, 'content')
+    if (MOTION_PROPERTY.test(name)) drop(context, `${label} { ${name} }`, 'other_at_rule')
+    else if (name === 'content') drop(context, `${label} { content }`, 'content')
     else if (name === 'position' && /^(fixed|sticky|-webkit-sticky)$/i.test(value))
       drop(context, `${label} { position: ${value} }`, 'fixed_position')
     else if (name === 'z-index' && !/^(auto|-?\d+)$/.test(value))
@@ -237,17 +241,7 @@ function walkRules(rules: ArrayLike<RuleLike>, context: Context): string[] {
         `${context.confine ? confineSelector(selector) : selector} { ${[body, ...nested].filter(Boolean).join(' ')} }`,
       )
     } else if (kind === 'CSSKeyframesRule') {
-      const frames: string[] = []
-      for (const frame of Array.from(rule.cssRules ?? [])) {
-        const { kept, important } = cleanDeclarations(frame.style?.cssText ?? '', context, label)
-        if (important) drop(context, label, 'important')
-        else if (kept.length)
-          frames.push(
-            `${frame.keyText ?? ''} { ${kept.map(({ name, value }) => `${name}: ${value};`).join(' ')} }`,
-          )
-      }
-      if (frames.length && !selectorReaches(String(rule.name ?? '')))
-        out.push(`${label} { ${frames.join(' ')} }`)
+      drop(context, label, 'other_at_rule')
     } else if (GROUPING.has(kind) && rule.cssRules) {
       if (selectorReaches(label)) {
         drop(context, label, 'protected_selector')

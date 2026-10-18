@@ -215,14 +215,11 @@ function withoutTheme<T>(run: () => T): T {
   }
 }
 
-/** The first thing a theme did to a protected surface that the layer could not stop, or null. */
-export function findProtectedViolation(root: ParentNode = document): string | null {
-  const surfaces = Array.from(root.querySelectorAll<HTMLElement>('[data-protected]')).filter(
-    (el) => !el.closest('[hidden]'),
-  )
-  if (surfaces.length === 0) return null
-  const targets = surfaces.flatMap(parts)
-  const glyphShapes = surfaces.flatMap(shapes)
+function violationIn(surfaces: HTMLElement[]): string | null {
+  const live = surfaces.filter((el) => !el.closest('[hidden]'))
+  if (live.length === 0) return null
+  const targets = live.flatMap(parts)
+  const glyphShapes = live.flatMap(shapes)
   const on = targets.map(snapshot)
   const shapesOn = glyphShapes.map(shapeSignature)
   const { off, shapesOff } = withoutTheme(() => ({
@@ -244,18 +241,94 @@ export function findProtectedViolation(root: ParentNode = document): string | nu
   return null
 }
 
+/** The first thing a theme did to a protected surface that the layer could not stop, or null. */
+export function findProtectedViolation(root: ParentNode = document): string | null {
+  return violationIn(Array.from(root.querySelectorAll<HTMLElement>('[data-protected]')))
+}
+
+// The way back must always work, so an action on one of these is never refused: if its surroundings are damaged the
+// periodic guard drops the theme, and the action goes ahead.
+const WAY_BACK =
+  '.look-reset, .look-banner, .command-run, .command-palette, .command-trigger, .menu-trigger, .main-nav-link, .nav-drawer-link, .needs-you-dot, .chat-toast'
+const ACTIONABLE =
+  'button, a[href], input, select, textarea, summary, [role=button], [role=menuitem], [role=radio], [role=checkbox], [role=switch]'
+
+/** What stands between the person and this control right now: not shown, hidden up the chain, or something on top of it. */
+function controlProblem(control: HTMLElement): string | null {
+  if (control.getClientRects().length === 0) return 'isn’t shown'
+  for (const node of chain(control)) {
+    const style = getComputedStyle(node)
+    if (style.visibility !== 'visible') return 'is hidden'
+  }
+  const box = control.getBoundingClientRect()
+  const inViewport =
+    box.right > 0 && box.bottom > 0 && box.left < window.innerWidth && box.top < window.innerHeight
+  if (inViewport && box.width > 0 && box.height > 0) {
+    const x = Math.min(window.innerWidth - 1, Math.max(0, box.left + box.width / 2))
+    const y = Math.min(window.innerHeight - 1, Math.max(0, box.top + box.height / 2))
+    const top = document.elementFromPoint(x, y)
+    if (top && !control.contains(top) && !top.contains(control)) return 'is covered'
+  }
+  return null
+}
+
+/**
+ * Checked at the moment a person acts on a control inside a protected surface (an approval, an answer, a permission, a
+ * password), when a theme is on: the whole surface is measured with and without the theme, and the control itself must
+ * be shown, visible and on top. Whatever a theme does later or on hover can't leave a decision hidden when it's made
+ * (gate finding #6). Returns what is wrong, or null.
+ */
+export function decisionProblem(control: HTMLElement): string | null {
+  if (document.documentElement.getAttribute('data-look') !== 'custom') return null
+  const surface = control.closest<HTMLElement>('[data-protected]')
+  if (!surface || control.closest(WAY_BACK)) return null
+  const problem = violationIn([surface]) ?? controlProblem(control)
+  if (!problem) return null
+  const name =
+    surface.getAttribute('aria-label') ?? control.getAttribute('aria-label') ?? 'A decision'
+  return problem.startsWith(name) ? problem : `${name} ${problem}`
+}
+
+// Style changes that come without a DOM change: hover, focus and pressed states, and animations and transitions as they
+// end. Each schedules a check of every protected surface. Not `animationstart` or `…cancel`: measuring lifts the theme's
+// sheets, which cancels and restarts a theme animation, so those would feed on the guard's own checks. A finished
+// animation is measured before it is lifted, and the sanitiser takes motion out of themes anyway (themes/sanitise.ts).
+const STYLE_EVENTS = [
+  'pointerover',
+  'pointerdown',
+  'pointerup',
+  'focusin',
+  'focusout',
+  'animationend',
+  'transitionend',
+] as const
+
+export type WatchOptions = {
+  /** Replaced in tests. */
+  check?: () => string | null
+  /** Replaced in tests: what a decision on this element runs into. */
+  decision?: (control: HTMLElement) => string | null
+}
+
 /**
  * Watches the page while a custom theme is on: when a protected surface is damaged, `onViolation` runs once (the
- * runtime then drops the theme). Re-checks on DOM changes (debounced) and window resizes.
+ * runtime then drops the theme). Re-checks on DOM changes (debounced), window resizes, and the events that change
+ * styles without touching the DOM. Every click or submit inside a protected surface is vetted first (`decisionProblem`):
+ * a refused action is stopped and `onViolation(what, true)` says so.
  */
-export function watchProtectedSurfaces(onViolation: (what: string) => void): () => void {
+export function watchProtectedSurfaces(
+  onViolation: (what: string, refused?: boolean) => void,
+  options: WatchOptions = {},
+): () => void {
+  const measure = options.check ?? findProtectedViolation
+  const vet = options.decision ?? decisionProblem
   let frame = 0
   let timer = 0
   let done = false
   const check = () => {
     frame = 0
     if (done || document.documentElement.getAttribute('data-look') !== 'custom') return
-    const problem = findProtectedViolation()
+    const problem = measure()
     if (problem) {
       done = true
       onViolation(problem)
@@ -268,14 +341,37 @@ export function watchProtectedSurfaces(onViolation: (what: string) => void): () 
       frame = requestAnimationFrame(check)
     }, 120)
   }
+  const refuse = (event: Event) => {
+    if (done || document.documentElement.getAttribute('data-look') !== 'custom') return
+    const target = event.target instanceof Element ? event.target : null
+    const control =
+      event.type === 'submit'
+        ? (target as HTMLElement | null)
+        : (target?.closest<HTMLElement>(ACTIONABLE) ?? null)
+    if (!control) return
+    const problem = vet(control)
+    if (!problem) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    done = true
+    onViolation(problem, true)
+  }
   const observer = new MutationObserver(schedule)
   observer.observe(document.body, { childList: true, subtree: true, attributes: true })
   window.addEventListener('resize', schedule)
+  window.addEventListener('hashchange', schedule)
+  for (const name of STYLE_EVENTS) document.addEventListener(name, schedule, true)
+  document.addEventListener('click', refuse, true)
+  document.addEventListener('submit', refuse, true)
   schedule()
   return () => {
     done = true
     observer.disconnect()
     window.removeEventListener('resize', schedule)
+    window.removeEventListener('hashchange', schedule)
+    for (const name of STYLE_EVENTS) document.removeEventListener(name, schedule, true)
+    document.removeEventListener('click', refuse, true)
+    document.removeEventListener('submit', refuse, true)
     window.clearTimeout(timer)
     cancelAnimationFrame(frame)
   }
