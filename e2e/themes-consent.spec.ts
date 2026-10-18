@@ -1,6 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
 import { ORCH_ACKNOWLEDGEMENT_TEXT } from '../packages/contract/src/index.ts'
-import { ACCEPTED_TOKEN, custom, drawn, expectRefused, wear } from './themes-consent-helpers.ts'
+import {
+  ACCEPTED_TOKEN,
+  custom,
+  drawn,
+  dropped,
+  expectRefused,
+  wear,
+} from './themes-consent-helpers.ts'
+import { pair } from './pair.ts'
+import { mockThemes } from './themes-fixtures.ts'
 
 // Cross-audit of v1.8.0 (K1, X1): every consent a person gives in Score is a decision, and a theme that the sanitiser
 // ACCEPTED (nothing here slips in afterwards unless the test says so) can neither hide nor fake any part of it. Real
@@ -164,6 +173,73 @@ test.describe('X1: starting an orchestration is one decision', () => {
     await dialog.getByRole('button', { name: 'Start orchestration' }).click()
     await expect.poll(() => sent.length).toBe(1)
   })
+})
+
+// L1 (1.8.1 verification, problem 1): the page wears a cached theme from the first paint, so its decisions are vetted
+// from then on, while the theme list or the theme itself is still on its way. Nothing here waits for the server.
+test.describe('L1: a cached theme is vetted while the list or the theme is still pending', () => {
+  const hiddenField = '.orch-form > label.orch-field { opacity: 0; }'
+
+  async function wearCached(page: Page, pending: 'list' | 'detail') {
+    const look = { active: 'gate', mode: 'light' as const }
+    await mockThemes(
+      page,
+      [{ id: 'gate', name: 'Gate', source: 'imported', manifest: {}, css: hiddenField }],
+      look,
+    )
+    // The last visit's boot cache, written by an earlier page: its CSS is what the page wears before React has the theme.
+    await page.addInitScript((css) => {
+      localStorage.setItem(
+        'score.look.cache',
+        JSON.stringify({
+          id: 'gate',
+          attributes: {
+            'data-look': 'custom',
+            'data-pack': 'score',
+            'data-layout': 'top',
+            'data-density': 'comfortable',
+          },
+          css,
+        }),
+      )
+    }, hiddenField)
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    await page.route(
+      pending === 'list' ? /\/api\/themes$/ : /\/api\/themes\/gate$/,
+      async (route) => {
+        await gate
+        await route.fallback().catch(() => undefined)
+      },
+    )
+    await pair(page)
+    return release
+  }
+
+  for (const pending of ['list', 'detail'] as const) {
+    test(`the first click inside the form is refused while the theme ${pending} is pending`, async ({
+      page,
+    }) => {
+      test.setTimeout(90_000)
+      const release = await wearCached(page, pending)
+      const { dialog, agent, sent } = await openNewOrchestration(page)
+      await expect
+        .poll(() =>
+          dialog
+            .locator('label.orch-field')
+            .first()
+            .evaluate((label) => getComputedStyle(label).opacity),
+        )
+        .toBe('0')
+      await dialog.getByRole('checkbox', { name: new RegExp(agent) }).click()
+      await expectRefused(page, sent)
+      // The theme list arrives afterwards: this device keeps the choice the guard made.
+      release()
+      await page.waitForTimeout(500)
+      await dropped(page)
+      await dialog.getByRole('checkbox', { name: new RegExp(agent) }).check()
+    })
+  }
 })
 
 // ---------------------------------------------------------------------------------------------------------------------

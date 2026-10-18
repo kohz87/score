@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { contrastVerdict, watchProtectedSurfaces } from './guard.ts'
+import { contrastVerdict, watchProtectedSurfaces, watchWhileCustom } from './guard.ts'
 
 describe('contrastVerdict', () => {
   test('AA is the bar: 4.5:1 for text, 3:1 for large text and icons', () => {
@@ -153,5 +153,68 @@ describe('watchProtectedSurfaces (gate #6)', () => {
     expect(reached).toHaveBeenCalledTimes(1)
     expect(seen).toEqual(['is covered'])
     stop2()
+  })
+})
+
+describe('watchWhileCustom (L1)', () => {
+  beforeEach(() => {
+    document.documentElement.removeAttribute('data-look')
+    document.body.innerHTML = '<div data-protected><button id="go">Approve</button></div>'
+  })
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-look')
+    document.body.innerHTML = ''
+  })
+  const click = () => {
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+    document.getElementById('go')!.dispatchEvent(event)
+    return event
+  }
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  test('a page that already wears a theme is vetted at once, before anything else has run', () => {
+    document.documentElement.setAttribute('data-look', 'custom')
+    const seen: [string, boolean | undefined][] = []
+    const stop = watchWhileCustom((what, refused) => seen.push([what, refused]), {
+      check: () => null,
+      decision: () => 'the approval is faded',
+    })
+    expect(click().defaultPrevented).toBe(true)
+    expect(seen).toEqual([['the approval is faded', true]])
+    stop()
+  })
+
+  test('nothing is vetted without a custom theme, and the watch starts when one is worn', async () => {
+    const stop = watchWhileCustom(() => undefined, {
+      check: () => null,
+      decision: () => 'the approval is faded',
+    })
+    expect(click().defaultPrevented).toBe(false)
+    document.documentElement.setAttribute('data-look', 'custom')
+    await tick()
+    expect(click().defaultPrevented).toBe(true)
+    document.documentElement.removeAttribute('data-look')
+    await tick()
+    expect(click().defaultPrevented).toBe(false)
+    stop()
+  })
+
+  test('after a violation the next theme is watched again', async () => {
+    document.documentElement.setAttribute('data-look', 'custom')
+    const seen: string[] = []
+    const stop = watchWhileCustom(
+      (what) => {
+        seen.push(what)
+        document.documentElement.removeAttribute('data-look')
+      },
+      { check: () => null, decision: () => 'is covered' },
+    )
+    click()
+    await tick()
+    document.documentElement.setAttribute('data-look', 'custom')
+    await tick()
+    click()
+    expect(seen).toEqual(['is covered', 'is covered'])
+    stop()
   })
 })

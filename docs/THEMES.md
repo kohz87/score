@@ -43,6 +43,11 @@ LICENSE, OFL.txt       optional: licence texts for what you ship (see “Licence
 - Import a package with `POST /api/themes/import` (the Customizer adds the buttons for it in Settings › Look). It is
   stored but not switched on. An id that
   belongs to a built-in theme (`score`, `paper`, `night`, `dense`, `harbour`, `ledger`, `studio`) is refused.
+- The Customizer reads a theme’s pictures, fonts and licence texts once, when it opens or copies the theme, and keeps
+  them in memory (a package is at most 5 MB). “Save as new”, “Export” and a save that rebuilds the package use those
+  bytes, so if another editor replaces the theme or removes a picture meanwhile, the save of your version is refused as
+  changed elsewhere, and “Save as new” still keeps your version whole, picture and licence included. If the theme
+  changes while it is being opened, the Customizer reads it again once and otherwise says so.
 - An import, a replace and a delete are all-or-nothing, also across a crash or power cut: after a restart the theme is
   either the old one or the new one (a delete that was cut off is undone; delete it again). Score syncs the files and
   its note to disk before it moves folders, so this holds on a disk and file system that honour `fsync`.
@@ -329,7 +334,7 @@ as an opaque background of its own, so a translucent rail over a picture can’t
 
 Beyond the sanitiser, Score re-asserts these in a protected cascade layer, and at run time it watches them: a theme
 that hides, fades, covers or blurs one of them from outside is switched off on that device, with a banner that says why.
-It checks when the page changes, on hover, focus and press, when an animation ends, and at the moment you act on an
+It does so from the first moment a custom theme is on the page, which includes the last visit’s look that the browser paints before the theme list or the theme itself has arrived. It checks when the page changes, on hover, focus and press, when an animation ends, and at the moment you act on an
 approval, an answer, a permission or a password: if the decision is hidden, clipped away by a box around it,
 unreadable (below 4.5:1, or 3:1 for large text and icons, or a colour Score can’t measure) or covered at that moment
 (the thing painted on it must be the control itself, something inside it or its own label, never a parent or a

@@ -2,7 +2,7 @@ import type { ThemeManifest } from '@score/contract'
 import { sanitiseCss } from '../sanitise.ts'
 import { manifestProblems, referencedAssets, type Draft } from './draft.ts'
 import { buildThemePackage, MAX_PACKAGE_BYTES, type ThemePackage } from './package.ts'
-import { THEME_CHANGED_TEXT, ThemeChangedError } from './snapshot.ts'
+import { THEME_CHANGED_TEXT, ThemeChangedError, type Snapshot } from './snapshot.ts'
 
 // Turning a draft into something that can be saved or exported: the CSS is sanitised again (the stored CSS is always the
 // sanitiser's own output, design §4.1), the files the draft points at are gathered, and the way to save is chosen.
@@ -18,7 +18,8 @@ export const MAX_CSS_BYTES = 262_144
  * `source` says where files that weren't added in this session live (an installed theme's asset folder) and the
  * package revision (`rev`, the etag of the detail the draft was opened or copied from) they belong to. Every file and
  * licence is read at that revision, so the package is one snapshot; if the theme changed meanwhile the server refuses
- * the read and the whole build stops with one sentence (contract § 16, J1).
+ * the read and the whole build stops with one sentence (contract § 16, J1). When the draft carries its snapshot
+ * (`source.snapshot`, read at open, L1) nothing is read at all.
  */
 export async function buildFromDraft(
   draft: Draft,
@@ -29,6 +30,11 @@ export async function buildFromDraft(
     rev: string | null
     /** The licence files the source package has (its detail's `licenseFiles`); with none there is nothing to read. */
     licenseFiles?: readonly string[]
+    /**
+     * The files and licences of that revision, read when the draft was opened. They are used as they are: nothing is
+     * fetched for what the snapshot holds, so a theme replaced since then doesn't stop the build.
+     */
+    snapshot?: Snapshot | null
   },
   fetchAsset: (id: string, path: string, rev: string | null) => Promise<Uint8Array>,
   /** The licence texts of the theme the draft was opened or copied from (read through its export). */
@@ -44,7 +50,9 @@ export async function buildFromDraft(
   const assets = new Map<string, Uint8Array>()
   for (const path of referencedAssets({ manifest, css, uploads: {} })) {
     const added = draft.uploads[path]
+    const held = source.snapshot?.assets[path]
     if (added) assets.set(path, added)
+    else if (held) assets.set(path, held)
     else if (source.id && source.assets.includes(path)) {
       try {
         assets.set(path, await fetchAsset(source.id, path, source.rev))
@@ -56,7 +64,9 @@ export async function buildFromDraft(
     } else problems.push(`The file “${path}” is used but isn’t there. Add it again or remove it.`)
   }
   let licenses: Record<string, string> = { ...draft.licenses }
-  if (source.id && Object.keys(licenses).length === 0 && source.licenseFiles?.length !== 0) {
+  if (Object.keys(licenses).length === 0 && source.snapshot)
+    licenses = { ...source.snapshot.licenses }
+  else if (source.id && Object.keys(licenses).length === 0 && source.licenseFiles?.length !== 0) {
     try {
       licenses = await fetchLicenses(source.id, source.rev)
     } catch (error) {

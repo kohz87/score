@@ -9,7 +9,12 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { Link, useBlocker, useNavigate, useParams } from 'react-router'
-import { themeAssetUrl, type ThemeColorToken, type ThemeSanitiseReport } from '@score/contract'
+import {
+  themeAssetUrl,
+  type ThemeColorToken,
+  type ThemeDetail,
+  type ThemeSanitiseReport,
+} from '@score/contract'
 import { ApiError } from '../../data/api.ts'
 import { dataUrlFor } from '../../themes/customizer/asset-types.ts'
 import {
@@ -44,8 +49,18 @@ import {
 import { createProbe, type Probe } from '../../themes/customizer/frame-document.ts'
 import { textFindingWords } from './text-findings.ts'
 import type { TextFinding } from '../../themes/customizer/measure.ts'
-import { buildThemePackage, readThemePackage } from '../../themes/customizer/package.ts'
+import {
+  buildThemePackage,
+  readThemePackage,
+  type ThemePackage,
+} from '../../themes/customizer/package.ts'
 import { buildFromDraft, filesForSave, saveRoute } from '../../themes/customizer/save.ts'
+import {
+  readSnapshot,
+  THEME_CHANGED_TEXT,
+  ThemeChangedError,
+  type Snapshot,
+} from '../../themes/customizer/snapshot.ts'
 import { themesKey } from '../../themes/queries.ts'
 import { useLook } from '../../themes/use-look.ts'
 import { ImportDialog, type ImportCandidate } from './ImportDialog.tsx'
@@ -85,6 +100,53 @@ type Target = {
   assetRev: string | null
   /** The licence files the source package has; with none, a copy has no licence to read. */
   licenseFiles: string[]
+  /** Those files and licences, read once at `assetRev` when the theme was opened or copied (L1); null for a new theme. */
+  snapshot: Snapshot | null
+}
+
+/**
+ * The files of the version a save just wrote are the ones the package carried: the draft goes on with them and nothing
+ * is read back (another writer could land in between). A file or licence the package doesn't hold is read from the
+ * server at the saved revision; if that fails the snapshot is left out and files are read when needed, as before.
+ */
+async function snapshotAfterSave(detail: ThemeDetail, pkg: ThemePackage): Promise<Snapshot | null> {
+  const complete =
+    detail.assets.every((path) => pkg.assets.has(path)) &&
+    (detail.licenseFiles.length === 0 || Object.keys(pkg.licenses).length > 0)
+  if (complete)
+    return {
+      assets: Object.fromEntries(detail.assets.map((path) => [path, pkg.assets.get(path)!])),
+      licenses: pkg.licenses,
+    }
+  try {
+    return await readSnapshot(
+      detail.manifest.id,
+      detail.etag,
+      detail,
+      fetchThemeAsset,
+      fetchThemeLicenses,
+    )
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A theme and its files and licences, read at one revision, once, for the draft that is made from it. A theme replaced
+ * while its files are being read (409) is read again from the start; a second miss is reported as it is.
+ */
+async function loadWithSnapshot(id: string): Promise<{ detail: ThemeDetail; snapshot: Snapshot }> {
+  for (let attempt = 0; ; attempt++) {
+    const detail = await loadTheme(id)
+    try {
+      return {
+        detail,
+        snapshot: await readSnapshot(id, detail.etag, detail, fetchThemeAsset, fetchThemeLicenses),
+      }
+    } catch (error) {
+      if (!(error instanceof ThemeChangedError) || attempt > 0) throw error
+    }
+  }
 }
 
 const tabs = [
@@ -171,8 +233,11 @@ export function Customizer() {
   const takenIds = useMemo(() => themes.map((theme) => theme.id), [themes])
 
   const copyOf = useCallback(
-    async (id: string): Promise<{ draft: Draft; target: Target }> => {
-      const detail = await loadTheme(id)
+    async (
+      id: string,
+      loaded?: { detail: ThemeDetail; snapshot: Snapshot },
+    ): Promise<{ draft: Draft; target: Target }> => {
+      const { detail, snapshot } = loaded ?? (await loadWithSnapshot(id))
       const name = `${detail.manifest.name} copy`.slice(0, 60)
       const nextId = freshId(name, takenIds)
       const manifest = hasSettings(detail.manifest)
@@ -189,6 +254,7 @@ export function Customizer() {
           assets: detail.assets,
           assetRev: detail.etag,
           licenseFiles: detail.licenseFiles,
+          snapshot,
         },
       }
     },
@@ -220,18 +286,21 @@ export function Customizer() {
             assets: [],
             assetRev: null,
             licenseFiles: [],
+            snapshot: null,
           })
           return
         }
-        const detail = await loadTheme(themeId)
+        const loaded = await loadWithSnapshot(themeId)
         if (!alive) return
+        const { detail, snapshot } = loaded
         if (detail.summary.source === 'builtin') {
-          const copy = await copyOf(themeId)
+          const copy = await copyOf(themeId, loaded)
           if (!alive) return
           setHistory(startHistory(copy.draft))
           setTarget(copy.target)
           return
         }
+        // `snapshot` holds this version's files, read now: a later conflict can't take them from "Save as new" or "Export".
         setHistory(startHistory({ manifest: detail.manifest, css: detail.css, uploads: {} }))
         setTarget({
           id: themeId,
@@ -242,13 +311,16 @@ export function Customizer() {
           assets: detail.assets,
           assetRev: detail.etag,
           licenseFiles: detail.licenseFiles,
+          snapshot,
         })
       } catch (error) {
         if (!alive) return
         setLoadProblem(
-          error instanceof ApiError && error.status === 404
-            ? 'Couldn’t find that theme. It may have been deleted.'
-            : 'Couldn’t open the theme. Check the connection and try again.',
+          error instanceof ThemeChangedError
+            ? THEME_CHANGED_TEXT
+            : error instanceof ApiError && error.status === 404
+              ? 'Couldn’t find that theme. It may have been deleted.'
+              : 'Couldn’t open the theme. Check the connection and try again.',
         )
       }
     })()
@@ -290,6 +362,9 @@ export function Customizer() {
       const path = ref.slice('asset:'.length)
       const bytes = uploads?.[path]
       if (bytes) return dataUrlFor(bytes, path)
+      // The version on screen draws its own files, whatever happened to the theme on the server since.
+      const held = target?.snapshot?.assets[path]
+      if (held) return dataUrlFor(held, path)
       if (target?.assetSource && target.assetRev && target.assets.includes(path))
         return themeAssetUrl(target.assetSource, path, target.assetRev)
       return null
@@ -402,6 +477,7 @@ export function Customizer() {
         assets: target.assets,
         rev: target.assetRev,
         licenseFiles: target.licenseFiles,
+        snapshot: target.snapshot,
       },
       fetchThemeAsset,
       licenceReader,
@@ -457,6 +533,7 @@ export function Customizer() {
       assets: detail.assets,
       assetRev: detail.etag,
       licenseFiles: detail.licenseFiles,
+      snapshot: await snapshotAfterSave(detail, built.pkg),
     })
     await queryClient.invalidateQueries({ queryKey: themesKey })
     if (detail.manifest.id !== themeId) {
@@ -491,6 +568,7 @@ export function Customizer() {
           assets: target.assets,
           rev: target.assetRev,
           licenseFiles: target.licenseFiles,
+          snapshot: target.snapshot,
         },
         fetchThemeAsset,
         licenceReader,
@@ -550,8 +628,14 @@ export function Customizer() {
         void navigate('/settings/look/customize', { replace: true })
       }
       setStatus(`Started from “${themes.find((theme) => theme.id === id)?.name ?? id}”.`)
-    } catch {
-      setProblem({ kind: 'other', text: 'Couldn’t open that theme. Try again.' })
+    } catch (error) {
+      setProblem({
+        kind: 'other',
+        text:
+          error instanceof ThemeChangedError
+            ? THEME_CHANGED_TEXT
+            : 'Couldn’t open that theme. Try again.',
+      })
     }
     setAskStart(null)
   }
