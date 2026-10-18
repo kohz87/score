@@ -330,3 +330,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   note erase in one tx, rollback on restart), start sweeps row-less folders, asset route 404 without a row; X5
   `durableTx()` (synchronous=FULL for that tx) + fsync of staged files, folders and the themes root in a fixed order,
   guarantee documented in THEMES.md. Lead reviewed inflate bounds and durableTx. Merged: server themes+db 624.
+- **J1** merged (fourth-gate #2 + X2, X3, X10, X13): theme file URLs carry `?rev=<etag>` (one `themeAssetUrl`), assets
+  require it (400 without, 409 `etag_mismatch` when stale), style.css/export enforce it when given; copies (Start
+  from, Save as new, export, saves keeping files) read at the draft's revision and stop with a plain message on 409;
+  `ThemeDetail.licenseFiles`; import Replace sends `If-Match` of the version it showed; Save as new adopts its name;
+  saving or replacing the shared active theme emits `look.changed`. Lead resolved conflicts with K2 (asset route = J1's
+  row + revision check + K2's safe reader; export = revision + safe reader; contract § 16 both sides) and gave K2's
+  symlink test the revision. Merged main: contract 1405, server themes 550, web themes 915, theme/Customizer e2e
+  234/235 (themes-decisions #1 failed once under parallel load, 39/39 repeated).
