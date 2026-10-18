@@ -69,21 +69,33 @@ export function UserShell() {
             <button
               type="button"
               className="user-way-link"
+              data-protected="any"
               aria-haspopup="dialog"
               aria-keyshortcuts="Meta+K Control+K"
               onClick={() => setCommandOpen(true)}
             >
               Search or run a command
             </button>
-            <button type="button" className="user-way-link" onClick={() => toAdmin('/now')}>
+            <button
+              type="button"
+              className="user-way-link"
+              data-protected="any"
+              onClick={() => toAdmin('/now')}
+            >
               Admin view
             </button>
-            <button type="button" className="user-way-link" onClick={() => toAdmin('/settings')}>
+            <button
+              type="button"
+              className="user-way-link"
+              data-protected="any"
+              onClick={() => toAdmin('/settings')}
+            >
               Settings
             </button>
             <button
               type="button"
               className="user-way-link look-reset"
+              data-protected="any"
               onClick={() => {
                 clearDeviceLook()
                 lookStore.setFailure(null)
