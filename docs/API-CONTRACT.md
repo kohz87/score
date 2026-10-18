@@ -2256,8 +2256,22 @@ it and still serves the other themes.
   whole package: manifest, CSS, licence files and, through a persisted write counter (migration 0076) that every write
   of the theme takes, every asset's bytes. A change to any of them, an identical re-import included, gives a new etag,
   and so does deleting and re-creating the theme.
-- `GET /api/themes/:id/style.css` → `text/css` with `asset:` references rewritten to the asset URLs below.
-- `GET /api/themes/:id/assets/<fonts|img>/<file>` → the file with its exact type, `nosniff`, `cache-control: private`.
+- **Revision-bound files (J1, fourth-gate finding 2; 1.8.1).** The package `etag` above is the package's **revision**.
+  A file URL names the revision its client holds: `/api/themes/:id/assets/<fonts|img>/<file>?rev=<etag>`
+  (`themeAssetUrl` in `packages/contract/src/themes.ts` builds it; the engine, the sanitiser, the Customizer and the
+  server's `style.css` rewrite all use that one function). The server **enforces** it: a request whose `rev` is not the
+  theme's current etag is `409 etag_mismatch` (`details.etag` = the current etag), never the newer bytes, so an editor
+  holding an old manifest, stylesheet or etag can't read a later replacement's file at the same path, and a copy can't
+  pair one version's manifest and CSS with another's files. Built-in themes are constants, so their etag is fixed for a
+  server build; their URLs carry it like any other. The check runs after `404` (unknown theme or file name) and
+  `409 theme_recovering`, and in the same synchronous step as the read of the file.
+- `GET /api/themes/:id/style.css[?rev=<etag>]` → `text/css` with `asset:` references rewritten to the asset URLs below
+  (each carries `?rev=` of the etag this response was made from). `rev` is optional here; when present and not
+  current it is `409 etag_mismatch`.
+- `GET /api/themes/:id/assets/<fonts|img>/<file>?rev=<etag>` → the file with its exact type, `nosniff`,
+  `cache-control: private`. **`rev` is required** (nothing depends on unversioned asset URLs): without it
+  `400 bad_request`; stale `409 etag_mismatch` as above. A page that kept a cached look from before 1.8.1 (URLs without
+  `rev`) shows the theme's fallback fonts and pictures until the theme is loaded again, which rewrites the cache.
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
   **files (C4 #2).** `ThemeSave` may also carry `assets` (`{ "<fonts|img>/<file>": "<base64>" }`, files to add or
@@ -2328,7 +2342,14 @@ it and still serves the other themes.
   answers `409 etag_mismatch` (`details.etag` = the current etag, `null` when the theme is gone) when it differs, leaving
   the theme unchanged. Without the header replace works as before (manual imports). The Customizer always sends it;
   `422 theme_rejected { reasons[] }` (bad manifest, newer `format`, bad paths, sizes, file types, CSS checks).
-- `GET /api/themes/:id/export` → `application/zip` (the same layout as import).
+- `GET /api/themes/:id/export[?rev=<etag>]` → `application/zip` (the same layout as import). Licence texts are not part
+  of `ThemeDetail`; the Customizer reads them from the export and **always sends `rev`**, so a licence is never paired
+  with another version's manifest: a stale `rev` is `409 etag_mismatch`. Without `rev` (a plain download link) the
+  current package is returned.
+- **Copies are one snapshot (J1).** The Customizer remembers the etag of the `ThemeDetail` a draft was opened or copied
+  from (Start from, Save as new, export of a draft, a save that keeps files) and reads every file and licence it pairs
+  with that draft's manifest and CSS at exactly that `rev`. Any `409 etag_mismatch` on those reads stops the operation
+  with “This theme changed while you were copying it. Reload and try again.”; nothing is saved or downloaded.
 - `DELETE /api/themes/:id` → `204`; `409 builtin_theme`, `409 theme_active`.
 - `PUT /api/look` `LookSettings` → `204`; `404` for an unknown theme. Emits `look.changed { activeTheme, mode,
   resetGeneration }` on the stream so other open devices switch (`resetGeneration` is the current value; the host command
