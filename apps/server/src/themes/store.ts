@@ -5,6 +5,7 @@ import {
   constants,
   existsSync,
   fstatSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -98,10 +99,31 @@ export class ThemeLockedError extends Error {
 export interface ThemeFs {
   rename(from: string, to: string): void
   rm(path: string): void
+  /** Flushes a file or folder to disk (fsync); default: the real one. Tests record or fail it. */
+  sync?(path: string): void
 }
 const realFs: ThemeFs = {
   rename: renameSync,
   rm: (path) => rmSync(path, { recursive: true, force: true }),
+  sync: fsyncPath,
+}
+
+/**
+ * fsync of a file or folder. A folder is opened read-only and synced to make the names in it (a rename, a new file)
+ * durable. Some systems refuse to sync a folder (EINVAL, ENOTSUP, EPERM); that is not a failure of the swap, the
+ * guarantee is then only what the system gives. Any other error (EIO, ENOSPC) is real and propagates.
+ */
+function fsyncPath(path: string): void {
+  let fd: number | null = null
+  try {
+    fd = openSync(path, constants.O_RDONLY)
+    fsyncSync(fd)
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    if (code !== 'EINVAL' && code !== 'ENOTSUP' && code !== 'EPERM') throw error
+  } finally {
+    if (fd !== null) closeSync(fd)
+  }
 }
 
 /** Rows and asset folders of imported and custom themes; built-ins are constants or shipped packages. */
@@ -115,6 +137,10 @@ export class ThemeStore {
     private readonly fs: ThemeFs = realFs,
   ) {
     this.root = join(home, 'themes')
+  }
+
+  private sync(path: string): void {
+    ;(this.fs.sync ?? fsyncPath)(path)
   }
 
   private now(): string {
@@ -360,6 +386,15 @@ export class ThemeStore {
    * between two steps, the theme is either wholly the old one or wholly the new one: a failure here puts the old folder
    * back, and one that also stops the way back is finished by `recoverInterrupted` at the next start. Files are 0600,
    * folders 0700.
+   *
+   * After a power cut or kernel crash (K2 X5) the same holds, because each step is on disk before the next one starts:
+   * the staged files and folders are fsynced, then the note is committed at `synchronous = FULL`, then each folder move
+   * is followed by an fsync of the themes folder, then the row and the note's erasure are committed at FULL, and only
+   * then is the old folder deleted. So a note that survives always has the old folder (or none, for a new theme) to go
+   * back to, and an old folder is never deleted while the old row could still come back. Not guaranteed: a disk or file
+   * system that lies about fsync, and a system that refuses to sync folders (the swap then relies on that system's own
+   * ordering of renames); any such state is repaired at the next start the same way, but the newest import may be lost.
+   * The cost is a handful of fsyncs per import or delete, and nothing else on the connection runs at FULL.
    */
   storeImported(
     manifest: ThemeManifest,
@@ -386,13 +421,22 @@ export class ThemeStore {
         const file = join(staged, 'assets', ...path.split('/'))
         writeFileSync(file, bytes, { mode: 0o600, flag: 'wx' })
         chmodSync(file, 0o600)
+        this.sync(file)
       }
+      // The staged tree is on disk before the swap is written down, so a note never stands for files that were lost.
+      for (const dir of ASSET_DIRS) this.sync(join(staged, 'assets', dir))
+      this.sync(join(staged, 'assets'))
+      this.sync(staged)
       const hadOld = existsSync(target)
       this.writeDown(token, 'swap', manifest.id, null, hadOld)
       try {
-        if (hadOld) this.fs.rename(target, old)
+        if (hadOld) {
+          this.fs.rename(target, old)
+          this.sync(this.root)
+        }
         this.fs.rename(staged, target)
-        this.db.tx((sqlite) => {
+        this.sync(this.root)
+        this.db.durableTx((sqlite) => {
           this.upsert(sqlite, manifest, css, source, licenses)
           this.eraseNote(sqlite, token)
         })
@@ -434,7 +478,7 @@ export class ThemeStore {
     otherId: string | null,
     hadFolder: boolean,
   ): void {
-    this.db.tx((sqlite) =>
+    this.db.durableTx((sqlite) =>
       sqlite
         .prepare(
           'INSERT INTO theme_swaps (token, kind, theme_id, other_id, had_folder, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -546,7 +590,10 @@ export class ThemeStore {
       mkdirSync(this.root, { recursive: true, mode: 0o700 })
       this.writeDown(token, 'reclaim', row.id, to, hadFolder)
       try {
-        if (hadFolder) this.fs.rename(oldFolder, newFolder)
+        if (hadFolder) {
+          this.fs.rename(oldFolder, newFolder)
+          this.sync(this.root)
+        }
       } catch {
         // Nothing moved: forget the plan and leave the theme as it was; the next start tries again.
         try {
@@ -557,7 +604,7 @@ export class ThemeStore {
         continue
       }
       try {
-        this.db.tx((sqlite) => this.commitReclaim(sqlite, row, to, token))
+        this.db.durableTx((sqlite) => this.commitReclaim(sqlite, row, to, token))
       } catch (error) {
         try {
           if (hadFolder) this.fs.rename(newFolder, oldFolder)
@@ -607,8 +654,11 @@ export class ThemeStore {
     const hadOld = presentOnDisk(target)
     this.writeDown(token, 'swap', id, null, hadOld)
     try {
-      if (hadOld) this.fs.rename(target, old)
-      this.db.tx((sqlite) => {
+      if (hadOld) {
+        this.fs.rename(target, old)
+        this.sync(this.root)
+      }
+      this.db.durableTx((sqlite) => {
         sqlite.prepare('DELETE FROM themes WHERE id = ?').run(id)
         this.eraseNote(sqlite, token)
       })
