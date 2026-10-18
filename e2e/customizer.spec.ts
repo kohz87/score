@@ -866,7 +866,10 @@ test('a picture replaced at the same path is a change and is saved', async ({ pa
     await expect(page.getByText('Unsaved changes')).toBeVisible()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByText('Unsaved changes')).toHaveCount(0, { timeout: 20_000 })
-    const served = await page.request.get('/api/themes/e2e-swap/assets/img/background.png')
+    const detail = await (await page.request.get('/api/themes/e2e-swap')).json()
+    const served = await page.request.get(
+      `/api/themes/e2e-swap/assets/img/background.png?rev=${detail.etag}`,
+    )
     expect(Buffer.from(await served.body()).equals(second)).toBe(true)
   } finally {
     await cleanUp(page)
@@ -989,4 +992,161 @@ test('small text on a translucent glass layer is measured against what is behind
   )
   await expect(checks).toContainText('“for Hermes”', { timeout: 20_000 })
   await expect(checks).toContainText('hard to read over its background')
+})
+
+// J1 (fourth-gate finding 2): file URLs name the package revision, and a copy is one snapshot of it.
+const snapManifest = (id: string, name: string) => ({
+  format: 1,
+  id,
+  name,
+  version: '1.0.0',
+  background: { image: 'asset:img/b.png', fit: 'cover', dim: 0 },
+})
+async function putSnap(page: Page, id: string, name: string, etag: string | null, picture: Buffer) {
+  const res = await page.request.put(`/api/themes/${id}`, {
+    headers: web,
+    data: {
+      manifest: snapManifest(id, name),
+      css: '',
+      etag,
+      assets: { 'img/b.png': picture.toString('base64') },
+      licenses: { LICENSE: `licence of ${name}` },
+    },
+  })
+  expect(res.status()).toBe(200)
+  return (await res.json()) as { etag: string }
+}
+
+test('Save as new refuses to pair one version’s settings with another’s picture and licence', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  made.add('e2e-snapa')
+  made.add('e2e-snap-copy')
+  try {
+    const first = makePng(40, 40, () => [255, 0, 0])
+    const second = makePng(40, 40, () => [0, 0, 255])
+    const a = await putSnap(page, 'e2e-snapa', 'E2E Snap', null, first)
+    await openCustomizer(page, '/settings/look/customize/e2e-snapa')
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('E2E Snap')
+    // Another editor replaces the theme, picture and licence at the same paths, after this one loaded it.
+    const b = await putSnap(page, 'e2e-snapa', 'E2E Snap elsewhere', a.etag, second)
+    expect(b.etag).not.toBe(a.etag)
+    // The server never answers an old revision with the new bytes.
+    const old = await page.request.get(`/api/themes/e2e-snapa/assets/img/b.png?rev=${a.etag}`)
+    expect(old.status()).toBe(409)
+    expect((await old.json()).error.code).toBe('etag_mismatch')
+    const stale = await page.request.get(`/api/themes/e2e-snapa/export?rev=${a.etag}`)
+    expect(stale.status()).toBe(409)
+    const fresh = await page.request.get(`/api/themes/e2e-snapa/assets/img/b.png?rev=${b.etag}`)
+    expect(Buffer.from(await fresh.body()).equals(second)).toBe(true)
+
+    const puts: string[] = []
+    page.on('request', (request) => {
+      if (request.method() !== 'GET' && request.url().includes('/api/themes/'))
+        puts.push(`${request.method()} ${new URL(request.url()).pathname}`)
+    })
+    await page.getByLabel('Author').fill('Me')
+    await page.getByRole('button', { name: 'Save as new…' }).click()
+    await page.getByRole('dialog').getByLabel('Name').fill('E2E Snap copy')
+    await page.getByRole('dialog').getByRole('button', { name: 'Save as new' }).click()
+    await expect(page.getByRole('alert')).toContainText(
+      'This theme changed while you were copying it. Reload and try again.',
+      { timeout: 20_000 },
+    )
+    expect(puts).toEqual([])
+    expect((await page.request.get('/api/themes/e2e-snap-copy')).status()).toBe(404)
+  } finally {
+    await cleanUp(page)
+  }
+})
+
+test('Start from and Export stop when the theme they copied changed meanwhile', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  made.add('e2e-snapb')
+  try {
+    const a = await putSnap(
+      page,
+      'e2e-snapb',
+      'E2E Snapb',
+      null,
+      makePng(40, 40, () => [255, 0, 0]),
+    )
+    await openCustomizer(page)
+    await tab(page, 'Theme').click()
+    await page.getByLabel('Start from a theme').selectOption({ label: 'E2E Snapb' })
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Started from “E2E Snapb”' }),
+    ).toBeVisible()
+    await putSnap(
+      page,
+      'e2e-snapb',
+      'E2E Snapb elsewhere',
+      a.etag,
+      makePng(40, 40, () => [0, 0, 255]),
+    )
+    const downloads: string[] = []
+    page.on('download', (download) => downloads.push(download.suggestedFilename()))
+    await page.getByRole('button', { name: 'Export', exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText(
+      'This theme changed while you were copying it. Reload and try again.',
+      { timeout: 20_000 },
+    )
+    expect(downloads).toEqual([])
+    // A copy started afterwards reads the new version whole.
+    await page.getByLabel('Start from a theme').selectOption({ label: 'E2E Snapb' })
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Started from “E2E Snapb”' }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Export', exact: true }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Exported' })).toBeVisible({
+      timeout: 20_000,
+    })
+    expect(downloads.length).toBe(1)
+  } finally {
+    await cleanUp(page)
+  }
+})
+
+test('a look cached before 1.8.1 (file URLs without a revision) still loads and is rewritten', async ({
+  page,
+}) => {
+  await pair(page)
+  made.add('e2e-snapc')
+  try {
+    const a = await putSnap(
+      page,
+      'e2e-snapc',
+      'E2E Snap',
+      null,
+      makePng(40, 40, () => [255, 0, 0]),
+    )
+    await page.goto('/settings')
+    await page.evaluate(() => {
+      window.localStorage.setItem('score.look.device', 'e2e-snapc')
+      window.localStorage.setItem(
+        'score.look.cache',
+        JSON.stringify({
+          id: 'e2e-snapc',
+          attributes: { 'data-look': 'custom' },
+          css: ':root:root[data-look=\'custom\'] body{background-image:url("/api/themes/e2e-snapc/assets/img/b.png")}',
+        }),
+      )
+    })
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    await expect
+      .poll(async () => page.evaluate(() => window.localStorage.getItem('score.look.cache') ?? ''))
+      .toContain(`/assets/img/b.png?rev=${a.etag}`)
+    await expect
+      .poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundImage))
+      .toContain(`?rev=${a.etag}`)
+  } finally {
+    await page.evaluate(() => window.localStorage.removeItem('score.look.device'))
+    await cleanUp(page)
+  }
 })
