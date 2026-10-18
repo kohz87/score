@@ -379,3 +379,9 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **T5** merged (test-side): themes-protection #6 hover flake — `unreadable()` measured the first `li` inside the rules
   card's collapsed `<details>`, which Chrome sometimes leaves without a box; content of a collapsed `<details>` (not its
   summary) is skipped. 2/20 → 0/20; full e2e 618/618. No product change, no redeploy.
+- **Housekeeping (2026-10-19 07:40 GMT+8):** after the owner asked about running shells: two of the lead's wait loops
+  had been stuck for 10 h (one waited for a file that was never written; one used `pgrep -f` that matched its own
+  command line), and 19 SIGTERM-ignoring fake workers from `coding-process.test.ts` were left from yesterday's loaded
+  runs (a `workerSeen()` timeout fails the test before its `try/finally`). All killed by exact PID; the live Score was not
+  touched; old test temp folders removed. Fix: the test file's `afterEach` SIGKILLs every worker whose pid file it
+  wrote. Lesson: never wait with `pgrep -f <pattern>` from a shell whose own command line holds the pattern.
