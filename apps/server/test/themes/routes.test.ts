@@ -390,6 +390,25 @@ test('an id with an unsettled swap note answers 409 theme_recovering until it is
   ).toBe(201)
 })
 
+// Re-gate finding 7: the import answers with the version it committed, etag included.
+test('import: the result carries the committed ThemeDetail, new and replaced', async () => {
+  const first = ThemeImportResultSchema.parse((await upload(await fullPackage())).json())
+  expect(first.detail).toEqual(
+    ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json()),
+  )
+  const again = await upload(await fullPackage('seaside', '.b{color:red}'), '?replace=1', {
+    ...headers,
+    'if-match': first.detail.etag,
+  })
+  expect(again.statusCode).toBe(201)
+  const second = ThemeImportResultSchema.parse(again.json())
+  expect(second.detail.etag).not.toBe(first.detail.etag)
+  expect(second.detail.css).toBe('.b{color:red}')
+  expect(second.detail).toEqual(
+    ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json()),
+  )
+})
+
 // Gate finding #7: the etag must change with every byte of the package, not only the manifest and the CSS.
 test('import: If-Match covers asset bytes and licence files, so a stale replace is refused', async () => {
   const pkg = (png: Buffer, licence?: string) =>

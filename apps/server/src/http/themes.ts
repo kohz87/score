@@ -209,6 +209,8 @@ export function registerThemeRoutes(
           return ThemeImportResultSchema.parse({
             theme: store.summary(store.get(pkg.manifest.id)!),
             report: { dropped: [] },
+            // Read in this same serialised step: the version this import wrote, with the etag a later save must send.
+            detail: detail(pkg.manifest.id),
           })
         })
         return reply.code(201).send(result)

@@ -281,10 +281,15 @@ export const ThemeSaveSchema = z
   .strict()
 export type ThemeSave = z.infer<typeof ThemeSaveSchema>
 
-/** `POST /api/themes/import` result. The theme is stored but not activated. */
+/**
+ * `POST /api/themes/import` result. The theme is stored but not activated. `detail` is the theme exactly as this import
+ * committed it (its `etag` included), read inside the same serialised step, so a client adopts what it wrote and not
+ * whatever another writer stored a moment later.
+ */
 export const ThemeImportResultSchema = z.object({
   theme: ThemeSummarySchema,
   report: ThemeSanitiseReportSchema,
+  detail: ThemeDetailSchema,
 })
 export type ThemeImportResult = z.infer<typeof ThemeImportResultSchema>
 

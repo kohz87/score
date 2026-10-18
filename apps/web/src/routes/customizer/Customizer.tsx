@@ -401,11 +401,14 @@ export function Customizer() {
         detail = await saveCustomTheme(manifest, built.pkg.css, replacing ? target.etag : null)
       } else {
         // The server compares the etag with the stored theme's in the same step as the replace (If-Match).
-        await installThemeZip(buildThemePackage(built.pkg), {
-          replace: replacing,
-          ifMatch: replacing ? target.etag : null,
-        })
-        detail = await loadTheme(manifest.id)
+        // The result carries the committed version and its etag, so nothing is read back (another writer could land
+        // between the two requests and the editor would adopt an etag for content it never loaded).
+        detail = (
+          await installThemeZip(buildThemePackage(built.pkg), {
+            replace: replacing,
+            ifMatch: replacing ? target.etag : null,
+          })
+        ).detail
       }
     } catch (error) {
       setProblem(describeSaveError(error))

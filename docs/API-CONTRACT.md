@@ -2252,7 +2252,10 @@ startup id move skips the row, until recovery succeeds. Other ids are unaffected
 - `PUT /api/themes/:id` `ThemeSave` → `ThemeDetail`: creates or updates a **custom** theme (`manifest.id` must equal `:id`);
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
   `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5).
-- `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult`; stored, **not** activated. A zip whose
+- `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult` `{ theme, report, detail }`; stored, **not**
+  activated. `detail` is the `ThemeDetail` (manifest, CSS, assets, `etag`) exactly as this import committed it, read in the
+  same serialised step as the write; the Customizer adopts it instead of fetching the theme again, so another writer's
+  version landing a moment later can never be paired with the draft that was saved. A zip whose
   local file headers and central directory disagree (name, method, sizes), that lists a name twice, or whose stored
   data overlaps is `422 theme_rejected`; the Customizer's reader applies the same rule to what it previews.
   `409 theme_exists` (same id; `?replace=1` replaces an imported or custom theme, never a built-in);
