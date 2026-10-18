@@ -141,6 +141,12 @@ describe('files', () => {
       'img/extra.png',
     ])
     expect(Object.keys(d.uploads).sort()).toEqual(['fonts/brand.woff2', 'img/background.png'])
+    // CSS-aware (third gate finding 6): a comment is no reference, an escaped spelling is.
+    expect(
+      referencedAssets(
+        setCss(blank(), '/* asset:img/note.png */ .x { background: url(asset\\3a img/real.png) }'),
+      ),
+    ).toEqual(['img/real.png'])
     d = setBackgroundDim(d, 200)
     expect(d.manifest.background?.dim).toBe(80)
     d = clearBackground(d)

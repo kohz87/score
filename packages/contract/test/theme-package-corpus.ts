@@ -172,6 +172,89 @@ export const corpus: CorpusCase[] = [
   bad('an extra field that runs past its header', [
     { ...base, centralExtra: bytesOf(0x01, 0x00, 0xff, 0x00, 1) },
   ]),
+  // Third gate finding 6: directory metadata. A reader that honours the Unix mode or the DOS attribute (JSZip does)
+  // and one that only reads the trailing slash must agree: a "file" marked as a directory is refused.
+  bad('theme.json marked as a directory by its Unix mode (040755)', [
+    { ...base, unixMode: 0o040755 },
+  ]),
+  bad('theme.json marked as a directory by the DOS attribute (0x10)', [
+    { ...base, dosAttributes: 0x10 },
+  ]),
+  bad('theme.json marked as a directory by both', [
+    { ...base, unixMode: 0o040755, dosAttributes: 0x10 },
+  ]),
+  bad('an asset marked as a directory by its Unix mode', [
+    { name: 'theme.json', data: withBackground },
+    { name: 'assets/img/a.png', data: PNG, unixMode: 0o040755 },
+  ]),
+  bad('a stylesheet marked as a directory by the DOS attribute', [
+    base,
+    { name: 'style.css', data: '.x{color:red}', dosAttributes: 0x10 },
+  ]),
+  ok('folder entries marked as directories (Unix mode and DOS attribute)', [
+    base,
+    { name: 'assets/', data: '', unixMode: 0o040755 },
+    { name: 'assets/img/', data: '', dosAttributes: 0x10 },
+  ]),
+  ok(
+    'files with ordinary modes (0100644, 0100755, DOS archive bit)',
+    [
+      { ...base, unixMode: 0o100644 },
+      { name: 'style.css', data: '.x{color:red}', dosAttributes: 0x20 },
+      { name: 'LICENSE', data: 'MIT', unixMode: 0o100755 },
+    ],
+    { css: '.x{color:red}', licenses: ['LICENSE'] },
+  ),
+  ok('a folder name with a file mode is still a folder (both readers go by the name)', [
+    base,
+    { name: 'assets/', data: '', unixMode: 0o100644 },
+  ]),
+
+  // ---- style.css asset references (third gate finding 6): read as CSS, not as text
+  ok(
+    'a comment that mentions a missing asset is not a reference',
+    [base, { name: 'style.css', data: '/* Example asset:img/missing.png */' }],
+    { css: '/* Example asset:img/missing.png */' },
+  ),
+  ok(
+    'a comment that mentions url(asset:…) of a missing file, beside real CSS',
+    [base, { name: 'style.css', data: '.x{color:red} /* url(asset:img/missing.png) */' }],
+    { css: '.x{color:red} /* url(asset:img/missing.png) */' },
+  ),
+  ok(
+    'an unterminated comment runs to the end',
+    [base, { name: 'style.css', data: '.x{color:red} /* url(asset:img/missing.png)' }],
+    { css: '.x{color:red} /* url(asset:img/missing.png)' },
+  ),
+  bad('a reference after a comment is still a reference', [
+    base,
+    { name: 'style.css', data: '/* note */ .x{background-image:url(asset:img/missing.png)}' },
+  ]),
+  bad('a hex-escaped colon names a missing asset', [
+    base,
+    { name: 'style.css', data: '.x{background-image:url(asset\\3a img/missing.png)}' },
+  ]),
+  bad('an escaped colon in a quoted url names a missing asset', [
+    base,
+    { name: 'style.css', data: '.x{background-image:url("asset\\:img/missing.png")}' },
+  ]),
+  bad('an escaped function name names a missing asset', [
+    base,
+    { name: 'style.css', data: '.x{background-image:u\\72 l(asset:img/missing.png)}' },
+  ]),
+  bad('an escaped file name names a missing asset', [
+    base,
+    { name: 'style.css', data: '.x{background-image:url(asset:img/\\6d issing.png)}' },
+  ]),
+  ok(
+    'an escaped reference to a file the package has',
+    [
+      base,
+      { name: 'style.css', data: '.x{background-image:url(asset\\3a img/a.png)}' },
+      { name: 'assets/img/a.png', data: PNG },
+    ],
+    { css: '.x{background-image:url(asset\\3a img/a.png)}', assets: ['img/a.png'] },
+  ),
   bad('not a zip', text('this is not a zip file')),
   bad('a truncated zip', buildZip([base]).subarray(0, 40)),
 ]

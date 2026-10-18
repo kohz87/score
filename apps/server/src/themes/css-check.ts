@@ -3,7 +3,7 @@
 // CSS that matches is rejected, never edited. Escapes and comments are resolved first so `\63 ontent`, `u\72l(` and
 // `con/**/tent` are caught.
 
-import { scanThemeCss } from '@score/contract'
+import { cssAssetPaths, cssAssetReferences, scanThemeCss } from '@score/contract'
 
 export const MAX_THEME_CSS_BYTES = 262_144
 
@@ -91,24 +91,26 @@ export function checkThemeCss(css: string): CssCheck {
   const reasons = new Set<string>()
   // The visual-only allowlist (decision 102), shared with the browser's sanitiser: anything off it is refused, named.
   for (const finding of scanThemeCss(css)) reasons.add(`${finding.message} (${finding.rule})`)
-  const assets = new Set<string>()
   if (Buffer.byteLength(css) > MAX_THEME_CSS_BYTES)
     reasons.add(`style.css is larger than ${MAX_THEME_CSS_BYTES / 1024} KB`)
   for (const text of forms(css)) {
     for (const rule of RULES) if (rule.test.test(text)) reasons.add(rule.reason)
     for (const arg of urlArguments(text)) {
       if (arg === null) reasons.add('url() may only name an asset: file of the theme')
-      else assets.add(arg)
     }
   }
-  return { reasons: [...reasons], assets: [...assets].sort() }
+  // The files the CSS needs are read by the shared CSS-aware function the browser's draft check uses too.
+  return { reasons: [...reasons], assets: cssAssetPaths(css) }
 }
 
-/** Serving: `url(asset:fonts/x.woff2)` becomes the URL Score serves that file at. */
+/** Serving: `url(asset:fonts/x.woff2)` becomes the URL Score serves that file at (escaped spellings too). */
 export function rewriteAssetUrls(css: string, themeId: string): string {
-  return css.replace(
-    /url\(\s*(["']?)asset:((?:fonts|img)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(?:woff2|png|jpg|jpeg|webp|avif))\1\s*\)/gi,
-    (_all, quote: string, path: string) =>
-      `url(${quote}/api/themes/${themeId}/assets/${path}${quote})`,
-  )
+  let out = ''
+  let at = 0
+  for (const ref of cssAssetReferences(css)) {
+    out += css.slice(at, ref.start)
+    out += `url(${ref.quote}/api/themes/${themeId}/assets/${ref.path}${ref.quote})`
+    at = ref.end
+  }
+  return out + css.slice(at)
 }

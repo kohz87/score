@@ -2274,10 +2274,17 @@ it and still serves the other themes.
 - **One rule set for packages** (`packages/contract/src/theme-package.ts`, pure, no Node or browser APIs): the browser's
   reader (Customizer preview and import dialog) and the server's reader run the same code for the zip's structure
   (central directory against local headers, names, **extra fields: a Unicode Path field, 0x7075, is refused**, flags,
-  symlink metadata, Zip64, overlapping data), for the entries (layout, types by folder, at most 41 files, per-file and
+  symlink metadata, **folder metadata: an entry whose name is a file but whose Unix mode (directory bit 0x4000) or DOS
+  attribute (0x10) says folder is refused**, since inflaters honour the metadata and a trailing slash alone does not,
+  Zip64, overlapping data), for the entries (layout, types by folder, at most 41 files, per-file and
   total caps, compression ratio) and for the inflated bytes (magic bytes per asset type, nested archives, licence texts
   as plain UTF-8). A package the browser previews is therefore one the server's package rules accept; what remains
-  different is by design (CSS: the browser sanitises, the server refuses; a built-in id is a naming conflict). A shared
+  different is by design (CSS: the browser sanitises, the server refuses; a built-in id is a naming conflict). **The `asset:` references of `style.css` are read as CSS, by one shared function** (`cssAssetReferences` /
+  `cssAssetPaths`, `packages/contract/src/theme-css-assets.ts`): a reference is the argument of a `url()` function,
+  with comments and strings skipped and CSS escapes decoded (`url(asset\3a img/a.png)` and `u\72 l(…)` count; text in a
+  comment such as `/* asset:img/x.png */` does not). The browser's draft check and the server's import check both use
+  it to decide which files the package must contain, and `GET …/style.css` rewrites every such reference to its asset URL
+  (escaped spellings included). A shared
   accept/reject corpus (`packages/contract/test/theme-package-corpus.ts`) runs against both readers.
 - `POST /api/themes/import` (multipart, one `.zip` ≤ 5 MB) → `ThemeImportResult` `{ theme, report, detail }`; stored, **not**
   activated. `detail` is the `ThemeDetail` (manifest, CSS, assets, `etag`) exactly as this import committed it, read in the

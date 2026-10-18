@@ -14,6 +14,8 @@ export interface ZipSpec {
   localFlags?: number
   /** Unix mode in the external attributes (0o120777 is a symlink); the entry is then marked as made on Unix. */
   unixMode?: number
+  /** Low bits of the external attributes (MS-DOS style): 0x10 marks a directory, 0x20 an ordinary archived file. */
+  dosAttributes?: number
   /** Written into the local header instead of the real size. */
   localSize?: number
   /** Method written into the local header instead of 0 (stored). */
@@ -94,7 +96,8 @@ export function buildZip(entries: ZipSpec[]): Uint8Array {
     hv.setUint32(24, data.length, true)
     hv.setUint16(28, centralName.length, true)
     hv.setUint16(30, centralExtra.length, true)
-    if (entry.unixMode !== undefined) hv.setUint32(38, (entry.unixMode << 16) >>> 0, true)
+    const external = ((entry.unixMode ?? 0) << 16) | (entry.dosAttributes ?? 0)
+    if (external !== 0) hv.setUint32(38, external >>> 0, true)
     hv.setUint32(42, offset, true)
     head.set(centralName, 46)
     head.set(centralExtra, 46 + centralName.length)

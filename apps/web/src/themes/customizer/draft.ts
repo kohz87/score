@@ -1,4 +1,9 @@
-import { BUILTIN_THEME_IDS, ThemeManifestSchema, type ThemeManifest } from '@score/contract'
+import {
+  BUILTIN_THEME_IDS,
+  ThemeManifestSchema,
+  cssAssetPaths,
+  type ThemeManifest,
+} from '@score/contract'
 import { destinations } from '../../shell/destinations.ts'
 import { DEFAULT_NOW_ARRANGEMENT, type NowCardKind } from '../layout.ts'
 
@@ -363,9 +368,6 @@ export function addNowCard(draft: Draft, card: NowCardKind): Draft {
 // ---------------------------------------------------------------------------------------------------------------
 // Assets and checks
 
-const CSS_ASSET =
-  /asset:((?:fonts|img)\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(?:woff2|png|jpg|jpeg|webp|avif))/g
-
 /** Every `asset:` the draft points at (manifest and CSS), as `fonts/x.woff2`. */
 export function referencedAssets(draft: Draft): string[] {
   const found = new Set<string>()
@@ -376,7 +378,7 @@ export function referencedAssets(draft: Draft): string[] {
     else if (node && typeof node === 'object') Object.values(node).forEach(walk)
   }
   walk(draft.manifest)
-  for (const match of draft.css.matchAll(CSS_ASSET)) found.add(match[1]!)
+  for (const path of cssAssetPaths(draft.css)) found.add(path)
   return [...found].sort()
 }
 

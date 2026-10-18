@@ -96,4 +96,26 @@ describe('helpers', () => {
       `a{background:url(/api/themes/seaside/assets/img/bg.webp)} @font-face{src:url("/api/themes/seaside/assets/fonts/x.woff2")} b{color:red}`,
     )
   })
+
+  // Third gate finding 6: references are read as CSS (the browser's draft check uses the same function).
+  test('asset references ignore comments and decode escapes', () => {
+    expect(checkThemeCss('/* Example asset:img/missing.png */ a{color:red}').assets).toEqual([])
+    expect(checkThemeCss('a{background-image:url(asset\\3a img/a.png)}').assets).toEqual([
+      'img/a.png',
+    ])
+    expect(checkThemeCss('a{background-image:u\\72 l("asset\\:img/a.png")}').assets).toEqual([
+      'img/a.png',
+    ])
+  })
+
+  test('serving rewrites escaped references too, and leaves comments alone', () => {
+    expect(
+      rewriteAssetUrls(
+        'a{background-image:url(asset\\3a img/a.png)} /* url(asset:img/b.png) is a note */',
+        'seaside',
+      ),
+    ).toBe(
+      'a{background-image:url(/api/themes/seaside/assets/img/a.png)} /* url(asset:img/b.png) is a note */',
+    )
+  })
 })
