@@ -100,7 +100,7 @@ export function registerThemeRoutes(
     let pkg
     try {
       pkg = await readThemePackage(
-        await buildThemePackage(body.manifest, body.css, files, licenses),
+        await buildThemePackage(body.manifest, body.css, files, licenses, false),
       )
     } catch (error) {
       if (error instanceof ThemeRejected) throw rejected(error.reasons)

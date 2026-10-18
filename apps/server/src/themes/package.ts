@@ -212,6 +212,8 @@ export async function buildThemePackage(
   css: string,
   assets: Map<string, Buffer>,
   licenses: Record<string, string> = {},
+  /** Off for the in-memory package a save with files is checked as: it was never a zip, so no ratio to judge. */
+  compress = true,
 ): Promise<Buffer> {
   const zip = new JSZip()
   const options = { date: EPOCH, unixPermissions: 0o644, createFolders: false }
@@ -223,7 +225,7 @@ export async function buildThemePackage(
     zip.file(`assets/${path}`, assets.get(path)!, { ...options, compression: 'STORE' })
   return zip.generateAsync({
     type: 'nodebuffer',
-    compression: 'DEFLATE',
+    compression: compress ? 'DEFLATE' : 'STORE',
     compressionOptions: { level: 9 },
     platform: 'UNIX',
   })

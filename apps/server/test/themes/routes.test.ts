@@ -663,6 +663,14 @@ test('PUT can add assets and licence files to a custom theme; they are served an
   expect(await exported.files['OFL.txt']!.async('string')).toBe(OFL)
 })
 
+test('PUT with files accepts repetitive CSS that a save without files accepts (no compression ratio of its own)', async () => {
+  // C4 cross-check #1: the in-memory package used for the checks must not be compressed, or valid CSS trips the ratio rule.
+  const css = '.a{color:red}'.repeat(6000)
+  const res = await saveFiles('mine', null, { assets: { 'img/a.png': b64(PNG) } }, css)
+  expect(res.statusCode, res.body).toBe(200)
+  expect((await detailOf('mine')).css).toBe(css)
+})
+
 test('PUT: keep, assets and licenses decide the files; none of them leaves the files alone', async () => {
   const created = await saveFiles(
     'mine',
