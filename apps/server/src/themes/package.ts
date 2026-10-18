@@ -1,4 +1,4 @@
-import type { Readable } from 'node:stream'
+import { inflateRawSync, type ZlibOptions } from 'node:zlib'
 import JSZip from 'jszip'
 import {
   ThemeManifestSchema,
@@ -13,6 +13,7 @@ import {
   tooWellCompressed,
   uploadProblem,
   type ThemeManifest,
+  type ZipEntryInfo,
 } from '@score/contract'
 import { isBuiltinThemeId } from './builtin.ts'
 import { LICENSE_FILES } from './license-files.ts'
@@ -54,31 +55,42 @@ export const ASSET_TYPES: Record<string, string> = {
 
 export const assetExtension = packageAssetExtension
 
-function inflate(
-  file: JSZip.JSZipObject,
-  name: string,
-  declared: number,
-  packed: number,
-  cap: number,
-) {
-  return new Promise<Buffer>((resolve, reject) => {
-    const chunks: Buffer[] = []
-    let total = 0
-    const stream = file.nodeStream('nodebuffer') as unknown as Readable
-    const stop = (reason: string) => {
-      stream.destroy()
-      reject(new ThemeRejected([reason]))
+/**
+ * The bytes of one entry, read from the extent the shared structure check validated (`dataStart`, `packed`), not
+ * through JSZip: JSZip ignores bytes that follow the end of a deflate stream, while the browser's inflater refuses
+ * them, so a package could install that the Customizer shows as broken (K2 X11). Here a deflated entry must consume
+ * its whole stored extent, and the inflated length must equal the declared size, as in the browser.
+ */
+function inflate(bytes: Buffer, entry: ZipEntryInfo, cap: number): Buffer {
+  const { name, size: declared, packed } = entry
+  const raw = bytes.subarray(entry.dataStart, entry.dataStart + packed)
+  if (raw.length !== packed) throw new ThemeRejected([`${name} could not be read`])
+  let data: Buffer
+  if (entry.method === 0) {
+    data = raw
+  } else {
+    try {
+      // `info: true` also returns the engine, whose `bytesWritten` is what the inflater consumed; @types/node omits that overload.
+      const out = inflateRawSync(raw, {
+        info: true,
+        maxOutputLength: Math.max(1, Math.min(cap, declared)),
+      } as ZlibOptions) as unknown as { buffer: Buffer; engine: { bytesWritten: number } }
+      if (out.engine.bytesWritten !== raw.length)
+        throw new ThemeRejected([`${name} has extra bytes after its compressed data`])
+      data = out.buffer
+    } catch (error) {
+      if (error instanceof ThemeRejected) throw error
+      if ((error as { code?: string }).code === 'ERR_BUFFER_TOO_LARGE')
+        throw new ThemeRejected([`${name} is larger than the zip says it is`])
+      throw new ThemeRejected([`${name} could not be read`])
     }
-    stream.on('data', (chunk: Buffer) => {
-      total += chunk.length
-      if (total > cap || total > declared) return stop(`${name} is larger than the zip says it is`)
-      if (tooWellCompressed(total, packed))
-        return stop('The zip compresses suspiciously well (zip bomb?)')
-      chunks.push(chunk)
-    })
-    stream.on('error', () => reject(new ThemeRejected([`${name} could not be read`])))
-    stream.on('end', () => resolve(Buffer.concat(chunks)))
-  })
+  }
+  if (data.length > cap || data.length > declared)
+    throw new ThemeRejected([`${name} is larger than the zip says it is`])
+  if (tooWellCompressed(data.length, packed))
+    throw new ThemeRejected(['The zip compresses suspiciously well (zip bomb?)'])
+  if (data.length !== declared) throw new ThemeRejected([`${name} doesn’t match its size`])
+  return Buffer.from(data)
 }
 
 /** Unpacks and validates a theme zip. Throws `ThemeRejected` with every reason found. */
@@ -115,15 +127,8 @@ export async function readThemePackage(bytes: Buffer): Promise<ThemePackage> {
   let total = 0
   for (const entry of listed) {
     if (entry.isDir) continue
-    const file = zip.files[entry.name]
-    if (!file) throw new ThemeRejected(['That zip file couldn’t be read'])
-    const data = await inflate(
-      file,
-      entry.name,
-      entry.size,
-      entry.packed,
-      packageFileCap(entry.name),
-    )
+    if (!zip.files[entry.name]) throw new ThemeRejected(['That zip file couldn’t be read'])
+    const data = inflate(bytes, entry, packageFileCap(entry.name))
     total += data.length
     if (total > MAX_UNPACKED_BYTES)
       throw new ThemeRejected([
