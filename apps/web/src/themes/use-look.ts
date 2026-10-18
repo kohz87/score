@@ -6,6 +6,7 @@ import { readStoredTheme, THEME_CHANGED, type ThemeChoice } from '../data/theme.
 import { useOptionalStream } from '../data/query-client.ts'
 import { builtinSummaries, saveSharedLook, themeListQuery, themesKey } from './queries.ts'
 import { clearDeviceLook, lookStore, useLookState, writeDeviceOverride } from './look-store.ts'
+import { useLayout, type LayoutConfig } from './layout.ts'
 
 export type Look = {
   themes: ThemeSummary[]
@@ -20,6 +21,8 @@ export type Look = {
   mode: ThemeChoice
   safe: boolean
   failure: string | null
+  /** What the applied theme asks of the components (menu, Now cards, chat); Score's default when none is applied. */
+  layout: LayoutConfig
   /** False while the theme list could not be read (older server): only the built-in themes are offered. */
   fromServer: boolean
   chooseForDevice: (id: string | null) => void
@@ -87,6 +90,7 @@ export function useLook(): Look {
       ? state.device
       : null
   const stored = readStoredTheme()
+  const layout = useLayout()
 
   const saveShared = useCallback(
     async (settings: { activeTheme: string; mode: ThemeChoice }) => {
@@ -110,6 +114,7 @@ export function useLook(): Look {
     mode: stored ?? sharedMode,
     safe: state.safe,
     failure: state.failure,
+    layout,
     fromServer: !!list.data,
     chooseForDevice: (id) => {
       writeDeviceOverride(id)

@@ -37,7 +37,9 @@ export function writeDeviceOverride(id: string | null): void {
   emit()
 }
 
-export type LookCache = { id: string; attributes: Record<string, string>; css: string }
+type CacheVariant = { attributes: Record<string, string>; css: string; layout?: unknown }
+/** `user` is the same look as the chat-first user view wears it (`views.user`); the boot script picks by address. */
+export type LookCache = { id: string; user?: CacheVariant } & CacheVariant
 
 export function writeLookCache(cache: LookCache | null): void {
   try {
@@ -45,6 +47,24 @@ export function writeLookCache(cache: LookCache | null): void {
     else window.localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
   } catch {
     // No cache: the next visit paints the default look for a moment.
+  }
+}
+
+/**
+ * The layout the last applied theme asked for, read before the first render so the menu and the Now cards don't
+ * jump when the theme arrives. Same conditions as public/boot-look.js: not in safe mode, not for another device
+ * choice.
+ */
+export function readCachedLayout(view: 'admin' | 'user'): unknown {
+  try {
+    if (safeFromUrl()) return undefined
+    const cache = JSON.parse(window.localStorage.getItem(CACHE_KEY) || 'null') as LookCache | null
+    if (!cache || typeof cache !== 'object') return undefined
+    const device = window.localStorage.getItem(DEVICE_KEY)
+    if (device && cache.id !== device) return undefined
+    return (view === 'user' ? (cache.user ?? cache) : cache).layout
+  } catch {
+    return undefined
   }
 }
 
