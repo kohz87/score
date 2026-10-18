@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { chatSettled } from './chat-settled.ts'
 import { fixtureNow } from './now-fixture.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
@@ -51,7 +52,11 @@ async function open(page: Page, target: (typeof pages)[number], width: number) {
   await expect(page.getByText(/^Loading/)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await expect(page.locator('html[data-motion]')).toHaveCount(0)
-  if (target.name === 'chat') await settleThread(page)
+  if (target.name === 'chat') {
+    // The context ring arrives after the first steady frame and grows the composer (T2): wait for the settled room.
+    await chatSettled(page)
+    await settleThread(page)
+  }
 }
 
 /**
