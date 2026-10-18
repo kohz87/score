@@ -1,5 +1,5 @@
 import { parseColor, type Rgba } from '../color.ts'
-import { ratioText, worstRatio } from './checks.ts'
+import { worstRatio } from './checks.ts'
 
 // Measures the text that is really drawn in the preview (PLAN 9.4, lead note 2026-10-18): small text over a picture or
 // a glass card can be unreadable while every pair of colour tokens is fine. For each visible piece of text the
@@ -60,8 +60,9 @@ export function measureText(doc: Document, sampler: Sampler | null, limit = 8): 
       opacity *= Number(computed.opacity)
       const background = parseColor(computed.backgroundColor)
       const isPage = node === doc.body || node === doc.documentElement
-      if (computed.backgroundImage !== 'none' && !isPage) {
-        judged = false
+      if (computed.backgroundImage !== 'none') {
+        // The page's own picture is measured through the sampler; a gradient or picture anywhere else isn't.
+        if (!isPage) judged = false
         break
       }
       if (background && background[3] > 0) layers.push(background)
@@ -69,7 +70,6 @@ export function measureText(doc: Document, sampler: Sampler | null, limit = 8): 
         reachedPage = false
         break
       }
-      if (computed.backgroundImage !== 'none' && isPage) break
     }
     if (!judged || opacity < 0.5) continue
     const bases: Rgba[] =
@@ -86,10 +86,6 @@ export function measureText(doc: Document, sampler: Sampler | null, limit = 8): 
     if (!known || ratio < known.ratio) found.set(key, { text: key, ratio, minimum })
   }
   return [...found.values()].sort((a, b) => a.ratio - b.ratio).slice(0, limit)
-}
-
-export function textFindingWords(finding: TextFinding, page: string): string {
-  return `“${finding.text}” on ${page} is hard to read over the background (${ratioText(finding.ratio)}; ${finding.minimum}:1 is the least that works). Dim the picture, or choose a text colour with more contrast.`
 }
 
 // ---------------------------------------------------------------------------------------------------------------

@@ -49,3 +49,14 @@ export function toDataUrl(bytes: Uint8Array, mime: string): string {
     binary += String.fromCharCode(...bytes.subarray(i, i + step))
   return `data:${mime};base64,${btoa(binary)}`
 }
+
+const dataUrls = new WeakMap<Uint8Array, string>()
+/** The data address of a file added in this session, made once per file. */
+export function dataUrlFor(bytes: Uint8Array, path: string): string {
+  let url = dataUrls.get(bytes)
+  if (!url) {
+    url = toDataUrl(bytes, mimeForPath(path))
+    dataUrls.set(bytes, url)
+  }
+  return url
+}

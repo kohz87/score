@@ -2,9 +2,16 @@
 // but none of the look applied to the page around it. The preview paints the draft into one; the defaults probe reads
 // Score's and the packs' values from another, so a custom theme on the page can't leak into the copy of a built-in.
 
+// The sentinel tells the document made from this text from the empty one a frame has before its source loads.
 const BLANK =
-  '<!doctype html><html lang="en"><head><meta charset="utf-8"></head><body></body></html>'
+  '<!doctype html><html lang="en" data-score-frame><head><meta charset="utf-8"></head><body></body></html>'
 export const FRAME_SRCDOC = BLANK
+
+/** The frame's document once it is ours (its source has loaded), else null. */
+export function frameDocument(frame: HTMLIFrameElement): Document | null {
+  const doc = frame.contentDocument
+  return doc?.documentElement.hasAttribute('data-score-frame') ? doc : null
+}
 
 /** Style nodes of the app, not the look applied to the page: those are the engine's (adopted sheets, boot copy). */
 function appStyleNodes(head: HTMLHeadElement): Element[] {
@@ -67,12 +74,17 @@ export async function createProbe(): Promise<Probe> {
   frame.style.cssText =
     'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:0;visibility:hidden;pointer-events:none'
   frame.srcdoc = BLANK
-  const loaded = new Promise<void>((resolve) =>
-    frame.addEventListener('load', () => resolve(), { once: true }),
-  )
+  const loaded = new Promise<Document>((resolve) => {
+    const check = () => {
+      const ours = frameDocument(frame)
+      if (!ours) return
+      frame.removeEventListener('load', check)
+      resolve(ours)
+    }
+    frame.addEventListener('load', check)
+  })
   document.body.append(frame)
-  await loaded
-  const doc = frame.contentDocument!
+  const doc = await loaded
   const mirror = mirrorStyles(document, doc)
   await mirror.ready
   const root = doc.documentElement

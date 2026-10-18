@@ -68,16 +68,14 @@ const FALLBACK: Partial<Record<ThemeColorToken, ThemeColorToken>> = {
 export const modeName = (mode: Mode) => (mode === 'light' ? 'Light' : 'Dark')
 export const ratioText = (ratio: number) => `${(Math.floor(ratio * 10) / 10).toFixed(1)}:1`
 
-/**
- * The colour pairs of a draft that are too faint, for both modes. `defaults(token, mode)` gives Score's own value for a
- * token the draft doesn't set. Only pairs that involve a colour the draft changed are reported: Score's own pairs are
- * checked elsewhere (packs.contrast.test).
- */
-export function colourFindings(
+export type PairProblem = { mode: Mode; pair: Pair; ratio: number }
+
+/** The pairs of colours that are too faint, for both modes. Only pairs that involve a colour the draft sets. */
+export function pairProblems(
   manifest: ThemeManifest,
   defaults: (token: ThemeColorToken, mode: Mode) => string,
-): Finding[] {
-  const out: Finding[] = []
+): PairProblem[] {
+  const out: PairProblem[] = []
   for (const mode of ['light', 'dark'] as const) {
     const set = (manifest.colors?.[mode] ?? {}) as Partial<Record<ThemeColorToken, string>>
     const valueOf = (token: ThemeColorToken): string => {
@@ -98,21 +96,48 @@ export function colourFindings(
       const background = parseColor(valueOf(pair.background))
       if (!text || !background) continue
       const ratio = contrastRatio(text, background)
-      if (ratio >= pair.minimum) continue
-      out.push({
-        id: `pair:${mode}:${pair.text}:${pair.background}`,
-        where: modeName(mode),
-        text: `${pair.what} is hard to read (${ratioText(ratio)}; ${pair.minimum}:1 is the least that works). Change “${tokenLabel(pair.text)}” or “${tokenLabel(pair.background)}”.`,
-        tokens: [pair.text, pair.background],
-      })
+      if (ratio < pair.minimum) out.push({ mode, pair, ratio })
     }
+  }
+  return out
+}
+
+/** A short warning for each colour token that takes part in a faint pair, for one mode. */
+export function tokenWarnings(
+  problems: PairProblem[],
+  mode: Mode,
+): Partial<Record<ThemeColorToken, string>> {
+  const out: Partial<Record<ThemeColorToken, string>> = {}
+  for (const { mode: where, pair, ratio } of problems) {
+    if (where !== mode) continue
+    out[pair.text] ??= `Hard to read on “${tokenLabel(pair.background)}” (${ratioText(ratio)}).`
+    out[pair.background] ??=
+      `“${tokenLabel(pair.text)}” is hard to read on this (${ratioText(ratio)}).`
+  }
+  return out
+}
+
+/**
+ * Everything wrong with a draft's colours, in words: faint pairs, and the protected surfaces that will use Score's
+ * own colours instead. `defaults(token, mode)` gives Score's own value for a token the draft doesn't set.
+ */
+export function colourFindings(
+  manifest: ThemeManifest,
+  defaults: (token: ThemeColorToken, mode: Mode) => string,
+): Finding[] {
+  const out: Finding[] = pairProblems(manifest, defaults).map(({ mode, pair, ratio }) => ({
+    id: `pair:${mode}:${pair.text}:${pair.background}`,
+    where: modeName(mode),
+    text: `${pair.what} is hard to read (${ratioText(ratio)}; ${pair.minimum}:1 is the least that works). Change “${tokenLabel(pair.text)}” or “${tokenLabel(pair.background)}”.`,
+    tokens: [pair.text, pair.background],
+  }))
+  for (const mode of ['light', 'dark'] as const)
     if (failsProtectedContrast(manifest, mode))
       out.push({
         id: `protected:${mode}`,
         where: modeName(mode),
         text: 'Approval cards and security screens will use Score’s own colours, because the text colours here are too faint on them.',
       })
-  }
   // The user view wears `views.user` over the theme: its colours are checked the same way.
   const user = lookForView(manifest, 'user')
   if (user !== manifest)
