@@ -452,3 +452,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   installs, Knowledge editor images; one shared `UploadProgress` component over `apiUpload`. Lead wrote PLAN entry and
   brief on `task/10.4-upload-progress`; Sonnet builder started in `../score-worktrees/10.4`, in parallel with 10.3
   (disjoint files; both append to PLAN.md, resolved at merge). Both ship together as 1.11.0.
+- **10.3 done** (`task/10.3-staged-zip`, builder: 4 commits; check green; e2e 634/0; the new e2e counts one PUT per
+  preview + unzip). Codex cross-check (`~/.score/codex/runs/10.3/crosscheck.md`): 1 P1 + 3 P2, all accepted, two of them
+  also found in the lead's review — start-up cleanup followed a symlinked staging folder (P1); concurrent previews
+  could exceed 8 / 256 MB; one stage could be consumed twice; a failed write left a temp file. Lead fixed all four in
+  `staging.ts` (5ecf4529: lstat-refused root, serialised admission, per-stage `use()` that a success consumes and a
+  throw keeps, temp removed in the catch) with 5 regression tests, all failing first. Waiting to ship with 10.4.
