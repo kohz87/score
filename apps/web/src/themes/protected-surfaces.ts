@@ -42,6 +42,7 @@ export const protectedClasses = [
   // Agent identity and error toasts
   'agent-glyph',
   'pet-avatar',
+  'room-stage',
   'chat-toast',
   // The way back
   'command-run',

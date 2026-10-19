@@ -1,0 +1,382 @@
+/* The room stage (PLAN 10.10, decision 110): a strip under a chat room's title where its members live. It is a
+   protected surface (themes/protected-surfaces.ts): the parts Score moves with `transform`, the crossfaded files and the
+   overlays carry the `room-stage__move`, `room-stage__anim` and `room-stage__fx` classes protected.css leaves alone;
+   everything else is placed without transforms (a zero-width slot centres its member). */
+.room-stage {
+  position: relative;
+  box-sizing: border-box;
+  margin: 12px 28px 0;
+}
+
+.room-stage__strip {
+  position: relative;
+  height: 150px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background-color: var(--ground);
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--ground) 40%, var(--card)),
+    var(--ground)
+  );
+}
+
+/* Zero width: the member (wider than that) is centred on `left` by flex alone, never by a transform. */
+.room-stage__slot {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  width: 0;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.room-stage__slot[data-front='true'] {
+  z-index: 4;
+}
+
+.room-stage__actor {
+  position: relative;
+  flex: none;
+  width: max-content;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.room-stage__actor:focus-visible .room-stage__body {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+/* `width: max-content` and images that opt out of max-width: a narrow anchor must not squeeze the character thin. */
+.room-stage__body {
+  position: relative;
+  display: grid;
+  width: max-content;
+  justify-items: center;
+  transition: transform 0.3s ease;
+}
+
+.room-stage__actor[data-front='true'] .room-stage__body {
+  transform: scale(1.08);
+  transform-origin: 50% 100%;
+}
+
+.room-stage__actor[data-mood='sleep'] .room-stage__fig,
+.room-stage__actor[data-mood='sleep'] .room-stage__mark,
+.room-stage__actor[data-quiet='true'] .room-stage__fig,
+.room-stage__actor[data-quiet='true'] .room-stage__mark {
+  opacity: 0.72;
+}
+
+.room-stage__fig {
+  position: relative;
+  /* Feet stand on the shadow; `floor` lifts them if the files have them too low. */
+  bottom: calc(var(--stage-floor, 0) * 112px);
+  display: grid;
+  height: 112px;
+}
+
+.room-stage__anim {
+  grid-area: 1 / 1;
+  width: auto;
+  height: 112px;
+  max-width: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  user-select: none;
+}
+
+.room-stage__anim--on {
+  opacity: 1;
+}
+
+/* Mirrored when walking left; on the files themselves, so the hop of the figure doesn't fight it. */
+.room-stage__fig--flip .room-stage__anim {
+  transform: scaleX(-1);
+}
+
+.room-stage__fig--hop {
+  animation: room-stage-hop 0.7s ease-in-out infinite;
+}
+
+.room-stage__mark {
+  display: grid;
+  height: 56px;
+  place-items: end center;
+  pointer-events: none;
+}
+
+.room-stage__mark .agent-glyph {
+  /* A mark is drawn 1.6x its box (agent-glyph.css): 30px makes it 48px. */
+  --glyph-svg-size: 30px;
+}
+
+.room-stage__mark--hop {
+  animation: room-stage-hop 0.7s ease-in-out infinite;
+}
+
+/* A soft shadow under the feet, no floor line: centred by its margins, shaped by a blurred ellipse. */
+.room-stage__shadow {
+  position: absolute;
+  right: 0;
+  bottom: calc(14px + var(--stage-floor, 0) * 0px);
+  left: 0;
+  width: 56px;
+  height: 6px;
+  margin: 0 auto;
+  border-radius: 50%;
+  box-shadow: 0 0 9px 5px rgb(18 19 26 / 14%);
+  pointer-events: none;
+}
+
+.room-stage__actor:has(.room-stage__mark) .room-stage__shadow {
+  width: 34px;
+}
+
+.room-stage__name {
+  margin-top: 1px;
+  font: 500 11px var(--font-code, monospace);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.room-stage__badge {
+  position: absolute;
+  right: -6px;
+  bottom: 18px;
+  z-index: 2;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 4px rgb(18 19 26 / 18%);
+  pointer-events: none;
+}
+
+.room-stage__badge .agent-glyph {
+  --glyph-svg-size: 14px;
+}
+
+/* Score's overlays: inline SVG, so a theme's text rules never touch them, centred without transforms. */
+.room-stage__fx {
+  position: absolute;
+  z-index: 5;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.room-stage__bang,
+.room-stage__dots,
+.room-stage__zzz {
+  top: 2px;
+  right: 0;
+  left: 0;
+  margin: 0 auto;
+}
+
+.room-stage__bang {
+  width: 22px;
+  height: 22px;
+  transform-origin: 50% 100%;
+  animation: room-stage-pop 1.3s ease-in-out infinite;
+}
+
+.room-stage__dots {
+  width: 30px;
+  height: 12px;
+}
+
+.room-stage__dot {
+  fill: var(--stage-color);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: room-stage-wave 1.2s ease-in-out infinite;
+}
+
+.room-stage__zzz {
+  width: 28px;
+  height: 28px;
+}
+
+.room-stage__z {
+  fill: var(--stage-color);
+  /* Visible on its own: under Still (no animation) the sign stays, the animation only fades it in and out. */
+  fill-opacity: 0.8;
+  font: 700 12px var(--font-body, sans-serif);
+  animation: room-stage-z 2.6s ease-in infinite;
+}
+
+/* A greeting inside the strip, beside the head: to the right, or to the left near the right edge. */
+.room-stage__say {
+  top: 4px;
+  left: calc(100% - 18px);
+  width: 44px;
+  height: 22px;
+  transform-origin: 0 100%;
+  animation: room-stage-say 0.18s cubic-bezier(0.3, 1.6, 0.5, 1) 1;
+}
+
+.room-stage__say--left {
+  right: calc(100% - 18px);
+  left: auto;
+  transform-origin: 100% 100%;
+}
+
+.room-stage__more {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 6;
+  min-width: 40px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: 600 13px var(--font-body, sans-serif);
+  cursor: pointer;
+}
+
+.room-stage__members {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--card);
+  list-style: none;
+}
+
+.room-stage__member {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--ink);
+  font: 500 14px var(--font-body, sans-serif);
+  text-align: left;
+  cursor: pointer;
+}
+
+.room-stage__member small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@keyframes room-stage-hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes room-stage-wave {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes room-stage-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.25);
+  }
+  30% {
+    transform: scale(1);
+  }
+}
+
+@keyframes room-stage-z {
+  0% {
+    fill-opacity: 0;
+    transform: translate(0, 0);
+  }
+  20% {
+    fill-opacity: 1;
+  }
+  100% {
+    fill-opacity: 0;
+    transform: translate(10px, -22px);
+  }
+}
+
+@keyframes room-stage-say {
+  0% {
+    transform: scale(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (width < 560px) {
+  .room-stage {
+    margin: 10px 16px 0;
+  }
+
+  .room-stage__strip {
+    height: 120px;
+  }
+
+  .room-stage__fig,
+  .room-stage__anim {
+    height: 88px;
+  }
+
+  .room-stage__fig {
+    bottom: calc(var(--stage-floor, 0) * 88px);
+  }
+}
+
+/* Scrolled out of view: every animation stands still until the stage is seen again. */
+.room-stage--paused,
+.room-stage--paused * {
+  animation-play-state: paused !important;
+}
+
+/* Still (Settings › Look, or reduced motion): no animation anywhere, no crossfade. */
+html[data-liveliness='still'] .room-stage *,
+html[data-liveliness='still'] .room-stage {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-stage,
+  .room-stage * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -20,8 +20,10 @@ import { usePendingDeletes } from './message-deletion.ts'
 import { MessageItem } from './MessageItem.tsx'
 import { ImportedBanner } from './ImportedBanner.tsx'
 import { RenameRoom } from './RenameRoom.tsx'
-import { StatusLine } from '../../live/StatusLine.tsx'
-import { useStatusLines } from '../../live/use-activity.ts'
+import { RoomStatus } from './RoomStatus.tsx'
+import { RoomStage } from './stage/RoomStage.tsx'
+import { StageToggle } from './stage/StageToggle.tsx'
+import { stageMembers } from './stage/stage-mood.ts'
 import { messagesQuery, roomQuery, versionsQuery } from './queries.ts'
 import {
   BranchView,
@@ -296,28 +298,6 @@ function MessagePage({
   )
 }
 
-/** The agents of the room that are working, each with what it is doing now. The line keeps its height when empty. */
-function RoomStatus({ working, agents }: { working: string[]; agents: AgentSummary[] }) {
-  const lines = useStatusLines(working.map((id) => ({ id, working: true })))
-  const shown = working.flatMap((id) => {
-    const agent = agents.find((item) => item.id === id)
-    const line = lines.get(id)
-    return agent && line ? [{ agent, line }] : []
-  })
-  return (
-    <ul className="chat-room-status" aria-label="Working now">
-      {shown.slice(0, 3).map(({ agent, line }) => (
-        <li key={agent.id}>
-          <AgentGlyph agent={agent} size="xs" bare decorative />
-          <strong>{agent.name}</strong>
-          <StatusLine line={line} reserve={false} />
-        </li>
-      ))}
-      {shown.length > 3 && <li>and {shown.length - 3} more</li>}
-    </ul>
-  )
-}
-
 export function ChatThread({
   roomId,
   agents,
@@ -477,14 +457,16 @@ export function ChatThread({
             </h1>
           )}
           {room?.leadAgentId && <p>Unaddressed messages go to {lead?.name ?? room.leadAgentId}</p>}
-          {room && <RoomStatus working={room.activeAgents} agents={agents} />}
+          {room && <RoomStatus room={room} agents={agents} />}
         </div>
+        {!userView && room && stageMembers(room, agents).length > 0 && <StageToggle />}
         {!userView && (
           <Link className="chat-score-link" to="/now">
             See it on the Score
           </Link>
         )}
       </header>
+      {!userView && room && <RoomStage room={room} agents={agents} />}
       {status === 'pending' && !room && (
         <p className="chat-state" role="status">
           Loading room…

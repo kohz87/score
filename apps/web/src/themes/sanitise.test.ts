@@ -28,6 +28,12 @@ describe('sanitiseCss', () => {
     expect(reasons('.chat-approval button { display: none }')).toEqual(['protected_selector'])
     expect(reasons('.orch-decision--gate { color: red }')).toEqual(['protected_selector'])
     expect(reasons('.agent-glyph__ring { fill: none }')).toEqual(['protected_selector'])
+    // The room stage and every part of it (PLAN 10.10).
+    expect(reasons('.room-stage { display: none }')).toEqual(['protected_selector'])
+    expect(reasons('.room-stage__body { color: red }')).toEqual(['protected_selector'])
+    expect(reasons('.chat-thread .room-stage__badge { display: none }')).toEqual([
+      'protected_selector',
+    ])
     expect(reasons('.orch-decisions { color: red }')).toEqual(['protected_selector'])
     // A pet avatar's own parts: Score's rules reach them, a theme's never do (so protected.css can leave them be).
     for (const part of [

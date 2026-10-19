@@ -160,6 +160,18 @@
   align-items: center;
   color: var(--ink);
 }
+.chat-stage-toggle {
+  height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
 .chat-scroll {
   flex: 1;
   min-height: 0;

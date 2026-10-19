@@ -100,6 +100,8 @@ for (const shot of shots) {
       const mode = variant === 'dark' ? 'dark' : 'light'
       await page.setViewportSize({ width: widths[variant], height: 1100 })
       await page.addInitScript((m) => localStorage.setItem('score.theme', m), mode)
+      // The room stage's members wander when Lively: a Chat shot needs them where they start.
+      if (shot.path.startsWith('/chat')) await page.emulateMedia({ reducedMotion: 'reduce' })
       await openWithTheme(page, [shot.theme], { active: shot.theme.id, mode })
       await page.goto(shot.path)
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')

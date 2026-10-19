@@ -31,6 +31,8 @@ for (const id of packagedThemeIds) {
         const mode = variant === 'dark' ? 'dark' : 'light'
         await page.setViewportSize({ width: widths[variant], height: 1100 })
         await page.addInitScript((m) => localStorage.setItem('score.theme', m), mode)
+        // The room stage's members wander when Lively: a Chat shot needs them where they start.
+        if (target.name === 'chat') await page.emulateMedia({ reducedMotion: 'reduce' })
         await openPackagedTheme(page, id, mode)
         await page.goto(target.path)
         if (target.name === 'chat' && variant === 'phone')

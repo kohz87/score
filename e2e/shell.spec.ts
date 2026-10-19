@@ -17,7 +17,10 @@ for (const [path, title] of destinations) {
     const external: string[] = []
     const fonts: string[] = []
     page.on('request', (request) => {
-      if (new URL(request.url()).hostname !== '127.0.0.1') external.push(request.url())
+      // Only addresses that go over the network: `blob:` and `data:` URLs (e.g. a pack portrait) never leave the page.
+      const url = new URL(request.url())
+      if (/^(https?|wss?):$/.test(url.protocol) && url.hostname !== '127.0.0.1')
+        external.push(request.url())
       if (request.resourceType() === 'font') fonts.push(request.url())
     })
     await page.goto(path)
