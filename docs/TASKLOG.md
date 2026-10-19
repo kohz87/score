@@ -497,3 +497,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   `task/10.10-room-stage` (lessons from the preview review carried in: max-content member boxes, bubbles inside the
   stage, shadow not a floor line, spacing by position and target, transforms exempted in the protected layer); Sonnet
   builder in `../score-worktrees/10.10`.
+- **10.10 built** (builder; check green, e2e 638/0, 43 Chat baselines regenerated, lead reviewed chat-1440 and
+  chat-room-390). Cross-check (Codex high): 4 P2 + 1 P3 accepted — unattributed approvals never shown (lead revised the
+  rule: approvals tied to another room stay out, unattributed ones show), streamed hand-offs missed, overlap after roster
+  change, offscreen pause left animations running, inherited-key lookup (`constructor`). Lead additions to the fix
+  round: header "Thinking…" line contradicted the stage (it reads `activeAgents` = wrote in the last 10 min) → same
+  mood source; Still keeps mood signs static; click plays `greet`; quiet-room naps after 5 min.
