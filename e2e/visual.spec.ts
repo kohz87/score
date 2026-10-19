@@ -10,7 +10,9 @@ const destinations = [
   { name: 'team', path: '/team', ready: '.team-agent-card' },
   { name: 'agent', path: '/team/builder', ready: '.team-tabs' },
   { name: 'reports', path: '/reports', ready: '.reports-table tbody tr' },
-  { name: 'settings', path: '/settings', ready: '.rules-columns' },
+  // Settings is one page per section (PLAN 10.1): Rules and approvals and the landing page, Models and keys.
+  { name: 'settings', path: '/settings/rules', ready: '.rules-columns' },
+  { name: 'settings-models', path: '/settings/models', ready: '.settings-card' },
   { name: 'journey', path: '/reports?tab=journey', ready: '.journey__row' },
   { name: 'popout', path: '/agents/builder/pop', ready: '.pop-chat textarea' },
   // Last: other tests in this file address destinations by index.

@@ -7,7 +7,7 @@ test('Settings › Look › Style (always shown): a pack applies live, survives 
   page,
 }) => {
   await pair(page)
-  await page.goto('/settings')
+  await page.goto('/settings/look')
   const html = page.locator('html')
   await expect(html).toHaveAttribute('data-pack', 'score')
   await expect(html).toHaveAttribute('data-layout', 'top')
@@ -51,7 +51,7 @@ test('Settings › Look › Style (always shown): a pack applies live, survives 
   ).toBeLessThanOrEqual(1)
 
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/settings')
+  await page.goto('/settings/look')
   await page.getByRole('radio', { name: /^Score/ }).click()
   await expect(html).toHaveAttribute('data-pack', 'score')
   await page.reload()

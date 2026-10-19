@@ -455,8 +455,8 @@ test.describe('X1: remote access with a password set is one decision', () => {
         return route.abort()
       },
     )
-    await asRemote(page, '/settings')
-    await page.goto('/settings')
+    await asRemote(page, '/settings/remote-access')
+    await page.goto('/settings/remote-access')
     const section = page.locator('#remote-access')
     await expect(section).toBeVisible()
     await section.getByLabel('Security password').fill('correct horse battery')

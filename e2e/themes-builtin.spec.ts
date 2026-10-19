@@ -72,7 +72,7 @@ for (const id of packagedThemeIds) {
   test.describe(id, () => {
     test('is offered in Settings › Look and applies its manifest', async ({ page }) => {
       await pair(page)
-      await page.goto('/settings#look')
+      await page.goto('/settings/look')
       const styles = page.getByRole('region', { name: 'Look' }).getByRole('radiogroup', {
         name: 'Style',
       })

@@ -15,11 +15,6 @@ test('settings shows providers and connections and the command to run for a sign
   // Agents on the demo provider are identified by glyph (color and shape).
   await expect(models.getByRole('img', { name: /builder/i }).first()).toBeVisible()
 
-  const connections = page.getByRole('region', { name: 'Connections' })
-  await expect(connections.getByText('web-search')).toBeVisible()
-  await expect(connections.getByText('Telegram')).toBeVisible()
-  await expect(page.getByText('Coming soon.')).toHaveCount(0)
-
   // Connecting needs a paired browser, so the request is stubbed; the UI contract is what is checked.
   await page.route('**/api/settings/providers/anthropic/connect', (route) =>
     route.fulfill({ json: { next: 'run_in_terminal', command: 'hermes auth add anthropic' } }),
@@ -29,4 +24,12 @@ test('settings shows providers and connections and the command to run for a sign
   await expect(command.getByText('hermes auth add anthropic')).toBeVisible()
   await command.getByRole('button', { name: 'Done' }).click()
   await expect(command).toBeHidden()
+
+  // Connections is a page of its own.
+  await expect(page.getByRole('region', { name: 'Connections' })).toHaveCount(0)
+  await nav.getByRole('link', { name: 'Connections' }).click()
+  const connections = page.getByRole('region', { name: 'Connections' })
+  await expect(connections.getByText('web-search')).toBeVisible()
+  await expect(connections.getByText('Telegram')).toBeVisible()
+  await expect(page.getByText('Coming soon.')).toHaveCount(0)
 })

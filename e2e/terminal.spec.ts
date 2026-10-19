@@ -94,7 +94,7 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
 
     // Settings lists the open terminal; Close ends it.
     const settings = await page.context().newPage()
-    await settings.goto(`${origin}/settings`)
+    await settings.goto(`${origin}/settings/terminal`)
     await expect(settings.getByRole('heading', { name: 'Terminal' })).toBeVisible()
     await settings
       .getByRole('list', { name: 'Open terminals' })

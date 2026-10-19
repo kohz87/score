@@ -16,7 +16,7 @@ test('look, hostile and safe screenshots', async ({ page }) => {
     look,
   )
   await pair(page)
-  await page.goto('/settings#look')
+  await page.goto('/settings/look')
   await page.getByRole('region', { name: 'Look' }).scrollIntoViewIfNeeded()
   await expect(page.getByRole('radiogroup', { name: 'Style' })).toBeVisible()
   await page.getByRole('region', { name: 'Look' }).screenshot({ path: `${dir}/look.png` })

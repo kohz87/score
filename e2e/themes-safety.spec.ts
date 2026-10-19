@@ -261,12 +261,17 @@ test.describe('a hostile theme', () => {
       look,
     )
     await pair(page)
-    await page.goto('/settings')
+    // Rules and approvals is a page of its own; the Look page holds the reset and the guard form.
+    await page.goto('/settings/rules')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    await expect(page.getByRole('region', { name: /Rules/ })).toBeVisible()
+    await page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('link', { name: 'Look' })
+      .click()
     const region = page.getByRole('region', { name: 'Look' })
     await expect(region.getByRole('button', { name: 'Reset look on this device' })).toBeVisible()
     await expect(region.getByLabel(/Ask for the security password/)).toBeVisible()
-    await expect(page.getByRole('region', { name: /Rules/ })).toBeVisible()
     // And the reset works from there.
     await region.getByRole('button', { name: 'Reset look on this device' }).click()
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
@@ -294,7 +299,7 @@ test.describe('the way back', () => {
     )
     // The link goes to Settings › Look without leaving safe mode.
     await banner.getByRole('link', { name: 'Settings › Look' }).click()
-    await expect(page).toHaveURL(/\/settings#look/)
+    await expect(page).toHaveURL(/\/settings\/look$/)
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
     // The device choice is untouched: the next ordinary visit has the theme again.
@@ -352,7 +357,7 @@ test.describe('shared and per-device looks', () => {
     const look: Look = { active: 'tidy', mode: 'light' }
     await mockThemes(page, [tidyTheme], look)
     await pair(page)
-    await page.goto('/settings')
+    await page.goto('/settings/look')
     const html = page.locator('html')
     await expect(html).toHaveAttribute('data-look', 'custom')
     const region = page.getByRole('region', { name: 'Look' })
@@ -378,7 +383,7 @@ test.describe('shared and per-device looks', () => {
     const look: Look = { active: 'score', mode: 'system' }
     const puts = await mockThemes(page, [tidyTheme], look)
     await pair(page)
-    await page.goto('/settings')
+    await page.goto('/settings/look')
     const region = page.getByRole('region', { name: 'Look' })
     await region.getByLabel('Theme for every device').selectOption('tidy')
     await region.getByLabel('Colours for every device').selectOption('dark')
@@ -616,7 +621,7 @@ test.describe('layout options never weaken a protected surface', () => {
       await expect(ask).toBeVisible()
       await assertProtectedHolds(ask)
       // Settings can't be hidden, and the way back is on its page.
-      await page.goto('/settings')
+      await page.goto('/settings/look')
       await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
       await expect(
         page

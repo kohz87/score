@@ -34,7 +34,7 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
   test.setTimeout(180_000)
   await pair(page)
   try {
-    await page.goto('/settings#look')
+    await page.goto('/settings/look')
     await page.getByRole('link', { name: 'Customize…' }).click()
     await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()
     await expect(page).toHaveURL(/\/settings\/look\/customize\/score$/)
@@ -475,7 +475,7 @@ test('Settings › Look shows an added theme in its own colours', async ({ page 
     })
     expect(put.status()).toBe(200)
     await page.addInitScript(() => window.localStorage.setItem('score.theme', 'light'))
-    await page.goto('/settings#look')
+    await page.goto('/settings/look')
     const card = page.getByRole('radio', { name: /E2E Swatch/ })
     const preview = card.locator('.look-pack-preview')
     await expect(preview).toBeVisible()
