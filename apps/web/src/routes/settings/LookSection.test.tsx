@@ -231,8 +231,9 @@ test('"Agents" is a per-device choice between Lively, Calm and Still', () => {
   expect(within(group).getByRole('radio', { name: 'Calm' }).getAttribute('aria-checked')).toBe(
     'true',
   )
-  expect(screen.getByText(/no walking or tricks/i)).toBeDefined()
+  expect(screen.getByText(/no breaks, no napping/i)).toBeDefined()
   fireEvent.click(within(group).getByRole('radio', { name: 'Still' }))
+  expect(screen.getByText(/show a still picture, marks stand still/i)).toBeDefined()
   expect(localStorage.getItem('score.liveliness')).toBe('still')
   fireEvent.click(within(group).getByRole('radio', { name: 'Lively' }))
   expect(localStorage.getItem('score.liveliness')).toBeNull()

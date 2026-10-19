@@ -248,7 +248,7 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
                 />
               </label>
               <AgentAppearanceFields
-                value={{ ...style, look: style.look ?? 'bot' }}
+                value={{ ...style, look: style.look ?? 'cut' }}
                 onChange={setStyle}
                 preview={{ id: id || 'new', name: id || 'New agent' }}
               />

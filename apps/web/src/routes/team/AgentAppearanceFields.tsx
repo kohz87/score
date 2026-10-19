@@ -6,8 +6,8 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 export type AppearanceValue = { color: string; shape: Shape; look: AgentLook }
 
 const looks: { value: AgentLook; label: string; hint: string }[] = [
-  { value: 'bot', label: 'Bot', hint: 'A friendly little bot' },
-  { value: 'chibi', label: 'Chibi', hint: 'A small character' },
+  { value: 'cut', label: 'Cut-out', hint: 'A solid mark; the eyes are cut through it' },
+  { value: 'ring', label: 'Ring', hint: 'The shape as one thick outline' },
 ]
 
 export function shapeLabel(shape: Shape) {
@@ -15,7 +15,7 @@ export function shapeLabel(shape: Shape) {
 }
 
 /**
- * Look (bot or chibi), colour and shape for one agent: a radio group of the two looks and a radio group of the
+ * Look (cut-out or ring), colour and shape for one agent: a radio group of the two looks and a radio group of the
  * twenty shapes. Native radios, so Tab enters a group and the arrow keys move through it. Each choice shows what it
  * looks like with the colour and look chosen so far.
  */

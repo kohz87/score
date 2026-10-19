@@ -1,5 +1,6 @@
 import { useContext } from 'react'
 import { Link, NavLink, Outlet } from 'react-router'
+import { AgentAvatar } from '../../components/AgentAvatar.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { activityOfStatus } from '../../components/agent-activity.ts'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
@@ -81,11 +82,12 @@ export function TeamPage() {
                 className="team-card team-agent-card"
                 to={`/team/${encodeURIComponent(agent.id)}`}
               >
-                <AgentGlyph
+                <AgentAvatar
                   agent={agent}
                   describeShape
                   contrast="high"
                   activity={activityOfStatus(agent.status)}
+                  petClassName="team-pet"
                 />
                 <h2>{agent.name}</h2>
                 <p className="team-muted-strong">{agent.role || 'No role set'}</p>

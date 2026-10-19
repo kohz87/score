@@ -261,7 +261,7 @@ test('the glyph popover saves a new color and shape with the CSRF header', async
   const dialog = screen.getByRole('dialog', { name: 'Agent appearance' })
   fireEvent.change(within(dialog).getByLabelText('Colour'), { target: { value: '#ff6b8a' } })
   fireEvent.click(within(dialog).getByRole('radio', { name: 'star' }))
-  fireEvent.click(within(dialog).getByRole('radio', { name: 'Chibi' }))
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'Ring' }))
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save appearance' }))
   await waitFor(() => expect(calls).toHaveLength(1))
   expect(calls[0]!.path).toBe('/api/agents/builder/style')
@@ -269,7 +269,7 @@ test('the glyph popover saves a new color and shape with the CSRF header', async
   expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
     color: '#ff6b8a',
     shape: 'star',
-    look: 'chibi',
+    look: 'ring',
   })
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   // The server also announces the change; the page follows the stream.
@@ -306,7 +306,7 @@ test('the appearance popover offers two looks and twenty shapes as radio groups,
   const looks = within(within(dialog).getByRole('radiogroup', { name: 'Look' })).getAllByRole(
     'radio',
   )
-  expect(looks.map((radio) => (radio as HTMLInputElement).value)).toEqual(['bot', 'chibi'])
+  expect(looks.map((radio) => (radio as HTMLInputElement).value)).toEqual(['cut', 'ring'])
   expect((looks[0] as HTMLInputElement).checked).toBe(true)
   const shapes = within(within(dialog).getByRole('radiogroup', { name: 'Shape' })).getAllByRole(
     'radio',
@@ -328,12 +328,7 @@ test('team cards move their glyph to match the live status', async () => {
   expect(leadCard.querySelector('.agent-glyph--idle')).not.toBeNull()
 })
 
-// jsdom has no object URLs; the preview only needs a string back.
-function stubObjectUrls() {
-  Object.assign(URL, { createObjectURL: () => 'blob:preview', revokeObjectURL: () => {} })
-}
-
-function pictureFile(name = 'face.png', type = 'image/png', size = 1200) {
+function packFile(name: string, type = 'image/webp', size = 1200) {
   return new File([new Uint8Array(size)], name, { type })
 }
 
@@ -344,154 +339,210 @@ async function openPicker() {
   return screen.getByRole('dialog', { name: 'Agent appearance' })
 }
 
-test('a picture is previewed, then sent as one multipart file to the avatar route', async () => {
+const pack = {
+  rev: 'r1',
+  activities: ['idle' as const, 'work' as const],
+  name: 'Test pack',
+  credits: 'Generated for tests',
+  floor: 0,
+}
+
+test('the look choices are a cut-out and a ring', async () => {
+  renderTeam('/team/builder')
+  const dialog = await openPicker()
+  const looks = within(dialog.querySelector('[aria-label="Look"]') as HTMLElement).getAllByRole(
+    'radio',
+  )
+  expect(looks.map((radio) => radio.closest('label')?.textContent)).toEqual(['Cut-out', 'Ring'])
+})
+
+test('a pet pack is chosen, then sent as multipart files to the pack route, and its ignored files are listed', async () => {
   renderTeam('/team/builder')
   const calls: { path: string; init?: RequestInit }[] = []
   const baseline = respond
   respond = (path, init) => {
-    if (path.includes('/avatar')) {
+    if (path.includes('/pack')) {
       calls.push({ path, init })
-      return json({ ...builder, style: { ...builder.style, avatar: 'r1' } })
+      return json({
+        agent: { ...builder, style: { ...builder.style, pack } },
+        ignored: ['__MACOSX/idle.webp', 'notes.txt'],
+      })
     }
     return baseline(path, init)
   }
-  stubObjectUrls()
   const dialog = await openPicker()
-  expect(within(dialog).getByRole('button', { name: 'Use a picture…' })).toBeDefined()
-  expect(within(dialog).queryByRole('button', { name: 'Remove picture' })).toBeNull()
-  fireEvent.change(within(dialog).getByLabelText('Picture file'), {
-    target: { files: [pictureFile()] },
+  expect(within(dialog).getByRole('button', { name: 'Upload a pet pack…' })).toBeDefined()
+  expect(within(dialog).queryByRole('button', { name: 'Remove pack' })).toBeNull()
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
+    target: {
+      files: [
+        packFile('idle.webp'),
+        packFile('work.webp'),
+        packFile('pet.json', 'application/json'),
+      ],
+    },
   })
-  expect((await within(dialog).findByAltText('Preview of face.png')).getAttribute('src')).toBe(
-    'blob:preview',
-  )
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this picture' }))
+  const chosen = within(dialog).getByRole('list', { name: 'Chosen files' })
+  expect(
+    within(chosen)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent),
+  ).toEqual(['idle.webp', 'work.webp', 'pet.json'])
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
   await waitFor(() => expect(calls).toHaveLength(1))
-  expect(calls[0]!.path).toBe('/api/agents/builder/avatar')
+  expect(calls[0]!.path).toBe('/api/agents/builder/pack')
   expect(calls[0]!.init?.method).toBe('PUT')
   expect(new Headers(calls[0]!.init?.headers).get('X-Score-Client')).toBe('web')
-  const sent = (calls[0]!.init?.body as FormData).get('file') as File
-  expect(sent.name).toBe('face.png')
-  expect(sent.type).toBe('image/png')
-  await waitFor(() => expect(within(dialog).queryByAltText('Preview of face.png')).toBeNull())
-  // The next step is marking the eyes on the new picture, which can be skipped.
-  expect(await within(dialog).findByRole('group', { name: 'Left eye' })).toBeDefined()
-  expect(within(dialog).getByRole('group', { name: 'Right eye' })).toBeDefined()
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Skip' }))
-  expect(within(dialog).queryByRole('group', { name: 'Left eye' })).toBeNull()
-  expect(calls).toHaveLength(1)
+  const sent = (calls[0]!.init?.body as FormData).getAll('file') as File[]
+  expect(sent.map((file) => file.name)).toEqual(['idle.webp', 'work.webp', 'pet.json'])
+  const status = await within(dialog).findByRole('status')
+  expect(status.textContent).toContain('Pack added: idle, work.')
+  expect(status.textContent).toContain('__MACOSX/idle.webp')
+  expect(status.textContent).toContain('notes.txt')
 })
 
-test('an agent with eye marks can edit or clear them', async () => {
-  const marks = {
-    left: { x: 0.2, y: 0.3, w: 0.2, h: 0.1 },
-    right: { x: 0.6, y: 0.3, w: 0.2, h: 0.1 },
-    lid: '#C89664',
-  }
-  const source = renderTeam('/team/builder')
-  agentUpdated(source, 1, {
-    ...builder,
-    style: { ...builder.style, avatar: 'r1', avatarEyes: marks },
-  })
-  const calls: { path: string; method?: string | undefined }[] = []
+test('a zip goes up as one file', async () => {
+  renderTeam('/team/builder')
+  const calls: { init?: RequestInit }[] = []
   const baseline = respond
   respond = (path, init) => {
-    if (path.includes('/avatar')) {
-      calls.push({ path, method: init?.method })
-      return json(builder)
+    if (path.includes('/pack')) {
+      calls.push({ init })
+      return json({ agent: { ...builder, style: { ...builder.style, pack } }, ignored: [] })
     }
     return baseline(path, init)
   }
   const dialog = await openPicker()
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Edit eye marks…' }))
-  const left = within(dialog).getByRole('group', { name: 'Left eye' })
-  // Editing starts from the saved boxes.
-  expect(left.style.left).toBe('20%')
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Skip' }))
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Clear eye marks' }))
-  await waitFor(() =>
-    expect(calls).toEqual([{ path: '/api/agents/builder/avatar/eyes', method: 'DELETE' }]),
-  )
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
+    target: { files: [packFile('luna.zip', 'application/zip')] },
+  })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
+  await waitFor(() => expect(calls).toHaveLength(1))
+  const sent = (calls[0]!.init?.body as FormData).getAll('file') as File[]
+  expect(sent.map((file) => file.name)).toEqual(['luna.zip'])
+  expect(within(dialog).queryByText(/Left out/)).toBeNull()
 })
 
-test('an agent with a picture but no marks is offered to mark the eyes', async () => {
-  const source = renderTeam('/team/builder')
-  agentUpdated(source, 1, { ...builder, style: { ...builder.style, avatar: 'r1' } })
-  const dialog = await openPicker()
-  expect(within(dialog).getByRole('button', { name: 'Mark the eyes…' })).toBeDefined()
-  expect(within(dialog).queryByRole('button', { name: 'Clear eye marks' })).toBeNull()
-})
-
-test('the server’s reasons for refusing a picture are shown as they are', async () => {
+test('the server’s reasons for refusing a pack are shown as they are, and the choice stays', async () => {
   renderTeam('/team/builder')
   const baseline = respond
   respond = (path, init) =>
-    path.includes('/avatar')
+    path.includes('/pack')
       ? json(
           {
             error: {
-              code: 'avatar_rejected',
-              message: 'That picture can’t be used.',
-              details: {
-                reasons: ['The picture is 4000 px wide; the most is 2048.', 'SVG is not allowed.'],
-              },
+              code: 'pack_rejected',
+              message: 'That pack can’t be used.',
+              details: { reasons: ['idle is missing.', 'sparkle is not an activity.'] },
             },
           },
           422,
         )
       : baseline(path, init)
-  stubObjectUrls()
   const dialog = await openPicker()
-  fireEvent.change(within(dialog).getByLabelText('Picture file'), {
-    target: { files: [pictureFile()] },
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
+    target: { files: [packFile('work.webp'), packFile('sparkle.webp')] },
   })
-  fireEvent.click(await within(dialog).findByRole('button', { name: 'Use this picture' }))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
   const alert = await within(dialog).findByRole('alert')
-  expect(alert.textContent).toContain('The picture is 4000 px wide; the most is 2048.')
-  expect(alert.textContent).toContain('SVG is not allowed.')
-  // The chosen file stays so it can be cancelled or retried.
-  expect(within(dialog).getByRole('button', { name: 'Cancel picture' })).toBeDefined()
+  expect(alert.textContent).toContain('idle is missing.')
+  expect(alert.textContent).toContain('sparkle is not an activity.')
+  expect(within(dialog).getByRole('button', { name: 'Cancel pack' })).toBeDefined()
 })
 
-test('a file that is the wrong type or over 2 MB is refused without an upload', async () => {
+test('a zip chosen with other files, or a pack over 64 MB, is refused without an upload', async () => {
   renderTeam('/team/builder')
   const calls: string[] = []
   const baseline = respond
   respond = (path, init) => {
-    if (path.includes('/avatar')) calls.push(path)
+    if (path.includes('/pack')) calls.push(path)
     return baseline(path, init)
   }
   const dialog = await openPicker()
-  fireEvent.change(within(dialog).getByLabelText('Picture file'), {
-    target: { files: [pictureFile('logo.svg', 'image/svg+xml')] },
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
+    target: { files: [packFile('luna.zip', 'application/zip'), packFile('idle.webp')] },
   })
-  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/PNG, JPEG or WebP/)
-  fireEvent.change(within(dialog).getByLabelText('Picture file'), {
-    target: { files: [pictureFile('big.png', 'image/png', 2 * 1024 * 1024 + 1)] },
-  })
-  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 2 MB/)
-  expect(within(dialog).queryByRole('button', { name: 'Use this picture' })).toBeNull()
+  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/one \.zip/)
+  const huge = packFile('idle.webp')
+  Object.defineProperty(huge, 'size', { value: 65 * 1024 * 1024 })
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [huge] } })
+  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 64 MB/)
+  expect(within(dialog).queryByRole('button', { name: 'Use this pack' })).toBeNull()
   expect(calls).toEqual([])
 })
 
-test('an agent with a picture can replace or remove it', async () => {
+test('an agent with a pack shows it, and can replace or remove it', async () => {
   const source = renderTeam('/team/builder')
-  agentUpdated(source, 1, { ...builder, style: { ...builder.style, avatar: 'r1' } })
+  agentUpdated(source, 1, { ...builder, style: { ...builder.style, pack } })
   const calls: { path: string; method?: string | undefined }[] = []
   const baseline = respond
   respond = (path, init) => {
-    if (path.includes('/avatar')) {
+    if (path.includes('/pack') && !path.includes('/pack/')) {
       calls.push({ path, method: init?.method })
       return json(builder)
     }
     return baseline(path, init)
   }
   const dialog = await openPicker()
-  expect(within(dialog).getByRole('button', { name: 'Replace picture…' })).toBeDefined()
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Remove picture' }))
+  expect(within(dialog).getByText(/Test pack/)).toBeDefined()
+  expect(within(dialog).getByText(/Generated for tests/)).toBeDefined()
+  expect(within(dialog).getByRole('button', { name: 'Replace pet pack…' })).toBeDefined()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Remove pack' }))
   await waitFor(() =>
-    expect(calls).toEqual([{ path: '/api/agents/builder/avatar', method: 'DELETE' }]),
+    expect(calls).toEqual([{ path: '/api/agents/builder/pack', method: 'DELETE' }]),
   )
+})
+
+test('How to make a pack is a disclosure with the naming table and the rules', async () => {
+  renderTeam('/team/builder')
+  const dialog = await openPicker()
+  const guide = within(dialog).getByText('How to make a pack').closest('details')!
+  expect(guide.open).toBe(false)
+  const table = within(guide).getByRole('table')
+  const names = within(table)
+    .getAllByRole('rowheader')
+    .map((cell) => cell.textContent)
+  expect(names).toEqual([
+    'idle',
+    'work',
+    'think',
+    'needs',
+    'sleep',
+    'walk',
+    'stretch, coffee, read',
+    'greet, happy',
+  ])
+  expect(guide.textContent).toContain('required')
+  expect(guide.textContent).toContain('8 MB per file and 64 MB per pack')
+  expect(guide.textContent).toContain('64–2048 px per side')
+  expect(guide.textContent).toContain('pet.json')
+  expect(guide.textContent).toContain('"floor": 0.03')
+})
+
+test('an agent with a pack wears its pet on the team card and in the page header, with its mark as the badge', async () => {
+  const source = renderTeam('/team')
+  agentUpdated(source, 1, { ...builder, style: { ...builder.style, pack } })
+  const card = (await screen.findByRole('heading', { name: 'Builder' })).closest('a')!
+  await waitFor(() => expect(card.querySelector('.pet-avatar')).not.toBeNull())
+  expect(card.querySelector('.pet-avatar .pet-badge .agent-glyph')).not.toBeNull()
+  // The agent is working: its work file is the one that plays.
+  expect(card.querySelector('img[data-anim="work"]')?.getAttribute('src')).toBe(
+    '/api/agents/builder/pack/work?rev=r1',
+  )
+  // Lead has none and keeps its mark.
+  const leadCard = screen.getByRole('heading', { name: 'Lead' }).closest('a')!
+  expect(leadCard.querySelector('.pet-avatar')).toBeNull()
+  expect(leadCard.querySelector('.agent-glyph--cut')).not.toBeNull()
+})
+
+test('the agent page header button shows the pet too', async () => {
+  const source = renderTeam('/team/builder')
+  agentUpdated(source, 1, { ...builder, style: { ...builder.style, pack } })
+  const trigger = await screen.findByRole('button', {
+    name: 'Change Builder’s look, colour and shape',
+  })
+  await waitFor(() => expect(trigger.querySelector('.pet-avatar')).not.toBeNull())
+  expect(trigger.className).toContain('team-glyph-trigger--pet')
 })
 
 const digest = {
