@@ -243,17 +243,18 @@ export function registerKnowledgeRoutes(
   if (staging)
     app.post('/api/knowledge/files-from-staged', guard, async (request, reply) => {
       const body = KnowledgeFromStagedRequestSchema.parse(request.body)
-      const bytes = await staging.read(body.stagedId, body.path)
-      if (bytes === 'gone')
+      // One request at a time per stage: a success uses it up, a 409 exists keeps it for the retry.
+      const result = await staging.use(body.stagedId, body.path, (bytes) =>
+        storeFile(body.path, bytes, body.mode, body.folder, body.onConflict),
+      )
+      if (result === 'gone')
         throw new HttpError(
           404,
           'staged_gone',
           'That upload is no longer kept. Send the file again.',
         )
-      if (bytes === 'mismatch')
+      if (result === 'mismatch')
         throw new HttpError(409, 'staged_mismatch', 'That upload was previewed for another file.')
-      const result = await storeFile(body.path, bytes, body.mode, body.folder, body.onConflict)
-      await staging.remove(body.stagedId)
       return reply.code(201).send(result)
     })
 
