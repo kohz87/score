@@ -286,6 +286,9 @@ export function registerKnowledgeRoutes(
       async (request, reply) => {
         if (!Buffer.isBuffer(request.body))
           throw new HttpError(400, 'bad_request', 'No file was sent.')
+        // The parser allows a little slack for the envelope; the cap on the file is exact, in every mode.
+        if (request.body.length > MAX_STORE_BYTES)
+          throw new HttpError(413, 'payload_too_large', 'Files can be at most 256 MB.')
         const target = rest(request)
         const query = UploadQuerySchema.parse(request.query)
         if (query.mode === 'preview' && /\.zip$/i.test(target)) {

@@ -146,6 +146,16 @@ describe('big files over HTTP', () => {
     expect(fs.existsSync(path.join(dir, 'vault', 'huge.png'))).toBe(false)
   })
 
+  test('256 MB plus one is 413 in keep, preview and unzip mode alike', async () => {
+    // Fastify's parser allows 1 KiB of slack; the cap itself is exact.
+    const body = Buffer.concat([Buffer.from([0x50, 0x4b, 5, 6]), Buffer.alloc(MAX_STORE_BYTES - 3)])
+    expect(body.length).toBe(MAX_STORE_BYTES + 1)
+    for (const query of ['', '?mode=preview', '?mode=unzip']) {
+      const res = await put('cap.zip', body, query)
+      expect(res.statusCode, query).toBe(413)
+    }
+  })
+
   test('a 100 MB zip: preview is staged, unzip from staged and keep both work', async () => {
     const zip = await makeZip({ 'inner.png': bigPng(100), 'a.md': '# a' }, 'STORE')
     const staged = (await preview('inbox/pack.zip', zip)).staged
