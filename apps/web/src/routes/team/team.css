@@ -261,7 +261,9 @@
   z-index: 5;
   top: calc(100% + 10px);
   left: 0;
-  width: 260px;
+  width: min(440px, calc(100vw - 32px));
+  max-height: min(80vh, 720px);
+  overflow-y: auto;
   padding: 18px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-20);
@@ -1354,4 +1356,165 @@ a.team-pill-button {
   color: var(--card);
   font-weight: 700;
   text-decoration: none;
+}
+
+/* Look, colour and shape (PLAN 10.2): two looks and twenty shapes as native radio groups. */
+.team-appearance {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3) var(--space-4);
+  align-items: center;
+  width: 100%;
+}
+.team-appearance-preview {
+  grid-row: span 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-20);
+  background: var(--ground);
+}
+.team-appearance-colour {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 14px;
+  font-weight: 600;
+}
+.team-looks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.team-shapes {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+}
+.team-look-choice,
+.team-shape-choice {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+.team-look-choice input,
+.team-shape-choice input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.team-look-card,
+.team-shape-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  padding: 6px 12px 6px 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.team-shape-cell {
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  text-align: center;
+}
+.team-look-choice input:checked + .team-look-card,
+.team-shape-choice input:checked + .team-shape-cell {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+  color: var(--ink);
+}
+.team-look-choice input:focus-visible + .team-look-card,
+.team-shape-choice input:focus-visible + .team-shape-cell {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+@media (max-width: 520px) {
+  .team-appearance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .team-appearance-preview {
+    grid-row: auto;
+  }
+}
+
+/* The popover's own label rules (stacked, bold) must not reach the radio cards. */
+.team-style-popover .team-look-choice,
+.team-style-popover .team-shape-choice {
+  display: block;
+  flex-direction: row;
+  font-weight: 500;
+}
+.team-picture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--hairline);
+}
+.team-picture h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.team-picture p {
+  margin: 0;
+  font-size: 13px;
+}
+.team-picture-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.team-picture-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  min-width: 0;
+}
+.team-picture-preview img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: var(--radius-14);
+  background: var(--ground);
+}
+.team-picture-preview span {
+  overflow-wrap: anywhere;
+}
+.team-picture-problems {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 13px;
+  color: var(--ink);
+}
+.team-glyph-trigger svg.agent-glyph--rich {
+  width: 84px;
+  height: 84px;
+}
+@media (width < 1024px) {
+  .team-glyph-trigger svg.agent-glyph--rich {
+    width: 66px;
+    height: 66px;
+  }
+}
+@media (width < 600px) {
+  .team-glyph-trigger svg.agent-glyph--rich {
+    width: 48px;
+    height: 48px;
+  }
 }

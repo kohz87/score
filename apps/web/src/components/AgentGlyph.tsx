@@ -21,6 +21,8 @@ export type AgentGlyphProps = {
   describeShape?: boolean
   contrast?: 'default' | 'high'
   activity?: AgentActivity
+  /** Always the plain coloured shape, whatever the agent's look: for a spot that draws its own tile behind it. */
+  plain?: boolean
 }
 
 const designTints: Record<string, string> = {
@@ -321,10 +323,13 @@ export function AgentGlyph({
   describeShape = false,
   contrast = 'default',
   activity,
+  plain = false,
 }: AgentGlyphProps) {
   // A picture that fails to load (removed, or the server unreachable) falls back to the agent's look.
   const [failedRev, setFailedRev] = useState<string | null>(null)
-  const kind = glyphKind(agent.style, size, failedRev !== null && failedRev === agent.style.avatar)
+  const kind = plain
+    ? 'plain'
+    : glyphKind(agent.style, size, failedRev !== null && failedRev === agent.style.avatar)
   const mood = activity ?? 'idle'
   const rich = kind !== 'plain'
   const className = [

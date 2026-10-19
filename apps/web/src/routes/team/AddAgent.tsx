@@ -1,7 +1,6 @@
 import {
   AgentOperationSchema,
   AgentPreviewSchema,
-  ShapeSchema,
   type AgentCreateInput,
   type AgentOperation,
   type AgentPreview,
@@ -12,7 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AGENT_ID_PATTERN, agentIdInput } from './agent-id.ts'
 import { AgentAdded } from './AgentAdded.tsx'
 import { ModelPicker } from '../../components/ModelPicker.tsx'
-import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { AgentAppearanceFields } from './AgentAppearanceFields.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
 import { newId } from '../../data/ids.ts'
@@ -244,43 +243,11 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
                   change({ model: choice.model, provider: choice.provider ?? undefined })
                 }}
               />
-              <div className="team-profile-appearance">
-                <AgentGlyph
-                  agent={{
-                    id: input.id || 'new',
-                    name: input.id || 'New agent',
-                    style: input.style,
-                  }}
-                  describeShape
-                  contrast="high"
-                />
-                <label>
-                  Colour
-                  <input
-                    type="color"
-                    value={input.style.color}
-                    onChange={(event) =>
-                      change({ style: { ...input.style, color: event.target.value } })
-                    }
-                  />
-                </label>
-                <label>
-                  Shape
-                  <select
-                    aria-label="Shape"
-                    value={input.style.shape}
-                    onChange={(event) =>
-                      change({
-                        style: { ...input.style, shape: ShapeSchema.parse(event.target.value) },
-                      })
-                    }
-                  >
-                    {ShapeSchema.options.map((shape) => (
-                      <option key={shape}>{shape}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              <AgentAppearanceFields
+                value={{ ...input.style, look: input.style.look ?? 'bot' }}
+                onChange={(style) => change({ style })}
+                preview={{ id: input.id || 'new', name: input.id || 'New agent' }}
+              />
               {preview && (
                 <section className="team-card">
                   <h3>Review changes</h3>

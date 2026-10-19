@@ -2,7 +2,6 @@ import {
   AgentOperationSchema,
   ImportInspectionSchema,
   PROFILE_IMPORT_MAX_BYTES,
-  ShapeSchema,
   type AgentOperation,
   type AgentStyle,
   type AgentSummary,
@@ -10,7 +9,7 @@ import {
 } from '@score/contract'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { AgentAppearanceFields } from './AgentAppearanceFields.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { AgentAdded } from './AgentAdded.tsx'
@@ -248,35 +247,11 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
                   onChange={(event) => setRole(event.target.value)}
                 />
               </label>
-              <div className="team-profile-appearance">
-                <AgentGlyph
-                  agent={{ id: id || 'new', name: id || 'New agent', style }}
-                  describeShape
-                  contrast="high"
-                />
-                <label>
-                  Colour
-                  <input
-                    type="color"
-                    value={style.color}
-                    onChange={(event) => setStyle({ ...style, color: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Shape
-                  <select
-                    aria-label="Shape"
-                    value={style.shape}
-                    onChange={(event) =>
-                      setStyle({ ...style, shape: ShapeSchema.parse(event.target.value) })
-                    }
-                  >
-                    {ShapeSchema.options.map((shape) => (
-                      <option key={shape}>{shape}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              <AgentAppearanceFields
+                value={{ ...style, look: style.look ?? 'bot' }}
+                onChange={setStyle}
+                preview={{ id: id || 'new', name: id || 'New agent' }}
+              />
               {inspection.credentialFiles.length > 0 && (
                 <label className="team-profile-confirm">
                   <input

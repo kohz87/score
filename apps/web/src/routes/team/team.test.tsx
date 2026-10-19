@@ -255,20 +255,27 @@ test('the glyph popover saves a new color and shape with the CSRF header', async
     }
     return baseline(path, init)
   }
-  fireEvent.click(await screen.findByRole('button', { name: 'Change Builder’s colour and shape' }))
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Change Builder’s look, colour and shape' }),
+  )
   const dialog = screen.getByRole('dialog', { name: 'Agent appearance' })
   fireEvent.change(within(dialog).getByLabelText('Colour'), { target: { value: '#ff6b8a' } })
-  fireEvent.change(within(dialog).getByLabelText('Shape'), { target: { value: 'star' } })
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'star' }))
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'Chibi' }))
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save appearance' }))
   await waitFor(() => expect(calls).toHaveLength(1))
   expect(calls[0]!.path).toBe('/api/agents/builder/style')
   expect(new Headers(calls[0]!.init?.headers).get('X-Score-Client')).toBe('web')
-  expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ color: '#ff6b8a', shape: 'star' })
+  expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+    color: '#ff6b8a',
+    shape: 'star',
+    look: 'chibi',
+  })
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   // The server also announces the change; the page follows the stream.
   agentUpdated(source, 1, { ...builder, style: { color: '#ff6b8a', shape: 'star' } })
   expect(document.activeElement).toBe(
-    screen.getByRole('button', { name: 'Change Builder’s colour and shape' }),
+    screen.getByRole('button', { name: 'Change Builder’s look, colour and shape' }),
   )
 })
 
@@ -279,13 +286,166 @@ test('the glyph popover closes with Escape and reports a failed save', async () 
     init?.method === 'PATCH'
       ? json({ error: { code: 'not_paired', message: 'Pair first' } }, 403)
       : baseline(path, init)
-  const trigger = await screen.findByRole('button', { name: 'Change Builder’s colour and shape' })
+  const trigger = await screen.findByRole('button', {
+    name: 'Change Builder’s look, colour and shape',
+  })
   fireEvent.click(trigger)
   fireEvent.click(screen.getByRole('button', { name: 'Save appearance' }))
   expect((await screen.findByRole('alert')).textContent).toMatch(/Pair this browser/)
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
+})
+
+test('the appearance popover offers two looks and twenty shapes as radio groups, with the agent’s own selected', async () => {
+  renderTeam('/team/builder')
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Change Builder’s look, colour and shape' }),
+  )
+  const dialog = screen.getByRole('dialog', { name: 'Agent appearance' })
+  const looks = within(within(dialog).getByRole('radiogroup', { name: 'Look' })).getAllByRole(
+    'radio',
+  )
+  expect(looks.map((radio) => (radio as HTMLInputElement).value)).toEqual(['bot', 'chibi'])
+  expect((looks[0] as HTMLInputElement).checked).toBe(true)
+  const shapes = within(within(dialog).getByRole('radiogroup', { name: 'Shape' })).getAllByRole(
+    'radio',
+  )
+  expect(shapes).toHaveLength(20)
+  // One native group: Tab enters it once and the arrow keys move through it.
+  expect(new Set(shapes.map((radio) => (radio as HTMLInputElement).name)).size).toBe(1)
+  expect(
+    (within(dialog).getByRole('radio', { name: 'triangle' }) as HTMLInputElement).checked,
+  ).toBe(true)
+  expect(within(dialog).getByRole('radio', { name: 'circle dot' })).toBeDefined()
+})
+
+test('team cards move their glyph to match the live status', async () => {
+  renderTeam('/team')
+  const builderCard = (await screen.findByRole('heading', { name: 'Builder' })).closest('a')!
+  const leadCard = screen.getByRole('heading', { name: 'Lead' }).closest('a')!
+  expect(builderCard.querySelector('.agent-glyph--working')).not.toBeNull()
+  expect(leadCard.querySelector('.agent-glyph--idle')).not.toBeNull()
+})
+
+// jsdom has no object URLs; the preview only needs a string back.
+function stubObjectUrls() {
+  Object.assign(URL, { createObjectURL: () => 'blob:preview', revokeObjectURL: () => {} })
+}
+
+function pictureFile(name = 'face.png', type = 'image/png', size = 1200) {
+  return new File([new Uint8Array(size)], name, { type })
+}
+
+async function openPicker() {
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Change Builder’s look, colour and shape' }),
+  )
+  return screen.getByRole('dialog', { name: 'Agent appearance' })
+}
+
+test('a picture is previewed, then sent as one multipart file to the avatar route', async () => {
+  renderTeam('/team/builder')
+  const calls: { path: string; init?: RequestInit }[] = []
+  const baseline = respond
+  respond = (path, init) => {
+    if (path.includes('/avatar')) {
+      calls.push({ path, init })
+      return json({ ...builder, style: { ...builder.style, avatar: 'r1' } })
+    }
+    return baseline(path, init)
+  }
+  stubObjectUrls()
+  const dialog = await openPicker()
+  expect(within(dialog).getByRole('button', { name: 'Use a picture…' })).toBeDefined()
+  expect(within(dialog).queryByRole('button', { name: 'Remove picture' })).toBeNull()
+  fireEvent.change(within(dialog).getByLabelText('Picture file'), {
+    target: { files: [pictureFile()] },
+  })
+  expect((await within(dialog).findByAltText('Preview of face.png')).getAttribute('src')).toBe(
+    'blob:preview',
+  )
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this picture' }))
+  await waitFor(() => expect(calls).toHaveLength(1))
+  expect(calls[0]!.path).toBe('/api/agents/builder/avatar')
+  expect(calls[0]!.init?.method).toBe('PUT')
+  expect(new Headers(calls[0]!.init?.headers).get('X-Score-Client')).toBe('web')
+  const sent = (calls[0]!.init?.body as FormData).get('file') as File
+  expect(sent.name).toBe('face.png')
+  expect(sent.type).toBe('image/png')
+  await waitFor(() => expect(within(dialog).queryByAltText('Preview of face.png')).toBeNull())
+})
+
+test('the server’s reasons for refusing a picture are shown as they are', async () => {
+  renderTeam('/team/builder')
+  const baseline = respond
+  respond = (path, init) =>
+    path.includes('/avatar')
+      ? json(
+          {
+            error: {
+              code: 'avatar_rejected',
+              message: 'That picture can’t be used.',
+              details: {
+                reasons: ['The picture is 4000 px wide; the most is 2048.', 'SVG is not allowed.'],
+              },
+            },
+          },
+          422,
+        )
+      : baseline(path, init)
+  stubObjectUrls()
+  const dialog = await openPicker()
+  fireEvent.change(within(dialog).getByLabelText('Picture file'), {
+    target: { files: [pictureFile()] },
+  })
+  fireEvent.click(await within(dialog).findByRole('button', { name: 'Use this picture' }))
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert.textContent).toContain('The picture is 4000 px wide; the most is 2048.')
+  expect(alert.textContent).toContain('SVG is not allowed.')
+  // The chosen file stays so it can be cancelled or retried.
+  expect(within(dialog).getByRole('button', { name: 'Cancel picture' })).toBeDefined()
+})
+
+test('a file that is the wrong type or over 2 MB is refused without an upload', async () => {
+  renderTeam('/team/builder')
+  const calls: string[] = []
+  const baseline = respond
+  respond = (path, init) => {
+    if (path.includes('/avatar')) calls.push(path)
+    return baseline(path, init)
+  }
+  const dialog = await openPicker()
+  fireEvent.change(within(dialog).getByLabelText('Picture file'), {
+    target: { files: [pictureFile('logo.svg', 'image/svg+xml')] },
+  })
+  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/PNG, JPEG or WebP/)
+  fireEvent.change(within(dialog).getByLabelText('Picture file'), {
+    target: { files: [pictureFile('big.png', 'image/png', 2 * 1024 * 1024 + 1)] },
+  })
+  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 2 MB/)
+  expect(within(dialog).queryByRole('button', { name: 'Use this picture' })).toBeNull()
+  expect(calls).toEqual([])
+})
+
+test('an agent with a picture can replace or remove it', async () => {
+  const source = renderTeam('/team/builder')
+  agentUpdated(source, 1, { ...builder, style: { ...builder.style, avatar: 'r1' } })
+  const calls: { path: string; method?: string | undefined }[] = []
+  const baseline = respond
+  respond = (path, init) => {
+    if (path.includes('/avatar')) {
+      calls.push({ path, method: init?.method })
+      return json(builder)
+    }
+    return baseline(path, init)
+  }
+  const dialog = await openPicker()
+  expect(within(dialog).getByRole('button', { name: 'Replace picture…' })).toBeDefined()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Remove picture' }))
+  await waitFor(() =>
+    expect(calls).toEqual([{ path: '/api/agents/builder/avatar', method: 'DELETE' }]),
+  )
 })
 
 const digest = {

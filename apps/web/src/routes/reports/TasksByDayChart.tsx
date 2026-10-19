@@ -20,10 +20,29 @@ const UNKNOWN_COLOR = 'var(--agent-unknown)'
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 // One distinct overlay per agent shape, so colour + pattern identify an agent.
-type PatternKind =
-  'dots' | 'diagonal' | 'vertical' | 'horizontal' | 'cross' | 'checks' | 'back-diagonal' | 'rings'
+export type PatternKind =
+  | 'dots'
+  | 'diagonal'
+  | 'vertical'
+  | 'horizontal'
+  | 'cross'
+  | 'checks'
+  | 'back-diagonal'
+  | 'rings'
+  | 'waves'
+  | 'zigzag'
+  | 'chevrons'
+  | 'grid'
+  | 'plus'
+  | 'triangles'
+  | 'diamonds'
+  | 'band'
+  | 'dashes'
+  | 'dot-pairs'
+  | 'wide-vertical'
+  | 'wide-horizontal'
 
-const patternByShape: Record<Shape, PatternKind> = {
+export const patternByShape: Record<Shape, PatternKind> = {
   'circle-dot': 'rings',
   triangle: 'diagonal',
   diamond: 'cross',
@@ -32,6 +51,19 @@ const patternByShape: Record<Shape, PatternKind> = {
   star: 'dots',
   pill: 'vertical',
   cross: 'back-diagonal',
+  // PLAN 10.2: twelve more shapes, twelve more overlays (colour + pattern still identify an agent in this chart).
+  cloud: 'waves',
+  cylinder: 'wide-vertical',
+  heart: 'dot-pairs',
+  drop: 'zigzag',
+  bolt: 'chevrons',
+  moon: 'band',
+  leaf: 'dashes',
+  blob: 'triangles',
+  shield: 'grid',
+  octagon: 'plus',
+  bubble: 'wide-horizontal',
+  gem: 'diamonds',
 }
 const unknownPattern: PatternKind = 'horizontal'
 
@@ -62,6 +94,35 @@ function PatternBody({ kind }: { kind: PatternKind }) {
       return <path d="M0 4 H8" {...line} />
     case 'cross':
       return <path d="M4 0 V8 M0 4 H8" {...line} strokeWidth={1.5} />
+    case 'waves':
+      return <path d="M0 4 Q2 1 4 4 T8 4" {...line} strokeWidth={1.6} fill="none" />
+    case 'zigzag':
+      return <path d="M0 6 L2 2 L4 6 L6 2 L8 6" {...line} strokeWidth={1.4} fill="none" />
+    case 'chevrons':
+      return <path d="M0 2 L4 6 L8 2" {...line} strokeWidth={1.6} fill="none" />
+    case 'grid':
+      return <path d="M0 0 H8 M0 0 V8" {...line} strokeWidth={1.2} />
+    case 'plus':
+      return <path d="M4 2 V6 M2 4 H6" {...line} strokeWidth={1.4} />
+    case 'triangles':
+      return <path d="M4 1 L7 7 H1 Z" className="tasks-by-day__pattern-ink" opacity="0.3" />
+    case 'diamonds':
+      return <path d="M4 1 L7 4 L4 7 L1 4 Z" className="tasks-by-day__pattern-ink" opacity="0.3" />
+    case 'band':
+      return <path d="M-1 9 L9 -1" {...line} strokeWidth={3.4} opacity={0.22} />
+    case 'dashes':
+      return <path d="M1 4 H4" {...line} strokeWidth={1.6} />
+    case 'dot-pairs':
+      return (
+        <>
+          <circle cx="2" cy="2" r="1.1" className="tasks-by-day__pattern-ink" opacity="0.4" />
+          <circle cx="6" cy="6" r="1.1" className="tasks-by-day__pattern-ink" opacity="0.4" />
+        </>
+      )
+    case 'wide-vertical':
+      return <rect width="3" height="8" className="tasks-by-day__pattern-ink" opacity="0.25" />
+    case 'wide-horizontal':
+      return <rect width="8" height="3" className="tasks-by-day__pattern-ink" opacity="0.25" />
     case 'checks':
       return (
         <>
