@@ -426,3 +426,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   pets, pictures with eye marks, layered rigs, 3D, wandering corners. Lead wrote the v2 contract on `task/10.2a`
   (34ada71a) and brief `docs/briefs/10.2-agent-looks-v2.md`; 10.2a (server packs) and 10.2b (web marks + PetAvatar +
   Look panel, merging 10.2c's liveliness and scheduler) resumed.
+- **10.2a v2 done** (task/10.2a, 47bff9fa): migration 0078 rewritten (look cut|ring, pack_rev, pack_meta), pack routes
+  PUT/DELETE/GET, `src/packs/{sniff,reader,store,meta}.ts` (bytes-based type + size + dims; shared zip rules + theme
+  inflater; files stored under activity names only; lstat walk + O_NOFOLLOW; temp + rename; recovery), picture and
+  eye-mark code removed. 30 route tests + reader/store/sniff/migration tests failed first; server suite 4567/0. Lead
+  reviewed the reader (no zip path is used for storage; caps before inflate). Choices accepted: file cap counts files
+  only; unknown-activity image = 422, other files ignored; case-insensitive names; unknown activity on GET = 404.
