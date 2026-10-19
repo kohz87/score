@@ -477,3 +477,10 @@ from its idle animation wherever `AgentGlyph` draws it; colour and shape still i
 portrait inside the shape at the smallest size). Done when: every `AgentGlyph` use shows the portrait for a pack agent
 and the mark otherwise; the idle file is decoded once per page, not per glyph; Still/reduced motion never animates;
 theme protection covers the portrait; Team card and agent header keep the full pet.
+
+**10.10 Room stage** (owner 2026-10-19: "let the avatar move around … a group of avatar on top of the room they're
+in" → preview → "the header concept is good to go"; decision 110) · brief `docs/briefs/10.10-room-stage.md`. A strip
+under each chat room's title where its members live: pets wander and take breaks, marks hop; the stage shows who is
+thinking, working or waiting for you; click a member to @mention it; hide per device; Lively / Calm / Still. Done
+when: the brief's behaviours work against live room state in tests, theme protection covers the stage, and the Chat
+visual baselines are regenerated once and reviewed by the lead.
