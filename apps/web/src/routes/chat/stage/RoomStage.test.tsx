@@ -255,3 +255,50 @@ test('removed agents and unknown members are left out; a room with nobody to sho
   )
   expect(screen.queryByRole('group', { name: 'Room members' })).toBeNull()
 })
+
+test('a hand-off that arrives as the reply streams in still turns the two toward each other', async () => {
+  mount()
+  await waitFor(() => expect(screen.getAllByRole('button')).toHaveLength(3))
+  const facing = (id: string) =>
+    screen.getByRole('button', { name: new RegExp(`^${id},`) }).getAttribute('data-facing')
+  // The server opens a reply empty, with nobody addressed; the mention only comes in later words.
+  emit(
+    'message.created',
+    message('m3', {
+      author: { kind: 'agent', agentId: 'reviewer' },
+      streaming: true,
+      parts: [],
+      to: [],
+      createdAt: '2026-10-19T10:02:00.000Z',
+    }),
+  )
+  expect(['lead', 'builder', 'reviewer'].map(facing)).toEqual(['right', 'right', 'right'])
+  emit('message.delta', { messageId: 'm3', roomId: 'room-1', append: 'Looks fine. ' })
+  expect(facing('reviewer')).toBe('right')
+  emit('message.delta', { messageId: 'm3', roomId: 'room-1', append: '@lead over to you' })
+  expect(facing('reviewer')).toBe('left')
+  expect(facing('lead')).toBe('right')
+})
+
+test('a mention that only appears with the completed message counts too', async () => {
+  mount()
+  await waitFor(() => expect(screen.getAllByRole('button')).toHaveLength(3))
+  const facing = (id: string) =>
+    screen.getByRole('button', { name: new RegExp(`^${id},`) }).getAttribute('data-facing')
+  emit(
+    'message.created',
+    message('m4', {
+      author: { kind: 'agent', agentId: 'reviewer' },
+      streaming: true,
+      parts: [],
+      createdAt: '2026-10-19T10:03:00.000Z',
+    }),
+  )
+  emit('message.completed', {
+    messageId: 'm4',
+    roomId: 'room-1',
+    parts: [{ kind: 'text', text: 'Done, @builder next' }],
+  })
+  expect(facing('reviewer')).toBe('left')
+  expect(facing('builder')).toBe('right')
+})

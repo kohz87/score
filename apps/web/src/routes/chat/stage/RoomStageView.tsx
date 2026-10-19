@@ -274,6 +274,10 @@ export function RoomStageView({ roomId, members, handoff, onMention, quiet = fal
       if (slot) slot.style.left = `${actor.x * 100}%`
     })
     setLook((previous) => {
+      const same =
+        previous.size === actors.current.size &&
+        [...actors.current.keys()].every((id) => previous.has(id))
+      if (same) return previous
       const next = new Map<string, Look>()
       for (const [id, actor] of actors.current)
         next.set(id, previous.get(id) ?? { mode: actor.mode, facing: actor.facing })
