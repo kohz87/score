@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { HttpError } from '../../src/errors.ts'
 import { MAX_READ_BYTES, MAX_STORE_BYTES } from '../../src/knowledge/doc-types.ts'
-import { PNG, makeZip } from './doc-fixtures.ts'
+import { PNG, makeZip, textDocx } from './doc-fixtures.ts'
 import { makeVault, type Harness } from './helpers.ts'
 
 // PLAN 10.6: big files are stored, hashed and served from disk; text work stops at MAX_READ_BYTES.
@@ -132,6 +132,42 @@ describe('reading from disk', () => {
     let total = 0
     for await (const chunk of file.stream) total += (chunk as Buffer).length
     expect(total).toBe(png.length)
+  })
+})
+
+describe('re-indexing big files', () => {
+  const bigDocx = async () => {
+    const small = await textDocx('hello')
+    // A real DOCX plus a stored filler part, so the central directory sits at the end of 30 MB.
+    const JSZip = (await import('jszip')).default
+    const zip = await JSZip.loadAsync(small)
+    zip.file('word/filler.bin', Buffer.alloc(30 * MB, 1), { compression: 'STORE' })
+    return zip.generateAsync({ type: 'nodebuffer', compression: 'STORE' })
+  }
+
+  test('a scan never reads a big CSV, JSON, DOCX or zip whole; it checks head and tail and marks them too_large', async () => {
+    const line = '{"a":1,"b":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}\n'
+    fs.writeFileSync(path.join(h.vaultDir, 'a.csv'), 'x,y\n'.repeat(8 * MB))
+    fs.writeFileSync(
+      path.join(h.vaultDir, 'b.json'),
+      line.repeat(Math.ceil((30 * MB) / line.length)),
+    )
+    fs.writeFileSync(path.join(h.vaultDir, 'c.html'), '<p>x</p>\n'.repeat(4 * MB))
+    fs.writeFileSync(path.join(h.vaultDir, 'd.docx'), await bigDocx())
+    fs.writeFileSync(
+      path.join(h.vaultDir, 'e.zip'),
+      await makeZip({ 'f.png': bigPng(30) }, 'STORE'),
+    )
+    fs.writeFileSync(path.join(h.vaultDir, 'fake.docx'), Buffer.alloc(30 * MB))
+    const read = vi.spyOn(h.vault, 'readContainedBuffer')
+    await h.vault.scanNow(true)
+    const wholeFileReads = read.mock.calls.filter(([, max]) => (max ?? 0) > MAX_READ_BYTES)
+    expect(wholeFileReads).toEqual([])
+    for (const name of ['a.csv', 'b.json', 'c.html', 'd.docx', 'e.zip'])
+      expect(await h.vault.docs.get(name), name).toMatchObject({ textStatus: 'too_large' })
+    // A file that is not what its name says is still left unlisted.
+    await expect(h.vault.docs.get('fake.docx')).rejects.toMatchObject({ status: 404 })
+    expect(worker.text).not.toHaveBeenCalled()
   })
 })
 

@@ -500,13 +500,13 @@ export class KnowledgeVault {
     }
   }
 
-  /** The first `bytes` bytes of a file (fewer when it is shorter). */
-  async readContainedHead(abs: string, bytes: number): Promise<Buffer> {
+  /** `length` bytes from `position` (fewer at the end of the file), one bounded positional read. */
+  async readContainedRange(abs: string, position: number, length: number): Promise<Buffer> {
     const handle = await this.openContained(abs)
     try {
-      const head = Buffer.alloc(bytes)
-      const { bytesRead } = await handle.read(head, 0, bytes, 0)
-      return head.subarray(0, bytesRead)
+      const out = Buffer.alloc(length)
+      const { bytesRead } = await handle.read(out, 0, length, position)
+      return out.subarray(0, bytesRead)
     } finally {
       await handle.close()
     }

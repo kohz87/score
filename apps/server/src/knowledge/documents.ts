@@ -18,6 +18,7 @@ import { KnowledgeTextStatusSchema } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
 import { isPlainText } from '../media/sniff.ts'
+import { bigFileMatches } from './big-file.ts'
 import { prepareNoteContent } from './note-images.ts'
 import { redact } from '../redact.ts'
 import {
@@ -64,9 +65,6 @@ const DocRowSchema = z.object({
 type DocRow = z.infer<typeof DocRowSchema>
 const EntriesSchema = z.array(z.object({ path: z.string(), size: z.number() }))
 const MAX_EVENTS = 200
-/** Types a big file can be validated by its first bytes alone (the others need the whole file). */
-const START_ONLY_TYPES: readonly KnowledgeDocumentType[] = ['pdf', 'image']
-const START_BYTES = 64 * 1024
 
 export type OnConflict = 'ask' | 'keep' | 'replace'
 
@@ -705,20 +703,27 @@ export class KnowledgeDocuments {
     const { abs, stat } = await this.vault.lookup(rel.split('/'))
     if (!type || !stat?.isFile() || stat.size > MAX_STORE_BYTES) return this.dropIndex(rel)
     const big = stat.size > MAX_READ_BYTES
-    // A big file is hashed in chunks first; it is read (whole, or just its start) only when it changed.
+    // A big file is hashed in chunks and never read whole: it is only checked from its start (and a DOCX's zip
+    // directory at its end), then stored as too_large.
     const hash = big ? await this.vault.hashContained(abs, MAX_STORE_BYTES) : null
     const known = this.db.read((sqlite) => this.row(sqlite, rel))
     if (hash !== null && known?.hash === hash) return this.markUnchanged(rel, stat)
-    const bytes =
-      big && START_ONLY_TYPES.includes(type)
-        ? await this.vault.readContainedHead(abs, START_BYTES)
-        : await this.vault.readContainedBuffer(abs, MAX_STORE_BYTES)
+    let bytes: Buffer
+    let match: boolean
+    if (big) {
+      const checked = await bigFileMatches(type, stat.size, (position, length) =>
+        this.vault.readContainedRange(abs, position, length),
+      )
+      bytes = checked.head
+      match = checked.ok
+    } else {
+      bytes = await this.vault.readContainedBuffer(abs, MAX_READ_BYTES)
+      match = bytesMatch(type, bytes)
+    }
     const fileHash = hash ?? hashContent(bytes)
     if (hash === null && known?.hash === fileHash) return this.markUnchanged(rel, stat)
     // A file whose bytes don't match its extension is left alone (and unlisted), not indexed as something it isn't.
-    const facts = bytesMatch(type, bytes)
-      ? await this.documentFacts(rel, type, bytes, stat.size)
-      : null
+    const facts = match ? await this.documentFacts(rel, type, bytes, stat.size) : null
     if (!facts) return this.dropIndex(rel)
     // A rebuild has no rows to remember, so git's tracking stands in for them.
     const versioned = await this.keptInHistory(rel, stat.size, known?.versioned === 1)
