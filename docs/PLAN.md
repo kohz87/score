@@ -452,3 +452,10 @@ https://claude.ai/artifact/2cSwUQMAEnz9jpwoTaij6B) · brief `docs/briefs/10.2-ag
 `10.2-agent-looks.md`). Marks: 20 shapes, cut-out (default) or ring, calm moods, eyes follow the pointer. Pet packs:
 activity-named animations uploaded per agent (ZIP or files), played by mood with idle fallback and overlays, mark badge;
 Lively / Calm / Still. 10.2a server (migration 0078, pack routes and store), 10.2b web, 10.2c liveliness.
+
+**10.8 Pet-pack portraits everywhere** (owner 2026-10-19: "the agent is still represented by the shape instead of the
+avatar?" → "Everywhere") · brief `docs/briefs/10.8-pack-portraits.md`. An agent with a pet pack appears as a portrait
+from its idle animation wherever `AgentGlyph` draws it; colour and shape still identify it (mark badge, or the
+portrait inside the shape at the smallest size). Done when: every `AgentGlyph` use shows the portrait for a pack agent
+and the mark otherwise; the idle file is decoded once per page, not per glyph; Still/reduced motion never animates;
+theme protection covers the portrait; Team card and agent header keep the full pet.
