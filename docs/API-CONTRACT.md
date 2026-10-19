@@ -43,7 +43,7 @@ type AgentSummary = {
   runtime?: Runtime /* PLAN 7.2; absent = 'hermes' */
   runtimeNote?: string /* coding agents: "Claude Code · Uses your Claude plan quota …" for the card */
 }
-type Runtime = 'hermes' | 'claude-code' | 'codex' | 'antigravity' | 'opencode'
+type Runtime = 'hermes' | 'claude-code' | 'codex' | 'antigravity' /* OpenCode dropped, decision 111 */
 type CostKind = 'reported' | 'estimated' | 'unknown'
 
 type Ref =
@@ -1028,14 +1028,14 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
 
 ### Coding agents (PLAN 7.2; schemas in `packages/contract/src/coding.ts`; design docs/briefs/7.2-coding-agents.md)
 
-Claude Code, Codex CLI and Antigravity (`agy`, PLAN 7.6; design docs/briefs/7.6-antigravity-agent.md) (OpenCode is listed as "not supported yet") join the team next to Hermes agents. A coding agent is
+Claude Code, Codex CLI and Antigravity (`agy`, PLAN 7.6; design docs/briefs/7.6-antigravity-agent.md) join the team next to Hermes agents. A coding agent is
 an `AgentSummary`/`AgentDetail` like any other with `runtime` set, so rooms, @mentions, hand-offs, Stop, Now, Flow, Watch and
 Reports need no new paths. It takes **room work only**: a Kanban task whose `assignee`/`reviewer` is a coding agent is `422
 unsupported`. Hermes-profile endpoints for an agent id that is a coding agent (`/api/agents/:id/skills`, `/memory`, `/files/…`, `/model`,
 `/routines`, …) answer `409 unsupported`. Rewind is not available for them: a room rewind hides the messages in Score and drops that
 room's CLI session (`skipped: no_session`).
 
-- `GET /api/coding-agents/runtimes` → `{ items: CodingRuntimeInfo[] }`: `{ runtime: 'claude-code'|'codex'|'antigravity'|'opencode'; label; state:
+- `GET /api/coding-agents/runtimes` → `{ items: CodingRuntimeInfo[] }`: `{ runtime: 'claude-code'|'codex'|'antigravity'; label; state:
   'ready'|'not_installed'|'not_supported'|'untested_version'; version: string|null; testedVersions: string[]; quota: string; message:
   string|null; unverifiedPermissions: ('read-only'|'workspace-write'|'full')[]; warning: string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
 - `GET /api/coding-agents` → `{ items: CodingAgent[] }`: `{ id; name; role; instructions: string; instructionsEtag: string; runtime; workspace; permission: 'read-only'|'workspace-write'|'full';
@@ -1989,7 +1989,7 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
 **Runtime validation (PLAN 7.7c).** Validate, save, new versions, preflight and start all call one function,
 `validateWorkflowAgents(definition, team, facts)`, next to the graph rules. It adds three codes, each with the `nodeId` of the
 step and `field: 'agentId'`: `coding_agent_unsupported` (the step's agent is not a Hermes, Claude Code or Codex agent, e.g.
-Antigravity or OpenCode, or no coding runtime is wired), `coding_permission_full` (a Claude Code or Codex agent with `full`
+Antigravity, or no coding runtime is wired), `coding_permission_full` (a Claude Code or Codex agent with `full`
 access; steps need `read-only` or `workspace-write`) and `coding_workers_need_units` (the host doesn’t run coding turns as
 supervised units). Graph `gate` nodes have no agent and are never checked. These issues depend on the team and the host, never
 on the definition alone: they are **not** part of a definition, its stored `hash` or its export validation, and readiness of

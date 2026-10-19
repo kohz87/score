@@ -14,8 +14,8 @@ import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
 import { WorkflowEditorRoute } from './WorkflowEditor.tsx'
 
-// 7.7c-2 #3: the editor offers Claude Code and Codex agents for steps (with their program named), refuses Antigravity and
-// OpenCode with the reason, and Validate's coding issues show on the step they are about, with words for what to do.
+// 7.7c-2 #3: the editor offers Claude Code and Codex agents for steps (with their program named), refuses Antigravity
+// with the reason, and Validate's coding issues show on the step they are about, with words for what to do.
 
 class Source extends EventTarget {
   close() {}
@@ -37,14 +37,6 @@ const team = [
     style: { color: '#6B4EFF', shape: 'diamond' },
     status: 'idle',
     runtime: 'antigravity',
-  },
-  {
-    id: 'coder-d',
-    name: 'coder-d',
-    role: '',
-    style: { color: '#FF6B8A', shape: 'circle-dot' },
-    status: 'idle',
-    runtime: 'opencode',
   },
 ]
 const dispose: (() => void)[] = []
@@ -145,7 +137,7 @@ function mountEditor() {
   )
 }
 
-test('the agent picker offers Claude Code and Codex agents with their program, and refuses Antigravity and OpenCode with the reason', async () => {
+test('the agent picker offers Claude Code and Codex agents with their program, and refuses Antigravity with the reason', async () => {
   mountEditor()
   fireEvent.click(await screen.findByRole('button', { name: /^Agent step Draft the notes/ }))
   const inspector = await screen.findByRole('complementary', { name: 'Step settings' })
@@ -158,7 +150,6 @@ test('the agent picker offers Claude Code and Codex agents with their program, a
     { text: 'coder-a · Codex', disabled: false },
     { text: 'coder-b · Claude Code', disabled: false },
     { text: 'coder-c · Antigravity (can’t take workflow steps)', disabled: true },
-    { text: 'coder-d · OpenCode (can’t take workflow steps)', disabled: true },
   ])
   fireEvent.change(picker, { target: { value: 'coder-a' } })
   expect((picker as HTMLSelectElement).value).toBe('coder-a')

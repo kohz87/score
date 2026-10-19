@@ -5,7 +5,6 @@ const labels: Record<Runtime, string> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
   antigravity: 'Antigravity',
-  opencode: 'OpenCode',
 }
 
 /** The runtime's name for a badge, or null for Hermes agents (the default, shown as nothing). */

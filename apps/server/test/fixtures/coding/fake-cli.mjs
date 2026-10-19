@@ -2,7 +2,7 @@
 // Stand-in for the coding CLIs in tests and fake mode (selected by SCORE_CODING_FAKE_CLI, honoured only in fake mode
 // and under test). It never talks to a model: it prints a hand-made fixture selected by `[fixture:NAME]` in the prompt.
 // `[fixture:subagent]` (claude-code) prints a recorded turn that used a sub-agent (PLAN 8.7).
-// Usage: node fake-cli.mjs <claude-code|codex|opencode> <the real CLI's arguments…>
+// Usage: node fake-cli.mjs <claude-code|codex|antigravity> <the real CLI's arguments…>
 import { spawn } from 'node:child_process'
 import {
   appendFileSync,

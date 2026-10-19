@@ -253,7 +253,6 @@ test('Add agent lists the CLIs and creates a coding agent that shows up as a tea
     ['claude-code', 'ready'],
     ['codex', 'ready'],
     ['antigravity', 'ready'],
-    ['opencode', 'not_supported'],
   ])
   expect(runtimes[0].quota).toMatch(/Claude plan quota/)
   const agent = await addAgent()
@@ -386,7 +385,7 @@ test('PLAN 10.2: a refresh that read the agent before a style or pack save canno
   updateProjectedAgent(db.sqlite, AgentSummarySchema.parse(stale[0]))
   expect(readAgent(db.sqlite, 'coder')!.style).toEqual(saved)
 })
-test('refuses duplicates, a missing CLI, OpenCode, full access without the password, bad folders', async () => {
+test('refuses duplicates, a missing CLI, an unknown runtime, full access without the password, bad folders', async () => {
   await addAgent()
   expect(
     (
@@ -419,8 +418,7 @@ test('refuses duplicates, a missing CLI, OpenCode, full access without the passw
     workspace,
     style,
   })
-  expect(opencode.statusCode).toBe(422)
-  expect(opencode.json().error.code).toBe('cli_not_installed')
+  expect(opencode.statusCode).toBe(400)
   const full = await request('POST', '/api/coding-agents', {
     id: 'bold',
     name: 'Bold',

@@ -10,7 +10,6 @@ import {
   parseAntigravityUsage,
 } from '../../src/runtimes/coding/antigravity.ts'
 import { codexDriver, createCodexParser } from '../../src/runtimes/coding/codex.ts'
-import { opencodeDriver } from '../../src/runtimes/coding/opencode.ts'
 import { isTestedVersion } from '../../src/runtimes/coding/drivers.ts'
 import { buildChildEnv } from '../../src/runtimes/coding/env.ts'
 import type { CodingEvent } from '../../src/runtimes/coding/types.ts'
@@ -197,11 +196,6 @@ test('codex flag mapping per permission level, new and resumed', () => {
   expect(resumed).not.toContain('-C')
 })
 
-test('opencode is listed but cannot run', () => {
-  expect(opencodeDriver.supported).toBe(false)
-  expect(() => opencodeDriver.buildArgs({ ...base, permission: 'read-only' })).toThrow()
-})
-
 test('version gate: tested series only', () => {
   expect(isTestedVersion(claudeDriver, '2.1.295')).toBe(true)
   expect(isTestedVersion(claudeDriver, '2.10.0')).toBe(false)
@@ -268,7 +262,6 @@ test('fake mode never starts a real CLI, whatever the environment says (review: 
     'not_installed',
     'not_installed',
     'not_installed',
-    'not_supported',
   ])
   expect(() => fakeMode.command(codex)).toThrow(/fake mode/)
   // With the fake script it is the script that runs, never the binary.
