@@ -218,11 +218,16 @@ test('the Hermes banner and the Team note show above every section', async () =>
   expect(screen.getByText(/Settings for one agent are on that agent’s page in Team/)).toBeDefined()
 })
 
-test('the palette lists each Settings section and opens it', async () => {
+test('the palette finds each Settings section once something is typed, and opens it', async () => {
   mount('/now')
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
   const palette = await screen.findByRole('dialog', { name: 'Search or run a command' })
   expect(within(palette).getByRole('link', { name: 'Settings' })).toBeDefined()
+  // The empty palette stays the short list of destinations.
+  expect(within(palette).queryByRole('link', { name: /^Settings: / })).toBeNull()
+  fireEvent.change(within(palette).getByLabelText('Search destinations'), {
+    target: { value: 'settings' },
+  })
   for (const [, label] of titles)
     expect(within(palette).getByRole('link', { name: `Settings: ${label}` })).toBeDefined()
   fireEvent.click(within(palette).getByRole('link', { name: 'Settings: Logs' }))

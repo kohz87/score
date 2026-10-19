@@ -37,7 +37,7 @@ export function CommandPalette({
   const menu = useMenu()
   // Settings is one page per section (PLAN 10.1): each is a destination of its own besides plain Settings.
   const { sections } = useSettingsSections(userView !== undefined)
-  const destinations: { path: string; title: string; name?: string }[] = userView
+  const destinations: { path: string; title: string; name?: string; section?: true }[] = userView
     ? [
         { path: '/now', title: 'Admin view' },
         { path: '/settings', title: 'Settings' },
@@ -47,10 +47,14 @@ export function CommandPalette({
         ...sections.map(({ id, label }) => ({
           path: settingsPath(id),
           title: `Settings: ${label}`,
+          section: true as const,
         })),
       ]
-  const options = destinations.filter(({ title, name }) =>
-    `${title} ${name ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()),
+  // Settings' sections only once something is typed: the empty palette stays the short list of destinations.
+  const options = destinations.filter(
+    ({ title, name, section }) =>
+      !(section && search.trim() === '') &&
+      `${title} ${name ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()),
   )
   const matchingCommands = commands.filter(({ title }) =>
     title.toLowerCase().includes(search.trim().toLowerCase()),
