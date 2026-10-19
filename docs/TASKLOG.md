@@ -438,3 +438,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   detection. Lead review added: no upload progress for packs up to 64 MB; appearance popover clips its last line. Lead
   merged main into 10.2b (DECISIONS conflict: rows 105–108 in order). Server fixes → 10.2a builder, web fixes → 10.2b
   builder. Lead viewed the real app with a pack: pet on the Team card and agent header with the mark badge.
+- **10.2 merged → v1.10.0** (427f9855). Lead committed the server builder's uncommitted structure-check files after
+  review (07ebc642; the web builder had refused to merge a non-typechecking tip). Combined branch: `pnpm check` green
+  (contract 1418, web 2858, server 4572, plugin 323, license ok); full e2e 614 passed, 18 visual diffs (marks) + 1 known
+  flake (`chat-follow.spec.ts:46`, passes alone); 18 baselines regenerated with `--update-snapshots=changed` and rerun
+  green (lead viewed team-dark-1440 and studio-user-phone). Lead checked real files against the new sniffing: owner's
+  two WebPs and ffmpeg GIF/APNG/WebP accepted. README screenshots regenerated (18 files, 21/21).
