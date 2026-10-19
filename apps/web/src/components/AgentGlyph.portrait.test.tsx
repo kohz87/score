@@ -166,3 +166,52 @@ test('the portrait is covered by the theme protection', () => {
   const guard = readFileSync('src/themes/guard.ts', 'utf8')
   expect(guard).toMatch(/const SHAPES = '[^']*\bimage\b/)
 })
+
+test('keyboard focus keeps it playing when the pointer leaves (hover and focus are tracked apart)', async () => {
+  render(
+    <button>
+      <AgentGlyph agent={packed()} />
+    </button>,
+  )
+  await settle()
+  const button = screen.getByRole('button')
+  fireEvent.focus(button)
+  fireEvent.pointerEnter(button)
+  fireEvent.pointerLeave(button)
+  expect(document.querySelector('img.agent-glyph__anim')).not.toBeNull()
+  fireEvent.blur(button)
+  expect(document.querySelector('img.agent-glyph__anim')).toBeNull()
+  // And the other way round: blur while the pointer is still over it.
+  fireEvent.pointerEnter(button)
+  fireEvent.focus(button)
+  fireEvent.blur(button)
+  expect(document.querySelector('img.agent-glyph__anim')).not.toBeNull()
+})
+
+test.each(
+  (['sm', 'md', 'lg'] as const).flatMap((size) =>
+    (['cut', 'ring'] as const).map((look) => ({ size, look })),
+  ),
+)('$look badge at $size keeps its shape styling', async ({ size, look }) => {
+  const a = packed()
+  render(<AgentGlyph agent={{ ...a, style: { ...a.style, look } }} size={size} />)
+  await settle()
+  const badge = glyph().querySelector('.agent-glyph__badge')!
+  expect(badge.classList.contains(`agent-glyph--${look}`)).toBe(true)
+  if (look === 'ring') {
+    expect(badge.querySelector('.agent-glyph__outline')).not.toBeNull()
+    const css = readFileSync('src/components/agent-glyph.css', 'utf8')
+    expect(css).toMatch(/\.agent-glyph--ring \.agent-glyph__outline\s*\{[^}]*stroke-width: [\d.]+/)
+    expect(css).toMatch(/\.agent-glyph--ring \.agent-glyph__outline\s*\{[^}]*stroke: var/)
+  } else {
+    expect(badge.querySelector('mask')).not.toBeNull()
+  }
+})
+
+test('under a custom theme the badge sits on Score’s own plate, not the theme’s card colour', () => {
+  const css = readFileSync('src/styles/protected.css', 'utf8').replace(/\s+/g, ' ')
+  expect(css).toMatch(
+    /html\[data-look='custom'\] \.agent-glyph__badge\[?[^{]*\{[^}]*background-color: var\(--glyph-plate\) !important/,
+  )
+  expect(css).toMatch(/\.agent-glyph__badge-plate[^{]*\{[^}]*fill: var\(--glyph-plate\) !important/)
+})

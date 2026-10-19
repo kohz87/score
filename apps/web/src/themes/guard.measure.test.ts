@@ -251,6 +251,24 @@ describe('third gate finding 3: non-text contrast of glyphs and Needs-you dots',
     )
   })
 
+  // 10.8 (cross-check P1): the identity badge of a portrait is a graphic of its own.
+  const badge = (extra = '') =>
+    `<div id="row"><span id="g" class="agent-glyph agent-glyph--portrait" data-protected="inline-flex" role="img" aria-label="lead" style="--glyph-color: #6b4eff; background-color: #ffffff"><span class="agent-glyph__portrait"></span><span id="b" class="agent-glyph__badge" style="${extra}"></span></span></div>`
+
+  test('a portrait’s badge on a plate of the agent’s own colour is reported', () => {
+    document.body.innerHTML = badge()
+    rects = { row: [0, 0, 60, 40], g: [0, 0, 34, 34], b: [20, 20, 14, 14] }
+    stage({ b: { backgroundColor: 'rgb(107, 78, 255)' } })
+    expect(findProtectedViolation()).toBe('span can’t be told apart from its background')
+  })
+
+  test('the badge on Score’s own plate is fine, whatever the theme’s card colour is', () => {
+    document.body.innerHTML = badge('background-color: #ffffff')
+    rects = { row: [0, 0, 60, 40], g: [0, 0, 34, 34], b: [20, 20, 14, 14] }
+    stage({ row: { backgroundColor: 'rgb(107, 78, 255)' } })
+    expect(findProtectedViolation()).toBeNull()
+  })
+
   const dot = (style = '') =>
     `<div id="link"><span id="d" class="needs-you-dot" role="img" aria-label="Needs you" data-protected="block" style="background-color: rgb(255, 107, 138); ${style}"></span></div>`
 
