@@ -51,7 +51,7 @@ test('a workspace upload shows its file, percent and megabytes, then "Saving…"
   xhr.progress(3 * MB, 12 * MB)
   expect(status().textContent).toContain('photo.jpg')
   expect(status().textContent).toContain('Uploading · 25% · 3.0 MB of 12.0 MB')
-  xhr.progress(12 * MB, 12 * MB)
+  xhr.uploaded(12 * MB)
   expect(status().textContent).toContain('Saving…')
   xhr.answer(201, { path: 'photo.jpg', size: 3 })
   expect(await screen.findByText('Uploaded photo.jpg.')).toBeTruthy()
@@ -68,4 +68,31 @@ test('several files show the one being sent, and a refusal keeps its message', a
   first.answer(409, { error: { code: 'exists', message: 'That name is taken' } })
   expect((await screen.findByRole('alert')).textContent).toBeTruthy()
   expect(ControlledXhr.all).toHaveLength(1)
+})
+
+test('two uploads at once each keep their own line, and one finishing removes only its own', async () => {
+  await pick('a.txt')
+  await pick('b.txt')
+  await vi.waitFor(() => expect(ControlledXhr.all).toHaveLength(2))
+  const [a, b] = ControlledXhr.all as [ControlledXhr, ControlledXhr]
+  a.progress(1 * MB, 4 * MB)
+  b.progress(3 * MB, 4 * MB)
+  const lines = () => screen.getAllByRole('status').map((el) => el.textContent ?? '')
+  expect(lines().some((t) => t.includes('a.txt') && t.includes('25%'))).toBe(true)
+  expect(lines().some((t) => t.includes('b.txt') && t.includes('75%'))).toBe(true)
+  a.answer(201, { path: 'a.txt', size: 3 })
+  await vi.waitFor(() =>
+    expect(lines().some((t) => t.includes('a.txt') && t.includes('%'))).toBe(false),
+  )
+  expect(lines().some((t) => t.includes('b.txt') && t.includes('75%'))).toBe(true)
+})
+
+test('an empty file moves on to "Saving…"', async () => {
+  await pick('empty.txt')
+  const xhr = await vi.waitFor(() => {
+    if (!ControlledXhr.all[0]) throw new Error('not sent yet')
+    return ControlledXhr.all[0]
+  })
+  xhr.uploaded(0)
+  expect(screen.getByRole('status').textContent).toContain('Saving…')
 })

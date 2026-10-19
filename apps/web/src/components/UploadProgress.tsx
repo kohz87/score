@@ -29,7 +29,7 @@ export function UploadProgress({
   compact?: boolean
 }) {
   const { loaded, total } = progress
-  const sent = total > 0 && loaded >= total
+  const sent = progress.done === true
   const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0
   const label = name ? shortName(name) : null
   const doing = sent ? after : 'Uploading'

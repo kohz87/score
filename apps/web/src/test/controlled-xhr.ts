@@ -8,7 +8,10 @@ export class ControlledXhr {
   method = ''
   url = ''
   headers: Record<string, string> = {}
-  upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null }
+  upload: {
+    onprogress: ((event: ProgressEvent) => void) | null
+    onload: (() => void) | null
+  } = { onprogress: null, onload: null }
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
   status = 200
@@ -32,6 +35,13 @@ export class ControlledXhr {
   progress(loaded: number, total: number) {
     act(() => {
       this.upload.onprogress?.({ loaded, total, lengthComputable: true } as ProgressEvent)
+    })
+  }
+  /** Every byte is out (the browser's upload `load` event); the server is working on them. */
+  uploaded(total: number) {
+    act(() => {
+      this.upload.onprogress?.({ loaded: total, total, lengthComputable: true } as ProgressEvent)
+      this.upload.onload?.()
     })
   }
   /** The server's answer. */

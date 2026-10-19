@@ -193,3 +193,28 @@ test('apiUpload can POST: the method is an option and PUT stays the default', as
   expect(opened).toEqual(['PUT', 'POST'])
   vi.unstubAllGlobals()
 })
+
+test('apiUpload reports that sending is done, also for an empty body', async () => {
+  class Empty {
+    upload: { onprogress: unknown; onload: (() => void) | null } = {
+      onprogress: null,
+      onload: null,
+    }
+    status = 200
+    responseText = '{}'
+    responseType = ''
+    onload: (() => void) | null = null
+    onerror: (() => void) | null = null
+    open() {}
+    setRequestHeader() {}
+    send() {
+      this.upload.onload?.()
+      this.onload?.()
+    }
+  }
+  vi.stubGlobal('XMLHttpRequest', Empty)
+  const seen: unknown[] = []
+  await apiUpload('a', new Blob([]), (progress) => seen.push(progress))
+  expect(seen).toEqual([{ loaded: 0, total: 0, done: true }])
+  vi.unstubAllGlobals()
+})

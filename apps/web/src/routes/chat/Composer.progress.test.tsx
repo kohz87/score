@@ -55,7 +55,7 @@ test('each attachment shows its own progress, then "Checking…", then becomes t
   expect(xhr.sent).toBeInstanceOf(FormData)
   xhr.progress(2 * MB, 5 * MB)
   expect(within(tray()).getByRole('status').textContent).toContain('report.pdf · 40%')
-  xhr.progress(5 * MB, 5 * MB)
+  xhr.uploaded(5 * MB)
   expect(within(tray()).getByRole('status').textContent).toContain('report.pdf · Checking…')
   xhr.answer(201, { mediaId: 'm1', name: 'report.pdf', size: 4, contentType: 'application/pdf' })
   expect(await within(tray()).findByText('report.pdf')).toBeTruthy()

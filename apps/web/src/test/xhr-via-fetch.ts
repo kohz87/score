@@ -4,7 +4,10 @@ class XhrViaFetch {
   status = 0
   responseText = ''
   responseType = ''
-  upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null }
+  upload: {
+    onprogress: ((event: ProgressEvent) => void) | null
+    onload: (() => void) | null
+  } = { onprogress: null, onload: null }
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
   private method = 'GET'
@@ -26,6 +29,7 @@ class XhrViaFetch {
       for (const value of body.values())
         size += typeof value === 'string' ? value.length : value.size
     this.upload.onprogress?.({ loaded: size, total: size, lengthComputable: true } as ProgressEvent)
+    this.upload.onload?.()
     void globalThis
       .fetch(this.url, {
         method: this.method,

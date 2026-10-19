@@ -43,7 +43,7 @@ test('an archive shows percent and megabytes while it is sent, then "Checking th
   const status = await screen.findByRole('status')
   expect(status.textContent).toContain('Uploading · 42% · 84.0 MB of 200.0 MB')
   expect(status.querySelector('progress')?.getAttribute('value')).toBe(String(84 * MB))
-  xhr.progress(200 * MB, 200 * MB)
+  xhr.uploaded(200 * MB)
   expect(status.textContent).toContain('Checking the archive…')
   expect(status.querySelector('progress')?.hasAttribute('value')).toBe(false)
 })
@@ -51,7 +51,7 @@ test('an archive shows percent and megabytes while it is sent, then "Checking th
 test('a refused archive still shows the server’s message and no progress', async () => {
   pick()
   const xhr = await sent()
-  xhr.progress(200 * MB, 200 * MB)
+  xhr.uploaded(200 * MB)
   xhr.answer(413, { error: { code: 'too_large', message: 'That archive is too large.' } })
   expect((await screen.findByRole('alert')).textContent).toContain('That archive is too large.')
   expect(screen.queryByRole('status')).toBeNull()

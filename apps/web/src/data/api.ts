@@ -31,7 +31,8 @@ function failure(path: string, status: number, payload: unknown): ApiError {
   )
 }
 
-export type UploadProgress = { loaded: number; total: number }
+/** Bytes sent so far; `done` is set once all of them are out (also for an empty body), and the server takes over. */
+export type UploadProgress = { loaded: number; total: number; done?: boolean }
 
 /** The bytes of a body, for a progress total when the browser can't say: a file, or every file in a form. */
 function bodySize(body: Blob | FormData): number {
@@ -61,12 +62,18 @@ export function apiUpload(
     if (body instanceof Blob) request.setRequestHeader('content-type', 'application/octet-stream')
     for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value)
     request.responseType = 'text'
-    if (onProgress)
+    if (onProgress) {
       request.upload.onprogress = (event) =>
         onProgress({
           loaded: event.loaded,
           total: event.lengthComputable ? event.total : bodySize(body),
         })
+      // `load` fires when the whole body is out, even an empty one that never gets a progress event.
+      request.upload.onload = () => {
+        const total = bodySize(body)
+        onProgress({ loaded: total, total, done: true })
+      }
+    }
     request.onload = () => {
       let payload: unknown
       try {

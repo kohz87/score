@@ -70,6 +70,6 @@ test('the install dialog shows "Uploading · …" and then "Installing…"', asy
   await vi.waitFor(() => expect(document.querySelector('.upload-progress')).toBeTruthy())
   const status = document.querySelector('.upload-progress')!
   expect(status.textContent).toContain('Uploading · 25% · 2.0 MB of 8.0 MB')
-  xhr.progress(8 * MB, 8 * MB)
+  xhr.uploaded(8 * MB)
   expect(status.textContent).toContain('Installing…')
 })

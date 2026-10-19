@@ -148,7 +148,8 @@ function Browser({
   const [needsTyping, setNeedsTyping] = useState(false)
   const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
-  const [sending, setSending] = useState<{ name: string; progress: Progress } | null>(null)
+  const [sending, setSending] = useState<{ id: number; name: string; progress: Progress }[]>([])
+  const uploadId = useRef(0)
   const picker = useRef<HTMLInputElement>(null)
   const grid = useRef<HTMLDivElement>(null)
   const split = useTreeWidth(grid)
@@ -237,18 +238,26 @@ function Browser({
   async function upload(files: File[]) {
     setNotice('')
     for (const file of files) {
-      setSending({ name: file.name, progress: { loaded: 0, total: file.size } })
+      // Uploads can overlap (a second pick while the first is out): each has its own line, keyed by its own id.
+      const id = (uploadId.current += 1)
+      const track = (progress: Progress) =>
+        setSending((current) =>
+          current.some((item) => item.id === id)
+            ? current.map((item) => (item.id === id ? { ...item, progress } : item))
+            : [...current, { id, name: file.name, progress }],
+        )
+      track({ loaded: 0, total: file.size })
       try {
         await actions.upload.mutateAsync({
           path: join(dir, file.name),
           file,
-          onProgress: (progress) => setSending({ name: file.name, progress }),
+          onProgress: track,
         })
         setNotice(`Uploaded ${file.name}.`)
       } catch {
         return
       } finally {
-        setSending(null)
+        setSending((current) => current.filter((item) => item.id !== id))
       }
     }
     expandTo(join(dir, 'x'))
@@ -421,8 +430,15 @@ function Browser({
             </div>
           )}
           {failure && <p role="alert">{failure}</p>}
-          {sending ? (
-            <UploadProgress name={sending.name} progress={sending.progress} after="Saving…" />
+          {sending.length > 0 ? (
+            sending.map((item) => (
+              <UploadProgress
+                key={item.id}
+                name={item.name}
+                progress={item.progress}
+                after="Saving…"
+              />
+            ))
           ) : (
             <p className="team-muted" role="status">
               {notice}
