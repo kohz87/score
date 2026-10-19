@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.12.1] — 2026-10-19
+
+### Fixed
+- **A pet pack could vanish.** Score's own test runs (on the same machine) could clear uploaded pet packs from the live
+  data folder, so an agent fell back to its mark after the next reload. Tests now never touch the real data folder, and
+  Score only tidies its packs and staged ZIPs in the data folder its own database lives in.
+
 ## [1.12.0] — 2026-10-19
 
 ### Added

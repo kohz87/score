@@ -509,3 +509,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   reviewed builtin-harbour-chat-light (header and stage agree). Combined on main: check green (contract 1420, web 2971,
   server 4607, plugin 323, license); e2e 638 passed, 0 failed. README chat screenshots regenerated (3 files). Follow-up
   noted by the builder: the sidebar room link still shows `activeAgents` glyphs ("wrote lately").
+- **v1.12.1 — incident: test runs deleted a live pet pack** (owner: "the pack disappeared whenever a reload was done").
+  Live log: pack files served 200 until 11:00 UTC, 404 at 12:41 after the 1.12.0 restart; the row named the revision
+  before the restart (pre-1.12.0 backup), and `packs/` and `packs/luna` mtimes showed the whole agent folder was
+  recreated at the 12:41 re-upload. Cause: ~30 server test files build the app with `loadConfig({})` and a test
+  database; the home defaulted to the real `~/.score`, and `PackStore.recover()` with the test DB's empty map removed
+  every pack folder. Full test runs (builder's and the lead's pre-release run at ~12:24, which also left an 88-byte test
+  file in `~/.score/media`) did it. Fix (lead, ade3557b): the server test setup points HOME at the per-file temp root;
+  start-up pack cleanup and staged-zip clearing only run when the database file lives in `config.home`; regression
+  tests failed first (2/3). Checked: live media table empty (no attachments lost); security password, bridge token, TLS
+  and key files untouched (timestamps only). Check green, server 4610/0, e2e 638/0, `~/.score` mtimes unchanged by the
+  runs. Owner's current pack (rev vzQc…) intact.
