@@ -132,7 +132,10 @@ async function glyphPaint(page: Page): Promise<string[]> {
           s.opacity,
           s.visibility,
           s.display,
-          s.transform,
+          // Score's own animated parts (a mark's eye slots, orbit and ripples) read a different transform every time.
+          shape.matches('.agent-glyph__slot, .agent-glyph__orbit, .agent-glyph__ripple')
+            ? 'animated'
+            : s.transform,
           s.fill,
           s.stroke,
           s.strokeWidth,
