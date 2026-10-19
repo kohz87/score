@@ -18,7 +18,7 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-// PLAN 10.2a: 0078 rebuilds agent_styles (20 shapes, look, avatar_rev) and gives coding_agents look + avatar_rev.
+// PLAN 10.2a: 0078 rebuilds agent_styles (20 shapes, look, pack) and gives coding_agents look, pack_rev and pack_meta.
 function migrateBefore() {
   const migrations = join(dir, 'migrations')
   mkdirSync(migrations)
@@ -40,7 +40,7 @@ function upgrade(migrations: string) {
   migrate(db, migrations)
 }
 
-test('0078 keeps every stored style and gives it the default look and no picture', () => {
+test('0078 keeps every stored style and gives it the default look and no pack', () => {
   const migrations = migrateBefore()
   const insert = db.sqlite.prepare(
     'INSERT INTO agent_styles (agent_id, color, shape, updated_at) VALUES (?, ?, ?, ?)',
@@ -53,18 +53,18 @@ test('0078 keeps every stored style and gives it the default look and no picture
       agent_id: 'builder',
       color: '#19C39A',
       shape: 'cross',
-      look: 'bot',
-      avatar_rev: null,
-      avatar_eyes: null,
+      look: 'cut',
+      pack_rev: null,
+      pack_meta: null,
       updated_at: at,
     },
     {
       agent_id: 'lead',
       color: '#6B4EFF',
       shape: 'hexagon',
-      look: 'bot',
-      avatar_rev: null,
-      avatar_eyes: null,
+      look: 'cut',
+      pack_rev: null,
+      pack_meta: null,
       updated_at: at,
     },
   ])
@@ -75,16 +75,19 @@ test('0078 accepts all 20 shapes and refuses an unknown shape or look', () => {
   const insert = db.sqlite.prepare(
     'INSERT INTO agent_styles (agent_id, color, shape, look, updated_at) VALUES (?, ?, ?, ?, ?)',
   )
-  for (const shape of ShapeSchema.options) insert.run(`a-${shape}`, '#112233', shape, 'chibi', at)
+  for (const shape of ShapeSchema.options) insert.run(`a-${shape}`, '#112233', shape, 'ring', at)
   expect(db.sqlite.prepare('SELECT count(*) AS n FROM agent_styles').get()).toEqual({
     n: ShapeSchema.options.length,
   })
   expect(ShapeSchema.options).toHaveLength(20)
-  expect(() => insert.run('x', '#112233', 'dodecagon', 'bot', at)).toThrow()
+  expect(() => insert.run('x', '#112233', 'dodecagon', 'cut', at)).toThrow()
   expect(() => insert.run('y', '#112233', 'cloud', 'robot', at)).toThrow()
+  // The looks of the unreleased first design are gone.
+  expect(() => insert.run('z', '#112233', 'cloud', 'bot', at)).toThrow()
+  expect(() => insert.run('z', '#112233', 'cloud', 'chibi', at)).toThrow()
 })
 
-test('0078 gives coding agents look and avatar_rev, and a style override moves into the agent row', () => {
+test('0078 gives coding agents look, pack_rev and pack_meta, and a style override moves into the agent row', () => {
   const migrations = migrateBefore()
   addCoding('coder', '#111111', 'square')
   addCoding('other', '#222222', 'star')
@@ -94,26 +97,24 @@ test('0078 gives coding agents look and avatar_rev, and a style override moves i
   upgrade(migrations)
   expect(
     db.sqlite
-      .prepare(
-        'SELECT id, color, shape, look, avatar_rev, avatar_eyes FROM coding_agents ORDER BY id',
-      )
+      .prepare('SELECT id, color, shape, look, pack_rev, pack_meta FROM coding_agents ORDER BY id')
       .all(),
   ).toEqual([
     {
       id: 'coder',
       color: '#abcdef',
       shape: 'pill',
-      look: 'bot',
-      avatar_rev: null,
-      avatar_eyes: null,
+      look: 'cut',
+      pack_rev: null,
+      pack_meta: null,
     },
     {
       id: 'other',
       color: '#222222',
       shape: 'star',
-      look: 'bot',
-      avatar_rev: null,
-      avatar_eyes: null,
+      look: 'cut',
+      pack_rev: null,
+      pack_meta: null,
     },
   ])
   // Coding agents are styled in one place only.

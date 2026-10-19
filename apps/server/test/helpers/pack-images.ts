@@ -1,6 +1,7 @@
+import JSZip from 'jszip'
 import { deflateSync } from 'node:zlib'
 
-// Generated, neutral test pictures: a flat grey square, never real artwork.
+// Generated, neutral test images and packs: a flat grey square, never real artwork.
 const CRC = new Uint32Array(256).map((_, n) => {
   let c = n
   for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
@@ -82,19 +83,58 @@ export function webpImage(
   return riff('VP8 ', body)
 }
 
-/** A multipart/form-data body with one file part named "file", as a browser sends it. */
-export function multipartFile(
-  filename: string,
-  bytes: Buffer,
-  contentType = 'application/octet-stream',
-): { payload: Buffer; headers: { 'content-type': string } } {
+/** A GIF with the given size (header and one empty frame; enough for the header checks). */
+export function gifImage(width: number, height: number, frames = 1): Buffer {
+  const head = Buffer.alloc(13)
+  head.write('GIF89a', 0, 'latin1')
+  head.writeUInt16LE(width, 6)
+  head.writeUInt16LE(height, 8)
+  const frame = Buffer.from([0x2c, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 2, 0x44, 1, 0])
+  return Buffer.concat([head, ...Array.from({ length: frames }, () => frame), Buffer.from([0x3b])])
+}
+/** An animated PNG (APNG): the acTL chunk declares the frames. */
+export function apngImage(width: number, height: number): Buffer {
+  const actl = Buffer.alloc(8)
+  actl.writeUInt32BE(2, 0)
+  return pngImage(width, height, [pngChunk('acTL', actl)])
+}
+
+/** A multipart/form-data body with several file parts, as a browser sends them. */
+export function multipartFiles(files: { name: string; bytes: Buffer }[]): {
+  payload: Buffer
+  headers: { 'content-type': string }
+} {
   const boundary = '----scoreTestBoundary7MA4YWxkTrZu0gW'
-  const payload = Buffer.concat([
+  const parts = files.flatMap((file) => [
     Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${file.name}"\r\nContent-Type: application/octet-stream\r\n\r\n`,
     ),
-    bytes,
-    Buffer.from(`\r\n--${boundary}--\r\n`),
+    file.bytes,
+    Buffer.from('\r\n'),
   ])
-  return { payload, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } }
+  return {
+    payload: Buffer.concat([...parts, Buffer.from(`--${boundary}--\r\n`)]),
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+  }
+}
+
+/** A zip of the given entries (name → bytes; a name ending in "/" is a folder). `link` entries are Unix symlinks. */
+export async function zipOf(
+  entries: Record<string, Buffer | string>,
+  options: { links?: string[]; store?: boolean } = {},
+): Promise<Buffer> {
+  const zip = new JSZip()
+  for (const [name, data] of Object.entries(entries)) {
+    if (name.endsWith('/')) zip.file(name, '', { dir: true })
+    else
+      zip.file(name, data, {
+        createFolders: false,
+        ...(options.links?.includes(name) ? { unixPermissions: 0o120777 } : {}),
+      })
+  }
+  return zip.generateAsync({
+    type: 'nodebuffer',
+    platform: 'UNIX',
+    compression: options.store ? 'STORE' : 'DEFLATE',
+  })
 }

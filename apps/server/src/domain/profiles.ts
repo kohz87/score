@@ -12,7 +12,7 @@ import {
   type AgentPreviewRequest,
   type ProfileStepName,
 } from '@score/contract'
-import type { AvatarStore } from '../avatars/store.ts'
+import type { PackStore } from '../packs/store.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import { ProfileInventorySchema } from '../hermes/index.ts'
@@ -94,7 +94,7 @@ export class ProfileOperations {
     private readonly port: HermesPort,
     private readonly clock = Date.now,
     private readonly imports?: ProfileImportStore,
-    private readonly avatars?: AvatarStore,
+    private readonly packs?: PackStore,
   ) {}
 
   get(id: string): AgentOperation {
@@ -703,22 +703,17 @@ export class ProfileOperations {
         sqlite
           .prepare('UPDATE producers SET token_expires_at = 0 WHERE profile = ?')
           .run(operation.targetName)
-        // The imported picture goes with the agent (PLAN 10.2): the revision here, the folder right after the commit.
+        // The uploaded pack goes with the agent (PLAN 10.2): the revision here, the folder right after the commit.
         sqlite
-          .prepare(
-            'UPDATE agent_styles SET avatar_rev = NULL, avatar_eyes = NULL WHERE agent_id = ?',
-          )
+          .prepare('UPDATE agent_styles SET pack_rev = NULL, pack_meta = NULL WHERE agent_id = ?')
           .run(operation.targetName)
         const previous = readAgent(sqlite, operation.targetName)
-        if (previous?.style.avatar || previous?.style.avatarEyes)
-          storeAgent(sqlite, {
-            ...previous,
-            style: { ...previous.style, avatar: null, avatarEyes: null },
-          })
+        if (previous?.style.pack)
+          storeAgent(sqlite, { ...previous, style: { ...previous.style, pack: null } })
         return events
       },
     })
-    this.avatars?.removeAgent(operation.targetName)
+    this.packs?.removeAgent(operation.targetName)
   }
   async close() {
     this.closed = true

@@ -35,7 +35,7 @@ import { CodingRuntime, type CodingRuntimeDeps } from '../../src/runtimes/coding
 import { SecurityPassword } from '../../src/auth/security-password.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 import { FAKE_CLI } from './coding-fixtures.ts'
-import { multipartFile, pngImage } from '../helpers/avatar-images.ts'
+import { multipartFiles, webpImage } from '../helpers/pack-images.ts'
 
 // Every test here spawns real child processes (a version probe per agent and per turn, then the CLI itself). Alone that
 // is ~1-2 s, but in the full parallel run on 4 cores node start-up alone takes seconds, and the two-agent Reports test
@@ -272,23 +272,18 @@ test('Add agent lists the CLIs and creates a coding agent that shows up as a tea
 })
 
 test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at creation and by the style route', async () => {
+  const forged = { rev: 'forged', activities: ['idle'], name: null, credits: null, floor: 0 }
   const created = await addAgent({
-    style: { color: '#19C39A', shape: 'cylinder', look: 'chibi', avatar: 'forged' },
+    style: { color: '#19C39A', shape: 'cylinder', look: 'ring', pack: forged },
   })
-  expect(created.style).toEqual({
-    color: '#19C39A',
-    shape: 'cylinder',
-    look: 'chibi',
-    avatar: null,
-    avatarEyes: null,
-  })
+  expect(created.style).toEqual({ color: '#19C39A', shape: 'cylinder', look: 'ring', pack: null })
   const patched = await request('PATCH', '/api/agents/coder/style', {
     shape: 'gem',
     color: '#102030',
-    look: 'bot',
+    look: 'cut',
   })
   expect(patched.statusCode, patched.body).toBe(200)
-  const expected = { color: '#102030', shape: 'gem', look: 'bot', avatar: null, avatarEyes: null }
+  const expected = { color: '#102030', shape: 'gem', look: 'cut', pack: null }
   expect(patched.json().style).toEqual(expected)
   // Every view of the agent agrees, and the style lives in the agent's own row only.
   const listed = (await request('GET', '/api/coding-agents')).json().items[0]
@@ -299,8 +294,8 @@ test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at crea
   }[]
   expect(team.find((item) => item.id === 'coder')!.style).toEqual(expected)
   expect(
-    db.sqlite.prepare('SELECT color, shape, look, avatar_rev FROM coding_agents').all(),
-  ).toEqual([{ color: '#102030', shape: 'gem', look: 'bot', avatar_rev: null }])
+    db.sqlite.prepare('SELECT color, shape, look, pack_rev, pack_meta FROM coding_agents').all(),
+  ).toEqual([{ color: '#102030', shape: 'gem', look: 'cut', pack_rev: null, pack_meta: null }])
   expect(db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
   const events = db.sqlite
     .prepare("SELECT data FROM events WHERE type = 'agent.updated' ORDER BY seq")
@@ -312,63 +307,45 @@ test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at crea
     (await request('PATCH', '/api/agents/coder/style', { shape: 'dodecagon' })).statusCode,
   ).toBe(400)
 })
-test('PLAN 10.2: a coding agent can have a picture, and removing the agent removes the folder', async () => {
+test('PLAN 10.2: a coding agent can have a pet pack, and removing the agent removes the folder', async () => {
   await addAgent()
-  const body = multipartFile('me.png', pngImage(64, 64))
+  const body = multipartFiles([
+    { name: 'idle.webp', bytes: webpImage(128, 128, 'VP8X', { animated: true }) },
+    { name: 'pet.json', bytes: Buffer.from('{"name":"Round","floor":0.1}') },
+  ])
   const uploaded = await app.inject({
     method: 'PUT',
-    url: '/api/agents/coder/avatar',
+    url: '/api/agents/coder/pack',
     headers: { ...headers, ...body.headers },
     payload: body.payload,
   })
   expect(uploaded.statusCode, uploaded.body).toBe(200)
-  const rev = uploaded.json().style.avatar
-  expect(typeof rev).toBe('string')
+  const pack = uploaded.json().agent.style.pack
+  expect(pack).toMatchObject({ activities: ['idle'], name: 'Round', credits: null, floor: 0.1 })
   // One place for the style: the agent's own row, seen the same from every list.
-  expect(db.sqlite.prepare('SELECT avatar_rev FROM coding_agents').all()).toEqual([
-    { avatar_rev: rev },
+  expect(db.sqlite.prepare('SELECT pack_rev FROM coding_agents').all()).toEqual([
+    { pack_rev: pack.rev },
   ])
   expect(db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
-  expect((await request('GET', '/api/coding-agents')).json().items[0].style.avatar).toBe(rev)
-  const served = await app.inject({ url: `/api/agents/coder/avatar?rev=${rev}`, headers })
+  expect((await request('GET', '/api/coding-agents')).json().items[0].style.pack).toEqual(pack)
+  const served = await app.inject({ url: `/api/agents/coder/pack/idle?rev=${pack.rev}`, headers })
   expect(served.statusCode).toBe(200)
-  expect(existsSync(join(home, 'avatars', 'coder', `${rev}.png`))).toBe(true)
-  // Eye marks live in the agent's own row too, and go with a replaced picture.
-  const marks = {
-    left: { x: 0.3, y: 0.5, w: 0.1, h: 0.12 },
-    right: { x: 0.56, y: 0.41, w: 0.12, h: 0.13 },
-    lid: '#fce9df',
-  }
-  const marked = await app.inject({
-    method: 'PUT',
-    url: '/api/agents/coder/avatar/eyes',
-    headers,
-    payload: marks,
-  })
-  expect(marked.statusCode, marked.body).toBe(200)
-  expect((await request('GET', '/api/coding-agents')).json().items[0].style.avatarEyes).toEqual(
-    marks,
-  )
-  expect(
-    JSON.parse(
-      String(db.sqlite.prepare('SELECT avatar_eyes FROM coding_agents').get()!.avatar_eyes),
-    ),
-  ).toEqual(marks)
-  expect(db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
+  expect(served.headers['content-type']).toBe('image/webp')
+  expect(existsSync(join(home, 'packs', 'coder', pack.rev, 'idle.webp'))).toBe(true)
   // The look and shape can change without losing it.
-  await request('PATCH', '/api/agents/coder/style', { look: 'chibi', shape: 'bubble' })
+  await request('PATCH', '/api/agents/coder/style', { look: 'ring', shape: 'bubble' })
   expect((await request('GET', '/api/coding-agents')).json().items[0].style).toMatchObject({
-    look: 'chibi',
+    look: 'ring',
     shape: 'bubble',
-    avatar: rev,
+    pack,
   })
   expect((await request('DELETE', '/api/coding-agents/coder')).statusCode).toBe(204)
-  expect(existsSync(join(home, 'avatars', 'coder'))).toBe(false)
+  expect(existsSync(join(home, 'packs', 'coder'))).toBe(false)
   expect(
-    (await app.inject({ url: `/api/agents/coder/avatar?rev=${rev}`, headers })).statusCode,
+    (await app.inject({ url: `/api/agents/coder/pack/idle?rev=${pack.rev}`, headers })).statusCode,
   ).toBe(404)
-  expect(db.sqlite.prepare('SELECT avatar_rev FROM coding_agents').all()).toEqual([
-    { avatar_rev: null },
+  expect(db.sqlite.prepare('SELECT pack_rev, pack_meta FROM coding_agents').all()).toEqual([
+    { pack_rev: null, pack_meta: null },
   ])
 })
 test('refuses duplicates, a missing CLI, OpenCode, full access without the password, bad folders', async () => {

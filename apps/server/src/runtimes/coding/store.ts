@@ -1,6 +1,5 @@
 import {
   AgentLookSchema,
-  AvatarRevSchema,
   DEFAULT_QUOTA_FLOOR_PERCENT,
   CodingPermissionSchema,
   CodingQuotaSchema,
@@ -13,7 +12,7 @@ import {
 } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { parseAvatarEyes } from '../../avatars/eyes.ts'
+import { parsePack } from '../../packs/meta.ts'
 
 const RowSchema = z.object({
   id: z.string(),
@@ -27,8 +26,8 @@ const RowSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,
   look: AgentLookSchema,
-  avatar_rev: AvatarRevSchema.nullable(),
-  avatar_eyes: z.string().nullable(),
+  pack_rev: z.string().nullable(),
+  pack_meta: z.string().nullable(),
   confirmed_version: z.string().nullable(),
   quota_floor_percent: z.int().min(0).max(50),
   created_at: z.iso.datetime(),
@@ -65,8 +64,7 @@ const toAgent = (value: unknown): StoredCodingAgent => {
       color: row.color,
       shape: row.shape,
       look: row.look,
-      avatar: row.avatar_rev,
-      avatarEyes: parseAvatarEyes(row.avatar_eyes),
+      pack: parsePack(row.pack_rev, row.pack_meta),
     },
     confirmedVersion: row.confirmed_version,
     quotaFloorPercent: row.quota_floor_percent,
@@ -124,7 +122,7 @@ export function insertCodingAgent(
       agent.model,
       agent.style.color,
       agent.style.shape,
-      agent.style.look ?? 'bot',
+      agent.style.look ?? 'cut',
       agent.createdAt,
       agent.quotaFloorPercent ?? DEFAULT_QUOTA_FLOOR_PERCENT,
     )
@@ -162,10 +160,10 @@ export function updateCodingAgent(
   }
 }
 export function removeCodingAgent(sqlite: DatabaseSync, id: string, now: string): void {
-  // The picture goes with the agent (its folder is removed by the caller).
+  // The pack goes with the agent (its folder is removed by the caller).
   sqlite
     .prepare(
-      'UPDATE coding_agents SET removed_at = ?, avatar_rev = NULL, avatar_eyes = NULL WHERE id = ?',
+      'UPDATE coding_agents SET removed_at = ?, pack_rev = NULL, pack_meta = NULL WHERE id = ?',
     )
     .run(now, id)
   // Same transaction: a deleted agent's MCP token and switches must not outlive it.
