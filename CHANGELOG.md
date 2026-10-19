@@ -3,6 +3,26 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.11.0] — 2026-10-19
+
+### Added
+- **Agents with a pet pack look like their character everywhere**: in the side list, chat, Now, Tasks, Flow and
+  mentions, a round portrait from the top of the idle animation, with a ring in the agent's colour and its mark as a
+  badge (at the smallest size, the portrait inside the agent's shape). It plays when you point at it; never under Still
+  or reduced motion. The Team card and agent page keep the full animated pet.
+- **Upload progress everywhere**: agent import (up to 200 MB), chat attachments (each file), workspace uploads (each
+  file) and theme ZIP installs show "Uploading · 42% · 84.0 MB of 200.0 MB", then what the server is doing.
+- **Big files in Knowledge**: files up to 256 MB (were 25 MB), ZIPs that unpack to 1 GB. Files over 25 MB are kept and
+  downloadable, but not searched or previewed ("Too large to preview (over 25 MB). Download it to open it.").
+  Downloads stream from disk.
+
+### Changed
+- **A previewed ZIP goes up once**: Knowledge keeps the ZIP it previewed, so Keep, Unzip and an "already exists" retry
+  don't send it again (kept for 30 minutes; at most 8 ZIPs, 1 GB).
+- **Pet-pack errors name the file**: "luna.zip wasn't accepted:" above the reasons, each reason names the file inside
+  it, and an animation that breaks off says where, e.g. "idle.webp: This WebP breaks off: its header says it ends at
+  1.8 MB, but the file is 5.1 MB, so only its first 35 frames would play. Export it again."
+
 ## [1.10.1] — 2026-10-19
 
 ### Changed

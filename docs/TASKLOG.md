@@ -479,3 +479,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   Chromium plays. Lead slip while starting the cross-check: appended to the worktree's `.git` pointer file instead of
   an exclude file; repaired at once and the cross-check restarted (killed by exact PID). **10.6 done** (builder; check
   green, e2e 634/0) — cross-check running. **10.4** fix round running.
+- **v1.11.0** = 10.3 (staged zips) + 10.6 (big Knowledge files) + 10.7 (pack errors name the file) + 10.4 (upload
+  progress everywhere) + 10.8 (pack portraits, decision 109), merged on `rel/1.11.0` (conflicts: PetPackSection — 10.4's
+  shared `UploadProgress` + 10.7's `refusedLabel`; PLAN appends). Cross-checks: 10.4 (3: overlapping workspace uploads,
+  e2e accepted 0%, zero-byte completion), 10.6 (4: worker copy, whole-file reindex reads, big images previewed, cap
+  bypass in preview/unzip), 10.8 (P1 theme could hide the badge; ring badge outline; hover vs focus) — all fixed by the
+  builders with failing-first tests; lead: 10.8 `mark` prop (pet badge stays the mark). Accepted residuals: a zip
+  upload peaks at ~2 copies in memory (jszip loads whole archives); a zip found by a scan over 25 MB lists no entries;
+  zip64 DOCX over 25 MB stays unlisted. Combined: check green (contract 1420, web 2911, server 4607, plugin, license);
+  e2e 635 passed, 1 known flake (`chat-follow.spec.ts:46`, passes alone). Lead slip: ran `npx tsc` in a fresh worktree
+  before installing, which fetched the npm placeholder package `tsc` (printed a warning only).
