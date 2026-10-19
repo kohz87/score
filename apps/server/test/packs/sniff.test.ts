@@ -62,12 +62,12 @@ test('the limits are inclusive: 64 and 2048 pass, 63 and 2049 do not, on either 
   }
 })
 
-test('8 MB is the most one image may be', () => {
+test('32 MB is the most one image may be', () => {
   const exactly = padTo(pngImage(64, 64), PACK_IMAGE_MAX_BYTES)
   expect(sniffPackImage(exactly, 'a.png').ok).toBe(true)
   expect(sniffPackImage(padTo(pngImage(64, 64), PACK_IMAGE_MAX_BYTES + 1), 'a.png')).toMatchObject({
     ok: false,
-    reasons: [expect.stringContaining('8 MB')],
+    reasons: [expect.stringContaining('32 MB')],
   })
 })
 

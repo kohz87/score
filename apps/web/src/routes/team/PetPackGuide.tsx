@@ -86,7 +86,7 @@ export function PetPackGuide() {
           in <code>sleep</code>).
         </li>
         <li>
-          <strong>Limits:</strong> up to 8 MB per file and 64 MB per pack; 64–2048 px per side.
+          <strong>Limits:</strong> up to 32 MB per file and 256 MB per pack; 64–2048 px per side.
           12–24 frames per second is plenty.
         </li>
         <li>

@@ -7,8 +7,8 @@ import { packProblems } from './pack-errors.ts'
 import { PetPackGuide } from './PetPackGuide.tsx'
 
 const ACCEPT = '.zip,.webp,.png,.gif,.json,application/zip,image/webp,image/png,image/gif'
-const FILE_MAX_BYTES = 8 * 1024 * 1024
-const PACK_MAX_BYTES = 64 * 1024 * 1024
+const FILE_MAX_BYTES = 32 * 1024 * 1024
+const PACK_MAX_BYTES = 256 * 1024 * 1024
 
 type Added = { activities: string[]; ignored: string[] }
 
@@ -44,11 +44,11 @@ export function packChoiceProblem(files: readonly File[]): string | null {
   const zips = files.filter((file) => /\.zip$/i.test(file.name))
   if (zips.length > 0 && files.length > 1)
     return 'Choose one .zip, or the activity files themselves, not both.'
-  // 8 MB is the limit of one image; a zip is held to the pack's 64 MB as a whole.
+  // 32 MB is the limit of one image; a zip is held to the pack's 256 MB as a whole.
   const big = files.find((file) => !/\.zip$/i.test(file.name) && file.size > FILE_MAX_BYTES)
-  if (big) return `${big.name} is larger than 8 MB.`
+  if (big) return `${big.name} is larger than 32 MB.`
   if (files.reduce((sum, file) => sum + file.size, 0) > PACK_MAX_BYTES)
-    return 'The pack is larger than 64 MB.'
+    return 'The pack is larger than 256 MB.'
   return null
 }
 

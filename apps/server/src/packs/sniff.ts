@@ -3,7 +3,7 @@
 // GIF and WebP (also animated) pass; JPEG, SVG (script) and everything else are refused with a reason a person can act
 // on. Nothing here decodes pixels, and nothing in a pack is ever run.
 
-export const PACK_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+export const PACK_IMAGE_MAX_BYTES = 32 * 1024 * 1024
 export const PACK_MIN_SIDE = 64
 export const PACK_MAX_SIDE = 2048
 
@@ -204,7 +204,7 @@ export function sniffPackImage(bytes: Buffer, filename: string): PackImageSniff 
   if (bytes.length === 0) return { ok: false, reasons: ['That file is empty.'] }
   if (bytes.length > PACK_IMAGE_MAX_BYTES)
     reasons.push(
-      `The image is ${(bytes.length / (1024 * 1024)).toFixed(1)} MB. An image can be up to 8 MB.`,
+      `The image is ${(bytes.length / (1024 * 1024)).toFixed(1)} MB. An image can be up to 32 MB.`,
     )
   const claimed = EXTENSIONS[/\.([A-Za-z0-9]+)$/.exec(filename)?.[1]?.toLowerCase() ?? '']
   const parsed = header(bytes)
