@@ -1,4 +1,5 @@
 import {
+  AgentSummarySchema,
   MessageSchema,
   RoomSchema,
   RunSummarySchema,
@@ -36,6 +37,7 @@ import { SecurityPassword } from '../../src/auth/security-password.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 import { FAKE_CLI } from './coding-fixtures.ts'
 import { multipartFiles, webpImage } from '../helpers/pack-images.ts'
+import { readAgent, reconcileAgents, updateProjectedAgent } from '../../src/domain/agents.ts'
 
 // Every test here spawns real child processes (a version probe per agent and per turn, then the CLI itself). Alone that
 // is ~1-2 s, but in the full parallel run on 4 cores node start-up alone takes seconds, and the two-agent Reports test
@@ -347,6 +349,42 @@ test('PLAN 10.2: a coding agent can have a pet pack, and removing the agent remo
   expect(db.sqlite.prepare('SELECT pack_rev, pack_meta FROM coding_agents').all()).toEqual([
     { pack_rev: null, pack_meta: null },
   ])
+})
+test('PLAN 10.2: a refresh that read the agent before a style or pack save cannot write the old look back', async () => {
+  await addAgent()
+  // The list a slow refresh fetched before the person changed anything.
+  const stale = await coding.details()
+  expect(stale[0]!.style).toMatchObject({ look: 'cut', pack: null })
+  const body = multipartFiles([
+    { name: 'idle.webp', bytes: webpImage(128, 128, 'VP8X', { animated: true }) },
+  ])
+  const uploaded = await app.inject({
+    method: 'PUT',
+    url: '/api/agents/coder/pack',
+    headers: { ...headers, ...body.headers },
+    payload: body.payload,
+  })
+  expect(uploaded.statusCode, uploaded.body).toBe(200)
+  await request('PATCH', '/api/agents/coder/style', { look: 'ring', shape: 'gem' })
+  const saved = (await request('GET', '/api/agents'))
+    .json()
+    .items.find((item: { id: string }) => item.id === 'coder').style
+  expect(saved).toMatchObject({ look: 'ring', shape: 'gem', pack: { activities: ['idle'] } })
+  const eventsBefore = db.sqlite
+    .prepare("SELECT count(*) AS n FROM events WHERE type = 'agent.updated'")
+    .get()
+  await reconcileAgents(ingest, stale)
+  expect(
+    (await request('GET', '/api/agents'))
+      .json()
+      .items.find((item: { id: string }) => item.id === 'coder').style,
+  ).toEqual(saved)
+  expect(
+    db.sqlite.prepare("SELECT count(*) AS n FROM events WHERE type = 'agent.updated'").get(),
+  ).toEqual(eventsBefore)
+  // The same for the fake adapter's own updates, which also pass through the projection.
+  updateProjectedAgent(db.sqlite, AgentSummarySchema.parse(stale[0]))
+  expect(readAgent(db.sqlite, 'coder')!.style).toEqual(saved)
 })
 test('refuses duplicates, a missing CLI, OpenCode, full access without the password, bad folders', async () => {
   await addAgent()
