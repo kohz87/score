@@ -452,3 +452,9 @@ https://claude.ai/artifact/2cSwUQMAEnz9jpwoTaij6B) · brief `docs/briefs/10.2-ag
 `10.2-agent-looks.md`). Marks: 20 shapes, cut-out (default) or ring, calm moods, eyes follow the pointer. Pet packs:
 activity-named animations uploaded per agent (ZIP or files), played by mood with idle fallback and overlays, mark badge;
 Lively / Calm / Still. 10.2a server (migration 0078, pack routes and store), 10.2b web, 10.2c liveliness.
+
+**10.4 Upload progress everywhere** (owner 2026-10-19: "also include upload progress for big files") · brief
+`docs/briefs/10.4-upload-progress.md`. Every upload shows what is being sent and how far it is (percent and megabytes),
+then what the server is doing: agent import (up to 200 MB), chat attachments, workspace uploads, theme zip installs and
+Knowledge editor images, as Knowledge files (1.9.5) and pet packs (1.10.0) already do. Done when: each of those shows
+a live percentage while sending and a named step after, with tests that drive the progress events.
