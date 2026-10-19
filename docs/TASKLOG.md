@@ -473,3 +473,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   by reverting src, web assertions new). **10.4 done** (builder; check green, e2e 634/0; editor images embed data URIs,
   nothing to upload) — Codex cross-check running. **10.8** (pet-pack portraits everywhere, decision 109; owner chose
   "Everywhere"): lead brief; Sonnet builder in `../score-worktrees/10.8`.
+- **10.7 cross-check** (Codex high): 1 P2 accepted — the frame count in the WebP size message could be missing (partial
+  frame, cut-short file) or overcount empty frames. Lead fixed it (035ba1cc: `playableFrames` counts complete frames
+  with image data up to the real end, both messages), test failed first; on the owner's file it reports 35 frames, as
+  Chromium plays. Lead slip while starting the cross-check: appended to the worktree's `.git` pointer file instead of
+  an exclude file; repaired at once and the cross-check restarted (killed by exact PID). **10.6 done** (builder; check
+  green, e2e 634/0) — cross-check running. **10.4** fix round running.
