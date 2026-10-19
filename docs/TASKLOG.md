@@ -528,3 +528,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   done (7.2: OpenCode driver `supported: false`), 1 blocked (5.17b). Lead spot-checked 8 verdicts against code and
   commits (3.11, 4.6, 5.10, 5.29 ×5 features, 5.33, 6.5, 8.2, T1): all hold. PLAN: 121 ticks, 7.2 marked partly done,
   stale text fixed (operating model, 5.17a "design v3 pending", 7.7 "until then", 8.3 became Phase 9 themes).
+- **10.12 drop OpenCode** (owner: "drop opencode"; decision 111): lead removed it from the contract (`Runtime`,
+  `CodingRuntimeSchema`, API text) on `task/10.12-drop-opencode`; live DB has no OpenCode agents; the old CHECK stays.
+  Sonnet builder removes the driver, workflow rule, web labels and mentions. PLAN 7.2 now complete.
