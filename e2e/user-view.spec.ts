@@ -221,7 +221,7 @@ test('the per-browser guard asks for the security password before the admin view
     headers: web,
     data: { password: SECURITY_PASSWORD },
   })
-  await page.goto('/settings')
+  await page.goto('/settings/look')
   const guard = page.getByRole('checkbox', { name: /Ask for the security password/ })
   await guard.check()
   const form = page.getByRole('form', { name: 'Turn on the password check' })
@@ -251,7 +251,7 @@ test('the per-browser guard asks for the security password before the admin view
   await dialog.getByRole('button', { name: 'Open admin view' }).click()
   await expect(page).toHaveURL(/\/now$/)
   // Turning it off again needs nothing.
-  await page.goto('/settings')
+  await page.goto('/settings/look')
   await page.getByRole('checkbox', { name: /Ask for the security password/ }).uncheck()
   await expect(
     page.getByRole('checkbox', { name: /Ask for the security password/ }),
