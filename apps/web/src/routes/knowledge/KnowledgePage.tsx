@@ -174,8 +174,13 @@ export function KnowledgePage() {
     >
       {dragging && (
         <p className="kn-drop-hint" role="status">
-          Drop to add the files to{' '}
-          <code>{(filesFolder ?? (path ? folderOf(path) : '')) || 'Knowledge'}</code>
+          {(filesFolder ?? (path ? folderOf(path) : '')) ? (
+            <>
+              Drop to add the files to <code>{filesFolder ?? folderOf(path ?? '')}</code>
+            </>
+          ) : (
+            'Drop to add the files to the top level of Knowledge (not into a folder)'
+          )}
         </p>
       )}
       <button

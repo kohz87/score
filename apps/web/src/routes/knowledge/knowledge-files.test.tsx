@@ -17,6 +17,8 @@ let router: ReturnType<typeof createMemoryRouter>
 let registry: ReturnType<typeof createStreamQueryRegistry>
 /** Responses for the next upload PUTs, in order; then 201. */
 let putQueue: Response[]
+/** While set, every PUT waits for it: the upload is "sent" and the server is still working. */
+let putGate: Promise<void> | null = null
 let documents: Array<Record<string, unknown>>
 
 const json = (body: unknown, status = 200) =>
@@ -131,6 +133,7 @@ function respond(input: string, init: RequestInit = {}): Response {
 beforeEach(() => {
   calls = []
   putQueue = []
+  putGate = null
   documents = [
     doc('inbox/spec.pdf'),
     doc('inbox/scan.pdf', { textStatus: 'unavailable' }),
@@ -146,6 +149,7 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (input: string, init?: RequestInit) => {
       if (input === '/api/agents') return json({ asOfSeq: 0, items: [builder] })
+      if (putGate && init?.method === 'PUT') await putGate
       return respond(input, init)
     }),
   )
@@ -247,6 +251,22 @@ test('uploading puts the raw file and reports it', async () => {
   const banner = screen.getByText(/Not added:/).textContent!
   expect(banner).toContain('virus.exe: this file type isn’t supported')
   expect(banner).toContain('big.csv: larger than the 25 MB limit')
+})
+
+test('a slow upload shows its progress until the server answers, then the panel goes', async () => {
+  let open!: () => void
+  putGate = new Promise((resolve) => (open = resolve))
+  mount('/knowledge?files=inbox')
+  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
+  upload([file('notes.pdf')])
+  const name = await screen.findByText('notes.pdf', { selector: '.kn-upload-progress strong' })
+  const progress = name.closest('.kn-upload-progress')!
+  expect(progress.textContent).toContain('notes.pdf')
+  expect(progress.textContent).toContain('Saving…')
+  open()
+  putGate = null
+  await screen.findByText(/Added inbox\/notes\.pdf/)
+  expect(document.querySelector('.kn-upload-progress')).toBeNull()
 })
 
 test('a name that exists asks keep both or replace, once for the whole batch if ticked', async () => {

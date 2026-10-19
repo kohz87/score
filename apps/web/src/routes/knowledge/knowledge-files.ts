@@ -5,7 +5,7 @@ import {
   KnowledgeZipPreviewSchema,
   type KnowledgeDocumentType,
 } from '@score/contract'
-import { apiFetch } from '../../data/api.ts'
+import { apiFetch, apiUpload, type UploadProgress } from '../../data/api.ts'
 import { notePath } from './knowledge-paths.ts'
 
 // Client side of Knowledge files (PLAN 6.6). The server decides from the bytes; these checks only spare an obviously
@@ -75,38 +75,38 @@ export async function fetchDocument(path: string, signal?: AbortSignal) {
   return KnowledgeDocumentSchema.parse(await apiFetch(documentApi(path), signal ? { signal } : {}))
 }
 
+// Uploads go through apiUpload so the person sees how much has been sent (a 24 MB zip took minutes in silence).
 export async function uploadBlob(
   path: string,
   blob: Blob,
   onConflict: OnConflict,
   extra: Record<string, string> = {},
+  onProgress?: (progress: UploadProgress) => void,
 ) {
   return KnowledgeUploadResultSchema.parse(
-    await apiFetch(uploadApi(path, { onConflict, ...extra }), {
-      method: 'PUT',
-      body: blob,
-      headers: { 'content-type': 'application/octet-stream' },
-    }),
+    await apiUpload(uploadApi(path, { onConflict, ...extra }), blob, onProgress),
   )
 }
 
-export async function previewZip(path: string, blob: Blob) {
+export async function previewZip(
+  path: string,
+  blob: Blob,
+  onProgress?: (progress: UploadProgress) => void,
+) {
   return KnowledgeZipPreviewSchema.parse(
-    await apiFetch(uploadApi(path, { mode: 'preview' }), {
-      method: 'PUT',
-      body: blob,
-      headers: { 'content-type': 'application/octet-stream' },
-    }),
+    await apiUpload(uploadApi(path, { mode: 'preview' }), blob, onProgress),
   )
 }
 
-export async function unzipBlob(path: string, blob: Blob, folder: string, onConflict: OnConflict) {
+export async function unzipBlob(
+  path: string,
+  blob: Blob,
+  folder: string,
+  onConflict: OnConflict,
+  onProgress?: (progress: UploadProgress) => void,
+) {
   return KnowledgeUnzipResultSchema.parse(
-    await apiFetch(uploadApi(path, { mode: 'unzip', folder, onConflict }), {
-      method: 'PUT',
-      body: blob,
-      headers: { 'content-type': 'application/octet-stream' },
-    }),
+    await apiUpload(uploadApi(path, { mode: 'unzip', folder, onConflict }), blob, onProgress),
   )
 }
 

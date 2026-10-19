@@ -1,7 +1,7 @@
 import type { KnowledgeZipPreview } from '@score/contract'
 import { useQueryClient } from '@tanstack/react-query'
 import { useId, useRef, useState, type ReactNode } from 'react'
-import { ApiError } from '../../data/api.ts'
+import { ApiError, type UploadProgress } from '../../data/api.ts'
 import { Modal } from './KnowledgeDialogs.tsx'
 import {
   existingOf,
@@ -63,6 +63,7 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
   const queryClient = useQueryClient()
   const [decision, setDecision] = useState<Decision | null>(null)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<Progress | null>(null)
   const running = useRef(false)
 
   const ask = <T,>(make: (resolve: (value: T) => void) => Decision): Promise<T> =>
@@ -83,6 +84,10 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
     }
     running.current = true
     setBusy(true)
+    const track =
+      (name: string, index: number, count: number, step: Progress['step']) =>
+      ({ loaded, total }: UploadProgress) =>
+        setProgress({ name, index, count, step, loaded, total })
     let batchChoice: 'keep' | 'replace' | null = null
     const withConflict = async <T,>(
       name: string,
@@ -123,7 +128,11 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
         }
         try {
           if ('blob' in item && isZipName(item.name)) {
-            const preview = await previewZip(target, item.blob)
+            const preview = await previewZip(
+              target,
+              item.blob,
+              track(item.name, index, items.length, 'check'),
+            )
             const choice = await ask<ZipChoice>((resolve) => ({
               kind: 'zip',
               name: item.name,
@@ -134,7 +143,13 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
             if (choice.mode === 'skip') continue
             if (choice.mode === 'unzip') {
               const result = await withConflict(item.name, remaining, (onConflict) =>
-                unzipBlob(target, item.blob, choice.folder, onConflict),
+                unzipBlob(
+                  target,
+                  item.blob,
+                  choice.folder,
+                  onConflict,
+                  track(item.name, index, items.length, 'unzip'),
+                ),
               )
               if (result)
                 summary.unzipped.push({
@@ -147,7 +162,13 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
           }
           const result = await withConflict(item.name, remaining, (onConflict) =>
             'blob' in item
-              ? uploadBlob(target, item.blob, onConflict)
+              ? uploadBlob(
+                  target,
+                  item.blob,
+                  onConflict,
+                  {},
+                  track(item.name, index, items.length, 'upload'),
+                )
               : saveMedia(item.mediaId, target, onConflict),
           )
           if (result) summary.saved.push(result.path)
@@ -158,6 +179,7 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
     } finally {
       running.current = false
       setBusy(false)
+      setProgress(null)
       void queryClient.invalidateQueries({ queryKey: knowledgeKey })
     }
     onFinished?.(summary)
@@ -169,8 +191,52 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
       <ZipDialog decision={decision} />
     ) : decision?.kind === 'clash' ? (
       <ClashDialog decision={decision} />
+    ) : progress ? (
+      <UploadProgressPanel progress={progress} />
     ) : null
   return { start, busy, dialogs }
+}
+
+type Progress = {
+  name: string
+  index: number
+  count: number
+  step: 'check' | 'upload' | 'unzip'
+  loaded: number
+  total: number
+}
+
+const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
+
+/** How far an upload has got: the file, its step, and bytes sent; once everything is sent, what the server is doing. */
+export function UploadProgressPanel({ progress }: { progress: Progress }) {
+  const { name, index, count, step, loaded, total } = progress
+  const sent = total > 0 && loaded >= total
+  const doing = sent
+    ? { check: 'Checking the zip…', upload: 'Saving…', unzip: 'Unzipping…' }[step]
+    : {
+        check: 'Sending the zip to check it',
+        upload: 'Uploading',
+        unzip: 'Sending the zip to unzip it',
+      }[step]
+  const percent = total > 0 ? Math.round((loaded / total) * 100) : 0
+  return (
+    <div className="kn-upload-progress" role="status" aria-live="polite">
+      <p>
+        <strong>{name}</strong>
+        {count > 1 ? <span>{` · file ${index + 1} of ${count}`}</span> : null}
+      </p>
+      <p>
+        {doing}
+        {sent ? null : ` · ${percent}% · ${megabytes(loaded)} of ${megabytes(total)}`}
+      </p>
+      {sent ? (
+        <progress aria-label={`${name}: ${doing}`} />
+      ) : (
+        <progress aria-label={`${name}: ${doing}`} max={total} value={loaded} />
+      )}
+    </div>
+  )
 }
 
 function ZipDialog({ decision }: { decision: Extract<Decision, { kind: 'zip' }> }) {
@@ -318,7 +384,7 @@ export function summaryText(summary: UploadSummary): string {
   if (summary.saved.length > 0)
     parts.push(
       summary.saved.length === 1
-        ? `Added ${summary.saved[0]}`
+        ? `Added ${summary.saved[0]}${summary.saved[0]!.includes('/') ? '' : ' at the top level'}`
         : `Added ${summary.saved.length} files`,
     )
   for (const unzipped of summary.unzipped)

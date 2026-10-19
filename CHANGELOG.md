@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.5] — 2026-10-19
+
+### Fixed
+- Knowledge uploads show their progress: the file, "file 2 of 3", percent and megabytes sent, and what happens after
+  ("Checking the zip…", "Unzipping…"). A big zip no longer uploads in silence.
+- Uploading at the top level of Knowledge says so ("Added pack.zip at the top level"; the drop hint names the top
+  level), so it isn't mistaken for the folder called Knowledge.
+
 ## [1.9.4] — 2026-10-19
 
 ### Fixed

@@ -107,6 +107,7 @@ export const KNOWN_OVERLAYS = [
   '.user-run',
   '.orch-room-head',
   '.kn-left',
+  '.kn-upload-progress',
   '.kn-drop-hint',
   '.kn-toolbar',
   '.chat-version-bar',
