@@ -11,7 +11,7 @@ test('add an agent, observe setup and readiness, then export and delete with its
   await dialog.getByLabel('Agent name').fill('profile-test-helper')
   await dialog.getByLabel('Role or description').fill('Helps the team test profile management')
   await dialog.getByLabel('Model', { exact: true }).fill('fake-model')
-  await dialog.getByLabel('Shape', { exact: true }).selectOption('hexagon')
+  await dialog.getByRole('radio', { name: 'hexagon' }).check()
   await dialog.getByRole('button', { name: 'Preview changes' }).click()
   await expect(dialog.getByRole('heading', { name: 'Review changes' })).toBeVisible()
   await dialog.getByRole('button', { name: 'Create agent' }).click()
