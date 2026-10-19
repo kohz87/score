@@ -297,6 +297,20 @@ const cases = [
   ['AgentLookSchema', 'chibi', 'anime'],
   ['AvatarRevSchema', 'r7Kq-2', '../x'],
   ['AgentStylePatchSchema', { look: 'chibi', shape: 'cylinder' }, { look: 'photo' }],
+  ['AvatarBoxSchema', { x: 0.3, y: 0.5, w: 0.1, h: 0.12 }, { x: 0.95, y: 0.5, w: 0.1, h: 0.1 }],
+  [
+    'AvatarEyesSchema',
+    {
+      left: { x: 0.3, y: 0.5, w: 0.1, h: 0.12 },
+      right: { x: 0.56, y: 0.41, w: 0.12, h: 0.13 },
+      lid: '#fce9df',
+    },
+    {
+      left: { x: 0.3, y: 0.5, w: 0.1, h: 0.12 },
+      right: { x: 0.56, y: 0.41, w: 0.12, h: 0.13 },
+      lid: 'skin',
+    },
+  ],
   ['AgentStatusSchema', 'working', 'busy'],
   ['AgentSummarySchema', f.agent, { ...f.agent, id: '' }],
   ['AsOfSeqSchema', 0, -1],

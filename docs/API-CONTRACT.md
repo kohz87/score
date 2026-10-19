@@ -923,7 +923,11 @@ incarnation-aware reuse confirmation contract is agreed.
     is taken from the bytes (magic number and header, which must agree with the file name's extension), never from
     the client; SVG, animated images and anything else are refused. → `AgentSummary` with `style.avatar` = a new
     revision. `422 avatar_rejected { reasons[] }`; `404` for an unknown agent; human-guarded mutation.
-  - `DELETE /api/agents/:agentId/avatar` → `AgentSummary` (`style.avatar: null`).
+  - `DELETE /api/agents/:agentId/avatar` → `AgentSummary` (`style.avatar: null`, `style.avatarEyes: null`).
+  - `PUT /api/agents/:agentId/avatar/eyes` `AvatarEyes` `{ left; right; lid }` (boxes as fractions of the picture,
+    inside it; `lid` a hex colour) → `AgentSummary` with `style.avatarEyes`; `404` when the agent has no picture.
+    `DELETE /api/agents/:agentId/avatar/eyes` → `AgentSummary` (`avatarEyes: null`). A new picture clears the marks.
+    Score blinks and closes the marked eyes (decision 106); without marks the picture moves as a whole.
   - `GET /api/agents/:agentId/avatar?rev=<rev>` → the bytes with their exact type, `X-Content-Type-Options: nosniff`,
     `Content-Disposition: inline`, `Cache-Control: private, max-age=31536000, immutable` (a new picture is a new
     revision). A `rev` that is not the current one, or no picture, is `404`.
