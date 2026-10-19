@@ -520,3 +520,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   tests failed first (2/3). Checked: live media table empty (no attachments lost); security password, bridge token, TLS
   and key files untouched (timestamps only). Check green, server 4610/0, e2e 638/0, `~/.score` mtimes unchanged by the
   runs. Owner's current pack (rev vzQc…) intact.
+- **Owner 2026-10-19 ("proceed … in parallel"):** removed the superseded `../score-worktrees/10.2c` (two untracked
+  PetCorner files; owner OK). **10.11** (Room.activeAgents = busy now, so the sidebar agrees with the stage): lead wrote
+  the contract comment and PLAN entry on `task/10.11-room-active`; Sonnet builder in `../score-worktrees/10.11`.
+  **Plan audit** (every PLAN item without ✅ checked against TASKLOG/CHANGELOG/code) running read-only in parallel.
