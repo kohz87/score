@@ -71,7 +71,9 @@
 }
 
 .room-stage__actor[data-mood='sleep'] .room-stage__fig,
-.room-stage__actor[data-mood='sleep'] .room-stage__mark {
+.room-stage__actor[data-mood='sleep'] .room-stage__mark,
+.room-stage__actor[data-quiet='true'] .room-stage__fig,
+.room-stage__actor[data-quiet='true'] .room-stage__mark {
   opacity: 0.72;
 }
 
@@ -210,7 +212,8 @@
 
 .room-stage__z {
   fill: var(--stage-color);
-  fill-opacity: 0;
+  /* Visible on its own: under Still (no animation) the sign stays, the animation only fades it in and out. */
+  fill-opacity: 0.8;
   font: 700 12px var(--font-body, sans-serif);
   animation: room-stage-z 2.6s ease-in infinite;
 }
@@ -355,6 +358,12 @@
   .room-stage__fig {
     bottom: calc(var(--stage-floor, 0) * 88px);
   }
+}
+
+/* Scrolled out of view: every animation stands still until the stage is seen again. */
+.room-stage--paused,
+.room-stage--paused * {
+  animation-play-state: paused !important;
 }
 
 /* Still (Settings › Look, or reduced motion): no animation anywhere, no crossfade. */

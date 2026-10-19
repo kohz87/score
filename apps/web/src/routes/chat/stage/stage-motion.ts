@@ -109,3 +109,32 @@ export function shownMembers<T extends { mood: StageMood }>(members: T[], limit:
   }
   return shown
 }
+
+/**
+ * Where a member who joins stands: the spot it would have, or, when someone is there or heading there, the spot
+ * farthest from everyone (so two members never share one after the roster changed).
+ */
+export function placeNewcomer(
+  preferred: number,
+  others: ReadonlyArray<{ x: number; target: number }>,
+): number {
+  if (others.length === 0) return preferred
+  const nearest = (candidate: number) =>
+    Math.min(
+      ...others.flatMap((other) => [
+        Math.abs(other.x - candidate),
+        Math.abs(other.target - candidate),
+      ]),
+    )
+  if (nearest(preferred) >= 0.1) return preferred
+  let best = preferred
+  let room = nearest(preferred)
+  for (let candidate = EDGE[0]; candidate <= EDGE[1] + 1e-9; candidate += 0.01) {
+    const space = nearest(candidate)
+    if (space > room) {
+      best = candidate
+      room = space
+    }
+  }
+  return best
+}

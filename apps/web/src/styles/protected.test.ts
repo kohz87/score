@@ -210,5 +210,5 @@ test('the room stage’s moving parts are exactly the ones that wear an exempt c
 test('the room stage is a protected surface a theme cannot name, and its markup says so', () => {
   expect(protectedClasses).toContain('room-stage')
   const view = readFileSync(join(root, 'routes/chat/stage/RoomStageView.tsx'), 'utf8')
-  expect(view).toMatch(/className="room-stage"[\s\S]{0,200}data-protected="any"/)
+  expect(view).toMatch(/className=\{`room-stage[^`]*`\}[\s\S]{0,300}data-protected="any"/)
 })

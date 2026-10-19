@@ -20,6 +20,7 @@ import {
   petView,
   pickBreak,
   pickTarget,
+  placeNewcomer,
   restingMotion,
   shownMembers,
   stepToward,
@@ -39,12 +40,16 @@ type Props = {
   /** The two members handing over right now, who face each other. */
   handoff: Handoff | null
   onMention: (agentId: string) => void
+  /** Nothing has happened in the room for a while: resting members nap (not under Still). */
+  quiet?: boolean
 }
 
 /** On a phone the strip is short: this many members, then a "+N" chip. */
 const PHONE_LIMIT = 5
 const PHONE_QUERY = '(width < 560px)'
 const SAY_MS = 1200
+/** A longer gap between frames than this means the loop was paused (tab hidden, stage off screen). */
+const PAUSE_GAP_MS = 250
 
 type Facing = 1 | -1
 /** Where a member is and what it is doing between moods; moved by the shared frame loop, not by React. */
@@ -196,7 +201,7 @@ function Overlay({ kind }: { kind: StageOverlay | null }) {
  * under Lively, one shared frame loop moves them; Calm only follows moods; Still and reduced motion show first frames.
  * Click a member to mention it.
  */
-export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
+export function RoomStageView({ roomId, members, handoff, onMention, quiet = false }: Props) {
   const liveliness = useLiveliness()
   const phone = useMediaQuery(PHONE_QUERY)
   const shown = useMemo(
@@ -210,7 +215,9 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
   const actors = useRef(new Map<string, Actor>())
   const latest = useRef({ shown, liveliness })
   const pair = useRef<{ a: string; b: string } | null>(null)
-  const [look, setLook] = useState<Record<string, Look>>({})
+  const [look, setLook] = useState<ReadonlyMap<string, Look>>(() => new Map())
+  const [greeting, setGreeting] = useState<string | null>(null)
+  const lastFrame = useRef(0)
   const [saying, setSaying] = useState<{ id: string; left: boolean } | null>(null)
   const [inView, setInView] = useState(true)
 
@@ -222,7 +229,7 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
     const actor = actors.current.get(id)
     if (!actor) return
     setLook((previous) => {
-      const before = previous[id]
+      const before = previous.get(id)
       if (
         before &&
         before.mode === actor.mode &&
@@ -230,7 +237,11 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
         before.facing === actor.facing
       )
         return previous
-      return { ...previous, [id]: { mode: actor.mode, file: actor.file, facing: actor.facing } }
+      return new Map(previous).set(id, {
+        mode: actor.mode,
+        file: actor.file,
+        facing: actor.facing,
+      })
     })
   }, [])
 
@@ -240,11 +251,13 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
     const ids = new Set(shown.map((item) => item.agent.id))
     for (const id of [...actors.current.keys()]) if (!ids.has(id)) actors.current.delete(id)
     const spots = initialPositions(shown.length)
+    // The first members spread over the strip; later ones stand where nobody is.
+    const first = actors.current.size === 0
     const now = performance.now()
     shown.forEach((item, index) => {
       const id = item.agent.id
       if (!actors.current.has(id)) {
-        const x = spots[index]!
+        const x = first ? spots[index]! : placeNewcomer(spots[index]!, [...actors.current.values()])
         actors.current.set(id, {
           id,
           x,
@@ -261,9 +274,9 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
       if (slot) slot.style.left = `${actor.x * 100}%`
     })
     setLook((previous) => {
-      const next: Record<string, Look> = {}
+      const next = new Map<string, Look>()
       for (const [id, actor] of actors.current)
-        next[id] = previous[id] ?? { mode: actor.mode, facing: actor.facing }
+        next.set(id, previous.get(id) ?? { mode: actor.mode, facing: actor.facing })
       return next
     })
   }, [shown])
@@ -333,6 +346,10 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
   useEffect(() => {
     if (!walks || !inView || !anyResting) return undefined
     return subscribeFrame((now, seconds) => {
+      // After a pause (tab hidden, stage off screen) nothing comes due at once: the waiting starts where it stopped.
+      const gap = lastFrame.current === 0 ? 0 : now - lastFrame.current
+      lastFrame.current = now
+      if (gap > PAUSE_GAP_MS) for (const actor of actors.current.values()) actor.until += gap
       const width = root.current?.clientWidth ?? 0
       if (width <= 0) return
       const { shown: current, liveliness: mood } = latest.current
@@ -386,19 +403,27 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
 
   const sayTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(sayTimer.current), [])
+  const still = liveliness === 'still'
+  // A click greets with the pack's own `greet` file when it has one (it moves, so not under Still), else with "hi!".
   const mention = (id: string) => {
     onMention(id)
+    const pack = members.find((item) => item.agent.id === id)?.agent.style.pack
+    clearTimeout(sayTimer.current)
+    if (pack && !still && pack.activities.includes('greet')) {
+      setGreeting(id)
+      setSaying(null)
+      sayTimer.current = setTimeout(() => setGreeting(null), SAY_MS)
+      return
+    }
     const actor = actors.current.get(id)
     setSaying({ id, left: (actor?.x ?? 0) > 0.7 })
-    clearTimeout(sayTimer.current)
     sayTimer.current = setTimeout(() => setSaying(null), SAY_MS)
   }
-
-  const still = liveliness === 'still'
+  const napping = quiet && !still
   return (
     <div
       ref={root}
-      className="room-stage"
+      className={`room-stage${inView ? '' : ' room-stage--paused'}`}
       role="group"
       aria-label="Room members"
       data-protected="any"
@@ -406,13 +431,21 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
       data-liveliness={liveliness}
     >
       <div className="room-stage__strip">
-        {shown.map(({ agent, mood }) => {
+        {shown.map(({ agent, mood: actual }) => {
           const id = agent.id
-          const state = look[id] ?? { mode: 'idle' as const, facing: 1 as Facing }
+          const state = look.get(id) ?? { mode: 'idle' as const, facing: 1 as Facing }
           const pack = agent.style.pack ?? null
-          const view = pack
+          // A quiet room sends its resting members to sleep; what they are told (the label) stays "resting".
+          const mood: StageMood = napping && actual === 'rest' ? 'sleep' : actual
+          const base = pack
             ? petView(mood, state, packActivities(pack))
-            : { file: 'idle' as PetActivity, overlay: mood === 'needs' ? ('bang' as const) : null }
+            : {
+                file: 'idle' as PetActivity,
+                overlay:
+                  mood === 'needs' ? ('bang' as const) : mood === 'sleep' ? ('zzz' as const) : null,
+              }
+          const view =
+            pack && greeting === id && !still ? { ...base, file: 'greet' as PetActivity } : base
           const needs = mood === 'needs'
           const hops = pack ? needs : needs || state.mode === 'walk'
           return (
@@ -429,9 +462,10 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
                 type="button"
                 className="room-stage__actor"
                 title={`Mention @${id}`}
-                aria-label={`${agent.name}, ${moodText(mood)}`}
+                aria-label={`${agent.name}, ${moodText(actual)}`}
                 data-agent={id}
-                data-mood={mood}
+                data-mood={actual}
+                data-quiet={mood !== actual ? 'true' : undefined}
                 data-mode={state.mode}
                 data-facing={state.facing < 0 ? 'left' : 'right'}
                 data-front={needs ? 'true' : undefined}
@@ -446,7 +480,7 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
                         agentId={id}
                         pack={pack}
                         file={view.file}
-                        still={still}
+                        still={still || !inView}
                         flip={state.facing < 0}
                         hop={hops}
                       />

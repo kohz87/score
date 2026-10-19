@@ -93,7 +93,6 @@ test('an approval tied to the room by a card message in it counts, one for anoth
       approvals: [approval({ refs: [{ kind: 'room', roomId: 'room-2' }] })],
     }).builder,
   ).toBe('rest')
-  expect(stageMoods({ ...base, approvals: [approval({ refs: [] })] }).builder).toBe('rest')
   expect(stageMoods({ ...base, approvals: [approval({ actionable: false })] }).builder).toBe('rest')
   expect(stageMoods({ ...base, approvals: [approval({ status: 'approved' })] }).builder).toBe(
     'rest',
@@ -214,4 +213,31 @@ test('a new message from a member that mentions another member is a hand-off, on
   const self = message('m4', { to: ['builder'] })
   const outside = message('m5', { to: ['ghost'] })
   expect(newHandoff([you, self, outside], seen, ids)).toBeNull()
+})
+
+test('an approval with no room attribution at all makes its agent wait in every room it is a member of', () => {
+  const unscoped = approval({ refs: [{ kind: 'task', taskId: 't1' }], origin: 'gateway' })
+  expect(stageMoods({ ...base, approvals: [unscoped] }).builder).toBe('needs')
+  expect(stageMoods({ ...base, approvals: [approval({ refs: [] })] }).builder).toBe('needs')
+  expect(stageMoods({ ...base, roomId: 'room-9', approvals: [unscoped] }).builder).toBe('needs')
+  // Tied to another room: it stays out. Not actionable or decided: out as well.
+  expect(
+    stageMoods({ ...base, approvals: [approval({ refs: [{ kind: 'room', roomId: 'room-2' }] })] })
+      .builder,
+  ).toBe('rest')
+  expect(
+    stageMoods({ ...base, approvals: [approval({ refs: [], actionable: false })] }).builder,
+  ).toBe('rest')
+})
+
+test('agent ids that are inherited object names are ordinary names', () => {
+  const odd = ['constructor', 'toString', '__proto__', 'hasOwnProperty'].map((id) => ({
+    id,
+    status: 'idle' as const,
+  }))
+  const moods = stageMoods({ ...base, members: odd })
+  for (const { id } of odd) expect(moods[id], id).toBe('rest')
+  const busy = stageMoods({ ...base, members: odd, typing: { constructor: 'writing' } })
+  expect(busy['constructor']).toBe('work')
+  expect(busy['toString']).toBe('rest')
 })

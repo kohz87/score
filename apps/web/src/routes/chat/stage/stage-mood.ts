@@ -40,7 +40,11 @@ const hasContent = (message: Message) =>
     part.kind === 'text' ? part.text.trim() !== '' : part.kind !== 'thinking',
   )
 
-/** An approval belongs to this room when it says so, or when the room holds its card. */
+/**
+ * Whose approval is waiting for the person here: one that belongs to this room (it says so, or the room holds its
+ * card), or one that has no room at all (a gateway approval): its agent waits for you wherever it is a member. One
+ * tied to another room stays out.
+ */
 function waitingHere(input: StageInput): Set<string> {
   const cards = new Set(
     input.messages.flatMap((message) =>
@@ -54,7 +58,8 @@ function waitingHere(input: StageInput): Set<string> {
           approval.actionable &&
           approval.status === 'pending' &&
           (cards.has(approval.id) ||
-            approval.refs.some((ref) => ref.kind === 'room' && ref.roomId === input.roomId)),
+            approval.refs.some((ref) => ref.kind === 'room' && ref.roomId === input.roomId) ||
+            !approval.refs.some((ref) => ref.kind === 'room')),
       )
       .map((approval) => approval.agentId),
   )
@@ -74,16 +79,19 @@ export function stageMoods(input: StageInput): Record<string, StageMood> {
       const id = message.author.agentId
       streaming.set(id, (streaming.get(id) ?? false) || hasContent(message))
     }
-  return Object.fromEntries(
-    input.members.map((member): [string, StageMood] => {
-      const id = member.id
-      if (needs.has(id)) return [id, 'needs']
-      if (member.status === 'paused' || member.status === 'offline') return [id, 'sleep']
-      if (streaming.get(id) === true || (input.typing[id] ?? '') !== '') return [id, 'work']
-      if (streaming.has(id) || id in input.typing) return [id, 'think']
-      return [id, 'rest']
-    }),
-  )
+  // No prototype: an agent may be called `constructor`.
+  const moods: Record<string, StageMood> = Object.create(null) as Record<string, StageMood>
+  const typing = (id: string) => (Object.hasOwn(input.typing, id) ? input.typing[id]! : null)
+  for (const member of input.members) {
+    const id = member.id
+    const said = typing(id)
+    if (needs.has(id)) moods[id] = 'needs'
+    else if (member.status === 'paused' || member.status === 'offline') moods[id] = 'sleep'
+    else if (streaming.get(id) === true || (said !== null && said !== '')) moods[id] = 'work'
+    else if (streaming.has(id) || said !== null) moods[id] = 'think'
+    else moods[id] = 'rest'
+  }
+  return moods
 }
 
 export type Handoff = { id: string; from: string; to: string }

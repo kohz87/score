@@ -4,6 +4,7 @@ import {
   gapBetween,
   initialPositions,
   petView,
+  placeNewcomer,
   pickBreak,
   pickTarget,
   restingMotion,
@@ -103,4 +104,19 @@ test('a short strip shows the first members, but never hides one that is waiting
   expect(shownMembers(ids, 10)).toHaveLength(7)
   const waiting = ids.map((item) => (item.id === 'g' ? { ...item, mood: 'needs' as const } : item))
   expect(shownMembers(waiting, 5).map((item) => item.id)).toEqual(['a', 'b', 'c', 'd', 'g'])
+})
+
+test('a newcomer is placed away from everyone standing or heading somewhere', () => {
+  const others = [pet(0.5), mark(0.2, 0.8)]
+  const spot = placeNewcomer(0.8, others)
+  for (const other of others) {
+    expect(Math.abs(spot - other.x)).toBeGreaterThan(0.05)
+    expect(Math.abs(spot - other.target)).toBeGreaterThan(0.05)
+  }
+  expect(spot).toBeGreaterThanOrEqual(0.08)
+  expect(spot).toBeLessThanOrEqual(0.92)
+  // Nobody there yet: the spot asked for.
+  expect(placeNewcomer(0.3, [])).toBe(0.3)
+  // A free preferred spot is kept.
+  expect(placeNewcomer(0.9, [pet(0.2)])).toBe(0.9)
 })
