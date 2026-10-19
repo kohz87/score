@@ -3,6 +3,21 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.12.0] — 2026-10-19
+
+### Added
+- **Room stage.** Under each chat room's title, a strip where the room's members live: agents with a pet pack play it
+  (with their mark as a badge), the others are their marks. While resting they wander, stop, and take breaks (coffee,
+  stretch, read — whatever the pack has); after 5 quiet minutes they nap. The stage shows what is happening in the room:
+  the one writing works, the one that has started but not written yet thinks, the one waiting for your approval steps
+  forward with "!", and a hand-off turns the two toward each other. Click a member to @mention it (and see its wave).
+  "Hide stage" is remembered per device; Settings › Look › Agents (Lively / Calm / Still) and reduced motion apply; on
+  phones up to 5 members show, then "+N".
+
+### Changed
+- The room header's status line now says what members are actually doing in the room ("Thinking…", "Working…",
+  "Waiting for you"), from the same source as the stage, instead of listing everyone who wrote in the last 10 minutes.
+
 ## [1.11.1] — 2026-10-19
 
 ### Changed
