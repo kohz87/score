@@ -280,9 +280,32 @@ test('a WebP whose header disagrees with its size says where it breaks off, in n
       ),
     ],
   })
+  // Cut inside the second frame: the first still plays, and the message says so.
   const short = whole.subarray(0, whole.length - 10)
   expect(sniffPackImage(short, 'idle.webp')).toMatchObject({
     ok: false,
-    reasons: [expect.stringMatching(/^This WebP is cut short: .* Export it again\.$/)],
+    reasons: [
+      expect.stringMatching(
+        /^This WebP is cut short: .*, so only its first 1 frame would play\. Export it again\.$/,
+      ),
+    ],
+  })
+  // Frames without image data are not counted as playable.
+  const empty = Buffer.concat([
+    riffOf([
+      ['VP8X', vp8xBody(64, 64, 0x02)],
+      ['ANIM', Buffer.alloc(6)],
+      ['ANMF', Buffer.alloc(16)],
+      ['ANMF', Buffer.alloc(16)],
+    ]),
+    Buffer.alloc(64),
+  ])
+  expect(sniffPackImage(empty, 'idle.webp')).toEqual({
+    ok: false,
+    reasons: [
+      expect.stringMatching(
+        /^This WebP breaks off: [^,]*, but the file is [0-9.]+ MB\. Export it again\.$/,
+      ),
+    ],
   })
 })
