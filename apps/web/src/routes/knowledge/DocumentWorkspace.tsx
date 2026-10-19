@@ -10,6 +10,7 @@ const NO_TEXT: Record<string, string> = {
   unavailable:
     'Text is not available for this file (it may be scanned, encrypted, damaged or empty). It is stored and can be downloaded, but agents and search can’t read it.',
   none: '',
+  too_large: 'Too large to preview (over 25 MB). Download it to open it.',
   truncated: 'The text was cut at 2 MB. Search and agents see the first part only.',
 }
 
@@ -150,7 +151,9 @@ export function DocumentWorkspace({
               ? 'Text is indexed'
               : doc.textStatus === 'none'
                 ? 'Not indexed'
-                : 'Text not available'}
+                : doc.textStatus === 'too_large'
+                  ? 'Not indexed (over 25 MB)'
+                  : 'Text not available'}
           </dd>
         </div>
       </dl>

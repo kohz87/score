@@ -11,7 +11,7 @@ import { notePath } from './knowledge-paths.ts'
 // Client side of Knowledge files (PLAN 6.6). The server decides from the bytes; these checks only spare an obviously
 // unsupported or oversized file the trip.
 
-export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+export const MAX_UPLOAD_BYTES = 256 * 1024 * 1024
 export const ACCEPT_FILES = [
   '.md',
   '.markdown',
@@ -42,7 +42,7 @@ export function uploadProblem(file: { name: string; size: number }): string | nu
   if (!isSupportedName(file.name))
     return `${file.name}: this file type isn’t supported. Use notes, PDF, DOCX, CSV, JSON, HTML, images or zip files`
   if (file.size === 0) return `${file.name}: the file is empty`
-  if (file.size > MAX_UPLOAD_BYTES) return `${file.name}: larger than the 25 MB limit`
+  if (file.size > MAX_UPLOAD_BYTES) return `${file.name}: larger than the 256 MB limit`
   return null
 }
 

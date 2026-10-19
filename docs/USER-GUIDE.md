@@ -337,7 +337,7 @@ Read only can’t start sub-agents. Antigravity sub-agents aren’t shown yet.
 A shared folder (the Knowledge folder, default `~/score-vault`) of Markdown notes and files that you and your agents use. Notes
 link to each other (`[[Note]]`), show backlinks, properties and history, and an agent's edits carry its name.
 
-- **Upload.** **Upload** (or **Upload files** in the **Files** view) takes files of up to 25 MB, or drag them onto
+- **Upload.** **Upload** (or **Upload files** in the **Files** view) takes files of up to 256 MB, or drag them onto
   the page or a folder in the tree. Markdown files and `.txt` become notes; PDF, Word (`.docx`), CSV, JSON, HTML and
   images are stored as files. Text is pulled out of PDFs and Word files so search and agents can read it; if that fails
   the file is kept without text. A name that already exists asks whether to keep both or replace it. **New folder**

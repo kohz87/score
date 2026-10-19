@@ -196,7 +196,7 @@ export function FilesView({
       </header>
       <p className="kn-muted">
         Drop files here to add them to {folder === '' ? 'Knowledge' : <code>{folder}</code>}. Notes
-        (.md, .txt), PDF, DOCX, CSV, JSON, HTML, images and zip files, up to 25 MB each.
+        (.md, .txt), PDF, DOCX, CSV, JSON, HTML, images and zip files, up to 256 MB each.
       </p>
       {rows.length === 0 ? (
         <p className="kn-muted">This folder is empty.</p>
