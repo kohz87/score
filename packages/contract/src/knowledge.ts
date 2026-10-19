@@ -111,6 +111,14 @@ export const KnowledgeZipPreviewSchema = z.object({
   /** True when the listing was cut at 1,000 names. */
   more: z.boolean(),
   extractCount: z.number().int().nonnegative(),
+  /**
+   * The previewed zip, kept on the server so keeping or unzipping it doesn't send it again (PLAN 10.3). Absent from
+   * servers before 1.11; null when it couldn't be kept (the client then sends the file again).
+   */
+  staged: z
+    .object({ id: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/), expiresAt: z.string() })
+    .nullable()
+    .optional(),
 })
 export const KnowledgeUnzipResultSchema = z.object({
   folder: z.string(),
@@ -125,6 +133,17 @@ export const KnowledgeFromMediaRequestSchema = z.object({
   path: z.string().min(1).max(1024),
   onConflict: KnowledgeUploadConflictSchema.default('ask'),
 })
+/** Keep or unzip a previewed zip without sending it again (PLAN 10.3). */
+export const KnowledgeFromStagedRequestSchema = z.object({
+  stagedId: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/),
+  /** The zip's destination path; must be the path it was previewed for. */
+  path: z.string().min(1).max(1024),
+  mode: z.enum(['keep', 'unzip']),
+  /** `unzip` only: the folder to extract into (default: the zip's name). */
+  folder: z.string().max(1024).optional(),
+  onConflict: KnowledgeUploadConflictSchema.default('ask'),
+})
+export type KnowledgeFromStagedRequest = z.infer<typeof KnowledgeFromStagedRequestSchema>
 export const KnowledgeLinkSchema = z.object({
   /** The link as written (`Target`, `Target#heading`). */
   target: z.string(),

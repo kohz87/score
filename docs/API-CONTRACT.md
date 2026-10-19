@@ -1430,6 +1430,15 @@ the bytes (magic numbers), never the extension or declared type alone. Names: no
   types are extracted, the rest are `skipped`. A clash anywhere in the batch answers `409 exists` (all clashing names in
   `details.existing`); one `onConflict` applies to the whole batch. A zip that breaks a limit -> `413 zip_limits`; an
   unreadable zip -> `415 unsupported_type`.
+- **Staged zips (PLAN 10.3).** `preview` keeps the zip it read (as sent, after the same checks) and returns
+  `staged: { id; expiresAt }` (`null` if it couldn't be kept). **H** `POST /api/knowledge/files-from-staged`
+  `KnowledgeFromStagedRequest` `{ stagedId; path; mode: 'keep'|'unzip'; folder?; onConflict }` then keeps or unzips it
+  with exactly the rules and answers of `PUT …?mode=keep|unzip` for that path, without the bytes being sent again.
+  `path` must be the one it was previewed for (`409 staged_mismatch` otherwise). A staged zip is removed once it has
+  been kept or unzipped; a `409 exists` keeps it, so the person can choose and try again. It expires 30 minutes after
+  the preview, and at most 8 zips (256 MB) are kept at once (the oldest goes first); unknown, expired or used:
+  `404 staged_gone` (the client sends the file again). Stored under `$SCORE_HOME/knowledge-staging/` (folder 0700,
+  files 0600, named by a random id only, never by a client path; no symlink followed); emptied when Score starts.
 - `GET /api/knowledge/documents/*path` -> `KnowledgeDocument` (summary + `text` + `entries` for zips).
   `GET /api/knowledge/files/*path` -> the bytes (images inline, everything else as an attachment; always `nosniff` and a
   sandbox CSP). **H** `DELETE /api/knowledge/documents/*path` -> `204`.

@@ -452,3 +452,9 @@ https://claude.ai/artifact/2cSwUQMAEnz9jpwoTaij6B) · brief `docs/briefs/10.2-ag
 `10.2-agent-looks.md`). Marks: 20 shapes, cut-out (default) or ring, calm moods, eyes follow the pointer. Pet packs:
 activity-named animations uploaded per agent (ZIP or files), played by mood with idle fallback and overlays, mark badge;
 Lively / Calm / Still. 10.2a server (migration 0078, pack routes and store), 10.2b web, 10.2c liveliness.
+
+**10.3 A previewed zip isn't sent twice** (owner 2026-10-19) · brief `docs/briefs/10.3-staged-zip.md`. Knowledge's zip
+preview keeps the zip on the server; Keep and Unzip use it (`POST /api/knowledge/files-from-staged`), so a big zip goes
+up once. Done when: a previewed zip is kept or unzipped with no second upload (one PUT in the network log); a `409
+exists` retry also sends nothing; an expired or unknown stage falls back to sending the file, with progress; staging is
+bounded (8 zips, 256 MB, 30 min), cleaned on start, and holds files under random ids only.
