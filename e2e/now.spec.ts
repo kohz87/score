@@ -119,6 +119,8 @@ test('approving from Now resolves the ledger', async ({ page }) => {
       { timeout: 15_000 },
     )
     .toMatchObject({ by: 'you', choice: 'once' })
+  // The approval brings more /api/now refreshes; one still in the handler when the test ends must not fail the run.
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 test('Pause everyone and Resume everyone round trip', async ({ page }) => {
