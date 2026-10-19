@@ -118,7 +118,6 @@ export function createPetEngine(options: PetEngineOptions): PetEngine {
   let hidden = false
   let hovered = false
   let started = false
-  let destroyed = false
   let hiddenAt = 0
   let lastAttention = Date.now()
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -193,7 +192,7 @@ export function createPetEngine(options: PetEngineOptions): PetEngine {
 
   function next() {
     timer = undefined
-    if (destroyed || hidden || !started) return
+    if (hidden || !started) return
     // Two draws every time, whatever the mood, so a seeded run is easy to follow.
     const roll = random()
     const vary = random()
@@ -221,15 +220,15 @@ export function createPetEngine(options: PetEngineOptions): PetEngine {
 
   return {
     start() {
-      if (started || destroyed) return
+      if (started) return
       started = true
       lastAttention = Date.now()
       next()
     },
     destroy() {
-      destroyed = true
+      // Stops the clock; a React strict-mode remount may start it again.
+      started = false
       clearTimers()
-      listeners.clear()
     },
     getSnapshot: () => snapshot,
     subscribe(listener) {
