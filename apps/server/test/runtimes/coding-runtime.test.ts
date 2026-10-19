@@ -270,6 +270,46 @@ test('Add agent lists the CLIs and creates a coding agent that shows up as a tea
   expect(team.find((item) => item.id === 'lead')!.runtime).toBeUndefined()
 })
 
+test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at creation and by the style route', async () => {
+  const created = await addAgent({
+    style: { color: '#19C39A', shape: 'cylinder', look: 'chibi', avatar: 'forged' },
+  })
+  expect(created.style).toEqual({
+    color: '#19C39A',
+    shape: 'cylinder',
+    look: 'chibi',
+    avatar: null,
+  })
+  const patched = await request('PATCH', '/api/agents/coder/style', {
+    shape: 'gem',
+    color: '#102030',
+    look: 'bot',
+  })
+  expect(patched.statusCode, patched.body).toBe(200)
+  const expected = { color: '#102030', shape: 'gem', look: 'bot', avatar: null }
+  expect(patched.json().style).toEqual(expected)
+  // Every view of the agent agrees, and the style lives in the agent's own row only.
+  const listed = (await request('GET', '/api/coding-agents')).json().items[0]
+  expect(listed.style).toEqual(expected)
+  const team = (await request('GET', '/api/agents')).json().items as {
+    id: string
+    style: unknown
+  }[]
+  expect(team.find((item) => item.id === 'coder')!.style).toEqual(expected)
+  expect(
+    db.sqlite.prepare('SELECT color, shape, look, avatar_rev FROM coding_agents').all(),
+  ).toEqual([{ color: '#102030', shape: 'gem', look: 'bot', avatar_rev: null }])
+  expect(db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
+  const events = db.sqlite
+    .prepare("SELECT data FROM events WHERE type = 'agent.updated' ORDER BY seq")
+    .all()
+    .map((row) => JSON.parse(String(row.data)))
+    .filter((data) => data.id === 'coder')
+  expect(events.at(-1).style).toEqual(expected)
+  expect(
+    (await request('PATCH', '/api/agents/coder/style', { shape: 'dodecagon' })).statusCode,
+  ).toBe(400)
+})
 test('refuses duplicates, a missing CLI, OpenCode, full access without the password, bad folders', async () => {
   await addAgent()
   expect(

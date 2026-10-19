@@ -1,6 +1,11 @@
 import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { AgentOperationSchema, AgentPreviewSchema, type AgentOperation } from '@score/contract'
+import {
+  AgentOperationSchema,
+  AgentPreviewSchema,
+  type AgentOperation,
+  type AgentStyle,
+} from '@score/contract'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
@@ -60,7 +65,7 @@ function mutate(
     headers: { cookie, 'x-score-client': 'web', ...extra },
   })
 }
-async function create(body = input) {
+async function create(body: Omit<typeof input, 'style'> & { style: AgentStyle } = input) {
   const preview = AgentPreviewSchema.parse(
     (await mutate('/api/agents/preview', { kind: 'create', ...body })).json(),
   )
@@ -119,6 +124,26 @@ test('create is observable as Setting up, then verifies every step and preserves
     name: 'Helper',
     lifecycle: { state: 'ready', incarnationId: operation.incarnationId },
   })
+})
+test('PLAN 10.2: a new agent keeps its look and new shape, and a picture in the request is never taken', async () => {
+  const body = {
+    ...input,
+    style: { color: '#19C39A', shape: 'cloud' as const, look: 'chibi' as const, avatar: 'forged' },
+  }
+  const operation = await create(body)
+  await finished(operation.id)
+  expect((await app.inject('/api/agents/helper')).json().style).toEqual({
+    color: '#19C39A',
+    shape: 'cloud',
+    look: 'chibi',
+    avatar: null,
+  })
+  expect(env.db.sqlite.prepare('SELECT look, avatar_rev FROM agent_styles').all()).toEqual([
+    { look: 'chibi', avatar_rev: null },
+  ])
+  // Nothing of it is kept in the operation journal either.
+  const operations = env.db.sqlite.prepare('SELECT request FROM profile_operations').all()
+  expect(JSON.stringify(operations)).not.toContain('forged')
 })
 test('clone previews inherited names, requires confirmation and applies the team baseline', async () => {
   const body = { ...input, cloneFrom: 'builder' }

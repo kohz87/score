@@ -1,11 +1,19 @@
-import { AgentStyleSchema, AgentSummarySchema } from '@score/contract'
+import { AgentStylePatchSchema, AgentStyleSchema, AgentSummarySchema } from '@score/contract'
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { AgentDetailSchema } from '@score/contract'
-import { readAgent, readAgentStyle, reconcileAgents, storeAgent } from '../domain/agents.ts'
+import {
+  completeStyle,
+  readAgent,
+  readAgentStyle,
+  reconcileAgents,
+  storeAgent,
+  writeAgentStyle,
+} from '../domain/agents.ts'
+import { getCodingAgent } from '../runtimes/coding/store.ts'
 import { unifiedDiff } from '../domain/line-diff.ts'
 import { HttpError } from '../errors.ts'
 import {
@@ -23,8 +31,10 @@ const ParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
 const FileParamsSchema = ParamsSchema.extend({ file: z.string() })
 const PreviewBodySchema = z.object({ content: z.string() }).strict()
 const PutFileBodySchema = z.object({ content: z.string(), etag: EtagSchema }).strict()
-const StylePatchSchema = AgentStyleSchema.partial()
+// `avatar` is accepted and dropped: the picture is only ever set by its own routes.
+const StylePatchSchema = AgentStylePatchSchema.extend({ avatar: z.unknown().optional() })
   .strict()
+  .transform(({ avatar: _ignored, ...patch }) => patch)
   .refine((body) => Object.keys(body).length > 0)
 export function registerAgentRoutes(
   app: FastifyInstance,
@@ -85,19 +95,19 @@ export function registerAgentRoutes(
         apply({ sqlite, now }) {
           const previous = readAgent(sqlite, agentId)
           if (!previous) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
-          const style = AgentStyleSchema.parse({
-            ...(readAgentStyle(sqlite, agentId) ?? previous.style),
-            ...patch,
-          })
+          const style = completeStyle(
+            AgentStyleSchema.parse({
+              ...(readAgentStyle(sqlite, agentId) ??
+                getCodingAgent(sqlite, agentId)?.style ??
+                previous.style),
+              ...patch,
+            }),
+          )
           const agent = AgentDetailSchema.parse({ ...previous, style })
-          sqlite
-            .prepare(
-              'INSERT INTO agent_styles (agent_id, color, shape, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (agent_id) DO UPDATE SET color = excluded.color, shape = excluded.shape, updated_at = excluded.updated_at',
-            )
-            .run(agentId, style.color, style.shape, now)
+          writeAgentStyle(sqlite, agentId, style, now)
           storeAgent(sqlite, agent)
           response = AgentSummarySchema.parse(agent)
-          return JSON.stringify(previous.style) === JSON.stringify(style)
+          return JSON.stringify(completeStyle(previous.style)) === JSON.stringify(style)
             ? []
             : [{ type: 'agent.updated', data: response }]
         },

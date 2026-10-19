@@ -18,7 +18,7 @@ import { ProfileInventorySchema } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { HttpError } from '../errors.ts'
 import { redact } from '../redact.ts'
-import { readAgent, reconcileAgents, storeAgent } from './agents.ts'
+import { clientStyle, readAgent, reconcileAgents, storeAgent, writeAgentStyle } from './agents.ts'
 import { applyLifecycle, lifecycleOf } from './agent-lifecycle.ts'
 import type { ProfileImportStore } from './profile-imports.ts'
 import { readBaseline } from './team-rules.ts'
@@ -219,7 +219,7 @@ export class ProfileOperations {
             id: request.id,
             name: redact(request.name),
             role: redact(request.role),
-            style: request.style,
+            style: clientStyle(request.style),
             model: request.model,
             ...(request.provider ? { provider: request.provider } : {}),
             ...(request.cloneFrom ? { cloneFrom: request.cloneFrom } : {}),
@@ -327,12 +327,7 @@ export class ProfileOperations {
             channels: [],
             permissions: [],
           })
-        if (input)
-          sqlite
-            .prepare(
-              'INSERT INTO agent_styles (agent_id, color, shape, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(agent_id) DO UPDATE SET color=excluded.color, shape=excluded.shape, updated_at=excluded.updated_at',
-            )
-            .run(input.id, input.style.color, input.style.shape, now)
+        if (input) writeAgentStyle(sqlite, input.id, input.style, now)
         storeAgent(sqlite, agent)
         return [
           { type: 'agent.updated', data: AgentSummarySchema.parse(applyLifecycle(sqlite, agent)) },
