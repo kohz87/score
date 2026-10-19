@@ -102,7 +102,7 @@ test('notifications ask for permission only on a click and then deliver through 
     }
   })
   await pair(page)
-  await page.goto('/settings')
+  await page.goto('/settings/notifications')
   const section = page.getByRole('region', { name: 'Notifications' })
   await expect(section).toBeVisible()
   expect(await page.evaluate(() => (window as unknown as { asked: number }).asked)).toBe(0)
@@ -217,7 +217,7 @@ test.describe('passkeys over HTTPS', () => {
       await page.goto(`${origin}/pair#${token}`)
       await page.getByRole('button', { name: 'Pair this browser' }).click()
       await expect(page.getByText('This browser is paired')).toBeVisible()
-      await page.goto(`${origin}/settings`)
+      await page.goto(`${origin}/settings/remote-access`)
       const setPassword = page.getByRole('form', { name: 'Set a security password' })
       await setPassword.getByLabel('New password (at least 8 characters)').fill(PASSWORD)
       await setPassword.getByLabel('New password again').fill(PASSWORD)
@@ -244,7 +244,7 @@ test.describe('passkeys over HTTPS', () => {
       await expect(page.getByRole('button', { name: 'Sign in with a passkey' })).toHaveCount(0)
 
       // Back on the domain: removing needs the password.
-      await page.goto(`${origin}/settings`)
+      await page.goto(`${origin}/settings/remote-access`)
       await page.getByLabel('Security password', { exact: true }).fill(PASSWORD)
       await page.getByRole('button', { name: 'Remove passkey E2E phone' }).click()
       await expect(page.getByText('Passkey removed.')).toBeVisible()

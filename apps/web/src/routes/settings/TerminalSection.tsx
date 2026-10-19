@@ -1,17 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { SecurityStatusSchema, TerminalSessionsSchema } from '@score/contract'
+import { TerminalSessionsSchema } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
+import { useSecurityStatus } from './settings-queries.ts'
 
 const sessionsKey = ['terminal', 'sessions'] as const
 
 /** Settings: is the web terminal on, and which terminals are open right now (with a Close button). */
 export function TerminalSection() {
   const queryClient = useQueryClient()
-  const security = useQuery({
-    queryKey: ['session', 'security'],
-    queryFn: async () => SecurityStatusSchema.parse(await apiFetch('session/security')),
-  })
+  const security = useSecurityStatus()
   const enabled = security.data?.terminal === true
   const sessions = useQuery({
     queryKey: sessionsKey,

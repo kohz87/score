@@ -20,7 +20,7 @@ test('Settings rules: staged edit with a reviewed diff, then a stricter-only age
     })
   })
 
-  await page.goto('/settings')
+  await page.goto('/settings/rules')
   const rules = page.getByRole('region', { name: 'Rules and approvals' })
   await expect(rules.getByRole('group', { name: 'Go ahead' })).toBeVisible()
   await expect(rules.getByRole('group', { name: 'Ask me', exact: true })).toContainText(

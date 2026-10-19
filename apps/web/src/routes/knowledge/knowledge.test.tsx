@@ -568,7 +568,7 @@ test('a missing note at a deep link offers to create it', async () => {
 })
 
 test('Settings › Knowledge shows the vault, git status and the agent switch', async () => {
-  mount('/settings')
+  mount('/settings/knowledge')
   const section = await screen.findByRole('region', { name: 'Knowledge' })
   expect(await within(section).findByText('/vault')).toBeDefined()
   expect(within(section).getByText(/Versioned with git/)).toBeDefined()
@@ -581,7 +581,7 @@ test('Settings › Knowledge shows the vault, git status and the agent switch', 
 })
 
 test('Settings › Knowledge has a switch for saving compacted summaries as memory notes (PLAN 8.2)', async () => {
-  mount('/settings')
+  mount('/settings/knowledge')
   const section = await screen.findByRole('region', { name: 'Knowledge' })
   const toggle = await within(section).findByRole('switch', {
     name: 'Save compacted summaries as memory notes',

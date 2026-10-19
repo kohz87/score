@@ -50,7 +50,7 @@ export function PermissionsTab({ agent }: { agent: AgentDetail }) {
     >
       <h2 id="team-permissions-heading">Permissions</h2>
       <p className="team-muted-strong">
-        {agent.name} starts from the <Link to="/settings#rules">team rules in Settings</Link>. Here
+        {agent.name} starts from the <Link to="/settings/rules">team rules in Settings</Link>. Here
         you can only make this agent stricter, never looser.
       </p>
       {change.isError && <p role="alert">{failure(change.error, 'change the permission')}</p>}

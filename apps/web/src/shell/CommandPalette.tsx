@@ -5,6 +5,7 @@ import { SearchSnippet } from '../components/SearchSnippet.tsx'
 import { messageHref, useMessageSearch } from '../data/message-search.ts'
 import { useMenu } from '../themes/layout.ts'
 import { clearDeviceLook, lookStore } from '../themes/look-store.ts'
+import { settingsPath, useSettingsSections } from '../routes/settings/settings-sections.ts'
 
 // Commands that run something instead of opening a page. "Reset look" is one of the ways back from a theme.
 const commands = [
@@ -34,14 +35,26 @@ export function CommandPalette({
   const titleId = useId()
   const navigate = useNavigate()
   const menu = useMenu()
-  const destinations = userView
+  // Settings is one page per section (PLAN 10.1): each is a destination of its own besides plain Settings.
+  const { sections } = useSettingsSections(userView !== undefined)
+  const destinations: { path: string; title: string; name?: string; section?: true }[] = userView
     ? [
         { path: '/now', title: 'Admin view' },
         { path: '/settings', title: 'Settings' },
       ]
-    : menu
-  const options = destinations.filter(({ title, name }) =>
-    `${title} ${name ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()),
+    : [
+        ...menu,
+        ...sections.map(({ id, label }) => ({
+          path: settingsPath(id),
+          title: `Settings: ${label}`,
+          section: true as const,
+        })),
+      ]
+  // Settings' sections only once something is typed: the empty palette stays the short list of destinations.
+  const options = destinations.filter(
+    ({ title, name, section }) =>
+      !(section && search.trim() === '') &&
+      `${title} ${name ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()),
   )
   const matchingCommands = commands.filter(({ title }) =>
     title.toLowerCase().includes(search.trim().toLowerCase()),

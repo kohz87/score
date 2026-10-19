@@ -247,7 +247,7 @@ test('Ctrl+K opens the palette on the user view; Settings goes through the view 
   expect(within(palette).queryByRole('link')).toBeNull()
   fireEvent.change(within(palette).getByRole('searchbox'), { target: { value: 'sett' } })
   fireEvent.click(within(palette).getByRole('button', { name: 'Settings' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/settings'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/settings/models'))
   expect(window.localStorage.getItem('score.view')).toBeNull()
 })
 

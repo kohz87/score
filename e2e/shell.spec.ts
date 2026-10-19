@@ -65,7 +65,8 @@ test('Ctrl+K opens the palette, traps focus, navigates and returns focus', async
   await page.keyboard.press('Shift+Tab')
   await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused()
   await page.keyboard.press('Shift+Tab')
-  await expect(dialog.getByRole('link', { name: 'Settings' })).toBeFocused()
+  // The last entry is the last Settings section (PLAN 10.1).
+  await expect(dialog.getByRole('link').last()).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused()
   await input.fill('Reports')
@@ -92,7 +93,7 @@ for (const width of [360, 719]) {
     )
     await page.getByRole('button', { name: 'Menu', exact: true }).click()
     await page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: 'Settings' }).click()
-    await expect(page).toHaveURL('/settings')
+    await expect(page).toHaveURL('/settings/models')
     await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible()
   })
 }

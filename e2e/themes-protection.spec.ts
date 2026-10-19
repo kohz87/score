@@ -400,7 +400,7 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
 
   /** Settings has no stream or clock: nothing mutates the DOM there, so only the guard's own triggers can notice. */
   async function quietSettings(page: Page) {
-    await page.goto('/settings')
+    await page.goto('/settings/rules')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     const rules = page.getByRole('region', { name: /Rules/ })
     await expect(rules).toBeVisible()

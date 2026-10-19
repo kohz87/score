@@ -262,7 +262,7 @@ test.describe('the chat-first view keeps a protected way back (re-gate #8)', () 
     await expect(way.getByRole('button', { name: 'Admin view' })).toBeVisible()
     await expect(way.getByRole('button', { name: 'Reset look' })).toBeVisible()
     await way.getByRole('button', { name: 'Settings' }).click()
-    await expect(page).toHaveURL(/\/settings$/)
+    await expect(page).toHaveURL(/\/settings\/models$/)
   })
 
   test('#8: “Reset look” in the strip drops the theme', async ({ page }) => {

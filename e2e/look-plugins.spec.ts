@@ -37,7 +37,7 @@ test('Team › agent › Plugins: toggles per agent, the bridge is locked; Setti
     'true',
   )
 
-  await page.goto('/settings')
+  await page.goto('/settings/look')
   const region = page.getByRole('region', { name: 'Look' })
   const html = page.locator('html')
   const groundOf = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor)
@@ -45,7 +45,7 @@ test('Team › agent › Plugins: toggles per agent, the bridge is locked; Setti
   await theme.getByRole('radio', { name: 'Dark' }).click()
   await expect(html).toHaveAttribute('data-theme', 'dark')
   expect(await groundOf()).toBe('rgb(15, 17, 22)')
-  await page.goto('/settings')
+  await page.goto('/settings/look')
   await expect(html).toHaveAttribute('data-theme', 'dark')
   await expect(theme.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true')
 

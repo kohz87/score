@@ -25,7 +25,7 @@ test.describe('X7: the full-screen Customizer keeps its way back', () => {
     await page.keyboard.press('Control+k')
     const palette = page.getByRole('dialog', { name: 'Search or run a command' })
     await expect(palette).toBeVisible()
-    await expect(palette.getByRole('link', { name: 'Settings' })).toBeVisible()
+    await expect(palette.getByRole('link', { name: 'Settings', exact: true })).toBeVisible()
     await palette.getByRole('searchbox').fill('reset look')
     await palette.getByRole('button', { name: 'Reset look on this device' }).click()
     await dropped(page)

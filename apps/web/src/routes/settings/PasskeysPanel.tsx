@@ -73,7 +73,8 @@ export function PasskeysPanel({
           Passkeys need a domain name, so they don’t work on a LAN IP address.{' '}
           {elsewhere ? (
             <>
-              Open Score at <a href={`${elsewhere}/settings`}>{elsewhere}</a> to add one.
+              Open Score at <a href={`${elsewhere}/settings/remote-access`}>{elsewhere}</a> to add
+              one.
             </>
           ) : (
             'Open Score at its Tailscale (.ts.net) address to add one.'

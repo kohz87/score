@@ -10,7 +10,7 @@ const variants: Variant[] = ['light', 'dark', 'phone']
 const pages = [
   { name: 'now', path: '/now', ready: '.now-score' },
   { name: 'chat', path: '/chat/room-activity-feed', ready: '.chat-message' },
-  { name: 'settings', path: '/settings', ready: '.rules-columns' },
+  { name: 'settings', path: '/settings/rules', ready: '.rules-columns' },
   { name: 'user', path: '/u/rooms/room-activity-feed', ready: '.chat-message' },
 ] as const
 

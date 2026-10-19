@@ -216,7 +216,7 @@ test.describe('menu', () => {
     const palette = page.getByRole('dialog', { name: 'Search or run a command' })
     await expect(palette.getByRole('link', { name: 'Numbers' })).toBeVisible()
     await expect(palette.getByRole('link', { name: 'Team' })).toHaveCount(0)
-    await expect(palette.getByRole('link', { name: 'Settings' })).toBeVisible()
+    await expect(palette.getByRole('link', { name: 'Settings', exact: true })).toBeVisible()
   })
 
   test('a menu that leaves Now out puts the Needs-you dot on its first entry', async ({ page }) => {

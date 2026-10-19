@@ -248,7 +248,7 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
 test('Settings › Backup repeats that a restore outside scripts/score restore cannot be detected', async ({
   page,
 }) => {
-  await page.goto('/settings')
+  await page.goto('/settings/backup')
   const backup = page.locator('#backup')
   await expect(backup).toContainText('scripts/score restore')
   await expect(backup).toContainText('can’t detect a restore done any other way')

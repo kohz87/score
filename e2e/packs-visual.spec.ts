@@ -9,7 +9,7 @@ const pages = [
   { name: 'now', path: '/now', ready: '.now-cards' },
   { name: 'chat', path: '/chat/room-activity-feed', ready: '.chat-files' },
   { name: 'knowledge', path: '/knowledge/projects/launch-plan.md', ready: '.cm-editor' },
-  { name: 'settings', path: '/settings', ready: '.rules-columns' },
+  { name: 'settings', path: '/settings/rules', ready: '.rules-columns' },
 ]
 const packs = [
   { id: 'paper', layout: 'top', density: 'comfortable' },

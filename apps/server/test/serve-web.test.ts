@@ -39,6 +39,12 @@ test('local mode serves the built web app next to the API and keeps unknown API 
   const page = await server.app.inject({ method: 'GET', url: '/now' })
   expect(page.statusCode).toBe(200)
   expect(page.headers['content-type']).toContain('text/html')
+  // Settings sections are app routes (PLAN 10.1), with or without a query.
+  for (const url of ['/settings/logs', '/settings/remote-access', '/settings?look=safe']) {
+    const section = await server.app.inject({ method: 'GET', url })
+    expect(section.statusCode).toBe(200)
+    expect(section.headers['content-type']).toContain('text/html')
+  }
   const note = await server.app.inject({ method: 'GET', url: '/knowledge/a/Plan%20B.md' })
   expect(note.statusCode).toBe(200)
   expect(note.headers['content-type']).toContain('text/html')

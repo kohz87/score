@@ -138,6 +138,9 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     await page.getByRole('link', { name: 'Open Score' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await page.getByRole('link', { name: 'Settings', exact: true }).click()
+    const sections = page.getByRole('navigation', { name: 'Settings sections' })
+    await sections.getByRole('link', { name: 'Remote access' }).click()
+    await expect(page).toHaveURL(`${origin}/settings/remote-access`)
     // Pair another device: set the security password, then the one-time link comes with a QR code.
     const setPassword = page.getByRole('form', { name: 'Set a security password' })
     await setPassword
@@ -150,6 +153,7 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     await expect(page.getByRole('img', { name: 'QR code for the pairing link' })).toBeVisible()
     await expect(page.getByRole('group', { name: 'Pairing link' })).toContainText('/pair#')
     // Settings › Logs: parsed lines, filters, and secrets already removed on the server.
+    await sections.getByRole('link', { name: 'Logs' }).click()
     const logs = page.getByRole('region', { name: 'Logs' })
     await expect(logs.getByText('e2e started cleanly')).toBeVisible()
     await expect(logs.getByText(/e2e failure/)).toBeVisible()
@@ -159,6 +163,7 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     await logs.getByLabel('Level').selectOption('all')
     await logs.getByLabel('Search').fill('cleanly')
     await expect(logs.getByText(/e2e failure/)).toHaveCount(0)
+    await sections.getByRole('link', { name: 'Remote access' }).click()
     await page.getByRole('button', { name: 'Log out this browser' }).click()
     await expect(page).toHaveURL(`${origin}/pair`)
     await expect(page.getByText(/Open the pairing link printed/)).toBeVisible()

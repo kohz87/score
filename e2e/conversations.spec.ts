@@ -212,7 +212,7 @@ test('a share link opens a static page without the app, and revoking it makes it
   await dialog.getByRole('button', { name: 'Close' }).click()
 
   // Settings › Shares lists nothing for the revoked link.
-  await page.goto('/settings')
+  await page.goto('/settings/shares')
   await expect(page.getByRole('region', { name: 'Shares' })).toBeVisible()
 })
 
