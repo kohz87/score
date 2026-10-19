@@ -27,12 +27,11 @@ import {
   insertRoom,
   markRoomRead,
   messagePage,
-  disabledFeatures,
+  readAllRooms,
   readRoom,
-  resendRooms,
+  staleRoomIds,
   refreshRooms,
   roomChanged,
-  roomIds,
   roomRow,
   storeMessage,
 } from '../domain/rooms.ts'
@@ -170,28 +169,10 @@ export function registerRoomRoutes(
       apply: ({ sqlite, now }) => refreshRooms(sqlite, now),
     })
   // The periodic tick reads first: an idle refresh must not create an observation (gate review #13).
-  // Switching approvals off (or back on) changes who counts as waiting, which no room event announces.
-  let features = JSON.stringify(disabledFeatures())
+  // Cheap: two indexed reads. Sends only rooms whose busy set changed (an approval ran out, compatibility changed).
   const tick = async () => {
-    const seen = JSON.stringify(disabledFeatures())
-    if (seen !== features) {
-      features = seen
-      await ingest.submit({
-        source: 'rooms',
-        identity: randomUUID(),
-        apply: ({ sqlite, now }) => resendRooms(sqlite, now),
-      })
-      return
-    }
     const now = new Date(clock()).toISOString()
-    const changed = db.read((sqlite) =>
-      roomIds(sqlite).some(
-        (id) =>
-          JSON.stringify(readRoom(sqlite, id, roomRow(sqlite, id).updated_at)) !==
-          JSON.stringify(readRoom(sqlite, id, now)),
-      ),
-    )
-    if (changed) await refresh()
+    if (db.read((sqlite) => staleRoomIds(sqlite, now)).length > 0) await refresh()
   }
   const timer = setInterval(() => {
     void tick().catch((error: unknown) =>
@@ -232,7 +213,7 @@ export function registerRoomRoutes(
       },
     })
     const result = snapshot(db, (sqlite) => {
-      const all = roomIds(sqlite).map((id) => readRoom(sqlite, id, roomRow(sqlite, id).updated_at))
+      const all = readAllRooms(sqlite, new Date(clock()).toISOString())
       const known = new Set(listed.map((agent) => agent.id))
       return {
         projects: listProjects(sqlite),

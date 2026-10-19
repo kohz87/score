@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
-import { readRoom, resendRooms, storeMessage, updateMessage } from '../../src/domain/rooms.ts'
+import { readRoom, refreshRooms, storeMessage, updateMessage } from '../../src/domain/rooms.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
@@ -695,6 +695,12 @@ test('an approval that expires while idle clears its agent on the periodic sweep
       port,
       clock: () => scheduler.now(),
     })
+    await ingest.submit({
+      source: 'test',
+      identity: 'initial',
+      apply: ({ sqlite, now }) => refreshRooms(sqlite, now),
+    })
+    expect(events().at(-1)).toMatchObject({ data: { id: room.id, activeAgents: ['builder'] } })
     await scheduler.advance(600000)
     const count = events().length
     await vi.advanceTimersByTimeAsync(30000)
@@ -751,7 +757,7 @@ test('a compatibility change that switches approvals off clears their agents on 
     await ingest.submit({
       source: 'test',
       identity: 'initial',
-      apply: ({ sqlite, now }) => resendRooms(sqlite, now),
+      apply: ({ sqlite, now }) => refreshRooms(sqlite, now),
     })
     await vi.advanceTimersByTimeAsync(30000)
     await ingest.drain()
