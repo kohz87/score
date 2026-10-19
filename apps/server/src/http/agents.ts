@@ -1,4 +1,9 @@
-import { AgentStylePatchSchema, AgentStyleSchema, AgentSummarySchema } from '@score/contract'
+import {
+  AgentStylePatchSchema,
+  type AgentStylePatch,
+  AgentStyleSchema,
+  AgentSummarySchema,
+} from '@score/contract'
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -34,7 +39,12 @@ const PutFileBodySchema = z.object({ content: z.string(), etag: EtagSchema }).st
 // `avatar` is accepted and dropped: the picture is only ever set by its own routes.
 const StylePatchSchema = AgentStylePatchSchema.extend({ avatar: z.unknown().optional() })
   .strict()
-  .transform(({ avatar: _ignored, ...patch }) => patch)
+  .transform(
+    (body) =>
+      Object.fromEntries(
+        Object.entries(body).filter(([key]) => key !== 'avatar'),
+      ) as AgentStylePatch,
+  )
   .refine((body) => Object.keys(body).length > 0)
 export function registerAgentRoutes(
   app: FastifyInstance,
