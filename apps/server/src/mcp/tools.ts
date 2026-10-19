@@ -17,7 +17,7 @@ import { assertRoomFree } from '../domain/orchestration/ownership.ts'
 import type { Orchestrator } from '../domain/orchestration/executor.ts'
 import type { ToolName } from '../domain/orchestration/commands.ts'
 import { assertAgentAdmits } from '../domain/agent-lifecycle.ts'
-import { readRoom, roomIds, roomRow, storeMessage } from '../domain/rooms.ts'
+import { readAllRooms, readRoom, roomRow, storeMessage } from '../domain/rooms.ts'
 import { rewindingRooms } from '../domain/room-rewinding.ts'
 import { projectedTasks, taskSummary } from '../domain/tasks.ts'
 import type { ScoreDb } from '../db/index.ts'
@@ -121,8 +121,7 @@ export function createMcpServer(
     },
     guarded(false, () =>
       db.read((sqlite) => ({
-        rooms: roomIds(sqlite)
-          .map((id) => readRoom(sqlite, id, roomRow(sqlite, id).updated_at))
+        rooms: readAllRooms(sqlite, new Date().toISOString())
           .filter((room) => room.members.includes(agentId) && room.archived !== true)
           .slice(0, MAX_LIST)
           .map((room) => {
