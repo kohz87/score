@@ -420,3 +420,39 @@ describe('eyes follow the pointer', () => {
     expect(screen.getByRole('img').querySelector('.agent-glyph__eyes')).toBeNull()
   })
 })
+
+describe('pose (the pet corner hook)', () => {
+  const chibi = {
+    id: 'b',
+    name: 'builder',
+    style: { color: '#19C39A', shape: 'gem' as const, look: 'chibi' as const },
+  }
+
+  test('a sleeping or yawning rich glyph carries a pose class for the corner to style', () => {
+    render(<AgentGlyph agent={agent('gem')} pose="sleep" />)
+    expect(screen.getByRole('img', { name: 'lead' }).classList.contains('agent-glyph--sleep')).toBe(
+      true,
+    )
+    cleanup()
+    render(<AgentGlyph agent={agent('gem')} pose="yawn" />)
+    expect(screen.getByRole('img', { name: 'lead' }).classList.contains('agent-glyph--yawn')).toBe(
+      true,
+    )
+  })
+
+  test('no pose, no class; the plain list shape ignores a pose', () => {
+    render(<AgentGlyph agent={agent('gem')} />)
+    expect(screen.getByRole('img', { name: 'lead' }).className).not.toMatch(/--(sleep|yawn)/)
+    cleanup()
+    render(<AgentGlyph agent={agent('gem')} size="xs" pose="sleep" />)
+    expect(screen.getByRole('img', { name: 'lead' }).className).not.toMatch(/--sleep/)
+  })
+
+  test('a yawning chibi opens its mouth', () => {
+    const { container } = render(<AgentGlyph agent={chibi} pose="yawn" />)
+    expect(container.querySelector('.agent-glyph__mouth-open')).not.toBeNull()
+    cleanup()
+    const rest = render(<AgentGlyph agent={chibi} />)
+    expect(rest.container.querySelector('.agent-glyph__mouth-open')).toBeNull()
+  })
+})

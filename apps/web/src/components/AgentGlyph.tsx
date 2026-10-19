@@ -23,7 +23,11 @@ export type AgentGlyphProps = {
   activity?: AgentActivity
   /** Always the plain coloured shape, whatever the agent's look: for a spot that draws its own tile behind it. */
   plain?: boolean
+  /** A passing pose for the pet corner (PLAN 10.2c): asleep (eyes shut) or yawning (eyes squinting, a chibi's mouth open). */
+  pose?: AgentPose
 }
+
+export type AgentPose = 'sleep' | 'yawn'
 
 const designTints: Record<string, string> = {
   '#6B4EFF': '#ECE8FF',
@@ -197,13 +201,15 @@ function ChibiEye({ cx }: { cx: number }) {
 function ChibiArt({
   agent,
   activity,
+  pose,
 }: {
   agent: AgentGlyphProps['agent']
   activity: AgentActivity
+  pose?: AgentPose
 }) {
   const clip = botBodies[agent.style.shape]
   const mouth =
-    activity === 'needs' ? (
+    activity === 'needs' || pose === 'yawn' ? (
       <ellipse className="agent-glyph__mouth-open" cx="24" cy="28.4" rx="1.3" ry="1.1" />
     ) : activity === 'working' || activity === 'thinking' ? (
       <path className="agent-glyph__mouth" d="M22.9 28.2 H25.1" />
@@ -324,6 +330,7 @@ export function AgentGlyph({
   contrast = 'default',
   activity,
   plain = false,
+  pose,
 }: AgentGlyphProps) {
   // A picture that fails to load (removed, or the server unreachable) falls back to the agent's look.
   const [failedRev, setFailedRev] = useState<string | null>(null)
@@ -338,6 +345,7 @@ export function AgentGlyph({
     `agent-glyph--${kind}`,
     rich && `agent-glyph--${mood}`,
     rich && 'agent-glyph--rich',
+    rich && pose && `agent-glyph--${pose}`,
     !bare && 'agent-glyph--tile',
     contrast === 'high' && 'agent-glyph--high',
   ]
@@ -371,7 +379,7 @@ export function AgentGlyph({
       art = <BotArt agent={agent} activity={mood} />
       break
     case 'chibi':
-      art = <ChibiArt agent={agent} activity={mood} />
+      art = <ChibiArt agent={agent} activity={mood} pose={pose} />
       viewBox = '0 0 48 52'
       break
     case 'picture':
