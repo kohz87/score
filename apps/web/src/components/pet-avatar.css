@@ -1,5 +1,5 @@
 /* A pet avatar (PLAN 10.2, decisions 107–108). One animated file per activity, stacked and crossfaded; Score adds the
-   floor, the moods the pack has no animation for (as overlays on idle), the greeting and the heart. */
+   shadow under the feet, the moods the pack has no animation for (as overlays on idle), the greeting and the heart. */
 .pet-avatar {
   /* White behind a dark agent colour and Score's ink behind a light one, as the glyph plate (agent-glyph.css). */
   --pet-lum: (0.2126 * pow(r / 255, 2.2) + 0.7152 * pow(g / 255, 2.2) + 0.0722 * pow(b / 255, 2.2));
@@ -23,12 +23,16 @@
   cursor: pointer;
 }
 
+/* A soft shadow under the feet (owner, 2026-10-19: no floor band or line); it follows `floor` with the character. */
 .pet-avatar__floor {
   position: absolute;
-  inset: auto 0 0;
-  height: 16%;
-  background: color-mix(in srgb, var(--ground) 85%, var(--card));
-  border-top: 1px solid var(--hairline);
+  /* Centred by its position alone, so the protected layer's reset of transforms can't move it. */
+  left: 27%;
+  bottom: calc(3.5% + var(--pet-floor, 0) * 80%);
+  width: 46%;
+  height: 9%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(18 19 26 / 15%), transparent);
 }
 
 /* Everything that hops or bounces moves as one: the stage. */
@@ -41,7 +45,7 @@
 .pet-avatar__anim {
   position: absolute;
   left: 50%;
-  /* Feet stand a little above the floor's edge; `floor` lifts them if the files have them too low. */
+  /* Feet stand on the shadow; `floor` lifts them if the files have them too low. */
   bottom: calc(8% + var(--pet-floor, 0) * 80%);
   height: 80%;
   width: auto;
