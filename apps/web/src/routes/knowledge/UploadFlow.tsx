@@ -8,9 +8,11 @@ import {
   formatBytes,
   isZipName,
   joinPath,
+  keepStaged,
   previewZip,
   saveMedia,
   unzipBlob,
+  unzipStaged,
   uploadBlob,
   uploadProblem,
   type OnConflict,
@@ -126,6 +128,25 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
           summary.problems.push(problem)
           continue
         }
+        // The server keeps a previewed zip for a while; once it says it's gone, the file is sent again.
+        let stagedId: string | null = null
+        const staged = async <T,>(
+          step: 'upload' | 'unzip',
+          viaStage: (id: string) => Promise<T>,
+          send: () => Promise<T>,
+        ): Promise<T> => {
+          if (stagedId) {
+            // Nothing is being sent: a full bar reads as "Saving…" / "Unzipping…" without a percentage.
+            track(item.name, index, items.length, step)({ loaded: 1, total: 1 })
+            try {
+              return await viaStage(stagedId)
+            } catch (error) {
+              if (!(error instanceof ApiError && error.code === 'staged_gone')) throw error
+              stagedId = null
+            }
+          }
+          return send()
+        }
         try {
           if ('blob' in item && isZipName(item.name)) {
             const preview = await previewZip(
@@ -133,6 +154,7 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
               item.blob,
               track(item.name, index, items.length, 'check'),
             )
+            stagedId = preview.staged?.id ?? null
             const choice = await ask<ZipChoice>((resolve) => ({
               kind: 'zip',
               name: item.name,
@@ -143,12 +165,17 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
             if (choice.mode === 'skip') continue
             if (choice.mode === 'unzip') {
               const result = await withConflict(item.name, remaining, (onConflict) =>
-                unzipBlob(
-                  target,
-                  item.blob,
-                  choice.folder,
-                  onConflict,
-                  track(item.name, index, items.length, 'unzip'),
+                staged(
+                  'unzip',
+                  (id) => unzipStaged(id, target, choice.folder, onConflict),
+                  () =>
+                    unzipBlob(
+                      target,
+                      item.blob,
+                      choice.folder,
+                      onConflict,
+                      track(item.name, index, items.length, 'unzip'),
+                    ),
                 ),
               )
               if (result)
@@ -162,12 +189,17 @@ export function useUploadFlow(onFinished?: (summary: UploadSummary) => void) {
           }
           const result = await withConflict(item.name, remaining, (onConflict) =>
             'blob' in item
-              ? uploadBlob(
-                  target,
-                  item.blob,
-                  onConflict,
-                  {},
-                  track(item.name, index, items.length, 'upload'),
+              ? staged(
+                  'upload',
+                  (id) => keepStaged(id, target, onConflict),
+                  () =>
+                    uploadBlob(
+                      target,
+                      item.blob,
+                      onConflict,
+                      {},
+                      track(item.name, index, items.length, 'upload'),
+                    ),
                 )
               : saveMedia(item.mediaId, target, onConflict),
           )

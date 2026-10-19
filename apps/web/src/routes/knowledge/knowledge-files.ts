@@ -110,6 +110,30 @@ export async function unzipBlob(
   )
 }
 
+/** Keeps or unzips the zip the server still holds from the preview; nothing is sent again (PLAN 10.3). */
+export async function keepStaged(stagedId: string, path: string, onConflict: OnConflict) {
+  return KnowledgeUploadResultSchema.parse(
+    await apiFetch('knowledge/files-from-staged', {
+      method: 'POST',
+      body: JSON.stringify({ stagedId, path, mode: 'keep', onConflict }),
+    }),
+  )
+}
+
+export async function unzipStaged(
+  stagedId: string,
+  path: string,
+  folder: string,
+  onConflict: OnConflict,
+) {
+  return KnowledgeUnzipResultSchema.parse(
+    await apiFetch('knowledge/files-from-staged', {
+      method: 'POST',
+      body: JSON.stringify({ stagedId, path, mode: 'unzip', folder, onConflict }),
+    }),
+  )
+}
+
 export async function saveMedia(mediaId: string, path: string, onConflict: OnConflict) {
   return KnowledgeUploadResultSchema.parse(
     await apiFetch('knowledge/files-from-media', {

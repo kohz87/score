@@ -18,6 +18,8 @@ let registry: ReturnType<typeof createStreamQueryRegistry>
 /** Responses for the next upload PUTs, in order; then 201. */
 let putQueue: Response[]
 /** While set, every PUT waits for it: the upload is "sent" and the server is still working. */
+/** Responses for the next files-from-staged POSTs, in order; then 201. */
+let stagedQueue: Response[] = []
 let putGate: Promise<void> | null = null
 let documents: Array<Record<string, unknown>>
 
@@ -112,6 +114,14 @@ function respond(input: string, init: RequestInit = {}): Response {
   if (p === '/folders' && method === 'POST') return json({ path: 'x' }, 201)
   if (p === '/move' && method === 'POST')
     return json({ path: 'inbox/renamed.pdf', updatedNotes: 0 })
+  if (p === '/files-from-staged' && method === 'POST') {
+    const next = stagedQueue.shift()
+    if (next) return next
+    const body = JSON.parse(String(init.body)) as { path: string; mode: string; folder?: string }
+    return body.mode === 'unzip'
+      ? json({ folder: body.folder, written: ['a.md', 'b.csv'], skipped: [] }, 201)
+      : json({ path: body.path, kind: 'document', replaced: false }, 201)
+  }
   if (p.startsWith('/files/') && method === 'PUT') {
     const next = putQueue.shift()
     if (next) return next
@@ -502,4 +512,86 @@ test('a note has a Download link to its raw Markdown', async () => {
   expect(within(region).getByRole('link', { name: 'Download Home.md' }).getAttribute('href')).toBe(
     '/api/knowledge/notes/Home.md?download=1',
   )
+})
+
+const stagedPreview = () => {
+  const response = zipPreview()
+  return response
+    .json()
+    .then((body) =>
+      json({ ...body, staged: { id: 'A'.repeat(32), expiresAt: '2026-01-01T00:30:00Z' } }),
+    )
+}
+const posts = () => calls.filter((c) => c.url === '/api/knowledge/files-from-staged')
+const clash = () =>
+  json(
+    {
+      error: {
+        code: 'exists',
+        message: 'x',
+        details: { existing: [{ path: 'inbox/pack.zip', mtime: '2026-03-04T00:00:00Z', size: 8 }] },
+      },
+    },
+    409,
+  )
+
+test('a previewed zip is kept without a second upload', async () => {
+  putQueue = [await stagedPreview()]
+  mount('/knowledge?files=inbox')
+  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
+  upload([file('pack.zip')])
+  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
+  fireEvent.click(within(dialog).getByRole('radio', { name: /Keep as a zip/ }))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep as a zip' }))
+  await screen.findByText(/Added inbox\/pack\.zip/)
+  expect(puts()).toHaveLength(1)
+  expect(posts()[0]!.body).toEqual({
+    stagedId: 'A'.repeat(32),
+    path: 'inbox/pack.zip',
+    mode: 'keep',
+    onConflict: 'ask',
+  })
+})
+
+test('a previewed zip is unzipped without a second upload', async () => {
+  putQueue = [await stagedPreview()]
+  mount('/knowledge?files=inbox')
+  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
+  upload([file('pack.zip')])
+  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Unzip' }))
+  await screen.findByText(/Unzipped 2 files into inbox\/pack/)
+  expect(puts()).toHaveLength(1)
+  expect(posts()[0]!.body).toMatchObject({ mode: 'unzip', folder: 'inbox/pack' })
+})
+
+test('a 409 on a staged zip is retried from the stage, not re-sent', async () => {
+  putQueue = [await stagedPreview()]
+  stagedQueue = [clash()]
+  mount('/knowledge?files=inbox')
+  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
+  upload([file('pack.zip')])
+  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
+  fireEvent.click(within(dialog).getByRole('radio', { name: /Keep as a zip/ }))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep as a zip' }))
+  fireEvent.click(await screen.findByRole('button', { name: /Replace/ }))
+  await screen.findByText(/Added inbox\/pack\.zip/)
+  expect(puts()).toHaveLength(1)
+  expect(posts().map((c) => (c.body as { onConflict: string }).onConflict)).toEqual([
+    'ask',
+    'replace',
+  ])
+})
+
+test('a staged zip the server dropped is sent again', async () => {
+  putQueue = [await stagedPreview()]
+  stagedQueue = [json({ error: { code: 'staged_gone', message: 'gone' } }, 404)]
+  mount('/knowledge?files=inbox')
+  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
+  upload([file('pack.zip')])
+  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Unzip' }))
+  await screen.findByText(/Unzipped 2 files into inbox\/pack/)
+  expect(puts()).toHaveLength(2)
+  expect(puts()[1]!.url).toContain('mode=unzip')
 })
