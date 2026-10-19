@@ -168,7 +168,8 @@ test('protected.css leaves a pet avatar’s own moving parts to Score’s rules,
       squashed,
     )
   expect(rule, 'the blanket rule').not.toBeNull()
-  expect(rule![1]).toBe(':not(.pet-avatar__stage, .pet-avatar__anim, .pet-avatar__fx) ')
+  // Inside `:where`, so it adds no specificity (the disabled-control rule must still win over this one).
+  expect(rule![1]).toBe(':not(:where(.pet-avatar__stage, .pet-avatar__anim, .pet-avatar__fx)) ')
   const pet = readFileSync(join(root, 'components/pet-avatar.css'), 'utf8')
   const moved = new Set<string>()
   for (const [, selector, body] of pet.matchAll(/^\.pet-avatar__([\w-]+)[^{]*\{([^}]*)\}/gm))
