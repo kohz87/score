@@ -87,6 +87,8 @@ function isJunk(path: string): boolean {
 
 function classify(path: string, folder: string | null): Kind {
   if (isJunk(path)) return { kind: 'ignored' }
+  // Files outside the pack's own folder (a README beside it) are not part of the pack.
+  if (folder !== null && !path.startsWith(`${folder}/`)) return { kind: 'ignored' }
   const relative = folder === null ? path : path.slice(folder.length + 1)
   // A pack is flat: files deeper than its one folder are not part of it.
   if (relative.includes('/')) return { kind: 'ignored' }
@@ -109,13 +111,27 @@ function classify(path: string, folder: string | null): Kind {
   return { kind: 'image', activity, ext: ext as PackExt }
 }
 
-/** The one top-level folder every wanted-or-not file lives in, if there is exactly one such folder. */
+/** True for what marks a place as the pack: pet.json, or an image named after an activity. */
+function marksPack(base: string): boolean {
+  const lower = base.toLowerCase()
+  if (lower === 'pet.json') return true
+  const match = /^(.+)\.([a-z0-9]+)$/.exec(lower)
+  return match !== null && IMAGE_LIKE.has(match[2]!) && ACTIVITIES.some((name) => name === match[1])
+}
+
+/**
+ * The folder the pack lives in, chosen by where its activity images and pet.json are, not by every file in the zip:
+ * none when any of them is at the top level (those win, files in folders are ignored); else the one top-level folder
+ * that holds them; none when several folders do.
+ */
 function topFolder(paths: string[]): string | null {
-  const real = paths.filter((path) => !isJunk(path))
-  if (real.length === 0) return null
-  const firsts = new Set(real.map((path) => (path.includes('/') ? path.split('/')[0]! : null)))
-  const [only] = [...firsts]
-  return firsts.size === 1 && only !== null && only !== undefined ? only : null
+  const marked = paths.filter((path) => !isJunk(path) && marksPack(path.split('/').pop()!))
+  if (marked.some((path) => !path.includes('/'))) return null
+  const folders = new Set(
+    marked.filter((path) => path.split('/').length === 2).map((path) => path.split('/')[0]!),
+  )
+  const [only] = [...folders]
+  return folders.size === 1 && only !== undefined ? only : null
 }
 
 function manifestOf(bytes: Buffer, reasons: string[]): PetPackManifest {
