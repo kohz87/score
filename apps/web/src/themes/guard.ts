@@ -322,7 +322,7 @@ const SHAPES = 'image, path, circle, rect, ellipse, polygon, polyline, line'
 // say at the moment of reading, so it can't be compared; a theme can't style them (the sanitiser guard), and everything
 // else about them (geometry, paint, display, clip, mask, filter) is still compared.
 const ANIMATED_BY_SCORE =
-  '.agent-glyph__slot, .agent-glyph__orbit, .agent-glyph__ripple, .pet-avatar__fx *'
+  '.agent-glyph__slot, .agent-glyph__orbit, .agent-glyph__ripple, .pet-avatar__fx *, .room-stage__fx *'
 
 function shapes(surface: HTMLElement): SVGGraphicsElement[] {
   return Array.from(surface.querySelectorAll<SVGGraphicsElement>(SHAPES)).filter(

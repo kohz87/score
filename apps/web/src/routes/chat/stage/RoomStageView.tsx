@@ -358,10 +358,7 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
             }
           } else {
             const file = restingMotion(mood, item.mood, actor.pet).breaks
-              ? pickBreak(
-                  packActivities(item.agent.style.pack ?? { activities: [] }),
-                  Math.random,
-                )
+              ? pickBreak(packActivities(item.agent.style.pack ?? { activities: [] }), Math.random)
               : null
             if (file) {
               actor.mode = 'break'

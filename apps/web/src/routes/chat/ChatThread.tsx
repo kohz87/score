@@ -20,6 +20,9 @@ import { usePendingDeletes } from './message-deletion.ts'
 import { MessageItem } from './MessageItem.tsx'
 import { ImportedBanner } from './ImportedBanner.tsx'
 import { RenameRoom } from './RenameRoom.tsx'
+import { RoomStage } from './stage/RoomStage.tsx'
+import { StageToggle } from './stage/StageToggle.tsx'
+import { stageMembers } from './stage/stage-mood.ts'
 import { StatusLine } from '../../live/StatusLine.tsx'
 import { useStatusLines } from '../../live/use-activity.ts'
 import { messagesQuery, roomQuery, versionsQuery } from './queries.ts'
@@ -479,12 +482,14 @@ export function ChatThread({
           {room?.leadAgentId && <p>Unaddressed messages go to {lead?.name ?? room.leadAgentId}</p>}
           {room && <RoomStatus working={room.activeAgents} agents={agents} />}
         </div>
+        {!userView && room && stageMembers(room, agents).length > 0 && <StageToggle />}
         {!userView && (
           <Link className="chat-score-link" to="/now">
             See it on the Score
           </Link>
         )}
       </header>
+      {!userView && room && <RoomStage room={room} agents={agents} />}
       {status === 'pending' && !room && (
         <p className="chat-state" role="status">
           Loading room…

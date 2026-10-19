@@ -53,13 +53,7 @@ export function StillFrame({
       image.onload = null
     }
   }, [url])
-  return (
-    <canvas
-      ref={canvas}
-      className={`${base}${on ? ` ${base}--on` : ''}`}
-      aria-hidden="true"
-    />
-  )
+  return <canvas ref={canvas} className={`${base}${on ? ` ${base}--on` : ''}`} aria-hidden="true" />
 }
 
 function Dots() {

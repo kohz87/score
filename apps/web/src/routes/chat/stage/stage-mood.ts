@@ -112,7 +112,9 @@ export function newHandoff(
     const from = message.author.agentId
     if (!memberIds.includes(from)) continue
     const text = message.parts.map((part) => (part.kind === 'text' ? part.text : '')).join('\n')
-    const to = [...message.to, ...mentioned(text)].find((id) => id !== from && memberIds.includes(id))
+    const to = [...message.to, ...mentioned(text)].find(
+      (id) => id !== from && memberIds.includes(id),
+    )
     if (to) return { id: message.id, from, to }
   }
   return null

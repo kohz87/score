@@ -169,7 +169,10 @@ test('protected.css leaves a pet avatar’s own moving parts to Score’s rules,
     )
   expect(rule, 'the blanket rule').not.toBeNull()
   // Inside `:where`, so it adds no specificity (the disabled-control rule must still win over this one).
-  expect(rule![1]).toBe(':not(:where(.pet-avatar__stage, .pet-avatar__anim, .pet-avatar__fx)) ')
+  // (Prettier wraps the list; the whitespace inside the brackets is not part of the selector.)
+  expect(rule![1]!.replace(/\( /g, '(').replace(/ \)/g, ')')).toBe(
+    ':not(:where(.pet-avatar__stage, .pet-avatar__anim, .pet-avatar__fx, .room-stage__move, .room-stage__anim, .room-stage__fx)) ',
+  )
   const pet = readFileSync(join(root, 'components/pet-avatar.css'), 'utf8')
   const moved = new Set<string>()
   for (const [, selector, body] of pet.matchAll(/^\.pet-avatar__([\w-]+)[^{]*\{([^}]*)\}/gm))
@@ -178,4 +181,34 @@ test('protected.css leaves a pet avatar’s own moving parts to Score’s rules,
   // Every part Score moves is either one of the three exempt classes or an overlay root that carries `fx` (see the
   // PetAvatar test); nothing else may move, or a theme could never be made to leave it alone.
   expect([...moved].sort()).toEqual(['alert', 'anim', 'dot', 'heart', 'say', 'stage', 'z'].sort())
+})
+
+// The room stage (PLAN 10.10) moves its own parts the same way: the three exempt classes above are the only ones
+// protected.css leaves alone, so every part Score moves must wear one (or sit inside an svg, which the layer never
+// pins), and nothing else may move.
+test('the room stage’s moving parts are exactly the ones that wear an exempt class or live in an svg', () => {
+  const css = readFileSync(join(root, 'routes/chat/stage/room-stage.css'), 'utf8')
+  const moved = new Set<string>()
+  for (const [, selectors, body] of css.matchAll(/^(\.room-stage[^{]*)\{([^}]*)\}/gm)) {
+    if (!/\b(opacity|transform|animation(-name)?):/.test(body!)) continue
+    for (const selector of selectors!.split(',')) {
+      // The element that moves is the last compound selector's own class.
+      const last = selector.trim().split(/\s+/).at(-1)!
+      const own = /\.room-stage__([\w]+)/.exec(last)
+      if (own) moved.add(own[1]!)
+    }
+  }
+  expect([...moved].sort()).toEqual(['anim', 'bang', 'body', 'dot', 'fig', 'mark', 'say', 'z'])
+  const view = readFileSync(join(root, 'routes/chat/stage/RoomStageView.tsx'), 'utf8')
+  for (const part of ['body', 'fig', 'mark'])
+    expect(view, part).toMatch(new RegExp('room-stage__' + part + '[\'"`,\\s]+room-stage__move'))
+  for (const part of ['bang', 'say'])
+    expect(view, part).toMatch(new RegExp(`room-stage__fx room-stage__${part}`))
+  expect(view).toContain('room-stage__anim')
+})
+
+test('the room stage is a protected surface a theme cannot name, and its markup says so', () => {
+  expect(protectedClasses).toContain('room-stage')
+  const view = readFileSync(join(root, 'routes/chat/stage/RoomStageView.tsx'), 'utf8')
+  expect(view).toMatch(/className="room-stage"[\s\S]{0,200}data-protected="any"/)
 })

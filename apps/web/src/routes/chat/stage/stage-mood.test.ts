@@ -2,7 +2,7 @@ import type { AgentSummary, Approval, Message } from '@score/contract'
 import { expect, test } from 'vitest'
 import { moodText, newHandoff, stageMembers, stageMoods, type StageInput } from './stage-mood.ts'
 
-const style = { color: '#6B4EFF', shape: 'circle' as const }
+const style = { color: '#6B4EFF', shape: 'circle-dot' as const }
 const agent = (id: string, extra: Partial<AgentSummary> = {}): AgentSummary => ({
   id,
   name: id,
@@ -85,9 +85,9 @@ test('an approval tied to the room by a card message in it counts, one for anoth
   const card = message('approval:approval-1', {
     parts: [{ kind: 'approval', approvalId: 'approval-1' }],
   })
-  expect(stageMoods({ ...base, messages: [card], approvals: [approval({ refs: [] })] }).builder).toBe(
-    'needs',
-  )
+  expect(
+    stageMoods({ ...base, messages: [card], approvals: [approval({ refs: [] })] }).builder,
+  ).toBe('needs')
   expect(
     stageMoods({
       ...base,
@@ -165,9 +165,19 @@ test('the screen-reader words for each mood', () => {
 test('members are the room’s members plus the lead, in order, without removed or unknown agents', () => {
   const roster = [
     ...agents,
-    agent('gone', { lifecycle: { state: 'removed', incarnationId: crypto.randomUUID(), operationId: null } }),
+    agent('gone', {
+      lifecycle: {
+        state: 'removed',
+        incarnationId: '00000000-0000-4000-8000-000000000000',
+        operationId: null,
+      },
+    }),
   ]
-  const room = { members: ['builder', 'gone', 'ghost', 'reviewer'], leadAgentId: 'lead', kind: 'room' as const }
+  const room = {
+    members: ['builder', 'gone', 'ghost', 'reviewer'],
+    leadAgentId: 'lead',
+    kind: 'room' as const,
+  }
   expect(stageMembers(room, roster).map((item) => item.id)).toEqual(['builder', 'reviewer', 'lead'])
   expect(
     stageMembers({ members: ['lead', 'builder'], leadAgentId: 'lead', kind: 'room' }, roster).map(

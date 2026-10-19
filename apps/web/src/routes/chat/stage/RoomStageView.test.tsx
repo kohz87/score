@@ -76,7 +76,9 @@ test('a pet plays its pack with its mark as a badge and its name below; an agent
   )
   const pet = button(/^builder/)
   const imgs = [...pet.querySelectorAll<HTMLImageElement>('img.room-stage__anim')]
-  expect(imgs.map((img) => img.getAttribute('src'))).toEqual(['/api/agents/builder/pack/idle?rev=r1'])
+  expect(imgs.map((img) => img.getAttribute('src'))).toEqual([
+    '/api/agents/builder/pack/idle?rev=r1',
+  ])
   expect(imgs[0]!.classList.contains('room-stage__anim--on')).toBe(true)
   expect(pet.querySelector('.room-stage__badge .agent-glyph')).not.toBeNull()
   expect(pet.querySelector('.room-stage__name')?.textContent).toBe('builder')
@@ -96,7 +98,10 @@ test('moods crossfade to the pack’s files, and fall back to idle plus an overl
       onMention={() => {}}
     />,
   )
-  const on = () => button(/^builder/).querySelector('img.room-stage__anim--on')?.getAttribute('data-anim')
+  const on = () =>
+    button(/^builder/)
+      .querySelector('img.room-stage__anim--on')
+      ?.getAttribute('data-anim')
   const show = (mood: StageMood) =>
     rerender(
       <RoomStageView
@@ -158,7 +163,11 @@ test('a hand-off turns the two toward each other', () => {
   render(
     <RoomStageView
       roomId="r"
-      members={[member('lead', 'rest', ['walk']), member('builder', 'rest', ['walk']), member('reviewer')]}
+      members={[
+        member('lead', 'rest', ['walk']),
+        member('builder', 'rest', ['walk']),
+        member('reviewer'),
+      ]}
       handoff={{ id: 'm1', from: 'builder', to: 'lead' }}
       onMention={() => {}}
     />,
@@ -176,8 +185,13 @@ test('Lively members wander and break; Calm and Still keep where they are', () =
     member('builder', 'rest', ['walk']),
     member('reviewer', 'work', ['walk']),
   ]
-  const modes = () => ['lead', 'builder', 'reviewer'].map((id) => button(new RegExp(`^${id}`)).getAttribute('data-mode'))
-  const { unmount } = render(<RoomStageView roomId="r" members={members} handoff={null} onMention={() => {}} />)
+  const modes = () =>
+    ['lead', 'builder', 'reviewer'].map((id) =>
+      button(new RegExp(`^${id}`)).getAttribute('data-mode'),
+    )
+  const { unmount } = render(
+    <RoomStageView roomId="r" members={members} handoff={null} onMention={() => {}} />,
+  )
   let walked = false
   for (let second = 0; second < 40 && !walked; second += 1) {
     act(() => {
@@ -191,7 +205,9 @@ test('Lively members wander and break; Calm and Still keep where they are', () =
   unmount()
   for (const choice of ['calm', 'still'] as const) {
     saveLiveliness(choice)
-    const view = render(<RoomStageView roomId="r" members={members} handoff={null} onMention={() => {}} />)
+    const view = render(
+      <RoomStageView roomId="r" members={members} handoff={null} onMention={() => {}} />,
+    )
     act(() => {
       vi.advanceTimersByTime(60_000)
     })
@@ -222,7 +238,14 @@ test('on a phone at most five members show, then a +N chip that opens the member
   }))
   const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
   const onMention = vi.fn()
-  render(<RoomStageView roomId="r" members={ids.map((id) => member(id))} handoff={null} onMention={onMention} />)
+  render(
+    <RoomStageView
+      roomId="r"
+      members={ids.map((id) => member(id))}
+      handoff={null}
+      onMention={onMention}
+    />,
+  )
   expect(group().querySelectorAll('.room-stage__actor')).toHaveLength(5)
   const chip = screen.getByRole('button', { name: '2 more members' })
   expect(chip.textContent).toBe('+2')
