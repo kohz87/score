@@ -404,3 +404,9 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v1.9.0 deployed** (2026-10-19 03:19 UTC): backup `score-pre-1.9.0-20261019.db`, gateway restarted, both producers re-registered, health 200 on LAN and Tailscale, `/settings/logs` deep link 200.
 - **1.9.1** (owner report): Terminal password field styled like Settings › Remote access (label above, 40px field); before/after screenshots at 1280 and 390; terminal e2e pass.
 - **1.9.2** (owner report): terminal had no clipboard on Windows/Linux (xterm defaults: Ctrl+C = interrupt, Ctrl+V = ^V). `clipboardKey()` + `attachCustomKeyEventHandler`: Ctrl+C copies a selection, Ctrl+V/Ctrl+Shift+V left to the browser's paste event; Copy/Paste buttons on the key bar (`readClipboardText`, hint when refused). Unit tests; terminal e2e on a real shell failed first at the paste (^V), passes 2/2 with paste, copy and interrupt checks.
+- **10.2a** (server) done on `task/10.2a`: migration 0078 (agent_styles rebuilt with 20 shapes + `look` + `avatar_rev`;
+  coding agents' style consolidated into `coding_agents`), `writeAgentStyle`/`readAgentStyle`, style PATCH with
+  `AgentStylePatchSchema` for both agent kinds, avatar PUT/DELETE/GET (`src/avatars/{sniff,store}.ts`: type and size
+  from bytes, APNG/animated WebP/SVG/GIF refused, 2 MB, 32–2048 px, lstat walk + O_NOFOLLOW, temp+rename, row commit
+  then old file removed, start-up recovery, folder removed with the agent). Defaults stay on the original eight shapes.
+  ~85 new tests, failing first. Waiting for 10.2b; merge order 10.2a → 10.2b → main.
