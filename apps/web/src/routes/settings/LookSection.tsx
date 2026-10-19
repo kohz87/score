@@ -10,6 +10,12 @@ import {
 import { apiFetch } from '../../data/api.ts'
 import { currencyKey, useDisplayCurrency } from '../../data/currency.ts'
 import '../../components/plugin-cards.css'
+import {
+  livelinessChoices,
+  saveLiveliness,
+  useChosenLiveliness,
+  type Liveliness,
+} from '../../data/liveliness.ts'
 import { isTouchDevice, readSendKey, saveSendKey, type SendKey } from '../../data/send-key.ts'
 import { saveTheme, themeChoices, type ThemeChoice } from '../../data/theme.ts'
 import { packs } from '../../styles/packs.ts'
@@ -256,6 +262,51 @@ function ResetLookCard() {
   )
 }
 
+const livelinessLabels: Record<Liveliness, string> = {
+  lively: 'Lively',
+  calm: 'Calm',
+  still: 'Still',
+}
+const livelinessNotes: Record<Liveliness, string> = {
+  lively:
+    'Agents on the Team page and on their own page wander their corner, look around, sit, stretch, nap and say hi.',
+  calm: 'No walking or tricks: agents only breathe, blink, show their mood and say hi when you point at them.',
+  still: 'Nothing moves. Agents keep their pose and mood, and the text says what they are doing.',
+}
+
+/** Decision 106: how much the pet corners move, per device. Reduced motion always means Still. */
+function LivelinessCard() {
+  const choice = useChosenLiveliness()
+  return (
+    <div className="plugins-card plugins-theme plugins-sendkey">
+      <span className="plugins-card-name" id="plugins-liveliness-label">
+        Agents
+      </span>
+      <div
+        role="radiogroup"
+        aria-labelledby="plugins-liveliness-label"
+        className="plugins-theme-choices"
+      >
+        {livelinessChoices.map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={choice === option}
+            className="plugins-theme-choice"
+            onClick={() => saveLiveliness(option)}
+          >
+            {livelinessLabels[option]}
+          </button>
+        ))}
+      </div>
+      <p className="settings-muted">
+        {livelinessNotes[choice]} Your device’s reduced-motion setting always means Still.
+      </p>
+    </div>
+  )
+}
+
 const sendKeyLabels: Record<SendKey, string> = { enter: 'Enter', 'ctrl-enter': 'Ctrl+Enter' }
 
 function SendKeyCard() {
@@ -450,6 +501,7 @@ export function LookSection() {
         <ThemeCard />
         <ResetLookCard />
         <SendKeyCard />
+        <LivelinessCard />
         <AdminGuardCard />
         <CurrencyCard />
       </div>
