@@ -141,6 +141,9 @@
   position: relative;
   flex-shrink: 0;
 }
+.top-bar-actions {
+  display: contents;
+}
 .avatar-popover {
   position: absolute;
   z-index: 20;
@@ -628,17 +631,26 @@ body.scroll-locked {
   :root[data-layout='side'] .command-shortcut {
     display: none;
   }
-  :root[data-layout='side'] .top-bar-terminal {
-    align-self: flex-start;
+  /* The terminal and the avatar share the rail's last row. The avatar's menu opens above that row, as wide as the rail
+     (the rail scrolls, so anything wider is cut off): it is placed against the row, not the 44px avatar. */
+  :root[data-layout='side'] .top-bar-actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
   :root[data-layout='side'] .avatar-menu {
-    align-self: flex-start;
+    position: static;
   }
   :root[data-layout='side'] .avatar-popover {
     top: auto;
     bottom: calc(100% + 8px);
-    right: auto;
+    right: 0;
     left: 0;
+    min-width: 0;
+  }
+  :root[data-layout='side'] .avatar-theme button {
+    padding: 0 var(--space-2);
   }
 }
 
@@ -660,10 +672,6 @@ body.scroll-locked {
   }
   :root[data-layout='side'][data-nav='right'] .page-content {
     grid-column: 1;
-  }
-  :root[data-layout='side'][data-nav='right'] .avatar-popover {
-    left: auto;
-    right: 0;
   }
 }
 @media (width >= 1024px) {

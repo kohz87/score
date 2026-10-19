@@ -96,8 +96,11 @@ export function TopBar({
         <span>Search or run a command</span>
         <kbd className="command-shortcut">⌘K</kbd>
       </button>
-      <TerminalButton offered={terminalOffered} />
-      <AvatarMenu view="admin" />
+      {/* One row at the foot of a side rail; no box of its own in the top bar (display: contents). */}
+      <div className="top-bar-actions">
+        <TerminalButton offered={terminalOffered} />
+        <AvatarMenu view="admin" />
+      </div>
     </header>
   )
 }
