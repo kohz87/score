@@ -391,3 +391,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   the menu placed against that row (left/right 0, min-width 0), tighter theme buttons in the rail. New
   `e2e/rail-actions.spec.ts` fails on 1.8.1 (60px apart), passes now; shell units 13, layout/visual e2e 264/264, no
   baseline changed.
+- **v1.8.2 deployed** (2026-10-19 02:28 UTC): backup `score-pre-1.8.2-20261019.db`, gateway restarted, both producers re-registered, health 200 on LAN and Tailscale.
