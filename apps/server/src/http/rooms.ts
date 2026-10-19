@@ -27,7 +27,9 @@ import {
   insertRoom,
   markRoomRead,
   messagePage,
+  disabledFeatures,
   readRoom,
+  resendRooms,
   refreshRooms,
   roomChanged,
   roomIds,
@@ -168,7 +170,19 @@ export function registerRoomRoutes(
       apply: ({ sqlite, now }) => refreshRooms(sqlite, now),
     })
   // The periodic tick reads first: an idle refresh must not create an observation (gate review #13).
+  // Switching approvals off (or back on) changes who counts as waiting, which no room event announces.
+  let features = JSON.stringify(disabledFeatures())
   const tick = async () => {
+    const seen = JSON.stringify(disabledFeatures())
+    if (seen !== features) {
+      features = seen
+      await ingest.submit({
+        source: 'rooms',
+        identity: randomUUID(),
+        apply: ({ sqlite, now }) => resendRooms(sqlite, now),
+      })
+      return
+    }
     const now = new Date(clock()).toISOString()
     const changed = db.read((sqlite) =>
       roomIds(sqlite).some(

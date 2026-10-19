@@ -5,9 +5,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
-import { approvalDraft } from '../../src/domain/approval-store.ts'
+import { approvalDraft, approvalView, readApprovalRow } from '../../src/domain/approval-store.ts'
 import {
   deriveRoomEvents,
+  setRoomCompatibility,
   insertRoom,
   readRoom,
   storeMessage,
@@ -37,6 +38,7 @@ beforeEach(() => {
     )
 })
 afterEach(async () => {
+  setRoomCompatibility(null)
   await ingest.close()
   db.close()
   rmSync(dir, { recursive: true, force: true })
@@ -98,9 +100,10 @@ function approval(id: string, agentId: string, over: Record<string, unknown> = {
       iso(),
     )
 }
-const card = (id: string, roomId: string, agentId: string, approvalId: string) =>
+// The card of an approval is stored as `approval:<id>`, as Score does.
+const card = (_id: string, roomId: string, agentId: string, approvalId: string) =>
   put({
-    ...message(id, roomId, agentId, false),
+    ...message(`approval:${approvalId}`, roomId, agentId, false),
     parts: [{ kind: 'approval', approvalId }],
   })
 
@@ -184,4 +187,101 @@ test('a room update goes out when an approval opens or closes', async () => {
       .slice(before)
       .map((room) => room.activeAgents),
   ).toEqual([[], []])
+})
+
+const roomEvents = () =>
+  db.sqlite
+    .prepare("SELECT data FROM events WHERE type = 'room.upserted' ORDER BY seq")
+    .all()
+    .map((row) => JSON.parse(String(row.data)) as { id: string; activeAgents: string[] })
+
+test('completing or deleting a streaming reply sends the room update that clears its author', async () => {
+  await ingest.submit({
+    source: 'test',
+    identity: 'start',
+    apply: ({ sqlite, now }) => [
+      ...storeMessage(sqlite, message('m1', 'r1', 'builder', true), now),
+      ...storeMessage(sqlite, message('m2', 'r1', 'lead', true), now),
+    ],
+  })
+  expect(roomEvents().at(-1)).toMatchObject({ id: 'r1', activeAgents: ['builder', 'lead'] })
+  await ingest.submit({
+    source: 'test',
+    identity: 'finish',
+    apply: ({ sqlite, now }) => updateMessage(sqlite, 'r1', 'm1', null, now),
+  })
+  expect(roomEvents().at(-1)).toMatchObject({ id: 'r1', activeAgents: ['lead'] })
+  await ingest.submit({
+    source: 'test',
+    identity: 'delete',
+    apply: ({ sqlite, now }) => {
+      sqlite.prepare("UPDATE messages SET deleted_at = ? WHERE id = 'm2'").run(now)
+      return [{ type: 'message.deleted', data: { roomId: 'r1', messageId: 'm2' } }]
+    },
+  })
+  expect(roomEvents().at(-1)).toMatchObject({ id: 'r1', activeAgents: [] })
+  // A completion that changes nobody's state sends nothing extra.
+  const count = roomEvents().length
+  await ingest.submit({
+    source: 'test',
+    identity: 'quiet',
+    apply: ({ sqlite, now }) => [
+      ...storeMessage(sqlite, message('m3', 'r1', 'lead', true), now),
+      ...storeMessage(sqlite, message('m4', 'r1', 'lead', true), now),
+    ],
+  })
+  const afterStart = roomEvents().length
+  await ingest.submit({
+    source: 'test',
+    identity: 'quiet-finish',
+    apply: ({ sqlite, now }) => updateMessage(sqlite, 'r1', 'm3', null, now),
+  })
+  expect(roomEvents()).toHaveLength(afterStart)
+  expect(afterStart).toBeGreaterThan(count)
+})
+
+test('a Score run approval belongs to the room its run answers in, for the sidebar and for the approval itself', () => {
+  const at = iso()
+  db.sqlite
+    .prepare(
+      `INSERT INTO runs (id, profile, origin, status, started_at, updated_at) VALUES ('run-1', 'builder', 'score', 'running', ?, ?)`,
+    )
+    .run(at, at)
+  put(message('q1', 'r1', 'lead', false))
+  db.sqlite
+    .prepare(
+      `INSERT INTO message_runs (message_id, run_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at)
+       VALUES ('q1-reply', 'run-1', 'r1', 'builder', 'q1', 0, 't1', 'q1', 'x', '[]', 'active', ?)`,
+    )
+    .run(at)
+  db.sqlite
+    .prepare(
+      `INSERT INTO approvals (id, origin, stage, target_kind, run_id, request_id, profile, session_key, surface, command, description,
+        pattern_keys, choices, phase, status, created_at, updated_at)
+       VALUES ('a1', 'score-run', 'human', 'run_request', 'run-1', 'req', 'builder', 'run-1', 'cli', 'rm', 'd', '[]', '["once"]',
+        'human_pending', 'pending', ?, ?)`,
+    )
+    .run(at, at)
+  const view = approvalView(db.sqlite, readApprovalRow(db.sqlite, 'a1')!, { now: clock })
+  expect(view.actionable).toBe(true)
+  expect(view.refs).toEqual([
+    { kind: 'run', runId: 'run-1' },
+    { kind: 'room', roomId: 'r1' },
+  ])
+  expect(active('r1')).toEqual(['builder'])
+  expect(active('r2')).toEqual([])
+})
+
+test('an approval that a compatibility check switched off is not busy, as the approvals API says', async () => {
+  approval('a1', 'builder')
+  const row = () => readApprovalRow(db.sqlite, 'a1')!
+  expect(active()).toEqual(['builder'])
+  setRoomCompatibility(() => ['gateway-approvals'])
+  expect(
+    approvalView(db.sqlite, row(), { now: clock, disabled: ['gateway-approvals'] }).actionable,
+  ).toBe(false)
+  expect(active()).toEqual([])
+  setRoomCompatibility(() => [])
+  expect(approvalView(db.sqlite, row(), { now: clock, disabled: [] }).actionable).toBe(true)
+  expect(active()).toEqual(['builder'])
 })

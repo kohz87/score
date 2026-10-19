@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
-import { readRoom, storeMessage, updateMessage } from '../../src/domain/rooms.ts'
+import { readRoom, resendRooms, storeMessage, updateMessage } from '../../src/domain/rooms.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
@@ -707,6 +707,67 @@ test('an approval that expires while idle clears its agent on the periodic sweep
     await vi.advanceTimersByTimeAsync(30000)
     await ingest.drain()
     expect(events()).toHaveLength(count + 1)
+    await app.close()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('a compatibility change that switches approvals off clears their agents on the next sweep', async () => {
+  const room = await create()
+  const at = new Date(scheduler.now()).toISOString()
+  db.sqlite
+    .prepare(
+      `INSERT INTO producers (id, profile, incarnation, pid, isolation, plugin_version, private_apis, token_hash,
+        token_expires_at, created_at, last_seen_at, gateway_approvals)
+       VALUES ('p1', 'builder', 'inc', 1, 'host', '1', '{}', 'hash', 0, ?, ?, 1)`,
+    )
+    .run(at, new Date(scheduler.now() + 3_600_000).toISOString())
+  db.sqlite
+    .prepare(
+      `INSERT INTO approvals (id, origin, stage, target_kind, request_id, producer_id, profile, session_key, surface,
+        command, description, pattern_keys, choices, phase, status, created_at, updated_at)
+       VALUES ('a1', 'gateway', 'human', 'gateway_request', 'req', 'p1', 'builder', 's', 'cli', 'rm', 'd', '[]',
+        '["once"]', 'human_pending', 'pending', ?, ?)`,
+    )
+    .run(at, at)
+  await app.close()
+  const status = port.status()
+  let disabled: string[] = []
+  vi.spyOn(port, 'status').mockImplementation(() => ({
+    ...status,
+    compatibility: { ...status.compatibility, disabled },
+  }))
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  try {
+    app = buildApp({
+      config: loadConfig({ SCORE_MODE: 'fake' }),
+      logger: false,
+      db,
+      ingest,
+      port,
+      clock: () => scheduler.now(),
+    })
+    await ingest.submit({
+      source: 'test',
+      identity: 'initial',
+      apply: ({ sqlite, now }) => resendRooms(sqlite, now),
+    })
+    await vi.advanceTimersByTimeAsync(30000)
+    await ingest.drain()
+    const count = events().length
+    await vi.advanceTimersByTimeAsync(30000)
+    await ingest.drain()
+    expect(events()).toHaveLength(count)
+    expect(events().at(-1)).toMatchObject({ data: { activeAgents: ['builder'] } })
+    disabled = ['gateway-approvals']
+    await vi.advanceTimersByTimeAsync(30000)
+    await ingest.drain()
+    expect(events()).toHaveLength(count + 1)
+    expect(events().at(-1)).toMatchObject({
+      type: 'room.upserted',
+      data: { id: room.id, activeAgents: [] },
+    })
     await app.close()
   } finally {
     vi.useRealTimers()

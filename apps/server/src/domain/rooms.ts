@@ -14,7 +14,7 @@ import { HttpError } from '../errors.ts'
 import type { DeriveEvents, DomainEventDraft } from '../hub/ingest.ts'
 import { markStaleSummaries } from './summary-stale.ts'
 import { autoSummaryOf } from './room-summaries.ts'
-import { actionable, ApprovalRowSchema } from './approval-store.ts'
+import { actionable, approvalRoomIds, ApprovalRowSchema } from './approval-store.ts'
 
 export const RoomRowSchema = z.object({
   id: z.string(),
@@ -89,6 +89,14 @@ export function roomRow(sqlite: DatabaseSync, id: string) {
   return RoomRowSchema.parse(row)
 }
 
+let compatibility: (() => readonly string[]) | null = null
+/** The features the compatibility check switched off, as the approvals API sees them (set once by the app). */
+export function setRoomCompatibility(disabled: (() => readonly string[]) | null): void {
+  compatibility = disabled
+}
+
+export const disabledFeatures = (): readonly string[] => compatibility?.() ?? []
+
 type RoomRow = z.infer<typeof RoomRowSchema>
 
 /**
@@ -121,23 +129,10 @@ function busyAgents(sqlite: DatabaseSync, row: RoomRow, members: string[], now: 
   for (const value of pending) {
     const approval = ApprovalRowSchema.parse(value)
     if (!here.has(approval.profile) || busy.has(approval.profile)) continue
-    if (!actionable(sqlite, approval, { now: Date.parse(now) })) continue
-    const rooms = new Set(
-      z
-        .array(z.object({ room_id: z.string() }))
-        .parse(
-          sqlite
-            .prepare(
-              `SELECT room_id FROM messages WHERE deleted_at IS NULL AND EXISTS
-                 (SELECT 1 FROM json_each(parts) WHERE json_extract(value, '$.kind') = 'approval' AND
-                   json_extract(value, '$.approvalId') = ?)
-               UNION SELECT room_id FROM message_runs WHERE run_id = ? AND room_id IS NOT NULL`,
-            )
-            .all(approval.id, approval.run_id ?? ''),
-        )
-        .map((item) => item.room_id),
-    )
-    if (rooms.size === 0 || rooms.has(row.id)) busy.add(approval.profile)
+    if (!actionable(sqlite, approval, { now: Date.parse(now), disabled: disabledFeatures() }))
+      continue
+    const rooms = approvalRoomIds(sqlite, approval.id, approval.run_id)
+    if (rooms.length === 0 || rooms.includes(row.id)) busy.add(approval.profile)
   }
   return [...busy].sort()
 }
@@ -236,20 +231,51 @@ export const deriveRoomEvents: DeriveEvents = (sqlite, drafts, { now }) => {
         : [],
     ),
   )
-  if (agents.size === 0) return []
   const emitted = new Set(
     drafts.flatMap((draft) => (draft.type === 'room.upserted' ? [draft.data.id] : [])),
   )
+  // A reply that finished (or a streaming one that was deleted) frees its author, and no other event says so.
+  const finished = new Map<string, Set<string>>()
+  for (const draft of drafts) {
+    if (draft.type !== 'message.completed' && draft.type !== 'message.deleted') continue
+    const value = sqlite
+      .prepare(
+        "SELECT author_agent_id, streaming FROM messages WHERE id = ? AND room_id = ? AND author_kind = 'agent'",
+      )
+      .get(draft.data.messageId, draft.data.roomId)
+    if (!value) continue
+    const row = z.object({ author_agent_id: AgentIdSchema, streaming: z.int() }).parse(value)
+    if (draft.type === 'message.deleted' && row.streaming !== 1) continue
+    const set = finished.get(draft.data.roomId) ?? new Set<string>()
+    set.add(row.author_agent_id)
+    finished.set(draft.data.roomId, set)
+  }
+  if (agents.size === 0 && finished.size === 0) return []
   return roomIds(sqlite).flatMap((id) => {
-    if (emitted.has(id)) return []
     const room = readRoom(sqlite, id, now)
-    if (![...agents].some((agent) => room.members.includes(agent) || room.leadAgentId === agent))
-      return []
+    const byApproval =
+      !emitted.has(id) &&
+      [...agents].some((agent) => room.members.includes(agent) || room.leadAgentId === agent)
+    // The author's state changed only if nothing else keeps them busy.
+    const byReply = [...(finished.get(id) ?? [])].some(
+      (agent) => !room.activeAgents.includes(agent),
+    )
+    if (!byApproval && !byReply) return []
     // `updated_at` marks the last state sent, which the periodic sweep compares against (an approval running out).
     sqlite
       .prepare('UPDATE rooms SET updated_at = ?, version = version + 1 WHERE id = ?')
       .run(now, id)
     return [{ type: 'room.upserted' as const, data: room }]
+  })
+}
+
+/** Every room's state, sent again: for when something outside the rooms (the compatibility check) changed who is busy. */
+export function resendRooms(sqlite: DatabaseSync, now: string): DomainEventDraft[] {
+  return roomIds(sqlite).map((id) => {
+    sqlite
+      .prepare('UPDATE rooms SET updated_at = ?, version = version + 1 WHERE id = ?')
+      .run(now, id)
+    return { type: 'room.upserted' as const, data: readRoom(sqlite, id, now) }
   })
 }
 
