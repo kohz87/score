@@ -1,4 +1,4 @@
-import { AgentSummarySchema } from '@score/contract'
+import { AgentSummarySchema, ShapeSchema } from '@score/contract'
 import { cpSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -77,7 +77,12 @@ test('style patch persists, emits once, replays receipts and survives app/adapte
   const headers = { 'x-score-client': 'web', cookie, 'idempotency-key': 'style-test' }
   const response = await patch({ color: '#123456', shape: 'hexagon' }, headers)
   expect(response.statusCode).toBe(200)
-  expect(response.json().style).toEqual({ color: '#123456', shape: 'hexagon' })
+  expect(response.json().style).toEqual({
+    color: '#123456',
+    shape: 'hexagon',
+    look: 'bot',
+    avatar: null,
+  })
   expect((await patch({ shape: 'hexagon', color: '#123456' }, headers)).json()).toEqual(
     response.json(),
   )
@@ -102,6 +107,8 @@ test('concurrent partial patches merge through ingest without losing a field', a
   expect((await app.inject('/api/agents/builder')).json().style).toEqual({
     color: '#abcdef',
     shape: 'cross',
+    look: 'bot',
+    avatar: null,
   })
 })
 test('unchanged style produces no additional event, but stores the override', async () => {
@@ -137,6 +144,9 @@ test.each([
   { shape: 'unknown' },
   { color: null },
   { extra: true },
+  { look: 'robot' },
+  { look: null },
+  { shape: 'dodecagon' },
 ])('invalid style %j is rejected', async (body) => {
   expect((await patch(body)).statusCode).toBe(400)
   expect(env.db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
@@ -228,4 +238,59 @@ test('live fixture profiles expose served and unserved agents with run activity 
   } finally {
     await live.stop()
   }
+})
+
+test('PLAN 10.2: look and the new shapes persist, merge with the rest, emit, and survive a restart', async () => {
+  await app.inject('/api/agents')
+  const first = await patch({ look: 'chibi' })
+  expect(first.statusCode).toBe(200)
+  expect(first.json().style).toMatchObject({ look: 'chibi', avatar: null })
+  const second = await patch({ shape: 'cloud', color: '#0A0B0C' })
+  expect(second.json().style).toEqual({
+    color: '#0A0B0C',
+    shape: 'cloud',
+    look: 'chibi',
+    avatar: null,
+  })
+  expect(
+    env.db.sqlite.prepare('SELECT color, shape, look, avatar_rev FROM agent_styles').all(),
+  ).toEqual([{ color: '#0A0B0C', shape: 'cloud', look: 'chibi', avatar_rev: null }])
+  const events = styleEvents().map((row) => JSON.parse(String(row.data)).style)
+  expect(events.at(-1)).toMatchObject({ shape: 'cloud', look: 'chibi' })
+  const count = events.length
+  // The same look again changes nothing and says nothing.
+  expect((await patch({ look: 'chibi' })).statusCode).toBe(200)
+  expect(styleEvents()).toHaveLength(count)
+  expect((await patch({ look: 'bot' })).json().style.look).toBe('bot')
+  expect(styleEvents()).toHaveLength(count + 1)
+  await app.close()
+  app = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake' }),
+    logger: false,
+    port: new FakePort(),
+    db: env.db,
+    ingest: env.ingest,
+  })
+  expect((await app.inject('/api/agents/builder')).json().style).toMatchObject({
+    shape: 'cloud',
+    look: 'bot',
+  })
+})
+test('PLAN 10.2: every one of the 20 shapes is accepted by the style route', async () => {
+  for (const shape of ShapeSchema.options) {
+    const response = await patch({ shape })
+    expect(response.statusCode, shape).toBe(200)
+    expect(response.json().style.shape).toBe(shape)
+  }
+})
+test('PLAN 10.2: a client cannot set the picture through the style route', async () => {
+  await app.inject('/api/agents')
+  const response = await patch({ shape: 'moon', avatar: 'forged' })
+  expect(response.statusCode).toBe(200)
+  expect(response.json().style.avatar ?? null).toBeNull()
+  expect(env.db.sqlite.prepare('SELECT avatar_rev FROM agent_styles').all()).toEqual([
+    { avatar_rev: null },
+  ])
+  // Nothing but a picture to set is nothing to do.
+  expect((await patch({ avatar: 'forged' })).statusCode).toBe(400)
 })

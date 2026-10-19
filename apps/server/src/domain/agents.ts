@@ -1,7 +1,10 @@
 import {
+  AgentLookSchema,
   AgentStyleSchema,
   AgentSummarySchema,
+  AvatarRevSchema,
   ShapeSchema,
+  type AgentLook,
   type AgentStyle,
   type AgentSummary,
 } from '@score/contract'
@@ -12,16 +15,38 @@ import type { Ingest } from '../hub/ingest.ts'
 import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 import { withInheritance } from './team-rules.ts'
 import { applyLifecycle } from './agent-lifecycle.ts'
+import { isCodingAgent } from '../runtimes/coding/store.ts'
 
+// Defaults stay on the original eight shapes (the rest, PLAN 10.2, are chosen), so no agent's default look changes.
+const defaultShapes = ShapeSchema.options.slice(0, 8)
 const colors = ['#6B4EFF', '#19C39A', '#FFB61E', '#FF6B8A'] as const
 export function defaultAgentStyle(index: number): AgentStyle {
   return {
     color: colors[index % colors.length]!,
-    shape: ShapeSchema.options[index % ShapeSchema.options.length]!,
+    shape: defaultShapes[index % defaultShapes.length]!,
   }
 }
 const DetailRowSchema = z.object({ detail: z.string() })
-const StyleRowSchema = AgentStyleSchema.extend({ updated_at: z.iso.datetime() })
+const StyleRowSchema = z.object({
+  color: AgentStyleSchema.shape.color,
+  shape: AgentStyleSchema.shape.shape,
+  look: AgentLookSchema,
+  avatar_rev: AvatarRevSchema.nullable(),
+  updated_at: z.iso.datetime(),
+})
+/** A style with every optional part spelled out (absent look = bot, absent avatar = none), so styles compare equal. */
+export function completeStyle(
+  style: AgentStyle,
+): AgentStyle & { look: AgentLook; avatar: string | null } {
+  return { ...style, look: style.look ?? 'bot', avatar: style.avatar ?? null }
+}
+/**
+ * What a client may put in a style it sends (create, import, patch): colour, shape and look. The picture has its own
+ * routes and is never taken from a request body.
+ */
+export function clientStyle(style: AgentStyle): AgentStyle {
+  return { color: style.color, shape: style.shape, look: style.look ?? 'bot', avatar: null }
+}
 export function readAgent(sqlite: DatabaseSync, id: string): AgentDetail | null {
   const row = sqlite.prepare('SELECT detail FROM agents_proj WHERE id = ?').get(id)
   return row ? AgentDetailSchema.parse(JSON.parse(DetailRowSchema.parse(row).detail)) : null
@@ -39,9 +64,48 @@ export function readAgentNames(sqlite: DatabaseSync): { id: string; name: string
 }
 export function readAgentStyle(sqlite: DatabaseSync, id: string): AgentStyle | null {
   const row = sqlite
-    .prepare('SELECT color, shape, updated_at FROM agent_styles WHERE agent_id = ?')
+    .prepare(
+      'SELECT color, shape, look, avatar_rev, updated_at FROM agent_styles WHERE agent_id = ?',
+    )
     .get(id)
-  return row ? AgentStyleSchema.parse(StyleRowSchema.parse(row)) : null
+  if (!row) return null
+  const parsed = StyleRowSchema.parse(row)
+  return AgentStyleSchema.parse({
+    color: parsed.color,
+    shape: parsed.shape,
+    look: parsed.look,
+    avatar: parsed.avatar_rev,
+  })
+}
+/**
+ * Writes the style of an agent where it lives: a coding agent in its own row, a Hermes profile in `agent_styles`.
+ * The picture revision is left alone unless `avatar` is given (only the picture routes do that).
+ */
+export function writeAgentStyle(
+  sqlite: DatabaseSync,
+  agentId: string,
+  style: AgentStyle,
+  now: string,
+  options: { avatar?: boolean } = {},
+): void {
+  const full = completeStyle(style)
+  if (isCodingAgent(sqlite, agentId)) {
+    sqlite
+      .prepare(
+        `UPDATE coding_agents SET color = ?, shape = ?, look = ?${options.avatar ? ', avatar_rev = ?' : ''} WHERE id = ?`,
+      )
+      .run(
+        ...[full.color, full.shape, full.look, ...(options.avatar ? [full.avatar] : []), agentId],
+      )
+    return
+  }
+  sqlite
+    .prepare(
+      `INSERT INTO agent_styles (agent_id, color, shape, look, avatar_rev, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (agent_id) DO UPDATE SET color = excluded.color, shape = excluded.shape, look = excluded.look,
+         ${options.avatar ? 'avatar_rev = excluded.avatar_rev,' : ''} updated_at = excluded.updated_at`,
+    )
+    .run(agentId, full.color, full.shape, full.look, full.avatar ?? null, now)
 }
 export function storeAgent(sqlite: DatabaseSync, raw: AgentDetail): void {
   const agent = applyLifecycle(sqlite, withInheritance(sqlite, raw))
