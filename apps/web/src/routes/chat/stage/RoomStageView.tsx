@@ -304,6 +304,18 @@ export function RoomStageView({ roomId, members, handoff, onMention }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handoffKey, commit])
 
+  // Calm and Still never wander: a stroll or a break in progress ends where it stands.
+  useLayoutEffect(() => {
+    if (liveliness === 'lively') return
+    for (const actor of actors.current.values()) {
+      if (actor.mode === 'idle') continue
+      actor.mode = 'idle'
+      actor.file = undefined
+      actor.target = actor.x
+      commit(actor.id)
+    }
+  }, [liveliness, commit])
+
   // Pause everything while the stage is scrolled out of view (and the shared loop pauses with the tab).
   useEffect(() => {
     const node = root.current

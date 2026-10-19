@@ -216,6 +216,28 @@ test('Lively members wander and break; Calm and Still keep where they are', () =
   }
 })
 
+test('a member that is walking stops where it stands when the device goes Calm or Still', () => {
+  let n = 0
+  vi.spyOn(Math, 'random').mockImplementation(() => (n++ * 0.381966) % 1)
+  render(
+    <RoomStageView
+      roomId="r"
+      members={[member('lead', 'rest', ['walk']), member('builder', 'rest', ['walk'])]}
+      handoff={null}
+      onMention={() => {}}
+    />,
+  )
+  const modes = () =>
+    ['lead', 'builder'].map((id) => button(new RegExp(`^${id}`)).getAttribute('data-mode'))
+  for (let second = 0; second < 40 && !modes().includes('walk'); second += 1)
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+  expect(modes()).toContain('walk')
+  act(() => saveLiveliness('calm'))
+  expect(modes()).toEqual(['idle', 'idle'])
+})
+
 test('Still shows still first frames and no animated image at all', () => {
   saveLiveliness('still')
   render(
