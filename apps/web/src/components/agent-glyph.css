@@ -93,3 +93,145 @@ svg.agent-glyph {
     --glyph-border: 1.5px solid #12131a;
   }
 }
+
+/* PLAN 10.2: bots, chibis and pictures (sm and up). The glyph box keeps today's size so no layout moves; the art is
+   drawn about 1.6x the plain shape (callers that set --glyph-svg-size for their own spot scale it too) and carries no
+   tile of its own: the agent is the bot. At list size (xs) the plain shape and its tile stay. */
+.agent-glyph--rich {
+  --glyph-art-size: calc(var(--glyph-svg-size) * 1.6);
+  /* The tile's border belongs to a boxed shape; art gets the outline stroke instead (high contrast, below). */
+  --glyph-border: 0 solid transparent;
+}
+
+.agent-glyph--tile.agent-glyph--rich {
+  background: transparent;
+}
+
+.agent-glyph--rich > svg,
+svg.agent-glyph--rich {
+  width: var(--glyph-art-size);
+  height: var(--glyph-art-size);
+  overflow: visible;
+}
+
+.agent-glyph--chibi > svg,
+svg.agent-glyph--chibi {
+  height: calc(var(--glyph-art-size) * 52 / 48);
+}
+
+.agent-glyph__shadow {
+  fill: #12131a;
+  /* Not `opacity`: protected.css pins opacity to 1 on glyph parts. */
+  fill-opacity: 0.12;
+}
+
+/* Eyes are the plate colour: white on a dark agent colour, ink on a light one (switched at the luminance where both
+   read about equally well), so a face always has at least 3:1 against its body (glyph-plate.test.ts walks the cube). */
+.agent-glyph__eye {
+  fill: var(--glyph-plate);
+}
+
+.agent-glyph__detail {
+  fill: none;
+  stroke: #ffffff;
+  stroke-opacity: 0.45;
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+}
+
+.agent-glyph__dot {
+  fill: var(--glyph-color);
+}
+
+.agent-glyph__badge-plate {
+  fill: var(--glyph-color);
+  stroke: #ffffff;
+  stroke-width: 0.8;
+}
+
+.agent-glyph__badge-shape {
+  fill: var(--glyph-plate);
+}
+
+/* Chibi parts: hair and outfit in the agent's colour, the shape as a white hair clip. */
+.agent-glyph__skin {
+  fill: #ffe2d2;
+}
+
+.agent-glyph__hair {
+  fill: color-mix(in srgb, var(--glyph-color) 78%, #12131a);
+}
+
+.agent-glyph__outfit {
+  fill: var(--glyph-color);
+}
+
+.agent-glyph__outfit-dark {
+  fill: color-mix(in srgb, var(--glyph-color) 55%, #12131a);
+}
+
+.agent-glyph__collar {
+  fill: none;
+  stroke: #ffffff;
+  stroke-opacity: 0.7;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+
+.agent-glyph__clip {
+  fill: #ffffff;
+  stroke: color-mix(in srgb, var(--glyph-color) 60%, #12131a);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+.agent-glyph__iris {
+  fill: #2b2240;
+}
+
+.agent-glyph__shine {
+  fill: #ffffff;
+}
+
+.agent-glyph__blush {
+  fill: #ff8fa3;
+  fill-opacity: 0.45;
+}
+
+.agent-glyph__mouth {
+  fill: none;
+  stroke: #7a3b4a;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+
+.agent-glyph__mouth-open {
+  fill: #7a3b4a;
+}
+
+.agent-glyph__lap-lid {
+  fill: #cfd5e2;
+}
+
+.agent-glyph__lap-logo {
+  fill: #ffffff;
+}
+
+.agent-glyph__lap-base {
+  fill: #9aa3b5;
+}
+
+.agent-glyph__alert-bg {
+  fill: var(--glyph-color);
+}
+
+.agent-glyph__alert-text {
+  fill: var(--glyph-plate);
+  font: 700 7px var(--font-body, sans-serif);
+  text-anchor: middle;
+}
+
+/* The picture wears a darker edge only where the user asked for high contrast. */
+.agent-glyph--high .agent-glyph__badge-plate {
+  stroke: var(--glyph-outline);
+}
