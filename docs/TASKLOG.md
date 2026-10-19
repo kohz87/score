@@ -537,3 +537,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   **10.11 cross-check** (Codex high): 3 P2 accepted — completion doesn't emit a room update (stale icon); approval room
   scoping differs between server (`message_runs`) and stage (refs) → expose the originating room in approval refs and
   use one rule; compatibility-disabled approvals still count as busy. Sent back to the builder.
+- **1.12.2 held: 10.11 performance regression.** Combined on `rel/1.12.2` (10.12 + 10.11 + a now.spec route teardown
+  fix): check green, but four full e2e runs on an idle machine took 4.9–5.0 min with the e2e server's RSS climbing to
+  1,273 MB, a different test failing each run, and one run crashing the server (`Trace/breakpoint trap`, 157 failures).
+  Same suite on main: 3.5 min, 840 MB peak, 638/0. Cause (lead's reading): `busyAgents()` runs per room read with
+  per-approval queries, the sweep reads every room twice, and `deriveRoomEvents` re-emits every member room on each
+  approval event even when nothing changed. Fix round sent to the 10.11 builder: one query per room read, emit only on
+  change (stored last set), cheap sweep, a benchmark test, and a full e2e with RSS sampling (target ≈ main).
+  10.12 cross-check: no findings.
