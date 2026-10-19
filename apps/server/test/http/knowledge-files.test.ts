@@ -155,9 +155,7 @@ describe('document routes', () => {
       payload: PNG,
     })
     expect(traversal.statusCode).toBe(400)
-    expect(
-      (await put('big.png', Buffer.concat([PNG, Buffer.alloc(26 * 1024 * 1024)]))).statusCode,
-    ).toBe(413)
+    expect((await put('big.png', Buffer.alloc(256 * 1024 * 1024 + 1))).statusCode).toBe(413)
     await put('c.png', PNG)
     const clash = await put('c.png', PNG)
     expect(clash.statusCode).toBe(409)

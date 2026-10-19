@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 
 export const STAGING_MAX_ENTRIES = 8
-export const STAGING_MAX_BYTES = 256 * 1024 * 1024
+export const STAGING_MAX_BYTES = 1024 * 1024 * 1024
 export const STAGING_TTL_MS = 30 * 60 * 1000
 
 interface Entry {

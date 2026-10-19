@@ -2,6 +2,8 @@ export interface ZipLimits {
   maxEntries: number
   maxTotalBytes: number
   maxNoteBytes: number
+  /** Per extracted file that is not a note. */
+  maxFileBytes: number
   /** Compressed-to-uncompressed ratio per entry. */
   maxRatio: number
   /** Entries up to this size are not held to the ratio (tiny files compress absurdly well legitimately). */

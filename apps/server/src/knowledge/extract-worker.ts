@@ -1,12 +1,14 @@
 import { Buffer } from 'node:buffer'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { createWriteStream } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-import type { Readable } from 'node:stream'
+import { Transform, type Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { parentPort, workerData } from 'node:worker_threads'
 import JSZip from 'jszip'
 import mammoth from 'mammoth'
 import { extractText, getDocumentProxy } from 'unpdf'
-import { classifyName, MAX_FILE_BYTES } from './doc-types.ts'
+import { classifyName } from './doc-types.ts'
 import type { WorkerRequest, WorkerResult, ZipItem, ZipLimits } from './extract-types.ts'
 
 // Runs inside a worker thread with a heap limit and a wall-clock limit set by the host (extract.ts): PDF, DOCX and
@@ -158,7 +160,7 @@ function plan(zip: JSZip, limits: ZipLimits) {
       items.push({ path: clean.path, size: size ?? 0, action: 'skip', reason: 'duplicate name' })
       continue
     }
-    const cap = cls.kind === 'note' ? limits.maxNoteBytes : MAX_FILE_BYTES
+    const cap = cls.kind === 'note' ? limits.maxNoteBytes : limits.maxFileBytes
     if (size !== null && size > cap) {
       items.push({ path: clean.path, size, action: 'skip', reason: 'file too large' })
       continue
@@ -186,31 +188,33 @@ function plan(zip: JSZip, limits: ZipLimits) {
   return items
 }
 
-function inflate(entry: Plan, cap: number, limits: ZipLimits): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    let total = 0
-    const stream = entry.file.nodeStream('nodebuffer') as unknown as Readable
-    stream.on('data', (chunk: Buffer) => {
+/** Inflates one entry straight to `file` (never held whole), counting the real bytes against the declared size and the ratio. */
+async function inflateToFile(
+  entry: Plan,
+  cap: number,
+  limits: ZipLimits,
+  file: string,
+): Promise<number> {
+  let total = 0
+  const counter = new Transform({
+    transform(chunk: Buffer, _encoding, done) {
       total += chunk.length
-      if (total > cap || (entry.size !== null && total > entry.size)) {
-        stream.destroy()
-        reject(new ZipLimitError(`${entry.path} is larger than the zip says it is`))
-        return
-      }
+      if (total > cap || (entry.size !== null && total > entry.size))
+        return done(new ZipLimitError(`${entry.path} is larger than the zip says it is`))
       if (
         total > limits.ratioFloorBytes &&
         total > limits.maxRatio * Math.max(entry.packed ?? 1, 1)
-      ) {
-        stream.destroy()
-        reject(new ZipLimitError('The zip compresses suspiciously well (zip bomb?)'))
-        return
-      }
-      chunks.push(chunk)
-    })
-    stream.on('error', reject)
-    stream.on('end', () => resolve(Buffer.concat(chunks)))
+      )
+        return done(new ZipLimitError('The zip compresses suspiciously well (zip bomb?)'))
+      done(null, chunk)
+    },
   })
+  await pipeline(
+    entry.file.nodeStream('nodebuffer') as unknown as Readable,
+    counter,
+    createWriteStream(file, { mode: 0o600 }),
+  )
+  return total
 }
 
 async function zipList(bytes: Uint8Array, limits: ZipLimits): Promise<WorkerResult> {
@@ -247,16 +251,15 @@ async function zipExtract(
     const cap =
       classifyName(item.path.split('/').pop()!)?.kind === 'note'
         ? limits.maxNoteBytes
-        : MAX_FILE_BYTES
-    const data = await inflate(item.entry, cap, limits)
-    total += data.length
+        : limits.maxFileBytes
+    const file = path.join(outDir, `${files.length}.bin`)
+    const size = await inflateToFile(item.entry, cap, limits, file)
+    total += size
     if (total > limits.maxTotalBytes)
       throw new ZipLimitError(
         `The zip would unpack to more than ${limits.maxTotalBytes / 1024 / 1024} MB`,
       )
-    const file = path.join(outDir, `${files.length}.bin`)
-    await writeFile(file, data)
-    files.push({ path: item.path, size: data.length, file })
+    files.push({ path: item.path, size, file })
   }
   return { ok: true, files, skipped }
 }

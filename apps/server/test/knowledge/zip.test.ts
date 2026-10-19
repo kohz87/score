@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { HttpError } from '../../src/errors.ts'
 import { makeZip, PNG, textPdf } from './doc-fixtures.ts'
-import { gitOut, makeVault, type Harness } from './helpers.ts'
+import { documentBytes, gitOut, makeVault, type Harness } from './helpers.ts'
 
 vi.setConfig({ testTimeout: 30_000 })
 
@@ -222,6 +222,6 @@ describe('keep as a zip', () => {
     expect(doc).toMatchObject({ type: 'zip', textStatus: 'none' })
     expect(doc.entries?.map((e) => e.path).sort()).toEqual(['one.md', 'two.txt'])
     expect(h.vault.search('zipped-secret-word', 5)).toEqual([])
-    expect((await h.vault.docs.bytes('archive/bundle.zip')).bytes.equals(zip)).toBe(true)
+    expect((await documentBytes(h.vault, 'archive/bundle.zip')).equals(zip)).toBe(true)
   })
 })

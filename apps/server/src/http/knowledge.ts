@@ -27,7 +27,7 @@ import {
 } from '@score/contract'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
-import { MAX_FILE_BYTES, isDocumentPath } from '../knowledge/doc-types.ts'
+import { MAX_STORE_BYTES, isDocumentPath } from '../knowledge/doc-types.ts'
 import {
   EXPORT_TIMEOUT_MS,
   exportCandidates,
@@ -158,22 +158,25 @@ export function registerKnowledgeRoutes(
   // download, always under a sandbox CSP, so an uploaded HTML or PDF can't run on Score's origin.
   app.get('/api/knowledge/files/*', async (request, reply) => {
     const { download } = DownloadQuerySchema.parse(request.query)
-    const file = await vault.docs.bytes(rest(request))
+    const file = await vault.docs.open(rest(request))
+    // The reply is closed with the connection, so no descriptor outlives it.
+    reply.raw.once('close', () => file.stream.destroy())
     void reply
       .header('X-Content-Type-Options', 'nosniff')
       .header('Content-Security-Policy', "default-src 'none'; sandbox")
       .header('Cache-Control', 'no-store')
     const inline = file.type === 'image' && download === undefined
     const type = inline
-      ? (sniffImage(file.bytes) ?? 'application/octet-stream')
+      ? (sniffImage(file.head) ?? 'application/octet-stream')
       : 'application/octet-stream'
     return reply
       .header('Content-Type', type)
+      .header('Content-Length', file.size)
       .header(
         'Content-Disposition',
         inline ? 'inline' : `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
       )
-      .send(file.bytes)
+      .send(file.stream)
   })
 
   // ---- export (PLAN 6.7) -------------------------------------------------------------------------------------
@@ -260,7 +263,7 @@ export function registerKnowledgeRoutes(
 
   // The raw-body parser lives in its own scope so no other route accepts that content type.
   void app.register(async (scope) => {
-    const limit = MAX_FILE_BYTES + 1024
+    const limit = MAX_STORE_BYTES + 1024
     scope.addContentTypeParser(
       'application/octet-stream',
       { parseAs: 'buffer', bodyLimit: limit },
