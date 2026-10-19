@@ -316,7 +316,13 @@ usage data (read-only), so spend appears only when Hermes records a cost.
 
 ## Settings
 
-A navigation list on the left, one card per section. Settings for a single agent are on its Team page.
+A list of sections on the left, and **one section per page**: choosing one opens `/settings/<section>` (for example
+`/settings/logs`) with only that section's cards, so Models, Connections and Logs no longer stack into one long column.
+The page opens on its heading, and the browser's back and forward buttons move between sections. On a phone the
+**Section** picker names the current section and switches it. **Ctrl+K** (or the search button) lists every section
+too ("Settings: Logs"). **Remote access** shows in the list when Score is served over HTTPS and **Terminal** when the
+web terminal is on. Old bookmarks of the form `/settings#look` still work and open the matching section. Settings for a
+single agent are on its Team page.
 
 - **Models and keys.** Providers with their status (connected or not) and which agents use them. **Connect** (or
   **Edit**) shows a command for you to run in a terminal; Score never asks for or stores a key or runs a sign-in
