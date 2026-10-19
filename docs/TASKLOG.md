@@ -493,3 +493,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   floor band became a soft shadow under the feet that follows `floor`; centred by position, because the protected-layer
   test caught that a `transform` on it would be reset under custom themes. Web 2911/0; agent-looks, pack-portraits,
   themes-protection, themes-safety e2e 55/0; lint/format/types ok. Owner approved the room-stage concept (preview v22).
+- **10.10 room stage** started (decision 110; owner approved the preview): lead wrote PLAN entry and brief on
+  `task/10.10-room-stage` (lessons from the preview review carried in: max-content member boxes, bubbles inside the
+  stage, shadow not a floor line, spacing by position and target, transforms exempted in the protected layer); Sonnet
+  builder in `../score-worktrees/10.10`.
