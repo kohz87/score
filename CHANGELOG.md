@@ -3,6 +3,25 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.10.0] — 2026-10-19
+
+### Added
+- **Agent marks.** Every agent is its shape in its colour, now with 20 shapes (cloud, cylinder, heart, drop, bolt,
+  moon, leaf, blob, shield, octagon, bubble and gem join the original eight) and two looks: **Cut-out** (solid, eyes
+  cut through; the default) or **Ring** (an outline with solid eyes). Marks breathe and blink at rest, pulse while
+  working, look up while thinking and ripple when they need you; their eyes follow your pointer.
+- **Pet packs: animated avatars.** On an agent's page (Look, colour and shape › Pet pack), upload a ZIP or the files of
+  a pack: looping animations named by activity (`idle`, `work`, `think`, `needs`, `sleep`, and optional `walk`,
+  `stretch`, `coffee`, `read`, `greet`, `happy`) as animated WebP, APNG or GIF, plus an optional `pet.json`. The agent's
+  Team card and page header play the animation for its mood, with a crossfade; missing activities fall back to `idle`
+  with Score's overlays. Point at it for "hi!", click it for a heart. The mark stays as its badge and in lists. "How to
+  make a pack" in the panel has the naming table and rules. Upload shows its progress.
+- **Settings › Look › Agents:** Lively, Calm or Still (per device; Still also follows reduced motion).
+
+### Security
+- Packs are checked from their bytes (type, size, 64–2048 px, the image structure to its end) and ZIPs go through the
+  same rules as theme packages; files are stored under activity names only and nothing in a pack is ever run.
+
 ## [1.9.5] — 2026-10-19
 
 ### Fixed

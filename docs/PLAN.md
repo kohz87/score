@@ -447,7 +447,8 @@ navigates); `/settings` opens the first section; old `/settings#<id>` links redi
 by link, keyboard and the palette; old anchors redirect; protected surfaces and ways back unchanged; e2e + visual
 baselines updated; `pnpm check` and full e2e green.
 
-**10.2 Agent looks** (owner 2026-10-19; decision 105; preview https://claude.ai/artifact/2cSwUQMAEnz9jpwoTaij6B) ·
-brief `docs/briefs/10.2-agent-looks.md`. Per agent: bot (default) or chibi; 12 new shapes; one imported picture per
-agent, animated, with a colour+shape badge; motion follows state; reduced-motion still. 10.2a server (migration 0078,
-avatar storage and routes), 10.2b web (glyph rendering, motion, pickers, upload UI). Generation from a concept: later.
+**10.2 Agent looks** ✅ v1.10.0 (owner 2026-10-19; decisions 105–108; preview
+https://claude.ai/artifact/2cSwUQMAEnz9jpwoTaij6B) · brief `docs/briefs/10.2-agent-looks-v2.md` (supersedes
+`10.2-agent-looks.md`). Marks: 20 shapes, cut-out (default) or ring, calm moods, eyes follow the pointer. Pet packs:
+activity-named animations uploaded per agent (ZIP or files), played by mood with idle fallback and overlays, mark badge;
+Lively / Calm / Still. 10.2a server (migration 0078, pack routes and store), 10.2b web, 10.2c liveliness.
