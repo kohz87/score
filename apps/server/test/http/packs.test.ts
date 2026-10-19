@@ -19,6 +19,7 @@ import {
   gifImage,
   jpegImage,
   multipartFiles,
+  padTo,
   pngImage,
   webpImage,
   zipOf,
@@ -225,7 +226,6 @@ test('GET never follows a symbolic link in the file, the revision, the agent fol
 })
 
 const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>')
-const eight = Buffer.concat([idle, Buffer.alloc(8 * 1024 * 1024 - idle.length)])
 test.each([
   ['idle missing', () => [{ name: 'work.gif', bytes: work }], 'idle is missing'],
   [
@@ -254,7 +254,7 @@ test.each([
   ],
   [
     'an image over 8 MB',
-    () => [{ name: 'idle.webp', bytes: Buffer.concat([eight, Buffer.alloc(1)]) }],
+    () => [{ name: 'idle.webp', bytes: padTo(idle, 8 * 1024 * 1024 + 2) }],
     '8 MB',
   ],
   [
@@ -304,7 +304,7 @@ test.each([
       {
         name: 'a.zip',
         bytes: await zipOf({
-          'idle.png': Buffer.concat([pngImage(64, 64), Buffer.alloc(4 * 1024 * 1024)]),
+          'idle.png': padTo(pngImage(64, 64), 4 * 1024 * 1024),
         }),
       },
     ],

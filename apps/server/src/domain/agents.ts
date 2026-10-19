@@ -16,7 +16,7 @@ import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 import { withInheritance } from './team-rules.ts'
 import { applyLifecycle } from './agent-lifecycle.ts'
 import { packMeta, parsePack } from '../packs/meta.ts'
-import { isCodingAgent } from '../runtimes/coding/store.ts'
+import { getCodingAgent, isCodingAgent } from '../runtimes/coding/store.ts'
 
 // Defaults stay on the original eight shapes (the rest, PLAN 10.2, are chosen), so no agent's default look changes.
 const defaultShapes = ShapeSchema.options.slice(0, 8)
@@ -64,7 +64,13 @@ export function readAgentNames(sqlite: DatabaseSync): { id: string; name: string
     .all()
     .map((row) => z.object({ id: z.string(), name: z.string() }).parse(row))
 }
+/**
+ * The saved style of an agent, wherever it lives: a coding agent's own row, else the Hermes override. Everything that
+ * rebuilds a projection from a fetched list (a refresh that started before a save) takes this as authoritative.
+ */
 export function readAgentStyle(sqlite: DatabaseSync, id: string): AgentStyle | null {
+  const coding = getCodingAgent(sqlite, id)
+  if (coding) return AgentStyleSchema.parse(coding.style)
   const row = sqlite
     .prepare(
       'SELECT color, shape, look, pack_rev, pack_meta, updated_at FROM agent_styles WHERE agent_id = ?',

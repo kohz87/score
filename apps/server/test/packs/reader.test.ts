@@ -6,6 +6,7 @@ import {
   gifImage,
   jpegImage,
   multipartFiles,
+  padTo,
   pngImage,
   webpImage,
   zipOf,
@@ -113,6 +114,42 @@ test('with files at the top level, files in folders are ignored; two folders hol
   expect(two.join(' ')).toMatch(/idle/)
 })
 
+test('the pack folder is where the activity images and pet.json are: unrelated files at the root do not hide it', async () => {
+  const pack = readPack(
+    await zipped({
+      'README.txt': 'hello',
+      'cover.png': pngImage(64, 64),
+      'pet/idle.webp': idle,
+      'pet/work.gif': work,
+      'pet/pet.json': '{"name":"In a folder"}',
+      'pet/notes.txt': 'x',
+      'other/readme.md': 'x',
+    }),
+  )
+  expect(pack.files.map((f) => f.activity)).toEqual(['idle', 'work'])
+  expect(pack.manifest.name).toBe('In a folder')
+  expect(pack.ignored).toEqual(['README.txt', 'cover.png', 'other/readme.md', 'pet/notes.txt'])
+  // Only pet.json in the folder still names it; the images at the root then win.
+  const rootWins = readPack(
+    await zipped({ 'idle.webp': idle, 'pet/idle.gif': work, 'pet/pet.json': '{}' }),
+  )
+  expect(rootWins.files).toEqual([expect.objectContaining({ activity: 'idle', ext: 'webp' })])
+  expect(rootWins.ignored).toEqual(['pet/idle.gif', 'pet/pet.json'])
+  // Two folders with pack files is still no pack; one without any is just junk.
+  expect(
+    (await rejectionOf(await zipped({ 'a/idle.webp': idle, 'b/work.gif': work }))).join(' '),
+  ).toMatch(/idle/)
+  const junkFolder = readPack(
+    await zipped({ 'pet/idle.webp': idle, 'docs/guide.pdf': 'x', 'docs/notes.txt': 'x' }),
+  )
+  expect(junkFolder.files).toHaveLength(1)
+  expect(junkFolder.ignored).toEqual(['docs/guide.pdf', 'docs/notes.txt'])
+  // The same in a request of several files.
+  const loose = readPack([file('luna/idle.webp', idle), file('notes.txt', Buffer.from('x'))])
+  expect(loose.files).toHaveLength(1)
+  expect(loose.ignored).toEqual(['notes.txt'])
+})
+
 test('every rejection of the contract: idle missing, unknown activity, other image types, duplicates', async () => {
   expect((await rejectionOf([file('work.gif', work)])).join(' ')).toMatch(
     /idle.*missing|missing.*idle/i,
@@ -150,12 +187,12 @@ test('a bad image names its file and says why: type, extension, size in pixels, 
   expect(reasons[1]).toMatch(/^work\.gif: .*PNG/)
   expect(reasons[2]).toMatch(/^think\.png: .*between 64 and 2048/)
   expect(reasons[3]).toMatch(/^needs\.webp: .*between 64 and 2048/)
-  const big = Buffer.concat([idle, Buffer.alloc(8 * 1024 * 1024)])
+  const big = padTo(idle, 8 * 1024 * 1024 + 2)
   expect((await rejectionOf([file('idle.webp', big)]))[0]).toMatch(/^idle\.webp: .*8 MB/)
 })
 
 test('the pack as a whole is at most 64 MB and 24 files', async () => {
-  const eight = Buffer.concat([idle, Buffer.alloc(8 * 1024 * 1024 - idle.length)])
+  const eight = padTo(idle, 8 * 1024 * 1024)
   const names = ['idle', 'work', 'think', 'needs', 'sleep', 'walk', 'stretch', 'coffee', 'read']
   expect(readPack(names.slice(0, 8).map((n) => file(`${n}.webp`, eight))).files).toHaveLength(8)
   expect((await rejectionOf(names.map((n) => file(`${n}.webp`, eight)))).join(' ')).toMatch(/64 MB/)
@@ -211,7 +248,7 @@ test('a zip goes through the shared zip rules: not a zip, damaged, links, paths,
     (await rejectionOf(await zipped({ 'idle.webp': idle, '/abs.png': work }))).join(' '),
   ).toMatch(/absolute/)
   // 4 MB of zeros after a real header compresses a thousandfold: a zip bomb, not a picture.
-  const bomb = Buffer.concat([pngImage(64, 64), Buffer.alloc(4 * 1024 * 1024)])
+  const bomb = padTo(pngImage(64, 64), 4 * 1024 * 1024)
   expect((await rejectionOf(await zipped({ 'idle.png': bomb }))).join(' ')).toMatch(/zip bomb/)
   // The same with the zip lying about its sizes cannot unpack more than it declared.
   const lying = Buffer.from(await zipOf({ 'idle.webp': idle }))
