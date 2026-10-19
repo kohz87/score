@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.10.1] — 2026-10-19
+
+### Changed
+- Pet packs can be much bigger: up to **32 MB per animation and 256 MB per pack** (were 8 MB and 64 MB), as a ZIP or
+  as files.
+
 ## [1.10.0] — 2026-10-19
 
 ### Added

@@ -458,3 +458,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   could exceed 8 / 256 MB; one stage could be consumed twice; a failed write left a temp file. Lead fixed all four in
   `staging.ts` (5ecf4529: lstat-refused root, serialised admission, per-stage `use()` that a success consumes and a
   throw keeps, temp removed in the catch) with 5 regression tests, all failing first. Waiting to ship with 10.4.
+- **v1.10.1** (10.5, lead): the owner's real pet-pack zip was over 64 MB, so packs now take 32 MB per file and 256 MB
+  per pack (server reader/sniff/route body limit 264 MB, web checks, guide, contract, USER-GUIDE). Check green (web
+  2858, server 4572, contract 1418); agent-looks e2e 4/4. **10.6** (Knowledge files up to 256 MB, text only to 25 MB)
+  started on `task/10.6-knowledge-large` (based on 10.3) after the owner noted Knowledge's 25 MB limit; lead wrote the
+  contract (`too_large` text status) and brief; Sonnet builder in `../score-worktrees/10.6`.
