@@ -97,9 +97,7 @@ test('0078 gives coding agents look, pack_rev and pack_meta, and a style overrid
   upgrade(migrations)
   expect(
     db.sqlite
-      .prepare(
-        'SELECT id, color, shape, look, pack_rev, pack_meta FROM coding_agents ORDER BY id',
-      )
+      .prepare('SELECT id, color, shape, look, pack_rev, pack_meta FROM coding_agents ORDER BY id')
       .all(),
   ).toEqual([
     {

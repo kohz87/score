@@ -36,17 +36,12 @@ const ParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
 const FileParamsSchema = ParamsSchema.extend({ file: z.string() })
 const PreviewBodySchema = z.object({ content: z.string() }).strict()
 const PutFileBodySchema = z.object({ content: z.string(), etag: EtagSchema }).strict()
-// `avatar` and `avatarEyes` are accepted and dropped: the picture and its marks are only set by their own routes.
-const StylePatchSchema = AgentStylePatchSchema.extend({
-  avatar: z.unknown().optional(),
-  avatarEyes: z.unknown().optional(),
-})
+// `pack` is accepted and dropped: the pet pack is only ever set by its own routes.
+const StylePatchSchema = AgentStylePatchSchema.extend({ pack: z.unknown().optional() })
   .strict()
   .transform(
     (body) =>
-      Object.fromEntries(
-        Object.entries(body).filter(([key]) => key !== 'avatar' && key !== 'avatarEyes'),
-      ) as AgentStylePatch,
+      Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'pack')) as AgentStylePatch,
   )
   .refine((body) => Object.keys(body).length > 0)
 export function registerAgentRoutes(
