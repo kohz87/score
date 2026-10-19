@@ -36,6 +36,29 @@ export type AgentLook = z.infer<typeof AgentLookSchema>
 /** The revision of an agent's imported picture, as it appears in `/api/agents/:id/avatar?rev=`. */
 export const AvatarRevSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
 
+/** A box on an imported picture, as fractions of its width and height (0–1). */
+export const AvatarBoxSchema = z
+  .object({
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    w: z.number().gt(0).max(1),
+    h: z.number().gt(0).max(1),
+  })
+  .refine((box) => box.x + box.w <= 1 + 1e-9 && box.y + box.h <= 1 + 1e-9, {
+    message: 'The box must lie inside the picture.',
+  })
+
+/**
+ * Where the eyes are on an imported picture (PLAN 10.2, owner: "drag two boxes"), so Score can blink and close them;
+ * `lid` is the eyelid colour, taken from the skin around the eyes when the boxes are drawn.
+ */
+export const AvatarEyesSchema = z.object({
+  left: AvatarBoxSchema,
+  right: AvatarBoxSchema,
+  lid: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+})
+export type AvatarEyes = z.infer<typeof AvatarEyesSchema>
+
 export const AgentStyleSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,
@@ -43,6 +66,8 @@ export const AgentStyleSchema = z.object({
   look: AgentLookSchema.optional(),
   /** Set only by the server (PUT/DELETE /api/agents/:id/avatar); a client's value is ignored. Absent means none. */
   avatar: AvatarRevSchema.nullable().optional(),
+  /** The eye marks of the current picture (PUT /api/agents/:id/avatar/eyes); a new picture clears them. */
+  avatarEyes: AvatarEyesSchema.nullable().optional(),
 })
 export type AgentStyle = z.infer<typeof AgentStyleSchema>
 
