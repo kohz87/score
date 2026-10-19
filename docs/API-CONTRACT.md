@@ -1409,22 +1409,23 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
 **Documents and zips (PLAN 6.6).** Files that are not Markdown notes live in the same vault and tree: `.pdf`, `.docx`,
 `.csv`, `.json`, `.html`/`.htm`, images (png, jpeg, gif, webp) and `.zip`. `.md`/`.markdown` (any case) uploads and `.txt`
 (all stored as `<name>.md`) become notes, with the same checks as an ordinary save. A file never replaces one that appeared meanwhile: with `ask` or `keep` a name that was taken after the check is a `409`
-(a zip entry is skipped); `replace` publishes only over the version it saw (`412` otherwise). Limits: 25 MB per file; documents up to 10 MB are committed to the vault's git unless their path is Git-ignored and untracked (size decides eligibility, the same ignore rule as notes decides the rest; both are stored, `versioned: false`, and never force-added); extracted text is redacted (D6), cut at 2 MiB
+(a zip entry is skipped); `replace` publishes only over the version it saw (`412` otherwise). Limits: 256 MB per file (PLAN 10.6); text is read, indexed and previewed only for files up to 25 MB (bigger ones are
+stored and downloadable, `textStatus: 'too_large'`; a zip over 25 MB still previews, keeps and unzips); documents up to 10 MB are committed to the vault's git unless their path is Git-ignored and untracked (size decides eligibility, the same ignore rule as notes decides the rest; both are stored, `versioned: false`, and never force-added); extracted text is redacted (D6), cut at 2 MiB
 (`textStatus: 'truncated'`) and indexed in its own FTS table. Text of PDF (`unpdf`) and DOCX (`mammoth`) is extracted in a
 worker thread (20 s, 512 MB heap); a failure keeps the file with `textStatus: 'unavailable'`. Types are decided from
 the bytes (magic numbers), never the extension or declared type alone. Names: no `..`, absolute, dot-segments or `.git`.
 - `GET /api/knowledge/tree` now also returns `documents: KnowledgeDocumentSummary[]` `{ path; type; size; mtime;
   lastAuthor; versioned; textStatus }`; `GET /api/knowledge` also `documents` and `documentBytes`.
 - **H** `PUT /api/knowledge/files/*path?onConflict=ask|keep|replace&mode=keep|unzip|preview&folder=` with the raw file as
-  the body (`application/octet-stream`, at most 25 MB) -> `{ path; kind: 'note'|'document'; replaced; history }` (201; `history` as for a note save, for a document it is `not_versioned` when it is over 10 MB or Git-ignored and untracked). A name that
+  the body (`application/octet-stream`, at most 256 MB) -> `{ path; kind: 'note'|'document'; replaced; history }` (201; `history` as for a note save, for a document it is `not_versioned` when it is over 10 MB or Git-ignored and untracked). A name that
   exists answers `409 exists` with `details.existing[]` (`ask`, the default); `keep` adds ` (2)`, ` (3)` to the name;
   `replace` overwrites (a note keeps its history; a document is a new commit when versioned). Unsupported or
-  mismatching content -> `415 unsupported_type`; over 25 MB -> `413`.
+  mismatching content -> `415 unsupported_type`; over 256 MB -> `413`.
 - Zip files (`mode`, default `keep`): `keep` stores the zip as a document (its file list shows on its page; not
   indexed); `preview` stores nothing and returns `KnowledgeZipPreview` `{ entries: { path; size; action; reason }[];
   more; extractCount }`; `unzip` extracts into `folder` (default: the zip's name) -> `KnowledgeUnzipResult` `{ folder;
   written[]; skipped[]; history }` in one commit "Unzipped <name>.zip". The zip is read in a worker thread: at most 1,000
-  entries, 200 MB uncompressed in total, 100:1 compression ratio per entry (entries under 64 KiB exempt), sizes
+  entries, 1 GB uncompressed in total, each extracted file up to 256 MB, 100:1 compression ratio per entry (entries under 64 KiB exempt), sizes
   checked while inflating; entry paths are normalised and confined to the folder (no `..`, absolute paths, drive
   letters, dot-files, `.git`); symlinks and directories are ignored; nested zips are kept as files; only the allowed
   types are extracted, the rest are `skipped`. A clash anywhere in the batch answers `409 exists` (all clashing names in
@@ -1436,7 +1437,7 @@ the bytes (magic numbers), never the extension or declared type alone. Names: no
   with exactly the rules and answers of `PUT …?mode=keep|unzip` for that path, without the bytes being sent again.
   `path` must be the one it was previewed for (`409 staged_mismatch` otherwise). A staged zip is removed once it has
   been kept or unzipped; a `409 exists` keeps it, so the person can choose and try again. It expires 30 minutes after
-  the preview, and at most 8 zips (256 MB) are kept at once (the oldest goes first); unknown, expired or used:
+  the preview, and at most 8 zips (1 GB) are kept at once (the oldest goes first); unknown, expired or used:
   `404 staged_gone` (the client sends the file again). Stored under `$SCORE_HOME/knowledge-staging/` (folder 0700,
   files 0600, named by a random id only, never by a client path; no symlink followed); emptied when Score starts.
 - `GET /api/knowledge/documents/*path` -> `KnowledgeDocument` (summary + `text` + `entries` for zips).

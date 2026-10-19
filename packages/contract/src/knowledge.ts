@@ -52,7 +52,14 @@ export const KnowledgeDocumentTypeSchema = z.enum([
  * `indexed`: text extracted and searchable; `truncated`: indexed, the text was cut at 2 MiB; `unavailable`: extraction
  * failed or no extractor; `none`: not indexed by design (images, zips).
  */
-export const KnowledgeTextStatusSchema = z.enum(['indexed', 'truncated', 'unavailable', 'none'])
+/** `too_large`: stored, but over 25 MB, so its text is not read, indexed or previewed (PLAN 10.6). */
+export const KnowledgeTextStatusSchema = z.enum([
+  'indexed',
+  'truncated',
+  'unavailable',
+  'too_large',
+  'none',
+])
 export const KnowledgeDocumentSummarySchema = z.object({
   path: z.string().min(1),
   type: KnowledgeDocumentTypeSchema,
