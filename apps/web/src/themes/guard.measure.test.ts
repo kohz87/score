@@ -340,15 +340,11 @@ describe('10.2: the shape signature with the animated parts of a mark', () => {
     expect(css).toMatch(/svg \*:not\(\.agent-glyph__mark\),[^{]*\{\s*mask: none !important/)
     const pinned = /\[data-protected\] svg \*,[^{]*\{([^}]*)\}/.exec(css)![1]!
     expect(pinned).not.toContain('mask')
-    for (const property of [
-      'opacity',
-      'visibility',
-      'filter',
-      'clip-path',
-      'scale',
-      'rotate',
-      'translate',
-    ])
+    for (const property of ['opacity', 'visibility', 'filter', 'scale', 'rotate', 'translate'])
       expect(pinned).toContain(property)
+    // The clip is pinned everywhere but on a pet portrait's own image, which Score clips to the agent's shape (10.8).
+    expect(css).toMatch(
+      /svg \*:not\(\.agent-glyph__portrait-image\),[^{]*\{\s*clip-path: none !important/,
+    )
   })
 })

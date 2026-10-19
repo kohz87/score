@@ -90,7 +90,8 @@
   }
   /* A bot, chibi or picture (PLAN 10.2) has no tile of its own, so in a custom look it sits on the same plate: its
      colour is then always read against white or ink, never against whatever the theme paints behind it. */
-  html[data-look='custom'] span.agent-glyph--rich[data-protected] {
+  html[data-look='custom'] span.agent-glyph--rich[data-protected],
+  html[data-look='custom'] span.agent-glyph--portrait[data-protected] {
     background-color: var(--glyph-plate) !important;
     border-radius: 3px !important;
   }
@@ -107,11 +108,16 @@
     opacity: 1 !important;
     visibility: visible !important;
     filter: none !important;
-    clip-path: none !important;
     mix-blend-mode: normal !important;
     translate: none !important;
     rotate: none !important;
     scale: none !important;
+  }
+  /* No clip either, except the one that cuts a pet portrait to the agent's shape (the glyph's own image, named by
+     Score's class; the clip path it names is Score's, and the guard compares the computed clip of every image). */
+  html[data-look='custom'] [data-protected] svg *:not(.agent-glyph__portrait-image),
+  html[data-look='custom'] svg[data-protected] *:not(.agent-glyph__portrait-image) {
+    clip-path: none !important;
   }
   /* No mask either, except the one a cut-out mark cuts its eyes with (the glyph's own, named by Score's class: a theme
      can't add one, and the guard still compares the computed mask of every shape). */

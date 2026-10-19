@@ -317,7 +317,7 @@ function parts(surface: HTMLElement): HTMLElement[] {
 
 // Glyph shapes (finding #5): an agent is told apart by its shape, so what the shapes paint is compared, not just
 // whether their wrapper is shown: geometry (`d`, size), paint and everything that can hide or move a path.
-const SHAPES = 'path, circle, rect, ellipse, polygon, polyline, line'
+const SHAPES = 'image, path, circle, rect, ellipse, polygon, polyline, line'
 // Parts Score itself animates with `transform` (a mark's eye slots, its orbiting dot and ripples, a pet's overlays): their transform is whatever the keyframes
 // say at the moment of reading, so it can't be compared; a theme can't style them (the sanitiser guard), and everything
 // else about them (geometry, paint, display, clip, mask, filter) is still compared.

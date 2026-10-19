@@ -1,7 +1,9 @@
 import type { AgentLook, AgentStyle } from '@score/contract'
-import { useEffect, useId, type CSSProperties } from 'react'
+import { useEffect, useId, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { useLiveliness } from '../data/liveliness.ts'
 import { agentEyes, agentShapes, markBodies, type AgentShapeElement } from './agent-shapes.ts'
 import { watchGlyphs } from './glyph-pointer.ts'
+import { usePortrait } from './portrait-cache.ts'
 import './agent-glyph.css'
 import './agent-glyph-motion.css'
 
@@ -150,6 +152,101 @@ function MarkArt({
   )
 }
 
+type Portrait = NonNullable<ReturnType<typeof usePortrait>>
+
+/** True while the pointer is over the glyph (or the button or link it sits in) or that control has keyboard focus. */
+function useWatched(ref: RefObject<Element | null>, enabled: boolean): boolean {
+  const [watched, setWatched] = useState(false)
+  useEffect(() => {
+    const own = ref.current
+    if (!enabled || !own) return undefined
+    const target = own.closest('button, a[href], [role=button], [role=menuitem]') ?? own
+    const on = () => setWatched(true)
+    const off = () => setWatched(false)
+    const events = [
+      ['pointerenter', on],
+      ['pointerleave', off],
+      ['focusin', on],
+      ['focusout', off],
+    ] as const
+    for (const [type, handler] of events) target.addEventListener(type, handler)
+    return () => {
+      for (const [type, handler] of events) target.removeEventListener(type, handler)
+      setWatched(false)
+    }
+  }, [ref, enabled])
+  return enabled && watched
+}
+
+/** Where the idle file sits so that the same square the still portrait was cut from fills the circle. */
+function animPlacement(portrait: Portrait): CSSProperties {
+  const { crop, width, height } = portrait
+  return {
+    width: `${+((width / crop.side) * 100).toFixed(3)}%`,
+    height: `${+((height / crop.side) * 100).toFixed(3)}%`,
+    left: `${+((-crop.x / crop.side) * 100).toFixed(3)}%`,
+    top: `${+((-crop.y / crop.side) * 100).toFixed(3)}%`,
+  }
+}
+
+/**
+ * The portrait as one svg (list size, and a bare glyph): clipped to the agent's shape at `xs`, or to a ring with a
+ * small shape badge when bare at a larger size. Identity stays colour + shape (AGENTS.md).
+ */
+function PortraitArt({
+  portrait,
+  shape,
+  round,
+  playing,
+}: {
+  portrait: Portrait
+  shape: AgentStyle['shape']
+  round: boolean
+  playing: boolean
+}) {
+  const clip = useId()
+  const k = 20 / portrait.crop.side
+  const outline = round ? (
+    <circle className="agent-glyph__portrait-outline" cx="10" cy="10" r="9" />
+  ) : (
+    <Shape elements={agentShapes[shape]} className="agent-glyph__portrait-outline" />
+  )
+  return (
+    <>
+      <clipPath id={clip}>
+        {round ? <circle cx="10" cy="10" r="9" /> : <Shape elements={agentShapes[shape]} />}
+      </clipPath>
+      <image
+        className="agent-glyph__portrait-image"
+        href={portrait.url}
+        x="0"
+        y="0"
+        width="20"
+        height="20"
+        clipPath={`url(#${clip})`}
+      />
+      {playing && (
+        <image
+          className="agent-glyph__portrait-image agent-glyph__anim"
+          href={portrait.idle}
+          x={-portrait.crop.x * k}
+          y={-portrait.crop.y * k}
+          width={portrait.width * k}
+          height={portrait.height * k}
+          clipPath={`url(#${clip})`}
+        />
+      )}
+      {outline}
+      {round && (
+        <g className="agent-glyph__badge-mark" transform="translate(11.2 11.2) scale(0.44)">
+          <circle className="agent-glyph__badge-plate" cx="10" cy="10" r="12" />
+          <Shape elements={agentShapes[shape]} />
+        </g>
+      )}
+    </>
+  )
+}
+
 export function AgentGlyph({
   agent,
   size = 'md',
@@ -160,17 +257,23 @@ export function AgentGlyph({
   activity,
   plain = false,
 }: AgentGlyphProps) {
+  const pack = agent.style.pack
+  const portrait = usePortrait(agent.id, plain || !pack ? null : pack.rev)
+  const liveliness = useLiveliness()
+  const root = useRef<HTMLSpanElement & SVGSVGElement>(null)
+  const playing = useWatched(root, portrait !== null && liveliness !== 'still')
   const kind = plain ? 'plain' : glyphKind(agent.style, size)
   const mood = activity ?? 'idle'
-  const rich = kind !== 'plain'
+  const pictured = portrait !== null
+  const rich = kind !== 'plain' && !pictured
   useEffect(() => (rich ? watchGlyphs() : undefined), [rich])
   const className = [
     'agent-glyph',
     `agent-glyph--${size}`,
-    `agent-glyph--${kind}`,
+    pictured ? 'agent-glyph--portrait' : `agent-glyph--${kind}`,
     rich && `agent-glyph--${mood}`,
     rich && 'agent-glyph--rich',
-    !bare && 'agent-glyph--tile',
+    !bare && !(pictured && size !== 'xs') && 'agent-glyph--tile',
     contrast === 'high' && 'agent-glyph--high',
   ]
     .filter(Boolean)
@@ -185,17 +288,55 @@ export function AgentGlyph({
         role: 'img',
         'aria-label': describeShape ? `${agent.name}, ${agent.style.shape}` : agent.name,
       }
-  const art =
-    kind === 'plain' ? (
-      <Shape elements={agentShapes[agent.style.shape]} />
-    ) : (
-      <MarkArt shape={agent.style.shape} look={kind} activity={mood} />
+  const art = pictured ? (
+    <PortraitArt
+      portrait={portrait}
+      shape={agent.style.shape}
+      round={size !== 'xs'}
+      playing={playing}
+    />
+  ) : kind === 'plain' ? (
+    <Shape elements={agentShapes[agent.style.shape]} />
+  ) : (
+    <MarkArt shape={agent.style.shape} look={kind} activity={mood} />
+  )
+
+  if (pictured && !bare && size !== 'xs') {
+    const look = agent.style.look ?? 'cut'
+    return (
+      <span
+        {...accessibility}
+        ref={root}
+        data-protected="inline-flex"
+        className={className}
+        style={style}
+      >
+        <span className="agent-glyph__portrait">
+          <img className="agent-glyph__still" src={portrait.url} alt="" draggable={false} />
+          {playing && (
+            <img
+              className="agent-glyph__anim"
+              src={portrait.idle}
+              alt=""
+              draggable={false}
+              style={animPlacement(portrait)}
+            />
+          )}
+        </span>
+        <span className="agent-glyph__badge">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+            <MarkArt shape={agent.style.shape} look={look} activity="idle" />
+          </svg>
+        </span>
+      </span>
     )
+  }
 
   if (bare) {
     return (
       <svg
         {...accessibility}
+        ref={root}
         data-protected="inline-flex"
         className={className}
         style={style}
@@ -209,7 +350,13 @@ export function AgentGlyph({
   }
 
   return (
-    <span {...accessibility} data-protected="inline-flex" className={className} style={style}>
+    <span
+      {...accessibility}
+      ref={root}
+      data-protected="inline-flex"
+      className={className}
+      style={style}
+    >
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
         {art}
       </svg>

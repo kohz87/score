@@ -17,9 +17,17 @@ const packed = (id = 'lead') => ({
   name: id,
   style: { color: '#19C39A', shape: 'triangle', pack } satisfies AgentStyle,
 })
-const plainAgent = { id: 'lead', name: 'lead', style: { color: '#19C39A', shape: 'triangle' } as AgentStyle }
+const plainAgent = {
+  id: 'lead',
+  name: 'lead',
+  style: { color: '#19C39A', shape: 'triangle' } as AgentStyle,
+}
 const glyph = () => screen.getByRole('img', { name: 'lead' })
-const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve() })
+const settle = () =>
+  act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
 
 beforeEach(() => {
   decode.mockResolvedValue(ready)
@@ -31,17 +39,21 @@ afterEach(() => {
   decode.mockReset()
   localStorage.clear()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
-test.each(['sm', 'md', 'lg'] as const)('%s: a ringed round portrait with the mark as a badge', async (size) => {
-  render(<AgentGlyph agent={packed()} size={size} />)
-  await settle()
-  const g = glyph()
-  expect(g.classList.contains('agent-glyph--portrait')).toBe(true)
-  expect(g.getAttribute('data-protected')).toBe('inline-flex')
-  expect(g.querySelector('.agent-glyph__portrait img')?.getAttribute('src')).toBe('blob:p')
-  expect(g.querySelector('.agent-glyph__badge svg path')).not.toBeNull()
-})
+test.each(['sm', 'md', 'lg'] as const)(
+  '%s: a ringed round portrait with the mark as a badge',
+  async (size) => {
+    render(<AgentGlyph agent={packed()} size={size} />)
+    await settle()
+    const g = glyph()
+    expect(g.classList.contains('agent-glyph--portrait')).toBe(true)
+    expect(g.getAttribute('data-protected')).toBe('inline-flex')
+    expect(g.querySelector('.agent-glyph__portrait img')?.getAttribute('src')).toBe('blob:p')
+    expect(g.querySelector('.agent-glyph__badge svg path')).not.toBeNull()
+  },
+)
 
 test('xs: the portrait is clipped to the agent’s shape and outlined in its colour', async () => {
   render(<AgentGlyph agent={packed()} size="xs" />)
@@ -76,7 +88,13 @@ test('an agent without a pack keeps its mark and decodes nothing', async () => {
 })
 
 test('fifty glyphs decode once', async () => {
-  render(<>{Array.from({ length: 50 }, (_, i) => <AgentGlyph key={i} agent={packed()} size={i % 2 ? 'xs' : 'md'} decorative />)}</>)
+  render(
+    <>
+      {Array.from({ length: 50 }, (_, i) => (
+        <AgentGlyph key={i} agent={packed()} size={i % 2 ? 'xs' : 'md'} decorative />
+      ))}
+    </>,
+  )
   await settle()
   expect(decode).toHaveBeenCalledTimes(1)
 })
@@ -94,7 +112,11 @@ test('pointing at it plays the idle file, cropped the same way; leaving stills i
 })
 
 test('an interactive parent’s keyboard focus plays it too', async () => {
-  render(<button><AgentGlyph agent={packed()} /></button>)
+  render(
+    <button>
+      <AgentGlyph agent={packed()} />
+    </button>,
+  )
   await settle()
   fireEvent.focus(screen.getByRole('button'))
   expect(document.querySelector('img.agent-glyph__anim')).not.toBeNull()
@@ -111,9 +133,11 @@ test('under Still it never animates', async () => {
 })
 
 test('reduced motion never animates either', async () => {
-  vi.spyOn(window, 'matchMedia').mockImplementation(
-    (query) => ({ matches: query.includes('reduce'), addEventListener() {}, removeEventListener() {} }) as never,
-  )
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('reduce'),
+    addEventListener() {},
+    removeEventListener() {},
+  }))
   render(<AgentGlyph agent={packed()} />)
   await settle()
   fireEvent.pointerEnter(glyph())
@@ -123,7 +147,9 @@ test('reduced motion never animates either', async () => {
 test('the portrait is covered by the theme protection', () => {
   const css = readFileSync('src/styles/protected.css', 'utf8').replace(/\s+/g, ' ')
   expect(css).toMatch(/span\.agent-glyph--portrait\[data-protected\]/)
-  expect(css).toMatch(/:not\(\.agent-glyph__mark\):not\(\.agent-glyph__portrait-image\)/)
+  expect(css).toMatch(
+    /svg \*:not\(\.agent-glyph__portrait-image\)[^{]*\{ clip-path: none !important/,
+  )
   const guard = readFileSync('src/themes/guard.ts', 'utf8')
   expect(guard).toMatch(/const SHAPES = '[^']*\bimage\b/)
 })
