@@ -532,3 +532,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   `CodingRuntimeSchema`, API text) on `task/10.12-drop-opencode`; live DB has no OpenCode agents; the old CHECK stays.
   Sonnet builder removes the driver, workflow rule, web labels and mentions. PLAN 7.2 now complete.
 - **5.17b Kanban Stop removed from the list** (owner; decision 112): an upstream Hermes design issue, not Score work.
+- **10.12 done** (builder; check green, e2e 638/0; grep leaves only history docs, old migrations and rejection tests;
+  `CliStateSchema.not_supported` kept for future runtimes; CHANGELOG history untouched) — cross-check running.
+  **10.11 cross-check** (Codex high): 3 P2 accepted — completion doesn't emit a room update (stale icon); approval room
+  scoping differs between server (`message_runs`) and stage (refs) → expose the originating room in approval refs and
+  use one rule; compatibility-disabled approvals still count as busy. Sent back to the builder.
