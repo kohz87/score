@@ -234,6 +234,17 @@ test('a document over 25 MB says it is too large to preview and offers the downl
   )
 })
 
+test('an image over 25 MB shows the notice and no picture', async () => {
+  documents.push(
+    doc('inbox/big.png', { type: 'image', textStatus: 'too_large', size: 100 * 1024 * 1024 }),
+  )
+  mount('/knowledge/inbox/big.png')
+  expect(
+    await screen.findByText('Too large to preview (over 25 MB). Download it to open it.'),
+  ).toBeDefined()
+  expect(screen.queryByAltText('Preview of big.png')).toBeNull()
+})
+
 test('a zip page lists its files', async () => {
   mount('/knowledge/inbox/pack.zip')
   const list = await screen.findByRole('list', { name: 'Files in the zip' })

@@ -16,6 +16,8 @@ const NO_TEXT: Record<string, string> = {
 
 function Body({ doc }: { doc: KnowledgeDocument }) {
   const path = doc.path
+  if (doc.type === 'image' && doc.textStatus === 'too_large')
+    return <p className="kn-banner is-warn">{NO_TEXT.too_large}</p>
   if (doc.type === 'image')
     return (
       <img
