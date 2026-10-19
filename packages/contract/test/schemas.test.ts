@@ -294,23 +294,16 @@ const cases = [
   ['AgentIdSchema', 'lead', ''],
   ['ShapeSchema', 'cloud', 'oval'],
   ['AgentStyleSchema', f.style, { ...f.style, color: '#abc' }],
-  ['AgentLookSchema', 'chibi', 'anime'],
-  ['AvatarRevSchema', 'r7Kq-2', '../x'],
-  ['AgentStylePatchSchema', { look: 'chibi', shape: 'cylinder' }, { look: 'photo' }],
-  ['AvatarBoxSchema', { x: 0.3, y: 0.5, w: 0.1, h: 0.12 }, { x: 0.95, y: 0.5, w: 0.1, h: 0.1 }],
+  ['AgentLookSchema', 'ring', 'chibi'],
+  ['PetActivitySchema', 'work', 'dance'],
+  ['PetPackManifestSchema', { name: 'Luna', floor: 0.03 }, { floor: 0.5 }],
+  ['PackRevSchema', 'r7Kq-2', '../x'],
   [
-    'AvatarEyesSchema',
-    {
-      left: { x: 0.3, y: 0.5, w: 0.1, h: 0.12 },
-      right: { x: 0.56, y: 0.41, w: 0.12, h: 0.13 },
-      lid: '#fce9df',
-    },
-    {
-      left: { x: 0.3, y: 0.5, w: 0.1, h: 0.12 },
-      right: { x: 0.56, y: 0.41, w: 0.12, h: 0.13 },
-      lid: 'skin',
-    },
+    'PetPackSchema',
+    { rev: 'a1', activities: ['idle', 'work'], name: 'Luna', credits: null, floor: 0 },
+    { rev: 'a1', activities: [], name: null, credits: null, floor: 0 },
   ],
+  ['AgentStylePatchSchema', { look: 'ring', shape: 'cylinder' }, { look: 'chibi' }],
   ['AgentStatusSchema', 'working', 'busy'],
   ['AgentSummarySchema', f.agent, { ...f.agent, id: '' }],
   ['AsOfSeqSchema', 0, -1],
@@ -2212,14 +2205,10 @@ describe('third gate 5: manifest menu labels need a visible character', () => {
   })
 })
 
-test('PLAN 10.2: a style without look or avatar (stored before 10.2) still parses; a client patch cannot set the picture', () => {
+test('PLAN 10.2: a style without look or pack (stored before 10.2) still parses; a client patch cannot set the pack', () => {
   const old = contract.AgentStyleSchema.parse({ color: '#6B4EFF', shape: 'circle-dot' })
   expect(old.look).toBeUndefined()
-  expect(old.avatar).toBeUndefined()
-  expect(
-    contract.AgentStyleSchema.parse({ color: '#6B4EFF', shape: 'gem', look: 'bot', avatar: 'abc' })
-      .avatar,
-  ).toBe('abc')
-  const patch = contract.AgentStylePatchSchema.parse({ look: 'chibi', avatar: 'x' })
-  expect(patch).toEqual({ look: 'chibi' })
+  expect(old.pack).toBeUndefined()
+  const patch = contract.AgentStylePatchSchema.parse({ look: 'ring', pack: { rev: 'x' } })
+  expect(patch).toEqual({ look: 'ring' })
 })
