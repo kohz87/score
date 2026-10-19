@@ -1489,6 +1489,12 @@ a.team-pill-button {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+.team-pack-refused {
+  margin: 0 0 var(--space-1);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .team-pack-added {
   display: flex;
   flex-direction: column;

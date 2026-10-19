@@ -267,3 +267,22 @@ test('WebP: the RIFF size must match the file, and the chunks must hold the imag
     ).ok,
   ).toBe(true)
 })
+
+test('a WebP whose header disagrees with its size says where it breaks off, in numbers (owner, 2026-10-19)', () => {
+  const whole = webpImage(64, 64, 'VP8X', { animated: true })
+  // Stray bytes after the frames the header covers, as an exporter that stopped early leaves them.
+  const broken = Buffer.concat([whole, Buffer.alloc(1024 * 1024)])
+  expect(sniffPackImage(broken, 'idle.webp')).toEqual({
+    ok: false,
+    reasons: [
+      expect.stringMatching(
+        /^This WebP breaks off: its header says it ends at 0\.0 MB, but the file is 1\.0 MB, so only its first 2 frames would play\. Export it again\.$/,
+      ),
+    ],
+  })
+  const short = whole.subarray(0, whole.length - 10)
+  expect(sniffPackImage(short, 'idle.webp')).toMatchObject({
+    ok: false,
+    reasons: [expect.stringMatching(/^This WebP is cut short: .* Export it again\.$/)],
+  })
+})

@@ -476,7 +476,37 @@ test('the server’s reasons for refusing a pack are shown as they are, and the 
   const alert = await within(dialog).findByRole('alert')
   expect(alert.textContent).toContain('idle is missing.')
   expect(alert.textContent).toContain('sparkle is not an activity.')
+  // Which upload the reasons are about (owner, 2026-10-19: "include … which file failed the check").
+  expect(within(alert).getByText('The pack (2 files) wasn’t accepted:')).toBeDefined()
   expect(within(dialog).getByRole('button', { name: 'Cancel pack' })).toBeDefined()
+})
+
+test('a refused zip is named above the server’s reasons, which name the file inside it', async () => {
+  renderTeam('/team/builder')
+  const baseline = respond
+  const reason =
+    'idle.webp: This WebP breaks off: its header says it ends at 1.8 MB, but the file is 5.1 MB, so only its first 35 frames would play. Export it again.'
+  respond = (path, init) =>
+    path.includes('/pack')
+      ? json(
+          {
+            error: {
+              code: 'pack_rejected',
+              message: 'That pack can’t be used.',
+              details: { reasons: [reason] },
+            },
+          },
+          422,
+        )
+      : baseline(path, init)
+  const dialog = await openPicker()
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
+    target: { files: [packFile('luna.zip', 'application/zip')] },
+  })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert.querySelector('p')?.textContent).toBe('luna.zip wasn’t accepted:')
+  expect(within(alert).getByRole('listitem').textContent).toBe(reason)
 })
 
 test('a zip chosen with other files, a file over 32 MB, or a pack over 256 MB, is refused without an upload', async () => {
