@@ -34,8 +34,16 @@ export function useRoomMoods(room: Room, agents: AgentSummary[]): RoomMoods {
   const messages = useMemo(() => thread?.items ?? [], [thread?.items])
   const typing = useMemo(() => thread?.typing ?? {}, [thread?.typing])
   const moods = useMemo(
-    () => stageMoods({ roomId, members: people, messages, typing, approvals }),
-    [roomId, people, messages, typing, approvals],
+    () =>
+      stageMoods({
+        roomId,
+        members: people,
+        messages,
+        typing,
+        approvals,
+        serverBusy: room.activeAgents,
+      }),
+    [roomId, people, messages, typing, approvals, room.activeAgents],
   )
   return { loaded: thread !== undefined, people, moods, messages, typing, approvals }
 }

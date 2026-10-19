@@ -330,7 +330,8 @@ export function registerRoomRoutes(
     const { roomId } = ParamsSchema.parse(request.params)
     await refresh()
     const result = snapshot(db, (sqlite) => ({
-      room: readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at),
+      // Busy-now is evaluated at the current time, like the rooms list (an approval may have expired since).
+      room: readRoom(sqlite, roomId, new Date(clock()).toISOString()),
       filesInPlay: roomFilesInPlay(sqlite, roomId),
       learned: roomLearned(sqlite, roomId),
     }))

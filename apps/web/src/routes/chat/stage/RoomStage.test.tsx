@@ -38,7 +38,8 @@ const room: Room = {
   leadAgentId: 'lead',
   members: ['lead', 'builder', 'reviewer'],
   unread: 0,
-  activeAgents: [],
+  // The server's busy list while reviewer's approval is pending (waiting needs both, 10.11).
+  activeAgents: ['reviewer'],
   channels: [],
 }
 const message = (id: string, extra: Partial<Message> = {}): Message => ({

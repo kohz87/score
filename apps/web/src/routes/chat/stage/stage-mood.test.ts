@@ -241,3 +241,11 @@ test('agent ids that are inherited object names are ordinary names', () => {
   expect(busy['constructor']).toBe('work')
   expect(busy['toString']).toBe('rest')
 })
+
+test('waiting for you also needs the server to count the agent busy here (a silent producer or compatibility clears it)', () => {
+  // The cached approval still says actionable, but the room's live activeAgents no longer has builder.
+  expect(stageMoods({ ...base, approvals: [approval()], serverBusy: [] }).builder).toBe('rest')
+  expect(stageMoods({ ...base, approvals: [approval()], serverBusy: ['builder'] }).builder).toBe(
+    'needs',
+  )
+})

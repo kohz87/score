@@ -35,7 +35,8 @@ const room: Room = {
   leadAgentId: 'lead',
   members: ['lead', 'builder', 'reviewer'],
   unread: 0,
-  activeAgents: ['lead', 'builder'],
+  // The server counts reviewer busy here while its approval is pending (waiting needs both, 10.11).
+  activeAgents: ['lead', 'builder', 'reviewer'],
   channels: [],
 }
 const approval: Approval = {
