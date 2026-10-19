@@ -211,7 +211,7 @@ test.each(
 test('under a custom theme the badge sits on Score’s own plate, not the theme’s card colour', () => {
   const css = readFileSync('src/styles/protected.css', 'utf8').replace(/\s+/g, ' ')
   expect(css).toMatch(
-    /html\[data-look='custom'\] \.agent-glyph__badge\[?[^{]*\{[^}]*background-color: var\(--glyph-plate\) !important/,
+    /html\[data-look='custom'\] \[data-protected\] \.agent-glyph__badge[^{]*\{[^}]*background-color: var\(--glyph-plate\) !important/,
   )
   expect(css).toMatch(/\.agent-glyph__badge-plate[^{]*\{[^}]*fill: var\(--glyph-plate\) !important/)
 })

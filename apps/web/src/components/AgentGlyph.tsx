@@ -158,25 +158,27 @@ type Portrait = NonNullable<ReturnType<typeof usePortrait>>
 
 /** True while the pointer is over the glyph (or the button or link it sits in) or that control has keyboard focus. */
 function useWatched(ref: RefObject<Element | null>, enabled: boolean): boolean {
-  const [watched, setWatched] = useState(false)
+  // Pointer and keyboard focus are tracked apart: leaving with the pointer must not cancel focus, nor blur hover.
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
   useEffect(() => {
     const own = ref.current
     if (!enabled || !own) return undefined
     const target = own.closest('button, a[href], [role=button], [role=menuitem]') ?? own
-    const on = () => setWatched(true)
-    const off = () => setWatched(false)
     const events = [
-      ['pointerenter', on],
-      ['pointerleave', off],
-      ['focusin', on],
-      ['focusout', off],
+      ['pointerenter', () => setHovered(true)],
+      ['pointerleave', () => setHovered(false)],
+      ['focusin', () => setFocused(true)],
+      ['focusout', () => setFocused(false)],
     ] as const
     for (const [type, handler] of events) target.addEventListener(type, handler)
     return () => {
       for (const [type, handler] of events) target.removeEventListener(type, handler)
-      setWatched(false)
+      setHovered(false)
+      setFocused(false)
     }
   }, [ref, enabled])
+  const watched = hovered || focused
   return enabled && watched
 }
 
@@ -326,7 +328,7 @@ export function AgentGlyph({
             />
           )}
         </span>
-        <span className="agent-glyph__badge">
+        <span className={`agent-glyph__badge agent-glyph--${look}`}>
           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
             <MarkArt shape={agent.style.shape} look={look} activity="idle" />
           </svg>

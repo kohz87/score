@@ -95,6 +95,15 @@
     background-color: var(--glyph-plate) !important;
     border-radius: 3px !important;
   }
+  /* The badge on a portrait (10.8) carries the agent's shape: on the same plate of Score's own, never the theme's card
+     colour (a card the agent's colour would erase the shape). The bare form draws its plate inside the svg. */
+  html[data-look='custom'] [data-protected] .agent-glyph__badge {
+    background-color: var(--glyph-plate) !important;
+  }
+  html[data-look='custom'] [data-protected] .agent-glyph__badge-plate,
+  html[data-look='custom'] svg[data-protected] .agent-glyph__badge-plate {
+    fill: var(--glyph-plate) !important;
+  }
   html[data-look='custom'] .needs-you-dot[data-protected] {
     box-sizing: content-box !important;
     border: 1.5px solid #12131a !important;

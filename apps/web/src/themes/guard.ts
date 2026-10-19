@@ -67,7 +67,7 @@ function contrastOver(colour: Rgba, nodes: Element[]): number | null {
  */
 function graphicContrast(element: Element): number | null | undefined {
   const style = getComputedStyle(element)
-  if (element.matches('.agent-glyph')) {
+  if (element.matches('.agent-glyph, .agent-glyph__badge')) {
     const colour = parseComputedColor(style.getPropertyValue('--glyph-color'))
     return colour ? contrastOver(colour, chain(element)) : null
   }
@@ -310,7 +310,7 @@ function parts(surface: HTMLElement): HTMLElement[] {
   for (const el of Array.from(surface.querySelectorAll<HTMLElement>('*'))) {
     if (el.closest('svg') || el.closest('[hidden], [inert], details:not([open])') || el.hidden)
       continue
-    if (el.matches(CONTROLS) || carriesText(el)) found.push(el)
+    if (el.matches(CONTROLS) || el.matches('.agent-glyph__badge') || carriesText(el)) found.push(el)
   }
   return found
 }
