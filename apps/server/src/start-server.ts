@@ -53,6 +53,7 @@ import {
 import { deriveAgentStatusEvents } from './domain/agent-status.ts'
 import { deriveBriefEvents } from './domain/briefs.ts'
 import { deriveTaskEvents } from './domain/tasks.ts'
+import { deriveRoomEvents } from './domain/rooms.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
 import { rotateLog } from './log-rotation.ts'
 import { snapshotSessionCosts } from './domain/spend.ts'
@@ -299,6 +300,7 @@ export async function startServer(
     ingest = createIngest(database, {
       deriveEvents: (sqlite, drafts, context) => [
         ...deriveTaskEvents(sqlite, drafts, context),
+        ...deriveRoomEvents(sqlite, drafts, context),
         ...deriveBriefEvents(sqlite, drafts, context),
         ...deriveAgentStatusEvents(sqlite, drafts, context),
       ],
