@@ -169,6 +169,12 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
     await expect(page.getByText('Closed.')).toBeVisible({ timeout: 15_000 })
     await settings.close()
   } finally {
+    // The tmux server the clipboard steps started outlives the terminal's shell: stop it by its own socket name.
+    try {
+      execFileSync('tmux', ['-L', 'score-e2e', 'kill-server'], { stdio: 'ignore' })
+    } catch {
+      // not started, or already gone
+    }
     child.kill('SIGTERM')
     if (child.exitCode === null && child.signalCode === null) await once(child, 'exit')
     rmSync(home, { recursive: true, force: true })
