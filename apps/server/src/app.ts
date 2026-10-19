@@ -18,6 +18,7 @@ import { registerAttemptRoutes } from './http/attempts.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerWorkspaceRoutes } from './http/workspace.ts'
 import { createAgentWorkspaces } from './workspace/agent-workspace.ts'
+import { ZipStaging } from './knowledge/staging.ts'
 import { registerKnowledgeRoutes } from './http/knowledge.ts'
 import { registerKnowledgeAgentRoutes } from './http/knowledge-agents.ts'
 import { registerMcpAccessRoutes } from './http/mcp-access.ts'
@@ -287,7 +288,12 @@ export function buildApp({
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerWorkspaceRoutes(app, port, config, undefined, workspaces)
   if (knowledge) {
-    registerKnowledgeRoutes(app, knowledge, mediaStore)
+    registerKnowledgeRoutes(
+      app,
+      knowledge,
+      mediaStore,
+      new ZipStaging(join(config.home, 'knowledge-staging'), clock),
+    )
     if (db) registerKnowledgeAgentRoutes(app, new KnowledgeAgentApi(knowledge, db, clock))
   }
   if (db)
