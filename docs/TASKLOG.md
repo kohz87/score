@@ -489,3 +489,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   zip64 DOCX over 25 MB stays unlisted. Combined: check green (contract 1420, web 2911, server 4607, plugin, license);
   e2e 635 passed, 1 known flake (`chat-follow.spec.ts:46`, passes alone). Lead slip: ran `npx tsc` in a fresh worktree
   before installing, which fetched the npm placeholder package `tsc` (printed a warning only).
+- **v1.11.1** (10.9, lead; owner: "can we take away the line below" → "apply that change first"): the pet avatar's
+  floor band became a soft shadow under the feet that follows `floor`; centred by position, because the protected-layer
+  test caught that a `transform` on it would be reset under custom themes. Web 2911/0; agent-looks, pack-portraits,
+  themes-protection, themes-safety e2e 55/0; lint/format/types ok. Owner approved the room-stage concept (preview v22).

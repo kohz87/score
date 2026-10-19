@@ -3,6 +3,11 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.11.1] — 2026-10-19
+
+### Changed
+- Pet avatars (Team card, agent page) stand on a soft shadow under their feet instead of a grey floor band with a line.
+
 ## [1.11.0] — 2026-10-19
 
 ### Added
