@@ -463,3 +463,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   2858, server 4572, contract 1418); agent-looks e2e 4/4. **10.6** (Knowledge files up to 256 MB, text only to 25 MB)
   started on `task/10.6-knowledge-large` (based on 10.3) after the owner noted Knowledge's 25 MB limit; lead wrote the
   contract (`too_large` text status) and brief; Sonnet builder in `../score-worktrees/10.6`.
+- **Owner's pack (2026-10-19):** `luna.zip` (78.6 MB, 11 animations) was refused: over 1.10.0's limits, and on 1.10.1
+  its `idle.webp` failed the structure check. Lead diagnosed it: RIFF size 1.9 MB vs a 5.3 MB file; 36,636 stray bytes
+  after frame 35 of 96 (Chromium plays 35 frames / 2.9 s). On the owner's choice the lead built
+  `~/score-vault/luna-repaired.zip` with `luna_idle_transparent.webp` as idle (server reader: accepted). Saved on coding
+  agent luna. **10.7** (lead, `task/10.7-pack-errors`, 5d9199fa; owner: "include in error response which file failed"):
+  zip-level reasons name the zip, the zip-bomb reason names the entry, the panel heads the server's reasons with the
+  upload ("luna.zip wasn't accepted:"), and a WebP that breaks off says where in numbers; tests failed first (2 server
+  by reverting src, web assertions new). **10.4 done** (builder; check green, e2e 634/0; editor images embed data URIs,
+  nothing to upload) — Codex cross-check running. **10.8** (pet-pack portraits everywhere, decision 109; owner chose
+  "Everywhere"): lead brief; Sonnet builder in `../score-worktrees/10.8`.
