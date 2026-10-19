@@ -545,3 +545,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   approval event even when nothing changed. Fix round sent to the 10.11 builder: one query per room read, emit only on
   change (stored last set), cheap sweep, a benchmark test, and a full e2e with RSS sampling (target ≈ main).
   10.12 cross-check: no findings.
+- **v1.12.2** (10.11 + 10.12). 10.11 performance round (builder): migration 0079 (`rooms.active_agents`, partial index
+  `messages_streaming`), one indexed read per room, emit only on change, cheap sweep; benchmark 300 rooms: list 243 →
+  26 ms, sweep 437 → 7 ms. Second cross-check: 2 P2 accepted, fixed by the lead (c6e57bbe): the stage's waiting mood
+  also needs the server's busy list (a silent producer or compatibility), room detail reads busy-now at the current
+  time. Lead also fixed a now.spec route teardown race. Final on the release branch: check green (contract 1420, web
+  2974, server 4621), e2e 639/0 in 3.4 min, server RSS peak 942 MB (main 840; earlier run 888). 10.12: no findings.

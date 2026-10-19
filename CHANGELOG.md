@@ -3,6 +3,16 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.12.2] — 2026-10-19
+
+### Changed
+- **The agent icons next to each room in Chat's sidebar now show who is busy there right now** (a reply in progress,
+  or an approval waiting for you), the same as the room stage and its header, instead of everyone who wrote in the
+  last 10 minutes. They update live, and only when something changes.
+- The stage shows "waiting for you" only while the approval can still be answered (not after Hermes's approvals go
+  quiet or are switched off for compatibility).
+- **OpenCode is no longer offered** as a coding agent; it was never supported (Claude Code, Codex and Antigravity are).
+
 ## [1.12.1] — 2026-10-19
 
 ### Fixed
