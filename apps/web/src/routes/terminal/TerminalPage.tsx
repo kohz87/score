@@ -57,6 +57,30 @@ export function TerminalPage() {
   const [ending, setEnding] = useState('')
   const [ctrl, setCtrl] = useState(false)
   const [pasteHint, setPasteHint] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef(0)
+  /**
+   * Copies the terminal's selection through the browser's own copy event, which xterm fills from its selection: no
+   * Clipboard API permission is involved, so it works on a LAN address with a self-signed certificate, where
+   * `navigator.clipboard` may be refused. The Clipboard API is only the fallback.
+   */
+  const copySelection = (xterm: Terminal) => {
+    if (!xterm.hasSelection()) return
+    const text = xterm.getSelection()
+    xterm.focus()
+    let done: boolean
+    try {
+      // The only permission-free way to raise a copy event; xterm answers it with its selection.
+      done = document.execCommand('copy')
+    } catch {
+      done = false
+    }
+    if (!done) void copyText(text)
+    xterm.clearSelection()
+    setCopied(true)
+    window.clearTimeout(copiedTimer.current)
+    copiedTimer.current = window.setTimeout(() => setCopied(false), 1500)
+  }
   const host = useRef<HTMLDivElement>(null)
   const socket = useRef<WebSocket | null>(null)
   const term = useRef<Terminal | null>(null)
@@ -128,15 +152,24 @@ export function TerminalPage() {
       xterm.attachCustomKeyEventHandler((event) => {
         const action = clipboardKey(event, xterm.hasSelection())
         if (action === 'copy') {
-          if (event.type === 'keydown') {
-            void copyText(xterm.getSelection())
-            xterm.clearSelection()
-          }
+          if (event.type === 'keydown') copySelection(xterm)
           event.preventDefault()
           return false
         }
         return action !== 'paste'
       })
+      // Right-click with text selected copies it, as in Windows Terminal (the browser's menu can't see the
+      // terminal's own selection). Without a selection the browser's menu opens as usual.
+      parent.addEventListener(
+        'contextmenu',
+        (event) => {
+          if (!xterm.hasSelection()) return
+          event.preventDefault()
+          event.stopPropagation()
+          copySelection(xterm)
+        },
+        { capture: true },
+      )
       xterm.onData((data) => {
         send(ctrlRef.current ? withCtrl(data) : data)
         if (ctrlRef.current) setCtrl(false)
@@ -279,9 +312,7 @@ export function TerminalPage() {
           <button
             type="button"
             onClick={() => {
-              const text = term.current?.getSelection() ?? ''
-              if (text) void copyText(text)
-              term.current?.focus()
+              if (term.current) copySelection(term.current)
             }}
           >
             Copy
@@ -298,6 +329,11 @@ export function TerminalPage() {
           >
             Paste
           </button>
+          {copied && (
+            <p className="terminal-paste-hint" role="status">
+              Copied.
+            </p>
+          )}
           {pasteHint && (
             <p className="terminal-paste-hint" role="status">
               The browser didn’t share the clipboard. Press Ctrl+V (⌘V on a Mac) in the terminal

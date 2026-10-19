@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.3] — 2026-10-19
+
+### Fixed
+- Terminal: copying works on the LAN address too. Ctrl+C (with text selected), right-click (with text selected) and
+  the Copy button copy through the browser's own copy event, which needs no clipboard permission; "Copied." confirms
+  it. Before, copying relied on a clipboard permission the browser can refuse on a self-signed address.
+
 ## [1.9.2] — 2026-10-19
 
 ### Fixed

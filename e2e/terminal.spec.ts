@@ -73,6 +73,14 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
   try {
     await expect.poll(() => /\/pair#([\w-]+)/.exec(output)?.[1], { timeout: 60_000 }).toBeTruthy()
     const token = /\/pair#([\w-]+)/.exec(output)![1]!
+    // As on a LAN address with a self-signed certificate: the page's Clipboard API refuses to write. Copying must not
+    // depend on it (owner report, 2026-10-19). The test keeps the real one for its own setup.
+    await page.addInitScript(() => {
+      const real = navigator.clipboard.writeText.bind(navigator.clipboard)
+      Object.assign(window, { __writeClipboard: real })
+      navigator.clipboard.writeText = () =>
+        Promise.reject(new DOMException('refused', 'NotAllowedError'))
+    })
     await page.goto(`${origin}/pair#${token}`)
     await page.getByRole('button', { name: 'Pair this browser' }).click()
     await expect(page.getByText('This browser is paired')).toBeVisible()
@@ -96,11 +104,19 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
 
     // Clipboard the Windows Terminal way: Ctrl+V pastes, Ctrl+C copies a selection, and is the interrupt otherwise.
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
-    await page.evaluate(() => navigator.clipboard.writeText('echo pasted-$((1+1))'))
+    const writeClipboard = (text: string) =>
+      page.evaluate(
+        (t) =>
+          (
+            window as unknown as { __writeClipboard: (s: string) => Promise<void> }
+          ).__writeClipboard(t),
+        text,
+      )
+    await writeClipboard('echo pasted-$((1+1))')
     await page.keyboard.press('Control+V')
     await page.keyboard.press('Enter')
     await expect(screen).toContainText('pasted-2', { timeout: 15_000 })
-    await page.evaluate(() => navigator.clipboard.writeText(''))
+    await writeClipboard('')
     // The terminal's own layer takes the pointer over its text: double-click where the output line is drawn.
     const line = (await screen
       .locator('.xterm-rows > div')
@@ -108,6 +124,12 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
       .boundingBox())!
     await page.mouse.dblclick(line.x + 30, line.y + line.height / 2)
     await page.keyboard.press('Control+C')
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('score-42-ok')
+    await expect(page.getByRole('status').filter({ hasText: 'Copied.' })).toBeVisible()
+    // Right-click with a selection copies it too (the browser's own menu can't see the terminal's selection).
+    await writeClipboard('')
+    await page.mouse.dblclick(line.x + 30, line.y + line.height / 2)
+    await page.mouse.click(line.x + 30, line.y + line.height / 2, { button: 'right' })
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('score-42-ok')
     await page.keyboard.type('sleep 30')
     await page.keyboard.press('Enter')
