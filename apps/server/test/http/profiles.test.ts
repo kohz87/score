@@ -139,6 +139,7 @@ test('PLAN 10.2: a new agent keeps its look and new shape, and a picture in the 
     shape: 'cloud',
     look: 'chibi',
     avatar: null,
+    avatarEyes: null,
   })
   expect(env.db.sqlite.prepare('SELECT look, avatar_rev FROM agent_styles').all()).toEqual([
     { look: 'chibi', avatar_rev: null },

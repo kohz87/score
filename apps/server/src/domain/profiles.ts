@@ -705,11 +705,16 @@ export class ProfileOperations {
           .run(operation.targetName)
         // The imported picture goes with the agent (PLAN 10.2): the revision here, the folder right after the commit.
         sqlite
-          .prepare('UPDATE agent_styles SET avatar_rev = NULL WHERE agent_id = ?')
+          .prepare(
+            'UPDATE agent_styles SET avatar_rev = NULL, avatar_eyes = NULL WHERE agent_id = ?',
+          )
           .run(operation.targetName)
         const previous = readAgent(sqlite, operation.targetName)
-        if (previous?.style.avatar)
-          storeAgent(sqlite, { ...previous, style: { ...previous.style, avatar: null } })
+        if (previous?.style.avatar || previous?.style.avatarEyes)
+          storeAgent(sqlite, {
+            ...previous,
+            style: { ...previous.style, avatar: null, avatarEyes: null },
+          })
         return events
       },
     })

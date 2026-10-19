@@ -36,13 +36,16 @@ const ParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
 const FileParamsSchema = ParamsSchema.extend({ file: z.string() })
 const PreviewBodySchema = z.object({ content: z.string() }).strict()
 const PutFileBodySchema = z.object({ content: z.string(), etag: EtagSchema }).strict()
-// `avatar` is accepted and dropped: the picture is only ever set by its own routes.
-const StylePatchSchema = AgentStylePatchSchema.extend({ avatar: z.unknown().optional() })
+// `avatar` and `avatarEyes` are accepted and dropped: the picture and its marks are only set by their own routes.
+const StylePatchSchema = AgentStylePatchSchema.extend({
+  avatar: z.unknown().optional(),
+  avatarEyes: z.unknown().optional(),
+})
   .strict()
   .transform(
     (body) =>
       Object.fromEntries(
-        Object.entries(body).filter(([key]) => key !== 'avatar'),
+        Object.entries(body).filter(([key]) => key !== 'avatar' && key !== 'avatarEyes'),
       ) as AgentStylePatch,
   )
   .refine((body) => Object.keys(body).length > 0)

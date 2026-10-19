@@ -280,6 +280,7 @@ test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at crea
     shape: 'cylinder',
     look: 'chibi',
     avatar: null,
+    avatarEyes: null,
   })
   const patched = await request('PATCH', '/api/agents/coder/style', {
     shape: 'gem',
@@ -287,7 +288,7 @@ test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at crea
     look: 'bot',
   })
   expect(patched.statusCode, patched.body).toBe(200)
-  const expected = { color: '#102030', shape: 'gem', look: 'bot', avatar: null }
+  const expected = { color: '#102030', shape: 'gem', look: 'bot', avatar: null, avatarEyes: null }
   expect(patched.json().style).toEqual(expected)
   // Every view of the agent agrees, and the style lives in the agent's own row only.
   const listed = (await request('GET', '/api/coding-agents')).json().items[0]
@@ -332,6 +333,28 @@ test('PLAN 10.2: a coding agent can have a picture, and removing the agent remov
   const served = await app.inject({ url: `/api/agents/coder/avatar?rev=${rev}`, headers })
   expect(served.statusCode).toBe(200)
   expect(existsSync(join(home, 'avatars', 'coder', `${rev}.png`))).toBe(true)
+  // Eye marks live in the agent's own row too, and go with a replaced picture.
+  const marks = {
+    left: { x: 0.3, y: 0.5, w: 0.1, h: 0.12 },
+    right: { x: 0.56, y: 0.41, w: 0.12, h: 0.13 },
+    lid: '#fce9df',
+  }
+  const marked = await app.inject({
+    method: 'PUT',
+    url: '/api/agents/coder/avatar/eyes',
+    headers,
+    payload: marks,
+  })
+  expect(marked.statusCode, marked.body).toBe(200)
+  expect((await request('GET', '/api/coding-agents')).json().items[0].style.avatarEyes).toEqual(
+    marks,
+  )
+  expect(
+    JSON.parse(
+      String(db.sqlite.prepare('SELECT avatar_eyes FROM coding_agents').get()!.avatar_eyes),
+    ),
+  ).toEqual(marks)
+  expect(db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
   // The look and shape can change without losing it.
   await request('PATCH', '/api/agents/coder/style', { look: 'chibi', shape: 'bubble' })
   expect((await request('GET', '/api/coding-agents')).json().items[0].style).toMatchObject({

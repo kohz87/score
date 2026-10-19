@@ -55,6 +55,7 @@ test('0078 keeps every stored style and gives it the default look and no picture
       shape: 'cross',
       look: 'bot',
       avatar_rev: null,
+      avatar_eyes: null,
       updated_at: at,
     },
     {
@@ -63,6 +64,7 @@ test('0078 keeps every stored style and gives it the default look and no picture
       shape: 'hexagon',
       look: 'bot',
       avatar_rev: null,
+      avatar_eyes: null,
       updated_at: at,
     },
   ])
@@ -92,11 +94,27 @@ test('0078 gives coding agents look and avatar_rev, and a style override moves i
   upgrade(migrations)
   expect(
     db.sqlite
-      .prepare('SELECT id, color, shape, look, avatar_rev FROM coding_agents ORDER BY id')
+      .prepare(
+        'SELECT id, color, shape, look, avatar_rev, avatar_eyes FROM coding_agents ORDER BY id',
+      )
       .all(),
   ).toEqual([
-    { id: 'coder', color: '#abcdef', shape: 'pill', look: 'bot', avatar_rev: null },
-    { id: 'other', color: '#222222', shape: 'star', look: 'bot', avatar_rev: null },
+    {
+      id: 'coder',
+      color: '#abcdef',
+      shape: 'pill',
+      look: 'bot',
+      avatar_rev: null,
+      avatar_eyes: null,
+    },
+    {
+      id: 'other',
+      color: '#222222',
+      shape: 'star',
+      look: 'bot',
+      avatar_rev: null,
+      avatar_eyes: null,
+    },
   ])
   // Coding agents are styled in one place only.
   expect(

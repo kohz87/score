@@ -3,7 +3,9 @@ import {
   AgentDetailSchema,
   AgentStyleSchema,
   AgentSummarySchema,
+  AvatarEyesSchema,
   AvatarRevSchema,
+  type AvatarEyes,
   ProfileNameSchema,
   type AgentDetail,
 } from '@score/contract'
@@ -70,8 +72,14 @@ export function registerAvatarRoutes(
     if (!live(agent)) throw notFound()
   }
 
-  /** Sets (or clears) the picture revision of one agent. Returns the agent and the revision it replaced. */
-  async function setRevision(agentId: string, rev: string | null) {
+  /**
+   * Changes the picture part of one agent's style in one step: a new revision (or none), which clears the eye marks,
+   * or new marks for the current picture. Returns the agent and what it replaced; says nothing when nothing changed.
+   */
+  async function change(
+    agentId: string,
+    next: { rev: string | null } | { eyes: AvatarEyes | null },
+  ) {
     let result: { agent: z.infer<typeof AgentSummarySchema>; previous: string | null } | undefined
     await ingest.submit({
       source: 'agent-avatar',
@@ -79,14 +87,23 @@ export function registerAvatarRoutes(
       apply({ sqlite, now }) {
         const detail = readAgent(sqlite, agentId)
         if (!live(detail)) throw notFound()
-        const base = AgentStyleSchema.parse(
-          readAgentStyle(sqlite, agentId) ?? getCodingAgent(sqlite, agentId)?.style ?? detail.style,
+        const base = completeStyle(
+          AgentStyleSchema.parse(
+            readAgentStyle(sqlite, agentId) ??
+              getCodingAgent(sqlite, agentId)?.style ??
+              detail.style,
+          ),
         )
-        const previous = base.avatar ?? null
-        const style = completeStyle({ ...base, avatar: rev })
+        if ('eyes' in next && next.eyes !== null && base.avatar === null)
+          throw new HttpError(404, 'not_found', 'This agent has no picture to mark.')
+        const style = completeStyle(
+          'rev' in next
+            ? { ...base, avatar: next.rev, avatarEyes: null }
+            : { ...base, avatarEyes: next.eyes },
+        )
         const agent = AgentDetailSchema.parse({ ...detail, style })
-        result = { agent: AgentSummarySchema.parse(agent), previous }
-        if (previous === rev) return []
+        result = { agent: AgentSummarySchema.parse(agent), previous: base.avatar }
+        if (JSON.stringify(style) === JSON.stringify(base)) return []
         writeAgentStyle(sqlite, agentId, style, now, { avatar: true })
         storeAgent(sqlite, agent)
         return [{ type: 'agent.updated', data: result.agent }]
@@ -134,7 +151,7 @@ export function registerAvatarRoutes(
         const rev = store.write(agentId, picture.ext, file.bytes)
         let done
         try {
-          done = await setRevision(agentId, rev)
+          done = await change(agentId, { rev })
         } catch (error) {
           store.remove(agentId, rev)
           throw error
@@ -151,9 +168,29 @@ export function registerAvatarRoutes(
     async (request) => {
       const { agentId } = ParamsSchema.parse(request.params)
       await existing(agentId)
-      const done = await setRevision(agentId, null)
+      const done = await change(agentId, { rev: null })
       if (done.previous) store.remove(agentId, done.previous)
       return done.agent
+    },
+  )
+
+  app.put(
+    '/api/agents/:agentId/avatar/eyes',
+    { preHandler: [humanGuard(app.pairing)] },
+    async (request) => {
+      const { agentId } = ParamsSchema.parse(request.params)
+      const eyes = AvatarEyesSchema.parse(request.body)
+      await existing(agentId)
+      return (await change(agentId, { eyes })).agent
+    },
+  )
+  app.delete(
+    '/api/agents/:agentId/avatar/eyes',
+    { preHandler: [humanGuard(app.pairing)] },
+    async (request) => {
+      const { agentId } = ParamsSchema.parse(request.params)
+      await existing(agentId)
+      return (await change(agentId, { eyes: null })).agent
     },
   )
 
