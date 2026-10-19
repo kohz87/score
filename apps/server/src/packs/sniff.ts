@@ -24,43 +24,168 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 const ascii = (bytes: Buffer, at: number, length: number) =>
   bytes.toString('latin1', at, at + length)
 
+// Each format is walked to its end with bounds checks, so a header that only claims a size isn't taken for an image:
+// the chunks, blocks and frames it needs must be there and fit inside the file. Nothing is decoded.
+
 function png(bytes: Buffer): Parsed {
-  // The first chunk is IHDR (13 bytes of data). An animation (`acTL`) is just more of the same file.
-  if (bytes.length < 33 || bytes.readUInt32BE(8) !== 13 || ascii(bytes, 12, 4) !== 'IHDR')
-    return { reason: 'This PNG is damaged.' }
-  return { ext: 'png', width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+  const damaged = { reason: 'This PNG is damaged or incomplete.' }
+  // Chunks: IHDR (13 bytes) first, at least one IDAT, IEND last and exactly at the end of the file. An animation's
+  // `acTL` has to come before the first IDAT.
+  let at = 8
+  let first = true
+  let data = false
+  let ended = false
+  let width = 0
+  let height = 0
+  while (at < bytes.length && !ended) {
+    if (at + 12 > bytes.length) return damaged
+    const length = bytes.readUInt32BE(at)
+    const type = ascii(bytes, at + 4, 4)
+    const end = at + 12 + length
+    if (length > 0x7fffffff || !/^[A-Za-z]{4}$/.test(type) || end > bytes.length) return damaged
+    if (first) {
+      if (type !== 'IHDR' || length !== 13) return damaged
+      width = bytes.readUInt32BE(at + 8)
+      height = bytes.readUInt32BE(at + 12)
+      first = false
+    } else if (type === 'IHDR') return damaged
+    if (type === 'acTL' && data) return damaged
+    if (type === 'IDAT') data = true
+    if (type === 'IEND') {
+      if (length !== 0 || end !== bytes.length) return damaged
+      ended = true
+    }
+    at = end
+  }
+  return data && ended && !first ? { ext: 'png', width, height } : damaged
 }
 
 function gif(bytes: Buffer): Parsed {
-  // "GIF87a" or "GIF89a", then the logical screen's width and height (little-endian).
-  if (bytes.length < 13) return { reason: 'This GIF is damaged.' }
-  return { ext: 'gif', width: bytes.readUInt16LE(6), height: bytes.readUInt16LE(8) }
+  const damaged = { reason: 'This GIF is damaged or incomplete.' }
+  if (bytes.length < 14) return damaged
+  // Header, logical screen (width and height little-endian), optional global colour table.
+  const width = bytes.readUInt16LE(6)
+  const height = bytes.readUInt16LE(8)
+  let at = 13
+  if (bytes[10]! & 0x80) at += 3 * 2 ** ((bytes[10]! & 7) + 1)
+  // Sub-blocks: a length byte and that many bytes, ended by a zero length. Returns how many held data, or null.
+  const subBlocks = (): number | null => {
+    let held = 0
+    for (;;) {
+      if (at >= bytes.length) return null
+      const size = bytes[at]!
+      at += 1
+      if (size === 0) return held
+      at += size
+      if (at > bytes.length) return null
+      held += 1
+    }
+  }
+  let images = 0
+  for (;;) {
+    if (at >= bytes.length) return damaged
+    const block = bytes[at]!
+    if (block === 0x3b) {
+      // The trailer ends the file.
+      return at === bytes.length - 1 && images > 0 ? { ext: 'gif', width, height } : damaged
+    }
+    if (block === 0x21) {
+      at += 2
+      if (at >= bytes.length || subBlocks() === null) return damaged
+    } else if (block === 0x2c) {
+      if (at + 10 > bytes.length) return damaged
+      const packed = bytes[at + 9]!
+      at += 10
+      if (packed & 0x80) at += 3 * 2 ** ((packed & 7) + 1)
+      if (at >= bytes.length || bytes[at]! < 2 || bytes[at]! > 8) return damaged
+      at += 1
+      // An image without any data is not an image.
+      if (!subBlocks()) return damaged
+      images += 1
+    } else return damaged
+  }
+}
+
+interface Chunk {
+  id: string
+  at: number
+  size: number
+}
+/** The chunks of a RIFF payload between `from` and `to`, each inside it; null when one doesn't fit. */
+function riffChunks(bytes: Buffer, from: number, to: number): Chunk[] | null {
+  const chunks: Chunk[] = []
+  let at = from
+  while (at < to) {
+    if (at + 8 > to) return null
+    const size = bytes.readUInt32LE(at + 4)
+    const end = at + 8 + size
+    if (end > to) return null
+    chunks.push({ id: ascii(bytes, at, 4), at: at + 8, size })
+    // Chunks are padded to an even size; a missing pad on the very last one is tolerated.
+    at = end + (size & 1)
+    if (at > to && end !== to) return null
+  }
+  return chunks
+}
+/** A VP8 or VP8L chunk with at least the header that gives the picture its size. */
+function hasImage(bytes: Buffer, chunks: Chunk[]): boolean {
+  return chunks.some(
+    (chunk) =>
+      (chunk.id === 'VP8 ' &&
+        chunk.size >= 10 &&
+        bytes[chunk.at + 3] === 0x9d &&
+        bytes[chunk.at + 4] === 0x01 &&
+        bytes[chunk.at + 5] === 0x2a) ||
+      (chunk.id === 'VP8L' && chunk.size >= 5 && bytes[chunk.at] === 0x2f),
+  )
 }
 
 function webp(bytes: Buffer): Parsed {
-  const damaged = { reason: 'This WebP is damaged.' }
-  if (bytes.length < 21 || bytes.readUInt32LE(4) + 8 > bytes.length) return damaged
-  const kind = ascii(bytes, 12, 4)
-  if (kind === 'VP8X') {
-    if (bytes.length < 30) return damaged
-    return { ext: 'webp', width: bytes.readUIntLE(24, 3) + 1, height: bytes.readUIntLE(27, 3) + 1 }
-  }
-  if (kind === 'VP8L') {
-    if (bytes.length < 25 || bytes[20] !== 0x2f) return damaged
-    const bits = bytes.readUInt32LE(21)
-    return { ext: 'webp', width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 }
-  }
-  if (kind === 'VP8 ') {
-    // 3-byte frame tag, then the start code 9d 01 2a, then 14-bit width and height.
-    if (bytes.length < 30 || bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a)
-      return damaged
+  const damaged = { reason: 'This WebP is damaged or incomplete.' }
+  // The RIFF size must be the file's, and every chunk must fit inside it.
+  if (bytes.length < 20 || bytes.readUInt32LE(4) + 8 !== bytes.length) return damaged
+  const chunks = riffChunks(bytes, 12, bytes.length)
+  const first = chunks?.[0]
+  if (!chunks || !first) return damaged
+  if (first.id === 'VP8L' || first.id === 'VP8 ') {
+    if (!hasImage(bytes, [first])) return damaged
+    if (first.id === 'VP8L') {
+      const bits = bytes.readUInt32LE(first.at + 1)
+      return { ext: 'webp', width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 }
+    }
     return {
       ext: 'webp',
-      width: bytes.readUInt16LE(26) & 0x3fff,
-      height: bytes.readUInt16LE(28) & 0x3fff,
+      width: bytes.readUInt16LE(first.at + 6) & 0x3fff,
+      height: bytes.readUInt16LE(first.at + 8) & 0x3fff,
     }
   }
-  return damaged
+  if (first.id !== 'VP8X' || first.size < 10) return damaged
+  const size = {
+    ext: 'webp' as const,
+    width: bytes.readUIntLE(first.at + 4, 3) + 1,
+    height: bytes.readUIntLE(first.at + 7, 3) + 1,
+  }
+  const rest = chunks.slice(1)
+  const frames = rest.filter((chunk) => chunk.id === 'ANMF')
+  if (!(bytes[first.at]! & 0x02)) {
+    // A still: its image is a chunk of its own; frames and an animation header without the flag are not allowed.
+    return hasImage(bytes, rest) &&
+      frames.length === 0 &&
+      !rest.some((chunk) => chunk.id === 'ANIM')
+      ? size
+      : damaged
+  }
+  // An animation: ANIM first, then frames that each hold image data; no still image beside them.
+  const anim = rest.findIndex((chunk) => chunk.id === 'ANIM')
+  const firstFrame = rest.findIndex((chunk) => chunk.id === 'ANMF')
+  if (anim < 0 || rest[anim]!.size < 6 || firstFrame < 0 || anim > firstFrame) return damaged
+  if (hasImage(bytes, rest)) return damaged
+  for (const frame of frames) {
+    if (frame.size < 16 + 8) return damaged
+    const inner = riffChunks(bytes, frame.at + 16, frame.at + frame.size)
+    if (!inner || !hasImage(bytes, inner)) return damaged
+  }
+  return size
 }
 
 function header(bytes: Buffer): Parsed | null {

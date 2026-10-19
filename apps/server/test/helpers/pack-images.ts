@@ -49,14 +49,52 @@ export function jpegImage(width: number, height: number, sof = 0xc0): Buffer {
   frame.set([3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1], 9)
   return Buffer.concat([Buffer.from([0xff, 0xd8]), app0, frame, Buffer.from([0xff, 0xd9])])
 }
-function riff(chunk: string, body: Buffer): Buffer {
-  const size = Buffer.alloc(4)
-  size.writeUInt32LE(body.length, 0)
-  const data = Buffer.concat([Buffer.from(chunk, 'latin1'), size, body])
+/** A RIFF/WebP file of the given chunks (fourcc, payload), each padded to an even size, with a correct RIFF size. */
+export function riffOf(chunks: [string, Buffer][]): Buffer {
+  const parts = chunks.flatMap(([fourcc, body]) => {
+    const size = Buffer.alloc(4)
+    size.writeUInt32LE(body.length, 0)
+    return [
+      Buffer.from(fourcc, 'latin1'),
+      size,
+      body,
+      ...(body.length % 2 ? [Buffer.alloc(1)] : []),
+    ]
+  })
+  const data = Buffer.concat(parts)
   const total = Buffer.alloc(4)
   total.writeUInt32LE(data.length + 4, 0)
   return Buffer.concat([Buffer.from('RIFF', 'latin1'), total, Buffer.from('WEBP', 'latin1'), data])
 }
+export const vp8lOf = (width: number, height: number) => {
+  const body = Buffer.alloc(16)
+  body[0] = 0x2f
+  body.writeUInt32LE((width - 1) | ((height - 1) << 14), 1)
+  return body
+}
+export const vp8Of = (width: number, height: number) => {
+  const body = Buffer.alloc(16)
+  body.set([0x10, 0, 0, 0x9d, 0x01, 0x2a])
+  body.writeUInt16LE(width, 6)
+  body.writeUInt16LE(height, 8)
+  return body
+}
+export function vp8xBody(width: number, height: number, flags = 0): Buffer {
+  const body = Buffer.alloc(10)
+  body[0] = flags
+  body.writeUIntLE(width - 1, 4, 3)
+  body.writeUIntLE(height - 1, 7, 3)
+  return body
+}
+/** An ANMF frame chunk body: the 16-byte frame header, then the frame's own chunks. */
+export function anmfBody(width: number, height: number, chunks: [string, Buffer][]): Buffer {
+  const head = Buffer.alloc(16)
+  head.writeUIntLE(width - 1, 6, 3)
+  head.writeUIntLE(height - 1, 9, 3)
+  head.writeUIntLE(100, 12, 3)
+  return Buffer.concat([head, riffOf(chunks).subarray(12)])
+}
+/** A complete WebP: lossy (VP8), lossless (VP8L), or extended (VP8X) as a still or, with `animated`, with frames. */
 export function webpImage(
   width: number,
   height: number,
@@ -64,23 +102,45 @@ export function webpImage(
   options: { animated?: boolean } = {},
 ): Buffer {
   if (kind === 'VP8X') {
-    const body = Buffer.alloc(10)
-    body[0] = options.animated ? 0x02 : 0
-    body.writeUIntLE(width - 1, 4, 3)
-    body.writeUIntLE(height - 1, 7, 3)
-    return riff('VP8X', body)
+    if (!options.animated)
+      return riffOf([
+        ['VP8X', vp8xBody(width, height)],
+        ['VP8L', vp8lOf(width, height)],
+      ])
+    const anim = Buffer.alloc(6)
+    return riffOf([
+      ['VP8X', vp8xBody(width, height, 0x02)],
+      ['ANIM', anim],
+      ['ANMF', anmfBody(width, height, [['VP8L', vp8lOf(width, height)]])],
+      ['ANMF', anmfBody(width, height, [['VP8 ', vp8Of(width, height)]])],
+    ])
   }
-  if (kind === 'VP8L') {
-    const body = Buffer.alloc(16)
-    body[0] = 0x2f
-    body.writeUInt32LE((width - 1) | ((height - 1) << 14), 1)
-    return riff('VP8L', body)
+  return kind === 'VP8L'
+    ? riffOf([['VP8L', vp8lOf(width, height)]])
+    : riffOf([['VP8 ', vp8Of(width, height)]])
+}
+/**
+ * The image made exactly `total` bytes long by a private chunk of zeros inside it (PNG, before IEND; WebP, at the
+ * end with the RIFF size kept right), so it stays a complete image. WebP sizes are even, so `total` must be too.
+ */
+export function padTo(image: Buffer, total: number): Buffer {
+  const extra = total - image.length
+  if (image.toString('latin1', 0, 4) === 'RIFF') {
+    if (extra < 8 || extra % 2) throw new Error('A WebP can only grow by an even 8 bytes or more')
+    const chunk = Buffer.alloc(extra)
+    chunk.write('JUNK', 0, 'latin1')
+    chunk.writeUInt32LE(extra - 8, 4)
+    const out = Buffer.concat([image, chunk])
+    out.writeUInt32LE(out.length - 8, 4)
+    return out
   }
-  const body = Buffer.alloc(16)
-  body.set([0x10, 0, 0, 0x9d, 0x01, 0x2a])
-  body.writeUInt16LE(width, 6)
-  body.writeUInt16LE(height, 8)
-  return riff('VP8 ', body)
+  if (extra < 12) throw new Error('A PNG can only grow by 12 bytes or more')
+  const end = image.length - 12
+  return Buffer.concat([
+    image.subarray(0, end),
+    pngChunk('prVt', Buffer.alloc(extra - 12)),
+    image.subarray(end),
+  ])
 }
 
 /** A GIF with the given size (header and one empty frame; enough for the header checks). */
