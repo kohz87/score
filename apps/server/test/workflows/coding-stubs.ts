@@ -9,14 +9,13 @@ export const CODING_TEAM = {
   cc: { runtime: 'claude-code', permission: 'workspace-write' },
   cx: { runtime: 'codex', permission: 'read-only' },
   ag: { runtime: 'antigravity', permission: 'workspace-write' },
-  oc: { runtime: 'opencode', permission: 'workspace-write' },
   wide: { runtime: 'codex', permission: 'full' },
 } as const
 
 export const stubFacts = (unitHost = true): CodingWorkerFacts => ({
   unitHost: () => unitHost,
   agent: (id) =>
-    // Antigravity and OpenCode are coding agents of the team, but never workers.
+    // Antigravity is a coding agent of the team, but never a worker.
     id in CODING_TEAM &&
     ['claude-code', 'codex'].includes(CODING_TEAM[id as keyof typeof CODING_TEAM].runtime)
       ? CODING_TEAM[id as keyof typeof CODING_TEAM]

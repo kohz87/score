@@ -32,17 +32,6 @@
       "message": null,
       "unverifiedPermissions": [],
       "warning": null
-    },
-    {
-      "runtime": "opencode",
-      "label": "OpenCode",
-      "state": "not_supported",
-      "version": null,
-      "testedVersions": [],
-      "quota": "Uses whichever provider OpenCode is signed in to.",
-      "message": "OpenCode is not supported by this version of Score yet.",
-      "unverifiedPermissions": [],
-      "warning": null
     }
   ]
 }

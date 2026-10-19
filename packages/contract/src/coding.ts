@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { AgentIdSchema, AgentStyleSchema } from './types.ts'
 import { ProfileNameSchema } from './profiles.ts'
 
-// §8 Coding agents (PLAN 7.2, 7.6): Claude Code, Codex CLI and Antigravity (agy) as team members; OpenCode is listed only.
+// §8 Coding agents (PLAN 7.2, 7.6): Claude Code, Codex CLI and Antigravity (agy) as team members.
 
 export const CodingRuntimeSchema = z.enum(['claude-code', 'codex', 'antigravity'])
 export type CodingRuntime = z.infer<typeof CodingRuntimeSchema>
@@ -14,7 +14,7 @@ export type CodingPermission = z.infer<typeof CodingPermissionSchema>
 export const CliStateSchema = z.enum([
   'ready',
   'not_installed',
-  /** Known, but this Score cannot drive it yet (OpenCode). */
+  /** Known, but this Score cannot drive it yet. */
   'not_supported',
   /** Installed, but its version is not one of the tested versions: runs only after the person confirms that version. */
   'untested_version',

@@ -422,7 +422,7 @@ accepted after two adversarial rounds; Codex code review, a fix round, a verific
 has a regression test that failed before it. Checked live with a real two-step workflow (Claude Code, then Codex).
 
 ### Added — coding agents in workflows
-- The workflow editor offers Claude Code and Codex agents for step nodes (with their badge); Antigravity and OpenCode
+- The workflow editor offers Claude Code and Codex agents for step nodes (with their badge); Antigravity
   are shown as unavailable with the reason. **Validate**, saving and starting all report coding problems the same way.
 - The run dialog explains in plain words what each coding agent can read and asks for one acknowledgement; it sets the
   coding step limit and which programs may keep going when their cost is unknown. A **rerun asks again**.

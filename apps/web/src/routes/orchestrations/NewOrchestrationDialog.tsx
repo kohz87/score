@@ -272,7 +272,7 @@ export function NewOrchestrationDialog({
                 <label key={agent.id} className="orch-check">
                   <input
                     type="checkbox"
-                    disabled={agent.runtime === 'antigravity' || agent.runtime === 'opencode'}
+                    disabled={agent.runtime === 'antigravity'}
                     checked={allowed.includes(agent.id)}
                     onChange={(event) =>
                       setAllowed((list) =>

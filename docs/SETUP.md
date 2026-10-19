@@ -353,5 +353,5 @@ line without it; the launcher shows the link once from a 0600 `pair-link` file a
 Team › Add agent › Coding agent runs the CLIs you already have, signed in with their own logins (Score never reads or
 passes credentials): `claude` (Claude Code, tested with exactly 2.1.295) and `codex` (Codex CLI, tested with exactly 0.160.1). Both must be
 on the `PATH` Score starts with. A newer or older version shows "untested version" and runs only after you confirm it for that
-agent. OpenCode is listed but not supported yet. Turns use your Claude / ChatGPT plan quota. Tests and the fake mode never start a
+agent. Turns use your Claude / ChatGPT plan quota. Tests and the fake mode never start a
 real CLI: `SCORE_CODING_FAKE_CLI` (honoured only in fake mode and under test) points at a script that prints hand-made fixtures.

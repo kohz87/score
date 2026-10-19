@@ -9,7 +9,6 @@ type TeamMember = Pick<AgentSummary, 'id' | 'runtime'>
 
 const LABELS: Record<string, string> = {
   antigravity: 'Antigravity',
-  opencode: 'OpenCode',
   'claude-code': 'Claude Code',
   codex: 'Codex',
 }

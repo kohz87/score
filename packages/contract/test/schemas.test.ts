@@ -1443,9 +1443,9 @@ const cases = [
   ],
   ['RoomDeletedSchema', { id: 'r' }, { id: '' }],
   // PLAN 7.2: coding agents
-  ['RuntimeSchema', 'claude-code', 'cursor'],
+  ['RuntimeSchema', 'claude-code', 'opencode'],
   ['CostKindSchema', 'estimated', 'free'],
-  ['CodingRuntimeSchema', 'codex', 'hermes'],
+  ['CodingRuntimeSchema', 'codex', 'opencode'],
   ['CodingPermissionSchema', 'workspace-write', 'root'],
   ['CliStateSchema', 'untested_version', 'broken'],
   [
