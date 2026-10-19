@@ -432,3 +432,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   eye-mark code removed. 30 route tests + reader/store/sniff/migration tests failed first; server suite 4567/0. Lead
   reviewed the reader (no zip path is used for storage; caps before inflate). Choices accepted: file cap counts files
   only; unknown-activity image = 422, other files ignored; case-insensitive names; unknown activity on GET = 404.
+- **10.2b web done; cross-check** (Codex high, `~/.score/codex/runs/10.2-v2/crosscheck.md`): 5 real P2s, all accepted —
+  protected layer forces pet frames visible under custom themes; stale refresh can revert a coding agent's look/pack;
+  header-only images pass sniffing; UI applies the 8 MB image cap to ZIPs; a stray root file blocks pack-folder
+  detection. Lead review added: no upload progress for packs up to 64 MB; appearance popover clips its last line. Lead
+  merged main into 10.2b (DECISIONS conflict: rows 105–108 in order). Server fixes → 10.2a builder, web fixes → 10.2b
+  builder. Lead viewed the real app with a pack: pet on the Team card and agent header with the mark badge.
