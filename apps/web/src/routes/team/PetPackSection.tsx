@@ -1,7 +1,7 @@
 import { AgentSummarySchema, type AgentSummary } from '@score/contract'
 import { useMutation } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { apiFetch } from '../../data/api.ts'
+import { apiFetch, apiUpload, type UploadProgress } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { packProblems } from './pack-errors.ts'
 import { PetPackGuide } from './PetPackGuide.tsx'
@@ -12,13 +12,40 @@ const PACK_MAX_BYTES = 64 * 1024 * 1024
 
 type Added = { activities: string[]; ignored: string[] }
 
+const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
+
+/** How far the upload has got: bytes sent, then what the server is doing once it has them all. */
+export function PackUploadProgress({ name, progress }: { name: string; progress: UploadProgress }) {
+  const { loaded, total } = progress
+  const sent = total > 0 && loaded >= total
+  const percent = total > 0 ? Math.round((loaded / total) * 100) : 0
+  const doing = sent ? 'Checking the pack…' : 'Uploading'
+  return (
+    <div className="team-pack-progress" role="status" aria-live="polite">
+      <p>
+        <strong>{name}</strong>
+      </p>
+      <p>
+        {doing}
+        {sent ? null : ` · ${percent}% · ${megabytes(loaded)} of ${megabytes(total)}`}
+      </p>
+      {sent ? (
+        <progress aria-label={`${name}: ${doing}`} />
+      ) : (
+        <progress aria-label={`${name}: ${doing}`} max={total} value={loaded} />
+      )}
+    </div>
+  )
+}
+
 /** What a person is told before anything is sent, or null when the choice can go to the server. */
 export function packChoiceProblem(files: readonly File[]): string | null {
   if (files.length === 0) return null
   const zips = files.filter((file) => /\.zip$/i.test(file.name))
   if (zips.length > 0 && files.length > 1)
     return 'Choose one .zip, or the activity files themselves, not both.'
-  const big = files.find((file) => file.size > FILE_MAX_BYTES)
+  // 8 MB is the limit of one image; a zip is held to the pack's 64 MB as a whole.
+  const big = files.find((file) => !/\.zip$/i.test(file.name) && file.size > FILE_MAX_BYTES)
   if (big) return `${big.name} is larger than 8 MB.`
   if (files.reduce((sum, file) => sum + file.size, 0) > PACK_MAX_BYTES)
     return 'The pack is larger than 64 MB.'
@@ -31,16 +58,16 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
   const [files, setFiles] = useState<File[]>([])
   const [problems, setProblems] = useState<string[]>([])
   const [added, setAdded] = useState<Added | null>(null)
+  const [progress, setProgress] = useState<UploadProgress | null>(null)
   const pack = agent.style.pack
   const base = `agents/${encodeURIComponent(agent.id)}/pack`
   const upload = useMutation({
     mutationFn: async (chosen: File[]) => {
       const form = new FormData()
       for (const file of chosen) form.append('file', file, file.name)
-      const body = (await apiFetch(base, {
-        method: 'PUT',
-        headers: { 'Idempotency-Key': newId() },
-        body: form,
+      setProgress({ loaded: 0, total: chosen.reduce((sum, file) => sum + file.size, 0) })
+      const body = (await apiUpload(base, form, setProgress, {
+        'Idempotency-Key': newId(),
       })) as { agent?: unknown; ignored?: unknown }
       const summary = AgentSummarySchema.parse(body.agent)
       const ignored = Array.isArray(body.ignored)
@@ -48,6 +75,7 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
         : []
       return { summary, ignored }
     },
+    onSettled: () => setProgress(null),
     onSuccess: ({ summary, ignored }) => {
       setFiles([])
       setProblems([])
@@ -110,6 +138,12 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
             <li key={file.name}>{file.name}</li>
           ))}
         </ul>
+      )}
+      {upload.isPending && progress && (
+        <PackUploadProgress
+          name={files.length === 1 ? files[0]!.name : `${files.length} files`}
+          progress={progress}
+        />
       )}
       <div className="team-style-actions">
         {files.length > 0 ? (

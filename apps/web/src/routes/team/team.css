@@ -262,8 +262,10 @@
   top: calc(100% + 10px);
   left: 0;
   width: min(440px, calc(100vw - 32px));
-  max-height: min(80vh, 720px);
+  /* Bounded by the window: what is left below the panel's top (set when it opens), so its last line can be scrolled to. */
+  max-height: max(240px, calc(100dvh - var(--team-popover-top, 200px) - 16px));
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 18px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-20);

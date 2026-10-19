@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { ApiError, apiFetch } from './api.ts'
+import { ApiError, apiFetch, apiUpload } from './api.ts'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -100,4 +100,72 @@ test('passes an AbortSignal through to fetch', async () => {
   const controller = new AbortController()
   await apiFetch('rooms', { signal: controller.signal })
   expect(fetch.mock.calls[0]![1].signal).toBe(controller.signal)
+})
+
+// apiUpload: a PUT with progress. A file goes as octet-stream; a form (a pet pack) is left to the browser.
+class FakeXhr {
+  static last: FakeXhr
+  headers: Record<string, string> = {}
+  method = ''
+  url = ''
+  sent: unknown
+  status = 200
+  responseText = '{"ok":true}'
+  responseType = ''
+  upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null }
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  constructor() {
+    FakeXhr.last = this
+  }
+  open(method: string, url: string) {
+    this.method = method
+    this.url = url
+  }
+  setRequestHeader(name: string, value: string) {
+    this.headers[name.toLowerCase()] = value
+  }
+  send(body: unknown) {
+    this.sent = body
+  }
+}
+
+test('a Blob upload is a PUT as octet-stream with the mutation header', async () => {
+  vi.stubGlobal('XMLHttpRequest', FakeXhr)
+  const done = apiUpload('knowledge/files/a.bin', new Blob(['abc']))
+  const xhr = FakeXhr.last
+  expect([xhr.method, xhr.url]).toEqual(['PUT', '/api/knowledge/files/a.bin'])
+  expect(xhr.headers['x-score-client']).toBe('web')
+  expect(xhr.headers['content-type']).toBe('application/octet-stream')
+  xhr.onload?.()
+  expect(await done).toEqual({ ok: true })
+})
+
+test('a FormData upload leaves the content type to the browser, keeps the mutation header and adds the given ones', async () => {
+  vi.stubGlobal('XMLHttpRequest', FakeXhr)
+  const form = new FormData()
+  form.append('file', new File([new Uint8Array(3000)], 'idle.png'), 'idle.png')
+  form.append('file', new File([new Uint8Array(1000)], 'work.png'), 'work.png')
+  const seen: { loaded: number; total: number }[] = []
+  const done = apiUpload('agents/lead/pack', form, (progress) => seen.push(progress), {
+    'Idempotency-Key': 'key-1',
+  })
+  const xhr = FakeXhr.last
+  expect(xhr.headers['content-type']).toBeUndefined()
+  expect(xhr.headers['x-score-client']).toBe('web')
+  expect(xhr.headers['idempotency-key']).toBe('key-1')
+  expect(xhr.sent).toBe(form)
+  // Without a computable total from the browser, the files' sizes stand in for it.
+  xhr.upload.onprogress?.({ loaded: 1500, lengthComputable: false, total: 0 } as ProgressEvent)
+  xhr.upload.onprogress?.({ loaded: 2000, lengthComputable: true, total: 4200 } as ProgressEvent)
+  expect(seen).toEqual([
+    { loaded: 1500, total: 4000 },
+    { loaded: 2000, total: 4200 },
+  ])
+  xhr.status = 422
+  xhr.responseText = JSON.stringify({
+    error: { code: 'pack_rejected', message: 'No.', details: { reasons: ['idle is missing.'] } },
+  })
+  xhr.onload?.()
+  await expect(done).rejects.toMatchObject({ status: 422, code: 'pack_rejected' })
 })

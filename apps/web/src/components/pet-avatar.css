@@ -23,7 +23,7 @@
   cursor: pointer;
 }
 
-.pet-floor {
+.pet-avatar__floor {
   position: absolute;
   inset: auto 0 0;
   height: 16%;
@@ -32,13 +32,13 @@
 }
 
 /* Everything that hops or bounces moves as one: the stage. */
-.pet-stage {
+.pet-avatar__stage {
   position: absolute;
   inset: 0;
   transform-origin: 50% 100%;
 }
 
-.pet-anim {
+.pet-avatar__anim {
   position: absolute;
   left: 50%;
   /* Feet stand a little above the floor's edge; `floor` lifts them if the files have them too low. */
@@ -53,28 +53,28 @@
   user-select: none;
 }
 
-.pet-anim--on {
+.pet-avatar__anim--on {
   opacity: 1;
 }
 
-.pet-avatar[data-file='sleep'] .pet-anim--on {
+.pet-avatar[data-file='sleep'] .pet-avatar__anim--on {
   filter: brightness(0.92) saturate(0.88);
 }
 
-.pet-stage--hop {
+.pet-avatar__stage--hop {
   animation: pet-hop 1.3s cubic-bezier(0.3, 0.7, 0.4, 1) infinite;
 }
 
-.pet-stage--love {
+.pet-avatar__stage--love {
   animation: pet-hop 0.8s cubic-bezier(0.3, 0.7, 0.4, 1) 1;
 }
 
 /* A second bounce in a row must restart the animation: alternate the name. */
-.pet-stage--love-1 {
+.pet-avatar__stage--love-1 {
   animation-name: pet-hop-alt;
 }
 
-.pet-badge {
+.pet-avatar__badge {
   position: absolute;
   right: 6%;
   bottom: 12%;
@@ -89,40 +89,40 @@
   box-shadow: 0 2px 8px rgb(18 19 26 / 14%);
 }
 
-.pet-badge .agent-glyph {
+.pet-avatar__badge .agent-glyph {
   --glyph-svg-size: 12px;
 }
 
 /* Score's overlays. Inline SVG, so a theme's text rules never touch them, and only transform and fill-opacity move. */
-.pet-fx {
+.pet-avatar__fx {
   position: absolute;
   z-index: 3;
   pointer-events: none;
   overflow: visible;
 }
 
-.pet-dots {
+.pet-avatar__dots {
   top: 14%;
   right: 14%;
   width: 30%;
 }
 
-.pet-dot {
+.pet-avatar__dot {
   fill: var(--pet-color);
   transform-box: fill-box;
   transform-origin: center;
   animation: pet-wave 1.2s ease-in-out infinite;
 }
 
-.pet-dot:nth-child(2) {
+.pet-avatar__dot:nth-child(2) {
   animation-delay: 0.15s;
 }
 
-.pet-dot:nth-child(3) {
+.pet-avatar__dot:nth-child(3) {
   animation-delay: 0.3s;
 }
 
-.pet-alert {
+.pet-avatar__alert {
   top: 12%;
   right: 12%;
   width: 26%;
@@ -130,30 +130,30 @@
   animation: pet-pop 1.3s ease-in-out infinite;
 }
 
-.pet-alert-bg {
+.pet-avatar__alert-bg {
   fill: var(--pet-color);
 }
 
-.pet-alert-text {
+.pet-avatar__alert-text {
   fill: var(--pet-plate);
   font: 700 18px var(--font-body, sans-serif);
   text-anchor: middle;
 }
 
-.pet-zzz {
+.pet-avatar__zzz {
   top: 16%;
   right: 16%;
   width: 28%;
 }
 
-.pet-z {
+.pet-avatar__z {
   fill: var(--pet-color);
   font: 700 12px var(--font-body, sans-serif);
   fill-opacity: 0;
   animation: pet-z 2.6s ease-in infinite;
 }
 
-.pet-say {
+.pet-avatar__say {
   left: 50%;
   top: 8%;
   width: 46%;
@@ -162,17 +162,17 @@
   animation: pet-say 0.18s cubic-bezier(0.3, 1.6, 0.5, 1) 1;
 }
 
-.pet-say-bg {
+.pet-avatar__say-bg {
   fill: #12131a;
 }
 
-.pet-say-text {
+.pet-avatar__say-text {
   fill: #ffffff;
   font: 600 11px var(--font-body, sans-serif);
   text-anchor: middle;
 }
 
-.pet-heart {
+.pet-avatar__heart {
   left: 50%;
   top: 16%;
   width: 20%;
@@ -180,7 +180,7 @@
   animation: pet-heart 0.9s ease-out 1 both;
 }
 
-.pet-heart-shape {
+.pet-avatar__heart-shape {
   fill: #f43f5e;
 }
 

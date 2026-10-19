@@ -29,6 +29,15 @@ describe('sanitiseCss', () => {
     expect(reasons('.orch-decision--gate { color: red }')).toEqual(['protected_selector'])
     expect(reasons('.agent-glyph__ring { fill: none }')).toEqual(['protected_selector'])
     expect(reasons('.orch-decisions { color: red }')).toEqual(['protected_selector'])
+    // A pet avatar's own parts: Score's rules reach them, a theme's never do (so protected.css can leave them be).
+    for (const part of [
+      'avatar',
+      'avatar__anim--on',
+      'avatar__stage',
+      'avatar__fx',
+      'avatar__badge',
+    ])
+      expect(reasons(`.pet-${part} { display: none }`), part).toEqual(['protected_selector'])
     // Gate #2: the task drawer's approval and the add-coding-agent permission controls are protected too.
     expect(reasons('.task-drawer-approval { display: none }')).toEqual(['protected_selector'])
     expect(reasons('.task-drawer-buttons button { display: none }')).toEqual(['protected_selector'])

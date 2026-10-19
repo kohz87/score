@@ -45,19 +45,23 @@ function StillFrame({ url, on }: { url: string; on: boolean }) {
     }
   }, [url])
   return (
-    <canvas ref={canvas} className={`pet-anim${on ? ' pet-anim--on' : ''}`} aria-hidden="true" />
+    <canvas
+      ref={canvas}
+      className={`pet-avatar__anim${on ? ' pet-avatar__anim--on' : ''}`}
+      aria-hidden="true"
+    />
   )
 }
 
 function Dots() {
   return (
-    <svg className="pet-fx pet-dots" viewBox="0 0 30 14" aria-hidden="true">
+    <svg className="pet-avatar__fx pet-avatar__dots" viewBox="0 0 30 14" aria-hidden="true">
       {[
         [5, 10, 2.6],
         [14, 8, 3.4],
         [24, 5.5, 4.2],
       ].map(([cx, cy, r]) => (
-        <circle key={cx} className="pet-dot" cx={cx} cy={cy} r={r} />
+        <circle key={cx} className="pet-avatar__dot" cx={cx} cy={cy} r={r} />
       ))}
     </svg>
   )
@@ -65,9 +69,9 @@ function Dots() {
 
 function Alert() {
   return (
-    <svg className="pet-fx pet-alert" viewBox="0 0 26 26" aria-hidden="true">
-      <rect className="pet-alert-bg" x="0" y="0" width="26" height="26" rx="9" />
-      <text className="pet-alert-text" x="13" y="19.5">
+    <svg className="pet-avatar__fx pet-avatar__alert" viewBox="0 0 26 26" aria-hidden="true">
+      <rect className="pet-avatar__alert-bg" x="0" y="0" width="26" height="26" rx="9" />
+      <text className="pet-avatar__alert-text" x="13" y="19.5">
         !
       </text>
     </svg>
@@ -76,11 +80,11 @@ function Alert() {
 
 function Zzz() {
   return (
-    <svg className="pet-fx pet-zzz" viewBox="0 0 30 30" aria-hidden="true">
+    <svg className="pet-avatar__fx pet-avatar__zzz" viewBox="0 0 30 30" aria-hidden="true">
       {[0, 1, 2].map((n) => (
         <text
           key={n}
-          className="pet-z"
+          className="pet-avatar__z"
           x={4 + n * 4}
           y={24 - n * 3}
           style={{ animationDelay: `${n * 0.9}s` }}
@@ -94,9 +98,9 @@ function Zzz() {
 
 function Say() {
   return (
-    <svg className="pet-fx pet-say" viewBox="0 0 44 22" aria-hidden="true">
-      <rect className="pet-say-bg" x="0" y="0" width="44" height="18" rx="9" />
-      <text className="pet-say-text" x="22" y="13">
+    <svg className="pet-avatar__fx pet-avatar__say" viewBox="0 0 44 22" aria-hidden="true">
+      <rect className="pet-avatar__say-bg" x="0" y="0" width="44" height="18" rx="9" />
+      <text className="pet-avatar__say-text" x="22" y="13">
         hi!
       </text>
     </svg>
@@ -105,9 +109,9 @@ function Say() {
 
 function Heart() {
   return (
-    <svg className="pet-fx pet-heart" viewBox="0 0 20 20" aria-hidden="true">
+    <svg className="pet-avatar__fx pet-avatar__heart" viewBox="0 0 20 20" aria-hidden="true">
       <path
-        className="pet-heart-shape"
+        className="pet-avatar__heart-shape"
         d="M10 16.6 C4 12.6 2.5 9.6 3.6 7.1 C4.8 4.4 8.4 4.2 10 6.8 C11.6 4.2 15.2 4.4 16.4 7.1 C17.5 9.6 16 12.6 10 16.6 Z"
       />
     </svg>
@@ -176,12 +180,12 @@ export function PetAvatar({
       onPointerEnter={() => pet.pointerEnter()}
       onClick={() => pet.click()}
     >
-      <div className="pet-floor" />
+      <div className="pet-avatar__floor" />
       <div
         className={[
-          'pet-stage',
-          view.hop && 'pet-stage--hop',
-          view.love && `pet-stage--love pet-stage--love-${view.hearts % 2}`,
+          'pet-avatar__stage',
+          view.hop && 'pet-avatar__stage--hop',
+          view.love && `pet-avatar__stage--love pet-avatar__stage--love-${view.hearts % 2}`,
         ]
           .filter(Boolean)
           .join(' ')}
@@ -192,7 +196,7 @@ export function PetAvatar({
           [...shown].map((file) => (
             <img
               key={file}
-              className={`pet-anim${file === view.file ? ' pet-anim--on' : ''}`}
+              className={`pet-avatar__anim${file === view.file ? ' pet-avatar__anim--on' : ''}`}
               data-anim={file}
               src={url(file)}
               alt=""
@@ -201,7 +205,7 @@ export function PetAvatar({
           ))
         )}
       </div>
-      <span className="pet-badge">
+      <span className="pet-avatar__badge">
         <AgentGlyph agent={agent} size="sm" decorative />
       </span>
       {view.overlay === 'dots' && <Dots />}

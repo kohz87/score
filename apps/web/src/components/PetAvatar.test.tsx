@@ -33,8 +33,8 @@ afterEach(() => {
   delete document.documentElement.dataset.liveliness
 })
 
-const imgs = () => [...document.querySelectorAll<HTMLImageElement>('img.pet-anim')]
-const on = () => document.querySelector('img.pet-anim--on')?.getAttribute('data-anim')
+const imgs = () => [...document.querySelectorAll<HTMLImageElement>('img.pet-avatar__anim')]
+const on = () => document.querySelector('img.pet-avatar__anim--on')?.getAttribute('data-anim')
 const avatar = () => screen.getByRole('img', { name: 'lead' })
 
 test('shows the idle file first, from the pack revision, with the agent’s mark as a badge', () => {
@@ -44,7 +44,7 @@ test('shows the idle file first, from the pack revision, with the agent’s mark
   ])
   expect(on()).toBe('idle')
   expect(avatar().getAttribute('data-protected')).toBe('any')
-  const badge = avatar().querySelector('.pet-badge .agent-glyph')!
+  const badge = avatar().querySelector('.pet-avatar__badge .agent-glyph')!
   expect(badge.classList.contains('agent-glyph--cut')).toBe(true)
   expect(badge.getAttribute('aria-hidden')).toBe('true')
 })
@@ -56,8 +56,8 @@ test('a file is fetched when its mood first comes, and the moods crossfade', () 
   expect(imgs().map((img) => img.dataset.anim)).toEqual(['idle', 'work'])
   expect(on()).toBe('work')
   // Both stay in the page so the crossfade is a change of opacity; only one is on.
-  expect(document.querySelectorAll('.pet-anim--on')).toHaveLength(1)
-  expect(css).toMatch(/\.pet-anim\s*\{[^}]*opacity: 0;[^}]*transition: opacity 0\.35s/)
+  expect(document.querySelectorAll('.pet-avatar__anim--on')).toHaveLength(1)
+  expect(css).toMatch(/\.pet-avatar__anim\s*\{[^}]*opacity: 0;[^}]*transition: opacity 0\.35s/)
   rerender(<PetAvatar agent={agent('work', 'think')} activity="idle" />)
   expect(on()).toBe('idle')
   expect(imgs()).toHaveLength(2)
@@ -66,24 +66,24 @@ test('a file is fetched when its mood first comes, and the moods crossfade', () 
 test('thinking and needs you fall back to idle with Score’s overlays when the pack has no such file', () => {
   const { rerender } = render(<PetAvatar agent={agent()} activity="thinking" />)
   expect(on()).toBe('idle')
-  expect(avatar().querySelectorAll('.pet-dot')).toHaveLength(3)
-  expect(avatar().querySelector('.pet-alert')).toBeNull()
+  expect(avatar().querySelectorAll('.pet-avatar__dot')).toHaveLength(3)
+  expect(avatar().querySelector('.pet-avatar__alert')).toBeNull()
   rerender(<PetAvatar agent={agent()} activity="needs" />)
-  expect(avatar().querySelector('.pet-alert-text')?.textContent).toBe('!')
-  expect(avatar().querySelector('.pet-stage--hop')).not.toBeNull()
-  expect(avatar().querySelector('.pet-dot')).toBeNull()
+  expect(avatar().querySelector('.pet-avatar__alert-text')?.textContent).toBe('!')
+  expect(avatar().querySelector('.pet-avatar__stage--hop')).not.toBeNull()
+  expect(avatar().querySelector('.pet-avatar__dot')).toBeNull()
   rerender(<PetAvatar agent={agent()} activity="working" />)
-  expect(avatar().querySelector('.pet-fx')).toBeNull()
+  expect(avatar().querySelector('.pet-avatar__fx')).toBeNull()
 })
 
 test('with the files, the animation shows the mood and no overlay is drawn', () => {
   const { rerender } = render(<PetAvatar agent={agent('think', 'needs')} activity="thinking" />)
   expect(on()).toBe('think')
-  expect(avatar().querySelector('.pet-fx')).toBeNull()
+  expect(avatar().querySelector('.pet-avatar__fx')).toBeNull()
   rerender(<PetAvatar agent={agent('think', 'needs')} activity="needs" />)
   expect(on()).toBe('needs')
-  expect(avatar().querySelector('.pet-fx')).toBeNull()
-  expect(avatar().querySelector('.pet-stage--hop')).toBeNull()
+  expect(avatar().querySelector('.pet-avatar__fx')).toBeNull()
+  expect(avatar().querySelector('.pet-avatar__stage--hop')).toBeNull()
 })
 
 test('pointing at it plays greet, or says hi without one, for a moment', () => {
@@ -94,9 +94,9 @@ test('pointing at it plays greet, or says hi without one, for a moment', () => {
   expect(on()).toBe('idle')
   rerender(<PetAvatar agent={agent()} />)
   fireEvent.pointerEnter(avatar())
-  expect(avatar().querySelector('.pet-say-text')?.textContent).toBe('hi!')
+  expect(avatar().querySelector('.pet-avatar__say-text')?.textContent).toBe('hi!')
   act(() => vi.advanceTimersByTime(1300))
-  expect(avatar().querySelector('.pet-say')).toBeNull()
+  expect(avatar().querySelector('.pet-avatar__say')).toBeNull()
 })
 
 test('clicking plays happy, or raises a heart and a bounce without one', () => {
@@ -106,10 +106,10 @@ test('clicking plays happy, or raises a heart and a bounce without one', () => {
   unmount()
   render(<PetAvatar agent={agent()} />)
   fireEvent.click(avatar())
-  expect(avatar().querySelector('.pet-heart-shape')).not.toBeNull()
-  expect(avatar().querySelector('.pet-stage--love')).not.toBeNull()
+  expect(avatar().querySelector('.pet-avatar__heart-shape')).not.toBeNull()
+  expect(avatar().querySelector('.pet-avatar__stage--love')).not.toBeNull()
   act(() => vi.advanceTimersByTime(1300))
-  expect(avatar().querySelector('.pet-heart')).toBeNull()
+  expect(avatar().querySelector('.pet-avatar__heart')).toBeNull()
 })
 
 test('Lively: after a while without attention it sleeps (the file, or z’s over idle)', () => {
@@ -120,7 +120,7 @@ test('Lively: after a while without attention it sleeps (the file, or z’s over
   expect(on()).toBe('idle')
   rerender(<PetAvatar agent={agent()} />)
   act(() => vi.advanceTimersByTime(SLEEP_AFTER_MS))
-  expect(avatar().querySelectorAll('.pet-z')).toHaveLength(3)
+  expect(avatar().querySelectorAll('.pet-avatar__z')).toHaveLength(3)
 })
 
 test('Calm: the mood plays, the greeting works, but there is no sleep and no break', () => {
@@ -180,7 +180,7 @@ test('Still shows one still frame on a canvas, with no animated image and no gre
   expect(draw).toHaveBeenCalledTimes(1)
   fireEvent.pointerEnter(avatar())
   fireEvent.click(avatar())
-  expect(avatar().querySelector('.pet-fx')).toBeNull()
+  expect(avatar().querySelector('.pet-avatar__fx')).toBeNull()
   // The frame of the mood's own file.
   rerender(<PetAvatar agent={agent('work')} activity="working" />)
   expect(avatar().querySelectorAll('canvas')).toHaveLength(1)
@@ -223,4 +223,21 @@ test('only transform and fill-opacity are animated (the protected layer pins opa
   expect(css).toMatch(
     /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.pet-avatar,\s*\.pet-avatar \*\s*\{\s*animation: none !important/,
   )
+})
+
+test('every overlay graphic is rooted in an element that carries the fx class (the one protected.css leaves to Score)', () => {
+  const roots = (container: HTMLElement) =>
+    [...container.querySelectorAll('.pet-avatar > svg')].map(
+      (svg) => svg.getAttribute('class') ?? '',
+    )
+  const { container, rerender } = render(<PetAvatar agent={agent()} activity="thinking" />)
+  expect(roots(container)).toEqual([expect.stringContaining('pet-avatar__fx')])
+  rerender(<PetAvatar agent={agent()} activity="needs" />)
+  expect(roots(container)).toEqual([expect.stringContaining('pet-avatar__fx')])
+  fireEvent.pointerEnter(container.firstElementChild!)
+  fireEvent.click(container.firstElementChild!)
+  expect(roots(container).length).toBeGreaterThanOrEqual(3)
+  for (const root of roots(container)) expect(root).toContain('pet-avatar__fx')
+  act(() => vi.advanceTimersByTime(SLEEP_AFTER_MS + 2000))
+  rerender(<PetAvatar agent={agent()} activity="idle" />)
 })

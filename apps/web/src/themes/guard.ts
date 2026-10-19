@@ -321,7 +321,8 @@ const SHAPES = 'path, circle, rect, ellipse, polygon, polyline, line'
 // Parts Score itself animates with `transform` (a mark's eye slots, its orbiting dot and ripples, a pet's overlays): their transform is whatever the keyframes
 // say at the moment of reading, so it can't be compared; a theme can't style them (the sanitiser guard), and everything
 // else about them (geometry, paint, display, clip, mask, filter) is still compared.
-const ANIMATED_BY_SCORE = '.agent-glyph__slot, .agent-glyph__orbit, .agent-glyph__ripple, .pet-fx *'
+const ANIMATED_BY_SCORE =
+  '.agent-glyph__slot, .agent-glyph__orbit, .agent-glyph__ripple, .pet-avatar__fx *'
 
 function shapes(surface: HTMLElement): SVGGraphicsElement[] {
   return Array.from(surface.querySelectorAll<SVGGraphicsElement>(SHAPES)).filter(

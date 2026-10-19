@@ -18,6 +18,7 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
   const [value, setValue] = useState<AppearanceValue>(current)
   const trigger = useRef<HTMLButtonElement>(null)
   const popover = useRef<HTMLDivElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
   const mutation = useMutation({
     mutationFn: async () => {
       const style = AgentStylePatchSchema.parse(value)
@@ -35,6 +36,18 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
     setOpen(false)
     trigger.current?.focus()
   }
+  // The panel is as tall as what is left of the window below its top, and scrolls inside that (its last line, a pack's
+  // result, must be reachable): measured when it opens and again when the window is resized.
+  useEffect(() => {
+    if (!open) return
+    const fit = () => {
+      const top = panel.current?.getBoundingClientRect().top ?? 0
+      panel.current?.style.setProperty('--team-popover-top', `${Math.max(0, Math.round(top))}px`)
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [open])
   useEffect(() => {
     if (!open) return
     popover.current?.querySelector<HTMLInputElement>('input[type="color"]')?.focus()
@@ -75,6 +88,7 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
       {open && (
         <div
           id="agent-style-picker"
+          ref={panel}
           className="team-style-popover"
           role="dialog"
           aria-label="Agent appearance"

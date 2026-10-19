@@ -20,8 +20,11 @@ class XhrViaFetch {
     this.headers.set(name, value)
   }
 
-  send(body?: Blob | string | null) {
-    const size = body instanceof Blob ? body.size : typeof body === 'string' ? body.length : 0
+  send(body?: Blob | FormData | string | null) {
+    let size = body instanceof Blob ? body.size : typeof body === 'string' ? body.length : 0
+    if (body instanceof FormData)
+      for (const value of body.values())
+        size += typeof value === 'string' ? value.length : value.size
     this.upload.onprogress?.({ loaded: size, total: size, lengthComputable: true } as ProgressEvent)
     void globalThis
       .fetch(this.url, {

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
@@ -7,6 +8,7 @@ import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
+import '../../test/xhr-via-fetch.ts'
 
 vi.mock('../../shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
 
@@ -347,6 +349,30 @@ const pack = {
   floor: 0,
 }
 
+test('the appearance panel is bounded by the window below its top and scrolls inside that', async () => {
+  const rect = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockImplementation(function (this: HTMLElement) {
+      return { top: this.id === 'agent-style-picker' ? 187.4 : 0 } as DOMRect
+    })
+  renderTeam('/team/builder')
+  const dialog = await openPicker()
+  expect(dialog.style.getPropertyValue('--team-popover-top')).toBe('187px')
+  const css = readFileSync('src/routes/team/team.css', 'utf8')
+  expect(css).toMatch(
+    /\.team-style-popover\s*\{[^}]*max-height: max\(240px, calc\(100dvh - var\(--team-popover-top, 200px\) - 16px\)\);\s*overflow-y: auto/,
+  )
+  // A resize measures again.
+  rect.mockImplementation(function (this: HTMLElement) {
+    return { top: this.id === 'agent-style-picker' ? 60 : 0 } as DOMRect
+  })
+  act(() => {
+    window.dispatchEvent(new Event('resize'))
+  })
+  expect(dialog.style.getPropertyValue('--team-popover-top')).toBe('60px')
+  rect.mockRestore()
+})
+
 test('the look choices are a cut-out and a ring', async () => {
   renderTeam('/team/builder')
   const dialog = await openPicker()
@@ -484,6 +510,94 @@ test('a zip chosen with other files, a file over 8 MB, or a pack over 64 MB, is 
   expect(calls).toEqual([])
 })
 
+test('a valid zip over 8 MB goes up (8 MB is the limit of one image, a zip is held to 64 MB)', async () => {
+  renderTeam('/team/builder')
+  const calls: { init?: RequestInit }[] = []
+  const baseline = respond
+  respond = (path, init) => {
+    if (path.includes('/pack')) {
+      calls.push({ init })
+      return json({ agent: { ...builder, style: { ...builder.style, pack } }, ignored: [] })
+    }
+    return baseline(path, init)
+  }
+  const dialog = await openPicker()
+  const zip = packFile('luna.zip', 'application/zip')
+  Object.defineProperty(zip, 'size', { value: 20 * 1024 * 1024 })
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [zip] } })
+  expect(within(dialog).queryByRole('alert')).toBeNull()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
+  await waitFor(() => expect(calls).toHaveLength(1))
+  // But not past the pack's 64 MB, and an image is still held to 8 MB.
+  const huge = packFile('luna.zip', 'application/zip')
+  Object.defineProperty(huge, 'size', { value: 65 * 1024 * 1024 })
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [huge] } })
+  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 64 MB/)
+})
+
+test('an upload shows how far it has got, then that the pack is being checked', async () => {
+  class Controlled {
+    static last: Controlled
+    headers: Record<string, string> = {}
+    upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null }
+    onload: (() => void) | null = null
+    onerror: (() => void) | null = null
+    status = 200
+    responseText = ''
+    responseType = ''
+    sent: unknown
+    constructor() {
+      Controlled.last = this
+    }
+    open() {}
+    setRequestHeader(name: string, value: string) {
+      this.headers[name.toLowerCase()] = value
+    }
+    send(body: unknown) {
+      this.sent = body
+    }
+  }
+  vi.stubGlobal('XMLHttpRequest', Controlled)
+  renderTeam('/team/builder')
+  const dialog = await openPicker()
+  const big = packFile('luna.zip', 'application/zip')
+  Object.defineProperty(big, 'size', { value: 7.4 * 1024 * 1024 })
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [big] } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
+  await waitFor(() => expect(Controlled.last?.sent).toBeInstanceOf(FormData))
+  const xhr = Controlled.last
+  // The browser sets the multipart type; Score adds its own header and the idempotency key.
+  expect(xhr.headers['content-type']).toBeUndefined()
+  expect(xhr.headers['x-score-client']).toBe('web')
+  expect(xhr.headers['idempotency-key']).toBeTruthy()
+  const total = 7.4 * 1024 * 1024
+  act(() => {
+    xhr.upload.onprogress?.({
+      loaded: 3.1 * 1024 * 1024,
+      total,
+      lengthComputable: true,
+    } as ProgressEvent)
+  })
+  const status = within(dialog).getByRole('status')
+  expect(status.textContent).toContain('luna.zip')
+  expect(status.textContent).toContain('Uploading · 42% · 3.1 MB of 7.4 MB')
+  expect(status.querySelector('progress')?.getAttribute('value')).toBe(String(3.1 * 1024 * 1024))
+  act(() => {
+    xhr.upload.onprogress?.({ loaded: total, total, lengthComputable: true } as ProgressEvent)
+  })
+  expect(status.textContent).toContain('Checking the pack…')
+  expect(status.textContent).not.toContain('%')
+  expect(status.querySelector('progress')?.hasAttribute('value')).toBe(false)
+  // The answer ends it: the pack is added and the progress is gone.
+  xhr.responseText = JSON.stringify({
+    agent: { ...builder, style: { ...builder.style, pack } },
+    ignored: [],
+  })
+  act(() => xhr.onload?.())
+  expect(await within(dialog).findByText(/Pack added: idle, work/)).toBeDefined()
+  expect(within(dialog).queryByText(/Checking the pack/)).toBeNull()
+})
+
 test('an agent with a pack shows it, and can replace or remove it', async () => {
   const source = renderTeam('/team/builder')
   agentUpdated(source, 1, { ...builder, style: { ...builder.style, pack } })
@@ -537,7 +651,7 @@ test('an agent with a pack wears its pet on the team card and in the page header
   agentUpdated(source, 1, { ...builder, style: { ...builder.style, pack } })
   const card = (await screen.findByRole('heading', { name: 'Builder' })).closest('a')!
   await waitFor(() => expect(card.querySelector('.pet-avatar')).not.toBeNull())
-  expect(card.querySelector('.pet-avatar .pet-badge .agent-glyph')).not.toBeNull()
+  expect(card.querySelector('.pet-avatar .pet-avatar__badge .agent-glyph')).not.toBeNull()
   // The agent is working: its work file is the one that plays.
   expect(card.querySelector('img[data-anim="work"]')?.getAttribute('src')).toBe(
     '/api/agents/builder/pack/work?rev=r1',

@@ -6,9 +6,14 @@
    and the built-in packs are untouched (and keep their entrance motion). styles/protected.test.ts keeps this file and
    the markup in step. */
 @layer score-protected {
-  /* The surface itself: always rendered, flat, on top, with its own display. */
+  /* The surface itself: always rendered, flat, on top, with its own display. A pet avatar's own moving parts (its stage,
+     the animation files stacked and crossfaded by opacity, and the overlay graphics) are the exception: pinning their
+     opacity or transform would leave every cached file on top and break the centring and the hop. They carry Score's
+     own `pet-avatar__` class names, which a theme's CSS can't name (the sanitiser), so only Score's rules reach them. */
   html[data-look='custom'] [data-protected],
-  html[data-look='custom'] [data-protected]:not(svg) *:not(svg *) {
+  html[data-look='custom']
+    [data-protected]:not(svg)
+    *:not(svg *):not(.pet-avatar__stage, .pet-avatar__anim, .pet-avatar__fx) {
     opacity: 1 !important;
     visibility: visible !important;
     transform: none !important;
