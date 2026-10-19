@@ -444,3 +444,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   flake (`chat-follow.spec.ts:46`, passes alone); 18 baselines regenerated with `--update-snapshots=changed` and rerun
   green (lead viewed team-dark-1440 and studio-user-phone). Lead checked real files against the new sniffing: owner's
   two WebPs and ffmpeg GIF/APNG/WebP accepted. README screenshots regenerated (18 files, 21/21).
+- **Owner 2026-10-19:** green-screen removal and pack generation from a concept are done externally (dropped from
+  Score's list). Task 7.7a was already merged (v1.1.0, 2026-10-13; 7.7b v1.2.0, 7.7c v1.3.0); stale tracker entry closed.
+  **10.3** (a previewed zip isn't sent twice): lead wrote the contract (staged zips, `files-from-staged`), PLAN entry and
+  brief on `task/10.3-staged-zip` (92270072); one Sonnet builder started in `../score-worktrees/10.3`.
