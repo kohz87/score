@@ -115,7 +115,8 @@
 }
 
 .room-stage__mark .agent-glyph {
-  --glyph-svg-size: 48px;
+  /* A mark is drawn 1.6x its box (agent-glyph.css): 30px makes it 48px. */
+  --glyph-svg-size: 30px;
 }
 
 .room-stage__mark--hop {
