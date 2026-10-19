@@ -3,6 +3,16 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.8.2] — 2026-10-19
+
+### Fixed
+- Themes with a side navigation (Harbour, Dense, Studio, …): the terminal button and your avatar now sit side by side at
+  the foot of the rail, and the avatar menu fits inside the rail, so its Light / Dark / System choice is no longer cut
+  off.
+
+### Internal
+- A coding-process test that failed early under load no longer leaves its fake worker running.
+
 ## [1.8.1] — 2026-10-19
 
 Fixes from an overnight cross-audit of 1.8.0 (Codex and Gemini 4 Argon) and a verification pass.

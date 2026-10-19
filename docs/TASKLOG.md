@@ -385,3 +385,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   runs (a `workerSeen()` timeout fails the test before its `try/finally`). All killed by exact PID; the live Score was not
   touched; old test temp folders removed. Fix: the test file's `afterEach` SIGKILLs every worker whose pid file it
   wrote. Lesson: never wait with `pgrep -f <pattern>` from a shell whose own command line holds the pattern.
+- **1.8.2** (owner report, 2026-10-19 morning): in a side rail the terminal button and the avatar sat in one column and
+  the avatar menu (220px) overflowed the scrolling rail (~214px inside), cutting off "System"; on the right rail it
+  opened outward. Lead fix: `.top-bar-actions` wrapper (`display: contents` in the top bar, one flex row in the rail),
+  the menu placed against that row (left/right 0, min-width 0), tighter theme buttons in the rail. New
+  `e2e/rail-actions.spec.ts` fails on 1.8.1 (60px apart), passes now; shell units 13, layout/visual e2e 264/264, no
+  baseline changed.
