@@ -410,3 +410,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   from bytes, APNG/animated WebP/SVG/GIF refused, 2 MB, 32–2048 px, lstat walk + O_NOFOLLOW, temp+rename, row commit
   then old file removed, start-up recovery, folder removed with the agent). Defaults stay on the original eight shapes.
   ~85 new tests, failing first. Waiting for 10.2b; merge order 10.2a → 10.2b → main.
+- **10.2 paused** (owner, 2026-10-19: "should we stop until we solidify the avatar design?"): 10.2a parked on its branch
+  (design-independent); 10.2b asked to stop at a clean point, commit solid parts as WIP, no baselines. Design being
+  settled in the preview (pets in their own corner, eye marks for imported pictures).
