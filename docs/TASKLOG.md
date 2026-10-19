@@ -531,3 +531,4 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **10.12 drop OpenCode** (owner: "drop opencode"; decision 111): lead removed it from the contract (`Runtime`,
   `CodingRuntimeSchema`, API text) on `task/10.12-drop-opencode`; live DB has no OpenCode agents; the old CHECK stays.
   Sonnet builder removes the driver, workflow rule, web labels and mentions. PLAN 7.2 now complete.
+- **5.17b Kanban Stop removed from the list** (owner; decision 112): an upstream Hermes design issue, not Score work.

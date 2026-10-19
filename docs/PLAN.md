@@ -280,7 +280,7 @@ Hermes's own records (read-only) and completes the reply, else marks it interrup
 **5.17a Kanban attempts as runs (read-only projection; v3 splits it into 5.17a-1 Kanban DB only and 5.17a-2 bridge provenance)** ✅ · Kanban worker attempts become runs in Flow, Now and Reports with
 exact provenance (merged 2026-10-09 in stages 1, 2a and 2b; see docs/briefs/5.17.md). Done when fixtures cover synthetic rows, restore/rollback,
 A→B→A revisions, pruned claims, short gaps, unknown states, host isolation and requested changes.
-**5.17b Kanban Stop** · ⏸ blocked upstream (checked 2026-10-19: installed Hermes `e97923c` has only `reclaim`/`block`; the proposal is still an unsent draft) · Needs an upstream Hermes operation (docs/proposals/hermes-attempt-fenced-stop.md, to be extended
+**5.17b Kanban Stop** · removed from Score's list (owner 2026-10-19, decision 112): an upstream Hermes design issue; Score keeps saying Stop is unavailable for Kanban attempts and wires it in only if Hermes adds an attempt-fenced stop (draft: docs/proposals/hermes-attempt-fenced-stop.md) · Needs an upstream Hermes operation (docs/proposals/hermes-attempt-fenced-stop.md, to be extended
 with durable intent and fenced launch registration). Until then Score says Stop is unavailable for Kanban attempts.
 
 **5.18 HTTPS-only remote access** ✅ · Owner 2026-10-09: remote mode serves the app only over HTTPS; plain HTTP gets an
