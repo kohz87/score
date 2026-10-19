@@ -11,7 +11,13 @@ import { AgentGlyph } from './AgentGlyph.tsx'
 import { resetPortraits } from './portrait-cache.ts'
 
 const ready = { url: 'blob:p', crop: { x: 5, y: 30, side: 90 }, width: 100, height: 200 }
-const pack = { rev: 'r1', activities: ['idle'], name: null, credits: null, floor: 0 } as const
+const pack: NonNullable<AgentStyle['pack']> = {
+  rev: 'r1',
+  activities: ['idle'],
+  name: null,
+  credits: null,
+  floor: 0,
+}
 const packed = (id = 'lead') => ({
   id,
   name: id,
