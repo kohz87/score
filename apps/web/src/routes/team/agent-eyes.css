@@ -1,0 +1,97 @@
+/* Marking a picture's eyes (PLAN 10.2b, decision 106). */
+.team-eyes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.team-eyes h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.team-eyes p {
+  margin: 0;
+  font-size: 13px;
+}
+.team-eyes-stage {
+  position: relative;
+  align-self: center;
+  max-width: 100%;
+  line-height: 0;
+  border-radius: var(--radius-14);
+  background: var(--ground);
+  touch-action: none;
+  user-select: none;
+}
+.team-eyes-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 340px;
+  width: auto;
+  height: auto;
+  min-width: 200px;
+  border-radius: var(--radius-14);
+}
+.team-eye-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #ffffff;
+  border-radius: 6px;
+  /* A dark second edge so the box shows on a light picture and a dark one. */
+  box-shadow:
+    0 0 0 1.5px #12131a,
+    inset 0 0 0 1px #12131a;
+  cursor: move;
+  touch-action: none;
+}
+.team-eye-box:focus-visible {
+  outline: 3px solid #6b4eff;
+  outline-offset: 3px;
+}
+.team-eye-name {
+  position: absolute;
+  top: -20px;
+  left: -2px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #12131a;
+  color: #ffffff;
+  font: 600 11px/16px var(--font-body, sans-serif);
+}
+.team-eye-handle {
+  position: absolute;
+  right: -9px;
+  bottom: -9px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #12131a;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: nwse-resize;
+}
+.team-eyes-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.team-eyes-lid {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.team-eyes-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline);
+}
+.team-eyes-preview button {
+  height: 36px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font-weight: 600;
+  cursor: pointer;
+}

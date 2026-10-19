@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { ShapeSchema, type AgentStyle, type Shape } from '@score/contract'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
-import { AgentGlyph, agentAvatarUrl, agentTint } from './AgentGlyph.tsx'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { AgentGlyph, agentAvatarUrl, agentTint, pictureFrame } from './AgentGlyph.tsx'
 import { agentShapes } from './agent-shapes.ts'
 
 const shapes = ShapeSchema.options
@@ -418,5 +418,115 @@ describe('eyes follow the pointer', () => {
     render(<AgentGlyph agent={styled({ avatar: 'r1' })} size="lg" />)
     fireEvent.pointerMove(screen.getByRole('img'), { clientX: 40, clientY: 20 })
     expect(screen.getByRole('img').querySelector('.agent-glyph__eyes')).toBeNull()
+  })
+})
+
+// PLAN 10.2b (decision 106): a picture with marked eyes blinks, and closes them when asleep.
+describe('marked eyes on a picture', () => {
+  const eyes = {
+    left: { x: 0.25, y: 0.4, w: 0.2, h: 0.1 },
+    right: { x: 0.55, y: 0.4, w: 0.2, h: 0.1 },
+    lid: '#C89664',
+  }
+  let loads: (() => void)[] = []
+  beforeEach(() => {
+    loads = []
+    vi.stubGlobal(
+      'Image',
+      class {
+        naturalWidth = 200
+        naturalHeight = 100
+        onload: (() => void) | null = null
+        set src(_value: string) {
+          loads.push(() => this.onload?.())
+        }
+      },
+    )
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  const pictured = (avatarEyes: typeof eyes | null, id = 'blinker') => ({
+    id,
+    name: id,
+    style: { color: '#6B4EFF', shape: 'cloud' as const, avatar: 'r1', avatarEyes },
+  })
+
+  test('without marks the picture moves as a whole and has no lids', () => {
+    render(<AgentGlyph agent={pictured(null)} size="md" />)
+    expect(screen.getByRole('img').querySelector('.agent-glyph__lid')).toBeNull()
+    expect(loads).toHaveLength(0)
+  })
+
+  test('with marks, a lid and a lash line sit over each eye once the picture size is known', () => {
+    render(<AgentGlyph agent={pictured(eyes, 'a')} size="md" />)
+    // Until the picture has loaded its shape is unknown, so nothing is drawn over it.
+    expect(screen.getByRole('img').querySelector('.agent-glyph__lid')).toBeNull()
+    act(() => loads.forEach((load) => load()))
+    const lids = screen.getByRole('img').querySelectorAll('.agent-glyph__lid')
+    expect(lids).toHaveLength(2)
+    expect(screen.getByRole('img').querySelectorAll('.agent-glyph__lash')).toHaveLength(2)
+    expect((lids[0] as HTMLElement).style.getPropertyValue('--glyph-lid')).toBe('#C89664')
+    // 200x100 is letterboxed into the 19-unit box: 19 wide, 9.5 tall, centred.
+    const skin = lids[0]!.querySelector('rect')!
+    expect(Number(skin.getAttribute('x'))).toBeCloseTo(0.5 + 0.25 * 19)
+    expect(Number(skin.getAttribute('y'))).toBeCloseTo(4.75 + 0.4 * 9.5)
+    expect(Number(skin.getAttribute('width'))).toBeCloseTo(0.2 * 19)
+    expect(Number(skin.getAttribute('height'))).toBeCloseTo(0.1 * 9.5)
+  })
+
+  test('the frame of a tall, a wide and a square picture', () => {
+    expect(pictureFrame({ width: 100, height: 100 })).toEqual({
+      x: 0.5,
+      y: 0,
+      width: 19,
+      height: 19,
+    })
+    expect(pictureFrame({ width: 100, height: 200 })).toEqual({
+      x: 5.25,
+      y: 0,
+      width: 9.5,
+      height: 19,
+    })
+    expect(pictureFrame({ width: 200, height: 100 })).toEqual({
+      x: 0.5,
+      y: 4.75,
+      width: 19,
+      height: 9.5,
+    })
+  })
+
+  test('the lids blink in every mood, are open when nothing moves, and stay down when asleep', () => {
+    expect(motion).toMatch(
+      /\.agent-glyph__lid\s*\{[^}]*transform: scaleY\(0\);[^}]*animation: agent-lid-blink 4\.2s infinite/,
+    )
+    expect(motion).toMatch(
+      /\.agent-glyph--asleep\.agent-glyph--rich \.agent-glyph__lid\s*\{\s*animation: none;\s*transform: scaleY\(1\)/,
+    )
+    expect(stylesheet).toMatch(
+      /\.agent-glyph__lash\s*\{[^}]*stroke: color-mix\(in srgb, var\(--glyph-lid\)/,
+    )
+    const { rerender } = render(
+      <AgentGlyph agent={pictured(eyes, 'b')} size="md" activity="working" />,
+    )
+    expect(screen.getByRole('img').classList.contains('agent-glyph--asleep')).toBe(false)
+    rerender(<AgentGlyph agent={pictured(eyes, 'b')} size="md" asleep />)
+    expect(screen.getByRole('img').classList.contains('agent-glyph--asleep')).toBe(true)
+  })
+
+  test('a bot or chibi that is asleep has its eyes closed too, and does not look at the pointer', () => {
+    expect(motion).toMatch(
+      /\.agent-glyph--asleep\.agent-glyph--rich \.agent-glyph__eyes\s*\{\s*animation: none;\s*transform: scaleY\(0\.1\)/,
+    )
+    render(<AgentGlyph agent={styled({})} size="lg" asleep />)
+    const glyph = screen.getByRole('img')
+    glyph.getBoundingClientRect = () => ({ left: 0, top: 0, width: 40, height: 40 }) as DOMRect
+    fireEvent.pointerMove(glyph, { clientX: 40, clientY: 20 })
+    expect(glyph.querySelector<SVGGElement>('.agent-glyph__eyes')!.style.transform).toBe('')
+  })
+
+  test('list size ignores asleep and marks', () => {
+    const { container } = render(<AgentGlyph agent={pictured(eyes, 'c')} size="xs" asleep />)
+    expect(container.firstElementChild!.classList.contains('agent-glyph--asleep')).toBe(false)
+    expect(container.querySelector('.agent-glyph__lid')).toBeNull()
   })
 })

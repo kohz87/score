@@ -10,6 +10,7 @@
 .agent-glyph__lock,
 .agent-glyph__torso,
 .agent-glyph__alert,
+.agent-glyph__lid,
 .agent-glyph__char {
   transform-box: fill-box;
   transform-origin: center;
@@ -509,6 +510,35 @@
   30% {
     transform: scale(1) translateY(0);
   }
+}
+
+/* Marked eyes on a picture: the lids blink in every mood (open when nothing moves), and close when asleep. */
+.agent-glyph__lid {
+  transform-origin: 50% 0;
+  transform: scaleY(0);
+  animation: agent-lid-blink 4.2s infinite;
+}
+
+@keyframes agent-lid-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(0);
+  }
+  95% {
+    transform: scaleY(1);
+  }
+}
+
+/* Asleep: every kind of eye is closed and stays closed (a pet in its corner, PLAN 10.2c). */
+.agent-glyph.agent-glyph--asleep.agent-glyph--rich .agent-glyph__lid {
+  animation: none;
+  transform: scaleY(1);
+}
+
+.agent-glyph.agent-glyph--asleep.agent-glyph--rich .agent-glyph__eyes {
+  animation: none;
+  transform: scaleY(0.1);
 }
 
 /* Reduced motion: completely still (the poses stay, nothing moves). */

@@ -6,28 +6,20 @@ import { activityOfStatus } from '../../components/agent-activity.ts'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { AgentAppearanceFields, type AppearanceValue } from './AgentAppearanceFields.tsx'
+import { AgentEyeMarker } from './AgentEyeMarker.tsx'
+import { avatarProblems } from './avatar-errors.ts'
 
 // What the server accepts (PUT /api/agents/:id/avatar); checked here first so a wrong file fails without an upload.
 const PICTURE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const PICTURE_MAX_BYTES = 2 * 1024 * 1024
-
-function rejection(error: unknown): string[] {
-  if (error instanceof ApiError) {
-    if (error.code === 'not_paired')
-      return ['Pair this browser using the link in the server terminal to change agent pictures.']
-    const reasons = (error.details as { reasons?: unknown } | undefined)?.reasons
-    if (Array.isArray(reasons) && reasons.every((reason) => typeof reason === 'string'))
-      return reasons.length > 0 ? (reasons as string[]) : [error.message]
-    return [error.message]
-  }
-  return ['Couldn’t save the picture. Try again.']
-}
 
 function AgentPicture({ agent }: { agent: AgentSummary }) {
   const input = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [problems, setProblems] = useState<string[]>([])
+  // Marking the eyes: the picture just uploaded, or the current one when the person asks to mark or edit them.
+  const [marking, setMarking] = useState<AgentSummary | null>(null)
   useEffect(() => {
     if (!file) return setPreviewUrl(null)
     const url = URL.createObjectURL(file)
@@ -47,11 +39,24 @@ function AgentPicture({ agent }: { agent: AgentSummary }) {
         }),
       )
     },
-    onSuccess: () => {
+    onSuccess: (summary) => {
       setFile(null)
       setProblems([])
+      // The next step: mark the eyes on the new picture (Save or Skip).
+      setMarking(summary)
     },
-    onError: (error) => setProblems(rejection(error)),
+    onError: (error) => setProblems(avatarProblems(error)),
+  })
+  const clearEyes = useMutation({
+    mutationFn: async () =>
+      AgentSummarySchema.parse(
+        await apiFetch(`${base}/eyes`, {
+          method: 'DELETE',
+          headers: { 'Idempotency-Key': newId() },
+        }),
+      ),
+    onSuccess: () => setProblems([]),
+    onError: (error) => setProblems(avatarProblems(error)),
   })
   const remove = useMutation({
     mutationFn: async () =>
@@ -59,7 +64,7 @@ function AgentPicture({ agent }: { agent: AgentSummary }) {
         await apiFetch(base, { method: 'DELETE', headers: { 'Idempotency-Key': newId() } }),
       ),
     onSuccess: () => setProblems([]),
-    onError: (error) => setProblems(rejection(error)),
+    onError: (error) => setProblems(avatarProblems(error)),
   })
   function choose(picture: File | undefined) {
     upload.reset()
@@ -75,7 +80,15 @@ function AgentPicture({ agent }: { agent: AgentSummary }) {
     setProblems([])
     setFile(picture)
   }
-  const busy = upload.isPending || remove.isPending
+  const busy = upload.isPending || remove.isPending || clearEyes.isPending
+  if (marking)
+    return (
+      <AgentEyeMarker
+        agent={marking}
+        start={marking.style.avatarEyes}
+        onDone={() => setMarking(null)}
+      />
+    )
   return (
     <section className="team-picture" aria-label="Picture">
       <h3>Picture</h3>
@@ -122,9 +135,19 @@ function AgentPicture({ agent }: { agent: AgentSummary }) {
           </button>
         )}
         {agent.style.avatar && !file && (
-          <button type="button" disabled={busy} onClick={() => remove.mutate()}>
-            {remove.isPending ? 'Removing…' : 'Remove picture'}
-          </button>
+          <>
+            <button type="button" disabled={busy} onClick={() => setMarking(agent)}>
+              {agent.style.avatarEyes ? 'Edit eye marks…' : 'Mark the eyes…'}
+            </button>
+            {agent.style.avatarEyes && (
+              <button type="button" disabled={busy} onClick={() => clearEyes.mutate()}>
+                Clear eye marks
+              </button>
+            )}
+            <button type="button" disabled={busy} onClick={() => remove.mutate()}>
+              {remove.isPending ? 'Removing…' : 'Remove picture'}
+            </button>
+          </>
         )}
       </div>
       {problems.length > 0 && (

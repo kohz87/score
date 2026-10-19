@@ -235,3 +235,16 @@ svg.agent-glyph--chibi {
 .agent-glyph--high .agent-glyph__badge-plate {
   stroke: var(--glyph-outline);
 }
+
+/* A picture with marked eyes (PLAN 10.2, decision 106): a lid in the skin colour sampled below each eye comes down to
+   blink, with a lash line on its lower edge. Asleep it stays down. */
+.agent-glyph__lid-skin {
+  fill: var(--glyph-lid);
+}
+
+.agent-glyph__lash {
+  fill: none;
+  stroke: color-mix(in srgb, var(--glyph-lid) 35%, #12131a);
+  stroke-width: 0.28;
+  stroke-linecap: round;
+}

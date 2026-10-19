@@ -1,5 +1,5 @@
-import type { AgentLook, AgentStyle } from '@score/contract'
-import { useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
+import type { AgentLook, AgentStyle, AvatarEyes } from '@score/contract'
+import { useEffect, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import {
   agentEyes,
   agentShapes,
@@ -23,6 +23,8 @@ export type AgentGlyphProps = {
   activity?: AgentActivity
   /** Always the plain coloured shape, whatever the agent's look: for a spot that draws its own tile behind it. */
   plain?: boolean
+  /** Eyes closed (a picture's marked eyes, a bot's or chibi's own), for a pet that is asleep. */
+  asleep?: boolean
 }
 
 const designTints: Record<string, string> = {
@@ -143,6 +145,77 @@ function BotArt({ agent, activity }: { agent: AgentGlyphProps['agent']; activity
   )
 }
 
+type PictureSize = { width: number; height: number }
+const pictureSizes = new Map<string, PictureSize>()
+
+/** The natural size of a picture, once it has loaded (the eye marks are fractions of it, and the picture is letterboxed). */
+function usePictureSize(url: string, wanted: boolean): PictureSize | null {
+  const [size, setSize] = useState<PictureSize | null>(pictureSizes.get(url) ?? null)
+  useEffect(() => {
+    if (!wanted) return
+    const known = pictureSizes.get(url)
+    if (known) return setSize(known)
+    const image = new Image()
+    image.onload = () => {
+      const loaded = { width: image.naturalWidth, height: image.naturalHeight }
+      if (loaded.width > 0 && loaded.height > 0) {
+        pictureSizes.set(url, loaded)
+        setSize(loaded)
+      }
+    }
+    image.src = url
+    return () => {
+      image.onload = null
+    }
+  }, [url, wanted])
+  return wanted ? size : null
+}
+
+/** The picture's box inside the 20-unit art: x 0.5 to 19.5, y 0 to 19, contained and centred. */
+export function pictureFrame(size: PictureSize) {
+  const wide = size.width >= size.height
+  const width = wide ? 19 : (19 * size.width) / size.height
+  const height = wide ? (19 * size.height) / size.width : 19
+  return { x: 0.5 + (19 - width) / 2, y: (19 - height) / 2, width, height }
+}
+
+function Lids({ eyes, size }: { eyes: AvatarEyes; size: PictureSize }) {
+  const frame = pictureFrame(size)
+  return (
+    <>
+      {(['left', 'right'] as const).map((side) => {
+        const box = eyes[side]
+        const x = frame.x + box.x * frame.width
+        const y = frame.y + box.y * frame.height
+        const width = box.w * frame.width
+        const height = box.h * frame.height
+        return (
+          <g
+            key={side}
+            className="agent-glyph__lid"
+            data-eye={side}
+            style={{ '--glyph-lid': eyes.lid } as CSSProperties}
+          >
+            <rect
+              className="agent-glyph__lid-skin"
+              x={+x.toFixed(3)}
+              y={+y.toFixed(3)}
+              width={+width.toFixed(3)}
+              height={+height.toFixed(3)}
+              rx={+(Math.min(width, height) * 0.4).toFixed(3)}
+            />
+            {/* A lash line along the lower edge, which shows when the lid is down. */}
+            <path
+              className="agent-glyph__lash"
+              d={`M${(x + width * 0.04).toFixed(3)} ${(y + height).toFixed(3)} Q${(x + width / 2).toFixed(3)} ${(y + height + height * 0.22).toFixed(3)} ${(x + width * 0.96).toFixed(3)} ${(y + height).toFixed(3)}`}
+            />
+          </g>
+        )
+      })}
+    </>
+  )
+}
+
 function PictureArt({
   agent,
   activity,
@@ -152,14 +225,16 @@ function PictureArt({
   activity: AgentActivity
   onError: () => void
 }) {
-  const { avatar, shape } = agent.style
+  const { avatar, shape, avatarEyes } = agent.style
+  const url = agentAvatarUrl(agent.id, avatar ?? '')
+  const size = usePictureSize(url, Boolean(avatarEyes))
   return (
     <>
       <ellipse className="agent-glyph__shadow" cx="10" cy="19.4" rx="5.5" ry="0.9" />
       <g className="agent-glyph__body">
         <image
           className="agent-glyph__image"
-          href={agentAvatarUrl(agent.id, avatar ?? '')}
+          href={url}
           x="0.5"
           y="0"
           width="19"
@@ -167,6 +242,7 @@ function PictureArt({
           preserveAspectRatio="xMidYMid meet"
           onError={onError}
         />
+        {avatarEyes && size && <Lids eyes={avatarEyes} size={size} />}
       </g>
       {/* The badge keeps agents told apart by colour and shape, whatever the picture shows. */}
       <g className="agent-glyph__badge">
@@ -300,7 +376,8 @@ const reducedMotion = () =>
 /** Faces look toward the pointer while it is over them (a bot or a chibi; never changes any state). */
 function lookAtPointer(event: PointerEvent<Element>, reach: number) {
   const eyes = event.currentTarget.querySelector<SVGGElement>('.agent-glyph__eyes')
-  if (!eyes || reducedMotion()) return
+  if (!eyes || reducedMotion() || event.currentTarget.classList.contains('agent-glyph--asleep'))
+    return
   const box = event.currentTarget.getBoundingClientRect()
   const dx = (event.clientX - (box.left + box.width / 2)) / box.width
   const dy = (event.clientY - (box.top + box.height / 2)) / box.height
@@ -324,6 +401,7 @@ export function AgentGlyph({
   contrast = 'default',
   activity,
   plain = false,
+  asleep = false,
 }: AgentGlyphProps) {
   // A picture that fails to load (removed, or the server unreachable) falls back to the agent's look.
   const [failedRev, setFailedRev] = useState<string | null>(null)
@@ -338,6 +416,7 @@ export function AgentGlyph({
     `agent-glyph--${kind}`,
     rich && `agent-glyph--${mood}`,
     rich && 'agent-glyph--rich',
+    rich && asleep && 'agent-glyph--asleep',
     !bare && 'agent-glyph--tile',
     contrast === 'high' && 'agent-glyph--high',
   ]

@@ -374,6 +374,52 @@ test('a picture is previewed, then sent as one multipart file to the avatar rout
   expect(sent.name).toBe('face.png')
   expect(sent.type).toBe('image/png')
   await waitFor(() => expect(within(dialog).queryByAltText('Preview of face.png')).toBeNull())
+  // The next step is marking the eyes on the new picture, which can be skipped.
+  expect(await within(dialog).findByRole('group', { name: 'Left eye' })).toBeDefined()
+  expect(within(dialog).getByRole('group', { name: 'Right eye' })).toBeDefined()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Skip' }))
+  expect(within(dialog).queryByRole('group', { name: 'Left eye' })).toBeNull()
+  expect(calls).toHaveLength(1)
+})
+
+test('an agent with eye marks can edit or clear them', async () => {
+  const marks = {
+    left: { x: 0.2, y: 0.3, w: 0.2, h: 0.1 },
+    right: { x: 0.6, y: 0.3, w: 0.2, h: 0.1 },
+    lid: '#C89664',
+  }
+  const source = renderTeam('/team/builder')
+  agentUpdated(source, 1, {
+    ...builder,
+    style: { ...builder.style, avatar: 'r1', avatarEyes: marks },
+  })
+  const calls: { path: string; method?: string | undefined }[] = []
+  const baseline = respond
+  respond = (path, init) => {
+    if (path.includes('/avatar')) {
+      calls.push({ path, method: init?.method })
+      return json(builder)
+    }
+    return baseline(path, init)
+  }
+  const dialog = await openPicker()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Edit eye marks…' }))
+  const left = within(dialog).getByRole('group', { name: 'Left eye' })
+  // Editing starts from the saved boxes.
+  expect(left.style.left).toBe('20%')
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Skip' }))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Clear eye marks' }))
+  await waitFor(() =>
+    expect(calls).toEqual([{ path: '/api/agents/builder/avatar/eyes', method: 'DELETE' }]),
+  )
+})
+
+test('an agent with a picture but no marks is offered to mark the eyes', async () => {
+  const source = renderTeam('/team/builder')
+  agentUpdated(source, 1, { ...builder, style: { ...builder.style, avatar: 'r1' } })
+  const dialog = await openPicker()
+  expect(within(dialog).getByRole('button', { name: 'Mark the eyes…' })).toBeDefined()
+  expect(within(dialog).queryByRole('button', { name: 'Clear eye marks' })).toBeNull()
 })
 
 test('the server’s reasons for refusing a picture are shown as they are', async () => {
