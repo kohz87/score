@@ -392,3 +392,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   `e2e/rail-actions.spec.ts` fails on 1.8.1 (60px apart), passes now; shell units 13, layout/visual e2e 264/264, no
   baseline changed.
 - **v1.8.2 deployed** (2026-10-19 02:28 UTC): backup `score-pre-1.8.2-20261019.db`, gateway restarted, both producers re-registered, health 200 on LAN and Tailscale.
+- **10.1 Settings as pages** merged (owner request 2026-10-19): `/settings/:section` (models, connections, rules, look,
+  notifications, knowledge, shares, advanced, backup, logs, about; remote-access and terminal when they apply),
+  `/settings` and `/settings#<id>` redirect (query kept), NavLink list with `aria-current`, phone picker navigates,
+  focus moves to the section heading, document title per section, palette "Settings: <section>" (lead: only once
+  something is typed), all in-app anchors updated; server SPA fallback asserted for `/settings/*`. 21 unit tests failed
+  first on the old sources; 6 new e2e; 26 Settings baselines and 2 README images updated deliberately (reviewed).
+- **Release 1.9.0**: e2e 629/629; check: contract 1405, web 2185 (after the lead fixed the App palette count his change
+  broke), server 4497 +14 skipped, plugin 323 (one interpreter segfault in `test_sender.py::test_bounded_queue_drops_oldest_once`,
+  3/3 clean reruns — follow-up), license ok.

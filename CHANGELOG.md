@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.0] — 2026-10-19
+
+### Changed
+- **Settings is one page per section** instead of one long column: Models and keys, Connections, Rules and approvals,
+  Look, Notifications, Knowledge, Shares, Advanced, Backup, Logs, About (plus Remote access and Terminal when they
+  apply), each at its own address such as `/settings/logs`. The list on the left is the navigation; on a phone the
+  Section picker switches pages. ⌘K finds each section ("Settings: Logs"). Old `/settings#…` links still work.
+
 ## [1.8.2] — 2026-10-19
 
 ### Fixed
