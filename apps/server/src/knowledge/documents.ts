@@ -1,3 +1,4 @@
+import type { ReadStream } from 'node:fs'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,22 +9,24 @@ import type {
   KnowledgeDocumentSummary,
   KnowledgeDocumentType,
   KnowledgeHistoryStatus,
-  KnowledgeTextStatusSchema,
   KnowledgeUnzipResult,
   KnowledgeUploadResult,
   KnowledgeZipPreview,
 } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
+import { KnowledgeTextStatusSchema } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
 import { isPlainText } from '../media/sniff.ts'
+import { bigFileMatches } from './big-file.ts'
 import { prepareNoteContent } from './note-images.ts'
 import { redact } from '../redact.ts'
 import {
   bytesMatch,
   classifyName,
   documentTypeOfPath,
-  MAX_FILE_BYTES,
+  MAX_READ_BYTES,
+  MAX_STORE_BYTES,
   MAX_TEXT_BYTES,
   MAX_VERSIONED_BYTES,
   PLAIN_TEXT_TYPES,
@@ -55,7 +58,7 @@ const DocRowSchema = z.object({
   size: z.number(),
   hash: z.string(),
   versioned: z.number(),
-  text_status: z.enum(['indexed', 'truncated', 'unavailable', 'none']),
+  text_status: KnowledgeTextStatusSchema,
   entries_json: z.string().nullable(),
   last_author: z.string().nullable(),
 })
@@ -80,6 +83,20 @@ interface PreparedNote {
   bytes: Buffer
 }
 type Prepared = PreparedDocument | PreparedNote
+/** An unzipped file waiting to be placed: its bytes stay in the scratch folder (`facts` null = a note). */
+interface Unpacked {
+  path: string
+  file: string
+  facts: Omit<PreparedDocument, 'bytes'> | null
+}
+const withoutBytes = (document: PreparedDocument): Omit<PreparedDocument, 'bytes'> => ({
+  kind: 'document',
+  path: document.path,
+  type: document.type,
+  text: document.text,
+  status: document.status,
+  entries: document.entries,
+})
 
 const toSummary = (row: DocRow): KnowledgeDocumentSummary => ({
   path: row.path,
@@ -300,19 +317,19 @@ export class KnowledgeDocuments {
     return fresh
   }
 
-  async bytes(
-    input: string,
-  ): Promise<{ bytes: Buffer; type: KnowledgeDocumentType; name: string }> {
+  /** A document to stream to the client: nothing of it is read into memory but the first bytes (for sniffing). */
+  async open(input: string): Promise<{
+    stream: ReadStream
+    size: number
+    head: Buffer
+    type: KnowledgeDocumentType
+    name: string
+  }> {
     const rel = this.knownPath(input)
     const { abs, stat } = await this.vault.lookup(rel.split('/'))
     if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Couldn’t find that document.')
-    if (stat.size > MAX_FILE_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'That file is too large.')
-    return {
-      bytes: await this.vault.readContainedBuffer(abs, MAX_FILE_BYTES),
-      type: documentTypeOfPath(rel)!,
-      name: path.posix.basename(rel),
-    }
+    const opened = await this.vault.openContainedStream(abs, MAX_STORE_BYTES)
+    return { ...opened, type: documentTypeOfPath(rel)!, name: path.posix.basename(rel) }
   }
 
   /** For agents: the extracted text (bounded by the caller), or a notice when there is none. */
@@ -329,6 +346,8 @@ export class KnowledgeDocuments {
     if (document.textStatus === 'unavailable')
       notice =
         'No text could be extracted from this file (it may be scanned, encrypted or damaged).'
+    else if (document.textStatus === 'too_large')
+      notice = 'This file is over 25 MB, so its text was not read.'
     else if (document.textStatus === 'none')
       notice = `This is ${document.type === 'image' ? 'an image' : 'a zip file'}; it has no text.`
     else if (document.textStatus === 'truncated')
@@ -382,10 +401,18 @@ export class KnowledgeDocuments {
     rel: string,
     type: KnowledgeDocumentType,
     bytes: Buffer,
+    /** The file's size when `bytes` holds only its start (a big file read for validation only). */
+    size = bytes.length,
   ): Promise<PreparedDocument> {
     let text = ''
     let status: TextStatus = 'none'
     let entries: PreparedDocument['entries'] = null
+    if (size > MAX_READ_BYTES) {
+      // Stored, not read: no text work for a big file. A zip still lists what it holds.
+      status = 'too_large'
+      if (type === 'zip' && bytes.length === size) entries = await this.zipEntries(bytes)
+      return { kind: 'document', path: rel, type, bytes, text, status, entries }
+    }
     if (PLAIN_TEXT_TYPES.includes(type)) {
       const raw = bytes.toString('utf8')
       text = Buffer.byteLength(raw) > MAX_TEXT_BYTES ? '' : raw
@@ -399,9 +426,7 @@ export class KnowledgeDocuments {
       text = out.text
       status = out.status
     } else if (type === 'zip') {
-      const listed = await runWorker({ op: 'zip-list', bytes, limits: ZIP_LIMITS }, ZIP_TIMEOUT_MS)
-      if (listed.ok && 'entries' in listed)
-        entries = listed.entries.map(({ path: entry, size }) => ({ path: entry, size }))
+      entries = await this.zipEntries(bytes)
     }
     // D6: nothing that looks like a credential is stored in the index, like notes written by agents.
     if (text !== '') text = redact(text)
@@ -413,6 +438,25 @@ export class KnowledgeDocuments {
     )
       status = 'unavailable'
     return { kind: 'document', path: rel, type, bytes, text, status, entries }
+  }
+
+  /** Runs the zip lister on a private temporary copy of the archive on disk (removed afterwards). */
+  private async listZip(bytes: Buffer): Promise<Awaited<ReturnType<typeof runWorker>>> {
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'score-zip-'))
+    try {
+      const file = path.join(scratch, 'input.zip')
+      await fs.writeFile(file, bytes, { mode: 0o600 })
+      return await runWorker({ op: 'zip-list', file, limits: ZIP_LIMITS }, ZIP_TIMEOUT_MS)
+    } finally {
+      await fs.rm(scratch, { recursive: true, force: true })
+    }
+  }
+
+  private async zipEntries(bytes: Buffer): Promise<PreparedDocument['entries']> {
+    const listed = await this.listZip(bytes)
+    return listed.ok && 'entries' in listed
+      ? listed.entries.map(({ path: entry, size }) => ({ path: entry, size }))
+      : null
   }
 
   /** Validates a file by name and bytes and extracts its text. Throws HttpError (415/413/400) when not acceptable. */
@@ -427,8 +471,8 @@ export class KnowledgeDocuments {
         'This file type isn’t supported. Use notes, PDF, DOCX, CSV, JSON, HTML, images or zip files.',
       )
     if (bytes.length === 0) throw new HttpError(400, 'bad_request', 'That file is empty.')
-    if (bytes.length > MAX_FILE_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'Files can be at most 25 MB.')
+    if (bytes.length > MAX_STORE_BYTES)
+      throw new HttpError(413, 'payload_too_large', 'Files can be at most 256 MB.')
     const finalPath = [...dir, cls.name].join('/')
     if (cls.kind === 'note') {
       if (bytes.length > MAX_NOTE_BYTES)
@@ -463,7 +507,7 @@ export class KnowledgeDocuments {
   private async versionOf(rel: string): Promise<string | null> {
     const { abs, stat } = await this.vault.lookup(rel.split('/'))
     if (!stat?.isFile()) return null
-    return this.vault.readContainedBuffer(abs, MAX_FILE_BYTES).then(hashContent, () => null)
+    return this.vault.hashContained(abs, MAX_STORE_BYTES).catch(() => null)
   }
 
   /** A free name next to `rel`: not on disk and not among `reserved` (lower-cased names other incoming files take). */
@@ -669,20 +713,29 @@ export class KnowledgeDocuments {
   ): Promise<IngestOutcome> {
     const type = documentTypeOfPath(rel)
     const { abs, stat } = await this.vault.lookup(rel.split('/'))
-    if (!type || !stat?.isFile() || stat.size > MAX_FILE_BYTES) return this.dropIndex(rel)
-    const bytes = await this.vault.readContainedBuffer(abs, MAX_FILE_BYTES)
-    const hash = hashContent(bytes)
+    if (!type || !stat?.isFile() || stat.size > MAX_STORE_BYTES) return this.dropIndex(rel)
+    const big = stat.size > MAX_READ_BYTES
+    // A big file is hashed in chunks and never read whole: it is only checked from its start (and a DOCX's zip
+    // directory at its end), then stored as too_large.
+    const hash = big ? await this.vault.hashContained(abs, MAX_STORE_BYTES) : null
     const known = this.db.read((sqlite) => this.row(sqlite, rel))
-    if (known?.hash === hash) {
-      this.db.tx((sqlite) =>
-        sqlite
-          .prepare('UPDATE knowledge_documents SET mtime_ms = ?, size = ? WHERE path = ?')
-          .run(Math.trunc(stat.mtimeMs), stat.size, rel),
+    if (hash !== null && known?.hash === hash) return this.markUnchanged(rel, stat)
+    let bytes: Buffer
+    let match: boolean
+    if (big) {
+      const checked = await bigFileMatches(type, stat.size, (position, length) =>
+        this.vault.readContainedRange(abs, position, length),
       )
-      return 'unchanged'
+      bytes = checked.head
+      match = checked.ok
+    } else {
+      bytes = await this.vault.readContainedBuffer(abs, MAX_READ_BYTES)
+      match = bytesMatch(type, bytes)
     }
+    const fileHash = hash ?? hashContent(bytes)
+    if (hash === null && known?.hash === fileHash) return this.markUnchanged(rel, stat)
     // A file whose bytes don't match its extension is left alone (and unlisted), not indexed as something it isn't.
-    const facts = bytesMatch(type, bytes) ? await this.documentFacts(rel, type, bytes) : null
+    const facts = match ? await this.documentFacts(rel, type, bytes, stat.size) : null
     if (!facts) return this.dropIndex(rel)
     // A rebuild has no rows to remember, so git's tracking stands in for them.
     const versioned = await this.keptInHistory(rel, stat.size, known?.versioned === 1)
@@ -690,12 +743,21 @@ export class KnowledgeDocuments {
       this.writeIndex(
         sqlite,
         rel,
-        { mtimeMs: stat.mtimeMs, size: stat.size, hash, versioned },
+        { mtimeMs: stat.mtimeMs, size: stat.size, hash: fileHash, versioned },
         facts,
         author,
       ),
     )
     return 'upserted'
+  }
+
+  private markUnchanged(rel: string, stat: { mtimeMs: number; size: number }): IngestOutcome {
+    this.db.tx((sqlite) =>
+      sqlite
+        .prepare('UPDATE knowledge_documents SET mtime_ms = ?, size = ? WHERE path = ?')
+        .run(Math.trunc(stat.mtimeMs), stat.size, rel),
+    )
+    return 'unchanged'
   }
 
   /** Drops the row for a file that is no longer an indexable document; says whether there was one. */
@@ -765,7 +827,7 @@ export class KnowledgeDocuments {
   async zipPreview(bytes: Buffer): Promise<KnowledgeZipPreview> {
     if (!bytesMatch('zip', bytes))
       throw new HttpError(415, 'unsupported_type', 'That isn’t a zip file.')
-    const listed = await runWorker({ op: 'zip-list', bytes, limits: ZIP_LIMITS }, ZIP_TIMEOUT_MS)
+    const listed = await this.listZip(bytes)
     if (!listed.ok) throw zipFailure(listed)
     if (!('entries' in listed))
       throw new HttpError(415, 'unsupported_type', 'Couldn’t read that zip file.')
@@ -789,33 +851,39 @@ export class KnowledgeDocuments {
     const folder = cleanSegments(folderInput).join('/')
     const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'score-unzip-'))
     try {
+      const zipFile = path.join(scratch, 'input.zip')
+      await fs.writeFile(zipFile, zipBytes, { mode: 0o600 })
       const out = await runWorker(
-        { op: 'zip-extract', bytes: zipBytes, outDir: scratch, limits: ZIP_LIMITS },
+        { op: 'zip-extract', file: zipFile, outDir: path.join(scratch, 'out'), limits: ZIP_LIMITS },
         ZIP_TIMEOUT_MS,
       )
       if (!out.ok) throw zipFailure(out)
       if (!('files' in out))
         throw new HttpError(415, 'unsupported_type', 'Couldn’t read that zip file.')
       const skipped = [...out.skipped]
-      const prepared: Prepared[] = []
+      // Only one extracted file is in memory at a time: each is checked here, then dropped, and read again from the
+      // scratch folder when it is placed (an unzip can total 1 GB).
+      const prepared: Unpacked[] = []
       const taken = new Set<string>()
       for (const file of out.files) {
-        const bytes = await fs.readFile(file.file)
         try {
-          const item = await this.prepare(`${folder}/${file.path}`, bytes)
+          const item = await this.prepare(`${folder}/${file.path}`, await fs.readFile(file.file))
           if (taken.has(item.path.toLowerCase())) {
             skipped.push({ path: file.path, reason: 'name clashes with another file in the zip' })
             continue
           }
           taken.add(item.path.toLowerCase())
-          prepared.push(item)
+          prepared.push({
+            path: item.path,
+            file: file.file,
+            facts: item.kind === 'document' ? withoutBytes(item) : null,
+          })
         } catch (error) {
           skipped.push({
             path: file.path,
             reason: error instanceof HttpError ? error.message : 'could not be read',
           })
         }
-        await fs.rm(file.file, { force: true })
       }
       const written = await this.vault.runLocked(async () => {
         const clashes: Array<{ path: string; mtime: string; size: number }> = []
@@ -840,7 +908,7 @@ export class KnowledgeDocuments {
         }
         await this.vault.commitOutside()
         const committed: string[] = []
-        const done: Prepared[] = []
+        const done: Unpacked[] = []
         for (const item of prepared) {
           const { stat } = await this.vault.lookup(item.path.split('/'))
           if (stat && !stat.isFile()) {
@@ -849,11 +917,12 @@ export class KnowledgeDocuments {
           }
           const expect = { hash: replacing.get(item.path) ?? null }
           try {
-            if (item.kind === 'document') {
-              await this.place(item, author, expect, committed)
+            if (item.facts) {
+              const bytes = await fs.readFile(item.file)
+              await this.place({ ...item.facts, path: item.path, bytes }, author, expect, committed)
             } else {
               const abs = await this.vault.prepareParent(item.path)
-              await this.vault.atomicWrite(abs, item.bytes.toString('utf8'), expect)
+              await this.vault.atomicWrite(abs, await fs.readFile(item.file, 'utf8'), expect)
               await this.vault.indexNote(item.path, author)
               committed.push(item.path)
             }

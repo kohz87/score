@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { extractDocumentText, runWorker, ZIP_LIMITS } from '../../src/knowledge/extract.ts'
-import { makeZip, textDocx, textPdf } from './doc-fixtures.ts'
+import { makeZip, textDocx, textPdf, zipFile } from './doc-fixtures.ts'
 
 describe('text extraction in a worker', () => {
   test('reads a PDF', async () => {
@@ -34,7 +34,10 @@ describe('text extraction in a worker', () => {
   })
   test('lists a zip', async () => {
     const zip = await makeZip({ 'a.md': '# a', 'b.exe': 'MZ' })
-    const result = await runWorker({ op: 'zip-list', bytes: zip, limits: ZIP_LIMITS }, 10_000)
+    const result = await runWorker(
+      { op: 'zip-list', file: zipFile(zip), limits: ZIP_LIMITS },
+      10_000,
+    )
     expect(result).toMatchObject({ ok: true })
   })
 })

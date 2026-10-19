@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { constants as C } from 'node:fs'
+import { constants as C, createReadStream, type ReadStream } from 'node:fs'
 import os from 'node:os'
 import { watch, type FSWatcher, type Stats } from 'node:fs'
-import fs from 'node:fs/promises'
+import fs, { type FileHandle } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
 import type {
@@ -37,7 +37,7 @@ import {
   serialiseNote,
 } from './note.ts'
 import { SEED_NOTES } from './seed.ts'
-import { isDocumentPath, MAX_FILE_BYTES } from './doc-types.ts'
+import { isDocumentPath, MAX_READ_BYTES, MAX_STORE_BYTES } from './doc-types.ts'
 import { KnowledgeDocuments } from './documents.ts'
 import { buildMonthIndex, memoryMonthDir } from './memory-notes.ts'
 
@@ -366,6 +366,18 @@ export class KnowledgeVault {
       throw new HttpError(400, 'bad_path', 'That folder points outside Knowledge.')
   }
 
+  /** The hashes the file at `abs` may be known by (bytes; for a small file also its UTF-8 round trip); `[null]` when there is none. */
+  private async currentHashes(abs: string): Promise<Array<string | null>> {
+    try {
+      const size = (await fs.lstat(abs)).size
+      if (size > MAX_READ_BYTES) return [await this.hashContained(abs, MAX_STORE_BYTES)]
+      const bytes = await this.readContainedBuffer(abs, MAX_READ_BYTES)
+      return [hashContent(bytes), hashContent(bytes.toString('utf8'))]
+    } catch {
+      return [null]
+    }
+  }
+
   /**
    * `expect`: the content hash the target must still have (null = must not exist) right before it is replaced.
    * A new target is published with `link`, which never replaces; an existing one is replaced only while it still
@@ -390,10 +402,7 @@ export class KnowledgeVault {
       }
       await this.assertParent(parent)
       if (expect) {
-        const now: Array<string | null> = await this.readContainedBuffer(abs, MAX_FILE_BYTES).then(
-          (bytes) => [hashContent(bytes), hashContent(bytes.toString('utf8'))],
-          () => [null],
-        )
+        const now = await this.currentHashes(abs)
         if (!now.includes(expect.hash)) {
           const first = now[0] ?? null
           throw new HttpError(412, 'precondition_failed', 'The note changed after you opened it.', {
@@ -428,8 +437,8 @@ export class KnowledgeVault {
     return (await this.readContainedBuffer(abs)).toString('utf8')
   }
 
-  /** `maxBytes` is checked on the open descriptor and while reading, so a file that grows after the size check cannot be slurped whole. */
-  async readContainedBuffer(abs: string, maxBytes = MAX_NOTE_BYTES): Promise<Buffer> {
+  /** Opens a plain file inside the vault: no symlink at the end, and the descriptor must still be at `abs` (Linux). */
+  private async openContained(abs: string): Promise<FileHandle> {
     const handle = await fs.open(abs, C.O_RDONLY | C.O_NOFOLLOW)
     try {
       if (process.platform === 'linux') {
@@ -437,6 +446,17 @@ export class KnowledgeVault {
         if (actual !== abs)
           throw new HttpError(400, 'bad_path', 'The note moved while it was being read.')
       }
+      return handle
+    } catch (error) {
+      await handle.close()
+      throw error
+    }
+  }
+
+  /** `maxBytes` is checked on the open descriptor and while reading, so a file that grows after the size check cannot be slurped whole. */
+  async readContainedBuffer(abs: string, maxBytes = MAX_NOTE_BYTES): Promise<Buffer> {
+    const handle = await this.openContained(abs)
+    try {
       const tooLarge = () =>
         new HttpError(413, 'payload_too_large', 'That file is too large to open.')
       if ((await handle.stat()).size > maxBytes) throw tooLarge()
@@ -453,6 +473,72 @@ export class KnowledgeVault {
       return Buffer.concat(chunks, total)
     } finally {
       await handle.close()
+    }
+  }
+
+  /** The SHA-256 of a file, read in chunks (never whole), with the same containment and size checks as the buffer reader. */
+  async hashContained(abs: string, maxBytes: number): Promise<string> {
+    const handle = await this.openContained(abs)
+    try {
+      if ((await handle.stat()).size > maxBytes)
+        throw new HttpError(413, 'payload_too_large', 'That file is too large to open.')
+      const hash = createHash('sha256')
+      const chunk = Buffer.allocUnsafe(READ_CHUNK_BYTES)
+      let total = 0
+      for (;;) {
+        const { bytesRead } = await handle.read(chunk, 0, chunk.length, null)
+        if (bytesRead === 0) break
+        total += bytesRead
+        // A file that grows while it is read is refused, like in the buffer reader.
+        if (total > maxBytes)
+          throw new HttpError(413, 'payload_too_large', 'That file is too large to open.')
+        hash.update(chunk.subarray(0, bytesRead))
+      }
+      return hash.digest('hex')
+    } finally {
+      await handle.close()
+    }
+  }
+
+  /** `length` bytes from `position` (fewer at the end of the file), one bounded positional read. */
+  async readContainedRange(abs: string, position: number, length: number): Promise<Buffer> {
+    const handle = await this.openContained(abs)
+    try {
+      const out = Buffer.alloc(length)
+      const { bytesRead } = await handle.read(out, 0, length, position)
+      return out.subarray(0, bytesRead)
+    } finally {
+      await handle.close()
+    }
+  }
+
+  /**
+   * A file to stream out: its size, its first bytes (for sniffing) and a stream from the same descriptor. The stream
+   * closes the descriptor when it ends or is destroyed.
+   */
+  async openContainedStream(
+    abs: string,
+    maxBytes: number,
+    headBytes = 64,
+  ): Promise<{ size: number; head: Buffer; stream: ReadStream }> {
+    const handle = await this.openContained(abs)
+    try {
+      const stat = await handle.stat()
+      if (stat.size > maxBytes)
+        throw new HttpError(413, 'payload_too_large', 'That file is too large.')
+      const head = Buffer.alloc(Math.min(headBytes, stat.size))
+      await handle.read(head, 0, head.length, 0)
+      // `end` pins the length announced to the client even if the file grows meanwhile.
+      const stream = createReadStream('', {
+        fd: handle,
+        start: 0,
+        end: Math.max(stat.size - 1, 0),
+        autoClose: true,
+      })
+      return { size: stat.size, head, stream }
+    } catch (error) {
+      await handle.close()
+      throw error
     }
   }
 
@@ -1442,9 +1528,7 @@ export class KnowledgeVault {
   /** Identity of the file at `abs`: inode and birth time survive a rename, the content hash survives a copy. */
   private async identityOf(abs: string, withHash = true): Promise<FileIdentity> {
     const st = await fs.lstat(abs)
-    const hash = withHash
-      ? hashContent(await this.readContainedBuffer(abs, MAX_FILE_BYTES))
-      : undefined
+    const hash = withHash ? await this.hashContained(abs, MAX_STORE_BYTES) : undefined
     return {
       dev: st.dev,
       ino: st.ino,
@@ -1465,8 +1549,8 @@ export class KnowledgeVault {
     )
       return true
     if (identity.hash === undefined || st.size !== identity.size) return false
-    const bytes = await this.readContainedBuffer(abs, MAX_FILE_BYTES).catch(() => null)
-    return bytes !== null && hashContent(bytes) === identity.hash
+    const hash = await this.hashContained(abs, MAX_STORE_BYTES).catch(() => null)
+    return hash !== null && hash === identity.hash
   }
 
   /** The move that needs attention, for the Knowledge page. */

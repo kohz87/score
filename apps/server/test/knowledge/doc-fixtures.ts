@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import JSZip from 'jszip'
 
 /** A one-page PDF with real structure (xref table), so a PDF parser can read `text` back. */
@@ -70,4 +73,11 @@ export async function makeZip(
     compression,
     platform: 'UNIX',
   })
+}
+
+/** Writes a zip to a temporary file (the zip worker reads its input from disk); returns the path. */
+export function zipFile(bytes: Buffer): string {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'score-test-zip-')), 'in.zip')
+  fs.writeFileSync(file, bytes)
+  return file
 }

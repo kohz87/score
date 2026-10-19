@@ -59,3 +59,10 @@ export async function makeVault(
 
 export const gitOut = (vaultDir: string, ...args: string[]) =>
   execFileSync('git', ['-C', vaultDir, ...args], { encoding: 'utf8' })
+
+/** The stored bytes of a document, read through the streaming `open`. */
+export async function documentBytes(vault: KnowledgeVault, rel: string): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of (await vault.docs.open(rel)).stream) chunks.push(chunk as Buffer)
+  return Buffer.concat(chunks)
+}

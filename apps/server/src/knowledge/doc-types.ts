@@ -4,7 +4,10 @@ import { DOCX_TYPE, isPlainText, sniffImage, sniffMedia } from '../media/sniff.t
 // What Knowledge accepts besides Markdown notes (PLAN 6.6). The type comes from the extension (allow-list) AND the
 // bytes (magic numbers / plain-text check): a file whose bytes disagree with its extension is refused.
 
-export const MAX_FILE_BYTES = 25 * 1024 * 1024
+/** The most Knowledge stores for one file (upload, unzipped entry); PLAN 10.6. */
+export const MAX_STORE_BYTES = 256 * 1024 * 1024
+/** Files up to this size are read into memory for text, indexing and preview; bigger ones are stored as `too_large`. */
+export const MAX_READ_BYTES = 25 * 1024 * 1024
 /** Documents up to this size are committed to the vault's git; larger ones are only stored. */
 export const MAX_VERSIONED_BYTES = 10 * 1024 * 1024
 /** Extracted text kept per document. */

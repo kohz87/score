@@ -8,6 +8,7 @@ import {
   KnowledgeExportSummarySchema,
   KnowledgeFolderRequestSchema,
   KnowledgeFromMediaRequestSchema,
+  KnowledgeFromStagedRequestSchema,
   KnowledgeHistorySchema,
   KnowledgeInfoSchema,
   KnowledgeMoveRequestSchema,
@@ -26,7 +27,7 @@ import {
 } from '@score/contract'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
-import { MAX_FILE_BYTES, isDocumentPath } from '../knowledge/doc-types.ts'
+import { MAX_STORE_BYTES, isDocumentPath } from '../knowledge/doc-types.ts'
 import {
   EXPORT_TIMEOUT_MS,
   exportCandidates,
@@ -37,6 +38,7 @@ import {
 } from '../knowledge/export.ts'
 import { MAX_NOTE_BYTES, parseNotePath } from '../knowledge/note.ts'
 import { sniffImage } from '../media/sniff.ts'
+import { ZipStaging } from '../knowledge/staging.ts'
 import type { MediaStore } from '../media/store.ts'
 import type { KnowledgeVault } from '../knowledge/vault.ts'
 
@@ -62,6 +64,7 @@ export function registerKnowledgeRoutes(
   app: FastifyInstance,
   vault: KnowledgeVault,
   media?: MediaStore,
+  staging?: ZipStaging,
 ): void {
   const guard = { preHandler: [humanGuard(app.pairing)] }
   // A note may be 8 MiB; the JSON envelope and escaping need headroom over Fastify's 1 MiB default.
@@ -155,22 +158,25 @@ export function registerKnowledgeRoutes(
   // download, always under a sandbox CSP, so an uploaded HTML or PDF can't run on Score's origin.
   app.get('/api/knowledge/files/*', async (request, reply) => {
     const { download } = DownloadQuerySchema.parse(request.query)
-    const file = await vault.docs.bytes(rest(request))
+    const file = await vault.docs.open(rest(request))
+    // The reply is closed with the connection, so no descriptor outlives it.
+    reply.raw.once('close', () => file.stream.destroy())
     void reply
       .header('X-Content-Type-Options', 'nosniff')
       .header('Content-Security-Policy', "default-src 'none'; sandbox")
       .header('Cache-Control', 'no-store')
     const inline = file.type === 'image' && download === undefined
     const type = inline
-      ? (sniffImage(file.bytes) ?? 'application/octet-stream')
+      ? (sniffImage(file.head) ?? 'application/octet-stream')
       : 'application/octet-stream'
     return reply
       .header('Content-Type', type)
+      .header('Content-Length', file.size)
       .header(
         'Content-Disposition',
         inline ? 'inline' : `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
       )
-      .send(file.bytes)
+      .send(file.stream)
   })
 
   // ---- export (PLAN 6.7) -------------------------------------------------------------------------------------
@@ -218,9 +224,46 @@ export function registerKnowledgeRoutes(
       return reply.code(201).send(KnowledgeUploadResultSchema.parse(result))
     })
 
+  // Keep or unzip a zip bytes-first; the PUT and files-from-staged share it so their rules can't drift.
+  const storeFile = async (
+    target: string,
+    bytes: Buffer,
+    mode: 'keep' | 'unzip',
+    folderInput: string | undefined,
+    onConflict: z.infer<typeof KnowledgeUploadConflictSchema>,
+  ) => {
+    const name = target.split('/').pop()!
+    if (mode === 'unzip' && /\.zip$/i.test(name)) {
+      const folder =
+        folderInput ?? [...target.split('/').slice(0, -1), name.replace(/\.zip$/i, '')].join('/')
+      return KnowledgeUnzipResultSchema.parse(
+        await vault.docs.unzip(bytes, name, folder, onConflict),
+      )
+    }
+    return KnowledgeUploadResultSchema.parse(await vault.docs.upload(target, bytes, onConflict))
+  }
+
+  if (staging)
+    app.post('/api/knowledge/files-from-staged', guard, async (request, reply) => {
+      const body = KnowledgeFromStagedRequestSchema.parse(request.body)
+      // One request at a time per stage: a success uses it up, a 409 exists keeps it for the retry.
+      const result = await staging.use(body.stagedId, body.path, (bytes) =>
+        storeFile(body.path, bytes, body.mode, body.folder, body.onConflict),
+      )
+      if (result === 'gone')
+        throw new HttpError(
+          404,
+          'staged_gone',
+          'That upload is no longer kept. Send the file again.',
+        )
+      if (result === 'mismatch')
+        throw new HttpError(409, 'staged_mismatch', 'That upload was previewed for another file.')
+      return reply.code(201).send(result)
+    })
+
   // The raw-body parser lives in its own scope so no other route accepts that content type.
   void app.register(async (scope) => {
-    const limit = MAX_FILE_BYTES + 1024
+    const limit = MAX_STORE_BYTES + 1024
     scope.addContentTypeParser(
       'application/octet-stream',
       { parseAs: 'buffer', bodyLimit: limit },
@@ -243,27 +286,27 @@ export function registerKnowledgeRoutes(
       async (request, reply) => {
         if (!Buffer.isBuffer(request.body))
           throw new HttpError(400, 'bad_request', 'No file was sent.')
+        // The parser allows a little slack for the envelope; the cap on the file is exact, in every mode.
+        if (request.body.length > MAX_STORE_BYTES)
+          throw new HttpError(413, 'payload_too_large', 'Files can be at most 256 MB.')
         const target = rest(request)
         const query = UploadQuerySchema.parse(request.query)
-        const name = target.split('/').pop()!
-        if (/\.zip$/i.test(name)) {
-          if (query.mode === 'preview')
-            return KnowledgeZipPreviewSchema.parse(await vault.docs.zipPreview(request.body))
-          if (query.mode === 'unzip') {
-            const folder =
-              query.folder ??
-              [...target.split('/').slice(0, -1), name.replace(/\.zip$/i, '')].join('/')
-            return reply
-              .code(201)
-              .send(
-                KnowledgeUnzipResultSchema.parse(
-                  await vault.docs.unzip(request.body, name, folder, query.onConflict),
-                ),
-              )
-          }
+        if (query.mode === 'preview' && /\.zip$/i.test(target)) {
+          const preview = KnowledgeZipPreviewSchema.parse(await vault.docs.zipPreview(request.body))
+          const staged = staging ? await staging.put(target, request.body) : null
+          return { ...preview, staged }
         }
-        const result = await vault.docs.upload(target, request.body, query.onConflict)
-        return reply.code(201).send(KnowledgeUploadResultSchema.parse(result))
+        return reply
+          .code(201)
+          .send(
+            await storeFile(
+              target,
+              request.body,
+              query.mode === 'unzip' ? 'unzip' : 'keep',
+              query.folder,
+              query.onConflict,
+            ),
+          )
       },
     )
   })

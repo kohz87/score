@@ -2,6 +2,8 @@ export interface ZipLimits {
   maxEntries: number
   maxTotalBytes: number
   maxNoteBytes: number
+  /** Per extracted file that is not a note. */
+  maxFileBytes: number
   /** Compressed-to-uncompressed ratio per entry. */
   maxRatio: number
   /** Entries up to this size are not held to the ratio (tiny files compress absurdly well legitimately). */
@@ -17,8 +19,9 @@ export interface ZipItem {
 
 export type WorkerRequest =
   | { op: 'text'; kind: 'pdf' | 'docx' | 'html'; bytes: Uint8Array; maxBytes: number }
-  | { op: 'zip-list'; bytes: Uint8Array; limits: ZipLimits }
-  | { op: 'zip-extract'; bytes: Uint8Array; outDir: string; limits: ZipLimits }
+  // Zips come as a file the worker reads itself: the archive is never copied through the worker's start-up data.
+  | { op: 'zip-list'; file: string; limits: ZipLimits }
+  | { op: 'zip-extract'; file: string; outDir: string; limits: ZipLimits }
 
 export type WorkerResult =
   | { ok: true; text: string; truncated: boolean }

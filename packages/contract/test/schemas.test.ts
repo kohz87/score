@@ -1031,6 +1031,17 @@ const cases = [
     { mediaId: 'm1', path: 'inbox/a.pdf', onConflict: 'ask' },
     { mediaId: '', path: 'inbox/a.pdf' },
   ],
+  [
+    'KnowledgeFromStagedRequestSchema',
+    {
+      stagedId: 'A'.repeat(32),
+      path: 'inbox/a.zip',
+      mode: 'unzip',
+      folder: 'inbox/a',
+      onConflict: 'ask',
+    },
+    { stagedId: '../x', path: 'inbox/a.zip', mode: 'keep' },
+  ],
   ['KnowledgeLinkSchema', { target: 'B', path: 'b.md' }, { target: 'B' }],
   [
     'KnowledgeNoteSchema',

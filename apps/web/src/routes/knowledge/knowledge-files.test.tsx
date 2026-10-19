@@ -18,6 +18,8 @@ let registry: ReturnType<typeof createStreamQueryRegistry>
 /** Responses for the next upload PUTs, in order; then 201. */
 let putQueue: Response[]
 /** While set, every PUT waits for it: the upload is "sent" and the server is still working. */
+/** Responses for the next files-from-staged POSTs, in order; then 201. */
+let stagedQueue: Response[] = []
 let putGate: Promise<void> | null = null
 let documents: Array<Record<string, unknown>>
 
@@ -95,7 +97,10 @@ function respond(input: string, init: RequestInit = {}): Response {
       })
     return json({
       ...found,
-      text: found.textStatus === 'unavailable' ? '' : 'Quarterly budget extracted text',
+      text:
+        found.textStatus === 'unavailable' || found.textStatus === 'too_large'
+          ? ''
+          : 'Quarterly budget extracted text',
       entries: null,
     })
   }
@@ -112,6 +117,14 @@ function respond(input: string, init: RequestInit = {}): Response {
   if (p === '/folders' && method === 'POST') return json({ path: 'x' }, 201)
   if (p === '/move' && method === 'POST')
     return json({ path: 'inbox/renamed.pdf', updatedNotes: 0 })
+  if (p === '/files-from-staged' && method === 'POST') {
+    const next = stagedQueue.shift()
+    if (next) return next
+    const body = JSON.parse(String(init.body)) as { path: string; mode: string; folder?: string }
+    return body.mode === 'unzip'
+      ? json({ folder: body.folder, written: ['a.md', 'b.csv'], skipped: [] }, 201)
+      : json({ path: body.path, kind: 'document', replaced: false }, 201)
+  }
   if (p.startsWith('/files/') && method === 'PUT') {
     const next = putQueue.shift()
     if (next) return next
@@ -209,6 +222,29 @@ test('a PDF without text says so; an unversioned image says it has no history', 
   )
 })
 
+test('a document over 25 MB says it is too large to preview and offers the download', async () => {
+  documents.push(doc('inbox/big.pdf', { textStatus: 'too_large', size: 100 * 1024 * 1024 }))
+  mount('/knowledge/inbox/big.pdf')
+  expect(
+    await screen.findByText('Too large to preview (over 25 MB). Download it to open it.'),
+  ).toBeDefined()
+  expect(screen.getByText('Not indexed (over 25 MB)')).toBeDefined()
+  expect(screen.getByRole('link', { name: /Download/ }).getAttribute('href')).toBe(
+    '/api/knowledge/files/inbox/big.pdf?download=1',
+  )
+})
+
+test('an image over 25 MB shows the notice and no picture', async () => {
+  documents.push(
+    doc('inbox/big.png', { type: 'image', textStatus: 'too_large', size: 100 * 1024 * 1024 }),
+  )
+  mount('/knowledge/inbox/big.png')
+  expect(
+    await screen.findByText('Too large to preview (over 25 MB). Download it to open it.'),
+  ).toBeDefined()
+  expect(screen.queryByAltText('Preview of big.png')).toBeNull()
+})
+
 test('a zip page lists its files', async () => {
   mount('/knowledge/inbox/pack.zip')
   const list = await screen.findByRole('list', { name: 'Files in the zip' })
@@ -244,13 +280,13 @@ test('the file manager lists folders, notes and documents with sizes, and opens 
 test('uploading puts the raw file and reports it', async () => {
   mount('/knowledge?files=inbox')
   await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('notes.pdf'), file('virus.exe'), file('big.csv', 26 * 1024 * 1024)])
+  upload([file('notes.pdf'), file('virus.exe'), file('big.csv', 257 * 1024 * 1024)])
   await screen.findByText(/Added inbox\/notes\.pdf/)
   expect(puts()).toHaveLength(1)
   expect(puts()[0]!.url).toBe('/api/knowledge/files/inbox/notes.pdf?onConflict=ask')
   const banner = screen.getByText(/Not added:/).textContent!
   expect(banner).toContain('virus.exe: this file type isn’t supported')
-  expect(banner).toContain('big.csv: larger than the 25 MB limit')
+  expect(banner).toContain('big.csv: larger than the 256 MB limit')
 })
 
 test('a slow upload shows its progress until the server answers, then the panel goes', async () => {
@@ -502,4 +538,86 @@ test('a note has a Download link to its raw Markdown', async () => {
   expect(within(region).getByRole('link', { name: 'Download Home.md' }).getAttribute('href')).toBe(
     '/api/knowledge/notes/Home.md?download=1',
   )
+})
+
+const stagedPreview = () => {
+  const response = zipPreview()
+  return response
+    .json()
+    .then((body) =>
+      json({ ...body, staged: { id: 'A'.repeat(32), expiresAt: '2026-01-01T00:30:00Z' } }),
+    )
+}
+const posts = () => calls.filter((c) => c.url === '/api/knowledge/files-from-staged')
+const clash = () =>
+  json(
+    {
+      error: {
+        code: 'exists',
+        message: 'x',
+        details: { existing: [{ path: 'inbox/pack.zip', mtime: '2026-03-04T00:00:00Z', size: 8 }] },
+      },
+    },
+    409,
+  )
+
+test('a previewed zip is kept without a second upload', async () => {
+  putQueue = [await stagedPreview()]
+  mount('/knowledge?files=inbox')
+  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
+  upload([file('pack.zip')])
+  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
+  fireEvent.click(within(dialog).getByRole('radio', { name: /Keep as a zip/ }))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep as a zip' }))
+  await screen.findByText(/Added inbox\/pack\.zip/)
+  expect(puts()).toHaveLength(1)
+  expect(posts()[0]!.body).toEqual({
+    stagedId: 'A'.repeat(32),
+    path: 'inbox/pack.zip',
+    mode: 'keep',
+    onConflict: 'ask',
+  })
+})
+
+test('a previewed zip is unzipped without a second upload', async () => {
+  putQueue = [await stagedPreview()]
+  mount('/knowledge?files=inbox')
+  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
+  upload([file('pack.zip')])
+  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Unzip' }))
+  await screen.findByText(/Unzipped 2 files into inbox\/pack/)
+  expect(puts()).toHaveLength(1)
+  expect(posts()[0]!.body).toMatchObject({ mode: 'unzip', folder: 'inbox/pack' })
+})
+
+test('a 409 on a staged zip is retried from the stage, not re-sent', async () => {
+  putQueue = [await stagedPreview()]
+  stagedQueue = [clash()]
+  mount('/knowledge?files=inbox')
+  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
+  upload([file('pack.zip')])
+  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
+  fireEvent.click(within(dialog).getByRole('radio', { name: /Keep as a zip/ }))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep as a zip' }))
+  fireEvent.click(await screen.findByRole('button', { name: /Replace/ }))
+  await screen.findByText(/Added inbox\/pack\.zip/)
+  expect(puts()).toHaveLength(1)
+  expect(posts().map((c) => (c.body as { onConflict: string }).onConflict)).toEqual([
+    'ask',
+    'replace',
+  ])
+})
+
+test('a staged zip the server dropped is sent again', async () => {
+  putQueue = [await stagedPreview()]
+  stagedQueue = [json({ error: { code: 'staged_gone', message: 'gone' } }, 404)]
+  mount('/knowledge?files=inbox')
+  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
+  upload([file('pack.zip')])
+  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Unzip' }))
+  await screen.findByText(/Unzipped 2 files into inbox\/pack/)
+  expect(puts()).toHaveLength(2)
+  expect(puts()[1]!.url).toContain('mode=unzip')
 })

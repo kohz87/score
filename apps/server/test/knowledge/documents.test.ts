@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { HttpError } from '../../src/errors.ts'
 import { KnowledgeAgentApi } from '../../src/knowledge/agent-api.ts'
 import { PNG, textDocx, textPdf } from './doc-fixtures.ts'
-import { gitOut, makeVault, type Harness } from './helpers.ts'
+import { documentBytes, gitOut, makeVault, type Harness } from './helpers.ts'
 
 vi.setConfig({ testTimeout: 30_000 })
 
@@ -57,8 +57,9 @@ describe('upload and read', () => {
     expect(h.vault.info()).toMatchObject({ documents: 1 })
     expect(gitOut(h.vaultDir, 'log', '-1', '--format=%an %s')).toBe('You Add reports/q3.pdf\n')
     expect(h.events.at(-1)).toMatchObject({ path: 'reports/q3.pdf', kind: 'written', by: 'you' })
-    const file = await h.vault.docs.bytes('reports/q3.pdf')
-    expect(file.bytes.equals(textPdf('Zeppelin budget review'))).toBe(true)
+    expect(
+      (await documentBytes(h.vault, 'reports/q3.pdf')).equals(textPdf('Zeppelin budget review')),
+    ).toBe(true)
   })
 
   test('DOCX text is extracted', async () => {
@@ -149,9 +150,9 @@ describe('validation', () => {
       (await failure(h.vault.docs.upload('a.csv', Buffer.from([0, 1, 2]), 'ask'))).status,
     ).toBe(415)
   })
-  test('size limits: empty 400, over 25 MB 413', async () => {
+  test('size limits: empty 400, over 256 MB 413', async () => {
     expect((await failure(h.vault.docs.upload('e.csv', Buffer.alloc(0), 'ask'))).status).toBe(400)
-    const huge = Buffer.concat([PNG, Buffer.alloc(25 * 1024 * 1024)])
+    const huge = Buffer.alloc(256 * 1024 * 1024 + 1)
     expect((await failure(h.vault.docs.upload('h.png', huge, 'ask'))).status).toBe(413)
   })
   test('path rules: no traversal, absolute, dotfiles or .git', async () => {

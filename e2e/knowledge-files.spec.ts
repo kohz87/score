@@ -178,3 +178,27 @@ test('a chat attachment can also be saved to Knowledge', async ({ page }) => {
   await page.goto(`/knowledge/inbox/${file}`)
   await expect(page.locator('.kn-doc-text')).toContainText('From the chat', { timeout: 15_000 })
 })
+
+test('a previewed zip is unzipped without sending it a second time (10.3)', async ({ page }) => {
+  const name = unique()
+  const puts: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && request.url().includes('/api/knowledge/files/'))
+      puts.push(request.url())
+  })
+  await page.goto('/knowledge?files=')
+  await page.getByRole('button', { name: 'Upload files' }).waitFor({ timeout: 15_000 })
+  await page.getByTestId('kn-upload-input').setInputFiles({
+    name: `${name}.zip`,
+    mimeType: 'application/zip',
+    buffer: storedZip({ 'one.md': `# One ${name}`, 'two.md': '# Two' }),
+  })
+  const dialog = page.getByRole('dialog', { name: new RegExp(`Zip file: ${name}\\.zip`) })
+  await expect(dialog).toBeVisible({ timeout: 15_000 })
+  await dialog.getByRole('button', { name: 'Unzip' }).click()
+  await expect(page.getByText(new RegExp(`Unzipped 2 files into ${name}`))).toBeVisible({
+    timeout: 30_000,
+  })
+  expect(puts).toHaveLength(1)
+  expect(puts[0]).toContain('mode=preview')
+})
