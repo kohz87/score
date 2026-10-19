@@ -3,6 +3,7 @@ import {
   BREAK_FILES,
   gapBetween,
   initialPositions,
+  petView,
   pickBreak,
   pickTarget,
   restingMotion,
@@ -72,4 +73,25 @@ test('what a resting member may do depends on the liveliness', () => {
   expect(restingMotion('still', 'rest', true)).toEqual({ walks: false, breaks: false })
   expect(restingMotion('lively', 'work', true)).toEqual({ walks: false, breaks: false })
   expect(restingMotion('lively', 'sleep', true)).toEqual({ walks: false, breaks: false })
+})
+
+test('a pet plays the file for its mood and falls back to idle with Score’s own overlay', () => {
+  const rich = new Set(['idle', 'work', 'think', 'needs', 'sleep', 'walk', 'coffee'])
+  const bare = new Set(['idle'])
+  const still = { mode: 'idle' as const }
+  expect(petView('rest', still, rich)).toEqual({ file: 'idle', overlay: null })
+  expect(petView('work', still, rich)).toEqual({ file: 'work', overlay: null })
+  expect(petView('think', still, rich)).toEqual({ file: 'think', overlay: null })
+  expect(petView('think', still, bare)).toEqual({ file: 'idle', overlay: 'dots' })
+  expect(petView('sleep', still, rich)).toEqual({ file: 'sleep', overlay: null })
+  expect(petView('sleep', still, bare)).toEqual({ file: 'idle', overlay: 'zzz' })
+  // "Waiting for you" always shows the "!", with its file or without.
+  expect(petView('needs', still, rich)).toEqual({ file: 'needs', overlay: 'bang' })
+  expect(petView('needs', still, bare)).toEqual({ file: 'idle', overlay: 'bang' })
+  expect(petView('work', still, bare)).toEqual({ file: 'idle', overlay: null })
+  // Resting: walking and breaks only with their files.
+  expect(petView('rest', { mode: 'walk' }, rich).file).toBe('walk')
+  expect(petView('rest', { mode: 'walk' }, bare).file).toBe('idle')
+  expect(petView('rest', { mode: 'break', file: 'coffee' }, rich).file).toBe('coffee')
+  expect(petView('rest', { mode: 'break', file: 'read' }, rich).file).toBe('idle')
 })

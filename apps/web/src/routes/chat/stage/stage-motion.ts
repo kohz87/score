@@ -70,3 +70,30 @@ export function restingMotion(
   const lively = liveliness === 'lively' && mood === 'rest'
   return { walks: lively, breaks: lively && pet }
 }
+
+export type StageOverlay = 'bang' | 'dots' | 'zzz'
+export type Motion = { mode: 'idle' | 'walk' | 'break'; file?: BreakFile }
+
+/** The file a pet plays now, always one the pack has, and Score's own overlay for a mood the pack has no file for. */
+export function petView(
+  mood: StageMood,
+  motion: Motion,
+  files: ReadonlySet<string>,
+): { file: PetActivity; overlay: StageOverlay | null } {
+  const has = (file: PetActivity) => files.has(file)
+  switch (mood) {
+    case 'needs':
+      return { file: has('needs') ? 'needs' : 'idle', overlay: 'bang' }
+    case 'think':
+      return has('think') ? { file: 'think', overlay: null } : { file: 'idle', overlay: 'dots' }
+    case 'sleep':
+      return has('sleep') ? { file: 'sleep', overlay: null } : { file: 'idle', overlay: 'zzz' }
+    case 'work':
+      return { file: has('work') ? 'work' : 'idle', overlay: null }
+    case 'rest':
+      if (motion.mode === 'walk' && has('walk')) return { file: 'walk', overlay: null }
+      if (motion.mode === 'break' && motion.file && has(motion.file))
+        return { file: motion.file, overlay: null }
+      return { file: 'idle', overlay: null }
+  }
+}
