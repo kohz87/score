@@ -1,3 +1,4 @@
+import JSZip from 'jszip'
 import { deflateSync } from 'node:zlib'
 
 // Generated, neutral test images and packs: a flat grey square, never real artwork.
@@ -115,4 +116,25 @@ export function multipartFiles(files: { name: string; bytes: Buffer }[]): {
     payload: Buffer.concat([...parts, Buffer.from(`--${boundary}--\r\n`)]),
     headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
   }
+}
+
+/** A zip of the given entries (name → bytes; a name ending in "/" is a folder). `link` entries are Unix symlinks. */
+export async function zipOf(
+  entries: Record<string, Buffer | string>,
+  options: { links?: string[]; store?: boolean } = {},
+): Promise<Buffer> {
+  const zip = new JSZip()
+  for (const [name, data] of Object.entries(entries)) {
+    if (name.endsWith('/')) zip.file(name, '', { dir: true })
+    else
+      zip.file(name, data, {
+        createFolders: false,
+        ...(options.links?.includes(name) ? { unixPermissions: 0o120777 } : {}),
+      })
+  }
+  return zip.generateAsync({
+    type: 'nodebuffer',
+    platform: 'UNIX',
+    compression: options.store ? 'STORE' : 'DEFLATE',
+  })
 }
