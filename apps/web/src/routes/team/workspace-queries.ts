@@ -8,7 +8,7 @@ import {
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createContext, useContext } from 'react'
-import { ApiError, apiFetch } from '../../data/api.ts'
+import { ApiError, apiFetch, apiUpload, type UploadProgress } from '../../data/api.ts'
 
 const base = (agentId: string) => `agents/${encodeURIComponent(agentId)}/workspace`
 const rootParam = (root: string | undefined) =>
@@ -214,12 +214,18 @@ export function useWorkspaceActions(agentId: string) {
       onError: refreshInfo,
     }),
     upload: useMutation({
-      mutationFn: (req: { path: string; file: File }) =>
-        apiFetch(withPath(agentId, 'upload', req.path, '', root), {
-          method: 'POST',
-          headers: { 'content-type': 'application/octet-stream' },
-          body: req.file,
-        }),
+      mutationFn: (req: {
+        path: string
+        file: File
+        onProgress?: (progress: UploadProgress) => void
+      }) =>
+        apiUpload(
+          withPath(agentId, 'upload', req.path, '', root),
+          req.file,
+          req.onProgress,
+          {},
+          'POST',
+        ),
       onSuccess: refreshTree,
       onError: refreshInfo,
     }),

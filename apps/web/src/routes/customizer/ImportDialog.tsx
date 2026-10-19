@@ -7,7 +7,8 @@ import { describeDropped, reportSummary } from '../../themes/customizer/report-t
 import type { ThemePackage } from '../../themes/customizer/package.ts'
 import { isReservedId } from '../../themes/customizer/draft.ts'
 import { sanitiseCss } from '../../themes/sanitise.ts'
-import { ApiError } from '../../data/api.ts'
+import { ApiError, type UploadProgress as Progress } from '../../data/api.ts'
+import { UploadProgress } from '../../components/UploadProgress.tsx'
 import { Modal, Segmented } from './controls.tsx'
 import { PreviewFrame } from './PreviewFrame.tsx'
 import { previewDevices, previewPages } from './preview-pages.ts'
@@ -82,6 +83,7 @@ function Review({
   const [replace, setReplace] = useState(false)
   const [state, setState] = useState<'review' | 'installing' | 'done'>('review')
   const [problem, setProblem] = useState('')
+  const [sent, setSent] = useState<Progress | null>(null)
   // The version of the installed theme this window shows (its etag). Replace is conditional on it (If-Match), so a
   // version that landed while the window was open is never overwritten; after a conflict the window must be reopened.
   const [shown, setShown] = useState<{ etag: string } | 'loading' | 'failed' | 'stale'>('loading')
@@ -126,10 +128,12 @@ function Review({
     if (mustReplace && (typeof shown === 'string' || !replace)) return
     setState('installing')
     setProblem('')
+    setSent({ loaded: 0, total: candidate.bytes.length })
     try {
       await installThemeZip(candidate.bytes, {
         replace: mustReplace && replace,
         ifMatch: mustReplace && typeof shown !== 'string' ? shown.etag : null,
+        onProgress: setSent,
       })
       setState('done')
       onInstalled()
@@ -141,6 +145,8 @@ function Review({
         )
       } else setProblem(describeSaveError(error).text)
       setState('review')
+    } finally {
+      setSent(null)
     }
   }
 
@@ -262,6 +268,7 @@ function Review({
           </div>
         </div>
       </div>
+      {state === 'installing' && sent && <UploadProgress progress={sent} after="Installing…" />}
       <div className="cz-modal-actions">
         <button type="button" className="cz-btn" onClick={onClose}>
           Cancel

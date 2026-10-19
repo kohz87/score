@@ -15,7 +15,8 @@ import {
   type ThemeDetail,
   type ThemeSanitiseReport,
 } from '@score/contract'
-import { ApiError } from '../../data/api.ts'
+import { ApiError, type UploadProgress as Progress } from '../../data/api.ts'
+import { UploadProgress } from '../../components/UploadProgress.tsx'
 import { dataUrlFor } from '../../themes/customizer/asset-types.ts'
 import {
   CHANGED_ELSEWHERE,
@@ -205,6 +206,7 @@ export function Customizer() {
   const [status, setStatus] = useState('')
   const [problem, setProblem] = useState<SaveProblem | null>(null)
   const [busy, setBusy] = useState<'' | 'save' | 'export' | 'use'>('')
+  const [sent, setSent] = useState<Progress | null>(null)
   const [report, setReport] = useState<ThemeSanitiseReport>({ dropped: [] })
   const [text, setText] = useState<Record<string, TextFinding[]>>({})
   const [saveAs, setSaveAs] = useState<string | null>(null)
@@ -510,16 +512,21 @@ export function Customizer() {
         // The server compares the etag with the stored theme's in the same step as the replace (If-Match).
         // The result carries the committed version and its etag, so nothing is read back (another writer could land
         // between the two requests and the editor would adopt an etag for content it never loaded).
+        const zip = buildThemePackage(built.pkg)
+        setSent({ loaded: 0, total: zip.length })
         detail = (
-          await installThemeZip(buildThemePackage(built.pkg), {
+          await installThemeZip(zip, {
             replace: replacing,
             ifMatch: replacing ? target.etag : null,
+            onProgress: setSent,
           })
         ).detail
       }
     } catch (error) {
       setProblem(describeSaveError(error))
       return null
+    } finally {
+      setSent(null)
     }
     setHistory((current) =>
       current ? afterSave(current, submitted, detail.manifest, draft) : current,
@@ -790,9 +797,13 @@ export function Customizer() {
       </header>
 
       <div className="cz-messages">
-        <p className="cz-status" role="status">
-          {status}
-        </p>
+        {sent ? (
+          <UploadProgress progress={sent} after="Installing…" />
+        ) : (
+          <p className="cz-status" role="status">
+            {status}
+          </p>
+        )}
         {problem && (
           <p className="cz-problem" role="alert">
             {problem.text}

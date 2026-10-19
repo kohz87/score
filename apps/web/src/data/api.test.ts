@@ -169,3 +169,27 @@ test('a FormData upload leaves the content type to the browser, keeps the mutati
   xhr.onload?.()
   await expect(done).rejects.toMatchObject({ status: 422, code: 'pack_rejected' })
 })
+
+test('apiUpload can POST: the method is an option and PUT stays the default', async () => {
+  const opened: string[] = []
+  class Spy {
+    upload = {}
+    status = 200
+    responseText = '{}'
+    responseType = ''
+    onload: (() => void) | null = null
+    onerror: (() => void) | null = null
+    open(method: string) {
+      opened.push(method)
+    }
+    setRequestHeader() {}
+    send() {
+      this.onload?.()
+    }
+  }
+  vi.stubGlobal('XMLHttpRequest', Spy)
+  await apiUpload('a', new Blob(['x']))
+  await apiUpload('a', new Blob(['x']), undefined, {}, 'POST')
+  expect(opened).toEqual(['PUT', 'POST'])
+  vi.unstubAllGlobals()
+})

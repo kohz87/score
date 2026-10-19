@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react'
-import { ApiError } from '../../data/api.ts'
+import { ApiError, type UploadProgress as Progress } from '../../data/api.ts'
+import { UploadProgress } from '../../components/UploadProgress.tsx'
 import { useTreeWidth, MAX_TREE, MIN_TREE } from './workspace-split.ts'
 import { discardDraftsUnder, WorkspaceFile } from './WorkspaceFile.tsx'
 import { join, parentOf, TreeLevel, type Selection } from './WorkspaceTree.tsx'
@@ -147,6 +148,7 @@ function Browser({
   const [needsTyping, setNeedsTyping] = useState(false)
   const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [sending, setSending] = useState<{ name: string; progress: Progress } | null>(null)
   const picker = useRef<HTMLInputElement>(null)
   const grid = useRef<HTMLDivElement>(null)
   const split = useTreeWidth(grid)
@@ -235,11 +237,18 @@ function Browser({
   async function upload(files: File[]) {
     setNotice('')
     for (const file of files) {
+      setSending({ name: file.name, progress: { loaded: 0, total: file.size } })
       try {
-        await actions.upload.mutateAsync({ path: join(dir, file.name), file })
+        await actions.upload.mutateAsync({
+          path: join(dir, file.name),
+          file,
+          onProgress: (progress) => setSending({ name: file.name, progress }),
+        })
         setNotice(`Uploaded ${file.name}.`)
       } catch {
         return
+      } finally {
+        setSending(null)
       }
     }
     expandTo(join(dir, 'x'))
@@ -412,9 +421,13 @@ function Browser({
             </div>
           )}
           {failure && <p role="alert">{failure}</p>}
-          <p className="team-muted" role="status">
-            {actions.upload.isPending ? 'Uploading…' : notice}
-          </p>
+          {sending ? (
+            <UploadProgress name={sending.name} progress={sending.progress} after="Saving…" />
+          ) : (
+            <p className="team-muted" role="status">
+              {notice}
+            </p>
+          )}
           <TreeLevel
             agentId={agentId}
             path=""
