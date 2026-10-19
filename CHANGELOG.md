@@ -3,6 +3,29 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.5] — 2026-10-19
+
+### Fixed
+- Knowledge uploads show their progress: the file, "file 2 of 3", percent and megabytes sent, and what happens after
+  ("Checking the zip…", "Unzipping…"). A big zip no longer uploads in silence.
+- Uploading at the top level of Knowledge says so ("Added pack.zip at the top level"; the drop hint names the top
+  level), so it isn't mistaken for the folder called Knowledge.
+
+## [1.9.4] — 2026-10-19
+
+### Fixed
+- Terminal: copying inside **tmux** (and vim or other programs that copy with the standard OSC 52 sequence) now puts
+  the text on your clipboard. A program can only do that right after your own key press or mouse release in the
+  terminal, never read your clipboard, and "Copied." shows each time. Holding Shift while dragging still selects in
+  the browser terminal itself, past tmux.
+
+## [1.9.3] — 2026-10-19
+
+### Fixed
+- Terminal: copying works on the LAN address too. Ctrl+C (with text selected), right-click (with text selected) and
+  the Copy button copy through the browser's own copy event, which needs no clipboard permission; "Copied." confirms
+  it. Before, copying relied on a clipboard permission the browser can refuse on a self-signed address.
+
 ## [1.9.2] — 2026-10-19
 
 ### Fixed

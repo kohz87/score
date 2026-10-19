@@ -404,3 +404,31 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v1.9.0 deployed** (2026-10-19 03:19 UTC): backup `score-pre-1.9.0-20261019.db`, gateway restarted, both producers re-registered, health 200 on LAN and Tailscale, `/settings/logs` deep link 200.
 - **1.9.1** (owner report): Terminal password field styled like Settings › Remote access (label above, 40px field); before/after screenshots at 1280 and 390; terminal e2e pass.
 - **1.9.2** (owner report): terminal had no clipboard on Windows/Linux (xterm defaults: Ctrl+C = interrupt, Ctrl+V = ^V). `clipboardKey()` + `attachCustomKeyEventHandler`: Ctrl+C copies a selection, Ctrl+V/Ctrl+Shift+V left to the browser's paste event; Copy/Paste buttons on the key bar (`readClipboardText`, hint when refused). Unit tests; terminal e2e on a real shell failed first at the paste (^V), passes 2/2 with paste, copy and interrupt checks.
+- **10.2a** (server) done on `task/10.2a`: migration 0078 (agent_styles rebuilt with 20 shapes + `look` + `avatar_rev`;
+  coding agents' style consolidated into `coding_agents`), `writeAgentStyle`/`readAgentStyle`, style PATCH with
+  `AgentStylePatchSchema` for both agent kinds, avatar PUT/DELETE/GET (`src/avatars/{sniff,store}.ts`: type and size
+  from bytes, APNG/animated WebP/SVG/GIF refused, 2 MB, 32–2048 px, lstat walk + O_NOFOLLOW, temp+rename, row commit
+  then old file removed, start-up recovery, folder removed with the agent). Defaults stay on the original eight shapes.
+  ~85 new tests, failing first. Waiting for 10.2b; merge order 10.2a → 10.2b → main.
+- **10.2 paused** (owner, 2026-10-19: "should we stop until we solidify the avatar design?"): 10.2a parked on its branch
+  (design-independent); 10.2b asked to stop at a clean point, commit solid parts as WIP, no baselines. Design being
+  settled in the preview (pets in their own corner, eye marks for imported pictures).
+- **10.2 resumed with the settled design** (decision 106, owner's four answers): pet corners on Team and the agent page,
+  moods in place elsewhere, plain shape in lists; Lively/Calm/Still per device; eye marks for pictures; bot default.
+  Lead wrote the eye-mark contract on `task/10.2a` (af7997c5). Running: 10.2a (eye storage), 10.2b (finish + eye-mark
+  UI), 10.2c (PetCorner + liveliness, from 10.2b). Merge order: 10.2a → 10.2b → 10.2c → main; baselines once.
+- **1.9.3** (owner: paste works, copy doesn't; Windows Chrome/Edge, select + Ctrl+C or right-click › Copy): copy now raises the browser's copy event (`execCommand('copy')`, which xterm fills from its selection) instead of the Clipboard API, which a self-signed LAN origin can refuse; right-click with a selection copies; "Copied." status. E2E with the page's Clipboard API made to refuse: fails on 1.9.2, passes. Also noted from the owner: Knowledge upload of a 24 MB zip shows no progress, and it landed at the vault root instead of `knowledge/` — to fix next.
+- **1.9.4** (owner: copy still failing — Windows, tmux, highlight but no "Copied."): the highlight was tmux's mouse selection, which never reaches the browser. OSC 52 handler (`osc52Text()` in keys.ts, no new dependency): honoured only within 3 s of the person's own key press or pointer release in the terminal (blocks clipboard injection by printed files), never answers a clipboard read, 256 KB cap, raised as a copy event with Clipboard API fallback, "Copied.". E2E with real tmux 3.6 (`set-buffer -w`): fails on 1.9.3, passes; a late OSC 52 (after sleep 4) is ignored.
+- **1.9.5** (owner: 24 MB zip upload showed no progress; "landed at the vault root"): `apiUpload()` (XHR with upload progress, same headers/errors as apiFetch; `failure()` shared) for Knowledge PUTs; `UploadProgressPanel` (file, n of m, step, %, MB; indeterminate while the server works) registered as Score's own overlay for the theme guard; test-only `src/test/xhr-via-fetch.ts` routes XHR through the tests' fetch stubs. The "root" case was a naming clash: the vault's top level is labelled Knowledge and it also has a folder named Knowledge — hint and summary now say "top level". Noted for later: a zip is still uploaded twice (preview, then save/unzip). Web 2192 unit tests, Knowledge e2e 18/18.
+- **10.2 re-scoped** (decisions 107, 108; owner reviewed every prototype in the preview): marks (cut-out, ring; 20
+  shapes; calm moods; eyes follow the pointer) + animated avatars from uploaded pet packs (activity-named animations,
+  idle fallback with overlays, mark badge) on Team cards and the agent page. Removed: bot faces, chibi, full-body vector
+  pets, pictures with eye marks, layered rigs, 3D, wandering corners. Lead wrote the v2 contract on `task/10.2a`
+  (34ada71a) and brief `docs/briefs/10.2-agent-looks-v2.md`; 10.2a (server packs) and 10.2b (web marks + PetAvatar +
+  Look panel, merging 10.2c's liveliness and scheduler) resumed.
+- **10.2a v2 done** (task/10.2a, 47bff9fa): migration 0078 rewritten (look cut|ring, pack_rev, pack_meta), pack routes
+  PUT/DELETE/GET, `src/packs/{sniff,reader,store,meta}.ts` (bytes-based type + size + dims; shared zip rules + theme
+  inflater; files stored under activity names only; lstat walk + O_NOFOLLOW; temp + rename; recovery), picture and
+  eye-mark code removed. 30 route tests + reader/store/sniff/migration tests failed first; server suite 4567/0. Lead
+  reviewed the reader (no zip path is used for storage; caps before inflate). Choices accepted: file cap counts files
+  only; unknown-activity image = 422, other files ignored; case-insensitive names; unknown activity on GET = 404.

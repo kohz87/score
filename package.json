@@ -1,6 +1,6 @@
 {
   "name": "score",
-  "version": "1.9.2",
+  "version": "1.9.5",
   "private": true,
   "description": "A multi-agent workspace for Hermes Agent",
   "license": "PolyForm-Noncommercial-1.0.0",

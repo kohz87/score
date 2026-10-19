@@ -1292,3 +1292,32 @@
   outline: 2px solid var(--line-strong);
   outline-offset: 2px;
 }
+/* Upload progress: a small card at the bottom right while files go up (a big zip takes a while). */
+.kn-upload-progress {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  width: min(340px, calc(100vw - 32px));
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-l);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 12px 32px rgb(var(--shadow-rgb) / 16%);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.kn-upload-progress p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.kn-upload-progress strong {
+  color: var(--ink);
+}
+.kn-upload-progress progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--ink);
+}
