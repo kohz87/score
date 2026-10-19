@@ -9,7 +9,9 @@ For installing and starting Score, see the [README](../README.md). The examples 
 ## Ideas that appear everywhere
 
 - **Agents.** Each agent is a Hermes profile. Score shows every agent with a colour and a shape, never colour alone, so
-  you can tell them apart in a black-and-white screenshot. You choose them on the agent's page (Team).
+  you can tell them apart in a black-and-white screenshot. You choose them on the agent's page (Team). The colour and
+  shape make the agent's **mark**, and an agent can also wear an animated avatar from a **pet pack** (see "Agent looks"
+  under Team).
 - **Needs you.** Anything an agent cannot do alone, such as a command that needs approval, is marked "Needs you" or
   "Waiting on you" and shown in a dark card. The top-level Needs you filter in Tasks and the Now page both surface it.
 - **Pairing.** Looking is free; changing needs a paired browser (README, "Pairing"). If a button answers "Pair this
@@ -209,7 +211,7 @@ Your agents at a glance, with a card for each. **Add agent** creates a new Herme
 to start blank or copy an existing agent, and an appearance; Score shows a preview of every change and then runs
 it. This needs the bridge install settings described in the README ("Create and manage agents").
 
-Click an agent to open its page. It has an appearance picker (color and shape) and these tabs (the Workspace tab also has its own address, `/team/<agent>/workspace?path=<file>`):
+Click an agent to open its page. It has an appearance picker (look, colour, shape and pet pack, see "Agent looks" below) and these tabs (the Workspace tab also has its own address, `/team/<agent>/workspace?path=<file>`):
 
 - **Overview**: a short summary of personality, who it reports to, where it works, its operating rules, the model
   and skills it uses and its routines, plus **Agent details** (display name, description) and a **Danger zone**
@@ -234,6 +236,52 @@ Click an agent to open its page. It has an appearance picker (color and shape) a
   the team, never looser. **Ask first** makes a kind of command always ask; **Add Never rule** blocks commands
   that match some text.
 - **Channels** and **History** say "coming soon".
+
+### Agent looks
+
+Every agent has a **mark**: its shape in its colour with a calm face. Click the agent's picture at the top of its
+page (or choose while adding or importing an agent) to open **Agent appearance**:
+
+- **Look**: **Cut-out** (a solid mark with the eyes cut through it, so the page shows through) or **Ring** (the shape
+  as one thick outline with two solid eyes).
+- **Colour** and **Shape**: twenty shapes (circle, triangle, diamond, square, hexagon, star, pill, cross, cloud,
+  cylinder, heart, drop, bolt, moon, leaf, blob, shield, octagon, bubble and gem). Move through them with the arrow
+  keys.
+
+The mark moves with what the agent is doing, where Score knows it: resting, it breathes and blinks; working, the eyes
+narrow and the mark pulses gently; thinking, the eyes look up while a small dot orbits; waiting for you, a ring ripples
+out. The eyes follow your pointer, and a click nudges the mark. In lists it is the plain shape.
+
+**Pet packs.** An agent can also wear an animated avatar, shown on its card on the Team page and at the top of its
+page, with its mark as a small badge. Under **Pet pack** choose **Upload a pet pack…** and pick a ZIP, or the animation
+files themselves (not both); **Use this pack** sends it. Score lists any files it left out, or the reasons it refused
+the pack. **Replace pet pack…** and **Remove pack** do what they say. **How to make a pack** on that panel has the
+table of names and the rules:
+
+| File | Played when | What the character does |
+| --- | --- | --- |
+| `idle` (required) | Resting | Stands, breathes, blinks, a small sway |
+| `work` | The agent is working | Types at a desk or laptop |
+| `think` | Thinking or planning | Hand on chin, looks up |
+| `needs` | Waiting for your approval or answer | Waves at you, a small hop |
+| `sleep` | Idle for a while | Naps |
+| `walk` | Optional: resting | Walks in place, side view facing right |
+| `stretch`, `coffee`, `read` | Optional: breaks | Arms up and a yawn; a sip of coffee; reading |
+| `greet`, `happy` | Optional: you point at it; you click it | A wave hello; a happy bounce |
+
+- Files are animated WebP (best), APNG (`.png`) or GIF with a transparent background; a still PNG works too. Up to
+  8 MB per file and 64 MB per pack, 64–2048 px per side. Keep the same character height and feet line in every file.
+- An optional `pet.json` beside the files gives a `name`, `credits` and a `floor` (0 to 0.3) that lifts the character
+  if its feet sit too low in the files.
+- An activity with no file falls back to `idle` with Score's own overlays (thought dots, a "!" with a hop, sleeping
+  z's), so a pack with only `idle` already works. Pointing at the avatar plays `greet` (or says "hi!"); clicking plays
+  `happy` (or raises a heart).
+- Score never runs anything from a pack: it only reads the images and `pet.json`.
+
+**Agents: Lively / Calm / Still** (Settings › Look, per device). **Lively** adds breaks (a stroll, a stretch, a coffee,
+a book, whichever the pack has) and a nap after about 25 seconds without anyone looking. **Calm** keeps to the mood,
+the greeting and the bounce. **Still** shows each avatar as one still picture and stops the marks. A device that asks
+for reduced motion always gets Still, and phones start on Calm.
 
 ### Coding agents
 
@@ -362,6 +410,8 @@ have `docs/THEMES.md`.
   cards when this device has its own) puts the device back in step with everyone else.
 - **Theme for every device** and **Colours for every device** set the shared look; **Save for every device** applies it
   to every browser that hasn't chosen its own. Devices that have their own choice keep it.
+- **Agents** chooses **Lively**, **Calm** or **Still** for this device: how much marks and pet avatars move (see "Agent
+  looks" under Team).
 - **Customize…** opens the Customizer.
 - **If a theme gets in the way** has the button that resets the look (see "Ways back from a broken theme").
 
