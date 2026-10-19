@@ -278,7 +278,7 @@ Hermes's own records (read-only) and completes the reply, else marks it interrup
 **5.17a Kanban attempts as runs (read-only projection; v3 splits it into 5.17a-1 Kanban DB only and 5.17a-2 bridge provenance)** · Kanban worker attempts become runs in Flow, Now and Reports with
 exact provenance (design v3 pending; see docs/briefs/5.17.md). Done when fixtures cover synthetic rows, restore/rollback,
 A→B→A revisions, pruned claims, short gaps, unknown states, host isolation and requested changes.
-**5.17b Kanban Stop** · Needs an upstream Hermes operation (docs/proposals/hermes-attempt-fenced-stop.md, to be extended
+**5.17b Kanban Stop** · ⏸ blocked upstream (checked 2026-10-19: installed Hermes `e97923c` has only `reclaim`/`block`; the proposal is still an unsent draft) · Needs an upstream Hermes operation (docs/proposals/hermes-attempt-fenced-stop.md, to be extended
 with durable intent and fenced launch registration). Until then Score says Stop is unavailable for Kanban attempts.
 
 **5.18 HTTPS-only remote access** · Owner 2026-10-09: remote mode serves the app only over HTTPS; plain HTTP gets an
@@ -370,7 +370,7 @@ human approval gates, budgets and deadlines, pause/resume/stop, replay, JSON exp
 **7.7 Coding agents as orchestration and workflow workers** · (owner 2026-10-11) Claude Code, Codex and Antigravity take
 steps handed out by a Hermes lead or drawn in a workflow; design and adversarial review first (orchestrator journal,
 stop, recovery and spend semantics for coding runs). Until then orchestrations and workflows refuse coding agents.
-**7.4 Backlog** · Long rooms auto-summarise at a token threshold; pop-out window per agent; journey graph (tasks,
+**7.4 Backlog** ✅ (7.4a room summaries, 7.4b pop-out, 7.4c journey graph, 7.4d Score MCP tools; merged 2026-10-09/10) · Long rooms auto-summarise at a token threshold; pop-out window per agent; journey graph (tasks,
 memories, skills over time); Score as an MCP tool server for its agents.
 **6.5 Knowledge editor** · (owner 2026-10-10) Obsidian-style live preview in CodeMirror (Markdown rendered inline except the edited line; files stay byte-exact), notes open rendered by default, split view on wide screens, styled tables/code/quotes/task lists/callouts.
 Not planned (owner): full-screen voice stage; multiple user accounts with roles.
