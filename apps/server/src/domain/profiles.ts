@@ -12,6 +12,7 @@ import {
   type AgentPreviewRequest,
   type ProfileStepName,
 } from '@score/contract'
+import type { AvatarStore } from '../avatars/store.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import { ProfileInventorySchema } from '../hermes/index.ts'
@@ -93,6 +94,7 @@ export class ProfileOperations {
     private readonly port: HermesPort,
     private readonly clock = Date.now,
     private readonly imports?: ProfileImportStore,
+    private readonly avatars?: AvatarStore,
   ) {}
 
   get(id: string): AgentOperation {
@@ -701,9 +703,17 @@ export class ProfileOperations {
         sqlite
           .prepare('UPDATE producers SET token_expires_at = 0 WHERE profile = ?')
           .run(operation.targetName)
+        // The imported picture goes with the agent (PLAN 10.2): the revision here, the folder right after the commit.
+        sqlite
+          .prepare('UPDATE agent_styles SET avatar_rev = NULL WHERE agent_id = ?')
+          .run(operation.targetName)
+        const previous = readAgent(sqlite, operation.targetName)
+        if (previous?.style.avatar)
+          storeAgent(sqlite, { ...previous, style: { ...previous.style, avatar: null } })
         return events
       },
     })
+    this.avatars?.removeAgent(operation.targetName)
   }
   async close() {
     this.closed = true

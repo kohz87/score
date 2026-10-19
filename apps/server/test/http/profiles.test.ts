@@ -1,4 +1,5 @@
-import { rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   AgentOperationSchema,
@@ -14,6 +15,7 @@ import { ProfileOperations } from '../../src/domain/profiles.ts'
 import { writeBaseline } from '../../src/domain/team-rules.ts'
 import { McpAccessStore } from '../../src/mcp/access.ts'
 import { setup } from '../hermes/live/gateway/helpers.ts'
+import { multipartFile, pngImage } from '../helpers/avatar-images.ts'
 
 let env: ReturnType<typeof setup>
 let app: ReturnType<typeof buildApp>
@@ -144,6 +146,39 @@ test('PLAN 10.2: a new agent keeps its look and new shape, and a picture in the 
   // Nothing of it is kept in the operation journal either.
   const operations = env.db.sqlite.prepare('SELECT request FROM profile_operations').all()
   expect(JSON.stringify(operations)).not.toContain('forged')
+})
+test('PLAN 10.2: deleting an agent removes its picture folder and clears the revision', async () => {
+  await finished((await create()).id)
+  const body = multipartFile('me.png', pngImage(64, 64))
+  const uploaded = await app.inject({
+    method: 'PUT',
+    url: '/api/agents/helper/avatar',
+    headers: { cookie, 'x-score-client': 'web', ...body.headers },
+    payload: body.payload,
+  })
+  expect(uploaded.statusCode, uploaded.body).toBe(200)
+  const rev = uploaded.json().style.avatar
+  const folder = join(env.home, 'avatars', 'helper')
+  expect(existsSync(join(folder, `${rev}.png`))).toBe(true)
+  const preview = (
+    await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })
+  ).json()
+  const response = await mutate(
+    '/api/agents/helper',
+    { typedName: 'helper', previewHash: preview.hash },
+    'DELETE',
+  )
+  expect((await finished(response.json().id)).state).toBe('completed')
+  expect(existsSync(folder)).toBe(false)
+  expect(
+    env.db.sqlite.prepare('SELECT avatar_rev FROM agent_styles WHERE agent_id = ?').get('helper'),
+  ).toEqual({
+    avatar_rev: null,
+  })
+  const removed = (await app.inject('/api/agents/helper')).json()
+  expect(removed.lifecycle.state).toBe('removed')
+  expect(removed.style.avatar ?? null).toBeNull()
+  expect((await app.inject(`/api/agents/helper/avatar?rev=${rev}`)).statusCode).toBe(404)
 })
 test('clone previews inherited names, requires confirmation and applies the team baseline', async () => {
   const body = { ...input, cloneFrom: 'builder' }

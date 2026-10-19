@@ -35,6 +35,7 @@ import { CodingRuntime, type CodingRuntimeDeps } from '../../src/runtimes/coding
 import { SecurityPassword } from '../../src/auth/security-password.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 import { FAKE_CLI } from './coding-fixtures.ts'
+import { multipartFile, pngImage } from '../helpers/avatar-images.ts'
 
 // Every test here spawns real child processes (a version probe per agent and per turn, then the CLI itself). Alone that
 // is ~1-2 s, but in the full parallel run on 4 cores node start-up alone takes seconds, and the two-agent Reports test
@@ -309,6 +310,43 @@ test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at crea
   expect(
     (await request('PATCH', '/api/agents/coder/style', { shape: 'dodecagon' })).statusCode,
   ).toBe(400)
+})
+test('PLAN 10.2: a coding agent can have a picture, and removing the agent removes the folder', async () => {
+  await addAgent()
+  const body = multipartFile('me.png', pngImage(64, 64))
+  const uploaded = await app.inject({
+    method: 'PUT',
+    url: '/api/agents/coder/avatar',
+    headers: { ...headers, ...body.headers },
+    payload: body.payload,
+  })
+  expect(uploaded.statusCode, uploaded.body).toBe(200)
+  const rev = uploaded.json().style.avatar
+  expect(typeof rev).toBe('string')
+  // One place for the style: the agent's own row, seen the same from every list.
+  expect(db.sqlite.prepare('SELECT avatar_rev FROM coding_agents').all()).toEqual([
+    { avatar_rev: rev },
+  ])
+  expect(db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
+  expect((await request('GET', '/api/coding-agents')).json().items[0].style.avatar).toBe(rev)
+  const served = await app.inject({ url: `/api/agents/coder/avatar?rev=${rev}`, headers })
+  expect(served.statusCode).toBe(200)
+  expect(existsSync(join(home, 'avatars', 'coder', `${rev}.png`))).toBe(true)
+  // The look and shape can change without losing it.
+  await request('PATCH', '/api/agents/coder/style', { look: 'chibi', shape: 'bubble' })
+  expect((await request('GET', '/api/coding-agents')).json().items[0].style).toMatchObject({
+    look: 'chibi',
+    shape: 'bubble',
+    avatar: rev,
+  })
+  expect((await request('DELETE', '/api/coding-agents/coder')).statusCode).toBe(204)
+  expect(existsSync(join(home, 'avatars', 'coder'))).toBe(false)
+  expect(
+    (await app.inject({ url: `/api/agents/coder/avatar?rev=${rev}`, headers })).statusCode,
+  ).toBe(404)
+  expect(db.sqlite.prepare('SELECT avatar_rev FROM coding_agents').all()).toEqual([
+    { avatar_rev: null },
+  ])
 })
 test('refuses duplicates, a missing CLI, OpenCode, full access without the password, bad folders', async () => {
   await addAgent()

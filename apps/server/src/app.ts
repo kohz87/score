@@ -6,6 +6,8 @@ import { SecurityPassword } from './auth/security-password.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { createAgentDirectory, withAgentDirectory } from './http/agent-directory.ts'
 import { registerAgentRoutes } from './http/agents.ts'
+import { currentAvatarRevs, registerAvatarRoutes } from './http/avatars.ts'
+import { AvatarStore } from './avatars/store.ts'
 import { registerCodingAgentRoutes } from './http/coding-agents.ts'
 import { hermesPortOf, withCodingAgents } from './runtimes/coding/port.ts'
 import type { CodingRuntime } from './runtimes/coding/service.ts'
@@ -267,8 +269,21 @@ export function buildApp({
   registerTaskRoutes(app, port, ingest, db, clock)
   registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
+  // Imported agent pictures (PLAN 10.2): strays from a crash are cleared before the first request.
+  const avatarStore = db ? new AvatarStore(config.home) : undefined
+  if (db && ingest && avatarStore) {
+    avatarStore.recover(currentAvatarRevs(db.sqlite))
+    registerAvatarRoutes(app, { port, db, ingest, store: avatarStore })
+  }
   if (db && ingest)
-    registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
+    registerProfileRoutes(app, {
+      db,
+      ingest,
+      port,
+      config,
+      ...(avatarStore ? { avatars: avatarStore } : {}),
+      ...(clock ? { clock } : {}),
+    })
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerWorkspaceRoutes(app, port, config, undefined, workspaces)
   if (knowledge) {
@@ -438,6 +453,7 @@ export function buildApp({
       db,
       ingest,
       security: securityPassword,
+      ...(avatarStore ? { avatars: avatarStore } : {}),
       ...(config.mode === 'fake' ? { workspaceBase: join(tmpdir(), 'score-workspaces') } : {}),
       ...(clock ? { clock } : {}),
     })

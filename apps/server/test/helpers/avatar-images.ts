@@ -81,3 +81,20 @@ export function webpImage(
   body.writeUInt16LE(height, 8)
   return riff('VP8 ', body)
 }
+
+/** A multipart/form-data body with one file part named "file", as a browser sends it. */
+export function multipartFile(
+  filename: string,
+  bytes: Buffer,
+  contentType = 'application/octet-stream',
+): { payload: Buffer; headers: { 'content-type': string } } {
+  const boundary = '----scoreTestBoundary7MA4YWxkTrZu0gW'
+  const payload = Buffer.concat([
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
+    ),
+    bytes,
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ])
+  return { payload, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } }
+}

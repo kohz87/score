@@ -154,7 +154,10 @@ export function updateCodingAgent(
   }
 }
 export function removeCodingAgent(sqlite: DatabaseSync, id: string, now: string): void {
-  sqlite.prepare('UPDATE coding_agents SET removed_at = ? WHERE id = ?').run(now, id)
+  // The picture goes with the agent (its folder is removed by the caller).
+  sqlite
+    .prepare('UPDATE coding_agents SET removed_at = ?, avatar_rev = NULL WHERE id = ?')
+    .run(now, id)
   // Same transaction: a deleted agent's MCP token and switches must not outlive it.
   sqlite.prepare('DELETE FROM mcp_access WHERE agent_id = ?').run(id)
 }
