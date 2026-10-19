@@ -13,14 +13,44 @@ export const ShapeSchema = z.enum([
   'star',
   'pill',
   'cross',
+  // PLAN 10.2 (owner 2026-10-19: "various shape like cloud, cylinder etc, so there's a lot more options").
+  'cloud',
+  'cylinder',
+  'heart',
+  'drop',
+  'bolt',
+  'moon',
+  'leaf',
+  'blob',
+  'shield',
+  'octagon',
+  'bubble',
+  'gem',
 ])
 export type Shape = z.infer<typeof ShapeSchema>
+
+/** How an agent is drawn (PLAN 10.2): a bot (the default) or a chibi character. An imported picture wins over both. */
+export const AgentLookSchema = z.enum(['bot', 'chibi'])
+export type AgentLook = z.infer<typeof AgentLookSchema>
+
+/** The revision of an agent's imported picture, as it appears in `/api/agents/:id/avatar?rev=`. */
+export const AvatarRevSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
 
 export const AgentStyleSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,
+  /** Absent means `bot` (styles stored before PLAN 10.2). */
+  look: AgentLookSchema.optional(),
+  /** Set only by the server (PUT/DELETE /api/agents/:id/avatar); a client's value is ignored. Absent means none. */
+  avatar: AvatarRevSchema.nullable().optional(),
 })
 export type AgentStyle = z.infer<typeof AgentStyleSchema>
+
+/** What a client may set: everything but the picture, which has its own upload route. */
+export const AgentStylePatchSchema = z
+  .object({ color: AgentStyleSchema.shape.color, shape: ShapeSchema, look: AgentLookSchema })
+  .partial()
+export type AgentStylePatch = z.infer<typeof AgentStylePatchSchema>
 
 export const AgentStatusSchema = z.enum([
   'idle',

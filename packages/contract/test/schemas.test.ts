@@ -292,8 +292,11 @@ const cases = [
   ['ProfileNameSchema', 'helper', 'Helper'],
   ['ProfileStepNameSchema', 'create_profile', 'other'],
   ['AgentIdSchema', 'lead', ''],
-  ['ShapeSchema', 'circle-dot', 'oval'],
+  ['ShapeSchema', 'cloud', 'oval'],
   ['AgentStyleSchema', f.style, { ...f.style, color: '#abc' }],
+  ['AgentLookSchema', 'chibi', 'anime'],
+  ['AvatarRevSchema', 'r7Kq-2', '../x'],
+  ['AgentStylePatchSchema', { look: 'chibi', shape: 'cylinder' }, { look: 'photo' }],
   ['AgentStatusSchema', 'working', 'busy'],
   ['AgentSummarySchema', f.agent, { ...f.agent, id: '' }],
   ['AsOfSeqSchema', 0, -1],
@@ -2193,4 +2196,16 @@ describe('third gate 5: manifest menu labels need a visible character', () => {
     expect(contract.hasVisibleCharacter(' ​')).toBe(false)
     expect(contract.hasVisibleCharacter(' x ')).toBe(true)
   })
+})
+
+test('PLAN 10.2: a style without look or avatar (stored before 10.2) still parses; a client patch cannot set the picture', () => {
+  const old = contract.AgentStyleSchema.parse({ color: '#6B4EFF', shape: 'circle-dot' })
+  expect(old.look).toBeUndefined()
+  expect(old.avatar).toBeUndefined()
+  expect(
+    contract.AgentStyleSchema.parse({ color: '#6B4EFF', shape: 'gem', look: 'bot', avatar: 'abc' })
+      .avatar,
+  ).toBe('abc')
+  const patch = contract.AgentStylePatchSchema.parse({ look: 'chibi', avatar: 'x' })
+  expect(patch).toEqual({ look: 'chibi' })
 })

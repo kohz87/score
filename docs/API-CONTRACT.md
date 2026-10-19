@@ -911,7 +911,25 @@ assignments, verifies a private export first, and retires the name. Exports omit
 their local path is displayed but their bytes are never served. Retired-name reuse is currently refused until an
 incarnation-aware reuse confirmation contract is agreed.
 
-- `PATCH /api/agents/:agentId/style` `{ color?; shape? }` → `AgentSummary`
+- `PATCH /api/agents/:agentId/style` `AgentStylePatch` `{ color?; shape?; look? }` → `AgentSummary`. `look` is `'bot'`
+  (default) or `'chibi'` (PLAN 10.2). Shapes: `circle-dot`, `triangle`, `diamond`, `square`, `hexagon`, `star`, `pill`,
+  `cross`, `cloud`, `cylinder`, `heart`, `drop`, `bolt`, `moon`, `leaf`, `blob`, `shield`, `octagon`, `bubble`, `gem`.
+  `AgentStyle` is `{ color; shape; look?; avatar?: string|null }` (absent `look` = `bot`, absent `avatar` = none, as
+  stored before 10.2); `avatar` is set only by the routes below.
+- **Agent pictures (PLAN 10.2, decision 105).** One imported picture per agent (Hermes profile or coding agent; ids
+  are unique across both), shown instead of the bot or chibi, animated by Score, with a small badge in the agent's
+  colour and shape so agents stay told apart by colour and shape.
+  - `PUT /api/agents/:agentId/avatar` multipart, one file: PNG, JPEG or WebP, ≤ 2 MB, each side 32–2048 px; the type
+    is taken from the bytes (magic number and header, which must agree with the file name's extension), never from
+    the client; SVG, animated images and anything else are refused. → `AgentSummary` with `style.avatar` = a new
+    revision. `422 avatar_rejected { reasons[] }`; `404` for an unknown agent; human-guarded mutation.
+  - `DELETE /api/agents/:agentId/avatar` → `AgentSummary` (`style.avatar: null`).
+  - `GET /api/agents/:agentId/avatar?rev=<rev>` → the bytes with their exact type, `X-Content-Type-Options: nosniff`,
+    `Content-Disposition: inline`, `Cache-Control: private, max-age=31536000, immutable` (a new picture is a new
+    revision). A `rev` that is not the current one, or no picture, is `404`.
+  - Stored at `$SCORE_HOME/avatars/<agentId>/<rev>.<png|jpg|webp>` (folder 0700, file 0600), written to a temp file
+    and renamed; the old file is removed after the row commits. Deleting an agent deletes its folder. Every change
+    emits `agent.updated` with the new style.
 - **S** `GET /api/agents/:agentId` → `AgentDetail`
   ```ts
   type AgentDetail = AgentSummary & {
