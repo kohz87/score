@@ -366,7 +366,7 @@ and blocked list per the design. Done when the design's tests pass on the fake a
 ## Phase 7: larger features (owner 2026-10-09; each needs a design + security review before building)
 **7.1 Workflow builder** ✅ · Reusable multi-agent pipelines on a canvas extending Flow: nodes per agent/runtime, branches,
 human approval gates, budgets and deadlines, pause/resume/stop, replay, JSON export/import.
-**7.2 Coding agents as team members** ◐ (Claude Code, Codex and Antigravity done; OpenCode's driver stays `supported: false` until it is installed and recorded) · Claude Code, Codex, OpenCode as room participants next to Hermes agents.
+**7.2 Coding agents as team members** ✅ (Claude Code, Codex, Antigravity; OpenCode dropped by the owner 2026-10-19, decision 111) · Claude Code and Codex as room participants next to Hermes agents.
 **7.3 Web terminal** ✅ · A terminal on the server in the browser (paired, HTTPS only; security design first).
 **7.5 Orchestrator** ✅ · (owner 2026-10-10, before 7.1) A lead agent runs a goal as an agentic workflow through Score tools (hand a step to an agent, wait for its result, ask the person at a gate, check budget, report); Score validates every request against limits, budgets, gates and permissions. Design + security review first.
 **7.7 Coding agents as orchestration and workflow workers** ✅ · (owner 2026-10-11) Claude Code, Codex and Antigravity take
@@ -487,3 +487,6 @@ under each chat room's title where its members live: pets wander and take breaks
 thinking, working or waiting for you; click a member to @mention it; hide per device; Lively / Calm / Still. Done
 when: the brief's behaviours work against live room state in tests, theme protection covers the stage, and the Chat
 visual baselines are regenerated once and reviewed by the lead.
+
+**10.12 Drop OpenCode** (owner 2026-10-19: "drop opencode"; decision 111) · Remove the unsupported OpenCode runtime from
+the contract, server drivers, workflow rules and web. Done when nothing offers or names OpenCode and the suites pass.

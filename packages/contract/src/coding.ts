@@ -4,7 +4,7 @@ import { ProfileNameSchema } from './profiles.ts'
 
 // §8 Coding agents (PLAN 7.2, 7.6): Claude Code, Codex CLI and Antigravity (agy) as team members; OpenCode is listed only.
 
-export const CodingRuntimeSchema = z.enum(['claude-code', 'codex', 'antigravity', 'opencode'])
+export const CodingRuntimeSchema = z.enum(['claude-code', 'codex', 'antigravity'])
 export type CodingRuntime = z.infer<typeof CodingRuntimeSchema>
 
 /** `read-only` reads; `workspace-write` (default) edits inside the workspace; `full` needs the security password. */
