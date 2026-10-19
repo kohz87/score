@@ -524,3 +524,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   PetCorner files; owner OK). **10.11** (Room.activeAgents = busy now, so the sidebar agrees with the stage): lead wrote
   the contract comment and PLAN entry on `task/10.11-room-active`; Sonnet builder in `../score-worktrees/10.11`.
   **Plan audit** (every PLAN item without ✅ checked against TASKLOG/CHANGELOG/code) running read-only in parallel.
+- **Plan audit** (Sonnet, read-only; `docs/reviews/2026-10-19-plan-audit.md`): 123 unticked items → 121 done, 1 partly
+  done (7.2: OpenCode driver `supported: false`), 1 blocked (5.17b). Lead spot-checked 8 verdicts against code and
+  commits (3.11, 4.6, 5.10, 5.29 ×5 features, 5.33, 6.5, 8.2, T1): all hold. PLAN: 121 ticks, 7.2 marked partly done,
+  stale text fixed (operating model, 5.17a "design v3 pending", 7.7 "until then", 8.3 became Phase 9 themes).
