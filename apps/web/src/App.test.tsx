@@ -149,8 +149,8 @@ test('palette opens on click, autofocuses, closes on Esc and restores focus', ()
   expect(trigger.getAttribute('aria-expanded')).toBe('true')
   const input = within(dialog).getByRole('searchbox', { name: 'Search destinations' })
   expect(document.activeElement).toBe(input)
-  // The seven destinations, then one entry per Settings section (PLAN 10.1).
-  expect(within(dialog).getAllByRole('link')).toHaveLength(7 + 11)
+  // The seven destinations; Settings' sections (PLAN 10.1) appear only once something is typed.
+  expect(within(dialog).getAllByRole('link')).toHaveLength(7)
   fireEvent.keyDown(input, { key: 'Escape' })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
