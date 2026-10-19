@@ -17,11 +17,13 @@ import { withInheritance } from './team-rules.ts'
 import { applyLifecycle } from './agent-lifecycle.ts'
 import { isCodingAgent } from '../runtimes/coding/store.ts'
 
+// Defaults stay on the original eight shapes (the rest, PLAN 10.2, are chosen), so no agent's default look changes.
+const defaultShapes = ShapeSchema.options.slice(0, 8)
 const colors = ['#6B4EFF', '#19C39A', '#FFB61E', '#FF6B8A'] as const
 export function defaultAgentStyle(index: number): AgentStyle {
   return {
     color: colors[index % colors.length]!,
-    shape: ShapeSchema.options[index % ShapeSchema.options.length]!,
+    shape: defaultShapes[index % defaultShapes.length]!,
   }
 }
 const DetailRowSchema = z.object({ detail: z.string() })
