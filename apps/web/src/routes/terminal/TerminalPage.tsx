@@ -10,7 +10,7 @@ import {
 } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { passkeysSupportedHere, signInWithPasskey } from '../../data/passkeys.ts'
-import { KEY_BYTES, clipboardKey, withCtrl } from './keys.ts'
+import { KEY_BYTES, clipboardKey, osc52Text, withCtrl } from './keys.ts'
 import { copyText, readClipboardText } from '../../data/clipboard.ts'
 import './terminal.css'
 
@@ -64,23 +64,50 @@ export function TerminalPage() {
    * Clipboard API permission is involved, so it works on a LAN address with a self-signed certificate, where
    * `navigator.clipboard` may be refused. The Clipboard API is only the fallback.
    */
-  const copySelection = (xterm: Terminal) => {
-    if (!xterm.hasSelection()) return
-    const text = xterm.getSelection()
-    xterm.focus()
-    let done: boolean
-    try {
-      // The only permission-free way to raise a copy event; xterm answers it with its selection.
-      done = document.execCommand('copy')
-    } catch {
-      done = false
-    }
-    if (!done) void copyText(text)
-    xterm.clearSelection()
+  const showCopied = useCallback(() => {
     setCopied(true)
     window.clearTimeout(copiedTimer.current)
     copiedTimer.current = window.setTimeout(() => setCopied(false), 1500)
-  }
+  }, [])
+  const copySelection = useCallback(
+    (xterm: Terminal) => {
+      if (!xterm.hasSelection()) return
+      const text = xterm.getSelection()
+      xterm.focus()
+      let done: boolean
+      try {
+        // The only permission-free way to raise a copy event; xterm answers it with its selection.
+        done = document.execCommand('copy')
+      } catch {
+        done = false
+      }
+      if (!done) void copyText(text)
+      xterm.clearSelection()
+      showCopied()
+    },
+    [showCopied],
+  )
+  /** Text a program in the terminal asked to copy (OSC 52, e.g. a tmux mouse selection); the copy event takes it. */
+  const pendingCopy = useRef<string | null>(null)
+  const copyFromProgram = useCallback(
+    (xterm: Terminal, text: string) => {
+      xterm.focus()
+      pendingCopy.current = text
+      let done: boolean
+      try {
+        done = document.execCommand('copy')
+      } catch {
+        done = false
+      }
+      if (pendingCopy.current !== null) done = false
+      pendingCopy.current = null
+      if (!done) void copyText(text)
+      showCopied()
+    },
+    [showCopied],
+  )
+  /** When the person last pressed a key or released the mouse in the terminal (OSC 52 is honoured only just after). */
+  const lastGesture = useRef(0)
   const host = useRef<HTMLDivElement>(null)
   const socket = useRef<WebSocket | null>(null)
   const term = useRef<Terminal | null>(null)
@@ -158,6 +185,31 @@ export function TerminalPage() {
         }
         return action !== 'paste'
       })
+      // tmux (and vim, …) copy a mouse or keyboard selection by sending OSC 52 to the outer terminal. Honour it, but only
+      // right after the person's own action in the terminal: a file or program printing the sequence on its own could
+      // otherwise swap the clipboard for a command they would then paste. Reading the clipboard (a `?` query) never.
+      for (const type of ['pointerup', 'keydown'] as const)
+        parent.addEventListener(type, () => (lastGesture.current = performance.now()), {
+          capture: true,
+        })
+      parent.addEventListener(
+        'copy',
+        (event) => {
+          const text = pendingCopy.current
+          if (text === null || !event.clipboardData) return
+          event.clipboardData.setData('text/plain', text)
+          event.preventDefault()
+          event.stopImmediatePropagation()
+          pendingCopy.current = null
+        },
+        { capture: true },
+      )
+      xterm.parser.registerOscHandler(52, (data) => {
+        const text = osc52Text(data)
+        if (text !== null && performance.now() - lastGesture.current < 3000)
+          copyFromProgram(xterm, text)
+        return true
+      })
       // Right-click with text selected copies it, as in Windows Terminal (the browser's menu can't see the
       // terminal's own selection). Without a selection the browser's menu opens as usual.
       parent.addEventListener(
@@ -192,7 +244,7 @@ export function TerminalPage() {
         setEnding((current) => current || 'The connection closed.')
       }
     },
-    [send],
+    [send, copySelection, copyFromProgram],
   )
 
   async function begin(proof: (signal: AbortSignal) => Promise<unknown>) {

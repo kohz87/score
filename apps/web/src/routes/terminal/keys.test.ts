@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { KEY_BYTES, clipboardKey, withCtrl } from './keys.ts'
+import { KEY_BYTES, OSC52_MAX_BYTES, clipboardKey, osc52Text, withCtrl } from './keys.ts'
 
 test('Ctrl turns a letter into its control code', () => {
   expect(withCtrl('c')).toBe('\x03')
@@ -40,4 +40,22 @@ test('Ctrl+V and Ctrl+Shift+V paste; plain keys, Alt and ⌘ are left alone', ()
   expect(clipboardKey(key('v', { ctrlKey: true, altKey: true }), false)).toBeNull()
   expect(clipboardKey(key('c', { metaKey: true }), true)).toBeNull()
   expect(clipboardKey(key('d', { ctrlKey: true }), true)).toBeNull()
+})
+
+const b64 = (text: string) => btoa(String.fromCharCode(...new TextEncoder().encode(text)))
+
+test('OSC 52 from tmux: the selection text, UTF-8 included', () => {
+  expect(osc52Text(`c;${b64('git status')}`)).toBe('git status')
+  expect(osc52Text(`;${b64('héllo ✓')}`)).toBe('héllo ✓')
+  expect(osc52Text(`pc;${b64('x')}`)).toBe('x')
+})
+
+test('OSC 52 never reads the clipboard and refuses anything malformed or oversized', () => {
+  expect(osc52Text('c;?')).toBeNull()
+  expect(osc52Text('c;')).toBeNull()
+  expect(osc52Text('no-separator')).toBeNull()
+  expect(osc52Text('x;aGk=')).toBeNull()
+  expect(osc52Text('c;not base64!')).toBeNull()
+  expect(osc52Text(`c;${btoa(String.fromCharCode(0xff, 0xfe))}`)).toBeNull()
+  expect(osc52Text(`c;${btoa('a'.repeat(OSC52_MAX_BYTES + 1))}`)).toBeNull()
 })

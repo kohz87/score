@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.4] — 2026-10-19
+
+### Fixed
+- Terminal: copying inside **tmux** (and vim or other programs that copy with the standard OSC 52 sequence) now puts
+  the text on your clipboard. A program can only do that right after your own key press or mouse release in the
+  terminal, never read your clipboard, and "Copied." shows each time. Holding Shift while dragging still selects in
+  the browser terminal itself, past tmux.
+
 ## [1.9.3] — 2026-10-19
 
 ### Fixed

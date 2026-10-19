@@ -131,6 +131,26 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
     await page.mouse.dblclick(line.x + 30, line.y + line.height / 2)
     await page.mouse.click(line.x + 30, line.y + line.height / 2, { button: 'right' })
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('score-42-ok')
+    // tmux copies a selection by sending OSC 52 to the outer terminal; Score honours it right after the person's own
+    // action in the terminal (here: the Enter that ran the command) and ignores it otherwise.
+    await writeClipboard('')
+    await page.keyboard.type('tmux -L score-e2e -f /dev/null new-session')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(800)
+    await page.keyboard.type('tmux -L score-e2e set-buffer -w from-tmux-$((6*7))')
+    await page.keyboard.press('Enter')
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('from-tmux-42')
+    await writeClipboard('unchanged')
+    await page.keyboard.type('sleep 4; tmux -L score-e2e set-buffer -w too-late')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(5_000)
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('unchanged')
+    await page.keyboard.type('exit')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(500)
+
     await page.keyboard.type('sleep 30')
     await page.keyboard.press('Enter')
     await page.keyboard.press('Control+C')
