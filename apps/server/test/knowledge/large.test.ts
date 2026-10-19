@@ -4,11 +4,11 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { HttpError } from '../../src/errors.ts'
 import { MAX_READ_BYTES, MAX_STORE_BYTES } from '../../src/knowledge/doc-types.ts'
-import { PNG, makeZip, textDocx } from './doc-fixtures.ts'
+import { PNG, makeZip, textDocx, zipFile } from './doc-fixtures.ts'
 import { makeVault, type Harness } from './helpers.ts'
 
 // PLAN 10.6: big files are stored, hashed and served from disk; text work stops at MAX_READ_BYTES.
-const worker = vi.hoisted(() => ({ text: vi.fn(), run: vi.fn() }))
+const worker = vi.hoisted(() => ({ text: vi.fn(), run: vi.fn(), requests: [] as unknown[] }))
 vi.mock('../../src/knowledge/extract.ts', async (original) => {
   const real = await original<typeof import('../../src/knowledge/extract.ts')>()
   return {
@@ -19,6 +19,7 @@ vi.mock('../../src/knowledge/extract.ts', async (original) => {
     },
     runWorker: (...args: Parameters<typeof real.runWorker>) => {
       worker.run(args[0].op)
+      worker.requests.push(args[0])
       return real.runWorker(...args)
     },
   }
@@ -31,6 +32,7 @@ let h: Harness
 beforeEach(async () => {
   worker.text.mockClear()
   worker.run.mockClear()
+  worker.requests.length = 0
   h = await makeVault()
 })
 afterEach(async () => {
@@ -171,6 +173,28 @@ describe('re-indexing big files', () => {
   })
 })
 
+describe('zip workers get a file, not a copy of the archive', () => {
+  test('preview, keep and unzip pass a path; the temporary file is gone afterwards', async () => {
+    const zip = await makeZip({ 'a.png': bigPng(2), 'n.md': '# n' }, 'STORE')
+    await h.vault.docs.zipPreview(zip)
+    await h.vault.docs.upload('k.zip', zip, 'ask')
+    await h.vault.docs.unzip(zip, 'u.zip', 'u', 'ask')
+    const zipRequests = (worker.requests as Array<Record<string, unknown>>).filter((request) =>
+      String(request.op).startsWith('zip-'),
+    )
+    expect(zipRequests.map((request) => request.op)).toEqual([
+      'zip-list',
+      'zip-list',
+      'zip-extract',
+    ])
+    for (const request of zipRequests) {
+      expect(request).not.toHaveProperty('bytes')
+      expect(typeof request.file).toBe('string')
+      expect(fs.existsSync(request.file as string)).toBe(false)
+    }
+  })
+})
+
 describe('big zips', () => {
   test('a 100 MB zip previews, is kept and unzips (its entry is a document)', async () => {
     const zip = await makeZip({ 'big.png': bigPng(100), 'note.md': '# n' }, 'STORE')
@@ -194,7 +218,7 @@ describe('big zips', () => {
     const { runWorker, ZIP_LIMITS } = await import('../../src/knowledge/extract.ts')
     const zip = await makeZip({ 'a.png': bigPng(3), 'b.png': PNG }, 'STORE')
     const out = await runWorker(
-      { op: 'zip-list', bytes: zip, limits: { ...ZIP_LIMITS, maxFileBytes: 2 * MB } },
+      { op: 'zip-list', file: zipFile(zip), limits: { ...ZIP_LIMITS, maxFileBytes: 2 * MB } },
       30_000,
     )
     expect(out).toMatchObject({ ok: true })

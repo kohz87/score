@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { createWriteStream } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Transform, type Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -276,9 +276,9 @@ async function handle(request: WorkerRequest): Promise<WorkerResult> {
       return { ok: true, ...cutText(text, request.maxBytes) }
     }
     case 'zip-list':
-      return zipList(request.bytes, request.limits)
+      return zipList(await readFile(request.file), request.limits)
     case 'zip-extract':
-      return zipExtract(request.bytes, request.outDir, request.limits)
+      return zipExtract(await readFile(request.file), request.outDir, request.limits)
   }
 }
 

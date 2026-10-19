@@ -440,8 +440,20 @@ export class KnowledgeDocuments {
     return { kind: 'document', path: rel, type, bytes, text, status, entries }
   }
 
+  /** Runs the zip lister on a private temporary copy of the archive on disk (removed afterwards). */
+  private async listZip(bytes: Buffer): Promise<Awaited<ReturnType<typeof runWorker>>> {
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'score-zip-'))
+    try {
+      const file = path.join(scratch, 'input.zip')
+      await fs.writeFile(file, bytes, { mode: 0o600 })
+      return await runWorker({ op: 'zip-list', file, limits: ZIP_LIMITS }, ZIP_TIMEOUT_MS)
+    } finally {
+      await fs.rm(scratch, { recursive: true, force: true })
+    }
+  }
+
   private async zipEntries(bytes: Buffer): Promise<PreparedDocument['entries']> {
-    const listed = await runWorker({ op: 'zip-list', bytes, limits: ZIP_LIMITS }, ZIP_TIMEOUT_MS)
+    const listed = await this.listZip(bytes)
     return listed.ok && 'entries' in listed
       ? listed.entries.map(({ path: entry, size }) => ({ path: entry, size }))
       : null
@@ -815,7 +827,7 @@ export class KnowledgeDocuments {
   async zipPreview(bytes: Buffer): Promise<KnowledgeZipPreview> {
     if (!bytesMatch('zip', bytes))
       throw new HttpError(415, 'unsupported_type', 'That isn’t a zip file.')
-    const listed = await runWorker({ op: 'zip-list', bytes, limits: ZIP_LIMITS }, ZIP_TIMEOUT_MS)
+    const listed = await this.listZip(bytes)
     if (!listed.ok) throw zipFailure(listed)
     if (!('entries' in listed))
       throw new HttpError(415, 'unsupported_type', 'Couldn’t read that zip file.')
@@ -839,8 +851,10 @@ export class KnowledgeDocuments {
     const folder = cleanSegments(folderInput).join('/')
     const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'score-unzip-'))
     try {
+      const zipFile = path.join(scratch, 'input.zip')
+      await fs.writeFile(zipFile, zipBytes, { mode: 0o600 })
       const out = await runWorker(
-        { op: 'zip-extract', bytes: zipBytes, outDir: scratch, limits: ZIP_LIMITS },
+        { op: 'zip-extract', file: zipFile, outDir: path.join(scratch, 'out'), limits: ZIP_LIMITS },
         ZIP_TIMEOUT_MS,
       )
       if (!out.ok) throw zipFailure(out)
