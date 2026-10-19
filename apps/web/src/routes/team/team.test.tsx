@@ -479,7 +479,7 @@ test('the server’s reasons for refusing a pack are shown as they are, and the 
   expect(within(dialog).getByRole('button', { name: 'Cancel pack' })).toBeDefined()
 })
 
-test('a zip chosen with other files, a file over 8 MB, or a pack over 64 MB, is refused without an upload', async () => {
+test('a zip chosen with other files, a file over 32 MB, or a pack over 256 MB, is refused without an upload', async () => {
   renderTeam('/team/builder')
   const calls: string[] = []
   const baseline = respond
@@ -493,23 +493,23 @@ test('a zip chosen with other files, a file over 8 MB, or a pack over 64 MB, is 
   })
   expect((await within(dialog).findByRole('alert')).textContent).toMatch(/one \.zip/)
   const big = packFile('idle.webp')
-  Object.defineProperty(big, 'size', { value: 9 * 1024 * 1024 })
+  Object.defineProperty(big, 'size', { value: 33 * 1024 * 1024 })
   fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [big] } })
   expect((await within(dialog).findByRole('alert')).textContent).toBe(
-    'idle.webp is larger than 8 MB.',
+    'idle.webp is larger than 32 MB.',
   )
   const parts = Array.from({ length: 9 }, (_, index) => {
     const part = packFile(`work${index}.webp`)
-    Object.defineProperty(part, 'size', { value: 7.5 * 1024 * 1024 })
+    Object.defineProperty(part, 'size', { value: 30 * 1024 * 1024 })
     return part
   })
   fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: parts } })
-  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 64 MB/)
+  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 256 MB/)
   expect(within(dialog).queryByRole('button', { name: 'Use this pack' })).toBeNull()
   expect(calls).toEqual([])
 })
 
-test('a valid zip over 8 MB goes up (8 MB is the limit of one image, a zip is held to 64 MB)', async () => {
+test('a valid zip over 32 MB goes up (32 MB is the limit of one image, a zip is held to 256 MB)', async () => {
   renderTeam('/team/builder')
   const calls: { init?: RequestInit }[] = []
   const baseline = respond
@@ -522,16 +522,16 @@ test('a valid zip over 8 MB goes up (8 MB is the limit of one image, a zip is he
   }
   const dialog = await openPicker()
   const zip = packFile('luna.zip', 'application/zip')
-  Object.defineProperty(zip, 'size', { value: 20 * 1024 * 1024 })
+  Object.defineProperty(zip, 'size', { value: 80 * 1024 * 1024 })
   fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [zip] } })
   expect(within(dialog).queryByRole('alert')).toBeNull()
   fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
   await waitFor(() => expect(calls).toHaveLength(1))
-  // But not past the pack's 64 MB, and an image is still held to 8 MB.
+  // But not past the pack's 256 MB, and an image is still held to 32 MB.
   const huge = packFile('luna.zip', 'application/zip')
-  Object.defineProperty(huge, 'size', { value: 65 * 1024 * 1024 })
+  Object.defineProperty(huge, 'size', { value: 257 * 1024 * 1024 })
   fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [huge] } })
-  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 64 MB/)
+  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 256 MB/)
 })
 
 test('an upload shows how far it has got, then that the pack is being checked', async () => {
@@ -639,7 +639,7 @@ test('How to make a pack is a disclosure with the naming table and the rules', a
     'greet, happy',
   ])
   expect(guide.textContent).toContain('required')
-  expect(guide.textContent).toContain('8 MB per file and 64 MB per pack')
+  expect(guide.textContent).toContain('32 MB per file and 256 MB per pack')
   expect(guide.textContent).toContain('64–2048 px per side')
   expect(guide.textContent).toContain('pet.json')
   expect(guide.textContent).toContain('"floor": 0.03')

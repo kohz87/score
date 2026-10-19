@@ -253,9 +253,9 @@ test.each([
     '64 and 2048',
   ],
   [
-    'an image over 8 MB',
-    () => [{ name: 'idle.webp', bytes: padTo(idle, 8 * 1024 * 1024 + 2) }],
-    '8 MB',
+    'an image over 32 MB',
+    () => [{ name: 'idle.webp', bytes: padTo(idle, 32 * 1024 * 1024 + 2) }],
+    '32 MB',
   ],
   [
     'pet.json that is not JSON',
@@ -347,7 +347,7 @@ test('PUT refuses a request that is not files, and a body far beyond the limit',
   })
   expect(json.statusCode).toBeGreaterThanOrEqual(400)
   expect(json.statusCode).toBeLessThan(500)
-  const huge = await put([{ name: 'idle.webp', bytes: Buffer.alloc(80 * 1024 * 1024) }])
+  const huge = await put([{ name: 'idle.webp', bytes: Buffer.alloc(265 * 1024 * 1024) }])
   expect(huge.statusCode).toBe(413)
   expect(existsSync(packs())).toBe(false)
 })

@@ -19,7 +19,7 @@ import { PACK_EXTENSIONS, PACK_IMAGE_MAX_BYTES, sniffPackImage, type PackExt } f
 export const PACK_LIMITS = {
   /** Files in the upload (a zip's folders are not counted). */
   files: 24,
-  unpackedBytes: 64 * 1024 * 1024,
+  unpackedBytes: 256 * 1024 * 1024,
   manifestBytes: 64 * 1024,
 } as const
 
@@ -255,7 +255,7 @@ export function readPack(files: { name: string; bytes: Buffer }[]): ReadPack {
     if (candidate.size > cap) {
       reasons.push(
         kind.kind === 'image'
-          ? `${shown(candidate.path)}: larger than 8 MB.`
+          ? `${shown(candidate.path)}: larger than 32 MB.`
           : 'pet.json: larger than 64 KB.',
       )
     }

@@ -924,7 +924,7 @@ incarnation-aware reuse confirmation contract is agreed.
   - `PUT /api/agents/:agentId/pack` multipart: either **one `.zip`** or **several activity files**. Accepted entries:
     `<activity>.webp|png|gif` and `pet.json`, at the top level or inside one top-level folder; `__MACOSX/`, `.DS_Store`
     and other files are ignored and listed back (`ignored[]`). Each image: the type from its bytes (WebP, PNG/APNG, GIF;
-    animated allowed), the extension must agree, 64–2048 px per side, ≤ 8 MB; the pack ≤ 64 MB unpacked; zips go
+    animated allowed), the extension must agree, 64–2048 px per side, ≤ 32 MB; the pack ≤ 256 MB unpacked; zips go
     through the shared zip rules (structure, ratio, entry count ≤ 24). `idle` missing, an unknown activity name, or a
     bad file is `422 pack_rejected { reasons[] }` and stores nothing. → `{ agent: AgentSummary; ignored: string[] }`
     with `style.pack` = a new revision.

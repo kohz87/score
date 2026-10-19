@@ -187,15 +187,17 @@ test('a bad image names its file and says why: type, extension, size in pixels, 
   expect(reasons[1]).toMatch(/^work\.gif: .*PNG/)
   expect(reasons[2]).toMatch(/^think\.png: .*between 64 and 2048/)
   expect(reasons[3]).toMatch(/^needs\.webp: .*between 64 and 2048/)
-  const big = padTo(idle, 8 * 1024 * 1024 + 2)
-  expect((await rejectionOf([file('idle.webp', big)]))[0]).toMatch(/^idle\.webp: .*8 MB/)
+  const big = padTo(idle, 32 * 1024 * 1024 + 2)
+  expect((await rejectionOf([file('idle.webp', big)]))[0]).toMatch(/^idle\.webp: .*32 MB/)
 })
 
-test('the pack as a whole is at most 64 MB and 24 files', async () => {
-  const eight = padTo(idle, 8 * 1024 * 1024)
+test('the pack as a whole is at most 256 MB and 24 files', async () => {
+  const eight = padTo(idle, 32 * 1024 * 1024)
   const names = ['idle', 'work', 'think', 'needs', 'sleep', 'walk', 'stretch', 'coffee', 'read']
   expect(readPack(names.slice(0, 8).map((n) => file(`${n}.webp`, eight))).files).toHaveLength(8)
-  expect((await rejectionOf(names.map((n) => file(`${n}.webp`, eight)))).join(' ')).toMatch(/64 MB/)
+  expect((await rejectionOf(names.map((n) => file(`${n}.webp`, eight)))).join(' ')).toMatch(
+    /256 MB/,
+  )
   const many = Array.from({ length: 25 }, (_, index) => file(`note${index}.txt`, Buffer.from('x')))
   expect((await rejectionOf([file('idle.webp', idle), ...many])).join(' ')).toMatch(/24 files/)
   const entries: Record<string, string | Buffer> = { 'idle.webp': idle }

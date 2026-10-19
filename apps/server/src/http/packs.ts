@@ -35,8 +35,8 @@ import { getCodingAgent } from '../runtimes/coding/store.ts'
 const ParamsSchema = z.object({ agentId: ProfileNameSchema })
 const ImageParamsSchema = ParamsSchema.extend({ activity: z.string().min(1).max(32) })
 const QuerySchema = z.object({ rev: PackRevSchema })
-/** A pack is up to 64 MB unpacked; a body this far past that is not even read (413). */
-const BODY_LIMIT = 72 * 1024 * 1024
+/** A pack is up to 256 MB unpacked; a body this far past that is not even read (413). */
+const BODY_LIMIT = 264 * 1024 * 1024
 const MAX_PARTS = 64
 const notFound = () => new HttpError(404, 'not_found', 'Couldn’t find that agent.')
 

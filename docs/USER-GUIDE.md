@@ -270,7 +270,7 @@ table of names and the rules:
 | `greet`, `happy` | Optional: you point at it; you click it | A wave hello; a happy bounce |
 
 - Files are animated WebP (best), APNG (`.png`) or GIF with a transparent background; a still PNG works too. Up to
-  8 MB per file and 64 MB per pack, 64–2048 px per side. Keep the same character height and feet line in every file.
+  32 MB per file and 256 MB per pack, 64–2048 px per side. Keep the same character height and feet line in every file.
 - An optional `pet.json` beside the files gives a `name`, `credits` and a `floor` (0 to 0.3) that lifts the character
   if its feet sit too low in the files.
 - An activity with no file falls back to `idle` with Score's own overlays (thought dots, a "!" with a hop, sleeping
