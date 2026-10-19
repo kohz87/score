@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll } from 'vitest'
@@ -12,6 +12,11 @@ process.env.TMPDIR = root
 // $XDG_STATE_HOME/score, so every test (and every child process) gets a private one. A test that needs a specific
 // journal folder still sets SCORE_JOURNAL_DIR itself.
 process.env.XDG_STATE_HOME = join(root, 'state')
+// Never the real home either: a server built with `loadConfig({})` defaults its home to ~/.score, and its start-up
+// cleanups (pet packs, staged zips) would then delete the owner's files that the test database doesn't name
+// (2026-10-19: a full run removed a live agent's pet pack). os.homedir() follows HOME.
+process.env.HOME = join(root, 'home')
+mkdirSync(process.env.HOME, { recursive: true })
 delete process.env.SCORE_JOURNAL_DIR
 // Coding runs on the host's real systemd user manager only where a test asks for it (the opt-in suites build their own
 // UnitBackend): a server started by a test never probes or starts a unit.

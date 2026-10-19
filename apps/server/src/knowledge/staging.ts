@@ -41,9 +41,11 @@ export class ZipStaging {
     private readonly dir: string,
     private readonly clock: () => number = Date.now,
     private readonly maxBytes: number = STAGING_MAX_BYTES,
+    /** Clear what a previous run left; false when the folder may not be this server's own (see app.ts). */
+    clearOnStart = true,
   ) {
     this.refused = !realFolderOrMissing(dir)
-    if (this.refused) return
+    if (this.refused || !clearOnStart) return
     try {
       // rmSync removes a symlinked entry itself, never what it points to.
       for (const name of readdirSync(dir))

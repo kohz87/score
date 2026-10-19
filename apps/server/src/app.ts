@@ -49,7 +49,7 @@ import { registerTeamPauseRoutes } from './http/team-pause.ts'
 import { registerMediaRoutes } from './http/media.ts'
 import { MediaStore } from './media/store.ts'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { registerNowRoutes } from './http/now.ts'
 import { registerAgentPauseRoutes } from './http/agent-pause.ts'
 import { registerWatchRoutes } from './http/watch.ts'
@@ -133,6 +133,12 @@ interface BuildAppOptions {
  * added on top of it (otherwise its list hid the coding agents from every live route: rooms, orchestration preflight
  * and create). Coding agents join the team under the same port: rooms, Now, Flow and Reports see one list of agents.
  */
+/** Whether the database file is the one in `home` (an in-memory or elsewhere database owns no home). */
+function databaseInHome(db: ScoreDb, home: string): boolean {
+  const file = db.sqlite.location()
+  return file !== null && resolve(dirname(file)) === resolve(home)
+}
+
 export function routePort(options: {
   live: boolean
   port: HermesPort
@@ -270,10 +276,13 @@ export function buildApp({
   registerTaskRoutes(app, port, ingest, db, clock)
   registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
+  // Start-up cleanups delete what the database doesn't name, so they only run against the home that database lives in:
+  // a server built with a test database and the default home must never clear the owner's real ~/.score (2026-10-19).
+  const ownsHome = db ? databaseInHome(db, config.home) : false
   // Uploaded pet packs (PLAN 10.2): strays from a crash are cleared before the first request.
   const packStore = db ? new PackStore(config.home) : undefined
   if (db && ingest && packStore) {
-    packStore.recover(currentPackRevs(db.sqlite))
+    if (ownsHome) packStore.recover(currentPackRevs(db.sqlite))
     registerPackRoutes(app, { port, db, ingest, store: packStore })
   }
   if (db && ingest)
@@ -292,7 +301,7 @@ export function buildApp({
       app,
       knowledge,
       mediaStore,
-      new ZipStaging(join(config.home, 'knowledge-staging'), clock),
+      new ZipStaging(join(config.home, 'knowledge-staging'), clock, undefined, ownsHome),
     )
     if (db) registerKnowledgeAgentRoutes(app, new KnowledgeAgentApi(knowledge, db, clock))
   }
