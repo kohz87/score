@@ -207,6 +207,11 @@ for (const id of packagedThemeIds) {
       await expect(settings).toBeVisible()
       await settings.click()
       await expect(page).toHaveURL(/\/settings/)
+      // Settings opens its first section; the Look page holds the reset.
+      await page
+        .getByRole('navigation', { name: 'Settings sections' })
+        .getByRole('link', { name: 'Look', exact: true })
+        .click()
       await expect(
         page.getByRole('region', { name: 'Look' }).getByRole('button', {
           name: 'Reset look on this device',
