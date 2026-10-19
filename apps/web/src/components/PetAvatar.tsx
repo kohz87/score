@@ -206,7 +206,7 @@ export function PetAvatar({
         )}
       </div>
       <span className="pet-avatar__badge">
-        <AgentGlyph agent={agent} size="sm" decorative />
+        <AgentGlyph agent={agent} size="sm" decorative mark />
       </span>
       {view.overlay === 'dots' && <Dots />}
       {view.overlay === 'alert' && <Alert />}

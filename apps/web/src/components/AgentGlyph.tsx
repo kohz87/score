@@ -20,6 +20,8 @@ export type AgentGlyphProps = {
   activity?: AgentActivity
   /** Always the plain coloured shape, whatever the agent's look: for a spot that draws its own tile behind it. */
   plain?: boolean
+  /** The mark even when the agent has a pet pack: the badge on its own full pet (decision 109). */
+  mark?: boolean
 }
 
 const designTints: Record<string, string> = {
@@ -256,9 +258,10 @@ export function AgentGlyph({
   contrast = 'default',
   activity,
   plain = false,
+  mark = false,
 }: AgentGlyphProps) {
   const pack = agent.style.pack
-  const portrait = usePortrait(agent.id, plain || !pack ? null : pack.rev)
+  const portrait = usePortrait(agent.id, plain || mark || !pack ? null : pack.rev)
   const liveliness = useLiveliness()
   const root = useRef<HTMLSpanElement & SVGSVGElement>(null)
   const playing = useWatched(root, portrait !== null && liveliness !== 'still')

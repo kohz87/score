@@ -93,6 +93,13 @@ test('an agent without a pack keeps its mark and decodes nothing', async () => {
   expect(glyph().classList.contains('agent-glyph--portrait')).toBe(false)
 })
 
+test('`mark` keeps the mark for a pack agent: the badge on its own full pet is never a portrait of itself', async () => {
+  render(<AgentGlyph agent={packed()} size="sm" mark />)
+  await settle()
+  expect(decode).not.toHaveBeenCalled()
+  expect(glyph().classList.contains('agent-glyph--portrait')).toBe(false)
+})
+
 test('fifty glyphs decode once', async () => {
   render(
     <>
