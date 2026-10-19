@@ -11,6 +11,11 @@ export type StageInput = {
   /** The room's `typing` map: agent id to what it is doing, empty when it has just started. */
   typing: Record<string, string>
   approvals: Approval[]
+  /**
+   * The room's live `activeAgents` from the server. When given, "waiting for you" also needs the agent there: the server
+   * knows when a cached approval stopped being actionable (a silent producer, compatibility), the page's copy may not.
+   */
+  serverBusy?: readonly string[]
 }
 
 const words: Record<StageMood, string> = {
@@ -85,7 +90,8 @@ export function stageMoods(input: StageInput): Record<string, StageMood> {
   for (const member of input.members) {
     const id = member.id
     const said = typing(id)
-    if (needs.has(id)) moods[id] = 'needs'
+    if (needs.has(id) && (input.serverBusy === undefined || input.serverBusy.includes(id)))
+      moods[id] = 'needs'
     else if (member.status === 'paused' || member.status === 'offline') moods[id] = 'sleep'
     else if (streaming.get(id) === true || (said !== null && said !== '')) moods[id] = 'work'
     else if (streaming.has(id) || said !== null) moods[id] = 'think'
