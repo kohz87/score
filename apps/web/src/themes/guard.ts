@@ -67,7 +67,7 @@ function contrastOver(colour: Rgba, nodes: Element[]): number | null {
  */
 function graphicContrast(element: Element): number | null | undefined {
   const style = getComputedStyle(element)
-  if (element.matches('.agent-glyph')) {
+  if (element.matches('.agent-glyph, .agent-glyph__badge')) {
     const colour = parseComputedColor(style.getPropertyValue('--glyph-color'))
     return colour ? contrastOver(colour, chain(element)) : null
   }
@@ -310,14 +310,14 @@ function parts(surface: HTMLElement): HTMLElement[] {
   for (const el of Array.from(surface.querySelectorAll<HTMLElement>('*'))) {
     if (el.closest('svg') || el.closest('[hidden], [inert], details:not([open])') || el.hidden)
       continue
-    if (el.matches(CONTROLS) || carriesText(el)) found.push(el)
+    if (el.matches(CONTROLS) || el.matches('.agent-glyph__badge') || carriesText(el)) found.push(el)
   }
   return found
 }
 
 // Glyph shapes (finding #5): an agent is told apart by its shape, so what the shapes paint is compared, not just
 // whether their wrapper is shown: geometry (`d`, size), paint and everything that can hide or move a path.
-const SHAPES = 'path, circle, rect, ellipse, polygon, polyline, line'
+const SHAPES = 'image, path, circle, rect, ellipse, polygon, polyline, line'
 // Parts Score itself animates with `transform` (a mark's eye slots, its orbiting dot and ripples, a pet's overlays): their transform is whatever the keyframes
 // say at the moment of reading, so it can't be compared; a theme can't style them (the sanitiser guard), and everything
 // else about them (geometry, paint, display, clip, mask, filter) is still compared.

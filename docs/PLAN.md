@@ -470,3 +470,10 @@ memory more than once per request; a big PDF is stored with `too_large` and neve
 then what the server is doing: agent import (up to 200 MB), chat attachments, workspace uploads, theme zip installs and
 Knowledge editor images, as Knowledge files (1.9.5) and pet packs (1.10.0) already do. Done when: each of those shows
 a live percentage while sending and a named step after, with tests that drive the progress events.
+
+**10.8 Pet-pack portraits everywhere** (owner 2026-10-19: "the agent is still represented by the shape instead of the
+avatar?" → "Everywhere") · brief `docs/briefs/10.8-pack-portraits.md`. An agent with a pet pack appears as a portrait
+from its idle animation wherever `AgentGlyph` draws it; colour and shape still identify it (mark badge, or the
+portrait inside the shape at the smallest size). Done when: every `AgentGlyph` use shows the portrait for a pack agent
+and the mark otherwise; the idle file is decoded once per page, not per glyph; Still/reduced motion never animates;
+theme protection covers the portrait; Team card and agent header keep the full pet.
