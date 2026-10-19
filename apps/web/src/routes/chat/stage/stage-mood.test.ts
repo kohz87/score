@@ -59,7 +59,6 @@ const base: StageInput = {
   members: agents,
   messages: [],
   typing: {},
-  activeAgents: [],
   approvals: [],
 }
 
@@ -120,7 +119,7 @@ test('a reply with text or a tool call in flight is working', () => {
   ).toBe('rest')
 })
 
-test('typing with text is working; typing without text, an empty or thought-only reply, or a started turn is thinking', () => {
+test('typing with text is working; typing without text, or an empty or thought-only reply, is thinking', () => {
   expect(stageMoods({ ...base, typing: { lead: 'is outlining the next steps' } }).lead).toBe('work')
   expect(stageMoods({ ...base, typing: { lead: '' } }).lead).toBe('think')
   expect(
@@ -132,12 +131,13 @@ test('typing with text is working; typing without text, an empty or thought-only
       messages: [message('m1', { streaming: true, parts: [{ kind: 'thinking', text: 'hm' }] })],
     }).builder,
   ).toBe('think')
-  expect(stageMoods({ ...base, activeAgents: ['reviewer'] }).reviewer).toBe('think')
-  // Streaming text beats "turn started".
+  // Who wrote lately (`Room.activeAgents`) says nothing about who is busy now.
+  expect(stageMoods({ ...base }).reviewer).toBe('rest')
+  // Text that has started beats a bare typing notice.
   expect(
     stageMoods({
       ...base,
-      activeAgents: ['builder'],
+      typing: { builder: '' },
       messages: [message('m1', { streaming: true })],
     }).builder,
   ).toBe('work')

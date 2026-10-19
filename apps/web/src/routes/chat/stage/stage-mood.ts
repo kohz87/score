@@ -10,8 +10,6 @@ export type StageInput = {
   messages: Message[]
   /** The room's `typing` map: agent id to what it is doing, empty when it has just started. */
   typing: Record<string, string>
-  /** `Room.activeAgents`: agents with a turn in progress here. */
-  activeAgents: string[]
   approvals: Approval[]
 }
 
@@ -65,7 +63,8 @@ function waitingHere(input: StageInput): Set<string> {
 /**
  * One mood per member. Waiting for you comes first (it needs the person), then paused or offline (a stale reply can't
  * keep a stopped agent working), then working (text or a tool call in flight), then thinking (a turn started and
- * nothing to show yet).
+ * nothing to show yet: an open reply with nothing in it, or typing without text). `Room.activeAgents` is not used: it
+ * lists who wrote in the last ten minutes, not who is busy.
  */
 export function stageMoods(input: StageInput): Record<string, StageMood> {
   const needs = waitingHere(input)
@@ -81,8 +80,7 @@ export function stageMoods(input: StageInput): Record<string, StageMood> {
       if (needs.has(id)) return [id, 'needs']
       if (member.status === 'paused' || member.status === 'offline') return [id, 'sleep']
       if (streaming.get(id) === true || (input.typing[id] ?? '') !== '') return [id, 'work']
-      if (streaming.has(id) || id in input.typing || input.activeAgents.includes(id))
-        return [id, 'think']
+      if (streaming.has(id) || id in input.typing) return [id, 'think']
       return [id, 'rest']
     }),
   )

@@ -35,10 +35,9 @@ export function RoomStage({ room, agents }: { room: Room; agents: AgentSummary[]
         members: people,
         messages,
         typing: typing ?? {},
-        activeAgents: room.activeAgents,
         approvals: approvals ?? [],
       }),
-    [roomId, people, messages, typing, room.activeAgents, approvals],
+    [roomId, people, messages, typing, approvals],
   )
   const members = useMemo(
     () => people.map((agent) => ({ agent, mood: moods[agent.id] ?? ('rest' as const) })),
