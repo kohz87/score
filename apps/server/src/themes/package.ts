@@ -61,7 +61,7 @@ export const assetExtension = packageAssetExtension
  * them, so a package could install that the Customizer shows as broken (K2 X11). Here a deflated entry must consume
  * its whole stored extent, and the inflated length must equal the declared size, as in the browser.
  */
-function inflate(bytes: Buffer, entry: ZipEntryInfo, cap: number): Buffer {
+export function inflate(bytes: Buffer, entry: ZipEntryInfo, cap: number): Buffer {
   const { name, size: declared, packed } = entry
   const raw = bytes.subarray(entry.dataStart, entry.dataStart + packed)
   if (raw.length !== packed) throw new ThemeRejected([`${name} could not be read`])

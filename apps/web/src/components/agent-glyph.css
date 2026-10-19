@@ -93,3 +93,45 @@ svg.agent-glyph {
     --glyph-border: 1.5px solid #12131a;
   }
 }
+
+/* PLAN 10.2 (decision 108): marks (sm and up). The glyph box keeps today's size so no layout moves; the mark is drawn
+   about 1.6x the plain shape (callers that set --glyph-svg-size for their own spot scale it too) and carries no tile of
+   its own. At list size (xs) the plain shape and its tile stay. */
+.agent-glyph--rich {
+  --glyph-art-size: calc(var(--glyph-svg-size) * 1.6);
+  /* The tile's border belongs to a boxed shape; a mark gets the outline stroke instead (high contrast, below). */
+  --glyph-border: 0 solid transparent;
+}
+
+.agent-glyph--tile.agent-glyph--rich {
+  background: transparent;
+}
+
+.agent-glyph--rich > svg,
+svg.agent-glyph--rich {
+  width: var(--glyph-art-size);
+  height: var(--glyph-art-size);
+  overflow: visible;
+}
+
+/* A ring: the shape as one thick outline in the agent's colour (the high-contrast outline recolours it like any ring). */
+.agent-glyph--ring .agent-glyph__outline {
+  fill: none;
+  stroke: var(--glyph-ring-stroke, var(--glyph-color));
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+}
+
+.agent-glyph__slot--solid {
+  fill: var(--glyph-ring-stroke, var(--glyph-color));
+}
+
+.agent-glyph__ripple {
+  fill: none;
+  stroke: var(--glyph-color);
+  stroke-width: 0.7;
+}
+
+.agent-glyph__orbit {
+  fill: var(--glyph-color);
+}

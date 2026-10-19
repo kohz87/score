@@ -13,14 +13,78 @@ export const ShapeSchema = z.enum([
   'star',
   'pill',
   'cross',
+  // PLAN 10.2 (owner 2026-10-19: "various shape like cloud, cylinder etc, so there's a lot more options").
+  'cloud',
+  'cylinder',
+  'heart',
+  'drop',
+  'bolt',
+  'moon',
+  'leaf',
+  'blob',
+  'shield',
+  'octagon',
+  'bubble',
+  'gem',
 ])
 export type Shape = z.infer<typeof ShapeSchema>
+
+/** How an agent's mark is drawn (PLAN 10.2, decision 108): a solid cut-out (the default) or a ring. */
+export const AgentLookSchema = z.enum(['cut', 'ring'])
+export type AgentLook = z.infer<typeof AgentLookSchema>
+
+/** The activities a pet pack can animate (decision 107); `idle` is required, the rest fall back to it. */
+export const PetActivitySchema = z.enum([
+  'idle',
+  'work',
+  'think',
+  'needs',
+  'sleep',
+  'walk',
+  'stretch',
+  'coffee',
+  'read',
+  'greet',
+  'happy',
+])
+export type PetActivity = z.infer<typeof PetActivitySchema>
+
+/** A pack's optional `pet.json`: a display name, credits, and how far up the feet sit (share of the height). */
+export const PetPackManifestSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  credits: z.string().trim().max(500).optional(),
+  floor: z.number().min(0).max(0.3).optional(),
+})
+export type PetPackManifest = z.infer<typeof PetPackManifestSchema>
+
+/** The revision of an agent's pet pack, as it appears in `/api/agents/:id/pack/:activity?rev=`. */
+export const PackRevSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
+
+/** An agent's uploaded pet pack: which activities it has, its manifest, and the revision its files are served at. */
+export const PetPackSchema = z.object({
+  rev: PackRevSchema,
+  activities: z.array(PetActivitySchema).min(1),
+  name: z.string().nullable(),
+  credits: z.string().nullable(),
+  floor: z.number().min(0).max(0.3),
+})
+export type PetPack = z.infer<typeof PetPackSchema>
 
 export const AgentStyleSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,
+  /** Absent means `cut` (styles stored before PLAN 10.2). */
+  look: AgentLookSchema.optional(),
+  /** Set only by the server (PUT/DELETE /api/agents/:id/pack); a client's value is ignored. Absent means none. */
+  pack: PetPackSchema.nullable().optional(),
 })
 export type AgentStyle = z.infer<typeof AgentStyleSchema>
+
+/** What a client may set: everything but the pack, which has its own upload route. */
+export const AgentStylePatchSchema = z
+  .object({ color: AgentStyleSchema.shape.color, shape: ShapeSchema, look: AgentLookSchema })
+  .partial()
+export type AgentStylePatch = z.infer<typeof AgentStylePatchSchema>
 
 export const AgentStatusSchema = z.enum([
   'idle',

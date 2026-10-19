@@ -16,6 +16,7 @@ import {
   AgentSummarySchema,
   ProfileNameSchema,
 } from '@score/contract'
+import type { PackStore } from '../packs/store.ts'
 import type { Config } from '../config.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
@@ -32,11 +33,18 @@ import { requestIdempotency } from './idempotency.ts'
 
 export function registerProfileRoutes(
   app: FastifyInstance,
-  deps: { db: ScoreDb; ingest: Ingest; port: HermesPort; config: Config; clock?: () => number },
+  deps: {
+    db: ScoreDb
+    ingest: Ingest
+    port: HermesPort
+    config: Config
+    packs?: PackStore
+    clock?: () => number
+  },
 ) {
   const { db, ingest, port, config } = deps
   const imports = new ProfileImportStore(config.home, deps.clock)
-  const operations = new ProfileOperations(db, ingest, port, deps.clock, imports)
+  const operations = new ProfileOperations(db, ingest, port, deps.clock, imports, deps.packs)
   const receipts = requestIdempotency(db, deps.clock)
   // Creating agents writes API keys and deleting them removes data, so the transport must be private: loopback, or
   // remote mode over TLS (the only remote mode since 5.18; this stays as a second line of defence).

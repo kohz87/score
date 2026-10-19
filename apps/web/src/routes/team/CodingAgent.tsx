@@ -2,7 +2,6 @@ import {
   CodingAgentSchema,
   CodingAgentsResponseSchema,
   CodingRuntimesResponseSchema,
-  ShapeSchema,
   type AgentDetail,
   type CodingAgent,
   type CodingPermission,
@@ -12,7 +11,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { AgentAppearanceFields } from './AgentAppearanceFields.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { CodingBackend } from './CodingBackend.tsx'
@@ -323,35 +322,11 @@ export function AddCodingAgentForm({
           />
         </label>
       )}
-      <div className="team-profile-appearance">
-        <AgentGlyph
-          agent={{ id: id || 'new', name: id || 'New agent', style }}
-          describeShape
-          contrast="high"
-        />
-        <label>
-          Colour
-          <input
-            type="color"
-            value={style.color}
-            onChange={(event) => setStyle({ ...style, color: event.target.value })}
-          />
-        </label>
-        <label>
-          Shape
-          <select
-            aria-label="Shape"
-            value={style.shape}
-            onChange={(event) =>
-              setStyle({ ...style, shape: ShapeSchema.parse(event.target.value) })
-            }
-          >
-            {ShapeSchema.options.map((shape) => (
-              <option key={shape}>{shape}</option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <AgentAppearanceFields
+        value={{ ...style, look: style.look ?? 'cut' }}
+        onChange={setStyle}
+        preview={{ id: id || 'new', name: id || 'New agent' }}
+      />
       <ReadAccessWarning runtime={runtime} permission={permission} />
       {create.error && <p role="alert">{create.error.message}</p>}
       <div className="team-file-actions">

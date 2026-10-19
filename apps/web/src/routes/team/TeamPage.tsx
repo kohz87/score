@@ -1,6 +1,8 @@
 import { useContext } from 'react'
 import { Link, NavLink, Outlet } from 'react-router'
+import { AgentAvatar } from '../../components/AgentAvatar.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { activityOfStatus } from '../../components/agent-activity.ts'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery, statusLabels } from './team-queries.ts'
 import './team.css'
@@ -19,7 +21,12 @@ export function TeamLayout() {
           ?.filter((agent) => agent.lifecycle?.state !== 'removed')
           .map((agent) => (
             <NavLink key={agent.id} to={`/team/${encodeURIComponent(agent.id)}`}>
-              <AgentGlyph agent={agent} decorative contrast="high" />
+              <AgentGlyph
+                agent={agent}
+                decorative
+                contrast="high"
+                activity={activityOfStatus(agent.status)}
+              />
               <span>{agent.name}</span>
             </NavLink>
           ))}
@@ -75,7 +82,13 @@ export function TeamPage() {
                 className="team-card team-agent-card"
                 to={`/team/${encodeURIComponent(agent.id)}`}
               >
-                <AgentGlyph agent={agent} describeShape contrast="high" />
+                <AgentAvatar
+                  agent={agent}
+                  describeShape
+                  contrast="high"
+                  activity={activityOfStatus(agent.status)}
+                  petClassName="team-pet"
+                />
                 <h2>{agent.name}</h2>
                 <p className="team-muted-strong">{agent.role || 'No role set'}</p>
                 <p className="team-status">

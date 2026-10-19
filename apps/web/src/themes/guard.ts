@@ -318,6 +318,11 @@ function parts(surface: HTMLElement): HTMLElement[] {
 // Glyph shapes (finding #5): an agent is told apart by its shape, so what the shapes paint is compared, not just
 // whether their wrapper is shown: geometry (`d`, size), paint and everything that can hide or move a path.
 const SHAPES = 'path, circle, rect, ellipse, polygon, polyline, line'
+// Parts Score itself animates with `transform` (a mark's eye slots, its orbiting dot and ripples, a pet's overlays): their transform is whatever the keyframes
+// say at the moment of reading, so it can't be compared; a theme can't style them (the sanitiser guard), and everything
+// else about them (geometry, paint, display, clip, mask, filter) is still compared.
+const ANIMATED_BY_SCORE =
+  '.agent-glyph__slot, .agent-glyph__orbit, .agent-glyph__ripple, .pet-avatar__fx *'
 
 function shapes(surface: HTMLElement): SVGGraphicsElement[] {
   return Array.from(surface.querySelectorAll<SVGGraphicsElement>(SHAPES)).filter(
@@ -345,7 +350,7 @@ function shapeSignature(el: SVGGraphicsElement): string {
     style.opacity,
     style.visibility,
     style.display,
-    style.transform,
+    el.matches(ANIMATED_BY_SCORE) ? 'animated' : style.transform,
     // Colours follow the theme's tokens (currentColor): what counts is that something is painted at all.
     paints(style.fill, 1) || paints(style.stroke, Number.parseFloat(style.strokeWidth) || 0),
     style.clipPath,

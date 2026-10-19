@@ -6,6 +6,8 @@ import { SecurityPassword } from './auth/security-password.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { createAgentDirectory, withAgentDirectory } from './http/agent-directory.ts'
 import { registerAgentRoutes } from './http/agents.ts'
+import { currentPackRevs, registerPackRoutes } from './http/packs.ts'
+import { PackStore } from './packs/store.ts'
 import { registerCodingAgentRoutes } from './http/coding-agents.ts'
 import { hermesPortOf, withCodingAgents } from './runtimes/coding/port.ts'
 import type { CodingRuntime } from './runtimes/coding/service.ts'
@@ -267,8 +269,21 @@ export function buildApp({
   registerTaskRoutes(app, port, ingest, db, clock)
   registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
+  // Uploaded pet packs (PLAN 10.2): strays from a crash are cleared before the first request.
+  const packStore = db ? new PackStore(config.home) : undefined
+  if (db && ingest && packStore) {
+    packStore.recover(currentPackRevs(db.sqlite))
+    registerPackRoutes(app, { port, db, ingest, store: packStore })
+  }
   if (db && ingest)
-    registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
+    registerProfileRoutes(app, {
+      db,
+      ingest,
+      port,
+      config,
+      ...(packStore ? { packs: packStore } : {}),
+      ...(clock ? { clock } : {}),
+    })
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerWorkspaceRoutes(app, port, config, undefined, workspaces)
   if (knowledge) {
@@ -438,6 +453,7 @@ export function buildApp({
       db,
       ingest,
       security: securityPassword,
+      ...(packStore ? { packs: packStore } : {}),
       ...(config.mode === 'fake' ? { workspaceBase: join(tmpdir(), 'score-workspaces') } : {}),
       ...(clock ? { clock } : {}),
     })

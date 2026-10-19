@@ -155,3 +155,27 @@ test('every form that posts a consent is a data-decision and wears its protected
   }
   expect(problems).toEqual([])
 })
+
+// A pet avatar's stage, animation files and overlay graphics are moved by Score's own CSS (opacity for the crossfade,
+// transform for the centring, the hop and the heart). protected.css pins opacity and transform on everything inside a
+// protected surface, so it must leave exactly those parts alone: pinned, every cached file would stay on top and the
+// centring would be lost (found in review, 10.2b).
+test('protected.css leaves a pet avatar’s own moving parts to Score’s rules, and only those', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  const squashed = css.replace(/\s+/g, ' ')
+  const rule =
+    /\[data-protected\]:not\(svg\) \*:not\(svg \*\)([^{]*)\{ opacity: 1 !important;[^}]*transform: none !important/.exec(
+      squashed,
+    )
+  expect(rule, 'the blanket rule').not.toBeNull()
+  // Inside `:where`, so it adds no specificity (the disabled-control rule must still win over this one).
+  expect(rule![1]).toBe(':not(:where(.pet-avatar__stage, .pet-avatar__anim, .pet-avatar__fx)) ')
+  const pet = readFileSync(join(root, 'components/pet-avatar.css'), 'utf8')
+  const moved = new Set<string>()
+  for (const [, selector, body] of pet.matchAll(/^\.pet-avatar__([\w-]+)[^{]*\{([^}]*)\}/gm))
+    if (/\b(opacity|transform|animation(-name)?):/.test(body!))
+      moved.add(selector!.replace(/--.*$/, ''))
+  // Every part Score moves is either one of the three exempt classes or an overlay root that carries `fx` (see the
+  // PetAvatar test); nothing else may move, or a theme could never be made to leave it alone.
+  expect([...moved].sort()).toEqual(['alert', 'anim', 'dot', 'heart', 'say', 'stage', 'z'].sort())
+})

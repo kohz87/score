@@ -1,8 +1,8 @@
-import type { AgentSummary, Shape } from '@score/contract'
+import { ShapeSchema, type AgentSummary, type Shape } from '@score/contract'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { stubReducedMotion } from '../../motion/test-support.ts'
-import { TasksByDayChart } from './TasksByDayChart.tsx'
+import { patternByShape, TasksByDayChart } from './TasksByDayChart.tsx'
 
 beforeEach(() => stubReducedMotion())
 afterEach(() => {
@@ -140,3 +140,20 @@ test.each([1, 2, 45, 366])(
     expect(labels.length).toBeLessThanOrEqual(count <= 7 ? count : 8)
   },
 )
+
+test('all twenty shapes have their own pattern overlay and every pattern draws something', () => {
+  const kinds = Object.values(patternByShape)
+  expect(kinds).toHaveLength(ShapeSchema.options.length)
+  expect(new Set(kinds).size).toBe(ShapeSchema.options.length)
+  const day = [
+    {
+      date: '2026-10-19',
+      perAgent: Object.fromEntries(ShapeSchema.options.map((shape) => [`a-${shape}`, 1])),
+    },
+  ]
+  const everyone = ShapeSchema.options.map((shape) => agent(`a-${shape}`, '#6B4EFF', shape))
+  const { container } = render(<TasksByDayChart byDay={day} agents={everyone} />)
+  const patterns = [...container.querySelectorAll('pattern')]
+  expect(patterns).toHaveLength(20)
+  for (const pattern of patterns) expect(pattern.children.length, pattern.id).toBeGreaterThan(0)
+})

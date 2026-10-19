@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { AgentSummary, FlowEdge, FlowNode } from '@score/contract'
 import { AgentGlyph } from '../../../components/AgentGlyph.tsx'
+import { activityOfNodeState } from '../../../components/agent-activity.ts'
 import { layoutFlow } from './layout.ts'
 import './flow.css'
 
@@ -441,7 +442,12 @@ export function FlowCanvas({ nodes, edges, agents, selectedId = null, onSelect }
                       </svg>
                     </span>
                   ) : (
-                    <AgentGlyph agent={glyphAgent} size="sm" decorative />
+                    <AgentGlyph
+                      agent={glyphAgent}
+                      size="sm"
+                      decorative
+                      activity={activityOfNodeState(node.state)}
+                    />
                   )}
                   <span className="flow-node__text">
                     <b title={node.title}>{node.title}</b>

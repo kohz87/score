@@ -1,4 +1,4 @@
-import { AgentSummarySchema } from '@score/contract'
+import { AgentSummarySchema, ShapeSchema } from '@score/contract'
 import { cpSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -77,7 +77,12 @@ test('style patch persists, emits once, replays receipts and survives app/adapte
   const headers = { 'x-score-client': 'web', cookie, 'idempotency-key': 'style-test' }
   const response = await patch({ color: '#123456', shape: 'hexagon' }, headers)
   expect(response.statusCode).toBe(200)
-  expect(response.json().style).toEqual({ color: '#123456', shape: 'hexagon' })
+  expect(response.json().style).toEqual({
+    color: '#123456',
+    shape: 'hexagon',
+    look: 'cut',
+    pack: null,
+  })
   expect((await patch({ shape: 'hexagon', color: '#123456' }, headers)).json()).toEqual(
     response.json(),
   )
@@ -102,6 +107,8 @@ test('concurrent partial patches merge through ingest without losing a field', a
   expect((await app.inject('/api/agents/builder')).json().style).toEqual({
     color: '#abcdef',
     shape: 'cross',
+    look: 'cut',
+    pack: null,
   })
 })
 test('unchanged style produces no additional event, but stores the override', async () => {
@@ -137,6 +144,9 @@ test.each([
   { shape: 'unknown' },
   { color: null },
   { extra: true },
+  { look: 'robot' },
+  { look: null },
+  { shape: 'dodecagon' },
 ])('invalid style %j is rejected', async (body) => {
   expect((await patch(body)).statusCode).toBe(400)
   expect(env.db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
@@ -228,4 +238,63 @@ test('live fixture profiles expose served and unserved agents with run activity 
   } finally {
     await live.stop()
   }
+})
+
+test('PLAN 10.2: look and the new shapes persist, merge with the rest, emit, and survive a restart', async () => {
+  await app.inject('/api/agents')
+  const first = await patch({ look: 'ring' })
+  expect(first.statusCode).toBe(200)
+  expect(first.json().style).toMatchObject({ look: 'ring', pack: null })
+  const second = await patch({ shape: 'cloud', color: '#0A0B0C' })
+  expect(second.json().style).toEqual({
+    color: '#0A0B0C',
+    shape: 'cloud',
+    look: 'ring',
+    pack: null,
+  })
+  expect(
+    env.db.sqlite.prepare('SELECT color, shape, look, pack_rev FROM agent_styles').all(),
+  ).toEqual([{ color: '#0A0B0C', shape: 'cloud', look: 'ring', pack_rev: null }])
+  const events = styleEvents().map((row) => JSON.parse(String(row.data)).style)
+  expect(events.at(-1)).toMatchObject({ shape: 'cloud', look: 'ring' })
+  const count = events.length
+  // The same look again changes nothing and says nothing.
+  expect((await patch({ look: 'ring' })).statusCode).toBe(200)
+  expect(styleEvents()).toHaveLength(count)
+  expect((await patch({ look: 'cut' })).json().style.look).toBe('cut')
+  expect(styleEvents()).toHaveLength(count + 1)
+  await app.close()
+  app = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake' }),
+    logger: false,
+    port: new FakePort(),
+    db: env.db,
+    ingest: env.ingest,
+  })
+  expect((await app.inject('/api/agents/builder')).json().style).toMatchObject({
+    shape: 'cloud',
+    look: 'cut',
+  })
+})
+test('PLAN 10.2: every one of the 20 shapes is accepted by the style route', async () => {
+  for (const shape of ShapeSchema.options) {
+    const response = await patch({ shape })
+    expect(response.statusCode, shape).toBe(200)
+    expect(response.json().style.shape).toBe(shape)
+  }
+})
+test('PLAN 10.2: a client cannot set the pack through the style route', async () => {
+  await app.inject('/api/agents')
+  const forged = { rev: 'forged', activities: ['idle'], name: null, credits: null, floor: 0 }
+  const response = await patch({ shape: 'moon', pack: forged })
+  expect(response.statusCode).toBe(200)
+  expect(response.json().style.pack ?? null).toBeNull()
+  expect(env.db.sqlite.prepare('SELECT pack_rev, pack_meta FROM agent_styles').all()).toEqual([
+    { pack_rev: null, pack_meta: null },
+  ])
+  // Nothing but a pack to set is nothing to do.
+  expect((await patch({ pack: forged })).statusCode).toBe(400)
+  // The looks of the first design are gone.
+  expect((await patch({ look: 'bot' })).statusCode).toBe(400)
+  expect((await patch({ look: 'chibi' })).statusCode).toBe(400)
 })

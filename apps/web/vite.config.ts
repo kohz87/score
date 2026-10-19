@@ -43,7 +43,11 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    setupFiles: ['./src/test/tmp-root.ts', './src/test/load-tolerance.ts', './src/test/xhr-via-fetch.ts'],
+    setupFiles: [
+      './src/test/tmp-root.ts',
+      './src/test/load-tolerance.ts',
+      './src/test/xhr-via-fetch.ts',
+    ],
     testTimeout: 20_000,
   },
 })

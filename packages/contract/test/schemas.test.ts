@@ -292,8 +292,18 @@ const cases = [
   ['ProfileNameSchema', 'helper', 'Helper'],
   ['ProfileStepNameSchema', 'create_profile', 'other'],
   ['AgentIdSchema', 'lead', ''],
-  ['ShapeSchema', 'circle-dot', 'oval'],
+  ['ShapeSchema', 'cloud', 'oval'],
   ['AgentStyleSchema', f.style, { ...f.style, color: '#abc' }],
+  ['AgentLookSchema', 'ring', 'chibi'],
+  ['PetActivitySchema', 'work', 'dance'],
+  ['PetPackManifestSchema', { name: 'Luna', floor: 0.03 }, { floor: 0.5 }],
+  ['PackRevSchema', 'r7Kq-2', '../x'],
+  [
+    'PetPackSchema',
+    { rev: 'a1', activities: ['idle', 'work'], name: 'Luna', credits: null, floor: 0 },
+    { rev: 'a1', activities: [], name: null, credits: null, floor: 0 },
+  ],
+  ['AgentStylePatchSchema', { look: 'ring', shape: 'cylinder' }, { look: 'chibi' }],
   ['AgentStatusSchema', 'working', 'busy'],
   ['AgentSummarySchema', f.agent, { ...f.agent, id: '' }],
   ['AsOfSeqSchema', 0, -1],
@@ -2193,4 +2203,12 @@ describe('third gate 5: manifest menu labels need a visible character', () => {
     expect(contract.hasVisibleCharacter(' ​')).toBe(false)
     expect(contract.hasVisibleCharacter(' x ')).toBe(true)
   })
+})
+
+test('PLAN 10.2: a style without look or pack (stored before 10.2) still parses; a client patch cannot set the pack', () => {
+  const old = contract.AgentStyleSchema.parse({ color: '#6B4EFF', shape: 'circle-dot' })
+  expect(old.look).toBeUndefined()
+  expect(old.pack).toBeUndefined()
+  const patch = contract.AgentStylePatchSchema.parse({ look: 'ring', pack: { rev: 'x' } })
+  expect(patch).toEqual({ look: 'ring' })
 })

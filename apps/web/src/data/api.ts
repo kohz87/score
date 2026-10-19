@@ -33,26 +33,38 @@ function failure(path: string, status: number, payload: unknown): ApiError {
 
 export type UploadProgress = { loaded: number; total: number }
 
+/** The bytes of a body, for a progress total when the browser can't say: a file, or every file in a form. */
+function bodySize(body: Blob | FormData): number {
+  if (body instanceof Blob) return body.size
+  let size = 0
+  for (const value of body.values()) size += typeof value === 'string' ? value.length : value.size
+  return size
+}
+
 /**
  * A PUT of a file body that reports how much has been sent (fetch can't): XMLHttpRequest with the same headers and
- * errors as apiFetch. `onProgress` gets bytes sent; once all are sent the server is still working on them.
+ * errors as apiFetch. `onProgress` gets bytes sent; once all are sent the server is still working on them. A `Blob`
+ * goes as `application/octet-stream`; a `FormData` (several files, a pet pack) is left to the browser, which sets its
+ * multipart type and boundary. `headers` adds any more, such as an `Idempotency-Key`.
  */
 export function apiUpload(
   path: string,
-  body: Blob,
+  body: Blob | FormData,
   onProgress?: (progress: UploadProgress) => void,
+  headers: Record<string, string> = {},
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
     request.open('PUT', `/api/${path.replace(/^\/+/, '')}`)
     request.setRequestHeader('X-Score-Client', 'web')
-    request.setRequestHeader('content-type', 'application/octet-stream')
+    if (body instanceof Blob) request.setRequestHeader('content-type', 'application/octet-stream')
+    for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value)
     request.responseType = 'text'
     if (onProgress)
       request.upload.onprogress = (event) =>
         onProgress({
           loaded: event.loaded,
-          total: event.lengthComputable ? event.total : body.size,
+          total: event.lengthComputable ? event.total : bodySize(body),
         })
     request.onload = () => {
       let payload: unknown

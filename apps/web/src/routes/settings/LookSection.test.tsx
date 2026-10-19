@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { LookSection } from './LookSection.tsx'
@@ -202,4 +202,40 @@ test('the currency inputs are styled like the other Settings fields', () => {
   expect(rule).toMatch(/background:\s*var\(--card\)/)
   expect(rule).toMatch(/height:\s*40px/)
   expect(rule).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+})
+
+test('"Agents" is a per-device choice between Lively, Calm and Still', () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(Response.json({ code: 'USD', rate: 1 }))),
+  )
+  localStorage.removeItem('score.liveliness')
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <LookSection />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  const group = screen.getByRole('radiogroup', { name: 'Agents' })
+  expect(
+    within(group)
+      .getAllByRole('radio')
+      .map((radio) => radio.textContent),
+  ).toEqual(['Lively', 'Calm', 'Still'])
+  expect(within(group).getByRole('radio', { name: 'Lively' }).getAttribute('aria-checked')).toBe(
+    'true',
+  )
+  fireEvent.click(within(group).getByRole('radio', { name: 'Calm' }))
+  expect(localStorage.getItem('score.liveliness')).toBe('calm')
+  expect(within(group).getByRole('radio', { name: 'Calm' }).getAttribute('aria-checked')).toBe(
+    'true',
+  )
+  expect(screen.getByText(/no breaks, no napping/i)).toBeDefined()
+  fireEvent.click(within(group).getByRole('radio', { name: 'Still' }))
+  expect(screen.getByText(/show a still picture, marks stand still/i)).toBeDefined()
+  expect(localStorage.getItem('score.liveliness')).toBe('still')
+  fireEvent.click(within(group).getByRole('radio', { name: 'Lively' }))
+  expect(localStorage.getItem('score.liveliness')).toBeNull()
+  localStorage.removeItem('score.liveliness')
 })

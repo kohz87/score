@@ -6,9 +6,15 @@
    and the built-in packs are untouched (and keep their entrance motion). styles/protected.test.ts keeps this file and
    the markup in step. */
 @layer score-protected {
-  /* The surface itself: always rendered, flat, on top, with its own display. */
+  /* The surface itself: always rendered, flat, on top, with its own display. A pet avatar's own moving parts (its stage,
+     the animation files stacked and crossfaded by opacity, and the overlay graphics) are the exception: pinning their
+     opacity or transform would leave every cached file on top and break the centring and the hop. They carry Score's
+     own `pet-avatar__` class names, which a theme's CSS can't name (the sanitiser), so only Score's rules reach them. (`:where` keeps the exclusion at no specificity, so the disabled-control rule below still
+     out-ranks this one.) */
   html[data-look='custom'] [data-protected],
-  html[data-look='custom'] [data-protected]:not(svg) *:not(svg *) {
+  html[data-look='custom']
+    [data-protected]:not(svg)
+    *:not(svg *):not(:where(.pet-avatar__stage, .pet-avatar__anim, .pet-avatar__fx)) {
     opacity: 1 !important;
     visibility: visible !important;
     transform: none !important;
@@ -82,6 +88,12 @@
     background-color: var(--glyph-plate) !important;
     border-radius: 3px !important;
   }
+  /* A bot, chibi or picture (PLAN 10.2) has no tile of its own, so in a custom look it sits on the same plate: its
+     colour is then always read against white or ink, never against whatever the theme paints behind it. */
+  html[data-look='custom'] span.agent-glyph--rich[data-protected] {
+    background-color: var(--glyph-plate) !important;
+    border-radius: 3px !important;
+  }
   html[data-look='custom'] .needs-you-dot[data-protected] {
     box-sizing: content-box !important;
     border: 1.5px solid #12131a !important;
@@ -96,11 +108,17 @@
     visibility: visible !important;
     filter: none !important;
     clip-path: none !important;
-    mask: none !important;
     mix-blend-mode: normal !important;
     translate: none !important;
     rotate: none !important;
     scale: none !important;
+  }
+  /* No mask either, except the one a cut-out mark cuts its eyes with (the glyph's own, named by Score's class: a theme
+     can't add one, and the guard still compares the computed mask of every shape). */
+  html[data-look='custom'] [data-protected] svg,
+  html[data-look='custom'] [data-protected] svg *:not(.agent-glyph__mark),
+  html[data-look='custom'] svg[data-protected] *:not(.agent-glyph__mark) {
+    mask: none !important;
   }
   /* No generated text or boxes (a fake "Approve" laid over the real one): none of these surfaces draws any. */
   html[data-look='custom'] [data-protected]::before,

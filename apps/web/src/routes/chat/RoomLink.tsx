@@ -1,6 +1,7 @@
 import type { AgentSummary, Room } from '@score/contract'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { activityOfStatus } from '../../components/agent-activity.ts'
 import { agentTextColor } from './agent-text-color.ts'
 import { roomLabel } from './room-label.ts'
 
@@ -31,7 +32,9 @@ export function RoomLink({
       to={`${base}/${encodeURIComponent(room.id)}`}
       aria-current={room.id === selected ? 'page' : undefined}
     >
-      {room.kind === 'direct' && agent && <AgentGlyph agent={agent} size="sm" decorative />}
+      {room.kind === 'direct' && agent && (
+        <AgentGlyph agent={agent} size="sm" decorative activity={activityOfStatus(agent.status)} />
+      )}
       <span className="chat-room-name">
         <span>
           {room.pinned && (
