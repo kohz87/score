@@ -28,7 +28,7 @@ const ascii = (bytes: Buffer, at: number, length: number) =>
 // the chunks, blocks and frames it needs must be there and fit inside the file. Nothing is decoded.
 
 function png(bytes: Buffer): Parsed {
-  const damaged = { reason: 'This PNG is damaged or incomplete.' }
+  const damaged = { reason: 'This PNG is damaged or incomplete. Export it again.' }
   // Chunks: IHDR (13 bytes) first, at least one IDAT, IEND last and exactly at the end of the file. An animation's
   // `acTL` has to come before the first IDAT.
   let at = 8
@@ -61,7 +61,7 @@ function png(bytes: Buffer): Parsed {
 }
 
 function gif(bytes: Buffer): Parsed {
-  const damaged = { reason: 'This GIF is damaged or incomplete.' }
+  const damaged = { reason: 'This GIF is damaged or incomplete. Export it again.' }
   if (bytes.length < 14) return damaged
   // Header, logical screen (width and height little-endian), optional global colour table.
   const width = bytes.readUInt16LE(6)
@@ -140,10 +140,46 @@ function hasImage(bytes: Buffer, chunks: Chunk[]): boolean {
   )
 }
 
+const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+
+/**
+ * How many animation frames a browser would play from the start of a WebP whose size is wrong: complete frames with
+ * image data, up to `end`, stopping at the first that is cut off or empty.
+ */
+function playableFrames(bytes: Buffer, end: number): number {
+  let frames = 0
+  let at = 12
+  while (at + 8 <= end) {
+    const size = bytes.readUInt32LE(at + 4)
+    const next = at + 8 + size
+    if (next > end) break
+    if (ascii(bytes, at, 4) === 'ANMF') {
+      const inner = size >= 24 ? riffChunks(bytes, at + 8 + 16, next) : null
+      if (!inner || !hasImage(bytes, inner)) break
+      frames += 1
+    }
+    at = next + (size & 1)
+  }
+  return frames
+}
+
 function webp(bytes: Buffer): Parsed {
-  const damaged = { reason: 'This WebP is damaged or incomplete.' }
-  // The RIFF size must be the file's, and every chunk must fit inside it.
-  if (bytes.length < 20 || bytes.readUInt32LE(4) + 8 !== bytes.length) return damaged
+  const damaged = { reason: 'This WebP is damaged or incomplete. Export it again.' }
+  // The RIFF size must be the file's, and every chunk must fit inside it. A size that disagrees with the file is said in
+  // numbers: an exporter that stops early (or writes stray bytes) leaves a file a browser plays only part of.
+  if (bytes.length < 20) return damaged
+  const declared = bytes.readUInt32LE(4) + 8
+  if (declared !== bytes.length) {
+    const frames = playableFrames(bytes, Math.min(declared, bytes.length))
+    const plays =
+      frames > 0 ? `, so only its first ${frames} frame${frames === 1 ? '' : 's'} would play` : ''
+    return {
+      reason:
+        declared < bytes.length
+          ? `This WebP breaks off: its header says it ends at ${megabytes(declared)}, but the file is ${megabytes(bytes.length)}${plays}. Export it again.`
+          : `This WebP is cut short: it should be ${megabytes(declared)} but is only ${megabytes(bytes.length)}${plays}. Export it again.`,
+    }
+  }
   const chunks = riffChunks(bytes, 12, bytes.length)
   const first = chunks?.[0]
   if (!chunks || !first) return damaged

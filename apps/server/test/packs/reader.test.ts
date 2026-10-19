@@ -283,3 +283,16 @@ test('parseFiles reads every file part, whatever its field name, and refuses a b
   expect(() => parseFiles(body.payload, body.headers['content-type'], 1)).toThrow()
   expect(() => parseFiles(body.payload, 'multipart/form-data', 40)).toThrow()
 })
+
+test('a rejected zip is named, and so is the entry that failed (owner, 2026-10-19)', async () => {
+  expect(await rejectionOf([file('luna.zip', Buffer.from('not a zip at all'))])).toEqual([
+    'luna.zip isn’t a zip file.',
+  ])
+  const broken = Buffer.from(await zipOf({ 'idle.webp': idle }))
+  broken.writeUInt32LE(0xdeadbeef, broken.length - 6) // the central directory's offset
+  expect((await rejectionOf([file('luna.zip', broken)]))[0]).toMatch(/^luna\.zip: /)
+  const bomb = padTo(pngImage(64, 64), 4 * 1024 * 1024)
+  expect(await rejectionOf([file('luna.zip', await zipOf({ 'idle.png': bomb }))])).toEqual([
+    'idle.png: compresses suspiciously well (a zip bomb?), so the pack isn’t read.',
+  ])
+})

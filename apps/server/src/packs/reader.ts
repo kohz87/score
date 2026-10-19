@@ -155,14 +155,15 @@ function manifestOf(bytes: Buffer, reasons: string[]): PetPackManifest {
   return parsed.data
 }
 
-function zipCandidates(bytes: Buffer): Candidate[] {
+function zipCandidates(name: string, bytes: Buffer): Candidate[] {
   if (bytes.length < 4 || bytes.toString('latin1', 0, 4) !== 'PK\x03\x04')
-    throw new PackRejected(['That isn’t a zip file.'])
+    throw new PackRejected([`${shown(name)} isn’t a zip file.`])
   let listed: ZipEntryInfo[]
   try {
     listed = readZipDirectory(bytes)
   } catch (error) {
-    if (error instanceof ThemePackageError) throw new PackRejected([error.message])
+    if (error instanceof ThemePackageError)
+      throw new PackRejected([`${shown(name)}: ${error.message}`])
     throw error
   }
   const reasons = new Set<string>()
@@ -208,7 +209,7 @@ export function readPack(files: { name: string; bytes: Buffer }[]): ReadPack {
     throw new PackRejected(['Send either one zip or several image files, not both.'])
   const candidates: Candidate[] =
     zips.length === 1
-      ? zipCandidates(zips[0]!.bytes)
+      ? zipCandidates(zips[0]!.name, zips[0]!.bytes)
       : files.map((file) => ({
           path: file.name,
           size: file.bytes.length,
@@ -260,7 +261,9 @@ export function readPack(files: { name: string; bytes: Buffer }[]): ReadPack {
       )
     }
     if (tooWellCompressed(candidate.size, candidate.packed))
-      throw new PackRejected(['The zip compresses suspiciously well (zip bomb?)'])
+      throw new PackRejected([
+        `${shown(candidate.path)}: compresses suspiciously well (a zip bomb?), so the pack isn’t read.`,
+      ])
     declared += candidate.size
   }
   if (declared > PACK_LIMITS.unpackedBytes)

@@ -1,7 +1,7 @@
 import { AgentSummarySchema, type AgentSummary } from '@score/contract'
 import { useMutation } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { apiFetch, apiUpload, type UploadProgress } from '../../data/api.ts'
+import { ApiError, apiFetch, apiUpload, type UploadProgress } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { packProblems } from './pack-errors.ts'
 import { PetPackGuide } from './PetPackGuide.tsx'
@@ -38,6 +38,13 @@ export function PackUploadProgress({ name, progress }: { name: string; progress:
   )
 }
 
+/** The heading over the server's reasons: the zip or file by name, or how many files the pack was. */
+export function refusedLabel(files: readonly File[]): string {
+  return files.length === 1
+    ? `${files[0]!.name} wasn’t accepted:`
+    : `The pack (${files.length} files) wasn’t accepted:`
+}
+
 /** What a person is told before anything is sent, or null when the choice can go to the server. */
 export function packChoiceProblem(files: readonly File[]): string | null {
   if (files.length === 0) return null
@@ -57,6 +64,8 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
   const input = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<File[]>([])
   const [problems, setProblems] = useState<string[]>([])
+  // Which upload the server's reasons are about (owner: say which file failed), shown above them.
+  const [refused, setRefused] = useState<string | null>(null)
   const [added, setAdded] = useState<Added | null>(null)
   const [progress, setProgress] = useState<UploadProgress | null>(null)
   const pack = agent.style.pack
@@ -79,11 +88,13 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
     onSuccess: ({ summary, ignored }) => {
       setFiles([])
       setProblems([])
+      setRefused(null)
       setAdded({ activities: summary.style.pack?.activities ?? [], ignored })
     },
-    onError: (error) => {
+    onError: (error, chosen) => {
       setAdded(null)
       setProblems(packProblems(error))
+      setRefused(error instanceof ApiError && error.status === 422 ? refusedLabel(chosen) : null)
     },
   })
   const remove = useMutation({
@@ -93,9 +104,13 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
       ),
     onSuccess: () => {
       setProblems([])
+      setRefused(null)
       setAdded(null)
     },
-    onError: (error) => setProblems(packProblems(error)),
+    onError: (error) => {
+      setProblems(packProblems(error))
+      setRefused(null)
+    },
   })
   const busy = upload.isPending || remove.isPending
   function choose(list: FileList | null) {
@@ -104,6 +119,7 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
     const chosen = list ? [...list] : []
     const problem = packChoiceProblem(chosen)
     setProblems(problem ? [problem] : [])
+    setRefused(null)
     setFiles(problem ? [] : chosen)
   }
   return (
@@ -172,11 +188,14 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
         )}
       </div>
       {problems.length > 0 && (
-        <ul role="alert" className="team-pack-problems">
-          {problems.map((problem) => (
-            <li key={problem}>{problem}</li>
-          ))}
-        </ul>
+        <div role="alert">
+          {refused && <p className="team-pack-refused">{refused}</p>}
+          <ul className="team-pack-problems">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </div>
       )}
       {added && (
         <div role="status" className="team-pack-added">
