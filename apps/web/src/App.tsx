@@ -92,7 +92,16 @@ export const appRoutes: RouteObject[] = [
             ],
           }
         if (path === '/reports') return { path, Component: ReportsPage }
-        if (path === '/settings') return { path, Component: SettingsPage }
+        // 10.1: one page per section. `/settings` and `/settings#<id>` redirect; an unknown section shows the first one.
+        if (path === '/settings')
+          return {
+            path,
+            Component: SettingsPage,
+            children: [
+              { index: true, element: <></> },
+              { path: ':section', element: <></> },
+            ],
+          }
         if (path === '/team')
           return {
             path,

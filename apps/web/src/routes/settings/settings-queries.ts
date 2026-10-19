@@ -12,6 +12,7 @@ import {
   MessagingPlatformSchema,
   ProviderItemSchema,
   ProvidersResponseSchema,
+  SecurityStatusSchema,
   SignInSchema,
   SystemStatusSchema,
   type ConfigApplyRequest,
@@ -235,4 +236,13 @@ export function useHermesCheck() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: systemKey }),
   })
   return { check, accept }
+}
+
+/** Whether the web terminal is on (Settings › Terminal) and what else the security card shows; one read, shared. */
+export function useSecurityStatus(enabled = true) {
+  return useQuery({
+    queryKey: ['session', 'security'],
+    enabled,
+    queryFn: async () => SecurityStatusSchema.parse(await apiFetch('session/security')),
+  })
 }

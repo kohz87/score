@@ -149,7 +149,8 @@ test('palette opens on click, autofocuses, closes on Esc and restores focus', ()
   expect(trigger.getAttribute('aria-expanded')).toBe('true')
   const input = within(dialog).getByRole('searchbox', { name: 'Search destinations' })
   expect(document.activeElement).toBe(input)
-  expect(within(dialog).getAllByRole('link')).toHaveLength(7)
+  // The seven destinations, then one entry per Settings section (PLAN 10.1).
+  expect(within(dialog).getAllByRole('link')).toHaveLength(7 + 11)
   fireEvent.keyDown(input, { key: 'Escape' })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
@@ -168,7 +169,7 @@ test('palette traps forward and backward focus and makes the shell inert', () =>
   fireEvent.click(commandButton())
   const dialog = screen.getByRole('dialog')
   const first = within(dialog).getByRole('button', { name: 'Close command palette' })
-  const last = within(dialog).getByRole('link', { name: 'Settings' })
+  const last = within(dialog).getAllByRole('link').at(-1)!
   first.focus()
   fireEvent.keyDown(first, { key: 'Tab', shiftKey: true })
   expect(document.activeElement).toBe(last)
@@ -315,7 +316,8 @@ test('nav links navigate between all destinations', async () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('link', { name: title }))
     })
-    expect(router.state.location.pathname).toBe(path)
+    // Settings opens its first section.
+    expect(router.state.location.pathname).toBe(path === '/settings' ? '/settings/models' : path)
     // Lazy pages (Knowledge, Settings, …) render a moment after navigation.
     expect(
       await screen.findByRole('heading', { level: 1, name: title }, { timeout: 5000 }),

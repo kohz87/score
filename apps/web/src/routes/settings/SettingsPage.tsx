@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Link, Navigate, NavLink, useLocation, useParams } from 'react-router'
 import { NARROW_QUERY, useMediaQuery } from '../../data/use-media.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
@@ -17,28 +18,93 @@ import { SharesSection } from './SharesSection.tsx'
 import { RemoteSection } from './RemoteSection.tsx'
 import { BackupSection } from './BackupSection.tsx'
 import { TerminalSection } from './TerminalSection.tsx'
-import { remoteTransport } from '../../data/session.ts'
+import { firstSection, settingsPath, useSettingsSections } from './settings-sections.ts'
 import './settings.css'
 
-const sections = [
-  { id: 'models', label: 'Models and keys', built: true },
-  { id: 'connections', label: 'Connections', built: true },
-  { id: 'rules', label: 'Rules and approvals', built: true },
-  { id: 'look', label: 'Look', built: true },
-  { id: 'notifications', label: 'Notifications', built: true },
-  { id: 'knowledge', label: 'Knowledge', built: true },
-  { id: 'shares', label: 'Shares', built: true },
-  { id: 'advanced', label: 'Advanced', built: true },
-  { id: 'backup', label: 'Backup', built: true },
-  { id: 'logs', label: 'Logs', built: true },
-  { id: 'about', label: 'About', built: true },
-] as const
+/** The cards of one section. Models and keys is two cards; every other section is one. */
+function SectionContent({ id, agents }: { id: string; agents: ReturnType<typeof useAgents> }) {
+  switch (id) {
+    case 'models':
+      return (
+        <>
+          <ProvidersSection agents={agents} />
+          <ModelListSection agents={agents} />
+        </>
+      )
+    case 'connections':
+      return <ConnectionsSection agents={agents} />
+    case 'rules':
+      return <RulesSection agents={agents} />
+    case 'look':
+      return <LookSection />
+    case 'notifications':
+      return <NotificationsSection />
+    case 'knowledge':
+      return <KnowledgeSection />
+    case 'shares':
+      return <SharesSection />
+    case 'advanced':
+      return <AdvancedSection />
+    case 'backup':
+      return <BackupSection />
+    case 'logs':
+      return <LogsSection />
+    case 'about':
+      return <AboutSection />
+    case 'remote-access':
+      return <RemoteSection />
+    case 'terminal':
+      return <TerminalSection />
+    default:
+      return null
+  }
+}
+
+function useAgents() {
+  return useStreamQuery(agentsQuery).data ?? []
+}
 
 export function SettingsPage() {
-  const agents = useStreamQuery(agentsQuery).data ?? []
+  const agents = useAgents()
   const narrow = useMediaQuery(NARROW_QUERY)
   const [jumpOpen, setJumpOpen] = useState(false)
-  const [current, setCurrent] = useState<string>(sections[0].label)
+  const { section: requested } = useParams()
+  const { search, hash } = useLocation()
+  const { sections, terminalPending } = useSettingsSections()
+  const content = useRef<HTMLDivElement>(null)
+  const shown = useRef<string | null>(null)
+  const current = sections.find((entry) => entry.id === requested)
+  // A deep link to Terminal waits for the status read that says whether it exists.
+  const waiting = terminalPending && (requested ?? hash.slice(1)) === 'terminal'
+  const currentId = current?.id
+  const currentLabel = current?.label
+  useEffect(() => {
+    if (currentId === undefined) return
+    const previous = shown.current
+    shown.current = currentId
+    const title = document.title
+    document.title = `${currentLabel} · Settings · Score`
+    if (previous !== null && previous !== currentId) {
+      // Moving between sections lands on the new content: the top of the page and the section's heading.
+      window.scrollTo(0, 0)
+      const heading = [...(content.current?.querySelectorAll<HTMLElement>('h2') ?? [])].find(
+        (candidate) => !candidate.closest('.settings-banner'),
+      )
+      const target = heading ?? content.current
+      target?.setAttribute('tabindex', '-1')
+      target?.focus({ preventScroll: true })
+    }
+    return () => {
+      document.title = title
+    }
+  }, [currentId, currentLabel])
+  if (waiting) return null
+  if (!current) {
+    // `/settings` (and an unknown section) shows the first one; `/settings#<id>` is the old way to name a section.
+    const fromHash = sections.find((entry) => entry.id === hash.slice(1))
+    const target = requested === undefined ? (fromHash ?? firstSection) : firstSection
+    return <Navigate replace to={{ pathname: settingsPath(target.id), search }} />
+  }
   return (
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings sections">
@@ -54,7 +120,7 @@ export function SettingsPage() {
             >
               <span>
                 <small>Section</small>
-                {current}
+                {current.label}
               </span>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                 <path
@@ -68,22 +134,15 @@ export function SettingsPage() {
             </button>
             {jumpOpen && (
               <div id="settings-jump-list" className="settings-jump-list">
-                {[
-                  ...sections,
-                  ...(remoteTransport()
-                    ? [{ id: 'remote-access', label: 'Remote access', built: true }]
-                    : []),
-                ].map((section) => (
-                  <a
+                {sections.map((section) => (
+                  <Link
                     key={section.id}
-                    href={`#${section.id}`}
-                    onClick={() => {
-                      setCurrent(section.label)
-                      setJumpOpen(false)
-                    }}
+                    to={settingsPath(section.id)}
+                    aria-current={section.id === current.id ? 'page' : undefined}
+                    onClick={() => setJumpOpen(false)}
                   >
                     {section.label}
-                  </a>
+                  </Link>
                 ))}
               </div>
             )}
@@ -91,31 +150,17 @@ export function SettingsPage() {
         ) : (
           <>
             {sections.map((section) => (
-              <a key={section.id} href={`#${section.id}`}>
+              <NavLink key={section.id} to={settingsPath(section.id)}>
                 {section.label}
-              </a>
+              </NavLink>
             ))}
             <p>Settings for one agent are on that agent’s page in Team.</p>
-            {remoteTransport() && <a href="#remote-access">Remote access</a>}
           </>
         )}
       </nav>
-      <div className="settings-content">
+      <div className="settings-content" ref={content}>
         <HermesVersionBanner />
-        <ProvidersSection agents={agents} />
-        <ModelListSection agents={agents} />
-        <ConnectionsSection agents={agents} />
-        <RulesSection agents={agents} />
-        <LookSection />
-        <NotificationsSection />
-        <KnowledgeSection />
-        <SharesSection />
-        <AdvancedSection />
-        <BackupSection />
-        <LogsSection />
-        <AboutSection />
-        <RemoteSection />
-        <TerminalSection />
+        <SectionContent id={current.id} agents={agents} />
       </div>
     </div>
   )

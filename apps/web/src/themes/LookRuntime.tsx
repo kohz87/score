@@ -190,11 +190,11 @@ function LookBanner({
     <div className="look-banner" role="status" data-protected="flex">
       <span>{safe ? 'Safe look: your theme is off for this visit' : failure}</span>
       <a
-        href="/settings#look"
+        href="/settings/look"
         onClick={(event) => {
           if (!router) return
           event.preventDefault()
-          void router.navigate('/settings#look')
+          void router.navigate('/settings/look')
         }}
       >
         Settings › Look

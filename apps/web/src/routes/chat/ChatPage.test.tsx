@@ -574,7 +574,7 @@ test('side panels show empty states for every card', async () => {
   expect(aside.getByText('Nothing saved from this room yet.')).toBeDefined()
   expect(aside.getByText('Not mirrored to any channel.')).toBeDefined()
   expect(aside.getByRole('link', { name: 'Manage channels' }).getAttribute('href')).toBe(
-    '/settings',
+    '/settings/connections',
   )
 })
 test('side panels list files, learned facts with memory links, and channels', async () => {

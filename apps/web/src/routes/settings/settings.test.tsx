@@ -87,12 +87,12 @@ beforeEach(() => {
     }),
   )
 })
-function mount() {
+function mount(path = '/settings') {
   const queryClient = createQueryClient()
   queryClient.setDefaultOptions({ queries: { retry: false } })
   stream = createStreamClient({ EventSourceImpl: MockEventSource, random: () => 0.5 })
   registry = createStreamQueryRegistry(queryClient, stream)
-  router = createMemoryRouter(appRoutes, { initialEntries: ['/settings'] })
+  router = createMemoryRouter(appRoutes, { initialEntries: [path] })
   render(
     <QueryClientProvider client={queryClient}>
       <StreamContext value={{ client: stream, queries: registry }}>
@@ -110,7 +110,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('shows the section nav, providers with status and who uses them, and connections', async () => {
+test('shows the section nav, providers with status and who uses them, and connections on their own pages', async () => {
   mount()
   const nav = screen.getByRole('navigation', { name: 'Settings sections' })
   expect(within(nav).getAllByRole('link')).toHaveLength(11)
@@ -120,7 +120,11 @@ test('shows the section nav, providers with status and who uses them, and connec
   expect(within(models).getByText('Sign in again')).toBeDefined()
   expect(within(models).getByText('API key (1)')).toBeDefined()
   await waitFor(() => expect(within(models).getByRole('img', { name: /Builder/ })).toBeDefined())
+  // One section per page: Connections is not on the Models page.
+  expect(screen.queryByRole('region', { name: 'Connections' })).toBeNull()
+  fireEvent.click(within(nav).getByRole('link', { name: 'Connections' }))
   const connectionsRegion = await screen.findByRole('region', { name: 'Connections' })
+  expect(screen.queryByRole('region', { name: 'Models and keys' })).toBeNull()
   expect(await within(connectionsRegion).findByText('files')).toBeDefined()
   expect(within(connectionsRegion).getByText(/Everyone/)).toBeDefined()
   expect(within(connectionsRegion).getByText('Auth failed')).toBeDefined()
@@ -219,7 +223,7 @@ test('messaging setup: a form from the field metadata, secret toggle, save, rest
   messagingRespond(() =>
     json({ platform: 'slack', label: 'Slack', status: 'disconnected', detail: null }),
   )
-  mount()
+  mount('/settings/connections')
   fireEvent.click(await screen.findByRole('button', { name: 'Connect Slack' }))
   const form = await screen.findByRole('form', { name: 'Connect Slack' })
   const token = within(form).getByLabelText(/Bot token/, { selector: 'input' }) as HTMLInputElement
@@ -241,7 +245,7 @@ test('messaging setup: a form from the field metadata, secret toggle, save, rest
 })
 test('messaging setup: a failed save shows an error and clears the token', async () => {
   messagingRespond(() => json({ error: { code: 'not_paired', message: 'x' } }, 401))
-  mount()
+  mount('/settings/connections')
   fireEvent.click(await screen.findByRole('button', { name: 'Connect Slack' }))
   const form = await screen.findByRole('form', { name: 'Connect Slack' })
   const token = within(form).getByLabelText(/Bot token/, { selector: 'input' }) as HTMLInputElement
@@ -256,7 +260,7 @@ test('messaging setup: a pairing platform explains that it needs the terminal', 
     path === '/api/settings/messaging/slack/fields'
       ? json({ fields: [], browserSetup: false })
       : base(path, init)
-  mount()
+  mount('/settings/connections')
   fireEvent.click(await screen.findByRole('button', { name: 'Connect Slack' }))
   expect(await screen.findByText(/This one needs the terminal/)).toBeDefined()
   expect(screen.getByText('hermes gateway setup')).toBeDefined()
@@ -296,7 +300,7 @@ async function stageTurns() {
 test('advanced: collapsed by default, opens on click or on a search, and remembers the choice', async () => {
   window.localStorage.clear()
   advancedRespond(() => json({ ok: true, restartRequired: false }))
-  mount()
+  mount('/settings/advanced')
   const advanced = await screen.findByRole('region', { name: 'Advanced' })
   const toggle = await within(advanced).findByRole('button', { name: 'Show all 2 settings' })
   expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -313,7 +317,7 @@ test('advanced: collapsed by default, opens on click or on a search, and remembe
   expect(within(advanced).getByRole('list', { name: 'Settings' })).toBeDefined()
   cleanup()
   window.localStorage.setItem('score.settings.advancedOpen', '1')
-  mount()
+  mount('/settings/advanced')
   expect(await screen.findByRole('list', { name: 'Settings' })).toBeDefined()
   window.localStorage.clear()
 })
@@ -325,7 +329,7 @@ test('advanced: while a search is on its way only matching settings show, never 
     path.startsWith('/api/settings/config?q=turn')
       ? (new Promise<Response>(() => undefined) as unknown as Response)
       : base(path, init)
-  mount()
+  mount('/settings/advanced')
   const advanced = await screen.findByRole('region', { name: 'Advanced' })
   await within(advanced).findByRole('button', { name: 'Show all 2 settings' })
   fireEvent.change(within(advanced).getByRole('searchbox', { name: 'Search settings' }), {
@@ -345,7 +349,7 @@ test('advanced: blocked storage still opens the list', async () => {
     throw new Error('blocked')
   })
   advancedRespond(() => json({ ok: true, restartRequired: false }))
-  mount()
+  mount('/settings/advanced')
   fireEvent.click(await screen.findByRole('button', { name: 'Show all 2 settings' }))
   expect(screen.getByRole('list', { name: 'Settings' })).toBeDefined()
   vi.restoreAllMocks()
@@ -353,7 +357,7 @@ test('advanced: blocked storage still opens the list', async () => {
 
 test('advanced: search, stage a change, preview the diff, then apply with the hash', async () => {
   advancedRespond(() => json({ ok: true, restartRequired: true }))
-  mount()
+  mount('/settings/advanced')
   const advanced = await stageTurns()
   const apply = within(advanced).getByRole('button', { name: 'Apply' })
   expect((apply as HTMLButtonElement).disabled).toBe(true)
@@ -370,7 +374,7 @@ test('advanced: search, stage a change, preview the diff, then apply with the ha
 })
 test('advanced: a 409 asks for a new preview and disables apply', async () => {
   advancedRespond(() => json({ error: { code: 'conflict', message: 'Changed' } }, 409))
-  mount()
+  mount('/settings/advanced')
   const advanced = await stageTurns()
   fireEvent.click(within(advanced).getByRole('button', { name: 'Preview' }))
   await within(advanced).findByText(/\+agent.max_turns: 30/)
@@ -381,7 +385,7 @@ test('advanced: a 409 asks for a new preview and disables apply', async () => {
 })
 test('advanced: editing after a preview clears the diff', async () => {
   advancedRespond(() => json({ ok: true, restartRequired: false }))
-  mount()
+  mount('/settings/advanced')
   const advanced = await stageTurns()
   fireEvent.click(within(advanced).getByRole('button', { name: 'Preview' }))
   await within(advanced).findByText(/\+agent.max_turns: 30/)
@@ -393,7 +397,7 @@ test('advanced: a change staged while an apply is in flight stays pending after 
   let release!: () => void
   applyGate = new Promise<void>((resolve) => (release = resolve))
   advancedRespond(() => json({ ok: true, restartRequired: false }))
-  mount()
+  mount('/settings/advanced')
   const advanced = await stageTurns()
   fireEvent.click(within(advanced).getByRole('button', { name: 'Preview' }))
   await within(advanced).findByText(/\+agent.max_turns: 30/)
@@ -412,7 +416,7 @@ test('advanced: a change staged while an apply is in flight stays pending after 
 
 test('theme choice applies data-theme, is remembered, and System clears it', async () => {
   window.localStorage.clear()
-  mount()
+  mount('/settings/look')
   const look = await screen.findByRole('region', { name: 'Look' })
   // Plugins are per agent and live on the Team page now.
   expect(screen.queryByText('Hermes plugins')).toBeNull()
@@ -436,7 +440,7 @@ test('theme still switches when storage is blocked', async () => {
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
     throw new Error('blocked')
   })
-  mount()
+  mount('/settings/look')
   const group = await screen.findByRole('radiogroup', { name: 'Theme' })
   fireEvent.click(within(group).getByRole('radio', { name: 'Dark' }))
   expect(document.documentElement.getAttribute('data-theme')).toBe('dark')

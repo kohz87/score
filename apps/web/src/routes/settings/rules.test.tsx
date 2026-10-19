@@ -113,7 +113,7 @@ afterEach(() => {
 })
 
 test('Settings shows the three columns, the approval style with plain consequences and the guardrail note', async () => {
-  mount('/settings')
+  mount('/settings/rules')
   const section = await screen.findByRole('region', { name: 'Rules and approvals' })
   const go = await within(section).findByRole('group', { name: 'Go ahead' })
   expect(within(go).getByText('SQL DROP')).toBeDefined()
@@ -142,7 +142,7 @@ test('editing is staged: review shows the dry-run diff, saving sends the full ba
       : path === '/api/settings/rules' && method === 'PUT'
         ? json({ ...rules, mode: 'manual', failed: [] })
         : undefined
-  mount('/settings')
+  mount('/settings/rules')
   const section = await screen.findByRole('region', { name: 'Rules and approvals' })
   await within(section).findByRole('group', { name: 'Go ahead' })
   expect(within(section).queryByRole('button', { name: 'Review changes' })).toBeNull()
@@ -190,7 +190,7 @@ test('an edit made while a save is in flight stays as an unsaved draft', async (
       ? gate.then(() => json({ ...rules, mode: 'manual', failed: [] }))
       : inner(path, init),
   )
-  mount('/settings')
+  mount('/settings/rules')
   const section = await screen.findByRole('region', { name: 'Rules and approvals' })
   await within(section).findByRole('group', { name: 'Go ahead' })
   fireEvent.click(within(section).getByRole('radio', { name: /Always ask me/ }))
@@ -211,7 +211,7 @@ test('Apply team rules re-applies the baseline to a drifted agent', async () => 
     method === 'POST' && path === '/api/settings/rules/apply/builder'
       ? json({ ...rules, drift: [{ agentId: 'builder', differs: false }] })
       : undefined
-  mount('/settings')
+  mount('/settings/rules')
   fireEvent.click(await screen.findByRole('button', { name: 'Apply team rules to Builder' }))
   await waitFor(() =>
     expect(calls.some((call) => call.path === '/api/settings/rules/apply/builder')).toBe(true),
@@ -274,7 +274,7 @@ test('a preview that returns after the draft changed is ignored, and Save sends 
     }
     return original(path, init)
   })
-  mount('/settings')
+  mount('/settings/rules')
   const section = await screen.findByRole('region', { name: 'Rules and approvals' })
   await within(section).findByRole('group', { name: 'Go ahead' })
   fireEvent.click(within(section).getByRole('radio', { name: /Always ask me/ }))

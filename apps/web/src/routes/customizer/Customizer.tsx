@@ -646,7 +646,7 @@ export function Customizer() {
     return (
       <div className="cz cz-empty">
         <p role="alert">{loadProblem}</p>
-        <Link className="cz-btn cz-error-back" to="/settings#look" data-protected="raised">
+        <Link className="cz-btn cz-error-back" to="/settings/look" data-protected="raised">
           Back to Settings
         </Link>
         <WayBackPalette />
@@ -685,7 +685,7 @@ export function Customizer() {
   return (
     <div className="cz" data-pane={pane}>
       <header className="cz-bar">
-        <Link className="cz-back" to="/settings#look" data-protected="raised">
+        <Link className="cz-back" to="/settings/look" data-protected="raised">
           <svg
             width="16"
             height="16"

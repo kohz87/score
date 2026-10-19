@@ -12,7 +12,7 @@ test('fake Chat shows the room side panels and collapses them on a narrow window
   await expect(panels.getByRole('heading', { name: 'Also reachable on' })).toBeVisible()
   await expect(panels.getByRole('link', { name: 'Manage channels' })).toHaveAttribute(
     'href',
-    '/settings',
+    '/settings/connections',
   )
   await page.setViewportSize({ width: 900, height: 900 })
   await expect(panels).toBeHidden()

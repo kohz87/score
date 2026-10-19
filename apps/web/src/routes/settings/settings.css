@@ -27,7 +27,7 @@
   color: var(--chat-secondary);
   text-decoration: none;
 }
-.settings-nav a:first-of-type {
+.settings-nav a[aria-current='page'] {
   background: var(--card);
   border-color: var(--hairline);
   color: var(--ink);
@@ -37,6 +37,10 @@
   margin: 18px 12px 0;
   font-size: 13px;
   color: var(--muted);
+}
+/* The heading a section change moves focus to is not a control: no ring on it. */
+.settings-content [tabindex='-1']:focus {
+  outline: none;
 }
 .settings-content {
   flex: 999 1 640px;
@@ -914,9 +918,12 @@
   .settings-jump-list a:focus-visible {
     background: var(--subtle);
   }
-  .settings-nav a:first-of-type {
+  .settings-nav a[aria-current='page'] {
     background: transparent;
     border-color: transparent;
+  }
+  .settings-jump-list a[aria-current='page'] {
+    font-weight: 600;
   }
   .settings-content {
     flex: none;

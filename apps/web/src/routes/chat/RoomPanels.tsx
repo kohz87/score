@@ -99,7 +99,7 @@ export function RoomPanels({ roomId, agents }: { roomId: string; agents: AgentSu
             ) : (
               <p className="chat-side-empty">Not mirrored to any channel.</p>
             ))}
-          <Link to="/settings">Manage channels</Link>
+          <Link to="/settings/connections">Manage channels</Link>
         </section>
       </aside>
     </div>

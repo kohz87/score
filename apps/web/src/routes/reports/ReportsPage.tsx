@@ -262,7 +262,7 @@ function Approvals({ approvals }: { approvals: Reports['approvals'] }) {
         <span>{denied} denied</span>
       </div>
       {approvals.insight && <p className="reports-approvals__insight">{approvals.insight}</p>}
-      <Link to="/settings#rules">Review rules</Link>
+      <Link to="/settings/rules">Review rules</Link>
     </section>
   )
 }
