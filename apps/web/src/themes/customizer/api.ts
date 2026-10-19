@@ -6,7 +6,7 @@ import {
   type ThemeManifest,
   themeAssetUrl,
 } from '@score/contract'
-import { ApiError, apiFetch } from '../../data/api.ts'
+import { ApiError, apiFetch, apiUpload, type UploadProgress } from '../../data/api.ts'
 import { LICENSE_FILES } from './package.ts'
 import type { SaveFiles } from './save.ts'
 import { ThemeChangedError } from './snapshot.ts'
@@ -35,17 +35,23 @@ export async function loadTheme(id: string): Promise<ThemeDetail> {
 /** Sends a theme zip. `replace` overwrites an installed or custom theme with the same id (never a built-in). */
 export async function installThemeZip(
   bytes: Uint8Array,
-  options: { replace?: boolean; ifMatch?: string | null } = {},
+  options: {
+    replace?: boolean
+    ifMatch?: string | null
+    onProgress?: (progress: UploadProgress) => void
+  } = {},
 ): Promise<ThemeImportResult> {
   const form = new FormData()
   form.append('file', new Blob([bytes as BlobPart], { type: 'application/zip' }), 'theme.zip')
   return ThemeImportResultSchema.parse(
-    await apiFetch(`themes/import${options.replace ? '?replace=1' : ''}`, {
-      method: 'POST',
-      body: form,
+    await apiUpload(
+      `themes/import${options.replace ? '?replace=1' : ''}`,
+      form,
+      options.onProgress,
       // A replace that must not overwrite a newer version: the server compares this with the stored theme's etag.
-      ...(options.replace && options.ifMatch ? { headers: { 'If-Match': options.ifMatch } } : {}),
-    }),
+      options.replace && options.ifMatch ? { 'If-Match': options.ifMatch } : {},
+      'POST',
+    ),
   )
 }
 

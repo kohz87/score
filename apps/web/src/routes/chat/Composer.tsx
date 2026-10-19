@@ -4,7 +4,8 @@ import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph, agentTint } from '../../components/AgentGlyph.tsx'
-import { apiFetch, ApiError } from '../../data/api.ts'
+import { apiFetch, apiUpload, ApiError, type UploadProgress as Progress } from '../../data/api.ts'
+import { UploadProgress } from '../../components/UploadProgress.tsx'
 import { agentTextColor } from './agent-text-color.ts'
 import {
   insertMention,
@@ -131,6 +132,11 @@ export function Composer({
   })
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(0)
+  // Each file being sent has its own chip in the tray, keyed by a counter so two files of one name stay apart.
+  const [sendingFiles, setSendingFiles] = useState<
+    { key: number; name: string; progress: Progress }[]
+  >([])
+  const sendingKey = useRef(0)
   const [attachMenu, setAttachMenu] = useState(false)
   const [pickingWorkspace, setPickingWorkspace] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -346,10 +352,19 @@ export function Composer({
       }
       uploadsInFlight.current += 1
       setUploading((count) => count + 1)
+      const key = (sendingKey.current += 1)
+      const name = file.name || 'pasted-file'
+      const track = (progress: Progress) =>
+        setSendingFiles((current) =>
+          current.some((item) => item.key === key)
+            ? current.map((item) => (item.key === key ? { ...item, progress } : item))
+            : [...current, { key, name, progress }],
+        )
+      track({ loaded: 0, total: file.size })
       try {
         const form = new FormData()
-        form.append('file', file, file.name || 'pasted-file')
-        const stored = parseUpload(await apiFetch('media', { method: 'POST', body: form }))
+        form.append('file', file, name)
+        const stored = parseUpload(await apiUpload('media', form, track, {}, 'POST'))
         changeAttachments((current) =>
           current.length >= MAX_ATTACHMENTS ||
           current.some((item) => attachmentKey(item) === stored.mediaId)
@@ -365,6 +380,7 @@ export function Composer({
               : 'couldn’t be uploaded'
         setNotice({ kind: 'error', text: `${file.name} ${reason}.` })
       } finally {
+        setSendingFiles((current) => current.filter((item) => item.key !== key))
         uploadsInFlight.current -= 1
         setUploading((count) => count - 1)
       }
@@ -810,7 +826,16 @@ export function Composer({
                 </button>
               </li>
             ))}
-            {uploading > 0 && <li className="chat-attachment">Uploading…</li>}
+            {sendingFiles.map((item) => (
+              <li key={item.key} className="chat-attachment">
+                <UploadProgress
+                  name={item.name}
+                  progress={item.progress}
+                  after="Checking…"
+                  compact
+                />
+              </li>
+            ))}
           </ul>
         )}
         {knowledgeFlow.dialogs}

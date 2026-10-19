@@ -31,7 +31,8 @@ function failure(path: string, status: number, payload: unknown): ApiError {
   )
 }
 
-export type UploadProgress = { loaded: number; total: number }
+/** Bytes sent so far; `done` is set once all of them are out (also for an empty body), and the server takes over. */
+export type UploadProgress = { loaded: number; total: number; done?: boolean }
 
 /** The bytes of a body, for a progress total when the browser can't say: a file, or every file in a form. */
 function bodySize(body: Blob | FormData): number {
@@ -42,7 +43,7 @@ function bodySize(body: Blob | FormData): number {
 }
 
 /**
- * A PUT of a file body that reports how much has been sent (fetch can't): XMLHttpRequest with the same headers and
+ * A PUT (or POST, via `method`) of a file body that reports how much has been sent (fetch can't): XMLHttpRequest with the same headers and
  * errors as apiFetch. `onProgress` gets bytes sent; once all are sent the server is still working on them. A `Blob`
  * goes as `application/octet-stream`; a `FormData` (several files, a pet pack) is left to the browser, which sets its
  * multipart type and boundary. `headers` adds any more, such as an `Idempotency-Key`.
@@ -52,20 +53,27 @@ export function apiUpload(
   body: Blob | FormData,
   onProgress?: (progress: UploadProgress) => void,
   headers: Record<string, string> = {},
+  method: 'PUT' | 'POST' = 'PUT',
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
-    request.open('PUT', `/api/${path.replace(/^\/+/, '')}`)
+    request.open(method, `/api/${path.replace(/^\/+/, '')}`)
     request.setRequestHeader('X-Score-Client', 'web')
     if (body instanceof Blob) request.setRequestHeader('content-type', 'application/octet-stream')
     for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value)
     request.responseType = 'text'
-    if (onProgress)
+    if (onProgress) {
       request.upload.onprogress = (event) =>
         onProgress({
           loaded: event.loaded,
           total: event.lengthComputable ? event.total : bodySize(body),
         })
+      // `load` fires when the whole body is out, even an empty one that never gets a progress event.
+      request.upload.onload = () => {
+        const total = bodySize(body)
+        onProgress({ loaded: total, total, done: true })
+      }
+    }
     request.onload = () => {
       let payload: unknown
       try {

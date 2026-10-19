@@ -464,3 +464,9 @@ brief `docs/briefs/10.6-knowledge-large.md`. Files up to 256 MB are stored (zips
 file); text is read, indexed and previewed only up to 25 MB (`textStatus: 'too_large'` above). Done when: a 100 MB
 upload, a 100 MB zip's preview + unzip, and a 100 MB download work in tests without the server reading a big file into
 memory more than once per request; a big PDF is stored with `too_large` and never sent to the text worker.
+
+**10.4 Upload progress everywhere** (owner 2026-10-19: "also include upload progress for big files") · brief
+`docs/briefs/10.4-upload-progress.md`. Every upload shows what is being sent and how far it is (percent and megabytes),
+then what the server is doing: agent import (up to 200 MB), chat attachments, workspace uploads, theme zip installs and
+Knowledge editor images, as Knowledge files (1.9.5) and pet packs (1.10.0) already do. Done when: each of those shows
+a live percentage while sending and a named step after, with tests that drive the progress events.

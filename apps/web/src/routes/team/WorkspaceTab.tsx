@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react'
-import { ApiError } from '../../data/api.ts'
+import { ApiError, type UploadProgress as Progress } from '../../data/api.ts'
+import { UploadProgress } from '../../components/UploadProgress.tsx'
 import { useTreeWidth, MAX_TREE, MIN_TREE } from './workspace-split.ts'
 import { discardDraftsUnder, WorkspaceFile } from './WorkspaceFile.tsx'
 import { join, parentOf, TreeLevel, type Selection } from './WorkspaceTree.tsx'
@@ -147,6 +148,8 @@ function Browser({
   const [needsTyping, setNeedsTyping] = useState(false)
   const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [sending, setSending] = useState<{ id: number; name: string; progress: Progress }[]>([])
+  const uploadId = useRef(0)
   const picker = useRef<HTMLInputElement>(null)
   const grid = useRef<HTMLDivElement>(null)
   const split = useTreeWidth(grid)
@@ -235,11 +238,26 @@ function Browser({
   async function upload(files: File[]) {
     setNotice('')
     for (const file of files) {
+      // Uploads can overlap (a second pick while the first is out): each has its own line, keyed by its own id.
+      const id = (uploadId.current += 1)
+      const track = (progress: Progress) =>
+        setSending((current) =>
+          current.some((item) => item.id === id)
+            ? current.map((item) => (item.id === id ? { ...item, progress } : item))
+            : [...current, { id, name: file.name, progress }],
+        )
+      track({ loaded: 0, total: file.size })
       try {
-        await actions.upload.mutateAsync({ path: join(dir, file.name), file })
+        await actions.upload.mutateAsync({
+          path: join(dir, file.name),
+          file,
+          onProgress: track,
+        })
         setNotice(`Uploaded ${file.name}.`)
       } catch {
         return
+      } finally {
+        setSending((current) => current.filter((item) => item.id !== id))
       }
     }
     expandTo(join(dir, 'x'))
@@ -412,9 +430,20 @@ function Browser({
             </div>
           )}
           {failure && <p role="alert">{failure}</p>}
-          <p className="team-muted" role="status">
-            {actions.upload.isPending ? 'Uploading…' : notice}
-          </p>
+          {sending.length > 0 ? (
+            sending.map((item) => (
+              <UploadProgress
+                key={item.id}
+                name={item.name}
+                progress={item.progress}
+                after="Saving…"
+              />
+            ))
+          ) : (
+            <p className="team-muted" role="status">
+              {notice}
+            </p>
+          )}
           <TreeLevel
             agentId={agentId}
             path=""

@@ -10,7 +10,8 @@ import {
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { AgentAppearanceFields } from './AgentAppearanceFields.tsx'
-import { apiFetch } from '../../data/api.ts'
+import { apiFetch, apiUpload, type UploadProgress as Progress } from '../../data/api.ts'
+import { UploadProgress } from '../../components/UploadProgress.tsx'
 import { newId } from '../../data/ids.ts'
 import { AgentAdded } from './AgentAdded.tsx'
 import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
@@ -65,18 +66,23 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
     dialog.current?.showModal?.()
   }, [])
 
+  const [sending, setSending] = useState<{ name: string; progress: Progress } | null>(null)
   const upload = useMutation({
     mutationFn: async (file: File) => {
       if (file.size > PROFILE_IMPORT_MAX_BYTES)
         throw new Error('The archive is larger than 200 MB.')
+      setSending({ name: file.name, progress: { loaded: 0, total: file.size } })
       return ImportInspectionSchema.parse(
-        await apiFetch('agents/imports', {
-          method: 'POST',
-          headers: { 'content-type': 'application/octet-stream' },
-          body: file,
-        }),
+        await apiUpload(
+          'agents/imports',
+          file,
+          (progress) => setSending({ name: file.name, progress }),
+          {},
+          'POST',
+        ),
       )
     },
+    onSettled: () => setSending(null),
     onSuccess: (result) => {
       setInspection(result)
       setId(result.suggestedId ?? '')
@@ -167,7 +173,13 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
                   }}
                 />
               </label>
-              {upload.isPending && <p aria-live="polite">Reading the archive…</p>}
+              {upload.isPending && sending && (
+                <UploadProgress
+                  name={sending.name}
+                  progress={sending.progress}
+                  after="Checking the archive…"
+                />
+              )}
               {upload.error && <p role="alert">{upload.error.message}</p>}
             </div>
           ) : (

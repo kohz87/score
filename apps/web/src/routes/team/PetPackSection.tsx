@@ -1,7 +1,8 @@
 import { AgentSummarySchema, type AgentSummary } from '@score/contract'
 import { useMutation } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { ApiError, apiFetch, apiUpload, type UploadProgress } from '../../data/api.ts'
+import { ApiError, apiFetch, apiUpload, type UploadProgress as Progress } from '../../data/api.ts'
+import { UploadProgress } from '../../components/UploadProgress.tsx'
 import { newId } from '../../data/ids.ts'
 import { packProblems } from './pack-errors.ts'
 import { PetPackGuide } from './PetPackGuide.tsx'
@@ -11,32 +12,6 @@ const FILE_MAX_BYTES = 32 * 1024 * 1024
 const PACK_MAX_BYTES = 256 * 1024 * 1024
 
 type Added = { activities: string[]; ignored: string[] }
-
-const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
-
-/** How far the upload has got: bytes sent, then what the server is doing once it has them all. */
-export function PackUploadProgress({ name, progress }: { name: string; progress: UploadProgress }) {
-  const { loaded, total } = progress
-  const sent = total > 0 && loaded >= total
-  const percent = total > 0 ? Math.round((loaded / total) * 100) : 0
-  const doing = sent ? 'Checking the pack…' : 'Uploading'
-  return (
-    <div className="team-pack-progress" role="status" aria-live="polite">
-      <p>
-        <strong>{name}</strong>
-      </p>
-      <p>
-        {doing}
-        {sent ? null : ` · ${percent}% · ${megabytes(loaded)} of ${megabytes(total)}`}
-      </p>
-      {sent ? (
-        <progress aria-label={`${name}: ${doing}`} />
-      ) : (
-        <progress aria-label={`${name}: ${doing}`} max={total} value={loaded} />
-      )}
-    </div>
-  )
-}
 
 /** The heading over the server's reasons: the zip or file by name, or how many files the pack was. */
 export function refusedLabel(files: readonly File[]): string {
@@ -67,7 +42,7 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
   // Which upload the server's reasons are about (owner: say which file failed), shown above them.
   const [refused, setRefused] = useState<string | null>(null)
   const [added, setAdded] = useState<Added | null>(null)
-  const [progress, setProgress] = useState<UploadProgress | null>(null)
+  const [progress, setProgress] = useState<Progress | null>(null)
   const pack = agent.style.pack
   const base = `agents/${encodeURIComponent(agent.id)}/pack`
   const upload = useMutation({
@@ -156,7 +131,8 @@ export function PetPackSection({ agent }: { agent: AgentSummary }) {
         </ul>
       )}
       {upload.isPending && progress && (
-        <PackUploadProgress
+        <UploadProgress
+          after="Checking the pack…"
           name={files.length === 1 ? files[0]!.name : `${files.length} files`}
           progress={progress}
         />

@@ -568,7 +568,10 @@ test('an upload shows how far it has got, then that the pack is being checked', 
   class Controlled {
     static last: Controlled
     headers: Record<string, string> = {}
-    upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null }
+    upload: {
+      onprogress: ((event: ProgressEvent) => void) | null
+      onload: (() => void) | null
+    } = { onprogress: null, onload: null }
     onload: (() => void) | null = null
     onerror: (() => void) | null = null
     status = 200
@@ -613,6 +616,7 @@ test('an upload shows how far it has got, then that the pack is being checked', 
   expect(status.querySelector('progress')?.getAttribute('value')).toBe(String(3.1 * 1024 * 1024))
   act(() => {
     xhr.upload.onprogress?.({ loaded: total, total, lengthComputable: true } as ProgressEvent)
+    xhr.upload.onload?.()
   })
   expect(status.textContent).toContain('Checking the pack…')
   expect(status.textContent).not.toContain('%')

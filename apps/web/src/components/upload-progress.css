@@ -1,0 +1,16 @@
+.upload-progress progress {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  height: 6px;
+  accent-color: var(--ink, #12131a);
+}
+.upload-progress p {
+  margin: 0 0 4px;
+}
+.upload-progress-compact {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+}
