@@ -274,3 +274,56 @@ describe('third gate finding 3: non-text contrast of glyphs and Needs-you dots',
     expect(findProtectedViolation()).toBeNull()
   })
 })
+
+// PLAN 10.2b: glyph parts that Score animates (thought dots, the floor shadow) read a different `transform` every time
+// they are sampled, and a picture is an SVG <image>. The shape signature must not call Score's own motion a theme's
+// doing, and must still catch a theme that hides or moves the real shapes.
+describe('10.2b: the shape signature with animated glyph parts and pictures', () => {
+  const thinking = `<div id="row"><span id="g" class="agent-glyph" data-protected="inline-flex" role="img" aria-label="lead" style="--glyph-color: #6b4eff; background-color: #ffffff"><svg viewBox="0 0 20 20"><ellipse id="shadow" class="agent-glyph__shadow" cx="10" cy="19.4" rx="5" ry="0.9"/><g class="agent-glyph__body"><path id="body" class="agent-glyph__solid" d="M10 3 L17.5 16 H2.5 Z"/><image id="pic" class="agent-glyph__image" href="/api/agents/lead/avatar?rev=r1" x="0.5" y="0" width="19" height="19"/></g><g class="agent-glyph__dots"><circle id="dot1" class="agent-glyph__dot" cx="16.2" cy="3.2" r="0.75"/><circle id="dot2" class="agent-glyph__dot" cx="18.2" cy="1.6" r="0.95"/></g></svg></span></div>`
+  const staged = () => {
+    document.body.innerHTML = thinking
+    rects = { row: [0, 0, 80, 40], g: [0, 0, 34, 34] }
+  }
+  /** Every read of these parts answers a new transform, as a running animation would. */
+  function animate(ids: string[]) {
+    const real = window.getComputedStyle.bind(window)
+    let tick = 0
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      (element: Element, pseudo?: string | null) => {
+        const style = real(element, pseudo)
+        if (!ids.includes(element.id)) return style
+        return new Proxy(style, {
+          get(target, key) {
+            if (key === 'transform') return `translateY(-${++tick}px)`
+            const value = Reflect.get(target, key)
+            return typeof value === 'function' ? value.bind(target) : value
+          },
+        })
+      },
+    )
+  }
+
+  test('moving thought dots and a breathing shadow are not a changed shape', () => {
+    staged()
+    animate(['dot1', 'dot2', 'shadow'])
+    expect(findProtectedViolation()).toBeNull()
+  })
+
+  test('a transform on the real body is still a changed shape (only Score’s own animated parts are exempt)', () => {
+    staged()
+    animate(['body'])
+    expect(findProtectedViolation()).toBe('lead changed shape')
+  })
+
+  test('a picture a theme hides is a changed shape', () => {
+    staged()
+    stage({ pic: { display: 'none' } })
+    expect(findProtectedViolation()).toBe('lead changed shape')
+  })
+
+  test('a dot a theme hides is still a changed shape', () => {
+    staged()
+    stage({ dot1: { display: 'none' } })
+    expect(findProtectedViolation()).toBe('lead changed shape')
+  })
+})
