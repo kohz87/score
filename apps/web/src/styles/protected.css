@@ -102,11 +102,17 @@
     visibility: visible !important;
     filter: none !important;
     clip-path: none !important;
-    mask: none !important;
     mix-blend-mode: normal !important;
     translate: none !important;
     rotate: none !important;
     scale: none !important;
+  }
+  /* No mask either, except the one a cut-out mark cuts its eyes with (the glyph's own, named by Score's class: a theme
+     can't add one, and the guard still compares the computed mask of every shape). */
+  html[data-look='custom'] [data-protected] svg,
+  html[data-look='custom'] [data-protected] svg *:not(.agent-glyph__mark),
+  html[data-look='custom'] svg[data-protected] *:not(.agent-glyph__mark) {
+    mask: none !important;
   }
   /* No generated text or boxes (a fake "Approve" laid over the real one): none of these surfaces draws any. */
   html[data-look='custom'] [data-protected]::before,

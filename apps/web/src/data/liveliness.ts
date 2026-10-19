@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from 'react'
 
-/** How much the agents' pet corners move on this device (Settings › Look). A per-device choice, like the colour mode. */
+/** How much agents move on this device (Settings › Look): pet avatars and marks. A per-device choice, like the colour mode. */
 export type Liveliness = 'lively' | 'calm' | 'still'
 export const livelinessChoices: Liveliness[] = ['lively', 'calm', 'still']
 const STORAGE_KEY = 'score.liveliness'
-/** Fired on window when this device's choice changes, so the pet corners on the page follow at once. */
+/** Fired on window when this device's choice changes, so the pets and marks on the page follow at once. */
 export const LIVELINESS_CHANGED = 'score:liveliness-changed'
 
 const PHONE = '(max-width: 599px)'
@@ -72,6 +72,19 @@ function subscribe(onChange: () => void): () => void {
     window.removeEventListener('storage', onChange)
     for (const list of lists) list.removeEventListener?.('change', onChange)
   }
+}
+
+/**
+ * Mirrors the effective liveliness on the page root (`data-liveliness`), so the stylesheets can stand every mark still
+ * under Still without each mark subscribing. Applied now and again whenever the choice, the screen size or the OS
+ * reduced-motion setting changes. Returns the cleanup.
+ */
+export function watchLiveliness(): () => void {
+  const apply = () => {
+    document.documentElement.dataset.liveliness = effectiveLiveliness()
+  }
+  apply()
+  return subscribe(apply)
 }
 
 /** The effective liveliness for this device, live: a new choice, another tab, a resized window or the OS setting. */

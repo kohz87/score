@@ -275,13 +275,13 @@ describe('third gate finding 3: non-text contrast of glyphs and Needs-you dots',
   })
 })
 
-// PLAN 10.2b: glyph parts that Score animates (thought dots, the floor shadow) read a different `transform` every time
-// they are sampled, and a picture is an SVG <image>. The shape signature must not call Score's own motion a theme's
-// doing, and must still catch a theme that hides or moves the real shapes.
-describe('10.2b: the shape signature with animated glyph parts and pictures', () => {
-  const thinking = `<div id="row"><span id="g" class="agent-glyph" data-protected="inline-flex" role="img" aria-label="lead" style="--glyph-color: #6b4eff; background-color: #ffffff"><svg viewBox="0 0 20 20"><ellipse id="shadow" class="agent-glyph__shadow" cx="10" cy="19.4" rx="5" ry="0.9"/><g class="agent-glyph__body"><path id="body" class="agent-glyph__solid" d="M10 3 L17.5 16 H2.5 Z"/><image id="pic" class="agent-glyph__image" href="/api/agents/lead/avatar?rev=r1" x="0.5" y="0" width="19" height="19"/></g><g class="agent-glyph__dots"><circle id="dot1" class="agent-glyph__dot" cx="16.2" cy="3.2" r="0.75"/><circle id="dot2" class="agent-glyph__dot" cx="18.2" cy="1.6" r="0.95"/></g></svg></span></div>`
+// PLAN 10.2: the parts of a mark that Score animates (the eye slots, the orbiting dot, the ripples) read a different
+// `transform` every time they are sampled. The shape signature must not call Score's own motion a theme's doing, and
+// must still catch a theme that hides or moves the real shapes.
+describe('10.2: the shape signature with the animated parts of a mark', () => {
+  const mark = `<div id="row"><span id="g" class="agent-glyph" data-protected="inline-flex" role="img" aria-label="lead" style="--glyph-color: #6b4eff; background-color: #ffffff"><svg viewBox="0 0 20 20"><circle id="ripple" class="agent-glyph__ripple" cx="10" cy="10" r="8.5"/><mask id="m"><rect x="-5" y="-5" width="30" height="30" fill="#fff"/><g class="agent-glyph__eyes"><rect id="slot1" class="agent-glyph__slot" x="8" y="8" width="1.5" height="2.7" fill="#000"/><rect id="slot2" class="agent-glyph__slot" x="11" y="8" width="1.5" height="2.7" fill="#000"/></g></mask><g class="agent-glyph__mark" mask="url(#m)"><path id="body" class="agent-glyph__solid" d="M10 3 L17.5 16 H2.5 Z"/></g><circle id="orbit" class="agent-glyph__orbit" cx="10" cy="0.6" r="0.9"/></svg></span></div>`
   const staged = () => {
-    document.body.innerHTML = thinking
+    document.body.innerHTML = mark
     rects = { row: [0, 0, 80, 40], g: [0, 0, 34, 34] }
   }
   /** Every read of these parts answers a new transform, as a running animation would. */
@@ -303,27 +303,52 @@ describe('10.2b: the shape signature with animated glyph parts and pictures', ()
     )
   }
 
-  test('moving thought dots and a breathing shadow are not a changed shape', () => {
+  test('blinking slots, an orbiting dot and rippling rings are not a changed shape', () => {
     staged()
-    animate(['dot1', 'dot2', 'shadow'])
+    animate(['slot1', 'slot2', 'orbit', 'ripple'])
     expect(findProtectedViolation()).toBeNull()
   })
 
-  test('a transform on the real body is still a changed shape (only Score’s own animated parts are exempt)', () => {
+  test('a transform on the real shape is still a changed shape (only Score’s own animated parts are exempt)', () => {
     staged()
     animate(['body'])
     expect(findProtectedViolation()).toBe('lead changed shape')
   })
 
-  test('a picture a theme hides is a changed shape', () => {
+  test.each(['slot1', 'orbit', 'ripple'])(
+    'a %s that a theme hides is still a changed shape',
+    (id) => {
+      staged()
+      stage({ [id]: { display: 'none' } })
+      expect(findProtectedViolation()).toBe('lead changed shape')
+    },
+  )
+
+  test('a mask a theme puts on the mark is a changed shape (the cut-out’s own mask is the same on and off)', () => {
     staged()
-    stage({ pic: { display: 'none' } })
+    stage({ body: { maskImage: 'linear-gradient(#000, transparent)' } })
     expect(findProtectedViolation()).toBe('lead changed shape')
   })
 
-  test('a dot a theme hides is still a changed shape', () => {
+  test('the cut-out’s own mask alone is not', () => {
     staged()
-    stage({ dot1: { display: 'none' } })
-    expect(findProtectedViolation()).toBe('lead changed shape')
+    expect(findProtectedViolation()).toBeNull()
+  })
+
+  test('protected.css pins every glyph part but lets the mark keep its mask', () => {
+    const css = readFileSync('src/styles/protected.css', 'utf8')
+    expect(css).toMatch(/svg \*:not\(\.agent-glyph__mark\),[^{]*\{\s*mask: none !important/)
+    const pinned = /\[data-protected\] svg \*,[^{]*\{([^}]*)\}/.exec(css)![1]!
+    expect(pinned).not.toContain('mask')
+    for (const property of [
+      'opacity',
+      'visibility',
+      'filter',
+      'clip-path',
+      'scale',
+      'rotate',
+      'translate',
+    ])
+      expect(pinned).toContain(property)
   })
 })

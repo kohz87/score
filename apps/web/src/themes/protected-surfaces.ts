@@ -41,6 +41,7 @@ export const protectedClasses = [
   'security-password',
   // Agent identity and error toasts
   'agent-glyph',
+  'pet-avatar',
   'chat-toast',
   // The way back
   'command-run',

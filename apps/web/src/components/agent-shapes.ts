@@ -79,10 +79,11 @@ export const agentShapes = {
 } as const satisfies Record<Shape, readonly AgentShapeElement[]>
 
 /**
- * What a bot is drawn with: the plain shapes, except the lead's ring-and-dot, which becomes a solid round head (a ring
- * can't carry a face, and no other shape is round). The plain list stays the list-size (xs) look.
+ * What a mark is drawn with (cut-out or ring): the plain silhouettes, except the lead's ring-and-dot, which becomes one
+ * round shape (a ring inside a ring can't carry eyes, and no other shape is round). The plain list stays the list-size
+ * (xs) look.
  */
-export const botBodies = {
+export const markBodies = {
   ...agentShapes,
   'circle-dot': [{ tag: 'circle', cx: 10, cy: 10, r: 8 }],
 } as const satisfies Record<Shape, readonly AgentShapeElement[]>
@@ -112,9 +113,3 @@ export const agentEyes = {
   bubble: { y: 8.8, xs: [8.2, 11.8], w: 1.5, h: 2.6 },
   gem: { y: 8.6, xs: [8.4, 11.6], w: 1.3, h: 2.2 },
 } as const satisfies Record<Shape, AgentEyes>
-
-/** Fine lines drawn over a bot's body (the cylinder's lid, the gem's facets): a white wash, never part of the silhouette. */
-export const botDetails: Partial<Record<Shape, readonly string[]>> = {
-  cylinder: ['M5 5.2 A5 2.3 0 0 0 15 5.2'],
-  gem: ['M2.4 8 H17.6', 'M7.6 3.4 L6.4 8 L10 17.2', 'M12.4 3.4 L13.6 8 L10 17.2'],
-}

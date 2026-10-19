@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { ShapeSchema, type AgentStyle, type Shape } from '@score/contract'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { AgentGlyph, agentAvatarUrl, agentTint, pictureFrame } from './AgentGlyph.tsx'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+import { AgentGlyph, agentTint } from './AgentGlyph.tsx'
 import { agentShapes } from './agent-shapes.ts'
 
 const shapes = ShapeSchema.options
@@ -177,8 +177,8 @@ test.each(['#6B4EFF', '#19C39A', '#FFB61E', '#FF6B8A', '#FFFF00', '#FFFFFF'])(
   },
 )
 
-// PLAN 10.2: looks, pictures and moods.
-const looks = ['bot', 'chibi'] as const
+// PLAN 10.2 (decision 108): marks.
+const looks = ['cut', 'ring'] as const
 const sizable = ['sm', 'md', 'lg'] as const
 const motion = readFileSync('src/components/agent-glyph-motion.css', 'utf8')
 
@@ -186,131 +186,99 @@ function styled(extra: Partial<AgentStyle>, shape: Shape = 'triangle') {
   return { id: 'lead', name: 'lead', style: { color: '#6B4EFF', shape, ...extra } }
 }
 
-test('an agent without a look is a bot with two eyes and no tile of its own', () => {
+test('an agent without a look is a cut-out with two eye slots cut through its mask', () => {
   render(<AgentGlyph agent={agent('triangle')} size="sm" />)
   const glyph = screen.getByRole('img', { name: 'lead' })
-  expect(glyph.classList.contains('agent-glyph--bot')).toBe(true)
+  expect(glyph.classList.contains('agent-glyph--cut')).toBe(true)
   expect(glyph.classList.contains('agent-glyph--rich')).toBe(true)
-  expect(glyph.querySelectorAll('.agent-glyph__eye')).toHaveLength(2)
-  expect(glyph.querySelector('.agent-glyph__image')).toBeNull()
+  const mask = glyph.querySelector('mask')!
+  // Black slots in a white field are what is cut out; the mark itself is solid and uses that mask.
+  expect(mask.querySelector('rect[fill="#fff"]')).not.toBeNull()
+  expect(mask.querySelectorAll('rect.agent-glyph__slot[fill="#000"]')).toHaveLength(2)
+  expect(glyph.querySelector('.agent-glyph__mark')!.getAttribute('mask')).toBe(`url(#${mask.id})`)
+  expect(glyph.querySelector('.agent-glyph__solid')).not.toBeNull()
   expect(stylesheet).toMatch(
     /\.agent-glyph--tile\.agent-glyph--rich\s*\{\s*background: transparent/,
   )
 })
 
+test('a ring is the shape as one thick outline with two solid eyes, and no mask', () => {
+  render(<AgentGlyph agent={styled({ look: 'ring' })} size="md" />)
+  const glyph = screen.getByRole('img')
+  expect(glyph.classList.contains('agent-glyph--ring')).toBe(true)
+  expect(glyph.querySelector('mask')).toBeNull()
+  expect(glyph.querySelectorAll('.agent-glyph__outline')).toHaveLength(1)
+  expect(glyph.querySelectorAll('.agent-glyph__slot--solid')).toHaveLength(2)
+  expect(stylesheet).toMatch(
+    /\.agent-glyph--ring \.agent-glyph__outline\s*\{[^}]*stroke-width: 2\.2/,
+  )
+})
+
+test('two marks on a page never share a mask id', () => {
+  render(
+    <>
+      <AgentGlyph agent={styled({})} size="sm" />
+      <AgentGlyph agent={styled({})} size="sm" />
+    </>,
+  )
+  const ids = [...document.querySelectorAll('mask')].map((mask) => mask.id)
+  expect(ids).toHaveLength(2)
+  expect(new Set(ids).size).toBe(2)
+})
+
 test.each(shapes.flatMap((shape) => sizable.map((size) => ({ shape, size }))))(
-  'every shape is a bot, a chibi and a picture at $size ($shape)',
+  'every shape is a cut-out and a ring at $size ($shape)',
   ({ shape, size }) => {
     const { rerender } = render(<AgentGlyph agent={styled({}, shape)} size={size} />)
-    expect(screen.getByRole('img').querySelectorAll('.agent-glyph__eye')).toHaveLength(2)
-    rerender(<AgentGlyph agent={styled({ look: 'chibi' }, shape)} size={size} />)
-    expect(screen.getByRole('img').classList.contains('agent-glyph--chibi')).toBe(true)
-    expect(screen.getByRole('img').querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 48 52')
-    expect(screen.getByRole('img').querySelectorAll('.agent-glyph__clip').length).toBeGreaterThan(0)
-    rerender(<AgentGlyph agent={styled({ avatar: 'r1' }, shape)} size={size} />)
-    expect(screen.getByRole('img').classList.contains('agent-glyph--picture')).toBe(true)
+    expect(screen.getByRole('img').querySelectorAll('.agent-glyph__slot')).toHaveLength(2)
+    rerender(<AgentGlyph agent={styled({ look: 'ring' }, shape)} size={size} />)
+    expect(screen.getByRole('img').querySelectorAll('.agent-glyph__slot')).toHaveLength(2)
   },
 )
 
-test('the lead as a bot is a solid round head, not a ring', () => {
+test('the lead’s mark is one solid round shape, not a ring inside a ring', () => {
   render(<AgentGlyph agent={agent('circle-dot')} size="sm" />)
   const art = screen.getByRole('img').querySelector('svg')!
   expect(art.querySelector('.agent-glyph__ring')).toBeNull()
-  expect(art.querySelector('circle.agent-glyph__solid')?.getAttribute('r')).toBe('8')
+  expect(art.querySelector('.agent-glyph__mark circle')?.getAttribute('r')).toBe('8')
 })
 
-test('a chibi wears its shape as a white hair clip, in the shape of the agent', () => {
-  const { rerender } = render(<AgentGlyph agent={styled({ look: 'chibi' }, 'heart')} size="sm" />)
-  const clip = () => screen.getByRole('img').querySelector('.agent-glyph__clip')!.getAttribute('d')
-  const heart = clip()
-  rerender(<AgentGlyph agent={styled({ look: 'chibi' }, 'gem')} size="sm" />)
-  expect(clip()).not.toBe(heart)
-  expect(stylesheet).toMatch(/\.agent-glyph__clip\s*\{[^}]*fill: #ffffff/)
-  // Large enough to read at about 28px: the clip is scaled to at least 0.7 of the 20-unit box.
-  const scale = screen.getByRole('img').querySelector('.agent-glyph__clip')!.parentElement!
-  expect(
-    Number(/scale\(([\d.]+)\)/.exec(scale.getAttribute('transform') ?? '')?.[1]),
-  ).toBeGreaterThanOrEqual(0.7)
-})
-
-test('list size is always the plain shape: no face, no picture, no clip', () => {
-  for (const extra of [
-    {},
-    { look: 'chibi' as const },
-    { avatar: 'r1' },
-    { look: 'chibi' as const, avatar: 'r1' },
-  ]) {
-    const { container, unmount } = render(<AgentGlyph agent={styled(extra)} size="xs" />)
+test('list size is always the plain shape: no face, no mask', () => {
+  for (const look of looks) {
+    const { container, unmount } = render(<AgentGlyph agent={styled({ look })} size="xs" />)
     const glyph = container.firstElementChild!
-    expect(glyph.querySelector('.agent-glyph__eye')).toBeNull()
-    expect(glyph.querySelector('image')).toBeNull()
-    expect(glyph.querySelector('.agent-glyph__clip')).toBeNull()
+    expect(glyph.querySelector('.agent-glyph__slot')).toBeNull()
+    expect(glyph.querySelector('mask')).toBeNull()
     expect(glyph.classList.contains('agent-glyph--plain')).toBe(true)
     expect(glyph.classList.contains('agent-glyph--rich')).toBe(false)
     unmount()
   }
 })
 
-test('a picture is shown from its revision, with a badge in the agent colour and shape', () => {
-  render(<AgentGlyph agent={styled({ avatar: 'r7Kq-2', look: 'chibi' }, 'cloud')} size="md" />)
-  const glyph = screen.getByRole('img', { name: 'lead' })
-  const image = glyph.querySelector('image')!
-  expect(image.getAttribute('href')).toBe('/api/agents/lead/avatar?rev=r7Kq-2')
-  expect(image.getAttribute('preserveAspectRatio')).toBe('xMidYMid meet')
-  // The picture wins over the look; the badge carries shape and colour so agents are never told apart by the art alone.
-  expect(glyph.querySelector('.agent-glyph__clip')).toBeNull()
-  expect(glyph.querySelector('.agent-glyph__badge-plate')).not.toBeNull()
-  expect(glyph.querySelector('.agent-glyph__badge-shape')?.getAttribute('d')).toBe(
-    agentShapes.cloud[0].d,
-  )
-  expect(stylesheet).toMatch(/\.agent-glyph__badge-plate\s*\{\s*fill: var\(--glyph-color\)/)
+test('plain forces the plain shape at any size', () => {
+  render(<AgentGlyph agent={styled({})} size="sm" plain />)
+  expect(screen.getByRole('img').classList.contains('agent-glyph--plain')).toBe(true)
 })
 
-test('the picture url escapes the agent id and the revision', () => {
-  expect(agentAvatarUrl('a b', 'x_y-1')).toBe('/api/agents/a%20b/avatar?rev=x_y-1')
-})
-
-test('a picture that fails to load falls back to the look', () => {
-  render(<AgentGlyph agent={styled({ avatar: 'gone', look: 'chibi' })} size="md" />)
-  fireEvent.error(screen.getByRole('img').querySelector('image')!)
-  expect(screen.getByRole('img').classList.contains('agent-glyph--chibi')).toBe(true)
-  expect(screen.getByRole('img').querySelector('image')).toBeNull()
-})
-
-test.each([...looks, 'picture'] as const)(
+test.each(looks)(
   'a %s keeps its name, shape description, decorative mode and bare form',
-  (kind) => {
-    const extra = kind === 'picture' ? { avatar: 'r1' } : { look: kind }
+  (look) => {
     const { rerender, container } = render(
-      <AgentGlyph agent={styled(extra, 'drop')} size="sm" describeShape />,
+      <AgentGlyph agent={styled({ look }, 'drop')} size="sm" describeShape />,
     )
     expect(screen.getByRole('img', { name: 'lead, drop' })).toBeDefined()
-    rerender(<AgentGlyph agent={styled(extra, 'drop')} size="sm" decorative />)
+    rerender(<AgentGlyph agent={styled({ look }, 'drop')} size="sm" decorative />)
     expect(screen.queryByRole('img')).toBeNull()
     expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true')
-    rerender(<AgentGlyph agent={styled(extra, 'drop')} size="sm" bare />)
+    rerender(<AgentGlyph agent={styled({ look }, 'drop')} size="sm" bare />)
     expect(screen.getByRole('img').tagName.toLowerCase()).toBe('svg')
     expect(screen.getByRole('img').getAttribute('data-protected')).toBe('inline-flex')
-    rerender(<AgentGlyph agent={styled(extra, 'drop')} size="sm" contrast="high" />)
+    rerender(<AgentGlyph agent={styled({ look }, 'drop')} size="sm" contrast="high" />)
     expect(screen.getByRole('img').classList.contains('agent-glyph--high')).toBe(true)
   },
 )
 
-test('the eyes are the plate colour, white on a dark agent and ink on a light one', () => {
-  expect(stylesheet).toMatch(/\.agent-glyph__eye\s*\{\s*fill: var\(--glyph-plate\)/)
-  // The plate switches at the luminance where white and ink read about equally well (glyph-plate.test.ts walks all
-  // colours for 3:1). Spot-check the preview's colours: dark ones get white eyes, light ones ink.
-  const darkAgent = (color: string) => {
-    const lum = rgb(color)
-      .map((channel, index) => (channel / 255) ** 2.2 * [0.2126, 0.7152, 0.0722][index]!)
-      .reduce((a, b) => a + b)
-    return lum < 0.1935
-  }
-  expect(['#6B4EFF', '#0F766E', '#DC2626'].map(darkAgent)).toEqual([true, true, true])
-  expect(['#FFB61E', '#19C39A', '#FFFF00'].map(darkAgent)).toEqual([false, false, false])
-})
-
-test('with no activity an agent rests; the activity prop picks the mood', () => {
+test('with no activity a mark rests; the activity prop picks the mood', () => {
   const { rerender } = render(<AgentGlyph agent={styled({})} size="sm" />)
   const glyph = () => screen.getByRole('img')
   expect(glyph().classList.contains('agent-glyph--idle')).toBe(true)
@@ -321,212 +289,131 @@ test('with no activity an agent rests; the activity prop picks the mood', () => 
   }
 })
 
-test.each([...looks, 'picture'] as const)(
-  'thought dots belong to thinking and needs-you only (%s)',
-  (kind) => {
-    const extra = kind === 'picture' ? { avatar: 'r1' } : { look: kind }
-    const { rerender } = render(<AgentGlyph agent={styled(extra)} size="md" />)
-    const dots = () => screen.getByRole('img').querySelectorAll('.agent-glyph__dot').length
-    expect(dots()).toBe(0)
-    rerender(<AgentGlyph agent={styled(extra)} size="md" activity="working" />)
-    expect(dots()).toBe(0)
-    rerender(<AgentGlyph agent={styled(extra)} size="md" activity="thinking" />)
-    expect(dots()).toBe(3)
-    if (kind !== 'chibi') {
-      rerender(<AgentGlyph agent={styled(extra)} size="md" activity="needs" />)
-      expect(dots()).toBe(3)
-    }
+test.each(looks)(
+  'a %s shows an orbiting dot only when thinking and ripples only when it needs you',
+  (look) => {
+    const { rerender } = render(<AgentGlyph agent={styled({ look })} size="md" />)
+    const count = (selector: string) => screen.getByRole('img').querySelectorAll(selector).length
+    expect([count('.agent-glyph__orbit'), count('.agent-glyph__ripple')]).toEqual([0, 0])
+    rerender(<AgentGlyph agent={styled({ look })} size="md" activity="working" />)
+    expect([count('.agent-glyph__orbit'), count('.agent-glyph__ripple')]).toEqual([0, 0])
+    rerender(<AgentGlyph agent={styled({ look })} size="md" activity="thinking" />)
+    expect([count('.agent-glyph__orbit'), count('.agent-glyph__ripple')]).toEqual([1, 0])
+    rerender(<AgentGlyph agent={styled({ look })} size="md" activity="needs" />)
+    expect([count('.agent-glyph__orbit'), count('.agent-glyph__ripple')]).toEqual([0, 2])
   },
 )
 
-test('a chibi works at a laptop, rests its cheek on a hand to think, and calls with a "!" bubble', () => {
-  const { rerender } = render(<AgentGlyph agent={styled({ look: 'chibi' })} size="lg" />)
-  const part = (name: string) => screen.getByRole('img').querySelector(`.agent-glyph__${name}`)
-  expect(part('laptop')).toBeNull()
-  expect(part('alert')).toBeNull()
-  expect(part('mouth-open')).toBeNull()
-  expect(part('arm--l')).not.toBeNull()
-  expect(part('arm--r')).not.toBeNull()
-  expect(part('lock--l')).not.toBeNull()
-  expect(part('head')).not.toBeNull()
-  rerender(<AgentGlyph agent={styled({ look: 'chibi' })} size="lg" activity="working" />)
-  expect(part('laptop')).not.toBeNull()
-  expect(part('alert')).toBeNull()
-  rerender(<AgentGlyph agent={styled({ look: 'chibi' })} size="lg" activity="needs" />)
-  expect(part('laptop')).toBeNull()
-  expect(part('alert')?.textContent).toBe('!')
-  expect(part('mouth-open')).not.toBeNull()
-  // Each state moves different parts (the arms type, the head nods, a hand rises to the cheek, an arm waves).
+test('each mood moves different parts, and eyes narrow or widen', () => {
   expect(motion).toMatch(
-    /--working\.agent-glyph--chibi \.agent-glyph__arm--l\s*\{\s*animation: agent-k-type-l/,
+    /--idle\.agent-glyph--rich \.agent-glyph__mark\s*\{\s*animation: agent-breathe 4\.2s/,
   )
   expect(motion).toMatch(
-    /--working\.agent-glyph--chibi \.agent-glyph__head\s*\{\s*animation: agent-k-nod/,
+    /--working\.agent-glyph--rich \.agent-glyph__mark\s*\{\s*animation: agent-pulse 1\.4s/,
   )
   expect(motion).toMatch(
-    /--thinking\.agent-glyph--chibi \.agent-glyph__arm--r\s*\{\s*transform: rotate\(140deg\)/,
+    /--working\.agent-glyph--rich \.agent-glyph__slot\s*\{\s*animation: none;\s*transform: scaleY\(0\.45\)/,
   )
   expect(motion).toMatch(
-    /--needs\.agent-glyph--chibi \.agent-glyph__arm--r\s*\{\s*animation: agent-k-wave/,
+    /--thinking\.agent-glyph--rich \.agent-glyph__eyes\s*\{\s*transform: translate\(0\.4px, -1\.1px\)/,
   )
   expect(motion).toMatch(
-    /--idle\.agent-glyph--chibi \.agent-glyph__lock--l\s*\{\s*animation: agent-k-lock/,
+    /--needs\.agent-glyph--rich \.agent-glyph__slot\s*\{\s*animation: none;\s*transform: scale\(1\.25\)/,
+  )
+  expect(motion).toMatch(
+    /\.agent-glyph--rich \.agent-glyph__slot\s*\{\s*animation: agent-blink 5s infinite/,
   )
 })
 
-test('reduced motion stills every animation, and only transform and fill-opacity are ever animated', () => {
+test('only transform and stroke-opacity are animated, and Still and reduced motion stop every animation', () => {
+  expect(motion).toMatch(
+    /html\[data-liveliness='still'\] \.agent-glyph \*\s*\{\s*animation: none !important/,
+  )
   expect(motion).toMatch(
     /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.agent-glyph,\s*\.agent-glyph \*\s*\{\s*animation: none !important/,
   )
   // protected.css pins opacity, scale, rotate and translate on glyph parts; an animation of those would be defeated.
   const properties = new Set<string>()
-  for (const block of motion.matchAll(/@keyframes [\w-]+\s*\{((?:\s*[\d%,\s]+\{[^}]*\})+)\s*\}/g))
+  for (const block of motion.matchAll(/@keyframes [\w-]+\s*\{((?:\s*[\d.%,\s]+\{[^}]*\})+)\s*\}/g))
     for (const declaration of block[1]!.matchAll(/([\w-]+):/g)) properties.add(declaration[1]!)
-  expect([...properties].sort()).toEqual(['fill-opacity', 'transform'])
+  expect([...properties].sort()).toEqual(['stroke-opacity', 'transform'])
   expect(motion).not.toMatch(/\sopacity:/)
 })
 
-describe('eyes follow the pointer', () => {
+describe('the pointer', () => {
+  afterEach(() => {
+    delete document.documentElement.dataset.liveliness
+    vi.restoreAllMocks()
+  })
+
+  function setup(activity?: 'thinking') {
+    vi.stubGlobal('requestAnimationFrame', (run: () => void) => {
+      run()
+      return 1
+    })
+    render(<AgentGlyph agent={styled({})} size="lg" activity={activity} />)
+    const glyph = screen.getByRole('img')
+    glyph.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 40, height: 40, bottom: 40, right: 40 }) as DOMRect
+    return { glyph, eyes: glyph.querySelector<SVGGElement>('.agent-glyph__eyes')! }
+  }
   afterEach(() => vi.unstubAllGlobals())
 
-  function hover(kind: 'bot' | 'chibi') {
-    render(<AgentGlyph agent={styled({ look: kind })} size="lg" />)
-    const glyph = screen.getByRole('img')
-    glyph.getBoundingClientRect = () => ({ left: 0, top: 0, width: 40, height: 40 }) as DOMRect
-    const eyes = glyph.querySelector<SVGGElement>('.agent-glyph__eyes')!
-    return { glyph, eyes }
-  }
+  test('the eyes look toward it, from one listener shared by every mark, and look away when it leaves nothing to follow', () => {
+    const add = vi.spyOn(document, 'addEventListener')
+    const { eyes, glyph } = setup()
+    render(<AgentGlyph agent={styled({})} size="sm" />)
+    expect(add.mock.calls.filter(([type]) => type === 'pointermove')).toHaveLength(1)
+    fireEvent.pointerMove(document, { clientX: 400, clientY: 20 })
+    expect(eyes.style.transform).toMatch(/^translate\(1\.3px, /)
+    fireEvent.pointerMove(document, { clientX: -400, clientY: 20 })
+    expect(eyes.style.transform).toMatch(/^translate\(-1\.3px, /)
+    expect(glyph).toBeDefined()
+  })
 
-  test.each(looks)('a %s looks toward the pointer and back again', (kind) => {
-    const { glyph, eyes } = hover(kind)
-    fireEvent.pointerMove(glyph, { clientX: 40, clientY: 20 })
-    expect(eyes.style.transform).toMatch(/^translate\(/)
-    expect(eyes.style.animation).toBe('none')
-    fireEvent.pointerLeave(glyph)
+  test('the listener goes when the last mark does', () => {
+    const remove = vi.spyOn(document, 'removeEventListener')
+    const { unmount } = render(<AgentGlyph agent={styled({})} size="sm" />)
+    unmount()
+    expect(remove.mock.calls.filter(([type]) => type === 'pointermove')).toHaveLength(1)
+  })
+
+  test('a thinking mark keeps its eyes up and ignores the pointer', () => {
+    const { eyes } = setup('thinking')
+    fireEvent.pointerMove(document, { clientX: 400, clientY: 20 })
     expect(eyes.style.transform).toBe('')
-    expect(eyes.style.animation).toBe('')
+  })
+
+  test('under Still the eyes stay put', () => {
+    document.documentElement.dataset.liveliness = 'still'
+    const { eyes } = setup()
+    fireEvent.pointerMove(document, { clientX: 400, clientY: 20 })
+    expect(eyes.style.transform).toBe('')
   })
 
   test('with reduced motion the eyes stay put', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: true }))
-    const { glyph, eyes } = hover('bot')
-    fireEvent.pointerMove(glyph, { clientX: 40, clientY: 20 })
+    const { eyes } = setup()
+    fireEvent.pointerMove(document, { clientX: 400, clientY: 20 })
     expect(eyes.style.transform).toBe('')
   })
 
-  test('a picture has no eyes to move', () => {
-    render(<AgentGlyph agent={styled({ avatar: 'r1' })} size="lg" />)
-    fireEvent.pointerMove(screen.getByRole('img'), { clientX: 40, clientY: 20 })
-    expect(screen.getByRole('img').querySelector('.agent-glyph__eyes')).toBeNull()
-  })
-})
-
-// PLAN 10.2b (decision 106): a picture with marked eyes blinks, and closes them when asleep.
-describe('marked eyes on a picture', () => {
-  const eyes = {
-    left: { x: 0.25, y: 0.4, w: 0.2, h: 0.1 },
-    right: { x: 0.55, y: 0.4, w: 0.2, h: 0.1 },
-    lid: '#C89664',
-  }
-  let loads: (() => void)[] = []
-  beforeEach(() => {
-    loads = []
-    vi.stubGlobal(
-      'Image',
-      class {
-        naturalWidth = 200
-        naturalHeight = 100
-        onload: (() => void) | null = null
-        set src(_value: string) {
-          loads.push(() => this.onload?.())
-        }
-      },
-    )
-  })
-  afterEach(() => vi.unstubAllGlobals())
-
-  const pictured = (avatarEyes: typeof eyes | null, id = 'blinker') => ({
-    id,
-    name: id,
-    style: { color: '#6B4EFF', shape: 'cloud' as const, avatar: 'r1', avatarEyes },
+  test('a click nudges the mark it landed on, and not under Still', () => {
+    vi.useFakeTimers()
+    const { glyph } = setup()
+    fireEvent.click(glyph)
+    expect(glyph.classList.contains('agent-glyph--poke')).toBe(true)
+    vi.advanceTimersByTime(500)
+    expect(glyph.classList.contains('agent-glyph--poke')).toBe(false)
+    document.documentElement.dataset.liveliness = 'still'
+    fireEvent.click(glyph)
+    expect(glyph.classList.contains('agent-glyph--poke')).toBe(false)
+    vi.useRealTimers()
   })
 
-  test('without marks the picture moves as a whole and has no lids', () => {
-    render(<AgentGlyph agent={pictured(null)} size="md" />)
-    expect(screen.getByRole('img').querySelector('.agent-glyph__lid')).toBeNull()
-    expect(loads).toHaveLength(0)
-  })
-
-  test('with marks, a lid and a lash line sit over each eye once the picture size is known', () => {
-    render(<AgentGlyph agent={pictured(eyes, 'a')} size="md" />)
-    // Until the picture has loaded its shape is unknown, so nothing is drawn over it.
-    expect(screen.getByRole('img').querySelector('.agent-glyph__lid')).toBeNull()
-    act(() => loads.forEach((load) => load()))
-    const lids = screen.getByRole('img').querySelectorAll('.agent-glyph__lid')
-    expect(lids).toHaveLength(2)
-    expect(screen.getByRole('img').querySelectorAll('.agent-glyph__lash')).toHaveLength(2)
-    expect((lids[0] as HTMLElement).style.getPropertyValue('--glyph-lid')).toBe('#C89664')
-    // 200x100 is letterboxed into the 19-unit box: 19 wide, 9.5 tall, centred.
-    const skin = lids[0]!.querySelector('rect')!
-    expect(Number(skin.getAttribute('x'))).toBeCloseTo(0.5 + 0.25 * 19)
-    expect(Number(skin.getAttribute('y'))).toBeCloseTo(4.75 + 0.4 * 9.5)
-    expect(Number(skin.getAttribute('width'))).toBeCloseTo(0.2 * 19)
-    expect(Number(skin.getAttribute('height'))).toBeCloseTo(0.1 * 9.5)
-  })
-
-  test('the frame of a tall, a wide and a square picture', () => {
-    expect(pictureFrame({ width: 100, height: 100 })).toEqual({
-      x: 0.5,
-      y: 0,
-      width: 19,
-      height: 19,
-    })
-    expect(pictureFrame({ width: 100, height: 200 })).toEqual({
-      x: 5.25,
-      y: 0,
-      width: 9.5,
-      height: 19,
-    })
-    expect(pictureFrame({ width: 200, height: 100 })).toEqual({
-      x: 0.5,
-      y: 4.75,
-      width: 19,
-      height: 9.5,
-    })
-  })
-
-  test('the lids blink in every mood, are open when nothing moves, and stay down when asleep', () => {
-    expect(motion).toMatch(
-      /\.agent-glyph__lid\s*\{[^}]*transform: scaleY\(0\);[^}]*animation: agent-lid-blink 4\.2s infinite/,
-    )
-    expect(motion).toMatch(
-      /\.agent-glyph--asleep\.agent-glyph--rich \.agent-glyph__lid\s*\{\s*animation: none;\s*transform: scaleY\(1\)/,
-    )
-    expect(stylesheet).toMatch(
-      /\.agent-glyph__lash\s*\{[^}]*stroke: color-mix\(in srgb, var\(--glyph-lid\)/,
-    )
-    const { rerender } = render(
-      <AgentGlyph agent={pictured(eyes, 'b')} size="md" activity="working" />,
-    )
-    expect(screen.getByRole('img').classList.contains('agent-glyph--asleep')).toBe(false)
-    rerender(<AgentGlyph agent={pictured(eyes, 'b')} size="md" asleep />)
-    expect(screen.getByRole('img').classList.contains('agent-glyph--asleep')).toBe(true)
-  })
-
-  test('a bot or chibi that is asleep has its eyes closed too, and does not look at the pointer', () => {
-    expect(motion).toMatch(
-      /\.agent-glyph--asleep\.agent-glyph--rich \.agent-glyph__eyes\s*\{\s*animation: none;\s*transform: scaleY\(0\.1\)/,
-    )
-    render(<AgentGlyph agent={styled({})} size="lg" asleep />)
-    const glyph = screen.getByRole('img')
-    glyph.getBoundingClientRect = () => ({ left: 0, top: 0, width: 40, height: 40 }) as DOMRect
-    fireEvent.pointerMove(glyph, { clientX: 40, clientY: 20 })
-    expect(glyph.querySelector<SVGGElement>('.agent-glyph__eyes')!.style.transform).toBe('')
-  })
-
-  test('list size ignores asleep and marks', () => {
-    const { container } = render(<AgentGlyph agent={pictured(eyes, 'c')} size="xs" asleep />)
-    expect(container.firstElementChild!.classList.contains('agent-glyph--asleep')).toBe(false)
-    expect(container.querySelector('.agent-glyph__lid')).toBeNull()
+  test('the plain list shape does not take part', () => {
+    const add = vi.spyOn(document, 'addEventListener')
+    render(<AgentGlyph agent={styled({})} size="xs" />)
+    expect(add.mock.calls.filter(([type]) => type === 'pointermove')).toHaveLength(0)
   })
 })

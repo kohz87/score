@@ -25,11 +25,13 @@ import { createQueryClient, StreamContext } from './data/query-client.ts'
 import { createStreamClient } from './data/stream.ts'
 import { createStreamQueryRegistry } from './data/resync.ts'
 import { clearBrowserSession } from './data/session.ts'
+import { watchLiveliness } from './data/liveliness.ts'
 import { applyTheme, readTheme } from './data/theme.ts'
 import { LookRuntime } from './themes/LookRuntime.tsx'
 import { registerServiceWorker } from './pwa/service-worker.ts'
 
 applyTheme(readTheme())
+watchLiveliness()
 registerServiceWorker()
 
 const queryClient = createQueryClient()

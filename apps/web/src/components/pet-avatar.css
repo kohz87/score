@@ -1,0 +1,296 @@
+/* A pet avatar (PLAN 10.2, decisions 107–108). One animated file per activity, stacked and crossfaded; Score adds the
+   floor, the moods the pack has no animation for (as overlays on idle), the greeting and the heart. */
+.pet-avatar {
+  /* White behind a dark agent colour and Score's ink behind a light one, as the glyph plate (agent-glyph.css). */
+  --pet-lum: (0.2126 * pow(r / 255, 2.2) + 0.7152 * pow(g / 255, 2.2) + 0.0722 * pow(b / 255, 2.2));
+  --pet-dark: clamp(0, (0.1935 - var(--pet-lum)) * 1000, 1);
+  --pet-plate: rgb(
+    from var(--pet-color) calc(18 + 237 * var(--pet-dark)) calc(19 + 236 * var(--pet-dark))
+      calc(26 + 229 * var(--pet-dark))
+  );
+  position: relative;
+  box-sizing: border-box;
+  width: var(--pet-size, 96px);
+  aspect-ratio: 1 / 1;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-20, 20px);
+  background: linear-gradient(
+    color-mix(in srgb, var(--pet-color) 8%, var(--card)),
+    var(--card) 70%
+  );
+  cursor: pointer;
+}
+
+.pet-floor {
+  position: absolute;
+  inset: auto 0 0;
+  height: 16%;
+  background: color-mix(in srgb, var(--ground) 85%, var(--card));
+  border-top: 1px solid var(--hairline);
+}
+
+/* Everything that hops or bounces moves as one: the stage. */
+.pet-stage {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+}
+
+.pet-anim {
+  position: absolute;
+  left: 50%;
+  /* Feet stand a little above the floor's edge; `floor` lifts them if the files have them too low. */
+  bottom: calc(8% + var(--pet-floor, 0) * 80%);
+  height: 80%;
+  width: auto;
+  max-width: 100%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.35s;
+  pointer-events: none;
+  user-select: none;
+}
+
+.pet-anim--on {
+  opacity: 1;
+}
+
+.pet-avatar[data-file='sleep'] .pet-anim--on {
+  filter: brightness(0.92) saturate(0.88);
+}
+
+.pet-stage--hop {
+  animation: pet-hop 1.3s cubic-bezier(0.3, 0.7, 0.4, 1) infinite;
+}
+
+.pet-stage--love {
+  animation: pet-hop 0.8s cubic-bezier(0.3, 0.7, 0.4, 1) 1;
+}
+
+/* A second bounce in a row must restart the animation: alternate the name. */
+.pet-stage--love-1 {
+  animation-name: pet-hop-alt;
+}
+
+.pet-badge {
+  position: absolute;
+  right: 6%;
+  bottom: 12%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30%;
+  aspect-ratio: 1 / 1;
+  min-width: 22px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 2px 8px rgb(18 19 26 / 14%);
+}
+
+.pet-badge .agent-glyph {
+  --glyph-svg-size: 12px;
+}
+
+/* Score's overlays. Inline SVG, so a theme's text rules never touch them, and only transform and fill-opacity move. */
+.pet-fx {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.pet-dots {
+  top: 14%;
+  right: 14%;
+  width: 30%;
+}
+
+.pet-dot {
+  fill: var(--pet-color);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pet-wave 1.2s ease-in-out infinite;
+}
+
+.pet-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.pet-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.pet-alert {
+  top: 12%;
+  right: 12%;
+  width: 26%;
+  transform-origin: 50% 100%;
+  animation: pet-pop 1.3s ease-in-out infinite;
+}
+
+.pet-alert-bg {
+  fill: var(--pet-color);
+}
+
+.pet-alert-text {
+  fill: var(--pet-plate);
+  font: 700 18px var(--font-body, sans-serif);
+  text-anchor: middle;
+}
+
+.pet-zzz {
+  top: 16%;
+  right: 16%;
+  width: 28%;
+}
+
+.pet-z {
+  fill: var(--pet-color);
+  font: 700 12px var(--font-body, sans-serif);
+  fill-opacity: 0;
+  animation: pet-z 2.6s ease-in infinite;
+}
+
+.pet-say {
+  left: 50%;
+  top: 8%;
+  width: 46%;
+  transform: translateX(-50%) scale(1);
+  transform-origin: 50% 100%;
+  animation: pet-say 0.18s cubic-bezier(0.3, 1.6, 0.5, 1) 1;
+}
+
+.pet-say-bg {
+  fill: #12131a;
+}
+
+.pet-say-text {
+  fill: #ffffff;
+  font: 600 11px var(--font-body, sans-serif);
+  text-anchor: middle;
+}
+
+.pet-heart {
+  left: 50%;
+  top: 16%;
+  width: 20%;
+  transform: translate(-50%, 0);
+  animation: pet-heart 0.9s ease-out 1 both;
+}
+
+.pet-heart-shape {
+  fill: #f43f5e;
+}
+
+@keyframes pet-hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  14% {
+    transform: scale(1.03, 0.96);
+  }
+  32% {
+    transform: translateY(-7%) scale(0.98, 1.02);
+  }
+  48% {
+    transform: scale(1.02, 0.98);
+  }
+}
+
+@keyframes pet-hop-alt {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  14% {
+    transform: scale(1.03, 0.96);
+  }
+  32% {
+    transform: translateY(-7%) scale(0.98, 1.02);
+  }
+  48% {
+    transform: scale(1.02, 0.98);
+  }
+}
+
+@keyframes pet-wave {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes pet-pop {
+  0%,
+  100% {
+    transform: scale(1) translateY(0);
+  }
+  15% {
+    transform: scale(1.25) translateY(-1px);
+  }
+  30% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pet-z {
+  0% {
+    fill-opacity: 0;
+    transform: translate(0, 0);
+  }
+  20% {
+    fill-opacity: 1;
+  }
+  100% {
+    fill-opacity: 0;
+    transform: translate(10px, -22px);
+  }
+}
+
+@keyframes pet-say {
+  0% {
+    transform: translateX(-50%) scale(0);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+@keyframes pet-heart {
+  0% {
+    transform: translate(-50%, 0) scale(0.4);
+    fill-opacity: 0;
+  }
+  30% {
+    transform: translate(-50%, -10px) scale(1.2);
+    fill-opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -34px) scale(0.9);
+    fill-opacity: 0;
+  }
+}
+
+/* Still (Settings › Look, or reduced motion): no animation anywhere, no crossfade. */
+html[data-liveliness='still'] .pet-avatar *,
+html[data-liveliness='still'] .pet-avatar {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-avatar,
+  .pet-avatar * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

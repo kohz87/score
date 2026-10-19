@@ -5,6 +5,7 @@ import {
   readLiveliness,
   readStoredLiveliness,
   saveLiveliness,
+  watchLiveliness,
 } from './liveliness.ts'
 
 function media(matches: Record<string, boolean>) {
@@ -75,4 +76,27 @@ test('choosing Lively on a phone is remembered, so it does not fall back to Calm
   saveLiveliness('lively')
   expect(localStorage.getItem('score.liveliness')).toBe('lively')
   expect(readLiveliness()).toBe('lively')
+})
+
+test('the page root mirrors the effective liveliness and follows a new choice', () => {
+  media({})
+  const stop = watchLiveliness()
+  expect(document.documentElement.dataset.liveliness).toBe('lively')
+  saveLiveliness('still')
+  expect(document.documentElement.dataset.liveliness).toBe('still')
+  saveLiveliness('calm')
+  expect(document.documentElement.dataset.liveliness).toBe('calm')
+  stop()
+  saveLiveliness('still')
+  expect(document.documentElement.dataset.liveliness).toBe('calm')
+  delete document.documentElement.dataset.liveliness
+})
+
+test('reduced motion is Still on the page root whatever was chosen', () => {
+  media({ '(prefers-reduced-motion: reduce)': true })
+  saveLiveliness('lively')
+  const stop = watchLiveliness()
+  expect(document.documentElement.dataset.liveliness).toBe('still')
+  stop()
+  delete document.documentElement.dataset.liveliness
 })

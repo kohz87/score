@@ -1,13 +1,13 @@
 import { ShapeSchema } from '@score/contract'
 import { expect, test } from 'vitest'
-import { agentEyes, agentShapes, botBodies } from './agent-shapes.ts'
+import { agentEyes, agentShapes, markBodies } from './agent-shapes.ts'
 import { occupancy, painted } from './shape-raster.ts'
 
 const grids = Object.fromEntries(
   ShapeSchema.options.map((shape) => [shape, occupancy(agentShapes[shape])]),
 )
-const botGrids = Object.fromEntries(
-  ShapeSchema.options.map((shape) => [shape, occupancy(botBodies[shape])]),
+const markGrids = Object.fromEntries(
+  ShapeSchema.options.map((shape) => [shape, occupancy(markBodies[shape])]),
 )
 
 const pairs = ShapeSchema.options.flatMap((first, index) =>
@@ -23,11 +23,11 @@ function distinct(all: Record<string, boolean[]>, first: string, second: string)
   return differing / occupied
 }
 
-test('there are twenty shapes, each with plain geometry, a bot body and eyes', () => {
+test('there are twenty shapes, each with plain geometry, a mark body and eyes', () => {
   expect(ShapeSchema.options).toHaveLength(20)
   for (const shape of ShapeSchema.options) {
     expect(agentShapes[shape].length, shape).toBeGreaterThan(0)
-    expect(botBodies[shape].length, shape).toBeGreaterThan(0)
+    expect(markBodies[shape].length, shape).toBeGreaterThan(0)
     expect(agentEyes[shape].xs, shape).toHaveLength(2)
   }
 })
@@ -39,19 +39,22 @@ test.each(pairs)(
   },
 )
 
-test.each(pairs)('as bots, %s and %s differ in at least 15% of occupied cells', (first, second) => {
-  expect(distinct(botGrids, first, second)).toBeGreaterThanOrEqual(0.15)
-})
+test.each(pairs)(
+  'as marks, %s and %s differ in at least 15% of occupied cells',
+  (first, second) => {
+    expect(distinct(markGrids, first, second)).toBeGreaterThanOrEqual(0.15)
+  },
+)
 
 test.each(ShapeSchema.options)(
   '%s fills a readable share of its box and stays inside it',
   (shape) => {
-    const cells = botGrids[shape]!.filter(Boolean).length
+    const cells = markGrids[shape]!.filter(Boolean).length
     // Neither a speck nor a wall-to-wall block: 25-80% of the 20x20 box.
     expect(cells, shape).toBeGreaterThanOrEqual(45)
     expect(cells, shape).toBeLessThanOrEqual(320)
     // The outer cells stay empty, so squash and hop never clip against the box.
-    const grid = botGrids[shape]!
+    const grid = markGrids[shape]!
     const edge = grid.filter(
       (cell, index) => cell && (index % 20 < 1 || index % 20 > 18 || index < 20 || index >= 380),
     )
@@ -63,7 +66,7 @@ test.each(ShapeSchema.options)(
   '%s has both eyes inside its body, apart, and clear of any hole',
   (shape) => {
     const { y, xs, w, h } = agentEyes[shape]
-    const inside = painted(botBodies[shape])
+    const inside = painted(markBodies[shape])
     for (const x of xs) {
       // Every corner and the middle of the eye lies on the body (an eye on the rim or in a hole is a bug).
       for (const [dx, dy] of [
@@ -80,11 +83,11 @@ test.each(ShapeSchema.options)(
   },
 )
 
-test('the lead as a bot is a solid round head, and the plain list shape keeps its ring and dot', () => {
-  expect(botBodies['circle-dot']).toEqual([{ tag: 'circle', cx: 10, cy: 10, r: 8 }])
+test("the lead's mark is one round shape, and the plain list shape keeps its ring and dot", () => {
+  expect(markBodies['circle-dot']).toEqual([{ tag: 'circle', cx: 10, cy: 10, r: 8 }])
   expect(agentShapes['circle-dot']).toHaveLength(2)
   for (const shape of ShapeSchema.options.filter((name) => name !== 'circle-dot')) {
-    expect(botBodies[shape], shape).toBe(agentShapes[shape])
+    expect(markBodies[shape], shape).toBe(agentShapes[shape])
   }
 })
 

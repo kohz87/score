@@ -3,7 +3,7 @@
 exports[`blob matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -14,25 +14,22 @@ exports[`blob matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_2b_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M7 3.2 C10.4 1.6 16 3.4 16.4 7.6 C16.6 10.4 14.8 11.2 15.8 13.6 C16.6 16 13.2 17.8 10 16.8 C8.2 16.2 6.8 13.8 4.8 14.8 C2.4 16 1.6 12.4 2.4 10 C3 8 2 6.4 3.6 5 C4.6 4 5.8 3.6 7 3.2 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.6"
           rx="0.75"
           width="1.5"
@@ -40,7 +37,8 @@ exports[`blob matches the shape snapshot 1`] = `
           y="8.5"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.6"
           rx="0.75"
           width="1.5"
@@ -48,6 +46,15 @@ exports[`blob matches the shape snapshot 1`] = `
           y="8.5"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_2b_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M7 3.2 C10.4 1.6 16 3.4 16.4 7.6 C16.6 10.4 14.8 11.2 15.8 13.6 C16.6 16 13.2 17.8 10 16.8 C8.2 16.2 6.8 13.8 4.8 14.8 C2.4 16 1.6 12.4 2.4 10 C3 8 2 6.4 3.6 5 C4.6 4 5.8 3.6 7 3.2 Z"
+      />
     </g>
   </svg>
 </span>
@@ -56,7 +63,7 @@ exports[`blob matches the shape snapshot 1`] = `
 exports[`bolt matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -67,25 +74,22 @@ exports[`bolt matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_28_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M12 2.4 L4.4 11.2 H9.2 L8 17.6 L15.6 8.8 H10.8 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="1.8"
           rx="0.5"
           width="1"
@@ -93,7 +97,8 @@ exports[`bolt matches the shape snapshot 1`] = `
           y="9.2"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="1.8"
           rx="0.5"
           width="1"
@@ -101,6 +106,15 @@ exports[`bolt matches the shape snapshot 1`] = `
           y="9.2"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_28_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M12 2.4 L4.4 11.2 H9.2 L8 17.6 L15.6 8.8 H10.8 Z"
+      />
     </g>
   </svg>
 </span>
@@ -109,7 +123,7 @@ exports[`bolt matches the shape snapshot 1`] = `
 exports[`bubble matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -120,25 +134,22 @@ exports[`bubble matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_2e_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M5 3.6 H15 A2.6 2.6 0 0 1 17.6 6.2 V11.4 A2.6 2.6 0 0 1 15 14 H9.2 L5.6 17.2 V14 H5 A2.6 2.6 0 0 1 2.4 11.4 V6.2 A2.6 2.6 0 0 1 5 3.6 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.6"
           rx="0.75"
           width="1.5"
@@ -146,7 +157,8 @@ exports[`bubble matches the shape snapshot 1`] = `
           y="7.5"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.6"
           rx="0.75"
           width="1.5"
@@ -154,6 +166,15 @@ exports[`bubble matches the shape snapshot 1`] = `
           y="7.5"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_2e_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M5 3.6 H15 A2.6 2.6 0 0 1 17.6 6.2 V11.4 A2.6 2.6 0 0 1 15 14 H9.2 L5.6 17.2 V14 H5 A2.6 2.6 0 0 1 2.4 11.4 V6.2 A2.6 2.6 0 0 1 5 3.6 Z"
+      />
     </g>
   </svg>
 </span>
@@ -162,7 +183,7 @@ exports[`bubble matches the shape snapshot 1`] = `
 exports[`circle-dot matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -173,27 +194,22 @@ exports[`circle-dot matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_1s_"
     >
-      <circle
-        class="agent-glyph__solid"
-        cx="10"
-        cy="10"
-        r="8"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.8"
           rx="0.8"
           width="1.6"
@@ -201,7 +217,8 @@ exports[`circle-dot matches the shape snapshot 1`] = `
           y="8.2"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.8"
           rx="0.8"
           width="1.6"
@@ -209,6 +226,17 @@ exports[`circle-dot matches the shape snapshot 1`] = `
           y="8.2"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_1s_)"
+    >
+      <circle
+        class="agent-glyph__solid"
+        cx="10"
+        cy="10"
+        r="8"
+      />
     </g>
   </svg>
 </span>
@@ -217,7 +245,7 @@ exports[`circle-dot matches the shape snapshot 1`] = `
 exports[`cloud matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -228,25 +256,22 @@ exports[`cloud matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_24_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M5.8 15.5 A3.3 3.3 0 0 1 5.3 9 A4.6 4.6 0 0 1 14 7.4 A4 4 0 0 1 14.6 15.5 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -254,7 +279,8 @@ exports[`cloud matches the shape snapshot 1`] = `
           y="10.4"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -262,6 +288,15 @@ exports[`cloud matches the shape snapshot 1`] = `
           y="10.4"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_24_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M5.8 15.5 A3.3 3.3 0 0 1 5.3 9 A4.6 4.6 0 0 1 14 7.4 A4 4 0 0 1 14.6 15.5 Z"
+      />
     </g>
   </svg>
 </span>
@@ -270,7 +305,7 @@ exports[`cloud matches the shape snapshot 1`] = `
 exports[`cross matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -281,25 +316,22 @@ exports[`cross matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_23_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M8 8 V4.5 A2 2 0 0 1 12 4.5 V8 H15.5 A2 2 0 0 1 15.5 12 H12 V15.5 A2 2 0 0 1 8 15.5 V12 H4.5 A2 2 0 0 1 4.5 8 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2"
           rx="0.55"
           width="1.1"
@@ -307,7 +339,8 @@ exports[`cross matches the shape snapshot 1`] = `
           y="9"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2"
           rx="0.55"
           width="1.1"
@@ -315,6 +348,15 @@ exports[`cross matches the shape snapshot 1`] = `
           y="9"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_23_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M8 8 V4.5 A2 2 0 0 1 12 4.5 V8 H15.5 A2 2 0 0 1 15.5 12 H12 V15.5 A2 2 0 0 1 8 15.5 V12 H4.5 A2 2 0 0 1 4.5 8 Z"
+      />
     </g>
   </svg>
 </span>
@@ -323,7 +365,7 @@ exports[`cross matches the shape snapshot 1`] = `
 exports[`cylinder matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -334,29 +376,22 @@ exports[`cylinder matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_25_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M5 5.2 A5 2.3 0 0 1 15 5.2 V14.8 A5 2.3 0 0 1 5 14.8 Z"
-      />
-      <path
-        class="agent-glyph__detail"
-        d="M5 5.2 A5 2.3 0 0 0 15 5.2"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.6"
           rx="0.75"
           width="1.5"
@@ -364,7 +399,8 @@ exports[`cylinder matches the shape snapshot 1`] = `
           y="9.3"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.6"
           rx="0.75"
           width="1.5"
@@ -372,6 +408,15 @@ exports[`cylinder matches the shape snapshot 1`] = `
           y="9.3"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_25_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M5 5.2 A5 2.3 0 0 1 15 5.2 V14.8 A5 2.3 0 0 1 5 14.8 Z"
+      />
     </g>
   </svg>
 </span>
@@ -380,7 +425,7 @@ exports[`cylinder matches the shape snapshot 1`] = `
 exports[`diamond matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -391,25 +436,22 @@ exports[`diamond matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_1u_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M10 2.5 L17.5 10 L10 17.5 L2.5 10 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.5"
           rx="0.7"
           width="1.4"
@@ -417,7 +459,8 @@ exports[`diamond matches the shape snapshot 1`] = `
           y="8.55"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.5"
           rx="0.7"
           width="1.4"
@@ -425,6 +468,15 @@ exports[`diamond matches the shape snapshot 1`] = `
           y="8.55"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_1u_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M10 2.5 L17.5 10 L10 17.5 L2.5 10 Z"
+      />
     </g>
   </svg>
 </span>
@@ -433,7 +485,7 @@ exports[`diamond matches the shape snapshot 1`] = `
 exports[`drop matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -444,25 +496,22 @@ exports[`drop matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_27_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M10 2.6 C13.2 6.8 15.3 9.4 15.3 12.2 A5.3 5.3 0 0 1 4.7 12.2 C4.7 9.4 6.8 6.8 10 2.6 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -470,7 +519,8 @@ exports[`drop matches the shape snapshot 1`] = `
           y="10.8"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -478,6 +528,15 @@ exports[`drop matches the shape snapshot 1`] = `
           y="10.8"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_27_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M10 2.6 C13.2 6.8 15.3 9.4 15.3 12.2 A5.3 5.3 0 0 1 4.7 12.2 C4.7 9.4 6.8 6.8 10 2.6 Z"
+      />
     </g>
   </svg>
 </span>
@@ -486,7 +545,7 @@ exports[`drop matches the shape snapshot 1`] = `
 exports[`gem matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -497,37 +556,22 @@ exports[`gem matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_2f_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M6 3.4 H14 L17.6 8 L10 17.2 L2.4 8 Z"
-      />
-      <path
-        class="agent-glyph__detail"
-        d="M2.4 8 H17.6"
-      />
-      <path
-        class="agent-glyph__detail"
-        d="M7.6 3.4 L6.4 8 L10 17.2"
-      />
-      <path
-        class="agent-glyph__detail"
-        d="M12.4 3.4 L13.6 8 L10 17.2"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.2"
           rx="0.65"
           width="1.3"
@@ -535,7 +579,8 @@ exports[`gem matches the shape snapshot 1`] = `
           y="7.5"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.2"
           rx="0.65"
           width="1.3"
@@ -543,6 +588,15 @@ exports[`gem matches the shape snapshot 1`] = `
           y="7.5"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_2f_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M6 3.4 H14 L17.6 8 L10 17.2 L2.4 8 Z"
+      />
     </g>
   </svg>
 </span>
@@ -551,7 +605,7 @@ exports[`gem matches the shape snapshot 1`] = `
 exports[`heart matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -562,25 +616,22 @@ exports[`heart matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_26_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M10 16.6 C4 12.6 2.5 9.6 3.6 7.1 C4.8 4.4 8.4 4.2 10 6.8 C11.6 4.2 15.2 4.4 16.4 7.1 C17.5 9.6 16 12.6 10 16.6 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -588,7 +639,8 @@ exports[`heart matches the shape snapshot 1`] = `
           y="8.6"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -596,6 +648,15 @@ exports[`heart matches the shape snapshot 1`] = `
           y="8.6"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_26_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M10 16.6 C4 12.6 2.5 9.6 3.6 7.1 C4.8 4.4 8.4 4.2 10 6.8 C11.6 4.2 15.2 4.4 16.4 7.1 C17.5 9.6 16 12.6 10 16.6 Z"
+      />
     </g>
   </svg>
 </span>
@@ -604,7 +665,7 @@ exports[`heart matches the shape snapshot 1`] = `
 exports[`hexagon matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -615,25 +676,22 @@ exports[`hexagon matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_20_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M10 2.5 L17.5 6.25 V13.75 L10 17.5 L2.5 13.75 V6.25 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.7"
           rx="0.75"
           width="1.5"
@@ -641,7 +699,8 @@ exports[`hexagon matches the shape snapshot 1`] = `
           y="8.45"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.7"
           rx="0.75"
           width="1.5"
@@ -649,6 +708,15 @@ exports[`hexagon matches the shape snapshot 1`] = `
           y="8.45"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_20_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M10 2.5 L17.5 6.25 V13.75 L10 17.5 L2.5 13.75 V6.25 Z"
+      />
     </g>
   </svg>
 </span>
@@ -657,7 +725,7 @@ exports[`hexagon matches the shape snapshot 1`] = `
 exports[`leaf matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -668,25 +736,22 @@ exports[`leaf matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_2a_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M3.6 16.4 C3.6 8.2 8.8 3.4 16.6 3.4 C16.6 11.2 11.8 16.4 3.6 16.4 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.2"
           rx="0.65"
           width="1.3"
@@ -694,7 +759,8 @@ exports[`leaf matches the shape snapshot 1`] = `
           y="9.8"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.2"
           rx="0.65"
           width="1.3"
@@ -702,6 +768,15 @@ exports[`leaf matches the shape snapshot 1`] = `
           y="9.8"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_2a_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M3.6 16.4 C3.6 8.2 8.8 3.4 16.6 3.4 C16.6 11.2 11.8 16.4 3.6 16.4 Z"
+      />
     </g>
   </svg>
 </span>
@@ -710,7 +785,7 @@ exports[`leaf matches the shape snapshot 1`] = `
 exports[`moon matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -721,25 +796,22 @@ exports[`moon matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_29_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M12.8 3.2 A7 7 0 1 0 16.8 12.6 A5.6 5.6 0 0 1 12.8 3.2 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.2"
           rx="0.65"
           width="1.3"
@@ -747,7 +819,8 @@ exports[`moon matches the shape snapshot 1`] = `
           y="9.1"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.2"
           rx="0.65"
           width="1.3"
@@ -755,6 +828,15 @@ exports[`moon matches the shape snapshot 1`] = `
           y="9.1"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_29_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M12.8 3.2 A7 7 0 1 0 16.8 12.6 A5.6 5.6 0 0 1 12.8 3.2 Z"
+      />
     </g>
   </svg>
 </span>
@@ -763,7 +845,7 @@ exports[`moon matches the shape snapshot 1`] = `
 exports[`octagon matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -774,25 +856,22 @@ exports[`octagon matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_2d_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M4 2 H16 L18 4 V16 L16 18 H4 L2 16 V4 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.7"
           rx="0.75"
           width="1.5"
@@ -800,7 +879,8 @@ exports[`octagon matches the shape snapshot 1`] = `
           y="8.45"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.7"
           rx="0.75"
           width="1.5"
@@ -808,6 +888,15 @@ exports[`octagon matches the shape snapshot 1`] = `
           y="8.45"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_2d_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M4 2 H16 L18 4 V16 L16 18 H4 L2 16 V4 Z"
+      />
     </g>
   </svg>
 </span>
@@ -816,7 +905,7 @@ exports[`octagon matches the shape snapshot 1`] = `
 exports[`pill matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -827,25 +916,22 @@ exports[`pill matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_22_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M6.5 6 H13.5 A4 4 0 0 1 13.5 14 H6.5 A4 4 0 0 1 6.5 6 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -853,7 +939,8 @@ exports[`pill matches the shape snapshot 1`] = `
           y="8.8"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -861,6 +948,15 @@ exports[`pill matches the shape snapshot 1`] = `
           y="8.8"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_22_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M6.5 6 H13.5 A4 4 0 0 1 13.5 14 H6.5 A4 4 0 0 1 6.5 6 Z"
+      />
     </g>
   </svg>
 </span>
@@ -869,7 +965,7 @@ exports[`pill matches the shape snapshot 1`] = `
 exports[`shield matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -880,25 +976,22 @@ exports[`shield matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_2c_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M10 2.4 L16.6 4.5 V8.2 C16.6 12.8 13.4 15.8 10 17.8 C6.6 15.8 3.4 12.8 3.4 8.2 V4.5 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.6"
           rx="0.75"
           width="1.5"
@@ -906,7 +999,8 @@ exports[`shield matches the shape snapshot 1`] = `
           y="7.7"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.6"
           rx="0.75"
           width="1.5"
@@ -914,6 +1008,15 @@ exports[`shield matches the shape snapshot 1`] = `
           y="7.7"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_2c_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M10 2.4 L16.6 4.5 V8.2 C16.6 12.8 13.4 15.8 10 17.8 C6.6 15.8 3.4 12.8 3.4 8.2 V4.5 Z"
+      />
     </g>
   </svg>
 </span>
@@ -922,7 +1025,7 @@ exports[`shield matches the shape snapshot 1`] = `
 exports[`square matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -933,15 +1036,42 @@ exports[`square matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
+    <mask
+      id="_r_1v_"
+    >
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
+      />
+      <g
+        class="agent-glyph__eyes"
+      >
+        <rect
+          class="agent-glyph__slot"
+          fill="#000"
+          height="2.7"
+          rx="0.75"
+          width="1.5"
+          x="7.35"
+          y="8.45"
+        />
+        <rect
+          class="agent-glyph__slot"
+          fill="#000"
+          height="2.7"
+          rx="0.75"
+          width="1.5"
+          x="11.15"
+          y="8.45"
+        />
+      </g>
+    </mask>
     <g
-      class="agent-glyph__body"
+      class="agent-glyph__mark"
+      mask="url(#_r_1v_)"
     >
       <rect
         class="agent-glyph__solid"
@@ -951,26 +1081,6 @@ exports[`square matches the shape snapshot 1`] = `
         x="4"
         y="4"
       />
-      <g
-        class="agent-glyph__eyes"
-      >
-        <rect
-          class="agent-glyph__eye"
-          height="2.7"
-          rx="0.75"
-          width="1.5"
-          x="7.35"
-          y="8.45"
-        />
-        <rect
-          class="agent-glyph__eye"
-          height="2.7"
-          rx="0.75"
-          width="1.5"
-          x="11.15"
-          y="8.45"
-        />
-      </g>
     </g>
   </svg>
 </span>
@@ -979,7 +1089,7 @@ exports[`square matches the shape snapshot 1`] = `
 exports[`star matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -990,25 +1100,22 @@ exports[`star matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_21_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M10 3 L11.88 7.91 L17.13 8.18 L13.04 11.49 L14.41 16.57 L10 13.7 L5.59 16.57 L6.96 11.49 L2.87 8.18 L8.12 7.91 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="1.9"
           rx="0.55"
           width="1.1"
@@ -1016,7 +1123,8 @@ exports[`star matches the shape snapshot 1`] = `
           y="9.45"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="1.9"
           rx="0.55"
           width="1.1"
@@ -1024,6 +1132,15 @@ exports[`star matches the shape snapshot 1`] = `
           y="9.45"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_21_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M10 3 L11.88 7.91 L17.13 8.18 L13.04 11.49 L14.41 16.57 L10 13.7 L5.59 16.57 L6.96 11.49 L2.87 8.18 L8.12 7.91 Z"
+      />
     </g>
   </svg>
 </span>
@@ -1032,7 +1149,7 @@ exports[`star matches the shape snapshot 1`] = `
 exports[`triangle matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
-  class="agent-glyph agent-glyph--md agent-glyph--bot agent-glyph--idle agent-glyph--rich agent-glyph--tile"
+  class="agent-glyph agent-glyph--md agent-glyph--cut agent-glyph--idle agent-glyph--rich agent-glyph--tile"
   data-protected="inline-flex"
   role="img"
   style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
@@ -1043,25 +1160,22 @@ exports[`triangle matches the shape snapshot 1`] = `
     focusable="false"
     viewBox="0 0 20 20"
   >
-    <ellipse
-      class="agent-glyph__shadow"
-      cx="10"
-      cy="19.4"
-      rx="5"
-      ry="0.9"
-    />
-    <g
-      class="agent-glyph__body"
+    <mask
+      id="_r_1t_"
     >
-      <path
-        class="agent-glyph__solid"
-        d="M10 3 L17.5 16 H2.5 Z"
+      <rect
+        fill="#fff"
+        height="30"
+        width="30"
+        x="-5"
+        y="-5"
       />
       <g
         class="agent-glyph__eyes"
       >
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -1069,7 +1183,8 @@ exports[`triangle matches the shape snapshot 1`] = `
           y="10.9"
         />
         <rect
-          class="agent-glyph__eye"
+          class="agent-glyph__slot"
+          fill="#000"
           height="2.4"
           rx="0.7"
           width="1.4"
@@ -1077,6 +1192,15 @@ exports[`triangle matches the shape snapshot 1`] = `
           y="10.9"
         />
       </g>
+    </mask>
+    <g
+      class="agent-glyph__mark"
+      mask="url(#_r_1t_)"
+    >
+      <path
+        class="agent-glyph__solid"
+        d="M10 3 L17.5 16 H2.5 Z"
+      />
     </g>
   </svg>
 </span>
