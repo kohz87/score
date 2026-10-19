@@ -54,7 +54,7 @@ test('fake startup streams the scenario and exposes the same adapter status in s
     let afterApproval = false
     let derivedRooms = 0
     for (const frame of replay.frames) {
-      if (frame.type.startsWith('approval.')) afterApproval = true
+      if (frame.type?.startsWith('approval.')) afterApproval = true
       else if (frame.type === 'room.upserted') derivedRooms += afterApproval ? 1 : 0
       else afterApproval = false
     }
