@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.2] — 2026-10-19
+
+### Fixed
+- Terminal clipboard, the Windows Terminal way: **Ctrl+C copies** when text is selected (and is still the interrupt
+  when nothing is), **Ctrl+V or Ctrl+Shift+V pastes**. The key bar has Copy and Paste buttons for the mouse and phones.
+  ⌘C/⌘V on a Mac work as before.
+
 ## [1.9.1] — 2026-10-19
 
 ### Fixed

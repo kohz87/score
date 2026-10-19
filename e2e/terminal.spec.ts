@@ -15,6 +15,8 @@ test.beforeAll(() => {
     execFileSync('pnpm', ['--filter', '@score/web', 'build'], { stdio: 'ignore', timeout: 120_000 })
 })
 test.use({ ignoreHTTPSErrors: true })
+// A real shell, its own server and the clipboard steps: more than the default 30 s.
+test.setTimeout(90_000)
 
 const launcher = fileURLToPath(new URL('../scripts/score', import.meta.url))
 const loader = fileURLToPath(
@@ -91,6 +93,28 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
     await page.keyboard.type('echo score-$((40+2))-ok')
     await page.keyboard.press('Enter')
     await expect(screen).toContainText('score-42-ok', { timeout: 15_000 })
+
+    // Clipboard the Windows Terminal way: Ctrl+V pastes, Ctrl+C copies a selection, and is the interrupt otherwise.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+    await page.evaluate(() => navigator.clipboard.writeText('echo pasted-$((1+1))'))
+    await page.keyboard.press('Control+V')
+    await page.keyboard.press('Enter')
+    await expect(screen).toContainText('pasted-2', { timeout: 15_000 })
+    await page.evaluate(() => navigator.clipboard.writeText(''))
+    // The terminal's own layer takes the pointer over its text: double-click where the output line is drawn.
+    const line = (await screen
+      .locator('.xterm-rows > div')
+      .filter({ hasText: /^score-42-ok\s*$/ })
+      .boundingBox())!
+    await page.mouse.dblclick(line.x + 30, line.y + line.height / 2)
+    await page.keyboard.press('Control+C')
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('score-42-ok')
+    await page.keyboard.type('sleep 30')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Control+C')
+    await page.keyboard.type('echo after-$((2+3))')
+    await page.keyboard.press('Enter')
+    await expect(screen).toContainText('after-5', { timeout: 5_000 })
 
     // Settings lists the open terminal; Close ends it.
     const settings = await page.context().newPage()

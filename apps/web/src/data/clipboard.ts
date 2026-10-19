@@ -29,6 +29,20 @@ export async function copyText(text: string): Promise<boolean> {
   return copied
 }
 
+/**
+ * The clipboard's text for a Paste button, or null where the browser won't hand it over (plain HTTP, a refused
+ * permission): the person can still press Ctrl+V, which needs no permission.
+ */
+export async function readClipboardText(): Promise<string | null> {
+  try {
+    // eslint-disable-next-line no-restricted-syntax -- the sanctioned read, from a click, guarded like copyText
+    const clipboard = navigator.clipboard as Clipboard | undefined
+    return clipboard?.readText ? await clipboard.readText() : null
+  } catch {
+    return null
+  }
+}
+
 /** Selects an element's text so the person can press Ctrl+C when no copy path works. */
 export function selectText(element: HTMLElement | null) {
   if (!element) return

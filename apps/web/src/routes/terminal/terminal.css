@@ -69,3 +69,9 @@
   background: var(--ink);
   color: var(--card);
 }
+.terminal-paste-hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}

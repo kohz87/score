@@ -14,3 +14,18 @@ export function withCtrl(data: string): string {
   const code = data.toUpperCase().charCodeAt(0)
   return code >= 64 && code <= 95 ? String.fromCharCode(code - 64) : data
 }
+
+/**
+ * What a key does to the clipboard in the terminal, the Windows Terminal way: Ctrl+C copies when text is selected (and
+ * is the interrupt otherwise), Ctrl+V and Ctrl+Shift+V paste. ⌘C/⌘V on a Mac already reach the browser untouched.
+ */
+export function clipboardKey(
+  event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>,
+  hasSelection: boolean,
+): 'copy' | 'paste' | null {
+  if (!event.ctrlKey || event.altKey || event.metaKey) return null
+  const key = event.key.toLowerCase()
+  if (key === 'c') return hasSelection ? 'copy' : null
+  if (key === 'v') return 'paste'
+  return null
+}

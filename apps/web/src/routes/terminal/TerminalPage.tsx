@@ -10,7 +10,8 @@ import {
 } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { passkeysSupportedHere, signInWithPasskey } from '../../data/passkeys.ts'
-import { KEY_BYTES, withCtrl } from './keys.ts'
+import { KEY_BYTES, clipboardKey, withCtrl } from './keys.ts'
+import { copyText, readClipboardText } from '../../data/clipboard.ts'
 import './terminal.css'
 
 type Phase = 'auth' | 'connecting' | 'open' | 'ended'
@@ -55,6 +56,7 @@ export function TerminalPage() {
   const [user, setUser] = useState('')
   const [ending, setEnding] = useState('')
   const [ctrl, setCtrl] = useState(false)
+  const [pasteHint, setPasteHint] = useState(false)
   const host = useRef<HTMLDivElement>(null)
   const socket = useRef<WebSocket | null>(null)
   const term = useRef<Terminal | null>(null)
@@ -121,6 +123,20 @@ export function TerminalPage() {
       }
       const observer = new ResizeObserver(refit)
       observer.observe(parent)
+      // Copy and paste the way Windows Terminal does (see clipboardKey). A paste key is left to the browser, whose paste
+      // event xterm turns into input; no clipboard permission is needed for it.
+      xterm.attachCustomKeyEventHandler((event) => {
+        const action = clipboardKey(event, xterm.hasSelection())
+        if (action === 'copy') {
+          if (event.type === 'keydown') {
+            void copyText(xterm.getSelection())
+            xterm.clearSelection()
+          }
+          event.preventDefault()
+          return false
+        }
+        return action !== 'paste'
+      })
       xterm.onData((data) => {
         send(ctrlRef.current ? withCtrl(data) : data)
         if (ctrlRef.current) setCtrl(false)
@@ -260,6 +276,34 @@ export function TerminalPage() {
           <button type="button" aria-pressed={ctrl} onClick={() => setCtrl((on) => !on)}>
             Ctrl
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              const text = term.current?.getSelection() ?? ''
+              if (text) void copyText(text)
+              term.current?.focus()
+            }}
+          >
+            Copy
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void readClipboardText().then((text) => {
+                if (text) term.current?.paste(text)
+                else setPasteHint(true)
+                term.current?.focus()
+              })
+            }}
+          >
+            Paste
+          </button>
+          {pasteHint && (
+            <p className="terminal-paste-hint" role="status">
+              The browser didn’t share the clipboard. Press Ctrl+V (⌘V on a Mac) in the terminal
+              instead.
+            </p>
+          )}
         </div>
       )}
     </section>

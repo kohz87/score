@@ -403,3 +403,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   3/3 clean reruns — follow-up), license ok.
 - **v1.9.0 deployed** (2026-10-19 03:19 UTC): backup `score-pre-1.9.0-20261019.db`, gateway restarted, both producers re-registered, health 200 on LAN and Tailscale, `/settings/logs` deep link 200.
 - **1.9.1** (owner report): Terminal password field styled like Settings › Remote access (label above, 40px field); before/after screenshots at 1280 and 390; terminal e2e pass.
+- **1.9.2** (owner report): terminal had no clipboard on Windows/Linux (xterm defaults: Ctrl+C = interrupt, Ctrl+V = ^V). `clipboardKey()` + `attachCustomKeyEventHandler`: Ctrl+C copies a selection, Ctrl+V/Ctrl+Shift+V left to the browser's paste event; Copy/Paste buttons on the key bar (`readClipboardText`, hint when refused). Unit tests; terminal e2e on a real shell failed first at the paste (^V), passes 2/2 with paste, copy and interrupt checks.
