@@ -7,6 +7,7 @@ import {
   pickBreak,
   pickTarget,
   restingMotion,
+  shownMembers,
   stepToward,
   type Walker,
 } from './stage-motion.ts'
@@ -94,4 +95,12 @@ test('a pet plays the file for its mood and falls back to idle with Score’s ow
   expect(petView('rest', { mode: 'walk' }, bare).file).toBe('idle')
   expect(petView('rest', { mode: 'break', file: 'coffee' }, rich).file).toBe('coffee')
   expect(petView('rest', { mode: 'break', file: 'read' }, rich).file).toBe('idle')
+})
+
+test('a short strip shows the first members, but never hides one that is waiting for you', () => {
+  const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => ({ id, mood: 'rest' as const }))
+  expect(shownMembers(ids, 5).map((item) => item.id)).toEqual(['a', 'b', 'c', 'd', 'e'])
+  expect(shownMembers(ids, 10)).toHaveLength(7)
+  const waiting = ids.map((item) => (item.id === 'g' ? { ...item, mood: 'needs' as const } : item))
+  expect(shownMembers(waiting, 5).map((item) => item.id)).toEqual(['a', 'b', 'c', 'd', 'g'])
 })

@@ -97,3 +97,15 @@ export function petView(
       return { file: 'idle', overlay: null }
   }
 }
+
+/** The first `limit` members; one waiting for you that would be cut takes the place of the last one that isn't. */
+export function shownMembers<T extends { mood: StageMood }>(members: T[], limit: number): T[] {
+  if (members.length <= limit) return members
+  const shown = members.slice(0, limit)
+  for (const waiting of members.slice(limit).filter((item) => item.mood === 'needs')) {
+    const at = shown.findLastIndex((item) => item.mood !== 'needs')
+    if (at < 0) break
+    shown[at] = waiting
+  }
+  return shown
+}

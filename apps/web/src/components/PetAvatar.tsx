@@ -22,7 +22,16 @@ export type PetAvatarProps = {
 }
 
 /** The first frame of a file, drawn once: what Still and reduced motion show instead of the animation. */
-function StillFrame({ url, on }: { url: string; on: boolean }) {
+export function StillFrame({
+  url,
+  on,
+  base = 'pet-avatar__anim',
+}: {
+  url: string
+  on: boolean
+  /** The class of the image files this stands in for; `${base}--on` marks the one showing. */
+  base?: string
+}) {
   const canvas = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const image = new Image()
@@ -47,7 +56,7 @@ function StillFrame({ url, on }: { url: string; on: boolean }) {
   return (
     <canvas
       ref={canvas}
-      className={`pet-avatar__anim${on ? ' pet-avatar__anim--on' : ''}`}
+      className={`${base}${on ? ` ${base}--on` : ''}`}
       aria-hidden="true"
     />
   )
