@@ -1,26 +1,43 @@
+import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
 import { sampleProfile } from '../apps/server/test/helpers/tar.ts'
 
-test('agent import shows the upload, then "Checking the archive…", before the preview', async ({
+test('agent import shows a real upload percentage while the archive is sent, then the preview', async ({
   page,
 }) => {
   await pair(page)
   await page.goto('/team')
-  // Hold the answer back so the progress is on screen long enough to see.
-  await page.route('**/api/agents/imports', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    await route.continue()
-  })
+  // A few MB of data that does not compress, sent over a slow link, so the browser reports real progress.
+  const archive = sampleProfile('scout', [
+    { name: 'scout/memories/big.bin', body: randomBytes(3 * 1024 * 1024) },
+  ])
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Network.enable')
+  const link = (bytesPerSecond: number) =>
+    cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: bytesPerSecond,
+    })
+  await link(400 * 1024)
   await page.getByRole('button', { name: 'Import agent', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Import agent' })
   await dialog.getByLabel('Archive').setInputFiles({
     name: 'scout.tar.gz',
     mimeType: 'application/gzip',
-    buffer: sampleProfile('scout', []),
+    buffer: archive,
   })
-  await expect(dialog.getByRole('status')).toContainText(/Uploading · \d+%|Checking the archive…/)
-  await expect(dialog.getByRole('heading', { name: 'In this archive' })).toBeVisible()
+  // Not "Uploading · 0%", which shows before any byte is out: a real percentage while the archive is still on its way.
+  await expect(dialog.getByRole('status')).toContainText(/Uploading · [1-9]\d*%/, {
+    timeout: 20_000,
+  })
+  await expect(dialog.getByRole('heading', { name: 'In this archive' })).toHaveCount(0)
+  await link(-1)
+  await expect(dialog.getByRole('heading', { name: 'In this archive' })).toBeVisible({
+    timeout: 30_000,
+  })
   await expect(dialog.getByRole('status')).toHaveCount(0)
   // Leaving the preview deletes the stored upload.
   await dialog.getByRole('button', { name: 'Cancel' }).click()
