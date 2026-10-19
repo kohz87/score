@@ -448,3 +448,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   Score's list). Task 7.7a was already merged (v1.1.0, 2026-10-13; 7.7b v1.2.0, 7.7c v1.3.0); stale tracker entry closed.
   **10.3** (a previewed zip isn't sent twice): lead wrote the contract (staged zips, `files-from-staged`), PLAN entry and
   brief on `task/10.3-staged-zip` (92270072); one Sonnet builder started in `../score-worktrees/10.3`.
+- **10.4** (upload progress everywhere; owner 2026-10-19): agent import, chat attachments, workspace uploads, theme zip
+  installs, Knowledge editor images; one shared `UploadProgress` component over `apiUpload`. Lead wrote PLAN entry and
+  brief on `task/10.4-upload-progress`; Sonnet builder started in `../score-worktrees/10.4`, in parallel with 10.3
+  (disjoint files; both append to PLAN.md, resolved at merge). Both ship together as 1.11.0.
