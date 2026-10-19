@@ -365,7 +365,7 @@ test('a pet pack is chosen, then sent as multipart files to the pack route, and 
       calls.push({ path, init })
       return json({
         agent: { ...builder, style: { ...builder.style, pack } },
-        ignored: ['__MACOSX/idle.webp', 'notes.txt'],
+        ignored: ['notes.txt', '__MACOSX/idle.webp'],
       })
     }
     return baseline(path, init)
@@ -397,8 +397,12 @@ test('a pet pack is chosen, then sent as multipart files to the pack route, and 
   expect(sent.map((file) => file.name)).toEqual(['idle.webp', 'work.webp', 'pet.json'])
   const status = await within(dialog).findByRole('status')
   expect(status.textContent).toContain('Pack added: idle, work.')
-  expect(status.textContent).toContain('__MACOSX/idle.webp')
-  expect(status.textContent).toContain('notes.txt')
+  // Listed by path, sorted.
+  expect(
+    within(status)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent),
+  ).toEqual(['__MACOSX/idle.webp', 'notes.txt'])
 })
 
 test('a zip goes up as one file', async () => {
@@ -450,7 +454,7 @@ test('the server’s reasons for refusing a pack are shown as they are, and the 
   expect(within(dialog).getByRole('button', { name: 'Cancel pack' })).toBeDefined()
 })
 
-test('a zip chosen with other files, or a pack over 64 MB, is refused without an upload', async () => {
+test('a zip chosen with other files, a file over 8 MB, or a pack over 64 MB, is refused without an upload', async () => {
   renderTeam('/team/builder')
   const calls: string[] = []
   const baseline = respond
@@ -463,9 +467,18 @@ test('a zip chosen with other files, or a pack over 64 MB, is refused without an
     target: { files: [packFile('luna.zip', 'application/zip'), packFile('idle.webp')] },
   })
   expect((await within(dialog).findByRole('alert')).textContent).toMatch(/one \.zip/)
-  const huge = packFile('idle.webp')
-  Object.defineProperty(huge, 'size', { value: 65 * 1024 * 1024 })
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [huge] } })
+  const big = packFile('idle.webp')
+  Object.defineProperty(big, 'size', { value: 9 * 1024 * 1024 })
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [big] } })
+  expect((await within(dialog).findByRole('alert')).textContent).toBe(
+    'idle.webp is larger than 8 MB.',
+  )
+  const parts = Array.from({ length: 9 }, (_, index) => {
+    const part = packFile(`work${index}.webp`)
+    Object.defineProperty(part, 'size', { value: 7.5 * 1024 * 1024 })
+    return part
+  })
+  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: parts } })
   expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 64 MB/)
   expect(within(dialog).queryByRole('button', { name: 'Use this pack' })).toBeNull()
   expect(calls).toEqual([])

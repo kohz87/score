@@ -1,15 +1,19 @@
 import { expect, test, type Page } from '@playwright/test'
 import { acquireLock } from './locks.ts'
 import { pair } from './pair.ts'
-import { makePng } from './png.ts'
+import { packFiles, zipOf } from './pet-pack.ts'
 
-// PLAN 10.2b: choose a look and a shape from the real forms, then give an agent a picture, mark its eyes, and remove it
-// again, against the real server (fake Hermes). The pictures are generated here, flat colours, never anyone's art.
+// PLAN 10.2b (decisions 107–108): choose a look and a shape from the real forms, then give an agent a pet pack, watch it
+// play, and remove it again, against the real server (fake Hermes). The packs are generated here (flat-coloured
+// creatures, animated PNG), never anyone's art.
 const web = { 'x-score-client': 'web' }
-const helperName = (info: { repeatEachIndex: number; retry: number }) =>
-  info.repeatEachIndex || info.retry
-    ? `looks-helper-${info.repeatEachIndex}-${info.retry}`
-    : 'looks-helper'
+// A deleted agent's name is retired for good: each test, repeat and retry gets its own.
+const helperName = (info: { repeatEachIndex: number; retry: number; title: string }) => {
+  const kind = info.title.startsWith('a pet pack') ? 'pack' : 'shape'
+  return info.repeatEachIndex || info.retry
+    ? `looks-${kind}-${info.repeatEachIndex}-${info.retry}`
+    : `looks-${kind}`
+}
 
 async function removeHelper(page: Page, id: string) {
   const live = async () => {
@@ -59,19 +63,7 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 })
 
-/** A face-like picture: a pale square with two dark "eyes" and a skin-coloured cheek band under them. */
-const picture = (size = 160) =>
-  makePng(size, size, (x, y) => {
-    const eye = (cx: number) => Math.hypot(x - cx * size, y - 0.4 * size) < 0.06 * size
-    if (eye(0.35) || eye(0.65)) return [30, 30, 40]
-    if (y > 0.45 * size && y < 0.6 * size) return [232, 190, 160]
-    return [168, 200, 232]
-  })
-
-test('look, shape and picture: add an agent as a chibi, change it to a bot with a new shape, add a picture and mark its eyes', async ({
-  page,
-}, testInfo) => {
-  const helper = helperName(testInfo)
+async function addHelper(page: Page, helper: string) {
   await pair(page)
   await page.goto('/team')
   await page.getByRole('button', { name: 'Add agent', exact: true }).click()
@@ -79,118 +71,168 @@ test('look, shape and picture: add an agent as a chibi, change it to a bot with 
   await dialog.getByLabel('Agent name').fill(helper)
   await dialog.getByLabel('Role or description').fill('Checks how agents look')
   await dialog.getByLabel('Model', { exact: true }).fill('fake-model')
+  return dialog
+}
 
-  // Twenty shapes and two looks, as radio groups; the keyboard moves through a group like any native one.
+async function createAndOpen(dialog: ReturnType<Page['getByRole']>) {
+  await dialog.getByRole('button', { name: 'Preview changes' }).click()
+  await dialog.getByRole('button', { name: 'Create agent' }).click()
+  await expect(dialog.getByRole('heading', { name: / joined the team$/ })).toBeVisible()
+  await dialog.getByRole('link', { name: /^Open / }).click()
+}
+
+test('look and shape: add an agent as a ring with a new shape, then change both on the agent page', async ({
+  page,
+}, testInfo) => {
+  const helper = helperName(testInfo)
+  const dialog = await addHelper(page, helper)
+
+  // Two looks and twenty shapes, as radio groups; the keyboard moves through a group like any native one.
   const shapes = dialog.getByRole('radiogroup', { name: 'Shape' })
   await expect(shapes.getByRole('radio')).toHaveCount(20)
   await expect(dialog.getByRole('radiogroup', { name: 'Look' }).getByRole('radio')).toHaveCount(2)
-  await expect(dialog.getByRole('radio', { name: 'Bot' })).toBeChecked()
+  await expect(dialog.getByRole('radio', { name: 'Cut-out' })).toBeChecked()
   const triangle = dialog.getByRole('radio', { name: 'triangle' })
   await expect(triangle).toBeChecked()
   await triangle.focus()
   await page.keyboard.press('ArrowRight')
   await expect(dialog.getByRole('radio', { name: 'diamond' })).toBeChecked()
   await dialog.getByRole('radio', { name: 'gem' }).check()
-  await dialog.getByRole('radio', { name: 'Chibi' }).check()
-  await expect(dialog.getByRole('img', { name: `${helper}, gem` })).toHaveClass(
-    /agent-glyph--chibi/,
-  )
-
-  await dialog.getByRole('button', { name: 'Preview changes' }).click()
-  await dialog.getByRole('button', { name: 'Create agent' }).click()
-  await expect(dialog.getByRole('heading', { name: / joined the team$/ })).toBeVisible()
-  await dialog.getByRole('link', { name: /^Open / }).click()
+  await dialog.getByRole('radio', { name: 'Ring' }).check()
+  await expect(dialog.getByRole('img', { name: `${helper}, gem` })).toHaveClass(/agent-glyph--ring/)
+  await createAndOpen(dialog)
 
   // The agent page shows the chosen look; the style button opens the same choices.
   const trigger = page.getByRole('button', { name: /^Change .* look, colour and shape$/ })
-  await expect(trigger.locator('.agent-glyph--chibi')).toHaveCount(1)
+  await expect(trigger.locator('.agent-glyph--ring')).toHaveCount(1)
   await trigger.click()
   const appearance = page.getByRole('dialog', { name: 'Agent appearance' })
-  await expect(appearance.getByRole('radio', { name: 'Chibi' })).toBeChecked()
+  await expect(appearance.getByRole('radio', { name: 'Ring' })).toBeChecked()
   await expect(appearance.getByRole('radio', { name: 'gem' })).toBeChecked()
-  await appearance.getByRole('radio', { name: 'Bot' }).check()
+  await appearance.getByRole('radio', { name: 'Cut-out' }).check()
   await appearance.getByRole('radio', { name: 'cloud' }).check()
   await appearance.getByRole('button', { name: 'Save appearance' }).click()
   await expect(appearance).toBeHidden()
-  await expect(trigger.locator('.agent-glyph--bot')).toHaveCount(1)
+  await expect(trigger.locator('.agent-glyph--cut')).toHaveCount(1)
   const saved = await (await page.request.get(`/api/agents/${helper}`)).json()
-  expect(saved.style).toMatchObject({ shape: 'cloud', look: 'bot' })
+  expect(saved.style).toMatchObject({ shape: 'cloud', look: 'cut', pack: null })
+  // The server refuses the old looks.
+  const refused = await page.request.patch(`/api/agents/${helper}/style`, {
+    headers: web,
+    data: { look: 'bot' },
+  })
+  expect(refused.status()).toBe(400)
+})
 
-  // A picture: wrong files are refused with reasons, a good one is previewed, then its eyes are marked.
+test('a pet pack: refused with reasons, accepted from a zip with its stray files listed, played by mood, removed', async ({
+  page,
+}, testInfo) => {
+  const helper = helperName(testInfo)
+  const dialog = await addHelper(page, helper)
+  await createAndOpen(dialog)
+  const trigger = page.getByRole('button', { name: /^Change .* look, colour and shape$/ })
   await trigger.click()
-  await appearance.getByLabel('Picture file').setInputFiles({
-    name: 'logo.svg',
-    mimeType: 'image/svg+xml',
-    buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'),
-  })
-  await expect(appearance.getByRole('alert')).toContainText('PNG, JPEG or WebP')
-  await appearance.getByLabel('Picture file').setInputFiles({
-    name: 'tiny.png',
-    mimeType: 'image/png',
-    buffer: makePng(20, 20, () => [200, 200, 200]),
-  })
-  await appearance.getByRole('button', { name: 'Use this picture' }).click()
-  // The server's reasons, not a generic message (each side must be 32 to 2048 px).
-  await expect(appearance.getByRole('alert')).toContainText(/32/)
-  await appearance.getByRole('button', { name: 'Cancel picture' }).click()
+  const appearance = page.getByRole('dialog', { name: 'Agent appearance' })
 
-  await appearance.getByLabel('Picture file').setInputFiles({
-    name: 'face.png',
-    mimeType: 'image/png',
-    buffer: picture(),
-  })
-  await expect(appearance.getByAltText('Preview of face.png')).toBeVisible()
-  await appearance.getByRole('button', { name: 'Use this picture' }).click()
+  // How to make a pack: a disclosure with the naming table.
+  const guide = appearance.getByText('How to make a pack')
+  await guide.click()
+  await expect(appearance.getByRole('rowheader', { name: 'idle' })).toBeVisible()
+  await expect(appearance.getByText('64–2048 px per side')).toBeVisible()
+  await guide.click()
 
-  const marker = appearance.getByRole('region', { name: 'Mark the eyes' })
-  await expect(marker).toBeVisible()
-  const left = marker.getByRole('group', { name: 'Left eye' })
-  const right = marker.getByRole('group', { name: 'Right eye' })
-  await expect(left).toBeVisible()
-  await expect(marker.getByAltText('Your picture, to mark its eyes on')).toBeVisible()
-  // Put the boxes over the eyes (at 35% / 65% across and 40% down): the keyboard moves them, a drag does the same.
-  const image = marker.getByAltText('Your picture, to mark its eyes on')
-  await expect.poll(async () => (await image.boundingBox())?.width ?? 0).toBeGreaterThan(100)
-  // The popover scrolls: bring the boxes into view before reading where they are.
-  await left.scrollIntoViewIfNeeded()
-  const box = (await image.boundingBox())!
-  const leftBox = (await left.boundingBox())!
-  await page.mouse.move(leftBox.x + leftBox.width / 2, leftBox.y + leftBox.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(box.x + box.width * 0.35, box.y + box.height * 0.4, { steps: 6 })
-  await page.mouse.up()
-  await right.focus()
-  const before = (await right.boundingBox())!
-  for (let i = 0; i < 3; i += 1) await page.keyboard.press('Shift+ArrowRight')
-  const after = (await right.boundingBox())!
-  expect(after.x - before.x).toBeGreaterThan(box.width * 0.1)
-  // The preview shows the lids, and the lid colour was sampled from the cheek band under the boxes.
-  await expect(marker.getByText(/Eyelid colour/)).toContainText(/#[0-9A-F]{6}/)
-  await marker.getByRole('button', { name: 'Blink' }).click()
-  await expect(marker.locator('.team-eyes-preview .agent-glyph--asleep')).toHaveCount(1)
-  await expect(marker.locator('.team-eyes-preview .agent-glyph--asleep')).toHaveCount(0)
-  await marker.getByRole('button', { name: 'Save eyes' }).click()
-  await expect(marker).toBeHidden()
+  // A pack without idle, and a file named for no activity, are refused with the server's reasons and nothing is stored.
+  const input = appearance.getByLabel('Pet pack files')
+  await input.setInputFiles(packFiles(['work']))
+  await appearance.getByRole('button', { name: 'Use this pack' }).click()
+  await expect(appearance.getByRole('alert')).toContainText(/idle/i)
+  await appearance.getByRole('button', { name: 'Cancel pack' }).click()
+  await input.setInputFiles(packFiles(['idle', 'sparkle']))
+  await appearance.getByRole('button', { name: 'Use this pack' }).click()
+  await expect(appearance.getByRole('alert')).toContainText(/sparkle/i)
+  await appearance.getByRole('button', { name: 'Cancel pack' }).click()
+  expect((await (await page.request.get(`/api/agents/${helper}`)).json()).style.pack).toBeNull()
 
-  const withEyes = await (await page.request.get(`/api/agents/${helper}`)).json()
-  expect(withEyes.style.avatar).toBeTruthy()
-  expect(withEyes.style.avatarEyes.lid).toMatch(/^#[0-9A-F]{6}$/i)
-  expect(withEyes.style.avatarEyes.left.x).toBeGreaterThan(0.2)
+  // A zip with one top-level folder, an activity file in each case, pet.json and stray files the server leaves out.
+  const files = packFiles(['idle', 'work', 'sleep'])
+  const zip = zipOf([
+    ...files.map((file) => ({ name: `luna/${file.name}`, buffer: file.buffer })),
+    {
+      name: 'luna/pet.json',
+      buffer: Buffer.from(JSON.stringify({ name: 'Test pack', floor: 0.02 })),
+    },
+    { name: '__MACOSX/luna/._idle.png', buffer: Buffer.from('x') },
+    { name: 'luna/.DS_Store', buffer: Buffer.from('x') },
+  ])
+  await input.setInputFiles({ name: 'luna.zip', mimeType: 'application/zip', buffer: zip })
+  await appearance.getByRole('button', { name: 'Use this pack' }).click()
+  const added = appearance.getByRole('status')
+  await expect(added).toContainText('Pack added: idle, work, sleep')
+  const ignored = (await added.getByRole('listitem').allTextContents()).map((text) => text.trim())
+  expect(ignored).toEqual([...ignored].sort())
+  expect(ignored.join(' ')).toContain('.DS_Store')
+  await expect(appearance.getByText('Test pack')).toBeVisible()
 
-  // The picture replaces the bot on the page, its marked eyes have lids, and the badge keeps colour and shape.
-  await page.keyboard.press('Escape')
-  await expect(trigger.locator('.agent-glyph--picture')).toHaveCount(1)
-  await expect(trigger.locator('.agent-glyph__lid')).toHaveCount(2)
-  await expect(trigger.locator('.agent-glyph__badge-shape')).toHaveCount(1)
-  const url = await trigger.locator('image').getAttribute('href')
-  const served = await page.request.get(url!)
+  const stored = (await (await page.request.get(`/api/agents/${helper}`)).json()).style.pack
+  expect(stored.activities).toEqual(expect.arrayContaining(['idle', 'work', 'sleep']))
+  expect(stored.floor).toBe(0.02)
+  // The files are served at their revision, as the images they are, and nowhere else.
+  const url = `/api/agents/${helper}/pack/idle?rev=${stored.rev}`
+  const served = await page.request.get(url)
   expect(served.status()).toBe(200)
   expect(served.headers()['content-type']).toBe('image/png')
+  expect((await page.request.get(`/api/agents/${helper}/pack/idle?rev=stale`)).status()).toBe(404)
+  expect(
+    (await page.request.get(`/api/agents/${helper}/pack/think?rev=${stored.rev}`)).status(),
+  ).toBe(404)
+  expect((await page.request.get(`/api/agents/${helper}/pack/idle`)).status()).toBe(400)
 
-  // Remove the picture: the look comes back.
+  // The page header now wears the pet, with the agent's mark as its badge.
+  await page.keyboard.press('Escape')
+  await expect(trigger.locator('.pet-avatar')).toHaveCount(1)
+  await expect(trigger.locator('.pet-badge .agent-glyph')).toHaveCount(1)
+  await expect(trigger.locator('img[data-anim="idle"]')).toHaveAttribute('src', url)
+
+  // The Team card plays the file for what the agent is doing (the agents snapshot is answered with a status).
+  const withStatus = async (status: string, activity: string) => {
+    await page.route('**/api/agents', async (route) => {
+      const body = await (await route.fetch()).json()
+      for (const item of body.items)
+        if (item.id === helper) Object.assign(item, { status, activity })
+      await route.fulfill({ json: body })
+    })
+    await page.goto('/team')
+    return page.locator('.team-agent-card', { hasText: helper })
+  }
+  let card = await withStatus('working', 'Typing')
+  await expect(card.locator('img[data-anim="work"]')).toHaveClass(/pet-anim--on/)
+  await expect(card.locator('.pet-fx')).toHaveCount(0)
+  // No `needs` file in this pack: idle plays with the "!" overlay and a hop.
+  await page.unroute('**/api/agents')
+  card = await withStatus('waiting', 'Needs you')
+  await expect(card.locator('img[data-anim="idle"]')).toHaveClass(/pet-anim--on/)
+  await expect(card.locator('.pet-alert')).toBeVisible()
+  await expect(card.locator('.pet-stage--hop')).toHaveCount(1)
+  await page.unroute('**/api/agents')
+
+  // Pointing at it says hi (no greet file), and Still shows one still frame on a canvas instead of the animation.
+  card = await withStatus('idle', '')
+  await card.locator('.pet-avatar').hover()
+  await expect(card.locator('.pet-say')).toBeVisible()
+  await page.unroute('**/api/agents')
+  await page.evaluate(() => localStorage.setItem('score.liveliness', 'still'))
+  card = await withStatus('idle', '')
+  await expect(page.locator('html')).toHaveAttribute('data-liveliness', 'still')
+  await expect(card.locator('.pet-avatar canvas')).toHaveCount(1)
+  await expect(card.locator('.pet-avatar img.pet-anim')).toHaveCount(0)
+  await page.unroute('**/api/agents')
+  await page.evaluate(() => localStorage.removeItem('score.liveliness'))
+
+  // Remove the pack: the mark comes back and the files are gone.
+  await page.goto(`/team/${helper}`)
   await trigger.click()
-  await appearance.getByRole('button', { name: 'Remove picture' }).click()
-  await expect(trigger.locator('.agent-glyph--bot')).toHaveCount(1)
-  await expect(trigger.locator('image')).toHaveCount(0)
-  expect((await page.request.get(url!)).status()).toBe(404)
+  await appearance.getByRole('button', { name: 'Remove pack' }).click()
+  await expect(trigger.locator('.pet-avatar')).toHaveCount(0)
+  await expect(trigger.locator('.agent-glyph--cut')).toHaveCount(1)
+  expect((await page.request.get(url)).status()).toBe(404)
 })
