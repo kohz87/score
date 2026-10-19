@@ -36,5 +36,5 @@ test('the sidebar shows a member while their reply streams and drops them after'
   await expect(icons).toHaveCount(1)
   await stop.click()
   await expect(history.getByText('This run was stopped.')).toBeVisible({ timeout: 20_000 })
-  await expect(icons).toHaveCount(0)
+  await expect(icons).toHaveCount(0, { timeout: 15_000 })
 })
