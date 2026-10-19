@@ -911,29 +911,31 @@ assignments, verifies a private export first, and retires the name. Exports omit
 their local path is displayed but their bytes are never served. Retired-name reuse is currently refused until an
 incarnation-aware reuse confirmation contract is agreed.
 
-- `PATCH /api/agents/:agentId/style` `AgentStylePatch` `{ color?; shape?; look? }` → `AgentSummary`. `look` is `'bot'`
-  (default) or `'chibi'` (PLAN 10.2). Shapes: `circle-dot`, `triangle`, `diamond`, `square`, `hexagon`, `star`, `pill`,
+- `PATCH /api/agents/:agentId/style` `AgentStylePatch` `{ color?; shape?; look? }` → `AgentSummary` (Hermes profiles and
+  coding agents alike; ids are unique across both). `look` is `'cut'` (default: a solid mark with cut-out eyes) or
+  `'ring'` (PLAN 10.2, decision 108). Shapes: `circle-dot`, `triangle`, `diamond`, `square`, `hexagon`, `star`, `pill`,
   `cross`, `cloud`, `cylinder`, `heart`, `drop`, `bolt`, `moon`, `leaf`, `blob`, `shield`, `octagon`, `bubble`, `gem`.
-  `AgentStyle` is `{ color; shape; look?; avatar?: string|null }` (absent `look` = `bot`, absent `avatar` = none, as
-  stored before 10.2); `avatar` is set only by the routes below.
-- **Agent pictures (PLAN 10.2, decision 105).** One imported picture per agent (Hermes profile or coding agent; ids
-  are unique across both), shown instead of the bot or chibi, animated by Score, with a small badge in the agent's
-  colour and shape so agents stay told apart by colour and shape.
-  - `PUT /api/agents/:agentId/avatar` multipart, one file: PNG, JPEG or WebP, ≤ 2 MB, each side 32–2048 px; the type
-    is taken from the bytes (magic number and header, which must agree with the file name's extension), never from
-    the client; SVG, animated images and anything else are refused. → `AgentSummary` with `style.avatar` = a new
-    revision. `422 avatar_rejected { reasons[] }`; `404` for an unknown agent; human-guarded mutation.
-  - `DELETE /api/agents/:agentId/avatar` → `AgentSummary` (`style.avatar: null`, `style.avatarEyes: null`).
-  - `PUT /api/agents/:agentId/avatar/eyes` `AvatarEyes` `{ left; right; lid }` (boxes as fractions of the picture,
-    inside it; `lid` a hex colour) → `AgentSummary` with `style.avatarEyes`; `404` when the agent has no picture.
-    `DELETE /api/agents/:agentId/avatar/eyes` → `AgentSummary` (`avatarEyes: null`). A new picture clears the marks.
-    Score blinks and closes the marked eyes (decision 106); without marks the picture moves as a whole.
-  - `GET /api/agents/:agentId/avatar?rev=<rev>` → the bytes with their exact type, `X-Content-Type-Options: nosniff`,
-    `Content-Disposition: inline`, `Cache-Control: private, max-age=31536000, immutable` (a new picture is a new
-    revision). A `rev` that is not the current one, or no picture, is `404`.
-  - Stored at `$SCORE_HOME/avatars/<agentId>/<rev>.<png|jpg|webp>` (folder 0700, file 0600), written to a temp file
-    and renamed; the old file is removed after the row commits. Deleting an agent deletes its folder. Every change
-    emits `agent.updated` with the new style.
+  `AgentStyle` is `{ color; shape; look?; pack?: PetPack|null }` (absent `look` = `cut`, absent `pack` = none, as stored
+  before 10.2); `pack` is set only by the routes below.
+- **Pet packs (PLAN 10.2, decisions 107–108).** An agent may wear an animated avatar: a pack of looping animations, one
+  per activity — `idle` (required), `work`, `think`, `needs`, `sleep`, `walk`, `stretch`, `coffee`, `read`, `greet`,
+  `happy` — plus an optional `pet.json` (`PetPackManifest` `{ name?; credits?; floor? }`, `floor` 0–0.3). The agent's
+  mark stays its badge and its look in lists. Score only reads the images and `pet.json`; nothing in a pack runs.
+  - `PUT /api/agents/:agentId/pack` multipart: either **one `.zip`** or **several activity files**. Accepted entries:
+    `<activity>.webp|png|gif` and `pet.json`, at the top level or inside one top-level folder; `__MACOSX/`, `.DS_Store`
+    and other files are ignored and listed back (`ignored[]`). Each image: the type from its bytes (WebP, PNG/APNG, GIF;
+    animated allowed), the extension must agree, 64–2048 px per side, ≤ 8 MB; the pack ≤ 64 MB unpacked; zips go
+    through the shared zip rules (structure, ratio, entry count ≤ 24). `idle` missing, an unknown activity name, or a
+    bad file is `422 pack_rejected { reasons[] }` and stores nothing. → `{ agent: AgentSummary; ignored: string[] }`
+    with `style.pack` = a new revision.
+  - `DELETE /api/agents/:agentId/pack` → `AgentSummary` (`style.pack: null`).
+  - `GET /api/agents/:agentId/pack/:activity?rev=<rev>` → the image with its exact type, `nosniff`, `inline`,
+    `Cache-Control: private, max-age=31536000, immutable`. Not the current revision, an activity the pack lacks, or no
+    pack: `404`. Missing or malformed `rev`: `400`.
+  - Stored at `$SCORE_HOME/packs/<agentId>/<rev>/<activity>.<ext>` (folders 0700, files 0600), written to a temp
+    folder and renamed into place, the row committed, then the old revision removed; recovery at start keeps only the
+    revision each row names. No symlink is followed on any part of a path. Deleting an agent deletes its packs. Every
+    change emits `agent.updated` with the new style.
 - **S** `GET /api/agents/:agentId` → `AgentDetail`
   ```ts
   type AgentDetail = AgentSummary & {

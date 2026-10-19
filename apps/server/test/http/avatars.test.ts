@@ -277,6 +277,7 @@ test('the picture survives changes to colour, shape and look, and a restart; a p
     shape: 'cloud',
     look: 'chibi',
     avatar: rev,
+    avatarEyes: null,
   })
   const again = await app.inject({
     method: 'PATCH',
@@ -314,4 +315,136 @@ test('start-up recovery keeps the current picture and removes strays, temp files
   expect(readdirSync(avatars())).toEqual(['builder'])
   expect(readdirSync(folder)).toEqual([`${rev}.png`])
   expect((await get(rev)).statusCode).toBe(200)
+})
+
+const eyes = {
+  left: { x: 0.3, y: 0.5, w: 0.1, h: 0.12 },
+  right: { x: 0.56, y: 0.41, w: 0.12, h: 0.13 },
+  lid: '#fce9df',
+}
+const putEyes = (body: unknown, agent = 'builder', headers = guardHeaders()) =>
+  app.inject({
+    method: 'PUT',
+    url: `/api/agents/${agent}/avatar/eyes`,
+    headers,
+    payload: body as object,
+  })
+const removeEyes = (agent = 'builder', headers = guardHeaders()) =>
+  app.inject({ method: 'DELETE', url: `/api/agents/${agent}/avatar/eyes`, headers })
+
+test('eye marks: PUT stores them with the picture, returns the agent, says so, and survives a restart', async () => {
+  const rev = (await put('a.png', png)).json().style.avatar
+  const sent = events().length
+  const response = await putEyes(eyes)
+  expect(response.statusCode, response.body).toBe(200)
+  const agent = AgentSummarySchema.parse(response.json())
+  expect(agent.style).toMatchObject({ avatar: rev, avatarEyes: eyes })
+  expect(events()).toHaveLength(sent + 1)
+  expect(events().at(-1).style.avatarEyes).toEqual(eyes)
+  expect(
+    JSON.parse(
+      String(env.db.sqlite.prepare('SELECT avatar_eyes FROM agent_styles').get()!.avatar_eyes),
+    ),
+  ).toEqual(eyes)
+  expect((await app.inject('/api/agents/builder')).json().style.avatarEyes).toEqual(eyes)
+  // The same marks again say nothing; moved marks do.
+  expect((await putEyes(eyes)).statusCode).toBe(200)
+  expect(events()).toHaveLength(sent + 1)
+  const moved = { ...eyes, lid: '#112233' }
+  expect((await putEyes(moved)).json().style.avatarEyes.lid).toBe('#112233')
+  expect(events()).toHaveLength(sent + 2)
+  await app.close()
+  await boot()
+  expect((await app.inject('/api/agents/builder')).json().style).toMatchObject({
+    avatar: rev,
+    avatarEyes: moved,
+  })
+})
+
+test('eye marks: no picture is 404; a box outside the picture, a bad lid or a missing eye is 400; nothing is stored', async () => {
+  await app.inject('/api/agents')
+  expect((await putEyes(eyes)).statusCode).toBe(404)
+  await put('a.png', png)
+  const sent = events().length
+  for (const bad of [
+    { ...eyes, left: { x: 0.95, y: 0.5, w: 0.1, h: 0.1 } },
+    { ...eyes, left: { x: 0.1, y: 0.1, w: 0, h: 0.1 } },
+    { ...eyes, lid: 'skin' },
+    { left: eyes.left, lid: eyes.lid },
+    {},
+    null,
+  ])
+    expect((await putEyes(bad)).statusCode, JSON.stringify(bad)).toBe(400)
+  expect(env.db.sqlite.prepare('SELECT avatar_eyes FROM agent_styles').all()).toEqual([
+    { avatar_eyes: null },
+  ])
+  expect(events()).toHaveLength(sent)
+})
+
+test('eye marks: guard, CSRF header and unknown agent are enforced on PUT and DELETE', async () => {
+  await put('a.png', png)
+  expect((await putEyes(eyes, 'builder', { 'x-score-client': 'web' } as never)).statusCode).toBe(
+    401,
+  )
+  expect((await putEyes(eyes, 'builder', { cookie } as never)).statusCode).toBe(403)
+  expect((await removeEyes('builder', { 'x-score-client': 'web' } as never)).statusCode).toBe(401)
+  expect((await removeEyes('builder', { cookie } as never)).statusCode).toBe(403)
+  expect((await putEyes(eyes, 'missing')).statusCode).toBe(404)
+  expect((await removeEyes('missing')).statusCode).toBe(404)
+  expect(env.db.sqlite.prepare('SELECT avatar_eyes FROM agent_styles').all()).toEqual([
+    { avatar_eyes: null },
+  ])
+})
+
+test('eye marks: DELETE clears them once, and a second DELETE changes nothing', async () => {
+  await put('a.png', png)
+  await putEyes(eyes)
+  const sent = events().length
+  const response = await removeEyes()
+  expect(response.statusCode).toBe(200)
+  expect(response.json().style.avatarEyes).toBeNull()
+  expect(response.json().style.avatar).toEqual(expect.any(String))
+  expect(events()).toHaveLength(sent + 1)
+  expect((await removeEyes()).statusCode).toBe(200)
+  expect(events()).toHaveLength(sent + 1)
+  // Also fine for an agent with no picture at all.
+  await remove()
+  expect((await removeEyes()).statusCode).toBe(200)
+})
+
+test('a new picture and DELETE …/avatar both clear the marks; colour, shape and look changes keep them', async () => {
+  await put('a.png', png)
+  await putEyes(eyes)
+  const patched = await app.inject({
+    method: 'PATCH',
+    url: '/api/agents/builder/style',
+    headers: guardHeaders(),
+    payload: { shape: 'gem', look: 'chibi', avatarEyes: { forged: true } },
+  })
+  expect(patched.statusCode).toBe(200)
+  expect(patched.json().style.avatarEyes).toEqual(eyes)
+  const replaced = await put('b.png', pngImage(80, 80))
+  expect(replaced.json().style.avatarEyes).toBeNull()
+  expect(events().at(-1).style.avatarEyes).toBeNull()
+  await putEyes(eyes)
+  const removed = await remove()
+  expect(removed.json().style).toMatchObject({ avatar: null, avatarEyes: null })
+  expect(env.db.sqlite.prepare('SELECT avatar_rev, avatar_eyes FROM agent_styles').all()).toEqual([
+    { avatar_rev: null, avatar_eyes: null },
+  ])
+  // With the picture gone there is nothing to mark.
+  expect((await putEyes(eyes)).statusCode).toBe(404)
+})
+
+test('marks stored as invalid JSON, or outside the schema, read as none', async () => {
+  await put('a.png', png)
+  await putEyes(eyes)
+  for (const stored of ['{not json', '{"left":1}', '[]']) {
+    env.db.sqlite.prepare('UPDATE agent_styles SET avatar_eyes = ?').run(stored)
+    await app.close()
+    await boot()
+    const style = (await app.inject('/api/agents/builder')).json().style
+    expect(style.avatarEyes ?? null, stored).toBeNull()
+    expect(style.avatar).toEqual(expect.any(String))
+  }
 })

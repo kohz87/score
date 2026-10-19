@@ -13,6 +13,7 @@ import {
 } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import { parseAvatarEyes } from '../../avatars/eyes.ts'
 
 const RowSchema = z.object({
   id: z.string(),
@@ -27,6 +28,7 @@ const RowSchema = z.object({
   shape: ShapeSchema,
   look: AgentLookSchema,
   avatar_rev: AvatarRevSchema.nullable(),
+  avatar_eyes: z.string().nullable(),
   confirmed_version: z.string().nullable(),
   quota_floor_percent: z.int().min(0).max(50),
   created_at: z.iso.datetime(),
@@ -59,7 +61,13 @@ const toAgent = (value: unknown): StoredCodingAgent => {
     workspace: row.workspace,
     permission: row.permission,
     model: row.model,
-    style: { color: row.color, shape: row.shape, look: row.look, avatar: row.avatar_rev },
+    style: {
+      color: row.color,
+      shape: row.shape,
+      look: row.look,
+      avatar: row.avatar_rev,
+      avatarEyes: parseAvatarEyes(row.avatar_eyes),
+    },
     confirmedVersion: row.confirmed_version,
     quotaFloorPercent: row.quota_floor_percent,
     createdAt: row.created_at,
@@ -156,7 +164,9 @@ export function updateCodingAgent(
 export function removeCodingAgent(sqlite: DatabaseSync, id: string, now: string): void {
   // The picture goes with the agent (its folder is removed by the caller).
   sqlite
-    .prepare('UPDATE coding_agents SET removed_at = ?, avatar_rev = NULL WHERE id = ?')
+    .prepare(
+      'UPDATE coding_agents SET removed_at = ?, avatar_rev = NULL, avatar_eyes = NULL WHERE id = ?',
+    )
     .run(now, id)
   // Same transaction: a deleted agent's MCP token and switches must not outlive it.
   sqlite.prepare('DELETE FROM mcp_access WHERE agent_id = ?').run(id)

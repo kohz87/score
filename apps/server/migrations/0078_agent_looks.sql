@@ -9,6 +9,8 @@ CREATE TABLE agent_styles_new (
   look TEXT NOT NULL DEFAULT 'bot' CHECK (look IN ('bot','chibi')),
   -- The revision of the imported picture ($SCORE_HOME/avatars/<agent_id>/<avatar_rev>.<ext>); NULL = none.
   avatar_rev TEXT,
+  -- Where the eyes are on that picture (JSON, AvatarEyes): lets Score blink and close them; NULL = not marked.
+  avatar_eyes TEXT,
   updated_at TEXT NOT NULL
 ) STRICT;
 INSERT INTO agent_styles_new (agent_id, color, shape, updated_at)
@@ -20,6 +22,7 @@ ALTER TABLE agent_styles_new RENAME TO agent_styles;
 -- agent_styles override moves into the row, so there is exactly one place per agent.
 ALTER TABLE coding_agents ADD COLUMN look TEXT NOT NULL DEFAULT 'bot' CHECK (look IN ('bot','chibi'));
 ALTER TABLE coding_agents ADD COLUMN avatar_rev TEXT;
+ALTER TABLE coding_agents ADD COLUMN avatar_eyes TEXT;
 UPDATE coding_agents SET
   color = (SELECT s.color FROM agent_styles s WHERE s.agent_id = coding_agents.id),
   shape = (SELECT s.shape FROM agent_styles s WHERE s.agent_id = coding_agents.id)

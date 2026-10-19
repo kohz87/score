@@ -2,7 +2,9 @@ import {
   AgentLookSchema,
   AgentStyleSchema,
   AgentSummarySchema,
+  AvatarEyesSchema,
   AvatarRevSchema,
+  type AvatarEyes,
   ShapeSchema,
   type AgentLook,
   type AgentStyle,
@@ -15,6 +17,7 @@ import type { Ingest } from '../hub/ingest.ts'
 import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 import { withInheritance } from './team-rules.ts'
 import { applyLifecycle } from './agent-lifecycle.ts'
+import { parseAvatarEyes } from '../avatars/eyes.ts'
 import { isCodingAgent } from '../runtimes/coding/store.ts'
 
 // Defaults stay on the original eight shapes (the rest, PLAN 10.2, are chosen), so no agent's default look changes.
@@ -32,20 +35,32 @@ const StyleRowSchema = z.object({
   shape: AgentStyleSchema.shape.shape,
   look: AgentLookSchema,
   avatar_rev: AvatarRevSchema.nullable(),
+  avatar_eyes: z.string().nullable(),
   updated_at: z.iso.datetime(),
 })
 /** A style with every optional part spelled out (absent look = bot, absent avatar = none), so styles compare equal. */
 export function completeStyle(
   style: AgentStyle,
-): AgentStyle & { look: AgentLook; avatar: string | null } {
-  return { ...style, look: style.look ?? 'bot', avatar: style.avatar ?? null }
+): AgentStyle & { look: AgentLook; avatar: string | null; avatarEyes: AvatarEyes | null } {
+  return {
+    ...style,
+    look: style.look ?? 'bot',
+    avatar: style.avatar ?? null,
+    avatarEyes: style.avatarEyes ?? null,
+  }
 }
 /**
  * What a client may put in a style it sends (create, import, patch): colour, shape and look. The picture has its own
  * routes and is never taken from a request body.
  */
 export function clientStyle(style: AgentStyle): AgentStyle {
-  return { color: style.color, shape: style.shape, look: style.look ?? 'bot', avatar: null }
+  return {
+    color: style.color,
+    shape: style.shape,
+    look: style.look ?? 'bot',
+    avatar: null,
+    avatarEyes: null,
+  }
 }
 export function readAgent(sqlite: DatabaseSync, id: string): AgentDetail | null {
   const row = sqlite.prepare('SELECT detail FROM agents_proj WHERE id = ?').get(id)
@@ -65,7 +80,7 @@ export function readAgentNames(sqlite: DatabaseSync): { id: string; name: string
 export function readAgentStyle(sqlite: DatabaseSync, id: string): AgentStyle | null {
   const row = sqlite
     .prepare(
-      'SELECT color, shape, look, avatar_rev, updated_at FROM agent_styles WHERE agent_id = ?',
+      'SELECT color, shape, look, avatar_rev, avatar_eyes, updated_at FROM agent_styles WHERE agent_id = ?',
     )
     .get(id)
   if (!row) return null
@@ -75,11 +90,12 @@ export function readAgentStyle(sqlite: DatabaseSync, id: string): AgentStyle | n
     shape: parsed.shape,
     look: parsed.look,
     avatar: parsed.avatar_rev,
+    avatarEyes: parseAvatarEyes(parsed.avatar_eyes),
   })
 }
 /**
  * Writes the style of an agent where it lives: a coding agent in its own row, a Hermes profile in `agent_styles`.
- * The picture revision is left alone unless `avatar` is given (only the picture routes do that).
+ * The picture revision and its eye marks are left alone unless `avatar` is given (only the picture routes do that).
  */
 export function writeAgentStyle(
   sqlite: DatabaseSync,
@@ -89,23 +105,32 @@ export function writeAgentStyle(
   options: { avatar?: boolean } = {},
 ): void {
   const full = completeStyle(style)
+  // Validated on the way in as on the way out.
+  const eyes = AvatarEyesSchema.nullable().parse(full.avatarEyes)
+  const stored = eyes === null ? null : JSON.stringify(eyes)
   if (isCodingAgent(sqlite, agentId)) {
     sqlite
       .prepare(
-        `UPDATE coding_agents SET color = ?, shape = ?, look = ?${options.avatar ? ', avatar_rev = ?' : ''} WHERE id = ?`,
+        `UPDATE coding_agents SET color = ?, shape = ?, look = ?${options.avatar ? ', avatar_rev = ?, avatar_eyes = ?' : ''} WHERE id = ?`,
       )
       .run(
-        ...[full.color, full.shape, full.look, ...(options.avatar ? [full.avatar] : []), agentId],
+        ...[
+          full.color,
+          full.shape,
+          full.look,
+          ...(options.avatar ? [full.avatar, stored] : []),
+          agentId,
+        ],
       )
     return
   }
   sqlite
     .prepare(
-      `INSERT INTO agent_styles (agent_id, color, shape, look, avatar_rev, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO agent_styles (agent_id, color, shape, look, avatar_rev, avatar_eyes, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (agent_id) DO UPDATE SET color = excluded.color, shape = excluded.shape, look = excluded.look,
-         ${options.avatar ? 'avatar_rev = excluded.avatar_rev,' : ''} updated_at = excluded.updated_at`,
+         ${options.avatar ? 'avatar_rev = excluded.avatar_rev, avatar_eyes = excluded.avatar_eyes,' : ''} updated_at = excluded.updated_at`,
     )
-    .run(agentId, full.color, full.shape, full.look, full.avatar ?? null, now)
+    .run(agentId, full.color, full.shape, full.look, full.avatar, stored, now)
 }
 export function storeAgent(sqlite: DatabaseSync, raw: AgentDetail): void {
   const agent = applyLifecycle(sqlite, withInheritance(sqlite, raw))

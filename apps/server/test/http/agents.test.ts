@@ -82,6 +82,7 @@ test('style patch persists, emits once, replays receipts and survives app/adapte
     shape: 'hexagon',
     look: 'bot',
     avatar: null,
+    avatarEyes: null,
   })
   expect((await patch({ shape: 'hexagon', color: '#123456' }, headers)).json()).toEqual(
     response.json(),
@@ -109,6 +110,7 @@ test('concurrent partial patches merge through ingest without losing a field', a
     shape: 'cross',
     look: 'bot',
     avatar: null,
+    avatarEyes: null,
   })
 })
 test('unchanged style produces no additional event, but stores the override', async () => {
@@ -251,6 +253,7 @@ test('PLAN 10.2: look and the new shapes persist, merge with the rest, emit, and
     shape: 'cloud',
     look: 'chibi',
     avatar: null,
+    avatarEyes: null,
   })
   expect(
     env.db.sqlite.prepare('SELECT color, shape, look, avatar_rev FROM agent_styles').all(),
