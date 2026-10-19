@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.1] — 2026-10-19
+
+### Fixed
+- Terminal: the security password field sat right against its label; it now has the label above and a full-width field,
+  like the other password fields.
+
 ## [1.9.0] — 2026-10-19
 
 ### Changed

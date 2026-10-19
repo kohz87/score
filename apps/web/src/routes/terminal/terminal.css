@@ -18,6 +18,23 @@
   gap: 10px;
   max-width: 360px;
 }
+/* The password field as in Settings › Remote access: its label above, a full-width field below. */
+.terminal-auth label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.terminal-auth input {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-14);
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
 .terminal-auth button,
 .terminal-keys button {
   min-height: 44px;

@@ -402,3 +402,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   broke), server 4497 +14 skipped, plugin 323 (one interpreter segfault in `test_sender.py::test_bounded_queue_drops_oldest_once`,
   3/3 clean reruns — follow-up), license ok.
 - **v1.9.0 deployed** (2026-10-19 03:19 UTC): backup `score-pre-1.9.0-20261019.db`, gateway restarted, both producers re-registered, health 200 on LAN and Tailscale, `/settings/logs` deep link 200.
+- **1.9.1** (owner report): Terminal password field styled like Settings › Remote access (label above, 40px field); before/after screenshots at 1280 and 390; terminal e2e pass.
