@@ -413,3 +413,7 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **10.2 paused** (owner, 2026-10-19: "should we stop until we solidify the avatar design?"): 10.2a parked on its branch
   (design-independent); 10.2b asked to stop at a clean point, commit solid parts as WIP, no baselines. Design being
   settled in the preview (pets in their own corner, eye marks for imported pictures).
+- **10.2 resumed with the settled design** (decision 106, owner's four answers): pet corners on Team and the agent page,
+  moods in place elsewhere, plain shape in lists; Lively/Calm/Still per device; eye marks for pictures; bot default.
+  Lead wrote the eye-mark contract on `task/10.2a` (af7997c5). Running: 10.2a (eye storage), 10.2b (finish + eye-mark
+  UI), 10.2c (PetCorner + liveliness, from 10.2b). Merge order: 10.2a → 10.2b → 10.2c → main; baselines once.
