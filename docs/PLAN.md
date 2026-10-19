@@ -484,3 +484,9 @@ under each chat room's title where its members live: pets wander and take breaks
 thinking, working or waiting for you; click a member to @mention it; hide per device; Lively / Calm / Still. Done
 when: the brief's behaviours work against live room state in tests, theme protection covers the stage, and the Chat
 visual baselines are regenerated once and reviewed by the lead.
+
+**10.11 Room activity means busy now** (owner 2026-10-19, after 10.10) · `Room.activeAgents` (the sidebar's icons next
+to each room) becomes the members busy in the room right now — a streaming reply there, or a pending actionable approval
+tied to the room (or to none) — instead of "wrote in the last 10 minutes", so the sidebar agrees with the room stage and
+header. Done when: the server computes it so, rooms update live when a reply starts/ends or an approval opens/closes,
+and the sidebar shows the same members as the stage's thinking/working/waiting moods.
