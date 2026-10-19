@@ -144,19 +144,17 @@ export function PetAvatar({
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [pet])
-  // Files are fetched when they are first needed, then kept so the next crossfade is instant.
+  // Files are fetched when they are first needed, then kept so the next crossfade is instant; a new pack is new files.
+  // (State derived while rendering, which React re-renders at once.)
   const [fetched, setFetched] = useState<ReadonlySet<string>>(() => new Set(['idle', view.file]))
-  const shown = fetched.has(view.file) ? fetched : new Set([...fetched, view.file])
-  useEffect(() => {
-    if (!fetched.has(view.file)) setFetched(shown)
-  }, [view.file, fetched, shown])
-  // A new pack is new files.
-  const rev = useRef(pack.rev)
-  useEffect(() => {
-    if (rev.current === pack.rev) return
-    rev.current = pack.rev
+  const [fetchedRev, setFetchedRev] = useState(pack.rev)
+  if (fetchedRev !== pack.rev) {
+    setFetchedRev(pack.rev)
     setFetched(new Set(['idle', view.file]))
-  }, [pack.rev, view.file])
+  } else if (!fetched.has(view.file)) {
+    setFetched(new Set([...fetched, view.file]))
+  }
+  const shown = fetched
 
   const still = liveliness === 'still'
   const style = {

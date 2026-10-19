@@ -3,7 +3,6 @@ import { ShapeSchema, type AgentStyle, type Shape } from '@score/contract'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { AgentGlyph, agentTint } from './AgentGlyph.tsx'
-import { agentShapes } from './agent-shapes.ts'
 
 const shapes = ShapeSchema.options
 const sizes = ['xs', 'sm', 'md', 'lg'] as const
