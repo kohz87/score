@@ -68,8 +68,8 @@ function waitingHere(input: StageInput): Set<string> {
 /**
  * One mood per member. Waiting for you comes first (it needs the person), then paused or offline (a stale reply can't
  * keep a stopped agent working), then working (text or a tool call in flight), then thinking (a turn started and
- * nothing to show yet: an open reply with nothing in it, or typing without text). `Room.activeAgents` is not used: it
- * lists who wrote in the last ten minutes, not who is busy.
+ * nothing to show yet: an open reply with nothing in it, or typing without text). `Room.activeAgents` is not used: the
+ * server computes it by these same rules for the sidebar, but only this live state tells thinking from working.
  */
 export function stageMoods(input: StageInput): Record<string, StageMood> {
   const needs = waitingHere(input)

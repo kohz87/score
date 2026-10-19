@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
-import { readRoom, storeMessage, updateMessage } from '../../src/domain/rooms.ts'
+import { readRoom, resendRooms, storeMessage, updateMessage } from '../../src/domain/rooms.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
@@ -267,12 +267,12 @@ test('reading an empty streaming placeholder does not acknowledge the answer tha
   expect(DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json()).room.unread).toBe(1)
 })
 
-test('read marker persists across reopen and activity expires with a single room event', async () => {
+test('read marker persists across reopen', async () => {
   const room = await create()
   await agentMessage(room.id)
   await agentMessage(room.id, 'review', 'reviewer')
   expect(DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json()).room.activeAgents).toEqual(
-    ['builder', 'reviewer'],
+    [],
   )
   await get(`/api/rooms/${room.id}/messages`)
   await app.close()
@@ -289,18 +289,6 @@ test('read marker persists across reopen and activity expires with a single room
     clock: () => scheduler.now(),
   })
   expect(DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json()).room.unread).toBe(0)
-  await scheduler.advance(600000)
-  const count = events().length
-  expect(DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json()).room.activeAgents).toEqual(
-    [],
-  )
-  expect(events()).toHaveLength(count + 1)
-  expect(events().at(-1)).toMatchObject({
-    type: 'room.upserted',
-    data: { unread: 0, activeAgents: [] },
-  })
-  await get(`/api/rooms/${room.id}`)
-  expect(events()).toHaveLength(count + 1)
 })
 
 test('room creates, updates and message posts replay exact receipts with no repeated events', async () => {
@@ -472,7 +460,7 @@ test('fake scenario persists full conversation, deltas, completion and unread vi
   expect(room).toMatchObject({
     name: '#activity-feed',
     unread: 4,
-    activeAgents: ['builder', 'lead', 'reviewer'],
+    activeAgents: ['designer'],
   })
   const page = PageSchema.parse((await get(`/api/rooms/${room.id}/messages`)).json())
   expect(page.items.map((message) => message.id)).toEqual([
@@ -678,9 +666,24 @@ test('room/message projections roll back together with their events on a failed 
   expect(events()).toHaveLength(count)
 })
 
-test('idle activity expiry emits on the periodic sweep without an API read', async () => {
+test('an approval that expires while idle clears its agent on the periodic sweep', async () => {
   const room = await create()
-  await agentMessage(room.id)
+  const at = new Date(scheduler.now()).toISOString()
+  db.sqlite
+    .prepare(
+      `INSERT INTO producers (id, profile, incarnation, pid, isolation, plugin_version, private_apis, token_hash,
+        token_expires_at, created_at, last_seen_at, gateway_approvals)
+       VALUES ('p1', 'builder', 'inc', 1, 'host', '1', '{}', 'hash', 0, ?, ?, 1)`,
+    )
+    .run(at, new Date(scheduler.now() + 3_600_000).toISOString())
+  db.sqlite
+    .prepare(
+      `INSERT INTO approvals (id, origin, stage, target_kind, request_id, producer_id, profile, session_key, surface,
+        command, description, pattern_keys, choices, phase, status, created_at, expires_at, updated_at)
+       VALUES ('a1', 'gateway', 'human', 'gateway_request', 'req', 'p1', 'builder', 's', 'cli', 'rm', 'd', '[]',
+        '["once"]', 'human_pending', 'pending', ?, ?, ?)`,
+    )
+    .run(at, new Date(scheduler.now() + 300_000).toISOString(), at)
   await app.close()
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
   try {
@@ -699,11 +702,72 @@ test('idle activity expiry emits on the periodic sweep without an API read', asy
     expect(events()).toHaveLength(count + 1)
     expect(events().at(-1)).toMatchObject({
       type: 'room.upserted',
-      data: { id: room.id, activeAgents: [], unread: 1 },
+      data: { id: room.id, activeAgents: [] },
     })
     await vi.advanceTimersByTimeAsync(30000)
     await ingest.drain()
     expect(events()).toHaveLength(count + 1)
+    await app.close()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('a compatibility change that switches approvals off clears their agents on the next sweep', async () => {
+  const room = await create()
+  const at = new Date(scheduler.now()).toISOString()
+  db.sqlite
+    .prepare(
+      `INSERT INTO producers (id, profile, incarnation, pid, isolation, plugin_version, private_apis, token_hash,
+        token_expires_at, created_at, last_seen_at, gateway_approvals)
+       VALUES ('p1', 'builder', 'inc', 1, 'host', '1', '{}', 'hash', 0, ?, ?, 1)`,
+    )
+    .run(at, new Date(scheduler.now() + 3_600_000).toISOString())
+  db.sqlite
+    .prepare(
+      `INSERT INTO approvals (id, origin, stage, target_kind, request_id, producer_id, profile, session_key, surface,
+        command, description, pattern_keys, choices, phase, status, created_at, updated_at)
+       VALUES ('a1', 'gateway', 'human', 'gateway_request', 'req', 'p1', 'builder', 's', 'cli', 'rm', 'd', '[]',
+        '["once"]', 'human_pending', 'pending', ?, ?)`,
+    )
+    .run(at, at)
+  await app.close()
+  const status = port.status()
+  let disabled: string[] = []
+  vi.spyOn(port, 'status').mockImplementation(() => ({
+    ...status,
+    compatibility: { ...status.compatibility, disabled },
+  }))
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  try {
+    app = buildApp({
+      config: loadConfig({ SCORE_MODE: 'fake' }),
+      logger: false,
+      db,
+      ingest,
+      port,
+      clock: () => scheduler.now(),
+    })
+    await ingest.submit({
+      source: 'test',
+      identity: 'initial',
+      apply: ({ sqlite, now }) => resendRooms(sqlite, now),
+    })
+    await vi.advanceTimersByTimeAsync(30000)
+    await ingest.drain()
+    const count = events().length
+    await vi.advanceTimersByTimeAsync(30000)
+    await ingest.drain()
+    expect(events()).toHaveLength(count)
+    expect(events().at(-1)).toMatchObject({ data: { activeAgents: ['builder'] } })
+    disabled = ['gateway-approvals']
+    await vi.advanceTimersByTimeAsync(30000)
+    await ingest.drain()
+    expect(events()).toHaveLength(count + 1)
+    expect(events().at(-1)).toMatchObject({
+      type: 'room.upserted',
+      data: { id: room.id, activeAgents: [] },
+    })
     await app.close()
   } finally {
     vi.useRealTimers()
@@ -736,29 +800,6 @@ test('rooms migration enforces STRICT tables, valid JSON, author constraints and
   expect(() =>
     db.sqlite.prepare('INSERT INTO room_reads VALUES (?, ?, ?)').run('missing', now, 'message'),
   ).toThrow()
-})
-
-test('activity cannot change between refresh and snapshot without advancing its watermark', async () => {
-  const room = await create()
-  await agentMessage(room.id)
-  await scheduler.advance(599999)
-  const submit = ingest.submit.bind(ingest)
-  const spy = vi.spyOn(ingest, 'submit').mockImplementation(async (observation) => {
-    const result = await submit(observation)
-    await scheduler.advance(2)
-    return result
-  })
-  const response = DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json())
-  expect(response.room.activeAgents).toEqual(['builder'])
-  expect(events().at(-1)).toMatchObject({
-    seq: response.asOfSeq,
-    type: 'room.upserted',
-    data: { activeAgents: ['builder'] },
-  })
-  spy.mockRestore()
-  const refreshed = DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json())
-  expect(refreshed.room.activeAgents).toEqual([])
-  expect(refreshed.asOfSeq).toBeGreaterThan(response.asOfSeq)
 })
 
 test('an idle activity refresh creates no observation (gate review #13)', async () => {

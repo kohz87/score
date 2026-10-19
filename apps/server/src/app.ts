@@ -33,6 +33,7 @@ import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
 import { registerThemeRoutes } from './http/themes.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
+import { setRoomCompatibility } from './domain/rooms.ts'
 import { registerOutsideSessionRoutes } from './http/outside-sessions.ts'
 import { registerShareRoutes } from './http/shares.ts'
 import { registerConversationRoutes } from './http/conversations.ts'
@@ -322,6 +323,9 @@ export function buildApp({
   registerCurrencyRoutes(app, db)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
+    setRoomCompatibility(
+      () => bridge?.getCompatibility().disabled ?? port.status().compatibility.disabled,
+    )
     const dispatch = registerRoomRoutes(
       app,
       port,

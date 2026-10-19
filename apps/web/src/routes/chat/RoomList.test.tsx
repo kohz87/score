@@ -56,6 +56,21 @@ test('lists pinned rooms first, a collapsible project and a Show archived toggle
   expect(screen.getByRole('link', { name: /#old/ })).toBeDefined()
 })
 
+test('a room shows the members that are busy in it now, and none once they are done', () => {
+  const busy = room('a', { activeAgents: ['builder'] })
+  view([busy, room('b')])
+  const link = screen.getByRole('link', { name: /#a/ })
+  expect(link.querySelector('.chat-active-agents')?.textContent).toContain('builder')
+  expect(
+    screen.getByRole('link', { name: /#b/ }).querySelector('.chat-active-agents')?.textContent,
+  ).toBe('')
+  cleanup()
+  view([{ ...busy, activeAgents: [] }])
+  expect(
+    screen.getByRole('link', { name: /#a/ }).querySelector('.chat-active-agents')?.textContent,
+  ).toBe('')
+})
+
 test('a tag chip filters the list and toggles off again', () => {
   view([room('a', { tags: ['q4'] }), room('b')])
   fireEvent.click(within(screen.getByRole('list', { name: 'Filter by tag' })).getByText('#q4'))

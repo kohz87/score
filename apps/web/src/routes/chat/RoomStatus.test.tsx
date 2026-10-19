@@ -27,7 +27,7 @@ const agent = (id: string): AgentSummary => ({
   served: true,
 })
 const agents = ['lead', 'builder', 'reviewer'].map(agent)
-// `activeAgents` lists everyone who wrote lately: it must not make anyone look busy.
+// The header and stage work from the room's live state, not from `activeAgents` (the sidebar's server-side copy of it).
 const room: Room = {
   id: 'room-1',
   name: '#room',

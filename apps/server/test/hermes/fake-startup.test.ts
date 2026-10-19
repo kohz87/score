@@ -50,7 +50,16 @@ test('fake startup streams the scenario and exposes the same adapter status in s
       )
     await vi.waitFor(() => expect(briefStatuses().at(-1)).toBe('done'), { timeout: 5000 })
     const derived = briefStatuses().length - 1
-    const total = createScenario(0).length + 4 + derived
+    // Room updates that follow an approval or a finished reply in the same observation (who is busy changed with it).
+    let afterApproval = false
+    let derivedRooms = 0
+    for (const frame of replay.frames) {
+      if (frame.type?.startsWith('approval.') || frame.type === 'message.completed')
+        afterApproval = true
+      else if (frame.type === 'room.upserted') derivedRooms += afterApproval ? 1 : 0
+      else afterApproval = false
+    }
+    const total = createScenario(0).length + 4 + derived + derivedRooms
     await vi.waitFor(() => expect(replay.seqs).toHaveLength(total), { timeout: 5000 })
     expect(replay.seqs).toEqual(Array.from({ length: total }, (_, index) => index + 1))
     expect(

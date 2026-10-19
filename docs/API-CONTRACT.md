@@ -129,6 +129,9 @@ type Room = {
   leadAgentId: AgentId | null /* unaddressed messages go here */
   members: AgentId[]
   unread: number
+  /* Members busy in this room right now (PLAN 10.11): a reply of theirs in this room is still streaming (thinking or
+     writing), or an approval of theirs is pending and actionable and tied to this room (or tied to no room). Sorted by id.
+     Before 1.12.2 this was "agents that wrote here in the last 10 minutes". */
   activeAgents: AgentId[]
   channels: { platform: string; label: string }[]
 }

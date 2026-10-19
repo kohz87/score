@@ -11,9 +11,10 @@ import {
 } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
-import type { DomainEventDraft } from '../hub/ingest.ts'
+import type { DeriveEvents, DomainEventDraft } from '../hub/ingest.ts'
 import { markStaleSummaries } from './summary-stale.ts'
 import { autoSummaryOf } from './room-summaries.ts'
+import { actionable, approvalRoomIds, ApprovalRowSchema } from './approval-store.ts'
 
 export const RoomRowSchema = z.object({
   id: z.string(),
@@ -88,6 +89,54 @@ export function roomRow(sqlite: DatabaseSync, id: string) {
   return RoomRowSchema.parse(row)
 }
 
+let compatibility: (() => readonly string[]) | null = null
+/** The features the compatibility check switched off, as the approvals API sees them (set once by the app). */
+export function setRoomCompatibility(disabled: (() => readonly string[]) | null): void {
+  compatibility = disabled
+}
+
+export const disabledFeatures = (): readonly string[] => compatibility?.() ?? []
+
+type RoomRow = z.infer<typeof RoomRowSchema>
+
+/**
+ * Members busy in a room right now (PLAN 10.11; the room stage's rules in `stage-mood.ts`): a reply of theirs there is
+ * still streaming, or an approval of theirs is pending and actionable and belongs to this room (its card is here, or
+ * its run was started from here) or to no room at all (a gateway approval). Sorted by id.
+ */
+function busyAgents(sqlite: DatabaseSync, row: RoomRow, members: string[], now: string): string[] {
+  const here = new Set(members)
+  if (row.lead_agent_id) here.add(row.lead_agent_id)
+  const busy = new Set(
+    z
+      .array(z.object({ author_agent_id: AgentIdSchema }))
+      .parse(
+        sqlite
+          .prepare(
+            `SELECT DISTINCT author_agent_id FROM messages
+             WHERE room_id = ? AND author_kind = 'agent' AND streaming = 1 AND deleted_at IS NULL`,
+          )
+          .all(row.id),
+      )
+      .map((agent) => agent.author_agent_id)
+      .filter((id) => here.has(id)),
+  )
+  const pending = sqlite
+    .prepare(
+      `SELECT * FROM approvals WHERE visible = 1 AND stage = 'human' AND phase = 'human_pending' AND status = 'pending'`,
+    )
+    .all()
+  for (const value of pending) {
+    const approval = ApprovalRowSchema.parse(value)
+    if (!here.has(approval.profile) || busy.has(approval.profile)) continue
+    if (!actionable(sqlite, approval, { now: Date.parse(now), disabled: disabledFeatures() }))
+      continue
+    const rooms = approvalRoomIds(sqlite, approval.id, approval.run_id)
+    if (rooms.length === 0 || rooms.includes(row.id)) busy.add(approval.profile)
+  }
+  return [...busy].sort()
+}
+
 export function readRoom(sqlite: DatabaseSync, id: string, now: string): Room {
   const row = roomRow(sqlite, id)
   const unread = CountSchema.parse(
@@ -101,18 +150,8 @@ export function readRoom(sqlite: DatabaseSync, id: string, now: string): Room {
       )
       .get(id),
   ).count
-  const cutoff = new Date(Date.parse(now) - 10 * 60 * 1000).toISOString()
-  const activeAgents = z
-    .array(z.object({ author_agent_id: AgentIdSchema }))
-    .parse(
-      sqlite
-        .prepare(
-          `SELECT DISTINCT author_agent_id FROM messages
-      WHERE room_id = ? AND author_kind = 'agent' AND deleted_at IS NULL AND created_at > ? ORDER BY author_agent_id`,
-        )
-        .all(id, cutoff),
-    )
-    .map((agent) => agent.author_agent_id)
+  const members = z.array(AgentIdSchema).parse(JSON.parse(row.members))
+  const activeAgents = busyAgents(sqlite, row, members, now)
   return RoomSchema.parse({
     id: row.id,
     name: row.name,
@@ -178,6 +217,66 @@ export function roomChanged(
       .prepare('UPDATE rooms SET updated_at = ?, version = version + 1 WHERE id = ?')
       .run(now, id)
   return [{ type: 'room.upserted', data: after }]
+}
+
+/**
+ * Ingest hook (createIngest deriveEvents): an approval that opens or closes changes who is busy in the rooms of its
+ * agent, and nothing else tells the rooms list. Emits the rooms' state directly, since the change is already stored.
+ */
+export const deriveRoomEvents: DeriveEvents = (sqlite, drafts, { now }) => {
+  const agents = new Set(
+    drafts.flatMap((draft) =>
+      draft.type === 'approval.requested' || draft.type === 'approval.updated'
+        ? [draft.data.agentId]
+        : [],
+    ),
+  )
+  const emitted = new Set(
+    drafts.flatMap((draft) => (draft.type === 'room.upserted' ? [draft.data.id] : [])),
+  )
+  // A reply that finished (or a streaming one that was deleted) frees its author, and no other event says so.
+  const finished = new Map<string, Set<string>>()
+  for (const draft of drafts) {
+    if (draft.type !== 'message.completed' && draft.type !== 'message.deleted') continue
+    const value = sqlite
+      .prepare(
+        "SELECT author_agent_id, streaming FROM messages WHERE id = ? AND room_id = ? AND author_kind = 'agent'",
+      )
+      .get(draft.data.messageId, draft.data.roomId)
+    if (!value) continue
+    const row = z.object({ author_agent_id: AgentIdSchema, streaming: z.int() }).parse(value)
+    if (draft.type === 'message.deleted' && row.streaming !== 1) continue
+    const set = finished.get(draft.data.roomId) ?? new Set<string>()
+    set.add(row.author_agent_id)
+    finished.set(draft.data.roomId, set)
+  }
+  if (agents.size === 0 && finished.size === 0) return []
+  return roomIds(sqlite).flatMap((id) => {
+    const room = readRoom(sqlite, id, now)
+    const byApproval =
+      !emitted.has(id) &&
+      [...agents].some((agent) => room.members.includes(agent) || room.leadAgentId === agent)
+    // The author's state changed only if nothing else keeps them busy.
+    const byReply = [...(finished.get(id) ?? [])].some(
+      (agent) => !room.activeAgents.includes(agent),
+    )
+    if (!byApproval && !byReply) return []
+    // `updated_at` marks the last state sent, which the periodic sweep compares against (an approval running out).
+    sqlite
+      .prepare('UPDATE rooms SET updated_at = ?, version = version + 1 WHERE id = ?')
+      .run(now, id)
+    return [{ type: 'room.upserted' as const, data: room }]
+  })
+}
+
+/** Every room's state, sent again: for when something outside the rooms (the compatibility check) changed who is busy. */
+export function resendRooms(sqlite: DatabaseSync, now: string): DomainEventDraft[] {
+  return roomIds(sqlite).map((id) => {
+    sqlite
+      .prepare('UPDATE rooms SET updated_at = ?, version = version + 1 WHERE id = ?')
+      .run(now, id)
+    return { type: 'room.upserted' as const, data: readRoom(sqlite, id, now) }
+  })
 }
 
 export function refreshRooms(sqlite: DatabaseSync, now: string): DomainEventDraft[] {

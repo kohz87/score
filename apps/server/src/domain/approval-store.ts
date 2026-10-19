@@ -200,6 +200,27 @@ function denialTaskRefs(
   return task?.history_id === history ? ref : []
 }
 
+/**
+ * The rooms an approval belongs to: the room its run answers in, and the room that holds its card. One rule for the
+ * refs the approval carries, the sidebar and the room stage, so they cannot disagree. Empty means no room (a gateway
+ * approval).
+ */
+export function approvalRoomIds(
+  sqlite: DatabaseSync,
+  approvalId: string,
+  runId: string | null,
+): string[] {
+  const rows = z.array(z.object({ room_id: z.string() })).parse(
+    sqlite
+      .prepare(
+        `SELECT room_id FROM messages WHERE id = ? AND deleted_at IS NULL
+           UNION SELECT room_id FROM message_runs WHERE run_id = ?`,
+      )
+      .all(`approval:${approvalId}`, runId ?? ''),
+  )
+  return rows.map((row) => row.room_id).sort()
+}
+
 export function approvalView(
   sqlite: DatabaseSync,
   row: ApprovalRow,
@@ -227,11 +248,17 @@ export function approvalView(
         : null,
     delivery: readDelivery(sqlite, row.id)?.state ?? 'none',
     blocking: row.blocking,
-    refs: row.kanban_task_id
-      ? denialTaskRefs(sqlite, row)
-      : row.run_id
-        ? [{ kind: 'run', runId: row.run_id }]
-        : [],
+    refs: [
+      ...(row.kanban_task_id
+        ? denialTaskRefs(sqlite, row)
+        : row.run_id
+          ? [{ kind: 'run' as const, runId: row.run_id }]
+          : []),
+      ...approvalRoomIds(sqlite, row.id, row.run_id).map((roomId) => ({
+        kind: 'room' as const,
+        roomId,
+      })),
+    ],
   })
 }
 

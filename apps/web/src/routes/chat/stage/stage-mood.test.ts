@@ -130,7 +130,7 @@ test('typing with text is working; typing without text, or an empty or thought-o
       messages: [message('m1', { streaming: true, parts: [{ kind: 'thinking', text: 'hm' }] })],
     }).builder,
   ).toBe('think')
-  // Who wrote lately (`Room.activeAgents`) says nothing about who is busy now.
+  // The stage reads the room's live state, never `Room.activeAgents`.
   expect(stageMoods({ ...base }).reviewer).toBe('rest')
   // Text that has started beats a bare typing notice.
   expect(
