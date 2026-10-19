@@ -437,3 +437,12 @@ saves, exports, re-imports; a11y checks pass.
 **9.5 Built-in themes and author guide** · three new clearly different themes, `docs/THEMES.md`, example zip. Done
 when: visual baselines for each (light, dark, phone; Now, Chat, Settings, user view); guide examples import cleanly.
 **9.6 Phase gate** · lead review + adversarial review of the safety model; full e2e; release.
+
+## Phase 10: owner requests after 1.8 (2026-10-19)
+
+**10.1 Settings as pages** (owner 2026-10-19: "use navigation page instead of 1 whole column scroll down … model,
+connections, especially logs extending too long") · brief `docs/briefs/10.1-settings-pages.md`. Each Settings section
+is its own page at `/settings/<section>` with the design's left section list as navigation (phone: the Section picker
+navigates); `/settings` opens the first section; old `/settings#<id>` links redirect. Done when: every section reachable
+by link, keyboard and the palette; old anchors redirect; protected surfaces and ways back unchanged; e2e + visual
+baselines updated; `pnpm check` and full e2e green.
