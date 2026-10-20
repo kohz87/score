@@ -18,7 +18,8 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 // The real launcher (bash) against a temp repo skeleton, a temp home and fake systemctl/loginctl. Nothing here may touch
 // the real user manager, ~/.config or ~/.score. SCORE_TEST_LAUNCHER lets the failing-first run use an older script.
 const launcher =
-  process.env.SCORE_TEST_LAUNCHER ?? fileURLToPath(new URL('../../../scripts/score', import.meta.url))
+  process.env.SCORE_TEST_LAUNCHER ??
+  fileURLToPath(new URL('../../../scripts/score', import.meta.url))
 
 const STUB_START = `
 import { writeFileSync } from 'node:fs'
@@ -88,7 +89,12 @@ function makeRig(extra: Record<string, string> = {}): Rig {
     state: join(base, 'state'),
     env: {},
   }
-  for (const dir of [join(root, 'scripts'), join(root, 'apps/web/dist'), rig.state, join(base, 'fake')])
+  for (const dir of [
+    join(root, 'scripts'),
+    join(root, 'apps/web/dist'),
+    rig.state,
+    join(base, 'fake'),
+  ])
     mkdirSync(dir, { recursive: true })
   copyFileSync(launcher, join(root, 'scripts/score'))
   chmodSync(join(root, 'scripts/score'), 0o755)
@@ -167,7 +173,10 @@ test('run: foreground, writes its own pid, becomes the server, refuses a second 
   spawned.push(first)
   for (let i = 0; i < 100 && !existsSync(join(rig.home, 'stub-env.json')); i++)
     await new Promise((resolve) => setTimeout(resolve, 100))
-  const env = JSON.parse(readFileSync(join(rig.home, 'stub-env.json'), 'utf8')) as Record<string, string>
+  const env = JSON.parse(readFileSync(join(rig.home, 'stub-env.json'), 'utf8')) as Record<
+    string,
+    string
+  >
   expect(env.SCORE_SERVE_WEB).toBe('1')
   expect(env.SCORE_LOG_FILE).toBe(join(rig.home, 'score.log'))
   expect(pidOf(rig)).toBe(first.pid)
@@ -218,9 +227,13 @@ test('service install writes the unit and a private env file, starts it, and pas
   expect(text).toContain('SCORE_PORT="18123"')
   expect(text).toContain(`PATH="${process.env.PATH}"`)
   expect(text).not.toMatch(/SECRET_X|leak-me|USER=|SCORE_SYSTEMCTL|SCORE_CONFIG_DIR/)
-  expect(text.split('\n').filter(Boolean).map((l) => l.split('=')[0]).sort()).toEqual(
-    ['PATH', 'SCORE_HOME', 'SCORE_MODE', 'SCORE_PORT'].sort(),
-  )
+  expect(
+    text
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => l.split('=')[0])
+      .sort(),
+  ).toEqual(['PATH', 'SCORE_HOME', 'SCORE_MODE', 'SCORE_PORT'].sort())
   expect(calls(rig)).toMatch(/--user daemon-reload[\s\S]*--user enable --now score/)
   expect(alive(pidOf(rig))).toBe(true)
 }, 60_000)
@@ -234,7 +247,9 @@ test('service install quotes values for systemd and refuses a line break', async
   expect(existsSync(join(rig.cfgDir, 'score.env'))).toBe(false)
   const ok = await score(rig, ['service', 'install'], { SCORE_X_NOTE: 'say "hi" \\ there' })
   expect(ok.code).toBe(0)
-  expect(readFileSync(join(rig.cfgDir, 'score.env'), 'utf8')).toContain('SCORE_X_NOTE="say \\"hi\\" \\\\ there"')
+  expect(readFileSync(join(rig.cfgDir, 'score.env'), 'utf8')).toContain(
+    'SCORE_X_NOTE="say \\"hi\\" \\\\ there"',
+  )
 }, 60_000)
 
 test('service install: no linger warning when linger is on; refuses without a user manager', async () => {
