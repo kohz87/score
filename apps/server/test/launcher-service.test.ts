@@ -41,7 +41,7 @@ verb="\${1:-}"; shift || true
 pidfile="$FAKE_STATE/mainpid"
 alive() { [[ -f "$pidfile" ]] && kill -0 "$(<"$pidfile")" 2>/dev/null; }
 launch() {
-  env -i HOME="$HOME" PATH="$PATH" FAKE_ROOT="$FAKE_ROOT" INVOCATION_ID=fake-invocation bash -c '
+  env -i HOME="$HOME" PATH="$PATH" FAKE_ROOT="$FAKE_ROOT" INVOCATION_ID=fake-invocation SCORE_SYSTEMD_USER_DIR="\${SCORE_SYSTEMD_USER_DIR:-}" SCORE_CONFIG_DIR="\${SCORE_CONFIG_DIR:-}" bash -c '
     set -a; . "$HOME/cfg/score.env"; set +a
     exec "$FAKE_ROOT/scripts/score" run >>"$SCORE_HOME/score.log" 2>&1' </dev/null 9>&- &
   echo $! >"$pidfile"

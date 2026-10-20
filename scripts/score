@@ -202,6 +202,7 @@ launcher_start() {
   read -r ino offset < <(log_state)
   (
     cd "$root"
+    unset SCORE_RUN_AS
     # 9>&- keeps the launcher lock from being inherited by the long-running server.
     SCORE_HOME="$home" SCORE_LOG_FILE="$log_file" SCORE_SERVE_WEB=1 nohup node scripts/start.mjs >>"$log_file" 2>&1 </dev/null 9>&- &
     echo $! >"$pid_file"
@@ -231,8 +232,38 @@ service_start() {
   wait_ready service "$offset" "$ino"
 }
 
+# 10.14: the first start in a terminal offers the service. Only for a person: needs a terminal on stdin and stdout, a
+# reachable user manager and a built app, and never repeats after a "no" (or beside a Score that is already running).
+prompt_file="$home/service-prompt"
+offer_service() {
+  local answer tries
+  [[ -t 0 && -t 1 && -z "${SCORE_NO_SERVICE_PROMPT:-}" && ! -e "$prompt_file" ]] || return 1
+  [[ -f "$root/apps/web/dist/index.html" ]] || return 1
+  sc show-environment >/dev/null 2>&1 || return 1
+  running_pid >/dev/null && return 1
+  for ((tries = 0; tries < 3; tries++)); do
+    printf 'Run Score as a service, so it starts at boot and restarts after a crash? [Y/n] '
+    read -r answer || return 1
+    case "${answer,,}" in
+      "" | y | yes) return 0 ;;
+      n | no)
+        (umask 077 && printf 'declined %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$prompt_file")
+        echo "Not installed. 'scripts/score service install' does it later."
+        return 1
+        ;;
+    esac
+  done
+  return 1
+}
+
 cmd_start() {
-  if service_installed; then service_start start; else launcher_start; fi
+  if service_installed; then
+    service_start start
+  elif offer_service; then
+    service_install
+  else
+    launcher_start
+  fi
 }
 
 cmd_restart() {
@@ -262,6 +293,8 @@ cmd_run() {
   exec 9>&-
   [[ -t 1 ]] || exec >>"$log_file" 2>&1
   cd "$root"
+  # The server reports it in About; only systemd's own start counts (it sets INVOCATION_ID), never a hand-run `run`.
+  if [[ -n "${INVOCATION_ID:-}" ]] && service_installed; then export SCORE_RUN_AS=service; else unset SCORE_RUN_AS; fi
   SCORE_HOME="$home" SCORE_LOG_FILE="$log_file" SCORE_SERVE_WEB=1 exec node scripts/start.mjs
 }
 
@@ -349,6 +382,7 @@ service_env_content() {
   while IFS= read -r name; do
     case "$name" in
       SCORE_HOME | SCORE_SYSTEMD_USER_DIR | SCORE_CONFIG_DIR | SCORE_SYSTEMCTL | SCORE_LOGINCTL) ;;
+      SCORE_RUN_AS | SCORE_NO_SERVICE_PROMPT) ;;
       SCORE_*) names+=("$name") ;;
     esac
   done < <(compgen -e | LC_ALL=C sort)
@@ -435,6 +469,7 @@ service_install() {
   fi
   write_atomic "$env_file" "$env_new" 600
   write_atomic "$unit_file" "$unit_new" 644
+  rm -f "$prompt_file"
   sc daemon-reload
   touch "$log_file"
   read -r ino offset < <(log_state)
