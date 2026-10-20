@@ -441,3 +441,29 @@ test('restart and reinstall find the ready line after the log is rotated past 10
   expect(again.code).toBe(0)
   expect(again.out).toMatch(/Score started/)
 }, 90_000)
+
+test('a fresh shell without SCORE_HOME follows the installed service’s home (read, never sourced)', async () => {
+  const rig = makeRig()
+  expect((await score(rig, ['service', 'install'], installEnv)).code).toBe(0)
+  const fresh: Record<string, string> = { ...rig.env }
+  delete fresh.SCORE_HOME
+  const result = await new Promise<{ code: number; out: string; err: string }>((resolve) => {
+    execFile(
+      join(rig.root, 'scripts/score'),
+      ['restart'],
+      { env: fresh, timeout: 60_000 },
+      (error, out, err) =>
+        resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, out, err }),
+    )
+  })
+  expect(result.err).toBe('')
+  expect(result.code).toBe(0)
+  expect(result.out).toMatch(/Score (re)?started/)
+}, 90_000)
+
+test('a manual start, restart or reinstall clears systemd’s start limit first', async () => {
+  const rig = makeRig()
+  await score(rig, ['service', 'install'], installEnv)
+  await score(rig, ['restart'])
+  expect(calls(rig)).toMatch(/--user reset-failed score\n[^\n]*--user restart score/)
+}, 90_000)

@@ -262,8 +262,11 @@ launcher-started Score must be stopped first (`scripts/score stop`): the two nev
   (names only) and restarts.
 - After `git pull` and `pnpm build`: `scripts/score restart` (a clean stop drains for up to about 45 s).
 - Logs: `scripts/score logs [-f]` (the unit appends to `$SCORE_HOME/score.log`); `journalctl --user -u score` shows systemd's own messages.
-- If it keeps failing, systemd gives up after 5 starts in 5 minutes: read the log, fix the cause, then `scripts/score start`.
+- If it keeps failing, systemd gives up after 5 starts in 5 minutes: read the log, fix the cause, then `scripts/score start`
+  (it clears systemd's start limit first, so you don't have to wait).
 - Remove it: `scripts/score service uninstall` (keeps `score.env`; `--purge` deletes it too). The launcher then runs Score again.
+- Once installed, `start`/`stop`/`restart`/`status`/`pair`/`logs` follow the service's `SCORE_HOME` even from a shell that
+  doesn't set it.
 - `scripts/score run` is the foreground form the unit uses; run it in a terminal to see Score's output directly.
 
 Upgrades: stop Score (`scripts/score restart` after the build does stop and start in one step), back up `$SCORE_HOME` (at least `score.db`, `score.db-wal`/`-shm` if present, and `media/`), `git pull`,

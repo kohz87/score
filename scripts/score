@@ -4,7 +4,23 @@ set -euo pipefail
 
 script="$(readlink -f "${BASH_SOURCE[0]}")"
 root="$(dirname "$(dirname "$script")")"
-home="${SCORE_HOME:-$HOME/.score}"
+# An installed service (PLAN 10.13) keeps its home in its env file: a fresh shell without SCORE_HOME follows it, so
+# restart, pair and logs read the service's files. The file is read as text, never sourced.
+saved_service_home() {
+  local env="${SCORE_CONFIG_DIR:-$HOME/.config/score}/score.env" line
+  [[ -f "${SCORE_SYSTEMD_USER_DIR:-$HOME/.config/systemd/user}/score.service" && -f "$env" ]] || return 1
+  line="$(grep -m1 '^SCORE_HOME="' "$env")" || return 1
+  line="${line#SCORE_HOME=\"}"
+  line="${line%\"}"
+  line="${line//\\\"/\"}"
+  line="${line//\\\\/\\}"
+  [[ -n "$line" ]] && printf '%s' "$line"
+}
+if [[ -z "${SCORE_HOME:-}" ]] && saved="$(saved_service_home)"; then
+  home="$saved"
+else
+  home="${SCORE_HOME:-$HOME/.score}"
+fi
 # The launcher changes directory; a relative home would then name a different place.
 mkdir -p "$home"
 home="$(cd "$home" && pwd -P)"
@@ -209,6 +225,8 @@ service_start() {
   mkdir -p "$home"
   touch "$log_file"
   read -r ino offset < <(log_state)
+  # A manual start comes after the person fixed whatever crashed it: clear systemd's start limit (5 in 300 s) first.
+  sc reset-failed score >/dev/null 2>&1 || true
   sc "$verb" score || { echo "systemctl --user $verb score failed." >&2; return 1; }
   wait_ready service "$offset" "$ino"
 }
@@ -420,6 +438,7 @@ service_install() {
   sc daemon-reload
   touch "$log_file"
   read -r ino offset < <(log_state)
+  sc reset-failed score >/dev/null 2>&1 || true
   if [[ "$reinstall" == 1 ]]; then
     sc enable score
     sc restart score
