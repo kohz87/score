@@ -110,7 +110,24 @@ loginctl_bin="${SCORE_LOGINCTL:-loginctl}"
 this_user="${USER:-$(id -un)}"
 
 sc() { "$systemctl_bin" --user "$@"; }
-service_installed() { [[ -f "$unit_file" ]]; }
+# The installed unit drives this launcher only for the home it was installed for: a launcher (or a test) pointed at any
+# other home must never start, stop or restart the owner's service (2026-10-20: a test run restarted the live one).
+service_home() {
+  local saved
+  saved="$(saved_service_home)" || return 1
+  (cd "$saved" 2>/dev/null && pwd -P)
+}
+service_installed() { [[ -f "$unit_file" ]] && [[ "$(service_home 2>/dev/null)" == "$home" ]]; }
+# Refuses service commands from another home instead of overwriting or removing that home's service.
+service_for_other_home() {
+  local other
+  [[ -f "$unit_file" ]] || return 1
+  other="$(service_home 2>/dev/null || true)"
+  [[ -n "$other" && "$other" != "$home" ]] || return 1
+  echo "The Score service is installed for $other, not for $home." >&2
+  echo "Run this with SCORE_HOME=$other, or 'scripts/score service uninstall' there first." >&2
+  return 0
+}
 service_active() { sc is-active --quiet score 2>/dev/null; }
 service_pid() {
   local value
@@ -241,6 +258,8 @@ offer_service() {
   [[ -f "$root/apps/web/dist/index.html" ]] || return 1
   sc show-environment >/dev/null 2>&1 || return 1
   running_pid >/dev/null && return 1
+  # A service already installed for another home: one per user, so don't offer a second.
+  [[ -f "$unit_file" ]] && return 1
   for ((tries = 0; tries < 3; tries++)); do
     printf 'Run Score as a service, so it starts at boot and restarts after a crash? [Y/n] '
     read -r answer || return 1
@@ -540,6 +559,7 @@ cmd_service() {
   local sub="${1:-}"
   [[ $# -eq 0 ]] || shift
   case "$sub" in
+    install | status | uninstall) ! service_for_other_home || return 1 ;;&
     install) service_install ;;
     status) service_status ;;
     uninstall) service_uninstall "${1:-}" ;;
