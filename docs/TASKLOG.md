@@ -571,3 +571,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   --purge clean; live 8741 answered throughout). Then live: launcher stop, backup `score-pre-1.13.0-20261020.db`,
   `service install` with the live env (9 keys), gateway restart, producers + both addresses healthy; kill -9 of the
   live MainPID → back in ~6 s, NRestarts 1, bridge producer reconnected.
+- **10.14 offer the service on first start** (owner: "add that prompt"): lead added `About.service` to the contract and
+  wrote PLAN entry and brief on `task/10.14-service-prompt`; Sonnet builder in `../score-worktrees/10.14` (launcher
+  prompt with fakes only, `SCORE_RUN_AS=service`, Settings › About row).
