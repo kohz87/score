@@ -609,3 +609,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   (S1–S6: `rewind_to_message` with expected rows, Score-owned sessions only with exact manifests, verified transcript
   checkpoint, admission outcome rules, a forget state machine, staged successors). Owner: ship swipe and same-context
   regeneration together (no Score-only interim). v4 review at max running. Reviews in docs/reviews/2026-10-20-10.15-*.
+- **Paused by the owner (2026-10-20 07:50 UTC, quota):** 10.15 design v5 committed on `task/10.15-swipe-design`
+  (5e2cf1be; T1 read-only spool scan, T2 no finishing without a terminal run, T3 shared-session refusal/detection, T4
+  coding finish rules); its Codex max review was started and stopped before finishing — rerun it to resume. Nothing
+  else running; live 1.14.0 up as the systemd service.
