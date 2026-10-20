@@ -67,6 +67,8 @@ export function registerAboutRoutes(
       mode: config.mode,
       repository: `https://github.com/${config.updateRepo}`,
       checkout: CHECKOUT,
+      // The launcher sets it only for the systemd service's own process (scripts/score run).
+      service: process.env.SCORE_RUN_AS === 'service',
     })
   })
   app.post('/api/about/update-check', { preHandler: humanGuard(app.pairing) }, async () =>

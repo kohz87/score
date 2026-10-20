@@ -18,6 +18,7 @@ const about = {
   mode: 'live',
   repository: 'https://github.com/kohz87/score',
   checkout: '/srv/my score',
+  service: false,
 }
 const check = (status: string, message: string, latest: unknown = null) => ({
   checkedAt: '2026-10-14T10:00:00.000Z',
@@ -33,9 +34,9 @@ const latest = {
   changelogUrl: 'https://github.com/kohz87/score/blob/v1.4.0/CHANGELOG.md',
 }
 
-function mount(update: () => Response | Promise<Response>) {
+function mount(update: () => Response | Promise<Response>, data: object = about) {
   const fetch = vi.fn((url: string) =>
-    Promise.resolve(String(url).endsWith('/about') ? Response.json(about) : update()),
+    Promise.resolve(String(url).endsWith('/about') ? Response.json(data) : update()),
   )
   vi.stubGlobal('fetch', fetch)
   render(
@@ -113,4 +114,18 @@ test('folder names with spaces or quotes are quoted for the shell', () => {
   expect(shellPath('/home/me/score')).toBe('/home/me/score')
   expect(shellPath("/home/o'brien/score")).toBe("'/home/o'\\''brien/score'")
   expect(updateSteps('/a b')[0]).toBe("cd '/a b'")
+})
+
+test('shows whether Score runs as a service, with the install command when it does not', async () => {
+  mount(() => Response.json(check('up_to_date', 'x')))
+  await screen.findByText('Score v1.3.0')
+  expect(screen.getByText('Runs as a service')).toBeTruthy()
+  expect(screen.getByText(/^No — /)).toBeTruthy()
+  expect(screen.getByText('scripts/score service install').tagName).toBe('CODE')
+  expect(screen.getByRole('button', { name: 'Copy command' })).toBeTruthy()
+  cleanup()
+  mount(() => Response.json(check('up_to_date', 'x')), { ...about, service: true })
+  await screen.findByText('Score v1.3.0')
+  expect(screen.getByText('Yes — starts at boot and restarts after a crash')).toBeTruthy()
+  expect(screen.queryByText('scripts/score service install')).toBeNull()
 })

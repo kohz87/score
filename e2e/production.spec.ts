@@ -21,7 +21,17 @@ test('built app: launcher starts it, a browser pairs and sees the shell, stop fr
   const home = mkdtempSync(join(tmpdir(), 'score-prod-e2e-'))
   const port = Number(process.env.SCORE_PORT ?? 8740) + 5
   const origin = `http://127.0.0.1:${port}`
-  const env = { ...process.env, SCORE_HOME: home, SCORE_PORT: String(port), SCORE_MODE: 'fake' }
+  // The launcher follows an installed service (10.13): point it at an empty unit folder so this test can never reach the
+  // owner's real score.service, and never offer the service.
+  const env = {
+    ...process.env,
+    SCORE_HOME: home,
+    SCORE_PORT: String(port),
+    SCORE_MODE: 'fake',
+    SCORE_SYSTEMD_USER_DIR: join(home, 'no-units'),
+    SCORE_CONFIG_DIR: join(home, 'no-config'),
+    SCORE_NO_SERVICE_PROMPT: '1',
+  }
   const run = (command: string) =>
     execFileSync(launcher, [command], { env, encoding: 'utf8', timeout: 60_000 })
   try {

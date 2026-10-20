@@ -100,7 +100,7 @@ Score is tested with Hermes **v0.21.x**. More in the [Hermes Agent README](https
 ```bash
 SCORE_MODE=live scripts/score start    # runs in the background and prints a pairing link
 scripts/score status                   # is it running, which URL
-scripts/score service install          # optional: run it as a systemd user service (boot, crash restart)
+scripts/score service install          # run it as a systemd user service (boot, crash restart); the first terminal start offers this
 curl -s http://127.0.0.1:8740/api/system   # "reachable": true means Score sees Hermes
 ```
 

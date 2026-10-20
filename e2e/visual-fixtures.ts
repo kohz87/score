@@ -229,6 +229,7 @@ export const visualFixtures: Record<string, unknown> = {
     mode: 'live',
     repository: 'https://github.com/kohz87/score',
     checkout: '/home/user/score',
+    service: false,
   },
   '/api/system/logs?limit=200': {
     available: true,

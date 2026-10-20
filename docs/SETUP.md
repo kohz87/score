@@ -245,6 +245,12 @@ To run Score as a service instead, see 9a below. Once it is installed, `start`, 
 
 ### 9a. Run Score as a service (starts at boot, restarts after a crash)
 
+The first `scripts/score start` you type in a terminal (when the systemd user manager is reachable and no service is
+installed) asks `Run Score as a service ... [Y/n]`. Enter or `y` runs `service install` below with your current
+environment; `n` is remembered in `$SCORE_HOME/service-prompt` and Score starts as usual (`service install` clears that
+note). It never asks from scripts, pipes or `nohup`, or when `SCORE_NO_SERVICE_PROMPT=1`. Settings › About shows
+"Runs as a service: Yes/No" and the install command.
+
 The launcher installs a systemd **user** service, the same kind as `hermes-gateway.service`. Build first (`pnpm build`), set
 the variables you normally start Score with, and run:
 ```bash
