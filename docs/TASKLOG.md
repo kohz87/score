@@ -598,3 +598,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   verified pre-turn fork. Score-side P1s (durable operation journal, causal consumers such as frozen summary inputs and
   reserved hand-offs) are solvable but moot until Hermes offers an atomic transcript compare-and-swap. The owner's
   delete-sync request needs the same operation for any reply but the latest turn. Decision taken to the owner.
+- **10.15 v2** (owner chose "Safe part now + proposal"): design v2 on `task/10.15-swipe-design` (d8f6d8ec) —
+  regenerate from the same context through 5.33's rewind with added preconditions (single Hermes user turn, no pending
+  transcript writes, latest causal work), the newest alternative continues and older ones are view-only, coding agents
+  labelled "written after the earlier answer", synced delete only as "delete question and reply" (5.33 rewind delete),
+  a durable `turn_operations` journal with a room hold. Draft `docs/proposals/hermes-transcript-cas.md` (unsent) for
+  true swapping and arbitrary deletes. Codex v2 review at max running.
