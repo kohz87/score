@@ -566,3 +566,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   `KillMode=mixed`. Second cross-check: 2 P2 fixed by the lead (3fac0998): a fresh shell follows the installed service's
   SCORE_HOME (read from the env file as text, never sourced), and manual start/restart/reinstall run `reset-failed`
   first. Launcher tests 18/18 (all new ones failed first); check green (server 4639); e2e 639/0 on the merge.
+- **Live switched to the service** (2026-10-20 01:50 UTC): real-systemd dry run first (fake-mode temp home on 5910:
+  install, unit/env contents and modes, kill -9 → restarted by systemd, restart/status from a fresh shell, uninstall
+  --purge clean; live 8741 answered throughout). Then live: launcher stop, backup `score-pre-1.13.0-20261020.db`,
+  `service install` with the live env (9 keys), gateway restart, producers + both addresses healthy; kill -9 of the
+  live MainPID → back in ~6 s, NRestarts 1, bridge producer reconnected.
