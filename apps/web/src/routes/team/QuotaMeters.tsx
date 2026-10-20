@@ -97,14 +97,18 @@ export function QuotaMeters({
           <Meter key={`${window.group ?? ''}|${window.name}`} window={window} floor={floor} />
         ))}
       </ul>
-      {floor ? (
-        <p className="team-muted quota-seen">
-          The red mark is the floor: runs stop giving this agent new steps below {floor}% left.
-        </p>
+      {floor || quota.source !== 'usage' ? (
+        <div className="quota-notes">
+          {floor ? (
+            <p className="team-muted quota-seen">
+              The red mark is the floor: runs stop giving this agent new steps below {floor}% left.
+            </p>
+          ) : null}
+          {quota.source !== 'usage' && (
+            <p className="team-muted quota-seen">As of {seenText(quota.seenAt)}.</p>
+          )}
+        </div>
       ) : null}
-      {quota.source !== 'usage' && (
-        <p className="team-muted quota-seen">As of {seenText(quota.seenAt)}.</p>
-      )}
     </div>
   )
 }

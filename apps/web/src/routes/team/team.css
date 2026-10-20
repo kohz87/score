@@ -1229,20 +1229,34 @@ a.team-pill-button {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
+/* One limit per block: name and "% left" on a line, the bar under them, the reset time under that (owner
+   2026-10-20: the four-column row read as cluttered). */
 .quota-row {
   display: grid;
-  grid-template-columns: minmax(0, 11rem) minmax(5rem, 1fr) 4.5rem minmax(0, 9rem);
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  row-gap: 6px;
+  column-gap: var(--space-3);
   text-align: left;
 }
 .quota-name {
+  grid-row: 1;
+  font-size: 14px;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
+.quota-left {
+  grid-row: 1;
+  grid-column: 2;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
 .quota-bar {
+  grid-row: 2;
+  grid-column: 1 / -1;
   position: relative;
   display: block;
   height: 8px;
@@ -1256,7 +1270,6 @@ a.team-pill-button {
   border-radius: var(--radius-pill);
   background: var(--ink);
 }
-/* The floor (PLAN 8.6): runs stop giving this agent new steps below it. */
 .quota-floor {
   position: absolute;
   top: 0;
@@ -1272,28 +1285,27 @@ a.team-pill-button {
 .quota-fill[data-level='out'] {
   background: var(--agent-coral);
 }
-.quota-left {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-.quota-reset,
-.quota-seen {
+.quota-reset {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  font-size: 12px;
   color: var(--muted);
 }
-.quota-seen {
-  margin: 6px 0 0;
+.quota-reset:empty {
+  display: none;
 }
-@media (max-width: 560px) {
-  .quota-row {
-    grid-template-columns: minmax(0, 1fr) 4.5rem;
-  }
-  .quota-bar {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-  .quota-reset {
-    grid-column: 1 / -1;
-  }
+/* What the marks mean and when Score read the numbers: set apart, smaller. */
+.quota-notes {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--hairline);
+  display: grid;
+  gap: 4px;
+}
+.quota-seen {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 /* What a coding agent can read: two short lines (owner 2026-10-11). */
