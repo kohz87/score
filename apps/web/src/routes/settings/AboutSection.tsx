@@ -74,6 +74,38 @@ function Result({ result, checkout }: { result: UpdateCheck; checkout: string })
   )
 }
 
+const SERVICE_COMMAND = 'scripts/score service install'
+
+function ServiceFact({ service }: { service: boolean }) {
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'manual'>('idle')
+  const code = useRef<HTMLElement>(null)
+  async function copy() {
+    if (await copyText(SERVICE_COMMAND)) setCopied('copied')
+    else {
+      selectText(code.current)
+      setCopied('manual')
+    }
+  }
+  return (
+    <div>
+      <dt>Runs as a service</dt>
+      {service ? (
+        <dd>Yes — starts at boot and restarts after a crash</dd>
+      ) : (
+        <dd>
+          No — <code ref={code}>{SERVICE_COMMAND}</code> turns it on{' '}
+          <button type="button" className="settings-pill" onClick={() => void copy()}>
+            {copied === 'copied' ? 'Copied' : 'Copy command'}
+          </button>
+          {copied === 'manual' && (
+            <span role="status"> The command is selected: press Ctrl+C (or ⌘C) to copy it.</span>
+          )}
+        </dd>
+      )}
+    </div>
+  )
+}
+
 const rows = (about: About): [string, string][] => [
   ['Build', about.commit ?? 'Not a git checkout'],
   ['Database schema', String(about.schema)],
@@ -109,6 +141,7 @@ export function AboutSection() {
                 <dd>{value}</dd>
               </div>
             ))}
+            <ServiceFact service={data.service} />
           </dl>
           <p>
             <a href={data.repository} target="_blank" rel="noreferrer">

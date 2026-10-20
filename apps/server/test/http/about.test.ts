@@ -70,6 +70,27 @@ test('GET /api/about shows the running version, the schema number and the reposi
   expect(spy).not.toHaveBeenCalled()
 })
 
+test('GET /api/about reports whether the server runs as the service (SCORE_RUN_AS=service only)', async () => {
+  const previous = process.env.SCORE_RUN_AS
+  try {
+    for (const [value, expected] of [
+      [undefined, false],
+      ['', false],
+      ['yes', false],
+      ['service', true],
+    ] as const) {
+      if (value === undefined) delete process.env.SCORE_RUN_AS
+      else process.env.SCORE_RUN_AS = value
+      const { app } = await start(answer([]))
+      const about = AboutSchema.parse((await app.inject({ url: '/api/about' })).json())
+      expect(about.service).toBe(expected)
+    }
+  } finally {
+    if (previous === undefined) delete process.env.SCORE_RUN_AS
+    else process.env.SCORE_RUN_AS = previous
+  }
+})
+
 test('says up to date, update available (highest stable tag) or ahead', async () => {
   const names = tags('v1.2.0', 'v99.10.0', 'v100.0.0-rc.1', 'nightly', 'v99.9.9')
   const a = await start(answer(names), { SCORE_UPDATE_REPO: 'acme/score-fork' })
