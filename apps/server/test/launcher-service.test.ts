@@ -467,3 +467,27 @@ test('a manual start, restart or reinstall clears systemd’s start limit first'
   await score(rig, ['restart'])
   expect(calls(rig)).toMatch(/--user reset-failed score\n[^\n]*--user restart score/)
 }, 90_000)
+
+test('a launcher for another home never drives the installed service (2026-10-20: tests restarted the live one)', async () => {
+  const rig = makeRig()
+  expect((await score(rig, ['service', 'install'], installEnv)).code).toBe(0)
+  const servicePid = pidOf(rig)
+  const before = calls(rig).length
+  const other = mkdtempSync(join(tmpdir(), 'score-other-home-'))
+  const otherEnv = { SCORE_HOME: other, ...installEnv }
+  // start/stop/status for another home act as a plain launcher on that home: no systemctl call reaches the service.
+  const started = await score(rig, ['start'], { ...otherEnv, SCORE_NO_SERVICE_PROMPT: '1' })
+  expect(started.code).toBe(0)
+  expect(started.out).not.toMatch(/systemctl/)
+  expect((await score(rig, ['status'], otherEnv)).out).toMatch(/Score is running \(pid \d+\)/)
+  expect((await score(rig, ['stop'], otherEnv)).code).toBe(0)
+  expect(calls(rig).slice(before)).not.toMatch(/--user (start|stop|restart|reset-failed) score/)
+  expect(alive(servicePid)).toBe(true)
+  // Installing, uninstalling or reading the service from another home is refused instead of overwriting it.
+  const install = await score(rig, ['service', 'install'], otherEnv)
+  expect(install.code).not.toBe(0)
+  expect(install.err).toMatch(/installed for .*score-home/)
+  const uninstall = await score(rig, ['service', 'uninstall'], otherEnv)
+  expect(uninstall.code).not.toBe(0)
+  expect(existsSync(join(rig.unitDir, 'score.service'))).toBe(true)
+}, 120_000)
