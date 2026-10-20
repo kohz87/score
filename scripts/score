@@ -279,7 +279,8 @@ cmd_start() {
   if service_installed; then
     service_start start
   elif offer_service; then
-    service_install
+    # Through the guarded command: another home may have installed the service while the question waited.
+    cmd_service install
   else
     launcher_start
   fi
@@ -461,6 +462,15 @@ service_install() {
     echo "Log in through a normal session (or 'loginctl enable-linger $this_user' and reboot), then try again." >&2
     return 1
   fi
+  # One service per user: the ownership check and the writes below are serialised across homes (two first-start
+  # prompts answered yes for two homes must not both install). The guard runs again under the lock.
+  mkdir -p "$config_dir"
+  exec 7>"$config_dir/.install.lock"
+  flock 7
+  if service_for_other_home; then
+    exec 7>&-
+    return 1
+  fi
   lock_launcher
   if pid="$(stray_pid)"; then
     echo "A Score started by the launcher is running (pid $pid); the service can't run beside it." >&2
@@ -488,6 +498,8 @@ service_install() {
   fi
   write_atomic "$env_file" "$env_new" 600
   write_atomic "$unit_file" "$unit_new" 644
+  # The files are in place: release the install lock before starting anything that could inherit it.
+  exec 7>&-
   rm -f "$prompt_file"
   sc daemon-reload
   touch "$log_file"

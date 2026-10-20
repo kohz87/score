@@ -673,3 +673,29 @@ test('no offer on a terminal start for another home while a service is installed
   expect(result.out).toMatch(/Score started/)
   await score(rig, ['stop'], { SCORE_HOME: other })
 }, 120_000)
+
+test('a prompt answered after another home installed the service is refused, not an overwrite (cross-check)', async () => {
+  const rig = makeRig()
+  const homeB = mkdtempSync(join(tmpdir(), 'score-home-b-'))
+  // B's first terminal start shows the question; while it waits, A installs the service; then B answers yes.
+  const child = spawn(
+    'script',
+    ['-qec', [join(rig.root, 'scripts/score'), 'start'].join(' '), '/dev/null'],
+    { env: { ...rig.env, ...installEnv, SCORE_HOME: homeB }, stdio: ['pipe', 'pipe', 'pipe'] },
+  )
+  spawned.push(child)
+  let out = ''
+  child.stdout.on('data', (chunk: Buffer) => (out += chunk.toString()))
+  for (let i = 0; i < 100 && !out.includes(QUESTION); i++)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  expect(out).toContain(QUESTION)
+  expect((await score(rig, ['service', 'install'], installEnv)).code).toBe(0)
+  const unitBefore = readFileSync(join(rig.unitDir, 'score.service'), 'utf8')
+  const envBefore = readFileSync(join(rig.cfgDir, 'score.env'), 'utf8')
+  child.stdin.write('\n')
+  const code = await new Promise<number>((resolve) => child.on('close', (c) => resolve(c ?? 1)))
+  expect(code).not.toBe(0)
+  expect(out.replaceAll('\r', '')).toMatch(/installed for .*score-home/)
+  expect(readFileSync(join(rig.unitDir, 'score.service'), 'utf8')).toBe(unitBefore)
+  expect(readFileSync(join(rig.cfgDir, 'score.env'), 'utf8')).toBe(envBefore)
+}, 120_000)
