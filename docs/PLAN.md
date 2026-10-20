@@ -504,7 +504,7 @@ status/pair/logs` drive the service when it is installed; SETUP.md documents it 
 restart, crash-restart and uninstall work in tests against a fake systemctl and a temp unit folder, the launcher can
 never run a second copy beside the service, and the owner's live Score is switched over by the lead after release.
 
-**10.14 Offer the service on first start** (owner 2026-10-20: "add that prompt") · brief `docs/briefs/10.14-service-prompt.md`.
+**10.14 Offer the service on first start** ✅ v1.14.0 (owner 2026-10-20: "add that prompt") · brief `docs/briefs/10.14-service-prompt.md`.
 The first `scripts/score start` in a terminal, where a systemd user manager is reachable, asks whether to run Score as a
 service; yes installs it with the settings just used, no is remembered; never asks without a terminal. Settings › About
 says whether Score runs as a service, with the command to turn it on.

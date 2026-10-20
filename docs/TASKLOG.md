@@ -583,3 +583,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   verified on the real machine (status/service status for a temp home leave the live MainPID unchanged) and the
   production spec passed without overrides with the live MainPID unchanged. Merged into 10.14 plus a guard so the
   first-start offer never appears while a service exists for another home (test failed first).
+- **v1.14.0** (10.14 + the service-home scope fix + Limits card). 10.14 cross-check: 1 P2 (a prompt answered after
+  another home installed could overwrite it) fixed by the lead (d63e0f47: the offer installs through the guarded
+  command; installs serialised across homes with a lock released before the service starts); test failed first.
+  Limits left card restructured (owner: "very cluttered"; agent-page coding baselines regenerated, lead reviewed dark
+  and phone). Check green (web 2975, server 4651), e2e 639/0, live MainPID unchanged through the run.
+- **10.15 swipe with true swapping** (owner: "build it with true swapping and swipe everywhere"): lead design v1
+  (`docs/briefs/10.15-swipe.md`, branch `task/10.15-swipe-design`); Codex adversarial review at max running. Owner then
+  asked to sync deletes to the agent's session: to be folded into design v2 (same bridge capability).

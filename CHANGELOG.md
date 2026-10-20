@@ -3,6 +3,23 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.14.0] — 2026-10-20
+
+### Added
+- **Setup offers the service.** The first `scripts/score start` in a terminal asks whether to run Score as a service
+  (starts at boot, restarts after a crash). Yes installs it with the settings you started with; no is remembered and
+  `scripts/score service install` does it later. Scripts and anything without a terminal are never asked.
+- **Settings › About says whether Score runs as a service**, with the command to turn it on.
+
+### Changed
+- **Limits left** (coding agents) is easier to read: each limit is a block with its name and "% left", the bar, and
+  the reset time, and the notes sit apart below.
+
+### Fixed
+- The launcher only drives the installed service for the data folder it was installed for; commands for any other
+  folder (tests, a second home) act on that folder only, and installing or removing the service from another folder is
+  refused.
+
 ## [1.13.0] — 2026-10-20
 
 ### Added
