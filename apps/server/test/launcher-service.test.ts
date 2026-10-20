@@ -47,6 +47,7 @@ launch() {
   echo $! >"$pidfile"
 }
 halt() { if alive; then kill -TERM "$(<"$pidfile")"; for _ in $(seq 50); do alive || break; sleep 0.1; done; fi; rm -f "$pidfile"; }
+[[ ",\${FAKE_FAIL:-}," != *",$verb,"* ]] || exit 1
 case "$verb" in
   show-environment) [[ -z "\${FAKE_NO_MANAGER:-}" ]] || exit 1 ;;
   daemon-reload) ;;
@@ -211,6 +212,7 @@ test('service install writes the unit and a private env file, starts it, and pas
     'RestartSec=5',
     'StartLimitIntervalSec=300',
     'StartLimitBurst=5',
+    'KillMode=mixed',
     'KillSignal=SIGTERM',
     'TimeoutStopSec=60',
     'WantedBy=default.target',
@@ -375,4 +377,67 @@ test('uninstall keeps the env file, --purge removes it', async () => {
   expect(purged.code).toBe(0)
   expect(existsSync(join(rig.cfgDir, 'score.env'))).toBe(false)
   expect(existsSync(join(rig.unitDir, 'score.service'))).toBe(false)
+}, 90_000)
+
+test('the instance lock keeps a second copy out for the server whole life (run and start)', async () => {
+  const rig = makeRig()
+  mkdirSync(rig.home, { recursive: true })
+  // Hold the lock the way a live server would, without being recognisable as start.mjs.
+  const holder = spawn('flock', ['-n', join(rig.home, 'score.instance.lock'), 'sleep', '60'], {
+    stdio: 'ignore',
+  })
+  spawned.push(holder)
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  const run = await score(rig, ['run'])
+  expect(run.code).not.toBe(0)
+  expect(run.err).toMatch(/Another Score/)
+  const start = await score(rig, ['start'])
+  expect(start.code).not.toBe(0)
+  expect(start.err).toMatch(/Another Score/)
+  holder.kill('SIGKILL')
+}, 30_000)
+
+test('two runs at once leave exactly one server', async () => {
+  const rig = makeRig()
+  const a = score(rig, ['run'], { SCORE_PORT: '1' })
+  const b = score(rig, ['run'], { SCORE_PORT: '2' })
+  // The loser exits at once; the winner keeps running until the afterEach kills it.
+  const settled = await Promise.race([a, b])
+  expect(settled.code).not.toBe(0)
+  expect(settled.err).toMatch(/already running|Another Score/)
+}, 30_000)
+
+test('uninstall keeps everything and fails when stopping fails', async () => {
+  const rig = makeRig()
+  await score(rig, ['service', 'install'], installEnv)
+  const pid = pidOf(rig)
+  const failed = await score(rig, ['service', 'uninstall', '--purge'], { FAKE_FAIL: 'disable' })
+  expect(failed.code).toBe(1)
+  expect(failed.err).toMatch(/Could not stop/)
+  expect(existsSync(join(rig.unitDir, 'score.service'))).toBe(true)
+  expect(existsSync(join(rig.cfgDir, 'score.env'))).toBe(true)
+  expect(alive(pid)).toBe(true)
+  const reload = await score(rig, ['service', 'uninstall', '--purge'], {
+    FAKE_FAIL: 'daemon-reload',
+  })
+  expect(reload.code).toBe(1)
+  expect(reload.err).toMatch(/daemon-reload failed/)
+  expect(existsSync(join(rig.unitDir, 'score.service'))).toBe(true)
+  expect(existsSync(join(rig.cfgDir, 'score.env'))).toBe(true)
+}, 90_000)
+
+test('restart and reinstall find the ready line after the log is rotated past 10 MB', async () => {
+  const rig = makeRig()
+  await score(rig, ['service', 'install'], installEnv)
+  const log = join(rig.home, 'score.log')
+  const big = () => writeFileSync(log, Buffer.alloc(10_500_000, 97))
+  big()
+  const restarted = await score(rig, ['restart'])
+  expect(restarted.code).toBe(0)
+  expect(restarted.out).toMatch(/Score started/)
+  expect(existsSync(`${log}.1`)).toBe(true)
+  big()
+  const again = await score(rig, ['service', 'install'], installEnv)
+  expect(again.code).toBe(0)
+  expect(again.out).toMatch(/Score started/)
 }, 90_000)

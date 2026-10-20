@@ -38,6 +38,13 @@ lock_launcher() {
   flock 9
 }
 
+# One server per home, for its whole life: a separate lock on fd 8 that survives `exec node` (the launcher lock is
+# released first, and the pid file alone can't tell a process that is about to exec). Node closes it for its children.
+lock_instance() {
+  exec 8>"$home/score.instance.lock"
+  flock -n 8
+}
+
 # Remote mode is HTTPS-only. Without SCORE_TLS_CERT/KEY, use the certificate `score tls` made, if there is one, and
 # make the public origins https:// (derived from SCORE_HOST and the port when SCORE_PUBLIC_ORIGINS is unset).
 use_local_tls() {
@@ -122,10 +129,15 @@ prepare_run() {
   touch "$log_file"
 }
 
+log_state() { stat -c '%i %s' "$log_file" 2>/dev/null || echo "0 0"; }
+
 # Waits for the server's ready line after $2 bytes of the log. $1 is a pid (launcher start) or "service".
 wait_ready() {
-  local who="$1" offset="$2" i dead
+  local who="$1" offset="$2" ino="$3" i dead cur_ino cur_size
   for ((i = 0; i < 100; i++)); do
+    # The server (run) may rotate the log after the caller marked it: a new file or a shorter one is read from the start.
+    read -r cur_ino cur_size < <(log_state)
+    if [[ "$cur_ino" != "$ino" || "$cur_size" -lt "$offset" ]]; then offset=0; ino="$cur_ino"; fi
     dead=0
     # Only a dead process is a failure here: right after the fork its cmdline is still nohup's, so
     # running_pid's start.mjs check could misreport a healthy start under load.
@@ -160,14 +172,18 @@ wait_ready() {
 }
 
 launcher_start() {
-  local pid offset child
+  local pid offset ino child
   lock_launcher
   if pid="$(running_pid)"; then
     echo "Score is already running (pid $pid). Use 'score pair' for a new pairing link."
     return 0
   fi
+  if ! lock_instance; then
+    echo "Another Score is starting or running on this home; not starting a second copy." >&2
+    return 1
+  fi
   prepare_run || return 1
-  offset="$(wc -c <"$log_file")"
+  read -r ino offset < <(log_state)
   (
     cd "$root"
     # 9>&- keeps the launcher lock from being inherited by the long-running server.
@@ -175,12 +191,12 @@ launcher_start() {
     echo $! >"$pid_file"
   )
   child="$(<"$pid_file")"
-  wait_ready "$child" "$offset"
+  wait_ready "$child" "$offset" "$ino"
 }
 
 # `start` and `restart` once the unit is installed. No launcher lock here: `run` takes it while systemd starts us.
 service_start() {
-  local verb="$1" pid offset
+  local verb="$1" pid offset ino
   if pid="$(stray_pid)"; then
     echo "A Score started by the launcher is already running (pid $pid), so the service can't run beside it." >&2
     echo "Run 'scripts/score stop' first (the launcher stops that copy), then start the service." >&2
@@ -192,9 +208,9 @@ service_start() {
   fi
   mkdir -p "$home"
   touch "$log_file"
-  offset="$(wc -c <"$log_file")"
+  read -r ino offset < <(log_state)
   sc "$verb" score || { echo "systemctl --user $verb score failed." >&2; return 1; }
-  wait_ready service "$offset"
+  wait_ready service "$offset" "$ino"
 }
 
 cmd_start() {
@@ -216,6 +232,10 @@ cmd_run() {
   lock_launcher
   if pid="$(running_pid)"; then
     echo "Score is already running on this home (pid $pid); not starting a second copy." >&2
+    return 1
+  fi
+  if ! lock_instance; then
+    echo "Another Score is starting or running on this home; not starting a second copy." >&2
     return 1
   fi
   prepare_run || return 1
@@ -350,6 +370,7 @@ StandardOutput=append:$(unit_escape "$log_file")
 StandardError=append:$(unit_escape "$log_file")
 Restart=on-failure
 RestartSec=5
+KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=60
 
@@ -359,7 +380,7 @@ EOT
 }
 
 service_install() {
-  local env_new unit_new pid offset reinstall=0 changed linger
+  local env_new unit_new pid offset ino reinstall=0 changed linger
   if [[ ! -f "$root/apps/web/dist/index.html" ]]; then
     echo "Score is not built yet. Run 'pnpm build' in $root first." >&2
     return 1
@@ -398,7 +419,7 @@ service_install() {
   write_atomic "$unit_file" "$unit_new" 644
   sc daemon-reload
   touch "$log_file"
-  offset="$(wc -c <"$log_file")"
+  read -r ino offset < <(log_state)
   if [[ "$reinstall" == 1 ]]; then
     sc enable score
     sc restart score
@@ -410,7 +431,7 @@ service_install() {
     echo "Warning: linger is off, so Score only starts after you log in. To start it at boot without a login, run:" >&2
     echo "  loginctl enable-linger $this_user" >&2
   fi
-  wait_ready service "$offset"
+  wait_ready service "$offset" "$ino"
 }
 
 service_status() {
@@ -436,9 +457,18 @@ service_uninstall() {
     *) usage ;;
   esac
   if service_installed; then
-    sc disable --now score || true
-    rm -f "$unit_file"
-    sc daemon-reload || true
+    if ! sc disable --now score; then
+      echo "Could not stop and disable the Score service (systemctl --user disable --now score failed)." >&2
+      echo "Nothing was removed. Fix the user manager, then run 'scripts/score service uninstall' again." >&2
+      return 1
+    fi
+    mv -f "$unit_file" "$unit_file.removing"
+    if ! sc daemon-reload; then
+      mv -f "$unit_file.removing" "$unit_file"
+      echo "systemctl --user daemon-reload failed; the unit file was put back. Run uninstall again." >&2
+      return 1
+    fi
+    rm -f "$unit_file.removing"
     running_pid >/dev/null || rm -f "$pid_file"
     echo "Removed $unit_file. Score is stopped; 'scripts/score start' runs it from the launcher again."
   else
