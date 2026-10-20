@@ -604,3 +604,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   labelled "written after the earlier answer", synced delete only as "delete question and reply" (5.33 rewind delete),
   a durable `turn_operations` journal with a room hold. Draft `docs/proposals/hermes-transcript-cas.md` (unsent) for
   true swapping and arbitrary deletes. Codex v2 review at max running.
+- **10.15 design rounds:** v2 review (P1 ×3: crash windows, pending-write race, partial group delete) → v3 (R1–R7);
+  v3 review (P1 ×3: rewind not pinned to the validated rows, shared sessions and baselines, unverified finish) → v4
+  (S1–S6: `rewind_to_message` with expected rows, Score-owned sessions only with exact manifests, verified transcript
+  checkpoint, admission outcome rules, a forget state machine, staged successors). Owner: ship swipe and same-context
+  regeneration together (no Score-only interim). v4 review at max running. Reviews in docs/reviews/2026-10-20-10.15-*.
