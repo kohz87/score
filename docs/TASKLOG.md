@@ -561,3 +561,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   Cross-check (Codex high): 3 P2 accepted — instance guard bypassable while `run` hands over to node (needs an instance
   lock held across exec), uninstall reports success when stopping failed, log rotation hides the ready line. Fix round
   sent to the builder.
+- **v1.13.0** (10.13 Score as a service). Fix round (builder): instance lock held across exec (lead verified neither
+  spawned nor pty children inherit it), uninstall keeps files when stopping fails, rotated-log ready wait,
+  `KillMode=mixed`. Second cross-check: 2 P2 fixed by the lead (3fac0998): a fresh shell follows the installed service's
+  SCORE_HOME (read from the env file as text, never sourced), and manual start/restart/reinstall run `reset-failed`
+  first. Launcher tests 18/18 (all new ones failed first); check green (server 4639); e2e 639/0 on the merge.

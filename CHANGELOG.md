@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.13.0] — 2026-10-20
+
+### Added
+- **Run Score as a service.** `scripts/score service install` installs Score as a systemd user service: it starts at
+  boot (with linger) and restarts after a crash (up to 5 times in 5 minutes). Your `SCORE_*` settings and `PATH` are
+  kept in a private file (`~/.config/score/score.env`). `service status` and `service uninstall [--purge]` go with it.
+  Once installed, `scripts/score start|stop|restart|status|pair|logs` work through the service, and the launcher never
+  runs a second copy beside it. New `scripts/score restart` and `scripts/score run` (foreground). See SETUP.md step 9a.
+
 ## [1.12.2] — 2026-10-19
 
 ### Changed

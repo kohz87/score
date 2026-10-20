@@ -497,7 +497,7 @@ and the sidebar shows the same members as the stage's thinking/working/waiting m
 **10.12 Drop OpenCode** ✅ v1.12.2 (owner 2026-10-19: "drop opencode"; decision 111) · Remove the unsupported OpenCode runtime from
 the contract, server drivers, workflow rules and web. Done when nothing offers or names OpenCode and the suites pass.
 
-**10.13 Score as a service** (owner 2026-10-20: "should we include install as service part of the setup?" → "yes") ·
+**10.13 Score as a service** ✅ v1.13.0 (owner 2026-10-20: "should we include install as service part of the setup?" → "yes") ·
 brief `docs/briefs/10.13-service.md`. `scripts/score service install|status|uninstall` installs Score as a systemd user
 service (restart on failure, starts at boot with linger), with the settings in a private env file; `start/stop/restart/
 status/pair/logs` drive the service when it is installed; SETUP.md documents it as a setup step. Done when: install,
