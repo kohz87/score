@@ -556,3 +556,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   and PATH, restart on failure with a start limit), launcher defers to the unit, docs; tests only against fake
   systemctl/loginctl and temp folders. Sonnet builder in `../score-worktrees/10.13`. Lead switches the live Score over
   after release.
+- **10.13 built** (builder; 12 launcher tests failing first against main's launcher; check green; e2e 638 + 1 known
+  theme flake). Lead review: add `KillMode=mixed` (default control-group would SIGTERM every process at once).
+  Cross-check (Codex high): 3 P2 accepted — instance guard bypassable while `run` hands over to node (needs an instance
+  lock held across exec), uninstall reports success when stopping failed, log rotation hides the ready line. Fix round
+  sent to the builder.
