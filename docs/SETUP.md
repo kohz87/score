@@ -235,14 +235,38 @@ scripts/score status    # running? pid and URL
 scripts/score pair      # mint a fresh pairing link (SIGUSR2 -> 0600 file in $SCORE_HOME; no network endpoint)
 scripts/score password  # set or reset the security password (guards pairing, renewing and terminating devices)
 scripts/score logs [-f] # last 100 log lines, or follow
+scripts/score restart   # stop, then start (or `systemctl --user restart score` when installed as a service)
 scripts/score stop
 ```
 Put it on your PATH if you like: `ln -s "$PWD/scripts/score" ~/.local/bin/score`.
 
-systemd user unit (not installed by Score): copy `docs/score.service.example` to `~/.config/systemd/user/score.service`,
-edit `WorkingDirectory`, then `systemctl --user enable --now score`. Use either the launcher or systemd for one `SCORE_HOME`, not both.
+To run Score as a service instead, see 9a below. Once it is installed, `start`, `stop`, `restart` and
+`status` act on the service, and `pair` and `logs` work as before.
 
-Upgrades: stop Score, back up `$SCORE_HOME` (at least `score.db`, `score.db-wal`/`-shm` if present, and `media/`), `git pull`,
+### 9a. Run Score as a service (starts at boot, restarts after a crash)
+
+The launcher installs a systemd **user** service, the same kind as `hermes-gateway.service`. Build first (`pnpm build`), set
+the variables you normally start Score with, and run:
+```bash
+SCORE_MODE=live SCORE_REMOTE=1 SCORE_HOST=192.168.1.20 scripts/score service install
+loginctl enable-linger "$USER"      # once: start at boot without a login (install warns when it is off)
+scripts/score service status        # state, enabled, MainPID, URL, linger
+```
+`install` writes `~/.config/systemd/user/score.service` and a private environment file `~/.config/score/score.env` (mode 600)
+holding `SCORE_HOME`, every `SCORE_*` variable set in the shell that ran `install`, and your `PATH` as it is then (systemd has
+no shell `PATH`, and Score runs `hermes`, `git`, `tmux` and the coding CLIs from it). Nothing else from your environment is
+copied. It then enables and starts the unit, waits for the server and prints the address and the pairing link. A
+launcher-started Score must be stopped first (`scripts/score stop`): the two never run side by side.
+
+- To change settings, run `install` again with the new variables: it rewrites both files, says which variables changed
+  (names only) and restarts.
+- After `git pull` and `pnpm build`: `scripts/score restart` (a clean stop drains for up to about 45 s).
+- Logs: `scripts/score logs [-f]` (the unit appends to `$SCORE_HOME/score.log`); `journalctl --user -u score` shows systemd's own messages.
+- If it keeps failing, systemd gives up after 5 starts in 5 minutes: read the log, fix the cause, then `scripts/score start`.
+- Remove it: `scripts/score service uninstall` (keeps `score.env`; `--purge` deletes it too). The launcher then runs Score again.
+- `scripts/score run` is the foreground form the unit uses; run it in a terminal to see Score's output directly.
+
+Upgrades: stop Score (`scripts/score restart` after the build does stop and start in one step), back up `$SCORE_HOME` (at least `score.db`, `score.db-wal`/`-shm` if present, and `media/`), `git pull`,
 `pnpm install && pnpm build`, start again. Migrations run automatically at start and are forward-only, so keep the backup
 if you may want to go back to the previous version.
 
