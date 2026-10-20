@@ -1349,7 +1349,9 @@ compatible: boolean }`. Read-only: compares the running build (version, code sha
 - `GET /api/about` → `About` `{ version: string /* Score's package.json */; commit: string | null /* short git commit of the
   running checkout, read once; null when the folder isn't a git checkout */; schema: number /* newest applied database
   migration, 0 without a database */; contract: number; hermes: { version: string } | null; node: string;
-  mode: 'live' | 'fake'; repository: string /* https URL */; checkout: string /* the folder the server runs from */ }`.
+  mode: 'live' | 'fake'; repository: string /* https URL */; checkout: string /* the folder the server runs from */;
+  service: boolean /* runs as the systemd user service (PLAN 10.14): `scripts/score run` under systemd sets
+  SCORE_RUN_AS=service */ }`.
 - **H** `POST /api/about/update-check` (no body) → `UpdateCheck` `{ checkedAt; current: string; status: 'up_to_date' |
   'update_available' | 'ahead' | 'unavailable'; latest: { version; tag; url; changelogUrl } | null; message: string }`.
   Runs only when asked: Score never checks at start, on page load or in the background. It reads the public tag list of

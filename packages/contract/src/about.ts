@@ -11,6 +11,8 @@ export const AboutSchema = z.object({
   mode: z.enum(['live', 'fake']),
   repository: z.url({ protocol: /^https$/ }),
   checkout: z.string().min(1),
+  /** True when the server runs as the systemd user service (`scripts/score service install`, PLAN 10.13/10.14). */
+  service: z.boolean(),
 })
 export type About = z.infer<typeof AboutSchema>
 

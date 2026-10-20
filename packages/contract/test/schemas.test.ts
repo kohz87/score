@@ -706,6 +706,7 @@ const cases = [
       mode: 'fake',
       repository: 'https://github.com/kohz87/score',
       checkout: '/srv/score',
+      service: true,
     },
     { version: '1.3.0' },
   ],

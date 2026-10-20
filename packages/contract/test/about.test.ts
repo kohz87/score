@@ -11,6 +11,7 @@ const about = {
   mode: 'live',
   repository: 'https://github.com/kohz87/score',
   checkout: '/srv/score',
+  service: false,
 }
 
 test('About accepts a checkout without git or Hermes, and rejects a plain-http repository', () => {
