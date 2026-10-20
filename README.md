@@ -100,12 +100,13 @@ Score is tested with Hermes **v0.21.x**. More in the [Hermes Agent README](https
 ```bash
 SCORE_MODE=live scripts/score start    # runs in the background and prints a pairing link
 scripts/score status                   # is it running, which URL
+scripts/score service install          # optional: run it as a systemd user service (boot, crash restart)
 curl -s http://127.0.0.1:8740/api/system   # "reachable": true means Score sees Hermes
 ```
 
 Other launcher commands: `scripts/score pair` (a fresh pairing link), `password` (security password for managing
-devices and the terminal), `logs -f`, `stop`, `restore <backup>`. To start Score with the machine, use the systemd user
-unit in [docs/SETUP.md](docs/SETUP.md) §9.
+devices and the terminal), `logs -f`, `restart`, `stop`, `restore <backup>`. To start Score with the machine and restart it
+after a crash, run `scripts/score service install` (a systemd user service; see [docs/SETUP.md](docs/SETUP.md) §9).
 
 ### 6. Use Score from your phone or another computer (HTTPS)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Score launcher: score start|stop|status|logs|pair|password|look|tls. State lives in $SCORE_HOME (default ~/.score).
+# Score launcher: score start|stop|restart|status|run|service|logs|pair|password|look|tls. State lives in $SCORE_HOME (default ~/.score).
 set -euo pipefail
 
 script="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -17,7 +17,7 @@ port="${SCORE_PORT:-8740}"
 host="${SCORE_HOST:-127.0.0.1}"
 
 usage() {
-  echo "Usage: score start|stop|status|logs [-f]|pair|password|look reset|restore <backup>|installation status|confirm-move|confirm-copy|reset-history|tls [--new-ca]|tailscale" >&2
+  echo "Usage: score start|stop|restart|status|run|service install|status|uninstall [--purge]|logs [-f]|pair|password|look reset|restore <backup>|installation status|confirm-move|confirm-copy|reset-history|tls [--new-ca]|tailscale" >&2
   exit 2
 }
 
@@ -76,13 +76,38 @@ use_named_tls() {
   [[ "$origins" == "${SCORE_PUBLIC_ORIGINS:-}" ]] || export SCORE_PUBLIC_ORIGINS="$origins"
 }
 
-cmd_start() {
-  local pid offset i child
-  lock_launcher
-  if pid="$(running_pid)"; then
-    echo "Score is already running (pid $pid). Use 'score pair' for a new pairing link."
-    return 0
-  fi
+# --- systemd user service (10.13) -------------------------------------------------------------------------------
+# The overrides exist for tests (fake systemctl/loginctl and temp folders); normal use never sets them.
+unit_dir="${SCORE_SYSTEMD_USER_DIR:-$HOME/.config/systemd/user}"
+unit_file="$unit_dir/score.service"
+config_dir="${SCORE_CONFIG_DIR:-$HOME/.config/score}"
+env_file="$config_dir/score.env"
+systemctl_bin="${SCORE_SYSTEMCTL:-systemctl}"
+loginctl_bin="${SCORE_LOGINCTL:-loginctl}"
+this_user="${USER:-$(id -un)}"
+
+sc() { "$systemctl_bin" --user "$@"; }
+service_installed() { [[ -f "$unit_file" ]]; }
+service_active() { sc is-active --quiet score 2>/dev/null; }
+service_pid() {
+  local value
+  value="$(sc show --property=MainPID --value score 2>/dev/null || true)"
+  [[ "$value" =~ ^[1-9][0-9]*$ ]] && echo "$value"
+  return 0
+}
+
+# A launcher-started Score (not the service's own process) that is still running on this home.
+stray_pid() {
+  local pid main
+  pid="$(running_pid)" || return 1
+  main=""
+  if service_installed; then main="$(service_pid)"; fi
+  [[ "$pid" != "$main" ]] || return 1
+  echo "$pid"
+}
+
+# Shared by `start` and `run`: everything that has to be true before the server process begins.
+prepare_run() {
   if [[ ! -f "$root/apps/web/dist/index.html" ]]; then
     echo "Score is not built yet. Run 'pnpm build' in $root first." >&2
     return 1
@@ -95,28 +120,31 @@ cmd_start() {
     mv -f "$log_file" "$log_file.1"
   fi
   touch "$log_file"
-  offset="$(wc -c <"$log_file")"
-  (
-    cd "$root"
-    # 9>&- keeps the launcher lock from being inherited by the long-running server.
-    SCORE_HOME="$home" SCORE_LOG_FILE="$log_file" SCORE_SERVE_WEB=1 nohup node scripts/start.mjs >>"$log_file" 2>&1 </dev/null 9>&- &
-    echo $! >"$pid_file"
-  )
-  child="$(<"$pid_file")"
+}
+
+# Waits for the server's ready line after $2 bytes of the log. $1 is a pid (launcher start) or "service".
+wait_ready() {
+  local who="$1" offset="$2" i dead
   for ((i = 0; i < 100; i++)); do
+    dead=0
     # Only a dead process is a failure here: right after the fork its cmdline is still nohup's, so
     # running_pid's start.mjs check could misreport a healthy start under load.
-    if ! kill -0 "$child" 2>/dev/null; then
+    if [[ "$who" == service ]]; then
+      if sc is-failed --quiet score 2>/dev/null; then dead=1; fi
+    elif ! kill -0 "$who" 2>/dev/null; then
+      dead=1
+    fi
+    if [[ "$dead" == 1 ]]; then
       echo "Score failed to start:" >&2
       tail -n 20 "$log_file" >&2
-      [[ "$(cat "$pid_file" 2>/dev/null)" == "$child" ]] && rm -f "$pid_file"
+      [[ "$who" == service ]] || { [[ "$(cat "$pid_file" 2>/dev/null)" == "$who" ]] && rm -f "$pid_file"; }
       return 1
     fi
     if tail -c +"$((offset + 1))" "$log_file" | grep -Eq 'Pair this browser|Setup guide:'; then
       # Before any output: a caller reading only the first line (| head -1) would stop us mid-way.
       tail -c +"$((offset + 1))" "$log_file" | grep -Em1 'Pair this browser|Setup guide:' |
         sed -E 's#^.*(Pair this browser|Setup guide): (https?://[^/]+)/.*#\2#' >"$url_file" || true
-      echo "Score started (pid $(running_pid)). Log: $log_file"
+      echo "Score started (pid $(running_pid || true)). Log: $log_file"
       tail -c +"$((offset + 1))" "$log_file" | grep -E 'Pair this browser|Setup guide:|Run scripts/score tls' | head -n 2
       # The link itself never goes to score.log: the server leaves it in a 0600 file, shown once here.
       if [[ -f "$pair_file" ]]; then
@@ -131,7 +159,75 @@ cmd_start() {
   return 1
 }
 
-cmd_stop() {
+launcher_start() {
+  local pid offset child
+  lock_launcher
+  if pid="$(running_pid)"; then
+    echo "Score is already running (pid $pid). Use 'score pair' for a new pairing link."
+    return 0
+  fi
+  prepare_run || return 1
+  offset="$(wc -c <"$log_file")"
+  (
+    cd "$root"
+    # 9>&- keeps the launcher lock from being inherited by the long-running server.
+    SCORE_HOME="$home" SCORE_LOG_FILE="$log_file" SCORE_SERVE_WEB=1 nohup node scripts/start.mjs >>"$log_file" 2>&1 </dev/null 9>&- &
+    echo $! >"$pid_file"
+  )
+  child="$(<"$pid_file")"
+  wait_ready "$child" "$offset"
+}
+
+# `start` and `restart` once the unit is installed. No launcher lock here: `run` takes it while systemd starts us.
+service_start() {
+  local verb="$1" pid offset
+  if pid="$(stray_pid)"; then
+    echo "A Score started by the launcher is already running (pid $pid), so the service can't run beside it." >&2
+    echo "Run 'scripts/score stop' first (the launcher stops that copy), then start the service." >&2
+    return 1
+  fi
+  if [[ "$verb" == start ]] && service_active; then
+    echo "Score is already running as a service (pid $(service_pid || true)). Use 'score pair' for a new pairing link."
+    return 0
+  fi
+  mkdir -p "$home"
+  touch "$log_file"
+  offset="$(wc -c <"$log_file")"
+  sc "$verb" score || { echo "systemctl --user $verb score failed." >&2; return 1; }
+  wait_ready service "$offset"
+}
+
+cmd_start() {
+  if service_installed; then service_start start; else launcher_start; fi
+}
+
+cmd_restart() {
+  if service_installed; then
+    service_start restart
+  else
+    cmd_stop
+    launcher_start
+  fi
+}
+
+# Foreground start for systemd (and for anyone who wants Score in a terminal): the process becomes the server.
+cmd_run() {
+  local pid
+  lock_launcher
+  if pid="$(running_pid)"; then
+    echo "Score is already running on this home (pid $pid); not starting a second copy." >&2
+    return 1
+  fi
+  prepare_run || return 1
+  echo $$ >"$pid_file"
+  # Release the lock and, under systemd, follow the log by name so a rotation above is not lost.
+  exec 9>&-
+  [[ -t 1 ]] || exec >>"$log_file" 2>&1
+  cd "$root"
+  SCORE_HOME="$home" SCORE_LOG_FILE="$log_file" SCORE_SERVE_WEB=1 exec node scripts/start.mjs
+}
+
+launcher_stop() {
   local pid i
   lock_launcher
   if ! pid="$(running_pid)"; then
@@ -153,8 +249,33 @@ cmd_stop() {
   return 1
 }
 
+cmd_stop() {
+  if ! service_installed; then
+    launcher_stop
+    return
+  fi
+  # Blocks until the unit is down (it drains for up to ~45 s); a stray launcher copy is stopped too.
+  sc stop score || { echo "systemctl --user stop score failed." >&2; return 1; }
+  running_pid >/dev/null || rm -f "$pid_file"
+  if stray_pid >/dev/null; then launcher_stop; else echo "Score stopped."; fi
+}
+
 cmd_status() {
   local pid
+  if service_installed; then
+    if service_active; then
+      pid="$(service_pid || true)"
+      if [[ -s "$url_file" ]]; then
+        echo "Score is running as a service (pid ${pid:-?}). Open $(<"$url_file") in your browser."
+      else
+        echo "Score is running as a service (pid ${pid:-?}) at http://$host:$port"
+      fi
+    else
+      echo "Score is installed as a service but is not running (systemctl --user status score)."
+      return 1
+    fi
+    return 0
+  fi
   if pid="$(running_pid)"; then
     if [[ -s "$url_file" ]]; then
       echo "Score is running (pid $pid). Open $(<"$url_file") in your browser."
@@ -165,6 +286,181 @@ cmd_status() {
     echo "Score is not running."
     return 1
   fi
+}
+
+# Writes $2 to $1 atomically with mode $3 (temp file in the same folder, then rename).
+write_atomic() {
+  local target="$1" content="$2" mode="$3" tmp
+  tmp="$(mktemp "$(dirname "$target")/.score-tmp.XXXXXX")"
+  printf '%s' "$content" >"$tmp"
+  chmod "$mode" "$tmp"
+  mv -f "$tmp" "$target"
+}
+
+# systemd specifiers: a literal % in a unit file is written %%.
+unit_escape() { printf '%s' "${1//%/%%}"; }
+
+# Key names (never values) that differ between two files, for "what changed" without printing secrets.
+changed_keys() {
+  diff <(cat "$1" 2>/dev/null) <(printf '%s' "$2") | sed -nE 's/^[<>] ([A-Za-z0-9_]+)=.*/\1/p' | sort -u | paste -sd, - || true
+}
+
+service_env_content() {
+  local name value out="" key
+  local -a names=()
+  while IFS= read -r name; do
+    case "$name" in
+      SCORE_HOME | SCORE_SYSTEMD_USER_DIR | SCORE_CONFIG_DIR | SCORE_SYSTEMCTL | SCORE_LOGINCTL) ;;
+      SCORE_*) names+=("$name") ;;
+    esac
+  done < <(compgen -e | LC_ALL=C sort)
+  # SCORE_HOME as resolved here, PATH as it is now (systemd has no login shell), then every other SCORE_* variable.
+  for key in SCORE_HOME PATH "${names[@]}"; do
+    if [[ "$key" == SCORE_HOME ]]; then value="$home"; else value="${!key-}"; fi
+    if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+      echo "$key contains a line break; the service environment file can't hold it. Fix the variable and run again." >&2
+      return 1
+    fi
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    out+="$key=\"$value\""$'\n'
+  done
+  printf '%s' "$out"
+}
+
+service_unit_content() {
+  local exec_path
+  exec_path="$(unit_escape "$root/scripts/score")"
+  [[ "$exec_path" == *" "* ]] && exec_path="\"$exec_path\""
+  local env_ref="%h/.config/score/score.env"
+  [[ -z "${SCORE_CONFIG_DIR:-}" ]] || env_ref="$(unit_escape "$env_file")"
+  cat <<EOT
+[Unit]
+Description=Score (Hermes team workspace)
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=$(unit_escape "$root")
+ExecStart=$exec_path run
+EnvironmentFile=$env_ref
+StandardOutput=append:$(unit_escape "$log_file")
+StandardError=append:$(unit_escape "$log_file")
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target
+EOT
+}
+
+service_install() {
+  local env_new unit_new pid offset reinstall=0 changed linger
+  if [[ ! -f "$root/apps/web/dist/index.html" ]]; then
+    echo "Score is not built yet. Run 'pnpm build' in $root first." >&2
+    return 1
+  fi
+  if ! sc show-environment >/dev/null 2>&1; then
+    echo "The systemd user manager isn't reachable (systemctl --user failed)." >&2
+    echo "Log in through a normal session (or 'loginctl enable-linger $this_user' and reboot), then try again." >&2
+    return 1
+  fi
+  lock_launcher
+  if pid="$(stray_pid)"; then
+    echo "A Score started by the launcher is running (pid $pid); the service can't run beside it." >&2
+    echo "Run 'scripts/score stop' first, then 'scripts/score service install'." >&2
+    return 1
+  fi
+  exec 9>&-
+  env_new="$(service_env_content)" || return 1
+  env_new+=$'\n'
+  unit_new="$(service_unit_content)"$'\n'
+  service_installed && reinstall=1
+  umask 077
+  mkdir -p "$config_dir" "$unit_dir" "$home"
+  chmod 700 "$config_dir"
+  if [[ "$reinstall" == 1 ]]; then
+    if printf '%s' "$env_new" | cmp -s - "$env_file"; then
+      echo "Environment file unchanged: $env_file"
+    else
+      changed="$(changed_keys "$env_file" "$env_new")"
+      echo "Environment file updated: $env_file${changed:+ (changed: $changed)}"
+    fi
+    if printf '%s' "$unit_new" | cmp -s - "$unit_file"; then echo "Unit file unchanged: $unit_file"; else echo "Unit file updated: $unit_file"; fi
+  else
+    echo "Wrote $env_file (private, mode 600) and $unit_file"
+  fi
+  write_atomic "$env_file" "$env_new" 600
+  write_atomic "$unit_file" "$unit_new" 644
+  sc daemon-reload
+  touch "$log_file"
+  offset="$(wc -c <"$log_file")"
+  if [[ "$reinstall" == 1 ]]; then
+    sc enable score
+    sc restart score
+  else
+    sc enable --now score
+  fi
+  linger="$("$loginctl_bin" show-user "$this_user" --property=Linger --value 2>/dev/null || true)"
+  if [[ "$linger" != yes ]]; then
+    echo "Warning: linger is off, so Score only starts after you log in. To start it at boot without a login, run:" >&2
+    echo "  loginctl enable-linger $this_user" >&2
+  fi
+  wait_ready service "$offset"
+}
+
+service_status() {
+  local linger
+  if ! service_installed; then
+    echo "Score is not installed as a service (scripts/score service install)."
+    return 1
+  fi
+  echo "Unit:     $unit_file"
+  echo "State:    $(sc is-active score 2>/dev/null || true)"
+  echo "Enabled:  $(sc is-enabled score 2>/dev/null || true)"
+  echo "MainPID:  $(service_pid || echo none)"
+  if [[ -s "$url_file" ]]; then echo "URL:      $(<"$url_file")"; else echo "URL:      (not known yet)"; fi
+  linger="$("$loginctl_bin" show-user "$this_user" --property=Linger --value 2>/dev/null || true)"
+  echo "Linger:   ${linger:-unknown}$([[ "$linger" == yes ]] || echo " (loginctl enable-linger $this_user starts Score at boot without a login)")"
+}
+
+service_uninstall() {
+  local purge=0
+  case "${1:-}" in
+    "") ;;
+    --purge) purge=1 ;;
+    *) usage ;;
+  esac
+  if service_installed; then
+    sc disable --now score || true
+    rm -f "$unit_file"
+    sc daemon-reload || true
+    running_pid >/dev/null || rm -f "$pid_file"
+    echo "Removed $unit_file. Score is stopped; 'scripts/score start' runs it from the launcher again."
+  else
+    echo "The Score service is not installed."
+  fi
+  if [[ "$purge" == 1 ]]; then
+    rm -f "$env_file"
+    echo "Removed $env_file."
+  elif [[ -f "$env_file" ]]; then
+    echo "Kept $env_file (use 'service uninstall --purge' to remove it)."
+  fi
+}
+
+cmd_service() {
+  local sub="${1:-}"
+  [[ $# -eq 0 ]] || shift
+  case "$sub" in
+    install) service_install ;;
+    status) service_status ;;
+    uninstall) service_uninstall "${1:-}" ;;
+    *) usage ;;
+  esac
 }
 
 cmd_logs() {
@@ -301,6 +597,9 @@ EOT
 case "${1:-}" in
   start) cmd_start ;;
   stop) cmd_stop ;;
+  restart) cmd_restart ;;
+  run) cmd_run ;;
+  service) shift; cmd_service "$@" ;;
   status) cmd_status ;;
   logs) shift; cmd_logs "${1:-}" ;;
   pair) cmd_pair ;;
