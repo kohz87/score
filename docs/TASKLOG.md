@@ -551,3 +551,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   also needs the server's busy list (a silent producer or compatibility), room detail reads busy-now at the current
   time. Lead also fixed a now.spec route teardown race. Final on the release branch: check green (contract 1420, web
   2974, server 4621), e2e 639/0 in 3.4 min, server RSS peak 942 MB (main 840; earlier run 888). 10.12: no findings.
+- **10.13 Score as a service** (owner: "yes"): lead wrote PLAN entry and brief on `task/10.13-service` — `score run`
+  (foreground, shared preparation), `score service install|status|uninstall` (user unit, private env file with SCORE_*
+  and PATH, restart on failure with a start limit), launcher defers to the unit, docs; tests only against fake
+  systemctl/loginctl and temp folders. Sonnet builder in `../score-worktrees/10.13`. Lead switches the live Score over
+  after release.
