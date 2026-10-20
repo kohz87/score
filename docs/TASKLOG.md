@@ -591,3 +591,10 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **10.15 swipe with true swapping** (owner: "build it with true swapping and swipe everywhere"): lead design v1
   (`docs/briefs/10.15-swipe.md`, branch `task/10.15-swipe-design`); Codex adversarial review at max running. Owner then
   asked to sync deletes to the agent's session: to be folded into design v2 (same bridge capability).
+- **10.15 design review** (Codex max, `docs/reviews/2026-10-20-10.15-swipe-design-codex.md`): **not approved** — 7 P1, 3
+  P2. Core blocker is upstream: Hermes's `replace_messages` has no expected-state check (a concurrent append can be
+  archived unseen), its common-prefix matcher can splice rows of the wrong alternative, pending transcript drains can
+  resurrect or lose rows, Hermes "user turns" are not Score reply-turns (steers, tool rows), and no coding CLI offers a
+  verified pre-turn fork. Score-side P1s (durable operation journal, causal consumers such as frozen summary inputs and
+  reserved hand-offs) are solvable but moot until Hermes offers an atomic transcript compare-and-swap. The owner's
+  delete-sync request needs the same operation for any reply but the latest turn. Decision taken to the owner.
