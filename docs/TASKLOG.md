@@ -574,3 +574,12 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **10.14 offer the service on first start** (owner: "add that prompt"): lead added `About.service` to the contract and
   wrote PLAN entry and brief on `task/10.14-service-prompt`; Sonnet builder in `../score-worktrees/10.14` (launcher
   prompt with fakes only, `SCORE_RUN_AS=service`, Settings › About row).
+- **Incident 2026-10-20 03:52–03:56 UTC: live service restarted four times.** The 10.14 builder's full e2e
+  (`e2e/production.spec.ts` runs `scripts/score start/status/stop` with a temp SCORE_HOME) and its manual repro drove the
+  owner's real `score.service`, because since 1.13.0 the launcher deferred to any installed unit. Downtime ~2½ min total
+  (longest 1 m 43 s); no runs or orchestrations were active; the gateway lost its bridge link and was restarted by the
+  lead (03:58, producers back). Root-cause fix on main (87111ac2, lead): the unit drives only the home it was
+  installed for; `service install|status|uninstall` from another home are refused; regression test failed first;
+  verified on the real machine (status/service status for a temp home leave the live MainPID unchanged) and the
+  production spec passed without overrides with the live MainPID unchanged. Merged into 10.14 plus a guard so the
+  first-start offer never appears while a service exists for another home (test failed first).
