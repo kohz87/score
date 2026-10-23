@@ -22,9 +22,10 @@ work together (rooms with @mentions, orchestrations, workflows) each have their 
 
 ## 2. The concept
 
-Three places: **Room**, **Team**, **Settings** (a gear). Dark first. Everything else is folded in or removed (§5).
+Three places: **Room**, **Team**, **Settings** (a gear), plus **Search** (⌘K) from anywhere. Dark first. Everything else is
+folded in or removed (§5). Every screen is mocked in `docs/design/bold/` (20 boards; the README lists them).
 
-1. **Team room** (`1-team-room.dc.html`): one room, always on, where you and the team talk.
+1. **Team room** (`01-team-room.dc.html`; empty state `09`, a job's thread `11`): one room, always on, where you and the team talk.
    - **Jobs are tabs inside it** (All · Activity feed · Release notes · …). A job is a thread: your request, the
      agents' work, the result. The room's main stream shows only your requests, results (as cards), one-line job
      capsules ("builder and reviewer · 2 rounds · approved") and requests for you. "Open thread" shows the rest.
@@ -32,10 +33,11 @@ Three places: **Room**, **Team**, **Settings** (a gear). Dark first. Everything 
    - **Composer** says which job it writes into ("To: Activity feed"); unaddressed messages go to lead, `@name`
      addresses one agent.
    - **Team dock** in the top bar: each agent's shape in a progress ring; clicking one opens its one-to-one.
-2. **Side panel**, one dropdown: **Work** or a **one-to-one** with any agent.
+2. **Side panel**, one dropdown: **Work**, **Library** (`13`, replaces Knowledge), a job's **Thread** (`11`), or a
+   **one-to-one** with any agent.
    - **Work → Results** (default): what the team is making as cards: a live preview, "What changed" in plain words
      (who caught what), drafts, small live screens. Never opens on raw code.
-   - **Work → Workbench** (`2-job-wide.dc.html`): the same work file by file: diffs with a bar in the colour of the
+   - **Work → Workbench** (`02-job-wide.dc.html`): the same work file by file: diffs with a bar in the colour of the
      agent who wrote each line, review comments pinned to lines, the agent's cursor; the agent's screen (read-only);
      drafts. Result cards link straight to the matching Workbench tab.
    - **One-to-one** (Claude-style, centred): private ("Only you and builder see this"), the panel takes the agent's
@@ -43,13 +45,19 @@ Three places: **Room**, **Team**, **Settings** (a gear). Dark first. Everything 
      "New chat". **Bring this into a new chat** attaches a reference chip ("Referring to: The cursor bug (Tue)").
      **Share to the team room** posts an answer into the room, labelled as shared from a one-to-one.
      "Take it aside with builder" on any job capsule opens this.
-3. **Team** (`4-team.dc.html`): four agent cards (state, where its computer is, a live screen glimpse, Message,
+3. **Team** (`04-team.dc.html`; everything else about an agent `06`; add an agent `07`): four agent cards (state, where its computer is, a live screen glimpse, Message,
    Settings). Selected agent: how it works (personality), model, **works on** (local / Docker sandbox / SSH), and
    "asks you first before" (packages, pushing code, deleting files, using mouse and keyboard). Memory, skills, tools,
    plugins and channels sit behind one link.
-4. **Settings** (`5-settings-usage.dc.html`): Connections, Look, Usage, System. **Usage replaces Reports**: three
-   headline numbers, tasks per day, spend by agent, time range, CSV, "Show as table".
-5. **Phone** (`3-phone.dc.html`): the team room; the work peeks up as a bottom sheet.
+4. **Settings** (`05`, `15`–`17`): Connections (Hermes, providers, channels, phone pairing), Look (dark default, light,
+   motion, text size, themes, customizer), **Usage replaces Reports** (headline numbers, tasks per day, spend by agent,
+   CSV, "Show as table"), System (team rules go / ask / never, service, updates, backups, logs, pause everyone).
+5. **Phone** (`03`, `18`–`20`): job list with the pinned request, a job's chat, one-to-ones, team; tab bar Room · Team ·
+   Settings.
+6. **Getting started:** first run (`08`: Hermes found, pick agents, pick the lead, keep Score running), empty room
+   (`09`), **Start a job** (`10`: recipe, repeat, ask-me-before, turn budget, spend cap, save as recipe).
+7. **An agent's screen** (`12`): read-only screen with a plain-step log and a time bar; replaces Watch.
+8. **Search** (`14`): jobs, one-to-ones, Library, messages and actions in one box.
 
 Visual system and exact values: `docs/design/bold/README.md`.
 
@@ -98,13 +106,15 @@ Contract first: `docs/API-CONTRACT.md` → `packages/contract` → server and we
 | Today | In the rework |
 |---|---|
 | Now › Score timeline, Flow, orchestration screens | Job capsules, exchange states, dock rings, Results. An orchestration becomes a job that lead plans |
-| Workflows, Routines | Saved job recipes and schedules, started from the room (later task) |
-| Watch | Screens in Results / Workbench; replay stays available from an agent's screen |
+| Workflows, Routines | **Recipes** and **Repeat** in Start a job (`10`) |
+| Watch | An agent's screen (`12`): live, replay, plain-step log; glimpses in Results and on Team cards |
 | Tasks board | Not a destination; jobs carry the state. Kanban data stays as the backing store if useful |
 | Chat (rooms, projects, direct, from elsewhere, stage, side cards) | Team room + one-to-ones |
 | Reports | Settings › Usage |
-| Knowledge | Decide in planning: reachable from Work (documents) and agent memory; keep the editor |
+| Knowledge | **Library** in the side panel (`13`); agents' memory stays on their Team page |
 | Customizer, themes | Settings › Look (dark default, light alternative) |
+| Rules | Settings › System › Team rules (go / ask / never); per-agent "asks you first" on Team |
+| Command menu | Search (⌘K) |
 | `/u` chat-first view, admin/user split | Removed: the new shell is the simple one |
 | Pets, room stage | Removed (the dock and capsules carry presence) |
 | Team: 12 tabs | Four settings + "more" |
@@ -123,7 +133,8 @@ Keep old screens behind a flag until the new shell reaches parity; remove them o
 6. **11.5 Side panel › Results.**
 7. **11.6 Workbench:** diffs with agent marks, comments on lines, read-only screens.
 8. **11.7 One-to-ones:** history, search, references, share to room, "take it aside".
-9. **11.8 Team page.**  10. **11.9 Settings + Usage.**  11. **11.10 Phone.**
+9. **11.8 Team page**, agent settings, add an agent.  10. **11.9 Settings** (four groups) **+ Usage**.
+11. **11.10 Phone**, first run, empty room, Start a job, Library, Search.
 12. **11.11 Retire old destinations** (owner OK), data migration verified on a copy of the live DB.
 13. **11.12 Phase gate:** code review at max against `main`, then the owner's Gemini review.
 

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Connect Hermes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#12131a}
+a{color:#ececf1}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #12131a; color: #ececf1; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 16px; line-height: 1.5; display: flex; flex-wrap: wrap; gap: 48px; padding: 72px 64px; box-sizing: border-box; align-items: flex-start">
+
+<div style="flex: 1 1 420px; display: flex; flex-direction: column; gap: 22px; padding-top: 24px">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 28px; letter-spacing: -0.04em">score</span>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 72px; font-weight: 700; letter-spacing: -0.045em; line-height: 0.98">Run a team of agents from one room.</h1>
+<p style="margin: 0; font-size: 19px; color: #a9adb8; max-width: 480px">Score works with the Hermes agents already on this machine. Nothing leaves it unless you connect a channel.</p>
+<div style="display: flex; gap: 6px; margin-top: 8px" aria-hidden="true">
+<svg width="44" height="44" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12" fill="#6b4eff"/></svg>
+<svg width="44" height="44" viewBox="0 0 28 28"><path d="M14 3 L26.5 24.5 H1.5 Z" fill="#19c39a"/></svg>
+<svg width="44" height="44" viewBox="0 0 28 28"><path d="M14 1.5 L26.5 14 L14 26.5 L1.5 14 Z" fill="#ffb61e"/></svg>
+<svg width="44" height="44" viewBox="0 0 28 28"><rect x="2" y="2" width="24" height="24" rx="8" fill="#ff6b8a"/></svg>
+</div>
+</div>
+
+<ol style="flex: 1 1 520px; max-width: 640px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px">
+<li style="background: #1a1c23; border-radius: 26px; padding: 20px 22px; display: flex; gap: 16px; align-items: flex-start">
+<span style="width: 32px; height: 32px; border-radius: 999px; background: #19c39a; color: #12131a; display: grid; place-items: center; flex: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#12131a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span>
+<span style="display: flex; flex-direction: column; gap: 2px"><b>Hermes found</b><span style="font-size: 14px; color: #a9adb8">Version 0.15.2, gateway running</span></span>
+</li>
+<li style="background: #1a1c23; border-radius: 26px; padding: 20px 22px; display: flex; gap: 16px; align-items: flex-start">
+<span style="width: 32px; height: 32px; border-radius: 999px; background: #19c39a; display: grid; place-items: center; flex: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#12131a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 10px"><span style="display: flex; flex-direction: column; gap: 2px"><b>4 agents ready to join</b><span style="font-size: 14px; color: #a9adb8">Pick who's on the team. You can add more later.</span></span>
+<span style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<label style="display: flex; align-items: center; gap: 10px; background: #23252e; border-radius: 14px; padding: 10px 12px; min-height: 44px"><input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #ececf1"><svg width="20" height="20" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12" fill="#6b4eff"/></svg>lead</label>
+<label style="display: flex; align-items: center; gap: 10px; background: #23252e; border-radius: 14px; padding: 10px 12px; min-height: 44px"><input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #ececf1"><svg width="20" height="20" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3 L26.5 24.5 H1.5 Z" fill="#19c39a"/></svg>builder</label>
+<label style="display: flex; align-items: center; gap: 10px; background: #23252e; border-radius: 14px; padding: 10px 12px; min-height: 44px"><input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #ececf1"><svg width="20" height="20" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 1.5 L26.5 14 L14 26.5 L1.5 14 Z" fill="#ffb61e"/></svg>reviewer</label>
+<label style="display: flex; align-items: center; gap: 10px; background: #23252e; border-radius: 14px; padding: 10px 12px; min-height: 44px"><input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #ececf1"><svg width="20" height="20" viewBox="0 0 28 28" aria-hidden="true"><rect x="2" y="2" width="24" height="24" rx="8" fill="#ff6b8a"/></svg>designer</label>
+</span></span>
+</li>
+<li style="background: #1a1c23; border-radius: 26px; padding: 20px 22px; display: flex; gap: 16px; align-items: flex-start; box-shadow: inset 0 0 0 2px #ececf1">
+<span style="width: 32px; height: 32px; border-radius: 999px; background: #ececf1; color: #12131a; display: grid; place-items: center; flex: none; font-weight: 700">3</span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 10px"><span style="display: flex; flex-direction: column; gap: 2px"><b>Who leads?</b><span style="font-size: 14px; color: #a9adb8">Messages without an @name go to the lead, who splits up the work.</span></span>
+<select aria-label="Team lead" style="font: inherit; color: #ececf1; background: #23252e; border: 0; border-radius: 14px; min-height: 48px; padding: 0 14px; max-width: 280px"><option>lead</option><option>builder</option><option>reviewer</option><option>designer</option></select></span>
+</li>
+<li style="background: #1a1c23; border-radius: 26px; padding: 20px 22px; display: flex; gap: 16px; align-items: flex-start; opacity: 0.6">
+<span style="width: 32px; height: 32px; border-radius: 999px; background: #23252e; display: grid; place-items: center; flex: none; font-weight: 700">4</span>
+<span style="display: flex; flex-direction: column; gap: 2px"><b>Keep Score running</b><span style="font-size: 14px; color: #a9adb8">Start Score with your computer, so the team keeps working when this tab is closed.</span></span>
+</li>
+<li style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 6px">
+<a href="09-empty-room.dc.html" style="text-decoration: none; background: #ececf1; color: #12131a; border-radius: 999px; min-height: 52px; padding: 0 28px; display: inline-flex; align-items: center; font-weight: 700; font-size: 16px">Continue</a>
+</li>
+</ol>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

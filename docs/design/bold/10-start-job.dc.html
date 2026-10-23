@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Start a job</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0;background:#12131a}
+a{color:#ececf1}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #0b0c10; color: #ececf1; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; line-height: 1.5; display: grid; place-items: center; padding: 32px 16px; box-sizing: border-box">
+
+<div role="dialog" aria-label="Start a job" style="width: 100%; max-width: 900px; background: #1a1c23; border-radius: 32px; padding: 30px; display: flex; flex-direction: column; gap: 22px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6)">
+<div style="display: flex; align-items: center; gap: 12px">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 34px; font-weight: 700; letter-spacing: -0.03em">Start a job</h1>
+<button type="button" aria-label="Close" style="margin-left: auto; width: 44px; height: 44px; border-radius: 999px; border: 0; background: #23252e; display: grid; place-items: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ececf1" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="what" style="font-size: 14px; font-weight: 600; color: #a9adb8">What should the team do?</label>
+<textarea id="what" rows="2" style="font: inherit; font-size: 18px; color: #ececf1; background: #23252e; border: 0; border-radius: 18px; padding: 14px 16px; resize: vertical">Write the 2.4 release notes from the merged changes, and an announcement image.</textarea>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 14px; font-weight: 600; color: #a9adb8">Recipe</span>
+<div role="radiogroup" aria-label="Recipe" style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" role="radio" aria-checked="false" style="border: 0; background: #23252e; color: #ececf1; border-radius: 999px; min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 600">lead decides</button>
+<button type="button" role="radio" aria-checked="false" style="border: 0; background: #23252e; color: #ececf1; border-radius: 999px; min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 600">Build, then review</button>
+<button type="button" role="radio" aria-checked="true" style="border: 0; background: #ececf1; color: #12131a; border-radius: 999px; min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 700">Write, review, design</button>
+<button type="button" role="radio" aria-checked="false" style="border: 0; background: #23252e; color: #ececf1; border-radius: 999px; min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 600">Research report</button>
+<button type="button" style="border: 1px dashed #626670; background: transparent; color: #c9ccd4; border-radius: 999px; min-height: 40px; padding: 0 16px; font-size: 14px">Your saved recipes · 2</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #16171e; border-radius: 18px; padding: 12px 14px; font-size: 14px">
+<svg width="18" height="18" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12" fill="#6b4eff"/></svg><span>lead plans</span><span style="color: #626670">→</span>
+<svg width="18" height="18" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12" fill="#6b4eff"/></svg><span>writes the notes</span><span style="color: #626670">→</span>
+<svg width="18" height="18" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 1.5 L26.5 14 L14 26.5 L1.5 14 Z" fill="#ffb61e"/></svg><span>reviews, sends back until right</span><span style="color: #626670">·</span>
+<svg width="18" height="18" viewBox="0 0 28 28" aria-hidden="true"><rect x="2" y="2" width="24" height="24" rx="8" fill="#ff6b8a"/></svg><span>draws the image alongside</span>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<fieldset style="border: 0; margin: 0; padding: 16px; background: #16171e; border-radius: 20px; display: flex; flex-direction: column; gap: 6px">
+<legend style="padding: 0; font-size: 14px; font-weight: 600; color: #a9adb8; float: left; margin-bottom: 6px">Repeat</legend>
+<label style="display: flex; align-items: center; gap: 10px; min-height: 40px; clear: both"><input type="radio" name="rep" checked style="width: 18px; height: 18px; accent-color: #ececf1">Just once</label>
+<label style="display: flex; align-items: center; gap: 10px; min-height: 40px"><input type="radio" name="rep" style="width: 18px; height: 18px; accent-color: #ececf1">Every weekday at 9:00</label>
+<label style="display: flex; align-items: center; gap: 10px; min-height: 40px"><input type="radio" name="rep" style="width: 18px; height: 18px; accent-color: #ececf1">Every Monday</label>
+</fieldset>
+<fieldset style="border: 0; margin: 0; padding: 16px; background: #16171e; border-radius: 20px; display: flex; flex-direction: column; gap: 6px">
+<legend style="padding: 0; font-size: 14px; font-weight: 600; color: #a9adb8; float: left; margin-bottom: 6px">Ask me before</legend>
+<label style="display: flex; align-items: center; gap: 10px; min-height: 40px; clear: both"><input type="radio" name="ask" style="width: 18px; height: 18px; accent-color: #ececf1">The plan starts</label>
+<label style="display: flex; align-items: center; gap: 10px; min-height: 40px"><input type="radio" name="ask" style="width: 18px; height: 18px; accent-color: #ececf1">Every hand-off</label>
+<label style="display: flex; align-items: center; gap: 10px; min-height: 40px"><input type="radio" name="ask" checked style="width: 18px; height: 18px; accent-color: #ececf1">Only risky actions</label>
+</fieldset>
+<div style="padding: 16px; background: #16171e; border-radius: 20px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 14px; font-weight: 600; color: #a9adb8">Limits</span>
+<label for="turns" style="display: flex; justify-content: space-between; font-size: 14px"><span>Turns per back-and-forth</span><b>8</b></label>
+<input id="turns" type="range" min="2" max="20" value="8" style="accent-color: #ececf1">
+<label for="cap" style="display: flex; justify-content: space-between; font-size: 14px"><span>Spend cap</span><b>$5.00</b></label>
+<input id="cap" type="range" min="0" max="20" value="5" style="accent-color: #ececf1">
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px solid #2c2f38; padding-top: 18px">
+<label style="display: flex; align-items: center; gap: 10px; font-size: 14px; min-height: 44px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #ececf1">Save as a recipe</label>
+<button type="button" style="margin-left: auto; border: 0; background: transparent; color: #ececf1; border-radius: 999px; min-height: 48px; padding: 0 16px; font-weight: 700">Cancel</button>
+<a href="01-team-room.dc.html" style="text-decoration: none; background: #ececf1; color: #12131a; border-radius: 999px; min-height: 48px; padding: 0 26px; display: inline-flex; align-items: center; font-weight: 700; font-size: 15px">Start the job</a>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

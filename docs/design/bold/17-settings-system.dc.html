@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings, System</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#12131a}
+a{color:#ececf1}a:hover{color:#b3a6ff}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #12131a; color: #ececf1; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; line-height: 1.5; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 16px 28px">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px; letter-spacing: -0.04em">score</span>
+<nav aria-label="Main" style="display: flex; gap: 2px">
+<a href="01-team-room.dc.html" style="text-decoration: none; border-radius: 999px; padding: 0 14px; min-height: 40px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; color: #a9adb8">Room</a>
+<a href="04-team.dc.html" style="text-decoration: none; border-radius: 999px; padding: 0 14px; min-height: 40px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; color: #a9adb8">Team</a>
+</nav>
+<a href="#" aria-current="page" aria-label="Settings" style="margin-left: auto; width: 40px; height: 40px; border-radius: 999px; background: #ececf1; display: grid; place-items: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#12131a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></a>
+<span aria-label="You" style="width: 36px; height: 36px; border-radius: 999px; background: #ececf1; color: #12131a; display: grid; place-items: center; font-weight: 700; font-size: 14px">Y</span>
+</header>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap; gap: 32px; padding: 20px 40px 40px; box-sizing: border-box; align-items: flex-start">
+<nav aria-label="Settings" style="flex: 1 1 200px; max-width: 240px; display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0 0 14px 12px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 34px; font-weight: 700; letter-spacing: -0.03em">Settings</h1>
+<a href="15-settings-connections.dc.html" style="text-decoration: none; display: flex; flex-direction: column; border-radius: 18px; padding: 10px 14px"><b style="font-weight: 600">Connections</b><span style="font-size: 13px; color: #a9adb8">Hermes, models, channels</span></a>
+<a href="16-settings-look.dc.html" style="text-decoration: none; display: flex; flex-direction: column; border-radius: 18px; padding: 10px 14px"><b style="font-weight: 600">Look</b><span style="font-size: 13px; color: #a9adb8">Dark or light, themes</span></a>
+<a href="05-settings-usage.dc.html" style="text-decoration: none; display: flex; flex-direction: column; border-radius: 18px; padding: 10px 14px"><b style="font-weight: 600">Usage</b><span style="font-size: 13px; color: #a9adb8">What got done, what it cost</span></a>
+<a href="#" aria-current="page" style="text-decoration: none; display: flex; flex-direction: column; border-radius: 18px; padding: 10px 14px; background: #1a1c23"><b style="font-weight: 600">System</b><span style="font-size: 13px; color: #a9adb8">Rules, backups, logs, updates</span></a>
+</nav>
+
+<main style="flex: 999 1 640px; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<h2 style="grid-column: span 2; margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 40px; font-weight: 700; letter-spacing: -0.03em">System</h2>
+
+<section style="background: #1a1c23; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Team rules</h3>
+<span style="font-size: 14px; color: #c9ccd4">What every agent may do without asking. Each agent can be stricter on its Team page.</span>
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+<span style="display: flex; gap: 10px; align-items: center; background: #23252e; border-radius: 12px; padding: 8px 12px"><span style="width: 8px; height: 8px; border-radius: 999px; background: #5ee3bf"></span><span style="flex: 1">Read and edit files in its workspace</span><b style="color: #5ee3bf">Go</b></span>
+<span style="display: flex; gap: 10px; align-items: center; background: #23252e; border-radius: 12px; padding: 8px 12px"><span style="width: 8px; height: 8px; border-radius: 2px; background: #ffc94d"></span><span style="flex: 1">Install packages, push code</span><b style="color: #ffc94d">Ask</b></span>
+<span style="display: flex; gap: 10px; align-items: center; background: #23252e; border-radius: 12px; padding: 8px 12px"><span style="width: 8px; height: 8px; border-radius: 2px; background: #ff97ae; transform: rotate(45deg)"></span><span style="flex: 1">Read your keys or password vault</span><b style="color: #ff97ae">Never</b></span>
+</div>
+<a href="#" style="font-size: 14px">Edit rules</a>
+</section>
+
+<section style="background: #1a1c23; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Score</h3>
+<div style="display: flex; align-items: center; gap: 10px; min-height: 40px"><span style="width: 8px; height: 8px; border-radius: 999px; background: #5ee3bf"></span><span style="flex: 1">Running as a service</span><span style="font-size: 13px; color: #a9adb8">starts with your computer</span></div>
+<div style="display: flex; align-items: center; gap: 10px; min-height: 40px"><span style="flex: 1">Version 1.14.0</span><span style="font-size: 13px; color: #a9adb8">up to date</span></div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="border: 0; background: #23252e; color: #ececf1; border-radius: 999px; min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 600">Restart Score</button>
+<button type="button" style="border: 0; background: #23252e; color: #ececf1; border-radius: 999px; min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 600">Check for updates</button>
+</div>
+</section>
+
+<section style="background: #1a1c23; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Backups</h3>
+<span style="font-size: 14px; color: #c9ccd4">Last backup tonight at 03:00 · kept for 14 days</span>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="border: 0; background: #ececf1; color: #12131a; border-radius: 999px; min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 700">Back up now</button>
+<button type="button" style="border: 0; background: #23252e; color: #ececf1; border-radius: 999px; min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 600">Restore</button>
+</div>
+</section>
+
+<section style="background: #1a1c23; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: baseline; gap: 10px"><h3 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Logs</h3><a href="#" style="margin-left: auto; font-size: 14px">Open full logs</a></div>
+<div style="background: #0f1116; border-radius: 14px; padding: 12px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8; color: #a9adb8">
+<div>21:16:02 approval requested · builder · npm install ws@8</div>
+<div>21:16:40 approval applied · you</div>
+<div>21:18:11 exchange paused · builder ⇄ reviewer · budget</div>
+</div>
+</section>
+
+<section style="grid-column: span 2; background: #1a1c23; border-radius: 24px; padding: 18px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px">
+<span style="flex: 1; min-width: 260px"><b>Pause everyone</b> <span style="color: #a9adb8">· agents finish their current step, then wait until you resume</span></span>
+<button type="button" style="border: 1.5px solid #ececf1; background: transparent; color: #ececf1; border-radius: 999px; min-height: 44px; padding: 0 20px; font-weight: 700; font-size: 14px">Pause everyone</button>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

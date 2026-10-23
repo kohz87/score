@@ -3,13 +3,32 @@
 Mockups for the UI rework proposed in [`docs/proposals/ui-rework-bold.md`](../../proposals/ui-rework-bold.md).
 The live, clickable canvas (owner's account, private): https://claude.ai/artifact/7zF2GJcnzUcArXiWeaRknh
 
+The whole app, in four areas: **Room** (the team room and its side panel), **Team**, **Settings** (a gear), and
+**Search** (⌘K, from anywhere). The side panel is one dropdown: **Work** (Results / Workbench), **Library**, a job's
+**Thread**, or a **one-to-one** with any agent.
+
 | File | Screen |
 |---|---|
-| `1-team-room.dc.html` | The main screen: team room on the left (always on, jobs as tabs, "needs you" pinned), one side panel on the right that is either **Work** or a **one-to-one** with an agent (history, search, references, share to the room) |
-| `2-job-wide.dc.html` | One job opened wide: the threaded chat beside **Results / Workbench** (Workbench = code with each agent's marks, the agent's screen, drafts) |
-| `3-phone.dc.html` | The team room on a phone; the work peeks up as a bottom sheet |
-| `4-team.dc.html` | Team: four agent cards (state, where its computer is, live screen glimpse, Message), the selected agent's four settings |
-| `5-settings-usage.dc.html` | Settings in four groups; Usage replaces the Reports page |
+| `01-team-room.dc.html` | **The main screen.** Team room on the left (always on, jobs as tabs, "needs you" pinned, job capsules, "take it aside"), side panel on the right: Work or a one-to-one (earlier chats, search, references, share to the room). Clickable |
+| `02-job-wide.dc.html` | One job opened wide: threaded chat beside **Results / Workbench** (code with each agent's marks, the agent's screen, drafts). Clickable |
+| `03-phone-room.dc.html` | A job on a phone: threaded chat, request bubble, typing |
+| `04-team.dc.html` | Team: agent cards (state, where its computer is, live screen glimpse, Message), the selected agent's four settings |
+| `05-settings-usage.dc.html` | Settings › Usage, which replaces the Reports page |
+| `06-agent-settings.dc.html` | Team › builder › everything else: memory, what it can use, skills, channels, recent work, its computer |
+| `07-add-agent.dc.html` | Add an agent: new, import a Hermes profile, or a coding CLI; shape + colour (taken colours fade), role, model, where it works |
+| `08-first-run.dc.html` | First run: Hermes found, pick the agents, pick the lead, keep Score running |
+| `09-empty-room.dc.html` | The team room before the first job: starter recipes, empty Work panel |
+| `10-start-job.dc.html` | Start a job: recipe (replaces orchestrations/workflows), repeat (replaces routines), ask-me-before, turn budget, spend cap, save as recipe |
+| `11-job-thread.dc.html` | A job's thread by rounds, paused at its turn budget: the exchange asks you to decide; "step in" box |
+| `12-agent-screen.dc.html` | An agent's screen, read-only: plain-step log, the screen, time bar with markers, Live (replaces Watch) |
+| `13-library.dc.html` | Library in the side panel (replaces Knowledge): notes with who wrote them and which job, search, links |
+| `14-search.dc.html` | ⌘K: jobs, one-to-one chats, Library, messages, and actions in one box |
+| `15-settings-connections.dc.html` | Settings › Connections: Hermes, model providers, channels, your phone |
+| `16-settings-look.dc.html` | Settings › Look: dark (default) / light / match device, motion, text size, themes |
+| `17-settings-system.dc.html` | Settings › System: team rules (go / ask / never), Score service and updates, backups, logs, pause everyone |
+| `18-phone-jobs.dc.html` | Phone: the team room as a job list with the pinned request; tab bar Room · Team · Settings |
+| `19-phone-one-to-one.dc.html` | Phone: a one-to-one in the agent's colour, earlier chats, a reference chip |
+| `20-phone-team.dc.html` | Phone: team list with state and Message |
 
 These are `.dc.html` design-canvas files: plain HTML with **inline styles**, plus `<sc-if>` / `<sc-for>` / `{{ }}`
 template tags and a small `class Component` script for the clickable states. They do not open standalone (they need

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>builder, all settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#12131a}
+a{color:#ececf1}a:hover{color:#b3a6ff}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #12131a; color: #ececf1; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; line-height: 1.5; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 16px 28px">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px; letter-spacing: -0.04em">score</span>
+<nav aria-label="Main" style="display: flex; gap: 2px">
+<a href="01-team-room.dc.html" style="text-decoration: none; border-radius: 999px; padding: 0 14px; min-height: 40px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; color: #a9adb8">Room</a>
+<a href="04-team.dc.html" aria-current="page" style="text-decoration: none; border-radius: 999px; padding: 0 14px; min-height: 40px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; background: #ececf1; color: #12131a">Team</a>
+</nav>
+<button type="button" style="margin-left: auto; display: inline-flex; align-items: center; gap: 10px; border: 0; background: #1a1c23; color: #a9adb8; border-radius: 999px; min-height: 40px; padding: 0 8px 0 14px; font-size: 14px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a9adb8" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Search<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: #23252e; border-radius: 8px; padding: 2px 8px; color: #c9ccd4">⌘K</span></button>
+<a href="05-settings-usage.dc.html" aria-label="Settings" style="width: 40px; height: 40px; border-radius: 999px; background: #1a1c23; display: grid; place-items: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9ccd4" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></a>
+<span aria-label="You" style="width: 36px; height: 36px; border-radius: 999px; background: #ececf1; color: #12131a; display: grid; place-items: center; font-weight: 700; font-size: 14px">Y</span>
+</header>
+
+<main style="flex: 1; padding: 12px 40px 40px; display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 18px">
+<a href="04-team.dc.html" style="font-size: 14px; color: #a9adb8">Team</a><span style="color: #626670">/</span>
+<svg width="48" height="48" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3 L26.5 24.5 H1.5 Z" fill="#19c39a"/><rect x="10.4" y="15" width="2.4" height="4" rx="1.2" fill="#12131a"/><rect x="15.2" y="15" width="2.4" height="4" rx="1.2" fill="#12131a"/></svg>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 44px; font-weight: 700; letter-spacing: -0.03em">builder</h1>
+<span style="color: #a9adb8">Builds features · Docker sandbox</span>
+<span style="margin-left: auto; display: flex; gap: 8px">
+<a href="01-team-room.dc.html" style="text-decoration: none; background: #ececf1; color: #12131a; border-radius: 999px; min-height: 44px; padding: 0 18px; display: inline-flex; align-items: center; font-weight: 700; font-size: 14px">Message</a>
+<button type="button" style="border: 1px solid #2c2f38; background: transparent; color: #ececf1; border-radius: 999px; min-height: 44px; padding: 0 16px; font-weight: 700; font-size: 14px">Pause builder</button>
+</span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+
+<section style="background: #1a1c23; border-radius: 26px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 8px"><h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Remembers</h2><span style="font-size: 13px; color: #a9adb8">12 things</span></div>
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 14px">
+<li style="display: flex; gap: 10px; align-items: flex-start; background: #23252e; border-radius: 14px; padding: 10px 12px"><span style="flex: 1">Event cursors are (created_at, id), never a timestamp alone.</span><button type="button" aria-label="Forget this" style="border: 0; background: transparent; color: #a9adb8; min-width: 32px; min-height: 32px">×</button></li>
+<li style="display: flex; gap: 10px; align-items: flex-start; background: #23252e; border-radius: 14px; padding: 10px 12px"><span style="flex: 1">The owner prefers small, reviewed changes over big ones.</span><button type="button" aria-label="Forget this" style="border: 0; background: transparent; color: #a9adb8; min-width: 32px; min-height: 32px">×</button></li>
+<li style="display: flex; gap: 10px; align-items: flex-start; background: #23252e; border-radius: 14px; padding: 10px 12px"><span style="flex: 1">Package installs always need the owner's OK.</span><button type="button" aria-label="Forget this" style="border: 0; background: transparent; color: #a9adb8; min-width: 32px; min-height: 32px">×</button></li>
+</ul>
+<a href="#" style="font-size: 14px; color: #a9adb8">See all 12 · Add something</a>
+</section>
+
+<section style="background: #1a1c23; border-radius: 26px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Can use</h2>
+<label style="display: flex; align-items: center; gap: 12px; min-height: 44px"><input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #ececf1"><span style="flex: 1">Terminal</span><span style="font-size: 12px; color: #a9adb8">in the sandbox</span></label>
+<label style="display: flex; align-items: center; gap: 12px; min-height: 44px"><input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #ececf1"><span style="flex: 1">Files</span><span style="font-size: 12px; color: #a9adb8">its workspace</span></label>
+<label style="display: flex; align-items: center; gap: 12px; min-height: 44px"><input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #ececf1"><span style="flex: 1">Browser</span></label>
+<label style="display: flex; align-items: center; gap: 12px; min-height: 44px"><input type="checkbox" style="width: 20px; height: 20px; accent-color: #ececf1"><span style="flex: 1">Its own screen (mouse and keyboard)</span></label>
+<label style="display: flex; align-items: center; gap: 12px; min-height: 44px"><input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #ececf1"><span style="flex: 1">Library</span><span style="font-size: 12px; color: #a9adb8">read and write</span></label>
+<a href="#" style="font-size: 14px; color: #a9adb8">Plugins and MCP servers · 2 on</a>
+</section>
+
+<section style="background: #1a1c23; border-radius: 26px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Skills</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="background: #23252e; border-radius: 999px; padding: 6px 14px; font-size: 14px">Python tests</span>
+<span style="background: #23252e; border-radius: 999px; padding: 6px 14px; font-size: 14px">SQL migrations</span>
+<span style="background: #23252e; border-radius: 999px; padding: 6px 14px; font-size: 14px">Websockets</span>
+<button type="button" style="border: 1px dashed #626670; background: transparent; color: #c9ccd4; border-radius: 999px; min-height: 36px; padding: 0 14px; font-size: 14px">Add a skill</button>
+</div>
+<h2 style="margin: 12px 0 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Reachable on</h2>
+<div style="display: flex; align-items: center; gap: 10px; min-height: 44px"><span style="width: 8px; height: 8px; border-radius: 999px; background: #5ee3bf"></span><span style="flex: 1">Telegram</span><span style="font-size: 13px; color: #a9adb8">replies land in the team room</span></div>
+<div style="display: flex; align-items: center; gap: 10px; min-height: 44px"><span style="width: 8px; height: 8px; border-radius: 999px; background: #626670"></span><span style="flex: 1; color: #a9adb8">Discord</span><a href="#" style="font-size: 13px">Connect</a></div>
+</section>
+
+<section style="grid-column: span 2; background: #1a1c23; border-radius: 26px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 8px"><h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Recent work</h2><a href="#" style="margin-left: auto; font-size: 14px; color: #a9adb8">All history</a></div>
+<div style="display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #23252e; padding: 8px 0"><span style="width: 40px; height: 40px; border-radius: 12px; background: #ddf6ee; flex: none"></span><span style="flex: 1; display: flex; flex-direction: column"><b style="font-weight: 600">Activity feed</b><span style="font-size: 13px; color: #a9adb8">2 rounds with reviewer · approved · 3 files</span></span><span style="font-size: 13px; color: #a9adb8">Today</span></div>
+<div style="display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #23252e; padding: 8px 0"><span style="width: 40px; height: 40px; border-radius: 12px; background: #ece8ff; flex: none"></span><span style="flex: 1; display: flex; flex-direction: column"><b style="font-weight: 600">Login rate limit</b><span style="font-size: 13px; color: #a9adb8">approved first time · 1 file</span></span><span style="font-size: 13px; color: #a9adb8">Mon</span></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 8px 0"><span style="width: 40px; height: 40px; border-radius: 12px; background: #fff1d1; flex: none"></span><span style="flex: 1; display: flex; flex-direction: column"><b style="font-weight: 600">Export to CSV</b><span style="font-size: 13px; color: #a9adb8">3 rounds · approved</span></span><span style="font-size: 13px; color: #a9adb8">Oct 16</span></div>
+</section>
+
+<section style="background: #1a1c23; border-radius: 26px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Its computer</h2>
+<span style="display: flex; flex-direction: column; gap: 4px; font-size: 14px"><span><b style="font-weight: 600">Docker sandbox</b> · running</span><span style="color: #a9adb8">Workspace: ~/app, 214 files</span></span>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<a href="12-agent-screen.dc.html" style="text-decoration: none; background: #23252e; border-radius: 999px; min-height: 40px; padding: 0 14px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600">Look at its screen</a>
+<button type="button" style="border: 0; background: #23252e; color: #ececf1; border-radius: 999px; min-height: 40px; padding: 0 14px; font-size: 14px; font-weight: 600">Copy terminal command</button>
+</div>
+<span style="font-size: 12px; color: #a9adb8">Continue builder's session yourself with <code style="font-family: 'JetBrains Mono', monospace; color: #c9ccd4">hermes -p builder --resume</code></span>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings, Look</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0;background:#12131a}
+a{color:#ececf1}a:hover{color:#b3a6ff}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #12131a; color: #ececf1; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; line-height: 1.5; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 16px 28px">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px; letter-spacing: -0.04em">score</span>
+<nav aria-label="Main" style="display: flex; gap: 2px">
+<a href="01-team-room.dc.html" style="text-decoration: none; border-radius: 999px; padding: 0 14px; min-height: 40px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; color: #a9adb8">Room</a>
+<a href="04-team.dc.html" style="text-decoration: none; border-radius: 999px; padding: 0 14px; min-height: 40px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; color: #a9adb8">Team</a>
+</nav>
+<a href="#" aria-current="page" aria-label="Settings" style="margin-left: auto; width: 40px; height: 40px; border-radius: 999px; background: #ececf1; display: grid; place-items: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#12131a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></a>
+<span aria-label="You" style="width: 36px; height: 36px; border-radius: 999px; background: #ececf1; color: #12131a; display: grid; place-items: center; font-weight: 700; font-size: 14px">Y</span>
+</header>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap; gap: 32px; padding: 20px 40px 40px; box-sizing: border-box; align-items: flex-start">
+<nav aria-label="Settings" style="flex: 1 1 200px; max-width: 240px; display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0 0 14px 12px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 34px; font-weight: 700; letter-spacing: -0.03em">Settings</h1>
+<a href="15-settings-connections.dc.html" style="text-decoration: none; display: flex; flex-direction: column; border-radius: 18px; padding: 10px 14px"><b style="font-weight: 600">Connections</b><span style="font-size: 13px; color: #a9adb8">Hermes, models, channels</span></a>
+<a href="#" aria-current="page" style="text-decoration: none; display: flex; flex-direction: column; border-radius: 18px; padding: 10px 14px; background: #1a1c23"><b style="font-weight: 600">Look</b><span style="font-size: 13px; color: #a9adb8">Dark or light, themes</span></a>
+<a href="05-settings-usage.dc.html" style="text-decoration: none; display: flex; flex-direction: column; border-radius: 18px; padding: 10px 14px"><b style="font-weight: 600">Usage</b><span style="font-size: 13px; color: #a9adb8">What got done, what it cost</span></a>
+<a href="17-settings-system.dc.html" style="text-decoration: none; display: flex; flex-direction: column; border-radius: 18px; padding: 10px 14px"><b style="font-weight: 600">System</b><span style="font-size: 13px; color: #a9adb8">Backups, logs, updates</span></a>
+</nav>
+
+<main style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 40px; font-weight: 700; letter-spacing: -0.03em">Look</h2>
+
+<div role="radiogroup" aria-label="Mode" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<button type="button" role="radio" aria-checked="true" style="border: 0; text-align: left; background: #1a1c23; color: #ececf1; border-radius: 24px; padding: 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: inset 0 0 0 2px #ececf1">
+<span aria-hidden="true" style="height: 120px; border-radius: 16px; background: #12131a; display: flex; gap: 8px; padding: 12px; box-sizing: border-box"><span style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px"><span style="align-self: flex-end; width: 60%; height: 14px; border-radius: 7px; background: #ececf1"></span><span style="width: 70%; height: 14px; border-radius: 7px; background: #23252e"></span></span><span style="flex: 1.3; border-radius: 10px; background: #fff"></span></span>
+<b>Dark</b><span style="font-size: 13px; color: #a9adb8; margin-top: -8px">The default</span></button>
+<button type="button" role="radio" aria-checked="false" style="border: 0; text-align: left; background: #1a1c23; color: #ececf1; border-radius: 24px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<span aria-hidden="true" style="height: 120px; border-radius: 16px; background: #eceef2; display: flex; gap: 8px; padding: 12px; box-sizing: border-box"><span style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px"><span style="align-self: flex-end; width: 60%; height: 14px; border-radius: 7px; background: #12131a"></span><span style="width: 70%; height: 14px; border-radius: 7px; background: #fff"></span></span><span style="flex: 1.3; border-radius: 10px; background: #fff"></span></span>
+<b>Light</b><span style="font-size: 13px; color: #a9adb8; margin-top: -8px">Score's original ground</span></button>
+<button type="button" role="radio" aria-checked="false" style="border: 0; text-align: left; background: #1a1c23; color: #ececf1; border-radius: 24px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<span aria-hidden="true" style="height: 120px; border-radius: 16px; background: linear-gradient(90deg, #12131a 50%, #eceef2 50%)"></span>
+<b>Match this device</b><span style="font-size: 13px; color: #a9adb8; margin-top: -8px">Switches with your system</span></button>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<fieldset style="border: 0; margin: 0; background: #1a1c23; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 4px">
+<legend style="float: left; padding: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 8px">Motion</legend>
+<label style="clear: both; display: flex; align-items: center; gap: 12px; min-height: 44px"><input type="radio" name="mo" checked style="width: 18px; height: 18px; accent-color: #ececf1"><span style="flex: 1">Calm</span><span style="font-size: 13px; color: #a9adb8">glows and typing dots</span></label>
+<label style="display: flex; align-items: center; gap: 12px; min-height: 44px"><input type="radio" name="mo" style="width: 18px; height: 18px; accent-color: #ececf1"><span style="flex: 1">Still</span><span style="font-size: 13px; color: #a9adb8">nothing moves</span></label>
+<span style="font-size: 13px; color: #a9adb8">Your system's reduce-motion setting always wins.</span>
+</fieldset>
+<fieldset style="border: 0; margin: 0; background: #1a1c23; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 4px">
+<legend style="float: left; padding: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 8px">Text size</legend>
+<div style="clear: both; display: flex; align-items: center; gap: 14px; min-height: 52px"><span style="font-size: 13px">A</span><label for="ts" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Text size</label><input id="ts" type="range" min="0" max="4" value="2" style="flex: 1; accent-color: #ececf1"><span style="font-size: 22px">A</span></div>
+<span style="font-size: 13px; color: #a9adb8">Messages, cards and settings scale together.</span>
+</fieldset>
+</div>
+
+<section style="background: #1a1c23; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 10px"><h3 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700">Themes</h3><a href="#" style="margin-left: auto; font-size: 14px">Open the customizer</a></div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<span style="display: flex; flex-direction: column; gap: 6px; font-size: 13px"><span style="width: 120px; height: 64px; border-radius: 14px; background: #12131a; box-shadow: inset 0 0 0 2px #ececf1; display: flex; align-items: flex-end; gap: 4px; padding: 8px; box-sizing: border-box"><span style="width: 12px; height: 12px; border-radius: 999px; background: #6b4eff"></span><span style="width: 12px; height: 12px; border-radius: 999px; background: #19c39a"></span><span style="width: 12px; height: 12px; border-radius: 999px; background: #ffb61e"></span><span style="width: 12px; height: 12px; border-radius: 999px; background: #ff6b8a"></span></span>Score</span>
+<span style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #a9adb8"><span style="width: 120px; height: 64px; border-radius: 14px; background: #0f2230"></span>Harbour</span>
+<span style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #a9adb8"><span style="width: 120px; height: 64px; border-radius: 14px; background: #f4efe6"></span>Paper</span>
+<span style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #a9adb8"><span style="width: 120px; height: 64px; border-radius: 14px; border: 1.5px dashed #626670; box-sizing: border-box; display: grid; place-items: center; color: #c9ccd4">Import</span>From a file</span>
+</div>
+<span style="font-size: 13px; color: #a9adb8">Agents keep their shapes in every theme, and requests that need you always stand out.</span>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
