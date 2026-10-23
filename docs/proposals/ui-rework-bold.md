@@ -1,7 +1,8 @@
 # Proposal: the bold rework (UI + agent-to-agent)
 
 Status: **direction approved by the owner (2026-10-23), not yet planned.** Turn this into `docs/PLAN.md` Phase 11
-tasks and briefs before any code. Design sources: [`docs/design/bold/`](../design/bold/README.md).
+tasks and briefs before any code. Design sources: [`docs/design/bold/`](../design/bold/README.md). Every current
+feature and where it goes: [`ui-rework-bold-parity.md`](ui-rework-bold-parity.md) (nothing may disappear silently).
 
 ## 1. Why
 
@@ -119,12 +120,14 @@ Contract first: `docs/API-CONTRACT.md` → `packages/contract` → server and we
 | Pets, room stage | Removed (the dock and capsules carry presence) |
 | Team: 12 tabs | Four settings + "more" |
 
-Keep old screens behind a flag until the new shell reaches parity; remove them only with the owner's OK.
+Keep old screens behind a flag until the new shell reaches parity; remove them only with the owner's OK. The full,
+row-by-row list (including the screens not drawn yet) is [`ui-rework-bold-parity.md`](ui-rework-bold-parity.md).
 
 ## 6. Suggested Phase 11 order
 
 1. **11.0 Design + review.** Write `docs/briefs/11.0-bold.md` from this proposal (jobs, exchanges, one-to-ones,
-   sessions, references, migrations). Adversarial review at max; record the review in `docs/reviews/`.
+   sessions, references, migrations). Give every row of the parity checklist a home, a design task, or an
+   owner-approved drop. Adversarial review at max; record the review in `docs/reviews/`.
 2. **11.1 A2A routing** (server only): hand-off tools, reply-back, exchange records and budget, pause-and-ask,
    context per job. Fixture tests: send-back loop completes, budget pause, prose mention starts nothing.
 3. **11.2 Contract:** jobs, exchanges, one-to-one conversations, references, share; fake adapter fixtures.
@@ -136,7 +139,8 @@ Keep old screens behind a flag until the new shell reaches parity; remove them o
 9. **11.8 Team page**, agent settings, add an agent.  10. **11.9 Settings** (four groups) **+ Usage**.
 11. **11.10 Phone**, first run, empty room, Start a job, Library, Search.
 12. **11.11 Retire old destinations** (owner OK), data migration verified on a copy of the live DB.
-13. **11.12 Phase gate:** code review at max against `main`, then the owner's Gemini review.
+13. **11.12 Phase gate:** code review at max against `main`, every parity row checked off, then the owner's Gemini
+    review.
 
 Every task ships tests; UI tasks ship Playwright specs against the fake adapter and screenshots compared with
 `docs/design/bold/`.
@@ -151,3 +155,5 @@ Every task ships tests; UI tasks ship Playwright specs against the fake adapter 
 5. **Hop-limit doc mismatch** (ARCHITECTURE says 6, code says 4) is resolved by the exchange budget; pick the
    default budget (mockups use 8 turns).
 6. The paused **10.15 swipe** work stays paused unless the owner says otherwise.
+7. The six decisions at the end of the parity checklist: the Score timeline and Flow graph, rooms becoming jobs,
+   the Tasks board, the room stage and **pet packs / agent looks**, the chat-first view, and the workflow graph editor.
