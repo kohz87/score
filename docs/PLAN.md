@@ -535,7 +535,7 @@ job's session (tests); a grep test fails on any other `score-${` session derivat
 across jobs (test); old UI and older rooms behave exactly as before (full suite green); the migration was run on a
 copy of the live DB with counts recorded in TASKLOG before deploy.
 
-**11.1b Exchanges and agent actions** · **Lead** · **prerequisites from 11.1a** (before any room gets a second job):
+**11.1b Exchanges and agent actions** ✅ (merged, not deployed) · **Lead** · **prerequisites from 11.1a** (before any room gets a second job):
 rewind, summaries, unread, search, shares, coding CLI sessions (`coding_sessions` per job), compaction's busy check and
 active agents become job-scoped; every `message_runs` writer records job sessions (or `sessionOwner` derives them); a
 default job's title follows a room rename; the team room is created (hidden from the old shell). Then: contract (`Exchange`, `exchange.upserted`, action receipts) →
