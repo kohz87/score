@@ -1,0 +1,419 @@
+/* One agent's screen (PLAN 11.6b), rebuilt from docs/design/bold/prototype.html's vReplay() and board 12. The classic
+   Watch frame renderers and replay timeline are reused verbatim; only their bold-shell colours and place in the page
+   are set here. Watching is read-only: the stage draws recorded frames and has no input into the agent's session. */
+[data-ui='bold'] .bold-screen {
+  --card: var(--panel);
+  --hairline: var(--line);
+  --ink-muted: var(--muted);
+  --tasks-border: var(--line);
+  --profile-dashed: var(--faint);
+  --agent-jade: var(--ok);
+  --agent-blue: #b3a6ff;
+  --agent-coral: var(--bad);
+  --agent-coral-text: var(--bad);
+  --watch-stage: var(--code-bg);
+  --watch-window: #23252e;
+  --watch-window-bar: #20232c;
+  --watch-window-dot: #3a3e4a;
+  --watch-muted: var(--muted);
+  --watch-faint: #626670;
+  --watch-bright: #e8eaf0;
+  --watch-tree: #171922;
+  --watch-live: var(--live);
+  gap: 18px;
+}
+
+[data-ui='bold'] .bold-screen-head {
+  align-items: center;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-screen-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-screen-title h1 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+[data-ui='bold'] .bold-screen-terminal {
+  margin-left: auto;
+  min-height: 40px;
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-screen-layout {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+[data-ui='bold'] .bold-screen-log {
+  flex: 1 1 280px;
+  max-width: 360px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-screen-log-title {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+[data-ui='bold'] .bold-screen-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-ui='bold'] .bold-screen-step {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--deep);
+  color: var(--ink);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-screen-step:hover {
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-screen-step.sel {
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+[data-ui='bold'] .bold-screen-step:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+[data-ui='bold'] .bold-screen-step:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-screen-time {
+  flex: none;
+  padding-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+[data-ui='bold'] .bold-screen-step[aria-current='true'] .bold-screen-time {
+  color: var(--ok);
+}
+
+[data-ui='bold'] .bold-screen-sub {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-screen-main {
+  flex: 999 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+[data-ui='bold'] .bold-screen-stage {
+  position: relative;
+  min-height: 600px;
+  border-radius: 26px;
+  background: var(--code-bg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-screen-badge {
+  position: absolute;
+  top: 20px;
+  right: 28px;
+  z-index: 2;
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: #20232c;
+  color: #e8eaf0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-screen-stage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: 38px;
+  padding-right: 132px;
+}
+
+[data-ui='bold'] .bold-screen-who {
+  color: #e8eaf0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-screen-surfaces {
+  display: inline-flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+[data-ui='bold'] .bold-screen-surfaces button {
+  border: 0;
+  border-radius: 999px;
+  min-height: 28px;
+  padding: 0 10px;
+  background: transparent;
+  color: #a9adb8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-screen-surfaces button.on {
+  background: #ececf1;
+  color: #12131a;
+}
+
+[data-ui='bold'] .bold-screen-surfaces button:disabled {
+  opacity: 0.45;
+}
+
+[data-ui='bold'] .bold-screen-surfaces button:focus-visible {
+  outline: 2px solid #ececf1;
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-screen-readonly {
+  color: #a9adb8;
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-screen-window {
+  flex: 1;
+  min-height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #1e2029;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-screen-window > .watch-window__bar {
+  height: 38px;
+  flex: 0 0 38px;
+  background: #20232c;
+}
+
+[data-ui='bold'] .bold-screen-window .watch-window__dot {
+  width: 10px;
+  height: 10px;
+}
+
+[data-ui='bold'] .bold-screen-window .watch-terminal,
+[data-ui='bold'] .bold-screen-window .watch-editor,
+[data-ui='bold'] .bold-screen-window .watch-browser {
+  flex: 1;
+  min-height: 0;
+}
+
+[data-ui='bold'] .bold-screen-window .watch-terminal {
+  font-size: 14px;
+  line-height: 1.9;
+  padding: 18px 20px;
+}
+
+[data-ui='bold'] .bold-screen-empty,
+[data-ui='bold'] .bold-screen-state {
+  margin: 0;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-screen-window > .bold-screen-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+[data-ui='bold'] .bold-screen-approval {
+  bottom: 16px;
+}
+
+[data-ui='bold'] .bold-screen-answer {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+/* The reused classic timeline, with the prototype's dark card and pill buttons. */
+[data-ui='bold'] .bold-screen .watch-replay {
+  background: var(--panel);
+  border: 0;
+  border-radius: 24px;
+  padding: 14px 18px;
+}
+
+[data-ui='bold'] .bold-screen .watch-replay__buttons button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-screen .watch-replay__time,
+[data-ui='bold'] .bold-screen .watch-replay__legend {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-screen .watch-track__rail {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-screen .watch-track__played {
+  background: var(--faint);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker {
+  border-color: var(--panel);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--command {
+  background: var(--ink2);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--file {
+  background: var(--ok);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--browser {
+  background: #b3a6ff;
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--asked {
+  background: var(--bad);
+}
+
+[data-ui='bold'] .bold-screen .watch-marker--on {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+[data-ui='bold'] .bold-screen .watch-replay__live {
+  color: var(--live);
+}
+
+[data-ui='bold'] .bold-screen .watch-replay__live:focus-visible,
+[data-ui='bold'] .bold-screen .watch-marker:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-screen .watch-legend__swatch--command {
+  background: var(--ink2);
+}
+
+[data-ui='bold'] .bold-screen .watch-legend__swatch--file {
+  background: var(--ok);
+}
+
+[data-ui='bold'] .bold-screen .watch-legend__swatch--browser {
+  background: #b3a6ff;
+}
+
+[data-ui='bold'] .bold-screen .watch-legend__swatch--asked {
+  background: var(--bad);
+}
+
+[data-ui='bold'] .bold-screen-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-screen {
+    gap: 16px;
+  }
+
+  [data-ui='bold'] .bold-screen-head {
+    align-items: flex-start;
+  }
+
+  [data-ui='bold'] .bold-screen-terminal {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
+  }
+
+  [data-ui='bold'] .bold-screen-layout {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  [data-ui='bold'] .bold-screen-log,
+  [data-ui='bold'] .bold-screen-main {
+    width: 100%;
+    max-width: none;
+    flex: none;
+  }
+
+  [data-ui='bold'] .bold-screen-stage {
+    min-height: 480px;
+    padding: 12px;
+  }
+
+  [data-ui='bold'] .bold-screen-stage-head {
+    padding-right: 0;
+  }
+
+  [data-ui='bold'] .bold-screen-badge {
+    position: static;
+    align-self: flex-start;
+    order: -1;
+  }
+
+  [data-ui='bold'] .bold-screen .watch-replay {
+    padding: 12px;
+  }
+
+  [data-ui='bold'] .bold-screen .watch-replay__legend {
+    gap: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .bold-screen .livedot,
+  [data-ui='bold'] .bold-screen .watch-terminal__cursor {
+    animation: none !important;
+  }
+}

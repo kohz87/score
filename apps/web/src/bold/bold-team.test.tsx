@@ -672,8 +672,8 @@ test('the agent page puts the four cards first and makes every classic tab reach
   expect(screen.getByText('/srv/app')).toBeDefined()
   expect(screen.getByRole('link', { name: 'Message' }).getAttribute('href')).toBe('/b?with=builder')
   expect(screen.getByRole('button', { name: 'Pause builder' })).toBeDefined()
-  expect(screen.getByRole('link', { name: 'Watch builder work' }).getAttribute('href')).toBe(
-    '/now/watch/builder',
+  expect(screen.getByRole('link', { name: 'Look at its screen' }).getAttribute('href')).toBe(
+    '/b/screen/builder',
   )
   expect(screen.getByRole('button', { name: 'Open builder in its own window' })).toBeDefined()
 

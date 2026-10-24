@@ -609,7 +609,7 @@ rework, and the owner is told the pilot result.
 latest screen frame; Hermes Bot Screen frames read-only when present. Done when: authorship test over interleaved edits
 by two agents; comments survive later edits or are marked outdated; nothing exposes a keyboard or takeover path.
 
-**11.6b Workbench and an agent's screen** · **DeepSeek** · boards 02, 12. Diffs with the agent's colour bar, comments
+**11.6b Workbench and an agent's screen** ✅ (workspace:// wiring with 11.4a) · **DeepSeek** · boards 02, 12. Diffs with the agent's colour bar, comments
 on lines, cursor, `workspace://` links, file tree/editor from today's workspace; the agent's screen page with plain-step
 log, time bar, markers, step keys, Live, approval bar, "Open in terminal" (replaces Watch). Done when: e2e; screenshots
 vs 02/12.
@@ -679,4 +679,4 @@ removed code has no route or import left; a copy of the live DB migrates and eve
 approved the removal list.
 
 **11.12 Phase gate** · **Lead** (Codex `gpt-6.1-sol` max if it has quota) · code review against `main` in a fresh
-session, every parity row checked off against the brief's §11, full e2e, then the owner's Gemini review; release.
+session, every parity row checked off against the brief's §11, full e2e, then the owner's own review (no Gemini review, decision 119); release.

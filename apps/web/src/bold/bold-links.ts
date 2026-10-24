@@ -66,14 +66,53 @@ export function boldSettingsSectionLink(sectionId: string): string {
 /** The Workbench tabs a Results card links to (11.5); the Workbench screen itself reads `work` in 11.6b. */
 export type WorkbenchTab = 'code' | 'screen' | 'draft' | 'workbench'
 
-/** 11.6b Workbench: a job's Workbench at the tab a Results card chose. */
-export function workbenchHref(jobId: string, tab: WorkbenchTab): string {
-  return boldQuery({ job: jobId, work: tab })
+/** 11.6b Workbench: a job's Workbench at the tab a Results card chose, optionally on one file. */
+export function workbenchHref(jobId: string, tab: WorkbenchTab, file?: string): string {
+  return boldQuery(file ? { job: jobId, work: tab, file } : { job: jobId, work: tab })
 }
 
 /** The Work header's Workbench switch keeps the room's current job, message and note. */
 export function boldWorkbenchLink(search: string): string {
   const params = new URLSearchParams(search)
   params.set('work', 'workbench')
+  params.delete('file')
   return `/b?${params.toString()}`
+}
+
+/** The Work header's Results switch keeps the room's current job and note, and leaves the Workbench. */
+export function boldResultsLink(search: string): string {
+  const params = new URLSearchParams(search)
+  params.delete('work')
+  params.delete('file')
+  return params.size > 0 ? `/b?${params.toString()}` : '/b'
+}
+
+/** 11.6b: an agent's full screen, reached from the Workbench and the agent page. */
+export function boldAgentScreenLink(agentId: string): string {
+  return `/b/screen/${encodeURIComponent(agentId)}`
+}
+
+/** 11.8b: the agent's Workspace tab (inside More), optionally on one file. */
+export function boldAgentWorkspaceLink(agentId: string, path?: string): string {
+  const query = path ? `?path=${encodeURIComponent(path)}` : ''
+  return `/b/team/${encodeURIComponent(agentId)}${query}#agent-workspace`
+}
+
+/** Normalises the paths workspace links and Workbench files use before comparing them. */
+function samePath(one: string, other: string): boolean {
+  const clean = (path: string) => path.replace(/^\.\//u, '').replace(/^\/+/u, '')
+  return clean(one) === clean(other)
+}
+
+/**
+ * 11.6b: a `workspace://` link from a message. It opens the job's Workbench when the path is one of the files that job
+ * changed, else the authoring agent's Workspace tab. The room passes the job it is showing and the job's changed files.
+ */
+export function boldWorkspaceLink(
+  agentId: string,
+  path: string,
+  job?: { id: string; files: readonly string[] },
+): string {
+  if (job?.files.some((file) => samePath(file, path))) return workbenchHref(job.id, 'code', path)
+  return boldAgentWorkspaceLink(agentId, path)
 }
