@@ -1049,13 +1049,432 @@
   min-width: 0;
 }
 
-.bold-settings-page .bold-trigger-empty {
+.bold-settings-page .btn.primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+.bold-settings-page .btn.ghost {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.bold-settings-page .btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bold-settings-page .chip {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.87em;
+  font-weight: 700;
   background: var(--field);
-  border-radius: 18px;
+  color: var(--ink2);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.bold-settings-page textarea.field {
+  padding: 12px 14px;
+  resize: vertical;
+  min-height: 90px;
+}
+
+.bold-settings-page .bold-trigger-push {
+  margin-left: auto;
+}
+
+.bold-settings-page .bold-trigger-danger {
+  color: var(--bad);
+}
+
+.bold-settings-page .btn.bold-trigger-danger {
+  background: transparent;
+  color: var(--bad);
+  box-shadow: inset 0 0 0 1.5px var(--bad);
+}
+
+.bold-settings-page .bold-trigger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bold-settings-page .bold-trigger-card {
+  background: var(--field);
+  border-radius: 20px;
   padding: 16px;
+}
+
+.bold-settings-page .bold-trigger-url {
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.bold-settings-page .bold-trigger-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(5, 6, 9, 0.62);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: max(40px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 40px
+    max(16px, env(safe-area-inset-left, 0px));
+}
+
+.bold-settings-page .bold-trigger-dialog {
+  width: 100%;
+  max-width: 760px;
+  background: var(--panel);
+  border-radius: 30px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+.bold-settings-page .bold-trigger-dialog.wide {
+  max-width: 1160px;
+}
+
+.bold-settings-page .bold-trigger-wizard-head h3 {
+  font-size: 26px;
+}
+
+.bold-settings-page .bold-trigger-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bold-settings-page .bold-trigger-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 4px 14px 4px 4px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-trigger-steps li span {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--line);
+  font-size: 12px;
+}
+
+.bold-settings-page .bold-trigger-steps li.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+.bold-settings-page .bold-trigger-steps li.on span {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+.bold-settings-page .bold-trigger-steps li.done {
+  color: var(--ink2);
+}
+
+.bold-settings-page .bold-trigger-steps li.done span {
+  background: var(--ok);
+  color: #12131a;
+}
+
+.bold-settings-page .bold-trigger-form,
+.bold-settings-page .bold-trigger-template {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bold-settings-page .bold-trigger-form label,
+.bold-settings-page .bold-trigger-template {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-trigger-form label {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.bold-settings-page .bold-trigger-test,
+.bold-settings-page .bold-trigger-map,
+.bold-settings-page .bold-trigger-report {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bold-settings-page .bold-trigger-inner {
+  background: var(--deep);
+  border-radius: 20px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bold-settings-page .bold-trigger-inner p {
+  margin: 6px 0 0;
+}
+
+.bold-settings-page .bold-trigger-secret {
+  background: var(--deep);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  gap: 10px;
+}
+
+.bold-settings-page .bold-trigger-secret-value {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--field);
+}
+
+.bold-settings-page .bold-trigger-wait {
+  background: var(--field);
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 28px;
+}
+
+.bold-settings-page .bold-trigger-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.bold-settings-page .bold-trigger-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ink2);
+  animation: bold-trigger-pulse 1.2s infinite ease-in-out;
+}
+
+.bold-settings-page .bold-trigger-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.bold-settings-page .bold-trigger-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes bold-trigger-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bold-settings-page .bold-trigger-dots span {
+    animation: none;
+  }
+}
+
+.bold-settings-page .bold-trigger-sample {
+  max-width: 100%;
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--deep);
+  color: var(--ink2);
+  font-family: var(--font-m);
+  font-size: 12px;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-trigger-mapgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.bold-settings-page .bold-trigger-payload {
+  max-height: 420px;
+  overflow: auto;
+  gap: 4px;
+}
+
+.bold-settings-page .bold-trigger-leaf {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 7px 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-trigger-leaf:hover,
+.bold-settings-page .bold-trigger-leaf.on {
+  background: var(--field);
+}
+
+.bold-settings-page .bold-trigger-leaf.on {
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.bold-settings-page .bold-trigger-leaf .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bold-settings-page .bold-trigger-leaf-slot {
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-family: var(--font-b);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.bold-settings-page .bold-trigger-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bold-settings-page .bold-trigger-slot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--deep);
+  border-radius: 16px;
+  padding-right: 6px;
+}
+
+.bold-settings-page .bold-trigger-slot.on {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.bold-settings-page .bold-trigger-slotbtn {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  min-height: 52px;
+}
+
+.bold-settings-page .bold-trigger-required {
+  color: var(--bad);
+  font-size: 0.8em;
+}
+
+.bold-settings-page .bold-trigger-actions {
+  justify-content: space-between;
+}
+
+.bold-settings-page .bold-trigger-modes {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bold-settings-page .bold-trigger-modes legend {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.bold-settings-page .bold-trigger-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--field);
+}
+
+.bold-settings-page .bold-trigger-mode input {
+  margin-top: 4px;
+  accent-color: var(--ink);
+}
+
+.bold-settings-page .bold-trigger-mode > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bold-settings-page .bold-trigger-confirm {
+  width: 100%;
+  max-width: 520px;
+  margin-top: max(70px, env(safe-area-inset-top, 0px));
+  background: var(--panel);
+  padding: 24px;
+  border-radius: 26px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+.bold-settings-page .bold-trigger-confirm p {
+  margin: 0;
+  color: var(--ink2);
+}
+
+@media (max-width: 800px) {
+  .bold-settings-page .bold-trigger-mapgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bold-settings-page .bold-trigger-scrim {
+    padding-top: max(20px, env(safe-area-inset-top, 0px));
+    padding-inline: 12px;
+  }
+
+  .bold-settings-page .bold-trigger-dialog {
+    padding: 20px;
+    border-radius: 24px;
+  }
 }
 
 .bold-settings-page .sr-only {

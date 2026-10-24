@@ -24,6 +24,12 @@ export const protectedClasses = [
   'needs-you-dot',
   // PLAN 11.3: the bold shell's dock ring of an agent that needs you
   'bold-needs',
+  // PLAN 11.9a: bold credential panels, the Add tool server form, and trigger secrets / rotate-delete decisions
+  'bold-connect-panel',
+  'bold-tool-add',
+  'bold-trigger-card',
+  'bold-trigger-secret',
+  'bold-trigger-confirm',
   'orch-pill',
   'orch-node__flag',
   // The task drawer's approval and its buttons

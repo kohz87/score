@@ -151,6 +151,7 @@ beforeEach(() => {
             },
           ],
         })
+      if (url.pathname === '/api/triggers') return jsonResponse({ items: [] })
       if (url.pathname === '/api/themes')
         return jsonResponse({
           items: [
@@ -301,7 +302,7 @@ test('the nine Settings sections open their bold views, including Connections, T
   fireEvent.click(within(nav).getByRole('button', { name: /^Tools and triggers/ }))
   expect(await screen.findByRole('heading', { name: 'Tools and triggers' })).toBeDefined()
   expect(await screen.findByText('files')).toBeDefined()
-  expect(screen.getByText(/Triggers need the 11.1d API/)).toBeDefined()
+  expect(screen.getByRole('button', { name: 'New trigger' })).toBeDefined()
   fireEvent.click(within(nav).getByRole('button', { name: /^Look/ }))
   expect(await screen.findByRole('heading', { name: 'Look' })).toBeDefined()
   expect(screen.getByRole('radiogroup', { name: 'Mode on this device' })).toBeDefined()

@@ -53,6 +53,22 @@ test('the New look restyles pairing without changing its protected consent card'
   expect(screen.getByRole('button', { name: 'Pair this browser' })).toBeDefined()
 })
 
+test('the bold pairing page paints from the stored theme without asking the server for themes', async () => {
+  window.localStorage.setItem('score.ui', 'bold')
+  window.localStorage.setItem('score.theme', 'light')
+  const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+  vi.stubGlobal('fetch', fetch)
+  pairPage()
+  await screen.findByRole('button', { name: 'Pair this browser' })
+  const frame = await waitFor(() => {
+    const element = document.querySelector<HTMLElement>('.bold-pair-page')
+    expect(element).not.toBeNull()
+    return element
+  })
+  expect(frame?.dataset.look).toBe('light')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
 test.each(['tls'])(
   'remote %s pairing clears the fragment and waits for explicit consent',
   async (transport) => {

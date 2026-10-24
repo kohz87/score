@@ -6,8 +6,8 @@ import { remoteTransport } from '../../data/session.ts'
 import { passkeysSupportedHere, signInWithPasskey } from '../../data/passkeys.ts'
 import { useTextScale } from '../../data/text-scale.ts'
 import { useMediaQuery } from '../../data/use-media.ts'
+import { readTheme } from '../../data/theme.ts'
 import { readUi } from '../../bold/bold-ui.ts'
-import { useLook } from '../../themes/use-look.ts'
 import '../../bold/tokens.css'
 import './pair-bold.css'
 
@@ -134,10 +134,11 @@ export function PairPage() {
 
 /** PLAN 11.9a: the pairing page under the bold tokens when the New look is on; classic keeps its own page. */
 function BoldPairFrame({ children }: { children: ReactNode }) {
-  const look = useLook()
+  // The pairing page runs before this browser may read /api/themes. Paint from what this device stored, else the OS.
+  const stored = readTheme()
   const systemLight = useMediaQuery('(prefers-color-scheme: light)')
   const scale = useTextScale()
-  const resolvedLook = look.mode === 'system' ? (systemLight ? 'light' : 'dark') : look.mode
+  const resolvedLook = stored === 'system' ? (systemLight ? 'light' : 'dark') : stored
   return (
     <div
       className="bold-pair-page"

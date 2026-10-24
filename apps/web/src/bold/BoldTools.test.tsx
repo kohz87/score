@@ -38,6 +38,7 @@ function mount() {
       return Promise.resolve(
         Response.json({ next: 'run_in_terminal', command: 'hermes mcp add tickets' }),
       )
+    if (url.pathname === '/api/triggers') return Promise.resolve(Response.json({ items: [] }))
     return Promise.resolve(
       Response.json({ error: { code: 'not_found', message: 'No' } }, { status: 404 }),
     )
@@ -63,7 +64,7 @@ test('tool servers show health and who uses them, and the add form returns the H
   const form = screen.getByRole('form', { name: 'Add a tool server' })
   fireEvent.change(within(form).getByLabelText('Name'), { target: { value: 'tickets' } })
   fireEvent.change(within(form).getByLabelText('Address or command'), {
-    target: { value: 'npx -y @example/tickets' },
+    target: { value: 'npx -y @example/tickets --title "My tickets app"' },
   })
   fireEvent.click(within(form).getByRole('button', { name: 'Add tool server' }))
   const terminal = await screen.findByRole('group', { name: 'Run in a terminal' })
@@ -75,15 +76,37 @@ test('tool servers show health and who uses them, and the add form returns the H
   )
   expect(JSON.parse(String(call?.[1]?.body))).toEqual({
     name: 'tickets',
-    command: ['npx', '-y', '@example/tickets'],
+    command: ['npx', '-y', '@example/tickets', '--title', 'My tickets app'],
   })
+  expect(screen.getByText(/Don’t paste tokens or passwords into the command/)).toBeDefined()
 })
 
-test('tool removal and test calls are not offered while the contract lacks their endpoints', async () => {
+test('tool testing and removal point to Hermes while the contract lacks their endpoints', async () => {
   mount()
   await screen.findByText('files')
   expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull()
   expect(screen.queryByRole('button', { name: /Send a test call/ })).toBeNull()
-  expect(screen.getByText(/Triggers need the 11.1d API/)).toBeDefined()
-  expect(screen.getByText(/not in the API contract yet/)).toBeDefined()
+  expect(
+    screen.getByText(/Testing and removing a tool server are done in Hermes for now/),
+  ).toBeDefined()
+  expect(screen.getByRole('button', { name: 'New trigger' })).toBeDefined()
+})
+
+test('a command with an unclosed quote is refused before it is sent', async () => {
+  const fetch = mount()
+  await screen.findByText('files')
+  const form = screen.getByRole('form', { name: 'Add a tool server' })
+  fireEvent.change(within(form).getByLabelText('Name'), { target: { value: 'tickets' } })
+  fireEvent.change(within(form).getByLabelText('Address or command'), {
+    target: { value: 'npx -y "unclosed' },
+  })
+  fireEvent.click(within(form).getByRole('button', { name: 'Add tool server' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('Close the quote in the command.')
+  expect(
+    fetch.mock.calls.some(
+      ([input, init]) =>
+        new URL(String(input), 'http://x').pathname === '/api/settings/tool-servers' &&
+        init?.method === 'POST',
+    ),
+  ).toBe(false)
 })

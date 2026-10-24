@@ -111,7 +111,21 @@ beforeEach(() => {
         )
         return Response.json(messaging.find((row) => row.platform === 'discord'))
       }
-      if (url.pathname === '/api/session/browsers') return Response.json({ items: [{}, {}] })
+      if (url.pathname === '/api/session/browsers')
+        return Response.json({
+          items: [
+            '11111111-1111-4111-8111-111111111111',
+            '22222222-2222-4222-8222-222222222222',
+          ].map((id, index) => ({
+            id,
+            label: index === 0 ? 'This browser' : 'Phone',
+            address: '127.0.0.1',
+            createdAt: '2026-10-24T09:00:00.000Z',
+            lastSeenAt: '2026-10-24T10:00:00.000Z',
+            expiresAt: '2026-11-24T10:00:00.000Z',
+            current: index === 0,
+          })),
+        })
       if (url.pathname === '/api/session/security')
         return Response.json({
           passwordSet: true,
@@ -148,6 +162,9 @@ test('an API-key provider connects through the classic panel and the row updates
     return found as HTMLElement
   })
   fireEvent.click(within(row).getByRole('button', { name: 'Connect OpenRouter' }))
+  expect(document.querySelector('.bold-connect-panel')?.getAttribute('data-protected')).toBe(
+    'block',
+  )
   fireEvent.change(await screen.findByLabelText('API key'), {
     target: { value: 'sk-or-example-key' },
   })
@@ -170,6 +187,9 @@ test('a channel uses the same browser setup form as classic Settings', async () 
     return found as HTMLElement
   })
   fireEvent.click(within(row).getByRole('button', { name: 'Connect Discord' }))
+  expect(document.querySelector('.bold-connect-panel')?.getAttribute('data-protected')).toBe(
+    'block',
+  )
   fireEvent.change(await screen.findByLabelText('Bot token'), {
     target: { value: 'discord-secret-token' },
   })
@@ -201,4 +221,13 @@ test('a local OpenAI-compatible endpoint can be added', async () => {
   fireEvent.click(within(local).getByRole('button', { name: 'Add model' }))
   expect(await screen.findByText('Added Local box.')).toBeDefined()
   await waitFor(() => expect(screen.getByText('Local box')).toBeDefined())
+})
+
+test('the phone card points at the real pairing flow instead of promising a QR it does not draw', async () => {
+  mount()
+  expect(await screen.findByRole('heading', { name: 'Your phone' })).toBeDefined()
+  expect(screen.queryByText(/Scan to open/)).toBeNull()
+  const link = screen.getByRole('link', { name: 'Pair another device or manage devices' })
+  expect(link.getAttribute('href')).toBe('/b/settings/security')
+  expect(await screen.findByText(/2 devices paired/)).toBeDefined()
 })

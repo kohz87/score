@@ -192,7 +192,7 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
               </button>
             )}
             {panel?.id === item.id && panel.kind === 'key' && (
-              <div className="bold-connect-panel">
+              <div className="bold-connect-panel" data-protected="block">
                 <ApiKeyPanel
                   providerId={item.id}
                   label={item.label}
@@ -207,7 +207,7 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
               </div>
             )}
             {panel?.id === item.id && panel.kind === 'device' && (
-              <div className="bold-connect-panel">
+              <div className="bold-connect-panel" data-protected="block">
                 <SignInPanel
                   label={item.label}
                   start={panel.start}
@@ -222,7 +222,7 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
               </div>
             )}
             {command?.id === item.id && (
-              <div className="bold-connect-panel">
+              <div className="bold-connect-panel" data-protected="block">
                 <TerminalCommand
                   command={command.text}
                   onClose={() => {
@@ -349,7 +349,7 @@ function ChannelsCard() {
               </button>
             )}
             {setup === row.platform && (
-              <div className="bold-connect-panel">
+              <div className="bold-connect-panel" data-protected="block">
                 <MessagingSetup
                   platform={row.platform}
                   label={row.label}
@@ -385,7 +385,7 @@ function PhoneCard() {
       <div className="grow">
         <h3 id="bold-phone-title">Your phone</h3>
         <span className="bold-connect-detail">
-          Scan to open Score on your phone. Approvals reach you there too.
+          Approvals reach you on any device paired with Score.
         </span>
         <span className="small muted">
           {count === undefined
@@ -394,7 +394,7 @@ function PhoneCard() {
           {security.data?.passwordSet ? ' · security password on' : ' · no security password'}
         </span>
         <Link className="link" to="/b/settings/security">
-          Manage devices
+          Pair another device or manage devices
         </Link>
       </div>
       <span className="bold-phone-mark" aria-hidden="true">

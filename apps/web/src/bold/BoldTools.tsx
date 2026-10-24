@@ -7,6 +7,8 @@ import {
   useRecheckSettings,
   useSettingsActions,
 } from '../routes/settings/settings-queries.ts'
+import { BoldTriggers } from './BoldTriggers.tsx'
+import { parseToolCommand } from './tool-command.ts'
 
 const statusLabel = {
   ok: 'Working',
@@ -14,21 +16,29 @@ const statusLabel = {
   error: 'Not working',
 } as const
 
-/** PLAN 11.9a: Settings › Tools and triggers. Trigger UI waits on the 11.1d endpoints; tool servers use contract §10. */
+/** PLAN 11.9a: Settings › Tools and triggers: tool servers use contract §10, triggers contract §17. */
 export function BoldTools({ agents }: { agents: AgentSummary[] }) {
   const [command, setCommand] = useState<string | null>(null)
   const [draft, setDraft] = useState({ name: '', target: '' })
+  const [formProblem, setFormProblem] = useState('')
   const connections = useConnections(command !== null)
   const recheck = useRecheckSettings()
   const { addToolServer } = useSettingsActions()
   const names = new Map(agents.map((agent) => [agent.id, agent.name]))
+  const appSuggestions = connections.data?.toolServers.map((server) => server.label) ?? []
 
   function add(event: FormEvent) {
     event.preventDefault()
     const target = draft.target.trim()
-    const request = /^https?:\/\//i.test(target)
-      ? { name: draft.name.trim(), url: target }
-      : { name: draft.name.trim(), command: target.split(/\s+/) }
+    const parsed = /^https?:\/\//i.test(target) ? null : parseToolCommand(target)
+    if (parsed && !parsed.ok) {
+      setFormProblem(parsed.error)
+      return
+    }
+    const request = parsed
+      ? { name: draft.name.trim(), command: parsed.argv }
+      : { name: draft.name.trim(), url: target }
+    setFormProblem('')
     addToolServer.mutate(request, {
       onSuccess: (result) => {
         if (result.command) setCommand(result.command)
@@ -87,7 +97,13 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
             </div>
           ))}
         </div>
-        <form className="bold-tool-add" aria-label="Add a tool server" onSubmit={add}>
+        <form
+          className="bold-tool-add"
+          data-protected="flex"
+          aria-label="Add a tool server"
+          noValidate
+          onSubmit={add}
+        >
           <label>
             <span className="sr-only">Name</span>
             <input
@@ -106,15 +122,24 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
               className="field"
               required
               aria-label="Address or command"
+              aria-describedby="bold-tool-command-hint"
               placeholder="https://… or a command"
               value={draft.target}
-              onChange={(event) => setDraft({ ...draft, target: event.target.value })}
+              onChange={(event) => {
+                setDraft({ ...draft, target: event.target.value })
+                setFormProblem('')
+              }}
             />
           </label>
           <button type="submit" className="btn primary" disabled={addToolServer.isPending}>
             {addToolServer.isPending ? 'Working…' : 'Add tool server'}
           </button>
         </form>
+        <span className="small muted" id="bold-tool-command-hint">
+          Don’t paste tokens or passwords into the command. Keep credentials in Hermes; separate
+          arguments with spaces and wrap an argument in quotes when it contains spaces.
+        </span>
+        {formProblem && <p role="alert">{formProblem}</p>}
         {addToolServer.isError && (
           <p role="alert">{failure(addToolServer.error, 'add this tool server')}</p>
         )}
@@ -128,24 +153,13 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
           />
         )}
         <span className="small muted">
-          Sign-in tokens are kept by Hermes in each agent’s own settings, never by Score.
+          Adding gives you a command to run in Hermes. Testing and removing a tool server are done
+          in Hermes for now. Sign-in tokens are kept by Hermes in each agent’s own settings, never
+          by Score.
         </span>
       </section>
 
-      <section className="card bold-triggers" aria-labelledby="bold-triggers-title">
-        <div className="row wrap">
-          <h3 id="bold-triggers-title">Triggers</h3>
-          <span className="small muted">Let another app start a job by calling an address</span>
-        </div>
-        <div className="bold-trigger-empty" role="status">
-          <b>Triggers need the 11.1d API</b>
-          <span className="small muted">
-            Creating a trigger, showing its secret once and receiving a signed test call need the
-            trigger endpoints and <code>/hooks</code> listener from 11.1d. Those endpoints are not
-            in the API contract yet, so this page does not pretend to create one.
-          </span>
-        </div>
-      </section>
+      <BoldTriggers appSuggestions={appSuggestions} />
     </div>
   )
 }

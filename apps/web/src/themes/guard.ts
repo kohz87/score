@@ -116,6 +116,7 @@ export const KNOWN_OVERLAYS = [
   '.chat-toast',
   '.bold-tabbar',
   '.bold-sidecol',
+  '.bold-trigger-scrim',
 ].join(', ')
 /** Dialog backdrops cover the page by design. */
 export const KNOWN_BACKDROPS =
