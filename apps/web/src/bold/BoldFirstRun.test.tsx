@@ -1,4 +1,4 @@
-import type { TeamRoomResponse, WorkflowList, WorkflowVersion } from '@score/contract'
+import { TeamRoomResponseSchema, type WorkflowList, type WorkflowVersion } from '@score/contract'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -8,6 +8,8 @@ import { createStreamQueryRegistry, immediateFrameScheduler } from '../data/resy
 import { createStreamClient } from '../data/stream.ts'
 import { BoldFirstRun } from './BoldFirstRun.tsx'
 import { FIRST_RUN_DONE_KEY } from './bold-first-run.ts'
+
+type TeamRoomResponse = ReturnType<typeof TeamRoomResponseSchema.parse>
 
 class Source extends EventTarget {
   close() {}
@@ -92,7 +94,7 @@ let calls: { url: string; method: string; body: unknown }[]
 let currentSystem = system()
 let existingRecipes: string[] = []
 let savedLead: string | null = null
-let disposed: (() => void)[] = []
+const disposed: (() => void)[] = []
 
 function installFetch() {
   calls = []
@@ -158,10 +160,9 @@ function open() {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source as never })
   const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)
-  const router = createMemoryRouter(
-    [{ path: '*', element: <BoldFirstRun /> }],
-    { initialEntries: ['/b?first=run'] },
-  )
+  const router = createMemoryRouter([{ path: '*', element: <BoldFirstRun /> }], {
+    initialEntries: ['/b?first=run'],
+  })
   disposed.push(() => {
     router.dispose()
     queries.dispose()
@@ -199,22 +200,30 @@ test('first run lists the team without pretending members are editable, and neve
     await screen.findByRole('heading', { name: 'Run a team of agents from one room.' }),
   ).toBeDefined()
   expect(screen.getByRole('heading', { name: 'Hermes found' })).toBeDefined()
-  expect(screen.getByText('Version 0.15.2, gateway running. Bridge waiting for a producer.')).toBeDefined()
+  expect(
+    screen.getByText('Version 0.15.2, gateway running. Bridge waiting for a producer.'),
+  ).toBeDefined()
 
   const members = screen.getByRole('list', { name: 'Team members' })
   expect(within(members).getAllByRole('listitem')).toHaveLength(4)
   expect(within(members).getByText('builder')).toBeDefined()
   expect(within(members).queryByRole('checkbox')).toBeNull()
   expect(
-    screen.getByRole('link', { name: 'Add or remove agents on the Team page' }).getAttribute('href'),
+    screen
+      .getByRole('link', { name: 'Add or remove agents on the Team page' })
+      .getAttribute('href'),
   ).toBe('/b/team')
 
   const lead = screen.getByRole('combobox', { name: /Who leads/ }) as HTMLSelectElement
   expect(lead.value).toBe('')
-  expect(screen.getByRole('button', { name: 'Open the team room' })).toBeDisabled()
+  expect(
+    (screen.getByRole('button', { name: 'Open the team room' }) as HTMLButtonElement).disabled,
+  ).toBe(true)
 
   for (const name of ['Build, then review', 'Write, review, design', 'Research report'])
-    expect(screen.getByRole('checkbox', { name: new RegExp(name) })).toBeEnabled()
+    expect(
+      (screen.getByRole('checkbox', { name: new RegExp(name) }) as HTMLInputElement).disabled,
+    ).toBe(false)
   expect(screen.getByText('scripts/score service install')).toBeDefined()
   expect(screen.getByRole('button', { name: 'Copy' })).toBeDefined()
 })
@@ -224,8 +233,8 @@ test('missing or degraded Hermes says what is wrong and links to the classic set
   open()
 
   expect(await screen.findByRole('heading', { name: 'Hermes not found' })).toBeDefined()
-  expect(screen.getByText('Score can’t reach Hermes on this machine.')).toBeDefined()
-  expect(screen.getByText('The bridge is out of date.')).toBeDefined()
+  expect(screen.getByText(/Score can’t reach Hermes on this machine\./)).toBeDefined()
+  expect(screen.getByText(/The bridge is out of date\./)).toBeDefined()
   expect(screen.queryByRole('heading', { name: 'Hermes found' })).toBeNull()
   expect(screen.getByRole('link', { name: 'Open the setup help' }).getAttribute('href')).toBe(
     '/settings/connections',
@@ -246,15 +255,15 @@ test('Open saves the chosen recipes and lead, sets the device flag and goes to t
 
   const posts = calls.filter((call) => call.url === '/api/workflows' && call.method === 'POST')
   expect(posts).toHaveLength(2)
-  expect(posts.map((call) => (call.body as { definition: { name: string } }).definition.name)).toEqual(
-    ['Build, then review', 'Research report'],
-  )
+  expect(
+    posts.map((call) => (call.body as { definition: { name: string } }).definition.name),
+  ).toEqual(['Build, then review', 'Research report'])
   const patch = calls.find((call) => call.url === '/api/rooms/team-room' && call.method === 'PATCH')
   expect(patch?.body).toEqual({ leadAgentId: 'reviewer' })
   // The room patch comes after every recipe, so a failed recipe never leaves a lead behind.
-  expect(calls.findLastIndex((call) => call.url === '/api/workflows')).toBeLessThan(
-    calls.findIndex((call) => call.url === '/api/rooms/team-room'),
-  )
+  expect(
+    calls.findLastIndex((call) => call.url === '/api/workflows' && call.method === 'POST'),
+  ).toBeLessThan(calls.findIndex((call) => call.url === '/api/rooms/team-room'))
 })
 
 test('an existing recipe is shown as already saved and is never posted twice', async () => {

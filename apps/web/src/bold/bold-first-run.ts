@@ -221,13 +221,7 @@ export const starterRecipes: readonly StarterRecipe[] = [
       description: 'A short summary with sources',
       inputs: [input('question', 'Question to answer')],
       nodes: [
-        agent(
-          'research',
-          'Research',
-          id('lead'),
-          'Answer {{inputs.question}} with sources.',
-          0,
-        ),
+        agent('research', 'Research', id('lead'), 'Answer {{inputs.question}} with sources.', 0),
         { id: 'end', kind: 'end', label: 'Done' },
       ],
       edges: [edge('research-end', 'research', 'ok', 'end')],

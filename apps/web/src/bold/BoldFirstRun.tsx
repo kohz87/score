@@ -1,14 +1,10 @@
-import {
-  AboutSchema,
-  RoomSchema,
-  type AgentSummary,
-  type TeamRoomResponse,
-} from '@score/contract'
+import { AboutSchema, RoomSchema, TeamRoomResponseSchema } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../data/api.ts'
+import { copyText } from '../data/clipboard.ts'
 import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { useSystemStatus } from '../routes/settings/settings-queries.ts'
@@ -25,6 +21,7 @@ import './bold-first-run.css'
 
 const SERVICE_COMMAND = 'scripts/score service install'
 const TEAM_ROOM_KEY = ['bold-search', 'team-room'] as const
+type TeamRoomResponse = ReturnType<typeof TeamRoomResponseSchema.parse>
 
 function useServiceStatus() {
   return useQuery({
@@ -77,20 +74,6 @@ function Mark({ ok }: { ok: boolean }) {
   )
 }
 
-function awaitClipboard(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text)
-  const field = document.createElement('textarea')
-  field.value = text
-  field.setAttribute('readonly', '')
-  field.style.position = 'fixed'
-  field.style.opacity = '0'
-  document.body.append(field)
-  field.select()
-  const copied = document.execCommand('copy')
-  field.remove()
-  return copied ? Promise.resolve() : Promise.reject(new Error('Copy is unavailable'))
-}
-
 function CopyCommand() {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
   return (
@@ -100,10 +83,7 @@ function CopyCommand() {
         type="button"
         className="btn sm"
         onClick={() => {
-          void awaitClipboard(SERVICE_COMMAND).then(
-            () => setState('copied'),
-            () => setState('failed'),
-          )
+          void copyText(SERVICE_COMMAND).then((copied) => setState(copied ? 'copied' : 'failed'))
         }}
       >
         {state === 'copied' ? 'Copied' : 'Copy'}
