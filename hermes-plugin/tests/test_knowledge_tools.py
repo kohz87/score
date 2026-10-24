@@ -82,7 +82,7 @@ def test_package_register_adds_tools_even_when_hooks_cannot_start(monkeypatch):
     monkeypatch.setattr(score_bridge, "_sender", None)
     monkeypatch.setattr("score_bridge.client.ScoreClient", lambda *a, **k: (_ for _ in ()).throw(RuntimeError()))
     score_bridge.register(Ctx())
-    assert len(tools) == 11
+    assert len(tools) == 13
 
 
 def test_search_read_list_write_append_shapes_and_request_bodies(bridge):

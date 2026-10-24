@@ -25,7 +25,14 @@ const textOf = (message: ReturnType<typeof messageFromRow>) =>
 function role(sqlite: DatabaseSync, turn: MessageRun): string {
   const exchange = turn.exchange_id ? exchangeRow(sqlite, turn.exchange_id) : null
   const me = turn.agent_id
-  if (!exchange) return 'The person asked you directly.'
+  if (!exchange) {
+    const deciding = sqlite
+      .prepare('SELECT id FROM exchanges WHERE decider_turn_id = ?')
+      .get(turn.turn_id)
+    return deciding
+      ? 'The person asked you, as the lead, to decide on a paused exchange (below).'
+      : 'The person asked you directly.'
+  }
   const other = exchange.to_agent_id === me ? exchange.from_agent_id : exchange.to_agent_id
   if (exchange.kind === 'review' && exchange.to_agent_id === me)
     return `You are reviewing ${other}'s work (round ${exchange.round}). End with an approval or a send-back.`
@@ -45,10 +52,11 @@ function howToAct(coding: boolean, capability: boolean): string {
     return [
       `To route the work, end your final reply with exactly one fenced score-action block holding one JSON action: ${actions}.`,
       'Example:\n```score-action\n{"action":"review","to":"reviewer","note":"Ready for a look."}\n```',
+      'Asked to decide on a paused exchange, use extend {turns, note} or stop_exchange {note} the same way.',
       `No block = no action. ${mention}`,
     ].join('\n')
   return [
-    `To route the work, call one Score tool before your turn ends: score_handoff, score_ask, score_review, score_approve, score_send_back or score_reply (${actions}). It takes effect when your turn ends, one routing action per turn.`,
+    `To route the work, call one Score tool before your turn ends: score_handoff, score_ask, score_review, score_approve, score_send_back or score_reply (${actions}). It takes effect when your turn ends, one routing action per turn. Asked to decide on a paused exchange, use score_extend or score_stop_exchange.`,
     capability
       ? `Pass this capability exactly: ${XTC_CAPABILITY_PLACEHOLDER}. Never write it anywhere else.`
       : '',

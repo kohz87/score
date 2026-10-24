@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import type { DatabaseSync } from 'node:sqlite'
 import {
+  ExchangeDecisionRequestSchema,
   ExchangesResponseSchema,
   JobCreateRequestSchema,
   JobSchema,
@@ -8,7 +10,9 @@ import {
 import type { FastifyInstance, preHandlerHookHandler, onSendHookHandler } from 'fastify'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
+import { decideExchange, stopJob, type Decided } from '../domain/exchanges/decisions.ts'
 import { createJob, jobRow, listExchanges, listJobs } from '../domain/exchanges/store.ts'
+import type { HermesPort } from '../hermes/index.ts'
 import { roomRow } from '../domain/rooms.ts'
 import { HttpError } from '../errors.ts'
 import type { Ingest } from '../hub/ingest.ts'
@@ -20,10 +24,44 @@ export function registerJobRoutes(
   deps: {
     db: ScoreDb
     ingest: Ingest
+    port: HermesPort
     mutation: { preHandler: preHandlerHookHandler[]; onSend: onSendHookHandler }
+    /** Starts the turns a decision queued. */
+    redispatch: () => Promise<void>
   },
 ): void {
-  const { db, ingest, mutation } = deps
+  const { db, ingest, port, mutation, redispatch } = deps
+  const ExchangeParams = z.object({ exchangeId: z.string().min(1).max(64) })
+
+  /** Applies a decision in one transaction, then stops what was running and starts what was queued. */
+  async function decide(apply: (sqlite: DatabaseSync, now: string) => Decided) {
+    let running: Decided['running'] = []
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite, now }) => {
+        const decided = apply(sqlite, now)
+        running = decided.running
+        return decided.drafts
+      },
+    })
+    // A run that won't stop is reported by its own completion; the exchange is already stopped.
+    await Promise.allSettled(running.map((run) => port.stopRun(run)))
+    await redispatch()
+  }
+
+  // PLAN 11.1c: the person's answer to a paused or stuck exchange, and a job's Stop.
+  app.post('/api/exchanges/:exchangeId/decision', mutation, async (request) => {
+    const { exchangeId } = ExchangeParams.parse(request.params)
+    const body = ExchangeDecisionRequestSchema.parse(request.body)
+    await decide((sqlite, now) => decideExchange(sqlite, exchangeId, body, now))
+    return { ok: true }
+  })
+  app.post('/api/jobs/:jobId/stop', mutation, async (request) => {
+    const { jobId } = z.object({ jobId: z.string().min(1).max(64) }).parse(request.params)
+    await decide((sqlite, now) => stopJob(sqlite, jobId, now))
+    return { ok: true }
+  })
   const RoomParams = z.object({ roomId: z.string().min(1).max(256) })
   const JobParams = z.object({ jobId: z.string().min(1).max(64) })
 

@@ -154,7 +154,13 @@ export function registerRoomRoutes(
   app.addHook('preClose', async () => {
     await routing.close()
   })
-  registerJobRoutes(app, { db, ingest, mutation })
+  registerJobRoutes(app, {
+    db,
+    ingest,
+    port,
+    mutation,
+    redispatch: () => routing.dispatch(),
+  })
   registerSessionCompactionRoutes(app, {
     port,
     db,

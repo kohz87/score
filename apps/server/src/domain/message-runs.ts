@@ -45,6 +45,8 @@ export const MessageRunSchema = z.object({
   job_id: z.string().nullable().optional(),
   /** The exchange the turn works in (PLAN 11.1b); null for a turn the person started. */
   exchange_id: z.string().nullable().optional(),
+  /** The person stopped this turn (PLAN 11.1c): its actions are dropped when it completes. */
+  stop_requested_at: z.string().nullable().optional(),
 })
 export type MessageRun = z.infer<typeof MessageRunSchema>
 

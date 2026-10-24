@@ -3,7 +3,7 @@
 exports[`context holds only this job’s messages since the agent’s last turn (snapshot) 1`] = `
 "[Score] You are builder, working on the job "#team" in #team.
 The person asked you directly.
-To route the work, call one Score tool before your turn ends: score_handoff, score_ask, score_review, score_approve, score_send_back or score_reply (handoff {to, note} (pass the work on), ask {to, question} (the answer comes back to you), review {to, note} (when you have the work), approve {note} / send_back {note} (when you review), reply {text} (marks your answer)). It takes effect when your turn ends, one routing action per turn.
+To route the work, call one Score tool before your turn ends: score_handoff, score_ask, score_review, score_approve, score_send_back or score_reply (handoff {to, note} (pass the work on), ask {to, question} (the answer comes back to you), review {to, note} (when you have the work), approve {note} / send_back {note} (when you review), reply {text} (marks your answer)). It takes effect when your turn ends, one routing action per turn. Asked to decide on a paused exchange, use score_extend or score_stop_exchange.
 Pass this capability exactly: {{SCORE_EXCHANGE_CAPABILITY}}. Never write it anywhere else.
 Writing @name only mentions someone; it does not hand anything off.
 

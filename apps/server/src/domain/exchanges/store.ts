@@ -1,6 +1,13 @@
 import { randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { ExchangeSchema, JobSchema, type Exchange, type Job } from '@score/contract'
+import {
+  ExchangeSchema,
+  JobSchema,
+  type Exchange,
+  type ExchangeOption,
+  type ExchangePauseReason,
+  type Job,
+} from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
@@ -35,6 +42,23 @@ const ExchangeRowSchema = z.object({
   budget: z.int(),
   outcome: ExchangeSchema.shape.outcome,
   ended_reason: z.string().nullable(),
+  lead_extended: z.union([z.literal(0), z.literal(1)]),
+  pause_reason: z
+    .enum([
+      'exchange_budget',
+      'job_limit',
+      'spend_cap',
+      'cost_unknown',
+      'turn_failed',
+      'unreachable',
+      'asker_gone',
+      'no_decision',
+      'author_stalled',
+      'question_stopped',
+    ])
+    .nullable(),
+  held: z.string().nullable(),
+  decider_turn_id: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -54,7 +78,63 @@ const jobFromRow = (row: JobRow): Job =>
     updatedAt: row.updated_at,
   })
 
-const exchangeFromRow = (row: ExchangeRow): Exchange =>
+/** What the person can do about a paused exchange (docs/briefs/11.1c-budgets.md). */
+export function pauseOptions(sqlite: DatabaseSync, row: ExchangeRow): ExchangeOption[] {
+  const lead = (
+    sqlite
+      .prepare('SELECT r.lead_agent_id FROM rooms r JOIN jobs j ON j.room_id = r.id WHERE j.id = ?')
+      .get(row.job_id) as { lead_agent_id: string | null } | undefined
+  )?.lead_agent_id
+  const leadMayDecide =
+    lead &&
+    lead !== row.from_agent_id &&
+    lead !== row.to_agent_id &&
+    row.lead_extended === 0 &&
+    row.decider_turn_id === null
+  // Reassigning only makes sense for the turn of the agent the exchange was opened to (not its author's side).
+  const heldAgent = row.held ? (JSON.parse(row.held) as { agentId?: string }).agentId : undefined
+  const reassign: ExchangeOption[] = heldAgent === row.to_agent_id ? ['reassign'] : []
+  const options: Record<ExchangePauseReason, ExchangeOption[]> = {
+    exchange_budget: [
+      'more_turns',
+      ...(leadMayDecide ? ['lead_decides' as const] : []),
+      'step_in',
+      'stop',
+    ],
+    job_limit: [
+      'more_turns',
+      ...(leadMayDecide ? ['lead_decides' as const] : []),
+      'step_in',
+      'stop',
+    ],
+    spend_cap: ['more_spend', 'step_in', 'stop'],
+    cost_unknown: ['continue', 'step_in', 'stop'],
+    turn_failed: ['retry', ...reassign, 'stop'],
+    unreachable: ['retry', ...reassign, 'stop'],
+    asker_gone: ['retry', ...(lead ? ['answer_to_lead' as const] : []), 'stop'],
+    no_decision: ['ask_again', 'send_back', 'close'],
+    author_stalled: ['ask_again', 'close'],
+    question_stopped: ['continue', 'stop'],
+  }
+  return row.pause_reason ? options[row.pause_reason] : []
+}
+
+/** The agent whose turn in another job of the room holds this exchange's queued turn back (§4.6 row 3), or null. */
+function queuedBehind(sqlite: DatabaseSync, row: ExchangeRow): Exchange['queuedBehind'] {
+  if (row.state !== 'live') return null
+  const waiting = sqlite
+    .prepare(
+      `SELECT q.agent_id, q.created_at FROM message_runs q
+       WHERE q.exchange_id = ? AND q.state = 'pending' AND EXISTS (
+         SELECT 1 FROM message_runs busy WHERE busy.room_id = q.room_id AND busy.agent_id = q.agent_id
+           AND busy.state = 'active' AND busy.job_id IS NOT q.job_id)
+       ORDER BY q.created_at LIMIT 1`,
+    )
+    .get(row.id) as { agent_id: string; created_at: string } | undefined
+  return waiting ? { agentId: waiting.agent_id, since: waiting.created_at } : null
+}
+
+const exchangeFromRow = (sqlite: DatabaseSync, row: ExchangeRow): Exchange =>
   ExchangeSchema.parse({
     id: row.id,
     jobId: row.job_id,
@@ -69,6 +149,11 @@ const exchangeFromRow = (row: ExchangeRow): Exchange =>
     budget: row.budget,
     outcome: row.outcome,
     endedReason: row.ended_reason,
+    pause:
+      row.pause_reason && ['paused_budget', 'waiting_on_you'].includes(row.state)
+        ? { reason: row.pause_reason, options: pauseOptions(sqlite, row) }
+        : null,
+    queuedBehind: queuedBehind(sqlite, row),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
@@ -106,7 +191,7 @@ export function listExchanges(sqlite: DatabaseSync, jobId: string): Exchange[] {
         .prepare(`${EXCHANGE_SELECT} WHERE x.job_id = ? ORDER BY x.created_at, x.id`)
         .all(jobId),
     )
-    .map(exchangeFromRow)
+    .map((row) => exchangeFromRow(sqlite, row))
 }
 
 export const jobEvent = (sqlite: DatabaseSync, jobId: string): DomainEventDraft[] => {
@@ -115,7 +200,7 @@ export const jobEvent = (sqlite: DatabaseSync, jobId: string): DomainEventDraft[
 }
 export const exchangeEvent = (sqlite: DatabaseSync, id: string): DomainEventDraft[] => {
   const row = exchangeRow(sqlite, id)
-  return row ? [{ type: 'exchange.upserted', data: exchangeFromRow(row) }] : []
+  return row ? [{ type: 'exchange.upserted', data: exchangeFromRow(sqlite, row) }] : []
 }
 
 /** Changes a job's holder and/or state; returns the event when anything changed. */
@@ -141,7 +226,20 @@ export function updateJob(
 export function updateExchange(
   sqlite: DatabaseSync,
   id: string,
-  change: Partial<Pick<ExchangeRow, 'state' | 'round' | 'outcome' | 'ended_reason'>>,
+  change: Partial<
+    Pick<
+      ExchangeRow,
+      | 'state'
+      | 'round'
+      | 'outcome'
+      | 'ended_reason'
+      | 'pause_reason'
+      | 'held'
+      | 'decider_turn_id'
+      | 'budget'
+      | 'lead_extended'
+    >
+  >,
   now: string,
 ): DomainEventDraft[] {
   const sets = Object.keys(change).map((key) => `${key} = ?`)
@@ -212,4 +310,15 @@ export function createJob(
     .run(id, roomId, title, now, now)
   const drafts = jobEvent(sqlite, id)
   return { job: (drafts[0] as { data: Job }).data, drafts }
+}
+
+/** The newest visible message of a job: what a turn Score starts on the person's behalf is attached to. */
+export function latestMessage(sqlite: DatabaseSync, jobId: string): string {
+  const row = sqlite
+    .prepare(
+      'SELECT id FROM messages WHERE job_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1',
+    )
+    .get(jobId) as { id: string } | undefined
+  if (!row) throw new HttpError(409, 'conflict', 'This job has no messages to continue from.')
+  return row.id
 }

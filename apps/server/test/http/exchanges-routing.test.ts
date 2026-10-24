@@ -161,3 +161,42 @@ test('jobs: create, list, post into one, and its exchanges', async () => {
   expect(exchanges.json()).toMatchObject({ items: [] })
   expect((await app.inject({ url: '/api/jobs/job_nope/exchanges', headers })).statusCode).toBe(404)
 })
+
+test('Pause everyone holds an exchange’s queued turn without spending it; Resume lets it run (11.1c)', async () => {
+  await send({ text: '@builder Build the feed' })
+  await advance(60_000)
+  const job = JobSchema.parse(
+    (await app.inject({ url: `/api/rooms/${roomId}/jobs`, headers })).json().items[0],
+  )
+  const parent = db.sqlite
+    .prepare("SELECT id FROM messages WHERE author_kind = 'agent' AND room_id = ?")
+    .get(roomId) as { id: string }
+  db.sqlite
+    .prepare(
+      `INSERT INTO exchanges (id, job_id, kind, from_agent_id, to_agent_id, state, budget, opened_by_turn_id, created_at, updated_at)
+       VALUES ('xch_p', ?, 'review', 'builder', 'reviewer', 'live', 8, 't', ?, ?)`,
+    )
+    .run(job.id, job.createdAt, job.createdAt)
+  expect((await post('/api/team/pause', {})).statusCode).toBe(200)
+  db.sqlite
+    .prepare(
+      `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents,
+         created_at, exchange_id)
+       VALUES ('reply:pz', ?, 'reviewer', ?, 1, 'pz', ?, 'Review it', '["builder","reviewer"]', ?, 'xch_p')`,
+    )
+    .run(roomId, parent.id, parent.id, new Date(scheduler.now()).toISOString())
+  await advance(60_000)
+  const turnsUsed = () =>
+    (
+      db.sqlite.prepare("SELECT turns_used FROM exchanges WHERE id = 'xch_p'").get() as {
+        turns_used: number
+      }
+    ).turns_used
+  expect(turnsUsed()).toBe(0)
+  expect(db.sqlite.prepare("SELECT state FROM message_runs WHERE turn_id = 'pz'").get()).toEqual({
+    state: 'pending',
+  })
+  expect((await post('/api/team/resume', {})).statusCode).toBe(200)
+  await advance(60_000)
+  expect(turnsUsed()).toBe(1)
+})

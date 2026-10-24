@@ -275,6 +275,8 @@ const exchange = {
   budget: 8,
   outcome: null,
   endedReason: null,
+  pause: { reason: 'exchange_budget', options: ['more_turns', 'lead_decides', 'step_in', 'stop'] },
+  queuedBehind: null,
   createdAt: '2026-10-24T00:00:00.000Z',
   updatedAt: '2026-10-24T00:00:00.000Z',
 }
@@ -303,6 +305,13 @@ const exchangeCases = [
   ['JobsResponseSchema', { asOfSeq: 1, items: [job] }, { items: [job] }],
   ['JobCreateRequestSchema', { title: 'Release notes' }, { title: '  ' }],
   ['ExchangesResponseSchema', { asOfSeq: 1, items: [exchange] }, { asOfSeq: 1, items: [job] }],
+  ['ExchangePauseReasonSchema', 'asker_gone', 'tired'],
+  ['ExchangeOptionSchema', 'answer_to_lead', 'shrug'],
+  [
+    'ExchangeDecisionRequestSchema',
+    { option: 'more_turns', turns: 4 },
+    { option: 'more_turns', turns: 50 },
+  ],
 ] as const
 
 const cases = [

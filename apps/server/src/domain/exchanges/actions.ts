@@ -60,6 +60,12 @@ export function roomMembers(sqlite: DatabaseSync, roomId: string): string[] {
 export const isRouting = (action: ExchangeAction['action']): boolean =>
   ROUTING_ACTIONS.includes(action)
 
+/** One action per group and turn: routing, the answer mark, or the lead's decision on a budget pause. */
+export function actionGroup(action: ExchangeAction['action']): 'routing' | 'reply' | 'decision' {
+  if (isRouting(action)) return 'routing'
+  return action === 'reply' ? 'reply' : 'decision'
+}
+
 const StoredSchema = z.object({
   command_id: z.string(),
   action: z.string(),
@@ -94,6 +100,23 @@ function whyNot(sqlite: DatabaseSync, turn: Turn, action: ExchangeAction): [stri
   if (routing !== 'exchanges' || !turn.job_id)
     return ['not_allowed', 'This room hands work on with @mentions, not with actions.']
   const exchange = turn.exchange_id ? exchangeRow(sqlite, turn.exchange_id) : null
+  // The lead's turn deciding a budget pause may only extend or stop that exchange, and nothing else may.
+  const deciding = sqlite
+    .prepare("SELECT id FROM exchanges WHERE decider_turn_id = ? AND state = 'paused_budget'")
+    .get(turn.turn_id) as { id: string } | undefined
+  if (actionGroup(action.action) === 'decision') {
+    if (!deciding)
+      return [
+        'not_allowed',
+        'Only the lead, when asked to decide on a paused exchange, can do that.',
+      ]
+    const budget = jobRow(sqlite, turn.job_id)?.exchange_budget ?? 0
+    if (action.action === 'extend' && action.turns > budget)
+      return ['not_allowed', `You can give at most ${budget} more turns.`]
+    return null
+  }
+  if (deciding)
+    return ['not_allowed', 'This turn only decides the paused exchange: extend it or stop it.']
   if ('to' in action) {
     if (action.to === turn.agent_id) return ['self', 'You can’t send this to yourself.']
     if (!roomMembers(sqlite, turn.room_id).includes(action.to))
@@ -127,6 +150,8 @@ function whyNot(sqlite: DatabaseSync, turn: Turn, action: ExchangeAction): [stri
         ? ['not_allowed', 'Questions can’t be nested deeper; answer with what you have.']
         : null
     case 'handoff':
+    case 'extend':
+    case 'stop_exchange':
       return null
   }
 }
@@ -147,6 +172,10 @@ function plainReceipt(sqlite: DatabaseSync, turn: Turn, action: ExchangeAction):
       return `Goes back to ${author} with your notes when your turn ends.`
     case 'reply':
       return `This will be your answer to ${author}.`
+    case 'extend':
+      return `The exchange gets ${action.turns} more turns when your turn ends.`
+    case 'stop_exchange':
+      return 'The exchange stops when your turn ends.'
   }
 }
 
@@ -200,7 +229,9 @@ export function stageAction(
         .prepare("SELECT * FROM exchange_actions WHERE turn_id = ? AND state = 'staged'")
         .all(turn.turn_id),
     )
-    .find((row) => isRouting(row.action as ExchangeAction['action']) === isRouting(action.action))
+    .find(
+      (row) => actionGroup(row.action as ExchangeAction['action']) === actionGroup(action.action),
+    )
   if (earlier) {
     const replaces = 'replaces' in action ? action.replaces : undefined
     if (action.action !== 'reply' && replaces !== earlier.command_id)
