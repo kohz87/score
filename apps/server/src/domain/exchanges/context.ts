@@ -44,7 +44,8 @@ function role(sqlite: DatabaseSync, turn: MessageRun): string {
 function howToAct(coding: boolean, capability: boolean): string {
   const actions =
     'handoff {to, note} (pass the work on), ask {to, question} (the answer comes back to you), review {to, note} ' +
-    '(when you have the work), approve {note} / send_back {note} (when you review), reply {text} (marks your answer)'
+    '(when you have the work), approve {note} / send_back {note} (when you review), reply {text} (marks your answer); ' +
+    'review, approve and send_back may add comments: up to 20 {path, line, text} notes pinned to lines of changed files'
   const mention = 'Writing @name only mentions someone; it does not hand anything off.'
   if (coding)
     return [

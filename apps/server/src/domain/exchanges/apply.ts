@@ -1,3 +1,4 @@
+import { recordComments } from './review-comments.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { ExchangeActionSchema, type ExchangeAction, type MessagePart } from '@score/contract'
 import { z } from 'zod'
@@ -287,6 +288,7 @@ export function settleExchangeTurn(
 
   // 2. The routing action, unless it was the verdict handled above; against the exchange as step 1 left it.
   const current = exchange ? exchangeRow(sqlite, exchange.id) : null
+  const before = routing?.action === 'review' ? latestReview(sqlite, jobId, me) : null
   if (routing?.action === 'handoff' || routing?.action === 'ask' || routing?.action === 'review')
     drafts.push(
       ...route(
@@ -297,6 +299,19 @@ export function settleExchangeTurn(
         now,
       ),
     )
+  // Line notes (11.6a): a verdict's notes belong to the review it answered; a review request's to the exchange it opened.
+  const where = { jobId, turnId: mapping.turn_id, agentId: me }
+  if (
+    (routing?.action === 'approve' || routing?.action === 'send_back') &&
+    exchange?.kind === 'review' &&
+    exchange.to_agent_id === me
+  )
+    recordComments(sqlite, { ...where, exchangeId: exchange.id }, routing, now)
+  if (routing?.action === 'review') {
+    const opened = latestReview(sqlite, jobId, me)
+    if (opened && opened !== before)
+      recordComments(sqlite, { ...where, exchangeId: opened }, routing, now)
+  }
   settle('applied')
 
   // 3. A prose @mention of a teammate hands nothing off in this room: say so, so it isn't mistaken for one.
@@ -606,4 +621,14 @@ function route(
     }
   }
   return drafts
+}
+
+/** The newest review exchange an agent opened in the job, to tell whether its review request went out. */
+function latestReview(sqlite: DatabaseSync, jobId: string, agentId: string): string | null {
+  const row = sqlite
+    .prepare(
+      "SELECT id FROM exchanges WHERE job_id = ? AND from_agent_id = ? AND kind = 'review' ORDER BY created_at DESC, rowid DESC LIMIT 1",
+    )
+    .get(jobId, agentId) as { id: string } | undefined
+  return row?.id ?? null
 }
