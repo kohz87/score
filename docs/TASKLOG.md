@@ -879,3 +879,23 @@ One entry per completed task: what landed, review results, and any **rejected re
   now, and scrolling into view stops above the phone tab bar (`scroll-padding-bottom`). Also exact e2e locators, the
   missing navigation in the reachability test, and a compare-script merge with 11.10f. Full check green (web 3,011);
   classic settings e2e 7/7; bold settings/team/search/shell 34/34 after merging main. Not deployed.
+- **11.6a Workbench data (lead, 2026-10-24).** `GET /api/jobs/:id/workbench` (S, read-only — no route under it takes
+  input, tested): per-line authorship replayed from the job's editor watch frames (a line belongs to whoever last wrote
+  it; context lines known without an author; `exact: false` for position-less fragments, cut diffs, the 2,000-frame and
+  200k-line bounds), each agent's last edit position, review notes pinned to lines, drafts and each agent's newest
+  frame. Notes come from optional `comments` on `review`/`approve`/`send_back` (contract, the plugin's `score_*` tools,
+  coding agents' `score-action`, the agents' instructions), stored in migration 0085 `review_comments` when the action
+  applies; on read a note moves with edits above it and is `outdated` once its line changes or goes. Fake team room:
+  the activity-feed job shows builder's lines, an outdated send-back note and a live approval note. No Hermes "Bot
+  Screen" frames exist today (Watch has terminal/editor/browser only), so that part waits for Hermes. **Sonnet review:
+  3 P1, 5 P2, 3 P3 — all real but one, fixed with tests:** replay was quadratic (a 30k-line write blocked the server for
+  30 s on an unauthenticated read; now one splice per hunk, bounded frames and lines: 30k lines in well under 2 s); a
+  second file header inside one frame was replayed as content (hunks now end by their counts); a repeat review request
+  lost its notes (`route` returns the exchange it used); verdict notes stored when the verdict wasn't applied (now only
+  for a live review); ICU ordering of timestamps and arbitrary ties between agents (plain order, rowid); a fragment
+  marker matched any hunk heading starting " fragment"; a fragment erased the agent's cursor; relative vs absolute paths
+  (unique suffix match); notes on credential files now keep only that they exist; plugin limits counted code points
+  (now UTF-16 units) and allowed blank paths. Rejected: "notes pinned at settle time, not when the agent looked" — a
+  reviewer's own edits in the same turn come before its verdict, and concurrent turns of other agents in one job don't
+  happen (one turn per agent, the job's exchanges serialise); `-0,0` from an agent's patch against an existing file — the
+  patch tool fails on it, so no frame is recorded. Not deployed.

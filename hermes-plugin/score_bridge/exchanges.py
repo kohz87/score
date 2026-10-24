@@ -54,6 +54,21 @@ _REPLACES_PROP = {
 _NOTE_PROP = {"type": "string", "minLength": 1, "description": "Note for the recipient (at most 4000 UTF-8 bytes)."}
 _QUESTION_PROP = {"type": "string", "minLength": 1, "description": "Question for the recipient (at most 4000 UTF-8 bytes)."}
 _TEXT_PROP = {"type": "string", "minLength": 1, "description": "The answer text (at most 8000 UTF-8 bytes)."}
+_COMMENTS_PROP = {
+    "type": "array",
+    "maxItems": 20,
+    "description": "Optional notes pinned to lines of files you or others changed in this job (shown on those lines).",
+    "items": {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "minLength": 1, "maxLength": 1024, "description": "The file path as edited."},
+            "line": {"type": "integer", "minimum": 1, "maximum": 1000000, "description": "Line number in the file now."},
+            "text": {"type": "string", "minLength": 1, "description": "The note (at most 1000 UTF-8 bytes)."},
+        },
+        "required": ["path", "line", "text"],
+        "additionalProperties": False,
+    },
+}
 
 
 def _routing_schema(description: str, action_prop: tuple[str, dict], required: list[str]) -> dict:
@@ -85,6 +100,7 @@ SCHEMAS = {
         "Ask another agent to review the work.", ("note", _NOTE_PROP), ["to", "note"]
     ),
 }
+SCHEMAS["score_review"]["parameters"]["properties"]["comments"] = _COMMENTS_PROP
 SCHEMAS["score_approve"] = {
     "description": _COMMON + " Approve the work you are reviewing.",
     "parameters": {
@@ -94,6 +110,7 @@ SCHEMAS["score_approve"] = {
             "note": _NOTE_PROP,
             "command_id": _COMMAND_PROP,
             "replaces": _REPLACES_PROP,
+            "comments": _COMMENTS_PROP,
         },
         "required": ["capability", "note"],
         "additionalProperties": False,
@@ -108,6 +125,7 @@ SCHEMAS["score_send_back"] = {
             "note": _NOTE_PROP,
             "command_id": _COMMAND_PROP,
             "replaces": _REPLACES_PROP,
+            "comments": _COMMENTS_PROP,
         },
         "required": ["capability", "note"],
         "additionalProperties": False,
@@ -169,7 +187,29 @@ DESCRIPTIONS = {
     "score_stop_exchange": "As the lead, stop a paused Score exchange.",
 }
 
-_TYPES = {"string": str, "integer": int, "null": type(None)}
+_TYPES = {"string": str, "integer": int, "null": type(None), "array": list}
+
+
+def _comments_problem(spec: dict, items: list) -> str | None:
+    if len(items) > spec.get("maxItems", len(items)):
+        return f"comments: at most {spec['maxItems']}"
+    for item in items:
+        if not isinstance(item, dict) or set(item) != {"path", "line", "text"}:
+            return "each comment needs exactly path, line and text"
+        path, line, text = item["path"], item["line"], item["text"]
+        # Server limits count UTF-16 units; a path of only spaces names nothing.
+        if (
+            type(path) is not str
+            or not path.strip()
+            or len(path.encode("utf-16-le")) // 2 > 1024
+            or any(c in path for c in "\0\r\n")
+        ):
+            return "comment path is not valid"
+        if type(line) is not int or not 1 <= line <= 1000000:
+            return "comment line must be between 1 and 1000000"
+        if type(text) is not str or not text or "\0" in text or len(text.encode("utf-8")) > 1000:
+            return "comment text must be 1 to 1000 UTF-8 bytes"
+    return None
 
 
 def _validate(schema: dict, args) -> str | None:
@@ -188,6 +228,11 @@ def _validate(schema: dict, args) -> str | None:
         kinds = spec["type"] if isinstance(spec["type"], list) else [spec["type"]]
         if not any(type(value) is _TYPES[k] for k in kinds):
             return f"{name} must be {' or '.join(kinds)}"
+        if type(value) is list:
+            problem = _comments_problem(spec, value)
+            if problem:
+                return problem
+            continue
         if type(value) is int and not spec.get("minimum", value) <= value <= spec.get("maximum", value):
             return f"{name} must be between {spec['minimum']} and {spec['maximum']}"
         if type(value) is not str:
@@ -226,6 +271,8 @@ def _action(name: str, args: dict) -> dict:
         action = {"action": "reply", "text": args["text"]}
     if "replaces" in args:
         action["replaces"] = args["replaces"]
+    if "comments" in args and name in ("score_review", "score_approve", "score_send_back"):
+        action["comments"] = args["comments"]
     return action
 
 

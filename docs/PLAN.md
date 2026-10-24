@@ -604,7 +604,7 @@ its Workbench tab; never opens on raw code; empty state (09). Done when: e2e on 
 reduced motion; screenshots vs 01/02; TASKLOG records fix rounds, Sonnet findings (real vs rejected) and the lead's
 rework, and the owner is told the pilot result.
 
-**11.6a Workbench data** · **Lead** · `GET /api/jobs/:id/workbench`: per-line authorship from ordered diffs
+**11.6a Workbench data** ✅ · **Lead** · `GET /api/jobs/:id/workbench`: per-line authorship from ordered diffs
 (`line-diff.ts`), review comments on lines from `review`/`send_back` (migration 0085), last edit position, drafts,
 latest screen frame; Hermes Bot Screen frames read-only when present. Done when: authorship test over interleaved edits
 by two agents; comments survive later edits or are marked outdated; nothing exposes a keyboard or takeover path.

@@ -15,6 +15,19 @@ export const ResultChangeLineSchema = z.object({
   caught: z.boolean(),
 })
 
+/** A document or workspace file an agent attached in the job (also listed in the Workbench). */
+export const ResultDraftSchema = z.object({
+  kind: z.literal('draft'),
+  id: z.string().min(1),
+  agentId: AgentIdSchema,
+  title: z.string(),
+  target: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('document'), mediaId: z.string().min(1) }),
+    z.object({ kind: z.literal('workspace'), path: z.string().min(1) }),
+  ]),
+  at,
+})
+
 export const ResultCardSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('change'),
@@ -45,17 +58,7 @@ export const ResultCardSchema = z.discriminatedUnion('kind', [
     live: z.boolean(),
     at,
   }),
-  z.object({
-    kind: z.literal('draft'),
-    id: z.string().min(1),
-    agentId: AgentIdSchema,
-    title: z.string(),
-    target: z.discriminatedUnion('kind', [
-      z.object({ kind: z.literal('document'), mediaId: z.string().min(1) }),
-      z.object({ kind: z.literal('workspace'), path: z.string().min(1) }),
-    ]),
-    at,
-  }),
+  ResultDraftSchema,
 ])
 export type ResultCard = z.infer<typeof ResultCardSchema>
 
