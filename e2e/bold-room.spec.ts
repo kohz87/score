@@ -425,8 +425,11 @@ for (const viewport of sizes) {
       const href = '/b?job=job-queue&message=message-queue'
       const result = page.getByRole('link', { name: 'Open result: Queue research' })
       if (viewport.width <= 860) {
-        // The phone's list row is the result; the result link is a desktop stream card. Follow the same target.
-        await expect(page.getByRole('button', { name: /^Queue research\. Done/ })).toBeVisible()
+        // The phone's list row is the result: tapping it opens the job. The seek target is the same link as the desktop
+        // card's, so it is then followed as a link (Search and notifications open it the same way).
+        await page.getByRole('button', { name: /^Queue research\. Done/ }).click()
+        await expect(page).toHaveURL(/[?&]job=job-queue/)
+        await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
         await page.goto(href)
       } else {
         await expect(result).toHaveAttribute('href', href)

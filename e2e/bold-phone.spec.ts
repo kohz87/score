@@ -154,13 +154,13 @@ for (const size of sizes) {
       await composer.fill('A note to the team.')
       await page.getByRole('button', { name: 'Send', exact: true }).click()
       await expect(composer).toHaveValue('')
-      expect(
-        state.requests.find(
-          (request) =>
-            request.method === 'POST' && request.path === '/api/rooms/team-room/messages',
-        )?.body,
-      ).toEqual(expect.objectContaining({ text: 'A note to the team.' }))
-      // From the list the composer sends with no jobId; the server files it in the default job (as All does on desktop).
+      const sent = state.requests.find(
+        (request) => request.method === 'POST' && request.path === '/api/rooms/team-room/messages',
+      )?.body as Record<string, unknown> | undefined
+      expect(sent).toEqual(expect.objectContaining({ text: 'A note to the team.' }))
+      // From the list the composer sends with no jobId, so the server files it in the default job (as All does on
+      // desktop): any other job here would be a regression.
+      expect(sent && 'jobId' in sent ? sent['jobId'] : undefined).toBeUndefined()
 
       await teamRow.click()
       await expect(page).toHaveURL(/job=job-default/)
