@@ -67,7 +67,7 @@ function stubRoom(exchange: Exchange | null, decided = approval) {
   return fetchMock
 }
 
-test('an approval and a paused exchange are protected decision cards with their job', async () => {
+test('an approval leads the pins, the count expands the rest, and both are protected', async () => {
   stubRoom(makeExchange())
   renderInRoom(
     <RoomRequests
@@ -89,6 +89,12 @@ test('an approval and a paused exchange are protected decision cards with their 
   expect(approvalCard.textContent).toContain('npm install ws@8')
   expect(approvalCard.textContent).toContain('Activity feed')
 
+  const pins = screen.getByLabelText('Needs you')
+  expect(pins.getAttribute('data-expanded')).toBe('false')
+  fireEvent.click(await screen.findByRole('button', { name: '1 more needs you' }))
+  expect(pins.getAttribute('data-expanded')).toBe('true')
+  expect(screen.getByRole('button', { name: 'Show fewer' })).toBeDefined()
+
   const exchangeCard = await screen.findByRole('article', {
     name: /The exchange used its turns/,
   })
@@ -96,7 +102,7 @@ test('an approval and a paused exchange are protected decision cards with their 
   expect(exchangeCard.textContent).toContain('8 of 8 turns')
 })
 
-test('Allow sends the approval decision once and shows the resolved choice', async () => {
+test('Allow sends the approval decision once and the answered card goes', async () => {
   const fetchMock = stubRoom(null)
   renderInRoom(
     <RoomRequests
@@ -114,7 +120,9 @@ test('Allow sends the approval decision once and shows the resolved choice', asy
   )
 
   fireEvent.click(await screen.findByRole('button', { name: 'Allow' }))
-  await screen.findByText('Approved by you')
+  await waitFor(() =>
+    expect(screen.queryByRole('article', { name: /May I install a package/ })).toBeNull(),
+  )
   const post = fetchMock.mock.calls.find(
     ([url, init]) =>
       String(url) === '/api/approvals/approval-1/decision' && init?.method === 'POST',
@@ -135,7 +143,9 @@ test('send back asks for the note the exchange decision needs, then posts it', a
   fireEvent.change(note, { target: { value: 'Add the migration steps.' } })
   fireEvent.click(screen.getByRole('button', { name: 'Send back' }))
 
-  await screen.findByText('Sent back with your note.')
+  await waitFor(() =>
+    expect(screen.queryByRole('article', { name: /review ended without a verdict/ })).toBeNull(),
+  )
   const post = fetchMock.mock.calls.find(
     ([url, init]) =>
       String(url) === '/api/exchanges/exchange-1/decision' && init?.method === 'POST',
@@ -145,6 +155,72 @@ test('send back asks for the note the exchange decision needs, then posts it', a
     option: 'send_back',
     note: 'Add the migration steps.',
   })
+})
+
+test('More offers this session and always for the asking agent', async () => {
+  const fetchMock = stubRoom(null)
+  renderInRoom(
+    <RoomRequests
+      jobs={[job]}
+      agents={[]}
+      selectedJob="all"
+      messages={[
+        makeMessage({
+          id: 'approval:approval-1',
+          jobId: job.id,
+          parts: [{ kind: 'approval', approvalId: approval.id }],
+        }),
+      ]}
+    />,
+  )
+
+  fireEvent.click(await screen.findByRole('button', { name: 'More' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Approve for this session' }))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url) === '/api/approvals/approval-1/decision' && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  )
+  expect(JSON.parse(String(fetchMock.mock.calls.at(-1)![1]!.body))).toEqual({ choice: 'session' })
+})
+
+test('a failed delivery explains the retry and keeps the approval open', async () => {
+  vi.stubGlobal(
+    'fetch',
+    mockFetch((url) => {
+      if (url === '/api/approvals?status=all')
+        return jsonResponse({
+          asOfSeq: 1,
+          items: [{ ...approval, delivery: 'failed' }],
+          nextCursor: null,
+        })
+      return jsonResponse({ asOfSeq: 0, items: [] })
+    }),
+  )
+  renderInRoom(<RoomRequests jobs={[job]} agents={[]} selectedJob="all" messages={[]} />)
+  await screen.findByText('Couldn’t deliver your answer. Try again.')
+  expect(screen.getByRole('button', { name: 'Allow' })).toBeDefined()
+})
+
+test('an approval answered outside Score says where to answer it', async () => {
+  vi.stubGlobal(
+    'fetch',
+    mockFetch((url) => {
+      if (url === '/api/approvals?status=all')
+        return jsonResponse({
+          asOfSeq: 1,
+          items: [{ ...approval, origin: 'gateway', actionable: false }],
+          nextCursor: null,
+        })
+      return jsonResponse({ asOfSeq: 0, items: [] })
+    }),
+  )
+  renderInRoom(<RoomRequests jobs={[job]} agents={[]} selectedJob="all" messages={[]} />)
+  await screen.findByText('Answer it in the chat app the agent asked in.')
+  expect(screen.queryByRole('button', { name: 'Allow' })).toBeNull()
 })
 
 test('a send-back without a note says what is missing and posts nothing', async () => {

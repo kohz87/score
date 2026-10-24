@@ -128,12 +128,15 @@ for (const viewport of sizes) {
         name: /The review ended without a verdict/,
       })
       await expect(approval).toHaveAttribute('data-protected', 'flex')
+      await expect(review).toBeHidden()
+      await page.getByRole('button', { name: '1 more needs you' }).click()
       await expect(review).toHaveAttribute('data-protected', 'flex')
+      await expect(review).toBeVisible()
       await expect(approval).toContainText('npm install ws@8')
       await expect(review).toContainText('Release notes 2.4')
 
       await approval.getByRole('button', { name: 'Allow', exact: true }).click()
-      await expect(approval.getByRole('status')).toContainText('Approved by you')
+      await expect(approval).toHaveCount(0)
       expect(
         state.requests.find(
           (request) =>
@@ -145,7 +148,7 @@ for (const viewport of sizes) {
       await review.getByRole('button', { name: 'Send back', exact: true }).click()
       await review.getByLabel('Note for the author').fill('Add the 2.3 migration steps.')
       await review.getByRole('button', { name: 'Send back', exact: true }).click()
-      await expect(review.getByRole('status')).toContainText('Sent back with your note.')
+      await expect(review).toHaveCount(0)
       expect(
         state.requests.find(
           (request) =>

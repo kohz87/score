@@ -106,3 +106,10 @@ export function exchangeStatus(exchange: Exchange): string {
 export function exchangeTurns(exchange: Exchange): string {
   return `${exchange.turnsUsed} of ${exchange.budget} turns`
 }
+
+/** The prototype's expand chip: the first card stays visible, the rest wait behind its count. */
+export function pinsMoreLabel(count: number, expanded: boolean): string | null {
+  if (count <= 1) return null
+  if (expanded) return 'Show fewer'
+  return `${count - 1} more need${count === 2 ? 's' : ''} you`
+}

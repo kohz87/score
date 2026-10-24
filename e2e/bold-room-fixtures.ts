@@ -10,6 +10,11 @@ export interface RoomRequest {
   body: unknown
 }
 
+export interface BoldRoomReply {
+  body: unknown
+  status?: number
+}
+
 export interface BoldRoomOptions {
   /** No named jobs and no messages: board 09. */
   empty?: boolean
@@ -17,6 +22,14 @@ export interface BoldRoomOptions {
   uploadDelay?: number
   /** Replace the paused review with another contract-valid pause (the seeded fake has no send-back fixture). */
   exchange?: Json
+  /** Replace the approval list (an empty list isolates a run-safety card). */
+  approvals?: Json[]
+  /** Replace the room's exchanges, across the named jobs. */
+  exchanges?: Json[]
+  /** Replace the room's job list (a run-safety card needs a recipe-linked job). */
+  jobs?: Json[]
+  /** Answer reads the fixtures do not cover, before the defaults; `undefined` falls through. */
+  handle?: (request: RoomRequest) => BoldRoomReply | undefined | Promise<BoldRoomReply | undefined>
 }
 
 const at = (minute: number) => `2026-10-24T10:${String(minute).padStart(2, '0')}:00.000Z`
@@ -334,8 +347,11 @@ function sentMessage(body: Json, index: number) {
 
 /** Routes the bold room's reads and mutations to stable contract-shaped fixtures; every other API stays real. */
 export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
-  const visibleJobs = options.empty ? jobs.filter((item) => item.isDefault) : jobs
-  const exchanges = [options.exchange ?? defaultExchange]
+  const visibleJobs = options.empty
+    ? (options.jobs ?? jobs).filter((item) => item.isDefault)
+    : (options.jobs ?? jobs)
+  const exchanges = options.exchanges ?? [options.exchange ?? defaultExchange]
+  const approvals = options.approvals ?? [approval]
   const pins = new Map([['message-pinned', 'Event cursors are (created_at, id).']])
   const requests: RoomRequest[] = []
   let sent = 0
@@ -354,6 +370,9 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
       }
     }
     requests.push({ method, path, search: url.searchParams, body })
+
+    const handled = await options.handle?.({ method, path, search: url.searchParams, body })
+    if (handled) return response(route, handled.body, handled.status)
 
     if (path === '/api/stream') return route.fulfill({ status: 204 })
     if (method === 'GET' && path === '/api/team-room')
@@ -431,7 +450,7 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
     if (method === 'GET' && path === '/api/approvals')
       return response(route, {
         asOfSeq: 12,
-        items: options.empty ? [] : [approval],
+        items: options.empty ? [] : approvals,
         nextCursor: null,
       })
     if (method === 'POST' && path === `/api/approvals/${approval.id}/decision`) {

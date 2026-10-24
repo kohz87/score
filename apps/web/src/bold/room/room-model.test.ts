@@ -9,6 +9,7 @@ import {
   jobStateLabel,
   needsYou,
   optionLabel,
+  pinsMoreLabel,
 } from './room-model.ts'
 import { makeExchange, makeJob } from './room-test-utils.tsx'
 
@@ -96,4 +97,12 @@ test('capsule status and turns read from the exchange, not from its job', () => 
   expect(exchangeStatus(makeExchange({ pause: null, state: 'live', round: 2 }))).toBe(
     'round 2 · working',
   )
+})
+
+test('the pins chip uses the prototype’s singular and plural count', () => {
+  expect(pinsMoreLabel(0, false)).toBeNull()
+  expect(pinsMoreLabel(1, false)).toBeNull()
+  expect(pinsMoreLabel(2, false)).toBe('1 more needs you')
+  expect(pinsMoreLabel(3, false)).toBe('2 more need you')
+  expect(pinsMoreLabel(3, true)).toBe('Show fewer')
 })

@@ -1,26 +1,34 @@
 import type {
   AgentSummary,
   Approval,
+  ApprovalChoice,
   Exchange,
   ExchangeOption,
   Job,
   Message,
 } from '@score/contract'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
-import { approvalOutcome, useApprovalDecision } from '../../routes/chat/ApprovalCard.tsx'
+import {
+  approvalOutcome,
+  useApprovalDecision,
+  whereToAnswer,
+} from '../../routes/chat/ApprovalCard.tsx'
 import { approvalsQuery } from '../../routes/chat/queries.ts'
 import { agentNameColor } from '../bold-agents.ts'
+import { ChevronIcon } from '../BoldIcons.tsx'
 import {
   exchangePauseAsk,
   exchangePauseTitle,
   exchangeTurns,
   needsYou,
   optionLabel,
+  pinsMoreLabel,
 } from './room-model.ts'
-import { jobExchangesQuery } from './room-queries.ts'
+import { roomExchangesQuery } from './room-queries.ts'
+import { RunSafetyRequests, type CountCards } from './RunSafetyRequests.tsx'
 
 type PendingOption = ExchangeOption | null
 
@@ -55,20 +63,28 @@ function decisionError(failure: unknown): string {
   return 'Couldn’t send that decision. Try again.'
 }
 
+function useReportedCount(id: string, count: number, report: CountCards) {
+  useEffect(() => {
+    report(id, count)
+  }, [count, id, report])
+  useEffect(() => () => report(id, 0), [id, report])
+}
+
 function ExchangeRequestCard({
   exchange,
   job,
   agents,
+  onAnswered,
 }: {
   exchange: Exchange
   job: Job
   agents: AgentSummary[]
+  onAnswered: (id: string) => void
 }) {
   const from = agents.find((agent) => agent.id === exchange.from)
   const to = agents.find((agent) => agent.id === exchange.to)
   const [pending, setPending] = useState<PendingOption>(null)
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const options = exchange.pause?.options ?? []
   const reassignChoices = agents.filter(
@@ -108,8 +124,7 @@ function ExchangeRequestCard({
         method: 'POST',
         body: JSON.stringify(body),
       })
-      setSent(option === 'send_back' ? 'Sent back with your note.' : 'Decision sent.')
-      setPending(null)
+      onAnswered(exchange.id)
     } catch (failure) {
       setError(decisionError(failure))
     } finally {
@@ -208,7 +223,7 @@ function ExchangeRequestCard({
         </div>
       )}
 
-      {pending === null && !sent && (
+      {pending === null && (
         <span className="row wrap">
           {options.map((option, index) => (
             <button
@@ -223,11 +238,6 @@ function ExchangeRequestCard({
           ))}
         </span>
       )}
-      {sent && (
-        <span className="bold-request-sent" role="status">
-          {sent}
-        </span>
-      )}
       {error && (
         <span className="bold-request-error" role="alert">
           {error}
@@ -237,14 +247,37 @@ function ExchangeRequestCard({
   )
 }
 
-function JobRequests({ job, agents }: { job: Job; agents: AgentSummary[] }) {
-  const definition = useMemo(() => jobExchangesQuery(job.id), [job.id])
+function RoomExchanges({
+  jobs,
+  agents,
+  dismissed,
+  report,
+  onAnswered,
+}: {
+  jobs: Job[]
+  agents: AgentSummary[]
+  dismissed: ReadonlySet<string>
+  report: CountCards
+  onAnswered: (id: string) => void
+}) {
+  const definition = useMemo(() => roomExchangesQuery(jobs.map((job) => job.id)), [jobs])
   const exchanges = useStreamQuery(definition).data ?? []
+  const visible = exchanges.filter((exchange) => needsYou(exchange) && !dismissed.has(exchange.id))
+  useReportedCount('exchanges', visible.length, report)
   return (
     <>
-      {exchanges.filter(needsYou).map((exchange) => (
-        <ExchangeRequestCard key={exchange.id} exchange={exchange} job={job} agents={agents} />
-      ))}
+      {visible.map((exchange) => {
+        const job = jobs.find((item) => item.id === exchange.jobId)
+        return job ? (
+          <ExchangeRequestCard
+            key={exchange.id}
+            exchange={exchange}
+            job={job}
+            agents={agents}
+            onAnswered={onAnswered}
+          />
+        ) : null
+      })}
     </>
   )
 }
@@ -253,17 +286,29 @@ function ApprovalRequestCard({
   approval,
   job,
   agents,
+  onAnswered,
 }: {
   approval: Approval
   job: Job | undefined
   agents: AgentSummary[]
+  onAnswered: (id: string) => void
 }) {
-  const { posted, busy, error, decide } = useApprovalDecision(approval.id)
+  const { posted, busy, error, decide: submit } = useApprovalDecision(approval.id)
+  const [more, setMore] = useState(false)
   const current = posted && approval.delivery === 'none' ? posted : approval
   const agent = agents.find((item) => item.id === current.agentId)
   const outcome = approvalOutcome(current)
-  const open = current.actionable && outcome === null && !busy
+  const retrying = current.actionable && current.delivery === 'failed'
+  const open = current.actionable && (outcome === null || retrying) && !busy
+  const showButtons = current.actionable && (outcome === null || retrying)
   const choices = current.choices
+
+  async function decide(choice: ApprovalChoice) {
+    setMore(false)
+    const result = await submit(choice)
+    if (result && result.delivery !== 'failed') onAnswered(current.id)
+  }
+
   return (
     <article
       className="bold-request bold-approval"
@@ -277,48 +322,66 @@ function ApprovalRequestCard({
         {job && <span className="bold-request-job">{job.title}</span>}
       </div>
       {current.command && <code className="bold-request-command">{current.command}</code>}
-      <span className="row wrap">
-        {choices.includes('once') && (
-          <button
-            type="button"
-            className="btn sm"
-            disabled={!open}
-            onClick={() => void decide('once')}
-          >
-            Allow
-          </button>
-        )}
-        {!choices.includes('once') && choices.includes('session') && (
-          <button
-            type="button"
-            className="btn sm"
-            disabled={!open}
-            onClick={() => void decide('session')}
-          >
-            Allow for this session
-          </button>
-        )}
-        {choices.includes('deny') && (
-          <button
-            type="button"
-            className="btn sm ghost"
-            disabled={!open}
-            onClick={() => void decide('deny')}
-          >
-            Don’t allow
-          </button>
-        )}
-        {choices.includes('always') && (
-          <button
-            type="button"
-            className="btn sm ghost"
-            disabled={!open}
-            onClick={() => void decide('always')}
-          >
-            Always allow for {current.agentId}
-          </button>
-        )}
-      </span>
+      {!current.actionable && outcome === null && whereToAnswer(current)}
+      {retrying && (
+        <span className="bold-request-failed">Couldn’t deliver your answer. Try again.</span>
+      )}
+      {showButtons && (
+        <span className="row wrap bold-approval-actions">
+          {choices.includes('once') && (
+            <button
+              type="button"
+              className="btn sm"
+              disabled={!open}
+              onClick={() => void decide('once')}
+            >
+              Allow
+            </button>
+          )}
+          {choices.includes('deny') && (
+            <button
+              type="button"
+              className="btn sm ghost"
+              disabled={!open}
+              onClick={() => void decide('deny')}
+            >
+              Don’t allow
+            </button>
+          )}
+          {(choices.includes('session') || choices.includes('always')) && (
+            <span className="bold-approval-more">
+              <button
+                type="button"
+                className="btn sm ghost"
+                aria-haspopup="menu"
+                aria-expanded={more}
+                disabled={!open}
+                onClick={() => setMore(!more)}
+              >
+                More
+              </button>
+              {more && (
+                <ul role="menu" aria-label="More approval choices">
+                  {choices.includes('session') && (
+                    <li role="none">
+                      <button type="button" role="menuitem" onClick={() => void decide('session')}>
+                        Approve for this session
+                      </button>
+                    </li>
+                  )}
+                  {choices.includes('always') && (
+                    <li role="none">
+                      <button type="button" role="menuitem" onClick={() => void decide('always')}>
+                        Always allow for {current.agentId}
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              )}
+            </span>
+          )}
+        </span>
+      )}
       {(busy || outcome) && (
         <span className="bold-request-sent" role="status">
           {busy ? 'Sending…' : outcome}
@@ -339,37 +402,52 @@ function RoomApprovals({
   jobs,
   selectedJob,
   agents,
+  dismissed,
+  report,
+  onAnswered,
 }: {
   approvals: Approval[]
   messages: Message[]
   jobs: Job[]
   selectedJob: string
   agents: AgentSummary[]
+  dismissed: ReadonlySet<string>
+  report: CountCards
+  onAnswered: (id: string) => void
 }) {
+  const cards = approvals.flatMap((approval) => {
+    if (dismissed.has(approval.id) || approvalOutcome(approval) !== null) return []
+    const message = messages.find((item) =>
+      item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
+    )
+    const known = jobs.find((item) => item.id === message?.jobId)
+    if (known && selectedJob !== 'all' && known.id !== selectedJob) return []
+    // The approvals read is complete; the message window is not. An approval whose message is older than the
+    // loaded page still shows as a request card (with the selected/default job as its reference).
+    const job =
+      known ??
+      jobs.find((item) => item.id === selectedJob) ??
+      jobs.find((item) => item.isDefault) ??
+      jobs[0]
+    return [{ approval, job }]
+  })
+  useReportedCount('approvals', cards.length, report)
   return (
     <>
-      {approvals.map((approval) => {
-        const message = messages.find((item) =>
-          item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
-        )
-        const known = jobs.find((item) => item.id === message?.jobId)
-        if (known && selectedJob !== 'all' && known.id !== selectedJob) return null
-        // The approvals read is complete; the message window is not. An approval whose message is older than the
-        // loaded page still shows as a request card (with the selected/default job as its reference).
-        const job =
-          known ??
-          jobs.find((item) => item.id === selectedJob) ??
-          jobs.find((item) => item.isDefault) ??
-          jobs[0]
-        return (
-          <ApprovalRequestCard key={approval.id} approval={approval} job={job} agents={agents} />
-        )
-      })}
+      {cards.map(({ approval, job }) => (
+        <ApprovalRequestCard
+          key={approval.id}
+          approval={approval}
+          job={job}
+          agents={agents}
+          onAnswered={onAnswered}
+        />
+      ))}
     </>
   )
 }
 
-/** The "Needs you" pins: each job's paused exchanges and approvals, shown above the stream and never scrolled away. */
+/** The "Needs you" pins: approvals, paused exchanges and run-safety cards above the stream. */
 export function RoomRequests({
   jobs,
   agents,
@@ -382,26 +460,70 @@ export function RoomRequests({
   selectedJob: string
 }) {
   const approvals = useStreamQuery(approvalsQuery).data ?? []
-  const cooking = jobs.filter(
-    (job) =>
-      (selectedJob === 'all' || job.id === selectedJob) &&
-      (job.state === 'waiting_on_you' || job.state === 'working'),
+  const [dismissedApprovals, setDismissedApprovals] = useState<Set<string>>(new Set())
+  const [dismissedExchanges, setDismissedExchanges] = useState<Set<string>>(new Set())
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [expanded, setExpanded] = useState(false)
+  const report: CountCards = useMemo(
+    () => (id, count) =>
+      setCounts((current) => (current[id] === count ? current : { ...current, [id]: count })),
+    [],
   )
-  const needsApproval = approvals.filter(
-    (approval) => approval.actionable && approval.phase === 'human_pending',
+  const selectedJobs = jobs.filter((job) => selectedJob === 'all' || job.id === selectedJob)
+  const cooking = selectedJobs.filter(
+    (job) => job.state === 'waiting_on_you' || job.state === 'working',
   )
+  const recipeJobs = selectedJobs.filter((job) => job.recipe !== null)
+  const needsApproval = approvals.filter((approval) => approval.phase === 'human_pending')
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
+  const moreLabel = pinsMoreLabel(total, expanded)
+
+  function dismissApproval(id: string) {
+    setDismissedApprovals((current) => new Set(current).add(id))
+  }
+  function dismissExchange(id: string) {
+    setDismissedExchanges((current) => new Set(current).add(id))
+  }
+
   return (
-    <div className="bold-pins" aria-label="Needs you">
-      {cooking.map((job) => (
-        <JobRequests key={job.id} job={job} agents={agents} />
-      ))}
-      <RoomApprovals
-        approvals={needsApproval}
-        messages={messages ?? []}
-        jobs={jobs}
-        selectedJob={selectedJob}
-        agents={agents}
-      />
-    </div>
+    <>
+      <div
+        id="bold-pins"
+        className="bold-pins"
+        data-expanded={expanded ? 'true' : 'false'}
+        aria-label="Needs you"
+      >
+        <RoomApprovals
+          approvals={needsApproval}
+          messages={messages ?? []}
+          jobs={jobs}
+          selectedJob={selectedJob}
+          agents={agents}
+          dismissed={dismissedApprovals}
+          report={report}
+          onAnswered={dismissApproval}
+        />
+        <RoomExchanges
+          jobs={cooking}
+          agents={agents}
+          dismissed={dismissedExchanges}
+          report={report}
+          onAnswered={dismissExchange}
+        />
+        <RunSafetyRequests jobs={recipeJobs} agents={agents} report={report} />
+      </div>
+      {moreLabel && (
+        <button
+          type="button"
+          className="bold-pins-more"
+          aria-expanded={expanded}
+          aria-controls="bold-pins"
+          onClick={() => setExpanded((open) => !open)}
+        >
+          {moreLabel}
+          <ChevronIcon />
+        </button>
+      )}
+    </>
   )
 }
