@@ -977,7 +977,7 @@ function RecipeStepRow({
         >
           <span className="mono small muted">{row.index + 1}</span>
           {agent ? (
-            <AgentGlyph agent={agent} size="xs" plain decorative />
+            <AgentGlyph agent={agent} size="xs" decorative />
           ) : node.kind === 'agent' ? (
             <span className="bold-step-mark bold-step-mark--missing" aria-hidden="true">
               ?

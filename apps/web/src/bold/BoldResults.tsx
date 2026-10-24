@@ -25,7 +25,7 @@ type ChangeState = Extract<ResultCard, { kind: 'change' }>['state']
 function AgentLine({ agent }: { agent: AgentSummary }) {
   return (
     <span className="bold-results-agent" style={{ color: agentNameColor(agent) }}>
-      <AgentGlyph agent={agent} size="xs" plain bare decorative />
+      <AgentGlyph agent={agent} size="xs" bare decorative />
       {agent.name}
     </span>
   )
@@ -63,7 +63,7 @@ function ChangeCard({
           return (
             <li key={`${line.text}-${index}`} className={line.caught ? 'caught' : undefined}>
               {agent ? (
-                <AgentGlyph agent={agent} size="xs" plain bare decorative />
+                <AgentGlyph agent={agent} size="xs" bare decorative />
               ) : (
                 <span className="bold-results-marker" aria-hidden="true" />
               )}
@@ -218,7 +218,7 @@ function ScreenCard({
         <ScreenMiniature item={item} />
       </span>
       <span className="bold-results-screen-meta">
-        <AgentGlyph agent={agent} size="xs" plain bare decorative />
+        <AgentGlyph agent={agent} size="xs" bare decorative />
         <b>{agent.name}</b>
         {screen.live && <span className="bold-results-dot livedot" aria-label="Live" />}
       </span>

@@ -238,11 +238,7 @@ function AddedView({
 }) {
   return (
     <section className="bold-add-added" role="status">
-      <AgentGlyph
-        agent={{ id: added.id, name: added.name, style: added.style }}
-        size="lg"
-        activity="idle"
-      />
+      <AgentGlyph agent={{ id: added.id, name: added.name, style: added.style }} size="lg" />
       <h2>{added.name} joined the team</h2>
       <p className="muted">{added.detail}</p>
       {added.runs && <JoinedRuns id={added.id} runs={added.runs} close={close} />}
@@ -340,7 +336,6 @@ function Appearance({
           agent={{ id: 'new-agent', name: name || 'New agent', style: value }}
           size="lg"
           describeShape
-          activity="idle"
         />
       </div>
       <div className="bold-add-shapes" role="radiogroup" aria-label="Shape">
@@ -360,7 +355,6 @@ function Appearance({
               <AgentGlyph
                 agent={{ id: `shape-${shape}`, name: label, style: { ...value, shape } }}
                 size="sm"
-                plain
                 bare
                 decorative
               />

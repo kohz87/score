@@ -263,19 +263,15 @@ function ResetLookCard() {
 }
 
 const livelinessLabels: Record<Liveliness, string> = {
-  lively: 'Lively',
   calm: 'Calm',
   still: 'Still',
 }
 const livelinessNotes: Record<Liveliness, string> = {
-  lively:
-    'Pet avatars take breaks (a stroll, a stretch, a coffee), nap when you have not been around, and say hi when you point at them. Marks blink and follow your pointer.',
-  calm: 'Pet avatars only show what the agent is doing and say hi when you point at them: no breaks, no napping. Marks still blink and follow your pointer.',
-  still:
-    'Nothing moves. Pet avatars show a still picture, marks stand still, and the text says what each agent is doing.',
+  calm: 'Glows and typing dots move; nothing else does.',
+  still: 'Nothing moves, and the text says what each agent is doing.',
 }
 
-/** Decisions 106–108: how much agents move, per device. Reduced motion always means Still. */
+/** How much moves, per device. Reduced motion always means Still. */
 function LivelinessCard() {
   const choice = useChosenLiveliness()
   return (

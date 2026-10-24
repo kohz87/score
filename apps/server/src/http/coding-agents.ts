@@ -21,7 +21,6 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { SecurityPassword } from '../auth/security-password.ts'
-import type { PackStore } from '../packs/store.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { readAgent, reconcileAgents } from '../domain/agents.ts'
 import { HttpError } from '../errors.ts'
@@ -53,8 +52,6 @@ export function registerCodingAgentRoutes(
     db: ScoreDb
     ingest: Ingest
     security: SecurityPassword | undefined
-    /** Uploaded pet packs (PLAN 10.2): a removed agent's folder goes with it. */
-    packs?: PackStore
     /** Where default workspaces are made (`~/score-workspaces`). */
     workspaceBase?: string
     clock?: () => number
@@ -269,7 +266,6 @@ export function registerCodingAgentRoutes(
         'This agent still has work Score can’t call finished. Stop it and wait until it has ended first.',
       )
     db.tx((sqlite) => removeCodingAgent(sqlite, agentId, new Date(clock()).toISOString()))
-    deps.packs?.removeAgent(agentId)
     // Gone from Team and Reports (their lists read the projection); browsers hear it as a removed agent.
     await ingest.submit({
       source: `coding:${agentId}`,

@@ -1063,3 +1063,16 @@ One entry per completed task: what landed, review results, and any **rejected re
   the 11.1b/11.1c exchange tests); imported rooms on exchanges (one member, `whyNot` refuses any `to` outside the room,
   same session context as before); fake.test counts (exact job.upserted counts asserted). 11.11a2's own Sonnet review:
   0 P1/P2; two P3s taken (comment, 'working' asserted first). Server suite 4824 green.
+- **11.11c Drop pet packs, portrait looks, eyes, moods and Lively (Sonnet coder → DeepSeek via ordeepseek, 2026-10-24).**
+  Decision 118 / D9. Agents render as colour + shape only; pet packs (web, server routes, `packs/` store, startup
+  recover), Cut-out/Ring, eyes, glyph moods, pointer-following eyes and the `lively` motion value are gone (Look ›
+  Motion keeps Calm and Still; a stored `lively` reads as calm). Contract: AgentLook/PetPack schemas removed; old styles
+  and import files carrying `look`/`pack` still parse (stripped). Migration 0087: the lead replaced the coder's
+  two-table rebuild with clearing only `pack_rev`/`pack_meta` (the unused `look` column keeps its default). Owner asked
+  mid-task to move coding to DeepSeek: the Sonnet coder (~140 files done) was stopped and DeepSeek finished on the
+  `ordeepseek` profile (NanoGPT was rate limited); its sandbox can't listen on loopback, so the lead ran e2e and the
+  full check. Sonnet review: 1 P1 (two `plain` glyph props that came from main after the branch removed the prop — the
+  lead's merge hadn't typechecked web; fixed), 1 P3 (shape-raster.ts kept for its test; left). Lead post-fix: the Motion
+  test now saves Still (Calm is the default), four visual baselines regenerated (only the glyph eyes changed; diff
+  checked), a format slip from 11.11a2. Full check green (contract 1505, web 2896, server 4757); 12 affected specs green.
+  `~/.score/packs` is removed at the release deploy after the backup. Not deployed.

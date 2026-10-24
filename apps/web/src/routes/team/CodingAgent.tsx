@@ -388,7 +388,7 @@ export function AddCodingAgentForm({
         </label>
       )}
       <AgentAppearanceFields
-        value={{ ...style, look: style.look ?? 'cut' }}
+        value={style}
         onChange={setStyle}
         preview={{ id: id || 'new', name: id || 'New agent' }}
       />

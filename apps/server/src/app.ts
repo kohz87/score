@@ -6,8 +6,6 @@ import { SecurityPassword } from './auth/security-password.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { createAgentDirectory, withAgentDirectory } from './http/agent-directory.ts'
 import { registerAgentRoutes } from './http/agents.ts'
-import { currentPackRevs, registerPackRoutes } from './http/packs.ts'
-import { PackStore } from './packs/store.ts'
 import { registerCodingAgentRoutes } from './http/coding-agents.ts'
 import { hermesPortOf, withCodingAgents } from './runtimes/coding/port.ts'
 import type { CodingRuntime } from './runtimes/coding/service.ts'
@@ -284,19 +282,12 @@ export function buildApp({
   // Start-up cleanups delete what the database doesn't name, so they only run against the home that database lives in:
   // a server built with a test database and the default home must never clear the owner's real ~/.score (2026-10-19).
   const ownsHome = db ? databaseInHome(db, config.home) : false
-  // Uploaded pet packs (PLAN 10.2): strays from a crash are cleared before the first request.
-  const packStore = db ? new PackStore(config.home) : undefined
-  if (db && ingest && packStore) {
-    if (ownsHome) packStore.recover(currentPackRevs(db.sqlite))
-    registerPackRoutes(app, { port, db, ingest, store: packStore })
-  }
   if (db && ingest)
     registerProfileRoutes(app, {
       db,
       ingest,
       port,
       config,
-      ...(packStore ? { packs: packStore } : {}),
       ...(clock ? { clock } : {}),
     })
   registerAgentTabRoutes(app, port, ingest, db, clock)
@@ -491,7 +482,6 @@ export function buildApp({
       db,
       ingest,
       security: securityPassword,
-      ...(packStore ? { packs: packStore } : {}),
       ...(config.mode === 'fake' ? { workspaceBase: join(tmpdir(), 'score-workspaces') } : {}),
       ...(clock ? { clock } : {}),
     })

@@ -20,7 +20,7 @@ export function emptyAgentInput(style: AgentStyle = defaultAgentStyle): AgentCre
     name: '',
     role: '',
     model: '',
-    style: { color: style.color, shape: style.shape, ...(style.look ? { look: style.look } : {}) },
+    style: { color: style.color, shape: style.shape },
   }
 }
 
