@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { openBoldJob, openBoldRoom } from './bold-room-fixtures.ts'
+import { openMenuRoom } from './bold-room-menu-fixtures.ts'
 import { holdLockPerTest } from './locks.ts'
 import { pair } from './pair.ts'
 
@@ -53,7 +54,8 @@ for (const size of sizes) {
 
       const jobs = page.getByRole('region', { name: 'Jobs' })
       await expect(jobs.getByRole('heading', { name: 'Jobs' })).toBeVisible()
-      await expect(jobs.getByRole('button', { name: /^Team room\./ })).toHaveCount(0)
+      const teamRow = jobs.getByRole('button', { name: /^Team room\./ })
+      await expect(teamRow).toBeVisible()
       const done = jobs.getByRole('button', { name: /^Queue research\./ })
       await expect(done.getByRole('img', { name: 'Done' })).toBeVisible()
       const pinned = page.getByRole('article', { name: /Needs you: May I install a package/ })
@@ -61,6 +63,15 @@ for (const size of sizes) {
       expect(pinned.compareDocumentPosition(jobs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       await expect(pinned.getByRole('button', { name: 'Allow' })).toBeVisible()
       await expect(pinned.getByRole('button', { name: 'Don’t allow' })).toBeVisible()
+      // The first card is the decision: at 360×740 its actions must fit without scrolling inside the strip.
+      const pinBox = await pinned.boundingBox()
+      const stripBox = await page.locator('.bold-pins').boundingBox()
+      expect(pinBox!.y + pinBox!.height).toBeLessThanOrEqual(stripBox!.y + stripBox!.height + 1)
+      expect(
+        await page
+          .locator('.bold-pins')
+          .evaluate((strip) => strip.scrollHeight <= strip.clientHeight),
+      ).toBe(true)
       await expectAboveTabBar(page, page.locator('.bold-room-composer'))
       await expectAtLeast44(jobs.getByRole('button', { name: /^Activity feed\./ }))
       await expectAtLeast44(page.getByRole('button', { name: 'Open side panel' }))
@@ -94,6 +105,48 @@ for (const size of sizes) {
       await page.getByRole('button', { name: 'Back to jobs' }).click()
       await expect(page).toHaveURL('/b')
       await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+      await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
+    })
+
+    test('browser Back closes the job chat and returns to the list, not out of /b', async ({
+      page,
+    }) => {
+      await openBoldRoom(page)
+      await openBoldJob(page, /^Activity feed\./)
+      await expect(page).toHaveURL(/job=job-activity/)
+      await expect(page.locator('[data-phone-chat-title]')).toBeFocused()
+
+      await page.goBack()
+      await expect(page).toHaveURL('/b')
+      await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Back to jobs' })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeFocused()
+    })
+
+    test('the Team room row opens the default job, the home of a list message', async ({
+      page,
+    }) => {
+      const state = await openBoldRoom(page)
+      const teamRow = page.getByRole('button', { name: /^Team room\..*/ })
+      await expect(teamRow).toBeVisible()
+      await expect(teamRow).toContainText('lead is working')
+
+      const composer = page.getByRole('combobox', { name: /^Message Team room/ })
+      await composer.fill('A note to the team.')
+      await page.getByRole('button', { name: 'Send', exact: true }).click()
+      await expect(composer).toHaveValue('')
+      expect(
+        state.requests.find(
+          (request) =>
+            request.method === 'POST' && request.path === '/api/rooms/team-room/messages',
+        )?.body,
+      ).toMatchObject({ jobId: 'job-default', text: 'A note to the team.' })
+
+      await teamRow.click()
+      await expect(page).toHaveURL(/job=job-default/)
+      await expect(page.locator('[data-phone-chat-title]')).toHaveText('Team room')
+      await expect(page.getByText('Event cursors are (created_at, id).')).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
     })
 
     test('answers the pinned approval in place and reports the POST', async ({ page }) => {
@@ -172,6 +225,48 @@ for (const size of sizes) {
       await expect(page).toHaveURL('/b')
       await expectTabBar(page, 'Room')
       await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+    })
+
+    test('older and imported rooms use the phone chat without overflow', async ({
+      page,
+    }, testInfo) => {
+      await openMenuRoom(page)
+      const picker = page.getByRole('button', { name: 'Team room' })
+      await picker.click()
+      await page.getByRole('option', { name: /#activity-feed/ }).click()
+
+      await expect(page).toHaveURL(/room=room-old/)
+      await expect(page.getByRole('button', { name: 'Back to the team room' })).toBeVisible()
+      await expect(page.locator('[data-phone-chat-title]')).toHaveText('#activity-feed')
+      await expect(
+        page.getByText('The feed is live. Ask builder for the cursor work.'),
+      ).toBeVisible()
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow).toBeLessThanOrEqual(0)
+      await expectAtLeast44(page.getByRole('button', { name: 'Back to the team room' }))
+      await expectAtLeast44(page.getByRole('button', { name: 'Room menu' }))
+      await page.screenshot({ path: testInfo.outputPath(`bold-phone-older-${size.width}.png`) })
+
+      await page.getByRole('button', { name: 'Back to the team room' }).click()
+      await expect(page).toHaveURL('/b')
+      await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+
+      await page.getByRole('button', { name: 'Team room' }).click()
+      await page.getByRole('option', { name: /#telegram-plan #imported/ }).click()
+      await expect(page).toHaveURL(/room=room-imported/)
+      await expect(page.getByRole('button', { name: 'Back to the team room' })).toBeVisible()
+      await expect(page.locator('[data-phone-chat-title]')).toHaveText('#telegram-plan #imported')
+      await expect(page.getByText('Outline the launch checklist.')).toBeVisible()
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        ),
+      ).toBeLessThanOrEqual(0)
+      await page.screenshot({
+        path: testInfo.outputPath(`bold-phone-imported-${size.width}.png`),
+      })
     })
   })
 }

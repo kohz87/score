@@ -502,7 +502,16 @@ try {
     const appJobs = page.getByRole('region', { name: 'Jobs' })
     if (phone) {
       await appJobs.waitFor()
-      assert.equal(await page.locator('.bold-phone-job').count(), 3)
+      // Board 18 omits the default job; the app adds its "Team room" row (the home of the list composer).
+      assert.equal(await page.locator('.bold-phone-job').count(), 4)
+      assert.equal(
+        await page
+          .locator('.bold-phone-job')
+          .first()
+          .locator('.bold-phone-job-title b')
+          .textContent(),
+        'Team room',
+      )
       assert.ok(
         (await page.locator('.bold-phone-presence').getAttribute('aria-label'))?.includes(
           'builder',

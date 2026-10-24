@@ -22,7 +22,8 @@ async function expectOlderRoomLabel(page: Page) {
   const label = page.getByText('Older room · @name')
   if ((page.viewportSize()?.width ?? 0) > 600) await expect(label).toBeVisible()
   else {
-    await expect(page.locator('.roomtitle')).toContainText('Older room')
+    await expect(page.locator('[data-phone-chat-title]')).toHaveText('#activity-feed')
+    await expect(page.getByRole('button', { name: 'Back to the team room' })).toBeVisible()
     await expect(label).toBeAttached()
   }
 }
@@ -66,7 +67,9 @@ for (const viewport of sizes) {
       await picker.getByRole('option', { name: /#activity-feed/ }).click()
 
       await expect(page).toHaveURL(/room=room-old/)
-      await expect(page.locator('.roomtitle')).toHaveText(/#activity-feed/)
+      if (viewport.width > 860)
+        await expect(page.locator('.roomtitle')).toHaveText(/#activity-feed/)
+      else await expect(page.locator('[data-phone-chat-title]')).toHaveText('#activity-feed')
       await expectOlderRoomLabel(page)
       await expect(page.getByRole('button', { name: 'Start a job' })).toHaveCount(0)
       const composer = page.getByRole('combobox', { name: /^Message #activity-feed/ })
@@ -89,7 +92,10 @@ for (const viewport of sizes) {
       await imported.click()
 
       await expect(page).toHaveURL(/room=room-imported/)
-      await expect(page.locator('.roomtitle')).toContainText('#telegram-plan #imported')
+      if (viewport.width > 860)
+        await expect(page.locator('.roomtitle')).toContainText('#telegram-plan #imported')
+      else
+        await expect(page.locator('[data-phone-chat-title]')).toHaveText('#telegram-plan #imported')
       const composer = page.getByRole('combobox', { name: /^Message #telegram-plan/ })
       await composer.fill('@builder Continue here?')
       await page.getByRole('button', { name: 'Send', exact: true }).click()
@@ -130,6 +136,10 @@ for (const viewport of sizes) {
       await expect(older).toBeFocused()
       await page.keyboard.press('Enter')
       await expect(page).toHaveURL(/room=room-old/)
+      if (viewport.width <= 860) {
+        await expect(page.locator('[data-phone-chat-title]')).toBeFocused()
+        return
+      }
       await expect(trigger).toBeFocused()
 
       await trigger.click()

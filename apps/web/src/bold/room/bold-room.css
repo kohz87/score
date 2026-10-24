@@ -1528,7 +1528,8 @@
   }
 
   [data-ui='bold'] .bold-pins {
-    max-height: 34%;
+    /* The prototype's 40% clips the first card's actions at 360×740; the card is the decision, so let it fit. */
+    max-height: 52%;
   }
 
   [data-ui='bold'] .bold-starters {

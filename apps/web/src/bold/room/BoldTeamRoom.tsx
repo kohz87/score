@@ -1,6 +1,6 @@
 import type { AgentSummary, Job, OutsideSession, Room } from '@score/contract'
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { DeleteRoomDialog } from '../../routes/chat/DeleteRoomDialog.tsx'
 import { ShareDialog } from '../../routes/chat/ShareDialog.tsx'
@@ -14,7 +14,7 @@ import { RoomEmpty } from './RoomEmpty.tsx'
 import { RoomMessageStream } from './RoomMessageStream.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
 import { RoomTabs } from './RoomTabs.tsx'
-import { JobMenu, RoomTitle } from './RoomMenus.tsx'
+import { JobMenu, RoomMenu, RoomTitle } from './RoomMenus.tsx'
 import { PhoneJobList } from './PhoneJobList.tsx'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
@@ -44,33 +44,46 @@ function RoomUnavailable({ error }: { error: boolean }) {
 function LoadedTeamRoom({
   room,
   agents,
+  allJobs,
+  jobsStatus,
   phone,
+  phoneJob,
+  phoneJobMissing,
   phoneAction,
+  onShareRoom,
+  onDeleteRoom,
   onOpenThread,
 }: {
   room: Room
   agents: AgentSummary[]
+  allJobs: Job[]
+  jobsStatus: 'pending' | 'success' | 'error'
   phone: boolean
+  /** The one job the phone chat shows. The head and the body both read this, so they cannot disagree. */
+  phoneJob?: Job
+  phoneJobMissing: boolean
   phoneAction?: ReactNode
+  onShareRoom: (room: Room) => void
+  onDeleteRoom: (room: Room) => void
   onOpenThread: (jobId: string) => void
 }) {
+  const location = useLocation()
   const [params, setParams] = useSearchParams()
-  const jobsDefinition = useMemo(() => roomJobsQuery(room.id), [room.id])
-  const { data: jobs, status: jobsStatus } = useStreamQuery(jobsDefinition)
-  const allJobs = useMemo(() => jobs ?? [], [jobs])
   const defaultJobId = allJobs.find((job) => job.isDefault)?.id ?? null
   const [filter, setFilter] = useState<JobFilter>('all')
   const [composerKey, setComposerKey] = useState(0)
   const [openedJobs, setOpenedJobs] = useState<string[]>([])
   const [sharingJob, setSharingJob] = useState<Job | null>(null)
+  const composerFocusFrame = useRef<number | null>(null)
   const showDeleted = useShowDeleted(room.id)
   const requestedJob = params.get('job') ?? 'all'
   // A tab that no longer exists, or that the D10 filter hides, falls back to All during render: an effect that called
   // selectJob would set state synchronously in an effect (and cascade a second render for the same event).
   const requested =
     requestedJob === 'all' ? undefined : allJobs.find((job) => job.id === requestedJob)
-  const selectedJob =
-    requestedJob === 'all'
+  const selectedJob = phone
+    ? (phoneJob?.id ?? 'all')
+    : requestedJob === 'all'
       ? 'all'
       : jobsStatus !== 'success'
         ? requestedJob
@@ -89,6 +102,21 @@ function LoadedTeamRoom({
   )
   const baseMessages = useStreamQuery(baseMessagesDefinition)
 
+  const focusComposer = useCallback(() => {
+    if (composerFocusFrame.current !== null) cancelAnimationFrame(composerFocusFrame.current)
+    composerFocusFrame.current = requestAnimationFrame(() => {
+      composerFocusFrame.current = null
+      document.querySelector<HTMLTextAreaElement>('.bold-room-composer textarea')?.focus()
+    })
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (composerFocusFrame.current !== null) cancelAnimationFrame(composerFocusFrame.current)
+    },
+    [],
+  )
+
   const selectJob = useCallback(
     (jobId: string) => {
       const leaving = params.get('job')
@@ -98,9 +126,12 @@ function LoadedTeamRoom({
       if (jobId === 'all') next.delete('job')
       else next.set('job', jobId)
       next.delete('message')
-      setParams(next, { replace: true })
+      if (phone) {
+        const previous = (location.state as Record<string, unknown> | null) ?? {}
+        setParams(next, { state: { ...previous, phoneJobFromList: true } })
+      } else setParams(next, { replace: true })
     },
-    [params, setParams],
+    [location.state, params, phone, setParams],
   )
 
   const selectFilter = useCallback(
@@ -124,10 +155,10 @@ function LoadedTeamRoom({
     jobsStatus === 'success' &&
     namedJobs.length === 0 &&
     baseMessages.status === 'success' &&
-    (baseMessages.data?.items.length ?? 0) === 0
+    (baseMessages.data?.items.length ?? 0) === 0 &&
+    // An older or imported phone room is still a chat: its one job must be reachable even before any message.
+    !(phone && room.role !== 'team')
   const job = allJobs.find((item) => item.id === selectedJob)
-  const phoneChatJob =
-    phone && requestedJob !== 'all' ? allJobs.find((item) => item.id === requestedJob) : undefined
   const lead = agents.find((agent) => agent.id === room.leadAgentId)
   const olderRoom = room.role !== 'team' && room.routing === 'mentions'
   const allLabel = olderRoom
@@ -155,9 +186,7 @@ function LoadedTeamRoom({
   function startWith(text: string) {
     saveDraft(room.id, text)
     setComposerKey((value) => value + 1)
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLTextAreaElement>('.bold-room-composer textarea')?.focus(),
-    )
+    focusComposer()
   }
 
   // A slash command from Search (`/b?command=assign`) loads into the same composer the prototype's menu feeds.
@@ -167,12 +196,8 @@ function LoadedTeamRoom({
     const next = new URLSearchParams(params)
     next.delete('command')
     setParams(next, { replace: true })
-    requestAnimationFrame(() => {
-      const box = document.querySelector<HTMLTextAreaElement>('.bold-room-composer textarea')
-      box?.focus()
-      box?.setSelectionRange(box.value.length, box.value.length)
-    })
-  }, [command, params, room.id, setParams])
+    focusComposer()
+  }, [command, focusComposer, params, room.id, setParams])
 
   return (
     <>
@@ -186,17 +211,25 @@ function LoadedTeamRoom({
           Couldn’t load jobs. Try again.
         </p>
       )}
-      {phone && phoneChatJob && (
+      {phoneJobMissing && (
+        <p className="bold-stream-note" role="status">
+          That job isn’t here any more.
+        </p>
+      )}
+      {phone && phoneJob && (
         <div className="bold-phone-chat-tools" aria-label="Job tools">
           <button
             type="button"
             className="bold-job-thread"
-            aria-label={`Open thread for ${phoneChatJob.title}`}
-            onClick={() => onOpenThread(phoneChatJob.id)}
+            aria-label={`Open thread for ${phoneJob.title}`}
+            onClick={() => onOpenThread(phoneJob.id)}
           >
             Thread
           </button>
-          <JobMenu room={room} job={phoneChatJob} onShare={setSharingJob} />
+          <JobMenu room={room} job={phoneJob} onShare={setSharingJob} />
+          {room.role !== 'team' && (
+            <RoomMenu room={room} onShare={onShareRoom} onDelete={onDeleteRoom} />
+          )}
           <button
             type="button"
             className="bold-filter bold-deleted-toggle"
@@ -240,10 +273,16 @@ function LoadedTeamRoom({
           messages={baseMessages.data?.items ?? []}
         />
       )}
-      {empty ? (
-        <RoomEmpty agents={agents} onStart={startWith} />
-      ) : phone && !phoneChatJob ? (
+      {phone && room.role === 'team' && phoneJobMissing ? (
         <PhoneJobList jobs={allJobs} agents={agents} onOpen={selectJob} />
+      ) : empty ? (
+        <RoomEmpty agents={agents} onStart={startWith} />
+      ) : phone && room.role === 'team' && !phoneJob ? (
+        <PhoneJobList jobs={allJobs} agents={agents} onOpen={selectJob} />
+      ) : phone && room.role !== 'team' && !phoneJob && jobsStatus !== 'success' ? (
+        <p className="bold-stream-note" role="status">
+          Opening the room…
+        </p>
       ) : (
         <div className="stream" id="bold-room-stream" aria-live="polite">
           {!phone && (
@@ -276,14 +315,14 @@ function LoadedTeamRoom({
           roomName={room.name}
           agents={agents}
           leadAgentId={room.leadAgentId}
-          jobId={selectedJob === 'all' || (phone && !phoneChatJob) ? null : selectedJob}
+          jobId={selectedJob === 'all' || (phone && !phoneJob) ? null : selectedJob}
           roomMode
           toLabel={toLabel}
           placeholder={
             empty
               ? 'Describe the work'
               : phone
-                ? phoneChatJob
+                ? phoneJob
                   ? 'Message the team'
                   : 'Start a job or message the team'
                 : olderRoom
@@ -321,6 +360,8 @@ export function BoldTeamRoom({
   onOpenThread?: (jobId: string) => void
 }) {
   const [params, setParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
   const override = params.get('room')
   const definition = useMemo(() => teamRoomQuery(override), [override])
   const { data: roomRead, status } = useStreamQuery(definition)
@@ -332,16 +373,73 @@ export function BoldTeamRoom({
   const rooms = useStreamQuery(roomsQuery).data?.rooms ?? []
   const current =
     room ?? (override === null ? teamRoom : (rooms.find((item) => item.id === override) ?? null))
+  const jobsDefinition = useMemo(() => roomJobsQuery(current?.id ?? null), [current?.id])
+  const { data: jobs, status: jobsStatus } = useStreamQuery(jobsDefinition)
+  const allJobs = useMemo(() => jobs ?? [], [jobs])
   const [sharing, setSharing] = useState<{ room: Room; job?: Job } | null>(null)
   const [deleting, setDeleting] = useState<Room | null>(null)
-  const phoneTeam = phone && current?.role === 'team'
-  const phoneJobId = params.get('job')
-  const phoneJob =
-    phoneTeam && phoneJobId && phoneJobId !== 'all'
-      ? [...(roomRead?.jobs ?? []), ...(teamRead?.jobs ?? [])].find((job) => job.id === phoneJobId)
+  const previousPhoneJob = useRef<string | null>(null)
+  const phoneRoom = phone && current !== null
+  const requestedPhoneJobId = params.get('job')
+  const requestedPhoneJob =
+    requestedPhoneJobId && requestedPhoneJobId !== 'all'
+      ? allJobs.find((job) => job.id === requestedPhoneJobId)
       : undefined
+  const phoneDefaultJob = allJobs.find((job) => job.isDefault) ?? allJobs[0]
+  // A phone team room lists its jobs; an older or imported room has one job, so it opens straight into that chat.
+  const phoneJob = phoneRoom
+    ? current?.role === 'team'
+      ? requestedPhoneJob
+      : (requestedPhoneJob ?? phoneDefaultJob)
+    : undefined
+  const phoneJobId = phoneJob?.id ?? null
+  const phoneJobMissing =
+    phoneRoom &&
+    current?.role === 'team' &&
+    requestedPhoneJobId !== null &&
+    requestedPhoneJobId !== 'all' &&
+    jobsStatus === 'success' &&
+    !requestedPhoneJob
+
+  useEffect(() => {
+    if (!phone || !phoneJobId) return
+    const frame = requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>('[data-phone-chat-title]')?.focus(),
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [phone, phoneJobId])
+
+  // Back (the button or the browser's) returns focus to the row of the job it left.
+  useEffect(() => {
+    if (!phone) return
+    if (phoneJobId) {
+      previousPhoneJob.current = phoneJobId
+      return
+    }
+    const leftJob = previousPhoneJob.current
+    if (!leftJob) return
+    previousPhoneJob.current = null
+    const frame = requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLElement>(`[data-phone-job-id=${JSON.stringify(leftJob)}]`)
+        ?.focus(),
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [phone, phoneJobId])
 
   const backToJobs = () => {
+    if (current?.role !== 'team') {
+      const next = new URLSearchParams(params)
+      next.delete('room')
+      next.delete('job')
+      next.delete('message')
+      setParams(next)
+      return
+    }
+    if ((location.state as { phoneJobFromList?: boolean } | null)?.phoneJobFromList) {
+      navigate(-1)
+      return
+    }
     const next = new URLSearchParams(params)
     next.delete('job')
     next.delete('message')
@@ -378,8 +476,9 @@ export function BoldTeamRoom({
         rooms={rooms}
         agents={agents}
         phoneAction={phoneAction}
-        phone={phoneTeam}
+        phone={phoneRoom}
         phoneJob={phoneJob}
+        phoneBackLabel={current?.role === 'team' ? 'Back to jobs' : 'Back to the team room'}
         onBackToJobs={backToJobs}
         onSelectRoom={selectRoom}
         onOpenElsewhere={(session) => onOpenElsewhere?.(session)}
@@ -387,7 +486,7 @@ export function BoldTeamRoom({
           const jobId = params.get('job')
           const job =
             room.role === 'team' && jobId && jobId !== 'all'
-              ? teamRead?.jobs.find((item) => item.id === jobId)
+              ? allJobs.find((item) => item.id === jobId)
               : undefined
           setSharing({ room, job })
         }}
@@ -402,8 +501,14 @@ export function BoldTeamRoom({
           key={room.id}
           room={room}
           agents={agents}
-          phone={phoneTeam}
+          allJobs={allJobs}
+          jobsStatus={jobsStatus}
+          phone={phoneRoom}
+          phoneJob={phoneJob}
+          phoneJobMissing={phoneJobMissing}
           phoneAction={phoneAction}
+          onShareRoom={(target) => setSharing({ room: target })}
+          onDeleteRoom={setDeleting}
           onOpenThread={onOpenThread}
         />
       )}

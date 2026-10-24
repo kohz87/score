@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Approval, OutsideSession, Room } from '@score/contract'
 import {
@@ -149,6 +149,15 @@ function ParamsProbe() {
   return <span data-testid="params">{params.toString()}</span>
 }
 
+function HistoryBack() {
+  const navigate = useNavigate()
+  return (
+    <button type="button" onClick={() => void navigate(-1)}>
+      History back
+    </button>
+  )
+}
+
 test('a slash command handed over in the URL is loaded into the room composer and removed from the URL', async () => {
   stubRoom()
   renderInRoom(
@@ -224,13 +233,15 @@ test('a phone opens on board 18 with the pinned request first, then jobs and the
 
   expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
   expect(screen.queryByRole('tablist', { name: 'Jobs' })).toBeNull()
-  expect(screen.queryByRole('button', { name: /^Team room\./ })).toBeNull()
+  const teamRow = screen.getByRole('button', { name: /^Team room\..*9 unread/ })
+  expect(teamRow.textContent).toContain('builder is working')
   expect(
     screen.getByRole('combobox', { name: /^Message Team room/ }).getAttribute('placeholder'),
   ).toBe('Start a job or message the team')
   const activity = screen.getByRole('button', { name: /^Activity feed\..*2 unread/ })
   const notes = screen.getByRole('button', { name: /^Release notes 2\.4\..*3 unread/ })
   expect(activity.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(teamRow.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(activity.textContent).toContain('builder is working')
   expect(notes.textContent).toContain('lead needs you')
   expect(screen.getByRole('img', { name: 'Done' })).toBeDefined()
@@ -258,6 +269,11 @@ test('a phone opens a job full screen and Back returns to the job list', async (
 
   fireEvent.click(await screen.findByRole('button', { name: /^Activity feed\./ }))
   expect(await screen.findByText('To: Activity feed')).toBeDefined()
+  await waitFor(() =>
+    expect(screen.getByText('Activity feed', { selector: '[data-phone-chat-title]' })).toBe(
+      document.activeElement,
+    ),
+  )
   expect(screen.getByTestId('params').textContent).toContain('job=job-activity')
   expect(screen.getByTestId('params').textContent).not.toContain('message')
   expect(screen.queryByRole('heading', { name: 'Jobs' })).toBeNull()
@@ -270,7 +286,101 @@ test('a phone opens a job full screen and Back returns to the job list', async (
   fireEvent.click(screen.getByRole('button', { name: 'Back to jobs' }))
   expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
   expect(screen.getByTestId('params').textContent).not.toContain('job=')
-  expect(screen.getByRole('button', { name: /^Activity feed\./ })).toBeDefined()
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /^Activity feed\./ })).toBe(document.activeElement),
+  )
+})
+
+test('the phone list puts the default Team room row first and opens its chat', async () => {
+  stubRoom([
+    makeJob({ id: 'job-default', title: 'Team room', isDefault: true, unread: 4 }),
+    makeJob({ id: 'job-activity', title: 'Activity feed', unread: 2 }),
+  ])
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} phone />
+      <ParamsProbe />
+    </>,
+    ['/b'],
+  )
+
+  const teamRow = await screen.findByRole('button', { name: /^Team room\..*4 unread/ })
+  expect(teamRow.textContent).toContain('builder is working')
+  const activity = screen.getByRole('button', { name: /^Activity feed\./ })
+  expect(teamRow.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+  fireEvent.click(teamRow)
+  expect(
+    await screen.findByText('builder is working', { selector: '.bold-phone-chat-id span' }),
+  ).toBeDefined()
+  expect(screen.getByTestId('params').textContent).toContain('job=job-default')
+  expect(screen.getByRole('button', { name: 'Back to jobs' })).toBeDefined()
+  expect(screen.getByRole('combobox', { name: /^Message Team room/ })).toBeDefined()
+})
+
+test('opening a phone job pushes history, so Back returns to the list instead of leaving /b', async () => {
+  stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} phone />
+      <HistoryBack />
+    </>,
+    ['/b'],
+  )
+
+  fireEvent.click(await screen.findByRole('button', { name: /^Activity feed\./ }))
+  expect(await screen.findByRole('button', { name: 'Back to jobs' })).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'History back' }))
+  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Back to jobs' })).toBeNull()
+})
+
+test('a missing phone job shows the list with a short note, never a Back header', async () => {
+  stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?job=job-deleted'])
+
+  expect(await screen.findByText('That job isn’t here any more.')).toBeDefined()
+  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Back to jobs' })).toBeNull()
+})
+
+test('a missing phone job in a fresh room still shows the job list, not the starter', async () => {
+  stubRoom([])
+  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?job=job-deleted'])
+
+  expect(await screen.findByText('That job isn’t here any more.')).toBeDefined()
+  expect(screen.getByRole('heading', { name: 'Jobs' })).toBeDefined()
+  expect(screen.queryByRole('heading', { name: 'Your team is ready. What first?' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Back to jobs' })).toBeNull()
+})
+
+test('an older phone room with no messages still opens its chat, not the starter', async () => {
+  stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })], { older: true })
+  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b?room=room-old'])
+
+  expect(await screen.findByRole('button', { name: 'Back to the team room' })).toBeDefined()
+  expect(screen.getByRole('combobox', { name: /^Message #activity-feed/ })).toBeDefined()
+  expect(screen.queryByRole('heading', { name: 'Your team is ready. What first?' })).toBeNull()
+})
+
+test('an older room opens straight into its phone chat and Back returns to the team room', async () => {
+  stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })], { older: true })
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} phone />
+      <ParamsProbe />
+    </>,
+    ['/b?room=room-old'],
+  )
+
+  expect(await screen.findByRole('button', { name: 'Back to the team room' })).toBeDefined()
+  expect(screen.getByText('#activity-feed', { selector: '.bold-phone-chat-id b' })).toBeDefined()
+  expect(screen.getByRole('combobox', { name: /^Message #activity-feed/ })).toBeDefined()
+  expect(screen.queryByRole('heading', { name: 'Jobs' })).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Back to the team room' }))
+  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
+  expect(screen.getByTestId('params').textContent).not.toContain('room=')
 })
 
 test('selecting a job changes the composer destination and hides the message param', async () => {
@@ -340,6 +450,7 @@ test('the room dropdown opens an older room read-write with today’s @mention r
 
   fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
   const picker = await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
+  await screen.findByRole('option', { name: /#activity-feed/ })
   expect(picker.textContent).toContain('Always on · 1 job')
   expect(picker.textContent).toContain('Older room · read-write with @mentions')
   fireEvent.click(screen.getByRole('option', { name: /#activity-feed/ }))

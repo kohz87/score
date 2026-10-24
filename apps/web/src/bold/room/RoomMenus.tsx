@@ -438,6 +438,7 @@ export function RoomTitle({
   phoneAction,
   phone = false,
   phoneJob,
+  phoneBackLabel = 'Back to jobs',
   onBackToJobs,
   onSelectRoom,
   onOpenElsewhere,
@@ -454,6 +455,7 @@ export function RoomTitle({
   phone?: boolean
   /** The job whose full-screen chat is open; absent means the job list. */
   phoneJob?: Job
+  phoneBackLabel?: string
   onBackToJobs?: () => void
   onSelectRoom: (room: Room) => void
   onOpenElsewhere: (session: OutsideSession) => void
@@ -467,7 +469,7 @@ export function RoomTitle({
         <button
           type="button"
           className="icon-btn bold-phone-back"
-          aria-label="Back to jobs"
+          aria-label={phoneBackLabel}
           onClick={onBackToJobs}
         >
           <svg
@@ -485,7 +487,9 @@ export function RoomTitle({
           </svg>
         </button>
         <span className="bold-phone-chat-id">
-          <b>{phoneJob.isDefault ? (current?.name ?? 'Team room') : phoneJob.title}</b>
+          <b data-phone-chat-title tabIndex={-1}>
+            {phoneJob.isDefault ? (current?.name ?? 'Team room') : phoneJob.title}
+          </b>
           <span>{jobStateLine(phoneJob, agents)}</span>
         </span>
         <PhonePresence agents={agents} />

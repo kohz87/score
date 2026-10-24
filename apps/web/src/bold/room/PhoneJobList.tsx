@@ -30,7 +30,10 @@ export function PhonePresence({ agents }: { agents: AgentSummary[] }) {
   )
 }
 
-/** Board 18: the phone's way into a job, with its holder's glyph, unread count and state. Default jobs are bins. */
+/**
+ * Board 18: the phone's way into a job, with its holder's glyph, unread count and state. Unlike the desktop tabs, the
+ * list also needs the default job: it is the visible home of the list composer's "message the team" path.
+ */
 export function PhoneJobList({
   jobs,
   agents,
@@ -40,24 +43,29 @@ export function PhoneJobList({
   agents: AgentSummary[]
   onOpen: (jobId: string) => void
 }) {
+  const defaultJob = jobs.find((job) => job.isDefault)
   const named = jobs.filter((job) => !job.isDefault)
+  const rows = defaultJob ? [defaultJob, ...named] : named
+
   return (
     <section className="bold-phone-jobs" aria-label="Jobs">
       <div className="bold-phone-jobs-head">
         <h2>Jobs</h2>
       </div>
       <div className="bold-phone-job-list">
-        {named.map((job) => {
+        {rows.map((job) => {
           const holder = job.holderAgentId
             ? agents.find((agent) => agent.id === job.holderAgentId)
             : undefined
           const state = jobStateLine(job, agents)
+          const title = job.isDefault ? 'Team room' : job.title
           return (
             <button
               key={job.id}
               type="button"
               className="bold-phone-job"
-              aria-label={`${job.title}. ${state}${job.unread ? `, ${job.unread} unread` : ''}`}
+              data-phone-job-id={job.id}
+              aria-label={`${title}. ${state}${job.unread ? `, ${job.unread} unread` : ''}`}
               onClick={() => onOpen(job.id)}
             >
               {holder ? (
@@ -67,7 +75,7 @@ export function PhoneJobList({
               )}
               <span className="bold-phone-job-copy">
                 <span className="bold-phone-job-title">
-                  <b>{job.title}</b>
+                  <b>{title}</b>
                   {job.unread !== undefined && job.unread > 0 ? (
                     <span className="bold-unread" aria-label={`${job.unread} unread`}>
                       {job.unread > 99 ? '99+' : job.unread}
