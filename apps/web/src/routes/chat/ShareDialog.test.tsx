@@ -135,6 +135,7 @@ test('a job share names the job and sends its id in the request', async () => {
   wrap(<ShareDialog room={room} job={job} close={() => {}} />)
   expect(screen.getByRole('heading', { name: 'Share Activity feed' })).toBeDefined()
   expect(screen.getByText(/the job’s/)).toBeDefined()
+  expect(screen.getByLabelText('Include the images attached in this job')).toBeDefined()
   fireEvent.change(screen.getByLabelText('Security password'), {
     target: { value: 'correct horse' },
   })

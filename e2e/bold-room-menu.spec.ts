@@ -47,11 +47,11 @@ for (const viewport of sizes) {
       const state = await openMenuRoom(page)
       const picker = await openRoomPicker(page)
       await expect(picker).toBeVisible()
-      await expect(picker).toContainText('Always on · the team’s home')
+      await expect(picker).toContainText('Always on · 4 jobs')
       await expect(picker).toContainText('Elsewhere · the agents’ own chats outside Score')
-      await expect(picker.getByRole('option', { name: /Plan the launch checklist/ })).toContainText(
-        'lead · Telegram · 4 messages',
-      )
+      const outside = picker.getByRole('option', { name: /Plan the launch checklist/ })
+      await expect(outside).toContainText('lead · Telegram')
+      await expect(outside).toContainText('Plan the launch checklist · 4 messages')
       await picker.getByRole('option', { name: /#activity-feed/ }).click()
 
       await expect(page).toHaveURL(/room=room-old/)

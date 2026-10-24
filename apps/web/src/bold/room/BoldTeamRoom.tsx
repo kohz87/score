@@ -258,13 +258,15 @@ export function BoldTeamRoom({
   const [params, setParams] = useSearchParams()
   const override = params.get('room')
   const definition = useMemo(() => teamRoomQuery(override), [override])
-  const { data: room, status } = useStreamQuery(definition)
+  const { data: roomRead, status } = useStreamQuery(definition)
+  const room = roomRead?.room ?? null
   const teamDefinition = useMemo(() => teamRoomQuery(null), [])
-  const { data: teamRoom } = useStreamQuery(teamDefinition)
+  const { data: teamRead } = useStreamQuery(teamDefinition)
+  const teamRoom = teamRead?.room ?? null
+  const teamJobCount = teamRead?.jobs.filter((job) => !job.isDefault).length ?? null
   const rooms = useStreamQuery(roomsQuery).data?.rooms ?? []
   const current =
-    room ??
-    (override === null ? (teamRoom ?? null) : (rooms.find((item) => item.id === override) ?? null))
+    room ?? (override === null ? teamRoom : (rooms.find((item) => item.id === override) ?? null))
   const [sharing, setSharing] = useState<Room | null>(null)
   const [deleting, setDeleting] = useState<Room | null>(null)
 
@@ -293,7 +295,8 @@ export function BoldTeamRoom({
     <>
       <RoomTitle
         current={current}
-        teamRoom={teamRoom ?? null}
+        teamRoom={teamRoom}
+        teamJobCount={teamJobCount}
         rooms={rooms}
         agents={agents}
         phoneAction={phoneAction}

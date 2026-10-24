@@ -80,6 +80,7 @@ function RoomDot({ team }: { team: boolean }) {
 export function RoomSwitcher({
   current,
   teamRoom,
+  teamJobCount,
   rooms,
   agents,
   onSelectRoom,
@@ -87,6 +88,7 @@ export function RoomSwitcher({
 }: {
   current: Room | null
   teamRoom: Room | null
+  teamJobCount: number | null
   rooms: Room[]
   agents: AgentSummary[]
   onSelectRoom: (room: Room) => void
@@ -145,7 +147,12 @@ export function RoomSwitcher({
               <RoomDot team />
               <span className="menu-copy">
                 <b>{teamRoom.name}</b>
-                <span className="small muted">Always on · the team’s home</span>
+                <span className="small muted">
+                  Always on
+                  {teamJobCount === null
+                    ? ''
+                    : ` · ${teamJobCount} ${teamJobCount === 1 ? 'job' : 'jobs'}`}
+                </span>
               </span>
             </button>
           )}
@@ -192,9 +199,12 @@ export function RoomSwitcher({
               >
                 <OutsideGlyph agent={agents.find((item) => item.id === session.agentId)} />
                 <span className="menu-copy">
-                  <b>{session.title || 'Untitled session'}</b>
+                  <b>
+                    {agents.find((item) => item.id === session.agentId)?.name ?? session.agentId} ·{' '}
+                    {session.sourceLabel}
+                  </b>
                   <span className="small muted">
-                    {session.agentId} · {session.sourceLabel} · {session.messageCount}{' '}
+                    {session.title || 'Untitled session'} · {session.messageCount}{' '}
                     {session.messageCount === 1 ? 'message' : 'messages'}
                     {session.busy ? ' · active now' : ''}
                   </span>
@@ -263,6 +273,7 @@ export function RoomMenu({
           onKeyDown={moveInMenu}
         >
           <a
+            className="mi"
             role="menuitem"
             href={`/api/rooms/${encodeURIComponent(room.id)}/export.md`}
             download
@@ -272,6 +283,7 @@ export function RoomMenu({
           </a>
           <button
             type="button"
+            className="mi"
             role="menuitem"
             onClick={() => {
               setOpen(false)
@@ -344,6 +356,7 @@ export function JobMenu({
         >
           <button
             type="button"
+            className="mi"
             role="menuitem"
             onClick={() => {
               setOpen(false)
@@ -353,6 +366,7 @@ export function JobMenu({
             Share a read-only link
           </button>
           <a
+            className="mi"
             role="menuitem"
             href={`/api/rooms/${encodeURIComponent(room.id)}/export.md`}
             download
@@ -369,6 +383,7 @@ export function JobMenu({
 export function RoomTitle({
   current,
   teamRoom,
+  teamJobCount,
   rooms,
   agents,
   phoneAction,
@@ -379,6 +394,7 @@ export function RoomTitle({
 }: {
   current: Room | null
   teamRoom: Room | null
+  teamJobCount: number | null
   rooms: Room[]
   agents: AgentSummary[]
   phoneAction?: ReactNode
@@ -393,6 +409,7 @@ export function RoomTitle({
       <RoomSwitcher
         current={current}
         teamRoom={teamRoom}
+        teamJobCount={teamJobCount}
         rooms={rooms}
         agents={agents}
         onSelectRoom={onSelectRoom}

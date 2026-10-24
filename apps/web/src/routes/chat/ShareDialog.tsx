@@ -133,7 +133,7 @@ export function ShareDialog({
             checked={images}
             onChange={(event) => setImages(event.target.checked)}
           />
-          Include the images attached in this room
+          Include the images attached in this {job ? 'job' : 'room'}
         </label>
         <button
           type="submit"

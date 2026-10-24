@@ -24,7 +24,7 @@ export function BoldElsewhere({
   onBroughtIn: (jobId: string) => void
 }) {
   const teamDefinition = useMemo(() => teamRoomQuery(null), [])
-  const team = useStreamQuery(teamDefinition).data
+  const team = useStreamQuery(teamDefinition).data?.room
   const bring = useBringOutsideSessionIntoJob()
   const agent = agents.find((item) => item.id === session.agentId)
   const title = session.title.trim() || 'Untitled session'

@@ -231,6 +231,7 @@ test('the room dropdown opens an older room read-write with today’s @mention r
 
   fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
   const picker = await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
+  expect(picker.textContent).toContain('Always on · 1 job')
   expect(picker.textContent).toContain('Older room · read-write with @mentions')
   fireEvent.click(screen.getByRole('option', { name: /#activity-feed/ }))
 
@@ -260,7 +261,8 @@ test('Elsewhere lists the agents’ own sessions as read-only chats to open', as
   const picker = await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
   expect(picker.textContent).toContain('Elsewhere · the agents’ own chats outside Score')
   const row = await screen.findByRole('option', { name: /Plan the launch checklist/ })
-  expect(row.textContent).toContain('lead · Telegram · 4 messages')
+  expect(row.textContent).toContain('lead · Telegram')
+  expect(row.textContent).toContain('Plan the launch checklist · 4 messages')
   fireEvent.click(row)
 
   expect(opened).toHaveBeenCalledWith(outsideSession)
@@ -275,6 +277,7 @@ test('the selected job’s menu offers the contract’s share and classic room e
   const menu = await screen.findByRole('menu', { name: 'Activity feed actions' })
   expect(menu.textContent).toContain('Share a read-only link')
   expect(menu.textContent).toContain('Export this room as Markdown')
+  expect(screen.getAllByRole('menuitem').every((item) => item.classList.contains('mi'))).toBe(true)
   // The contract has no job rename, close or delete; those prototype items are reported as gaps, not faked here.
   expect(menu.textContent).not.toContain('Rename')
   expect(menu.textContent).not.toContain('Delete job')
@@ -282,4 +285,19 @@ test('the selected job’s menu offers the contract’s share and classic room e
   const dialog = await screen.findByRole('dialog')
   expect(dialog.textContent).toContain('Share Activity feed')
   expect(dialog.textContent).toContain('the job’s messages')
+})
+
+test('the room menu gives export, share and delete the prototype’s menu rows', async () => {
+  stubRoom([makeJob({ id: 'job-1', title: 'Activity feed' })], { older: true })
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?room=room-old'])
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Room menu' }))
+  const menu = await screen.findByRole('menu', { name: '#activity-feed actions' })
+  expect(menu.textContent).toContain('Export this room')
+  expect(menu.textContent).toContain('Share a read-only link')
+  expect(menu.textContent).toContain('Delete #activity-feed')
+  expect(
+    [...menu.querySelectorAll('[role="menuitem"]')].every((item) => item.classList.contains('mi')),
+  ).toBe(true)
+  expect(menu.getAttribute('data-protected')).toBe('flex')
 })
