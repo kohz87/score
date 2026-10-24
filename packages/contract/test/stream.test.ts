@@ -29,6 +29,8 @@ const eventData = {
     lastMessageAt: '2026-10-24T00:00:00.000Z',
     messageCount: 4,
     summary: 'Get the activity feed streaming',
+    source: null,
+    reportBack: null,
     createdAt: '2026-10-24T00:00:00.000Z',
     updatedAt: '2026-10-24T00:00:00.000Z',
   },

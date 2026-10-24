@@ -119,6 +119,12 @@
     box-sizing: content-box !important;
     border: 1.5px solid #12131a !important;
   }
+  /* The bold shell's dock ring of an agent that needs you (PLAN 11.3): a two-tone outline that shows on any ground. */
+  html[data-look='custom'] .bold-needs[data-protected] {
+    box-shadow:
+      0 0 0 2px #ececf1,
+      0 0 0 4px #12131a !important;
+  }
   /* Glyph shapes: a path stays visible, unfiltered and unclipped. (Transforms are left alone: Score's own glyph CSS
      may use them. The `d` geometry can't be re-asserted from CSS, `d: none` removes the path: the sanitiser drops
      the property instead, and theme rules never match in here.) */

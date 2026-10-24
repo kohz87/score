@@ -371,6 +371,14 @@ Reports read `runs`, `tool_calls`, `approvals` and `tasks_proj` history, kept â‰
     self-approval and CSRF, not a hostile same-user process.
   - Real isolation means running agents in Hermes's sandboxed terminal backend (docker/ssh) or as a different
     OS user. Score shows the current isolation level on the Settings page.
+  - **Checked 2026-10-24 (PLAN 11.8a, Hermes 0.21.5, source and a live Docker run on a test profile):** a Docker or
+    remote-SSH backend confines only the terminal, background processes, file read/write/patch/search, `execute_code`
+    and file-based vision. Browsers, computer use, web tools, MCP servers, memory, skills, scheduled jobs, messaging,
+    generation tools and plugins (Score's bridge included) still run in the Hermes process as the same user, so an
+    agent keeps same-user reach through them. Docker's defaults also share registered credential files and skills
+    read-only, leave the network on and run commands as root inside the container. Score therefore never says
+    "separated": the agent page says "partly" with the exact lists (`GET /api/agents/:id/runs-on`), and SSH to this
+    machine is "not separated". The threat-model limit above stands for every backend.
 - **Bridge identity.** The bootstrap secret `~/.score/bridge.token` only allows `POST /bridge/v1/hello`. Each
   producer then gets a short-lived **producer token** scoped to its profile, process incarnation and
   `HERMES_KANBAN_TASK`. It can post only its own events, receive only decisions targeted at its own approvals,

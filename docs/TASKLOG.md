@@ -762,3 +762,74 @@ One entry per completed task: what landed, review results, and any **rejected re
   P3 e2e asserted fake-data weekdays and counts that move with the date → date-proof (found failing on rebase, so the
   flake was real). Kept: 32–36 px links/segments are the prototype's values. Lead fixes: 3 small. 1 fix round.
   Web 2994 tests, lint/types green, `e2e/bold-usage` 4 + reports e2e pass.
+- **11.1d job sources, webhook triggers, report-back (lead, security, 2026-10-24).** Spike first (brief
+  `docs/briefs/11.1d-sources.md`, from Hermes source): a profile's MCP tools can be listed without Score reading a
+  credential — in-process from Hermes's tool registry (`mcp-<server>` toolset, with schemas; the plugin route,
+  preferred), `hermes mcp test` (names only) or the dashboard API (no schemas); the picker comes with 11.9a, tools are
+  named by hand until then (PLAN's fallback). Migration 0084: `triggers`, `trigger_calls`,
+  `session_tool_calls.args_digest`, `jobs.report_back`. `POST /hooks/<id>`: Standard Webhooks (±5 min, constant-time
+  HMAC), 24 h idempotency on `webhook-id`, JSON only, ≤ 256 KB, 60 verified calls/min per trigger; the only remote-mode
+  public addition and CSRF exemption (exact `POST /hooks/trg_<24 hex>`). Secrets are Score's own, sealed (AES-256-GCM,
+  `~/.score/sealing.key`, bound to the trigger id), shown once and then only to a paired browser. A call starts a job in
+  the team room with `Job.source`, the payload quoted and redacted under "outside content, not instructions" (snapshot
+  test with an injected instruction and an API key). Report-back: a constrained lead turn; "confirmed" only from the
+  bridge's record of that tool in the lead's job session after the turn began, status ok, same `args_digest` (the plugin
+  digests canonical JSON; a shared fixture pins Python = TypeScript). **Sonnet security review: 1 P1, 5 P2, 6 P3.** Real,
+  fixed with tests: (P1) credential-named payload keys made the redacted sample invalid JSON → 500 and no job (sample is
+  now redacted as data); unredacted/any-scheme links (http(s) only, redacted); template holes outside JSON strings could
+  inject structure into report-back args (holes filled only inside string values; templates validated on save);
+  bad-signature calls used the trigger's budget, a lockout (verified before queueing; failures limited per caller; unknown
+  ids answered before the queue); a failed turn could be "confirmed" (requires a completed turn); report-back could be
+  sent twice (409 while sending or once confirmed); line breaks other than \n escaped the quote block; prototype paths;
+  unbounded `webhook-id`; `no-store` on secret answers; trigger list paired-only; the plugin's digest can no longer
+  drop a hook record (catches everything, 1 MB bound). **Rejected/noted:** "confirmed doesn't prove the app accepted it"
+  — true by design (Score confirms the call was made with the exact arguments and Hermes reported success; the app's
+  own answer is in the tool result the lead saw), documented; `linkSync` on filesystems without hard links — same as
+  `bridge.token`, not a supported setup; `lead_decides` OK = the person's POST (documented). Auto report-back on "done"
+  comes with the job menu (11.4d). SETUP §6d "One Score per team". Not deployed.
+- **11.8a Where an agent runs (lead, adapter, 2026-10-24).** `GET`/`PUT /api/agents/:id/runs-on` (both H), contract §
+  "Where an agent runs", `RunsOn*` schemas. Reads `terminal.*` with `hermes config get --json`, writes with `hermes
+  config set` (settings first, `terminal.backend` last, so a failure leaves the agent where it ran; lowercase
+  `terminal.*` keys go to config.yaml, never `.env`, checked in `hermes_cli/config.py`); Docker refused `409
+  backend_unavailable` unless the daemon answers; SSH key stored as a path, never read. **Confinement, per tool (Hermes
+  0.21.5 source, Sonnet inventory, lead spot-checks):** confined = terminal + background processes, file
+  read/write/patch/search (shell commands through the backend), `execute_code` (remote kernel when not local),
+  vision/video file reads (exec-read in the sandbox); host = browsers (all local modes), computer use, web/x search,
+  stdio MCP servers, memory, skills, todo, session search, cron scheduling, kanban, messaging, image/video/TTS
+  generation (host cache), desktop-UI tools, plugins and hooks; delegate_task inherits the parent's container;
+  checkpoints are off for Docker (SSH not in Hermes's container list: possible host snapshots, noted). Docker defaults
+  that weaken it: registered credential files + skills + caches mounted read-only, network on, root in the container,
+  persistent container with `/root` and `/workspace` bind-mounted from `~/.hermes/sandboxes/docker/…`, `docker_volumes`
+  and `docker_extra_args` passed verbatim. **Live check** (owner installed Docker, decision 116; test profile
+  `scoretesta`, gpt-6-luna per decision 1): backend set to docker via the CLI, one-shot turn → terminal saw container
+  hostname and uid 0 and no `/home/raven/score`; `write_file` and `execute_code` files absent from the host `/tmp`;
+  `read_file` of the repo README not found; backend restored to `local`, probe container removed. The API never says
+  "separated": `partly` with both lists and per-config notes; SSH to this machine and `local` are `no`; unknown
+  backends `unknown`. ARCHITECTURE D7.1 updated; SETUP "Running agents in Docker" (the service needs a re-login for
+  the docker group). The card itself comes with 11.9b/11.8b ("Where agents run"). Not deployed.
+- **11.3 Theme protection on the new shell (lead, 2026-10-24).** The dock's "needs you" ring is a protected surface
+  (`data-protected`, `.bold-needs` in `protected.css`, listed in `protected-surfaces.ts`); hostile-theme e2e
+  (`e2e/bold-protection.spec.ts`) proves a theme can't hide the ring or the agents' glyphs. Found while writing the e2e:
+  the ring only lit while a run said `waiting_for_approval`, so an open approval whose run had moved on showed the agent
+  as "working"; it now also follows open human decisions (the classic Needs-you rule). AGENTS.md design rules now
+  describe the bold system and the `data-protected` rule for every new decision surface. Full e2e 647/648, the one
+  failure (`themes-builtin-visual` harbour light) a flake: 36/36 on rerun. The Look switch and pairing restyle move to
+  11.9a. Not deployed.
+  **11.8a Sonnet security review: no P1, 4 P2, P3s.** Real, fixed with tests: an edit within the same backend wasn't
+  rolled back when a later write failed (now every written key is put back from a snapshot, inside the profile lock,
+  and the read-back happens in the lock too); SSH to this machine under another spelling (`127.x`, `0.0.0.0`, IPv6
+  forms, `::ffff:127.…`, `*.localhost`, FQDN vs short name, own interface addresses) read as "partly" (now "no"; a plain
+  name gets "Score checks the name, not where it points"); Docker `extra_args`/volumes that hand over the machine
+  (`--privileged`, host namespaces, `--cap-add`, `--device`, `--security-opt`, mounts of `/`, Docker's socket, `/run`,
+  home) were ignored (now "no"; `--network` in extra args wins over `docker_network`; malformed settings "unknown");
+  `docker_forward_env` now noted; string booleans read; omitted SSH port/key reset to defaults instead of carried over;
+  host schema no longer takes brackets or junk IPv6. Noted, not fixable by Score: a backend set through the profile's
+  environment file (`TERMINAL_ENV`) is invisible to `config get` — the local card says so. Rejected: none.
+- **11.2c Fake team room (DeepSeek, 2026-10-24).** `seedFakeTeam` (fake mode only, after the team room exists; startup
+  waits for it in fake mode only): lead picked, four demo jobs (activity feed with an ask/review exchange and a held
+  turn, release notes, queue research, the default job's pinned decision), direct chats per agent, shares, pins and
+  watch frames, through the domain functions (no raw inserts but two seed messages); idempotent via a marker row.
+  1 round, no fix round. Lead review instead of a Sonnet pass (seed data only, fake-mode guarded, no personas).
+  Full e2e: the first run had 132 failures, all pairing-lock timeouts — the lead had run another spec on the same
+  `SCORE_WEB_PORT` meanwhile; the 181 affected specs pass on their own port. `codex-task.sh` now gives each task its own
+  e2e port. Not deployed.
