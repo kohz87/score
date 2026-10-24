@@ -111,8 +111,8 @@ interface MeterProps {
   roomId: string
   agentId: string
   name: string
-  /** The job's own session when the meter sits in a one-to-one (PLAN 11.7); without it, the room session. */
-  sessionId?: string | undefined
+  /** The session to read; the room session when omitted (a job's thread passes its own). */
+  sessionId?: string
   /** Changes after every finished reply: the reading is refreshed. */
   finishedReplies: number
   /** Opens the popover on the compact confirmation (the `/compress` command). */
@@ -157,13 +157,13 @@ function MeterView({
   roomId,
   agentId,
   name,
-  sessionId: namedSessionId,
+  sessionId: suppliedSessionId,
   finishedReplies,
   confirmSignal,
   data,
   refetch,
 }: MeterProps & { data: SessionContextState | undefined; refetch: () => void }) {
-  const sessionId = namedSessionId ?? roomSessionId(roomId, agentId)
+  const sessionId = suppliedSessionId ?? roomSessionId(roomId, agentId)
   const [open, setOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [keepRecent, setKeepRecent] = useState(KEEP_RECENT)

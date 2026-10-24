@@ -4,11 +4,22 @@ import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentNameColor } from '../bold-agents.ts'
-import { boldAsideLink, boldJobLink } from '../bold-links.ts'
+import { boldAsideLink } from '../bold-links.ts'
 import { exchangeStatus, exchangeTurns, type JobFilter, jobMatchesFilter } from './room-model.ts'
 import { jobExchangesQuery } from './room-queries.ts'
+import { currentExchange } from './thread-model.ts'
 
-function Capsule({ exchange, agents }: { exchange: Exchange; agents: AgentSummary[] }) {
+function Capsule({
+  exchange,
+  agents,
+  job,
+  onOpenThread,
+}: {
+  exchange: Exchange
+  agents: AgentSummary[]
+  job: Job
+  onOpenThread: (jobId: string) => void
+}) {
   const from = agents.find((agent) => agent.id === exchange.from)
   const to = agents.find((agent) => agent.id === exchange.to)
   const paused = Boolean(exchange.pause)
@@ -36,15 +47,33 @@ function Capsule({ exchange, agents }: { exchange: Exchange; agents: AgentSummar
           Waiting for {exchange.queuedBehind.agentId} in another job
         </span>
       )}
+      <span className="bold-capsule-actions">
+        <button
+          type="button"
+          className="bold-capsule-thread"
+          aria-label={`Open thread for ${job.title}`}
+          onClick={() => onOpenThread(job.id)}
+        >
+          Open thread
+        </button>
+      </span>
     </article>
   )
 }
 
-function JobCapsule({ job, agents }: { job: Job; agents: AgentSummary[] }) {
+function JobCapsule({
+  job,
+  agents,
+  onOpenThread,
+}: {
+  job: Job
+  agents: AgentSummary[]
+  onOpenThread: (jobId: string) => void
+}) {
   const definition = useMemo(() => jobExchangesQuery(job.id), [job.id])
   const exchanges = useStreamQuery(definition).data ?? []
   const navigate = useNavigate()
-  const latest = exchanges.at(-1)
+  const latest = currentExchange(exchanges)
   if (!latest) return null
   const asideAgent = agents.find((agent) => agent.id === latest.from)
 
@@ -55,12 +84,9 @@ function JobCapsule({ job, agents }: { job: Job; agents: AgentSummary[] }) {
 
   return (
     <div className="bold-capsule-wrap">
-      <Capsule exchange={latest} agents={agents} />
+      <Capsule exchange={latest} agents={agents} job={job} onOpenThread={onOpenThread} />
       {asideAgent && (
         <span className="bold-capsule-actions">
-          <button type="button" className="chip" onClick={() => void navigate(boldJobLink(job.id))}>
-            Open thread
-          </button>
           <button
             type="button"
             className="chip bold-capsule-aside"
@@ -81,11 +107,13 @@ export function RoomCapsules({
   agents,
   selectedJob,
   filter,
+  onOpenThread,
 }: {
   jobs: Job[]
   agents: AgentSummary[]
   selectedJob: string
   filter: JobFilter
+  onOpenThread: (jobId: string) => void
 }) {
   const shown = jobs.filter(
     (job) => jobMatchesFilter(job, filter) && (selectedJob === 'all' || job.id === selectedJob),
@@ -93,7 +121,7 @@ export function RoomCapsules({
   return (
     <div className="bold-capsules" aria-label="Exchanges">
       {shown.map((job) => (
-        <JobCapsule key={job.id} job={job} agents={agents} />
+        <JobCapsule key={job.id} job={job} agents={agents} onOpenThread={onOpenThread} />
       ))}
     </div>
   )

@@ -198,7 +198,8 @@ for (const size of sizes) {
       await openSearch(page)
       await page.getByRole('combobox', { name: 'Search or run a command' }).fill('/as')
       await page.getByRole('option', { name: /^\/assign/ }).click()
-      expect(new URL(page.url()).searchParams.get('command')).toBe('assign')
+      // The room (11.4a) takes `?command=` into its composer and drops it from the address, so check where it landed.
+      await expect(page.locator('.chat-composer textarea').first()).toHaveValue(/^\/assign/)
     })
 
     test('Control+K opens search from inside a focused composer or editor', async ({ page }) => {
