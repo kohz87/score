@@ -1,0 +1,289 @@
+/* PLAN 11.10b: the first run, rebuilt from prototype.html's vFirstRun() and board 08. The page keeps the shell's
+   top bar, dock and tab bar; only the main column changes. */
+[data-ui='bold'] .bold-first-run {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-block: 56px;
+}
+
+[data-ui='bold'] .bold-first-run-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 48px;
+}
+
+[data-ui='bold'] .bold-first-run-hero {
+  flex: 1 1 380px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+[data-ui='bold'] .bold-first-run-hero .word {
+  align-self: flex-start;
+}
+
+[data-ui='bold'] .bold-first-run-hero h1 {
+  font-family: var(--font-d);
+  font-size: clamp(44px, 6vw, 72px);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+[data-ui='bold'] .bold-first-run-hero p {
+  max-width: 480px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 19px;
+}
+
+[data-ui='bold'] .bold-first-run-glyphs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+[data-ui='bold'] .bold-first-run-steps {
+  flex: 1 1 480px;
+  max-width: 620px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-first-run-list {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-first-run-card {
+  background: var(--panel);
+  border-radius: 24px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-first-run-card h2 {
+  margin: 0;
+  font-family: var(--font-b);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: normal;
+  line-height: 1.5;
+}
+
+[data-ui='bold'] .bold-first-run-card p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-first-run-hermes {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+[data-ui='bold'] .bold-first-run-hermes-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-first-run-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--ok);
+  color: var(--bg);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+[data-ui='bold'] .bold-first-run-mark[data-state='attention'] {
+  background: var(--warn);
+  color: #12131a;
+}
+
+[data-ui='bold'] .bold-first-run-help {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-first-run-help a {
+  text-underline-offset: 3px;
+}
+
+[data-ui='bold'] .bold-first-run-members {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-first-run-member {
+  min-height: 44px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--field);
+  border-radius: 14px;
+  padding: 8px 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-first-run-member-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--line);
+  flex: none;
+}
+
+[data-ui='bold'] .bold-first-run-team-link {
+  align-self: flex-start;
+}
+
+[data-ui='bold'] .bold-first-run-select {
+  max-width: 260px;
+  min-height: 48px;
+}
+
+[data-ui='bold'] .bold-first-run-service {
+  margin: 0 !important;
+  color: var(--ok);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-first-run-command {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: 18px;
+  padding: 10px 12px;
+}
+
+[data-ui='bold'] .bold-first-run-command code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-first-run-command .btn {
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-first-run-recipes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-first-run-option {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--field);
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-first-run-option.disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-first-run-option input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--ink);
+}
+
+[data-ui='bold'] .bold-first-run-option-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+[data-ui='bold'] .bold-first-run-option-copy b {
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-first-run-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+[data-ui='bold'] .bold-first-run-open {
+  min-height: 52px;
+  padding: 0 28px;
+  font-size: 16px;
+}
+
+[data-ui='bold'] .bold-first-run-error {
+  align-self: stretch;
+  margin: 0;
+  color: var(--bad);
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-first-run {
+    padding-block: 32px 24px;
+  }
+
+  [data-ui='bold'] .bold-first-run-grid {
+    gap: 28px;
+  }
+
+  [data-ui='bold'] .bold-first-run-steps {
+    max-width: none;
+  }
+
+  [data-ui='bold'] .bold-first-run-members {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-first-run-select {
+    max-width: none;
+  }
+
+  [data-ui='bold'] .bold-first-run-actions,
+  [data-ui='bold'] .bold-first-run-open {
+    align-self: stretch;
+    width: 100%;
+  }
+}

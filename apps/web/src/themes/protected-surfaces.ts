@@ -24,6 +24,8 @@ export const protectedClasses = [
   'needs-you-dot',
   // PLAN 11.3: the bold shell's dock ring of an agent that needs you
   'bold-needs',
+  // PLAN 11.10b: first run asks for the lead, the service choice and the starter recipes
+  'bold-first-run-decision',
   'orch-pill',
   'orch-node__flag',
   // The task drawer's approval and its buttons
