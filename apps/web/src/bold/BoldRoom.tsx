@@ -12,6 +12,7 @@ import { BookIcon, ChevronIcon, CloseIcon, GridIcon, ThreadIcon } from './BoldIc
 import { BoldWorkbench } from './BoldWorkbench.tsx'
 import { boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
+import { BoldThread } from './room/BoldThread.tsx'
 import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 
 const PHONE = '(max-width: 860px)'
@@ -21,7 +22,7 @@ type SideMode = 'work' | 'library' | 'thread' | `agent:${string}`
 function sideCopy(mode: SideMode, agent: AgentSummary | undefined): string {
   if (mode === 'work') return 'The Work panel comes in a later task.'
   if (mode === 'library') return ''
-  if (mode === 'thread') return 'The Thread panel comes in a later task.'
+  if (mode === 'thread') return ''
   return `Your one-to-one with ${agent?.id ?? 'this agent'} comes in a later task.`
 }
 
@@ -40,6 +41,7 @@ export function BoldRoom() {
   const { sheetOpen, setSheetOpen } = useOutletContext<BoldSheetState>()
   const location = useLocation()
   const [mode, setMode] = useState<SideMode>('work')
+  const [threadJob, setThreadJob] = useState<string | null>(null)
   const workbenchVisible =
     mode === 'work' &&
     ['workbench', 'code', 'screen', 'draft'].includes(
@@ -114,18 +116,35 @@ export function BoldRoom() {
     setMenuOpen(false)
     toggleRef.current?.focus()
   }
+  const openThread = (jobId: string | null) => {
+    setThreadJob(jobId)
+    setMode('thread')
+    setMenuOpen(false)
+    if (phone) setSheetOpen(true)
+    toggleRef.current?.focus()
+  }
+  const openThreadFromMenu = () => {
+    const current = new URLSearchParams(location.search).get('job')
+    openThread(current && current !== 'all' ? current : threadJob)
+  }
   const closeSheet = () => {
     setSheetOpen(false)
     setMenuOpen(false)
     requestAnimationFrame(() => phoneOpenRef.current?.focus())
   }
-  const option = (target: SideMode, icon: ReactNode, name: string, hint: string) => (
+  const option = (
+    target: SideMode,
+    icon: ReactNode,
+    name: string,
+    hint: string,
+    onChoose = () => choose(target),
+  ) => (
     <button
       key={target}
       type="button"
       aria-current={mode === target ? 'true' : undefined}
       className={`mi ${mode === target ? 'sel' : ''}`}
-      onClick={() => choose(target)}
+      onClick={onChoose}
     >
       {icon}
       <span className="menu-copy">
@@ -150,7 +169,7 @@ export function BoldRoom() {
   return (
     <div className="roomgrid">
       <section className="roomcol" aria-label="Team room" inert={phone && sheetOpen}>
-        <BoldTeamRoom agents={agents} phoneAction={phoneAction} />
+        <BoldTeamRoom agents={agents} phoneAction={phoneAction} onOpenThread={openThread} />
       </section>
 
       <div
@@ -221,7 +240,13 @@ export function BoldRoom() {
               <div className="menu side-menu" id={menuId}>
                 {option('work', <GridIcon />, 'Work', 'What the team is making')}
                 {option('library', <BookIcon />, 'Library', 'Notes and files')}
-                {option('thread', <ThreadIcon />, 'Thread', "A job's back-and-forth")}
+                {option(
+                  'thread',
+                  <ThreadIcon />,
+                  'Thread',
+                  "A job's back-and-forth",
+                  openThreadFromMenu,
+                )}
                 {agents.length > 0 && <div className="sec">One to one</div>}
                 {agents.map((item) =>
                   option(
@@ -234,7 +259,10 @@ export function BoldRoom() {
               </div>
             )}
           </div>
-          {mode !== 'library' && mode !== 'work' && (
+          {mode === 'thread' && (
+            <BoldThread jobId={threadJob} onSelectJob={(jobId) => setThreadJob(jobId)} />
+          )}
+          {mode !== 'library' && mode !== 'work' && mode !== 'thread' && (
             <div className="sidebody" data-placeholder={mode}>
               <p className="side-placeholder">{sideCopy(mode, agent)}</p>
               {agent && (

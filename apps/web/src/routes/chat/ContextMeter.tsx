@@ -111,6 +111,8 @@ interface MeterProps {
   roomId: string
   agentId: string
   name: string
+  /** The session to read; the room session when omitted (a job's thread passes its own). */
+  sessionId?: string
   /** Changes after every finished reply: the reading is refreshed. */
   finishedReplies: number
   /** Opens the popover on the compact confirmation (the `/compress` command). */
@@ -127,7 +129,7 @@ export function ContextMeter(props: MeterProps) {
 }
 
 function Streamed(props: MeterProps) {
-  const sessionId = roomSessionId(props.roomId, props.agentId)
+  const sessionId = props.sessionId ?? roomSessionId(props.roomId, props.agentId)
   const definition = useMemo(
     () => sessionContextQuery(props.agentId, sessionId),
     [props.agentId, sessionId],
@@ -138,7 +140,7 @@ function Streamed(props: MeterProps) {
 }
 
 function Polled(props: MeterProps) {
-  const sessionId = roomSessionId(props.roomId, props.agentId)
+  const sessionId = props.sessionId ?? roomSessionId(props.roomId, props.agentId)
   const query = useQuery({
     queryKey: ['chat', 'session-context', props.agentId, sessionId],
     queryFn: async (): Promise<SessionContextState> => ({
@@ -155,12 +157,13 @@ function MeterView({
   roomId,
   agentId,
   name,
+  sessionId: suppliedSessionId,
   finishedReplies,
   confirmSignal,
   data,
   refetch,
 }: MeterProps & { data: SessionContextState | undefined; refetch: () => void }) {
-  const sessionId = roomSessionId(roomId, agentId)
+  const sessionId = suppliedSessionId ?? roomSessionId(roomId, agentId)
   const [open, setOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [keepRecent, setKeepRecent] = useState(KEEP_RECENT)

@@ -1,0 +1,402 @@
+/* A job's thread, rebuilt from docs/design/bold/prototype.html (`vThread`) and board 11. The classic message cards
+   keep their behaviour; these rules give them the side panel's compact, conversation-first shape. */
+[data-ui='bold'] .bold-thread {
+  padding: 18px;
+  gap: 14px;
+}
+
+[data-ui='bold'] .bold-thread-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-thread-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-thread-title h2 {
+  font-family: var(--font-d);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-thread-status {
+  color: var(--muted);
+  font-size: 0.87em;
+}
+
+[data-ui='bold'] .bold-thread-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-thread-stop {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+
+[data-ui='bold'] .bold-thread-stop-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-thread-stop-confirm > b {
+  font-family: var(--font-d);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+[data-ui='bold'] .bold-thread-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-thread-stop-confirm .btn {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-thread-stop-confirm .btn.ghost {
+  background: transparent;
+  color: var(--hi-ink);
+  box-shadow: inset 0 0 0 1.5px var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-thread-status-line,
+[data-ui='bold'] .bold-thread-error,
+[data-ui='bold'] .bold-thread-note {
+  margin: 0;
+  font-size: 0.93em;
+}
+
+[data-ui='bold'] .bold-thread-status-line {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-error {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-note {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-thread-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-thread-picker > button {
+  border: 0;
+  border-radius: 18px;
+  min-height: 54px;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread-picker > button:hover {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-thread-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+[data-ui='bold'] .bold-thread-round {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-thread-round-label,
+[data-ui='bold'] .bold-thread-eyebrow {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-ui='bold'] .bold-thread-history {
+  align-self: center;
+  border: 0;
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 14px;
+  background: var(--panel);
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-thread-history:hover {
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread .bold-request {
+  border-radius: 24px;
+  padding: 20px 22px;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-thread .bold-request-title {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+[data-ui='bold'] .bold-thread .bold-request-head {
+  gap: 7px;
+}
+
+[data-ui='bold'] .bold-thread-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+[data-ui='bold'] .bold-thread-recipe-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-thread-recipe-head > b {
+  font-family: var(--font-d);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+[data-ui='bold'] .bold-thread-eyebrow {
+  flex-basis: 100%;
+}
+
+[data-ui='bold'] .bold-thread-recipe-status {
+  margin-left: auto;
+  color: var(--ink2);
+  font-size: 0.87em;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-recipe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-thread-link {
+  color: var(--ink2);
+  font-size: 0.87em;
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room {
+  margin: 4px 0 0;
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room-head {
+  background: var(--field);
+  border-color: var(--line);
+  border-radius: 18px;
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room button {
+  background: var(--field);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room button.orch-primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  border-color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-room .orch-step,
+[data-ui='bold'] .bold-thread-recipe .orch-room [class*='orch-'] {
+  border-color: var(--line);
+}
+
+[data-ui='bold'] .bold-thread-recipe .orch-muted {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-thread-message .chat-message {
+  width: 100%;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-thread-message .chat-message > .agent-glyph {
+  --glyph-tile-size: 22px;
+  --glyph-radius: 8px;
+}
+
+[data-ui='bold'] .bold-thread-message .chat-message-meta {
+  margin-bottom: 3px;
+}
+
+[data-ui='bold'] .bold-thread-message .chat-text {
+  padding: 9px 13px;
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx {
+  position: relative;
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-ring {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-track {
+  stroke: var(--line);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-fill {
+  stroke: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel {
+  top: calc(100% + 10px);
+  bottom: auto;
+  right: 0;
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--ink);
+  border-radius: 22px;
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel h3,
+[data-ui='bold'] .bold-thread .chat-ctx-panel h4,
+[data-ui='bold'] .bold-thread .chat-ctx-panel p,
+[data-ui='bold'] .bold-thread .chat-ctx-panel button {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel h4,
+[data-ui='bold'] .bold-thread .chat-ctx-meta,
+[data-ui='bold'] .bold-thread .chat-ctx-note,
+[data-ui='bold'] .bold-thread .chat-ctx-tokens {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel button {
+  background: var(--field);
+  border-color: var(--line);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-panel .chat-ctx-primary {
+  background: var(--hi-bg);
+  border-color: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-thread .chat-ctx-confirm input {
+  background: var(--field);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-thread-foot {
+  flex: none;
+  padding: 0 20px 20px;
+  background: var(--deep);
+}
+
+[data-ui='bold'] .bold-thread-composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 6px 6px 6px 18px;
+  border-radius: 26px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-thread-composer input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 12px 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+[data-ui='bold'] .bold-thread-composer input::placeholder {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-thread-send {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-thread-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+[data-ui='bold'] .bold-thread-composer-status,
+[data-ui='bold'] .bold-thread-composer-error {
+  margin: 8px 4px 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-composer-status {
+  color: var(--ok);
+}
+
+[data-ui='bold'] .bold-thread-composer-error {
+  color: var(--bad);
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-thread-actions {
+    margin-left: 0;
+  }
+}

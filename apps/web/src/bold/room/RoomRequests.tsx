@@ -55,7 +55,7 @@ function decisionError(failure: unknown): string {
   return 'Couldn’t send that decision. Try again.'
 }
 
-function ExchangeRequestCard({
+export function ExchangeRequestCard({
   exchange,
   job,
   agents,
