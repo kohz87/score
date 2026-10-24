@@ -584,7 +584,7 @@ requests for you), composer "To:" with `@name`, `+` (attach with progress, voice
 with rewind and ‹ 2 / 3 ›, copy, save to Library, pin, delete, D5), deleted show/hide. Done when: e2e for each,
 screenshots vs 01/09.
 
-**11.4b Pinned needs-you** · **DeepSeek** · approvals (More: this session, always for <agent>; delivery failed → retry;
+**11.4b Pinned needs-you** ✅ · **DeepSeek** · approvals (More: this session, always for <agent>; delivery failed → retry;
 answer in Hermes), questions, paused exchanges, run-safety cards (quota guard, not confirmed ended, retry / try again /
 remap, spend not settled, D2), answerable in place. Done when: each card kind has an e2e on fake data and is
 protected; decisions need a paired browser as today.

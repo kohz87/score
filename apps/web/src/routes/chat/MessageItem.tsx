@@ -133,10 +133,12 @@ function Part({
   nested,
   bold,
   workspaceLinkFor,
+  approvalPointerIds,
 }: {
   part: MessagePart
   nested: ToolPart[]
   workspaceLinkFor?: ((target: WorkspaceTarget) => string) | undefined
+  approvalPointerIds?: ReadonlySet<string> | undefined
   agents: AgentSummary[]
   message: Message
   expansion: Expansion
@@ -216,6 +218,12 @@ function Part({
         </div>
       )
     case 'approval':
+      if (approvalPointerIds?.has(part.approvalId))
+        return (
+          <p className="chat-compact chat-notice" role="note">
+            Waiting in Needs you
+          </p>
+        )
       return <ApprovalCard approvalId={part.approvalId} />
     case 'notice':
       return (
@@ -519,6 +527,7 @@ export function MessageItem({
   importedLabel,
   versionControl,
   workspaceLinkFor,
+  approvalPointerIds,
 }: {
   message: Message
   agents: AgentSummary[]
@@ -532,6 +541,8 @@ export function MessageItem({
   importedLabel?: string | undefined
   /** The `‹ 2 / 3 ›` control of an edited message (PLAN 5.35), shown in the action row. */
   versionControl?: ReactNode
+  /** Pending approvals that live in the bold strip: their message part is a pointer, not a second decision card. */
+  approvalPointerIds?: ReadonlySet<string>
 }) {
   const imported = message.id.startsWith('import:')
   const author = message.author
@@ -619,6 +630,7 @@ export function MessageItem({
               <Part
                 key={partKey(message.parts, index)}
                 workspaceLinkFor={workspaceLinkFor}
+                approvalPointerIds={approvalPointerIds}
                 nested={
                   part.kind === 'tool' && part.callId
                     ? (nesting.children.get(part.callId) ?? [])

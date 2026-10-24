@@ -240,3 +240,34 @@ export function jobExchangesQuery(jobId: string) {
     },
   })
 }
+
+/** The paused exchanges of several jobs in one read, so the pinned strip can show one card across the room. */
+export function roomExchangesQuery(jobIds: string[]) {
+  const ids = [...new Set(jobIds)].sort()
+  return defineStreamQuery<Exchange[]>({
+    key: ['bold', 'exchanges', 'room', ...ids],
+    async fetch(signal) {
+      const responses = await Promise.all(
+        ids.map(async (jobId) =>
+          ExchangesResponseSchema.parse(
+            await apiFetch(`jobs/${encodeURIComponent(jobId)}/exchanges`, { signal }),
+          ),
+        ),
+      )
+      return {
+        asOfSeq: responses.reduce((highest, response) => Math.max(highest, response.asOfSeq), 0),
+        data: responses
+          .flatMap((response) => response.items)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)),
+      }
+    },
+    types: ['exchange.upserted'],
+    reduce(data, event) {
+      if (event.type !== 'exchange.upserted' || !ids.includes(event.data.jobId)) return data
+      const exchange = ExchangeSchema.parse(event.data)
+      return [...data.filter((item) => item.id !== exchange.id), exchange].sort(
+        (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+      )
+    },
+  })
+}

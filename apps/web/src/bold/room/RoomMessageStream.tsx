@@ -9,7 +9,7 @@ import { copyText } from '../../data/clipboard.ts'
 import { newId } from '../../data/ids.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { MessageItem } from '../../routes/chat/MessageItem.tsx'
-import { versionsQuery, type MessagePageData } from '../../routes/chat/queries.ts'
+import { approvalsQuery, versionsQuery, type MessagePageData } from '../../routes/chat/queries.ts'
 import { requestDelete, usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { startEdit } from '../../routes/chat/message-edit.ts'
 import type { WorkspaceTarget } from '../../routes/chat/workspace-link.ts'
@@ -23,7 +23,7 @@ import {
 import { saveCandidates, SaveToKnowledge } from '../../routes/knowledge/SaveToKnowledge.tsx'
 import { boldJobLink, boldMessageLink, boldWorkspaceLink } from '../bold-links.ts'
 import { jobResultsKey } from '../bold-results-queries.ts'
-import { jobMatchesFilter, type JobFilter } from './room-model.ts'
+import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomMessagesQuery, roomPinsQuery, roomSeekQuery, setRoomPin } from './room-queries.ts'
 
 function messageText(message: Message) {
@@ -114,6 +114,7 @@ function MessageWithActions({
   pinned,
   pinBusy,
   onTogglePin,
+  approvalPointerIds,
 }: {
   message: Message
   agents: AgentSummary[]
@@ -122,6 +123,7 @@ function MessageWithActions({
   pinned: boolean
   pinBusy: boolean
   onTogglePin: () => void
+  approvalPointerIds?: ReadonlySet<string>
 }) {
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -191,6 +193,7 @@ function MessageWithActions({
         agents={agents}
         bold
         workspaceLinkFor={workspaceLinkFor}
+        approvalPointerIds={approvalPointerIds}
         versionControl={
           <MessageVersionControl messageId={message.id} versions={versions} onSelect={onView} />
         }
@@ -394,6 +397,11 @@ export function RoomMessageStream({
   const [pinError, setPinError] = useState<string | null>(null)
   const versionsDefinition = useMemo(() => versionsQuery(roomId), [roomId])
   const versions = useStreamQuery(versionsDefinition).data ?? []
+  const approvalsData = useStreamQuery(approvalsQuery).data
+  const approvalPointerIds = useMemo(
+    () => approvalPointerSet(approvalsData ?? [], roomId),
+    [approvalsData, roomId],
+  )
   const hidden = usePendingDeletes().hidden
   const [view, setView] = useState<
     (NonNullable<VersionView> & { filter: JobFilter; selectedJob: string }) | null
@@ -545,6 +553,7 @@ export function RoomMessageStream({
           message={message}
           agents={agents}
           versions={versions}
+          approvalPointerIds={approvalPointerIds}
           onView={(version) => setView({ messageId: message.id, version, filter, selectedJob })}
           pinned={isPinned(message.id)}
           pinBusy={pinBusy === message.id}
