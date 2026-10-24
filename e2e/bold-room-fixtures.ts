@@ -8,6 +8,7 @@ export interface RoomRequest {
   path: string
   search: URLSearchParams
   body: unknown
+  headers: Record<string, string>
 }
 
 export interface BoldRoomOptions {
@@ -353,7 +354,7 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
         body = request.postData()
       }
     }
-    requests.push({ method, path, search: url.searchParams, body })
+    requests.push({ method, path, search: url.searchParams, body, headers: request.headers() })
 
     if (path === '/api/stream') return route.fulfill({ status: 204 })
     if (method === 'GET' && path === '/api/team-room')

@@ -24,30 +24,47 @@ export function readJobs(raw: unknown): JobRead[] {
   return JobsResponseSchema.parse(raw).items
 }
 
+/** The team-room read also carries the jobs that make the room switcher's "N jobs" honest. */
+export interface TeamRoomRead {
+  room: Room
+  jobs: JobRead[]
+}
+
+function withJob(jobs: JobRead[], job: Job): JobRead[] {
+  return [...jobs.filter((item) => item.id !== job.id), job].sort(
+    (a, b) => Number(b.isDefault) - Number(a.isDefault) || a.createdAt.localeCompare(b.createdAt),
+  )
+}
+
 /**
  * The always-on team room. `?room=` opens a room directly for the shell's own tests; without it the contract's
  * `GET /api/team-room` names the room (404 `not_ready` until the agents are known, which the room shows as a state).
  */
 export function teamRoomQuery(roomIdOverride: string | null) {
-  return defineStreamQuery<Room | null>({
+  return defineStreamQuery<TeamRoomRead | null>({
     key: ['bold', 'team-room', roomIdOverride],
     async fetch(signal) {
       if (roomIdOverride !== null) {
         const snapshot = RoomDetailSnapshotSchema.parse(
           await apiFetch(`rooms/${encodeURIComponent(roomIdOverride)}`, { signal }),
         )
-        return { asOfSeq: snapshot.asOfSeq, data: snapshot.room }
+        return { asOfSeq: snapshot.asOfSeq, data: { room: snapshot.room, jobs: [] } }
       }
       const snapshot = TeamRoomResponseSchema.parse(await apiFetch('team-room', { signal }))
-      return { asOfSeq: snapshot.asOfSeq, data: snapshot.room }
+      return { asOfSeq: snapshot.asOfSeq, data: { room: snapshot.room, jobs: snapshot.jobs } }
     },
-    types: ['room.upserted', 'room.deleted'],
+    types: ['room.upserted', 'room.deleted', 'job.upserted'],
     reduce(data, event) {
-      if (event.type === 'room.deleted') return data?.id === event.data.id ? null : data
-      if (event.type !== 'room.upserted') return data
-      if (roomIdOverride !== null) return event.data.id === roomIdOverride ? event.data : data
-      if (event.data.role === 'team') return event.data
-      return data?.id === event.data.id ? event.data : data
+      if (event.type === 'room.deleted') return data?.room.id === event.data.id ? null : data
+      if (event.type === 'job.upserted') {
+        if (roomIdOverride !== null || !data || event.data.roomId !== data.room.id) return data
+        return { ...data, jobs: withJob(data.jobs, JobSchema.parse(event.data)) }
+      }
+      if (event.type !== 'room.upserted' || !data) return data
+      if (roomIdOverride !== null)
+        return event.data.id === roomIdOverride ? { ...data, room: event.data } : data
+      if (event.data.role === 'team') return { ...data, room: event.data }
+      return data.room.id === event.data.id ? { ...data, room: event.data } : data
     },
   })
 }
@@ -199,11 +216,7 @@ export function roomJobsQuery(roomId: string) {
       if (event.type !== 'job.upserted' || event.data.roomId !== roomId) return data
       // `job.upserted` carries the whole read model. Keeping the previous snapshot's unread/active fields would
       // leave a badge stuck after the server marks the job read.
-      const next = JobSchema.parse(event.data)
-      return [...data.filter((job) => job.id !== next.id), next].sort(
-        (a, b) =>
-          Number(b.isDefault) - Number(a.isDefault) || a.createdAt.localeCompare(b.createdAt),
-      )
+      return withJob(data, JobSchema.parse(event.data))
     },
   })
 }
