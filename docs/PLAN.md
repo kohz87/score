@@ -571,7 +571,7 @@ results, one-to-ones and a paused exchange. Done when: contract doc + schemas + 
 a direct room's summary runs on its own agent and no team-room input contains one-to-one text (test); a reference sends
 only the frozen summary; the fake adapter's seeded team room renders every board state the UI tasks need.
 
-**11.3 New shell** · **Lead** · dark tokens under `[data-ui=bold]` (README values), light alternative, Room · Team ·
+**11.3 New shell** ✅ (protection; Look switch and pairing restyle → 11.9a) · **Lead** · dark tokens under `[data-ui=bold]` (README values), light alternative, Room · Team ·
 Settings + Search (⌘K) frame, side-panel dropdown slot, team dock with rings, pairing page restyle, per-device switch
 (`Settings › Look`, `?ui=bold`); AGENTS.md design rules updated once the owner confirms dark default. Done when: both
 shells run from one build; the old shell is pixel-identical to its baselines; the new frame matches boards 01 and 18 at

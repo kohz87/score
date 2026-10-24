@@ -787,3 +787,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   own answer is in the tool result the lead saw), documented; `linkSync` on filesystems without hard links — same as
   `bridge.token`, not a supported setup; `lead_decides` OK = the person's POST (documented). Auto report-back on "done"
   comes with the job menu (11.4d). SETUP §6d "One Score per team". Not deployed.
+- **11.3 Theme protection on the new shell (lead, 2026-10-24).** The dock's "needs you" ring is a protected surface
+  (`data-protected`, `.bold-needs` in `protected.css`, listed in `protected-surfaces.ts`); hostile-theme e2e
+  (`e2e/bold-protection.spec.ts`) proves a theme can't hide the ring or the agents' glyphs. Found while writing the e2e:
+  the ring only lit while a run said `waiting_for_approval`, so an open approval whose run had moved on showed the agent
+  as "working"; it now also follows open human decisions (the classic Needs-you rule). AGENTS.md design rules now
+  describe the bold system and the `data-protected` rule for every new decision surface. Full e2e 647/648, the one
+  failure (`themes-builtin-visual` harbour light) a flake: 36/36 on rerun. The Look switch and pairing restyle move to
+  11.9a. Not deployed.
