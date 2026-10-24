@@ -114,6 +114,8 @@ export const KNOWN_OVERLAYS = [
   '.chat-doc-table',
   '.task-drawer',
   '.chat-toast',
+  '.bold-tabbar',
+  '.bold-sidecol',
 ].join(', ')
 /** Dialog backdrops cover the page by design. */
 export const KNOWN_BACKDROPS =

@@ -691,3 +691,25 @@ One entry per completed task: what landed, review results, and any **rejected re
   code. **Live-DB rehearsal** of 0080 + 0081 (read-only `VACUUM INTO` copy): 21 ms; 17 jobs; 14 `room_reads` → 14
   `job_reads`; 11 coding sessions all kept; 0 shares and 0 pending terminals to move; no message without a job;
   foreign_key_check 0, integrity ok. Not deployed.
+- **11.3a bold shell frame (DeepSeek, 2026-10-24).** Delegated part of 11.3 (owner: "offload what can be offloaded";
+  "the design must adhere to the artifact mock up"). Brief made the prototype binding; the repo's `prototype.html` was
+  verified identical to the owner's live artifact. Round 0 (thinking model) built `/b` (`apps/web/src/bold/`): per-device
+  switch `?ui=bold`/`?ui=classic`, top bar, dock, side panel, phone tab bar, tokens scoped under `[data-ui='bold']`,
+  e2e + a side-by-side compare script; it died on the NanoGPT `missing_tool_call_reasoning` error after 243k tokens with
+  the work done. Lead's side-by-side check (1440 and 390 px screenshots + computed-style table): frame matches the
+  prototype; only differences explained (side head shorter without the Results/Workbench switch, ring background
+  colour vs transparent). **Sonnet review: 0 P1, 2 P2, 7 P3.** Real: dock arc was a constant 65% shown as progress
+  (now no arc until 11.2 provides progress; label hidden); no way back to classic (Settings button); classic `.avatar`
+  leaked into the bold avatar (bold classes renamed `bold-tabbar/-sidecol/-avatar`); dropdown claimed listbox without
+  keyboard support (now a disclosure, focus returns to the toggle); dead `aria-haspopup` on the room title; ⌘K
+  re-captured the palette input; reduced-motion e2e proved nothing (now probes a `livedot`). Kept: touch targets of
+  36–42 px are the prototype's values (owner's mock-up wins over the 44 px rule here). Lead-found: the theme guard
+  requires every fixed/sticky class on `KNOWN_OVERLAYS` (added `.bold-tabbar`, `.bold-sidecol`). **Fix round 1 (non-
+  thinking variant): all items done, 0 further rounds**; lead added one `btn` class. No final report again (DeepSeek
+  runs end mid-sentence; the lead reads the diff). `pnpm check` green apart from two `terminal-manager` tests that
+  pass alone (kernel oops on the VM, see below); full `pnpm e2e` 643 passed. **DeepSeek UI quality so far** (counts
+  toward the 11.5 pilot verdict): one fix round, clean code, prototype-faithful.
+- **VM kernel oops (2026-10-24 06:57 UTC).** `BUG: kernel NULL pointer dereference` in `free_swap_cache` (kernel
+  7.0.0-38-generic, Hyper-V) while a vitest worker unmapped memory; the worker hung in D state and made `ps` hang. The
+  lead killed that one worker (its own test process). Same day: a pytest segfault and a V8 `index < size()` abort, all
+  passing on rerun. Owner asked to update/reboot (system-level, needs their OK). The live Score service stayed up.

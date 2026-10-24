@@ -1,0 +1,68 @@
+/* The bold shell's visual system, copied from docs/design/bold/prototype.html. Scoped to the shell's root so the
+   classic interface keeps its own tokens. Light is the prototype's alternative set; Settings › Look will choose it
+   explicitly later, for now the shell follows the device. */
+[data-ui='bold'] {
+  --bg: #12131a;
+  --panel: #1a1c23;
+  --deep: #16171e;
+  --field: #23252e;
+  --line: #2c2f38;
+  --ink: #ececf1;
+  --ink2: #c9ccd4;
+  --muted: #a9adb8;
+  --faint: #626670;
+  --hi-bg: #ececf1;
+  --hi-ink: #12131a;
+  --hi-line: #12131a;
+  --hi-sub: #3a3d45;
+  --code-bg: #0f1116;
+  --code-ink: #c9ccd4;
+  --ok: #5ee3bf;
+  --warn: #ffc94d;
+  --bad: #ff97ae;
+  --live: #d93a4e;
+  --font-d: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --font-b: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --font-m: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --scale: 1;
+  --thumb: rgba(236, 238, 241, 0.14);
+  --thumb-hi: rgba(236, 238, 241, 0.34);
+  /* The README's light agent-name tints, readable on the dark ground. */
+  --agent-violet-name: #b3a6ff;
+  --agent-jade-name: #5ee3bf;
+  --agent-saffron-name: #ffc94d;
+  --agent-coral-name: #ff97ae;
+  --menu-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  --glow: rgba(25, 195, 154, 0.25);
+  --glow-soft: rgba(25, 195, 154, 0.15);
+  --stream-mask: #000000;
+  color-scheme: dark;
+}
+
+[data-ui='bold'][data-look='light'] {
+  --bg: #eceef2;
+  --panel: #ffffff;
+  --deep: #ffffff;
+  --field: #f4f5f8;
+  --line: #dfe2e8;
+  --ink: #12131a;
+  --ink2: #3a3d45;
+  --muted: #5e626c;
+  --faint: #9a9ea7;
+  --hi-bg: #12131a;
+  --hi-ink: #ffffff;
+  --hi-line: #ffffff;
+  --hi-sub: #c9cbd2;
+  --code-bg: #1e2029;
+  --code-ink: #d6d8de;
+  --ok: #00694f;
+  --warn: #8a5a00;
+  --bad: #b01e43;
+  --thumb: rgba(18, 19, 26, 0.14);
+  --thumb-hi: rgba(18, 19, 26, 0.38);
+  --agent-violet-name: #4a2fd9;
+  --agent-jade-name: #00694f;
+  --agent-saffron-name: #8a5a00;
+  --agent-coral-name: #b01e43;
+  color-scheme: light;
+}
