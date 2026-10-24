@@ -31,6 +31,8 @@ const eventData = {
     summary: 'Get the activity feed streaming',
     source: null,
     reportBack: null,
+    spendCapUsd: null,
+    recipe: null,
     createdAt: '2026-10-24T00:00:00.000Z',
     updatedAt: '2026-10-24T00:00:00.000Z',
   },

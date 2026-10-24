@@ -159,6 +159,10 @@ export const ExchangeReceiptSchema = z.object({
 export type ExchangeReceipt = z.infer<typeof ExchangeReceiptSchema>
 
 /** A job: a thread inside a room with its own agent sessions (brief §3.2). `job.upserted` carries the whole row. */
+/** What runs the job when it came from a recipe (PLAN 11.10c): the orchestration or workflow run it belongs to. */
+export const JobRecipeSchema = z
+  .object({ kind: z.enum(['orchestration', 'workflow']), ref: z.string().min(1).max(200) })
+  .strict()
 export const JobSchema = z.object({
   id: z.string().min(1),
   roomId: z.string().min(1),
@@ -170,6 +174,10 @@ export const JobSchema = z.object({
   isDefault: z.boolean(),
   exchangeBudget: z.int().positive(),
   jobTurnLimit: z.int().positive(),
+  /** 11.10c: the job's spend cap in USD; null = none. */
+  spendCapUsd: z.number().positive().nullable(),
+  /** 11.10c: the orchestration or workflow run this job came from; null for a free-form job. */
+  recipe: JobRecipeSchema.nullable(),
   /** PLAN 11.2: agent messages in the job the person hasn't read. */
   unread: z.int().nonnegative(),
   /** Agents busy in this job now (answering, or waiting on an approval). */
@@ -283,7 +291,14 @@ export const JobsResponseSchema = z.object({
   items: z.array(JobSchema),
 })
 export const JobCreateRequestSchema = z
-  .object({ title: z.string().trim().min(1).max(200) })
+  .object({
+    title: z.string().trim().min(1).max(200),
+    /** Start-a-job limits (11.10c); omitted = the defaults (8 turns per exchange, 40 per job, no spend cap). */
+    exchangeBudget: z.int().min(1).max(100).optional(),
+    jobTurnLimit: z.int().min(1).max(1000).optional(),
+    spendCapUsd: z.number().positive().max(10_000).optional(),
+    recipe: JobRecipeSchema.optional(),
+  })
   .strict()
 export const ExchangesResponseSchema = z.object({
   asOfSeq: z.int().nonnegative(),
@@ -322,3 +337,5 @@ export const RoomPinsResponseSchema = z.object({ items: z.array(RoomPinSchema) }
 export const RoomPinsChangedSchema = z.object({ roomId: z.string().min(1) })
 
 export type LineComment = z.infer<typeof LineCommentSchema>
+
+export type JobCreateRequest = z.infer<typeof JobCreateRequestSchema>

@@ -10,6 +10,7 @@ import { agentsQuery } from '../routes/chat/queries.ts'
 import { useNow, useTeamPause } from '../routes/now/now-queries.ts'
 import { useWatchOverview } from '../routes/watch/watch-queries.ts'
 import { agentNameColor, agentStateLabel } from './bold-agents.ts'
+import { BoldAddAgent } from './BoldAddAgent.tsx'
 import './bold-team.css'
 
 const PHONE = '(max-width: 860px)'
@@ -164,9 +165,7 @@ export function BoldTeam() {
         <h1 className="big grow" id="bold-team-title">
           {phone ? 'Team' : 'Your team'}
         </h1>
-        <button type="button" className="btn primary" disabled title="Adding agents comes in 11.8c">
-          {phone ? 'Add' : 'Add an agent'}
-        </button>
+        <BoldAddAgent agents={visible} phone={phone} />
       </div>
       {body}
       <div className="card row wrap bold-pause">

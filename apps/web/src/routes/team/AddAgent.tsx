@@ -1,21 +1,12 @@
-import {
-  AgentOperationSchema,
-  AgentPreviewSchema,
-  type AgentCreateInput,
-  type AgentOperation,
-  type AgentPreview,
-  type AgentSummary,
-} from '@score/contract'
-import { useMutation } from '@tanstack/react-query'
+import { type AgentCreateInput, type AgentSummary } from '@score/contract'
 import { useEffect, useRef, useState } from 'react'
 import { AGENT_ID_PATTERN, agentIdInput } from './agent-id.ts'
 import { AgentAdded } from './AgentAdded.tsx'
 import { ModelPicker } from '../../components/ModelPicker.tsx'
 import { AgentAppearanceFields } from './AgentAppearanceFields.tsx'
-import { apiFetch } from '../../data/api.ts'
-import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
-import { newId } from '../../data/ids.ts'
+import { ProfileOperation } from './ProfileOperation.tsx'
 import { AddCodingAgentForm } from './CodingAgent.tsx'
+import { useAgentCreateDraft } from './use-agent-create.ts'
 
 export function AddAgent({ agents }: { agents: AgentSummary[] }) {
   const [open, setOpen] = useState(false)
@@ -37,77 +28,30 @@ export function AddAgent({ agents }: { agents: AgentSummary[] }) {
     </>
   )
 }
-const emptyInput: AgentCreateInput = {
-  id: '',
-  name: '',
-  role: '',
-  model: '',
-  style: { color: '#19C39A', shape: 'triangle' },
-}
-
 type AgentAddedInfo = { id: string; name: string; style: AgentCreateInput['style'] }
 
 function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const [input, setInput] = useState<AgentCreateInput>(emptyInput)
   const [kind, setKind] = useState<'hermes' | 'coding'>('hermes')
-  const [preview, setPreview] = useState<AgentPreview | null>(null)
-  const [confirmed, setConfirmed] = useState(false)
-  const [accepted, setAccepted] = useState<AgentOperation | null>(null)
   const [added, setAdded] = useState<{ agent: AgentAddedInfo; detail: string } | null>(null)
-  const status = useProfileOperation(accepted?.id ?? null)
-  const operation = status.data ?? accepted
+  const {
+    input,
+    preview,
+    confirmed,
+    operation,
+    status,
+    review,
+    create,
+    change,
+    another: resetDraft,
+    setConfirmed,
+  } = useAgentCreateDraft()
   useEffect(() => {
     dialog.current?.showModal?.()
   }, [])
-  const review = useMutation({
-    mutationFn: async () =>
-      AgentPreviewSchema.parse(
-        await apiFetch('agents/preview', {
-          method: 'POST',
-          body: JSON.stringify({ kind: 'create', ...input }),
-        }),
-      ),
-    onSuccess: setPreview,
-  })
-  const create = useMutation({
-    mutationFn: async () =>
-      AgentOperationSchema.parse(
-        await apiFetch('agents', {
-          method: 'POST',
-          headers: { 'Idempotency-Key': newId() },
-          body: JSON.stringify({
-            ...input,
-            previewHash: preview!.hash,
-            confirmInheritance: confirmed,
-          }),
-        }),
-      ),
-    onSuccess: setAccepted,
-    onError: () => {
-      setPreview(null)
-      setConfirmed(false)
-    },
-  })
   const another = () => {
-    setInput(emptyInput)
-    setPreview(null)
-    setConfirmed(false)
-    setAccepted(null)
+    resetDraft()
     setAdded(null)
-    review.reset()
-    create.reset()
-  }
-  const change = (patch: Partial<AgentCreateInput>) => {
-    setInput((current) => {
-      const next = { ...current, ...patch }
-      if (next.provider === undefined) delete next.provider
-      return next
-    })
-    setPreview(null)
-    setConfirmed(false)
-    review.reset()
-    create.reset()
   }
   return (
     <dialog

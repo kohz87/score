@@ -427,7 +427,8 @@ function AdminGuardCard() {
   )
 }
 
-function CurrencyCard() {
+/** Shared with the bold Settings › Look page, so both shells save through one form and one endpoint. */
+export function CurrencyCard() {
   const current = useDisplayCurrency()
   const queryClient = useQueryClient()
   const [code, setCode] = useState<string | null>(null)

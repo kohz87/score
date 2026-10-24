@@ -1,9 +1,15 @@
 import { AgentIdSchema } from '@score/contract'
 import { useLoaderData } from 'react-router'
-import { useState } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { remoteTransport } from '../../data/session.ts'
 import { passkeysSupportedHere, signInWithPasskey } from '../../data/passkeys.ts'
+import { useTextScale } from '../../data/text-scale.ts'
+import { useMediaQuery } from '../../data/use-media.ts'
+import { readTheme } from '../../data/theme.ts'
+import { readUi } from '../../bold/bold-ui.ts'
+import '../../bold/tokens.css'
+import './pair-bold.css'
 
 export async function pairBrowser() {
   const token = window.location.hash.slice(1)
@@ -67,7 +73,7 @@ export function PairPage() {
   const [result, setResult] = useState<Awaited<ReturnType<typeof redeem>>>()
   const [pending, setPending] = useState(false)
   const status = result?.status ?? data.status
-  return (
+  const content = (
     <>
       <h1>Pair this browser</h1>
       {/* Pairing grants a browser control of Score: the card is one protected decision (X1). */}
@@ -122,5 +128,25 @@ export function PairPage() {
         )}
       </div>
     </>
+  )
+  return readUi() === 'bold' ? <BoldPairFrame>{content}</BoldPairFrame> : content
+}
+
+/** PLAN 11.9a: the pairing page under the bold tokens when the New look is on; classic keeps its own page. */
+function BoldPairFrame({ children }: { children: ReactNode }) {
+  // The pairing page runs before this browser may read /api/themes. Paint from what this device stored, else the OS.
+  const stored = readTheme()
+  const systemLight = useMediaQuery('(prefers-color-scheme: light)')
+  const scale = useTextScale()
+  const resolvedLook = stored === 'system' ? (systemLight ? 'light' : 'dark') : stored
+  return (
+    <div
+      className="bold-pair-page"
+      data-ui="bold"
+      data-look={resolvedLook}
+      style={{ '--scale': scale } as CSSProperties}
+    >
+      <main className="bold-pair-content">{children}</main>
+    </div>
   )
 }

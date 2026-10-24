@@ -598,7 +598,7 @@ answered from the thread; screenshots vs 11.
 (read-only, "Bring into a job"); job menu rename, close, export, share read-only link, delete with undo. Done when: e2e
 for each; older rooms open read-write with today's routing.
 
-**11.5 Side panel › Results (DeepSeek pilot)** · **DeepSeek** · boards 01, 02 (Results tab); prototype Work ›
+**11.5 Side panel › Results (DeepSeek pilot)** ✅ · **DeepSeek** · boards 01, 02 (Results tab); prototype Work ›
 Results; data from 11.2, mounted in 11.3's side-panel slot (the room itself comes in 11.4). Cards: live preview, "What changed" in plain words, drafts, small live screens; each links to
 its Workbench tab; never opens on raw code; empty state (09). Done when: e2e on the fake team room, phone width,
 reduced motion; screenshots vs 01/02; TASKLOG records fix rounds, Sonnet findings (real vs rejected) and the lead's
@@ -629,10 +629,10 @@ More (memory, skills + hub search, tools + helper count, plugins and MCP, worksp
 with export); coding agents on the same page (permission, quota floor, password, Codex ack). Done when: every tab of
 today's agent page is reachable; e2e; screenshots vs 04/06/20.
 
-**11.8c Add an agent** · **DeepSeek** · board 07: new, copy from, import a Hermes profile (progress), coding CLI
+**11.8c Add an agent** ✅ · **DeepSeek** · board 07: new, copy from, import a Hermes profile (progress), coding CLI
 (install + version check); 20 shapes, taken colours fade, preview of changes. Done when: e2e for each path.
 
-**11.9a Settings › Connections and Look** · **DeepSeek** · boards 15, 16: Hermes, providers (local endpoint),
+**11.9a Settings › Connections and Look** ✅ (trigger follow-ups on main) · **DeepSeek** · boards 15, 16: Hermes, providers (local endpoint),
 channels, your phone; tool servers + Tools and triggers UI (D18 four steps, data from 11.1d); Look (dark/light/match,
 motion, text size, per-device vs shared, send key, currency, New look switch). Done when: e2e; screenshots vs 15/16.
 
@@ -660,7 +660,7 @@ schedule, webhook, D13; routines carried over), ask-me-before, turn budget, spen
 before-it-starts checklist (D2), save as recipe; maps onto today's orchestration/workflow start APIs (migration 0086
 for When if needed). Done when: e2e starts each kind; a routine appears as a scheduled job.
 
-**11.10d Recipe editor** · **DeepSeek**, lead reviews against 7.1 rules · D1: step list (agent steps, gates, branches,
+**11.10d Recipe editor** ✅ · **DeepSeek**, lead reviews against 7.1 rules · D1: step list (agent steps, gates, branches,
 joins, ends, retries 0–2, failure paths, `{{nodes.*}}`/`{{inputs.*}}`, live checking, undo/redo), versions (immutable,
 conflict, start from older), export (scrubbed), optional read-only graph. Done when: every 7.1 editor e2e has a
 step-list equivalent; saved recipes run unchanged on the workflow engine.

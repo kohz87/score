@@ -200,3 +200,34 @@ test('Pause everyone holds an exchange’s queued turn without spending it; Resu
   await advance(60_000)
   expect(turnsUsed()).toBe(1)
 })
+
+test('a job can start with its limits and the recipe run it belongs to (11.10c)', async () => {
+  const created = await post(`/api/rooms/${roomId}/jobs`, {
+    title: 'Ship the feed',
+    exchangeBudget: 4,
+    jobTurnLimit: 20,
+    spendCapUsd: 2.5,
+    recipe: { kind: 'orchestration', ref: 'orc_123' },
+  })
+  expect(created.statusCode).toBe(201)
+  expect(created.json()).toMatchObject({
+    exchangeBudget: 4,
+    jobTurnLimit: 20,
+    spendCapUsd: 2.5,
+    recipe: { kind: 'orchestration', ref: 'orc_123' },
+  })
+  const plain = (await post(`/api/rooms/${roomId}/jobs`, { title: 'Plain' })).json()
+  expect(plain).toMatchObject({
+    exchangeBudget: 8,
+    jobTurnLimit: 40,
+    spendCapUsd: null,
+    recipe: null,
+  })
+  for (const bad of [
+    { title: 'x', exchangeBudget: 0 },
+    { title: 'x', jobTurnLimit: 5000 },
+    { title: 'x', spendCapUsd: -1 },
+    { title: 'x', recipe: { kind: 'routine', ref: 'r' } },
+  ])
+    expect((await post(`/api/rooms/${roomId}/jobs`, bad)).statusCode, JSON.stringify(bad)).toBe(400)
+})
