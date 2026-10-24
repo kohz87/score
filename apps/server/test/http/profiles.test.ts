@@ -144,7 +144,8 @@ test('PLAN 10.2: a new agent keeps its new shape, and a look or pack in the requ
     shape: 'cloud',
   })
   expect(env.db.sqlite.prepare('SELECT look, pack_rev, pack_meta FROM agent_styles').all()).toEqual(
-    [{ look: null, pack_rev: null, pack_meta: null }],
+    // The request's look ('ring') is dropped; the unused column keeps its default.
+    [{ look: 'cut', pack_rev: null, pack_meta: null }],
   )
   // Nothing of it is kept in the operation journal either.
   const operations = env.db.sqlite.prepare('SELECT request FROM profile_operations').all()

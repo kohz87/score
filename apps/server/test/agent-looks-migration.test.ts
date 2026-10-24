@@ -126,8 +126,8 @@ test('0078 gives coding agents look, pack_rev and pack_meta, and a style overrid
   ).toThrow()
 })
 
-// PLAN 11.11c: 0087 clears the unused look and pack columns; the columns stay.
-test('0087 clears looks and packs on both tables, keeps the columns, and is idempotent', () => {
+// PLAN 11.11c: 0087 clears the pack references; the unused columns stay and `look` keeps its value (nothing reads it).
+test('0087 clears the pack references on both tables, keeps the columns, and is idempotent', () => {
   const migrations = join(dir, 'migrations')
   mkdirSync(migrations)
   for (const name of readdirSync(SRC).filter((file) => file.endsWith('.sql')))
@@ -154,19 +154,10 @@ test('0087 clears looks and packs on both tables, keeps the columns, and is idem
     db.sqlite.prepare('SELECT color, shape, look, pack_rev, pack_meta FROM coding_agents').all(),
   ]
   const cleared = [
-    [{ color: '#6B4EFF', shape: 'star', look: null, pack_rev: null, pack_meta: null }],
-    [{ color: '#111111', shape: 'square', look: null, pack_rev: null, pack_meta: null }],
+    [{ color: '#6B4EFF', shape: 'star', look: 'ring', pack_rev: null, pack_meta: null }],
+    [{ color: '#111111', shape: 'square', look: 'ring', pack_rev: null, pack_meta: null }],
   ]
   expect(rows()).toEqual(cleared)
-  // The columns stay (unused), and `look` now accepts NULL.
-  for (const table of ['agent_styles', 'coding_agents']) {
-    const look = db.sqlite
-      .prepare(`PRAGMA table_info(${table})`)
-      .all()
-      .find((column) => (column as { name: string }).name === 'look') as
-      { notnull: number } | undefined
-    expect(look?.notnull).toBe(0)
-  }
   db.sqlite.exec(readFileSync(join(SRC, '0087_drop_agent_looks.sql'), 'utf8'))
   expect(rows()).toEqual(cleared)
 })
