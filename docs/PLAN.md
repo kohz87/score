@@ -665,7 +665,7 @@ joins, ends, retries 0–2, failure paths, `{{nodes.*}}`/`{{inputs.*}}`, live ch
 conflict, start from older), export (scrubbed), optional read-only graph. Done when: every 7.1 editor e2e has a
 step-list equivalent; saved recipes run unchanged on the workflow engine.
 
-**11.10e Library** · **DeepSeek** · board 13: notes, who wrote them and in which job, search, links, backlinks,
+**11.10e Library** ✅ · **DeepSeek** · board 13: notes, who wrote them and in which job, search, links, backlinks,
 properties, history, upload ≤ 256 MB with progress, zip preview/keep, files view, folders, export. Done when: today's
 Knowledge e2e pass against the Library panel.
 

@@ -27,7 +27,6 @@ let nowMs: number
 let roomId: string
 let feedId: string
 let notesId: string
-let queueId: string
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'score-team-seed-'))
@@ -63,7 +62,7 @@ beforeEach(async () => {
   const jobs = (await get('/api/team-room')).json().jobs as Job[]
   feedId = jobs.find((job) => job.title === 'Activity feed')!.id
   notesId = jobs.find((job) => job.title === 'Release notes 2.4')!.id
-  queueId = jobs.find((job) => job.title === 'Queue research')!.id
+  expect(jobs.some((job) => job.title === 'Queue research')).toBe(true)
 })
 
 afterEach(async () => {

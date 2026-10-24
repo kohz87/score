@@ -1,6 +1,6 @@
 import type { AgentSummary } from '@score/contract'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { App, appRoutes } from '../App.tsx'
@@ -54,6 +54,28 @@ const agents: AgentSummary[] = [
 
 class Source extends EventTarget {
   close() {}
+}
+
+class PendingUpload {
+  static last: PendingUpload
+  upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null }
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  status = 200
+  responseText = ''
+  responseType = ''
+  headers: Record<string, string> = {}
+  url = ''
+  constructor() {
+    PendingUpload.last = this
+  }
+  open(_method: string, url: string) {
+    this.url = url
+  }
+  setRequestHeader(name: string, value: string) {
+    this.headers[name.toLowerCase()] = value
+  }
+  send() {}
 }
 
 let phone = false
@@ -214,7 +236,7 @@ test('the side-panel dropdown is a disclosure that closes and restores focus', (
   ).toBe(false)
 
   fireEvent.click(within(menu).getByRole('button', { name: /^Library/ }))
-  expect(screen.getByText('The Library panel comes in a later task.')).toBeDefined()
+  expect(screen.getByTestId('bold-library')).toBeDefined()
   expect(document.getElementById(menuId!)).toBeNull()
   expect(document.activeElement).toBe(toggle)
 
@@ -226,7 +248,7 @@ test('the side-panel dropdown is a disclosure that closes and restores focus', (
   expect(document.activeElement).toBe(toggle)
 })
 
-test('a phone keeps the wordmark and avatar, shows the tab bar and hides the side panel', () => {
+test('a phone keeps the wordmark and avatar, shows the tab bar and opens the side panel as a sheet', async () => {
   phone = true
   open('/b')
   const nav = screen.getByRole('navigation', { name: 'Main' })
@@ -236,6 +258,79 @@ test('a phone keeps the wordmark and avatar, shows the tab bar and hides the sid
   expect(screen.queryByRole('group', { name: /Your team/ })).toBeNull()
   expect(screen.getByRole('button', { name: 'Score, go to the team room' })).toBeDefined()
   expect(screen.getByText('Y')).toBeDefined()
+  const openPanel = screen.getByRole('button', { name: 'Open side panel' })
+  expect(openPanel.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(openPanel)
+  const panel = screen.getByRole('complementary', { name: 'Side panel' })
+  expect(panel.getAttribute('aria-modal')).toBe('true')
+  expect(openPanel.getAttribute('aria-expanded')).toBe('true')
+  expect(screen.getByRole('banner').hasAttribute('inert')).toBe(true)
+  expect(nav.hasAttribute('inert')).toBe(true)
+  expect(document.querySelector('.roomcol')?.hasAttribute('inert')).toBe(true)
+  const close = screen.getByRole('button', { name: 'Close side panel' })
+  await waitFor(() => expect(document.activeElement).toBe(close))
+  fireEvent.click(close)
+  expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull()
+  expect(document.getElementById('bold-side-panel')).not.toBeNull()
+  expect(document.querySelector('.bold-sidecol')?.hasAttribute('hidden')).toBe(true)
+  expect(screen.getByRole('banner').hasAttribute('inert')).toBe(false)
+  expect(nav.hasAttribute('inert')).toBe(false)
+  expect(document.querySelector('.roomcol')?.hasAttribute('inert')).toBe(false)
+  await waitFor(() => expect(document.activeElement).toBe(openPanel))
+})
+
+test('Escape in a Library dialog closes the dialog, not the phone sheet', async () => {
+  phone = true
+  open('/b')
+  fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }))
+  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'New note' }))
+  const dialog = screen.getByRole('dialog', { name: 'New note' })
+  fireEvent.keyDown(within(dialog).getByLabelText('Path in Knowledge'), { key: 'Escape' })
+  expect(screen.queryByRole('dialog', { name: 'New note' })).toBeNull()
+  expect(screen.getByRole('complementary', { name: 'Side panel' })).toBeDefined()
+  expect(screen.getByTestId('bold-library')).toBeDefined()
+})
+
+test('the Library keeps an upload and its state while the phone sheet closes and the mode changes', async () => {
+  phone = true
+  vi.stubGlobal('XMLHttpRequest', PendingUpload)
+  open('/b')
+  fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }))
+  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
+  const library = screen.getByTestId('bold-library')
+  fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'still here' } })
+  fireEvent.change(screen.getByLabelText('Choose files to upload to the Library'), {
+    target: { files: [new File(['keep me'], 'notes.pdf', { type: 'application/pdf' })] },
+  })
+  await screen.findByRole('button', { name: /Uploading…/ })
+  expect(PendingUpload.last.url).toBe('/api/knowledge/files/notes.pdf?onConflict=ask')
+
+  fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  expect(screen.getByTestId('bold-library')).toBe(library)
+  expect(library.hasAttribute('hidden')).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
+  expect(library.hasAttribute('hidden')).toBe(false)
+  expect(screen.getByPlaceholderText('Search')).toHaveProperty('value', 'still here')
+  expect(screen.getByRole('button', { name: /Uploading…/ })).toBeDefined()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Close side panel' }))
+  expect(screen.getByTestId('bold-library')).toBe(library)
+  fireEvent.click(screen.getByRole('button', { name: 'Open side panel' }))
+  expect(screen.getByTestId('bold-library')).toBe(library)
+  expect(screen.getByRole('button', { name: /Uploading…/ })).toBeDefined()
+
+  PendingUpload.last.responseText = JSON.stringify({
+    path: 'notes.pdf',
+    kind: 'document',
+    replaced: false,
+    history: 'committed',
+  })
+  act(() => PendingUpload.last.onload?.())
 })
 
 test('Team and Settings are real pages, and the search button and Ctrl+K open the palette', async () => {

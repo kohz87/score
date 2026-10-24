@@ -833,3 +833,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   Full e2e: the first run had 132 failures, all pairing-lock timeouts — the lead had run another spec on the same
   `SCORE_WEB_PORT` meanwhile; the 181 affected specs pass on their own port. `codex-task.sh` now gives each task its own
   e2e port. Not deployed.
+- **11.10e Library panel (DeepSeek, 2026-10-24).** The bold side panel's Library mode reusing the classic Knowledge
+  pieces (optional `onOpenPath` on FilesView/NotePanels/NoteWorkspace; classic unchanged). Rounds: build + 2 fix rounds,
+  then the lead. Sonnet review: 1 P1 (Escape in a dialog closed the whole phone sheet, unmounting the panel and any
+  upload), 6 P2 (stale upload folder, no drag-and-drop, upload/zip prompts lost on mode switch, sheet focus/inert,
+  thin e2e, dialog stacking), 6 P3. Fixed in round 1: all P1/P2 and P3 byline ("Last edited by"), after-delete state,
+  phone scroll-to-note. Kept: no Recent list/folder collapse (the prototype has none), 36px tool buttons (prototype
+  sizes), unknown authors without a glyph (inherited from classic). Round 2 left 4 e2e failures, all test errors: the
+  lead fixed them (a zip unpacks into the folder on show, as the classic rule says; a CSV shows its header as a table
+  row). `bold-library.spec.ts` 26/26 twice; full check green (web 2,998); classic knowledge e2e green. Not deployed.

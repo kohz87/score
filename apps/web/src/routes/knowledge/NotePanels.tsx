@@ -1,5 +1,5 @@
 import type { KnowledgeAuthor, KnowledgeNote, AgentSummary } from '@score/contract'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { MarkdownEditor } from './MarkdownEditor.tsx'
@@ -177,15 +177,25 @@ export function NotePanels({
   note,
   currentBody,
   agents,
+  onOpenPath,
   onRestored,
   onCreate,
 }: {
   note: KnowledgeNote
   currentBody: string
   agents: AgentSummary[]
+  onOpenPath?: (path: string) => void
   onRestored: () => void
   onCreate: (target: string) => void
 }) {
+  const pathLink = (path: string, children: ReactNode) =>
+    onOpenPath ? (
+      <button type="button" className="kn-link-button" onClick={() => onOpenPath(path)}>
+        {children}
+      </button>
+    ) : (
+      <Link to={noteUrl(path)}>{children}</Link>
+    )
   return (
     <aside className="kn-side" aria-label="Note details">
       <section className="kn-panel" aria-labelledby="kn-backlinks">
@@ -195,9 +205,7 @@ export function NotePanels({
         ) : (
           <ul>
             {note.backlinks.map((link) => (
-              <li key={link.path}>
-                <Link to={noteUrl(link.path)}>{link.title || link.path}</Link>
-              </li>
+              <li key={link.path}>{pathLink(link.path, link.title || link.path)}</li>
             ))}
           </ul>
         )}
@@ -211,7 +219,7 @@ export function NotePanels({
             {note.links.map((link) => (
               <li key={link.target}>
                 {link.path ? (
-                  <Link to={noteUrl(link.path)}>{link.target}</Link>
+                  pathLink(link.path, link.target)
                 ) : (
                   <>
                     <span className="kn-missing">{link.target}</span>{' '}
