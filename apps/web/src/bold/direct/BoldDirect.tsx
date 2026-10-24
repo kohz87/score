@@ -1,5 +1,5 @@
 import type { AgentSummary, Job, Room } from '@score/contract'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
@@ -180,7 +180,13 @@ export function PrivacyNote({ agentId }: { agentId: string }) {
 
 const STARTERS = ['What are you working on?', 'What do you need from me?', 'Show me your screen']
 
-function Starters({ onAsk }: { onAsk: (text: string) => void }) {
+function Starters({
+  onAsk,
+  disabled = false,
+}: {
+  onAsk: (text: string) => void
+  disabled?: boolean
+}) {
   return (
     <div className="bold-dm-starters">
       {STARTERS.map((question) => (
@@ -188,6 +194,7 @@ function Starters({ onAsk }: { onAsk: (text: string) => void }) {
           key={question}
           type="button"
           className="btn sm ghost"
+          disabled={disabled}
           onClick={() => onAsk(question)}
         >
           {question}
@@ -197,7 +204,15 @@ function Starters({ onAsk }: { onAsk: (text: string) => void }) {
   )
 }
 
-function EmptyHome({ agent, onAsk }: { agent: AgentSummary; onAsk: (text: string) => void }) {
+function EmptyHome({
+  agent,
+  onAsk,
+  busy,
+}: {
+  agent: AgentSummary
+  onAsk: (text: string) => void
+  busy: boolean
+}) {
   return (
     <div className="bold-dm-empty">
       <AgentGlyph agent={agent} size="lg" decorative />
@@ -206,7 +221,7 @@ function EmptyHome({ agent, onAsk }: { agent: AgentSummary; onAsk: (text: string
         Nothing here reaches the team room unless you share it. {agent.id} keeps working on its jobs
         while you talk.
       </p>
-      <Starters onAsk={onAsk} />
+      <Starters onAsk={onAsk} disabled={busy} />
     </div>
   )
 }
@@ -396,7 +411,20 @@ function DirectConversation({
   const [starterKey, setStarterKey] = useState(0)
   const [bringing, setBringing] = useState(false)
   const [bringError, setBringError] = useState<string | null>(null)
-  const items = page.data?.items ?? []
+  // The page arrives newest first; the thread reads oldest to newest.
+  const items = useMemo(
+    () =>
+      [...(page.data?.items ?? [])].sort(
+        (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+      ),
+    [page.data?.items],
+  )
+  const scroller = useRef<HTMLDivElement>(null)
+  const last = items.at(-1)
+  useEffect(() => {
+    const element = scroller.current
+    if (element) element.scrollTop = element.scrollHeight
+  }, [chat.id, items.length, last?.parts.length, last?.streaming])
   const lastAgent = [...items]
     .reverse()
     .find(
@@ -440,7 +468,7 @@ function DirectConversation({
 
   return (
     <div className="bold-dm">
-      <div className="bold-dm-scroll">
+      <div className="bold-dm-scroll" ref={scroller}>
         <div className="bold-dm-thread">
           {chatDay(chat.createdAt) !== 'Today' && (
             <span className="bold-dm-date">{chatDay(chat.createdAt)} · earlier chat</span>
@@ -472,7 +500,7 @@ function DirectConversation({
               key={message.id}
               data-message-id={message.id}
             >
-              <MessageItem message={message} agents={agents} />
+              <MessageItem message={message} agents={agents} bold />
               {message.id === lastAgent?.id && (
                 <div className="bold-dm-msg-actions">
                   {shared.has(message.id) ? (
@@ -638,7 +666,7 @@ export function BoldDirect({
   if (!room || chats.length === 0)
     return (
       <div className="bold-dm">
-        <EmptyHome agent={agent} onAsk={(text) => void newChat(text)} />
+        <EmptyHome agent={agent} busy={busy} onAsk={(text) => void newChat(text)} />
         {error && (
           <p className="small bold-dm-error" role="alert">
             {error}
