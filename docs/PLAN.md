@@ -618,7 +618,7 @@ vs 02/12.
 this", earlier chats with search and New chat, reference chips, Share to the team room, "Take it aside", Add someone,
 context meter. Done when: e2e for each; screenshots vs 01/19.
 
-**11.8a Where an agent runs and "Runs on"** · **Lead** (adapter) · D3, D15: read/set the profile's terminal backend
+**11.8a Where an agent runs and "Runs on"** ✅ (API; the card lands with 11.8b) · **Lead** (adapter) · D3, D15: read/set the profile's terminal backend
 through the `hermes` CLI; verify on a test profile which tools Docker/SSH confines and record it; update D7.1. Done
 when: fixture tests for the CLI calls; nothing writes `~/.hermes` directly; the confinement result is in TASKLOG and the
 API says exactly what is confined.

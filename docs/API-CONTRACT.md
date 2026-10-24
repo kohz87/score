@@ -1427,6 +1427,46 @@ compatible: boolean }`. Read-only: compares the running build (version, code sha
   when the build changed since the check (hash differs), `409 not_compatible` when the check is not compatible.
 - Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
 
+### Where an agent runs ("Runs on", PLAN 11.8a, D15)
+Which Hermes terminal backend a profile uses, and what that actually separates from the person's machine. Read and set
+through the `hermes` CLI (`config get --json` / `config set` on `terminal.*`), never a file write. Schemas: `RunsOn*` in
+`packages/contract/src/runs-on.ts`. Both routes are **H**: the answer describes the agent's isolation and the PUT changes it.
+- **H** `GET /api/agents/:agentId/runs-on` → `RunsOn`:
+  ```ts
+  {
+    backend: 'local' | 'docker' | 'ssh' | 'other'  /* unset = local */
+    raw: string | null                             /* terminal.backend as Hermes has it */
+    separated: 'no' | 'partly' | 'unknown'         /* never 'yes': some tools always run on this machine */
+    docker: { image: string | null; network: boolean; mountsWorkspace: boolean; runsAsRoot: boolean; extraMounts: number } | null
+    ssh: { host: string | null; user: string | null; port: number | null; sameMachine: boolean } | null
+    separatedTools: string[]   /* plain-language groups that run inside the backend */
+    hostTools: string[]        /* groups that still run on this machine as you */
+    notes: string[]            /* caveats for this configuration (network, credentials, root, …) */
+    checked: { how: 'source' | 'live'; hermes: string; at: string }  /* how the confinement statement was established */
+  }
+  ```
+  `local` is always `separated: 'no'` ("This machine as you, not separated"; a backend set through the profile's
+  environment file instead of its settings isn't visible to Score, and the notes say so). `ssh` to this machine is `'no'`:
+  any loopback spelling (`127.x.y.z`, `0.0.0.0`, `::1` in any form, `::ffff:127.…`, `localhost`, `*.localhost`), the
+  machine's own names (short or full) and its interface addresses; any other name is `'partly'` with a note that Score
+  checks the name, not where it points. `docker` is `'no'` when its settings hand the container this machine
+  (`--privileged`, host network/PID/IPC/UTS/userns, `--cap-add`, `--device`, `--security-opt`, or a mount of `/`, Docker's
+  socket, `/run`, `/var/run` or the home folder), `'unknown'` when a Docker setting isn't in a form Score understands, and
+  otherwise `'partly'`: only the terminal, background processes, file read/write/patch/search, `execute_code` and
+  file-based vision run in the backend; browsers, computer use, web search, MCP servers, memory, skills, scheduled jobs,
+  messaging, image/voice generation and plugins still run on this machine as the Hermes user. `ssh` without a host and
+  backends Score doesn't know are `'unknown'` with no tool lists.
+  `502 hermes_unavailable` when Hermes can't answer.
+- **H** `PUT /api/agents/:agentId/runs-on` `{ backend: 'local' } | { backend: 'docker'; image?: string; network?: boolean }
+  | { backend: 'ssh'; host: string; user: string; port?: number; keyPath?: string }` → `RunsOn`. Settings are written
+  before `terminal.backend`, and a failure part-way puts back every value already written, so the agent keeps running
+  exactly where it did. Omitted Docker fields stay as they are; an omitted SSH `port` or `keyPath` goes back to Hermes's
+  default (22, none), so a new host never inherits the last host's key. `docker` is refused `409
+  backend_unavailable` when Docker doesn't answer on this machine. Score stores the SSH key's **path** only and never
+  reads the key. `image` is a Docker reference (`[a-z0-9._/:@-]`, ≤ 255); `host` a hostname, IPv4 or bare IPv6 address (no brackets); `user` a POSIX user name;
+  `keyPath` absolute. Takes effect for terminals the agent starts afterwards. The agent's Workspace tab is unavailable on
+  any backend but `local` (§ Workspace).
+
 ### About and updates (decision 79; schemas in `packages/contract/src/about.ts`)
 
 - `GET /api/about` → `About` `{ version: string /* Score's package.json */; commit: string | null /* short git commit of the
