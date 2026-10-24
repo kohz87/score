@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { useSearchParams } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import type { OutsideSession, Room } from '@score/contract'
+import type { Approval, OutsideSession, Room } from '@score/contract'
 import {
   agents,
   disposeRoomTest,
@@ -58,7 +58,12 @@ const outsideSession: OutsideSession = {
 
 function stubRoom(
   jobs = [makeJob({ unread: 2 })],
-  options: { older?: boolean; imported?: boolean; outside?: OutsideSession[] } = {},
+  options: {
+    older?: boolean
+    imported?: boolean
+    outside?: OutsideSession[]
+    approvals?: Approval[]
+  } = {},
 ) {
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://x')
@@ -127,7 +132,8 @@ function stubRoom(
     if (parsed.pathname === '/api/rooms/room-1/pins') return jsonResponse({ items: [] })
     if (parsed.pathname === '/api/rooms/room-1/versions')
       return jsonResponse({ asOfSeq: 1, items: [] })
-    if (parsed.pathname === '/api/approvals') return jsonResponse({ asOfSeq: 1, items: [] })
+    if (parsed.pathname === '/api/approvals')
+      return jsonResponse({ asOfSeq: 1, items: options.approvals ?? [], nextCursor: null })
     if (parsed.pathname === '/api/commands') return jsonResponse({ items: [] })
     if (parsed.pathname.startsWith('/api/jobs/')) return jsonResponse({ asOfSeq: 1, items: [] })
     if (parsed.pathname.startsWith('/api/rooms/room-old'))
@@ -175,6 +181,96 @@ test('the room shows job tabs, the To chip and the seeded unread count', async (
   expect(screen.getByRole('tab', { name: /^All/ }).textContent).toContain('5')
   expect(screen.getByText('To: team room (lead)')).toBeDefined()
   expect(screen.getByRole('button', { name: 'Needs you' })).toBeDefined()
+})
+
+const phoneApproval: Approval = {
+  id: 'approval-phone',
+  origin: 'score-run',
+  phase: 'human_pending',
+  status: 'pending',
+  actionable: true,
+  linkedTo: null,
+  agentId: 'builder',
+  title: 'May I install a package?',
+  command: 'npm install ws@8',
+  cwd: '~/app',
+  description: 'The websocket feed needs ws.',
+  choices: ['once', 'session', 'always', 'deny'],
+  createdAt: '2026-10-24T09:03:00.000Z',
+  expiresAt: null,
+  decision: null,
+  delivery: 'none',
+  blocking: null,
+  refs: [],
+}
+
+test('a phone opens on board 18 with the pinned request first, then jobs and their unread counts', async () => {
+  stubRoom(
+    [
+      makeJob({ id: 'job-default', title: 'Team room', isDefault: true, unread: 9 }),
+      makeJob({ id: 'job-activity', title: 'Activity feed', unread: 2 }),
+      makeJob({ id: 'job-queue', title: 'Queue research', state: 'done', unread: 0 }),
+      makeJob({
+        id: 'job-notes',
+        title: 'Release notes 2.4',
+        state: 'waiting_on_you',
+        holderAgentId: 'lead',
+        unread: 3,
+      }),
+    ],
+    { approvals: [phoneApproval] },
+  )
+  renderInRoom(<BoldTeamRoom agents={agents} phone />, ['/b'])
+
+  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
+  expect(screen.queryByRole('tablist', { name: 'Jobs' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^Team room\./ })).toBeNull()
+  expect(
+    screen.getByRole('combobox', { name: /^Message Team room/ }).getAttribute('placeholder'),
+  ).toBe('Start a job or message the team')
+  const activity = screen.getByRole('button', { name: /^Activity feed\..*2 unread/ })
+  const notes = screen.getByRole('button', { name: /^Release notes 2\.4\..*3 unread/ })
+  expect(activity.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(activity.textContent).toContain('builder is working')
+  expect(notes.textContent).toContain('lead needs you')
+  expect(screen.getByRole('img', { name: 'Done' })).toBeDefined()
+
+  const pin = await screen.findByRole('article', {
+    name: /Needs you: May I install a package/,
+  })
+  expect(pin.getAttribute('data-protected')).toBe('flex')
+  const jobs = screen.getByRole('region', { name: 'Jobs' })
+  expect(pin.compareDocumentPosition(jobs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+test('a phone opens a job full screen and Back returns to the job list', async () => {
+  stubRoom([
+    makeJob({ id: 'job-activity', title: 'Activity feed', unread: 2 }),
+    makeJob({ id: 'job-notes', title: 'Release notes 2.4' }),
+  ])
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} phone />
+      <ParamsProbe />
+    </>,
+    ['/b?message=old'],
+  )
+
+  fireEvent.click(await screen.findByRole('button', { name: /^Activity feed\./ }))
+  expect(await screen.findByText('To: Activity feed')).toBeDefined()
+  expect(screen.getByTestId('params').textContent).toContain('job=job-activity')
+  expect(screen.getByTestId('params').textContent).not.toContain('message')
+  expect(screen.queryByRole('heading', { name: 'Jobs' })).toBeNull()
+  expect(screen.getByText('Activity feed')).toBeDefined()
+  expect(
+    screen.getByRole('combobox', { name: /^Message Team room/ }).getAttribute('placeholder'),
+  ).toBe('Message the team')
+  expect(screen.getByRole('button', { name: /Open thread for Activity feed/ })).toBeDefined()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Back to jobs' }))
+  expect(await screen.findByRole('heading', { name: 'Jobs' })).toBeDefined()
+  expect(screen.getByTestId('params').textContent).not.toContain('job=')
+  expect(screen.getByRole('button', { name: /^Activity feed\./ })).toBeDefined()
 })
 
 test('selecting a job changes the composer destination and hides the message param', async () => {

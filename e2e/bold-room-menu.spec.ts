@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { openBoldJob } from './bold-room-fixtures.ts'
 import { openMenuRoom } from './bold-room-menu-fixtures.ts'
 
 test.use({
@@ -159,7 +160,7 @@ for (const viewport of sizes) {
 
     test(`the job menu shares that job and exports the classic room at ${at}`, async ({ page }) => {
       const state = await openMenuRoom(page)
-      await page.getByRole('tab', { name: /Activity feed/ }).click()
+      await openBoldJob(page, /Activity feed/)
       await page.getByRole('button', { name: 'Job menu' }).click()
       const menu = page.getByRole('menu', { name: 'Activity feed actions' })
       await expect(menu).toHaveAttribute('data-protected', 'flex')
@@ -187,7 +188,7 @@ for (const viewport of sizes) {
 
     test(`the job menu works from the keyboard at ${at}`, async ({ page }) => {
       await openMenuRoom(page)
-      await page.getByRole('tab', { name: /Activity feed/ }).click()
+      await openBoldJob(page, /Activity feed/)
       const trigger = page.getByRole('button', { name: 'Job menu' })
       await trigger.click()
       const menu = page.getByRole('menu', { name: 'Activity feed actions' })
@@ -231,7 +232,12 @@ for (const viewport of sizes) {
 
       await side.getByRole('button', { name: 'Bring into a job' }).click()
       await expect(page).toHaveURL(/job=job-brought/)
-      await expect(page.getByRole('tab', { name: /Plan the launch checklist/ })).toBeVisible()
+      if (viewport.width > 860)
+        await expect(page.getByRole('tab', { name: /Plan the launch checklist/ })).toBeVisible()
+      else {
+        await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
+        await expect(page.locator('.bold-phone-chat-id')).toContainText('Plan the launch checklist')
+      }
 
       expect(
         state.requests.filter(

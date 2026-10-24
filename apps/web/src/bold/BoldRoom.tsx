@@ -185,6 +185,7 @@ export function BoldRoom() {
     setSheetOpen(false)
     const next = withoutDirect(new URLSearchParams(params))
     void navigate({ pathname: location.pathname, search: next.toString() ? `?${next}` : '' })
+    requestAnimationFrame(() => phoneOpenRef.current?.focus())
   }
 
   const closeSheet = () => {
@@ -237,11 +238,12 @@ export function BoldRoom() {
       ref={phoneOpenRef}
       type="button"
       className="btn sm phone-side-open"
+      aria-label="Open side panel"
       aria-expanded={sheetOpen}
       aria-controls="bold-side-panel"
       onClick={() => setSheetOpen(true)}
     >
-      <BookIcon /> Open side panel
+      <BookIcon /> <span className="phone-side-label">Open side panel</span>
     </button>
   ) : undefined
 
@@ -250,6 +252,7 @@ export function BoldRoom() {
       <section className="roomcol" aria-label="Team room" inert={phone && sheetOpen}>
         <BoldTeamRoom
           agents={agents}
+          phone={phone}
           phoneAction={phoneAction}
           onOpenElsewhere={openElsewhere}
           onOpenThread={openThread}

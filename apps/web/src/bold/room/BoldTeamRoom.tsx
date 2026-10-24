@@ -15,6 +15,7 @@ import { RoomMessageStream } from './RoomMessageStream.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
 import { RoomTabs } from './RoomTabs.tsx'
 import { JobMenu, RoomTitle } from './RoomMenus.tsx'
+import { PhoneJobList } from './PhoneJobList.tsx'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
 import './bold-room.css'
@@ -43,10 +44,14 @@ function RoomUnavailable({ error }: { error: boolean }) {
 function LoadedTeamRoom({
   room,
   agents,
+  phone,
+  phoneAction,
   onOpenThread,
 }: {
   room: Room
   agents: AgentSummary[]
+  phone: boolean
+  phoneAction?: ReactNode
   onOpenThread: (jobId: string) => void
 }) {
   const [params, setParams] = useSearchParams()
@@ -121,6 +126,8 @@ function LoadedTeamRoom({
     baseMessages.status === 'success' &&
     (baseMessages.data?.items.length ?? 0) === 0
   const job = allJobs.find((item) => item.id === selectedJob)
+  const phoneChatJob =
+    phone && requestedJob !== 'all' ? allJobs.find((item) => item.id === requestedJob) : undefined
   const lead = agents.find((agent) => agent.id === room.leadAgentId)
   const olderRoom = room.role !== 'team' && room.routing === 'mentions'
   const allLabel = olderRoom
@@ -179,7 +186,29 @@ function LoadedTeamRoom({
           Couldn’t load jobs. Try again.
         </p>
       )}
-      {jobsStatus === 'success' && !empty && (
+      {phone && phoneChatJob && (
+        <div className="bold-phone-chat-tools" aria-label="Job tools">
+          <button
+            type="button"
+            className="bold-job-thread"
+            aria-label={`Open thread for ${phoneChatJob.title}`}
+            onClick={() => onOpenThread(phoneChatJob.id)}
+          >
+            Thread
+          </button>
+          <JobMenu room={room} job={phoneChatJob} onShare={setSharingJob} />
+          <button
+            type="button"
+            className="bold-filter bold-deleted-toggle"
+            aria-pressed={showDeleted}
+            onClick={() => setShowDeleted(room.id, !showDeleted)}
+          >
+            {showDeleted ? 'Hide deleted messages' : 'Show deleted messages'}
+          </button>
+          {phoneAction}
+        </div>
+      )}
+      {!phone && jobsStatus === 'success' && !empty && (
         <RoomTabs
           jobs={allJobs}
           selectedJob={selectedJob}
@@ -190,7 +219,7 @@ function LoadedTeamRoom({
           onOpenThread={onOpenThread}
         />
       )}
-      {jobsStatus === 'success' && !empty && (
+      {!phone && jobsStatus === 'success' && !empty && (
         <div className="bold-room-tools">
           <button
             type="button"
@@ -213,15 +242,19 @@ function LoadedTeamRoom({
       )}
       {empty ? (
         <RoomEmpty agents={agents} onStart={startWith} />
+      ) : phone && !phoneChatJob ? (
+        <PhoneJobList jobs={allJobs} agents={agents} onOpen={selectJob} />
       ) : (
         <div className="stream" id="bold-room-stream" aria-live="polite">
-          <RoomCapsules
-            jobs={allJobs}
-            agents={agents}
-            selectedJob={selectedJob}
-            filter={filter}
-            onOpenThread={onOpenThread}
-          />
+          {!phone && (
+            <RoomCapsules
+              jobs={allJobs}
+              agents={agents}
+              selectedJob={selectedJob}
+              filter={filter}
+              onOpenThread={onOpenThread}
+            />
+          )}
           <RoomMessageStream
             roomId={room.id}
             jobs={allJobs}
@@ -243,15 +276,19 @@ function LoadedTeamRoom({
           roomName={room.name}
           agents={agents}
           leadAgentId={room.leadAgentId}
-          jobId={selectedJob === 'all' ? null : selectedJob}
+          jobId={selectedJob === 'all' || (phone && !phoneChatJob) ? null : selectedJob}
           roomMode
           toLabel={toLabel}
           placeholder={
             empty
               ? 'Describe the work'
-              : olderRoom
-                ? 'Message this room. @name for one agent, / for commands'
-                : 'Message the team. @name for one agent, / for commands'
+              : phone
+                ? phoneChatJob
+                  ? 'Message the team'
+                  : 'Start a job or message the team'
+                : olderRoom
+                  ? 'Message this room. @name for one agent, / for commands'
+                  : 'Message the team. @name for one agent, / for commands'
           }
           messagesKey={baseMessagesDefinition.key}
           initialText={command ? `/${command} ` : undefined}
@@ -271,11 +308,14 @@ function LoadedTeamRoom({
 /** The room column of the bold shell: its title, job tabs, requests, live stream and composer. */
 export function BoldTeamRoom({
   agents,
+  phone = false,
   phoneAction,
   onOpenElsewhere,
   onOpenThread = () => undefined,
 }: {
   agents: AgentSummary[]
+  /** The bold shell's phone breakpoint: board 18's job list and board 03's full-screen chat. */
+  phone?: boolean
   phoneAction?: ReactNode
   onOpenElsewhere?: (session: OutsideSession) => void
   onOpenThread?: (jobId: string) => void
@@ -294,6 +334,19 @@ export function BoldTeamRoom({
     room ?? (override === null ? teamRoom : (rooms.find((item) => item.id === override) ?? null))
   const [sharing, setSharing] = useState<{ room: Room; job?: Job } | null>(null)
   const [deleting, setDeleting] = useState<Room | null>(null)
+  const phoneTeam = phone && current?.role === 'team'
+  const phoneJobId = params.get('job')
+  const phoneJob =
+    phoneTeam && phoneJobId && phoneJobId !== 'all'
+      ? [...(roomRead?.jobs ?? []), ...(teamRead?.jobs ?? [])].find((job) => job.id === phoneJobId)
+      : undefined
+
+  const backToJobs = () => {
+    const next = new URLSearchParams(params)
+    next.delete('job')
+    next.delete('message')
+    setParams(next, { replace: true })
+  }
 
   const selectRoom = (target: Room) => {
     const next = new URLSearchParams(params)
@@ -325,6 +378,9 @@ export function BoldTeamRoom({
         rooms={rooms}
         agents={agents}
         phoneAction={phoneAction}
+        phone={phoneTeam}
+        phoneJob={phoneJob}
+        onBackToJobs={backToJobs}
         onSelectRoom={selectRoom}
         onOpenElsewhere={(session) => onOpenElsewhere?.(session)}
         onShare={(room) => {
@@ -342,7 +398,14 @@ export function BoldTeamRoom({
       ) : status === 'error' || !room ? (
         <RoomUnavailable error={status === 'error'} />
       ) : (
-        <LoadedTeamRoom key={room.id} room={room} agents={agents} onOpenThread={onOpenThread} />
+        <LoadedTeamRoom
+          key={room.id}
+          room={room}
+          agents={agents}
+          phone={phoneTeam}
+          phoneAction={phoneAction}
+          onOpenThread={onOpenThread}
+        />
       )}
       {sharing && (
         <ShareDialog room={sharing.room} job={sharing.job} close={() => setSharing(null)} />

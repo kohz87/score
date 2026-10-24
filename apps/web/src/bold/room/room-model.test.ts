@@ -8,6 +8,7 @@ import {
   exchangeTurns,
   jobMatchesFilter,
   jobStateLabel,
+  jobStateLine,
   needsYou,
   optionLabel,
   pinsMoreLabel,
@@ -34,6 +35,40 @@ test('job state labels name the four states and closed', () => {
   expect(jobStateLabel(job('working'))).toBe('Working')
   expect(jobStateLabel(job('done'))).toBe('Done')
   expect(jobStateLabel(job('closed'))).toBe('Closed')
+})
+
+test('a job’s phone state line names who holds working and waiting jobs, or the summary when done', () => {
+  const agents = [
+    {
+      id: 'builder',
+      name: 'builder',
+      role: '',
+      style: { color: '#19C39A', shape: 'triangle' as const },
+      status: 'working' as const,
+      activity: null,
+      model: { id: 'fake', label: 'Demo' },
+      served: true,
+    },
+    {
+      id: 'reviewer',
+      name: 'reviewer',
+      role: '',
+      style: { color: '#FFB61E', shape: 'diamond' as const },
+      status: 'idle' as const,
+      activity: null,
+      model: { id: 'fake', label: 'Demo' },
+      served: true,
+    },
+  ]
+  expect(jobStateLine(makeJob({ holderAgentId: 'builder' }), agents)).toBe('builder is working')
+  expect(jobStateLine(makeJob({ activeAgents: ['builder', 'reviewer'] }), agents)).toBe(
+    'builder and reviewer working',
+  )
+  expect(jobStateLine(makeJob({ state: 'waiting_on_you' }), agents)).toBe('builder needs you')
+  expect(jobStateLine(makeJob({ state: 'done', summary: 'One clear pick' }), agents)).toBe(
+    'Done · One clear pick',
+  )
+  expect(jobStateLine(makeJob({ state: 'open', holderAgentId: null }), agents)).toBe('Open')
 })
 
 test('a paused exchange needs you in both paused states, but a pause without a pause object does not', () => {

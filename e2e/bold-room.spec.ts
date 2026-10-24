@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { openBoldRoom } from './bold-room-fixtures.ts'
+import { openBoldJob, openBoldRoom } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 
 // PLAN 11.4a: the bold team room. The robot room moves over time, so these specs pin the contract-shaped reads to a
@@ -49,9 +49,7 @@ async function expectDestination(page: Page, label: string) {
 }
 
 async function openJob(page: Page, title: RegExp) {
-  await page.getByRole('tab', { name: title }).click()
-  // Opening the tab reads that job, so its badge goes away once its own messages are on screen.
-  await expect(page.getByRole('tab', { name: title })).toHaveAttribute('aria-selected', 'true')
+  await openBoldJob(page, title)
 }
 
 function message(page: Parameters<typeof openBoldRoom>[0], id: string) {
@@ -70,6 +68,33 @@ for (const viewport of sizes) {
       page,
     }) => {
       await openBoldRoom(page)
+
+      if (viewport.width <= 860) {
+        await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+        const activity = page.getByRole('button', { name: /^Activity feed\..*2 unread/ })
+        const notes = page.getByRole('button', { name: /^Release notes 2\.4\..*3 unread/ })
+        const queue = page.getByRole('button', { name: /^Queue research\./ })
+        const closed = page.getByRole('button', { name: /^Old import\..*1 unread/ })
+        await expect(activity).toBeVisible()
+        await expect(notes).toBeVisible()
+        await expect(queue).toBeVisible()
+        await expect(queue.locator('.bold-unread')).toHaveCount(0)
+        await expect(closed).toBeVisible()
+
+        await activity.click()
+        expect(new URL(page.url()).searchParams.get('job')).toBe('job-activity')
+        await expectDestination(page, 'To: Activity feed')
+        await expect(
+          page.getByText('Read layer is ready. The feed renders newest first.'),
+        ).toBeVisible()
+        await expect(
+          page.getByText('Draft is ready. The migration steps are still open.'),
+        ).toHaveCount(0)
+        await page.getByRole('button', { name: 'Back to jobs' }).click()
+        await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+        await expect(page.getByRole('button', { name: /^Activity feed\..*/ })).toBeVisible()
+        return
+      }
 
       const all = page.getByRole('tab', { name: /^All/ })
       const activity = page.getByRole('tab', { name: /Activity feed/ })
@@ -165,7 +190,7 @@ for (const viewport of sizes) {
 
     test(`@name sends to that agent in the selected job at ${at}`, async ({ page }) => {
       const state = await openBoldRoom(page)
-      await page.getByRole('tab', { name: /Release notes 2\.4/ }).click()
+      await openBoldJob(page, /Release notes 2\.4/)
 
       const composer = page.getByRole('combobox', { name: /^Message Team room/ })
       await composer.fill('@rev')
@@ -397,10 +422,12 @@ for (const viewport of sizes) {
       await expect(result).toContainText('Done · lead')
       await result.click()
       await expect(page).toHaveURL(/[?&]job=job-queue/)
-      await expect(page.getByRole('tab', { name: /Queue research/ })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      )
+      if (viewport.width > 860)
+        await expect(page.getByRole('tab', { name: /Queue research/ })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        )
+      else await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
       await expectDestination(page, 'To: Queue research')
       const article = page.locator('#message-message-queue')
       await expect(article).toHaveClass(/bold-message-hit/)

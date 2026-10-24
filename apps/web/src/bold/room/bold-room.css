@@ -1227,6 +1227,293 @@
     max-width: none;
   }
 
+  /* PLAN 11.10a: board 18's job list, then board 03's full-screen job chat. The shell's tab bar stays under both. */
+  [data-ui='bold'] .bold-phone-list-head,
+  [data-ui='bold'] .bold-phone-chat-head {
+    gap: 8px;
+    padding: 0 2px;
+  }
+
+  [data-ui='bold'] .bold-phone-list-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  [data-ui='bold'] .bold-phone-list-title,
+  [data-ui='bold'] .bold-phone-list-actions,
+  [data-ui='bold'] .bold-phone-chat-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .bold-phone-list-title .roomtitle {
+    flex: 1;
+    min-width: 0;
+    font-size: 28px;
+  }
+
+  [data-ui='bold'] .bold-phone-list-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  [data-ui='bold'] .bold-phone-list-actions .chip,
+  [data-ui='bold'] .bold-phone-list-actions .btn.sm,
+  [data-ui='bold'] .bold-phone-list-actions .icon-btn.sm,
+  [data-ui='bold'] .bold-phone-chat-tools button,
+  [data-ui='bold'] .bold-phone-chat-tools .icon-btn.sm {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-phone-list-actions .icon-btn.sm {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-phone-list-actions .phone-side-open {
+    margin-left: 0;
+  }
+
+  [data-ui='bold'] .bold-phone-presence {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--panel);
+    padding: 5px 8px;
+  }
+
+  [data-ui='bold'] .bold-phone-presence-agent {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+  }
+
+  [data-ui='bold'] .bold-phone-presence-agent.needs {
+    background: var(--hi-bg);
+  }
+
+  [data-ui='bold'] .bold-phone-jobs {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 2px 0 4px;
+  }
+
+  [data-ui='bold'] .bold-phone-jobs-head {
+    display: flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 4px;
+  }
+
+  [data-ui='bold'] .bold-phone-jobs-head h2 {
+    font-family: var(--font-b);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0;
+  }
+
+  [data-ui='bold'] .bold-phone-job-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  [data-ui='bold'] .bold-phone-job {
+    min-height: 72px;
+    width: 100%;
+    border: 0;
+    border-radius: 20px;
+    background: var(--panel);
+    color: var(--ink);
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+  }
+
+  [data-ui='bold'] .bold-phone-job-blank {
+    width: 44px;
+    height: 44px;
+    flex: none;
+    border-radius: 14px;
+    background: var(--field);
+  }
+
+  [data-ui='bold'] .bold-phone-job-copy {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  [data-ui='bold'] .bold-phone-job-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .bold-phone-job-title b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui='bold'] .bold-phone-job-title .bold-unread,
+  [data-ui='bold'] .bold-phone-state-mark {
+    margin-left: auto;
+  }
+
+  [data-ui='bold'] .bold-phone-state-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    flex: none;
+  }
+
+  [data-ui='bold'] .bold-phone-state-dot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 999px;
+  }
+
+  [data-ui='bold'] .bold-phone-state-check {
+    display: inline-grid;
+    place-items: center;
+    color: var(--ok);
+  }
+
+  [data-ui='bold'] .bold-phone-job-state {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-head {
+    padding: 0 2px 0 0;
+  }
+
+  [data-ui='bold'] .bold-phone-back {
+    background: transparent;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-id {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-id b {
+    font-family: var(--font-d);
+    font-size: 18px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-id > span {
+    color: var(--muted);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 44px;
+    padding: 0 2px;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .bold-filter,
+  [data-ui='bold'] .bold-phone-chat-tools .bold-job-thread {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .bold-deleted-toggle {
+    margin-left: auto;
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .phone-side-open {
+    margin-left: 0;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .phone-side-label {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-phone-chat-tools .phone-side-open,
+  [data-ui='bold'] .bold-phone-chat-tools .icon-btn.sm {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  [data-ui='bold'] .bold-room-composer .chat-composer-box--room .chat-attach,
+  [data-ui='bold'] .bold-room-composer .chat-composer-box--room .chat-send {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-room-composer .chat-composer-box--room > textarea {
+    min-height: 44px;
+  }
+
+  /* Sheets and message tools are reached by finger too. */
+  [data-ui='bold'] .bold-approval-menu button,
+  [data-ui='bold'] .bold-act,
+  [data-ui='bold'] .bold-history,
+  [data-ui='bold'] .bold-pins-more,
+  [data-ui='bold'] .bold-request-form input,
+  [data-ui='bold'] .bold-request-form select,
+  [data-ui='bold'] .chat-composer-box--room .chat-attach-list button,
+  [data-ui='bold'] .chat-composer-box--room .chat-attachment > button {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .chat-composer-box--room .chat-attachment > button {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-thread-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-phone-job,
+  [data-ui='bold'] .bold-phone-jobs-head,
+  [data-ui='bold'] .bold-phone-chat-tools,
+  [data-ui='bold'] .bold-phone-chat-head {
+    scroll-margin-bottom: 104px;
+  }
+
   [data-ui='bold'] .bold-job-tabs,
   [data-ui='bold'] .bold-job-filters {
     flex-wrap: nowrap;

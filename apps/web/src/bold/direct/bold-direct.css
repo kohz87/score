@@ -613,6 +613,30 @@
     left: 12px;
     right: 12px;
   }
+
+  [data-ui='bold'] .bold-dm-ref button,
+  [data-ui='bold'] .bold-dm-link {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-dm-composer .chat-composer-box--room > textarea,
+  [data-ui='bold'] .bold-dm-msg-actions .btn,
+  [data-ui='bold'] .bold-dm-starters .btn {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-dm-history-search,
+  [data-ui='bold'] .bold-dm-history-foot a {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-dm-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+  }
 }
 
 [data-ui='bold'] .bold-dm-load {
