@@ -79,6 +79,32 @@ beforeEach(() => {
       url.searchParams.delete('tz')
       if (url.pathname === '/api/agents')
         return Promise.resolve(Response.json({ asOfSeq: 1, items: agents }))
+      if (url.pathname === '/api/watch/overview')
+        return Promise.resolve(
+          Response.json({
+            items: agents.map((agent) => ({
+              agent,
+              thumbnail: null,
+              status: 'Idle',
+              live: false,
+              surface: null,
+            })),
+          }),
+        )
+      if (url.pathname === '/api/now')
+        return Promise.resolve(
+          Response.json({
+            asOfSeq: 1,
+            now: new Date().toISOString(),
+            paused: false,
+            headline: { working: 1, needsYou: 0, text: 'One agent is working.' },
+            lanes: [],
+            handoffs: [],
+            focusApproval: null,
+            thread: null,
+            madeToday: [],
+          }),
+        )
       return Promise.resolve(
         Response.json(
           {
@@ -205,11 +231,11 @@ test('a phone keeps the wordmark and avatar, shows the tab bar and hides the sid
   expect(screen.getByText('Y')).toBeDefined()
 })
 
-test('Team and Settings are placeholders, and the search button and Ctrl+K open the palette', async () => {
+test('Team is a real page, Settings is still a placeholder, and the search button and Ctrl+K open the palette', async () => {
   open('/b')
   fireEvent.click(screen.getByRole('button', { name: 'Team' }))
-  expect(await screen.findByRole('heading', { name: 'Team' })).toBeDefined()
-  expect(screen.getByText('Team comes in 11.8')).toBeDefined()
+  expect(await screen.findByRole('heading', { name: 'Your team' })).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Pause everyone' })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
   expect(await screen.findByRole('heading', { name: 'Settings' })).toBeDefined()
   expect(screen.getByText('Settings come in 11.9')).toBeDefined()

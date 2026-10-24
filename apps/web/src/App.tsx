@@ -4,7 +4,9 @@ import type { DataRouter, RouteObject } from 'react-router'
 import { applyUiParam, readUi } from './bold/bold-ui.ts'
 import { BoldRoom } from './bold/BoldRoom.tsx'
 import { BoldShell } from './bold/BoldShell.tsx'
-import { BoldSettings, BoldTeam } from './bold/BoldPlaceholder.tsx'
+import { BoldAgentPage } from './bold/BoldAgent.tsx'
+import { BoldSettings } from './bold/BoldPlaceholder.tsx'
+import { BoldTeam } from './bold/BoldTeam.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
 import { AgentPage } from './routes/team/AgentPage.tsx'
 import { TeamLayout, TeamPage } from './routes/team/TeamPage.tsx'
@@ -83,6 +85,7 @@ export const appRoutes: RouteObject[] = [
         children: [
           { index: true, Component: BoldRoom },
           { path: 'team', Component: BoldTeam },
+          { path: 'team/:agentId', Component: BoldAgentPage },
           { path: 'settings', Component: BoldSettings },
           { path: '*', loader: () => redirect('/b') },
         ],
