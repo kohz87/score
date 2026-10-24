@@ -1,8 +1,11 @@
 import type { AgentSummary, Exchange, Job } from '@score/contract'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentNameColor } from '../bold-agents.ts'
+import { boldChatRefLink, boldJobLink } from '../bold-links.ts'
+import { createDirectChat } from '../direct/direct-queries.ts'
 import { exchangeStatus, exchangeTurns, type JobFilter, jobMatchesFilter } from './room-model.ts'
 import { jobExchangesQuery } from './room-queries.ts'
 
@@ -41,9 +44,53 @@ function Capsule({ exchange, agents }: { exchange: Exchange; agents: AgentSummar
 function JobCapsule({ job, agents }: { job: Job; agents: AgentSummary[] }) {
   const definition = useMemo(() => jobExchangesQuery(job.id), [job.id])
   const exchanges = useStreamQuery(definition).data ?? []
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const latest = exchanges.at(-1)
   if (!latest) return null
-  return <Capsule exchange={latest} agents={agents} />
+  const asideAgent = agents.find((agent) => agent.id === latest.from)
+
+  async function takeAside() {
+    if (!asideAgent) return
+    setBusy(true)
+    setError(null)
+    try {
+      const chat = await createDirectChat(asideAgent.id, job.title)
+      void navigate(boldChatRefLink(asideAgent.id, chat.id, job.id))
+    } catch {
+      setError('Couldn’t start a private chat. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="bold-capsule-wrap">
+      <Capsule exchange={latest} agents={agents} />
+      {asideAgent && (
+        <span className="bold-capsule-actions">
+          <button type="button" className="chip" onClick={() => void navigate(boldJobLink(job.id))}>
+            Open thread
+          </button>
+          <button
+            type="button"
+            className="chip bold-capsule-aside"
+            style={{ color: agentNameColor(asideAgent) }}
+            disabled={busy}
+            onClick={() => void takeAside()}
+          >
+            {busy ? 'Opening…' : `Take it aside with ${asideAgent.id}`}
+          </button>
+        </span>
+      )}
+      {error && (
+        <p className="small bold-request-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  )
 }
 
 /** The prototype's exchange capsules: who is working with whom, and how the round is going. */

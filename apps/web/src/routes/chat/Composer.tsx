@@ -118,6 +118,7 @@ export function Composer({
   placeholder,
   messagesKey,
   initialText,
+  references = [],
 }: {
   roomId: string
   roomName: string
@@ -141,6 +142,8 @@ export function Composer({
   messagesKey?: QueryKey
   /** Text to load once on mount, taking precedence over the stored draft (the bold room's command hand-off). */
   initialText?: string
+  /** Jobs this message refers to (PLAN 11.2 §6.3); the server freezes each one into a `ref` part. */
+  references?: readonly { jobId: string }[]
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -527,6 +530,9 @@ export function Composer({
       ...(planFirst ? { planFirst: true } : {}),
       ...(editing ? { edits: editing.messageId } : {}),
       ...(sentJobId ? { jobId: sentJobId } : {}),
+      ...(references.length
+        ? { refs: references.map((reference) => ({ jobId: reference.jobId })) }
+        : {}),
     }
     const submittedSession = editSession.current
     // A retry of the same payload reuses its key, so a lost response cannot post twice.

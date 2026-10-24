@@ -174,6 +174,7 @@ function MessageWithActions({
       <MessageItem
         message={message}
         agents={agents}
+        bold
         versionControl={
           <MessageVersionControl messageId={message.id} versions={versions} onSelect={onView} />
         }

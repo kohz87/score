@@ -24,6 +24,11 @@ export function boldChatLink(agentId: string, chatId: string): string {
   return boldQuery({ with: agentId, chat: chatId })
 }
 
+/** 11.7 "Take it aside": a new one-to-one whose first message refers to the team-room job. */
+export function boldChatRefLink(agentId: string, chatId: string, jobId: string): string {
+  return boldQuery({ with: agentId, chat: chatId, ref: jobId })
+}
+
 /** 11.7 one-to-ones: open an agent's home. */
 export function boldOneToOneLink(agentId: string): string {
   return boldQuery({ with: agentId })
