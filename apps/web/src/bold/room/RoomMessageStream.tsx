@@ -191,6 +191,7 @@ function MessageWithActions({
       <MessageItem
         message={message}
         agents={agents}
+        bold
         workspaceLinkFor={workspaceLinkFor}
         approvalPointerIds={approvalPointerIds}
         versionControl={

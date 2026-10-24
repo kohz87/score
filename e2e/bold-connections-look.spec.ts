@@ -298,9 +298,10 @@ async function exerciseLook(page: Page, shared: () => { active: string; mode: st
 
   // Per-device motion is saved even though the test's reduced-motion setting keeps the shell still.
   const motion = page.getByRole('radiogroup', { name: 'Motion on this device' })
-  await motion.getByRole('radio', { name: 'Calm' }).click()
-  await expect(motion.getByRole('radio', { name: 'Calm' })).toHaveAttribute('aria-checked', 'true')
-  expect(await page.evaluate(() => localStorage.getItem('score.liveliness'))).toBe('calm')
+  // Calm is the default since Lively went (11.11c), so choosing Still is the change that gets saved.
+  await motion.getByRole('radio', { name: 'Still' }).click()
+  await expect(motion.getByRole('radio', { name: 'Still' })).toHaveAttribute('aria-checked', 'true')
+  expect(await page.evaluate(() => localStorage.getItem('score.liveliness'))).toBe('still')
 
   // Text size changes the shell's own scale and is remembered per device.
   const scale = page.getByRole('slider', { name: 'Text size' })
@@ -330,7 +331,7 @@ async function exerciseLook(page: Page, shared: () => { active: string; mode: st
   await expect(page.getByRole('heading', { name: 'Look', exact: true })).toBeVisible()
   await expect(shell).toHaveAttribute('data-look', 'light')
   await expect(mode.getByRole('radio', { name: /^Light/ })).toHaveAttribute('aria-checked', 'true')
-  await expect(motion.getByRole('radio', { name: 'Calm' })).toHaveAttribute('aria-checked', 'true')
+  await expect(motion.getByRole('radio', { name: 'Still' })).toHaveAttribute('aria-checked', 'true')
   await expect(scale).toHaveValue('1.05')
   await expect(sendKey.getByRole('radio', { name: 'Ctrl+Enter' })).toHaveAttribute(
     'aria-checked',

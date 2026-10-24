@@ -26,6 +26,7 @@ import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { scenarioDuration } from '../../src/hermes/fake/scenario.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
+import { onMentions } from '../helpers/on-mentions.ts'
 
 let dir: string
 let db: ScoreDb
@@ -79,6 +80,7 @@ beforeEach(async () => {
   roomId = RoomSchema.parse(
     (await post('/api/rooms', { name: 'briefs', leadAgentId: 'lead' })).json(),
   ).id
+  onMentions(db, roomId)
 })
 afterEach(async () => {
   await port.stop()
@@ -605,4 +607,29 @@ test('stop requires CSRF, validates inputs and replays its receipt without anoth
   expect(replay.json()).toEqual(first.json())
   expect(stop).toHaveBeenCalledTimes(1)
   expect((await post('/api/flow/nodes/invalid/stop')).statusCode).toBe(404)
+})
+
+test('a plan-first turn in an exchanges room only proposes, and its job stops working when it ends', async () => {
+  // Rooms people talk in route with exchanges since 11.11; the planner gets the room's context and no actions.
+  db.sqlite.prepare("UPDATE rooms SET routing = 'exchanges' WHERE id = ?").run(roomId)
+  replies.lead = ['Plan:', '- [ ] @builder Build the endpoint'].join('\n')
+  const run = vi.spyOn(port, 'startRun')
+  await ask('Ship the endpoint', { planFirst: true })
+  const input = run.mock.calls[0]![0].input
+  expect(input).toContain(PLAN_FIRST_ADDENDUM.trim())
+  expect(JSON.stringify(run.mock.calls[0]![0])).not.toMatch(/xtc|score_exchange/i)
+  expect(rows('SELECT xtc_hash FROM message_runs WHERE room_id = ?', roomId)).toEqual([
+    { xtc_hash: null },
+  ])
+  expect(rows('SELECT state FROM jobs WHERE room_id = ? AND is_default = 1', roomId)).toEqual([
+    { state: 'working' },
+  ])
+  await advance(4000)
+  const reply = messages().find((message) => message.author.kind === 'agent')!
+  expect(reply.parts.some((part) => part.kind === 'plan')).toBe(true)
+  expect(reply.parts.some((part) => part.kind === 'notice')).toBe(false)
+  expect(rows('SELECT state FROM jobs WHERE room_id = ? AND is_default = 1', roomId)).toEqual([
+    { state: 'waiting_on_you' },
+  ])
+  expect(run).toHaveBeenCalledTimes(1)
 })

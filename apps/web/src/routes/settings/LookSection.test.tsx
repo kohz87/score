@@ -204,7 +204,7 @@ test('the currency inputs are styled like the other Settings fields', () => {
   expect(rule).not.toMatch(/#[0-9a-f]{3,8}\b/i)
 })
 
-test('"Agents" is a per-device choice between Lively, Calm and Still', () => {
+test('"Agents" is a per-device choice between Calm and Still', () => {
   vi.stubGlobal(
     'fetch',
     vi.fn(() => Promise.resolve(Response.json({ code: 'USD', rate: 1 }))),
@@ -222,20 +222,14 @@ test('"Agents" is a per-device choice between Lively, Calm and Still', () => {
     within(group)
       .getAllByRole('radio')
       .map((radio) => radio.textContent),
-  ).toEqual(['Lively', 'Calm', 'Still'])
-  expect(within(group).getByRole('radio', { name: 'Lively' }).getAttribute('aria-checked')).toBe(
-    'true',
-  )
-  fireEvent.click(within(group).getByRole('radio', { name: 'Calm' }))
-  expect(localStorage.getItem('score.liveliness')).toBe('calm')
+  ).toEqual(['Calm', 'Still'])
   expect(within(group).getByRole('radio', { name: 'Calm' }).getAttribute('aria-checked')).toBe(
     'true',
   )
-  expect(screen.getByText(/no breaks, no napping/i)).toBeDefined()
   fireEvent.click(within(group).getByRole('radio', { name: 'Still' }))
-  expect(screen.getByText(/show a still picture, marks stand still/i)).toBeDefined()
+  expect(screen.getByText(/nothing moves/i)).toBeDefined()
   expect(localStorage.getItem('score.liveliness')).toBe('still')
-  fireEvent.click(within(group).getByRole('radio', { name: 'Lively' }))
+  fireEvent.click(within(group).getByRole('radio', { name: 'Calm' }))
   expect(localStorage.getItem('score.liveliness')).toBeNull()
   localStorage.removeItem('score.liveliness')
 })

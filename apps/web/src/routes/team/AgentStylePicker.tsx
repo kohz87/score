@@ -1,19 +1,16 @@
 import { AgentStylePatchSchema, AgentSummarySchema, type AgentSummary } from '@score/contract'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { AgentAvatar } from '../../components/AgentAvatar.tsx'
-import { activityOfStatus } from '../../components/agent-activity.ts'
+import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { AgentAppearanceFields, type AppearanceValue } from './AgentAppearanceFields.tsx'
-import { PetPackSection } from './PetPackSection.tsx'
 
 export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
   const [open, setOpen] = useState(false)
   const current = (): AppearanceValue => ({
     color: agent.style.color,
     shape: agent.style.shape,
-    look: agent.style.look ?? 'cut',
   })
   const [value, setValue] = useState<AppearanceValue>(current)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -36,8 +33,7 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
     setOpen(false)
     trigger.current?.focus()
   }
-  // The panel is as tall as what is left of the window below its top, and scrolls inside that (its last line, a pack's
-  // result, must be reachable): measured when it opens and again when the window is resized.
+  // The panel is as tall as what is left of the window below its top, and scrolls inside that : measured when it opens and again when the window is resized.
   useEffect(() => {
     if (!open) return
     const fit = () => {
@@ -60,10 +56,10 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
   return (
     <div className="team-style" ref={popover}>
       <button
-        className={`team-glyph-trigger${agent.style.pack ? ' team-glyph-trigger--pet' : ''}`}
+        className="team-glyph-trigger"
         ref={trigger}
         type="button"
-        aria-label={`Change ${agent.name}’s look, colour and shape`}
+        aria-label={`Change ${agent.name}’s colour and shape`}
         aria-expanded={open}
         aria-controls="agent-style-picker"
         onClick={() => {
@@ -75,15 +71,7 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
           }
         }}
       >
-        <AgentAvatar
-          agent={agent}
-          size="lg"
-          bare
-          decorative
-          contrast="high"
-          activity={activityOfStatus(agent.status)}
-          petClassName="team-pet-trigger"
-        />
+        <AgentGlyph agent={agent} size="lg" bare decorative contrast="high" />
       </button>
       {open && (
         <div
@@ -127,7 +115,6 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
               </button>
             </div>
           </form>
-          <PetPackSection agent={agent} />
         </div>
       )}
     </div>

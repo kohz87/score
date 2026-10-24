@@ -575,7 +575,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   §3–§5). Every room has a default job (`isDefault`, titled by the room's name and following a rename); `Message.jobId`
   says which job a message is in. `Room.role`: `team` (the always-on team room of the new shell, members = every agent,
   no lead until the person picks one; `GET /api/rooms` and the classic shell leave it out, `GET /api/rooms/:id` serves
-  it), `direct`, `room`. `Room.routing`: `mentions` (D3.2) or `exchanges` (D3.3: agents act with the exchange actions of
+  it), `direct`, `room`. `Room.routing`: `mentions` (D3.2; since 11.11 only orchestration and workflow run rooms, migration 0086) or
+  `exchanges` (D3.3, every room people talk in: agents act with the exchange actions of
   §11; a prose `@name` from an agent hands nothing off and gets a `notice` part `mention_not_handoff`). In an
   `exchanges` room a person's message goes to the addressed agents, else the lead (`409 no_lead` in the team room
   without one); unaddressed into a job with a live exchange it is a step in and starts nothing. The addressed agent
@@ -586,8 +587,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     default 40); spendCapUsd? (> 0, ≤ 10000; default none); recipe?: { kind: 'orchestration'|'workflow'; ref } }` →
     `201 Job` (the limits and `recipe` from Start a job, PLAN 11.10c: `recipe` names the orchestration or workflow run
     the job belongs to; Score stores the link and doesn't start anything from it); its agents get sessions of their own
-    (`score-<room>-<job>-<agent>`). Emits `job.upserted`. `409 conflict` for a room on `mentions` (one thread until
-    11.11 moves it to exchanges).
+    (`score-<room>-<job>-<agent>`). Emits `job.upserted`. `409 conflict` for a room on `mentions` (since 11.11 only an
+    orchestration or workflow run's room, which its executor routes).
   - The team room can't be deleted, renamed, archived or given members (`409 conflict`); its members follow the team's
     agents at every start, and its lead is set with `PATCH /api/rooms/:roomId { leadAgentId }`.
   - **S** `GET /api/jobs/:jobId/exchanges` → `{ asOfSeq; items: Exchange[] }` (oldest first).
@@ -630,7 +631,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.
   - **S** `GET /api/agents/:agentId/direct` → `{ asOfSeq; room: Room | null; chats: Job[] }` (newest activity first);
     **H** `POST /api/agents/:agentId/chats { title? }` → `201 Job` (a new one-to-one; makes the direct room on first
-    use). Direct rooms keep `routing = mentions` until 11.11 and may hold several jobs. A direct room's summaries run on
+    use). Direct rooms route with exchanges (11.11) and may hold several jobs. A direct room's summaries run on
     its own agent; no other room's turn input includes a one-to-one, except as a reference or a share.
   - **References.** Post body `refs?: { jobId }[]` (≤ 5) adds `ref` parts `{ kind: 'ref'; target: { kind: 'job'; jobId };
     title; summary; frozenAt }`, frozen at send time (the job's usable summary, else its last 10 messages condensed to
@@ -1012,31 +1013,14 @@ assignments, verifies a private export first, and retires the name. Exports omit
 their local path is displayed but their bytes are never served. Retired-name reuse is currently refused until an
 incarnation-aware reuse confirmation contract is agreed.
 
-- `PATCH /api/agents/:agentId/style` `AgentStylePatch` `{ color?; shape?; look? }` → `AgentSummary` (Hermes profiles and
-  coding agents alike; ids are unique across both). `look` is `'cut'` (default: a solid mark with cut-out eyes) or
-  `'ring'` (PLAN 10.2, decision 108). Shapes: `circle-dot`, `triangle`, `diamond`, `square`, `hexagon`, `star`, `pill`,
-  `cross`, `cloud`, `cylinder`, `heart`, `drop`, `bolt`, `moon`, `leaf`, `blob`, `shield`, `octagon`, `bubble`, `gem`.
-  `AgentStyle` is `{ color; shape; look?; pack?: PetPack|null }` (absent `look` = `cut`, absent `pack` = none, as stored
-  before 10.2); `pack` is set only by the routes below.
-- **Pet packs (PLAN 10.2, decisions 107–108).** An agent may wear an animated avatar: a pack of looping animations, one
-  per activity — `idle` (required), `work`, `think`, `needs`, `sleep`, `walk`, `stretch`, `coffee`, `read`, `greet`,
-  `happy` — plus an optional `pet.json` (`PetPackManifest` `{ name?; credits?; floor? }`, `floor` 0–0.3). The agent's
-  mark stays its badge and its look in lists. Score only reads the images and `pet.json`; nothing in a pack runs.
-  - `PUT /api/agents/:agentId/pack` multipart: either **one `.zip`** or **several activity files**. Accepted entries:
-    `<activity>.webp|png|gif` and `pet.json`, at the top level or inside one top-level folder; `__MACOSX/`, `.DS_Store`
-    and other files are ignored and listed back (`ignored[]`). Each image: the type from its bytes (WebP, PNG/APNG, GIF;
-    animated allowed), the extension must agree, 64–2048 px per side, ≤ 32 MB; the pack ≤ 256 MB unpacked; zips go
-    through the shared zip rules (structure, ratio, entry count ≤ 24). `idle` missing, an unknown activity name, or a
-    bad file is `422 pack_rejected { reasons[] }` and stores nothing. → `{ agent: AgentSummary; ignored: string[] }`
-    with `style.pack` = a new revision.
-  - `DELETE /api/agents/:agentId/pack` → `AgentSummary` (`style.pack: null`).
-  - `GET /api/agents/:agentId/pack/:activity?rev=<rev>` → the image with its exact type, `nosniff`, `inline`,
-    `Cache-Control: private, max-age=31536000, immutable`. Not the current revision, an activity the pack lacks, or no
-    pack: `404`. Missing or malformed `rev`: `400`.
-  - Stored at `$SCORE_HOME/packs/<agentId>/<rev>/<activity>.<ext>` (folders 0700, files 0600), written to a temp
-    folder and renamed into place, the row committed, then the old revision removed; recovery at start keeps only the
-    revision each row names. No symlink is followed on any part of a path. Deleting an agent deletes its packs. Every
-    change emits `agent.updated` with the new style.
+- `PATCH /api/agents/:agentId/style` `AgentStylePatch` `{ color?; shape? }` → `AgentSummary` (Hermes profiles and
+  coding agents alike; ids are unique across both). Shapes: `circle-dot`, `triangle`, `diamond`, `square`, `hexagon`,
+  `star`, `pill`, `cross`, `cloud`, `cylinder`, `heart`, `drop`, `bolt`, `moon`, `leaf`, `blob`, `shield`, `octagon`,
+  `bubble`, `gem`. `AgentStyle` is `{ color; shape }`: an agent is its colour and shape, nothing else (PLAN 11.11,
+  decision 118). The cut-out and ring looks and pet packs of PLAN 10.2 are gone, with `PUT|DELETE
+  /api/agents/:agentId/pack` and `GET /api/agents/:agentId/pack/:activity`. A body or stored style that still carries
+  `look` or `pack` is read without them (unknown keys are dropped), and the style route ignores both keys, so an
+  old browser tab or an old profile export keeps working; a patch with nothing else in it is `400`.
 - **S** `GET /api/agents/:agentId` → `AgentDetail`
   ```ts
   type AgentDetail = AgentSummary & {

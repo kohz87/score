@@ -942,6 +942,8 @@ export class Orchestrator {
         kind: 'room',
         leadAgentId: body.leadAgentId,
         members: [body.leadAgentId, ...body.allowedAgents],
+        // The executor routes this room itself (PLAN 11.11 moves only the rooms people talk in).
+        routing: 'mentions',
       },
       now,
     )

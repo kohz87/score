@@ -11,6 +11,7 @@ import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
 import { multipart, png } from '../media-fixtures.ts'
+import { onMentions } from '../helpers/on-mentions.ts'
 
 let dir: string
 let db: ScoreDb
@@ -85,6 +86,7 @@ test('only the person-authored turn carries the message images; hand-offs carry 
       })
     ).json(),
   )
+  onMentions(db, room.id)
   const a = await upload(1)
   const b = await upload(2)
   const sent = await app.inject({

@@ -1017,3 +1017,62 @@ One entry per completed task: what landed, review results, and any **rejected re
   errors), P3s — fixed. Contract gaps recorded: no job-level pause (Stop only), no job-scoped steps/unblock/comment,
   the plan card only through the classic run panel. Lead: a Search e2e race (the room drops `?command=` after taking
   it). Thread e2e 14/14 ×3, room + search + shell + protection green; full check green. Not deployed.
+- **11.7 One-to-ones (DeepSeek + Sonnet coder, 2026-10-24).** Side panel › an agent: privacy label, Earlier chats
+  (search titles and summaries; an empty default chat hidden), New chat, per-chat drafts (`room:job`), the context meter
+  on the chat's own session (room session for the default chat), Share to the team room (`{jobId}`), Add someone
+  (confirm step naming the job, summary and who is asked; message to both; retry repeats only the message), Take it
+  aside / Bring into a new chat (`?with&ref`, the chat is made on first send), shared messages in the team room in the
+  sharer's colour. Sonnet review: P1/P2s (Add someone sent without confirming and addressed one agent, Take it aside
+  created empty chats, wrong session for the default chat, drafts shared across chats, dialogs without Escape/focus
+  return) — fixed by a Sonnet coder (DeepSeek at its two-session limit). Lead merge: thread mode beside the one-to-one
+  (opening a thread drops `?with=`), the capsule keeps Take it aside beside 11.4c's thread link; a CSS rule cut by the
+  merge (caught only by `pnpm build`, so the lead's merge gate now includes the build). Full check green (coder);
+  one-to-ones + thread + room + search + shell e2e 87/87. Not deployed.
+- **11.11a Rooms route with exchanges (lead + Sonnet coder for tests, 2026-10-24).** Decision 118, first part: migration
+  0086 moves every `room`/`direct` room on mentions to `routing = exchanges`, except orchestration and workflow run rooms
+  (`orchestrations.room_id`, routed by their executor); `insertRoom` defaults to exchanges, the executor and workflow
+  runs pass `mentions`. Contract §Jobs and exchanges updated (D3.2 mentions only for run rooms; direct rooms on
+  exchanges). Consequences: agents in older rooms and one-to-ones hand off with exchange actions (a prose @name gets the
+  `mention_not_handoff` notice); their jobs emit `job.upserted`. Tests: D3.2 hand-off tests pin their rooms to mentions
+  (`test/helpers/on-mentions.ts`); event-count tests gain exactly the new `job.upserted` events (verified each);
+  new `rooms-exchanges-migration.test.ts`. **Rehearsal on a copy of the live DB** (backup API; live at 0079/v1.14.0, so
+  0080–0086 together): rooms 17 → 17 (9 direct + 5 rooms → exchanges, 3 orchestration rooms stay mentions), default
+  jobs 17, messages 108 → 108 (none without a job, none in another room's job), room_reads 14 → job_reads 14, schema 86.
+  Full check green; chat/room/one-to-one/thread/search e2e 107/107, coding agents/orchestrations/workflows/stage 44/44.
+  11.11b (removals and default shell) follows after 11.9d. Not deployed.
+- **11.4d Room dropdown and job menu (DeepSeek + Sonnet coder, 2026-10-24).** Room dropdown (team room, older rooms
+  read-write with today's routing, Rooms and chats elsewhere), room menu (export, share read-only link, delete an older
+  room with the typed-name confirm; the team room can't be deleted), job menu (share that job, export the whole room),
+  Elsewhere view (read-only, "Preview this chat" imports it, then "Bring into a job" creates the job and shares the
+  messages; one attempt object keeps the job, the imported room and one Idempotency-Key across retries; says it keeps an
+  "Imported from…" room). Sonnet review: 0 P1, 2 P2 (Bring into a job duplicated on retry; no transcript before
+  copying), P3s (imported rooms in the older list, menu focus, wording). DeepSeek fix round 1 done; round 2 cut off by
+  NanoGPT 429 → a Sonnet coder finished it: the 11 failing e2e were test races/scoping (download name bypasses
+  page.route, keyboard before first focus, a GET counted as a retry, hidden Library inputs, the phone hides the To row
+  by design) plus a real bug (the new job's tab didn't appear: invalidateQueries on a stream query → refetch). Contract
+  gaps: no job rename/close/delete, no room-delete undo, no single attach call, outside sessions carry no transcript.
+  Lead merge: elsewhere mode beside the one-to-one and the thread. Full check green (coder); units 379, room-menu + room
+  + one-to-ones + thread + shell e2e 77/77. Not deployed.
+- **11.11a review and 11.11a2 (lead, 2026-10-24).** Owner: Sonnet reviews every task before the merge checks, lead work
+  included, so 11.11a got a review after its merge: 0 P1. Accepted: plan-first in an exchanges room (the planner got the
+  exchange prompt and a capability, and its job stayed 'working' because the plan-first branch skipped
+  settleExchangeTurn) → 11.11a2: plan-first turns get the room context and no capability, the job state is recomputed
+  when the turn ends (test in briefs.test.ts); RoomSchema's routing default now 'exchanges'. Rejected: in-flight turns at
+  migration (the deploy stops Score first; the live copy has no pending/active turns: 56 completed, 3 failed; pending
+  turns take the new routing at admission, as intended); more exchange variants for brief pause/attachments (covered by
+  the 11.1b/11.1c exchange tests); imported rooms on exchanges (one member, `whyNot` refuses any `to` outside the room,
+  same session context as before); fake.test counts (exact job.upserted counts asserted). 11.11a2's own Sonnet review:
+  0 P1/P2; two P3s taken (comment, 'working' asserted first). Server suite 4824 green.
+- **11.11c Drop pet packs, portrait looks, eyes, moods and Lively (Sonnet coder → DeepSeek via ordeepseek, 2026-10-24).**
+  Decision 118 / D9. Agents render as colour + shape only; pet packs (web, server routes, `packs/` store, startup
+  recover), Cut-out/Ring, eyes, glyph moods, pointer-following eyes and the `lively` motion value are gone (Look ›
+  Motion keeps Calm and Still; a stored `lively` reads as calm). Contract: AgentLook/PetPack schemas removed; old styles
+  and import files carrying `look`/`pack` still parse (stripped). Migration 0087: the lead replaced the coder's
+  two-table rebuild with clearing only `pack_rev`/`pack_meta` (the unused `look` column keeps its default). Owner asked
+  mid-task to move coding to DeepSeek: the Sonnet coder (~140 files done) was stopped and DeepSeek finished on the
+  `ordeepseek` profile (NanoGPT was rate limited); its sandbox can't listen on loopback, so the lead ran e2e and the
+  full check. Sonnet review: 1 P1 (two `plain` glyph props that came from main after the branch removed the prop — the
+  lead's merge hadn't typechecked web; fixed), 1 P3 (shape-raster.ts kept for its test; left). Lead post-fix: the Motion
+  test now saves Still (Calm is the default), four visual baselines regenerated (only the glyph eyes changed; diff
+  checked), a format slip from 11.11a2. Full check green (contract 1505, web 2896, server 4757); 12 affected specs green.
+  `~/.score/packs` is removed at the release deploy after the backup. Not deployed.

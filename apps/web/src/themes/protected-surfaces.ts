@@ -41,6 +41,15 @@ export const protectedClasses = [
   'bold-request',
   // PLAN 11.4b: the count that expands the rest of the needs-you strip (a theme may not hide the way to the cards)
   'bold-pins-more',
+  // PLAN 11.4d: the room and job menus make destructive or exposing choices; deleting a room asks for its name.
+  'bold-room-menu',
+  'bold-job-menu',
+  'bold-room-delete-dialog',
+  // PLAN 11.7: the privacy label, the share chooser, Add someone, and a shared one-to-one copy in the team room
+  'bold-dm-privacy',
+  'bold-dm-share-menu',
+  'bold-dm-add',
+  'bold-shared',
   // PLAN 11.4c: the thread's confirmation before stopping a job
   'bold-thread-stop-confirm',
   // The task drawer's approval and its buttons
@@ -63,7 +72,6 @@ export const protectedClasses = [
   'security-password',
   // Agent identity and error toasts
   'agent-glyph',
-  'pet-avatar',
   'room-stage',
   'chat-toast',
   // The way back

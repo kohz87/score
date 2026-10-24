@@ -209,7 +209,7 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
                 />
               </label>
               <AgentAppearanceFields
-                value={{ ...style, look: style.look ?? 'cut' }}
+                value={style}
                 onChange={setStyle}
                 preview={{ id: id || 'new', name: id || 'New agent' }}
               />

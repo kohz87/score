@@ -8,6 +8,7 @@ export interface RoomRequest {
   path: string
   search: URLSearchParams
   body: unknown
+  headers: Record<string, string>
 }
 
 export interface BoldRoomReply {
@@ -369,7 +370,7 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
         body = request.postData()
       }
     }
-    requests.push({ method, path, search: url.searchParams, body })
+    requests.push({ method, path, search: url.searchParams, body, headers: request.headers() })
 
     const handled = await options.handle?.({ method, path, search: url.searchParams, body })
     if (handled) return response(route, handled.body, handled.status)

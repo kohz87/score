@@ -106,9 +106,9 @@ for (const viewport of sizes) {
       } else if (name === 'Personality') {
         await expect(section.getByRole('textbox', { name: 'SOUL.md contents' })).toBeVisible()
       } else if (name === 'Appearance') {
-        await section.getByRole('button', { name: /Change builder.s look/ }).click()
+        await section.getByRole('button', { name: /Change builder.s colour and shape/ }).click()
         const dialog = page.getByRole('dialog', { name: 'Agent appearance' })
-        await expect(dialog.getByRole('heading', { name: 'Pet pack' })).toBeVisible()
+        await expect(dialog.getByRole('radio', { name: 'star' })).toBeVisible()
         await dialog.getByRole('button', { name: 'Cancel' }).click()
         await expect(dialog).toHaveCount(0)
       } else if (name === 'Todo') {

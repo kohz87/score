@@ -8,7 +8,7 @@ import { expect, type Page } from '@playwright/test'
  * half-built room (no ring, the last lines shifted 50px). It also stands the room stage's members still.
  */
 export async function chatSettled(page: Page, replier = 'builder') {
-  // The room stage's members wander when the device is Lively (PLAN 10.10); a screenshot needs them where they start.
+  // The room stage's members animate (PLAN 10.10); a screenshot needs them still.
   await page.emulateMedia({ reducedMotion: 'reduce' })
   const ring = page.getByRole('button', { name: new RegExp(`^${replier} context: `) })
   await expect(ring.first()).toBeVisible()

@@ -77,39 +77,3 @@ export const agentShapes = {
   ],
   gem: [{ tag: 'path', d: 'M6 3.4 H14 L17.6 8 L10 17.2 L2.4 8 Z' }],
 } as const satisfies Record<Shape, readonly AgentShapeElement[]>
-
-/**
- * What a mark is drawn with (cut-out or ring): the plain silhouettes, except the lead's ring-and-dot, which becomes one
- * round shape (a ring inside a ring can't carry eyes, and no other shape is round). The plain list stays the list-size
- * (xs) look.
- */
-export const markBodies = {
-  ...agentShapes,
-  'circle-dot': [{ tag: 'circle', cx: 10, cy: 10, r: 8 }],
-} as const satisfies Record<Shape, readonly AgentShapeElement[]>
-
-/** The eyes of a shape, in its 20-unit box: centre line `y`, the two centres, and each eye's width and height. */
-export type AgentEyes = { y: number; xs: readonly [number, number]; w: number; h: number }
-
-export const agentEyes = {
-  'circle-dot': { y: 9.6, xs: [7.7, 12.3], w: 1.6, h: 2.8 },
-  triangle: { y: 12.1, xs: [8.6, 11.4], w: 1.4, h: 2.4 },
-  diamond: { y: 9.8, xs: [8.3, 11.7], w: 1.4, h: 2.5 },
-  square: { y: 9.8, xs: [8.1, 11.9], w: 1.5, h: 2.7 },
-  hexagon: { y: 9.8, xs: [8.1, 11.9], w: 1.5, h: 2.7 },
-  star: { y: 10.4, xs: [9, 11], w: 1.1, h: 1.9 },
-  pill: { y: 10, xs: [8.2, 11.8], w: 1.4, h: 2.4 },
-  cross: { y: 10, xs: [8.9, 11.1], w: 1.1, h: 2 },
-  cloud: { y: 11.6, xs: [8.4, 11.9], w: 1.4, h: 2.4 },
-  cylinder: { y: 10.6, xs: [8.2, 11.8], w: 1.5, h: 2.6 },
-  heart: { y: 9.8, xs: [8, 12], w: 1.4, h: 2.4 },
-  drop: { y: 12, xs: [8.3, 11.7], w: 1.4, h: 2.4 },
-  bolt: { y: 10.1, xs: [9.3, 11.1], w: 1, h: 1.8 },
-  moon: { y: 10.2, xs: [6.6, 9.2], w: 1.3, h: 2.2 },
-  leaf: { y: 10.9, xs: [8.9, 11.7], w: 1.3, h: 2.2 },
-  blob: { y: 9.8, xs: [8, 11.6], w: 1.5, h: 2.6 },
-  shield: { y: 9, xs: [8.2, 11.8], w: 1.5, h: 2.6 },
-  octagon: { y: 9.8, xs: [8.2, 11.8], w: 1.5, h: 2.7 },
-  bubble: { y: 8.8, xs: [8.2, 11.8], w: 1.5, h: 2.6 },
-  gem: { y: 8.6, xs: [8.4, 11.6], w: 1.3, h: 2.2 },
-} as const satisfies Record<Shape, AgentEyes>

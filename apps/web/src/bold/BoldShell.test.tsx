@@ -204,8 +204,8 @@ test('/b draws the frame and the dock', async () => {
   expect(screen.getByRole('button', { name: 'Score, go to the team room' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Team' })).toBeDefined()
   const roomTitle = screen.getByRole('button', { name: 'Team room' })
-  expect(roomTitle.hasAttribute('aria-haspopup')).toBe(false)
-  expect(roomTitle.hasAttribute('aria-expanded')).toBe(false)
+  expect(roomTitle.getAttribute('aria-haspopup')).toBe('listbox')
+  expect(roomTitle.getAttribute('aria-expanded')).toBe('false')
 
   const dock = screen.getByRole('group', { name: /Your team/ })
   expect(within(dock).queryByText('Rings show progress')).toBeNull()

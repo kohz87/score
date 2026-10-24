@@ -1,28 +1,22 @@
-import type { AgentSummary, PetActivity } from '@score/contract'
+import type { AgentSummary } from '@score/contract'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { saveLiveliness } from '../../../data/liveliness.ts'
 import { RoomStageView, type StageMember } from './RoomStageView.tsx'
 import type { StageMood } from './stage-mood.ts'
 
-const agent = (id: string, color: string, files?: PetActivity[]): AgentSummary => ({
+const agent = (id: string, color: string): AgentSummary => ({
   id,
   name: id,
   role: 'role',
-  style: {
-    color,
-    shape: 'circle-dot',
-    ...(files
-      ? { pack: { rev: 'r1', activities: ['idle', ...files], name: null, credits: null, floor: 0 } }
-      : {}),
-  },
+  style: { color, shape: 'circle-dot' },
   status: 'idle',
   activity: null,
   model: null,
   served: true,
 })
-const member = (id: string, mood: StageMood = 'rest', files?: PetActivity[]): StageMember => ({
-  agent: agent(id, '#6B4EFF', files),
+const member = (id: string, mood: StageMood = 'rest'): StageMember => ({
+  agent: agent(id, '#6B4EFF'),
   mood,
 })
 
@@ -52,7 +46,7 @@ test('the strip is a protected, labelled group with one button per member that s
   render(
     <RoomStageView
       roomId="room-1"
-      members={[member('lead'), member('builder', 'needs', ['needs']), member('reviewer', 'work')]}
+      members={[member('lead'), member('builder', 'needs'), member('reviewer', 'work')]}
       handoff={null}
       onMention={() => {}}
     />,
@@ -65,67 +59,48 @@ test('the strip is a protected, labelled group with one button per member that s
   expect(button('reviewer, working').getAttribute('data-mood')).toBe('work')
 })
 
-test('a pet plays its pack with its mark as a badge and its name below; an agent without a pack is its mark', () => {
+test('every member is its mark with its name below', () => {
   render(
     <RoomStageView
       roomId="room-1"
-      members={[member('builder', 'rest', ['work']), member('lead')]}
+      members={[member('builder', 'rest'), member('lead')]}
       handoff={null}
       onMention={() => {}}
     />,
   )
-  const pet = button(/^builder/)
-  const imgs = [...pet.querySelectorAll<HTMLImageElement>('img.room-stage__anim')]
-  expect(imgs.map((img) => img.getAttribute('src'))).toEqual([
-    '/api/agents/builder/pack/idle?rev=r1',
-  ])
-  expect(imgs[0]!.classList.contains('room-stage__anim--on')).toBe(true)
-  expect(pet.querySelector('.room-stage__badge .agent-glyph')).not.toBeNull()
-  expect(pet.querySelector('.room-stage__name')?.textContent).toBe('builder')
   const mark = button(/^lead/)
   expect(mark.querySelector('img')).toBeNull()
   expect(mark.querySelector('.room-stage__mark .agent-glyph')).not.toBeNull()
-  expect(mark.querySelector('.room-stage__badge')).toBeNull()
   expect(mark.querySelector('.room-stage__name')?.textContent).toBe('lead')
 })
 
-test('moods crossfade to the pack’s files, and fall back to idle plus an overlay where it has none', () => {
+test('moods show Score’s own signs: thought dots, the "!" and the z’s', () => {
   const { rerender } = render(
     <RoomStageView
       roomId="r"
-      members={[member('builder', 'rest', ['work', 'needs'])]}
+      members={[member('builder', 'rest')]}
       handoff={null}
       onMention={() => {}}
     />,
   )
-  const on = () =>
-    button(/^builder/)
-      .querySelector('img.room-stage__anim--on')
-      ?.getAttribute('data-anim')
   const show = (mood: StageMood) =>
     rerender(
       <RoomStageView
         roomId="r"
-        members={[member('builder', mood, ['work', 'needs'])]}
+        members={[member('builder', mood)]}
         handoff={null}
         onMention={() => {}}
       />,
     )
-  expect(on()).toBe('idle')
-  show('work')
-  expect(on()).toBe('work')
-  expect(button(/^builder/).querySelectorAll('img.room-stage__anim')).toHaveLength(2)
   show('think')
-  expect(on()).toBe('idle')
   expect(button(/^builder/).querySelector('.room-stage__dots')).not.toBeNull()
   show('needs')
-  expect(on()).toBe('needs')
   expect(button(/^builder/).querySelector('.room-stage__bang')).not.toBeNull()
   show('sleep')
   expect(button(/^builder/).querySelector('.room-stage__zzz')).not.toBeNull()
 })
 
-test('a member waiting for you steps to the front; a mark in that state is marked for hopping', () => {
+test('a member waiting for you steps to the front; its mark is marked for hopping', () => {
   render(
     <RoomStageView
       roomId="r"
@@ -137,7 +112,7 @@ test('a member waiting for you steps to the front; a mark in that state is marke
   expect(button(/^builder/).getAttribute('data-front')).toBe('true')
   expect(button(/^lead/).getAttribute('data-front')).toBeNull()
   expect(button(/^builder/).querySelector('.room-stage__bang')).not.toBeNull()
-  expect(button(/^builder/).querySelector('.agent-glyph--needs')).not.toBeNull()
+  expect(button(/^builder/).querySelector('.room-stage__mark--hop')).not.toBeNull()
 })
 
 test('clicking a member asks for its mention and it says hi beside its head', () => {
@@ -163,11 +138,7 @@ test('a hand-off turns the two toward each other', () => {
   render(
     <RoomStageView
       roomId="r"
-      members={[
-        member('lead', 'rest', ['walk']),
-        member('builder', 'rest', ['walk']),
-        member('reviewer'),
-      ]}
+      members={[member('lead'), member('builder'), member('reviewer')]}
       handoff={{ id: 'm1', from: 'builder', to: 'lead' }}
       onMention={() => {}}
     />,
@@ -177,79 +148,18 @@ test('a hand-off turns the two toward each other', () => {
   expect(button(/^builder/).getAttribute('data-facing')).toBe('left')
 })
 
-test('Lively members wander and break; Calm and Still keep where they are', () => {
-  let n = 0
-  vi.spyOn(Math, 'random').mockImplementation(() => (n++ * 0.381966) % 1)
-  const members = [
-    member('lead', 'rest', ['walk', 'coffee']),
-    member('builder', 'rest', ['walk']),
-    member('reviewer', 'work', ['walk']),
-  ]
-  const modes = () =>
-    ['lead', 'builder', 'reviewer'].map((id) =>
-      button(new RegExp(`^${id}`)).getAttribute('data-mode'),
-    )
-  const { unmount } = render(
-    <RoomStageView roomId="r" members={members} handoff={null} onMention={() => {}} />,
-  )
-  let walked = false
-  for (let second = 0; second < 40 && !walked; second += 1) {
-    act(() => {
-      vi.advanceTimersByTime(1000)
-    })
-    walked = modes().includes('walk')
-  }
-  expect(walked).toBe(true)
-  // Only resting members wander.
-  expect(modes()[2]).toBe('idle')
-  unmount()
-  for (const choice of ['calm', 'still'] as const) {
-    saveLiveliness(choice)
-    const view = render(
-      <RoomStageView roomId="r" members={members} handoff={null} onMention={() => {}} />,
-    )
-    act(() => {
-      vi.advanceTimersByTime(60_000)
-    })
-    expect(modes()).toEqual(['idle', 'idle', 'idle'])
-    view.unmount()
-  }
-})
-
-test('a member that is walking stops where it stands when the device goes Calm or Still', () => {
-  let n = 0
-  vi.spyOn(Math, 'random').mockImplementation(() => (n++ * 0.381966) % 1)
-  render(
-    <RoomStageView
-      roomId="r"
-      members={[member('lead', 'rest', ['walk']), member('builder', 'rest', ['walk'])]}
-      handoff={null}
-      onMention={() => {}}
-    />,
-  )
-  const modes = () =>
-    ['lead', 'builder'].map((id) => button(new RegExp(`^${id}`)).getAttribute('data-mode'))
-  for (let second = 0; second < 40 && !modes().includes('walk'); second += 1)
-    act(() => {
-      vi.advanceTimersByTime(1000)
-    })
-  expect(modes()).toContain('walk')
-  act(() => saveLiveliness('calm'))
-  expect(modes()).toEqual(['idle', 'idle'])
-})
-
-test('Still shows still first frames and no animated image at all', () => {
+test('Still shows no motion class on the strip', () => {
   saveLiveliness('still')
   render(
     <RoomStageView
       roomId="r"
-      members={[member('builder', 'work', ['work']), member('lead')]}
+      members={[member('builder', 'work'), member('lead')]}
       handoff={null}
       onMention={() => {}}
     />,
   )
+  expect(group().getAttribute('data-liveliness')).toBe('still')
   expect(group().querySelectorAll('img')).toHaveLength(0)
-  expect(button(/^builder/).querySelector('canvas.room-stage__anim--on')).not.toBeNull()
 })
 
 test('on a phone at most five members show, then a +N chip that opens the member list', () => {

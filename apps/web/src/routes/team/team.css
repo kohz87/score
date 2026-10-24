@@ -1397,24 +1397,17 @@ a.team-pill-button {
   font-size: 14px;
   font-weight: 600;
 }
-.team-looks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
 .team-shapes {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
   gap: 6px;
 }
-.team-look-choice,
 .team-shape-choice {
   position: relative;
   display: block;
   cursor: pointer;
 }
-.team-look-choice input,
 .team-shape-choice input {
   position: absolute;
   opacity: 0;
@@ -1422,7 +1415,6 @@ a.team-pill-button {
   margin: 0;
   cursor: pointer;
 }
-.team-look-card,
 .team-shape-cell {
   display: flex;
   align-items: center;
@@ -1443,13 +1435,11 @@ a.team-pill-button {
   color: var(--ink-muted);
   text-align: center;
 }
-.team-look-choice input:checked + .team-look-card,
 .team-shape-choice input:checked + .team-shape-cell {
   border-color: var(--ink);
   box-shadow: 0 0 0 1px var(--ink);
   color: var(--ink);
 }
-.team-look-choice input:focus-visible + .team-look-card,
 .team-shape-choice input:focus-visible + .team-shape-cell {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
@@ -1464,125 +1454,8 @@ a.team-pill-button {
 }
 
 /* The popover's own label rules (stacked, bold) must not reach the radio cards. */
-.team-style-popover .team-look-choice,
 .team-style-popover .team-shape-choice {
   display: block;
   flex-direction: row;
   font-weight: 500;
-}
-.team-pack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--hairline);
-}
-.team-pack h3 {
-  margin: 0;
-  font-size: 16px;
-}
-.team-pack p {
-  margin: 0;
-  font-size: 13px;
-}
-.team-pack-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-.team-pack-files,
-.team-pack-problems,
-.team-pack-added ul {
-  margin: 0;
-  padding-left: var(--space-4);
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-.team-pack-refused {
-  margin: 0 0 var(--space-1);
-  font-size: 13px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.team-pack-added {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.team-pack-guide {
-  font-size: 13px;
-}
-.team-pack-guide summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-.team-pack-guide > * + * {
-  margin-top: var(--space-2);
-}
-.team-pack-guide ul {
-  margin: 0;
-  padding-left: var(--space-4);
-  display: grid;
-  gap: 6px;
-}
-.team-pack-guide pre {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: var(--radius-14);
-  background: var(--ground);
-  overflow-x: auto;
-  font-family: var(--font-code, monospace);
-  font-size: 12px;
-}
-.team-pack-table {
-  overflow-x: auto;
-}
-.team-pack-table table {
-  border-collapse: collapse;
-  width: 100%;
-  min-width: 420px;
-}
-.team-pack-table th,
-.team-pack-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--hairline);
-  text-align: left;
-  vertical-align: top;
-}
-.team-pack-table thead th {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-}
-/* A pet avatar in the Team card and in the agent page's trigger. */
-.team-pet {
-  --pet-size: 96px;
-  align-self: flex-start;
-}
-.team-glyph-trigger--pet {
-  background: transparent;
-  overflow: hidden;
-}
-.team-glyph-trigger .team-pet-trigger {
-  --pet-size: 100%;
-}
-.team-glyph-trigger svg.agent-glyph--rich {
-  width: 84px;
-  height: 84px;
-}
-@media (width < 1024px) {
-  .team-glyph-trigger svg.agent-glyph--rich {
-    width: 66px;
-    height: 66px;
-  }
-}
-@media (width < 600px) {
-  .team-glyph-trigger svg.agent-glyph--rich {
-    width: 48px;
-    height: 48px;
-  }
 }

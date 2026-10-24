@@ -594,7 +594,7 @@ header (pause/stop, steps, unblock, comment, context meter + compact, job histor
 reasoning/tool cards, coding sub-agent cards, stall notice, recipe-run cards. Done when: e2e incl. a paused exchange
 answered from the thread; screenshots vs 11.
 
-**11.4d Room dropdown and job menu** · **DeepSeek** · board 21; prototype. Team room, older rooms, Elsewhere
+**11.4d Room dropdown and job menu** ✅ · **DeepSeek** · board 21; prototype. Team room, older rooms, Elsewhere
 (read-only, "Bring into a job"); job menu rename, close, export, share read-only link, delete with undo. Done when: e2e
 for each; older rooms open read-write with today's routing.
 
@@ -614,7 +614,7 @@ on lines, cursor, `workspace://` links, file tree/editor from today's workspace;
 log, time bar, markers, step keys, Live, approval bar, "Open in terminal" (replaces Watch). Done when: e2e; screenshots
 vs 02/12.
 
-**11.7 One-to-ones** · **DeepSeek** · boards 01 (one-to-one), 19. Agent-coloured panel, "Only you and <agent> see
+**11.7 One-to-ones** ✅ · **DeepSeek** · boards 01 (one-to-one), 19. Agent-coloured panel, "Only you and <agent> see
 this", earlier chats with search and New chat, reference chips, Share to the team room, "Take it aside", Add someone,
 context meter. Done when: e2e for each; screenshots vs 01/19.
 
@@ -641,7 +641,7 @@ ask / never, diff), service, updates, backups, logs, pause everyone, Notificatio
 Remote access and security (paired browsers, passkeys, password, Where agents run card from 11.8a), Terminal page.
 Done when: every current Settings section reachable; e2e; screenshots vs 17.
 
-**11.9c Usage** · **DeepSeek** · board 05, D12: headline numbers, tasks per day stacked per agent with patterns, spend by
+**11.9c Usage** ✅ · **DeepSeek** · board 05, D12: headline numbers, tasks per day stacked per agent with patterns, spend by
 agent, first-time pass rate, time waiting on you, approvals, CSV, "Show as table", range. Done when: numbers equal
 today's Reports API for the same fixtures; e2e; screenshots vs 05.
 
