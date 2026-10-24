@@ -915,3 +915,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   `spendCapUsd` and `recipe { kind: orchestration|workflow; ref }`; `Job` shows `spendCapUsd` and `recipe`. The columns
   existed since 0080; the Start-a-job review showed the dialog had no way to set limits on a plain job or to link a job
   to the orchestration or workflow run it starts. Route test for the fields and their bounds; check green.
+- **11.5 Side panel › Results (DeepSeek pilot + lead, 2026-10-24).** Work › Results in the side panel: change cards
+  ("What changed" from exchange outcomes, who caught what), live preview, drafts, small screens; links to Workbench tabs
+  (`workbenchHref`); never raw code. Rounds: build, a continuation (the first session stopped mid-run) and 1 fix round.
+  Sonnet: 0 P1, 6 P2 — the Workbench switch dropped the job, a refresh storm (every job, every event, even hidden),
+  invented labels ("Saved to the Library", "run has finished", "0 files"), screen tiles contradicting their card, tab
+  semantics and focus — all fixed; judged: a room-wide list matches the prototype's vWork (kept; follows `?job=`).
+  Lead rework: two merges with main by hand (DeepSeek left its resolutions unstaged), and three e2e test errors (two
+  change cards in the room; the stream needs `{ seq, ts, type, data }` envelopes). **Pilot result (owner's rule:
+  ≤ 2 fix rounds and clean code → keep the split):** 1 fix round, code clean after review; the lead's rework was
+  integration and test plumbing, not UI code. Split kept. E2E 67/67 (results, library, shell, protection, search);
+  full check green (web 3,054). Not deployed.

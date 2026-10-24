@@ -598,7 +598,7 @@ answered from the thread; screenshots vs 11.
 (read-only, "Bring into a job"); job menu rename, close, export, share read-only link, delete with undo. Done when: e2e
 for each; older rooms open read-write with today's routing.
 
-**11.5 Side panel › Results (DeepSeek pilot)** · **DeepSeek** · boards 01, 02 (Results tab); prototype Work ›
+**11.5 Side panel › Results (DeepSeek pilot)** ✅ · **DeepSeek** · boards 01, 02 (Results tab); prototype Work ›
 Results; data from 11.2, mounted in 11.3's side-panel slot (the room itself comes in 11.4). Cards: live preview, "What changed" in plain words, drafts, small live screens; each links to
 its Workbench tab; never opens on raw code; empty state (09). Done when: e2e on the fake team room, phone width,
 reduced motion; screenshots vs 01/02; TASKLOG records fix rounds, Sonnet findings (real vs rejected) and the lead's
