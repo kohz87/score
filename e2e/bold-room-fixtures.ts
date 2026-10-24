@@ -575,3 +575,14 @@ export async function openBoldRoomWith(
   await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
   return state
 }
+
+/** Board 18 on a phone opens a job from the list; the desktop opens its tab. Both land on that job's chat. */
+export async function openBoldJob(page: Page, title: RegExp) {
+  if ((page.viewportSize()?.width ?? 1440) <= 860) {
+    await page.getByRole('button', { name: title }).click()
+    await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
+    return
+  }
+  await page.getByRole('tab', { name: title }).click()
+  await expect(page.getByRole('tab', { name: title })).toHaveAttribute('aria-selected', 'true')
+}

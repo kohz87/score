@@ -192,6 +192,9 @@
   padding: 0;
   display: grid;
   place-items: center;
+  /* Named here: the shell's `button { color: inherit }` is unlayered and beats the contrast fallback's layered
+     `color: var(--ink)`, so a ring would keep the failing theme's ink against its own Score fill. */
+  color: var(--ink);
 }
 
 [data-ui='bold'] .ring > span {
@@ -681,6 +684,24 @@ body.fit [data-ui='bold'] .stream {
     min-height: 48px;
     font-size: 12px;
     font-weight: 600;
+  }
+
+  /* PLAN 11.10a: a finger needs 44px, whichever page the control sits on. */
+  [data-ui='bold'] .btn.sm,
+  [data-ui='bold'] .chip,
+  [data-ui='bold'] .seg button,
+  [data-ui='bold'] .link {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .icon-btn.sm {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .chat-ctx-ring {
+    width: 44px;
+    height: 44px;
   }
 
   [data-ui='bold'] .bold-tabbar button.on {

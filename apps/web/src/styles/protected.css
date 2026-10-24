@@ -169,6 +169,15 @@
   html[data-look='custom'] [data-protected='grid'] {
     display: grid !important;
   }
+  /* The Needs-you strip's own fold (bold/room): the cards behind "N more need you" are hidden by Score, through
+     attributes only Score sets (the fold state and each card's rank), so a theme can't use this to hide a card. It must
+     come after the display rules above, which would otherwise show every folded card. */
+  html[data-look='custom']
+    [data-ui='bold']
+    .bold-pins[data-expanded='false']
+    > [data-protected][data-pin-rank]:not([data-pin-rank='0']) {
+    display: none !important;
+  }
   html[data-look='custom'] [data-protected='inline'] {
     display: inline !important;
   }

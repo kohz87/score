@@ -211,6 +211,11 @@
     gap: 12px;
     padding: 10px 16px;
   }
+
+  [data-ui='bold'] .bold-search-esc {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

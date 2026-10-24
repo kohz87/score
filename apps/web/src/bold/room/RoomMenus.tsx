@@ -12,6 +12,8 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useOutsideSessions } from '../../data/outside-sessions.ts'
 import { ChevronIcon, PlusIcon, TrashIcon } from '../BoldIcons.tsx'
 import { useStartJob } from '../BoldStartJob.tsx'
+import { PhonePresence } from './PhoneJobList.tsx'
+import { jobStateLine } from './room-model.ts'
 
 function DotsIcon() {
   return (
@@ -434,6 +436,10 @@ export function RoomTitle({
   rooms,
   agents,
   phoneAction,
+  phone = false,
+  phoneJob,
+  phoneBackLabel = 'Back to jobs',
+  onBackToJobs,
   onSelectRoom,
   onOpenElsewhere,
   onShare,
@@ -445,12 +451,84 @@ export function RoomTitle({
   rooms: Room[]
   agents: AgentSummary[]
   phoneAction?: ReactNode
+  /** The phone room's board 18/03 head, instead of the desktop title. */
+  phone?: boolean
+  /** The job whose full-screen chat is open; absent means the job list. */
+  phoneJob?: Job
+  phoneBackLabel?: string
+  onBackToJobs?: () => void
   onSelectRoom: (room: Room) => void
   onOpenElsewhere: (session: OutsideSession) => void
   onShare: (room: Room) => void
   onDelete: (room: Room) => void
 }) {
   const startJob = useStartJob()
+  if (phone && phoneJob) {
+    return (
+      <div className="roomhead bold-phone-chat-head">
+        <button
+          type="button"
+          className="icon-btn bold-phone-back"
+          aria-label={phoneBackLabel}
+          onClick={onBackToJobs}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span className="bold-phone-chat-id">
+          <b data-phone-chat-title tabIndex={-1}>
+            {phoneJob.isDefault ? (current?.name ?? 'Team room') : phoneJob.title}
+          </b>
+          <span>{jobStateLine(phoneJob, agents)}</span>
+        </span>
+        <PhonePresence agents={agents} />
+      </div>
+    )
+  }
+  if (phone) {
+    return (
+      <div className="roomhead bold-phone-list-head">
+        <div className="bold-phone-list-title">
+          <RoomSwitcher
+            current={current}
+            teamRoom={teamRoom}
+            teamJobCount={teamJobCount}
+            rooms={rooms}
+            agents={agents}
+            onSelectRoom={onSelectRoom}
+            onOpenElsewhere={onOpenElsewhere}
+          />
+          <PhonePresence agents={agents} />
+        </div>
+        <div className="bold-phone-list-actions">
+          {current && <RoomMenu room={current} onShare={onShare} onDelete={onDelete} />}
+          {current?.role === 'team' && (
+            <button
+              type="button"
+              className="chip room-start"
+              aria-label="Start a job"
+              onClick={() => startJob?.openStartJob()}
+            >
+              <PlusIcon />
+              Job
+            </button>
+          )}
+          {phoneAction}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="roomhead">
       <RoomSwitcher

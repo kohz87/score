@@ -1104,3 +1104,34 @@ One entry per completed task: what landed, review results, and any **rejected re
   copy says a later bring-in makes another job. Last review: 0 P1/P2; P3 (a job closed in the same moment a message is
   deleted reads as gone) accepted. Lead e2e fixes: Work chosen from the side panel's menu in Elsewhere mode; on phones
   the kept view skips the preview step. Full check green; room-menu + room + shell + needs-you e2e green. Not deployed.
+- **11.9d Themes and Customizer on the new shell (Sonnet coder → DeepSeek on ordeepseek → Sonnet coder + lead,
+  2026-10-24/25).** `bold-theme.css` maps the shell's tokens to a theme's colours (custom themes and the paper/night/
+  dense packs; Score's own look untouched); fonts follow the theme; the Customizer previews Room/Team/Agent/Settings
+  of the new shell; safe mode and the reset shortcut work on /b; the banner links to /b/settings/look. Protected layer
+  strengthened: fonts pinned on decision surfaces; the contrast fallback now covers the shell's own tokens, keyed on the
+  shell's look and winning by specificity (system-dark + Search's switch to light case), with an opaque Score ground
+  for block-level protected text (inline kinds left alone); the screen page's approval bar uses the shell's 'for you'
+  pair; the dock ring reads Score ink (the guard switched failing themes off over it — guard unchanged, its measurement
+  was right); the needs-you strip folds under custom themes too (protected display rule had un-folded it; the re-hide
+  keys only on Score-set attributes). Contrast deviation from the prototype on the light request card (AA) and the
+  Started-by card painted --deep per the prototype. Reviews: build (P2 fallback gap, no hostile-theme e2e), round 1
+  (P2 cascade tie, unfilled protected text), round 2 (P2 inline patches, Started-by fill), lead fix (P2 screen
+  approval bar), final (clean). Baselines: themes-bold-visual 49/63, themes-builtin-visual 11, themes-layout-visual 15
+  regenerated — glyph eyes (11.11c) and today's room merges; diffs checked; main had been red on the two classic
+  visual specs since 11.11c (lead ran only 12 specs there). Contract gap: Job.source has no app name ('through a
+  trigger'); the engine's AA check covers classic pairs only. Full check green; theme/protection/shell/room/screen/
+  Customizer e2e 368 passed. Not deployed.
+- **11.10a Phone (DeepSeek on ordeepseek → Sonnet coder → lead, 2026-10-25).** Board 18's job list on phones (needs-you
+  cards first, a Team room row for the default job — a list message is filed there; unread counts, holder glyphs,
+  state lines), board 03's full-screen job chat with Back (button and browser/system back: opening from the list pushes
+  a marked entry, job-to-job and in-place cleanups keep it), one source for the open job in head and body (a missing
+  job → the list with a note), older/imported rooms in the phone layout with Back to the team room, side-panel modes
+  and one-to-ones as sheets, the tab bar, 44px targets, capsules with Take it aside inside the phone job chat (the
+  prototype). Reviews: build — 4 P2 (team chat unreachable, back left /b, head/body disagree, older rooms desktop
+  layout); round 1 — 2 P2 (history mark dropped by in-place cleanups; pins strip on short screens) fixed by the lead;
+  e2e (DeepSeek's sandbox can't run Playwright): 19 phone failures at first run — a Sonnet coder found one product bug
+  (older room label on phones) and fixed tests written blind; the lead put capsules back in the phone chat (they had
+  been made desktop-only) and tightened two tests on review (no jobId from the list; the result row is tapped).
+  Differences from the boards reported: Team room row, four tabs, tab bar in chat, 48px targets, pins 52% capped at
+  22rem. Full check green (contract 1505, web 2947, server 4757); room/phone/needs-you/menu/thread/one-to-ones/shell/
+  search/themes e2e green. Not deployed.

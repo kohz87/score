@@ -482,6 +482,35 @@
   flex: none;
 }
 
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-add-from button,
+  [data-ui='bold'] .bold-add-tools label,
+  [data-ui='bold'] .bold-add-shapes label {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .bold-add-shapes {
+    grid-template-columns: repeat(4, 44px);
+  }
+
+  [data-ui='bold'] .bold-add-shapes label {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .bold-add-colours label {
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    background-clip: content-box;
+  }
+
+  [data-ui='bold'] .bold-add-dialog .link,
+  [data-ui='bold'] .bold-add-dialog .team-coding-permission label {
+    min-height: 44px;
+  }
+}
+
 [data-ui='bold'] .bold-add-dialog .coding-reach {
   padding: 12px 14px;
   border-radius: 16px;

@@ -1,4 +1,4 @@
-import type { Approval, Exchange, ExchangeOption, Job } from '@score/contract'
+import type { AgentSummary, Approval, Exchange, ExchangeOption, Job } from '@score/contract'
 
 export type JobFilter = 'all' | 'needs' | 'working' | 'done'
 
@@ -22,6 +22,28 @@ export function jobStateLabel(job: Job): string {
   if (job.state === 'working') return 'Working'
   if (job.state === 'done') return 'Done'
   return 'Closed'
+}
+
+function agentNames(ids: string[], agents: AgentSummary[]): string {
+  const names = ids.map((id) => agents.find((agent) => agent.id === id)?.name ?? id)
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+}
+
+/** One line for the phone's job list and chat head, using the agents and state the contract already ships. */
+export function jobStateLine(job: Job, agents: AgentSummary[]): string {
+  const holder = job.holderAgentId
+    ? (agents.find((agent) => agent.id === job.holderAgentId)?.name ?? job.holderAgentId)
+    : null
+  if (job.state === 'waiting_on_you') return holder ? `${holder} needs you` : 'Needs you'
+  if (job.state === 'working' || job.state === 'open') {
+    const active = agentNames(job.activeAgents, agents)
+    if (active) return `${active} ${job.state === 'open' ? 'up next' : 'working'}`
+    if (holder) return `${holder} ${job.state === 'open' ? 'is up next' : 'is working'}`
+    return jobStateLabel(job)
+  }
+  const label = jobStateLabel(job)
+  return job.summary ? `${label} · ${job.summary}` : label
 }
 
 const PAUSE_TITLE: Record<string, string> = {

@@ -203,17 +203,20 @@ export async function setRoomPin(roomId: string, messageId: string, pinned: bool
   })
 }
 
-export function roomJobsQuery(roomId: string) {
+export function roomJobsQuery(roomId: string | null) {
   return defineStreamQuery<JobRead[]>({
     key: ['bold', 'jobs', roomId],
     async fetch(signal) {
+      // The room is still resolving: the jobs read starts as soon as its id is known.
+      if (roomId === null) return { asOfSeq: 0, data: [] }
       const raw: unknown = await apiFetch(`rooms/${encodeURIComponent(roomId)}/jobs`, { signal })
       const response = JobsResponseSchema.parse(raw)
       return { asOfSeq: response.asOfSeq, data: readJobs(raw) }
     },
     types: ['job.upserted'],
     reduce(data, event) {
-      if (event.type !== 'job.upserted' || event.data.roomId !== roomId) return data
+      if (event.type !== 'job.upserted' || roomId === null || event.data.roomId !== roomId)
+        return data
       // `job.upserted` carries the whole read model. Keeping the previous snapshot's unread/active fields would
       // leave a badge stuck after the server marks the job read.
       return withJob(data, JobSchema.parse(event.data))

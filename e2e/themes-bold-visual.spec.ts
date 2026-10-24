@@ -80,6 +80,8 @@ for (const id of boldThemeIds) {
           const body = (await response.json()) as { items: { id: string }[] }
           const items = body.items
             .filter((item) => item.id in example)
+            // The server lists agents by recent activity, which other specs change: the baseline needs a fixed order.
+            .sort((a, b) => Object.keys(example).indexOf(a.id) - Object.keys(example).indexOf(b.id))
             .map((item) => {
               const { role, color, shape } = example[item.id]!
               return {
@@ -93,6 +95,10 @@ for (const id of boldThemeIds) {
             })
           await route.fulfill({ response, json: { ...body, items } })
         })
+        // Other specs run agents on the shared fake: whether a card has a screen glimpse depends on that. None here.
+        await page.route('**/api/watch/overview*', (route) =>
+          route.fulfill({ json: { items: [] } }),
+        )
         await withLock('roster', async () => {
           await page.goto('/b/team')
           await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
