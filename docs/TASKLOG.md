@@ -1076,3 +1076,19 @@ One entry per completed task: what landed, review results, and any **rejected re
   test now saves Still (Calm is the default), four visual baselines regenerated (only the glyph eyes changed; diff
   checked), a format slip from 11.11a2. Full check green (contract 1505, web 2896, server 4757); 12 affected specs green.
   `~/.score/packs` is removed at the release deploy after the backup. Not deployed.
+- **11.4b Pinned needs-you (DeepSeek → Sonnet coder → DeepSeek → lead, 2026-10-24).** The room's protected strip of
+  decisions: approvals (once / this session / always for <agent>, deny; delivery failed → Retry; non-actionable →
+  answer in Hermes), paused exchanges (more turns 1–20, more spend ≤ 1000, step in, reassign, send back, stop/close —
+  no confirm, at classic parity), questions from the lead and the run-safety cards (quota guard, not confirmed ended,
+  retry/try again/remap, spend not settled, gates) through the classic Decision components; oldest first, human
+  decisions before notices, "N more need you" (protected), focus moves to the next card, live count. One live copy per
+  decision in the room stream ("Waiting in Needs you" pointer); the thread shows the real card (the strip may be
+  filtered or covered). Reviews (Sonnet after every round, owner rule): build — 2 P1 (permanent dismissed sets lost
+  re-pauses; approvals hidden while delivering) + 6 P2; round 2 — approvals from other rooms under an invented job;
+  round 3 — two-room approvals hidden in both rooms, thread pointer with no card, a re-held pause hidden by "sent";
+  lead fixes — "sent" holds only for the read it answered (exchange id + updatedAt; a decision is one server write).
+  DeepSeek round 2 hit the NanoGPT 429 (Sonnet coder finished it); round 3 ran on ordeepseek. Rejected/accepted P3s:
+  stop/close confirm (no classic confirm), approvals with no room ref show in every room (as before), same-millisecond
+  updatedAt (accepted). Contract gaps: no Hermes-side clarify endpoint; exchanges carry no pause-start time ("oldest"
+  uses updatedAt). Full check green (contract 1515, web 3248, server 4822); room e2e 103/103 after the last merge.
+  Not deployed.
