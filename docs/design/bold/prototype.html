@@ -89,7 +89,17 @@ label.lab { font-size: 0.87em; font-weight: 600; color: var(--muted); display: b
 .pin .btn { background: var(--hi-ink); color: var(--hi-bg); }
 .pin .btn.ghost { background: transparent; color: var(--hi-ink); box-shadow: inset 0 0 0 1.5px var(--hi-ink); }
 .pin .sub { color: var(--hi-sub); font-size: 0.87em; }
-.stream { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow-y: auto; min-height: 260px; padding-right: 2px; }
+.stream { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; min-height: 260px; padding-right: 2px; }
+.stream > :first-child, #dmstream > :first-child { margin-top: auto; }
+.pins { flex: none; display: flex; flex-direction: column; gap: 12px; max-height: 40%; overflow-y: auto; overscroll-behavior: contain; border-radius: 22px; }
+/* The room fills the window: the page never scrolls, the stream, the pinned requests and the side panel scroll inside. */
+body.fit { height: 100dvh; overflow: hidden; }
+body.fit #app { height: 100%; display: flex; flex-direction: column; }
+body.fit .main { flex: 1; min-height: 0; display: flex; box-sizing: border-box; }
+body.fit .roomgrid { flex: 1; min-height: 0; width: 100%; }
+body.fit .roomcol, body.fit .sidecol { min-height: 0; }
+body.fit .side { min-height: 0; }
+body.fit .stream { min-height: 120px; }
 .mine { align-self: flex-end; max-width: 84%; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; position: relative; }
 .bub { border-radius: 20px 20px 6px 20px; padding: 9px 14px; background: var(--hi-bg); color: var(--hi-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
 .theirs { display: flex; gap: 10px; align-items: flex-end; max-width: 90%; position: relative; }
@@ -185,6 +195,7 @@ body.still *, body.still *::before { animation: none !important; transition: non
   .span2 { grid-column: auto; }
   .setnav { max-width: none; flex-direction: row; flex-wrap: wrap; }
   .stream { min-height: 320px; }
+  body.fit .stream { min-height: 120px; }
 }
 @media (min-width: 861px) { .sideclose { display: none; } }
 </style>
@@ -372,6 +383,7 @@ function render() {
   const stream = document.getElementById('stream'); const atBottom = !stream || stream.scrollHeight - stream.scrollTop - stream.clientHeight < 60;
   document.body.dataset.look = S.look;
   document.body.classList.toggle('still', S.motion === 'still');
+  document.body.classList.toggle('fit', !S.first && S.view === 'room');
   document.documentElement.style.setProperty('--scale', S.scale);
   let body = '';
   if (S.first) body = vFirstRun();
@@ -423,7 +435,7 @@ function vRoom() {
       </div>
       ${room.kind === 'older' ? `<div class="note" style="align-self:flex-start">Older room · new jobs start in the team room</div>` : ''}
       ${tabs}
-      ${reqs.map(vRequest).join('')}
+      ${reqs.length ? `<div class="pins" aria-label="Needs you">${(S.pinsOpen ? reqs : reqs.slice(0, 1)).map(vRequest).join('')}</div>${reqs.length > 1 ? `<button class="chip" style="align-self:flex-start" data-a="pinsMore" aria-expanded="${!!S.pinsOpen}">${S.pinsOpen ? 'Show fewer' : (reqs.length - 1) + ' more need' + (reqs.length === 2 ? 's' : '') + ' you'}${S.pinsOpen ? I.up : I.down}</button>` : ''}` : ''}
       <div class="stream" id="stream" aria-live="polite">${items.length ? items.map(vMsg).join('') : `<div class="muted" style="text-align:center;padding:30px">Nothing here yet. Write below to start.</div>`}${typing}</div>
       ${S.editing ? `<div class="editing">Editing your message. Sending replaces it and rewinds the agents to before it. <button class="link" data-a="cancelEdit">Cancel</button></div>` : ''}
       ${S.attach.length ? `<div class="attach">${S.attach.map((f, i) => `<span class="chip">${esc(f)}<button class="act" data-a="unattach" data-v="${i}" aria-label="Remove ${esc(f)}">${I.x}</button></span>`).join('')}</div>` : ''}
@@ -591,7 +603,7 @@ function vDM() {
   const s = S.side; const a = W[s.agent]; const c = curConv();
   const msgs = c ? c.msgs : [];
   const shareable = c && msgs.length && msgs[msgs.length - 1][0] !== 'you';
-  const content = msgs.length ? `<div id="dmstream" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:16px;justify-content:flex-end;max-width:620px;width:100%;margin:0 auto">
+  const content = msgs.length ? `<div id="dmstream" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:16px;overscroll-behavior:contain;max-width:620px;width:100%;margin:0 auto">
       ${c.date && c !== (S.dms[s.agent] || [])[0] ? `<span class="note">${esc(c.date)} · earlier chat</span>` : ''}
       ${msgs.map(([w, t], i) => w === 'you' ? `<div class="mine"><div class="bub">${esc(t)}</div></div>` : `<div class="row" style="align-items:flex-start;gap:12px">${glyph(a, 26)}<div style="display:flex;flex-direction:column;gap:8px"><p style="margin:0;font-size:1.05em;line-height:1.6">${esc(t)}</p>${i === msgs.length - 1 ? `<span class="row wrap"><button class="btn sm primary" data-a="shareDM">Share to the team room</button><button class="btn sm ghost" data-a="refer">Bring into a new chat</button></span>` : ''}</div></div>`).join('')}
       ${S.dmTyping === s.agent ? `<div class="row">${glyph(a, 26)}<span class="bub typing" style="background:var(--field);display:inline-flex;gap:4px">${'<span style="background:' + nameColor(a) + '"></span>'.repeat(3)}</span></div>` : ''}
@@ -913,6 +925,7 @@ const A = {
   else(v) { S.roomDrop = false; openSide('else', { else: v }); },
   job(v) { S.job = v; S.jobMenu = false; },
   plus() { S.plus = !S.plus; },
+  pinsMore() { S.pinsOpen = !S.pinsOpen; },
   attachFile() { S.attach.push(['screenshot.png', 'notes.pdf', 'data.csv'][S.attach.length % 3]); S.plus = false; },
   unattach(v) { S.attach.splice(+v, 1); },
   voice() { S.recording = !S.recording; S.plus = false; toast(S.recording ? 'Voice input on. Your words appear in the box.' : 'Voice input off.'); },
