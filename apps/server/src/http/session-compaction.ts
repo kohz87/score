@@ -19,6 +19,7 @@ import { headSeq } from '../hub/snapshot.ts'
 import type { KnowledgeVault } from '../knowledge/vault.ts'
 import { saveMemoryNote } from '../knowledge/memory-notes.ts'
 import { readAgentContext } from './agent-context.ts'
+import { sessionFor, sessionOwner } from '../domain/job-sessions.ts'
 
 const ParamsSchema = z.object({
   agentId: z.string().min(1).max(256),
@@ -85,21 +86,13 @@ export function registerSessionCompactionRoutes(
     // `score-<roomId>-<agentId>` names the room's session of that agent; in an imported room that continues a Hermes
     // session it stands for that session. The continued session's own id is accepted too.
     const found = db.read((sqlite) => {
-      const continued = sqlite
-        .prepare(
-          'SELECT room_id, session_id FROM room_sessions WHERE agent_id = ? AND session_id = ?',
-        )
-        .get(agentId, sessionId) as { room_id: string; session_id: string } | undefined
-      if (continued) return { roomId: continued.room_id, hermesSession: continued.session_id }
-      if (!sessionId.startsWith('score-') || !sessionId.endsWith(`-${agentId}`)) return null
-      const id = sessionId.slice('score-'.length, sessionId.length - agentId.length - 1)
-      if (!sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(id)) return null
-      const same = sqlite
-        .prepare(
-          "SELECT session_id FROM room_sessions WHERE room_id = ? AND agent_id = ? AND mode = 'same_session'",
-        )
-        .get(id, agentId) as { session_id: string } | undefined
-      return { roomId: id, hermesSession: same?.session_id ?? sessionId }
+      const owner = sessionOwner(sqlite, agentId, sessionId)
+      if (!owner) return null
+      if (owner.continued) return { roomId: owner.roomId, hermesSession: sessionId }
+      return {
+        roomId: owner.roomId,
+        hermesSession: sessionFor(sqlite, { roomId: owner.roomId, jobId: owner.jobId, agentId }),
+      }
     })
     if (found === null) throw new HttpError(404, 'not_found', 'Couldn’t find that conversation.')
     const { roomId, hermesSession } = found

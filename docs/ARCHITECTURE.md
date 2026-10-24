@@ -201,18 +201,29 @@ terminal on the Hermes machine.
 **D3.1 Room turns.** Identities are kept separate and persisted per turn:
 - `score_turn_id`, Score's own; also the `Idempotency-Key`;
 - Hermes `run_id`, which is also the approval session key;
-- the conversation session ID, stable per (room, agent): `score-<room>-<agent>`;
+- the conversation session ID, stable per (job, agent) (PLAN 11.1a): a room's default job keeps the room's
+  session `score-<room>-<agent>` (or the outside session an imported room continues), so rooms from before jobs
+  keep their history; any other job has `score-<room>-<job>-<agent>`, recorded in `job_sessions`. Only
+  `domain/job-sessions.ts` builds these ids (`sessionFor`; `sessionOwner` is the reverse lookup);
 - the **live tip** Hermes resolves it to after compression, recorded from run status.
 
-Turns are **serialized per (room, agent)**, so the same agent never runs two turns in one room at once. The input
-is built **at admission**, not at enqueue: `session_id` plus, as `input`, the room messages since that agent's
-last turn (speaker-labelled). No `conversation_history` is sent, so Hermes keeps the agent's own tool history from
-its session and won't swap in a different history after waiting on its turn lease.
+A **job** is a thread inside a room (`jobs`, `messages.job_id`, `message_runs.job_id`); every room has one default
+job, and until 11.1b no room has more. Turns are **serialized per (room, agent)** across all its jobs, so the same
+agent never runs two turns in one room at once. The input is built **at admission**, not at enqueue: `session_id`
+plus, as `input`, the person's or the handing-off agent's text and the room's last 10 messages (or its summary and
+the messages after it, PLAN 7.4a), speaker-labelled and redacted, ≤ 8 KB. No `conversation_history` is sent, so
+Hermes keeps the agent's own tool history from its session and won't swap in a different history after waiting on
+its turn lease. Rooms with `routing = 'exchanges'` build per-job input instead (docs/briefs/11.0-bold.md §5).
 
-**D3.2 @mention routing** (designed from scratch; no Graphite on this machine):
+**D3.2 @mention routing** (rooms with `routing = 'mentions'`, every room until 11.11):
 - An unaddressed message goes to the room's lead agent; `@agent` starts a turn for that agent.
-- An agent reply that @mentions another agent is a hand-off, subject to a hop limit (6 per human message) and a
-  ping-pong guard (a pair at most 2 times without a human message).
+- An agent reply that @mentions another agent is a hand-off. Hand-offs stop at 4 hops per human message
+  (`HANDOFF_HOP_LIMIT`), and a reverse hand-off (B → A after A → B) in the same chain is refused; the reply then shows
+  "Hand-off limit reached". (Earlier drafts said 6 hops and "a pair at most 2 times"; the code was always this.)
+
+**D3.3 Exchanges** (team room and one-to-ones, PLAN 11.1b): explicit agent actions (hand off, ask, review, approve,
+send back, reply) bound to the turn by a per-turn capability, applied when the turn completes, with a turn budget
+per exchange and per job that pauses and asks the person. Design: docs/briefs/11.0-bold.md §4.
 
 ### D4. Approvals: one ledger, exact targets, confirmed delivery
 **Ledger model.** An *operation* (one flagged action) has phases: `guardian_evaluating` → `human_pending` →
@@ -312,7 +323,7 @@ offers an exact invocation id.
 - `lanes` / `handoffs` (Score timeline)
 
 **Owned state:**
-- `rooms`, `room_members`, `messages`, `mentions`
+- `rooms`, `room_members`, `messages`, `mentions`; `jobs` and `job_sessions` (11.1a; Score's threads, not Hermes's cron `/api/jobs`)
 - `briefs`, `brief_tasks`, `room_tasks`: the associations Hermes can't hold.
 - `approvals` (operations) and `approval_deliveries` (outbox)
 - `kanban_grants`

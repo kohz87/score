@@ -8,6 +8,7 @@ import { requestSummary, shouldAutoSummarise } from './room-summaries.ts'
 import { compactingKey, compactingSessions, rewindingRooms } from './room-rewinding.ts'
 import { continuationFor, markSummarySent } from './outside-sessions.ts'
 import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.ts'
+import { sessionFor } from './job-sessions.ts'
 
 /** How long a turn waits for an outside session to go quiet before it fails with `session_busy`. */
 export const SESSION_BUSY_WAIT_MS = 10 * 60_000
@@ -174,9 +175,13 @@ export class RoutingDispatcher {
           agentId: job.agent_id,
           input: frozen.admission_input!,
           turnId: job.turn_id,
-          sessionId:
-            this.db.read((sqlite) => continuationFor(sqlite, job.room_id, job.agent_id))
-              .sessionId ?? `score-${job.room_id}-${job.agent_id}`,
+          sessionId: this.db.read((sqlite) =>
+            sessionFor(sqlite, {
+              roomId: job.room_id,
+              jobId: job.job_id ?? null,
+              agentId: job.agent_id,
+            }),
+          ),
           ...(job.model ? { model: job.model } : {}),
           ...(frozen.provider ? { provider: frozen.provider } : {}),
           ...(images.length ? { images } : {}),

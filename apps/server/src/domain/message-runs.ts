@@ -41,6 +41,8 @@ export const MessageRunSchema = z.object({
   purpose: z.enum(['summary']).nullable().optional(),
   /** Set for the reply of an orchestration lead or step attempt (PLAN 7.5): no hand-offs, no plan, no retry. */
   orchestration_attempt_id: z.string().nullable().optional(),
+  /** The job the turn belongs to (PLAN 11.1a); set by the insert trigger from the message it answers. */
+  job_id: z.string().nullable().optional(),
 })
 export type MessageRun = z.infer<typeof MessageRunSchema>
 
@@ -94,6 +96,9 @@ export function reserveMessageRun(
       req.admissionInput ?? null,
       req.purpose ?? null,
     )
+  const job = sqlite.prepare('SELECT job_id FROM message_runs WHERE turn_id = ?').get(turnId) as
+    { job_id: string | null } | undefined
+  if (job?.job_id) ensureJobSession(sqlite, job.job_id, req.agentId, now)
   return `reply:${turnId}`
 }
 
@@ -813,3 +818,4 @@ export function failMessageRun(
   )
 }
 import { agentAdmits, assertAgentAdmits } from './agent-lifecycle.ts'
+import { ensureJobSession } from './job-sessions.ts'

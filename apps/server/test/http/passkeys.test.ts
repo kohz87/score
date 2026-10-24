@@ -353,7 +353,10 @@ test('a passkey session behaves exactly like a paired one: list, renew, expiry, 
     owner,
   )
   expect(renewed.statusCode).toBe(200)
-  expect(Date.parse(renewed.json().expiresAt)).toBeGreaterThan(Date.now())
+  // Later than the test clock's now (start + 5 days), not the wall clock, which has moved past the test's dates.
+  expect(Date.parse(renewed.json().expiresAt)).toBeGreaterThan(
+    Date.UTC(2026, 9, 9) + 5 * 24 * 60 * 60 * 1000,
+  )
 
   // The owner can revoke it, which ends the session at once.
   const revoked = await post(

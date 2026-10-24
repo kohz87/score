@@ -4,6 +4,7 @@ import type { ObservationSink } from '../port.ts'
 import { CredentialsUnavailable } from './credentials.ts'
 import { GatewayClient, HermesHttpError } from './gateway.ts'
 import { resumableSse, SseHttpError, type SseBackoff } from './sse-client.ts'
+import { sessionFor } from '../../domain/job-sessions.ts'
 import {
   readRun,
   runDraft,
@@ -87,12 +88,20 @@ async function runGone(options: FollowOptions): Promise<void> {
   const { db, sink, context } = options
   const row = readRun(db.sqlite, context.runId)
   const mapped = db.sqlite
-    .prepare('SELECT room_id, agent_id FROM message_runs WHERE run_id = ?')
+    .prepare('SELECT room_id, job_id, agent_id FROM message_runs WHERE run_id = ?')
     .get(context.runId)
-  const parsed = z.object({ room_id: z.string(), agent_id: z.string() }).safeParse(mapped)
+  const parsed = z
+    .object({ room_id: z.string(), job_id: z.string().nullable(), agent_id: z.string() })
+    .safeParse(mapped)
   const sessionId =
     row.session_id ??
-    (parsed.success ? `score-${parsed.data.room_id}-${parsed.data.agent_id}` : null)
+    (parsed.success
+      ? sessionFor(db.sqlite, {
+          roomId: parsed.data.room_id,
+          jobId: parsed.data.job_id,
+          agentId: parsed.data.agent_id,
+        })
+      : null)
   const intent = z
     .object({ payload: z.string() })
     .safeParse(

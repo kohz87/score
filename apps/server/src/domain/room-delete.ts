@@ -138,6 +138,10 @@ export function deleteRoom(
     'messages',
   ])
     sqlite.prepare(`DELETE FROM ${table} WHERE room_id = ?`).run(roomId)
+  sqlite
+    .prepare('DELETE FROM job_sessions WHERE job_id IN (SELECT id FROM jobs WHERE room_id = ?)')
+    .run(roomId)
+  sqlite.prepare('DELETE FROM jobs WHERE room_id = ?').run(roomId)
   sqlite.prepare('DELETE FROM rooms WHERE id = ?').run(roomId)
   return [{ type: 'room.deleted', data: { id: roomId } }]
 }

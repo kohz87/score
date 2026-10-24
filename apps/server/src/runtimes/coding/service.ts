@@ -56,6 +56,7 @@ import {
   saveCodingQuota,
   type StoredCodingAgent,
 } from './store.ts'
+import { sessionOwner } from '../../domain/job-sessions.ts'
 import {
   eventObservation,
   newTranslation,
@@ -491,11 +492,10 @@ export class CodingRuntime {
     return value
   }
 
-  /** The room's Hermes-style session key is `score-<room>-<agent>`: forget that room's CLI session. */
+  /** Forget the CLI session of the room a Score session key belongs to (CLI sessions are per room until 11.1b). */
   forgetRoomSession(sessionKey: string, agentId: string): void {
-    const suffix = `-${agentId}`
-    if (!sessionKey.startsWith('score-') || !sessionKey.endsWith(suffix)) return
-    forgetCliSession(this.deps.db.sqlite, sessionKey.slice(6, -suffix.length), agentId)
+    const owner = sessionOwner(this.deps.db.sqlite, agentId, sessionKey)
+    if (owner && !owner.continued) forgetCliSession(this.deps.db.sqlite, owner.roomId, agentId)
   }
 
   /** Why this CLI may not run for this agent right now, or null. Read fresh when `fresh` (before a spawn). */
