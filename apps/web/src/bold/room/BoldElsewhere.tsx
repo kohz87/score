@@ -97,7 +97,7 @@ export function BoldElsewhere({
                   </li>
                 ) : (
                   <li key={message.id} className="bold-elsewhere-theirs">
-                    {agent && <AgentGlyph agent={agent} size="sm" plain bare decorative />}
+                    {agent && <AgentGlyph agent={agent} size="sm" bare decorative />}
                     <div>
                       <span className="small muted">{author}</span>
                       <p className="bold-elsewhere-bub">{textOf(message)}</p>

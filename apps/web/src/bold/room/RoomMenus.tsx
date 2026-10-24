@@ -240,7 +240,7 @@ export function RoomSwitcher({
 
 function OutsideGlyph({ agent }: { agent: AgentSummary | undefined }) {
   return agent ? (
-    <AgentGlyph agent={agent} size="sm" plain bare decorative />
+    <AgentGlyph agent={agent} size="sm" bare decorative />
   ) : (
     <span className="bold-outside-glyph" aria-hidden="true" />
   )
