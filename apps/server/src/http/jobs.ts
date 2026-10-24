@@ -6,6 +6,7 @@ import {
   ExchangeDecisionRequestSchema,
   ExchangesResponseSchema,
   JobCreateRequestSchema,
+  JobResultsSchema,
   JobSchema,
   JobsResponseSchema,
   RoomPinsResponseSchema,
@@ -16,6 +17,7 @@ import type { FastifyInstance, preHandlerHookHandler, onSendHookHandler } from '
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { decideExchange, stopJob, type Decided } from '../domain/exchanges/decisions.ts'
+import { jobResults } from '../domain/exchanges/results.ts'
 import { createJob, jobRow, listExchanges, listJobs } from '../domain/exchanges/store.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import { insertRoom, readRoom, roomChanged, roomRow } from '../domain/rooms.ts'
@@ -95,6 +97,12 @@ export function registerJobRoutes(
       },
     })
     return reply.code(201).send(JobSchema.parse(created))
+  })
+
+  app.get('/api/jobs/:jobId/results', async (request) => {
+    const { jobId } = JobParams.parse(request.params)
+    const result = snapshot(db, (sqlite) => jobResults(sqlite, jobId))
+    return JobResultsSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
   })
 
   app.get('/api/jobs/:jobId/exchanges', async (request) => {

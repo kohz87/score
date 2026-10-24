@@ -638,6 +638,14 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     **H** `POST|DELETE /api/rooms/:roomId/pins/:messageId` → `204`; at most 10 (`409 too_many_pins`); event
     `room.pins.changed { roomId }`. Every turn in the room gets the pins' text (≤ 2 KB) as "Decisions pinned in this
     room".
+  - **S** `GET /api/jobs/:jobId/results` → `JobResults { asOfSeq; items: ResultCard[]; screens: { agentId; seq; surface;
+    caption; live; at }[] }` (PLAN 11.2b; schemas in `packages/contract/src/results.ts`), derived on read, newest first:
+    `change { title; authors; state: 'working'|'in_review'|'sent_back'|'approved'|'waiting_on_you'|'done'; whatChanged:
+    { text; by; caught }[] (each applied approve, and each send-back's first line, `caught` once approved); files: { path;
+    added; removed; by }[] }` from the agents' `file` parts and the job's reviews; `preview { agentId; url; title;
+    imageUrl; live }` from the newest browser watch frame of the job's runs; `draft { agentId; title; target: { kind:
+    'document'; mediaId } | { kind: 'workspace'; path } }` from the agents' attachments. `screens`: each agent's newest
+    watch frame in the job (`live` while its run is running).
 - **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
   `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409

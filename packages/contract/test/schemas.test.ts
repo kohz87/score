@@ -326,6 +326,30 @@ const exchangeCases = [
   ],
   ['RoomPinsResponseSchema', { items: [] }, { items: [{}] }],
   ['RoomPinsChangedSchema', { roomId: 'r1' }, {}],
+  [
+    'ResultChangeLineSchema',
+    { text: 'Approved by reviewer', by: 'reviewer', caught: false },
+    { text: 'x' },
+  ],
+  [
+    'ResultCardSchema',
+    {
+      kind: 'preview',
+      id: 'p1',
+      agentId: 'builder',
+      url: 'http://localhost:5173',
+      title: null,
+      imageUrl: null,
+      live: true,
+      at: '2026-10-24T00:00:00.000Z',
+    },
+    { kind: 'code', id: 'x' },
+  ],
+  [
+    'JobResultsSchema',
+    { asOfSeq: 1, items: [], screens: [] },
+    { asOfSeq: 1, items: [{ kind: 'draft' }], screens: [] },
+  ],
   ['ExchangeOptionSchema', 'answer_to_lead', 'shrug'],
   [
     'ExchangeDecisionRequestSchema',
