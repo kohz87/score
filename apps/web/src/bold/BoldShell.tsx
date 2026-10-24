@@ -2,6 +2,7 @@ import type { AgentSummary } from '@score/contract'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
+import { BoldRecipes } from './BoldRecipes.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useTextScale } from '../data/text-scale.ts'
 import { useMediaQuery } from '../data/use-media.ts'
@@ -66,6 +67,7 @@ export function BoldShell() {
   )
   const navigate = useNavigate()
   const location = useLocation()
+  const recipesOpen = new URLSearchParams(location.search).get('recipes') === '1'
   const view = viewOf(location.pathname)
   const phone = useMediaQuery(PHONE)
   const systemLight = useMediaQuery('(prefers-color-scheme: light)')
@@ -136,7 +138,7 @@ export function BoldShell() {
       data-look={resolvedLook}
       style={{ '--scale': scale } as CSSProperties}
     >
-      <div className="bold-frame" inert={commandOpen}>
+      <div className="bold-frame" inert={commandOpen || recipesOpen}>
         <header className="top" inert={phone && sheetOpen}>
           <button
             type="button"
@@ -150,6 +152,9 @@ export function BoldShell() {
             <nav className="nav" aria-label="Main">
               {navButton('room', 'Room', '/b')}
               {navButton('team', 'Team', '/b/team')}
+              <button type="button" onClick={go('/b?recipes=1')}>
+                Recipes
+              </button>
             </nav>
           )}
           {!phone && (
@@ -169,6 +174,11 @@ export function BoldShell() {
                 <span className="small muted dock-note">Rings show progress</span>
               )}
             </div>
+          )}
+          {phone && (
+            <button type="button" className="btn sm" onClick={go('/b?recipes=1')}>
+              Recipes
+            </button>
           )}
           {!phone && (
             <button
@@ -240,6 +250,7 @@ export function BoldShell() {
           </nav>
         )}
       </div>
+      {recipesOpen && <BoldRecipes onClose={() => void navigate('/b')} />}
       {commandOpen && (
         <BoldSearch
           agents={agents}

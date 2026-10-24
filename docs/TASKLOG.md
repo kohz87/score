@@ -899,3 +899,30 @@ One entry per completed task: what landed, review results, and any **rejected re
   reviewer's own edits in the same turn come before its verdict, and concurrent turns of other agents in one job don't
   happen (one turn per agent, the job's exchanges serialise); `-0,0` from an agent's patch against an existing file — the
   patch tool fails on it, so no frame is recorded. Not deployed.
+- **11.10d Recipe editor (DeepSeek + lead, 2026-10-24).** `BoldRecipes` (`/b?recipes=1`): the 7.1 workflows as a step
+  list (agent steps, gates, branches with target selects, joins, ends; retries 0–2 and failure paths; template fields;
+  live checking via the shared validator; undo/redo; versions with conflict choices and "start from an older version";
+  scrubbed export; read-only graph view through the classic `EditorCanvas`, whose new `readOnly` prop defaults off).
+  Build in two sessions (the first died on a NanoGPT 502 after 1M tokens) + 1 fix round. Sonnet: 2 P1 — adding a step
+  gave two edges the same id (so "Looks good" never showed: the failing e2e was a product bug) and moving a step could cut
+  a step loose from its upstream — 5 P2 (no-op moves, round trips only over three fixtures, cycles listable, unsaved
+  work lost on Escape/older version, step-list focus and announcements), 1 P3 (failed validation enabled Save); all
+  fixed, with a round trip over every 7.1 fixture. Lead: a version-agnostic e2e assertion, the compare-script merge
+  (one `measure()` for both selector styles), and prototype fidelity from screenshots (no focus ring on the dialog,
+  trash and plus icons, red remove). E2E 61/61 (recipes, classic workflows, coding workflows, workflow visual, shell,
+  search); full check green (web 3,081). Not deployed.
+- **11.10c contract (lead, 2026-10-24).** `POST /api/rooms/:roomId/jobs` takes `exchangeBudget`, `jobTurnLimit`,
+  `spendCapUsd` and `recipe { kind: orchestration|workflow; ref }`; `Job` shows `spendCapUsd` and `recipe`. The columns
+  existed since 0080; the Start-a-job review showed the dialog had no way to set limits on a plain job or to link a job
+  to the orchestration or workflow run it starts. Route test for the fields and their bounds; check green.
+- **11.5 Side panel › Results (DeepSeek pilot + lead, 2026-10-24).** Work › Results in the side panel: change cards
+  ("What changed" from exchange outcomes, who caught what), live preview, drafts, small screens; links to Workbench tabs
+  (`workbenchHref`); never raw code. Rounds: build, a continuation (the first session stopped mid-run) and 1 fix round.
+  Sonnet: 0 P1, 6 P2 — the Workbench switch dropped the job, a refresh storm (every job, every event, even hidden),
+  invented labels ("Saved to the Library", "run has finished", "0 files"), screen tiles contradicting their card, tab
+  semantics and focus — all fixed; judged: a room-wide list matches the prototype's vWork (kept; follows `?job=`).
+  Lead rework: two merges with main by hand (DeepSeek left its resolutions unstaged), and three e2e test errors (two
+  change cards in the room; the stream needs `{ seq, ts, type, data }` envelopes). **Pilot result (owner's rule:
+  ≤ 2 fix rounds and clean code → keep the split):** 1 fix round, code clean after review; the lead's rework was
+  integration and test plumbing, not UI code. Split kept. E2E 67/67 (results, library, shell, protection, search);
+  full check green (web 3,054). Not deployed.
