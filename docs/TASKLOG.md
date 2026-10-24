@@ -713,3 +713,20 @@ One entry per completed task: what landed, review results, and any **rejected re
   7.0.0-38-generic, Hyper-V) while a vitest worker unmapped memory; the worker hung in D state and made `ps` hang. The
   lead killed that one worker (its own test process). Same day: a pytest segfault and a V8 `index < size()` abort, all
   passing on rerun. Owner asked to update/reboot (system-level, needs their OK). The live Score service stayed up.
+- **11.1c budgets, pause-and-ask, step in (lead, 2026-10-24).** Brief `docs/briefs/11.1c-budgets.md`; migration 0082
+  (PLAN's later migration numbers now follow merge order, the runner refuses gaps). A turn that may not be queued is
+  held on its exchange with a reason (`exchange_budget`, `job_limit`, `spend_cap`, `cost_unknown`, `turn_failed`,
+  `unreachable`, `asker_gone`, `no_decision`, `author_stalled`, `question_stopped`); `Exchange.pause` lists what the
+  person can do; `POST /api/exchanges/:id/decision` and `POST /api/jobs/:id/stop`; "Let lead decide" gives the room lead
+  one turn whose only actions are `extend`/`stop_exchange` (plugin tools `score_extend`, `score_stop_exchange`), once
+  per exchange, never when the lead is in it; `queuedBehind` shows a turn waiting on the agent's turn in another job.
+  17 acceptance tests (one per done-when item and per §4.6 row) + a dispatcher test for Pause everyone. Deviation: a
+  child `ask` opens with the job's budget, not the parent's remainder (the job limit bounds the tree; brief notes it).
+  **Sonnet review: 4 P1, 6 P2, 4 P3, all real and fixed with tests** — released turns lost their resume state (a review
+  waiting on its author came back `live` and was stranded), a stopped question or an answer passed to the lead left the
+  asker's exchange waiting forever, a turn completing after Stop still routed work, answers back to person-started
+  turns escaped the job limit, release didn't re-check the other limits or throw-proof an unreachable agent, reassign
+  was offered on the author's side, the lead's deciding turn kept running after the person decided; plus the harness
+  marking failed runs completed and unknown-cost timing on `updated_at`. **Found by tests:** `exchange_actions.action`
+  CHECK lacked the new actions (rebuilt in 0082). `pnpm check` green (contract 1454, web 2988, server 4751 + 14
+  skipped, plugin 356, licenses). Not deployed.

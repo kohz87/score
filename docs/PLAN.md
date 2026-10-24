@@ -548,7 +548,7 @@ action in one turn is refused; a capability from another turn, an ended turn or 
 single `score-action` block routes and two blocks route nothing with a notice; context holds only this job's messages
 since the agent's last turn, pins and references (snapshot test); older rooms still route by @mention.
 
-**11.1c Budgets, pause-and-ask, step in** · **Lead** · brief §4.5–§4.6, migration 0082 (numbers after it moved up one, 2026-10-24). Done when: an exchange pauses at 8 of 8
+**11.1c Budgets, pause-and-ask, step in** ✅ (merged, not deployed) · **Lead** · brief §4.5–§4.6, migration 0082 (numbers after it moved up one, 2026-10-24). Done when: an exchange pauses at 8 of 8
 turns with a needs-you card; "Give 4 more", "Let lead decide" (lead extends once, never as a participant), "Step in"
 and "Stop" each work (tests); the job-wide 40-turn limit stops nested asks and repeated hand-offs; spend cap and
 unknown cost pause before admission; Pause everyone holds exchanges without spending turns; every row of brief §4.6
