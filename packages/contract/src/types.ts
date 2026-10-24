@@ -306,6 +306,13 @@ export const RoomSchema = z.object({
   importedFrom: RoomImportSchema.nullable().optional(),
   /** Opt-in summary of long history (PLAN 7.4a); the server always sends it, absent = off. */
   autoSummary: AutoSummarySchema.optional(),
+  /**
+   * PLAN 11.1b: `team` = the always-on team room of the new shell (the classic shell leaves it out), `direct` = an
+   * agent's one-to-one home, `room` = any other room. The server always sends it; absent = `room`/`direct` by `kind`.
+   */
+  role: z.enum(['team', 'direct', 'room']).optional(),
+  /** `mentions` = @mention hand-offs (D3.2), `exchanges` = agent actions (D3.3). The server always sends it. */
+  routing: z.enum(['mentions', 'exchanges']).optional(),
 })
 export type Room = z.infer<typeof RoomSchema>
 
@@ -434,6 +441,11 @@ export const MessageSchema = z.object({
   editedBy: z.string().min(1).nullish(),
   /** Set on the corrected message: the id of the message it replaces. */
   edits: z.string().min(1).nullish(),
+  /**
+   * The job (thread) the message belongs to (PLAN 11.1b). Always set on messages Score sends; when storing, absent
+   * means the room's default job.
+   */
+  jobId: z.string().min(1).nullish(),
 })
 export type Message = z.infer<typeof MessageSchema>
 

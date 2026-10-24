@@ -26,6 +26,7 @@ import {
   deleteMessage,
   insertRoom,
   markRoomRead,
+  messageFromRow,
   messagePage,
   readAllRooms,
   readRoom,
@@ -40,6 +41,7 @@ import {
   editableMessage,
   listVersions,
   markEdited,
+  jobOfMessage,
   markRunsRewound,
   rewindableMessage,
   rewindScope,
@@ -58,6 +60,7 @@ import {
 import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
 import { requestSummary, sanitizeSummaryText } from '../domain/room-summaries.ts'
 import { visibleSummaries } from '../domain/summary-stale.ts'
+import { defaultJobId } from '../domain/job-sessions.ts'
 import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
 import { routeMessage, modelCommand } from '../domain/routing.ts'
@@ -111,6 +114,7 @@ const MessageBodySchema = z
     model: z.string().min(1).max(256).optional(),
     attachments: z.array(MessageAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
     edits: z.string().min(1).max(200).optional(),
+    jobId: z.string().min(1).max(64).optional(),
   })
   .strict()
 const ParamsSchema = z.object({ roomId: z.string().min(1).max(256) })
@@ -487,7 +491,14 @@ export function registerRoomRoutes(
             source: 'rooms',
             identity: randomUUID(),
             apply: ({ sqlite, now }) => {
-              markRunsRewound(sqlite, roomId, agent.agentId, anchor.createdAt, now)
+              markRunsRewound(
+                sqlite,
+                roomId,
+                jobOfMessage(sqlite, anchor),
+                agent.agentId,
+                anchor.createdAt,
+                now,
+              )
               return []
             },
           })
@@ -560,7 +571,7 @@ export function registerRoomRoutes(
       identity: randomUUID(),
       apply: ({ sqlite, now }) => {
         roomRow(sqlite, roomId)
-        const current = visibleSummaries(sqlite, roomId)[0]
+        const current = visibleSummaries(sqlite, roomId, defaultJobId(sqlite, roomId) ?? '')[0]
         if (!current) throw new HttpError(404, 'not_found', 'This room has no summary.')
         const text = sanitizeSummaryText(body.text)
         if (!text) throw new HttpError(400, 'bad_request', 'The summary can’t be empty.')
@@ -589,7 +600,7 @@ export function registerRoomRoutes(
         identity: randomUUID(),
         apply: ({ sqlite, now }) => {
           roomRow(sqlite, roomId)
-          const current = visibleSummaries(sqlite, roomId)[0]
+          const current = visibleSummaries(sqlite, roomId, defaultJobId(sqlite, roomId) ?? '')[0]
           if (!current) throw new HttpError(404, 'not_found', 'This room has no summary.')
           return deleteMessage(sqlite, roomId, current.id, now)
         },
@@ -673,6 +684,13 @@ export function registerRoomRoutes(
     const original = body.edits
       ? db.read((sqlite) => editableMessage(sqlite, roomId, body.edits!))
       : undefined
+    if (body.jobId && original?.jobId && body.jobId !== original.jobId)
+      throw new HttpError(
+        400,
+        'bad_request',
+        'An edit stays in the job of the message it corrects.',
+      )
+    const jobId = body.jobId ?? original?.jobId
     const to = [...new Set(body.to ?? original?.to ?? [])]
     const known = (await agents()).map((agent) => agent.id)
     if (to.some((id) => !known.includes(id)))
@@ -775,11 +793,14 @@ export function registerRoomRoutes(
           streaming: false,
           refs: [],
           ...(original ? { edits: original.id } : {}),
+          // An edit stays in the job of the message it corrects.
+          ...(jobId ? { jobId } : {}),
         }
         if (original) editableMessage(sqlite, roomId, original.id)
         // Inside the same transaction, so an item deleted since the check above fails the whole message.
         media?.retain(sqlite, mediaIds, now)
         const drafts = storeMessage(sqlite, message, now)
+        message = messageFromRow(sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(id))
         if (original) drafts.push(...markEdited(sqlite, roomId, original, id, now))
         // Plan first admits only the planner; the others are named in its prompt and start from the plan.
         const team = route.routedTo.filter((agentId) => agentId !== planner)

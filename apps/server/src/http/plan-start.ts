@@ -118,8 +118,9 @@ export function createPlanStarter(deps: {
             "UPDATE plan_start_runs SET state = 'failed', error = ?, updated_at = ? WHERE message_id = ? AND state = 'running'",
           )
           .run(reason, now, run.message_id)
-        const plan = sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(run.message_id)
-        const author: Message['author'] = plan ? messageFromRow(plan).author : { kind: 'you' }
+        const value = sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(run.message_id)
+        const plan = value ? messageFromRow(value) : undefined
+        const author: Message['author'] = plan ? plan.author : { kind: 'you' }
         return storeMessage(
           sqlite,
           {
@@ -136,6 +137,7 @@ export function createPlanStarter(deps: {
             refs: [],
             streaming: false,
             createdAt: now,
+            ...(plan?.jobId ? { jobId: plan.jobId } : {}),
           },
           now,
         )

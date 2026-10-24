@@ -164,7 +164,7 @@ function rewind(id: string, forge: Forge): { runId: string; launchId: string } {
     )
     if (forge.run.pendingSuccess)
       sql(
-        'INSERT INTO coding_pending_terminals (run_id, agent_id, room_id, usage, info, created_at) VALUES (?, ?, NULL, NULL, ?, ?)',
+        'INSERT INTO coding_pending_terminals (run_id, agent_id, job_id, usage, info, created_at) VALUES (?, ?, NULL, NULL, ?, ?)',
         runId,
         'coder',
         JSON.stringify({

@@ -206,6 +206,7 @@ export function attachRunMessage(
       refs: [{ kind: 'run', runId }],
       streaming: true,
       createdAt: now,
+      ...(mapping.job_id ? { jobId: mapping.job_id } : {}),
     },
     now,
   )
@@ -412,7 +413,7 @@ export function approvalMessage(
 ): DomainEventDraft[] {
   const value = sqlite
     .prepare(
-      `SELECT m.room_id, m.agent_id, a.run_id FROM approvals a
+      `SELECT m.room_id, m.agent_id, m.job_id, a.run_id FROM approvals a
        LEFT JOIN message_runs m ON m.run_id = a.run_id WHERE a.id = ? AND a.origin = 'score-run'`,
     )
     .get(approvalId)
@@ -421,6 +422,7 @@ export function approvalMessage(
     .object({
       room_id: z.string().nullable(),
       agent_id: z.string().nullable(),
+      job_id: z.string().nullable(),
       run_id: z.string().nullable(),
     })
     .parse(value)
@@ -436,6 +438,7 @@ export function approvalMessage(
       refs: row.run_id ? [{ kind: 'run', runId: row.run_id }] : [],
       streaming: false,
       createdAt: now,
+      ...(row.job_id ? { jobId: row.job_id } : {}),
     },
     now,
   )
@@ -736,7 +739,7 @@ function finishSummaryRun(
     .run(ok ? 'completed' : 'failed', message.id)
   const drafts: DomainEventDraft[] = []
   if (ok) {
-    for (const older of visibleSummaries(sqlite, mapping.room_id)) {
+    for (const older of visibleSummaries(sqlite, mapping.room_id, mapping.job_id ?? undefined)) {
       if (older.id === message.id) continue
       sqlite
         .prepare(
@@ -761,17 +764,20 @@ export function roomRunInput(
   roomId: string,
   input: string,
   parentMessageId: string,
+  jobId?: string | null,
 ): string {
+  // Only the turn's own job is context (PLAN 11.1b): a room's other threads are not this conversation.
+  const job = jobId ?? defaultJobId(sqlite, roomId) ?? ''
   // A usable summary replaces the plain window: "summary + the messages after it" (PLAN 7.4a).
-  const summarised = summaryContext(sqlite, roomId, parentMessageId)
+  const summarised = summaryContext(sqlite, roomId, job, parentMessageId)
   if (summarised) return `${input}\n\nRoom context:\n${summarised}`
   const messages = sqlite
     .prepare(
-      `SELECT * FROM messages WHERE room_id = ? AND id != ? AND deleted_at IS NULL
+      `SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND id != ? AND deleted_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM json_each(messages.parts) WHERE json_extract(value, '$.kind') = 'summary')
        ORDER BY created_at DESC, id DESC LIMIT 10`,
     )
-    .all(roomId, parentMessageId)
+    .all(roomId, job, parentMessageId)
     .map(messageFromRow)
     .reverse()
   const context = redactBounded(
@@ -813,9 +819,10 @@ export function failMessageRun(
       createdAt: now,
       streaming: false,
       refs: [],
+      ...(mapping.job_id ? { jobId: mapping.job_id } : {}),
     },
     now,
   )
 }
 import { agentAdmits, assertAgentAdmits } from './agent-lifecycle.ts'
-import { ensureJobSession } from './job-sessions.ts'
+import { defaultJobId, ensureJobSession } from './job-sessions.ts'

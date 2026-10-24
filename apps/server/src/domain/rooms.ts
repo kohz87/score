@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DeriveEvents, DomainEventDraft } from '../hub/ingest.ts'
 import { markStaleSummaries } from './summary-stale.ts'
+import { defaultJobId } from './job-sessions.ts'
 import { autoSummaryOf } from './room-summaries.ts'
 import { actionable, ApprovalRowSchema } from './approval-store.ts'
 
@@ -32,6 +33,8 @@ export const RoomRowSchema = z.object({
   imported_from: z.string().nullable(),
   auto_summary: z.string().nullable(),
   active_agents: z.string().default('[]'),
+  role: z.enum(['team', 'direct', 'room']).default('room'),
+  routing: z.enum(['mentions', 'exchanges']).default('mentions'),
 })
 export const MessageRowSchema = z.object({
   id: z.string(),
@@ -49,6 +52,7 @@ export const MessageRowSchema = z.object({
   edits: z.string().nullish(),
   deleted_at: z.string().nullish(),
   progress_at: z.string().nullish(),
+  job_id: z.string().nullish(),
 })
 const CountSchema = z.object({ count: z.int().nonnegative() })
 
@@ -198,9 +202,9 @@ export function readRoom(
     sqlite
       .prepare(
         `
-    SELECT count(*) AS count FROM messages m LEFT JOIN room_reads r ON r.room_id = m.room_id
+    SELECT count(*) AS count FROM messages m LEFT JOIN job_reads r ON r.job_id = m.job_id
     WHERE m.room_id = ? AND m.author_kind = 'agent' AND m.deleted_at IS NULL AND
-      (r.room_id IS NULL OR (m.created_at, m.id) > (r.last_read_message_created_at, r.last_read_message_id))
+      (r.job_id IS NULL OR (m.created_at, m.id) > (r.last_read_message_created_at, r.last_read_message_id))
   `,
       )
       .get(id),
@@ -224,6 +228,8 @@ export function readRoom(
     tags: row.tags === null ? nameTags(row.name) : z.array(z.string()).parse(JSON.parse(row.tags)),
     importedFrom: importedFrom(sqlite, row),
     autoSummary: autoSummaryOf(row.auto_summary),
+    role: row.role,
+    routing: row.routing,
   })
 }
 
@@ -234,10 +240,13 @@ export function readAllRooms(sqlite: DatabaseSync, now: string): Room[] {
 }
 
 export function roomIds(sqlite: DatabaseSync): string[] {
-  return z
-    .array(z.object({ id: z.string() }))
-    .parse(sqlite.prepare('SELECT id FROM rooms ORDER BY name, id').all())
-    .map((row) => row.id)
+  return (
+    z
+      .array(z.object({ id: z.string() }))
+      // The team room belongs to the new shell (PLAN 11.1b) and is read on its own.
+      .parse(sqlite.prepare("SELECT id FROM rooms WHERE role != 'team' ORDER BY name, id").all())
+      .map((row) => row.id)
+  )
 }
 
 export function insertRoom(
@@ -379,6 +388,7 @@ export function messageFromRow(value: unknown): Message {
     ...(row.streaming === 1 && row.progress_at ? { progressAt: row.progress_at } : {}),
     ...(row.edited_by ? { editedBy: row.edited_by } : {}),
     ...(row.edits ? { edits: row.edits } : {}),
+    ...(row.job_id ? { jobId: row.job_id } : {}),
   })
 }
 
@@ -389,11 +399,18 @@ export function storeMessage(
 ): DomainEventDraft[] {
   const message = MessageSchema.parse(value)
   const before = readRoom(sqlite, message.roomId, roomRow(sqlite, message.roomId).updated_at)
+  if (
+    message.jobId &&
+    !sqlite
+      .prepare('SELECT 1 FROM jobs WHERE id = ? AND room_id = ?')
+      .get(message.jobId, message.roomId)
+  )
+    throw new HttpError(404, 'not_found', 'Couldn’t find that job in this room.')
   const result = sqlite
     .prepare(
       `INSERT INTO messages
-    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, edits, progress_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, edits, progress_at, job_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
     )
     .run(
       message.id,
@@ -408,10 +425,18 @@ export function storeMessage(
       now,
       message.edits ?? null,
       message.streaming ? (message.progressAt ?? now) : null,
+      message.jobId ?? null,
     )
   if (!result.changes) return []
+  // Without a job the insert trigger placed it in the room's default job: the event says which.
+  const stored = sqlite.prepare('SELECT job_id FROM messages WHERE id = ?').get(message.id) as {
+    job_id: string | null
+  }
   return [
-    { type: 'message.created', data: message },
+    {
+      type: 'message.created',
+      data: { ...message, ...(stored.job_id ? { jobId: stored.job_id } : {}) },
+    },
     ...roomChanged(sqlite, message.roomId, now, before),
   ]
 }
@@ -561,14 +586,16 @@ export function markRoomRead(
   newest: Message | undefined,
 ): DomainEventDraft[] {
   const before = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
-  if (newest)
+  // Unread is per job (PLAN 11.1b): reading up to a message reads its job up to there.
+  const jobId = newest && (newest.jobId ?? defaultJobId(sqlite, roomId))
+  if (newest && jobId)
     sqlite
       .prepare(
-        `INSERT INTO room_reads (room_id, last_read_message_created_at, last_read_message_id)
-    VALUES (?, ?, ?) ON CONFLICT (room_id) DO UPDATE SET
+        `INSERT INTO job_reads (job_id, last_read_message_created_at, last_read_message_id)
+    VALUES (?, ?, ?) ON CONFLICT (job_id) DO UPDATE SET
     last_read_message_created_at = excluded.last_read_message_created_at, last_read_message_id = excluded.last_read_message_id
-    WHERE (excluded.last_read_message_created_at, excluded.last_read_message_id) > (room_reads.last_read_message_created_at, room_reads.last_read_message_id)`,
+    WHERE (excluded.last_read_message_created_at, excluded.last_read_message_id) > (job_reads.last_read_message_created_at, job_reads.last_read_message_id)`,
       )
-      .run(roomId, newest.createdAt, newest.id)
+      .run(jobId, newest.createdAt, newest.id)
   return roomChanged(sqlite, roomId, now, before)
 }

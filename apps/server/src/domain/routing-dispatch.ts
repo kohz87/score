@@ -8,7 +8,7 @@ import { requestSummary, shouldAutoSummarise } from './room-summaries.ts'
 import { compactingKey, compactingSessions, rewindingRooms } from './room-rewinding.ts'
 import { continuationFor, markSummarySent } from './outside-sessions.ts'
 import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.ts'
-import { sessionFor } from './job-sessions.ts'
+import { sessionFor, usesRoomSession } from './job-sessions.ts'
 
 /** How long a turn waits for an outside session to go quiet before it fails with `session_busy`. */
 export const SESSION_BUSY_WAIT_MS = 10 * 60_000
@@ -36,7 +36,7 @@ export class RoutingDispatcher {
   ) {
     this.unsubscribe = ingest.onCommitted((events) => {
       const completed = events.flatMap((event) =>
-        event.type === 'message.completed' ? [event.data.roomId] : [],
+        event.type === 'message.completed' ? [event.data.messageId] : [],
       )
       if (completed.length)
         return this.summarise(new Set(completed))
@@ -49,16 +49,29 @@ export class RoutingDispatcher {
     this.timer.unref()
   }
 
-  /** Opt-in room summaries (PLAN 7.4a): a room past its threshold gets a summary run through its lead agent. */
-  private async summarise(roomIds: Set<string>): Promise<void> {
-    for (const roomId of roomIds) {
-      if (this.closed || !this.db.read((sqlite) => shouldAutoSummarise(sqlite, roomId))) continue
+  /**
+   * Opt-in summaries (PLAN 7.4a), one per job (11.1b): a job past its room's threshold gets a summary run through the
+   * room's lead agent. Takes the ids of the messages that just completed.
+   */
+  private async summarise(messageIds: Set<string>): Promise<void> {
+    const jobs = new Map<string, string>()
+    this.db.read((sqlite) => {
+      for (const messageId of messageIds) {
+        const row = sqlite
+          .prepare('SELECT room_id, job_id FROM messages WHERE id = ?')
+          .get(messageId) as { room_id: string; job_id: string | null } | undefined
+        if (row?.job_id) jobs.set(row.job_id, row.room_id)
+      }
+    })
+    for (const [jobId, roomId] of jobs) {
+      if (this.closed || !this.db.read((sqlite) => shouldAutoSummarise(sqlite, roomId, jobId)))
+        continue
       await this.ingest.submit({
         source: 'routing',
         identity: randomUUID(),
         apply: ({ sqlite, now }) => {
           // Re-checked inside the transaction; a refusal (paused, nothing to cover) just means "not now".
-          if (shouldAutoSummarise(sqlite, roomId)) requestSummary(sqlite, roomId, now)
+          if (shouldAutoSummarise(sqlite, roomId, jobId)) requestSummary(sqlite, roomId, now, jobId)
           return []
         },
       })
@@ -121,10 +134,21 @@ export class RoutingDispatcher {
           identity: `input:${job.turn_id}`,
           apply: ({ sqlite }) => {
             if (job.admission_input !== null) return []
-            let input = roomRunInput(sqlite, job.room_id, job.input, job.parent_message_id)
+            let input = roomRunInput(
+              sqlite,
+              job.room_id,
+              job.input,
+              job.parent_message_id,
+              job.job_id,
+            )
             // An imported room whose Hermes session could not be continued: the first turn carries a recap (PLAN 5.26).
+            // Only the job that runs in the room's own session continues it.
             const continuation = continuationFor(sqlite, job.room_id, job.agent_id)
-            if (continuation.summaryTurn && continuation.summary) {
+            if (
+              continuation.summaryTurn &&
+              continuation.summary &&
+              usesRoomSession(sqlite, job.job_id)
+            ) {
               input = `${input}\n\n${continuation.summary}`
               markSummarySent(sqlite, job.room_id, job.agent_id)
             }

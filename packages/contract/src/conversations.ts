@@ -37,6 +37,8 @@ export const MessageSearchHitSchema = z.object({
   messageId: z.string().min(1),
   roomId: z.string().min(1),
   roomName: z.string(),
+  /** The job (thread) the message is in (PLAN 11.1b); always set by this server. */
+  jobId: z.string().min(1).nullish(),
   author: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('you') }),
     z.object({ kind: z.literal('agent'), agentId: AgentIdSchema }),
@@ -53,6 +55,8 @@ export const ShareCreateRequestSchema = z
     password: z.unknown().optional(),
     expiresInDays: z.int().min(1).max(30).default(7),
     includeImages: z.boolean().default(false),
+    /** PLAN 11.1b: the job (thread) to share; default: the room's default job. */
+    jobId: z.string().min(1).max(64).optional(),
   })
   .strict()
 export const ShareCreatedSchema = z.object({

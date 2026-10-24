@@ -641,7 +641,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */
          planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string; root?: string /* root the file was picked from: a changed root is 409 workspace_changed */ } })[] /* ≤ 10 */
-         edits?: MessageId /* edit and resend: the sender's own earlier message in this room */ }
+         edits?: MessageId /* edit and resend: the sender's own earlier message in this room */
+         jobId?: JobId /* PLAN 11.1b: the job (thread) to post in; default: the room's default job, or the job of `edits` */ }
   res: { message: Message; routedTo: AgentId[]; command: CommandResult | null; notices?: string[] }
   ```
 
@@ -730,8 +731,8 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
   `GET /api/rooms/:roomId/delete-plan` (**S**) → `RoomDeletePlan` `{ name; messages; files; runs; briefs; blocked: 'room_busy' |
   'orchestration_owned' | 'direct' | null }`, the counts the dialog lists (`files` = distinct attachments, `runs` = message runs
   plus an orchestration run's records).
-- `GET /api/search/messages?q=&roomId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
-  author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
+- `GET /api/search/messages?q=&roomId?&jobId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
+  jobId /* 11.1b */; author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
   indexed once it completes); the query is tokenised into quoted terms (no FTS syntax from the user, the last word is a
   prefix); `[[`/`]]` in `snippet` mark matches (redacted). Used by the ⌘K palette ("Messages") and the Chat search box;
   the web opens a hit at `/chat/:roomId?message=:messageId` and scrolls to it.
@@ -772,11 +773,12 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
 A share is a **frozen snapshot** of one room, readable by anyone who has the link and can reach Score (LAN or Tailscale; the
 create dialog says so). Nothing live is exposed.
 
-- **H** `POST /api/rooms/:roomId/shares` `{ password; expiresInDays?: 1..30 (default 7); includeImages?: false }` →
+- **H** `POST /api/rooms/:roomId/shares` `{ password; expiresInDays?: 1..30 (default 7); includeImages?: false; jobId? }` →
   `{ id; url; expiresAt }`. `password` is the security password, with the same check, limits and errors as pairing
   management (`409 password_not_set`, `403 wrong_password`, `429 too_many_attempts`). `url` = `<public origin>/s/<token>`.
   No `Idempotency-Key` receipt (the body holds the password; a replay would mint a second token).
-- Snapshot content: the room's finished, undeleted messages as author name, time and the **text parts only** (Markdown
+- Snapshot content (PLAN 11.1b: one job's, `jobId` or the room's default job; a job other than the default is titled by
+  its job title): the job's finished, undeleted messages as author name, time and the **text parts only** (Markdown
   source), each through `redact()`; with `includeImages` the media ids of `image` parts are copied into the share's own list.
   No tool, thinking, file-path, plan, review or approval parts, no room settings, member ids, workspace paths or profile
   data. The room's later edits and deletions do not change it. At most the latest 2000 messages.

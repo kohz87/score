@@ -138,9 +138,9 @@ describe('Chat’s session cache', () => {
     ] as string
     h.db.sqlite
       .prepare(
-        "INSERT INTO coding_sessions (room_id, agent_id, session_id, updated_at) VALUES (?, 'cc', 'chat-session', ?)",
+        "INSERT INTO coding_sessions (job_id, agent_id, session_id, updated_at) SELECT id, 'cc', 'chat-session', ? FROM jobs WHERE room_id = ?",
       )
-      .run(room, new Date().toISOString())
+      .run(new Date().toISOString(), room)
     await h.until(() => wfRunOf(h, id).assignmentGates.some((g) => g.status === 'open'))
     const open = wfRunOf(h, id).assignmentGates.find((g) => g.status === 'open')!
     await h.orch.wfGateDecision(id, open.id, {

@@ -51,16 +51,25 @@ test('fake startup streams the scenario and exposes the same adapter status in s
     await vi.waitFor(() => expect(briefStatuses().at(-1)).toBe('done'), { timeout: 5000 })
     const derived = briefStatuses().length - 1
     // Room updates that follow an approval or a finished reply in the same observation (who is busy changed with it).
+    // The team room (PLAN 11.1b) is created once the agents are listed, and as every agent's room it also follows
+    // who is busy: its updates are counted on their own.
+    const isTeamRoom = (frame: (typeof replay.frames)[number]) =>
+      frame.type === 'room.upserted' &&
+      (frame.data as { data: { role?: string } }).data.role === 'team'
+    await vi.waitFor(() => expect(replay.frames.some(isTeamRoom)).toBe(true), { timeout: 5000 })
     let afterApproval = false
     let derivedRooms = 0
     for (const frame of replay.frames) {
+      if (isTeamRoom(frame)) continue
       if (frame.type?.startsWith('approval.') || frame.type === 'message.completed')
         afterApproval = true
       else if (frame.type === 'room.upserted') derivedRooms += afterApproval ? 1 : 0
       else afterApproval = false
     }
-    const total = createScenario(0).length + 4 + derived + derivedRooms
-    await vi.waitFor(() => expect(replay.seqs).toHaveLength(total), { timeout: 5000 })
+    const base = createScenario(0).length + 4 + derived + derivedRooms
+    const totalNow = () => base + replay.frames.filter(isTeamRoom).length
+    await vi.waitFor(() => expect(replay.seqs).toHaveLength(totalNow()), { timeout: 5000 })
+    const total = totalNow()
     expect(replay.seqs).toEqual(Array.from({ length: total }, (_, index) => index + 1))
     expect(
       replay.frames

@@ -238,8 +238,8 @@ test('one launch per generation: an owned turn never resumes a CLI session and h
   // The orchestration's room already has a (dead) CLI session for the agent: a Chat turn would resume it first, be
   // refused, and launch a second time. An owned turn must start fresh and launch once.
   h.db.sqlite.exec(`CREATE TRIGGER seed_session AFTER INSERT ON rooms BEGIN
-    INSERT INTO coding_sessions (room_id, agent_id, session_id, updated_at)
-    VALUES (NEW.id, 'coder', 'dead-session', '2026-01-01T00:00:00.000Z'); END`)
+    INSERT INTO coding_sessions (job_id, agent_id, session_id, updated_at)
+    SELECT id, 'coder', 'dead-session', '2026-01-01T00:00:00.000Z' FROM jobs WHERE room_id = NEW.id; END`)
   const id = await h.create()
   await h.until(() => status(id) === 'succeeded', 40_000)
   expect(h.cliCalls()).toHaveLength(1)

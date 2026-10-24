@@ -106,6 +106,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'ingest_checkpoints',
     'ingest_floors',
     'ingest_keys',
+    'job_reads',
     'job_sessions',
     'jobs',
     'kanban_associations',

@@ -36,8 +36,10 @@ function migrateBefore() {
   migrate(db, migrations)
   return migrations
 }
+/** Applies 0080 and every later migration (later ones rebuild tables 0080 created rows in). */
 function upgrade(migrations: string) {
-  copyFileSync(join(SRC, '0080_jobs.sql'), join(migrations, '0080_jobs.sql'))
+  for (const name of readdirSync(SRC).filter((file) => file.endsWith('.sql')))
+    if (name >= '0080') copyFileSync(join(SRC, name), join(migrations, name))
   migrate(db, migrations)
 }
 const room = (id: string, name: string, kind: 'room' | 'direct', lead: string, members: string[]) =>
@@ -170,8 +172,13 @@ test('a turn answers into the job of its message, and job-scheme sessions resolv
   expect(jobOf('message_runs', 'message_id', 'reply:x')).toBe('job_x')
   const turnInJob = { roomId: 'r1', jobId: 'job_x', agentId: 'builder' }
   expect(sessionFor(db.sqlite, turnInJob)).toBe('score-r1-job_x-builder')
-  // Not recorded yet: the reverse lookup doesn't guess (the room key parse would misread it).
-  expect(sessionOwner(db.sqlite, 'builder', 'score-r1-job_x-builder')).toBeNull()
+  // Not recorded yet: the reverse lookup still finds the job by its own key (orchestration turns record nothing).
+  expect(sessionOwner(db.sqlite, 'builder', 'score-r1-job_x-builder')).toEqual({
+    roomId: 'r1',
+    jobId: 'job_x',
+    continued: false,
+  })
+  expect(sessionOwner(db.sqlite, 'builder', 'score-r1-job_y-builder')).toBeNull()
   ensureJobSession(db.sqlite, 'job_x', 'builder', at)
   ensureJobSession(db.sqlite, 'job_x', 'builder', at)
   expect(sessionOwner(db.sqlite, 'builder', 'score-r1-job_x-builder')).toEqual({

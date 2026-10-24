@@ -492,10 +492,11 @@ export class CodingRuntime {
     return value
   }
 
-  /** Forget the CLI session of the room a Score session key belongs to (CLI sessions are per room until 11.1b). */
+  /** Forget the CLI session of the job a Score session key belongs to (CLI sessions are per job, PLAN 11.1b). */
   forgetRoomSession(sessionKey: string, agentId: string): void {
     const owner = sessionOwner(this.deps.db.sqlite, agentId, sessionKey)
-    if (owner && !owner.continued) forgetCliSession(this.deps.db.sqlite, owner.roomId, agentId)
+    if (owner?.jobId && !owner.continued)
+      forgetCliSession(this.deps.db.sqlite, owner.jobId, agentId)
   }
 
   /** Why this CLI may not run for this agent right now, or null. Read fresh when `fresh` (before a spawn). */
@@ -700,11 +701,11 @@ export class CodingRuntime {
     })
   }
 
-  private roomOf(turnId: string): string | null {
+  private jobOf(turnId: string): string | null {
     const row = this.deps.db.sqlite
-      .prepare('SELECT room_id FROM message_runs WHERE turn_id = ?')
-      .get(turnId) as { room_id: string } | undefined
-    return row?.room_id ?? null
+      .prepare('SELECT job_id FROM message_runs WHERE turn_id = ?')
+      .get(turnId) as { job_id: string } | undefined
+    return row?.job_id ?? null
   }
 
   /**
@@ -839,9 +840,9 @@ export class CodingRuntime {
       .prepare('SELECT id FROM runs WHERE score_turn_id = ?')
       .get(req.turnId) as { id: string } | undefined
     const proposed = known?.id ?? `cr_${randomUUID()}`
-    const room = this.roomOf(req.turnId)
+    const job = this.jobOf(req.turnId)
     // An owned turn never resumes a CLI session: one launch per generation, a fresh context per step (7.7b §5).
-    const resumed = room && !owner ? cliSessionFor(db.sqlite, room, agent.id) : null
+    const resumed = job && !owner ? cliSessionFor(db.sqlite, job, agent.id) : null
     await ingest.submit({
       source: `coding:${agent.id}`,
       identity: `admitted:${intentId}`,
@@ -872,7 +873,7 @@ export class CodingRuntime {
       .run(runId, new Date().toISOString(), intentId)
     // The reply was cancelled while it was being admitted: nothing to run.
     if (isCancelledTurn(db.sqlite, req.turnId)) {
-      await this.finish(newTranslation(runId, agent.id, room), {
+      await this.finish(newTranslation(runId, agent.id, job), {
         status: 'cancelled',
         costKind: driver.runtime === 'claude-code' ? 'estimated' : 'unknown',
       })
@@ -880,7 +881,7 @@ export class CodingRuntime {
     }
     // Closed while the turn was being admitted: end it visibly, never spawn it.
     if (this.closed) {
-      await this.finish(newTranslation(runId, agent.id, room), {
+      await this.finish(newTranslation(runId, agent.id, job), {
         status: 'interrupted',
         error: TERMINAL_NOTE.interrupted,
         costKind: 'unknown',
@@ -907,9 +908,9 @@ export class CodingRuntime {
     // One turn per coding agent at a time: later turns wait their turn (the run shows as queued).
     const previous = this.queues.get(agent.id) ?? Promise.resolve()
     const mine = previous.then(() =>
-      this.execute(entry, agent, payload.input, room, payload.model).catch((error: unknown) =>
+      this.execute(entry, agent, payload.input, job, payload.model).catch((error: unknown) =>
         // Preparing the turn failed (settings folder, spawn setup…): end the run and the reply, never leave it queued.
-        this.finish(newTranslation(runId, agent.id, room), {
+        this.finish(newTranslation(runId, agent.id, job), {
           status: 'failed',
           error: `Could not prepare the run: ${oneLine(error instanceof Error ? error.message : String(error), 200)}`,
           costKind: 'unknown',
@@ -1066,7 +1067,7 @@ export class CodingRuntime {
     if (run.status === 'queued') {
       // Queued means the run never left the queue: the process cannot exist.
       const agent = getCodingAgent(this.deps.db.sqlite, req.agentId, true)
-      await this.finish(newTranslation(req.runId, req.agentId, this.roomOfRun(req.runId)), {
+      await this.finish(newTranslation(req.runId, req.agentId, this.jobOfRun(req.runId)), {
         status: 'cancelled',
         costKind: agent?.runtime === 'claude-code' ? 'estimated' : 'unknown',
       })
@@ -1082,18 +1083,18 @@ export class CodingRuntime {
       { status: string } | undefined
     if (!run || !['queued', 'running', 'waiting_for_approval'].includes(run.status)) return
     const agent = getCodingAgent(this.deps.db.sqlite, agentId, true)
-    await this.finish(newTranslation(runId, agentId, this.roomOfRun(runId)), {
+    await this.finish(newTranslation(runId, agentId, this.jobOfRun(runId)), {
       status: 'cancelled',
       costKind: agent?.runtime === 'claude-code' ? 'estimated' : 'unknown',
       group: 'released',
     })
   }
 
-  private roomOfRun(runId: string): string | null {
+  private jobOfRun(runId: string): string | null {
     const row = this.deps.db.sqlite
-      .prepare('SELECT room_id FROM message_runs WHERE run_id = ?')
-      .get(runId) as { room_id: string } | undefined
-    return row?.room_id ?? null
+      .prepare('SELECT job_id FROM message_runs WHERE run_id = ?')
+      .get(runId) as { job_id: string } | undefined
+    return row?.job_id ?? null
   }
 
   private requestStop(entry: ActiveRun, reason: StopReason): void {
@@ -1170,13 +1171,13 @@ export class CodingRuntime {
     try {
       this.deps.db.sqlite
         .prepare(
-          `INSERT OR IGNORE INTO coding_pending_terminals (run_id, agent_id, room_id, usage, info, created_at)
+          `INSERT OR IGNORE INTO coding_pending_terminals (run_id, agent_id, job_id, usage, info, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
         )
         .run(
           translation.runId,
           translation.agentId,
-          translation.roomId,
+          translation.jobId,
           translation.usage ? JSON.stringify(translation.usage) : null,
           // Free text is redacted and bounded BEFORE it reaches the disk: deleting the row later would not remove the
           // bytes already written to the WAL or the database file (review 2026-10-12 #7). Same limits as the terminal row.
@@ -1223,7 +1224,7 @@ export class CodingRuntime {
         z.object({
           run_id: z.string(),
           agent_id: z.string(),
-          room_id: z.string().nullable(),
+          job_id: z.string().nullable(),
           usage: z.string().nullable(),
           info: z.string(),
         }),
@@ -1235,7 +1236,7 @@ export class CodingRuntime {
       )
     for (const row of rows) {
       try {
-        const translation = newTranslation(row.run_id, row.agent_id, row.room_id)
+        const translation = newTranslation(row.run_id, row.agent_id, row.job_id)
         if (row.usage)
           translation.usage = JSON.parse(row.usage) as NonNullable<RunTranslation['usage']>
         await this.commitTerminal(
@@ -1253,13 +1254,13 @@ export class CodingRuntime {
     entry: ActiveRun,
     admitted: StoredCodingAgent,
     input: string,
-    room: string | null,
+    job: string | null,
     model: string | null,
   ): Promise<void> {
     // The owner's instructions file (Claude Code) lives only as long as the run.
     const temporary: string[] = []
     try {
-      await this.executeRun(temporary, entry, admitted, input, room, model)
+      await this.executeRun(temporary, entry, admitted, input, job, model)
     } finally {
       for (const file of temporary) rmSync(file, { force: true })
     }
@@ -1270,7 +1271,7 @@ export class CodingRuntime {
     entry: ActiveRun,
     admitted: StoredCodingAgent,
     input: string,
-    room: string | null,
+    job: string | null,
     /** The model admitted with the turn (`req.model ?? agent.model` at admission): what the row says is what runs. */
     model: string | null,
   ): Promise<void> {
@@ -1278,13 +1279,13 @@ export class CodingRuntime {
     // A queued turn starts long after admission: permission, workspace and the rest are read as they are now.
     const agent = getCodingAgent(db.sqlite, admitted.id)
     if (!agent)
-      return void (await this.finish(newTranslation(entry.runId, admitted.id, room), {
+      return void (await this.finish(newTranslation(entry.runId, admitted.id, job), {
         status: 'failed',
         error: 'This coding agent was removed',
         costKind: 'unknown',
       }))
     const driver = driverFor(agent.runtime)
-    const translation = newTranslation(entry.runId, agent.id, room, Boolean(entry.owner))
+    const translation = newTranslation(entry.runId, agent.id, job, Boolean(entry.owner))
     const costKind = agent.runtime === 'claude-code' ? 'estimated' : 'unknown'
     const owner = entry.owner
     // An owned worker runs what its policy says (7.7b §3), never what the agent row says now: permission, model and
@@ -1367,7 +1368,7 @@ export class CodingRuntime {
     // The policy-built invocation of an owned worker is prepared right after Score wrote its settings file: every identity
     // is read again and the id computed from what will really run; a difference ends the run before anything is armed.
     let preparedPolicyId: string | undefined
-    let resume = room && !owner ? cliSessionFor(db.sqlite, room, agent.id) : null
+    let resume = job && !owner ? cliSessionFor(db.sqlite, job, agent.id) : null
     // Event numbers keep counting across attempts: they name the observations, and a fallback's must not collide.
     let index = 0
     // One wall-clock budget for the whole turn, whichever launch it takes.
@@ -1442,7 +1443,7 @@ export class CodingRuntime {
       // message. A new session (also the retry after a dead resume) is sent the block again; a resumed one only
       // when it changed since the session last received it.
       const frame = frameOf(agent)
-      const sentHash = resume && room ? cliSessionInstructions(db.sqlite, room, agent.id) : ''
+      const sentHash = resume && job ? cliSessionInstructions(db.sqlite, job, agent.id) : ''
       const delivery: { prompt: string; file: string | null; refresh: boolean } = {
         prompt: input,
         file: null,
@@ -1660,7 +1661,7 @@ export class CodingRuntime {
         // Proven gone and nothing is being finished: the record goes now so the second launch can write its own.
         if (outcome.launchId) await unit?.settleLaunch(outcome.launchId, 'retried')
         else this.forgetProcess(entry.runId)
-        if (room) forgetCliSession(db.sqlite, room, agent.id)
+        if (job) forgetCliSession(db.sqlite, job, agent.id)
         resume = null
         continue
       }
@@ -1753,14 +1754,14 @@ export class CodingRuntime {
       }
       // The CLI took this turn's prompt: its session now holds this block (a failed launch changes nothing).
       if (
-        room &&
+        job &&
         !owner &&
         !outcome.spawnError &&
         outcome.refusal === null &&
         (threadId !== null || resume !== null)
       )
         try {
-          rememberCliInstructions(db.sqlite, room, agent.id, blockHash(frame))
+          rememberCliInstructions(db.sqlite, job, agent.id, blockHash(frame))
         } catch (error) {
           this.deps.onError?.(error)
         }
@@ -2045,9 +2046,9 @@ export class CodingRuntime {
       )
     for (const row of rows) {
       const turn = db.sqlite
-        .prepare('SELECT room_id FROM message_runs WHERE run_id = ?')
-        .get(row.id) as { room_id: string } | undefined
-      await this.finish(newTranslation(row.id, row.profile, turn?.room_id ?? null), {
+        .prepare('SELECT job_id FROM message_runs WHERE run_id = ?')
+        .get(row.id) as { job_id: string } | undefined
+      await this.finish(newTranslation(row.id, row.profile, turn?.job_id ?? null), {
         status: 'interrupted',
         error: unresolved.has(row.id)
           ? `${TERMINAL_NOTE.interrupted} ${UNRESOLVED_NOTE}`
