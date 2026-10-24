@@ -858,13 +858,462 @@
   color: var(--muted);
 }
 
-.bold-settings-page .settings-placeholder h2 {
-  font-size: 38px;
+/* Connections, Tools and Look (PLAN 11.9a), from the prototype's sConn(), sTools() and sLook(). */
+.bold-settings-page .bold-connections,
+.bold-settings-page .bold-tools,
+.bold-settings-page .bold-look {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.bold-settings-page .settings-placeholder p {
+.bold-settings-page .bold-connections > h2,
+.bold-settings-page .bold-tools > h2,
+.bold-settings-page .bold-look > h2 {
+  font-size: 38px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
   margin: 0;
+}
+
+.bold-settings-page .bold-connections .card h3,
+.bold-settings-page .bold-tools .card h3,
+.bold-settings-page .bold-look .card h3 {
+  font-size: 22px;
+}
+
+.bold-settings-page .bold-connect-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bold-settings-page .bold-connect-status[data-status='ok'] {
+  color: var(--ok);
+}
+
+.bold-settings-page .bold-connect-status[data-status='error'] {
+  color: var(--bad);
+}
+
+.bold-settings-page .bold-connect-detail {
+  color: var(--ink2);
+  font-size: 0.93em;
+}
+
+.bold-settings-page .dot[data-status='ok'] {
+  background: var(--ok);
+}
+
+.bold-settings-page .dot[data-status='warn'] {
+  background: var(--warn);
+}
+
+.bold-settings-page .dot[data-status='error'] {
+  background: var(--bad);
+}
+
+.bold-settings-page .dot[data-status='off'] {
+  background: var(--faint);
+}
+
+.bold-settings-page .bold-connect-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.bold-settings-page .bold-connect-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 40px;
+  padding-block: 4px;
+}
+
+.bold-settings-page .bold-connect-name {
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-connect-name[data-missing='true'] {
+  color: var(--muted);
+}
+
+.bold-settings-page .bold-connect-panel,
+.bold-settings-page .bold-local-model {
+  flex: 1 0 100%;
+}
+
+.bold-settings-page .bold-local-model {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bold-settings-page .bold-local-model label,
+.bold-settings-page .bold-look-shared-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-local-model .field,
+.bold-settings-page .bold-look-shared-fields select {
+  background: var(--field);
+  border: 0;
+  border-radius: 14px;
+  color: var(--ink);
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.bold-settings-page .bold-phone {
+  flex-direction: row;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.bold-settings-page .bold-phone .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bold-settings-page .bold-phone-mark {
+  width: 120px;
+  height: 120px;
+  flex: none;
+  border-radius: 16px;
+  background: var(--field);
+  color: var(--ink2);
+  display: grid;
+  place-items: center;
+}
+
+.bold-settings-page .bold-tool-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.bold-settings-page .bold-tool-server {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 48px;
+  padding-block: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.bold-settings-page .bold-tool-server:first-child {
+  border-top: 0;
+}
+
+.bold-settings-page .bold-tool-name {
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-tool-agents {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bold-settings-page .bold-tool-add {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.bold-settings-page .bold-tool-add label {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.bold-settings-page .bold-tool-add label:last-of-type {
+  flex: 2 1 240px;
+}
+
+.bold-settings-page .bold-tool-add .field {
+  min-width: 0;
+}
+
+.bold-settings-page .bold-trigger-empty {
+  background: var(--field);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bold-settings-page .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.bold-settings-page .bold-look-subhead {
+  margin-top: 4px;
+}
+
+.bold-settings-page .bold-look-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.bold-settings-page .bold-look-mode {
+  border: 0;
+  border-radius: 24px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  font: inherit;
+}
+
+.bold-settings-page .bold-look-mode[aria-checked='true'] {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.bold-settings-page .bold-look-mode b {
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-look-mode .small {
+  margin-top: -8px;
+}
+
+.bold-settings-page .bold-look-mode-preview {
+  height: 110px;
+  border-radius: 16px;
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: #12131a;
+}
+
+.bold-settings-page .bold-look-mode-preview[data-preview='light'] {
+  background: #eceef2;
+}
+
+.bold-settings-page .bold-look-mode-preview[data-preview='system'] {
+  background: linear-gradient(90deg, #12131a 50%, #eceef2 50%);
+}
+
+.bold-settings-page .bold-look-mode-room {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.bold-settings-page .bold-look-mode-preview[data-preview='dark'] .bold-look-mode-line {
+  background: #23252e;
+}
+
+.bold-settings-page .bold-look-mode-preview[data-preview='dark'] .bold-look-mode-line--mine {
+  background: #ececf1;
+}
+
+.bold-settings-page .bold-look-mode-preview[data-preview='light'] .bold-look-mode-line {
+  background: #ffffff;
+}
+
+.bold-settings-page .bold-look-mode-preview[data-preview='light'] .bold-look-mode-line--mine {
+  background: #12131a;
+}
+
+.bold-settings-page .bold-look-mode-line {
+  width: 70%;
+  height: 14px;
+  border-radius: 7px;
+}
+
+.bold-settings-page .bold-look-mode-line--mine {
+  width: 60%;
+  align-self: flex-end;
+}
+
+.bold-settings-page .bold-look-mode-card {
+  flex: 1.3;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.bold-settings-page .bold-look-fieldset {
+  border: 0;
+  margin: 0;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bold-settings-page .bold-look-fieldset legend {
+  float: left;
+  padding: 0;
+  margin-bottom: 8px;
+  font-family: var(--font-d);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.bold-settings-page .bold-look-fieldset .seg {
+  clear: both;
+}
+
+.bold-settings-page .bold-look-scale {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 52px;
+  clear: both;
+}
+
+.bold-settings-page .bold-look-scale input {
+  flex: 1;
+  accent-color: var(--ink);
+  min-width: 0;
+}
+
+.bold-settings-page .bold-look-scale-large {
+  font-size: 22px;
+}
+
+.bold-settings-page .bold-look-scale output {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bold-settings-page .bold-look-themes,
+.bold-settings-page .bold-look-shared,
+.bold-settings-page .bold-look-sendkey,
+.bold-settings-page .bold-look-new {
+  gap: 12px;
+}
+
+.bold-settings-page .bold-look-reset {
+  margin-left: auto;
+}
+
+.bold-settings-page .bold-look-theme-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bold-settings-page .bold-look-theme {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  background: var(--field);
+  color: var(--ink2);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.87em;
+}
+
+.bold-settings-page .bold-look-theme[aria-checked='true'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+.bold-settings-page .bold-look-themes p {
+  margin: 0;
+}
+
+.bold-settings-page .bold-look-shared-fields {
+  gap: 14px;
+}
+
+.bold-settings-page .bold-look-sendkey .seg,
+.bold-settings-page .bold-look-fieldset .seg {
+  align-self: flex-start;
+}
+
+.bold-settings-page .bold-look-new {
+  justify-content: space-between;
+}
+
+.bold-settings-page .bold-look-new > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bold-settings-page .bold-look-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.bold-settings-page .bold-look-switch input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+.bold-settings-page .plugins-currency.bold-look-currency,
+.bold-settings-page .bold-look > .plugins-card.plugins-currency {
+  background: var(--panel);
+  border: 0;
+  border-radius: 24px;
+  padding: 18px;
+  align-items: stretch;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.bold-settings-page .bold-look > .plugins-card.plugins-currency .plugins-card-name {
+  font-family: var(--font-d);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.bold-settings-page .bold-look > .plugins-card.plugins-currency label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-look > .plugins-card.plugins-currency input {
+  background: var(--field);
+  border: 0;
+  border-radius: 14px;
+  color: var(--ink);
+  height: 40px;
+}
+
+.bold-settings-page .bold-look > .plugins-card.plugins-currency .settings-pill {
+  align-self: flex-start;
+  background: var(--field);
+  color: var(--ink);
 }
 
 @media (max-width: 860px) {
@@ -889,8 +1338,13 @@
 
   .bold-settings-page .grid2,
   .bold-settings-page .grid3,
-  .bold-settings-page .grid4 {
+  .bold-settings-page .grid4,
+  .bold-settings-page .bold-look-modes {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bold-settings-page .bold-look-reset {
+    margin-left: 0;
   }
 
   .bold-settings-page .span2,

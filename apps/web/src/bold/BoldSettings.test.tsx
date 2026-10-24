@@ -126,6 +126,50 @@ beforeEach(() => {
         return jsonResponse(rules)
       }
       if (url.pathname === '/api/settings/config') return jsonResponse({ items: configItems })
+      if (url.pathname === '/api/settings/providers')
+        return jsonResponse({
+          items: [
+            {
+              id: 'openrouter',
+              label: 'OpenRouter',
+              status: 'connected',
+              detail: 'API key (1)',
+              usedBy: [],
+              signIn: 'api_key',
+            },
+          ],
+        })
+      if (url.pathname === '/api/settings/connections')
+        return jsonResponse({
+          toolServers: [{ id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' }],
+          messaging: [
+            {
+              platform: 'telegram',
+              label: 'Telegram',
+              status: 'connected',
+              detail: null,
+            },
+          ],
+        })
+      if (url.pathname === '/api/themes')
+        return jsonResponse({
+          items: [
+            {
+              id: 'score',
+              name: 'Score',
+              version: '1.0.0',
+              author: null,
+              description: null,
+              source: 'builtin',
+              updatedAt: '2026-10-17T00:00:00.000Z',
+              hasCss: false,
+            },
+          ],
+          active: 'score',
+          mode: 'system',
+          resetGeneration: 0,
+        })
+      if (url.pathname === '/api/settings/currency') return jsonResponse({ code: 'USD', rate: 1 })
       if (url.pathname === '/api/settings/config/preview')
         return jsonResponse({
           diff: '+display.compact: true',
@@ -247,21 +291,21 @@ function open(path = '/b/settings') {
   return router
 }
 
-test('the nine Settings sections open their bold views and 11.9a links to the classic pages', async () => {
+test('the nine Settings sections open their bold views, including Connections, Tools and Look', async () => {
   open('/b/settings/connections')
   expect(await screen.findByRole('heading', { name: 'Connections' })).toBeDefined()
-  expect(screen.getByRole('link', { name: 'models and keys' }).getAttribute('href')).toBe(
-    '/settings/models',
-  )
+  expect(await screen.findByRole('heading', { name: 'Hermes' })).toBeDefined()
+  expect(await screen.findByText('OpenRouter')).toBeDefined()
+  expect(await screen.findByText('Telegram')).toBeDefined()
   const nav = screen.getByRole('navigation', { name: 'Settings' })
   fireEvent.click(within(nav).getByRole('button', { name: /^Tools and triggers/ }))
   expect(await screen.findByRole('heading', { name: 'Tools and triggers' })).toBeDefined()
-  expect(screen.getByRole('link', { name: 'Connections' }).getAttribute('href')).toBe(
-    '/settings/connections',
-  )
+  expect(await screen.findByText('files')).toBeDefined()
+  expect(screen.getByText(/Triggers need the 11.1d API/)).toBeDefined()
   fireEvent.click(within(nav).getByRole('button', { name: /^Look/ }))
   expect(await screen.findByRole('heading', { name: 'Look' })).toBeDefined()
-  expect(screen.getByRole('link', { name: 'Look' }).getAttribute('href')).toBe('/settings/look')
+  expect(screen.getByRole('radiogroup', { name: 'Mode on this device' })).toBeDefined()
+  expect(screen.getByRole('slider', { name: 'Text size' })).toBeDefined()
   fireEvent.click(within(nav).getByRole('button', { name: /^Rules/ }))
   expect(await screen.findByRole('heading', { name: 'Rules' })).toBeDefined()
   fireEvent.click(within(nav).getByRole('button', { name: /^Notifications/ }))

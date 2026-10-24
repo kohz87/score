@@ -148,33 +148,24 @@ test.describe('bold Settings', () => {
       ])
         await expect(nav.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible()
 
-      // 11.9a placeholders still link to the classic pages they replace.
+      // 11.9a: Connections, Tools and Look are real bold sections now.
       await page.goto('/b/settings/connections')
       await expect(page.getByRole('heading', { name: 'Connections', exact: true })).toBeVisible()
-      await expect(page.getByRole('link', { name: 'models and keys' })).toHaveAttribute(
-        'href',
-        '/settings/models',
-      )
-      await expect(page.getByRole('link', { name: 'connections', exact: true })).toHaveAttribute(
-        'href',
-        '/settings/connections',
-      )
+      await expect(page.getByRole('heading', { name: 'Hermes', exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Model providers' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible()
       await expectNoOverflow(page, 'Connections')
 
       await page.goto('/b/settings/tools')
       await expect(page.getByRole('heading', { name: 'Tools and triggers' })).toBeVisible()
-      await expect(page.getByRole('link', { name: 'Connections', exact: true })).toHaveAttribute(
-        'href',
-        '/settings/connections',
-      )
+      await expect(page.getByText('files', { exact: true })).toBeVisible()
+      await expect(page.getByRole('form', { name: 'Add a tool server' })).toBeVisible()
       await expectNoOverflow(page, 'Tools and triggers')
 
       await page.goto('/b/settings/look')
       await expect(page.getByRole('heading', { name: 'Look', exact: true })).toBeVisible()
-      await expect(page.getByRole('link', { name: 'Look', exact: true })).toHaveAttribute(
-        'href',
-        '/settings/look',
-      )
+      await expect(page.getByRole('radiogroup', { name: 'Mode on this device' })).toBeVisible()
+      await expect(page.getByRole('slider', { name: 'Text size' })).toBeVisible()
       await expectNoOverflow(page, 'Look')
 
       // Rules: guardian mode, the three lists, a diff, and the team-wide save.

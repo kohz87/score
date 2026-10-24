@@ -107,7 +107,7 @@ test('the prototype Settings nav has nine sections, opens Usage and selects a se
   fireEvent.click(within(nav).getByRole('button', { name: /^Connections/ }))
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/settings/connections'))
   expect(await screen.findByRole('heading', { name: 'Connections' })).toBeDefined()
-  expect(screen.getByText('Comes in 11.9a')).toBeDefined()
+  expect(await screen.findByRole('heading', { name: 'Hermes' })).toBeDefined()
   expect(
     within(nav)
       .getByRole('button', { name: /^Connections/ })
