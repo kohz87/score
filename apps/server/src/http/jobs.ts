@@ -93,7 +93,8 @@ export function registerJobRoutes(
       source: 'rooms',
       identity: randomUUID(),
       apply: ({ sqlite, now }) => {
-        const made = createJob(sqlite, roomId, body.title, now)
+        const { title, ...options } = body
+        const made = createJob(sqlite, roomId, title, now, options)
         created = made.job
         return made.drafts
       },

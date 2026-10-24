@@ -911,3 +911,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   (one `measure()` for both selector styles), and prototype fidelity from screenshots (no focus ring on the dialog,
   trash and plus icons, red remove). E2E 61/61 (recipes, classic workflows, coding workflows, workflow visual, shell,
   search); full check green (web 3,081). Not deployed.
+- **11.10c contract (lead, 2026-10-24).** `POST /api/rooms/:roomId/jobs` takes `exchangeBudget`, `jobTurnLimit`,
+  `spendCapUsd` and `recipe { kind: orchestration|workflow; ref }`; `Job` shows `spendCapUsd` and `recipe`. The columns
+  existed since 0080; the Start-a-job review showed the dialog had no way to set limits on a plain job or to link a job
+  to the orchestration or workflow run it starts. Route test for the fields and their bounds; check green.
