@@ -624,3 +624,26 @@ One entry per completed task: what landed, review results, and any **rejected re
   resolver; live rooms' behaviour change → older rooms keep @mention routing until 11.11; stalled waits; theme
   protection for new surfaces; report-back secrets and verification), 9 P2, 2 P3; 5 rejected/deferred with reasons.
   Waiting for the owner on the plan and §12 decisions before 11.1a. 10.15 stays paused.
+- **11.1a jobs and per-job sessions (lead, 2026-10-24).** Owner said "start the work now"; §12 decisions taken with the
+  recommended options (decision 113). Scope narrowed while reading the code (brief `docs/briefs/11.1a-jobs.md`):
+  server-only, no contract change; one default job per room by construction, so room-scoped rewind, summaries, unread,
+  search, shares, coding CLI sessions, compaction's busy check and active agents stay correct — moving each to job
+  scope is a listed 11.1b prerequisite; the team room is created in 11.1b (now it would show up empty in the live old
+  UI); room roles `team | direct | room`. Design refinement: session ids parsed back to rooms in compaction and the
+  coding runtime need a reverse lookup, so `job_sessions` + `sessionOwner` (brief F4 holds). Migration 0080 + triggers;
+  `domain/job-sessions.ts` the only session-id builder (grep test). Also fixed `passkeys.test.ts`, which compared a
+  fake-clock expiry with the wall clock and started failing on main once real time passed 2026-10-21.
+  `pnpm check` green (web 2975, server 4657, contract 1420, plugin 323). **Live-DB rehearsal** (read-only `VACUUM INTO`
+  copy, migrated in the scratchpad): v79 → v80 in 10 ms; 17 rooms (9 direct, 8 room) → 17 default jobs; 108 messages
+  and 59 turns, none without a job or in another room's job; foreign_key_check 0, integrity ok; all 20 (room, agent)
+  pairs resolve to exactly their old session id. No room continues an outside session on the live DB (that path is
+  covered by tests only).
+  **Sonnet review (findings only): 0 P1, 2 P2, 5 P3.** Real: (1) the brief's rerun guard had no test → added
+  "running the migrations again changes nothing"; the dispatcher half of the finding was already covered end to end
+  (`routing.test.ts` asserts `score-<room>-builder`, `outside-sessions.test.ts` both continuation modes); (2) the
+  guard only caught `` `score-${ `` templates → it now also fails on any quoted `'score-'` outside the resolver; (3)
+  run-gone recovery now reads a same-session imported room's continued session instead of the room key — the old
+  value was wrong (the turn ran in the continued session); no live room continues one; (4) only `reserveMessageRun`
+  records job sessions and (5) a default job's title doesn't follow a room rename → both listed as 11.1b
+  prerequisites. **Rejected:** (6) "passkeys fix is scope creep" — already named in the commit and here; (7)
+  "`hermes/live` imports domain code" — allowed, and `flow-history.ts`/`task-writes.ts` already do.

@@ -535,7 +535,10 @@ job's session (tests); a grep test fails on any other `score-${` session derivat
 across jobs (test); old UI and older rooms behave exactly as before (full suite green); the migration was run on a
 copy of the live DB with counts recorded in TASKLOG before deploy.
 
-**11.1b Exchanges and agent actions** · **Lead** · contract (`Exchange`, `exchange.upserted`, action receipts) →
+**11.1b Exchanges and agent actions** · **Lead** · **prerequisites from 11.1a** (before any room gets a second job):
+rewind, summaries, unread, search, shares, coding CLI sessions (`coding_sessions` per job), compaction's busy check and
+active agents become job-scoped; every `message_runs` writer records job sessions (or `sessionOwner` derives them); a
+default job's title follows a room rename; the team room is created (hidden from the old shell). Then: contract (`Exchange`, `exchange.upserted`, action receipts) →
 server; migration 0081; bridge plugin tools `score_handoff|ask|review|approve|send_back|reply` (pytest);
 `score-action` block for coding agents; per-turn `xtc_` capability; staged actions applied at turn completion;
 `jobRunInput` context (brief §4–§5). Done when (fixture tests, fake adapter): a builder → reviewer → send_back →

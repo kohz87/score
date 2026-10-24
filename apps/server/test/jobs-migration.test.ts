@@ -100,6 +100,17 @@ test('0080 gives every existing room one default job holding all its messages an
   })
 })
 
+test('running the migrations again changes nothing', () => {
+  const migrations = migrateBefore()
+  room('r1', 'release', 'room', 'lead', ['lead'])
+  message('m1', 'r1')
+  upgrade(migrations)
+  const jobs = db.sqlite.prepare('SELECT * FROM jobs ORDER BY id').all()
+  migrate(db, migrations)
+  expect(db.sqlite.prepare('SELECT * FROM jobs ORDER BY id').all()).toEqual(jobs)
+  expect(jobOf('messages', 'id', 'm1')).toBe(defaultJobId(db.sqlite, 'r1'))
+})
+
 test('a migrated room keeps its exact session ids, continued outside sessions included', () => {
   const migrations = migrateBefore()
   room('r1', 'release', 'room', 'lead', ['lead', 'builder'])
@@ -214,16 +225,21 @@ test('no Score session id is built outside domain/job-sessions.ts', () => {
     ['domain/job-sessions.ts', 2],
   ])
   const found = new Map<string, number>()
+  const quoted: string[] = []
   const walk = (folder: string) => {
     for (const entry of readdirSync(folder, { withFileTypes: true })) {
       const path = join(folder, entry.name)
       if (entry.isDirectory()) walk(path)
       else if (entry.name.endsWith('.ts')) {
-        const count = readFileSync(path, 'utf8').split('`score-${').length - 1
+        const text = readFileSync(path, 'utf8')
+        const count = text.split('`score-${').length - 1
         if (count) found.set(relative(SERVER_SRC, path), count)
+        // Concatenation or parsing (`'score-' + room`, `startsWith('score-')`) may only happen in the resolver.
+        if (/['"]score-['"]/.test(text)) quoted.push(relative(SERVER_SRC, path))
       }
     }
   }
   walk(SERVER_SRC)
   expect(Object.fromEntries(found)).toEqual(Object.fromEntries(allowed))
+  expect(quoted).toEqual(['domain/job-sessions.ts'])
 })
