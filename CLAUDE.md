@@ -19,7 +19,7 @@
 | Fix round that needs the original reasoning | `codex-task.sh resume` (re-bills the whole session; rarely worth it) | high |
 | Adversarial design review | `codex exec --disable apps -m gpt-6.1-sol -c model_reasoning_effort=max -s read-only` | max |
 | Phase-gate code review | `codex exec review` / `codex exec -s read-only` against `main` | max |
-| Implementation on DeepSeek (NanoGPT subscription) | `CODEX_PROFILE=deepseek scripts/codex-task.sh start/fix …` (profile in `~/.codex/deepseek.config.toml`) | profile default |
+| Implementation on DeepSeek (NanoGPT subscription; see the 2026-10-24 roles below) | `CODEX_PROFILE=deepseek scripts/codex-task.sh start/fix …` (profile in `~/.codex/deepseek.config.toml`) | profile default |
 
 Always pass `--disable apps` (keeps the owner's ChatGPT connectors out of Score work). The sandbox needs the
 system `bubblewrap` package on Ubuntu (AppArmor userns restriction; see docs/SETUP.md).
@@ -79,12 +79,23 @@ committed to `docs/reviews/`). Record findings and responses in the doc's review
   reviews all code (including phase gates and design reviews) itself. If a question to the owner gets no reply within
   5 minutes, proceed with the recommended option and keep going. Writes to the owner's real Hermes profiles (not the
   test profiles) are still prepared and asked about first, with other work continuing meanwhile.
-- *Owner, 2026-10-24:* **DeepSeek through NanoGPT** is an allowed implementer, run as a Codex CLI profile:
-  `CODEX_PROFILE=deepseek scripts/codex-task.sh start|fix …`. It bills the owner's NanoGPT subscription (verified $0 per
-  call), not the ChatGPT plan, so it's the default for implementation tasks; Sonnet agents remain the fallback. Same
-  briefs, worktrees, review, tests and live checks as any implementer. Not for adversarial design reviews or phase gates
-  (the lead does those, or Codex on `gpt-6.1-sol` when it has quota). If it exits 75 (NanoGPT limit), fall back to
-  Sonnet and record the switch in `docs/TASKLOG.md`.
+- *Owner, 2026-10-24:* **three roles from Phase 11 on.** **Opus (the lead)** orchestrates: plans, briefs, starts
+  tasks, decides on every finding, commits, merges, and keeps PLAN/TASKLOG. **DeepSeek through NanoGPT** codes: a Codex
+  CLI profile, `CODEX_PROFILE=deepseek scripts/codex-task.sh start|fix …` (run it in the background; tasks outlast the
+  Bash timeout). It bills the owner's NanoGPT subscription (verified $0 per call), not the ChatGPT plan. **Sonnet**
+  reviews: a subagent (`model: sonnet`) gets the brief, `git diff main`, AGENTS.md and the contract/design sections, and
+  returns findings only, never edits. The lead verifies each finding before it becomes fix feedback and logs rejected
+  ones; `pnpm check` (and `pnpm e2e` for UI) is the gate, not the review.
+  - **Who codes what.** The lead writes the hard, core work itself: design and plan (11.0), a2a routing (11.1), contract
+    changes (11.2), live-data migration (11.11), anything at the Hermes adapter boundary or security, and phase gates.
+    DeepSeek takes the well-specified bulk: UI screens built from `docs/design/bold/prototype.html`, routes, tests,
+    settings sections.
+  - **Pilot first.** DeepSeek's first task is **11.5 Side panel › Results**. Record in TASKLOG: fix rounds, Sonnet
+    findings (real vs rejected), and how much the lead had to rework. Keep the split if it took ≤ 2 fix rounds and clean
+    code; otherwise the lead codes the UI tasks and DeepSeek gets only tests and small tasks. Tell the owner the result.
+  - **Fallbacks.** Two failed fix rounds: the lead (or a Sonnet coder) takes the task over. DeepSeek exits 75 (NanoGPT
+    limit): Sonnet subagents code until it's back; record the switch in TASKLOG. Not for adversarial design reviews or
+    phase gates (the lead does those, or Codex on `gpt-6.1-sol` when it has quota).
 - Plan first; no feature code without an approved plan task.
 - System-level or global installs, and anything that writes to `~/.hermes` beyond the approved test profiles:
   give the exact command plus the reason, and wait for an OK.
