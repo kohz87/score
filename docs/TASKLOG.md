@@ -949,3 +949,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   follow-up on main. Lead: merges with main (shell look/scale with the recipe dialog's inert), e2e locators.
   E2E 264/264 (connections/look, settings, classic settings/themes/pair, protection, shell, search); full check green
   (web 3,123). Not deployed.
+- **11.9a follow-up (lead, 2026-10-24).** From the trigger wizard's review: closing a new trigger after its address went
+  live but before the mapping was saved (Finish later, Close, Escape) now asks "Keep this unfinished trigger?" — its
+  calls would start jobs with placeholder wording — and offers Delete; the e2e now sends a second signed call after
+  saving and checks its job carries the mapped title, plus a test for the unfinished-trigger prompt.
