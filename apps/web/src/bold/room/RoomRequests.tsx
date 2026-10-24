@@ -56,7 +56,7 @@ function needsForm(option: ExchangeOption): boolean {
   return ['more_spend', 'step_in', 'reassign', 'send_back'].includes(option)
 }
 
-function decisionError(failure: unknown): string {
+export function decisionError(failure: unknown): string {
   if (failure instanceof ApiError && (failure.status === 401 || failure.status === 403))
     return 'Pair this browser first.'
   if (failure instanceof ApiError && failure.status === 409) return failure.message
@@ -70,7 +70,7 @@ function useReportedCount(id: string, count: number, report: CountCards) {
   useEffect(() => () => report(id, 0), [id, report])
 }
 
-function ExchangeRequestCard({
+export function ExchangeRequestCard({
   exchange,
   job,
   agents,
@@ -79,7 +79,7 @@ function ExchangeRequestCard({
   exchange: Exchange
   job: Job
   agents: AgentSummary[]
-  onAnswered: (id: string) => void
+  onAnswered?: (id: string) => void
 }) {
   const from = agents.find((agent) => agent.id === exchange.from)
   const to = agents.find((agent) => agent.id === exchange.to)
@@ -124,7 +124,7 @@ function ExchangeRequestCard({
         method: 'POST',
         body: JSON.stringify(body),
       })
-      onAnswered(exchange.id)
+      onAnswered?.(exchange.id)
     } catch (failure) {
       setError(decisionError(failure))
     } finally {

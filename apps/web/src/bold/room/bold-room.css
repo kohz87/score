@@ -409,6 +409,28 @@
   color: var(--warn);
 }
 
+[data-ui='bold'] .bold-capsule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-capsule-thread {
+  border: 0;
+  border-radius: 999px;
+  min-height: 30px;
+  padding: 0 11px;
+  background: var(--panel);
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-capsule-thread:hover {
+  background: var(--field);
+  color: var(--ink);
+}
+
 [data-ui='bold'] .bold-stream {
   display: flex;
   flex-direction: column;

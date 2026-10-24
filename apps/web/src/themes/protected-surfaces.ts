@@ -39,6 +39,8 @@ export const protectedClasses = [
   'orch-pill',
   'orch-node__flag',
   'bold-request',
+  // PLAN 11.4c: the thread's confirmation before stopping a job
+  'bold-thread-stop-confirm',
   // The task drawer's approval and its buttons
   'task-drawer-approval',
   'task-drawer-buttons',
