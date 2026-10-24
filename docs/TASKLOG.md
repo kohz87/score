@@ -1121,3 +1121,17 @@ One entry per completed task: what landed, review results, and any **rejected re
   visual specs since 11.11c (lead ran only 12 specs there). Contract gap: Job.source has no app name ('through a
   trigger'); the engine's AA check covers classic pairs only. Full check green; theme/protection/shell/room/screen/
   Customizer e2e 368 passed. Not deployed.
+- **11.10a Phone (DeepSeek on ordeepseek → Sonnet coder → lead, 2026-10-25).** Board 18's job list on phones (needs-you
+  cards first, a Team room row for the default job — a list message is filed there; unread counts, holder glyphs,
+  state lines), board 03's full-screen job chat with Back (button and browser/system back: opening from the list pushes
+  a marked entry, job-to-job and in-place cleanups keep it), one source for the open job in head and body (a missing
+  job → the list with a note), older/imported rooms in the phone layout with Back to the team room, side-panel modes
+  and one-to-ones as sheets, the tab bar, 44px targets, capsules with Take it aside inside the phone job chat (the
+  prototype). Reviews: build — 4 P2 (team chat unreachable, back left /b, head/body disagree, older rooms desktop
+  layout); round 1 — 2 P2 (history mark dropped by in-place cleanups; pins strip on short screens) fixed by the lead;
+  e2e (DeepSeek's sandbox can't run Playwright): 19 phone failures at first run — a Sonnet coder found one product bug
+  (older room label on phones) and fixed tests written blind; the lead put capsules back in the phone chat (they had
+  been made desktop-only) and tightened two tests on review (no jobId from the list; the result row is tapped).
+  Differences from the boards reported: Team room row, four tabs, tab bar in chat, 48px targets, pins 52% capped at
+  22rem. Full check green (contract 1505, web 2947, server 4757); room/phone/needs-you/menu/thread/one-to-ones/shell/
+  search/themes e2e green. Not deployed.
