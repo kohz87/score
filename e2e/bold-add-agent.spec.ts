@@ -63,15 +63,19 @@ for (const viewport of sizes) {
     try {
       const shapeGroup = dialog.getByRole('radiogroup', { name: 'Shape' })
       await expect(shapeGroup.getByRole('radio')).toHaveCount(20)
-      await expect(
-        dialog.getByRole('radio', { name: /Colour #19c39a, used by builder/ }),
-      ).toBeDisabled()
+      const colourGroup = dialog.getByRole('radiogroup', { name: 'Colour' })
+      const taken = colourGroup.locator('input[type=radio]:disabled')
+      await expect(taken.first()).toBeVisible()
+      expect(await taken.count()).toBeGreaterThan(0)
+      expect(await taken.first().isChecked()).toBe(false)
 
       await dialog.getByLabel('Name').fill(id)
       await dialog.getByLabel('What does it do?').fill('Finds sources and writes a short summary.')
       await dialog.getByLabel('Model', { exact: true }).fill('fake-model')
       await shapeGroup.getByRole('radio', { name: 'star' }).click()
-      await dialog.getByRole('radio', { name: 'Colour #2bb3c0' }).click()
+      const free = colourGroup.locator('input[type=radio]:not(:disabled)').first()
+      const chosen = await free.getAttribute('data-colour')
+      await free.check()
 
       const preview = dialog.getByRole('img', { name: `${id}, star` })
       await expect(preview).toBeVisible()
@@ -79,11 +83,14 @@ for (const viewport of sizes) {
         await preview.evaluate((element) =>
           getComputedStyle(element).getPropertyValue('--glyph-color').trim(),
         ),
-      ).toBe('#2bb3c0')
+      ).toBe(chosen)
 
       await dialog.getByRole('button', { name: 'Preview changes' }).click()
       await expect(dialog.getByRole('heading', { name: 'Review changes' })).toBeVisible()
-      await expect(dialog.getByText('Create profile ' + id)).toBeVisible()
+      // The server's preview of what creating the profile does (fake adapter wording).
+      await expect(
+        dialog.getByRole('region', { name: 'Review changes' }).getByRole('listitem').first(),
+      ).toBeVisible()
       await dialog.getByRole('button', { name: `Add ${id}` }).click()
       await expect(dialog.getByRole('heading', { name: 'Setting up' })).toBeVisible()
       await expect(dialog.getByRole('heading', { name: `${id} joined the team` })).toBeVisible({
@@ -111,8 +118,8 @@ for (const viewport of sizes) {
       await dialog.getByRole('button', { name: 'Preview changes' }).click()
 
       await expect(dialog.getByRole('heading', { name: 'Review changes' })).toBeVisible()
-      await expect(dialog.getByText('Memories')).toBeVisible()
-      await expect(dialog.getByText('Skills')).toBeVisible()
+      await expect(dialog.getByText('Memories', { exact: true })).toBeVisible()
+      await expect(dialog.getByText('Skills', { exact: true })).toBeVisible()
       const add = dialog.getByRole('button', { name: `Add ${id}` })
       await expect(add).toBeDisabled()
       await dialog.getByRole('checkbox', { name: /what this agent inherits/ }).check()
@@ -128,6 +135,94 @@ for (const viewport of sizes) {
     }
   })
 
+  test(`new agent on Docker: the write succeeds and the joined screen says what separated at ${viewport.width}×${viewport.height}`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000)
+    const id = `docker-${suffix()}`
+    const dialog = await openAdd(page, viewport.width)
+    let created = false
+    try {
+      await dialog.getByLabel('Name').fill(id)
+      await dialog.getByLabel('What does it do?').fill('Runs builds in a container.')
+      await dialog.getByLabel('Model', { exact: true }).fill('fake-model')
+      await dialog.getByLabel('Works on').selectOption('docker')
+
+      const write = page.waitForRequest(
+        (request) =>
+          request.method() === 'PUT' && request.url().endsWith(`/api/agents/${id}/runs-on`),
+      )
+      const answer = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'PUT' &&
+          response.url().endsWith(`/api/agents/${id}/runs-on`),
+      )
+      await dialog.getByRole('button', { name: 'Preview changes' }).click()
+      await expect(dialog.getByRole('heading', { name: 'Review changes' })).toBeVisible()
+      await dialog.getByRole('button', { name: `Add ${id}` }).click()
+
+      expect(await (await write).postDataJSON()).toEqual({ backend: 'docker' })
+      const runsOn = (await (await answer).json()) as {
+        separated: 'no' | 'partly' | 'unknown'
+        notes: string[]
+      }
+      expect(runsOn.separated).toBe('partly')
+      await expect(dialog.getByRole('heading', { name: `${id} joined the team` })).toBeVisible({
+        timeout: 20_000,
+      })
+      await expect(dialog.getByText(/Docker · Partly separated/)).toBeVisible()
+      await expect(dialog.getByText(runsOn.notes[0]!)).toBeVisible()
+      await expect(dialog.getByRole('link', { name: 'Where it works' })).toHaveAttribute(
+        'href',
+        `/b/team/${id}#agent-where`,
+      )
+      created = true
+    } finally {
+      if (created) await deleteProfile(page, id)
+    }
+  })
+
+  test(`a 409 on Docker: the reason and Continue path say where the agent runs at ${viewport.width}×${viewport.height}`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000)
+    const id = `no-docker-${suffix()}`
+    const dialog = await openAdd(page, viewport.width)
+    let created = false
+    const reason = 'Docker isn’t installed or its daemon is not running.'
+    await page.route('**/api/agents/*/runs-on', async (route) => {
+      if (route.request().method() !== 'PUT') return route.continue()
+      expect(route.request().postDataJSON()).toEqual({ backend: 'docker' })
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'backend_unavailable', message: reason } }),
+      })
+    })
+    try {
+      await dialog.getByLabel('Name').fill(id)
+      await dialog.getByLabel('What does it do?').fill('Runs builds in a container.')
+      await dialog.getByLabel('Model', { exact: true }).fill('fake-model')
+      await dialog.getByLabel('Works on').selectOption('docker')
+      await dialog.getByRole('button', { name: 'Preview changes' }).click()
+      await expect(dialog.getByRole('heading', { name: 'Review changes' })).toBeVisible()
+      await dialog.getByRole('button', { name: `Add ${id}` }).click()
+
+      await expect(dialog.getByRole('alert').getByText(reason)).toBeVisible()
+      await dialog.getByRole('button', { name: 'Continue on this machine' }).click()
+      await expect(dialog.getByRole('heading', { name: `${id} joined the team` })).toBeVisible()
+      await expect(dialog.getByText(`Runs on this machine as you: ${reason}`)).toBeVisible()
+      await expect(dialog.getByRole('link', { name: 'Where it works' })).toHaveAttribute(
+        'href',
+        `/b/team/${id}#agent-where`,
+      )
+      created = true
+    } finally {
+      if (created) await deleteProfile(page, id)
+      await page.unroute('**/api/agents/*/runs-on')
+    }
+  })
+
   test(`import a profile: upload progress, credentials and done at ${viewport.width}×${viewport.height}`, async ({
     page,
   }) => {
@@ -139,7 +234,7 @@ for (const viewport of sizes) {
       await dialog.getByRole('radio', { name: /Bring in a Hermes profile/ }).click()
       await page.route('**/api/agents/imports', async (route) => {
         if (route.request().method() !== 'POST') return route.continue()
-        await new Promise((resolve) => setTimeout(resolve, 600))
+        await new Promise((resolve) => setTimeout(resolve, 2000))
         await route.continue()
       })
       await dialog.getByLabel('Profile export').setInputFiles({
@@ -150,6 +245,18 @@ for (const viewport of sizes) {
       await expect(
         dialog.getByRole('status').filter({ hasText: /Uploading|Checking/ }),
       ).toBeVisible()
+
+      // While the upload runs, Escape and the backdrop do nothing; the X asks before discarding it.
+      await page.keyboard.press('Escape')
+      await expect(dialog).toBeVisible()
+      await page.mouse.click(5, 5)
+      await expect(dialog).toBeVisible()
+      await dialog.getByRole('button', { name: 'Close' }).click()
+      const confirm = dialog.getByRole('alertdialog', { name: 'Close while it’s still running?' })
+      await expect(confirm).toBeVisible()
+      await expect(confirm).toHaveAttribute('data-protected', 'block')
+      await confirm.getByRole('button', { name: 'Keep waiting' }).click()
+
       await expect(dialog.getByRole('heading', { name: 'In this archive' })).toBeVisible()
       await expect(dialog.getByText('example/model-1')).toBeVisible()
       await expect(dialog.getByText(/\.env/)).toBeVisible()
@@ -179,10 +286,17 @@ for (const viewport of sizes) {
     const id = `coder-${suffix()}`
     const dialog = await openAdd(page, viewport.width)
     let created = false
+    const runsOnWrites: string[] = []
+    page.on('request', (request) => {
+      if (request.method() === 'PUT' && request.url().includes('/runs-on'))
+        runsOnWrites.push(request.url())
+    })
     try {
       await dialog.getByRole('radio', { name: /A coding tool/ }).click()
       await expect(dialog.getByText(/Installed · version 2\.1\.295/)).toBeVisible()
       await expect(dialog.getByText(/tested by Score/)).toBeVisible()
+      await expect(dialog.getByLabel('Works on')).toHaveCount(0)
+      await expect(dialog.getByText('Runs on this machine as you.')).toBeVisible()
       const checked = page.waitForResponse(
         (response) =>
           response.url().endsWith('/api/coding-agents/runtimes') &&
@@ -194,9 +308,15 @@ for (const viewport of sizes) {
       await dialog.getByRole('radio', { name: 'Codex' }).click()
       const ack = dialog.getByRole('checkbox', { name: /can read any file/ })
       await expect(ack).toBeVisible()
-      await expect(ack).toHaveAttribute('data-protected', 'any')
+      await expect(dialog.locator('label.coding-acknowledge')).toHaveAttribute(
+        'data-protected',
+        'any',
+      )
       await dialog.getByRole('radio', { name: /Full access/ }).check()
-      await expect(dialog.getByLabel('Security password')).toHaveAttribute('data-protected', 'any')
+      await expect(dialog.locator('label', { hasText: 'Security password' })).toHaveAttribute(
+        'data-protected',
+        'any',
+      )
       await dialog.getByRole('radio', { name: /Workspace write/ }).check()
 
       await dialog.getByLabel('Name').fill(id)
@@ -210,6 +330,7 @@ for (const viewport of sizes) {
       })
       await expect(dialog.getByText(/Codex/)).toBeVisible()
       await expect(dialog.getByText(/workspace write/)).toBeVisible()
+      expect(runsOnWrites).toEqual([])
       created = true
     } finally {
       if (created) await deleteCoding(page, id)

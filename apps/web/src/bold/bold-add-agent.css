@@ -63,8 +63,9 @@
 }
 
 [data-ui='bold'] .bold-add-from button:disabled,
-[data-ui='bold'] .bold-add-shapes button:disabled,
-[data-ui='bold'] .bold-add-colours button:disabled {
+[data-ui='bold'] .bold-add-shapes label:has(input:disabled),
+[data-ui='bold'] .bold-add-colours label:has(input:disabled),
+[data-ui='bold'] .bold-add-tools label:has(input:disabled) {
   cursor: default;
 }
 
@@ -110,7 +111,8 @@
   justify-content: center;
 }
 
-[data-ui='bold'] .bold-add-shapes button {
+[data-ui='bold'] .bold-add-shapes label {
+  position: relative;
   width: 36px;
   height: 36px;
   border: 0;
@@ -121,7 +123,7 @@
   padding: 0;
 }
 
-[data-ui='bold'] .bold-add-shapes button.on {
+[data-ui='bold'] .bold-add-shapes label.on {
   background: var(--hi-bg);
 }
 
@@ -136,7 +138,8 @@
   gap: 6px;
 }
 
-[data-ui='bold'] .bold-add-colours button {
+[data-ui='bold'] .bold-add-colours label {
+  position: relative;
   width: 24px;
   height: 24px;
   border: 0;
@@ -144,14 +147,39 @@
   padding: 0;
 }
 
-[data-ui='bold'] .bold-add-colours button.on {
+[data-ui='bold'] .bold-add-colours label.on {
   box-shadow:
     0 0 0 2px var(--panel),
     0 0 0 4px var(--ink);
 }
 
-[data-ui='bold'] .bold-add-colours button:disabled {
+[data-ui='bold'] .bold-add-colours label:has(input:disabled) {
   opacity: 0.3;
+}
+
+[data-ui='bold'] .bold-add-shapes label,
+[data-ui='bold'] .bold-add-colours label,
+[data-ui='bold'] .bold-add-tools label {
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-add-shapes input,
+[data-ui='bold'] .bold-add-colours input,
+[data-ui='bold'] .bold-add-tools input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-add-shapes label:focus-within,
+[data-ui='bold'] .bold-add-colours label:focus-within,
+[data-ui='bold'] .bold-add-tools label:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 [data-ui='bold'] .bold-add-hint {
@@ -342,7 +370,8 @@
   background: var(--field);
 }
 
-[data-ui='bold'] .bold-add-tools button {
+[data-ui='bold'] .bold-add-tools label {
+  position: relative;
   min-height: 36px;
   padding: 0 14px;
   border: 0;
@@ -351,9 +380,11 @@
   color: var(--ink2);
   font-size: 0.87em;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
 }
 
-[data-ui='bold'] .bold-add-tools button.on {
+[data-ui='bold'] .bold-add-tools label.on {
   background: var(--hi-bg);
   color: var(--hi-ink);
 }
@@ -496,6 +527,20 @@
   margin: 0;
 }
 
+[data-ui='bold'] .bold-add-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 [data-ui='bold'] .bold-add-upload {
   padding: 16px;
   border-radius: 20px;
@@ -529,6 +574,21 @@
 
 [data-ui='bold'] .bold-add-added p {
   margin: 0;
+}
+
+[data-ui='bold'] .bold-add-joined-runs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 560px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--deep);
+}
+
+[data-ui='bold'] .bold-add-joined-runs p {
+  overflow-wrap: anywhere;
 }
 
 [data-ui='bold'] .bold-add-added-actions {

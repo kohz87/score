@@ -436,6 +436,86 @@ const systemParts = [
   },
 ]
 
+// PLAN 11.8c: the Add an agent dialog. The prototype uses its generic dialog classes; the app prefixes its own.
+const addAgentParts = [
+  {
+    name: 'Dialog',
+    selector: '.dialog[aria-label="Add an agent"]',
+    appSelector: '.bold-add-dialog',
+    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
+  },
+  {
+    name: 'Start from',
+    selector: '.dialog[aria-label="Add an agent"] > .seg',
+    appSelector: '.bold-add-from',
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Start choice',
+    selector: '.dialog[aria-label="Add an agent"] > .seg button.on',
+    appSelector: '.bold-add-from button.on',
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
+  },
+  {
+    name: 'Appearance',
+    selector: '.dialog[aria-label="Add an agent"] > .row.wrap > div:first-child',
+    appSelector: '.bold-add-appearance',
+    props: ['width', 'display', 'flexDirection', 'alignItems', 'gap'],
+  },
+  {
+    name: 'Shapes',
+    selector: '.dialog[aria-label="Add an agent"] > .row.wrap > div:first-child > .row.wrap',
+    appSelector: '.bold-add-shapes',
+    props: ['display', 'gap', 'gridTemplateColumns', 'justifyContent'],
+  },
+  {
+    name: 'Colours',
+    selector: '.dialog[aria-label="Add an agent"] > .row.wrap > div:first-child > .row:not(.wrap)',
+    appSelector: '.bold-add-colours',
+    props: ['display', 'gap', 'flexWrap', 'justifyContent'],
+  },
+  {
+    name: 'Fields',
+    selector: '.dialog[aria-label="Add an agent"] > .row.wrap > div:nth-child(2)',
+    appSelector: '.bold-add-fields',
+    props: ['display', 'gap', 'minWidth', 'flexGrow', 'flexBasis'],
+  },
+  {
+    name: 'Name',
+    selector: '#anname',
+    appSelector: '.bold-add-name',
+    props: ['minHeight', 'padding', 'borderRadius', 'fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Footer',
+    selector: '.dialog[aria-label="Add an agent"] > span.row:last-child',
+    appSelector: '.bold-add-footer',
+    props: ['display', 'alignItems', 'gap'],
+  },
+  {
+    name: 'Add button',
+    selector: '.dialog[aria-label="Add an agent"] > span.row:last-child .btn.primary',
+    appSelector: '.bold-add-footer .btn.primary',
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontWeight',
+      'fontSize',
+      'color',
+      'backgroundColor',
+    ],
+  },
+]
+
 // PLAN 11.10f: the prototype's vSearch/searchList and the app's BoldSearch use different class names, so each side
 // gets its own selector while the part names and measured properties stay aligned.
 const searchPrototypeParts = [
@@ -559,6 +639,15 @@ async function openPrototypeSettings(page, section) {
   await page.evaluate(() => globalThis.document.fonts.ready)
 }
 
+async function openPrototypeAddAgent(page) {
+  await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+  await page.locator('.top .word').waitFor()
+  await page.locator('[data-a="go"][data-v="team"]:visible').click()
+  await page.locator('[data-a="addAgent"]:visible').click()
+  await page.locator('.dialog[aria-label="Add an agent"]').waitFor()
+  await page.evaluate(() => globalThis.document.fonts.ready)
+}
+
 let browser
 try {
   browser = await chromium.launch()
@@ -672,6 +761,16 @@ try {
     })
     const appSystemMetrics = await measure(page, systemParts, 'app')
 
+    await openPrototypeAddAgent(page)
+    await page.screenshot({ path: join(output, `bold-prototype-add-agent-${size}.png`) })
+    const prototypeAddAgentMetrics = await measure(page, addAgentParts)
+
+    await page.goto(`${baseURL}/b/team?add=agent`)
+    await page.locator('[data-ui="bold"] .bold-add-dialog').waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-add-agent-${size}.png`) })
+    const appAddAgentMetrics = await measure(page, addAgentParts, 'app')
+
     results[size] = {
       prototype: prototypeMetrics,
       app: appMetrics,
@@ -679,6 +778,7 @@ try {
       usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
       rules: { prototype: prototypeRulesMetrics, app: appRulesMetrics },
       system: { prototype: prototypeSystemMetrics, app: appSystemMetrics },
+      addAgent: { prototype: prototypeAddAgentMetrics, app: appAddAgentMetrics },
     }
   }
 
@@ -746,6 +846,22 @@ try {
     searchLines.push('')
   }
   writeFileSync(join(output, 'bold-search-metrics.md'), `${searchLines.join('\n')}\n`)
+
+  const addAgentLines = ['# Bold Add an agent: prototype vs app', '']
+  for (const size of Object.keys(results)) {
+    addAgentLines.push(
+      `## ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of addAgentParts)
+      addAgentLines.push(
+        `| ${part.name} | ${cell(results[size].addAgent.prototype, part)} | ${cell(results[size].addAgent.app, part)} | ${difference(results[size].addAgent.prototype, results[size].addAgent.app, part)} |`,
+      )
+    addAgentLines.push('')
+  }
+  writeFileSync(join(output, 'bold-add-agent-metrics.md'), `${addAgentLines.join('\n')}\n`)
   console.log(`Wrote screenshots and measurements to ${output}`)
 } finally {
   await browser?.close()

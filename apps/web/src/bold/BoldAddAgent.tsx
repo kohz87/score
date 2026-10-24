@@ -1,5 +1,11 @@
-import { ShapeSchema, type AgentStyle, type AgentSummary, type CodingAgent } from '@score/contract'
-import { useEffect, useRef, useState } from 'react'
+import {
+  PROFILE_IMPORT_MAX_BYTES,
+  ShapeSchema,
+  type AgentStyle,
+  type AgentSummary,
+  type RunsOn,
+} from '@score/contract'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { ModelPicker as HermesModelPicker } from '../components/ModelPicker.tsx'
@@ -26,7 +32,11 @@ type AddedAgent = {
   style: AgentStyle
   detail: string
   another: boolean
+  runs?: RunsOutcome
 }
+
+type RunsOutcome =
+  { kind: 'saved'; runsOn: RunsOn } | { kind: 'local' } | { kind: 'failed'; reason: string }
 
 const fromLabels: { value: From; label: string }[] = [
   { value: 'new', label: 'New agent' },
@@ -36,9 +46,17 @@ const fromLabels: { value: From; label: string }[] = [
 
 const worksOnLabels: { value: WorksOnChoice['backend']; label: string }[] = [
   { value: 'local', label: 'This machine as you' },
-  { value: 'docker', label: 'Docker sandbox' },
-  { value: 'ssh', label: 'Another machine (SSH)' },
+  { value: 'docker', label: 'Docker (partly separated)' },
+  { value: 'ssh', label: 'Another machine over SSH' },
 ]
+
+const separatedLabels: Record<RunsOn['separated'], string> = {
+  no: 'Not separated',
+  partly: 'Partly separated',
+  unknown: 'Separation not known',
+}
+
+const importMax = `${Math.round(PROFILE_IMPORT_MAX_BYTES / (1024 * 1024))} MB`
 
 function CloseIcon() {
   return (
@@ -90,14 +108,27 @@ function BoldAddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: 
   const dialog = useRef<HTMLDialogElement>(null)
   const [from, setFrom] = useState<From>('new')
   const [busy, setBusy] = useState(false)
+  const [askingClose, setAskingClose] = useState(false)
   const [added, setAdded] = useState<AddedAgent | null>(null)
   useEffect(() => {
     dialog.current?.showModal?.()
   }, [])
+  const setWorking = useCallback((working: boolean) => {
+    setBusy(working)
+    if (!working) setAskingClose(false)
+  }, [])
   const another = () => {
     setAdded(null)
-    setBusy(false)
+    setWorking(false)
     setFrom('new')
+  }
+  const requestClose = () => {
+    if (busy) setAskingClose(true)
+    else close()
+  }
+  const onAdded = (agent: AddedAgent) => {
+    setWorking(false)
+    setAdded(agent)
   }
   return (
     <dialog
@@ -107,10 +138,10 @@ function BoldAddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: 
       aria-label="Add an agent"
       onCancel={(event) => {
         event.preventDefault()
-        close()
+        if (!busy) close()
       }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) close()
+        if (event.target === event.currentTarget && !busy) close()
       }}
     >
       {added ? (
@@ -119,10 +150,38 @@ function BoldAddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: 
         <>
           <header className="bold-add-head">
             <h2>Add an agent</h2>
-            <button type="button" className="icon-btn" onClick={close} aria-label="Close">
+            <button type="button" className="icon-btn" onClick={requestClose} aria-label="Close">
               <CloseIcon />
             </button>
           </header>
+          {askingClose && (
+            <div
+              className="bold-add-confirm"
+              role="alertdialog"
+              aria-labelledby="bold-add-confirm-title"
+              aria-describedby="bold-add-confirm-note"
+              data-protected="block"
+            >
+              <b id="bold-add-confirm-title">Close while it’s still running?</b>
+              <span id="bold-add-confirm-note" className="small muted">
+                Score is still working. An upload is discarded; setup already started keeps going in
+                the background.
+              </span>
+              <div className="bold-add-confirm-actions">
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() => setAskingClose(false)}
+                  autoFocus
+                >
+                  Keep waiting
+                </button>
+                <button type="button" className="btn sm primary" onClick={close}>
+                  Close anyway
+                </button>
+              </div>
+            </div>
+          )}
           <div className="bold-add-from" role="radiogroup" aria-label="Start from">
             {fromLabels.map((choice) => (
               <button
@@ -141,25 +200,25 @@ function BoldAddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: 
           {from === 'new' && (
             <NewAgentPanel
               agents={agents}
-              close={close}
-              onAdded={(agent) => setAdded(agent)}
-              onBusy={setBusy}
+              close={requestClose}
+              onAdded={onAdded}
+              onBusy={setWorking}
             />
           )}
           {from === 'import' && (
             <ImportProfilePanel
               agents={agents}
-              close={close}
-              onAdded={(agent) => setAdded(agent)}
-              onBusy={setBusy}
+              close={requestClose}
+              onAdded={onAdded}
+              onBusy={setWorking}
             />
           )}
           {from === 'coding' && (
             <CodingAgentPanel
               agents={agents}
-              close={close}
-              onAdded={(agent) => setAdded(agent)}
-              onBusy={setBusy}
+              close={requestClose}
+              onAdded={onAdded}
+              onBusy={setWorking}
             />
           )}
         </>
@@ -186,6 +245,7 @@ function AddedView({
       />
       <h2>{added.name} joined the team</h2>
       <p className="muted">{added.detail}</p>
+      {added.runs && <JoinedRuns id={added.id} runs={added.runs} close={close} />}
       <div className="bold-add-added-actions">
         <Link
           className="btn primary"
@@ -208,6 +268,50 @@ function AddedView({
   )
 }
 
+function JoinedRuns({ id, runs, close }: { id: string; runs: RunsOutcome; close: () => void }) {
+  if (runs.kind === 'failed')
+    return (
+      <div className="bold-add-joined-runs" data-protected="block">
+        <p>Runs on this machine as you: {runs.reason}</p>
+        <WhereItWorksLink id={id} close={close} />
+      </div>
+    )
+  if (runs.kind === 'local')
+    return (
+      <div className="bold-add-joined-runs" data-protected="block">
+        <p>Runs on this machine as you.</p>
+        <WhereItWorksLink id={id} close={close} />
+      </div>
+    )
+  const backend =
+    runs.runsOn.backend === 'docker'
+      ? 'Docker'
+      : runs.runsOn.backend === 'ssh'
+        ? 'Another machine over SSH'
+        : runs.runsOn.backend === 'local'
+          ? 'This machine as you'
+          : `Another backend (${runs.runsOn.raw ?? 'unknown'})`
+  return (
+    <div className="bold-add-joined-runs" data-protected="block">
+      <p>
+        <b>
+          {backend} · {separatedLabels[runs.runsOn.separated]}
+        </b>
+        {runs.runsOn.notes[0] ? ` — ${runs.runsOn.notes[0]}` : null}
+      </p>
+      <WhereItWorksLink id={id} close={close} />
+    </div>
+  )
+}
+
+function WhereItWorksLink({ id, close }: { id: string; close: () => void }) {
+  return (
+    <Link className="link" to={`/b/team/${encodeURIComponent(id)}#agent-where`} onClick={close}>
+      Where it works
+    </Link>
+  )
+}
+
 /** Shape, colour and the live mark: the same 20 contract shapes, with colours already on the team faded. */
 function Appearance({
   agents,
@@ -221,6 +325,14 @@ function Appearance({
   onChange: (style: AgentStyle) => void
 }) {
   const colours = colourChoices(agents)
+  const chosen = colours.find((choice) => choice.colour === value.color.toLowerCase())
+  const firstFree = colours.find((choice) => choice.takenBy === null)
+  useEffect(() => {
+    // The dialog can open before the roster has loaded; once it does, never keep a colour that is already taken.
+    if (firstFree && (!chosen || chosen.takenBy !== null))
+      onChange({ ...value, color: firstFree.colour })
+  }, [chosen, firstFree, onChange, value])
+  const group = useId()
   return (
     <div className="bold-add-appearance">
       <div className="bold-add-preview">
@@ -236,15 +348,15 @@ function Appearance({
           const selected = value.shape === shape
           const label = shapeLabel(shape)
           return (
-            <button
-              key={shape}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              aria-label={label}
-              className={selected ? 'on' : undefined}
-              onClick={() => onChange({ ...value, shape })}
-            >
+            <label key={shape} className={selected ? 'on' : undefined}>
+              <input
+                type="radio"
+                name={`${group}-shape`}
+                value={shape}
+                checked={selected}
+                aria-label={label}
+                onChange={() => onChange({ ...value, shape })}
+              />
               <AgentGlyph
                 agent={{ id: `shape-${shape}`, name: label, style: { ...value, shape } }}
                 size="sm"
@@ -252,7 +364,7 @@ function Appearance({
                 bare
                 decorative
               />
-            </button>
+            </label>
           )
         })}
       </div>
@@ -260,17 +372,22 @@ function Appearance({
         {colours.map(({ colour, takenBy }) => {
           const selected = value.color.toLowerCase() === colour
           return (
-            <button
+            <label
               key={colour}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              aria-label={`Colour ${colour}${takenBy ? `, used by ${takenBy}` : ''}`}
               className={selected ? 'on' : undefined}
-              disabled={takenBy !== null}
               style={{ background: colour }}
-              onClick={() => onChange({ ...value, color: colour })}
-            />
+            >
+              <input
+                type="radio"
+                name={`${group}-colour`}
+                value={colour}
+                checked={selected}
+                aria-label={`Colour ${colour}${takenBy ? `, used by ${takenBy}` : ''}`}
+                data-colour={colour}
+                disabled={takenBy !== null}
+                onChange={() => onChange({ ...value, color: colour })}
+              />
+            </label>
           )
         })}
       </div>
@@ -372,7 +489,12 @@ function WorksOnFields({ runs, setRuns }: { runs: Runs; setRuns: (runs: Runs) =>
 
 type RunsSetup = ReturnType<typeof useRunsOnSetup>
 
-function useRunsOnSetup(ready: boolean, agentId: string, runs: Runs, onReady: () => void) {
+function useRunsOnSetup(
+  ready: boolean,
+  agentId: string,
+  runs: Runs,
+  onReady: (result: RunsOn | null) => void,
+) {
   const [state, setState] = useState<'idle' | 'saving' | 'error' | 'ready'>('idle')
   const [error, setError] = useState<string | null>(null)
   const started = useRef(false)
@@ -382,9 +504,9 @@ function useRunsOnSetup(ready: boolean, agentId: string, runs: Runs, onReady: ()
     setError(null)
     try {
       const choice = runsChoice(runs)
-      if (choice.backend !== 'local') await saveRunsOn(agentId, choice)
+      const result = choice.backend === 'local' ? null : await saveRunsOn(agentId, choice)
       setState('ready')
-      onReady()
+      onReady(result)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Couldn’t set where this agent runs.')
       setState('error')
@@ -410,7 +532,7 @@ function RunsProgress({ setup }: { setup: RunsSetup }) {
     )
   if (setup.state === 'error')
     return (
-      <div className="bold-add-error" role="alert">
+      <div className="bold-add-error" role="alert" data-protected="block">
         <p>{setup.error}</p>
         <button type="button" className="btn sm" onClick={() => void setup.retry()}>
           Try again
@@ -443,7 +565,7 @@ function NewAgentPanel({
     sshKey: '',
   })
   const finished = useRef(false)
-  const finish = () => {
+  const finish = (runsOutcome: RunsOutcome) => {
     if (finished.current) return
     finished.current = true
     onAdded({
@@ -458,9 +580,12 @@ function NewAgentPanel({
         .filter(Boolean)
         .join(' · '),
       another: true,
+      runs: runsOutcome,
     })
   }
-  const setup = useRunsOnSetup(operation?.state === 'completed', input.id, runs, finish)
+  const setup = useRunsOnSetup(operation?.state === 'completed', input.id, runs, (result) =>
+    finish(result ? { kind: 'saved', runsOn: result } : { kind: 'local' }),
+  )
   useEffect(() => {
     onBusy(Boolean(operation) || review.isPending || create.isPending)
   }, [operation, review.isPending, create.isPending, onBusy])
@@ -479,8 +604,18 @@ function NewAgentPanel({
         )}
         <RunsProgress setup={setup} />
         {setup.state === 'error' && (
-          <button type="button" className="btn ghost" onClick={finish}>
-            Continue without changing where it runs
+          <button
+            type="button"
+            className="btn ghost"
+            data-protected="inline-flex"
+            onClick={() =>
+              finish({
+                kind: 'failed',
+                reason: setup.error ?? 'Score couldn’t change where it runs.',
+              })
+            }
+          >
+            Continue on this machine
           </button>
         )}
       </div>
@@ -712,7 +847,7 @@ function ImportProfilePanel({
     sshKey: '',
   })
   const finished = useRef(false)
-  const finish = () => {
+  const finish = (runsOutcome: RunsOutcome) => {
     if (finished.current) return
     finished.current = true
     onAdded({
@@ -721,9 +856,12 @@ function ImportProfilePanel({
       style,
       detail: 'Hermes agent, imported from an archive',
       another: false,
+      runs: runsOutcome,
     })
   }
-  const setup = useRunsOnSetup(operation?.state === 'completed', id, runs, finish)
+  const setup = useRunsOnSetup(operation?.state === 'completed', id, runs, (result) =>
+    finish(result ? { kind: 'saved', runsOn: result } : { kind: 'local' }),
+  )
   useEffect(() => {
     onBusy(upload.isPending || Boolean(operation) || start.isPending)
   }, [upload.isPending, operation, start.isPending, onBusy])
@@ -742,8 +880,18 @@ function ImportProfilePanel({
         )}
         <RunsProgress setup={setup} />
         {setup.state === 'error' && (
-          <button type="button" className="btn ghost" onClick={finish}>
-            Continue without changing where it runs
+          <button
+            type="button"
+            className="btn ghost"
+            data-protected="inline-flex"
+            onClick={() =>
+              finish({
+                kind: 'failed',
+                reason: setup.error ?? 'Score couldn’t change where it runs.',
+              })
+            }
+          >
+            Continue on this machine
           </button>
         )}
       </div>
@@ -753,7 +901,7 @@ function ImportProfilePanel({
     return (
       <div className="bold-add-form">
         <label className="bold-add-upload">
-          <span className="lab">Profile export (.tar.gz, up to 200 MB)</span>
+          <span className="lab">Profile export (.tar.gz, up to {importMax})</span>
           <input
             type="file"
             accept=".gz,.tgz,application/gzip,application/x-gzip"
@@ -911,9 +1059,15 @@ function CodingAgentPanel({
   onBusy: (busy: boolean) => void
 }) {
   const [initial] = useState(() => availableStyle(agents))
-  const [created, setCreated] = useState<{ agent: CodingAgent; detail: string } | null>(null)
   const draft = useCodingAgentDraft(
-    (agent: CodingAgent, detail: string) => setCreated({ agent, detail }),
+    (agent, detail) =>
+      onAdded({
+        id: agent.id,
+        name: agent.name,
+        style: agent.style,
+        detail,
+        another: false,
+      }),
     initial,
   )
   const {
@@ -943,52 +1097,17 @@ function CodingAgentPanel({
     needsAck,
     create,
   } = draft
-  const [runs, setRuns] = useState<Runs>({
-    backend: 'local',
-    sshHost: '',
-    sshUser: '',
-    sshPort: '',
-    sshKey: '',
-  })
-  const finished = useRef(false)
-  const finish = () => {
-    if (!created || finished.current) return
-    finished.current = true
-    onAdded({
-      id: created.agent.id,
-      name: created.agent.name,
-      style: created.agent.style,
-      detail: created.detail,
-      another: false,
-    })
-  }
-  const setup = useRunsOnSetup(created !== null, created?.agent.id ?? id, runs, finish)
   useEffect(() => {
-    onBusy(create.isPending || created !== null)
-  }, [create.isPending, created, onBusy])
+    onBusy(create.isPending)
+  }, [create.isPending, onBusy])
   const blocked = Boolean(
     create.isPending ||
     !usable ||
     !id ||
     (needsAck && !acknowledged) ||
-    unverified.includes(permission) ||
-    (runs.backend === 'ssh' && (!runs.sshHost.trim() || !runs.sshUser.trim())),
+    unverified.includes(permission),
   )
-  if (created)
-    return (
-      <div className="bold-add-operation">
-        <section className="team-card" aria-live="polite">
-          <h2>Ready</h2>
-          <p>{created.agent.name} was created as a coding agent.</p>
-        </section>
-        <RunsProgress setup={setup} />
-        {setup.state === 'error' && (
-          <button type="button" className="btn ghost" onClick={finish}>
-            Continue without changing where it runs
-          </button>
-        )}
-      </div>
-    )
+  const group = useId()
   return (
     <form
       className="bold-add-form"
@@ -1002,16 +1121,16 @@ function CodingAgentPanel({
         <span className="lab">Which tool</span>
         <div className="bold-add-tools" role="radiogroup" aria-label="Which tool">
           {(runtimes.data ?? []).map((item) => (
-            <button
-              key={item.runtime}
-              type="button"
-              role="radio"
-              aria-checked={runtime === item.runtime}
-              className={runtime === item.runtime ? 'on' : undefined}
-              onClick={() => chooseRuntime(item.runtime)}
-            >
-              {item.label}
-            </button>
+            <label key={item.runtime} className={runtime === item.runtime ? 'on' : undefined}>
+              <input
+                type="radio"
+                name={`${group}-tool`}
+                value={item.runtime}
+                checked={runtime === item.runtime}
+                onChange={() => chooseRuntime(item.runtime)}
+              />
+              <span>{item.label}</span>
+            </label>
           ))}
         </div>
         {!runtimes.data && <p className="small muted">Checking installed coding tools…</p>}
@@ -1082,7 +1201,7 @@ function CodingAgentPanel({
               onChange={(event) => setWorkspace(event.target.value)}
             />
           </label>
-          <WorksOnFields runs={runs} setRuns={setRuns} />
+          <p className="small muted">Runs on this machine as you.</p>
           <CodingModelPicker key={runtime} runtime={runtime} value={model} onChange={setModel} />
           <PermissionPicker
             value={permission}

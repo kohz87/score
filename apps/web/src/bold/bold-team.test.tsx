@@ -1,4 +1,9 @@
-import { AgentDetailSchema, type AgentDetail, type CodingAgent } from '@score/contract'
+import {
+  AgentDetailSchema,
+  PROFILE_IMPORT_MAX_BYTES,
+  type AgentDetail,
+  type CodingAgent,
+} from '@score/contract'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
@@ -112,9 +117,11 @@ const dockerRunsOn = {
     runsAsRoot: true,
     extraMounts: 0,
   },
+  ssh: null,
   separatedTools: ['Terminal commands and background processes'],
   hostTools: ['MCP servers'],
   notes: ['Commands run as root inside the container.'],
+  checked: { how: 'live', hermes: '0.21.5 (e97923c)', at: '2026-10-24' },
 }
 let runsOn: Record<string, unknown> = localRunsOn
 let runsOnPuts: unknown[] = []
@@ -124,6 +131,7 @@ let pauseReply: (() => Response) | null
 let previewReply: () => Response
 let createReply: () => Response
 let runsOnReply: (() => Response) | null
+let previewHold: Promise<void> | null
 let runtimeCalls = 0
 const disposers: (() => void)[] = []
 
@@ -235,6 +243,7 @@ beforeEach(() => {
   pauseReply = null
   createReply = completedOperation
   runsOnReply = null
+  previewHold = null
   runtimeCalls = 0
   previewReply = () =>
     Response.json({
@@ -280,7 +289,7 @@ beforeEach(() => {
       if (url.pathname === '/api/agents') return Promise.resolve(agentsReply())
       if (url.pathname.startsWith('/api/agents/operations/')) return Promise.resolve(createReply())
       if (url.pathname === '/api/agents/runs-agent/runs-on' && init?.method === 'PUT')
-        return Promise.resolve(runsOnReply?.() ?? new Response(null, { status: 204 }))
+        return Promise.resolve(runsOnReply?.() ?? Response.json(dockerRunsOn))
       if (url.pathname === '/api/agents/builder/runs-on') {
         if (init?.method === 'PUT') {
           runsOnPuts.push(JSON.parse(String(init.body)))
@@ -331,7 +340,10 @@ beforeEach(() => {
         )
       if (url.pathname === '/api/agents/coder/quota')
         return Promise.resolve(Response.json({ quota: null }))
-      if (url.pathname === '/api/agents/preview') return Promise.resolve(previewReply())
+      if (url.pathname === '/api/agents/preview')
+        return previewHold
+          ? previewHold.then(() => previewReply())
+          : Promise.resolve(previewReply())
       if (url.pathname === '/api/coding-agents/runtimes') {
         runtimeCalls += 1
         return Promise.resolve(Response.json({ items: codingRuntimes }))
@@ -422,12 +434,40 @@ test('?add=agent opens the Add an agent dialog with all 20 shapes and taken colo
   const colours = within(dialog).getByRole('radiogroup', { name: 'Colour' })
   const taken = within(colours).getByRole('radio', {
     name: 'Colour #19c39a, used by builder',
-  }) as HTMLButtonElement
+  }) as HTMLInputElement
   expect(taken.disabled).toBe(true)
-  expect(taken.style.opacity).toBe('')
-  const free = within(colours).getByRole('radio', { name: 'Colour #2bb3c0' })
+  const free = within(colours).getByRole('radio', { name: 'Colour #2bb3c0' }) as HTMLInputElement
   fireEvent.click(free)
-  expect(free.getAttribute('aria-checked')).toBe('true')
+  expect(free.checked).toBe(true)
+})
+
+test('a full palette starts a new agent on an enabled generated colour', async () => {
+  const palette = ['#6b8cff', '#2bb3c0', '#ff8a3d', '#8bd450']
+  agentsReply = () =>
+    Response.json({
+      asOfSeq: 1,
+      items: palette.map((color, index) => ({
+        ...builder,
+        id: `agent-${index}`,
+        name: `agent-${index}`,
+        reportsTo: null,
+        style: { color, shape: 'hexagon' },
+      })),
+    })
+  open('/b/team?add=agent')
+  const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
+  const colours = within(dialog).getByRole('radiogroup', { name: 'Colour' })
+  const radios = within(colours).getAllByRole('radio') as HTMLInputElement[]
+  const selected = await waitFor(() => {
+    const choice = (within(colours).getAllByRole('radio') as HTMLInputElement[]).find(
+      (radio) => radio.checked,
+    )
+    expect(choice?.disabled).toBe(false)
+    return choice
+  })
+  expect(selected).toBeDefined()
+  expect(radios.filter((radio) => !radio.disabled).length).toBeGreaterThan(0)
+  expect(radios.length).toBeGreaterThan(palette.length)
 })
 
 test('the bold dialog reuses the classic preview hash and inheritance confirmation when copying', async () => {
@@ -460,6 +500,11 @@ test('the coding tool shows install state and checks the CLI version again', asy
   const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
   fireEvent.click(within(dialog).getByRole('radio', { name: /A coding tool/ }))
   expect(await within(dialog).findByText(/Installed · version 2\.1\.295/)).toBeDefined()
+  expect(within(dialog).queryByLabelText('Works on')).toBeNull()
+  expect(within(dialog).getByText('Runs on this machine as you.')).toBeDefined()
+  expect(
+    (within(dialog).getByRole('radio', { name: 'Claude Code' }) as HTMLInputElement).type,
+  ).toBe('radio')
 
   const initialCalls = runtimeCalls
   fireEvent.click(within(dialog).getByRole('button', { name: 'Check version again' }))
@@ -474,7 +519,100 @@ test('the coding tool shows install state and checks the CLI version again', asy
   expect(await within(dialog).findByRole('checkbox', { name: /can read any file/ })).toBeDefined()
 })
 
+test('the import size hint follows the contract maximum', async () => {
+  open('/b/team?add=agent')
+  const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
+  fireEvent.click(within(dialog).getByRole('radio', { name: /Bring in a Hermes profile/ }))
+  const megabytes = Math.round(PROFILE_IMPORT_MAX_BYTES / (1024 * 1024))
+  expect(within(dialog).getByText(`Profile export (.tar.gz, up to ${megabytes} MB)`)).toBeDefined()
+})
+
+test('while setup is running Escape and the backdrop leave the dialog open and the X asks first', async () => {
+  let releasePreview: () => void = () => {}
+  previewHold = new Promise<void>((resolve) => {
+    releasePreview = resolve
+  })
+  open('/b/team?add=agent')
+  const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
+  fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'busy-agent' } })
+  fireEvent.change(within(dialog).getByLabelText('What does it do?'), {
+    target: { value: 'Waits for the preview.' },
+  })
+  fireEvent.change(within(dialog).getByLabelText('Model'), { target: { value: 'fake-model' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Preview changes' }))
+  await within(dialog).findByRole('button', { name: 'Loading preview…' })
+
+  const cancel = new Event('cancel', { bubbles: true, cancelable: true })
+  fireEvent(dialog, cancel)
+  expect(cancel.defaultPrevented).toBe(true)
+  expect(screen.getByRole('dialog', { name: 'Add an agent' })).toBe(dialog)
+
+  fireEvent.click(dialog)
+  expect(screen.getByRole('dialog', { name: 'Add an agent' })).toBe(dialog)
+
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+  const confirm = within(dialog).getByRole('alertdialog', {
+    name: 'Close while it’s still running?',
+  })
+  expect(confirm.getAttribute('data-protected')).toBe('block')
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Keep waiting' }))
+
+  previewHold = null
+  releasePreview()
+  expect(await within(dialog).findByRole('heading', { name: 'Review changes' })).toBeDefined()
+})
+
 test('a non-local Works on choice is saved after setup and a 409 reason is shown with retry', async () => {
+  runsOnReply = () =>
+    Response.json(
+      {
+        error: {
+          code: 'backend_unavailable',
+          message: 'Docker isn’t installed or its daemon is not running.',
+        },
+      },
+      { status: 409 },
+    )
+  open('/b/team?add=agent')
+  const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
+  fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'runs-agent' } })
+  fireEvent.change(within(dialog).getByLabelText('What does it do?'), {
+    target: { value: 'Runs checks in a box.' },
+  })
+  fireEvent.change(within(dialog).getByLabelText('Model'), { target: { value: 'fake-model' } })
+  expect(within(dialog).getByRole('option', { name: 'Docker (partly separated)' })).toBeDefined()
+  fireEvent.change(within(dialog).getByLabelText('Works on'), { target: { value: 'docker' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Preview changes' }))
+  await within(dialog).findByRole('heading', { name: 'Review changes' })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Add runs-agent' }))
+
+  expect(
+    await within(dialog).findByText('Docker isn’t installed or its daemon is not running.'),
+  ).toBeDefined()
+  const calls = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([input, init]) =>
+          String(input).endsWith('/api/agents/runs-agent/runs-on') && init?.method === 'PUT',
+      )
+  await waitFor(() => expect(calls()).toHaveLength(1))
+  expect(JSON.parse(String(calls()[0]?.[1]?.body))).toEqual({ backend: 'docker' })
+
+  runsOnReply = null
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Try again' }))
+  expect(
+    await within(dialog).findByRole('heading', { name: 'runs-agent joined the team' }),
+  ).toBeDefined()
+  expect(calls()).toHaveLength(2)
+  expect(within(dialog).getByText(/Docker · Partly separated/)).toBeDefined()
+  expect(within(dialog).getByText(/Commands run as root inside the container\./)).toBeDefined()
+  expect(within(dialog).getByRole('link', { name: 'Where it works' }).getAttribute('href')).toBe(
+    '/b/team/runs-agent#agent-where',
+  )
+})
+
+test('continuing past a failed Works on write says the agent runs on this machine, with the reason', async () => {
   runsOnReply = () =>
     Response.json(
       {
@@ -500,22 +638,15 @@ test('a non-local Works on choice is saved after setup and a 409 reason is shown
   expect(
     await within(dialog).findByText('Docker isn’t installed or its daemon is not running.'),
   ).toBeDefined()
-  const calls = () =>
-    vi
-      .mocked(fetch)
-      .mock.calls.filter(
-        ([input, init]) =>
-          String(input).endsWith('/api/agents/runs-agent/runs-on') && init?.method === 'PUT',
-      )
-  await waitFor(() => expect(calls()).toHaveLength(1))
-  expect(JSON.parse(String(calls()[0]?.[1]?.body))).toEqual({ backend: 'docker' })
-
-  runsOnReply = null
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Try again' }))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Continue on this machine' }))
   expect(
-    await within(dialog).findByRole('heading', { name: 'runs-agent joined the team' }),
+    await within(dialog).findByText(
+      'Runs on this machine as you: Docker isn’t installed or its daemon is not running.',
+    ),
   ).toBeDefined()
-  expect(calls()).toHaveLength(2)
+  expect(within(dialog).getByRole('link', { name: 'Where it works' }).getAttribute('href')).toBe(
+    '/b/team/runs-agent#agent-where',
+  )
 })
 
 test('the agent page puts the four cards first and makes every classic tab reachable under More', async () => {
