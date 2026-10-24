@@ -25,19 +25,31 @@ async function expectTabBar(page: Page, current: 'Room' | 'Team' | 'Settings') {
 }
 
 async function expectAtLeast44(locator: ReturnType<Page['locator']>) {
-  const box = await locator.boundingBox()
-  expect(box?.width, `${await locator.getAttribute('aria-label')} width`).toBeGreaterThanOrEqual(44)
-  expect(box?.height, `${await locator.getAttribute('aria-label')} height`).toBeGreaterThanOrEqual(
-    44,
-  )
+  // Poll: a control can render a frame before its final layout (labels, fonts) settles.
+  await expect(locator).toBeVisible()
+  await expect
+    .poll(
+      async () => {
+        const box = await locator.boundingBox()
+        return box ? Math.min(box.width, box.height) : 0
+      },
+      { message: `${await locator.first().getAttribute('aria-label')} is at least 44px` },
+    )
+    .toBeGreaterThanOrEqual(44)
 }
 
 async function expectAboveTabBar(page: Page, locator: ReturnType<Page['locator']>) {
-  const bar = await tabs(page).boundingBox()
-  const content = await locator.boundingBox()
-  expect(content, 'content has a box').not.toBeNull()
-  expect(bar, 'tab bar has a box').not.toBeNull()
-  expect(content!.y + content!.height).toBeLessThanOrEqual(bar!.y + 1)
+  // Tall pages scroll under the fixed bar by design; what counts is that the end of the content clears it. Poll, since
+  // content that loads late grows the page after the first scroll.
+  await expect
+    .poll(async () => {
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+      const bar = await tabs(page).boundingBox()
+      const content = await locator.boundingBox()
+      if (!bar || !content) return Number.POSITIVE_INFINITY
+      return content.y + content.height - bar.y
+    })
+    .toBeLessThanOrEqual(1)
 }
 
 for (const size of sizes) {
@@ -60,8 +72,15 @@ for (const size of sizes) {
       await expect(done.getByRole('img', { name: 'Done' })).toBeVisible()
       const pinned = page.getByRole('article', { name: /Needs you: May I install a package/ })
       await expect(pinned).toHaveAttribute('data-protected', 'flex')
-      expect(pinned.compareDocumentPosition(jobs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-      await expect(pinned.getByRole('button', { name: 'Allow' })).toBeVisible()
+      // The pinned decision comes before the job list in document order.
+      expect(
+        await pinned.evaluate(
+          (el, jobsEl) =>
+            Boolean(el.compareDocumentPosition(jobsEl) & Node.DOCUMENT_POSITION_FOLLOWING),
+          await jobs.elementHandle(),
+        ),
+      ).toBe(true)
+      await expect(pinned.getByRole('button', { name: 'Allow', exact: true })).toBeVisible()
       await expect(pinned.getByRole('button', { name: 'Don’t allow' })).toBeVisible()
       // The first card is the decision: at 360×740 its actions must fit without scrolling inside the strip.
       const pinBox = await pinned.boundingBox()
@@ -140,7 +159,8 @@ for (const size of sizes) {
           (request) =>
             request.method === 'POST' && request.path === '/api/rooms/team-room/messages',
         )?.body,
-      ).toMatchObject({ jobId: 'job-default', text: 'A note to the team.' })
+      ).toEqual(expect.objectContaining({ text: 'A note to the team.' }))
+      // From the list the composer sends with no jobId; the server files it in the default job (as All does on desktop).
 
       await teamRow.click()
       await expect(page).toHaveURL(/job=job-default/)
@@ -153,7 +173,7 @@ for (const size of sizes) {
       const state = await openBoldRoom(page)
       const card = page.getByRole('article', { name: /Needs you: May I install a package/ })
       await expect(card).toContainText('npm install ws@8')
-      await expectAtLeast44(card.getByRole('button', { name: 'Allow' }))
+      await expectAtLeast44(card.getByRole('button', { name: 'Allow', exact: true }))
       await expectAtLeast44(card.getByRole('button', { name: 'Don’t allow' }))
 
       await card.getByRole('button', { name: 'Allow', exact: true }).click()
@@ -218,7 +238,7 @@ for (const size of sizes) {
       await expect(page).toHaveURL('/b/settings')
       await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible()
       await expectTabBar(page, 'Settings')
-      await expectAboveTabBar(page, page.getByRole('navigation', { name: 'Settings' }))
+      await expectAboveTabBar(page, page.locator('.setmain'))
       await page.screenshot({ path: testInfo.outputPath(`bold-phone-settings-${size.width}.png`) })
 
       await tabs(page).getByRole('button', { name: 'Room' }).click()
@@ -231,7 +251,7 @@ for (const size of sizes) {
       page,
     }, testInfo) => {
       await openMenuRoom(page)
-      const picker = page.getByRole('button', { name: 'Team room' })
+      const picker = page.getByRole('button', { name: 'Team room', exact: true })
       await picker.click()
       await page.getByRole('option', { name: /#activity-feed/ }).click()
 
@@ -253,7 +273,7 @@ for (const size of sizes) {
       await expect(page).toHaveURL('/b')
       await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 
-      await page.getByRole('button', { name: 'Team room' }).click()
+      await page.getByRole('button', { name: 'Team room', exact: true }).click()
       await page.getByRole('option', { name: /#telegram-plan #imported/ }).click()
       await expect(page).toHaveURL(/room=room-imported/)
       await expect(page.getByRole('button', { name: 'Back to the team room' })).toBeVisible()
@@ -293,7 +313,7 @@ for (const size of sizes) {
     await expectAtLeast44(panel.getByRole('button', { name: 'Earlier chats' }))
     const composer = panel.getByPlaceholder('Message builder privately')
     await expectAtLeast44(composer)
-    await expectAtLeast44(panel.getByRole('button', { name: 'Send privately' }))
+    await expectAtLeast44(panel.getByRole('button', { name: 'Send', exact: true }))
     await page.screenshot({ path: testInfo.outputPath(`bold-phone-one-to-one-${size.width}.png`) })
 
     await page.getByRole('button', { name: 'Back', exact: true }).click()

@@ -211,7 +211,8 @@ function LoadedTeamRoom({
     : lead
       ? `To: team room (${lead.name})`
       : 'No lead yet — use @name'
-  const toLabel = job ? `To: ${job.title}` : allLabel
+  // An older room's one job is an implementation detail on a phone; it stays "Older room · @name" there too.
+  const toLabel = job && !olderRoom ? `To: ${job.title}` : allLabel
 
   const clearSeek = useCallback(() => {
     const next = new URLSearchParams(params)
@@ -331,7 +332,8 @@ function LoadedTeamRoom({
       ) : (
         <div className="stream" id="bold-room-stream" aria-live="polite">
           {job && <StartedBy job={job} />}
-          {!phone && (
+          {/* On a phone the capsule (and its Take it aside) sits in the open job's chat, as the prototype shows it. */}
+          {(!phone || phoneJob) && (
             <RoomCapsules
               jobs={allJobs}
               agents={agents}

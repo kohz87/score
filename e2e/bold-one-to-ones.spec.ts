@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+import { openBoldJob } from './bold-room-fixtures.ts'
 
 // PLAN 11.7: one-to-ones in the bold shell, against the fake adapter's seeded direct chats (builder: "Websockets or
 // server-sent events", "The cursor bug", "Working in the Docker sandbox"; reviewer: "How strict to be on docs").
@@ -184,6 +185,8 @@ for (const { name, viewport } of sizes) {
       page,
     }) => {
       await page.goto('/b')
+      // A phone opens on the job list; the capsule with Take it aside is in the job's own chat.
+      if (phone) await openBoldJob(page, /^Activity feed\./)
       const aside = page.getByRole('button', { name: 'Take it aside with builder' }).first()
       await expect(aside).toBeVisible({ timeout: 30_000 })
       const posts = recordPosts(page)

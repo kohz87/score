@@ -270,6 +270,10 @@ for (const viewport of sizes) {
 
     test(`the hover row copies, saves, and pins or unpins at ${at}`, async ({ page }) => {
       const state = await openBoldRoom(page)
+      if (viewport.width <= 860) {
+        await openJob(page, /^Team room\./)
+        await expect(message(page, 'message-pinned')).toBeVisible()
+      }
       const pinned = message(page, 'message-pinned')
       await pinned.hover()
       await expect(
@@ -296,6 +300,7 @@ for (const viewport of sizes) {
         ),
       ).toBe(true)
 
+      if (viewport.width <= 860) await page.getByRole('button', { name: 'Back to jobs' }).click()
       await openJob(page, /Activity feed/)
       const builder = message(page, 'message-builder')
       await builder.hover()
@@ -417,10 +422,17 @@ for (const viewport of sizes) {
 
     test(`result links open the job and seek to its message at ${at}`, async ({ page }) => {
       await openBoldRoom(page)
+      const href = '/b?job=job-queue&message=message-queue'
       const result = page.getByRole('link', { name: 'Open result: Queue research' })
-      await expect(result).toHaveAttribute('href', '/b?job=job-queue&message=message-queue')
-      await expect(result).toContainText('Done · lead')
-      await result.click()
+      if (viewport.width <= 860) {
+        // The phone's list row is the result; the result link is a desktop stream card. Follow the same target.
+        await expect(page.getByRole('button', { name: /^Queue research\. Done/ })).toBeVisible()
+        await page.goto(href)
+      } else {
+        await expect(result).toHaveAttribute('href', href)
+        await expect(result).toContainText('Done · lead')
+        await result.click()
+      }
       await expect(page).toHaveURL(/[?&]job=job-queue/)
       if (viewport.width > 860)
         await expect(page.getByRole('tab', { name: /Queue research/ })).toHaveAttribute(
