@@ -31,10 +31,218 @@ const contentTypes = {
   '.woff2': 'font/woff2',
 }
 
+const searchRoom = {
+  id: 'team-room',
+  name: 'Team room',
+  kind: 'room',
+  leadAgentId: 'lead',
+  members: ['lead', 'builder', 'reviewer', 'designer'],
+  unread: 0,
+  activeAgents: [],
+  channels: [],
+  role: 'team',
+  routing: 'exchanges',
+}
+
+const searchJob = (id, roomId, title, extra = {}) => ({
+  id,
+  roomId,
+  title,
+  state: 'working',
+  holderAgentId: 'builder',
+  isDefault: false,
+  exchangeBudget: 8,
+  jobTurnLimit: 40,
+  unread: 0,
+  activeAgents: [],
+  lastMessageAt: null,
+  messageCount: 0,
+  summary: null,
+  source: null,
+  reportBack: null,
+  createdAt: '2026-10-24T10:00:00.000Z',
+  updatedAt: '2026-10-24T10:00:00.000Z',
+  ...extra,
+})
+
+// PLAN 11.10f: representative search rows, so the comparison exercises every prototype group without a server.
+const searchFixtures = {
+  '/api/team-room': {
+    asOfSeq: 1,
+    room: searchRoom,
+    jobs: [
+      searchJob('job-activity', 'team-room', 'Activity feed', { unread: 2 }),
+      searchJob('job-release', 'team-room', 'Release notes 2.4', { state: 'done' }),
+      searchJob('job-queue', 'team-room', 'Queue research', { state: 'closed' }),
+    ],
+  },
+  '/api/agents/builder/direct': {
+    asOfSeq: 1,
+    room: null,
+    chats: [
+      searchJob('chat-cursor', 'direct-builder', 'The cursor bug', {
+        summary: 'Why the cursor jumps',
+      }),
+      searchJob('chat-socket', 'direct-builder', 'Websockets or server-sent events', {
+        summary: 'One connection for the feed',
+      }),
+    ],
+  },
+  ...Object.fromEntries(
+    ['lead', 'reviewer', 'designer'].map((id) => [
+      `/api/agents/${id}/direct`,
+      { asOfSeq: 1, room: null, chats: [] },
+    ]),
+  ),
+  '/api/knowledge/tree': {
+    folders: ['Decisions', 'Projects'],
+    documents: [],
+    notes: [
+      {
+        path: 'Decisions/Event-cursors.md',
+        title: 'Event cursors',
+        mtime: '2026-10-24T09:00:00.000Z',
+        lastAuthor: { agentId: 'reviewer' },
+      },
+      {
+        path: 'Projects/Roadmap.md',
+        title: 'Roadmap',
+        mtime: '2026-10-23T09:00:00.000Z',
+        lastAuthor: { agentId: 'lead' },
+      },
+      {
+        path: 'Decisions/Websockets.md',
+        title: 'Websockets vs SSE',
+        mtime: '2026-10-22T09:00:00.000Z',
+        lastAuthor: { agentId: 'builder' },
+      },
+    ],
+  },
+  '/api/knowledge/search': {
+    items: [
+      {
+        path: 'Decisions/Event-cursors.md',
+        title: 'Event cursors',
+        kind: 'note',
+        type: null,
+        snippet: 'Page task events by (created_at, id), never by a [[cursor]] alone.',
+      },
+    ],
+  },
+  '/api/search/messages': {
+    items: [
+      {
+        messageId: 'message-cursor',
+        roomId: 'team-room',
+        roomName: 'Team room',
+        jobId: 'job-activity',
+        author: { kind: 'agent', agentId: 'reviewer' },
+        createdAt: '2026-10-24T10:00:00.000Z',
+        snippet: 'Make the [[cursor]] (created_at, id) and add a test.',
+      },
+    ],
+  },
+  '/api/commands': {
+    items: [
+      { name: 'assign', usage: '/assign @agent <title>', description: 'Create a task.' },
+      { name: 'model', usage: '/model <model> <message>', description: 'Use a model.' },
+    ],
+  },
+}
+
+// PLAN 11.5: deterministic Results for the activity-feed and release-notes jobs, so both review sizes render the same
+// cards without a server. The prototype's Queue libraries summary has no ResultCard kind in the contract; it is left out.
+const resultAgents = fixtures['/api/agents'].items
+const resultFixtures = {
+  '/api/watch/overview': {
+    items: resultAgents.map((agent) =>
+      agent.id === 'builder'
+        ? { agent, thumbnail: null, status: 'working', live: true, surface: 'terminal' }
+        : { agent, thumbnail: null, status: 'idle', live: false, surface: null },
+    ),
+  },
+  '/api/jobs/job-activity/results': {
+    asOfSeq: 53,
+    items: [
+      {
+        kind: 'preview',
+        id: 'preview:builder:12',
+        agentId: 'builder',
+        url: 'http://localhost:5173/feed',
+        title: 'Activity feed',
+        imageUrl: null,
+        live: true,
+        at: '2026-10-24T10:03:00.000Z',
+      },
+      {
+        kind: 'change',
+        id: 'change:job-activity',
+        title: 'Activity feed',
+        authors: ['builder'],
+        state: 'approved',
+        whatChanged: [
+          {
+            text: 'Events in the same millisecond get skipped.',
+            by: 'reviewer',
+            caught: true,
+          },
+          { text: 'Approved by reviewer', by: 'reviewer', caught: false },
+        ],
+        files: [
+          { path: 'api/events.py', added: 15, removed: 3, by: ['builder'] },
+          { path: 'api/test_events.py', added: 20, removed: 0, by: ['builder'] },
+        ],
+        at: '2026-10-24T10:02:00.000Z',
+      },
+    ],
+    screens: [
+      {
+        agentId: 'builder',
+        seq: 12,
+        surface: 'terminal',
+        caption: 'Ran pnpm test api/events',
+        live: true,
+        at: '2026-10-24T10:03:00.000Z',
+      },
+    ],
+  },
+  '/api/jobs/job-release/results': {
+    asOfSeq: 54,
+    items: [
+      {
+        kind: 'draft',
+        id: 'draft:notes:document',
+        agentId: 'designer',
+        title: 'Announcement image.md',
+        target: { kind: 'document', mediaId: 'media-notes' },
+        at: '2026-10-24T09:58:00.000Z',
+      },
+    ],
+    screens: [
+      {
+        agentId: 'designer',
+        seq: 4,
+        surface: 'browser',
+        caption: 'Opened the announcement draft',
+        live: false,
+        at: '2026-10-24T09:58:00.000Z',
+      },
+    ],
+  },
+  '/api/jobs/job-queue/results': { asOfSeq: 55, items: [], screens: [] },
+}
+
 async function serve(route) {
   const url = new URL(route.request().url())
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === '/api/stream') return route.fulfill({ status: 204 })
+    const searchFixture = searchFixtures[url.pathname] ?? resultFixtures[url.pathname]
+    if (searchFixture)
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(searchFixture),
+      })
     // Reports requests carry the viewer's time zone; the visual fixture is keyed by range only.
     const reportFixture =
       url.pathname === '/api/reports'
@@ -203,6 +411,228 @@ const usageParts = [
   },
 ]
 
+// PLAN 11.10f: the prototype's vSearch/searchList and the app's BoldSearch use different class names, so each side
+// gets its own selector while the part names and measured properties stay aligned.
+const searchPrototypeParts = [
+  {
+    name: 'Scrim',
+    selector: '.scrim',
+    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  },
+  {
+    name: 'Dialog',
+    selector: '.scrim .dialog',
+    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
+  },
+  {
+    name: 'Head',
+    selector: '.scrim .dialog > .row',
+    props: ['padding', 'gap', 'borderBottomColor'],
+  },
+  { name: 'Input', selector: '#sq', props: ['fontSize', 'color', 'backgroundColor'] },
+  {
+    name: 'List',
+    selector: '#sres',
+    props: ['padding', 'gap', 'maxHeight', 'overflowY', 'backgroundColor'],
+  },
+  {
+    name: 'Section',
+    selector: '#sres .sec',
+    props: ['padding', 'fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Result',
+    selector: '#sres .mi',
+    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+]
+
+const searchAppParts = [
+  {
+    name: 'Scrim',
+    selector: '.bold-search-scrim',
+    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  },
+  {
+    name: 'Dialog',
+    selector: '.bold-search-dialog',
+    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
+  },
+  {
+    name: 'Head',
+    selector: '.bold-search-head',
+    props: ['padding', 'gap', 'borderBottomColor'],
+  },
+  {
+    name: 'Input',
+    selector: '.bold-search-head input',
+    props: ['fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'List',
+    selector: '.bold-search-list',
+    props: ['padding', 'gap', 'maxHeight', 'overflowY', 'backgroundColor'],
+  },
+  {
+    name: 'Section',
+    selector: '.bold-search-section',
+    props: ['padding', 'fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Result',
+    selector: '.bold-search-result',
+    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+]
+
+// PLAN 11.5: the prototype has no role-specific classes for the Results cards, so its selectors use card order while
+// the app's use their card classes. Part names and measured properties stay aligned for the report.
+const resultsPrototypeParts = [
+  {
+    name: 'Side body',
+    selector: '.side .sidebody',
+    props: ['padding', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Grid',
+    selector: '.side .grid2',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'Preview card',
+    selector: '.side .grid2 > article:nth-of-type(1)',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Preview title',
+    selector: '.side .grid2 > article:nth-of-type(1) .row b',
+    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Change card',
+    selector: '.side .grid2 > article:nth-of-type(2)',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Change title',
+    selector: '.side .grid2 > article:nth-of-type(2) > b',
+    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Draft card',
+    selector: '.side .grid2 > article:nth-of-type(4)',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Draft title',
+    selector: '.side .grid2 > article:nth-of-type(4) > b',
+    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Badge',
+    selector: '.side .grid2 .badge',
+    props: ['padding', 'borderRadius', 'fontSize', 'fontWeight', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Live dot',
+    selector: '.side .grid2 .dot.livedot',
+    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Change link',
+    selector: '.side .grid2 .link',
+    props: ['minHeight', 'fontSize', 'color', 'textDecorationLine'],
+  },
+  {
+    name: 'Screens',
+    selector: '.side .grid2 > .row',
+    props: ['display', 'gap', 'flexWrap', 'color'],
+  },
+  {
+    name: 'Screen chip',
+    selector: '.side .grid2 > .row .btn',
+    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Screen thumb',
+    selector: '.side .grid2 > .row .btn .thumb',
+    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
+  },
+]
+
+const resultsAppParts = [
+  {
+    name: 'Side body',
+    selector: '.side .bold-results',
+    props: ['padding', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Grid',
+    selector: '.bold-results-grid',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'Preview card',
+    selector: '.bold-results-preview',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Preview title',
+    selector: '.bold-results-preview h2',
+    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Change card',
+    selector: '.bold-results-change',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Change title',
+    selector: '.bold-results-change h2',
+    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Draft card',
+    selector: '.bold-results-draft',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Draft title',
+    selector: '.bold-results-draft h2',
+    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Badge',
+    selector: '.bold-results-badge',
+    props: ['padding', 'borderRadius', 'fontSize', 'fontWeight', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Live dot',
+    selector: '.bold-results-live .bold-results-dot',
+    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Change link',
+    selector: '.bold-results-link',
+    props: ['minHeight', 'fontSize', 'color', 'textDecorationLine'],
+  },
+  {
+    name: 'Screens',
+    selector: '.bold-results-screens',
+    props: ['display', 'gap', 'flexWrap', 'color'],
+  },
+  {
+    name: 'Screen chip',
+    selector: '.bold-results-screen',
+    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Screen thumb',
+    selector: '.bold-results-screen-thumb',
+    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
+  },
+]
+
 async function measure(page, selectedParts = parts) {
   return page.evaluate((selectedParts) => {
     const result = {}
@@ -274,6 +704,28 @@ try {
 
     await page.goto(prototype, { waitUntil: 'domcontentloaded' })
     await page.locator('.top .word').waitFor()
+    await page.locator('button[data-a="search"]:visible').first().click()
+    await page.locator('#sq').waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-prototype-search-${size}.png`) })
+    const prototypeSearchMetrics = await measure(page, searchPrototypeParts)
+    await page.locator('#sq').fill('cursor')
+    await page.screenshot({ path: join(output, `bold-prototype-search-query-${size}.png`) })
+
+    await page.goto(`${baseURL}/b`)
+    await page.locator('[data-ui="bold"] .top .word').waitFor({ timeout: 20_000 })
+    await page.getByRole('button', { name: 'Search', exact: true }).click()
+    await page.locator('.bold-search-dialog').waitFor({ timeout: 20_000 })
+    await page.locator('.bold-search-result').first().waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-search-${size}.png`) })
+    const appSearchMetrics = await measure(page, searchAppParts)
+    await page.getByRole('combobox', { name: 'Search or run a command' }).fill('cursor')
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: join(output, `bold-app-search-query-${size}.png`) })
+
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.top .word').waitFor()
     await page.locator('[data-a="go"][data-v="settings"]:visible').click()
     await page.locator('[data-a="setSec"][data-v="usage"]').click()
     await page.locator('.setgrid .setnav').waitFor()
@@ -294,10 +746,28 @@ try {
     })
     const appUsageMetrics = await measure(page, usageParts)
 
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.side .grid2 > article').first().waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-prototype-results-${size}.png`) })
+    const prototypeResultsMetrics = await measure(page, resultsPrototypeParts)
+
+    await page.goto(`${baseURL}/b`)
+    await page.locator('[data-ui="bold"] .top .word').waitFor({ timeout: 20_000 })
+    if (viewport.width < 861)
+      await page.getByRole('button', { name: 'Open side panel' }).click()
+    await page.getByRole('complementary', { name: 'Side panel' }).waitFor({ timeout: 20_000 })
+    await page.locator('[data-card="change"]').waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-results-${size}.png`) })
+    const appResultsMetrics = await measure(page, resultsAppParts)
+
     results[size] = {
       prototype: prototypeMetrics,
       app: appMetrics,
+      search: { prototype: prototypeSearchMetrics, app: appSearchMetrics },
       usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
+      results: { prototype: prototypeResultsMetrics, app: appResultsMetrics },
     }
   }
 
@@ -329,6 +799,38 @@ try {
     usageLines.push('')
   }
   writeFileSync(join(output, 'bold-usage-metrics.md'), `${usageLines.join('\n')}\n`)
+
+  const searchLines = ['# Bold search: prototype vs app', '']
+  for (const size of Object.keys(results)) {
+    searchLines.push(
+      `## ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of searchPrototypeParts)
+      searchLines.push(
+        `| ${part.name} | ${cell(results[size].search.prototype, part)} | ${cell(results[size].search.app, part)} | ${difference(results[size].search.prototype, results[size].search.app, part)} |`,
+      )
+    searchLines.push('')
+  }
+  writeFileSync(join(output, 'bold-search-metrics.md'), `${searchLines.join('\n')}\n`)
+
+  const resultsLines = ['# Bold Results: prototype vs app', '']
+  for (const size of Object.keys(results)) {
+    resultsLines.push(
+      `## ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of resultsPrototypeParts)
+      resultsLines.push(
+        `| ${part.name} | ${cell(results[size].results.prototype, part)} | ${cell(results[size].results.app, part)} | ${difference(results[size].results.prototype, results[size].results.app, part)} |`,
+      )
+    resultsLines.push('')
+  }
+  writeFileSync(join(output, 'bold-results-metrics.md'), `${resultsLines.join('\n')}\n`)
   console.log(`Wrote screenshots and measurements to ${output}`)
 } finally {
   await browser?.close()

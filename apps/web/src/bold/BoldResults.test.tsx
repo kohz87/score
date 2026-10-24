@@ -204,7 +204,7 @@ test('what changed is plain words and names who caught the problem', () => {
   mountView()
   const card = screen.getByText('What changed').closest('article') as HTMLElement
   expect(within(card).getByText('Approved')).toBeDefined()
-  expect(within(card).getByText('Events in the same millisecond get skipped.')).toBeDefined()
+  expect(card.textContent).toContain('Events in the same millisecond get skipped.')
   expect(within(card).getByText('reviewer caught this')).toBeDefined()
   const link = within(card).getByRole('link', { name: 'See the code · 2 files' })
   expect(link.getAttribute('href')).toBe('/b?job=job-feed&work=code')
@@ -263,7 +263,22 @@ test('a job.upserted event refreshes the Results snapshot', async () => {
       const path = new URL(String(input), 'http://score.test').pathname
       if (path === '/api/team-room')
         return Promise.resolve(
-          Response.json({ asOfSeq: 1, room: { id: 'team', name: '#team' }, jobs: [feedJob] }),
+          Response.json({
+            asOfSeq: 1,
+            room: {
+              id: 'team',
+              name: '#team',
+              kind: 'room',
+              leadAgentId: 'lead',
+              members: ['lead', 'builder', 'reviewer', 'designer'],
+              unread: 0,
+              activeAgents: [],
+              channels: [],
+              role: 'team',
+              routing: 'exchanges',
+            },
+            jobs: [feedJob],
+          }),
         )
       if (path === '/api/jobs/job-feed/results')
         return Promise.resolve(
