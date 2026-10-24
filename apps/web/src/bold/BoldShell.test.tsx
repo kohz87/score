@@ -222,11 +222,11 @@ test('Team is a placeholder, Settings opens Usage, and the search button and Ctr
   expect(await screen.findByRole('heading', { name: 'Usage' })).toBeDefined()
 
   fireEvent.click(screen.getByRole('button', { name: 'Search' }))
-  const palette = await screen.findByRole('dialog', { name: 'Search or run a command' })
-  fireEvent.click(within(palette).getByRole('button', { name: 'Close command palette' }))
+  const palette = await screen.findByRole('dialog', { name: 'Search and commands' })
+  fireEvent.click(within(palette).getByRole('button', { name: 'Close search' }))
   expect(screen.queryByRole('dialog')).toBeNull()
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
-  expect(await screen.findByRole('dialog', { name: 'Search or run a command' })).toBeDefined()
+  expect(await screen.findByRole('dialog', { name: 'Search and commands' })).toBeDefined()
 })
 
 test('Settings offers the way back to the classic view', async () => {
@@ -248,10 +248,10 @@ test.each(['ctrlKey', 'metaKey'])(
     const trigger = screen.getByRole('button', { name: 'Search' })
     trigger.focus()
     fireEvent.click(trigger)
-    const palette = await screen.findByRole('dialog', { name: 'Search or run a command' })
+    const palette = await screen.findByRole('dialog', { name: 'Search and commands' })
     fireEvent.keyDown(document, { key: 'k', [modifier]: true })
-    expect(screen.getByRole('dialog', { name: 'Search or run a command' })).toBeDefined()
-    fireEvent.click(within(palette).getByRole('button', { name: 'Close command palette' }))
+    expect(screen.getByRole('dialog', { name: 'Search and commands' })).toBeDefined()
+    fireEvent.click(within(palette).getByRole('button', { name: 'Close search' }))
     await waitFor(() => expect(document.activeElement).toBe(trigger))
   },
 )
