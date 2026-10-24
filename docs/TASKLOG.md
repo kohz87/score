@@ -926,3 +926,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   ≤ 2 fix rounds and clean code → keep the split):** 1 fix round, code clean after review; the lead's rework was
   integration and test plumbing, not UI code. Split kept. E2E 67/67 (results, library, shell, protection, search);
   full check green (web 3,054). Not deployed.
+- **11.8c Add an agent (DeepSeek + lead, 2026-10-24).** The bold add-agent dialog: new, copy from, import a Hermes
+  profile (upload progress, size limit from the shared constant), a coding tool (state and version check; the contract
+  has no install endpoint), 20 shapes, taken colours disabled with unused colours offered, preview of changes, and "Works
+  on" for Hermes agents only (this machine / Docker (partly separated) / SSH) through the 11.8a runs-on API, with the
+  honest outcome on the joined screen. Classic flows shared through hooks (the classic import now also deletes an
+  abandoned upload on unmount — correct, classic e2e green). Build + 1 fix round. Sonnet: 1 P1 (Works on offered for
+  coding tools, which aren't Hermes profiles — the server already answered 404 in live and fake; the UI no longer offers
+  it), 4 P2 (unclear failed runs-on outcome, an overclaiming "Docker sandbox" label, a colour cap that reused taken
+  colours, e2e gaps), 4 P3 — all fixed. Lead: e2e assertions matched the unit-test mock instead of the server's preview,
+  and inexact text matches. E2E 55/55 (add agent, team, classic team/agent/coding, shell, protection); full check green
+  (web 3,107). Not deployed.

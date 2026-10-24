@@ -629,7 +629,7 @@ More (memory, skills + hub search, tools + helper count, plugins and MCP, worksp
 with export); coding agents on the same page (permission, quota floor, password, Codex ack). Done when: every tab of
 today's agent page is reachable; e2e; screenshots vs 04/06/20.
 
-**11.8c Add an agent** · **DeepSeek** · board 07: new, copy from, import a Hermes profile (progress), coding CLI
+**11.8c Add an agent** ✅ · **DeepSeek** · board 07: new, copy from, import a Hermes profile (progress), coding CLI
 (install + version check); 20 shapes, taken colours fade, preview of changes. Done when: e2e for each path.
 
 **11.9a Settings › Connections and Look** · **DeepSeek** · boards 15, 16: Hermes, providers (local endpoint),
