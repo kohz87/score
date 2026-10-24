@@ -1,4 +1,5 @@
-import type { AgentSummary, Job, Message, RoomVersion } from '@score/contract'
+import type { AgentSummary, Job, JobResults, Message, RoomVersion } from '@score/contract'
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
@@ -11,6 +12,7 @@ import { MessageItem } from '../../routes/chat/MessageItem.tsx'
 import { versionsQuery, type MessagePageData } from '../../routes/chat/queries.ts'
 import { requestDelete, usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { startEdit } from '../../routes/chat/message-edit.ts'
+import type { WorkspaceTarget } from '../../routes/chat/workspace-link.ts'
 import { RewindDialog } from '../../routes/chat/RewindDialog.tsx'
 import {
   BranchView,
@@ -19,7 +21,8 @@ import {
   type VersionView,
 } from '../../routes/chat/versions.tsx'
 import { saveCandidates, SaveToKnowledge } from '../../routes/knowledge/SaveToKnowledge.tsx'
-import { boldJobLink, boldMessageLink } from '../bold-links.ts'
+import { boldJobLink, boldMessageLink, boldWorkspaceLink } from '../bold-links.ts'
+import { jobResultsKey } from '../bold-results-queries.ts'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomMessagesQuery, roomPinsQuery, roomSeekQuery, setRoomPin } from './room-queries.ts'
 
@@ -140,6 +143,18 @@ function MessageWithActions({
   const text = messageText(message)
   const finished = !message.streaming && !message.id.startsWith('pending-')
   const canSave = saveCandidates(message, author).length > 0
+  // `workspace://` links (11.6b): a file this message's job changed opens in its Workbench, any other file in the agent's
+  // workspace. The job's changed files come from the Results data the side panel already holds (no extra request).
+  const queryClient = useQueryClient()
+  const workspaceLinkFor = (target: WorkspaceTarget) => {
+    const jobId = message.jobId ?? null
+    const results = jobId ? queryClient.getQueryData<JobResults>(jobResultsKey(jobId)) : undefined
+    const files =
+      results?.items.flatMap((item) =>
+        item.kind === 'change' ? item.files.map((file) => file.path) : [],
+      ) ?? []
+    return boldWorkspaceLink(target.agentId, target.path, jobId ? { id: jobId, files } : undefined)
+  }
 
   async function copy() {
     if (!(await copyText(text))) return
@@ -174,6 +189,7 @@ function MessageWithActions({
       <MessageItem
         message={message}
         agents={agents}
+        workspaceLinkFor={workspaceLinkFor}
         versionControl={
           <MessageVersionControl messageId={message.id} versions={versions} onSelect={onView} />
         }
