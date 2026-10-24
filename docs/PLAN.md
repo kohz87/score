@@ -636,7 +636,7 @@ today's agent page is reachable; e2e; screenshots vs 04/06/20.
 channels, your phone; tool servers + Tools and triggers UI (D18 four steps, data from 11.1d); Look (dark/light/match,
 motion, text size, per-device vs shared, send key, currency, New look switch). Done when: e2e; screenshots vs 15/16.
 
-**11.9b Settings › System and the rest** · **DeepSeek** · board 17 + prototype: team rules editor (guardian mode, go /
+**11.9b Settings › System and the rest** ✅ · **DeepSeek** · board 17 + prototype: team rules editor (guardian mode, go /
 ask / never, diff), service, updates, backups, logs, pause everyone, Notifications, Library access, Shares, Advanced,
 Remote access and security (paired browsers, passkeys, password, Where agents run card from 11.8a), Terminal page.
 Done when: every current Settings section reachable; e2e; screenshots vs 17.
