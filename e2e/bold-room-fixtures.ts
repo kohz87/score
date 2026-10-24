@@ -51,6 +51,8 @@ function job(id: string, title: string, extra: Json = {}) {
     summary: null,
     source: null,
     reportBack: null,
+    spendCapUsd: null,
+    recipe: null,
     createdAt: at(0),
     updatedAt: at(15),
     ...extra,
@@ -473,9 +475,9 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
         size: 19,
       })
     }
-    if (method === 'POST' && path.startsWith('/api/knowledge/files/'))
+    if (method === 'PUT' && path.startsWith('/api/knowledge/files/'))
       return response(route, {
-        path: 'inbox/Reply from builder.md',
+        path: decodeURIComponent(path.slice('/api/knowledge/files/'.length)),
         kind: 'note',
         replaced: false,
         history: 'committed',

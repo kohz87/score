@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { openBoldRoom } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 
@@ -35,13 +35,24 @@ test('a second job keeps its unread badge until its own tab is opened (real fake
   await expect(badge).toHaveText(String(notes!.unread), { timeout: 30_000 })
 
   await page.getByRole('tab', { name: /Activity feed/ }).click()
-  await expect(page.getByText('To: Activity feed')).toBeVisible()
+  await expectDestination(page, 'To: Activity feed')
   await expect(badge).toHaveText(String(notes!.unread))
 
   await notesTab.click()
-  await expect(page.getByText('To: Release notes 2.4')).toBeVisible()
+  await expectDestination(page, 'To: Release notes 2.4')
   await expect(notesTab.locator('.bold-unread')).toHaveCount(0)
 })
+
+/** The composer's destination pill. On a phone it is hidden by design (the pill composer), so read its text, not its visibility. */
+async function expectDestination(page: Page, label: string) {
+  await expect(page.locator('.chat-composer-room-to')).toHaveText(label)
+}
+
+async function openJob(page: Page, title: RegExp) {
+  await page.getByRole('tab', { name: title }).click()
+  // Opening the tab reads that job, so its badge goes away once its own messages are on screen.
+  await expect(page.getByRole('tab', { name: title })).toHaveAttribute('aria-selected', 'true')
+}
 
 function message(page: Parameters<typeof openBoldRoom>[0], id: string) {
   return page.locator(`[data-message-id="${id}"]`)
@@ -73,7 +84,7 @@ for (const viewport of sizes) {
 
       await activity.click()
       expect(new URL(page.url()).searchParams.get('job')).toBe('job-activity')
-      await expect(page.getByText('To: Activity feed')).toBeVisible()
+      await expectDestination(page, 'To: Activity feed')
       await expect(
         page.getByText('Read layer is ready. The feed renders newest first.'),
       ).toBeVisible()
@@ -161,11 +172,12 @@ for (const viewport of sizes) {
       const sent = state.requests.find(
         (request) => request.method === 'POST' && request.path === '/api/rooms/team-room/messages',
       )
+      // The @mention travels in the text: the server merges it with any explicit To chips (contract), so no `to` here.
       expect(sent?.body).toMatchObject({
-        to: ['reviewer'],
         jobId: 'job-notes',
         text: '@reviewer Please check the migration steps.',
       })
+      expect(sent?.body).not.toHaveProperty('to')
     })
 
     test(`+ attaches a file with visible progress and sends it at ${at}`, async ({ page }) => {
@@ -224,30 +236,6 @@ for (const viewport of sizes) {
 
     test(`the hover row copies, saves, and pins or unpins at ${at}`, async ({ page }) => {
       const state = await openBoldRoom(page)
-      const builder = message(page, 'message-builder')
-      await builder.hover()
-      await builder.getByRole('button', { name: 'Copy message from builder' }).click()
-      await expect(builder.getByRole('button', { name: 'Copy message from builder' })).toHaveText(
-        'Copied',
-      )
-      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-        'Read layer is ready. The feed renders newest first.',
-      )
-
-      await builder.hover()
-      await builder.getByRole('button', { name: 'Save message from builder to Library' }).click()
-      const save = page.getByRole('dialog', { name: 'Save to Knowledge' })
-      await expect(save.getByText('This reply as a note')).toBeVisible()
-      await save.getByRole('button', { name: 'Save', exact: true }).click()
-      await expect(save.getByRole('status')).toContainText('Added inbox/Reply from builder.md')
-      expect(
-        state.requests.some(
-          (request) =>
-            request.method === 'POST' && request.path.startsWith('/api/knowledge/files/'),
-        ),
-      ).toBe(true)
-      await save.getByRole('button', { name: 'Done' }).click()
-
       const pinned = message(page, 'message-pinned')
       await pinned.hover()
       await expect(
@@ -273,10 +261,39 @@ for (const viewport of sizes) {
             request.path === '/api/rooms/team-room/pins/message-pinned',
         ),
       ).toBe(true)
+
+      await openJob(page, /Activity feed/)
+      const builder = message(page, 'message-builder')
+      await builder.hover()
+      await builder.getByRole('button', { name: 'Copy message from builder' }).click()
+      await expect(builder.getByRole('button', { name: 'Copy message from builder' })).toHaveText(
+        'Copied',
+      )
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+        'Read layer is ready. The feed renders newest first.',
+      )
+
+      await builder.hover()
+      await builder.getByRole('button', { name: 'Save message from builder to Library' }).click()
+      const save = page.getByRole('dialog', { name: 'Save to Knowledge' })
+      await expect(save.getByText('This reply as a note')).toBeVisible()
+      await save.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(save.getByRole('status')).toContainText(/Added inbox\/Reply from builder .*\.md/)
+      expect(
+        state.requests.some(
+          (request) =>
+            request.method === 'PUT' &&
+            decodeURIComponent(request.path).startsWith(
+              '/api/knowledge/files/inbox/Reply from builder',
+            ),
+        ),
+      ).toBe(true)
+      await save.getByRole('button', { name: 'Done' }).click()
     })
 
     test(`edit rewinds then sends the correction at ${at}`, async ({ page }) => {
       const state = await openBoldRoom(page)
+      await openJob(page, /Activity feed/)
       const own = message(page, 'message-action')
       await own.hover()
       await own.getByRole('button', { name: 'Edit message from You' }).click()
@@ -284,7 +301,7 @@ for (const viewport of sizes) {
       await expect(composer).toHaveValue('Please add pagination.')
       await expect(page.getByText(/Sending replaces it and rewinds/)).toBeVisible()
       await composer.fill('Please add pagination, newest first.')
-      await page.getByRole('button', { name: 'Send', exact: true }).click()
+      await page.getByRole('button', { name: 'Send correction', exact: true }).click()
 
       const dialog = page.getByRole('dialog', { name: 'Edit and send again?' })
       await expect(dialog.getByText(/Agents rewound: builder −1 exchange/)).toBeVisible()
@@ -317,6 +334,7 @@ for (const viewport of sizes) {
       page,
     }) => {
       const state = await openBoldRoom(page)
+      await openJob(page, /Activity feed/)
       const own = message(page, 'message-activity')
       await own.hover()
       await own.getByRole('button', { name: 'Delete message from You' }).click()
@@ -346,6 +364,7 @@ for (const viewport of sizes) {
 
     test(`versions step from ‹ 3 / 3 › to 2 / 3 and 1 / 3 at ${at}`, async ({ page }) => {
       await openBoldRoom(page)
+      await openJob(page, /Activity feed/)
       const edited = message(page, 'message-edit')
       const control = edited.getByRole('group', { name: 'Message versions' })
       await expect(control).toContainText('Version 3 of 3')
@@ -373,7 +392,7 @@ for (const viewport of sizes) {
         'aria-selected',
         'true',
       )
-      await expect(page.getByText('To: Queue research')).toBeVisible()
+      await expectDestination(page, 'To: Queue research')
       const article = page.locator('#message-message-queue')
       await expect(article).toHaveClass(/bold-message-hit/)
       await expect(article).toBeFocused()

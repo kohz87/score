@@ -622,7 +622,8 @@ export function Composer({
         kind: 'error',
         text: noLead ? 'No lead yet — use @name, or pick a lead in Settings.' : errorText(error),
         ...(typeof held === 'string' ? { heldAgent: held } : {}),
-        ...(noLead ? { action: { label: 'Pick a lead', to: '/b/settings' } } : {}),
+        // Only the new shell's room links into it; the classic chat keeps the plain sentence.
+        ...(noLead && roomMode ? { action: { label: 'Pick a lead', to: '/b/settings' } } : {}),
       })
     } finally {
       if (mounted.current) {

@@ -1,5 +1,6 @@
 import type { AgentSummary, Job, Message, RoomVersion } from '@score/contract'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
@@ -247,9 +248,16 @@ function MessageWithActions({
           )}
         </div>
       )}
-      {saving && (
-        <SaveToKnowledge message={message} authorName={author} onClose={() => setSaving(false)} />
-      )}
+      {saving &&
+        // The stream is masked (its top fade), which would clip a fixed dialog inside it: render it at the shell.
+        createPortal(
+          <SaveToKnowledge
+            message={message}
+            authorName={author}
+            onClose={() => setSaving(false)}
+          />,
+          document.querySelector('[data-ui="bold"]') ?? document.body,
+        )}
       {confirmDelete && (
         <RewindDialog
           roomId={message.roomId}

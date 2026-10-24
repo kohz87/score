@@ -981,3 +981,9 @@
     margin-left: 0;
   }
 }
+
+/* "Save to Knowledge" is portaled to the shell (the stream's fade mask would clip a fixed dialog); lift its backdrop
+   above the side panel and the phone tab bar like the Library's dialogs. */
+[data-ui='bold'] > .kn-backdrop {
+  z-index: 70;
+}
