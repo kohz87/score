@@ -33,6 +33,9 @@ import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
 import { registerThemeRoutes } from './http/themes.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
+import { registerTriggerRoutes } from './http/triggers.ts'
+import { loadSealingKey, sealer } from './auth/sealing.ts'
+import { humanGuard } from './auth/human.ts'
 import { setRoomCompatibility } from './domain/rooms.ts'
 import { registerOutsideSessionRoutes } from './http/outside-sessions.ts'
 import { registerShareRoutes } from './http/shares.ts'
@@ -336,6 +339,20 @@ export function buildApp({
       workspaces,
       knowledge,
     )
+    // PLAN 11.1d: webhook triggers. Their signing secrets are sealed with a key in Score's home, so only a server that
+    // owns its home (never a test against a borrowed database) serves them.
+    if (ownsHome) {
+      const guard = { preHandler: [humanGuard(app.pairing)] }
+      registerTriggerRoutes(app, {
+        db,
+        ingest,
+        seal: sealer(loadSealingKey(config.home)),
+        guard,
+        origin: serverOrigin(config),
+        redispatch: dispatch,
+        ...(clock ? { clock } : {}),
+      })
+    }
     registerConversationRoutes(app, { db, ingest, port, ...(clock ? { clock } : {}) })
     registerOutsideSessionRoutes(app, { db, ingest, port })
     const holds = createTaskHolds({

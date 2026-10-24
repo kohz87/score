@@ -365,3 +365,12 @@ def test_outside_a_gateway_the_sender_waits_for_a_hook_before_hello(setup, monke
     monkeypatch.delitem(sys.modules, "gateway.run", raising=False)
     sender._greet()
     assert not [call for call in transport.calls if call[0].endswith("/hello")]
+
+
+def test_post_tool_call_args_digest_matches_score_canonical_json():
+    # The same arguments and digest as apps/server/test/triggers/sealing-signature.test.ts (PLAN 11.1d report-back).
+    from score_bridge.sender import _args_digest
+    args = {"ticket": "TCK-142", "text": "Fixed — “café” ✓\nline 2", "n": 3, "nested": {"b": True, "a": None}}
+    assert _args_digest({"args": args}) == "2b828f5d951ba24f5fc07eae668d54cb9d3357a2e6fea47da728c065fc84c3ad"
+    assert _args_digest({"args": "not a dict"}) is None
+    assert _args_digest({"args": {"x": float("nan")}}) is None

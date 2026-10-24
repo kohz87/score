@@ -196,6 +196,8 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'theme_swaps',
     'themes',
     'tool_calls',
+    'trigger_calls',
+    'triggers',
     'watch_frames',
     'wf_commands',
     'wf_consumed',

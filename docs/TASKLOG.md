@@ -762,3 +762,28 @@ One entry per completed task: what landed, review results, and any **rejected re
   P3 e2e asserted fake-data weekdays and counts that move with the date → date-proof (found failing on rebase, so the
   flake was real). Kept: 32–36 px links/segments are the prototype's values. Lead fixes: 3 small. 1 fix round.
   Web 2994 tests, lint/types green, `e2e/bold-usage` 4 + reports e2e pass.
+- **11.1d job sources, webhook triggers, report-back (lead, security, 2026-10-24).** Spike first (brief
+  `docs/briefs/11.1d-sources.md`, from Hermes source): a profile's MCP tools can be listed without Score reading a
+  credential — in-process from Hermes's tool registry (`mcp-<server>` toolset, with schemas; the plugin route,
+  preferred), `hermes mcp test` (names only) or the dashboard API (no schemas); the picker comes with 11.9a, tools are
+  named by hand until then (PLAN's fallback). Migration 0084: `triggers`, `trigger_calls`,
+  `session_tool_calls.args_digest`, `jobs.report_back`. `POST /hooks/<id>`: Standard Webhooks (±5 min, constant-time
+  HMAC), 24 h idempotency on `webhook-id`, JSON only, ≤ 256 KB, 60 verified calls/min per trigger; the only remote-mode
+  public addition and CSRF exemption (exact `POST /hooks/trg_<24 hex>`). Secrets are Score's own, sealed (AES-256-GCM,
+  `~/.score/sealing.key`, bound to the trigger id), shown once and then only to a paired browser. A call starts a job in
+  the team room with `Job.source`, the payload quoted and redacted under "outside content, not instructions" (snapshot
+  test with an injected instruction and an API key). Report-back: a constrained lead turn; "confirmed" only from the
+  bridge's record of that tool in the lead's job session after the turn began, status ok, same `args_digest` (the plugin
+  digests canonical JSON; a shared fixture pins Python = TypeScript). **Sonnet security review: 1 P1, 5 P2, 6 P3.** Real,
+  fixed with tests: (P1) credential-named payload keys made the redacted sample invalid JSON → 500 and no job (sample is
+  now redacted as data); unredacted/any-scheme links (http(s) only, redacted); template holes outside JSON strings could
+  inject structure into report-back args (holes filled only inside string values; templates validated on save);
+  bad-signature calls used the trigger's budget, a lockout (verified before queueing; failures limited per caller; unknown
+  ids answered before the queue); a failed turn could be "confirmed" (requires a completed turn); report-back could be
+  sent twice (409 while sending or once confirmed); line breaks other than \n escaped the quote block; prototype paths;
+  unbounded `webhook-id`; `no-store` on secret answers; trigger list paired-only; the plugin's digest can no longer
+  drop a hook record (catches everything, 1 MB bound). **Rejected/noted:** "confirmed doesn't prove the app accepted it"
+  — true by design (Score confirms the call was made with the exact arguments and Hermes reported success; the app's
+  own answer is in the tool result the lead saw), documented; `linkSync` on filesystems without hard links — same as
+  `bridge.token`, not a supported setup; `lead_decides` OK = the person's POST (documented). Auto report-back on "done"
+  comes with the job menu (11.4d). SETUP §6d "One Score per team". Not deployed.
