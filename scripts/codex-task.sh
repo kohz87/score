@@ -65,7 +65,8 @@ case "$cmd" in
     set -e
     check_quota "$run_dir/round-$n.log"
     [[ $status -eq 0 ]] || die "codex exited with status $status (see $run_dir/round-$n.log)"
-    sed 's/\x1b\[[0-9;]*m//g' "$run_dir/round-$n.log" | grep -m1 -oE 'session id: [0-9a-f-]+' | awk '{print $3}' > "$run_dir/session"
+    # awk reads the whole log (no early exit), so sed never dies of SIGPIPE under pipefail (exit 141, 2026-10-24).
+    sed 's/\x1b\[[0-9;]*m//g' "$run_dir/round-$n.log" | awk 'match($0, /session id: [0-9a-f-]+/) && !id { id = substr($0, RSTART + 12, RLENGTH - 12) } END { if (id) print id }' > "$run_dir/session"
     [[ -s "$run_dir/session" ]] || die "could not read the Codex session id from $run_dir/round-$n.log"
     echo "codex-task: session $(cat "$run_dir/session"); worktree $wt; report $run_dir/round-$n.md"
     ;;
