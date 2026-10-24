@@ -48,6 +48,13 @@ function needsForm(option: ExchangeOption): boolean {
   return ['more_spend', 'step_in', 'reassign', 'send_back'].includes(option)
 }
 
+function decisionError(failure: unknown): string {
+  if (failure instanceof ApiError && (failure.status === 401 || failure.status === 403))
+    return 'Pair this browser first.'
+  if (failure instanceof ApiError && failure.status === 409) return failure.message
+  return 'Couldn’t send that decision. Try again.'
+}
+
 function ExchangeRequestCard({
   exchange,
   job,
@@ -63,11 +70,17 @@ function ExchangeRequestCard({
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState({ note: '', text: '', agent: exchange.to, usd: '10' })
   const options = exchange.pause?.options ?? []
   const reassignChoices = agents.filter(
     (agent) => agent.id !== exchange.from && agent.id !== exchange.to,
   )
+  // Reassign never starts on the agent who has the turn (`exchange.to`): the first legal choice is the pick.
+  const [form, setForm] = useState({
+    note: '',
+    text: '',
+    agent: reassignChoices[0]?.id ?? '',
+    usd: '10',
+  })
 
   async function choose(option: ExchangeOption) {
     if (needsForm(option)) {
@@ -98,11 +111,7 @@ function ExchangeRequestCard({
       setSent(option === 'send_back' ? 'Sent back with your note.' : 'Decision sent.')
       setPending(null)
     } catch (failure) {
-      setError(
-        failure instanceof ApiError && failure.status === 409
-          ? failure.message
-          : 'Couldn’t send that decision. Try again.',
-      )
+      setError(decisionError(failure))
     } finally {
       setBusy(false)
     }
@@ -246,7 +255,7 @@ function ApprovalRequestCard({
   agents,
 }: {
   approval: Approval
-  job: Job
+  job: Job | undefined
   agents: AgentSummary[]
 }) {
   const { posted, busy, error, decide } = useApprovalDecision(approval.id)
@@ -265,7 +274,7 @@ function ApprovalRequestCard({
         {agent && <AgentGlyph agent={agent} size="xs" decorative />}
         <b style={agent ? { color: agentNameColor(agent) } : undefined}>{current.agentId}</b>
         <span>· {current.title}</span>
-        <span className="bold-request-job">{job.title}</span>
+        {job && <span className="bold-request-job">{job.title}</span>}
       </div>
       {current.command && <code className="bold-request-command">{current.command}</code>}
       <span className="row wrap">
@@ -337,15 +346,32 @@ function RoomApprovals({
   selectedJob: string
   agents: AgentSummary[]
 }) {
-  const shown = approvals.flatMap((approval) => {
-    const message = messages.find((item) =>
-      item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
-    )
-    const job = jobs.find((item) => item.id === message?.jobId)
-    if (!job || (selectedJob !== 'all' && job.id !== selectedJob)) return []
-    return [<ApprovalRequestCard key={approval.id} approval={approval} job={job} agents={agents} />]
-  })
-  return <>{shown}</>
+  return (
+    <>
+      {approvals.map((approval) => {
+        const message = messages.find((item) =>
+          item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
+        )
+        const known = jobs.find((item) => item.id === message?.jobId)
+        if (known && selectedJob !== 'all' && known.id !== selectedJob) return null
+        // The approvals read is complete; the message window is not. An approval whose message is older than the
+        // loaded page still shows as a request card (with the selected/default job as its reference).
+        const job =
+          known ??
+          jobs.find((item) => item.id === selectedJob) ??
+          jobs.find((item) => item.isDefault) ??
+          jobs[0]
+        return (
+          <ApprovalRequestCard
+            key={approval.id}
+            approval={approval}
+            job={job}
+            agents={agents}
+          />
+        )
+      })}
+    </>
+  )
 }
 
 /** The "Needs you" pins: each job's paused exchanges and approvals, shown above the stream and never scrolled away. */
@@ -357,11 +383,15 @@ export function RoomRequests({
 }: {
   jobs: Job[]
   agents: AgentSummary[]
-  messages: Message[]
+  messages?: Message[]
   selectedJob: string
 }) {
   const approvals = useStreamQuery(approvalsQuery).data ?? []
-  const cooking = jobs.filter((job) => selectedJob === 'all' || job.id === selectedJob)
+  const cooking = jobs.filter(
+    (job) =>
+      (selectedJob === 'all' || job.id === selectedJob) &&
+      (job.state === 'waiting_on_you' || job.state === 'working'),
+  )
   const needsApproval = approvals.filter(
     (approval) => approval.actionable && approval.phase === 'human_pending',
   )
@@ -372,7 +402,7 @@ export function RoomRequests({
       ))}
       <RoomApprovals
         approvals={needsApproval}
-        messages={messages}
+        messages={messages ?? []}
         jobs={jobs}
         selectedJob={selectedJob}
         agents={agents}

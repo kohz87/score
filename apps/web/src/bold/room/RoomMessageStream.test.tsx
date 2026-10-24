@@ -93,6 +93,9 @@ function renderStream(selectedJob = 'all', showDeleted = false, seek: string | n
       filter="all"
       showDeleted={showDeleted}
       seek={seek}
+      openedJobs={[]}
+      onRevealSeek={() => undefined}
+      onSeeked={() => undefined}
     />,
   )
 }
@@ -204,6 +207,9 @@ test('a done job gets a result card linked to its latest agent message', async (
       filter="all"
       showDeleted={false}
       seek={null}
+      openedJobs={[]}
+      onRevealSeek={() => undefined}
+      onSeeked={() => undefined}
     />,
   )
   const result = await screen.findByRole('link', { name: 'Open result: Queue research' })

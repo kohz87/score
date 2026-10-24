@@ -28,67 +28,55 @@ function RoomTitle({ name, action }: { name: string; action?: ReactNode }) {
   )
 }
 
-function RoomWaiting({ name, action }: { name: string; action?: ReactNode }) {
+function RoomWaiting() {
   return (
-    <>
-      <RoomTitle name={name} action={action} />
-      <p className="bold-stream-note" role="status">
-        Loading the team room…
-      </p>
-    </>
+    <p className="bold-stream-note" role="status">
+      Loading the team room…
+    </p>
   )
 }
 
-function RoomUnavailable({
-  name,
-  action,
-  error,
-}: {
-  name: string
-  action?: ReactNode
-  error: boolean
-}) {
+function RoomUnavailable({ error }: { error: boolean }) {
   return (
-    <>
-      <RoomTitle name={name} action={action} />
-      <div className="bold-room-unavailable" role={error ? 'alert' : 'status'}>
-        <b>{error ? 'Couldn’t open the team room.' : 'The team room isn’t ready yet.'}</b>
-        <span>
-          {error
-            ? 'Check that Score is running, then try again.'
-            : 'It appears once the team’s agents are known.'}
-        </span>
-      </div>
-    </>
+    <div className="bold-room-unavailable" role={error ? 'alert' : 'status'}>
+      <b>{error ? 'Couldn’t open the team room.' : 'The team room isn’t ready yet.'}</b>
+      <span>
+        {error
+          ? 'Check that Score is running, then try again.'
+          : 'It appears once the team’s agents are known.'}
+      </span>
+    </div>
   )
 }
 
 function LoadedTeamRoom({
   room,
   agents,
-  phoneAction,
 }: {
   room: Room
   agents: AgentSummary[]
-  phoneAction?: ReactNode
 }) {
   const [params, setParams] = useSearchParams()
   const jobsDefinition = useMemo(() => roomJobsQuery(room.id), [room.id])
   const { data: jobs, status: jobsStatus } = useStreamQuery(jobsDefinition)
   const allJobs = useMemo(() => jobs ?? [], [jobs])
   const defaultJobId = allJobs.find((job) => job.isDefault)?.id ?? null
-  const jobIds = useMemo(() => allJobs.map((job) => job.id), [allJobs])
-  const messagesDefinition = useMemo(
-    () => roomMessagesQuery(room.id, jobIds, defaultJobId),
-    [defaultJobId, jobIds, room.id],
-  )
-  const { data: messages, status: messagesStatus } = useStreamQuery(messagesDefinition)
   const [filter, setFilter] = useState<JobFilter>('all')
   const [composerKey, setComposerKey] = useState(0)
+  const [openedJobs, setOpenedJobs] = useState<string[]>([])
   const showDeleted = useShowDeleted(room.id)
   const selectedJob = params.get('job') ?? 'all'
   const seek = params.get('message')
   const command = params.get('command')
+
+  // The message page the composer writes into: the selected job, or the room's default job from All. Its query key
+  // does not depend on the room's job list, so a new job never refetches it or drops an optimistic message.
+  const composerJobId = selectedJob === 'all' ? defaultJobId : selectedJob
+  const baseMessagesDefinition = useMemo(
+    () => roomMessagesQuery(room.id, composerJobId, null, defaultJobId),
+    [composerJobId, defaultJobId, room.id],
+  )
+  const baseMessages = useStreamQuery(baseMessagesDefinition)
 
   const selectJob = useCallback(
     (jobId: string) => {
@@ -113,14 +101,43 @@ function LoadedTeamRoom({
     if (job && !jobMatchesFilter(job, filter)) selectJob('all')
   }, [allJobs, filter, selectJob, selectedJob])
 
+  // Opening a job is what reads it: remember the tab so All keeps showing its pages after a move, and never read a
+  // different job's first page on mount (that would clear every badge at once).
+  useEffect(() => {
+    if (selectedJob === 'all') return
+    if (!allJobs.some((job) => job.id === selectedJob)) return
+    setOpenedJobs((current) =>
+      current.includes(selectedJob) ? current : [...current, selectedJob],
+    )
+  }, [allJobs, selectedJob])
+
   const namedJobs = allJobs.filter((job) => !job.isDefault)
   const empty =
     jobsStatus === 'success' &&
     namedJobs.length === 0 &&
-    messagesStatus === 'success' &&
-    (messages?.items.length ?? 0) === 0
+    baseMessages.status === 'success' &&
+    (baseMessages.data?.items.length ?? 0) === 0
   const job = allJobs.find((item) => item.id === selectedJob)
-  const toLabel = job ? `To: ${job.title}` : 'To: new job'
+  const lead = agents.find((agent) => agent.id === room.leadAgentId)
+  const allLabel = lead
+    ? `To: team room (${lead.name})`
+    : 'No lead yet — use @name'
+  const toLabel = job ? `To: ${job.title}` : allLabel
+
+  const clearSeek = useCallback(() => {
+    const next = new URLSearchParams(params)
+    if (!next.has('message')) return
+    next.delete('message')
+    setParams(next, { replace: true })
+  }, [params, setParams])
+
+  const revealSeek = useCallback(
+    (jobId: string | null) => {
+      setFilter('all')
+      if (jobId && selectedJob !== 'all' && jobId !== selectedJob) selectJob(jobId)
+    },
+    [selectJob, selectedJob],
+  )
 
   function startWith(text: string) {
     saveDraft(room.id, text)
@@ -146,7 +163,6 @@ function LoadedTeamRoom({
 
   return (
     <>
-      <RoomTitle name={room.name} action={phoneAction} />
       {jobsStatus === 'pending' && (
         <p className="bold-stream-note" role="status">
           Loading jobs…
@@ -179,12 +195,7 @@ function LoadedTeamRoom({
         </div>
       )}
       {!empty && (
-        <RoomRequests
-          jobs={allJobs}
-          agents={agents}
-          messages={messages?.items ?? []}
-          selectedJob={selectedJob}
-        />
+        <RoomRequests jobs={allJobs} agents={agents} selectedJob={selectedJob} />
       )}
       {empty ? (
         <RoomEmpty agents={agents} onStart={startWith} />
@@ -199,6 +210,9 @@ function LoadedTeamRoom({
             filter={filter}
             showDeleted={showDeleted}
             seek={seek}
+            openedJobs={openedJobs}
+            onRevealSeek={revealSeek}
+            onSeeked={clearSeek}
           />
         </div>
       )}
@@ -215,7 +229,7 @@ function LoadedTeamRoom({
           placeholder={
             empty ? 'Describe the work' : 'Message the team. @name for one agent, / for commands'
           }
-          messagesKey={messagesDefinition.key}
+          messagesKey={baseMessagesDefinition.key}
           initialText={command ? `/${command} ` : undefined}
           onSent={() => {
             if (!params.has('message')) return
@@ -241,9 +255,20 @@ export function BoldTeamRoom({
   const override = params.get('room')
   const definition = useMemo(() => teamRoomQuery(override), [override])
   const { data: room, status } = useStreamQuery(definition)
+  const name = room?.name ?? 'Team room'
 
-  if (status === 'pending') return <RoomWaiting name="Team room" action={phoneAction} />
-  if (status === 'error' || !room)
-    return <RoomUnavailable name="Team room" action={phoneAction} error={status === 'error'} />
-  return <LoadedTeamRoom room={room} agents={agents} phoneAction={phoneAction} />
+  // The head (and the phone's side-panel button) stays mounted across loading, error and ready, so focus on that
+  // button survives the room's first read.
+  return (
+    <>
+      <RoomTitle name={name} action={phoneAction} />
+      {status === 'pending' ? (
+        <RoomWaiting />
+      ) : status === 'error' || !room ? (
+        <RoomUnavailable error={status === 'error'} />
+      ) : (
+        <LoadedTeamRoom room={room} agents={agents} />
+      )}
+    </>
+  )
 }

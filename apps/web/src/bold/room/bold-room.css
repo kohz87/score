@@ -444,6 +444,36 @@
   display: flex;
 }
 
+[data-ui='bold'] .bold-message:focus-visible {
+  outline: 2px solid var(--hi-bg);
+  outline-offset: 4px;
+  border-radius: 18px;
+}
+
+[data-ui='bold'] .bold-history {
+  align-self: center;
+  border: 0;
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 14px;
+  background: var(--panel);
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-history:hover {
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-act-error {
+  align-self: flex-start;
+  padding-left: 36px;
+  color: var(--bad);
+  font-size: 12px;
+}
+
 [data-ui='bold'] .bold-act {
   border: 0;
   background: var(--panel);

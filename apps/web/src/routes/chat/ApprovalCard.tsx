@@ -84,7 +84,11 @@ export function useApprovalDecision(approvalId: string) {
       return result
     } catch (caught) {
       setError(
-        caught instanceof ApiError ? caught.message : 'Couldn’t send your answer. Try again.',
+        caught instanceof ApiError && (caught.status === 401 || caught.status === 403)
+          ? 'Pair this browser first.'
+          : caught instanceof ApiError
+            ? caught.message
+            : 'Couldn’t send your answer. Try again.',
       )
       return null
     } finally {

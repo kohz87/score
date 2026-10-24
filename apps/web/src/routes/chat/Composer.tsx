@@ -66,7 +66,12 @@ const ORCHESTRATE_MENU_ITEM = {
 }
 
 type Notice =
-  | { kind: 'error'; text: string; heldAgent?: string }
+  | {
+      kind: 'error'
+      text: string
+      heldAgent?: string
+      action?: { label: string; to: string }
+    }
   | { kind: 'info'; text: string }
   | { kind: 'result'; command: CommandResult | null }
 type Snapshot = { asOfSeq: number; data: MessagePageData }
@@ -612,10 +617,14 @@ export function Composer({
         error instanceof ApiError && error.code === 'agent_still_stopping'
           ? (error.details as { agentId?: unknown } | undefined)?.agentId
           : undefined
+      const noLead = error instanceof ApiError && error.code === 'no_lead'
       setNotice({
         kind: 'error',
-        text: errorText(error),
+        text: noLead
+          ? 'No lead yet — use @name, or pick a lead in Settings.'
+          : errorText(error),
         ...(typeof held === 'string' ? { heldAgent: held } : {}),
+        ...(noLead ? { action: { label: 'Pick a lead', to: '/b/settings' } } : {}),
       })
     } finally {
       if (mounted.current) {
@@ -698,7 +707,17 @@ export function Composer({
           {notice.kind === 'result' ? (
             <CommandNotice command={notice.command} />
           ) : (
-            <span className="chat-usage-card">{notice.text}</span>
+            <span className="chat-usage-card">
+              {notice.text}
+              {notice.kind === 'error' && notice.action && (
+                <>
+                  {' '}
+                  <Link className="link" to={notice.action.to}>
+                    {notice.action.label}
+                  </Link>
+                </>
+              )}
+            </span>
           )}
           {notice.kind === 'error' && notice.heldAgent && (
             <ReleaseHeld agentId={notice.heldAgent} />

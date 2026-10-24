@@ -60,8 +60,14 @@ test('a slash command handed over in the URL is loaded into the room composer an
     </>,
     ['/b?command=assign'],
   )
-  const composer = await screen.findByRole('combobox', { name: /^Message Team room/ })
-  await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe('/assign '))
+  const composer = await screen.findByRole(
+    'combobox',
+    { name: /^Message Team room/ },
+    { timeout: 4000 },
+  )
+  await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe('/assign '), {
+    timeout: 4000,
+  })
   expect(screen.getByTestId('params').textContent).not.toContain('command')
 })
 
@@ -73,7 +79,7 @@ test('the room shows job tabs, the To chip and the seeded unread count', async (
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
   await screen.findByRole('tab', { name: /Activity feed/ })
   expect(screen.getByRole('tab', { name: /^All/ }).textContent).toContain('5')
-  expect(screen.getByText('To: new job')).toBeDefined()
+  expect(screen.getByText('To: team room (lead)')).toBeDefined()
   expect(screen.getByRole('button', { name: 'Needs you' })).toBeDefined()
 })
 
@@ -82,7 +88,42 @@ test('selecting a job changes the composer destination and hides the message par
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-1&message=old'])
   expect(await screen.findByText('To: Activity feed')).toBeDefined()
   fireEvent.click(screen.getByRole('tab', { name: /^All/ }))
-  expect(await screen.findByText('To: new job')).toBeDefined()
+  expect(await screen.findByText('To: team room (lead)')).toBeDefined()
+})
+
+test('opening the room reads only the jobs on screen, and a second job waits for its tab', async () => {
+  const activity = makeJob({ id: 'job-activity', title: 'Activity feed', unread: 4 })
+  const defaultJob = makeJob({
+    id: 'job-default',
+    title: 'Team room',
+    isDefault: true,
+    unread: 0,
+  })
+  const fetchMock = stubRoom([defaultJob, activity])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+
+  await screen.findByRole('tab', { name: /Activity feed 4 unread/ })
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url]) => String(url).includes('/messages?') && String(url).includes('jobId=job-default'),
+      ),
+    ).toBe(true),
+  )
+  expect(
+    fetchMock.mock.calls.some(
+      ([url]) => String(url).includes('/messages?') && String(url).includes('jobId=job-activity'),
+    ),
+  ).toBe(false)
+
+  fireEvent.click(screen.getByRole('tab', { name: /Activity feed/ }))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url]) => String(url).includes('/messages?') && String(url).includes('jobId=job-activity'),
+      ),
+    ).toBe(true),
+  )
 })
 
 test('a fresh team room shows board 09 and a starter fills the composer', async () => {

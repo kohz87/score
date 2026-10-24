@@ -1,12 +1,13 @@
 import type { AgentSummary, Job, Message, RoomVersion } from '@score/contract'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { ApiError } from '../../data/api.ts'
 import { copyText } from '../../data/clipboard.ts'
+import { newId } from '../../data/ids.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { MessageItem } from '../../routes/chat/MessageItem.tsx'
-import { versionsQuery } from '../../routes/chat/queries.ts'
+import { versionsQuery, type MessagePageData } from '../../routes/chat/queries.ts'
 import { requestDelete, usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { startEdit } from '../../routes/chat/message-edit.ts'
 import { RewindDialog } from '../../routes/chat/RewindDialog.tsx'
@@ -38,6 +39,45 @@ function atOrAfter(message: Message, anchor: Message) {
   )
 }
 
+type PageState = {
+  data?: MessagePageData
+  status: 'pending' | 'success' | 'error'
+  error?: unknown
+}
+
+function pageKey(jobId: string | null, before: string | null) {
+  return `${jobId ?? 'default'}::${before ?? 'latest'}`
+}
+
+function jobKey(jobId: string | null) {
+  return jobId ?? 'default'
+}
+
+/** Registers one page with the stream and hands its latest state to the stream that draws them all in order. */
+function MessagePageCollector({
+  roomId,
+  jobId,
+  before,
+  defaultJobId,
+  onPage,
+}: {
+  roomId: string
+  jobId: string | null
+  before: string | null
+  defaultJobId: string | null
+  onPage: (key: string, state: PageState) => void
+}) {
+  const definition = useMemo(
+    () => roomMessagesQuery(roomId, jobId, before, defaultJobId),
+    [before, defaultJobId, jobId, roomId],
+  )
+  const { data, status, error } = useStreamQuery(definition)
+  useEffect(() => {
+    onPage(pageKey(jobId, before), { data, status, error })
+  }, [before, data, error, jobId, onPage, status])
+  return null
+}
+
 function MessageWithActions({
   message,
   agents,
@@ -58,8 +98,17 @@ function MessageWithActions({
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [retry, setRetry] = useState<'idle' | 'busy' | 'queued'>('idle')
+  const [retryError, setRetryError] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(() => () => clearTimeout(timer.current), [])
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current)
+      clearTimeout(retryTimer.current)
+    },
+    [],
+  )
   const imported = message.id.startsWith('import:')
   const mine = message.author.kind === 'you'
   const author = authorName(message, agents)
@@ -74,8 +123,29 @@ function MessageWithActions({
     timer.current = setTimeout(() => setCopied(false), 2000)
   }
 
+  async function retryReply() {
+    setRetry('busy')
+    setRetryError(null)
+    try {
+      await apiFetch(
+        `rooms/${encodeURIComponent(message.roomId)}/messages/${encodeURIComponent(message.id)}/retry`,
+        { method: 'POST', headers: { 'Idempotency-Key': newId() }, body: '{}' },
+      )
+      setRetry('queued')
+      clearTimeout(retryTimer.current)
+      retryTimer.current = setTimeout(() => setRetry('idle'), 2000)
+    } catch (failure) {
+      setRetry('idle')
+      setRetryError(
+        failure instanceof ApiError && failure.status === 409
+          ? 'Can’t retry right now: it is already being answered, or work is paused.'
+          : 'Couldn’t retry. Try again.',
+      )
+    }
+  }
+
   return (
-    <div className="bold-message" data-message-id={message.id}>
+    <div className="bold-message" data-message-id={message.id} tabIndex={0}>
       <MessageItem
         message={message}
         agents={agents}
@@ -113,6 +183,17 @@ function MessageWithActions({
               onClick={() => setSaving(true)}
             >
               Save to Library
+            </button>
+          )}
+          {!mine && !imported && (
+            <button
+              type="button"
+              className="bold-act"
+              aria-label={`Retry reply from ${author}`}
+              disabled={retry !== 'idle'}
+              onClick={() => void retryReply()}
+            >
+              {retry === 'idle' ? 'Retry reply' : 'Retrying'}
             </button>
           )}
           {!imported && (
@@ -160,6 +241,11 @@ function MessageWithActions({
           Copied
         </span>
       )}
+      {retryError && (
+        <span className="bold-act-error" role="alert">
+          {retryError}
+        </span>
+      )}
     </div>
   )
 }
@@ -173,6 +259,9 @@ export function RoomMessageStream({
   filter,
   showDeleted,
   seek,
+  openedJobs,
+  onRevealSeek,
+  onSeeked,
 }: {
   roomId: string
   jobs: Job[]
@@ -181,14 +270,68 @@ export function RoomMessageStream({
   filter: JobFilter
   showDeleted: boolean
   seek: string | null
+  /** Jobs whose tab has been opened; All draws their pages too without reading any other job. */
+  openedJobs: string[]
+  onRevealSeek: (jobId: string | null) => void
+  onSeeked: () => void
 }) {
   const defaultJob = jobs.find((job) => job.isDefault)?.id ?? null
-  const jobIds = useMemo(() => jobs.map((job) => job.id), [jobs])
-  const definition = useMemo(
-    () => roomMessagesQuery(roomId, jobIds, defaultJob),
-    [defaultJob, jobIds, roomId],
+  const [older, setOlder] = useState<Record<string, string[]>>({})
+  const [pageStates, setPageStates] = useState<Record<string, PageState>>({})
+  const [seekError, setSeekError] = useState<string | null>(null)
+  const seeked = useRef<string | null>(null)
+
+  const reportPage = useCallback((key: string, state: PageState) => {
+    setPageStates((current) => {
+      const previous = current[key]
+      if (
+        previous &&
+        previous.data === state.data &&
+        previous.status === state.status &&
+        previous.error === state.error
+      )
+        return current
+      return { ...current, [key]: state }
+    })
+  }, [])
+
+  // All shows the room thread plus the jobs that are read or have been opened. An unread job's page is not read
+  // until its tab is selected, so its badge means "not opened yet".
+  const visibleJobIds = useMemo(() => {
+    if (selectedJob !== 'all') return [selectedJob]
+    const ids = jobs
+      .filter((job) => job.isDefault || job.unread === 0 || openedJobs.includes(job.id))
+      .map((job) => job.id)
+    const unique = [...new Set(ids)]
+    return unique.length ? unique : [null]
+  }, [jobs, openedJobs, selectedJob])
+
+  const pageRefs = useMemo(
+    () =>
+      visibleJobIds.flatMap((jobId) =>
+        [null, ...(older[jobKey(jobId)] ?? [])].map((before) => ({ jobId, before })),
+      ),
+    [older, visibleJobIds],
   )
-  const { data, status } = useStreamQuery(definition)
+
+  const states = pageRefs.map((ref) => pageStates[pageKey(ref.jobId, ref.before)])
+  const status = states.some((state) => state?.status === 'success')
+    ? 'success'
+    : states.some((state) => state?.status === 'error')
+      ? 'error'
+      : 'pending'
+
+  const allItems = useMemo(() => {
+    const byId = new Map<string, Message>()
+    for (const ref of pageRefs) {
+      const page = pageStates[pageKey(ref.jobId, ref.before)]?.data
+      for (const message of page?.items ?? []) byId.set(message.id, message)
+    }
+    return [...byId.values()].sort(
+      (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    )
+  }, [pageRefs, pageStates])
+
   const pinsDefinition = useMemo(() => roomPinsQuery(roomId), [roomId])
   const pins = useStreamQuery(pinsDefinition)
   const refetchPins = useStreamQueryRefetch(pinsDefinition)
@@ -201,7 +344,6 @@ export function RoomMessageStream({
   const [view, setView] = useState<
     (NonNullable<VersionView> & { filter: JobFilter; selectedJob: string }) | null
   >(null)
-  const seeked = useRef<string | null>(null)
   const pinnedIds = useMemo(
     () => new Set((pins.data?.items ?? []).map((pin) => pin.messageId)),
     [pins.data],
@@ -237,23 +379,67 @@ export function RoomMessageStream({
     const shownJobs = new Set(
       jobs.filter((job) => jobMatchesFilter(job, filter)).map((job) => job.id),
     )
-    return (data?.items ?? [])
-      .filter((message) => {
-        if (hidden.has(message.id)) return false
-        if (selectedJob === 'all') {
-          if (!message.jobId) return true
-          return shownJobs.has(message.jobId)
-        }
-        return (
-          message.jobId === selectedJob || (message.jobId == null && selectedJob === defaultJob)
-        )
-      })
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-  }, [data, defaultJob, filter, hidden, jobs, selectedJob])
+    return allItems.filter((message) => {
+      if (hidden.has(message.id)) return false
+      if (selectedJob === 'all') {
+        if (!message.jobId) return true
+        return shownJobs.has(message.jobId)
+      }
+      return (
+        message.jobId === selectedJob || (message.jobId == null && selectedJob === defaultJob)
+      )
+    })
+  }, [allItems, defaultJob, filter, hidden, jobs, selectedJob])
+
+  const addOlder = useCallback((jobId: string | null, cursor: string) => {
+    setOlder((current) => {
+      const key = jobKey(jobId)
+      const list = current[key] ?? []
+      return list.includes(cursor) ? current : { ...current, [key]: [...list, cursor] }
+    })
+  }, [])
+
+  // "Load earlier" walks backwards through the job on show (the room thread when All is selected).
+  const historyJob = selectedJob === 'all' ? defaultJob : selectedJob
+  const historyCursors = [null, ...(older[jobKey(historyJob)] ?? [])]
+  const historyLast = pageStates[pageKey(historyJob, historyCursors.at(-1) ?? null)]
+  const historyCursor =
+    historyLast?.status === 'success' ? (historyLast.data?.nextCursor ?? null) : null
 
   useEffect(() => {
-    if (!seek || status !== 'success' || seeked.current === seek) return
-    if (!data?.items.some((message) => message.id === seek)) return
+    if (seek) return
+    seeked.current = null
+    setSeekError(null)
+  }, [seek])
+
+  // A search target beyond the first page loads page after page until it appears, then says so if the end is reached.
+  useEffect(() => {
+    if (!seek || seeked.current === seek || allItems.some((message) => message.id === seek)) return
+    const jobId = selectedJob === 'all' ? defaultJob : selectedJob
+    const cursors = [null, ...(older[jobKey(jobId)] ?? [])]
+    const last = pageStates[pageKey(jobId, cursors.at(-1) ?? null)]
+    if (!last || last.status === 'pending') return
+    if (last.status === 'error') {
+      setSeekError('Couldn’t load the history to find that message.')
+      return
+    }
+    const next = last.data?.nextCursor ?? null
+    if (!next) {
+      setSeekError('Couldn’t find that message. It may have been deleted or moved.')
+      return
+    }
+    addOlder(jobId, next)
+  }, [addOlder, allItems, defaultJob, older, pageStates, seek, selectedJob])
+
+  // Once loaded, a target hidden by the D10 filter reveals itself in All; either way the URL keeps the link clean.
+  useEffect(() => {
+    if (!seek || seeked.current === seek) return
+    const target = allItems.find((message) => message.id === seek)
+    if (!target) return
+    if (!items.some((message) => message.id === seek)) {
+      onRevealSeek(target.jobId ?? defaultJob)
+      return
+    }
     const found = document.getElementById(`message-${seek}`)
     if (!found) return
     seeked.current = seek
@@ -261,8 +447,9 @@ export function RoomMessageStream({
       found.scrollIntoView?.({ block: 'center' })
       found.classList.add('bold-message-hit')
       found.focus({ preventScroll: true })
+      onSeeked()
     })
-  }, [data, seek, status])
+  }, [allItems, defaultJob, items, onRevealSeek, onSeeked, seek])
 
   const branch = view?.filter === filter && view.selectedJob === selectedJob ? view : null
   const anchor = branch ? items.find((message) => message.id === branch.messageId) : undefined
@@ -328,7 +515,7 @@ export function RoomMessageStream({
           jobMatchesFilter(item, filter) &&
           (selectedJob === 'all' || selectedJob === item.id),
       )) {
-        const latest = (data?.items ?? [])
+        const latest = allItems
           .filter(
             (message) =>
               message.jobId === job.id &&
@@ -361,8 +548,20 @@ export function RoomMessageStream({
       }
   }
 
+  const typing = Object.assign({}, ...states.map((state) => state?.data?.typing ?? {}))
+
   return (
     <div className="bold-stream" aria-label="Team room messages">
+      {pageRefs.map((ref) => (
+        <MessagePageCollector
+          key={pageKey(ref.jobId, ref.before)}
+          roomId={roomId}
+          jobId={ref.jobId}
+          before={ref.before}
+          defaultJobId={defaultJob}
+          onPage={reportPage}
+        />
+      ))}
       {status === 'pending' && (
         <p className="bold-stream-note" role="status">
           Loading messages…
@@ -378,11 +577,29 @@ export function RoomMessageStream({
           {pinError}
         </p>
       )}
+      {seekError && (
+        <p className="bold-stream-note" role="status">
+          {seekError}
+        </p>
+      )}
+      {status === 'success' && historyCursor && (
+        <button
+          type="button"
+          className="bold-history"
+          onClick={() => addOlder(historyJob, historyCursor)}
+        >
+          Load earlier
+        </button>
+      )}
       {status === 'success' && items.length === 0 && !showDeleted && (
-        <p className="bold-stream-empty">Nothing here yet. Write below to start.</p>
+        <p className="bold-stream-empty">
+          {selectedJob === 'all' && jobs.some((job) => job.messageCount > 0)
+            ? 'Choose a job to read its messages.'
+            : 'Nothing here yet. Write below to start.'}
+        </p>
       )}
       {nodes}
-      {Object.entries(data?.typing ?? {}).map(([agentId, text]) => {
+      {Object.entries(typing).map(([agentId, text]) => {
         const agent = agents.find((item) => item.id === agentId)
         if (!agent) return null
         return (
