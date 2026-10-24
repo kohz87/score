@@ -1003,3 +1003,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   file when the job changed it (from the Results data the side panel already holds), else the agent's workspace;
   `MessageItem` takes an optional `workspaceLinkFor`, so the classic chat keeps its Team › Workspace links (unit test
   for both). Room, Workbench, classic chat and workspace e2e 44/44.
+- **NanoGPT rate limit (2026-10-24, 13:00 UTC).** The four room tasks (11.4b, 11.4c, 11.4d, 11.7) started in parallel on
+  DeepSeek all stopped on `429 Too Many Requests` after 0.7–1.2M tokens each; a probe a few minutes later answered.
+  Split the load: DeepSeek continues 11.4b and 11.4d (two sessions at a time), Sonnet coders (the owner's fallback rule)
+  finish 11.4c and 11.7. Their work so far was committed and main merged in first.
