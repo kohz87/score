@@ -807,3 +807,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   "separated": `partly` with both lists and per-config notes; SSH to this machine and `local` are `no`; unknown
   backends `unknown`. ARCHITECTURE D7.1 updated; SETUP "Running agents in Docker" (the service needs a re-login for
   the docker group). The card itself comes with 11.9b/11.8b ("Where agents run"). Not deployed.
+- **11.3 Theme protection on the new shell (lead, 2026-10-24).** The dock's "needs you" ring is a protected surface
+  (`data-protected`, `.bold-needs` in `protected.css`, listed in `protected-surfaces.ts`); hostile-theme e2e
+  (`e2e/bold-protection.spec.ts`) proves a theme can't hide the ring or the agents' glyphs. Found while writing the e2e:
+  the ring only lit while a run said `waiting_for_approval`, so an open approval whose run had moved on showed the agent
+  as "working"; it now also follows open human decisions (the classic Needs-you rule). AGENTS.md design rules now
+  describe the bold system and the `data-protected` rule for every new decision surface. Full e2e 647/648, the one
+  failure (`themes-builtin-visual` harbour light) a flake: 36/36 on rerun. The Look switch and pairing restyle move to
+  11.9a. Not deployed.
