@@ -145,3 +145,27 @@ test('notes are redacted like every agent note', () => {
   })
   expect(workbench().looseComments[0]!.text).not.toContain('sk-ant-api03-x')
 })
+
+test('a second review request to the same reviewer keeps its notes', () => {
+  h.ask('builder', 'Build it.')
+  h.turn('builder', { action: 'review', to: 'reviewer', note: 'Ready.' })
+  h.turn('reviewer', { action: 'send_back', note: 'Fix it.' })
+  h.turn('builder', {
+    action: 'review',
+    to: 'reviewer',
+    note: 'Fixed.',
+    comments: [{ path: 'a.py', line: 3, text: 'Look here first.' }],
+  })
+  expect(workbench().looseComments.map((note) => note.text)).toEqual(['Look here first.'])
+})
+
+test('a note on a credential file keeps only that it exists', () => {
+  h.ask('builder', 'Build it.')
+  h.turn('builder', { action: 'review', to: 'reviewer', note: 'Ready.' })
+  h.turn('reviewer', {
+    action: 'send_back',
+    note: 'No.',
+    comments: [{ path: 'app/.env', line: 2, text: 'DB_PASSWORD=hunter2 is wrong' }],
+  })
+  expect(workbench().looseComments[0]!.text).toBe('A note on a credential file (hidden).')
+})

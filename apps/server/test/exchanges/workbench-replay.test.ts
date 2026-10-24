@@ -127,3 +127,66 @@ test('a whole-file write replaces what Score knew; notes on paths never edited a
     expect.objectContaining({ path: 'docs/readme.md', line: 3, outdated: false }),
   ])
 })
+
+// Sonnet review (11.6a).
+
+test('a large write replays in linear time', () => {
+  const big = Array.from({ length: 30_000 }, (_, i) => `line ${i}`).join('\n') + '\n'
+  const started = performance.now()
+  const replay = replayWorkbench([edit(0, 'builder', '', big)], [])
+  expect(performance.now() - started).toBeLessThan(2000)
+  expect(replay.files[0]!.lines).toHaveLength(5000)
+  expect(replay.files[0]!.exact).toBe(false)
+})
+
+test('a second file header inside one frame is not taken for content', () => {
+  const v1 = lines('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l')
+  const first = unifiedDiff(v1, lines('a', 'B', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'))
+  const second = unifiedDiff(
+    lines('a', 'B', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'),
+    lines('a', 'B', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'K', 'l'),
+  )
+  // watch-diff joins two operations on one path into one frame, the second keeping its header.
+  const joined: EditEvent = { ...edit(1, 'builder', '', ''), diff: first + second }
+  const { files } = replayWorkbench([edit(0, 'builder', '', v1), joined], [])
+  expect(files[0]!.lines.map((line) => line.text)).toEqual([
+    'a',
+    'B',
+    'c',
+    'd',
+    'e',
+    'f',
+    'g',
+    'h',
+    'i',
+    'j',
+    'K',
+    'l',
+  ])
+  expect(files[0]!.exact).toBe(true)
+})
+
+test('a fragment keeps the agent’s last known cursor and only a real fragment marker counts', () => {
+  const v1 = lines('a', 'b', 'c')
+  const fragment: EditEvent = {
+    ...edit(1, 'builder', '', ''),
+    diff: '@@ -1,1 +1,1 @@ fragment (file position unknown)\n-x\n+y\n',
+  }
+  const { files } = replayWorkbench([edit(0, 'builder', '', v1), fragment], [])
+  expect(files[0]!.cursors[0]!.line).toBe(3)
+  const heading: EditEvent = {
+    ...edit(2, 'builder', '', ''),
+    diff: '@@ -1,1 +1,1 @@ fragment of the docs\n-a\n+A\n',
+  }
+  expect(replayWorkbench([edit(0, 'builder', '', v1), heading], []).files[0]!.exact).toBe(true)
+})
+
+test('a note on a relative path finds the one edited file it names', () => {
+  const v1 = lines('a', 'b')
+  const { files, looseComments } = replayWorkbench(
+    [edit(0, 'builder', '', v1, '/home/me/app/src/feed.ts')],
+    [note(1, 2, 'b?', 'src/feed.ts')],
+  )
+  expect(looseComments).toEqual([])
+  expect(files[0]!.comments[0]).toMatchObject({ text: 'b?', line: 2 })
+})

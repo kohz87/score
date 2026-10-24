@@ -68,7 +68,8 @@ export const LineCommentSchema = z
       .string()
       .min(1)
       .max(1024)
-      .refine((v) => !/[\0\r\n]/u.test(v), 'One line, no NUL'),
+      .refine((v) => !/[\0\r\n]/u.test(v), 'One line, no NUL')
+      .refine((v) => v.trim() !== '', 'A path, not only spaces'),
     line: z.int().min(1).max(1_000_000),
     text: text(EXCHANGE_LIMITS.commentBytes),
   })

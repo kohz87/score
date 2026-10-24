@@ -197,7 +197,13 @@ def _comments_problem(spec: dict, items: list) -> str | None:
         if not isinstance(item, dict) or set(item) != {"path", "line", "text"}:
             return "each comment needs exactly path, line and text"
         path, line, text = item["path"], item["line"], item["text"]
-        if type(path) is not str or not 0 < len(path) <= 1024 or any(c in path for c in "\0\r\n"):
+        # Server limits count UTF-16 units; a path of only spaces names nothing.
+        if (
+            type(path) is not str
+            or not path.strip()
+            or len(path.encode("utf-16-le")) // 2 > 1024
+            or any(c in path for c in "\0\r\n")
+        ):
             return "comment path is not valid"
         if type(line) is not int or not 1 <= line <= 1000000:
             return "comment line must be between 1 and 1000000"

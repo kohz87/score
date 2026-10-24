@@ -27,11 +27,17 @@ export interface CommentEvent {
 }
 
 const MAX_LINES = 5000
-const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@( fragment)?/u
+// Past this a file's known lines stop growing: the replay stays linear-time and bounded for any job.
+const MAX_TRACKED = 200_000
+const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/u
+const FRAGMENT = ' fragment (file position unknown)'
 const CUT = /^… \d+ more lines$/u
 
+type Line = { text: string; by: string | null } | undefined
+
 interface FileState {
-  lines: Map<number, { text: string; by: string | null }>
+  /** Index n - 1 holds line n; holes are lines Score never saw. */
+  lines: Line[]
   markers: Map<string, number | null>
   cursorAt: Map<string, string>
   exact: boolean
@@ -40,72 +46,141 @@ interface FileState {
   lastEditAt: string
 }
 
-function insertAt(file: FileState, pos: number): void {
-  const lines = new Map<number, { text: string; by: string | null }>()
-  for (const [n, line] of file.lines) lines.set(n >= pos ? n + 1 : n, line)
-  file.lines = lines
-  for (const [key, n] of file.markers) if (n !== null && n >= pos) file.markers.set(key, n + 1)
-}
-
-function deleteAt(file: FileState, pos: number): void {
-  const lines = new Map<number, { text: string; by: string | null }>()
-  for (const [n, line] of file.lines) if (n !== pos) lines.set(n > pos ? n - 1 : n, line)
-  file.lines = lines
-  for (const [key, n] of file.markers)
-    if (n === pos) file.markers.set(key, null)
-    else if (n !== null && n > pos) file.markers.set(key, n - 1)
+/** One hunk as a single splice: the old region becomes the new one, and markers inside it follow their line. */
+function applyHunk(
+  file: FileState,
+  agentId: string,
+  start: number,
+  oldCount: number,
+  body: string[],
+): number | null {
+  const from = Math.max(0, start - 1)
+  if (from + oldCount > MAX_TRACKED) {
+    file.exact = false
+    return null
+  }
+  if (file.lines.length < from + oldCount) file.lines.length = from + oldCount
+  const old = file.lines.slice(from, from + oldCount)
+  const next: Line[] = []
+  // Where each old line of the region ended up (null = removed or rewritten).
+  const moved: (number | null)[] = []
+  let at = 0
+  let last: number | null = null
+  for (const raw of body) {
+    const text = raw.slice(1)
+    if (raw.startsWith(' ')) {
+      moved[at] = from + next.length + 1
+      next.push({ text, by: old[at]?.by ?? null })
+      at += 1
+    } else if (raw.startsWith('-')) {
+      moved[at] = null
+      at += 1
+      last = from + next.length + 1
+    } else {
+      next.push({ text, by: agentId })
+      last = from + next.length
+    }
+  }
+  file.lines.splice(from, oldCount, ...next)
+  const shift = next.length - oldCount
+  for (const [key, n] of file.markers) {
+    if (n === null || n <= from) continue
+    if (n > from + oldCount) file.markers.set(key, n + shift)
+    else file.markers.set(key, moved[n - from - 1] ?? null)
+  }
+  if (file.lines.length > MAX_TRACKED) {
+    file.lines.length = MAX_TRACKED
+    file.exact = false
+  }
+  return last
 }
 
 function applyEdit(file: FileState, edit: EditEvent): void {
   file.editedBy.add(edit.agentId)
   file.lastEditAt = edit.at
   if (edit.language) file.language = edit.language
-  const cursor = `cursor:${edit.agentId}`
-  file.cursorAt.set(edit.agentId, edit.at)
-  let pos = 0
-  let inHunk = false
   let last: number | null = null
+  let hunk: {
+    start: number
+    oldCount: number
+    oldLeft: number
+    newLeft: number
+    body: string[]
+    /** False for a fragment: its lines are consumed but never placed. */
+    place: boolean
+  } | null = null
+  const close = () => {
+    if (hunk?.place)
+      last = applyHunk(file, edit.agentId, hunk.start, hunk.oldCount, hunk.body) ?? last
+    hunk = null
+  }
   for (const raw of edit.diff.split('\n')) {
-    const hunk = HUNK.exec(raw)
-    if (hunk) {
-      if (hunk[5]) {
-        // A snippet without a file position: Score can't place it, so the file's authorship is no longer exact.
+    // Inside a hunk its own counts say where it ends, so a second file header (watch-diff joins operations on one
+    // path into one frame) is never taken for content.
+    if (hunk && (hunk.oldLeft > 0 || hunk.newLeft > 0)) {
+      if (raw.startsWith('\\')) continue
+      if (raw.startsWith(' ')) {
+        hunk.oldLeft -= 1
+        hunk.newLeft -= 1
+      } else if (raw.startsWith('-')) hunk.oldLeft -= 1
+      else if (raw.startsWith('+')) hunk.newLeft -= 1
+      else {
+        // The diff ended early (cut or malformed): what is known is applied, the rest is not exact.
         file.exact = false
-        inHunk = false
+        close()
+        if (CUT.test(raw)) break
         continue
       }
-      const oldStart = Number(hunk[1])
-      const oldCount = hunk[2] === undefined ? 1 : Number(hunk[2])
-      // "-0,0": the file was empty or written whole (write_file without a known previous version).
-      if (oldStart === 0 && oldCount === 0) {
-        file.lines = new Map()
-        for (const [key, n] of file.markers) if (n !== null) file.markers.set(key, null)
-      }
-      pos = Math.max(1, Number(hunk[3]))
-      inHunk = true
+      hunk.body.push(raw)
+      if (hunk.oldLeft <= 0 && hunk.newLeft <= 0) close()
       continue
     }
+    close()
     if (CUT.test(raw)) {
       file.exact = false
       break
     }
-    if (!inHunk || raw.startsWith('\\')) continue
-    const text = raw.slice(1)
-    if (raw.startsWith('+')) {
-      insertAt(file, pos)
-      file.lines.set(pos, { text, by: edit.agentId })
-      last = pos
-      pos += 1
-    } else if (raw.startsWith('-')) {
-      deleteAt(file, pos)
-      last = pos
-    } else if (raw.startsWith(' ')) {
-      const known = file.lines.get(pos)
-      file.lines.set(pos, { text, by: known?.by ?? null })
-      pos += 1
-    } else inHunk = false
+    const header = HUNK.exec(raw)
+    if (!header) continue
+    const oldCount = header[2] === undefined ? 1 : Number(header[2])
+    const newCount = header[4] === undefined ? 1 : Number(header[4])
+    if (header[5] === FRAGMENT) {
+      // A snippet without a file position: Score can't place it, so the file's authorship is no longer exact.
+      file.exact = false
+      hunk = { start: 0, oldCount, oldLeft: oldCount, newLeft: newCount, body: [], place: false }
+      continue
+    }
+    const oldStart = Number(header[1])
+    // "-0,0": the file was empty or written whole (write_file without a known previous version).
+    if (oldStart === 0 && oldCount === 0) {
+      file.lines = []
+      for (const [key, n] of file.markers) if (n !== null) file.markers.set(key, null)
+    }
+    hunk = {
+      start: Math.max(1, Number(header[3])),
+      oldCount,
+      oldLeft: oldCount,
+      newLeft: newCount,
+      body: [],
+      place: true,
+    }
+    if (oldCount === 0 && newCount === 0) close()
   }
-  file.markers.set(cursor, last)
+  close()
+  if (last !== null) {
+    file.markers.set(`cursor:${edit.agentId}`, last)
+    file.cursorAt.set(edit.agentId, edit.at)
+  }
+}
+
+/** The edited path a note means: the same string, or the one edited path that ends with it (or it ends with). */
+function resolvePath(files: Map<string, unknown>, path: string): string | null {
+  const clean = path.replace(/^\.\//u, '')
+  if (files.has(clean)) return clean
+  const matches = [...files.keys()].filter(
+    (edited) => edited.endsWith(`/${clean}`) || clean.endsWith(`/${edited}`),
+  )
+  return matches.length === 1 ? matches[0]! : null
 }
 
 export interface ReplayResult {
@@ -128,7 +203,7 @@ export function replayWorkbench(edits: EditEvent[], comments: CommentEvent[]): R
       let file = files.get(event.path)
       if (!file) {
         file = {
-          lines: new Map(),
+          lines: [],
           markers: new Map(),
           cursorAt: new Map(),
           exact: true,
@@ -141,7 +216,8 @@ export function replayWorkbench(edits: EditEvent[], comments: CommentEvent[]): R
       applyEdit(file, event)
       continue
     }
-    const file = files.get(event.path)
+    const path = resolvePath(files, event.path)
+    const file = path === null ? undefined : files.get(path)
     const note = (line: number | null): WorkbenchComment => ({
       id: event.id,
       by: event.agentId,
@@ -157,7 +233,7 @@ export function replayWorkbench(edits: EditEvent[], comments: CommentEvent[]): R
       loose.push({ ...note(event.line), outdated: false, path: event.path })
       continue
     }
-    notes.set(event.id, event)
+    notes.set(event.id, { ...event, path: path! })
     file.markers.set(`note:${event.id}`, event.line)
   }
 
@@ -165,7 +241,10 @@ export function replayWorkbench(edits: EditEvent[], comments: CommentEvent[]): R
     files: [...files.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([path, file]) => {
-        const lines = [...file.lines.entries()].sort(([a], [b]) => a - b)
+        const lines: [number, NonNullable<Line>][] = []
+        file.lines.forEach((line, index) => {
+          if (line) lines.push([index + 1, line])
+        })
         return {
           path,
           language: file.language,

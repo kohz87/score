@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { ExchangeAction } from '@score/contract'
 import { z } from 'zod'
 import { redact } from '../../redact.ts'
+import { isCredentialPath } from '../watch-frames.ts'
 
 type Commenting = Extract<ExchangeAction, { action: 'review' | 'approve' | 'send_back' }>
 
@@ -32,7 +33,10 @@ export function recordComments(
       action.action,
       comment.path,
       comment.line,
-      redact(comment.text),
+      // As Watch hides a credential file's diff, a note on one keeps only that it exists.
+      isCredentialPath(comment.path)
+        ? 'A note on a credential file (hidden).'
+        : redact(comment.text),
       now,
     )
 }
