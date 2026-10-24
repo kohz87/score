@@ -93,7 +93,47 @@ let agentsReply: () => Response
 let detailReply: () => Response
 let watchReply: () => Response
 let pauseReply: (() => Response) | null
+let previewReply: () => Response
+let createReply: () => Response
+let runsOnReply: (() => Response) | null
+let runtimeCalls = 0
 const disposers: (() => void)[] = []
+
+const codingRuntimes = [
+  {
+    runtime: 'claude-code',
+    label: 'Claude Code',
+    state: 'ready',
+    version: '2.1.295',
+    testedVersions: ['2.1.295'],
+    quota: 'Uses your Claude plan quota.',
+    message: null,
+    unverifiedPermissions: [],
+    warning: null,
+  },
+  {
+    runtime: 'codex',
+    label: 'Codex',
+    state: 'ready',
+    version: '0.160.1',
+    testedVersions: ['0.160.1'],
+    quota: 'Uses your ChatGPT plan quota.',
+    message: null,
+    unverifiedPermissions: [],
+    warning: null,
+  },
+  {
+    runtime: 'antigravity',
+    label: 'Antigravity (agy)',
+    state: 'not_installed',
+    version: null,
+    testedVersions: ['1.3.3'],
+    quota: 'Uses your Google plan quota.',
+    message: 'Antigravity (agy) is not installed or not on PATH.',
+    unverifiedPermissions: ['full'],
+    warning: null,
+  },
+] as const
 
 function now() {
   return {
@@ -111,6 +151,23 @@ function now() {
 
 function agentResponse(agent: AgentDetail): Response {
   return Response.json(agent)
+}
+
+function completedOperation(): Response {
+  return Response.json({
+    id: '11111111-1111-4111-8111-111111111111',
+    kind: 'create',
+    targetName: 'runs-agent',
+    incarnationId: '22222222-2222-4222-8222-222222222222',
+    requestHash: 'a'.repeat(64),
+    state: 'completed',
+    steps: [],
+    createdAt: '2026-10-24T10:00:00.000Z',
+    updatedAt: '2026-10-24T10:00:01.000Z',
+    nextStep: null,
+    error: null,
+    exportPath: null,
+  })
 }
 
 function emptyFor(pathname: string): Response {
@@ -139,9 +196,39 @@ beforeEach(() => {
         removeEventListener() {},
       }) as unknown as MediaQueryList,
   )
-  agentsReply = () => Response.json({ asOfSeq: 1, items: [builder, coderDetail, { ...builder, id: 'lead', name: 'lead', reportsTo: null }] })
+  agentsReply = () =>
+    Response.json({
+      asOfSeq: 1,
+      items: [builder, coderDetail, { ...builder, id: 'lead', name: 'lead', reportsTo: null }],
+    })
   detailReply = () => agentResponse(builder)
   pauseReply = null
+  createReply = completedOperation
+  runsOnReply = null
+  runtimeCalls = 0
+  previewReply = () =>
+    Response.json({
+      kind: 'create',
+      targetName: 'researcher',
+      hash: 'a'.repeat(64),
+      inherited: {
+        memories: ['Release notes go through reviewer first.'],
+        skills: ['Planning'],
+        plugins: [],
+        approvalSettings: [],
+        credentialsPresent: [],
+      },
+      effects: ['Create profile researcher', 'Install Score’s plugin'],
+      blockers: [],
+      pendingWork: {
+        activeRuns: 0,
+        queuedTurns: 0,
+        pendingApprovals: 0,
+        assignments: 0,
+        disposition: '',
+      },
+      exportPath: null,
+    })
   watchReply = () =>
     Response.json({
       items: [
@@ -156,9 +243,14 @@ beforeEach(() => {
     })
   vi.stubGlobal(
     'fetch',
-    vi.fn((input: RequestInfo | URL) => {
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://x')
+      if (url.pathname === '/api/agents' && init?.method === 'POST')
+        return Promise.resolve(createReply())
       if (url.pathname === '/api/agents') return Promise.resolve(agentsReply())
+      if (url.pathname.startsWith('/api/agents/operations/')) return Promise.resolve(createReply())
+      if (url.pathname === '/api/agents/runs-agent/runs-on' && init?.method === 'PUT')
+        return Promise.resolve(runsOnReply?.() ?? new Response(null, { status: 204 }))
       if (
         pauseReply &&
         (url.pathname === '/api/agents/builder/pause' ||
@@ -202,6 +294,17 @@ beforeEach(() => {
         )
       if (url.pathname === '/api/agents/coder/quota')
         return Promise.resolve(Response.json({ quota: null }))
+      if (url.pathname === '/api/agents/preview') return Promise.resolve(previewReply())
+      if (url.pathname === '/api/coding-agents/runtimes') {
+        runtimeCalls += 1
+        return Promise.resolve(Response.json({ items: codingRuntimes }))
+      }
+      if (url.pathname === '/api/coding-agents/runtimes/claude-code/models')
+        return Promise.resolve(Response.json({ models: [], source: 'aliases' }))
+      if (url.pathname === '/api/coding-agents/runtimes/codex/models')
+        return Promise.resolve(Response.json({ models: [], source: 'aliases' }))
+      if (url.pathname === '/api/coding-agents/runtimes/antigravity/models')
+        return Promise.resolve(Response.json({ models: [], source: 'aliases' }))
       return Promise.resolve(emptyFor(url.pathname))
     }),
   )
@@ -268,6 +371,114 @@ test('Team says so when there are no agents and when the list cannot load', asyn
   const alert = await screen.findByRole('alert')
   expect(within(alert).getByText('Couldn’t load the team')).toBeDefined()
   expect(within(alert).getByRole('button', { name: 'Try again' })).toBeDefined()
+})
+
+test('?add=agent opens the Add an agent dialog with all 20 shapes and taken colours disabled', async () => {
+  open('/b/team?add=agent')
+  const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
+
+  const shapes = within(dialog).getByRole('radiogroup', { name: 'Shape' })
+  expect(within(shapes).getAllByRole('radio')).toHaveLength(20)
+  fireEvent.click(within(shapes).getByRole('radio', { name: 'circle dot' }))
+  expect(within(dialog).getByRole('img', { name: 'New agent, circle-dot' })).toBeDefined()
+
+  const colours = within(dialog).getByRole('radiogroup', { name: 'Colour' })
+  const taken = within(colours).getByRole('radio', {
+    name: 'Colour #19c39a, used by builder',
+  }) as HTMLButtonElement
+  expect(taken.disabled).toBe(true)
+  expect(taken.style.opacity).toBe('')
+  const free = within(colours).getByRole('radio', { name: 'Colour #2bb3c0' })
+  fireEvent.click(free)
+  expect(free.getAttribute('aria-checked')).toBe('true')
+})
+
+test('the bold dialog reuses the classic preview hash and inheritance confirmation when copying', async () => {
+  open('/b/team?add=agent')
+  const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
+  fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'researcher' } })
+  fireEvent.change(within(dialog).getByLabelText('What does it do?'), {
+    target: { value: 'Finds and compares options.' },
+  })
+  fireEvent.change(within(dialog).getByLabelText('Model'), { target: { value: 'fake-model' } })
+  fireEvent.change(within(dialog).getByLabelText('Copy from'), {
+    target: { value: 'builder' },
+  })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Preview changes' }))
+
+  expect(await within(dialog).findByRole('heading', { name: 'Review changes' })).toBeDefined()
+  expect(within(dialog).getByText('Create profile researcher')).toBeDefined()
+  expect(within(dialog).getByText('Release notes go through reviewer first.')).toBeDefined()
+  expect(
+    within(dialog).getByRole('button', { name: 'Add researcher' }).hasAttribute('disabled'),
+  ).toBe(true)
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: /what this agent inherits/ }))
+  expect(
+    within(dialog).getByRole('button', { name: 'Add researcher' }).hasAttribute('disabled'),
+  ).toBe(false)
+})
+
+test('the coding tool shows install state and checks the CLI version again', async () => {
+  open('/b/team?add=agent')
+  const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
+  fireEvent.click(within(dialog).getByRole('radio', { name: /A coding tool/ }))
+  expect(await within(dialog).findByText(/Installed · version 2\.1\.295/)).toBeDefined()
+
+  const initialCalls = runtimeCalls
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Check version again' }))
+  await waitFor(() => expect(runtimeCalls).toBeGreaterThan(initialCalls))
+
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'Antigravity (agy)' }))
+  expect(
+    await within(dialog).findByText(/Antigravity \(agy\) is not installed/, { exact: false }),
+  ).toBeDefined()
+
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'Codex' }))
+  expect(await within(dialog).findByRole('checkbox', { name: /can read any file/ })).toBeDefined()
+})
+
+test('a non-local Works on choice is saved after setup and a 409 reason is shown with retry', async () => {
+  runsOnReply = () =>
+    Response.json(
+      {
+        error: {
+          code: 'backend_unavailable',
+          message: 'Docker isn’t installed or its daemon is not running.',
+        },
+      },
+      { status: 409 },
+    )
+  open('/b/team?add=agent')
+  const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
+  fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'runs-agent' } })
+  fireEvent.change(within(dialog).getByLabelText('What does it do?'), {
+    target: { value: 'Runs checks in a box.' },
+  })
+  fireEvent.change(within(dialog).getByLabelText('Model'), { target: { value: 'fake-model' } })
+  fireEvent.change(within(dialog).getByLabelText('Works on'), { target: { value: 'docker' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Preview changes' }))
+  await within(dialog).findByRole('heading', { name: 'Review changes' })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Add runs-agent' }))
+
+  expect(
+    await within(dialog).findByText('Docker isn’t installed or its daemon is not running.'),
+  ).toBeDefined()
+  const calls = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([input, init]) =>
+          String(input).endsWith('/api/agents/runs-agent/runs-on') && init?.method === 'PUT',
+      )
+  await waitFor(() => expect(calls()).toHaveLength(1))
+  expect(JSON.parse(String(calls()[0]?.[1]?.body))).toEqual({ backend: 'docker' })
+
+  runsOnReply = null
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Try again' }))
+  expect(
+    await within(dialog).findByRole('heading', { name: 'runs-agent joined the team' }),
+  ).toBeDefined()
+  expect(calls()).toHaveLength(2)
 })
 
 test('the agent page puts the four cards first and makes every classic tab reachable under More', async () => {

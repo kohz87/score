@@ -1,5 +1,6 @@
-// Side-by-side check for PLAN 11.3a (not part of `pnpm e2e`): screenshots the binding prototype and `/b` at the two
-// review sizes, then compares the frame's computed values. Run `pnpm build` first, then `node scripts/bold-frame-compare.mjs`.
+// Side-by-side check for the bold shell (not part of `pnpm e2e`): screenshots the binding prototype and the app at the
+// two review sizes, then compares computed values. It covers the frame (11.3a) and Add an agent (11.8c). Run
+// `pnpm build` first, then `node scripts/bold-frame-compare.mjs`.
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -132,22 +133,132 @@ const parts = [
   },
 ]
 
-async function measure(page) {
-  return page.evaluate((parts) => {
-    const result = {}
-    for (const part of parts) {
-      const element = globalThis.document.querySelector(part.selector)
-      if (!element) {
-        result[part.name] = null
-        continue
+// PLAN 11.8c. The prototype spells every input with its own id, while the app uses the shared `.field` class.
+const addParts = [
+  {
+    name: 'Add dialog',
+    selector: '.dialog[aria-label="Add an agent"]',
+    appSelector: '.bold-add-dialog',
+    props: [
+      'fontSize',
+      'width',
+      'maxWidth',
+      'height',
+      'padding',
+      'borderRadius',
+      'gap',
+      'backgroundColor',
+      'boxShadow',
+    ],
+  },
+  {
+    name: 'Add heading',
+    selector: '.dialog[aria-label="Add an agent"] h2',
+    appSelector: '.bold-add-head h2',
+    props: ['fontSize', 'fontWeight', 'letterSpacing', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Start segment',
+    selector: '.dialog[aria-label="Add an agent"] .seg',
+    appSelector: '.bold-add-from',
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Start choice',
+    selector: '.dialog[aria-label="Add an agent"] .seg button',
+    appSelector: '.bold-add-from button',
+    props: [
+      'fontSize',
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
+  },
+  {
+    name: 'Appearance',
+    selector: '.dialog[aria-label="Add an agent"] .row.wrap > div:first-child',
+    appSelector: '.bold-add-appearance',
+    props: ['width', 'gap', 'alignItems'],
+  },
+  {
+    name: 'Preview mark',
+    selector: '.dialog[aria-label="Add an agent"] .row.wrap > div:first-child > svg',
+    appSelector: '.bold-add-preview .agent-glyph',
+    props: ['width', 'height'],
+  },
+  {
+    name: 'Shape choice',
+    selector: '.dialog[aria-label="Add an agent"] button[data-a="addShape"]',
+    appSelector: '.bold-add-shapes button',
+    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Colour choice',
+    selector: '.dialog[aria-label="Add an agent"] button[data-a="addColor"]',
+    appSelector: '.bold-add-colours button',
+    props: ['width', 'height', 'borderRadius', 'opacity'],
+  },
+  {
+    name: 'Fields column',
+    selector: '.dialog[aria-label="Add an agent"] .row.wrap > div:last-child',
+    appSelector: '.bold-add-fields',
+    props: ['width', 'minWidth', 'gap'],
+  },
+  {
+    name: 'Name field',
+    selector: '.dialog[aria-label="Add an agent"] #anname',
+    appSelector: '.bold-add-name',
+    props: ['fontSize', 'minHeight', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Description field',
+    selector: '.dialog[aria-label="Add an agent"] #anrole',
+    appSelector: '.bold-add-fields textarea',
+    props: ['minHeight', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Works on field',
+    selector: '.dialog[aria-label="Add an agent"] #anwhere',
+    appSelector: '.bold-add-works select',
+    props: ['minHeight', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Footer',
+    selector: '.dialog[aria-label="Add an agent"] > .row:last-child',
+    appSelector: '.bold-add-footer',
+    props: ['height', 'gap', 'paddingTop', 'borderTopColor', 'justifyContent', 'alignItems'],
+  },
+  {
+    name: 'Close',
+    selector: '.dialog[aria-label="Add an agent"] .icon-btn',
+    appSelector: '.bold-add-head .icon-btn',
+    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
+  },
+]
+
+async function measure(page, measured = parts, app = false) {
+  return page.evaluate(
+    ({ parts, app }) => {
+      const result = {}
+      for (const part of parts) {
+        const selector = app ? (part.appSelector ?? part.selector) : part.selector
+        const element = globalThis.document.querySelector(selector)
+        if (!element) {
+          result[part.name] = null
+          continue
+        }
+        const style = globalThis.getComputedStyle(element)
+        result[part.name] = Object.fromEntries(
+          [...part.props, 'display'].map((property) => [property, style[property]]),
+        )
       }
-      const style = globalThis.getComputedStyle(element)
-      result[part.name] = Object.fromEntries(
-        [...part.props, 'display'].map((property) => [property, style[property]]),
-      )
-    }
-    return result
-  }, parts)
+      return result
+    },
+    { parts: measured, app },
+  )
 }
 
 function cell(metrics, part) {
@@ -201,7 +312,26 @@ try {
     await page.screenshot({ path: join(output, `bold-app-${size}.png`) })
     const appMetrics = await measure(page)
 
-    results[size] = { prototype: prototypeMetrics, app: appMetrics }
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.top .word').waitFor()
+    await page.locator('button[data-a="go"][data-v="team"]:visible').first().click()
+    await page.locator('button[data-a="addAgent"]:visible').click()
+    await page.getByRole('dialog', { name: 'Add an agent' }).waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-prototype-add-${size}.png`) })
+    const addPrototypeMetrics = await measure(page, addParts)
+
+    await page.goto(`${baseURL}/b/team?add=agent`)
+    await page.locator('[data-ui="bold"] .bold-add-dialog').waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-add-${size}.png`) })
+    const addAppMetrics = await measure(page, addParts, true)
+
+    results[size] = {
+      prototype: prototypeMetrics,
+      app: appMetrics,
+      add: { prototype: addPrototypeMetrics, app: addAppMetrics },
+    }
   }
 
   writeFileSync(join(output, 'bold-frame-metrics.json'), `${JSON.stringify(results, null, 2)}\n`)
@@ -212,6 +342,17 @@ try {
     for (const part of parts)
       lines.push(
         `| ${part.name} | ${cell(results[size].prototype, part)} | ${cell(results[size].app, part)} | ${difference(results[size].prototype, results[size].app, part)} |`,
+      )
+    lines.push('')
+    lines.push(
+      '### Add an agent',
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of addParts)
+      lines.push(
+        `| ${part.name} | ${cell(results[size].add.prototype, part)} | ${cell(results[size].add.app, part)} | ${difference(results[size].add.prototype, results[size].add.app, part)} |`,
       )
     lines.push('')
   }
