@@ -107,9 +107,10 @@ export function importOutsideSession(
   if (last)
     sqlite
       .prepare(
-        'INSERT INTO room_reads (room_id, last_read_message_created_at, last_read_message_id) VALUES (?, ?, ?)',
+        `INSERT INTO job_reads (job_id, last_read_message_created_at, last_read_message_id)
+         SELECT id, ?, ? FROM jobs WHERE room_id = ? AND is_default = 1`,
       )
-      .run(roomId, last.at, last.id)
+      .run(last.at, last.id, roomId)
   return {
     roomId,
     imported: history.messages.length,

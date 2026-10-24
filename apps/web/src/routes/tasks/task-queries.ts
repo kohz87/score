@@ -129,7 +129,7 @@ export const taskRoomsQuery = defineStreamQuery({
   },
   types: ['room.upserted'],
   reduce(rooms, event) {
-    if (event.type !== 'room.upserted') return rooms
+    if (event.type !== 'room.upserted' || event.data.role === 'team') return rooms
     return rooms.some((room) => room.id === event.data.id)
       ? rooms.map((room) => (room.id === event.data.id ? event.data : room))
       : [...rooms, event.data]

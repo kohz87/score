@@ -17,6 +17,7 @@ import {
   revokeShare,
 } from '../domain/shares.ts'
 import { HttpError } from '../errors.ts'
+import { defaultJobId } from '../domain/job-sessions.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { MediaStore } from '../media/store.ts'
 import { NOT_FOUND_PAGE, renderSharePage, SHARE_HEADERS, TOO_MANY_PAGE } from '../shares/page.ts'
@@ -69,17 +70,20 @@ export function registerShareRoutes(
     const now = clock()
     const id = randomUUID()
     const expiresAt = new Date(now + body.expiresInDays * DAY_MS).toISOString()
-    db.tx((sqlite) =>
+    db.tx((sqlite) => {
+      const jobId = body.jobId ?? defaultJobId(sqlite, roomId)
+      if (!jobId) throw new HttpError(404, 'not_found', 'Couldn’t find that room.')
       insertShare(sqlite, {
         id,
         roomId,
+        jobId,
         tokenHash: hashShareToken(token),
         createdAt: new Date(now).toISOString(),
         expiresAt,
         includeImages: body.includeImages,
-        snapshot: buildShareSnapshot(sqlite, roomId, names, body.includeImages),
-      }),
-    )
+        snapshot: buildShareSnapshot(sqlite, roomId, jobId, names, body.includeImages),
+      })
+    })
     return ShareCreatedSchema.parse({ id, url: `${origin}/s/${token}`, expiresAt })
   })
 

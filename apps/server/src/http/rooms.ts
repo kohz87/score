@@ -1,3 +1,4 @@
+import type { DatabaseSync } from 'node:sqlite'
 import { deleteRoom, roomDeletePlan } from '../domain/room-delete.ts'
 import { assertRoomFree } from '../domain/orchestration/ownership.ts'
 import { randomUUID } from 'node:crypto'
@@ -26,6 +27,7 @@ import {
   deleteMessage,
   insertRoom,
   markRoomRead,
+  messageFromRow,
   messagePage,
   readAllRooms,
   readRoom,
@@ -40,6 +42,7 @@ import {
   editableMessage,
   listVersions,
   markEdited,
+  jobOfMessage,
   markRunsRewound,
   rewindableMessage,
   rewindScope,
@@ -58,6 +61,9 @@ import {
 import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
 import { requestSummary, sanitizeSummaryText } from '../domain/room-summaries.ts'
 import { visibleSummaries } from '../domain/summary-stale.ts'
+import { defaultJobId } from '../domain/job-sessions.ts'
+import { updateJob } from '../domain/exchanges/store.ts'
+import { registerJobRoutes } from './jobs.ts'
 import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
 import { routeMessage, modelCommand } from '../domain/routing.ts'
@@ -111,6 +117,7 @@ const MessageBodySchema = z
     model: z.string().min(1).max(256).optional(),
     attachments: z.array(MessageAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
     edits: z.string().min(1).max(200).optional(),
+    jobId: z.string().min(1).max(64).optional(),
   })
   .strict()
 const ParamsSchema = z.object({ roomId: z.string().min(1).max(256) })
@@ -137,12 +144,17 @@ export function registerRoomRoutes(
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
     onSend: receipts.onSend,
   }
+  const isTeamRoom = (roomId: string) =>
+    db.read((sqlite) =>
+      Boolean(sqlite.prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team'").get(roomId)),
+    )
   const routing = new RoutingDispatcher(db, ingest, port, (error) =>
     app.log.error({ err: error }, 'Room run admission failed'),
   )
   app.addHook('preClose', async () => {
     await routing.close()
   })
+  registerJobRoutes(app, { db, ingest, mutation })
   registerSessionCompactionRoutes(app, {
     port,
     db,
@@ -257,6 +269,16 @@ export function registerRoomRoutes(
   app.patch('/api/rooms/:roomId', mutation, async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)
     const body = PatchSchema.parse(request.body)
+    // The team room always holds the whole team under its own name; only its lead and settings change (11.1b).
+    if (
+      isTeamRoom(roomId) &&
+      (body.name !== undefined || body.archived !== undefined || body.members !== undefined)
+    )
+      throw new HttpError(
+        409,
+        'conflict',
+        'The team room can’t be renamed, archived or given other members.',
+      )
     await validateAgents([...(body.members ?? []), ...(body.leadAgentId ? [body.leadAgentId] : [])])
     let room: Room | undefined
     await ingest.submit({
@@ -318,6 +340,7 @@ export function registerRoomRoutes(
   app.delete('/api/rooms/:roomId', mutation, async (request, reply) => {
     const { roomId } = ParamsSchema.parse(request.params)
     const body = RoomDeleteRequestSchema.parse(request.body)
+    if (isTeamRoom(roomId)) throw new HttpError(409, 'conflict', 'The team room can’t be deleted.')
     await ingest.submit({
       source: 'rooms',
       identity: randomUUID(),
@@ -487,7 +510,14 @@ export function registerRoomRoutes(
             source: 'rooms',
             identity: randomUUID(),
             apply: ({ sqlite, now }) => {
-              markRunsRewound(sqlite, roomId, agent.agentId, anchor.createdAt, now)
+              markRunsRewound(
+                sqlite,
+                roomId,
+                jobOfMessage(sqlite, anchor),
+                agent.agentId,
+                anchor.createdAt,
+                now,
+              )
               return []
             },
           })
@@ -560,7 +590,7 @@ export function registerRoomRoutes(
       identity: randomUUID(),
       apply: ({ sqlite, now }) => {
         roomRow(sqlite, roomId)
-        const current = visibleSummaries(sqlite, roomId)[0]
+        const current = visibleSummaries(sqlite, roomId, defaultJobId(sqlite, roomId) ?? '')[0]
         if (!current) throw new HttpError(404, 'not_found', 'This room has no summary.')
         const text = sanitizeSummaryText(body.text)
         if (!text) throw new HttpError(400, 'bad_request', 'The summary can’t be empty.')
@@ -589,7 +619,7 @@ export function registerRoomRoutes(
         identity: randomUUID(),
         apply: ({ sqlite, now }) => {
           roomRow(sqlite, roomId)
-          const current = visibleSummaries(sqlite, roomId)[0]
+          const current = visibleSummaries(sqlite, roomId, defaultJobId(sqlite, roomId) ?? '')[0]
           if (!current) throw new HttpError(404, 'not_found', 'This room has no summary.')
           return deleteMessage(sqlite, roomId, current.id, now)
         },
@@ -673,6 +703,13 @@ export function registerRoomRoutes(
     const original = body.edits
       ? db.read((sqlite) => editableMessage(sqlite, roomId, body.edits!))
       : undefined
+    if (body.jobId && original?.jobId && body.jobId !== original.jobId)
+      throw new HttpError(
+        400,
+        'bad_request',
+        'An edit stays in the job of the message it corrects.',
+      )
+    const jobId = body.jobId ?? original?.jobId
     const to = [...new Set(body.to ?? original?.to ?? [])]
     const known = (await agents()).map((agent) => agent.id)
     if (to.some((id) => !known.includes(id)))
@@ -680,7 +717,8 @@ export function registerRoomRoutes(
     const attached = await resolveAttachments(body.attachments ?? [], media, workspaces, known)
     const mediaIds = attached.mediaIds
     const room = db.read((sqlite) => readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at))
-    const route = routeMessage(body.text, to, room, known)
+    const stepIn = db.read((sqlite) => openExchangeIn(sqlite, roomId, jobId))
+    const route = routeMessage(body.text, to, room, known, stepIn)
     let command: CommandResult | null = modelCommand(route.model)
     // `/model <alias>` names the model the alias stands for on each recipient (aliases belong to a profile).
     const typedModel = route.model ?? body.model
@@ -775,11 +813,24 @@ export function registerRoomRoutes(
           streaming: false,
           refs: [],
           ...(original ? { edits: original.id } : {}),
+          // An edit stays in the job of the message it corrects.
+          ...(jobId ? { jobId } : {}),
         }
         if (original) editableMessage(sqlite, roomId, original.id)
         // Inside the same transaction, so an item deleted since the check above fails the whole message.
         media?.retain(sqlite, mediaIds, now)
         const drafts = storeMessage(sqlite, message, now)
+        message = messageFromRow(sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(id))
+        // In an exchanges room the agent the person addresses has the work (PLAN 11.1b).
+        if (room.routing === 'exchanges' && message.jobId && route.routedTo[0])
+          drafts.push(
+            ...updateJob(
+              sqlite,
+              message.jobId,
+              { holder: route.routedTo[0], state: 'working' },
+              now,
+            ),
+          )
         if (original) drafts.push(...markEdited(sqlite, roomId, original, id, now))
         // Plan first admits only the planner; the others are named in its prompt and start from the plan.
         const team = route.routedTo.filter((agentId) => agentId !== planner)
@@ -830,3 +881,20 @@ export function registerRoomRoutes(
   return () => routing.dispatch()
 }
 import { agentAdmits } from '../domain/agent-lifecycle.ts'
+
+/** A job with an exchange still going (live, waiting on an agent or paused): a message into it steps in. */
+function openExchangeIn(
+  sqlite: DatabaseSync,
+  roomId: string,
+  jobId: string | null | undefined,
+): boolean {
+  const job = jobId ?? defaultJobId(sqlite, roomId)
+  return Boolean(
+    job &&
+    sqlite
+      .prepare(
+        "SELECT 1 FROM exchanges WHERE job_id = ? AND state IN ('live', 'waiting_on_agent', 'paused_budget')",
+      )
+      .get(job),
+  )
+}

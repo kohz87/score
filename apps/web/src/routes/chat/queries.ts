@@ -40,7 +40,8 @@ export const roomsQuery = defineStreamQuery({
         rooms: data.rooms.filter((room) => room.id !== event.data.id),
         directs: data.directs.filter((room) => room.id !== event.data.id),
       }
-    if (event.type !== 'room.upserted') return data
+    // The team room belongs to the new shell (PLAN 11.1b); the classic Chat never lists it.
+    if (event.type !== 'room.upserted' || event.data.role === 'team') return data
     const rooms = data.rooms.filter((room) => room.id !== event.data.id)
     const directs = data.directs.filter((room) => room.id !== event.data.id)
     const target = event.data.kind === 'room' ? rooms : directs

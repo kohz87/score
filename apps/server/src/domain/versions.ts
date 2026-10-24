@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
 import { IMPORTED_ID_PREFIX } from './outside-sessions.ts'
-import { roomSession } from './job-sessions.ts'
+import { defaultJobId, sessionFor } from './job-sessions.ts'
 import { markStaleSummaries } from './summary-stale.ts'
 import { MessageRowSchema, messageFromRow, readRoom, roomChanged, roomRow } from './rooms.ts'
 
@@ -148,15 +148,23 @@ export interface RewindScope {
 
 const AFTER = '(created_at, id) >= (?, ?)'
 
+/** The job a message belongs to: a rewind or edit acts within that job only (PLAN 11.1b). */
+export function jobOfMessage(sqlite: DatabaseSync, message: Message): string {
+  const jobId = message.jobId ?? defaultJobId(sqlite, message.roomId)
+  if (!jobId) throw new Error(`room ${message.roomId} has no default job`)
+  return jobId
+}
+
 /** What a rewind of `anchor` hides and how many Hermes turns each agent has from there, by Score's own records. */
 export function rewindScope(sqlite: DatabaseSync, roomId: string, anchor: Message): RewindScope {
+  const jobId = jobOfMessage(sqlite, anchor)
   const hidden = z.object({ count: z.int(), streaming: z.int() }).parse(
     sqlite
       .prepare(
         `SELECT count(*) AS count, COALESCE(SUM(streaming), 0) AS streaming FROM messages
-           WHERE room_id = ? AND deleted_at IS NULL AND ${AFTER}`,
+           WHERE room_id = ? AND job_id = ? AND deleted_at IS NULL AND ${AFTER}`,
       )
-      .get(roomId, anchor.createdAt, anchor.id),
+      .get(roomId, jobId, anchor.createdAt, anchor.id),
   )
   const open = z.object({ count: z.int(), held: z.int() }).parse(
     sqlite
@@ -179,11 +187,11 @@ export function rewindScope(sqlite: DatabaseSync, roomId: string, anchor: Messag
       .prepare(
         `SELECT mr.agent_id, count(*) AS turns FROM message_runs mr
            LEFT JOIN messages m ON m.id = mr.message_id
-           WHERE mr.room_id = ? AND mr.rewound_at IS NULL AND mr.state IN ('completed', 'failed') AND mr.run_id IS NOT NULL
-             AND COALESCE(m.created_at, mr.created_at) >= ?
+           WHERE mr.room_id = ? AND mr.job_id = ? AND mr.rewound_at IS NULL AND mr.state IN ('completed', 'failed')
+             AND mr.run_id IS NOT NULL AND COALESCE(m.created_at, mr.created_at) >= ?
            GROUP BY mr.agent_id ORDER BY mr.agent_id`,
       )
-      .all(roomId, anchor.createdAt),
+      .all(roomId, jobId, anchor.createdAt),
   )
   return {
     hiddenCount: hidden.count,
@@ -191,7 +199,7 @@ export function rewindScope(sqlite: DatabaseSync, roomId: string, anchor: Messag
     agents: rows.map((row) => ({
       agentId: row.agent_id,
       turns: row.turns,
-      sessionId: roomSession(sqlite, roomId, row.agent_id),
+      sessionId: sessionFor(sqlite, { roomId, jobId, agentId: row.agent_id }),
     })),
   }
 }
@@ -200,16 +208,18 @@ export function rewindScope(sqlite: DatabaseSync, roomId: string, anchor: Messag
 export function markRunsRewound(
   sqlite: DatabaseSync,
   roomId: string,
+  jobId: string,
   agentId: string,
   since: string,
   now: string,
 ): void {
   sqlite
     .prepare(
-      `UPDATE message_runs SET rewound_at = ? WHERE room_id = ? AND agent_id = ? AND rewound_at IS NULL AND state IN ('completed', 'failed') AND run_id IS NOT NULL
+      `UPDATE message_runs SET rewound_at = ? WHERE room_id = ? AND job_id = ? AND agent_id = ? AND rewound_at IS NULL
+         AND state IN ('completed', 'failed') AND run_id IS NOT NULL
          AND COALESCE((SELECT created_at FROM messages WHERE id = message_runs.message_id), created_at) >= ?`,
     )
-    .run(now, roomId, agentId, since)
+    .run(now, roomId, jobId, agentId, since)
 }
 
 /**
@@ -239,9 +249,10 @@ export function createVersion(
     .parse(
       sqlite
         .prepare(
-          `SELECT id FROM messages WHERE room_id = ? AND deleted_at IS NULL AND ${AFTER} AND id != ? ORDER BY created_at, id`,
+          `SELECT id FROM messages WHERE room_id = ? AND job_id = ? AND deleted_at IS NULL AND ${AFTER} AND id != ?
+           ORDER BY created_at, id`,
         )
-        .all(roomId, anchor.createdAt, anchor.id, req.except ?? ''),
+        .all(roomId, jobOfMessage(sqlite, anchor), anchor.createdAt, anchor.id, req.except ?? ''),
     )
     .map((row) => row.id)
   const id = randomUUID()

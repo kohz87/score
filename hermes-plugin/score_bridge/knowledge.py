@@ -131,8 +131,8 @@ def error(message: str, **fields) -> str:
     return json.dumps({"success": False, "error": message, **fields}, ensure_ascii=False, allow_nan=False)
 
 
-class KnowledgeClient:
-    """One bridge identity per process for tool calls (separate from the hook sender; no approval polling)."""
+class BridgeToolClient:
+    """One bridge identity per process for authenticated tool calls (no approval polling)."""
 
     def __init__(self, factory=ScoreClient):
         self._factory = factory
@@ -148,9 +148,9 @@ class KnowledgeClient:
                 self._pid = os.getpid()
             return self._client
 
-    def call(self, op: str, body: dict) -> dict:
+    def post(self, path: str, body: dict) -> dict:
         client = self._get()
-        url = client.base_url + "/bridge/v1/knowledge/" + op
+        url = client.base_url + path
         with client._hello_lock:
             if client.producer_token is None or client.expires_at <= client.clock() + 60:
                 client._hello()
@@ -168,6 +168,11 @@ class KnowledgeClient:
         if not isinstance(response, dict):
             raise ProtocolError("invalid response")
         return response
+
+
+class KnowledgeClient(BridgeToolClient):
+    def call(self, op: str, body: dict) -> dict:
+        return self.post("/bridge/v1/knowledge/" + op, body)
 
 
 _client = KnowledgeClient()

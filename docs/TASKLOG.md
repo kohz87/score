@@ -647,3 +647,47 @@ One entry per completed task: what landed, review results, and any **rejected re
   records job sessions and (5) a default job's title doesn't follow a room rename → both listed as 11.1b
   prerequisites. **Rejected:** (6) "passkeys fix is scope creep" — already named in the commit and here; (7)
   "`hermes/live` imports domain code" — allowed, and `flow-history.ts`/`task-writes.ts` already do.
+- **11.1b exchanges and agent actions (lead, with three DeepSeek pieces, 2026-10-24).** Owner, mid-task: "if there's
+  anything you can offload to deepseek, just do it", and "the design must adhere to the artifact mock up".
+  **Prerequisites** (commit `584ab8b2`): rewind, summaries, turn context, unread (`job_reads`), search (`jobId`),
+  shares (one job's snapshot), coding CLI sessions (per job, `coding_pending_terminals.job_id`) are job-scoped;
+  `Message.jobId`; agent replies, approval cards, failure notices and plan-start notices land in their turn's job;
+  `sessionOwner` derives an unrecorded `score-<room>-<job>-<agent>` key (so orchestration writers need no change); the
+  default job's title follows a rename (trigger); the team room (`role 'team'`, `routing 'exchanges'`, members = the
+  agents at every start, **no lead until the person picks one** — Score never guesses; decision 114) is left out of
+  `GET /api/rooms`, the classic Chat/Tasks reducers and Now. Kept per room on purpose: compaction's busy check and the
+  dispatcher's one active turn per (room, agent) (F11). **Exchanges** (migration 0081 part 2): bridge route
+  `POST /bridge/v1/exchanges/action`, `xtc_` capability minted per start in the dispatcher and rendered into the
+  Hermes payload only (hash on `message_runs.xtc_hash`, cleared at settle; `xtc_` redacted), `stageAction`
+  (members only, not self, verdicts only for the reviewer, review only by the holder, ask depth ≤ 2, one routing
+  action per turn unless `replaces`, capability-shaped text refused and stored nowhere), `settleExchangeTurn` at turn
+  completion (failed/stopped turns drop their actions with a notice), `jobRunInput`, coding agents' `score-action`
+  block, `notice` message part (classic renderer shows it), jobs API (`GET/POST /api/rooms/:id/jobs`,
+  `GET /api/jobs/:id/exchanges`), `job.upserted` / `exchange.upserted`. Budgets are counted, not enforced (11.1c).
+  Pins and references in the context join with 11.2 (their tables are 0083).
+  **DeepSeek pieces.** (1) `11.1b-tools` (bridge plugin tools + block parser): 0 fix rounds, clean; lead changed one
+  helper to read zod's typed issues. Its run ended mid-sentence with no final report, and `codex-task.sh` exited 141
+  (SIGPIPE in its session-id grep, fixed). (2) `11.1b-scope-tests`: two runs died on a NanoGPT error
+  (`missing_tool_call_reasoning`, after ~70 tool calls, nothing written); the third, on the non-thinking variant
+  (`CODEX_MODEL=deepseek/deepseek-v4.1-flash-1017`), wrote 24 passing tests over all 12 brief items, no `test.fails`
+  (again no final report). (3) `11.3a` frame: see its entry. Decision 115: DeepSeek runs use the non-thinking variant
+  until NanoGPT replays reasoning; `codex-task.sh` gained `CODEX_BASE` to fork a delegated part from its task branch.
+  **Sonnet review: 0 P1, 5 P2, 4 P3.** Real and fixed, each with a regression test: (1) an image turn's text skipped
+  `render`, so its agent got the placeholder → render before `buildRunInput`; (2) a turn failing at dispatch
+  (`failMessageRun`) never settled its exchange → it now settles (exchange `waiting_on_you`, job state recomputed);
+  (3) `route` used the exchange row read before `answerExchange` changed it, so asking from a hand-off or mid-review
+  corrupted state and an author asking before resubmitting reset the round → fresh row, an `ask` is neutral for
+  reviewer and author, an answer reopens only an exchange that waited on the asker; (4) answering an ask and handing
+  off to the asker gave both turns the same turn id (second silently dropped) → one turn id per exchange, and a target
+  that can't take work moves the exchange to `waiting_on_you`; (5) a failed turn on the author's side left the review
+  `waiting_on_agent` → either side's failure hands the exchange to the person; (6) team room reachable by delete,
+  rename, archive and Now → refused/filtered; (7) jobs could be created in `mentions` rooms → `409`; (9) summary runs
+  kept a job `working` → excluded. **Rejected:** (8) "compaction busy check and dispatcher are still per room" — by
+  design (F11, one workspace per agent per room), noted above. **Found by the new tests:** `message_runs.hop` has
+  `CHECK (hop BETWEEN 0 AND 4)` (D3.2's limit), so a third review round would have crashed → exchange turns are hop 1;
+  exchanges are bounded by budgets (11.1c), not hops.
+  `pnpm check` green (contract 1448, web 2976, server 4731 + 14 skipped, plugin 351, licenses); two native crashes on
+  the way (pytest segfault in a fresh venv, a V8 `index < size()` abort in a worker) passed on rerun — environment, not
+  code. **Live-DB rehearsal** of 0080 + 0081 (read-only `VACUUM INTO` copy): 21 ms; 17 jobs; 14 `room_reads` → 14
+  `job_reads`; 11 coding sessions all kept; 0 shares and 0 pending terminals to move; no message without a job;
+  foreign_key_check 0, integrity ok. Not deployed.

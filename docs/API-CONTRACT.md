@@ -280,6 +280,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `system.status`      | `SystemStatus`                                                                                | header banner, Settings                                  |
 | `agent.updated`      | `AgentSummary`                                                                                | everywhere agents render                                 |
 | `room.upserted`      | `Room`                                                                                        | Chat rooms list                                          |
+| `job.upserted`       | `Job` (PLAN 11.1b)                                                                            | The new shell's job tabs                                 |
+| `exchange.upserted`  | `Exchange` (PLAN 11.1b)                                                                       | Job capsules and threads                                 |
 | `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
@@ -568,6 +570,28 @@ surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature
 - **S** `GET /api/rooms/:roomId` → `{ asOfSeq; room: Room; filesInPlay: string[]
 learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **S** `GET /api/rooms/:roomId/messages?before=<cursor>&limit=50` → `{ asOfSeq; items: Message[]; nextCursor }`
+- **Jobs and exchanges** (PLAN 11.1b; schemas in `packages/contract/src/exchanges.ts`; design docs/briefs/11.0-bold.md
+  §3–§5). Every room has a default job (`isDefault`, titled by the room's name and following a rename); `Message.jobId`
+  says which job a message is in. `Room.role`: `team` (the always-on team room of the new shell, members = every agent,
+  no lead until the person picks one; `GET /api/rooms` and the classic shell leave it out, `GET /api/rooms/:id` serves
+  it), `direct`, `room`. `Room.routing`: `mentions` (D3.2) or `exchanges` (D3.3: agents act with the exchange actions of
+  §11; a prose `@name` from an agent hands nothing off and gets a `notice` part `mention_not_handoff`). In an
+  `exchanges` room a person's message goes to the addressed agents, else the lead (`409 no_lead` in the team room
+  without one); unaddressed into a job with a live exchange it is a step in and starts nothing. The addressed agent
+  becomes the job's holder. `MessagePart` gains `{ kind: 'notice'; code: 'mention_not_handoff' | 'action_ignored' |
+  'action_not_sent' | 'no_lead'; text }` (a line from Score, never agent text).
+  - **S** `GET /api/rooms/:roomId/jobs` → `{ asOfSeq; items: Job[] }` (open jobs, the default first).
+  - **H** `POST /api/rooms/:roomId/jobs` `{ title (1–200) }` → `201 Job`; its agents get sessions of their own
+    (`score-<room>-<job>-<agent>`). Emits `job.upserted`. `409 conflict` for a room on `mentions` (one thread until
+    11.11 moves it to exchanges).
+  - The team room can't be deleted, renamed, archived or given members (`409 conflict`); its members follow the team's
+    agents at every start, and its lead is set with `PATCH /api/rooms/:roomId { leadAgentId }`.
+  - **S** `GET /api/jobs/:jobId/exchanges` → `{ asOfSeq; items: Exchange[] }` (oldest first).
+  - `Job { id; roomId; title; state: 'open'|'working'|'waiting_on_you'|'done'|'closed'; holderAgentId; isDefault;
+    exchangeBudget (8); jobTurnLimit (40); createdAt; updatedAt }`; `Exchange { id; jobId; roomId; kind:
+    'handoff'|'ask'|'review'; parentId; from; to; state: 'live'|'waiting_on_agent'|'waiting_on_you'|'paused_budget'|
+    'done'|'stopped'; round; turnsUsed; budget; outcome: 'approved'|'answered'|'handed_off'|'no_decision'|null;
+    endedReason; createdAt; updatedAt }`.
 - **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
   `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409
@@ -641,7 +665,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */
          planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string; root?: string /* root the file was picked from: a changed root is 409 workspace_changed */ } })[] /* ≤ 10 */
-         edits?: MessageId /* edit and resend: the sender's own earlier message in this room */ }
+         edits?: MessageId /* edit and resend: the sender's own earlier message in this room */
+         jobId?: JobId /* PLAN 11.1b: the job (thread) to post in; default: the room's default job, or the job of `edits` */ }
   res: { message: Message; routedTo: AgentId[]; command: CommandResult | null; notices?: string[] }
   ```
 
@@ -730,8 +755,8 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
   `GET /api/rooms/:roomId/delete-plan` (**S**) → `RoomDeletePlan` `{ name; messages; files; runs; briefs; blocked: 'room_busy' |
   'orchestration_owned' | 'direct' | null }`, the counts the dialog lists (`files` = distinct attachments, `runs` = message runs
   plus an orchestration run's records).
-- `GET /api/search/messages?q=&roomId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
-  author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
+- `GET /api/search/messages?q=&roomId?&jobId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
+  jobId /* 11.1b */; author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
   indexed once it completes); the query is tokenised into quoted terms (no FTS syntax from the user, the last word is a
   prefix); `[[`/`]]` in `snippet` mark matches (redacted). Used by the ⌘K palette ("Messages") and the Chat search box;
   the web opens a hit at `/chat/:roomId?message=:messageId` and scrolls to it.
@@ -772,11 +797,12 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
 A share is a **frozen snapshot** of one room, readable by anyone who has the link and can reach Score (LAN or Tailscale; the
 create dialog says so). Nothing live is exposed.
 
-- **H** `POST /api/rooms/:roomId/shares` `{ password; expiresInDays?: 1..30 (default 7); includeImages?: false }` →
+- **H** `POST /api/rooms/:roomId/shares` `{ password; expiresInDays?: 1..30 (default 7); includeImages?: false; jobId? }` →
   `{ id; url; expiresAt }`. `password` is the security password, with the same check, limits and errors as pairing
   management (`409 password_not_set`, `403 wrong_password`, `429 too_many_attempts`). `url` = `<public origin>/s/<token>`.
   No `Idempotency-Key` receipt (the body holds the password; a replay would mint a second token).
-- Snapshot content: the room's finished, undeleted messages as author name, time and the **text parts only** (Markdown
+- Snapshot content (PLAN 11.1b: one job's, `jobId` or the room's default job; a job other than the default is titled by
+  its job title): the job's finished, undeleted messages as author name, time and the **text parts only** (Markdown
   source), each through `redact()`; with `includeImages` the media ids of `image` parts are copied into the share's own list.
   No tool, thinking, file-path, plan, review or approval parts, no room settings, member ids, workspace paths or profile
   data. The room's later edits and deletions do not change it. At most the latest 2000 messages.

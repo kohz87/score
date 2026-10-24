@@ -75,9 +75,18 @@ def _register_knowledge(ctx):
         pass
 
 
+def _register_exchanges(ctx):
+    try:
+        from .exchanges import register_tools
+        register_tools(ctx)
+    except Exception:
+        pass
+
+
 def register(ctx):
     global _sender, _pid, _exit_callback
     _register_knowledge(ctx)
+    _register_exchanges(ctx)
     try:
         from .client import ScoreClient
         from .gates import reset

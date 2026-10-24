@@ -114,3 +114,67 @@ export const ExchangeReceiptSchema = z.object({
   message: z.string(),
 })
 export type ExchangeReceipt = z.infer<typeof ExchangeReceiptSchema>
+
+/** A job: a thread inside a room with its own agent sessions (brief §3.2). `job.upserted` carries the whole row. */
+export const JobSchema = z.object({
+  id: z.string().min(1),
+  roomId: z.string().min(1),
+  title: z.string(),
+  state: z.enum(['open', 'working', 'waiting_on_you', 'done', 'closed']),
+  /** Who has the work now. */
+  holderAgentId: AgentIdSchema.nullable(),
+  /** The room's own thread (every room has one; older rooms have only it). */
+  isDefault: z.boolean(),
+  exchangeBudget: z.int().positive(),
+  jobTurnLimit: z.int().positive(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+})
+export type Job = z.infer<typeof JobSchema>
+
+export const ExchangeKindSchema = z.enum(['handoff', 'ask', 'review'])
+export const ExchangeStateSchema = z.enum([
+  'live',
+  'waiting_on_agent',
+  'waiting_on_you',
+  'paused_budget',
+  'done',
+  'stopped',
+])
+/** Two agents working on one step of a job (brief §3.4). `exchange.upserted` carries the whole row. */
+export const ExchangeSchema = z.object({
+  id: z.string().min(1),
+  jobId: z.string().min(1),
+  roomId: z.string().min(1),
+  kind: ExchangeKindSchema,
+  /** The exchange an `ask` was opened from (null at the top). */
+  parentId: z.string().min(1).nullable(),
+  /** Who opened it (the author of the work under review, the asker, the one handing off). */
+  from: AgentIdSchema,
+  /** Who it was opened to (the reviewer, the one asked, the one handed to). */
+  to: AgentIdSchema,
+  state: ExchangeStateSchema,
+  /** Review rounds: each `send_back` starts the next one. */
+  round: z.int().positive(),
+  turnsUsed: z.int().nonnegative(),
+  budget: z.int().positive(),
+  /** `approved` (review), `answered` (ask), `handed_off`, `no_decision` (a reviewer ended without a verdict). */
+  outcome: z.enum(['approved', 'answered', 'handed_off', 'no_decision']).nullable(),
+  /** Plain words for a stopped or stuck exchange ("the turn failed", "stopped by you"). */
+  endedReason: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+})
+export type Exchange = z.infer<typeof ExchangeSchema>
+
+export const JobsResponseSchema = z.object({
+  asOfSeq: z.int().nonnegative(),
+  items: z.array(JobSchema),
+})
+export const JobCreateRequestSchema = z
+  .object({ title: z.string().trim().min(1).max(200) })
+  .strict()
+export const ExchangesResponseSchema = z.object({
+  asOfSeq: z.int().nonnegative(),
+  items: z.array(ExchangeSchema),
+})

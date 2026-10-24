@@ -51,6 +51,12 @@ export function sessionFor(
   return stored?.session_id ?? jobKey(job, turn.agentId)
 }
 
+/** True when the job's turns run in its room's own session (the default job, or a turn row without a job). */
+export function usesRoomSession(sqlite: DatabaseSync, jobId: string | null | undefined): boolean {
+  if (!jobId) return true
+  return jobRow(sqlite, jobId)?.session_scheme !== 'job'
+}
+
 /** The session of a room's default job: for room-scoped callers (one job per room until 11.1b). */
 export function roomSession(sqlite: DatabaseSync, roomId: string, agentId: string): string {
   return sessionFor(sqlite, { roomId, jobId: defaultJobId(sqlite, roomId), agentId })
@@ -99,7 +105,15 @@ export function sessionOwner(
   const prefix = 'score-'
   const suffix = `-${agentId}`
   if (!sessionId.startsWith(prefix) || !sessionId.endsWith(suffix)) return null
-  const roomId = sessionId.slice(prefix.length, sessionId.length - suffix.length)
-  if (!sqlite.prepare('SELECT 1 FROM rooms WHERE id = ?').get(roomId)) return null
-  return { roomId, jobId: defaultJobId(sqlite, roomId), continued: false }
+  const middle = sessionId.slice(prefix.length, sessionId.length - suffix.length)
+  if (sqlite.prepare('SELECT 1 FROM rooms WHERE id = ?').get(middle))
+    return { roomId: middle, jobId: defaultJobId(sqlite, middle), continued: false }
+  // A job's own key (`score-<room>-<job>-<agent>`), also when no turn recorded it (orchestration and workflow turns
+  // insert their rows directly).
+  const job = sqlite
+    .prepare(
+      "SELECT id, room_id FROM jobs WHERE session_scheme = 'job' AND room_id || '-' || id = ?",
+    )
+    .get(middle) as { id: string; room_id: string } | undefined
+  return job ? { roomId: job.room_id, jobId: job.id, continued: false } : null
 }

@@ -20,6 +20,7 @@ const SearchQuerySchema = z
   .object({
     q: z.string().max(500).default(''),
     roomId: z.string().min(1).max(256).optional(),
+    jobId: z.string().min(1).max(64).optional(),
     limit: z.coerce.number().int().min(1).max(50).default(20),
   })
   .strict()
@@ -72,9 +73,9 @@ export function registerConversationRoutes(
   })
 
   app.get('/api/search/messages', async (request) => {
-    const { q, roomId, limit } = SearchQuerySchema.parse(request.query)
+    const { q, roomId, jobId, limit } = SearchQuerySchema.parse(request.query)
     return MessageSearchResponseSchema.parse({
-      items: db.read((sqlite) => searchMessages(sqlite, q, limit, roomId)),
+      items: db.read((sqlite) => searchMessages(sqlite, q, limit, roomId, jobId)),
     })
   })
 

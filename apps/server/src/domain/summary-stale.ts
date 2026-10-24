@@ -11,12 +11,14 @@ const PartsSchema = z
 
 export type SummaryPart = Extract<MessagePart, { kind: 'summary' }>
 
-/** Summary messages of a room that are still visible, newest first. */
+/** Summary messages of a job (of every job in the room when `jobId` is omitted) that are still visible, newest first. */
 export function visibleSummaries(
   sqlite: DatabaseSync,
   roomId: string,
+  jobId?: string,
 ): {
   id: string
+  jobId: string | null
   createdAt: string
   updatedAt: string
   authorAgentId: string | null
@@ -24,16 +26,17 @@ export function visibleSummaries(
 }[] {
   const rows = sqlite
     .prepare(
-      `SELECT id, created_at, updated_at, author_agent_id, parts FROM messages
-       WHERE room_id = ? AND deleted_at IS NULL AND streaming = 0
+      `SELECT id, job_id, created_at, updated_at, author_agent_id, parts FROM messages
+       WHERE room_id = ? AND (? IS NULL OR job_id = ?) AND deleted_at IS NULL AND streaming = 0
          AND EXISTS (SELECT 1 FROM json_each(messages.parts) WHERE json_extract(value, '$.kind') = 'summary')
        ORDER BY created_at DESC, id DESC`,
     )
-    .all(roomId)
+    .all(roomId, jobId ?? null, jobId ?? null)
   return z
     .array(
       z.object({
         id: z.string(),
+        job_id: z.string().nullable(),
         created_at: z.string(),
         updated_at: z.string(),
         author_agent_id: z.string().nullable(),
@@ -47,6 +50,7 @@ export function visibleSummaries(
         ? [
             {
               id: row.id,
+              jobId: row.job_id,
               createdAt: row.created_at,
               updatedAt: row.updated_at,
               authorAgentId: row.author_agent_id,
@@ -64,7 +68,7 @@ export function visibleSummaries(
 export function coveredMessageHidden(
   sqlite: DatabaseSync,
   roomId: string,
-  summary: { createdAt: string; updatedAt: string; part: SummaryPart },
+  summary: { jobId: string | null; createdAt: string; updatedAt: string; part: SummaryPart },
 ): boolean {
   const boundary = sqlite
     .prepare('SELECT created_at, id, deleted_at FROM messages WHERE id = ? AND room_id = ?')
@@ -74,13 +78,14 @@ export function coveredMessageHidden(
   return Boolean(
     sqlite
       .prepare(
-        `SELECT 1 FROM messages WHERE room_id = ? AND (created_at, id) <= (?, ?)
+        `SELECT 1 FROM messages WHERE room_id = ? AND job_id IS ? AND (created_at, id) <= (?, ?)
            AND deleted_at IS NOT NULL AND deleted_at > ?
            AND NOT EXISTS (SELECT 1 FROM json_each(messages.parts) WHERE json_extract(value, '$.kind') = 'summary') LIMIT 1`,
       )
       // An edited summary was read and vouched for by the person at its last update.
       .get(
         roomId,
+        summary.jobId,
         boundary.created_at,
         boundary.id,
         summary.part.edited ? summary.updatedAt : summary.createdAt,

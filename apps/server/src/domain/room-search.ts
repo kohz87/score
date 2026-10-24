@@ -7,6 +7,7 @@ const RowSchema = z.object({
   id: z.string(),
   room_id: z.string(),
   room_name: z.string(),
+  job_id: z.string().nullable(),
   author_kind: z.enum(['you', 'agent']),
   author_agent_id: z.string().nullable(),
   created_at: z.iso.datetime(),
@@ -22,6 +23,7 @@ export function searchMessages(
   query: string,
   limit: number,
   roomId?: string,
+  jobId?: string,
 ): MessageSearchHit[] {
   const words = (query.match(/[\p{L}\p{N}_]+/gu) ?? []).slice(0, 12)
   if (words.length === 0) return []
@@ -34,19 +36,28 @@ export function searchMessages(
       .parse(
         sqlite
           .prepare(
-            `SELECT m.id, m.room_id, r.name AS room_name, m.author_kind, m.author_agent_id, m.created_at,
+            `SELECT m.id, m.room_id, r.name AS room_name, m.job_id, m.author_kind, m.author_agent_id, m.created_at,
                snippet(message_fts, 0, '[[', ']]', '…', 16) AS snippet
              FROM message_fts JOIN messages m ON m.rowid = message_fts.rowid JOIN rooms r ON r.id = m.room_id
              WHERE message_fts MATCH ? AND m.deleted_at IS NULL AND (? IS NULL OR m.room_id = ?)
+               AND (? IS NULL OR m.job_id = ?)
              ORDER BY bm25(message_fts), m.created_at DESC LIMIT ?`,
           )
-          .all(match, roomId ?? null, roomId ?? null, Math.min(Math.max(limit, 1), 50)),
+          .all(
+            match,
+            roomId ?? null,
+            roomId ?? null,
+            jobId ?? null,
+            jobId ?? null,
+            Math.min(Math.max(limit, 1), 50),
+          ),
       )
       .map((row) =>
         MessageSearchHitSchema.parse({
           messageId: row.id,
           roomId: row.room_id,
           roomName: row.room_name,
+          jobId: row.job_id,
           author:
             row.author_kind === 'you'
               ? { kind: 'you' }

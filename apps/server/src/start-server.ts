@@ -68,6 +68,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { retireIngestKeys, retireMedia } from './hub/retire.ts'
+import { ensureTeamRoom } from './domain/team-room.ts'
 import { restoreRoomHolds } from './domain/room-rewinding.ts'
 import { locatorForMode } from './runtimes/coding/cli.ts'
 import { CodingRuntime } from './runtimes/coding/service.ts'
@@ -571,8 +572,22 @@ export async function startServer(
     }
     // Warm the per-profile caches, so the first page load after a restart doesn't wait ~15 s on cold Hermes reads.
     const warming = port
+    const teamIngest = ingest
     void Promise.resolve()
       .then(() => warming.listAgents())
+      // The team room of the new shell (PLAN 11.1b) exists once the team's agents are known.
+      .then((agents) =>
+        teamIngest.submit({
+          source: 'rooms',
+          identity: randomUUID(),
+          apply: ({ sqlite, now }) =>
+            ensureTeamRoom(
+              sqlite,
+              agents.map((agent) => agent.id),
+              now,
+            ),
+        }),
+      )
       .catch(() => undefined)
     await outbox.start()
     const observations = ingest

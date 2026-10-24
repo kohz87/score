@@ -35,7 +35,8 @@ const boundCallId = (id: string) => id.slice(0, 200)
 export interface RunTranslation {
   runId: string
   agentId: string
-  roomId: string | null
+  /** The job whose CLI session this run resumes or starts (null: not a room turn). */
+  jobId: string | null
   /** An orchestration- or workflow-owned run (7.7b §6): it never writes Chat's (room, agent) session cache. */
   owned: boolean
   seq: number
@@ -61,9 +62,9 @@ export function pendingBytes(translation: RunTranslation, info: TerminalInfo): n
 export const newTranslation = (
   runId: string,
   agentId: string,
-  roomId: string | null,
+  jobId: string | null,
   owned = false,
-): RunTranslation => ({ runId, agentId, roomId, owned, seq: 0, calls: new Map(), usage: null })
+): RunTranslation => ({ runId, agentId, jobId, owned, seq: 0, calls: new Map(), usage: null })
 
 function setRun(
   sqlite: DatabaseSync,
@@ -241,8 +242,8 @@ export function eventObservation(
           })
           // Durable as soon as it is known: a restart keeps the session so the next turn resumes it. An owned run keeps
           // its session on its run row only: Chat's cache for that room is never overwritten (7.7b §6).
-          if (translation.roomId && !translation.owned)
-            rememberCliSession(sqlite, translation.roomId, agentId, event.sessionId, now)
+          if (translation.jobId && !translation.owned)
+            rememberCliSession(sqlite, translation.jobId, agentId, event.sessionId, now)
           drafts.push(runDraft(sqlite, runId))
           break
         }

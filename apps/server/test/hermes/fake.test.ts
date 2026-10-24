@@ -103,7 +103,10 @@ test('the whole fake scenario passes real ingest validation and covers every scr
         type !== 'room.deleted' &&
         type !== 'session.compacted' &&
         type !== 'room-project.upserted' &&
-        type !== 'room-project.deleted',
+        type !== 'room-project.deleted' &&
+        // Jobs and exchanges (11.1b) come from people and agent actions; 11.2's fake team room scripts them.
+        type !== 'job.upserted' &&
+        type !== 'exchange.upserted',
     )
   expect([...new Set(stored.map((event) => event.type))].sort()).toEqual(expectedTypes.sort())
   expect(stored).toHaveLength(createScenario(schedulerStart).length + 4)

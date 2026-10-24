@@ -170,55 +170,52 @@ export function removeCodingAgent(sqlite: DatabaseSync, id: string, now: string)
   sqlite.prepare('DELETE FROM mcp_access WHERE agent_id = ?').run(id)
 }
 
-export function cliSessionFor(
-  sqlite: DatabaseSync,
-  roomId: string,
-  agentId: string,
-): string | null {
+// A coding CLI's own session per (job, agent) (PLAN 11.1b; per room before): a job's turns resume it.
+export function cliSessionFor(sqlite: DatabaseSync, jobId: string, agentId: string): string | null {
   const row = sqlite
-    .prepare('SELECT session_id FROM coding_sessions WHERE room_id = ? AND agent_id = ?')
-    .get(roomId, agentId) as { session_id: string } | undefined
+    .prepare('SELECT session_id FROM coding_sessions WHERE job_id = ? AND agent_id = ?')
+    .get(jobId, agentId) as { session_id: string } | undefined
   return row?.session_id ?? null
 }
 export function rememberCliSession(
   sqlite: DatabaseSync,
-  roomId: string,
+  jobId: string,
   agentId: string,
   sessionId: string,
   now: string,
 ): void {
   sqlite
     .prepare(
-      `INSERT INTO coding_sessions (room_id, agent_id, session_id, updated_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT (room_id, agent_id) DO UPDATE SET session_id = excluded.session_id, updated_at = excluded.updated_at`,
+      `INSERT INTO coding_sessions (job_id, agent_id, session_id, updated_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (job_id, agent_id) DO UPDATE SET session_id = excluded.session_id, updated_at = excluded.updated_at`,
     )
-    .run(roomId, agentId, sessionId, now)
+    .run(jobId, agentId, sessionId, now)
 }
 /** The hash of the role/instructions block this session last received ('' = none; also for sessions from before 8.8). */
 export function cliSessionInstructions(
   sqlite: DatabaseSync,
-  roomId: string,
+  jobId: string,
   agentId: string,
 ): string {
   const row = sqlite
-    .prepare('SELECT instructions_hash FROM coding_sessions WHERE room_id = ? AND agent_id = ?')
-    .get(roomId, agentId) as { instructions_hash: string | null } | undefined
+    .prepare('SELECT instructions_hash FROM coding_sessions WHERE job_id = ? AND agent_id = ?')
+    .get(jobId, agentId) as { instructions_hash: string | null } | undefined
   return row?.instructions_hash ?? ''
 }
 export function rememberCliInstructions(
   sqlite: DatabaseSync,
-  roomId: string,
+  jobId: string,
   agentId: string,
   hash: string,
 ): void {
   sqlite
-    .prepare('UPDATE coding_sessions SET instructions_hash = ? WHERE room_id = ? AND agent_id = ?')
-    .run(hash === '' ? null : hash, roomId, agentId)
+    .prepare('UPDATE coding_sessions SET instructions_hash = ? WHERE job_id = ? AND agent_id = ?')
+    .run(hash === '' ? null : hash, jobId, agentId)
 }
-export function forgetCliSession(sqlite: DatabaseSync, roomId: string, agentId: string): void {
+export function forgetCliSession(sqlite: DatabaseSync, jobId: string, agentId: string): void {
   sqlite
-    .prepare('DELETE FROM coding_sessions WHERE room_id = ? AND agent_id = ?')
-    .run(roomId, agentId)
+    .prepare('DELETE FROM coding_sessions WHERE job_id = ? AND agent_id = ?')
+    .run(jobId, agentId)
 }
 
 const QuotaRowSchema = z.object({

@@ -105,3 +105,19 @@ test('a crash retry re-reads the bytes from the media store', async () => {
     intents().startRunIntent({ profile: 'builder', input: 'look', images: ['r2'] }, 'retry-turn'),
   ).rejects.toThrow('different request')
 })
+
+test('a rendered capability reaches Hermes in the text part of an image turn too (11.1b review)', async () => {
+  store.set('m1', Buffer.from('first'))
+  const capability = `xtc_${'Q'.repeat(43)}`
+  await intents().startRunIntent(
+    { profile: 'builder', input: 'look {{SCORE_EXCHANGE_CAPABILITY}}', images: ['m1'] },
+    'img-xtc-turn',
+    { render: (input) => input.replaceAll('{{SCORE_EXCHANGE_CAPABILITY}}', capability) },
+  )
+  const [message] = lastBody().input as { content: { type: string; text?: string }[] }[]
+  expect(message!.content[0]).toEqual({ type: 'text', text: `look ${capability}` })
+  const payload = (
+    env.db.sqlite.prepare('SELECT payload FROM command_intents').get() as { payload: string }
+  ).payload
+  expect(payload).not.toContain(capability)
+})

@@ -40,6 +40,8 @@ export function redact(text: string): string {
       .replace(/(?<![A-Za-z0-9])scm_[A-Za-z0-9_-]{8,}/g, '[redacted]')
       // Orchestration capabilities (orc_ + base64url, 7.5): bearer authority for one lead attempt.
       .replace(/orc_[A-Za-z0-9_-]{8,}/g, '[redacted]')
+      // Exchange capabilities (xtc_ + base64url, 11.1b): bearer authority for one agent turn.
+      .replace(/xtc_[A-Za-z0-9_-]{8,}/g, '[redacted]')
       // One-time pairing links (/pair#<token>) work for whoever holds them: never let one reach a log or a page.
       .replace(/(\/pair#)[A-Za-z0-9_-]{16,}/g, '$1[redacted]')
       // URL query secrets and userinfo: the assignment pass below would otherwise swallow "https:" + the whole URL.

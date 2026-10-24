@@ -9,6 +9,7 @@ import {
 import { HttpError } from '../errors.ts'
 import { redact, redactBounded } from '../redact.ts'
 import { assertAgentAdmits } from './agent-lifecycle.ts'
+import { defaultJobId } from './job-sessions.ts'
 import { reserveMessageRun } from './message-runs.ts'
 import { rewindingRooms } from './room-rewinding.ts'
 import { messageFromRow, roomRow } from './rooms.ts'
@@ -53,21 +54,23 @@ const line = (message: Message) =>
 function transcript(
   sqlite: DatabaseSync,
   roomId: string,
+  jobId: string,
   after: { createdAt: string; id: string } | null,
   excludeId?: string,
 ): Message[] {
   const rows = after
     ? sqlite
         .prepare(
-          `SELECT * FROM messages WHERE room_id = ? AND deleted_at IS NULL AND id != ? AND (created_at, id) > (?, ?)
+          `SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND deleted_at IS NULL AND id != ?
+             AND (created_at, id) > (?, ?)
            ORDER BY created_at, id`,
         )
-        .all(roomId, excludeId ?? '', after.createdAt, after.id)
+        .all(roomId, jobId, excludeId ?? '', after.createdAt, after.id)
     : sqlite
         .prepare(
-          'SELECT * FROM messages WHERE room_id = ? AND deleted_at IS NULL AND id != ? ORDER BY created_at, id',
+          'SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND deleted_at IS NULL AND id != ? ORDER BY created_at, id',
         )
-        .all(roomId, excludeId ?? '')
+        .all(roomId, jobId, excludeId ?? '')
   return rows.map(messageFromRow).filter((message) => !isSummary(message))
 }
 
@@ -78,9 +81,20 @@ export interface UsableSummary {
   boundary: { createdAt: string; id: string }
 }
 
+/** The job a summary call is about: the given one, else the room's default job (PLAN 11.1b). */
+function jobFor(sqlite: DatabaseSync, roomId: string, jobId: string | undefined): string {
+  const id = jobId ?? defaultJobId(sqlite, roomId)
+  if (!id) throw new HttpError(404, 'not_found', 'Couldn’t find that room.')
+  return id
+}
+
 /** The newest visible summary that may still be used as context (not stale, and nothing it covers was hidden). */
-export function usableSummary(sqlite: DatabaseSync, roomId: string): UsableSummary | null {
-  const newest = visibleSummaries(sqlite, roomId)[0]
+export function usableSummary(
+  sqlite: DatabaseSync,
+  roomId: string,
+  jobId?: string,
+): UsableSummary | null {
+  const newest = visibleSummaries(sqlite, roomId, jobFor(sqlite, roomId, jobId))[0]
   if (!newest || newest.part.stale || coveredMessageHidden(sqlite, roomId, newest)) return null
   const boundary = sqlite
     .prepare('SELECT created_at, id FROM messages WHERE id = ? AND room_id = ?')
@@ -101,11 +115,14 @@ export function usableSummary(sqlite: DatabaseSync, roomId: string): UsableSumma
 export function summaryContext(
   sqlite: DatabaseSync,
   roomId: string,
+  jobId: string,
   excludeId: string,
 ): string | null {
-  const summary = usableSummary(sqlite, roomId)
+  const summary = usableSummary(sqlite, roomId, jobId)
   if (!summary) return null
-  const after = transcript(sqlite, roomId, summary.boundary, excludeId).slice(-MAX_TAIL_MESSAGES)
+  const after = transcript(sqlite, roomId, jobId, summary.boundary, excludeId).slice(
+    -MAX_TAIL_MESSAGES,
+  )
   const lines: string[] = []
   let size = 0
   for (const message of after.toReversed()) {
@@ -123,22 +140,23 @@ export function summaryContext(
 }
 
 /** Estimated tokens (characters / 4) of the room's visible text that no usable summary covers. */
-export function uncoveredTokens(sqlite: DatabaseSync, roomId: string): number {
-  const summary = usableSummary(sqlite, roomId)
-  const chars = transcript(sqlite, roomId, summary?.boundary ?? null).reduce(
+export function uncoveredTokens(sqlite: DatabaseSync, roomId: string, jobId?: string): number {
+  const job = jobFor(sqlite, roomId, jobId)
+  const summary = usableSummary(sqlite, roomId, job)
+  const chars = transcript(sqlite, roomId, job, summary?.boundary ?? null).reduce(
     (sum, message) => sum + textOf(message).length,
     0,
   )
   return Math.ceil(chars / 4)
 }
 
-function summaryRunOpen(sqlite: DatabaseSync, roomId: string): boolean {
+function summaryRunOpen(sqlite: DatabaseSync, roomId: string, jobId: string): boolean {
   return Boolean(
     sqlite
       .prepare(
-        "SELECT 1 FROM message_runs WHERE room_id = ? AND purpose = 'summary' AND state IN ('pending', 'active')",
+        "SELECT 1 FROM message_runs WHERE room_id = ? AND job_id = ? AND purpose = 'summary' AND state IN ('pending', 'active')",
       )
-      .get(roomId),
+      .get(roomId, jobId),
   )
 }
 
@@ -151,18 +169,24 @@ function whyHeld(sqlite: DatabaseSync, roomId: string, leadAgentId: string): str
   return null
 }
 
-/** Reserves the summary run through the room's lead agent. Returns the reply message id. */
-export function requestSummary(sqlite: DatabaseSync, roomId: string, now: string): string {
+/** Reserves the summary run of a job through the room's lead agent. Returns the reply message id. */
+export function requestSummary(
+  sqlite: DatabaseSync,
+  roomId: string,
+  now: string,
+  jobId?: string,
+): string {
   const room = roomRow(sqlite, roomId)
+  const job = jobFor(sqlite, roomId, jobId)
   const lead = room.lead_agent_id
   if (!lead) throw new HttpError(409, 'conflict', 'This room has no lead agent to write a summary.')
   const held = whyHeld(sqlite, roomId, lead)
   if (held) throw new HttpError(409, 'conflict', held)
-  if (summaryRunOpen(sqlite, roomId))
+  if (summaryRunOpen(sqlite, roomId, job))
     throw new HttpError(409, 'conflict', 'A summary is already being written.')
   assertAgentAdmits(sqlite, lead)
-  const previous = usableSummary(sqlite, roomId)
-  const messages = transcript(sqlite, roomId, previous?.boundary ?? null)
+  const previous = usableSummary(sqlite, roomId, job)
+  const messages = transcript(sqlite, roomId, job, previous?.boundary ?? null)
   // Only what is finished: stop before the first message still being written.
   const firstOpen = messages.findIndex((message) => message.streaming)
   const covered = firstOpen === -1 ? messages : messages.slice(0, firstOpen)
@@ -185,9 +209,9 @@ export function requestSummary(sqlite: DatabaseSync, roomId: string, now: string
   // chain_id must name a message; a brief's root would make the summary run part of that brief's work and status.
   const chain = sqlite
     .prepare(
-      'SELECT id FROM messages WHERE room_id = ? AND id NOT IN (SELECT id FROM briefs) ORDER BY created_at DESC, id DESC LIMIT 1',
+      'SELECT id FROM messages WHERE room_id = ? AND job_id = ? AND id NOT IN (SELECT id FROM briefs) ORDER BY created_at DESC, id DESC LIMIT 1',
     )
-    .get(roomId) as { id: string } | undefined
+    .get(roomId, job) as { id: string } | undefined
   return reserveMessageRun(
     sqlite,
     {
@@ -207,28 +231,30 @@ export function requestSummary(sqlite: DatabaseSync, roomId: string, now: string
 }
 
 /** After a message completed: should this room be summarised now? (cheap read; `requestSummary` re-checks) */
-export function shouldAutoSummarise(sqlite: DatabaseSync, roomId: string): boolean {
+export function shouldAutoSummarise(sqlite: DatabaseSync, roomId: string, jobId?: string): boolean {
   const row = sqlite
     .prepare('SELECT auto_summary, lead_agent_id FROM rooms WHERE id = ?')
     .get(roomId) as { auto_summary: string | null; lead_agent_id: string | null } | undefined
   if (!row?.lead_agent_id) return false
   const setting = autoSummaryOf(row.auto_summary)
   if (!setting.enabled) return false
-  if (whyHeld(sqlite, roomId, row.lead_agent_id) || summaryRunOpen(sqlite, roomId)) return false
+  const job = jobFor(sqlite, roomId, jobId)
+  if (whyHeld(sqlite, roomId, row.lead_agent_id) || summaryRunOpen(sqlite, roomId, job))
+    return false
   // A failed attempt is not repeated until the person writes again, so a broken lead does not loop.
   const failed = sqlite
     .prepare(
-      "SELECT created_at FROM message_runs WHERE room_id = ? AND purpose = 'summary' AND state = 'failed' ORDER BY created_at DESC LIMIT 1",
+      "SELECT created_at FROM message_runs WHERE room_id = ? AND job_id = ? AND purpose = 'summary' AND state = 'failed' ORDER BY created_at DESC LIMIT 1",
     )
-    .get(roomId) as { created_at: string } | undefined
+    .get(roomId, job) as { created_at: string } | undefined
   if (
     failed &&
     !sqlite
       .prepare(
-        "SELECT 1 FROM messages WHERE room_id = ? AND author_kind = 'you' AND deleted_at IS NULL AND created_at > ?",
+        "SELECT 1 FROM messages WHERE room_id = ? AND job_id = ? AND author_kind = 'you' AND deleted_at IS NULL AND created_at > ?",
       )
-      .get(roomId, failed.created_at)
+      .get(roomId, job, failed.created_at)
   )
     return false
-  return uncoveredTokens(sqlite, roomId) > setting.thresholdTokens
+  return uncoveredTokens(sqlite, roomId, job) > setting.thresholdTokens
 }

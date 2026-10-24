@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { ShareSummarySchema, type ShareSummary } from '@score/contract'
 import { z } from 'zod'
+import { HttpError } from '../errors.ts'
 import { redact } from '../redact.ts'
 import type { ShareSnapshot } from '../shares/page.ts'
 import { releaseShareMedia, retainShareMedia } from './media-refs.ts'
@@ -30,17 +31,23 @@ export function wellFormedToken(token: string): boolean {
 export function buildShareSnapshot(
   sqlite: DatabaseSync,
   roomId: string,
+  jobId: string,
   names: ReadonlyMap<string, string>,
   includeImages: boolean,
 ): ShareSnapshot {
   const room = roomRow(sqlite, roomId)
+  const job = sqlite
+    .prepare('SELECT title, is_default FROM jobs WHERE id = ? AND room_id = ?')
+    .get(jobId, roomId) as { title: string; is_default: number } | undefined
+  if (!job) throw new HttpError(404, 'not_found', 'Couldn’t find that job in this room.')
   const images: string[] = []
+  // One job's thread (PLAN 11.1b): a room's other jobs are separate conversations.
   const rows = sqlite
     .prepare(
-      `SELECT * FROM (SELECT * FROM messages WHERE room_id = ? AND deleted_at IS NULL AND streaming = 0
+      `SELECT * FROM (SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND deleted_at IS NULL AND streaming = 0
          ORDER BY created_at DESC, id DESC LIMIT ?) ORDER BY created_at, id`,
     )
-    .all(roomId, MAX_MESSAGES)
+    .all(roomId, jobId, MAX_MESSAGES)
   const messages = rows
     .map(messageFromRow)
     .map((message) => {
@@ -67,7 +74,7 @@ export function buildShareSnapshot(
       }
     })
     .filter((message) => message.text !== '' || message.images.length > 0)
-  return { title: redact(room.name), messages, images }
+  return { title: redact(job.is_default ? room.name : job.title), messages, images }
 }
 
 const ShareRowSchema = z.object({
@@ -88,6 +95,7 @@ export function insertShare(
   share: {
     id: string
     roomId: string
+    jobId: string
     tokenHash: string
     createdAt: string
     expiresAt: string
@@ -105,12 +113,13 @@ export function insertShare(
   for (const id of oldIds) sqlite.prepare('DELETE FROM room_shares WHERE id = ?').run(id)
   sqlite
     .prepare(
-      `INSERT INTO room_shares (id, room_id, token_hash, created_at, expires_at, include_images, snapshot)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO room_shares (id, room_id, job_id, token_hash, created_at, expires_at, include_images, snapshot)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       share.id,
       share.roomId,
+      share.jobId,
       share.tokenHash,
       share.createdAt,
       share.expiresAt,
