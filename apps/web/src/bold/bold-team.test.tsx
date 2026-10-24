@@ -726,17 +726,17 @@ test('Asks you first checkboxes update the permission through the classic mutati
   })
 })
 
-test('More offers the appearance editor with the pet pack', async () => {
+test('More offers the appearance editor', async () => {
   open('/b/team/builder')
   fireEvent.click(await screen.findByRole('button', { name: /^More: memory/ }))
   const appearance = document.querySelector('#agent-appearance')!
   fireEvent.click(
     within(appearance as HTMLElement).getByRole('button', {
-      name: /Change builder.s look, colour and shape/,
+      name: /Change builder.s colour and shape/,
     }),
   )
   expect(await screen.findByRole('dialog', { name: 'Agent appearance' })).toBeDefined()
-  expect(screen.getByRole('heading', { name: 'Pet pack', level: 3 })).toBeDefined()
+  expect(screen.getByRole('radio', { name: 'star' })).toBeDefined()
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
   expect(screen.queryByRole('dialog', { name: 'Agent appearance' })).toBeNull()
 })

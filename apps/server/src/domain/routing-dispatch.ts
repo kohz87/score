@@ -137,10 +137,12 @@ export class RoutingDispatcher {
           identity: `input:${job.turn_id}`,
           apply: ({ sqlite }) => {
             if (job.admission_input !== null) return []
-            // A room that routes with exchanges gives the turn its job's context and how to act (PLAN 11.1b).
-            let input = exchangesRoom(sqlite, job.room_id)
-              ? jobRunInput(sqlite, job, { coding: codingAgent(sqlite, job.agent_id) })
-              : roomRunInput(sqlite, job.room_id, job.input, job.parent_message_id, job.job_id)
+            // A room that routes with exchanges gives the turn its job's context and how to act (PLAN 11.1b). A
+            // plan-first turn only proposes a plan, so it gets the room's context and no actions.
+            let input =
+              exchangesRoom(sqlite, job.room_id) && !job.plan_first
+                ? jobRunInput(sqlite, job, { coding: codingAgent(sqlite, job.agent_id) })
+                : roomRunInput(sqlite, job.room_id, job.input, job.parent_message_id, job.job_id)
             // An imported room whose Hermes session could not be continued: the first turn carries a recap (PLAN 5.26).
             // Only the job that runs in the room's own session continues it.
             const continuation = continuationFor(sqlite, job.room_id, job.agent_id)
@@ -198,7 +200,10 @@ export class RoutingDispatcher {
         // A Hermes agent's turn in an exchanges room acts through the bridge tools with a capability of its own: a
         // fresh one per start, only its hash stored, filled into the payload in memory (brief §4.2).
         const capability = this.db.read(
-          (sqlite) => exchangesRoom(sqlite, job.room_id) && !codingAgent(sqlite, job.agent_id),
+          (sqlite) =>
+            exchangesRoom(sqlite, job.room_id) &&
+            !job.plan_first &&
+            !codingAgent(sqlite, job.agent_id),
         )
           ? mintXtc()
           : null

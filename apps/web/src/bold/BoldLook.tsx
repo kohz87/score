@@ -135,11 +135,6 @@ export function BoldLook() {
             Calm: glows and typing dots. Still: nothing moves. Your device’s reduce-motion setting
             always wins.
           </span>
-          {motion === 'lively' && (
-            <span className="small muted">
-              Lively is on from the classic setting. Choose Calm or Still to change the new look.
-            </span>
-          )}
         </fieldset>
 
         <fieldset className="card bold-look-fieldset">

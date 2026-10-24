@@ -22,7 +22,8 @@ export function approvalOutcome(approval: Approval): string | null {
   return approvalChip(approval)?.text ?? null
 }
 
-function whereToAnswer(approval: Approval) {
+/** Where a pending approval outside Score must be answered (the bold room shows the same note). */
+export function whereToAnswer(approval: Approval) {
   const task = approval.refs.find((ref) => ref.kind === 'task')
   if (approval.origin === 'kanban' && task)
     return (

@@ -66,7 +66,7 @@ function DockRing({
       }}
     >
       <span className="dock-ring-inner">
-        <AgentGlyph agent={agent} size="sm" plain bare decorative />
+        <AgentGlyph agent={agent} size="sm" bare decorative />
       </span>
     </button>
   )

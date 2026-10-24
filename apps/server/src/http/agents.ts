@@ -11,7 +11,6 @@ import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { AgentDetailSchema } from '@score/contract'
 import {
-  completeStyle,
   readAgent,
   readAgentStyle,
   reconcileAgents,
@@ -36,12 +35,17 @@ const ParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
 const FileParamsSchema = ParamsSchema.extend({ file: z.string() })
 const PreviewBodySchema = z.object({ content: z.string() }).strict()
 const PutFileBodySchema = z.object({ content: z.string(), etag: EtagSchema }).strict()
-// `pack` is accepted and dropped: the pet pack is only ever set by its own routes.
-const StylePatchSchema = AgentStylePatchSchema.extend({ pack: z.unknown().optional() })
+// `look` and `pack` (removed in 11.11) are accepted and dropped, so a browser tab left open across the update still saves.
+const StylePatchSchema = AgentStylePatchSchema.extend({
+  look: z.unknown().optional(),
+  pack: z.unknown().optional(),
+})
   .strict()
   .transform(
     (body) =>
-      Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'pack')) as AgentStylePatch,
+      Object.fromEntries(
+        Object.entries(body).filter(([key]) => key !== 'pack' && key !== 'look'),
+      ) as AgentStylePatch,
   )
   .refine((body) => Object.keys(body).length > 0)
 export function registerAgentRoutes(
@@ -103,19 +107,17 @@ export function registerAgentRoutes(
         apply({ sqlite, now }) {
           const previous = readAgent(sqlite, agentId)
           if (!previous) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
-          const style = completeStyle(
-            AgentStyleSchema.parse({
-              ...(readAgentStyle(sqlite, agentId) ??
-                getCodingAgent(sqlite, agentId)?.style ??
-                previous.style),
-              ...patch,
-            }),
-          )
+          const style = AgentStyleSchema.parse({
+            ...(readAgentStyle(sqlite, agentId) ??
+              getCodingAgent(sqlite, agentId)?.style ??
+              previous.style),
+            ...patch,
+          })
           const agent = AgentDetailSchema.parse({ ...previous, style })
           writeAgentStyle(sqlite, agentId, style, now)
           storeAgent(sqlite, agent)
           response = AgentSummarySchema.parse(agent)
-          return JSON.stringify(completeStyle(previous.style)) === JSON.stringify(style)
+          return JSON.stringify(previous.style) === JSON.stringify(style)
             ? []
             : [{ type: 'agent.updated', data: response }]
         },

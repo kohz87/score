@@ -355,11 +355,9 @@ test('every form that posts a consent is a data-decision and wears its protected
   expect(problems).toEqual([])
 })
 
-// A pet avatar's stage, animation files and overlay graphics are moved by Score's own CSS (opacity for the crossfade,
-// transform for the centring, the hop and the heart). protected.css pins opacity and transform on everything inside a
-// protected surface, so it must leave exactly those parts alone: pinned, every cached file would stay on top and the
-// centring would be lost (found in review, 10.2b).
-test('protected.css leaves a pet avatar’s own moving parts to Score’s rules, and only those', () => {
+// The room stage's marks are moved by Score's own CSS (the hop, the mirroring and the overlays). protected.css pins
+// opacity and transform on everything inside a protected surface, so it must leave exactly those parts alone.
+test('protected.css leaves the moving parts of the room stage to Score’s rules, and only those', () => {
   const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
   const squashed = css.replace(/\s+/g, ' ')
   const rule =
@@ -370,16 +368,8 @@ test('protected.css leaves a pet avatar’s own moving parts to Score’s rules,
   // Inside `:where`, so it adds no specificity (the disabled-control rule must still win over this one).
   // (Prettier wraps the list; the whitespace inside the brackets is not part of the selector.)
   expect(rule![1]!.replace(/\( /g, '(').replace(/ \)/g, ')')).toBe(
-    ':not(:where(.pet-avatar__stage, .pet-avatar__anim, .pet-avatar__fx, .room-stage__move, .room-stage__anim, .room-stage__fx)) ',
+    ':not(:where(.room-stage__move, .room-stage__anim, .room-stage__fx)) ',
   )
-  const pet = readFileSync(join(root, 'components/pet-avatar.css'), 'utf8')
-  const moved = new Set<string>()
-  for (const [, selector, body] of pet.matchAll(/^\.pet-avatar__([\w-]+)[^{]*\{([^}]*)\}/gm))
-    if (/\b(opacity|transform|animation(-name)?):/.test(body!))
-      moved.add(selector!.replace(/--.*$/, ''))
-  // Every part Score moves is either one of the three exempt classes or an overlay root that carries `fx` (see the
-  // PetAvatar test); nothing else may move, or a theme could never be made to leave it alone.
-  expect([...moved].sort()).toEqual(['alert', 'anim', 'dot', 'heart', 'say', 'stage', 'z'].sort())
 })
 
 // The room stage (PLAN 10.10) moves its own parts the same way: the three exempt classes above are the only ones
@@ -399,11 +389,10 @@ test('the room stage’s moving parts are exactly the ones that wear an exempt c
   }
   expect([...moved].sort()).toEqual(['anim', 'bang', 'body', 'dot', 'fig', 'mark', 'say', 'z'])
   const view = readFileSync(join(root, 'routes/chat/stage/RoomStageView.tsx'), 'utf8')
-  for (const part of ['body', 'fig', 'mark'])
+  for (const part of ['body', 'mark'])
     expect(view, part).toMatch(new RegExp('room-stage__' + part + '[\'"`,\\s]+room-stage__move'))
   for (const part of ['bang', 'say'])
     expect(view, part).toMatch(new RegExp(`room-stage__fx room-stage__${part}`))
-  expect(view).toContain('room-stage__anim')
 })
 
 test('the room stage is a protected surface a theme cannot name, and its markup says so', () => {

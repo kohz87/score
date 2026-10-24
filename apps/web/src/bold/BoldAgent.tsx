@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
-import { activityOfStatus } from '../components/agent-activity.ts'
 import { runtimeLabel } from '../components/runtime-label.ts'
 import { TodoItems, todoProgress, useAgentTodos } from '../components/TodoList.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
@@ -193,9 +192,7 @@ function AppearanceCard({ agent }: { agent: AgentDetail }) {
   return (
     <section className="team-card" aria-labelledby="agent-appearance-heading">
       <h2 id="agent-appearance-heading">Appearance</h2>
-      <p className="team-muted">
-        Change {agent.name}’s look, colour and shape, or give it a pet pack.
-      </p>
+      <p className="team-muted">Change {agent.name}’s colour and shape.</p>
       <AgentStylePicker key={agent.id} agent={agent} />
     </section>
   )
@@ -336,7 +333,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
         <span className="muted" aria-hidden>
           /
         </span>
-        <AgentGlyph agent={agent} size="md" activity={activityOfStatus(agent.status)} decorative />
+        <AgentGlyph agent={agent} size="md" decorative />
         <h1 className="big" id="agent-title">
           {agent.id}
         </h1>

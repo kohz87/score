@@ -121,14 +121,23 @@ for (const viewport of sizes) {
     })
 
     test(`approvals and a paused review are protected request cards at ${at}`, async ({ page }) => {
-      const state = await openBoldRoom(page)
+      // The exchange answer comes back without the exchange leaving its pause, so the sent note stays readable.
+      const state = await openBoldRoom(page, {
+        handle: (request) =>
+          request.method === 'POST' && /^\/api\/exchanges\/[^/]+\/decision$/.test(request.path)
+            ? { body: { ok: true } }
+            : undefined,
+      })
 
       const approval = page.getByRole('article', { name: /May I install a package/ })
       const review = page.getByRole('article', {
         name: /The review ended without a verdict/,
       })
       await expect(approval).toHaveAttribute('data-protected', 'flex')
+      await expect(review).toBeHidden()
+      await page.getByRole('button', { name: '1 more needs you' }).click()
       await expect(review).toHaveAttribute('data-protected', 'flex')
+      await expect(review).toBeVisible()
       await expect(approval).toContainText('npm install ws@8')
       await expect(review).toContainText('Release notes 2.4')
 

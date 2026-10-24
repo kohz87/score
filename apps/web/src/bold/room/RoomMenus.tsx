@@ -41,6 +41,9 @@ function useMenu(
     function onPointerDown(event: PointerEvent) {
       if (!root.current?.contains(event.target as Node)) setOpen(false)
     }
+    function onFocusIn(event: FocusEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false)
+    }
     function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       event.preventDefault()
@@ -48,10 +51,12 @@ function useMenu(
       trigger.current?.focus()
     }
     document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('focusin', onFocusIn)
     document.addEventListener('keydown', onKeyDown)
     return () => {
       cancelAnimationFrame(first)
       document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('focusin', onFocusIn)
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [open, root, setOpen, trigger])
@@ -82,6 +87,10 @@ function RoomDot({ team }: { team: boolean }) {
   return <span className={`bold-room-dot${team ? ' team' : ''}`} aria-hidden="true" />
 }
 
+function isOlderRoom(room: Room): boolean {
+  return room.role !== 'team' && room.kind === 'room' && !room.importedFrom
+}
+
 export function RoomSwitcher({
   current,
   teamRoom,
@@ -106,12 +115,10 @@ export function RoomSwitcher({
   const sessions = useOutsideSessions(open)
   const close = useMenu(open, setOpen, root, trigger)
 
-  const older = rooms.filter(
+  const older = rooms.filter((room) => room.id !== teamRoom?.id && isOlderRoom(room))
+  const imported = rooms.filter(
     (room) =>
-      room.id !== teamRoom?.id &&
-      room.role !== 'team' &&
-      room.kind === 'room' &&
-      !room.importedFrom,
+      room.id !== teamRoom?.id && room.role !== 'team' && room.kind === 'room' && room.importedFrom,
   )
   const chooseRoom = (room: Room) => {
     close()
@@ -134,6 +141,7 @@ export function RoomSwitcher({
         onClick={() => setOpen((value) => !value)}
       >
         {current?.name ?? 'Team room'}
+        {current && isOlderRoom(current) && <span className="bold-room-kind">Older room</span>}
         <ChevronIcon />
       </button>
       {open && (
@@ -143,9 +151,6 @@ export function RoomSwitcher({
           role="listbox"
           aria-label="Rooms and chats elsewhere"
           onKeyDown={moveInMenu}
-          onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false)
-          }}
         >
           <div className="sec">Rooms</div>
           {teamRoom && (
@@ -184,6 +189,25 @@ export function RoomSwitcher({
                   {room.importedFrom
                     ? `Imported from ${room.importedFrom.label}`
                     : 'Older room · read-write with @mentions'}
+                </span>
+              </span>
+            </button>
+          ))}
+          {imported.length > 0 && <div className="sec">Imported chats</div>}
+          {imported.map((room) => (
+            <button
+              key={room.id}
+              type="button"
+              role="option"
+              aria-selected={current?.id === room.id}
+              className={`mi${current?.id === room.id ? ' sel' : ''}`}
+              onClick={() => chooseRoom(room)}
+            >
+              <RoomDot team={false} />
+              <span className="menu-copy">
+                <b>{room.name}</b>
+                <span className="small muted">
+                  Imported from {room.importedFrom?.label ?? 'Elsewhere'} · read-write
                 </span>
               </span>
             </button>
@@ -240,7 +264,7 @@ export function RoomSwitcher({
 
 function OutsideGlyph({ agent }: { agent: AgentSummary | undefined }) {
   return agent ? (
-    <AgentGlyph agent={agent} size="sm" plain bare decorative />
+    <AgentGlyph agent={agent} size="sm" bare decorative />
   ) : (
     <span className="bold-outside-glyph" aria-hidden="true" />
   )
@@ -283,9 +307,6 @@ export function RoomMenu({
           aria-label={`${room.name} actions`}
           data-protected="flex"
           onKeyDown={moveInMenu}
-          onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false)
-          }}
         >
           <a
             className="mi"
@@ -376,9 +397,6 @@ export function JobMenu({
           aria-label={`${job.title} actions`}
           data-protected="flex"
           onKeyDown={moveInMenu}
-          onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false)
-          }}
         >
           <button
             type="button"

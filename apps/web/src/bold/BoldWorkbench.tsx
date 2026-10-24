@@ -51,7 +51,6 @@ function AgentName({ agent, id }: { agent: AgentSummary | undefined; id: string 
       <AgentGlyph
         agent={agent ?? { id, name: id, style: { color: '#626670', shape: 'circle-dot' } }}
         size="xs"
-        plain
         bare
         decorative
       />
@@ -154,7 +153,6 @@ function CursorMark({
             }
           }
           size="xs"
-          plain
           bare
           decorative
         />

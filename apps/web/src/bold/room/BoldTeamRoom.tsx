@@ -245,7 +245,15 @@ function LoadedTeamRoom({
           </button>
         </div>
       )}
-      {!empty && <RoomRequests jobs={allJobs} agents={agents} selectedJob={selectedJob} />}
+      {!empty && (
+        <RoomRequests
+          roomId={room.id}
+          jobs={allJobs}
+          agents={agents}
+          selectedJob={selectedJob}
+          messages={baseMessages.data?.items ?? []}
+        />
+      )}
       {empty ? (
         <RoomEmpty agents={agents} onStart={startWith} />
       ) : (

@@ -13,8 +13,8 @@ process.env.TMPDIR = root
 // journal folder still sets SCORE_JOURNAL_DIR itself.
 process.env.XDG_STATE_HOME = join(root, 'state')
 // Never the real home either: a server built with `loadConfig({})` defaults its home to ~/.score, and its start-up
-// cleanups (pet packs, staged zips) would then delete the owner's files that the test database doesn't name
-// (2026-10-19: a full run removed a live agent's pet pack). os.homedir() follows HOME.
+// cleanups (staged zips) would then delete the owner's files that the test database doesn't name
+// (2026-10-19: a full run removed a live agent's files). os.homedir() follows HOME.
 process.env.HOME = join(root, 'home')
 mkdirSync(process.env.HOME, { recursive: true })
 delete process.env.SCORE_JOURNAL_DIR
