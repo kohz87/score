@@ -564,7 +564,7 @@ reaches the lead only quoted and redacted (snapshot test); report-back runs as a
 "Reported back" only on a matching tool-call record, otherwise "not confirmed" with Try again; `docs/SETUP.md` gains
 "One Score per team" (D14–D16).
 
-**11.2 Contract and fake data for the new screens** · **Lead** · one-to-ones as jobs in direct rooms (privacy rules),
+**11.2 Contract and fake data for the new screens** ✅ · **Lead** · one-to-ones as jobs in direct rooms (privacy rules),
 references, share to room, pins (migration 0084), `GET /api/jobs/:id/results` and its derivation from watch frames,
 tool calls and exchange outcomes (brief §6, §10); fake-adapter fixtures that produce a team room with jobs, exchanges,
 results, one-to-ones and a paused exchange. Done when: contract doc + schemas + server routes with `inject()` tests;
