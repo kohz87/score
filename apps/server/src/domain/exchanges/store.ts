@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import {
+  EXCHANGE_LIMITS,
   JobSourceSchema,
   ExchangeSchema,
   JobSchema,
@@ -8,6 +9,7 @@ import {
   type ExchangeOption,
   type ExchangePauseReason,
   type Job,
+  type JobCreateRequest,
 } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
@@ -27,6 +29,9 @@ const JobRowSchema = z.object({
   source: z.string().nullable(),
   exchange_budget: z.int(),
   job_turn_limit: z.int(),
+  spend_cap_usd: z.number().nullable(),
+  recipe_kind: z.enum(['orchestration', 'workflow']).nullable(),
+  recipe_ref: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -93,6 +98,9 @@ function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
     isDefault: row.is_default === 1,
     exchangeBudget: row.exchange_budget,
     jobTurnLimit: row.job_turn_limit,
+    spendCapUsd: row.spend_cap_usd,
+    recipe:
+      row.recipe_kind && row.recipe_ref ? { kind: row.recipe_kind, ref: row.recipe_ref } : null,
     unread: counts.unread ?? 0,
     activeAgents: busy.map((agent) => agent.agent_id),
     lastMessageAt: counts.last,
@@ -358,6 +366,7 @@ export function createJob(
   roomId: string,
   title: string,
   now: string,
+  options: Omit<JobCreateRequest, 'title'> = {},
 ): { job: Job; drafts: DomainEventDraft[] } {
   const room = sqlite.prepare('SELECT routing, role FROM rooms WHERE id = ?').get(roomId) as
     { routing: string; role: string } | undefined
@@ -369,10 +378,22 @@ export function createJob(
   const id = `job_${randomBytes(12).toString('hex')}`
   sqlite
     .prepare(
-      `INSERT INTO jobs (id, room_id, title, session_scheme, created_at, updated_at)
-       VALUES (?, ?, ?, 'job', ?, ?)`,
+      `INSERT INTO jobs (id, room_id, title, session_scheme, exchange_budget, job_turn_limit, spend_cap_usd,
+                         recipe_kind, recipe_ref, created_at, updated_at)
+       VALUES (?, ?, ?, 'job', ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, roomId, title, now, now)
+    .run(
+      id,
+      roomId,
+      title,
+      options.exchangeBudget ?? EXCHANGE_LIMITS.exchangeBudget,
+      options.jobTurnLimit ?? EXCHANGE_LIMITS.jobTurnLimit,
+      options.spendCapUsd ?? null,
+      options.recipe?.kind ?? null,
+      options.recipe?.ref ?? null,
+      now,
+      now,
+    )
   const drafts = jobEvent(sqlite, id)
   return { job: (drafts[0] as { data: Job }).data, drafts }
 }

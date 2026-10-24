@@ -67,6 +67,7 @@ export function EditorCanvas({
   onLayout,
   announce,
   overlay = null,
+  readOnly = false,
 }: {
   draft: Draft
   agents: AgentSummary[]
@@ -86,6 +87,8 @@ export function EditorCanvas({
   announce: (message: string) => void
   /** The states of a run going now, drawn over the nodes (PLAN 5.39); the draft is not touched. */
   overlay?: LiveOverlay | null
+  /** Show the drawing without editing it: selection stays, moving, connecting and deleting do not. */
+  readOnly?: boolean
 }) {
   const viewport = useRef<HTMLDivElement>(null)
   const world = useRef<HTMLDivElement>(null)
@@ -229,7 +232,7 @@ export function EditorCanvas({
   }
 
   function startConnect(event: PointerEvent<HTMLButtonElement>, from: string, port: string) {
-    if (event.button !== 0) return
+    if (readOnly || event.button !== 0) return
     event.preventDefault()
     drag.current = { x: event.clientX, y: event.clientY, moved: false }
     setConnecting({ from, port })
@@ -270,7 +273,7 @@ export function EditorCanvas({
     })
   }
   function startMove(event: PointerEvent<HTMLButtonElement>, id: string) {
-    if (event.button !== 0 || connecting) return
+    if (readOnly || event.button !== 0 || connecting) return
     const at = position.get(id)
     if (!at) return
     const point = worldPoint(event)
@@ -372,6 +375,7 @@ export function EditorCanvas({
       return
     }
     if (
+      !readOnly &&
       (event.key === 'm' || event.key === 'M') &&
       !event.ctrlKey &&
       !event.metaKey &&
@@ -385,7 +389,7 @@ export function EditorCanvas({
       )
       return
     }
-    if (event.key === 'Delete' || event.key === 'Backspace') {
+    if (!readOnly && (event.key === 'Delete' || event.key === 'Backspace')) {
       event.preventDefault()
       onDeleteNode(id)
       return
@@ -430,6 +434,7 @@ export function EditorCanvas({
   }, [connecting, announce])
 
   function onDrop(event: DragEvent, onto: string | null) {
+    if (readOnly) return
     const raw = event.dataTransfer.getData(PALETTE_MIME)
     setDropOn(null)
     if (!raw) return
@@ -460,22 +465,26 @@ export function EditorCanvas({
     <div className="wf-canvas">
       <div className="wf-canvas__bar">
         <span className="orch-muted">
-          {arranged
-            ? 'Drag a step to move it. Hold Alt to skip the grid.'
-            : 'Steps are arranged for you until you move one.'}
+          {readOnly
+            ? 'Read-only graph. Choose a step to inspect it.'
+            : arranged
+              ? 'Drag a step to move it. Hold Alt to skip the grid.'
+              : 'Steps are arranged for you until you move one.'}
         </span>
-        <button
-          type="button"
-          className="wf-arrange"
-          disabled={!arranged}
-          title={arranged ? undefined : 'Already arranged automatically'}
-          onClick={() => {
-            onLayout(withLayout(draft, undefined))
-            announce('Arranged automatically.')
-          }}
-        >
-          Arrange automatically
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="wf-arrange"
+            disabled={!arranged}
+            title={arranged ? undefined : 'Already arranged automatically'}
+            onClick={() => {
+              onLayout(withLayout(draft, undefined))
+              announce('Arranged automatically.')
+            }}
+          >
+            Arrange automatically
+          </button>
+        )}
         <div className="wf-zoom" role="group" aria-label="Zoom">
           <button
             type="button"
@@ -511,7 +520,7 @@ export function EditorCanvas({
           </button>
         </p>
       )}
-      {selectedEdge && (
+      {selectedEdge && !readOnly && (
         <p className="wf-banner" role="status">
           Connection from {nodeById.get(selectedEdge.from)?.label} to{' '}
           {nodeById.get(selectedEdge.to)?.label} selected.
@@ -524,7 +533,11 @@ export function EditorCanvas({
         ref={viewport}
         className="orch-canvas wf-canvas__viewport"
         role="group"
-        aria-label="Workflow canvas. Arrow keys move between steps, Enter selects one, M then the arrow keys moves the focused step, Delete removes it. Drag a step to place it. The outline below lists the same steps and connections."
+        aria-label={
+          readOnly
+            ? 'Read-only workflow graph. Arrow keys move between steps and Enter selects one.'
+            : 'Workflow canvas. Arrow keys move between steps, Enter selects one, M then the arrow keys moves the focused step, Delete removes it. Drag a step to place it. The outline below lists the same steps and connections.'
+        }
         onClick={(event) => {
           if (
             event.target === event.currentTarget ||
@@ -670,7 +683,7 @@ export function EditorCanvas({
                     data-node={node.id}
                     data-kind={node.kind}
                     aria-pressed={isOn}
-                    aria-keyshortcuts="M"
+                    aria-keyshortcuts={readOnly ? undefined : 'M'}
                     aria-label={`${KIND_LABEL[node.kind]} ${node.label || node.id}${node.kind === 'agent' ? `, ${glyph.name}${cli ? ` (${cli})` : ''}` : ''}${live ? `, ${visualLabel[live.visual]}${live.status ? `: ${live.status.replaceAll('`', '')}` : ''}` : ''}${mine.length > 0 ? `, ${mine.length} ${mine.length === 1 ? 'problem' : 'problems'}` : ''}`}
                     tabIndex={node.id === focusId ? 0 : -1}
                     onFocus={() => setActiveId(node.id)}
@@ -716,34 +729,35 @@ export function EditorCanvas({
                       {worst === 'error' ? '✕' : '!'} {mine.length}
                     </span>
                   )}
-                  {ports.map((port, index) => (
-                    <button
-                      key={port.id}
-                      type="button"
-                      className={`wf-handle${connecting?.from === node.id && connecting.port === port.id ? ' wf-handle--on' : ''}`}
-                      style={{ top: ((index + 1) * size.h) / (ports.length + 1) - 8 }}
-                      aria-label={`Connect ${node.label || node.id} (${port.label})`}
-                      aria-pressed={connecting?.from === node.id && connecting.port === port.id}
-                      tabIndex={node.id === focusId ? 0 : -1}
-                      onPointerDown={(event) => startConnect(event, node.id, port.id)}
-                      onPointerMove={moveConnect}
-                      onPointerUp={endConnect}
-                      onClick={(event) => {
-                        // Keyboard activation (a pointer click is handled by the pointer events above).
-                        if (event.detail === 0) {
-                          setConnecting(
-                            connecting?.from === node.id && connecting.port === port.id
-                              ? null
-                              : { from: node.id, port: port.id },
-                          )
-                        }
-                      }}
-                    >
-                      <span aria-hidden="true">
-                        {port.id === 'failed' || port.id === 'rejected' ? '✕' : '›'}
-                      </span>
-                    </button>
-                  ))}
+                  {!readOnly &&
+                    ports.map((port, index) => (
+                      <button
+                        key={port.id}
+                        type="button"
+                        className={`wf-handle${connecting?.from === node.id && connecting.port === port.id ? ' wf-handle--on' : ''}`}
+                        style={{ top: ((index + 1) * size.h) / (ports.length + 1) - 8 }}
+                        aria-label={`Connect ${node.label || node.id} (${port.label})`}
+                        aria-pressed={connecting?.from === node.id && connecting.port === port.id}
+                        tabIndex={node.id === focusId ? 0 : -1}
+                        onPointerDown={(event) => startConnect(event, node.id, port.id)}
+                        onPointerMove={moveConnect}
+                        onPointerUp={endConnect}
+                        onClick={(event) => {
+                          // Keyboard activation (a pointer click is handled by the pointer events above).
+                          if (event.detail === 0) {
+                            setConnecting(
+                              connecting?.from === node.id && connecting.port === port.id
+                                ? null
+                                : { from: node.id, port: port.id },
+                            )
+                          }
+                        }}
+                      >
+                        <span aria-hidden="true">
+                          {port.id === 'failed' || port.id === 'rejected' ? '✕' : '›'}
+                        </span>
+                      </button>
+                    ))}
                 </div>
               )
             })}

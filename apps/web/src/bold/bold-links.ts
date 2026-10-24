@@ -62,3 +62,18 @@ export function boldAddAgentLink(): string {
 export function boldSettingsSectionLink(sectionId: string): string {
   return `/b/settings/${encodeURIComponent(sectionId)}`
 }
+
+/** The Workbench tabs a Results card links to (11.5); the Workbench screen itself reads `work` in 11.6b. */
+export type WorkbenchTab = 'code' | 'screen' | 'draft' | 'workbench'
+
+/** 11.6b Workbench: a job's Workbench at the tab a Results card chose. */
+export function workbenchHref(jobId: string, tab: WorkbenchTab): string {
+  return boldQuery({ job: jobId, work: tab })
+}
+
+/** The Work header's Workbench switch keeps the room's current job, message and note. */
+export function boldWorkbenchLink(search: string): string {
+  const params = new URLSearchParams(search)
+  params.set('work', 'workbench')
+  return `/b?${params.toString()}`
+}
