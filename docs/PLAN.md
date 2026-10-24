@@ -508,3 +508,172 @@ never run a second copy beside the service, and the owner's live Score is switch
 The first `scripts/score start` in a terminal, where a systemd user manager is reachable, asks whether to run Score as a
 service; yes installs it with the settings just used, no is remembered; never asks without a terminal. Settings › About
 says whether Score runs as a service, with the command to turn it on.
+
+## Phase 11: the bold rework (owner 2026-10-23/24; design docs/briefs/11.0-bold.md; review docs/reviews/2026-10-24-11.0-bold-design-lead.md)
+
+Proposal `docs/proposals/ui-rework-bold.md` (§6 order, §8 D1–D13, §9 D14–D18), parity list
+`docs/proposals/ui-rework-bold-parity.md`, designs `docs/design/bold/` (prototype + boards). **Roles (owner
+2026-10-24, CLAUDE.md):** **Lead** = Opus codes it; **DeepSeek** = `CODEX_PROFILE=deepseek scripts/codex-task.sh`, the
+lead reviews and merges. Every task also gets a Sonnet findings-only review; `pnpm check` (+ `pnpm e2e` for UI) is the
+gate. **11.5 is DeepSeek's pilot** and runs before any other DeepSeek task; its result decides the split for the rest
+(CLAUDE.md). UI tasks build in the new shell behind its switch, ship Playwright specs (fake adapter, phone width,
+reduced motion) and screenshots the lead compares with the named boards. Migrations pre-assigned: 0080 jobs + sessions,
+0081 exchanges, 0082 job sources + triggers, 0083 one-to-ones + references + pins, 0084 workbench comments, 0085
+recipes (When). 10.15 stays paused.
+
+**11.0 Design + review** · **Lead** · brief `docs/briefs/11.0-bold.md` v1.1. Done when: the brief settles jobs,
+sessions, exchanges, agent actions, context, one-to-ones, references, sources/triggers/report-back, shell rules and
+migration; every parity row has a home, a task or an owner-approved drop (§11); the adversarial review is committed;
+the owner has seen this plan and the open decisions (§12).
+
+**11.1a Jobs and per-job sessions** · **Lead** · contract (jobs, `job.upserted`) → `packages/contract` → server;
+migration 0080 (team room, `rooms.role`/`routing`, `jobs`, `messages.job_id`, `job_sessions`, `job_reads`, job-scoped
+summaries, search and shares); `sessionFor` replaces every `score-<room>-<agent>` derivation; ARCHITECTURE D3.2/D3.3.
+Done when: every existing room migrates to `older` with one job holding all its messages and its exact old session
+keys (fixture DB test with counts); rewind, compaction, coding-session forget and outside-session continuation use the
+job's session (tests); a grep test fails on any other `score-${` session derivation; one active turn per (room, agent)
+across jobs (test); old UI and older rooms behave exactly as before (full suite green); the migration was run on a
+copy of the live DB with counts recorded in TASKLOG before deploy.
+
+**11.1b Exchanges and agent actions** · **Lead** · contract (`Exchange`, `exchange.upserted`, action receipts) →
+server; migration 0081; bridge plugin tools `score_handoff|ask|review|approve|send_back|reply` (pytest);
+`score-action` block for coding agents; per-turn `xtc_` capability; staged actions applied at turn completion;
+`jobRunInput` context (brief §4–§5). Done when (fixture tests, fake adapter): a builder → reviewer → send_back →
+builder → review → approve loop completes over 2 rounds; a prose `@reviewer` starts nothing and shows the mention
+marker; an `ask` answer returns to the asker; a failed turn applies none of its staged actions; a second routing
+action in one turn is refused; a capability from another turn, an ended turn or in text is refused; a coding agent's
+single `score-action` block routes and two blocks route nothing with a notice; context holds only this job's messages
+since the agent's last turn, pins and references (snapshot test); older rooms still route by @mention.
+
+**11.1c Budgets, pause-and-ask, step in** · **Lead** · brief §4.5–§4.6. Done when: an exchange pauses at 8 of 8
+turns with a needs-you card; "Give 4 more", "Let lead decide" (lead extends once, never as a participant), "Step in"
+and "Stop" each work (tests); the job-wide 40-turn limit stops nested asks and repeated hand-offs; spend cap and
+unknown cost pause before admission; Pause everyone holds exchanges without spending turns; every row of brief §4.6
+ends in a visible card (one test per row).
+
+**11.1d Job sources, webhook triggers, report-back** · **Lead** (security) · brief §7, D13/D17/D18, migration 0082;
+starts with a spike: can the adapter list a profile's MCP server tools without Score reading credentials (result in
+TASKLOG; fallback: tool picked by name). Done when: `POST /hooks/<id>` accepts only valid Standard Webhooks signatures
+within ±5 min, is idempotent on `webhook-id`, refuses non-JSON, > 256 KB and > 60/min (tests); remote mode exposes only
+`/hooks/*` beyond today's list; the secret is sealed at rest and shown again only to a paired browser; a mapped call
+starts a job with `source` and the "Started by" data; a call missing a field still starts and says which; payload text
+reaches the lead only quoted and redacted (snapshot test); report-back runs as a constrained lead turn and is
+"Reported back" only on a matching tool-call record, otherwise "not confirmed" with Try again; `docs/SETUP.md` gains
+"One Score per team" (D14–D16).
+
+**11.2 Contract and fake data for the new screens** · **Lead** · one-to-ones as jobs in direct rooms (privacy rules),
+references, share to room, pins (migration 0083), `GET /api/jobs/:id/results` and its derivation from watch frames,
+tool calls and exchange outcomes (brief §6, §10); fake-adapter fixtures that produce a team room with jobs, exchanges,
+results, one-to-ones and a paused exchange. Done when: contract doc + schemas + server routes with `inject()` tests;
+a direct room's summary runs on its own agent and no team-room input contains one-to-one text (test); a reference sends
+only the frozen summary; the fake adapter's seeded team room renders every board state the UI tasks need.
+
+**11.3 New shell** · **Lead** · dark tokens under `[data-ui=bold]` (README values), light alternative, Room · Team ·
+Settings + Search (⌘K) frame, side-panel dropdown slot, team dock with rings, pairing page restyle, per-device switch
+(`Settings › Look`, `?ui=bold`); AGENTS.md design rules updated once the owner confirms dark default. Done when: both
+shells run from one build; the old shell is pixel-identical to its baselines; the new frame matches boards 01 and 18 at
+desktop and phone width; the protected-surface list includes the new decision surfaces and the hostile-theme e2e passes
+on the new shell; reduced motion stops every glow and dot.
+
+**11.4a Team room: stream, tabs, composer** · **DeepSeek** (after the pilot) · boards 01, 09; prototype room. Job tabs
+with unread and filter chips (needs you · working · done, D10), the main stream (requests, result cards, capsules,
+requests for you), composer "To:" with `@name`, `+` (attach with progress, voice) and `/` commands, hover row (edit
+with rewind and ‹ 2 / 3 ›, copy, save to Library, pin, delete, D5), deleted show/hide. Done when: e2e for each,
+screenshots vs 01/09.
+
+**11.4b Pinned needs-you** · **DeepSeek** · approvals (More: this session, always for <agent>; delivery failed → retry;
+answer in Hermes), questions, paused exchanges, run-safety cards (quota guard, not confirmed ended, retry / try again /
+remap, spend not settled, D2), answerable in place. Done when: each card kind has an e2e on fake data and is
+protected; decisions need a paired browser as today.
+
+**11.4c A job's thread** · **DeepSeek** · board 11. Rounds, exchange states and "5 of 8 turns", step-in box, thread
+header (pause/stop, steps, unblock, comment, context meter + compact, job history, D10), plan card, streaming,
+reasoning/tool cards, coding sub-agent cards, stall notice, recipe-run cards. Done when: e2e incl. a paused exchange
+answered from the thread; screenshots vs 11.
+
+**11.4d Room dropdown and job menu** · **DeepSeek** · board 21; prototype. Team room, older rooms, Elsewhere
+(read-only, "Bring into a job"); job menu rename, close, export, share read-only link, delete with undo. Done when: e2e
+for each; older rooms open read-write with today's routing.
+
+**11.5 Side panel › Results (DeepSeek pilot)** · **DeepSeek** · boards 01, 02 (Results tab); prototype Work ›
+Results; data from 11.2, mounted in 11.3's side-panel slot (the room itself comes in 11.4). Cards: live preview, "What changed" in plain words, drafts, small live screens; each links to
+its Workbench tab; never opens on raw code; empty state (09). Done when: e2e on the fake team room, phone width,
+reduced motion; screenshots vs 01/02; TASKLOG records fix rounds, Sonnet findings (real vs rejected) and the lead's
+rework, and the owner is told the pilot result.
+
+**11.6a Workbench data** · **Lead** · `GET /api/jobs/:id/workbench`: per-line authorship from ordered diffs
+(`line-diff.ts`), review comments on lines from `review`/`send_back` (migration 0084), last edit position, drafts,
+latest screen frame; Hermes Bot Screen frames read-only when present. Done when: authorship test over interleaved edits
+by two agents; comments survive later edits or are marked outdated; nothing exposes a keyboard or takeover path.
+
+**11.6b Workbench and an agent's screen** · **DeepSeek** · boards 02, 12. Diffs with the agent's colour bar, comments
+on lines, cursor, `workspace://` links, file tree/editor from today's workspace; the agent's screen page with plain-step
+log, time bar, markers, step keys, Live, approval bar, "Open in terminal" (replaces Watch). Done when: e2e; screenshots
+vs 02/12.
+
+**11.7 One-to-ones** · **DeepSeek** · boards 01 (one-to-one), 19. Agent-coloured panel, "Only you and <agent> see
+this", earlier chats with search and New chat, reference chips, Share to the team room, "Take it aside", Add someone,
+context meter. Done when: e2e for each; screenshots vs 01/19.
+
+**11.8a Where an agent runs and "Runs on"** · **Lead** (adapter) · D3, D15: read/set the profile's terminal backend
+through the `hermes` CLI; verify on a test profile which tools Docker/SSH confines and record it; update D7.1. Done
+when: fixture tests for the CLI calls; nothing writes `~/.hermes` directly; the confinement result is in TASKLOG and the
+API says exactly what is confined.
+
+**11.8b Team page and agent page** · **DeepSeek** · boards 04, 06, 20; prototype Team › agent (D3, D4). Four up front
+(how it works with SOUL/AGENTS editor + diff + conflict, model + fallback + engine, where it works, asks you first),
+More (memory, skills + hub search, tools + helper count, plugins and MCP, workspace, repeating jobs, todo, danger zone
+with export); coding agents on the same page (permission, quota floor, password, Codex ack). Done when: every tab of
+today's agent page is reachable; e2e; screenshots vs 04/06/20.
+
+**11.8c Add an agent** · **DeepSeek** · board 07: new, copy from, import a Hermes profile (progress), coding CLI
+(install + version check); 20 shapes, taken colours fade, preview of changes. Done when: e2e for each path.
+
+**11.9a Settings › Connections and Look** · **DeepSeek** · boards 15, 16: Hermes, providers (local endpoint),
+channels, your phone; tool servers + Tools and triggers UI (D18 four steps, data from 11.1d); Look (dark/light/match,
+motion, text size, per-device vs shared, send key, currency, New look switch). Done when: e2e; screenshots vs 15/16.
+
+**11.9b Settings › System and the rest** · **DeepSeek** · board 17 + prototype: team rules editor (guardian mode, go /
+ask / never, diff), service, updates, backups, logs, pause everyone, Notifications, Library access, Shares, Advanced,
+Remote access and security (paired browsers, passkeys, password, Where agents run card from 11.8a), Terminal page.
+Done when: every current Settings section reachable; e2e; screenshots vs 17.
+
+**11.9c Usage** · **DeepSeek** · board 05, D12: headline numbers, tasks per day stacked per agent with patterns, spend by
+agent, first-time pass rate, time waiting on you, approvals, CSV, "Show as table", range. Done when: numbers equal
+today's Reports API for the same fixtures; e2e; screenshots vs 05.
+
+**11.9d Themes and Customizer on the new shell** · **DeepSeek**, lead reviews protection · preview pages for the new
+screens, seven built-in themes re-checked, escape hatches. Done when: visual baselines per theme (dark, light, phone;
+Room, Team, Settings); hostile-theme e2e still green.
+
+**11.10a Phone** · **DeepSeek** · boards 03, 18–20: job list with pinned request and unread, a job's chat, one-to-ones,
+team; tab bar Room · Team · Settings; sheets. Done when: e2e at phone width; screenshots vs 03/18–20.
+
+**11.10b First run and empty room** · **DeepSeek** · boards 08, 09: Hermes found, pick agents, pick the lead, keep
+Score running; starter recipes. Done when: e2e from an empty SCORE_HOME in fake mode.
+
+**11.10c Start a job** · **DeepSeek** · board 10 + prototype: recipe (lead decides / saved / none), When (once,
+schedule, webhook, D13; routines carried over), ask-me-before, turn budget, spend cap, deadline, agents allowed,
+before-it-starts checklist (D2), save as recipe; maps onto today's orchestration/workflow start APIs (migration 0085
+for When if needed). Done when: e2e starts each kind; a routine appears as a scheduled job.
+
+**11.10d Recipe editor** · **DeepSeek**, lead reviews against 7.1 rules · D1: step list (agent steps, gates, branches,
+joins, ends, retries 0–2, failure paths, `{{nodes.*}}`/`{{inputs.*}}`, live checking, undo/redo), versions (immutable,
+conflict, start from older), export (scrubbed), optional read-only graph. Done when: every 7.1 editor e2e has a
+step-list equivalent; saved recipes run unchanged on the workflow engine.
+
+**11.10e Library** · **DeepSeek** · board 13: notes, who wrote them and in which job, search, links, backlinks,
+properties, history, upload ≤ 256 MB with progress, zip preview/keep, files view, folders, export. Done when: today's
+Knowledge e2e pass against the Library panel.
+
+**11.10f Search** · **DeepSeek** · board 14: jobs, one-to-ones, Library, messages, actions, settings sections, "Reset
+look", `/` commands. Done when: e2e for each result kind and keyboard use.
+
+**11.11 Retire old destinations** · **Lead**, only with the owner's OK · switch the default to the new shell; move
+older rooms to `routing = exchanges`; remove Now/Flow/Score timeline, Tasks board, `/u` and admin view, room stage, pet
+packs and stored packs, Cut-out/Ring/eyes, Lively, pop-outs (D8, D9, D11); keep data the new screens read. Done when:
+removed code has no route or import left; a copy of the live DB migrates and every parity row still works; the owner
+approved the removal list.
+
+**11.12 Phase gate** · **Lead** (Codex `gpt-6.1-sol` max if it has quota) · code review against `main` in a fresh
+session, every parity row checked off against the brief's §11, full e2e, then the owner's Gemini review; release.

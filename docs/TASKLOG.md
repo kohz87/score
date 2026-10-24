@@ -613,3 +613,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   (5e2cf1be; T1 read-only spool scan, T2 no finishing without a terminal run, T3 shared-session refusal/detection, T4
   coding finish rules); its Codex max review was started and stopped before finishing — rerun it to resume. Nothing
   else running; live 1.14.0 up as the systemd service.
+- **Phase 11 started (2026-10-24): 11.0 bold design, lead.** Owner's proposal, parity list, designs and the
+  2026-10-24 roles (Opus leads, DeepSeek codes, Sonnet reviews) came from a cloud session branch
+  (`origin/ccr-854a7997-na4rk3`); local `main` fast-forwarded to it (f39322e4). Wrote `docs/briefs/11.0-bold.md` v1.1
+  and PLAN Phase 11 (11.0–11.12, who codes each, migrations 0080–0085 pre-assigned; 11.5 Results is DeepSeek's pilot).
+  Codex has no ChatGPT credits, so the lead did the adversarial review
+  (`docs/reviews/2026-10-24-11.0-bold-design-lead.md`): 8 P1 (MCP off by default and missing on coding agents, so
+  actions go through bridge tools + a `score-action` block; actions not bound to a turn → per-turn `xtc_` capability;
+  unbounded per-exchange budgets → job limit, depth, lead extends once; six `score-<room>-<agent>` derivations → one
+  resolver; live rooms' behaviour change → older rooms keep @mention routing until 11.11; stalled waits; theme
+  protection for new surfaces; report-back secrets and verification), 9 P2, 2 P3; 5 rejected/deferred with reasons.
+  Waiting for the owner on the plan and §12 decisions before 11.1a. 10.15 stays paused.
