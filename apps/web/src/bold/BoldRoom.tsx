@@ -112,6 +112,10 @@ export function BoldRoom() {
   }, [phone, setSheetOpen])
 
   const choose = (next: SideMode) => {
+    if (next === 'thread') {
+      const current = new URLSearchParams(location.search).get('job')
+      if (current && current !== 'all') setThreadJob(current)
+    }
     setMode(next)
     setMenuOpen(false)
     toggleRef.current?.focus()
@@ -123,28 +127,18 @@ export function BoldRoom() {
     if (phone) setSheetOpen(true)
     toggleRef.current?.focus()
   }
-  const openThreadFromMenu = () => {
-    const current = new URLSearchParams(location.search).get('job')
-    openThread(current && current !== 'all' ? current : threadJob)
-  }
   const closeSheet = () => {
     setSheetOpen(false)
     setMenuOpen(false)
     requestAnimationFrame(() => phoneOpenRef.current?.focus())
   }
-  const option = (
-    target: SideMode,
-    icon: ReactNode,
-    name: string,
-    hint: string,
-    onChoose = () => choose(target),
-  ) => (
+  const option = (target: SideMode, icon: ReactNode, name: string, hint: string) => (
     <button
       key={target}
       type="button"
       aria-current={mode === target ? 'true' : undefined}
       className={`mi ${mode === target ? 'sel' : ''}`}
-      onClick={onChoose}
+      onClick={() => choose(target)}
     >
       {icon}
       <span className="menu-copy">
@@ -240,13 +234,7 @@ export function BoldRoom() {
               <div className="menu side-menu" id={menuId}>
                 {option('work', <GridIcon />, 'Work', 'What the team is making')}
                 {option('library', <BookIcon />, 'Library', 'Notes and files')}
-                {option(
-                  'thread',
-                  <ThreadIcon />,
-                  'Thread',
-                  "A job's back-and-forth",
-                  openThreadFromMenu,
-                )}
+                {option('thread', <ThreadIcon />, 'Thread', "A job's back-and-forth")}
                 {agents.length > 0 && <div className="sec">One to one</div>}
                 {agents.map((item) =>
                   option(
