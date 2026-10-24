@@ -621,6 +621,9 @@ test('a plan-first turn in an exchanges room only proposes, and its job stops wo
   expect(rows('SELECT xtc_hash FROM message_runs WHERE room_id = ?', roomId)).toEqual([
     { xtc_hash: null },
   ])
+  expect(rows('SELECT state FROM jobs WHERE room_id = ? AND is_default = 1', roomId)).toEqual([
+    { state: 'working' },
+  ])
   await advance(4000)
   const reply = messages().find((message) => message.author.kind === 'agent')!
   expect(reply.parts.some((part) => part.kind === 'plan')).toBe(true)

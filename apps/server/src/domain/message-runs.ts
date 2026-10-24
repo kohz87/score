@@ -674,7 +674,8 @@ export function completeRunMessage(
             .join('\n')
     const plan = planPart(mapping.chain_id, parsePlanSteps(text, mapping.agents), now)
     if (plan) message.parts.push(plan)
-    // In an exchanges room the planner's turn acted on nothing, so the job stops showing it as working.
+    // In an exchanges room the planner's turn acted on nothing (it never gets a capability, so there is no xtc_hash
+    // to clear here), and the job stops showing it as working.
     if (exchangeRoom(sqlite, mapping) && mapping.job_id)
       drafts.push(
         ...updateJob(
