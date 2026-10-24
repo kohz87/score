@@ -40,6 +40,8 @@ const eventData = {
     budget: 8,
     outcome: null,
     endedReason: null,
+    pause: null,
+    queuedBehind: null,
     createdAt: '2026-10-24T00:00:00.000Z',
     updatedAt: '2026-10-24T00:00:00.000Z',
   },

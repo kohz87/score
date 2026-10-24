@@ -591,7 +591,26 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     exchangeBudget (8); jobTurnLimit (40); createdAt; updatedAt }`; `Exchange { id; jobId; roomId; kind:
     'handoff'|'ask'|'review'; parentId; from; to; state: 'live'|'waiting_on_agent'|'waiting_on_you'|'paused_budget'|
     'done'|'stopped'; round; turnsUsed; budget; outcome: 'approved'|'answered'|'handed_off'|'no_decision'|null;
-    endedReason; createdAt; updatedAt }`.
+    endedReason; pause: { reason; options } | null; queuedBehind: { agentId; since } | null; createdAt; updatedAt }`.
+  - **Budgets and pauses** (PLAN 11.1c, docs/briefs/11.1c-budgets.md). Before an exchange gets its next turn: its turns
+    started + queued < `budget` (8), the job's agent-started exchange turns < `jobTurnLimit` (40), and with a spend cap
+    settled cost + 0.50 per running turn < cap and no run of unknown cost since the last "continue". Otherwise the turn is
+    held and the exchange stops with `pause.reason`: `exchange_budget` | `job_limit` (`paused_budget`; options
+    `more_turns`, `lead_decides` (not when the room lead is in the exchange or already decided once), `step_in`, `stop`),
+    `spend_cap` (`more_spend`, `step_in`, `stop`), `cost_unknown` (`continue`, `step_in`, `stop`), `turn_failed` |
+    `unreachable` (`waiting_on_you`; `retry`, `reassign`, `stop`), `asker_gone` (`answer_to_lead`, `stop`),
+    `no_decision` (`ask_again`, `send_back`, `close`), `author_stalled` (`ask_again`, `close`). `queuedBehind` is set
+    while its next turn waits on that agent's turn in another job of the room (nothing to decide). Person-started turns
+    never count; Pause everyone and agent pauses hold queued turns before they start, so nothing is spent.
+  - **H** `POST /api/exchanges/:exchangeId/decision` `ExchangeDecisionRequest` (`{ option: 'more_turns'; turns 1–20 }`
+    · `{ option: 'more_spend'; usd }` · `{ option: 'step_in'; text }` · `{ option: 'reassign'; to }` · `{ option:
+    'send_back'; note }` · `{ option }` for the rest) → `{ ok: true }`; `409 conflict` when the exchange doesn't offer that
+    option now. `step_in` stores the person's text in the job and sends the held turn on with it (that turn is not the
+    agents' spend); `lead_decides` gives the room lead one turn whose only allowed actions are `extend {turns ≤ the
+    job's exchange budget, note}` and `stop_exchange {note}` (tools `score_extend`, `score_stop_exchange`; once per
+    exchange); `stop` stops the exchange and its open questions (queued turns end, running ones are stopped).
+  - **H** `POST /api/jobs/:jobId/stop` → `{ ok: true }`: every open exchange of the job stops, queued turns end and running
+    ones are stopped.
 - **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
   `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409

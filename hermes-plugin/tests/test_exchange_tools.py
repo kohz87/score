@@ -65,7 +65,7 @@ def exchange_calls(bridge):
     return [c for c in bridge.calls if c[0].endswith("/bridge/v1/exchanges/action")]
 
 
-def test_registers_six_tools_through_public_register_tool():
+def test_registers_eight_tools_through_public_register_tool():
     seen = []
 
     class Ctx:
@@ -75,6 +75,7 @@ def test_registers_six_tools_through_public_register_tool():
     exchanges.register_tools(Ctx())
     assert [s["name"] for s in seen] == [
         "score_handoff", "score_ask", "score_review", "score_approve", "score_send_back", "score_reply",
+        "score_extend", "score_stop_exchange",
     ]
     for s in seen:
         assert s["toolset"] == "score_exchanges" and callable(s["handler"])
@@ -229,7 +230,8 @@ def test_register_keeps_exchange_tools_when_knowledge_registration_fails(monkeyp
     monkeypatch.setattr(score_bridge.knowledge, "register_tools", lambda ctx: (_ for _ in ()).throw(RuntimeError()))
     monkeypatch.setattr("score_bridge.client.ScoreClient", lambda *a, **k: (_ for _ in ()).throw(RuntimeError()))
     score_bridge.register(Ctx())
-    assert names == ["score_handoff", "score_ask", "score_review", "score_approve", "score_send_back", "score_reply"]
+    assert names == ["score_handoff", "score_ask", "score_review", "score_approve", "score_send_back", "score_reply",
+                     "score_extend", "score_stop_exchange"]
 
 
 def test_register_keeps_knowledge_tools_when_exchange_registration_fails(monkeypatch):
@@ -247,3 +249,23 @@ def test_register_keeps_knowledge_tools_when_exchange_registration_fails(monkeyp
     monkeypatch.setattr("score_bridge.client.ScoreClient", lambda *a, **k: (_ for _ in ()).throw(RuntimeError()))
     score_bridge.register(Ctx())
     assert names == ["knowledge_search", "knowledge_read", "knowledge_list", "knowledge_write", "knowledge_append"]
+
+
+def test_lead_decision_tools_send_extend_and_stop_exchange(bridge):
+    bridge.reply = lambda body: {"status": "staged", "commandId": body["commandId"], "action": body["action"]["action"],
+                                 "message": "ok"}
+    handlers = exchanges.make_handlers(exchanges.ExchangeClient(bridge.client))
+    cap = "xtc_" + "a" * 43
+    assert json.loads(handlers["score_extend"]({"capability": cap, "turns": 4, "note": "Close to done."}))["success"]
+    assert json.loads(handlers["score_stop_exchange"]({"capability": cap, "note": "Going in circles."}))["success"]
+    sent = [c[2]["action"] for c in exchange_calls(bridge)]
+    assert sent == [{"action": "extend", "turns": 4, "note": "Close to done."},
+                    {"action": "stop_exchange", "note": "Going in circles."}]
+
+
+@pytest.mark.parametrize("turns", [0, 101, True, "4"])
+def test_extend_turns_are_checked_before_sending(bridge, turns):
+    handlers = exchanges.make_handlers(exchanges.ExchangeClient(bridge.client))
+    out = json.loads(handlers["score_extend"]({"capability": "xtc_" + "a" * 43, "turns": turns, "note": "x"}))
+    assert out["success"] is False
+    assert exchange_calls(bridge) == []

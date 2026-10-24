@@ -127,6 +127,37 @@ SCHEMAS["score_reply"] = {
     },
 }
 
+_DECIDE = (
+    " Only when Score asked you, as the lead, to decide on a paused exchange; once per exchange."
+)
+SCHEMAS["score_extend"] = {
+    "description": _COMMON + _DECIDE + " Give the paused exchange more turns.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "capability": _CAPABILITY_PROP,
+            "turns": {"type": "integer", "minimum": 1, "maximum": 100,
+                      "description": "How many more turns (at most the job's exchange budget)."},
+            "note": _NOTE_PROP,
+            "command_id": _COMMAND_PROP,
+        },
+        "required": ["capability", "turns", "note"],
+        "additionalProperties": False,
+    },
+}
+SCHEMAS["score_stop_exchange"] = {
+    "description": _COMMON + _DECIDE + " Stop the paused exchange.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "capability": _CAPABILITY_PROP,
+            "note": _NOTE_PROP,
+            "command_id": _COMMAND_PROP,
+        },
+        "required": ["capability", "note"],
+        "additionalProperties": False,
+    },
+}
 DESCRIPTIONS = {
     "score_handoff": "Hand work on to another agent in this Score exchange.",
     "score_ask": "Ask another agent a question in this Score exchange.",
@@ -134,6 +165,8 @@ DESCRIPTIONS = {
     "score_approve": "Approve the work you are reviewing in this Score exchange.",
     "score_send_back": "Send reviewed work back for changes in this Score exchange.",
     "score_reply": "Mark your answer to a question you were asked in this Score exchange.",
+    "score_extend": "As the lead, give a paused Score exchange more turns.",
+    "score_stop_exchange": "As the lead, stop a paused Score exchange.",
 }
 
 _TYPES = {"string": str, "integer": int, "null": type(None)}
@@ -155,6 +188,8 @@ def _validate(schema: dict, args) -> str | None:
         kinds = spec["type"] if isinstance(spec["type"], list) else [spec["type"]]
         if not any(type(value) is _TYPES[k] for k in kinds):
             return f"{name} must be {' or '.join(kinds)}"
+        if type(value) is int and not spec.get("minimum", value) <= value <= spec.get("maximum", value):
+            return f"{name} must be between {spec['minimum']} and {spec['maximum']}"
         if type(value) is not str:
             continue
         if "\0" in value:
@@ -183,6 +218,10 @@ def _action(name: str, args: dict) -> dict:
         action = {"action": "approve", "note": args["note"]}
     elif name == "score_send_back":
         action = {"action": "send_back", "note": args["note"]}
+    elif name == "score_extend":
+        action = {"action": "extend", "turns": args["turns"], "note": args["note"]}
+    elif name == "score_stop_exchange":
+        action = {"action": "stop_exchange", "note": args["note"]}
     else:
         action = {"action": "reply", "text": args["text"]}
     if "replaces" in args:

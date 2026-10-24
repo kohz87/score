@@ -15,6 +15,10 @@ export const EXCHANGE_LIMITS = {
   jobTurnLimit: 40,
   /** Nested `ask` depth below a top-level exchange. */
   askDepth: 2,
+  /** "Give N more turns" (11.1c). */
+  moreTurnsMax: 20,
+  /** What a running turn is reserved at against a job's spend cap (as the orchestrator's step estimate). */
+  turnEstimateUsd: 0.5,
 } as const
 
 /** `xtc_` + 43 base64url characters: the per-turn exchange capability (brief §4.2), distinct from `orc_` and `scm_`. */
@@ -29,6 +33,8 @@ export const ExchangeActionKindSchema = z.enum([
   'approve',
   'send_back',
   'reply',
+  'extend',
+  'stop_exchange',
 ])
 export type ExchangeActionKind = z.infer<typeof ExchangeActionKindSchema>
 
@@ -88,6 +94,15 @@ export const ExchangeActionSchema = z.discriminatedUnion('action', [
     })
     .strict(),
   z.object({ action: z.literal('reply'), text: text(EXCHANGE_LIMITS.replyBytes) }).strict(),
+  // Only in the room lead's turn deciding a budget pause ("Let lead decide", 11.1c): one of the two, once.
+  z
+    .object({
+      action: z.literal('extend'),
+      turns: z.int().min(1).max(100),
+      note: text(EXCHANGE_LIMITS.noteBytes),
+    })
+    .strict(),
+  z.object({ action: z.literal('stop_exchange'), note: text(EXCHANGE_LIMITS.noteBytes) }).strict(),
 ])
 export type ExchangeAction = z.infer<typeof ExchangeActionSchema>
 
@@ -133,6 +148,33 @@ export const JobSchema = z.object({
 export type Job = z.infer<typeof JobSchema>
 
 export const ExchangeKindSchema = z.enum(['handoff', 'ask', 'review'])
+export const ExchangePauseReasonSchema = z.enum([
+  'exchange_budget',
+  'job_limit',
+  'spend_cap',
+  'cost_unknown',
+  'turn_failed',
+  'unreachable',
+  'asker_gone',
+  'no_decision',
+  'author_stalled',
+])
+export type ExchangePauseReason = z.infer<typeof ExchangePauseReasonSchema>
+export const ExchangeOptionSchema = z.enum([
+  'more_turns',
+  'more_spend',
+  'continue',
+  'lead_decides',
+  'step_in',
+  'stop',
+  'retry',
+  'reassign',
+  'answer_to_lead',
+  'ask_again',
+  'send_back',
+  'close',
+])
+export type ExchangeOption = z.infer<typeof ExchangeOptionSchema>
 export const ExchangeStateSchema = z.enum([
   'live',
   'waiting_on_agent',
@@ -162,10 +204,38 @@ export const ExchangeSchema = z.object({
   outcome: z.enum(['approved', 'answered', 'handed_off', 'no_decision']).nullable(),
   /** Plain words for a stopped or stuck exchange ("the turn failed", "stopped by you"). */
   endedReason: z.string().nullable(),
+  /** Why it waits on the person and what they can do (11.1c, brief §4.5–§4.6); null while it runs or is done. */
+  pause: z
+    .object({ reason: ExchangePauseReasonSchema, options: z.array(ExchangeOptionSchema) })
+    .nullable(),
+  /** Its next turn waits on that agent's turn in another job of the room (§4.6): shown, nothing to decide. */
+  queuedBehind: z.object({ agentId: AgentIdSchema, since: z.iso.datetime() }).nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })
 export type Exchange = z.infer<typeof ExchangeSchema>
+
+/** `POST /api/exchanges/:id/decision` (11.1c). The option must be one the exchange's `pause.options` offers. */
+export const ExchangeDecisionRequestSchema = z.discriminatedUnion('option', [
+  z
+    .object({
+      option: z.literal('more_turns'),
+      turns: z.int().min(1).max(EXCHANGE_LIMITS.moreTurnsMax),
+    })
+    .strict(),
+  z.object({ option: z.literal('more_spend'), usd: z.number().positive().max(1000) }).strict(),
+  z.object({ option: z.literal('continue') }).strict(),
+  z.object({ option: z.literal('lead_decides') }).strict(),
+  z.object({ option: z.literal('step_in'), text: text(EXCHANGE_LIMITS.noteBytes) }).strict(),
+  z.object({ option: z.literal('stop') }).strict(),
+  z.object({ option: z.literal('retry') }).strict(),
+  z.object({ option: z.literal('reassign'), to: AgentIdSchema }).strict(),
+  z.object({ option: z.literal('answer_to_lead') }).strict(),
+  z.object({ option: z.literal('ask_again') }).strict(),
+  z.object({ option: z.literal('send_back'), note: text(EXCHANGE_LIMITS.noteBytes) }).strict(),
+  z.object({ option: z.literal('close') }).strict(),
+])
+export type ExchangeDecisionRequest = z.infer<typeof ExchangeDecisionRequestSchema>
 
 export const JobsResponseSchema = z.object({
   asOfSeq: z.int().nonnegative(),
