@@ -396,7 +396,9 @@ test('an approval without a loaded message gets no invented job chip', async () 
   expect(card.querySelector('.bold-request-job')).toBeNull()
 })
 
-test('a server updatedAt bump does not bring the exchange buttons back', async () => {
+// A decision is applied in one server write: the same read keeps the sent line; any newer read that still pauses is a
+// pause held again (e.g. more_spend below the cap) and must offer the choices again rather than hide them.
+test('the same read keeps the sent line; a newer read that still pauses brings the buttons back', async () => {
   const exchange = makeExchange({ pause: { reason: 'no_decision', options: ['send_back'] } })
   stubRoom(exchange)
   const { queryClient } = renderInRoom(
@@ -412,11 +414,20 @@ test('a server updatedAt bump does not bring the exchange buttons back', async (
   act(() =>
     queryClient.setQueryData(roomExchangesQuery([job.id]).key, {
       asOfSeq: 2,
-      data: [{ ...exchange, updatedAt: '2026-10-24T09:20:00.000Z' }],
+      data: [{ ...exchange }],
     }),
   )
   await waitFor(() => expect(screen.getByText('Sent back with your note.')).toBeDefined())
   expect(screen.queryByRole('button', { name: 'Send back' })).toBeNull()
+
+  act(() =>
+    queryClient.setQueryData(roomExchangesQuery([job.id]).key, {
+      asOfSeq: 3,
+      data: [{ ...exchange, updatedAt: '2026-10-24T09:20:00.000Z' }],
+    }),
+  )
+  expect(await screen.findByRole('button', { name: 'Send back' })).toBeDefined()
+  expect(screen.queryByText('Sent back with your note.')).toBeNull()
 })
 
 test('a cleared or changed pause releases the exchange buttons again', async () => {

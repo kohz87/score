@@ -91,17 +91,10 @@ export function ExchangeRequestCard({
   const [sent, setSent] = useState<{ pause: string; text: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const options = exchange.pause?.options ?? []
-  // Which pause this is: the exchange, why it stopped, the choices, and how far it had got. A bare updatedAt bump keeps
-  // the sent line; the same exchange pausing again later (more turns used, a bigger budget) brings the buttons back.
-  const pauseIdentity = exchange.pause
-    ? [
-        exchange.id,
-        exchange.pause.reason,
-        options.join(','),
-        exchange.turnsUsed,
-        exchange.budget,
-      ].join('|')
-    : null
+  // The decision is applied (and the limits re-checked) in one server transaction that writes the exchange once, so any
+  // later read has a newer updatedAt: either the pause is gone (the card leaves) or it was held again (the buttons come
+  // back, even with the same reason and options). Until then the "sent" line stays.
+  const pauseIdentity = exchange.pause ? `${exchange.id}|${exchange.updatedAt}` : null
   const sentMatchesPause = sent !== null && sent.pause === pauseIdentity
   if (sent !== null && !sentMatchesPause) setSent(null)
   const sentText = sentMatchesPause ? sent.text : null
