@@ -43,23 +43,28 @@ async function fetchJobResults(jobId: string, signal?: AbortSignal): Promise<Job
   )
 }
 
-// Results are derived on read, so events only say "look again". Frames arrive while an agent works; a short delay folds
-// a burst into one read without making the panel feel stale.
-const REFRESH_MS = 350
+// Results are derived on read, so events only say "look again". Streaming replies update per token; `message.updated`
+// would turn every token into a read, so only durable job, exchange and watch changes ask for one. A one-second window
+// folds a burst (one event or many) into at most one refresh.
+const REFRESH_MS = 1000
 const RESULT_EVENTS = new Set<StreamEvent['type']>([
   'job.upserted',
   'exchange.upserted',
-  'message.created',
-  'message.completed',
-  'message.updated',
-  'message.deleted',
-  'run.updated',
   'watch.frame',
 ])
 
+function eventJobId(event: StreamEvent): string | undefined {
+  if (event.type === 'job.upserted') return event.data.id
+  if (event.type === 'exchange.upserted') return event.data.jobId
+  return undefined
+}
+
 export type ResultsJob = { job: Job; result: JobResults }
 
-export function useBoldResults(): {
+export function useBoldResults(
+  visible = true,
+  selectedJobId: string | null = null,
+): {
   jobs: Job[]
   results: ResultsJob[]
   screens: { job: Job; screen: JobResults['screens'][number] }[]
@@ -69,40 +74,61 @@ export function useBoldResults(): {
   retry: () => void
 } {
   const room = useStreamQuery(boldTeamRoomQuery)
-  const jobs = room.data?.jobs ?? []
+  const jobs = (room.data?.jobs ?? []).filter(
+    (job) => job.state !== 'closed' && (!selectedJobId || job.id === selectedJobId),
+  )
   const stream = useStream()
   const queryClient = useQueryClient()
-  const overview = useWatchOverview()
+  const overview = useWatchOverview(visible)
   const resultQueries = useQueries({
     queries: jobs.map((job) => ({
       queryKey: jobResultsKey(job.id),
       queryFn: ({ signal }: { signal: AbortSignal }) => fetchJobResults(job.id, signal),
       retry: false,
+      enabled: visible,
     })),
   })
 
   useEffect(() => {
+    if (!visible) return
     let timer: ReturnType<typeof setTimeout> | undefined
-    const refresh = () => {
-      if (timer !== undefined) return
-      timer = setTimeout(() => {
-        timer = undefined
-        void queryClient.invalidateQueries({ queryKey: ['bold', 'team-room'] })
+    const jobIds = new Set<string>()
+    let allResults = false
+    let roomWide = false
+    const flush = () => {
+      timer = undefined
+      if (allResults) {
         void queryClient.invalidateQueries({ queryKey: ['bold', 'job-results'] })
-      }, REFRESH_MS)
+      } else {
+        for (const jobId of jobIds)
+          void queryClient.invalidateQueries({ queryKey: jobResultsKey(jobId), exact: true })
+      }
+      if (roomWide) void queryClient.invalidateQueries({ queryKey: ['bold', 'team-room'] })
+      jobIds.clear()
+      allResults = false
+      roomWide = false
+    }
+    const refresh = (event?: StreamEvent) => {
+      const jobId = event ? eventJobId(event) : undefined
+      if (jobId) jobIds.add(jobId)
+      else allResults = true
+      timer ??= setTimeout(flush, REFRESH_MS)
     }
     const offEvents = stream.subscribe((event) => {
-      if (RESULT_EVENTS.has(event.type)) refresh()
+      if (RESULT_EVENTS.has(event.type)) refresh(event)
     })
     const offControl = stream.onControl(({ resync }) => {
-      if (resync) refresh()
+      if (resync) {
+        roomWide = true
+        refresh()
+      }
     })
     return () => {
       offEvents()
       offControl()
       if (timer !== undefined) clearTimeout(timer)
     }
-  }, [queryClient, stream])
+  }, [queryClient, stream, visible])
 
   const results = jobs.flatMap((job, index) => {
     const result = resultQueries[index]?.data

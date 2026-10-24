@@ -1,5 +1,5 @@
 import type { AgentSummary, Job, JobResults, ResultCard, WatchOverviewItem } from '@score/contract'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph, agentTint } from '../components/AgentGlyph.tsx'
 import { ScreenMiniature } from '../routes/watch/SidePanels.tsx'
 import '../routes/watch/watch.css'
@@ -16,9 +16,11 @@ const STATE_LABEL: Record<Extract<ResultCard, { kind: 'change' }>['state'], stri
   in_review: 'In review',
   sent_back: 'Sent back',
   approved: 'Approved',
-  waiting_on_you: 'Needs your call',
+  waiting_on_you: 'Waiting on you',
   done: 'Done',
 }
+
+type ChangeState = Extract<ResultCard, { kind: 'change' }>['state']
 
 function AgentLine({ agent }: { agent: AgentSummary }) {
   return (
@@ -78,9 +80,11 @@ function ChangeCard({
           )
         })}
       </ul>
-      <Link className="bold-results-link" to={workbenchHref(job.id, 'code')}>
-        See the code · {card.files.length} {card.files.length === 1 ? 'file' : 'files'}
-      </Link>
+      {card.files.length > 0 && (
+        <Link className="bold-results-link" to={workbenchHref(job.id, 'code')}>
+          See the code · {card.files.length} {card.files.length === 1 ? 'file' : 'files'}
+        </Link>
+      )}
     </article>
   )
 }
@@ -88,34 +92,36 @@ function ChangeCard({
 function PreviewCard({
   job,
   card,
-  state,
+  states,
 }: {
   job: Job
   card: Extract<ResultCard, { kind: 'preview' }>
-  state: Extract<ResultCard, { kind: 'change' }>['state'] | null
+  states: ChangeState[]
 }) {
   const title = card.title ?? job.title
+  const knownFinished = !card.live && (job.state === 'done' || job.state === 'closed')
   return (
-    <Link
-      className="bold-results-card bold-results-preview"
-      to={workbenchHref(job.id, 'screen')}
-      aria-label={`Open ${title} in the Workbench`}
-      data-card="preview"
-    >
-      <span className="bold-results-card-head">
-        <span>
+    <article className="bold-results-card bold-results-preview" data-card="preview">
+      <header className="bold-results-card-head">
+        <div>
           <h2>{title}</h2>
           <span className="bold-results-job">{job.title}</span>
-        </span>
+        </div>
         <span className="bold-results-preview-flags">
-          {state && <ChangeBadge state={state} />}
+          {states.map((state, index) => (
+            <ChangeBadge key={`${state}-${index}`} state={state} />
+          ))}
           <span className={`bold-results-live${card.live ? ' is-live' : ''}`}>
             <span className={`bold-results-dot${card.live ? ' livedot' : ''}`} aria-hidden="true" />
             {card.live ? 'Live preview' : 'Saved preview'}
           </span>
         </span>
-      </span>
-      <span className="bold-results-preview-stage">
+      </header>
+      <Link
+        className="bold-results-preview-stage"
+        to={workbenchHref(job.id, 'screen')}
+        aria-label={`Open ${title} in the Workbench`}
+      >
         {card.imageUrl ? (
           <img src={card.imageUrl} alt={`Preview of ${title}`} />
         ) : (
@@ -125,12 +131,16 @@ function PreviewCard({
             <span />
           </span>
         )}
-      </span>
-      <span className="bold-results-note">
+      </Link>
+      <p className="bold-results-note">
         Opened at <span className="bold-results-url">{card.url}</span>.{' '}
-        {card.live ? 'Updates while the work is live.' : 'The run has finished.'}
-      </span>
-    </Link>
+        {card.live
+          ? 'Updates while the work is live.'
+          : knownFinished
+            ? 'The run has finished.'
+            : null}
+      </p>
+    </article>
   )
 }
 
@@ -161,7 +171,7 @@ function DraftCard({
       <span className="bold-results-draft-by">
         {agent ? <AgentLine agent={agent} /> : card.agentId}
         <span className="bold-results-muted">
-          {card.target.kind === 'document' ? 'Saved to the Library' : 'In the workspace'}
+          {card.target.kind === 'document' ? 'Attached document' : 'In the workspace'}
         </span>
       </span>
       <Link className="bold-results-link" to={workbenchHref(job.id, 'draft')}>
@@ -182,11 +192,17 @@ function ScreenCard({
 }) {
   const agent = agents.get(screen.agentId)
   if (!agent) return null
-  const item: WatchOverviewItem = overview?.find(
-    (candidate) => candidate.agent.id === agent.id,
-  ) ?? {
+  const watched = overview?.find(
+    (candidate) =>
+      candidate.agent.id === agent.id &&
+      candidate.surface === screen.surface &&
+      candidate.live === screen.live,
+  )
+  // The overview is room-wide, not job-scoped: its thumbnail is safe only when it is the same agent's frame with
+  // the same surface and live state as this job's screen. Everything else comes from `/results`.
+  const item: WatchOverviewItem = {
     agent,
-    thumbnail: null,
+    thumbnail: watched?.thumbnail ?? null,
     status: '',
     live: screen.live,
     surface: screen.surface,
@@ -265,7 +281,10 @@ export function BoldResultsView({
     (item): item is CardWithJob & { card: Extract<ResultCard, { kind: 'draft' }> } =>
       item.card.kind === 'draft',
   )
-  const changeByJob = new Map(changes.map((item) => [item.job.id, item.card]))
+  const changeStatesByJob = new Map<string, ChangeState[]>()
+  for (const { job, card } of changes) {
+    changeStatesByJob.set(job.id, [...(changeStatesByJob.get(job.id) ?? []), card.state])
+  }
   const empty = cards.length === 0 && screens.length === 0
 
   if (pending && results.length === 0) {
@@ -284,7 +303,7 @@ export function BoldResultsView({
           <p>Couldn’t load the Results. Try again.</p>
           {onRetry && (
             <button type="button" className="btn sm" onClick={onRetry}>
-              Try again
+              Retry
             </button>
           )}
         </div>
@@ -302,9 +321,14 @@ export function BoldResultsView({
   return (
     <div className="sidebody bold-results" hidden={hidden} data-testid="bold-results">
       {failed && (
-        <p className="bold-results-inline-error" role="alert">
-          Some Results couldn’t be refreshed.
-        </p>
+        <div className="bold-results-inline-error" role="alert">
+          <span>Some Results couldn’t be refreshed.</span>
+          {onRetry && (
+            <button type="button" className="btn sm" onClick={onRetry}>
+              Retry
+            </button>
+          )}
+        </div>
       )}
       <div className="bold-results-grid">
         {previews.map(({ job, card }) => (
@@ -312,7 +336,7 @@ export function BoldResultsView({
             key={card.id}
             job={job}
             card={card}
-            state={changeByJob.get(job.id)?.state ?? null}
+            states={changeStatesByJob.get(job.id) ?? []}
           />
         ))}
         {changes.map(({ job, card }) => (
@@ -343,7 +367,8 @@ export function BoldResultsView({
 }
 
 export function BoldResults({ agents, hidden }: { agents: AgentSummary[]; hidden: boolean }) {
-  const data = useBoldResults()
+  const [search] = useSearchParams()
+  const data = useBoldResults(!hidden, search.get('job'))
   return (
     <BoldResultsView
       results={data.results}

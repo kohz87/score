@@ -70,3 +70,10 @@ export type WorkbenchTab = 'code' | 'screen' | 'draft' | 'workbench'
 export function workbenchHref(jobId: string, tab: WorkbenchTab): string {
   return boldQuery({ job: jobId, work: tab })
 }
+
+/** The Work header's Workbench switch keeps the room's current job, message and note. */
+export function boldWorkbenchLink(search: string): string {
+  const params = new URLSearchParams(search)
+  params.set('work', 'workbench')
+  return `/b?${params.toString()}`
+}
