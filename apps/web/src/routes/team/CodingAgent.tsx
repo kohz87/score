@@ -348,7 +348,14 @@ export function AddCodingAgentForm({
   )
 }
 
-export function CodingOverview({ agent }: { agent: AgentDetail }) {
+export function CodingOverview({
+  agent,
+  teamPath = '/team',
+}: {
+  agent: AgentDetail
+  /** Where to go after removal; the bold shell passes its own Team route. */
+  teamPath?: string
+}) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const list = useQuery(codingAgentsQuery)
@@ -395,7 +402,7 @@ export function CodingOverview({ agent }: { agent: AgentDetail }) {
         coding={coding}
         onRemoved={() => {
           changed()
-          void navigate('/team')
+          void navigate(teamPath)
         }}
       />
     </div>

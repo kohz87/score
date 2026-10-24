@@ -16,6 +16,7 @@ import { registerAgentContextRoutes } from './http/agent-context.ts'
 import { registerAgentHistoryRoutes } from './http/agent-history.ts'
 import { registerAttemptRoutes } from './http/attempts.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
+import { registerRunsOnRoutes } from './http/agent-runs-on.ts'
 import { registerWorkspaceRoutes } from './http/workspace.ts'
 import { createAgentWorkspaces } from './workspace/agent-workspace.ts'
 import { ZipStaging } from './knowledge/staging.ts'
@@ -299,6 +300,7 @@ export function buildApp({
       ...(clock ? { clock } : {}),
     })
   registerAgentTabRoutes(app, port, ingest, db, clock)
+  registerRunsOnRoutes(app, port, db, clock)
   registerWorkspaceRoutes(app, port, config, undefined, workspaces)
   if (knowledge) {
     registerKnowledgeRoutes(

@@ -618,12 +618,12 @@ vs 02/12.
 this", earlier chats with search and New chat, reference chips, Share to the team room, "Take it aside", Add someone,
 context meter. Done when: e2e for each; screenshots vs 01/19.
 
-**11.8a Where an agent runs and "Runs on"** · **Lead** (adapter) · D3, D15: read/set the profile's terminal backend
+**11.8a Where an agent runs and "Runs on"** ✅ (API; the card lands with 11.8b) · **Lead** (adapter) · D3, D15: read/set the profile's terminal backend
 through the `hermes` CLI; verify on a test profile which tools Docker/SSH confines and record it; update D7.1. Done
 when: fixture tests for the CLI calls; nothing writes `~/.hermes` directly; the confinement result is in TASKLOG and the
 API says exactly what is confined.
 
-**11.8b Team page and agent page** · **DeepSeek** · boards 04, 06, 20; prototype Team › agent (D3, D4). Four up front
+**11.8b Team page and agent page** ✅ · **DeepSeek** · boards 04, 06, 20; prototype Team › agent (D3, D4). Four up front
 (how it works with SOUL/AGENTS editor + diff + conflict, model + fallback + engine, where it works, asks you first),
 More (memory, skills + hub search, tools + helper count, plugins and MCP, workspace, repeating jobs, todo, danger zone
 with export); coding agents on the same page (permission, quota floor, password, Codex ack). Done when: every tab of
@@ -636,7 +636,7 @@ today's agent page is reachable; e2e; screenshots vs 04/06/20.
 channels, your phone; tool servers + Tools and triggers UI (D18 four steps, data from 11.1d); Look (dark/light/match,
 motion, text size, per-device vs shared, send key, currency, New look switch). Done when: e2e; screenshots vs 15/16.
 
-**11.9b Settings › System and the rest** · **DeepSeek** · board 17 + prototype: team rules editor (guardian mode, go /
+**11.9b Settings › System and the rest** ✅ · **DeepSeek** · board 17 + prototype: team rules editor (guardian mode, go /
 ask / never, diff), service, updates, backups, logs, pause everyone, Notifications, Library access, Shares, Advanced,
 Remote access and security (paired browsers, passkeys, password, Where agents run card from 11.8a), Terminal page.
 Done when: every current Settings section reachable; e2e; screenshots vs 17.
@@ -665,11 +665,11 @@ joins, ends, retries 0–2, failure paths, `{{nodes.*}}`/`{{inputs.*}}`, live ch
 conflict, start from older), export (scrubbed), optional read-only graph. Done when: every 7.1 editor e2e has a
 step-list equivalent; saved recipes run unchanged on the workflow engine.
 
-**11.10e Library** · **DeepSeek** · board 13: notes, who wrote them and in which job, search, links, backlinks,
+**11.10e Library** ✅ · **DeepSeek** · board 13: notes, who wrote them and in which job, search, links, backlinks,
 properties, history, upload ≤ 256 MB with progress, zip preview/keep, files view, folders, export. Done when: today's
 Knowledge e2e pass against the Library panel.
 
-**11.10f Search** · **DeepSeek** · board 14: jobs, one-to-ones, Library, messages, actions, settings sections, "Reset
+**11.10f Search** ✅ · **DeepSeek** · board 14: jobs, one-to-ones, Library, messages, actions, settings sections, "Reset
 look", `/` commands. Done when: e2e for each result kind and keyboard use.
 
 **11.11 Retire old destinations** · **Lead**, only with the owner's OK · switch the default to the new shell; move
