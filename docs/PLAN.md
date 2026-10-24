@@ -655,7 +655,7 @@ team; tab bar Room · Team · Settings; sheets. Done when: e2e at phone width; s
 **11.10b First run and empty room** · **DeepSeek** · boards 08, 09: Hermes found, pick agents, pick the lead, keep
 Score running; starter recipes. Done when: e2e from an empty SCORE_HOME in fake mode.
 
-**11.10c Start a job** · **DeepSeek** · board 10 + prototype: recipe (lead decides / saved / none), When (once,
+**11.10c Start a job** ✅ · **DeepSeek** · board 10 + prototype: recipe (lead decides / saved / none), When (once,
 schedule, webhook, D13; routines carried over), ask-me-before, turn budget, spend cap, deadline, agents allowed,
 before-it-starts checklist (D2), save as recipe; maps onto today's orchestration/workflow start APIs (migration 0086
 for When if needed). Done when: e2e starts each kind; a routine appears as a scheduled job.
