@@ -1102,7 +1102,11 @@ export class FakePort implements HermesPort {
   /** Fake mode answers as if Docker were installed, so the card's states can be shown and tested. */
   async readRunsOn(agentId: string): Promise<RunsOn> {
     this.agentOrThrow(agentId)
-    return describeRunsOn(this.terminalOf(agentId), 'score-fake')
+    return describeRunsOn(
+      this.terminalOf(agentId),
+      { names: ['score-fake'], addresses: ['127.0.0.1'] },
+      '/home/fake',
+    )
   }
   async setRunsOn(agentId: string, update: RunsOnUpdate): Promise<RunsOn> {
     this.agentOrThrow(agentId)
@@ -1132,6 +1136,8 @@ export class FakePort implements HermesPort {
         dockerMountCwd: null,
         dockerRunAsHostUser: null,
         dockerVolumes: null,
+        dockerExtraArgs: null,
+        dockerForwardEnv: null,
         sshHost: null,
         sshUser: null,
         sshPort: null,

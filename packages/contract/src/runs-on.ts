@@ -35,12 +35,19 @@ const DockerImageSchema = z
   .min(1)
   .max(255)
   .regex(/^[a-z0-9][a-z0-9._/:@-]*$/u)
+// A host name, an IPv4 address or a bare IPv6 address (ssh takes `user@host`, so no brackets).
 const HostSchema = z
   .string()
   .min(1)
   .max(253)
-  .regex(
-    /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*|\[?[0-9A-Fa-f:.]+\]?)$/u,
+  .refine(
+    (host) =>
+      /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.?$/u.test(
+        host,
+      ) ||
+      /^(?:\d{1,3}\.){3}\d{1,3}$/u.test(host) ||
+      (/^[0-9A-Fa-f:.]+$/u.test(host) && host.includes(':') && /[0-9A-Fa-f]/u.test(host)),
+    'Not a host name or address',
   )
 export const RunsOnUpdateSchema = z.discriminatedUnion('backend', [
   z.object({ backend: z.literal('local') }).strict(),

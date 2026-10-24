@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { LiveAgentTabs } from '../../../src/hermes/live/agent-tabs.ts'
 import type { HermesRunner } from '../../../src/hermes/live/cli.ts'
 import { ProfilesReader } from '../../../src/hermes/live/profiles.ts'
-import { describeRunsOn, type TerminalSettings } from '../../../src/hermes/runs-on.ts'
+import { describeRunsOn, hostIs, type TerminalSettings } from '../../../src/hermes/runs-on.ts'
 
 const fixture = fileURLToPath(new URL('../../fixtures/hermes/', import.meta.url))
 let home: string
@@ -57,6 +57,8 @@ beforeEach(() => {
     docker_mount_cwd_to_workspace: false,
     docker_run_as_host_user: false,
     docker_volumes: [],
+    docker_extra_args: [],
+    docker_forward_env: [],
   }
   failSet = null
   runner.mockReset().mockImplementation(async (args) => hermes(args))
@@ -111,11 +113,14 @@ test('without Docker nothing is written', async () => {
 
 test('a failed setting leaves the backend where it was', async () => {
   failSet = 'terminal.ssh_user'
+  terminal.ssh_host = 'old-box'
   await expect(
     tabs.setRunsOn('builder', { backend: 'ssh', host: 'build-box', user: 'agent' }),
   ).rejects.toMatchObject({ status: 409 })
   expect(terminal.backend).toBe('local')
   expect(sets().some((args) => args.includes('terminal.backend'))).toBe(false)
+  // The host written before the failure is put back.
+  expect(terminal.ssh_host).toBe('old-box')
 })
 
 test('SSH stores the key path only, and SSH to this machine separates nothing', async () => {
@@ -137,8 +142,12 @@ test('SSH stores the key path only, and SSH to this machine separates nothing', 
     separated: 'partly',
     ssh: { host: 'build-box', user: 'agent', port: 2222 },
   })
+  runner.mockClear()
   const here = await tabs.setRunsOn('builder', { backend: 'ssh', host: 'localhost', user: 'agent' })
   expect(here).toMatchObject({ separated: 'no', ssh: { sameMachine: true }, separatedTools: [] })
+  // A new host never inherits the last host's key or port.
+  expect(terminal.ssh_key).toBe('')
+  expect(terminal.ssh_port).toBe(22)
 })
 
 test('an unknown backend is "unknown", and Hermes not answering is 502', async () => {
@@ -160,16 +169,88 @@ test('Docker caveats follow the settings', () => {
     dockerMountCwd: true,
     dockerRunAsHostUser: true,
     dockerVolumes: ['/a:/a', '/b:/b'],
+    dockerExtraArgs: [],
+    dockerForwardEnv: ['GITHUB_TOKEN'],
     sshHost: null,
     sshUser: null,
     sshPort: null,
   }
-  const notes = describeRunsOn(settings, 'box').notes.join(' ')
+  const notes = describeRunsOn(settings, me, '/home/me').notes.join(' ')
   expect(notes).toMatch(/internet/u)
   expect(notes).toMatch(/working folder .* mounted/u)
   expect(notes).toMatch(/2 more folders/u)
   expect(notes).not.toMatch(/root/u)
-  expect(describeRunsOn({ ...settings, backend: 'ssh', sshHost: 'Box' }, 'box').separated).toBe(
-    'no',
+  expect(notes).toMatch(/1 environment variable from this machine/u)
+  expect(describeRunsOn({ ...settings, backend: 'ssh', sshHost: 'Box' }, me).separated).toBe('no')
+})
+
+const me = {
+  names: ['box.example.lan'],
+  addresses: ['127.0.0.1', '192.168.1.20', '::1', 'fe80::1'],
+}
+const docker = (extra: Partial<TerminalSettings>): TerminalSettings => ({
+  backend: 'docker',
+  dockerImage: null,
+  dockerNetwork: null,
+  dockerMountCwd: null,
+  dockerRunAsHostUser: null,
+  dockerVolumes: [],
+  dockerExtraArgs: [],
+  dockerForwardEnv: [],
+  sshHost: null,
+  sshUser: null,
+  sshPort: null,
+  ...extra,
+})
+
+test('SSH to this machine in any spelling separates nothing; a plain name says Score only checks the name', () => {
+  for (const host of [
+    '127.0.0.2',
+    '0.0.0.0',
+    '0:0:0:0:0:0:0:1',
+    '::ffff:127.0.0.1',
+    'LOCALHOST.',
+    'app.localhost',
+    'box',
+    'box.example.lan',
+    '192.168.1.20',
+    'FE80::1',
+  ])
+    expect(hostIs(host, me), host).toBe('same')
+  expect(hostIs('10.0.0.9', me)).toBe('other')
+  expect(hostIs('build-box', me)).toBe('name')
+  const named = describeRunsOn(docker({ backend: 'ssh', sshHost: 'build-box' }), me)
+  expect(named.separated).toBe('partly')
+  expect(named.notes.join(' ')).toMatch(/checks the name, not where it points/u)
+  expect(describeRunsOn(docker({ backend: 'ssh', sshHost: null }), me).separated).toBe('unknown')
+})
+
+test('Docker options or mounts that hand over this machine make it "not separated"', () => {
+  for (const extra of [
+    { dockerExtraArgs: ['--privileged'] },
+    { dockerExtraArgs: ['--network', 'host'] },
+    { dockerExtraArgs: ['--net=host'] },
+    { dockerExtraArgs: ['--pid=host'] },
+    { dockerExtraArgs: ['--cap-add', 'SYS_ADMIN'] },
+    { dockerExtraArgs: ['-v', '/var/run/docker.sock:/var/run/docker.sock'] },
+    { dockerExtraArgs: ['--mount', 'type=bind,source=/,target=/host'] },
+    { dockerVolumes: ['/:/host:ro'] },
+    { dockerVolumes: ['/home/me:/me'] },
+  ]) {
+    const runsOn = describeRunsOn(docker(extra), me, '/home/me')
+    expect(runsOn.separated, JSON.stringify(extra)).toBe('no')
+    expect(runsOn.separatedTools).toEqual([])
+  }
+  const projects = describeRunsOn(
+    docker({ dockerVolumes: ['/home/me/project:/w'] }),
+    me,
+    '/home/me',
   )
+  expect(projects.separated).toBe('partly')
+  // An explicit --network none wins over the docker_network setting.
+  expect(
+    describeRunsOn(docker({ dockerExtraArgs: ['--network=none'], dockerNetwork: true }), me).docker
+      ?.network,
+  ).toBe(false)
+  expect(describeRunsOn(docker({ dockerVolumes: '/a:/a' }), me).separated).toBe('unknown')
 })

@@ -815,3 +815,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   describe the bold system and the `data-protected` rule for every new decision surface. Full e2e 647/648, the one
   failure (`themes-builtin-visual` harbour light) a flake: 36/36 on rerun. The Look switch and pairing restyle move to
   11.9a. Not deployed.
+  **11.8a Sonnet security review: no P1, 4 P2, P3s.** Real, fixed with tests: an edit within the same backend wasn't
+  rolled back when a later write failed (now every written key is put back from a snapshot, inside the profile lock,
+  and the read-back happens in the lock too); SSH to this machine under another spelling (`127.x`, `0.0.0.0`, IPv6
+  forms, `::ffff:127.…`, `*.localhost`, FQDN vs short name, own interface addresses) read as "partly" (now "no"; a plain
+  name gets "Score checks the name, not where it points"); Docker `extra_args`/volumes that hand over the machine
+  (`--privileged`, host namespaces, `--cap-add`, `--device`, `--security-opt`, mounts of `/`, Docker's socket, `/run`,
+  home) were ignored (now "no"; `--network` in extra args wins over `docker_network`; malformed settings "unknown");
+  `docker_forward_env` now noted; string booleans read; omitted SSH port/key reset to defaults instead of carried over;
+  host schema no longer takes brackets or junk IPv6. Noted, not fixable by Score: a backend set through the profile's
+  environment file (`TERMINAL_ENV`) is invisible to `config get` — the local card says so. Rejected: none.

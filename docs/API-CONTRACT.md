@@ -1445,17 +1445,25 @@ through the `hermes` CLI (`config get --json` / `config set` on `terminal.*`), n
     checked: { how: 'source' | 'live'; hermes: string; at: string }  /* how the confinement statement was established */
   }
   ```
-  `local` is always `separated: 'no'` ("This machine as you, not separated"). `ssh` to this machine (`localhost`,
-  `127.0.0.1`, `::1`, or the machine's own hostname) is `'no'` too. `docker` and other-host `ssh` are `'partly'`: only the
-  terminal, background processes, file read/write/patch/search, `execute_code` and file-based vision run in the backend;
-  browsers, computer use, web search, MCP servers, memory, skills, scheduled jobs, messaging, image/voice generation and
-  plugins still run on this machine as the Hermes user. A backend Score doesn't know is `'unknown'` with no tool lists.
+  `local` is always `separated: 'no'` ("This machine as you, not separated"; a backend set through the profile's
+  environment file instead of its settings isn't visible to Score, and the notes say so). `ssh` to this machine is `'no'`:
+  any loopback spelling (`127.x.y.z`, `0.0.0.0`, `::1` in any form, `::ffff:127.…`, `localhost`, `*.localhost`), the
+  machine's own names (short or full) and its interface addresses; any other name is `'partly'` with a note that Score
+  checks the name, not where it points. `docker` is `'no'` when its settings hand the container this machine
+  (`--privileged`, host network/PID/IPC/UTS/userns, `--cap-add`, `--device`, `--security-opt`, or a mount of `/`, Docker's
+  socket, `/run`, `/var/run` or the home folder), `'unknown'` when a Docker setting isn't in a form Score understands, and
+  otherwise `'partly'`: only the terminal, background processes, file read/write/patch/search, `execute_code` and
+  file-based vision run in the backend; browsers, computer use, web search, MCP servers, memory, skills, scheduled jobs,
+  messaging, image/voice generation and plugins still run on this machine as the Hermes user. `ssh` without a host and
+  backends Score doesn't know are `'unknown'` with no tool lists.
   `502 hermes_unavailable` when Hermes can't answer.
 - **H** `PUT /api/agents/:agentId/runs-on` `{ backend: 'local' } | { backend: 'docker'; image?: string; network?: boolean }
   | { backend: 'ssh'; host: string; user: string; port?: number; keyPath?: string }` → `RunsOn`. Settings are written
-  before `terminal.backend`, so a failed write leaves the agent where it ran. `docker` is refused `409
+  before `terminal.backend`, and a failure part-way puts back every value already written, so the agent keeps running
+  exactly where it did. Omitted Docker fields stay as they are; an omitted SSH `port` or `keyPath` goes back to Hermes's
+  default (22, none), so a new host never inherits the last host's key. `docker` is refused `409
   backend_unavailable` when Docker doesn't answer on this machine. Score stores the SSH key's **path** only and never
-  reads the key. `image` is a Docker reference (`[a-z0-9._/:@-]`, ≤ 255); `host` a hostname or IP; `user` a POSIX user name;
+  reads the key. `image` is a Docker reference (`[a-z0-9._/:@-]`, ≤ 255); `host` a hostname, IPv4 or bare IPv6 address (no brackets); `user` a POSIX user name;
   `keyPath` absolute. Takes effect for terminals the agent starts afterwards. The agent's Workspace tab is unavailable on
   any backend but `local` (§ Workspace).
 
