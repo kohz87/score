@@ -42,6 +42,23 @@ const protectedPair = {
   },
 } as const
 
+/** Reads an element's text colour and its nearest opaque background, from computed styles. */
+async function computedPair(locator: Locator): Promise<[string, string]> {
+  return locator.evaluate((element) => {
+    const rgb = (value: string) => {
+      const parts = value.match(/\d+/g)?.map(Number) ?? []
+      return `rgb(${parts[0] ?? 0}, ${parts[1] ?? 0}, ${parts[2] ?? 0})`
+    }
+    const colour = getComputedStyle(element).color
+    for (let node: Element | null = element; node; node = node.parentElement) {
+      const background = getComputedStyle(node).backgroundColor
+      if (background && background !== 'rgba(0, 0, 0, 0)' && background !== 'transparent')
+        return [rgb(colour), rgb(background)]
+    }
+    return [rgb(colour), 'rgb(255, 255, 255)']
+  })
+}
+
 /** WCAG AA for the text and the fill a person reads it on. */
 async function expectReadable(locator: Locator, [colour, background]: readonly [string, string]) {
   await expect(locator).toBeVisible()
@@ -99,6 +116,72 @@ for (const mode of ['light', 'dark'] as const) {
     await expectReadable(privacy, expected.privacy)
   })
 }
+
+test('a failing theme on a dark device, with Look on system, keeps the bold light switch readable', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  // No score.theme: Look follows the device. The failing theme makes the engine set data-contrast-fallback.
+  await page.addInitScript(() => localStorage.removeItem('score.theme'))
+  await openBoldRoomWith(page, {}, async (frame) => {
+    const look: Look = { active: 'failing', mode: 'system' }
+    await mockThemes(frame, [failing], look)
+  })
+  await expect(page.locator('html')).toHaveAttribute('data-contrast-fallback', '')
+  const shell = page.locator('[data-ui="bold"]')
+  await expect(shell).toHaveAttribute('data-look', 'dark')
+
+  // Search's switch is for this visit only: it changes data-look, not data-theme or score.theme.
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Search and commands' })
+  await dialog.getByRole('combobox', { name: 'Search or run a command' }).fill('Switch to light')
+  await dialog.getByRole('option', { name: 'Switch to light' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(shell).toHaveAttribute('data-look', 'light')
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme')
+  expect(await page.evaluate(() => localStorage.getItem('score.theme'))).toBeNull()
+
+  // The dark @media copy must not win: Score's light pair, not light ink on a white panel.
+  const request = page.locator('[data-ui="bold"] .bold-request').first()
+  await expect(request).toHaveCSS('color', 'rgb(255, 255, 255)')
+  await expect(request).toHaveCSS('background-color', 'rgb(18, 19, 26)')
+  await expectReadable(request, ['rgb(255, 255, 255)', 'rgb(18, 19, 26)'])
+  // Open the one-to-one through the shell: a page load would drop the visit-only light override.
+  await page.getByRole('button', { name: /^One to one with builder,/ }).click()
+  await expect(shell).toHaveAttribute('data-look', 'light')
+  const privacy = page.locator('#bold-side-panel .bold-dm-privacy[data-protected]')
+  await expect(privacy).toBeVisible()
+  await expect(privacy).toHaveCSS('color', 'rgb(94, 98, 108)')
+  await expect(privacy).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+  await expectReadable(privacy, ['rgb(94, 98, 108)', 'rgb(255, 255, 255)'])
+})
+
+test('a failing theme gives protected text with no fill an opaque Score ground', async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem('score.theme', 'dark'))
+  await openBoldRoomWith(page, { shared: true, source: true }, async (frame) => {
+    const look: Look = { active: 'failing', mode: 'dark' }
+    await mockThemes(frame, [failing], look)
+  })
+  await expect(page.locator('html')).toHaveAttribute('data-contrast-fallback', '')
+  const expected: [string, string] = ['rgb(236, 236, 241)', 'rgb(26, 28, 35)']
+
+  // A shared message paints its text bubble itself; its wrapper is the protected surface that needs the fill.
+  await page.getByRole('tab', { name: /Activity feed/ }).click()
+  const shared = page.locator('[data-ui="bold"] .bold-shared')
+  await expect(shared).toContainText('shared from a one-to-one with you')
+  const [sharedInk, sharedGround] = await computedPair(shared)
+  expect([sharedInk, sharedGround]).toEqual(expected)
+  await expectReadable(shared, expected)
+
+  // Started by has no fill of its own: the fallback panel is its ground.
+  const started = page.getByRole('article', { name: /^Started by Tickets/ })
+  await expect(started).toContainText('TCK-142')
+  await expect(started).toHaveCSS('background-color', expected[1])
+  await expect(started).toHaveCSS('color', expected[0])
+  await expectReadable(started, expected)
+})
 
 for (const id of themed) {
   for (const mode of ['light', 'dark'] as const) {

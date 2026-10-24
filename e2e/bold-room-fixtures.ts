@@ -18,6 +18,10 @@ export interface BoldRoomOptions {
   uploadDelay?: number
   /** Replace the paused review with another contract-valid pause (the seeded fake has no send-back fixture). */
   exchange?: Json
+  /** Add a frozen one-to-one reply to the Activity feed job, as sharing one into the room does. */
+  shared?: boolean
+  /** Give the Activity feed job a trigger source, for the Started-by card. */
+  source?: boolean
 }
 
 const at = (minute: number) => `2026-10-24T10:${String(minute).padStart(2, '0')}:00.000Z`
@@ -134,6 +138,15 @@ const approval = {
   delivery: 'none',
   blocking: null,
   refs: [],
+}
+
+const triggerSource = {
+  app: 'Tickets',
+  ref: 'TCK-142',
+  title: 'Checkout drops the last cart line',
+  link: 'https://tickets.example.com/TCK-142',
+  triggerId: 'trigger-support',
+  missing: [],
 }
 
 const messages: Record<string, Json[]> = {
@@ -335,7 +348,37 @@ function sentMessage(body: Json, index: number) {
 
 /** Routes the bold room's reads and mutations to stable contract-shaped fixtures; every other API stays real. */
 export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
-  const visibleJobs = options.empty ? jobs.filter((item) => item.isDefault) : jobs
+  const visibleJobs = (options.empty ? jobs.filter((item) => item.isDefault) : jobs).map((item) =>
+    options.source && item.id === 'job-activity' ? { ...item, source: triggerSource } : item,
+  )
+  const roomMessages: Record<string, Json[]> = { ...messages }
+  if (options.shared)
+    roomMessages['job-activity'] = [
+      ...(roomMessages['job-activity'] ?? []),
+      {
+        id: 'message-shared',
+        roomId: room.id,
+        jobId: 'job-activity',
+        author: { kind: 'you' },
+        to: [],
+        parts: [
+          {
+            kind: 'shared',
+            from: {
+              roomId: 'dm-builder',
+              jobId: 'chat-builder',
+              messageId: 'message-shared-source',
+              agentId: 'builder',
+              at: at(12),
+            },
+            text: 'The cursor is stable when the page reloads.',
+          },
+        ],
+        createdAt: at(12),
+        streaming: false,
+        refs: [],
+      },
+    ]
   const exchanges = [options.exchange ?? defaultExchange]
   const pins = new Map([['message-pinned', 'Event cursors are (created_at, id).']])
   const requests: RoomRequest[] = []
@@ -369,7 +412,7 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
       const jobId = url.searchParams.get('jobId') ?? 'job-default'
       return response(route, {
         asOfSeq: 12,
-        items: options.empty ? [] : (messages[jobId] ?? []),
+        items: options.empty ? [] : (roomMessages[jobId] ?? []),
         nextCursor: null,
         jobId,
       })
@@ -384,7 +427,7 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
       })
     if (method === 'POST' && path.startsWith('/api/rooms/team-room/pins/')) {
       const messageId = decodeURIComponent(path.split('/').pop() ?? '')
-      const message = Object.values(messages)
+      const message = Object.values(roomMessages)
         .flat()
         .find((item) => item.id === messageId)
       const part = Array.isArray(message?.parts) ? (message.parts as Json[])[0] : undefined

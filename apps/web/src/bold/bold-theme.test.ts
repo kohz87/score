@@ -151,7 +151,7 @@ it('Score itself keeps the request cards’ agent names readable in both looks',
 
 it('the contrast fallback keeps the request cards’ agent names readable in both looks', () => {
   for (const mode of ['light', 'dark'] as const) {
-    const selector = `html[data-contrast-fallback] [data-ui='bold'][data-look='${mode}'] [data-protected]`
+    const selector = `html[data-contrast-fallback][data-contrast-fallback] [data-ui='bold'][data-look='${mode}'] [data-protected]`
     const background = declaration(protectedCss, selector, 'hi-bg')
     expectNameTints(background, mode)
   }

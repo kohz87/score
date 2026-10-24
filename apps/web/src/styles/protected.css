@@ -251,44 +251,6 @@
     --ink: #eceef2 !important;
     --card: #181a21 !important;
   }
-  /* The bold shell's own tokens resolve on its root from the theme's `--t-*` values, so the classic fallback above
-     never reaches them. Give its decision surfaces Score's bold sets too, chosen by the root's actual look: Search's
-     switch changes `data-look` without changing `data-theme`. */
-  html[data-contrast-fallback] [data-ui='bold'][data-look='light'] [data-protected],
-  html[data-contrast-fallback] [data-ui='bold'][data-look='light'] [data-decision] {
-    --bg: #eceef2 !important;
-    --panel: #ffffff !important;
-    --deep: #ffffff !important;
-    --field: #f4f5f8 !important;
-    --line: #dfe2e8 !important;
-    --ink: #12131a !important;
-    --ink2: #3a3d45 !important;
-    --muted: #5e626c !important;
-    --faint: #9a9ea7 !important;
-    --hi-bg: #12131a !important;
-    --hi-ink: #ffffff !important;
-    --hi-sub: #c9cbd2 !important;
-  }
-  html[data-contrast-fallback] [data-ui='bold'][data-look='dark'] [data-protected],
-  html[data-contrast-fallback] [data-ui='bold'][data-look='dark'] [data-decision] {
-    --bg: #12131a !important;
-    --panel: #1a1c23 !important;
-    --deep: #16171e !important;
-    --field: #23252e !important;
-    --line: #2c2f38 !important;
-    --ink: #ececf1 !important;
-    --ink2: #c9ccd4 !important;
-    --muted: #a9adb8 !important;
-    --faint: #626670 !important;
-    --hi-bg: #ececf1 !important;
-    --hi-ink: #12131a !important;
-    --hi-sub: #3a3d45 !important;
-  }
-  /* The privacy promise sits on the panel a theme paints. In the fallback it wears Score's own ground, so its text is
-     measured against a colour Score chose rather than whatever happens to be behind it. */
-  html[data-contrast-fallback] [data-ui='bold'] .bold-dm-privacy[data-protected] {
-    background-color: var(--deep) !important;
-  }
   @media (prefers-color-scheme: dark) {
     html[data-contrast-fallback]:not([data-theme]) [data-protected] {
       --ground: #0f1116 !important;
@@ -305,5 +267,72 @@
       --ink: #eceef2 !important;
       --card: #181a21 !important;
     }
+  }
+  /* The bold shell's own tokens resolve on its root from the theme's `--t-*` values, so the classic fallback above
+     never reaches them. Give its decision surfaces Score's bold sets too, chosen by the root's actual look: Search's
+     switch changes `data-look` without changing `data-theme`.
+
+     This block comes after the `prefers-color-scheme` copy above on purpose. Both used to have the same specificity
+     (0,4,1), so that copy won by order and put light ink on a white panel when Look was "system" on a dark device and
+     Search switched to light. The doubled attribute raises this to (0,5,1): order is no longer what decides. */
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold'][data-look='light']
+    [data-protected],
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold'][data-look='light']
+    [data-decision] {
+    --bg: #eceef2 !important;
+    --panel: #ffffff !important;
+    --deep: #ffffff !important;
+    --field: #f4f5f8 !important;
+    --line: #dfe2e8 !important;
+    --ink: #12131a !important;
+    --ink2: #3a3d45 !important;
+    --muted: #5e626c !important;
+    --faint: #9a9ea7 !important;
+    --hi-bg: #12131a !important;
+    --hi-ink: #ffffff !important;
+    --hi-sub: #c9cbd2 !important;
+  }
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold'][data-look='dark']
+    [data-protected],
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold'][data-look='dark']
+    [data-decision] {
+    --bg: #12131a !important;
+    --panel: #1a1c23 !important;
+    --deep: #16171e !important;
+    --field: #23252e !important;
+    --line: #2c2f38 !important;
+    --ink: #ececf1 !important;
+    --ink2: #c9ccd4 !important;
+    --muted: #a9adb8 !important;
+    --faint: #626670 !important;
+    --hi-bg: #ececf1 !important;
+    --hi-ink: #12131a !important;
+    --hi-sub: #3a3d45 !important;
+  }
+  /* Protected text that sits directly on whatever a theme paints needs an opaque fill of Score's own in the fallback;
+     measured contrast otherwise depends on what happens to be behind it. This is deliberately a normal declaration in
+     the protected layer, not `!important`: Score's own unlayered backgrounds (request and approval cards, dialogs,
+     menus, fields, the dock ring and the Needs-you marker) win automatically, while a surface with no fill of its own
+     (a shared message, a Started-by line, report-back text, coding-add-context, bold-add-error) gets this panel. The
+     privacy promise below is the one exception, with its own deeper ground. Graphics are left alone: a panel rectangle
+     behind a glyph, pet or room stage is not a text ground. */
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold']
+    [data-protected]:not([data-protected='raised']):not(
+      :is(.agent-glyph, .pet-avatar, .room-stage)
+    ) {
+    background-color: var(--panel);
+    color: var(--ink);
+  }
+  /* The privacy promise sits on the panel a theme paints. In the fallback it wears Score's own ground, so its text is
+     measured against a colour Score chose rather than whatever happens to be behind it. */
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold']
+    .bold-dm-privacy[data-protected] {
+    background-color: var(--deep) !important;
   }
 }
