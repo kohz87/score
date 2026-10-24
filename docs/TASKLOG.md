@@ -750,3 +750,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   `listJobs` 4 queries per job — fine at team-room sizes, revisit if a room grows past ~50 jobs. Tests: 10 HTTP
   (incl. privacy across all agents and the summary run, pins per room) + 4 results; DeepSeek's job-scope unread test
   updated to the default-job badge. `pnpm check` green apart from that test (fixed after). Not deployed.
+- **11.9c Settings › Usage (DeepSeek, 2026-10-24).** Settings frame on `/b/settings/:section` (the prototype's nine
+  sections; Usage built, the rest placeholders) and Usage (`sUsage`, board 05) on the existing Reports API. Round 0
+  (non-thinking variant) built it, again without a final report. Lead's side-by-side check: chart stacked per agent and
+  an approvals card the prototype doesn't have, spend not sorted → **fix round 1**: one-series chart with the busiest day
+  highlighted, sorted spend, no approvals card (prototype wins over PLAN's wording; decisions recorded in the brief).
+  **Sonnet review: 1 P1, 2 P2, 6 P3** — P1 "not stacked per agent" and P2 "approvals card missing" **rejected**
+  (owner: the mock-up is binding; prototype and board 05 are one-series and have no card; per-agent counts stay in the
+  table, agents keep colour + shape in Spend); P2 currency **real but narrower than reported** (classic shows USD unless
+  the person picked the Look currency on Reports) → Usage now follows the same rule; P3 unknown section → redirect;
+  P3 e2e asserted fake-data weekdays and counts that move with the date → date-proof (found failing on rebase, so the
+  flake was real). Kept: 32–36 px links/segments are the prototype's values. Lead fixes: 3 small. 1 fix round.
+  Web 2994 tests, lint/types green, `e2e/bold-usage` 4 + reports e2e pass.
