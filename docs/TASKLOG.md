@@ -966,3 +966,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   tests updated for the new behaviour, an e2e asserting the job's recipe link and the routine's cron value; and a main
   fix: 11.10d's e2e named add-step buttons "+ Gate" after the plus became an icon. E2E 52/53 + the recipes spec 8/8 after
   that fix; full check green (web 3,145). Not deployed.
+- **11.10b First run and starter recipes (DeepSeek + lead, 2026-10-24).** `BoldFirstRun` at `/b` while the team room
+  has no lead (and on `?first=run`): Hermes found (truthful, degraded states explained), the team as a read-only list
+  (membership can't be changed — a prototype difference), "Who leads?" saved with `PATCH /api/rooms/:id` (never
+  guessed), the SETUP service command (never claims it was installed), three starter recipes mapped onto the team's
+  agents (empty steps when none fits). Build + continuation + 1 fix round. Sonnet: 0 P1, 3 P2 (a workflows failure
+  blocked the lead, save order on partial failure, recipes needing literal agent ids), P3s — fixed. Lead: the e2e
+  caught a real bug — `refetch()` resolved with the cached list while another fetch was in flight, so a recipe saved
+  meanwhile was created twice (now read straight from the server); first run scrolls inside the room frame on phones.
+  E2E 5/5 twice (fresh SCORE_HOME per test); full check green (web 3,160). Not deployed.

@@ -252,6 +252,10 @@
     max(20px, env(safe-area-inset-left, 0px));
 }
 
+[data-ui='bold'] .bold-home-loading {
+  min-height: calc(100vh - 110px);
+}
+
 [data-ui='bold'] .bold-tabbar {
   display: none;
 }
