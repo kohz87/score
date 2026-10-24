@@ -867,3 +867,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   11.3/11.9c into the shell test, phone e2e (the name opens the agent there) and a state assertion that doesn't depend on
   the moving fake demo. Full check: web 3,013, server 4,801 + 2 PTY timing flakes under load (7/7 twice alone); team,
   agent and coding e2e 38/38. Not deployed.
+- **11.9b Settings › Rules, Notifications, Remote access and security, Advanced, System (DeepSeek + lead,
+  2026-10-24).** The bold Settings sections reusing the classic sections (optional props on Rules/Remote/Backup/About;
+  classic unchanged). Build + 1 fix round. Sonnet: 3 P2, 4 P3 — real and fixed: Knowledge settings partly missing
+  (memory-notes switch, per-agent usage, vault facts), the "Hermes was updated" banner missing under /b (approvals stay
+  paused until checked), 44px controls on phones, e2e that never pressed Pause or the Library switch. Rejected: pause
+  without confirmation and an unprotected terminal card (parity with classic); "paired browsers errors in local mode" —
+  not an error, but the list was empty there (only remote pairings are listed): it now says so. **Lead found a shell bug
+  while finishing the e2e:** every `/b` page had the room's fixed-height frame (`body.fit` + `.bold-shell`
+  `overflow: hidden`), so Team and Settings were clipped below the fold on phones; only the room view fixes the window
+  now, and scrolling into view stops above the phone tab bar (`scroll-padding-bottom`). Also exact e2e locators, the
+  missing navigation in the reachability test, and a compare-script merge with 11.10f. Full check green (web 3,011);
+  classic settings e2e 7/7; bold settings/team/search/shell 34/34 after merging main. Not deployed.
