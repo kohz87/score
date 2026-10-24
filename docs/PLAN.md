@@ -554,7 +554,7 @@ and "Stop" each work (tests); the job-wide 40-turn limit stops nested asks and r
 unknown cost pause before admission; Pause everyone holds exchanges without spending turns; every row of brief §4.6
 ends in a visible card (one test per row).
 
-**11.1d Job sources, webhook triggers, report-back** · **Lead** (security) · brief §7, D13/D17/D18, migration 0083;
+**11.1d Job sources, webhook triggers, report-back** ✅ (merged, not deployed) · **Lead** (security) · brief §7, D13/D17/D18, migration 0083;
 starts with a spike: can the adapter list a profile's MCP server tools without Score reading credentials (result in
 TASKLOG; fallback: tool picked by name). Done when: `POST /hooks/<id>` accepts only valid Standard Webhooks signatures
 within ±5 min, is idempotent on `webhook-id`, refuses non-JSON, > 256 KB and > 60/min (tests); remote mode exposes only

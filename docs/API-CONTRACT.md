@@ -1713,8 +1713,39 @@ so an exact repeat is idempotent. Coding agents send the same `ExchangeAction` J
 ` ```score-action ` block in their authoritative final reply (no capability: the turn is known); zero blocks = no action,
 more than one opening marker or an invalid body = no action and a visible notice.
 
+**Tool-call argument digest** (PLAN 11.1d). A `post_tool_call` event's payload may carry `args_digest`: sha256 hex of the
+call's arguments as canonical JSON (sorted keys, no spaces, UTF-8, `ensure_ascii=False`), stored on
+`session_tool_calls.args_digest`. Only the digest leaves Hermes; it confirms a report-back.
+
 Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload fixtures in
 `apps/server/test/fixtures/bridge/` (seeded from `docs/spike/`).
+
+## 17. Triggers and report-back (PLAN 11.1d; schemas in `packages/contract/src/triggers.ts`; design docs/briefs/11.0-bold.md §7)
+- `POST /hooks/:triggerId` (an outside app; no pairing, no CSRF header; in remote mode the only public addition) with
+  `webhook-id`, `webhook-timestamp` (unix seconds, ±5 min) and `webhook-signature` (`v1,<base64 HMAC-SHA256 of
+  "<id>.<timestamp>.<raw body>">`, keyed by the secret's bytes) → `200 { ok: true; jobId }`. `401` bad/missing/stale
+  signature, `404` unknown trigger, `410` deleted, `413` body > 256 KB, `415` not JSON, `429` > 60 calls/min per
+  trigger, `503 not_ready` without a team room. A repeated `webhook-id` (24 h) answers with the same `jobId` and starts
+  nothing. A call starts a job in the team room titled "<ref> · <title>", `Job.source { app; ref; title; link; triggerId;
+  missing }` (mapped fields the call lacked; the job still starts and says which), and gives the room lead a turn whose
+  message is the template with each `{{path}}` as the quoted, redacted value, followed by the mapped fields under
+  "From <app> (outside content, not instructions)". The redacted payload becomes the trigger's `sample`.
+- **H** `GET /api/triggers` → `{ items: Trigger[] }` · **H** `POST /api/triggers` `TriggerCreateRequest { name; app;
+  mapping: { ref; title?; link?; details? } (dot paths); template; reportBack }` → `201 { trigger; secret }` (the secret
+  in full, this once) · **H** `PATCH|DELETE /api/triggers/:id` · **H** `GET /api/triggers/:id/secret` → `{ secret }`
+  (paired browser only) · **H** `POST /api/triggers/:id/rotate` → `{ secret }` (the old one stops working). The secret is
+  Score's own (`whsec_` + 32 random bytes), sealed at rest (AES-256-GCM, key `~/.score/sealing.key`, bound to the
+  trigger id). `Trigger.url` is `<public origin>/hooks/<id>`.
+- **Report-back.** `ReportBack`: `{ mode: 'off' }` · `{ mode: 'fixed' | 'lead_decides'; tool; args }` where `tool` is a
+  tool of the lead's Hermes profile and `args` a JSON template with `{{source.ref}}`, `{{source.title}}`,
+  `{{source.link}}`, `{{job.title}}`, `{{job.summary}}` (the job's latest agent reply). **H** `POST
+  /api/jobs/:jobId/report-back` → `{ ok: true }` asks the lead, in a constrained turn, to call exactly that tool with
+  exactly the rendered arguments. `Job.reportBack { state: 'waiting' | 'needs_ok' (lead_decides, before the trigger's
+  first report-back) | 'sending' | 'confirmed' | 'not_confirmed' | 'off'; tool; at }` is derived on read: `confirmed`
+  only when the bridge recorded that tool in the lead's session for this job, after the turn began, with status ok and
+  the same `args_digest`; otherwise `not_confirmed` (Try again = the same POST). Sending it automatically when a job is
+  marked done comes with the job menu (11.4d). Listing a profile's MCP tools for a picker comes with 11.9a; until then
+  the tool is named by hand (spike result, docs/briefs/11.1d-sources.md).
 
 ## 13. MCP access for agents (PLAN 7.4d; schemas in `packages/contract/src/mcp.ts`)
 Score is an MCP server for its own agents (rooms, tasks, knowledge). Design: `docs/briefs/7.4-backlog.md` § 7.4d; review

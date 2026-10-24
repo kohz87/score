@@ -34,6 +34,11 @@ const ToolPayloadSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .nullish(),
+  // PLAN 11.1d: a finished call's exact arguments, digested by the plugin (canonical JSON).
+  args_digest: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .nullish(),
   // The plugin's redacted terminal tail; a malformed one only costs the frame its output.
   watch: WatchInfoSchema.optional().catch(undefined),
 })
@@ -359,6 +364,7 @@ export function translateBridgeEvent(
                     ended_at: event.at,
                     duration_ms: tool.duration_ms ?? null,
                     result_preview: preview(result),
+                    args_digest: tool.args_digest ?? null,
                   }),
             },
           })
