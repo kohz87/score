@@ -14,6 +14,7 @@ import { HttpError } from '../errors.ts'
 import type { DeriveEvents, DomainEventDraft } from '../hub/ingest.ts'
 import { markStaleSummaries } from './summary-stale.ts'
 import { defaultJobId } from './job-sessions.ts'
+import { jobEvent } from './exchanges/store.ts'
 import { autoSummaryOf } from './room-summaries.ts'
 import { actionable, ApprovalRowSchema } from './approval-store.ts'
 
@@ -438,6 +439,8 @@ export function storeMessage(
       data: { ...message, ...(stored.job_id ? { jobId: stored.job_id } : {}) },
     },
     ...roomChanged(sqlite, message.roomId, now, before),
+    // Its job's count, unread and last activity changed (PLAN 11.2).
+    ...(stored.job_id ? jobEvent(sqlite, stored.job_id) : []),
   ]
 }
 
@@ -555,19 +558,22 @@ export function messagePage(
   roomId: string,
   limit: number,
   before?: z.infer<typeof CursorSchema>,
+  /** PLAN 11.2: one job's messages; the room's default job when omitted (what the classic shell shows). */
+  jobId?: string,
 ) {
   roomRow(sqlite, roomId)
+  const job = jobId ?? defaultJobId(sqlite, roomId) ?? ''
   const rows = before
     ? sqlite
         .prepare(
-          'SELECT * FROM messages WHERE room_id = ? AND deleted_at IS NULL AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?',
+          'SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND deleted_at IS NULL AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?',
         )
-        .all(roomId, before.createdAt, before.id, limit + 1)
+        .all(roomId, job, before.createdAt, before.id, limit + 1)
     : sqlite
         .prepare(
-          'SELECT * FROM messages WHERE room_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT ?',
+          'SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT ?',
         )
-        .all(roomId, limit + 1)
+        .all(roomId, job, limit + 1)
   const items = rows.slice(0, limit).map(messageFromRow)
   const last = items.at(-1)
   const nextCursor =
@@ -588,6 +594,7 @@ export function markRoomRead(
   const before = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
   // Unread is per job (PLAN 11.1b): reading up to a message reads its job up to there.
   const jobId = newest && (newest.jobId ?? defaultJobId(sqlite, roomId))
+  const jobBefore = jobId ? jobEvent(sqlite, jobId) : []
   if (newest && jobId)
     sqlite
       .prepare(
@@ -597,5 +604,10 @@ export function markRoomRead(
     WHERE (excluded.last_read_message_created_at, excluded.last_read_message_id) > (job_reads.last_read_message_created_at, job_reads.last_read_message_id)`,
       )
       .run(jobId, newest.createdAt, newest.id)
-  return roomChanged(sqlite, roomId, now, before)
+  // Only a read that changed the job's unread count announces the job again.
+  const jobAfter = jobId ? jobEvent(sqlite, jobId) : []
+  return [
+    ...roomChanged(sqlite, roomId, now, before),
+    ...(JSON.stringify(jobAfter) === JSON.stringify(jobBefore) ? [] : jobAfter),
+  ]
 }

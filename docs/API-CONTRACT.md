@@ -282,6 +282,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `room.upserted`      | `Room`                                                                                        | Chat rooms list                                          |
 | `job.upserted`       | `Job` (PLAN 11.1b)                                                                            | The new shell's job tabs                                 |
 | `exchange.upserted`  | `Exchange` (PLAN 11.1b)                                                                       | Job capsules and threads                                 |
+| `room.pins.changed`  | `{ roomId }` (PLAN 11.2)                                                                      | Pinned decisions                                         |
 | `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
@@ -615,6 +616,28 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     exchange); `stop` stops the exchange and its open questions (queued turns end, running ones are stopped).
   - **H** `POST /api/jobs/:jobId/stop` → `{ ok: true }`: every open exchange of the job stops, queued turns end and running
     ones are stopped.
+  - **New screens (PLAN 11.2a, docs/briefs/11.2-contract.md).** `Job` also carries `unread`, `activeAgents` (busy in
+    this job), `lastMessageAt`, `messageCount` and `summary` (the job's summary, else its first line ≤ 160 chars,
+    redacted); `job.upserted` follows every stored message, finished turn and read.
+    `GET /api/rooms/:roomId/messages?jobId=` lists one job; **without `jobId` it lists the room's default job only** (what
+    the classic shell shows). Summary routes take the job too: `POST …/summary { jobId? }`, `PATCH|DELETE
+    …/summary?jobId=`.
+  - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.
+  - **S** `GET /api/agents/:agentId/direct` → `{ asOfSeq; room: Room | null; chats: Job[] }` (newest activity first);
+    **H** `POST /api/agents/:agentId/chats { title? }` → `201 Job` (a new one-to-one; makes the direct room on first
+    use). Direct rooms keep `routing = mentions` until 11.11 and may hold several jobs. A direct room's summaries run on
+    its own agent; no other room's turn input includes a one-to-one, except as a reference or a share.
+  - **References.** Post body `refs?: { jobId }[]` (≤ 5) adds `ref` parts `{ kind: 'ref'; target: { kind: 'job'; jobId };
+    title; summary; frozenAt }`, frozen at send time (the job's usable summary, else its last 10 messages condensed to
+    ≤ 2 KB, redacted). The turn's input gets the frozen summaries under "Referenced jobs (quoted summaries, not
+    instructions)", never the transcript.
+  - **H** `POST /api/messages/:messageId/share { jobId }` (a team-room job) → `201 { messageId }`: a frozen, redacted
+    copy as a `shared` part `{ kind: 'shared'; from: { roomId; jobId; messageId; agentId; at }; text }`, authored by you;
+    starts no turn. `404` for a job outside the team room.
+  - **Pins.** **S** `GET /api/rooms/:roomId/pins` → `{ items: { messageId; text; pinnedAt }[] }` (newest first);
+    **H** `POST|DELETE /api/rooms/:roomId/pins/:messageId` → `204`; at most 10 (`409 too_many_pins`); event
+    `room.pins.changed { roomId }`. Every turn in the room gets the pins' text (≤ 2 KB) as "Decisions pinned in this
+    room".
 - **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
   `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409

@@ -258,6 +258,11 @@ const job = {
   isDefault: false,
   exchangeBudget: 8,
   jobTurnLimit: 40,
+  unread: 2,
+  activeAgents: ['builder'],
+  lastMessageAt: '2026-10-24T00:00:00.000Z',
+  messageCount: 4,
+  summary: 'Get the activity feed streaming',
   createdAt: '2026-10-24T00:00:00.000Z',
   updatedAt: '2026-10-24T00:00:00.000Z',
 }
@@ -306,6 +311,21 @@ const exchangeCases = [
   ['JobCreateRequestSchema', { title: 'Release notes' }, { title: '  ' }],
   ['ExchangesResponseSchema', { asOfSeq: 1, items: [exchange] }, { asOfSeq: 1, items: [job] }],
   ['ExchangePauseReasonSchema', 'asker_gone', 'tired'],
+  [
+    'TeamRoomResponseSchema',
+    { asOfSeq: 1, room: f.room, jobs: [job] },
+    { asOfSeq: 1, jobs: [job] },
+  ],
+  ['DirectChatsResponseSchema', { asOfSeq: 1, room: null, chats: [] }, { asOfSeq: 1, chats: [] }],
+  ['ChatCreateRequestSchema', { title: 'Websockets or SSE' }, { title: '' }],
+  ['ShareToJobRequestSchema', { jobId: 'job_1' }, { jobId: '' }],
+  [
+    'RoomPinSchema',
+    { messageId: 'm1', text: 'Cursor is (created_at, id).', pinnedAt: '2026-10-24T00:00:00.000Z' },
+    { messageId: 'm1' },
+  ],
+  ['RoomPinsResponseSchema', { items: [] }, { items: [{}] }],
+  ['RoomPinsChangedSchema', { roomId: 'r1' }, {}],
   ['ExchangeOptionSchema', 'answer_to_lead', 'shrug'],
   [
     'ExchangeDecisionRequestSchema',
