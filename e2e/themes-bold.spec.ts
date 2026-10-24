@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
+import { openBoldRoomWith } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 import {
   boldThemeIds,
@@ -7,12 +8,97 @@ import {
   wearBuiltin,
   type BoldThemeId,
 } from './themes-bold-fixtures.ts'
+import { mockThemes, type Look, type MockTheme } from './themes-fixtures.ts'
 
 // PLAN 11.9d: themes and the Customizer on the new shell. A built-in theme paints the bold shell through the colours it
 // sets for the classic one; the ways back work on /b; the Customizer previews the new screens.
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
 
 const themed = boldThemeIds.filter((id): id is Exclude<BoldThemeId, 'score'> => id !== 'score')
+
+// A theme whose ink/card pair fails AA in both modes. The engine must put its protected surfaces back on Score's own
+// colours, including the bold shell's own tokens (protected.css keys those on the shell's data-look).
+const failing: MockTheme = {
+  id: 'failing',
+  name: 'Failing contrast',
+  source: 'custom',
+  manifest: {
+    colors: {
+      light: { ground: '#ffffff', card: '#ffffff', ink: '#eeeeee' },
+      dark: { ground: '#000000', card: '#000000', ink: '#222222' },
+    },
+  },
+}
+
+/** [text, background] a protected surface wears in each fallback mode (prototype's dark and light sets). */
+const protectedPair = {
+  light: {
+    request: ['rgb(255, 255, 255)', 'rgb(18, 19, 26)'],
+    privacy: ['rgb(94, 98, 108)', 'rgb(255, 255, 255)'],
+  },
+  dark: {
+    request: ['rgb(18, 19, 26)', 'rgb(236, 236, 241)'],
+    privacy: ['rgb(169, 173, 184)', 'rgb(22, 23, 30)'],
+  },
+} as const
+
+/** WCAG AA for the text and the fill a person reads it on. */
+async function expectReadable(locator: Locator, [colour, background]: readonly [string, string]) {
+  await expect(locator).toBeVisible()
+  await locator.evaluate(
+    (element, [foreground, fill]) => {
+      const channel = (value: number) => {
+        const c = value / 255
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+      }
+      const read = (value: string) => value.match(/\d+/g)!.map(Number)
+      const ratio = (a: string, b: string) => {
+        const [ar, ag, ab] = read(a)
+        const [br, bg, bb] = read(b)
+        const one = 0.2126 * channel(ar!) + 0.7152 * channel(ag!) + 0.0722 * channel(ab!)
+        const two = 0.2126 * channel(br!) + 0.7152 * channel(bg!) + 0.0722 * channel(bb!)
+        return (Math.max(one, two) + 0.05) / (Math.min(one, two) + 0.05)
+      }
+      if (ratio(foreground, fill) < 4.5) throw new Error(`${foreground} on ${fill} is below AA`)
+      const box = (element as HTMLElement).getBoundingClientRect()
+      if (box.width === 0 || box.height === 0) throw new Error('no box')
+    },
+    [colour, background] as const,
+  )
+}
+
+for (const mode of ['light', 'dark'] as const) {
+  test(`a failing theme wears Score’s protected colours on bold decisions and privacy (${mode})`, async ({
+    page,
+  }) => {
+    await page.addInitScript((value) => localStorage.setItem('score.theme', value), mode)
+    await openBoldRoomWith(page, {}, async (frame) => {
+      const look: Look = { active: 'failing', mode }
+      await mockThemes(frame, [failing], look)
+    })
+    await expect(page.locator('html')).toHaveAttribute('data-contrast-fallback', '')
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    await expect(page.locator('[data-ui="bold"]')).toHaveAttribute('data-look', mode)
+
+    // A protected decision card is painted from Score's bold pair, not the failing theme's card and ink.
+    const request = page.locator('[data-ui="bold"] .bold-request').first()
+    const expected = protectedPair[mode]
+    await expect(request).toHaveCSS('color', expected.request[0])
+    await expect(request).toHaveCSS('background-color', expected.request[1])
+    await expect(request).toContainText(
+      /May I install a package\?|The review ended without a verdict/,
+    )
+    await expectReadable(request, expected.request)
+
+    // The privacy promise in a one-to-one: Score's muted text on Score's panel fill.
+    await page.goto('/b?with=builder')
+    const privacy = page.locator('#bold-side-panel .bold-dm-privacy[data-protected]')
+    await expect(privacy).toContainText('Only you and builder see this')
+    await expect(privacy).toHaveCSS('color', expected.privacy[0])
+    await expect(privacy).toHaveCSS('background-color', expected.privacy[1])
+    await expectReadable(privacy, expected.privacy)
+  })
+}
 
 for (const id of themed) {
   for (const mode of ['light', 'dark'] as const) {

@@ -9,6 +9,18 @@ import { baseTokens, contrast, resolve } from '../styles/contrast-pairs.ts'
 const root = join(import.meta.dirname, '../../../..')
 // Whitespace is flattened so Prettier's line breaks inside a selector don't matter.
 const css = readFileSync(join(import.meta.dirname, 'bold-theme.css'), 'utf8').replace(/\s+/g, ' ')
+const boldTokens = readFileSync(join(import.meta.dirname, 'tokens.css'), 'utf8').replace(
+  /\s+/g,
+  ' ',
+)
+const roomCss = readFileSync(join(import.meta.dirname, 'room/bold-room.css'), 'utf8').replace(
+  /\s+/g,
+  ' ',
+)
+const protectedCss = readFileSync(
+  join(import.meta.dirname, '../styles/protected.css'),
+  'utf8',
+).replace(/\s+/g, ' ')
 
 /** [text token, background token] in the bold set, as the shell draws them. */
 const pairs: [string, string, string][] = [
@@ -32,6 +44,37 @@ function source(selector: string, name: string): string {
   const value = new RegExp(`--${name}:\\s*([^;]+);`).exec(body)?.[1]
   if (!value) throw new Error(`${name} is not set under ${selector}`)
   return value
+}
+
+function declaration(text: string, selector: string, name: string): string {
+  // The same selector can be split over several rules (the request card paints, then tints); find the one with `name`.
+  const pattern = new RegExp(`--${name}:\\s*([^;]+);`)
+  let at = text.indexOf(selector)
+  let value: string | undefined
+  while (at >= 0 && !value) {
+    const open = text.indexOf('{', at)
+    value = pattern.exec(text.slice(open + 1, text.indexOf('}', open)))?.[1]
+    at = text.indexOf(selector, at + 1)
+  }
+  if (at < 0 && !value) throw new Error(`${selector} is missing`)
+  if (!value) throw new Error(`${name} is not set under ${selector}`)
+  return value.trim()
+}
+
+const nameTints = ['agent-violet-name', 'agent-jade-name', 'agent-saffron-name', 'agent-coral-name']
+
+/** The name tints a request card uses: its light rule in the light look, its default rule in dark. */
+function requestTints(mode: 'light' | 'dark'): Record<string, string> {
+  const selector =
+    mode === 'light'
+      ? "[data-ui='bold'][data-look='light'] .bold-request"
+      : "[data-ui='bold'] .bold-request"
+  return Object.fromEntries(nameTints.map((name) => [name, declaration(roomCss, selector, name)]))
+}
+
+function expectNameTints(background: string, mode: 'light' | 'dark') {
+  for (const [name, value] of Object.entries(requestTints(mode)))
+    expect(contrast(value, background), `${name} on the request card`).toBeGreaterThanOrEqual(4.5)
 }
 
 /** The colour of a bold token for a mode: a `var(--t-x)` or a `color-mix` of two. */
@@ -93,6 +136,23 @@ describe.each(BUILTIN_THEME_IDS.slice(1))('the bold shell in %s', (id) => {
           `${what} (${text} on ${background})`,
         ).toBeGreaterThanOrEqual(4.5)
       }
+      expectNameTints(read('hi-bg'), mode)
     })
+  }
+})
+
+it('Score itself keeps the request cards’ agent names readable in both looks', () => {
+  for (const mode of ['light', 'dark'] as const) {
+    const selector = mode === 'light' ? "[data-ui='bold'][data-look='light']" : "[data-ui='bold']"
+    const background = declaration(boldTokens, selector, 'hi-bg')
+    expectNameTints(background, mode)
+  }
+})
+
+it('the contrast fallback keeps the request cards’ agent names readable in both looks', () => {
+  for (const mode of ['light', 'dark'] as const) {
+    const selector = `html[data-contrast-fallback] [data-ui='bold'][data-look='${mode}'] [data-protected]`
+    const background = declaration(protectedCss, selector, 'hi-bg')
+    expectNameTints(background, mode)
   }
 })

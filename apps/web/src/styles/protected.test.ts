@@ -76,6 +76,23 @@ test('the protected layer re-asserts what a hostile theme would change, with !im
   expect(css).toContain('--font-body')
 })
 
+test('the bold fallback follows the shell’s data-look, not the page’s data-theme', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  for (const mode of ['light', 'dark'] as const) {
+    const rule = new RegExp(
+      `html\\[data-contrast-fallback\\] \\[data-ui='bold'\\]\\[data-look='${mode}'\\] \\[data-protected\\]`,
+    )
+    expect(css, mode).toMatch(rule)
+    expect(css, `${mode} decision`).toContain(
+      `[data-ui='bold'][data-look='${mode}'] [data-decision]`,
+    )
+  }
+  // Search's switch changes data-look only: keying the bold fallback on data-theme would miss it.
+  expect(css).not.toMatch(
+    /html\[data-contrast-fallback\]\[data-theme='(light|dark)'\] \[data-ui='bold'\]/,
+  )
+})
+
 test('glyph shapes are re-asserted too, and the bare glyph svg is not a flex container', () => {
   const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
   expect(css).toContain("html[data-look='custom'] [data-protected] svg *")

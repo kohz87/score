@@ -1,5 +1,13 @@
 import type { AgentSummary } from '@score/contract'
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { BoldRecipes } from './BoldRecipes.tsx'
@@ -90,7 +98,8 @@ export function BoldShell() {
   // The Customizer's frame (11.9d) has a document of its own: the colour mode it previews is on its <html>, not the
   // host's Look, and the shell must never touch the Customizer page's body or keys.
   const [previewLight, setPreviewLight] = useState<boolean | null>(null)
-  useEffect(() => {
+  // A layout effect, so the Customizer's first paint already uses the frame's mode rather than the host's Look.
+  useLayoutEffect(() => {
     const html = shellRef.current?.ownerDocument.documentElement
     if (!preview || !html) return
     const read = () => setPreviewLight(html.getAttribute('data-theme') === 'light')
