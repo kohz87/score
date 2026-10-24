@@ -120,6 +120,7 @@ export function Markdown({
   const inRouter = useInRouterContext()
   const agentId = workspace?.agentId ?? null
   const agentIds = workspace?.agentIds
+  const linkFor = workspace?.linkFor
   const components = useMemo<Components>(
     () => ({
       ...baseComponents,
@@ -136,7 +137,7 @@ export function Markdown({
               </span>
             )
           return (
-            <Link className="chat-workspace-link" to={workspace?.linkFor?.(target) ?? target.to}>
+            <Link className="chat-workspace-link" to={linkFor?.(target) ?? target.to}>
               {children}
             </Link>
           )
@@ -148,7 +149,7 @@ export function Markdown({
         )
       },
     }),
-    [agentId, agentIds, inRouter, workspace?.linkFor],
+    [agentId, agentIds, inRouter, linkFor],
   )
   return (
     <div className="chat-text chat-md">

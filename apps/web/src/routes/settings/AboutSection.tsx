@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { AboutSchema, UpdateCheckSchema, type About, type UpdateCheck } from '@score/contract'
+import { UpdateCheckSchema, type About, type UpdateCheck } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { copyText, selectText } from '../../data/clipboard.ts'
+import { aboutQuery } from './settings-queries.ts'
 import { failure } from './TerminalCommand.tsx'
 
 /** A folder name safe to paste after `cd`: plain paths stay as they are, anything else is single-quoted. */
@@ -117,12 +118,7 @@ const rows = (about: About): [string, string][] => [
 
 /** Settings › About: what is running, and an update check that only happens when you press the button. */
 export function AboutSection({ heading = 'About Score' }: { heading?: string } = {}) {
-  const about = useQuery({
-    queryKey: ['about'],
-    queryFn: async ({ signal }) => AboutSchema.parse(await apiFetch('about', { signal })),
-    retry: false,
-    staleTime: Infinity,
-  })
+  const about = useQuery(aboutQuery)
   const check = useMutation({
     mutationFn: async () =>
       UpdateCheckSchema.parse(await apiFetch('about/update-check', { method: 'POST' })),

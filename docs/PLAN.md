@@ -652,10 +652,10 @@ Room, Team, Settings); hostile-theme e2e still green.
 **11.10a Phone** · **DeepSeek** · boards 03, 18–20: job list with pinned request and unread, a job's chat, one-to-ones,
 team; tab bar Room · Team · Settings; sheets. Done when: e2e at phone width; screenshots vs 03/18–20.
 
-**11.10b First run and empty room** · **DeepSeek** · boards 08, 09: Hermes found, pick agents, pick the lead, keep
+**11.10b First run and empty room** ✅ (empty room with 11.4a) · **DeepSeek** · boards 08, 09: Hermes found, pick agents, pick the lead, keep
 Score running; starter recipes. Done when: e2e from an empty SCORE_HOME in fake mode.
 
-**11.10c Start a job** · **DeepSeek** · board 10 + prototype: recipe (lead decides / saved / none), When (once,
+**11.10c Start a job** ✅ · **DeepSeek** · board 10 + prototype: recipe (lead decides / saved / none), When (once,
 schedule, webhook, D13; routines carried over), ask-me-before, turn budget, spend cap, deadline, agents allowed,
 before-it-starts checklist (D2), save as recipe; maps onto today's orchestration/workflow start APIs (migration 0086
 for When if needed). Done when: e2e starts each kind; a routine appears as a scheduled job.
@@ -679,4 +679,4 @@ removed code has no route or import left; a copy of the live DB migrates and eve
 approved the removal list.
 
 **11.12 Phase gate** · **Lead** (Codex `gpt-6.1-sol` max if it has quota) · code review against `main` in a fresh
-session, every parity row checked off against the brief's §11, full e2e, then the owner's Gemini review; release.
+session, every parity row checked off against the brief's §11, full e2e, then the owner's own review (no Gemini review, decision 119); release.

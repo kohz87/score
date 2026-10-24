@@ -8,7 +8,8 @@ import { agentsQuery } from '../routes/chat/queries.ts'
 import { agentNameColor, agentStateLabel } from './bold-agents.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
 import { BoldResults } from './BoldResults.tsx'
-import { BookIcon, ChevronIcon, CloseIcon, GridIcon, ThreadIcon } from './BoldIcons.tsx'
+import { BookIcon, ChevronIcon, CloseIcon, GridIcon, PlusIcon, ThreadIcon } from './BoldIcons.tsx'
+import { useStartJob } from './BoldStartJob.tsx'
 import { BoldWorkbench } from './BoldWorkbench.tsx'
 import { boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
@@ -35,6 +36,7 @@ function SideGlyph({ agent }: { agent: AgentSummary }) {
 /** The room column and the switchable side panel: the frame only, until 11.4/11.5 bring the screens inside it. */
 export function BoldRoom() {
   const agents = useStreamQuery(agentsQuery).data ?? []
+  const startJob = useStartJob()
   const phone = useMediaQuery(PHONE)
   const { sheetOpen, setSheetOpen } = useOutletContext<BoldSheetState>()
   const location = useLocation()
@@ -141,6 +143,15 @@ export function BoldRoom() {
           <button className="roomtitle" type="button">
             Team room
             <ChevronIcon />
+          </button>
+          <button
+            type="button"
+            className="chip room-start"
+            aria-label="Start a job"
+            onClick={() => startJob?.openStartJob()}
+          >
+            <PlusIcon />
+            Job
           </button>
           {phone && (
             <button

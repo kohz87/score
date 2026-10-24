@@ -252,6 +252,10 @@
     max(20px, env(safe-area-inset-left, 0px));
 }
 
+[data-ui='bold'] .bold-home-loading {
+  min-height: calc(100vh - 110px);
+}
+
 [data-ui='bold'] .bold-tabbar {
   display: none;
 }
@@ -602,6 +606,12 @@ body.fit [data-ui='bold'] .stream {
     min-height: auto;
   }
 
+  /* The room head also carries Start a job on a phone: let the side-panel button take the next line rather than push
+     either control off the edge. */
+  [data-ui='bold'] .roomhead {
+    flex-wrap: wrap;
+  }
+
   [data-ui='bold'] .bold-sidecol {
     display: none;
   }
@@ -633,4 +643,9 @@ body.fit [data-ui='bold'] .stream {
   [data-ui='bold'] .sideclose {
     display: none;
   }
+}
+
+/* Start a job (11.10c) sits at the end of the room head. */
+[data-ui='bold'] .room-start {
+  margin-left: auto;
 }

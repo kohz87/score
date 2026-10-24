@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import { Outlet, redirect, RouterProvider, useLocation } from 'react-router'
 import type { DataRouter, RouteObject } from 'react-router'
 import { applyUiParam, readUi } from './bold/bold-ui.ts'
-import { BoldRoom } from './bold/BoldRoom.tsx'
+import { BoldHome } from './bold/BoldHome.tsx'
 import { BoldShell } from './bold/BoldShell.tsx'
 import { BoldAgentPage } from './bold/BoldAgent.tsx'
 import { BoldScreenPage } from './bold/BoldScreen.tsx'
@@ -84,7 +84,7 @@ export const appRoutes: RouteObject[] = [
         Component: BoldShell,
         HydrateFallback: BoldShell,
         children: [
-          { index: true, Component: BoldRoom },
+          { index: true, Component: BoldHome },
           { path: 'team', Component: BoldTeam },
           { path: 'team/:agentId', Component: BoldAgentPage },
           { path: 'screen/:agentId', Component: BoldScreenPage },
