@@ -99,7 +99,7 @@ export function BoldSearch({
   const listId = useId()
   const navigate = useNavigate()
 
-  const team = useBoldTeamRoom()
+  const team = useBoldTeamRoom({ fresh: true })
   const directs = useBoldDirectChats(agents)
   const notes = useBoldNotes(query)
   const messages = useBoldMessageSearch(query, 4)

@@ -14,12 +14,15 @@ import { useDebounced } from '../data/message-search.ts'
 import { nowKey } from '../routes/now/now-queries.ts'
 import type { BoldSearchCommand, BoldSearchNote } from './bold-search-model.ts'
 
-export function useBoldTeamRoom() {
+/** The team room and its jobs. `fresh`: read again whenever the caller mounts (Search opens), so a job made moments
+ * ago is found even though the first-run routing (BoldHome) read the same key when /b opened. */
+export function useBoldTeamRoom({ fresh = false }: { fresh?: boolean } = {}) {
   return useQuery({
     queryKey: ['bold-search', 'team-room'],
     queryFn: async ({ signal }) =>
       TeamRoomResponseSchema.parse(await apiFetch('team-room', { signal })),
     staleTime: 5_000,
+    ...(fresh ? { refetchOnMount: 'always' as const } : {}),
     retry: false,
   })
 }
