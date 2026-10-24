@@ -275,6 +275,36 @@
   color: var(--warn);
 }
 
+[data-ui='bold'] .bold-capsule-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-capsule-aside-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: 36px;
+}
+
+[data-ui='bold'] .bold-capsule-aside-row .chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-capsule-aside-row .chip:disabled {
+  opacity: 0.6;
+}
+
 [data-ui='bold'] .bold-capsule-actions {
   display: flex;
   flex-wrap: wrap;
@@ -410,6 +440,35 @@
   border-radius: 20px 20px 6px 20px;
   background: var(--hi-bg);
   color: var(--hi-ink);
+}
+
+/* A shared one-to-one copy reads as the agent's own bubble on the left (board 01), with the source named above it. */
+[data-ui='bold'] .bold-message .chat-message.bold-shared {
+  justify-content: flex-start;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-body {
+  flex: 0 1 90%;
+  max-width: 90%;
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-meta {
+  display: flex;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-meta time {
+  display: none;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-parts {
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-text {
+  border-radius: 20px 20px 20px 6px;
+  background: var(--field);
+  color: var(--ink);
 }
 
 [data-ui='bold'] .bold-message .chat-md p,

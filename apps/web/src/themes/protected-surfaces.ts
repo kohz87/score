@@ -39,6 +39,11 @@ export const protectedClasses = [
   'orch-pill',
   'orch-node__flag',
   'bold-request',
+  // PLAN 11.7: the privacy label, the share chooser, Add someone, and a shared one-to-one copy in the team room
+  'bold-dm-privacy',
+  'bold-dm-share-menu',
+  'bold-dm-add',
+  'bold-shared',
   // PLAN 11.4c: the thread's confirmation before stopping a job
   'bold-thread-stop-confirm',
   // The task drawer's approval and its buttons

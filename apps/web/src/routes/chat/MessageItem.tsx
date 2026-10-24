@@ -1,5 +1,5 @@
 import type { AgentSummary, Message, MessagePart } from '@score/contract'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { copyText } from '../../data/clipboard.ts'
 import { newId } from '../../data/ids.ts'
@@ -131,6 +131,7 @@ function Part({
   authorName,
   readOnly,
   nested,
+  bold,
   workspaceLinkFor,
 }: {
   part: MessagePart
@@ -141,6 +142,7 @@ function Part({
   expansion: Expansion
   authorName: string
   readOnly: boolean
+  bold: boolean
 }) {
   switch (part.kind) {
     case 'summary':
@@ -223,13 +225,13 @@ function Part({
       )
     case 'ref':
       return (
-        <p className="chat-compact chat-notice" role="note">
-          Refers to “{part.title}”
+        <p className={`chat-compact chat-notice${bold ? ' bold-ref-chip' : ''}`} role="note">
+          {bold ? 'Referring to' : 'Refers to'} “{part.title}”
         </p>
       )
     case 'shared':
       return (
-        <blockquote className="chat-compact">
+        <blockquote className={`chat-compact${bold ? ' bold-shared-part' : ''}`}>
           <span className="chat-notice">
             Shared from a one-to-one{part.from.agentId ? ` with ${part.from.agentId}` : ''}
           </span>
@@ -513,6 +515,7 @@ export function MessageItem({
   message,
   agents,
   readOnly = false,
+  bold = false,
   importedLabel,
   versionControl,
   workspaceLinkFor,
@@ -523,6 +526,8 @@ export function MessageItem({
   workspaceLinkFor?: (target: WorkspaceTarget) => string
   /** A message of a previous version (PLAN 5.33): greyed, no actions. */
   readOnly?: boolean
+  /** The bold shell's presentation (PLAN 11.7): a shared part is labelled with the agent it came from. */
+  bold?: boolean
   /** Where an imported copy came from ("Telegram"); such messages cannot be edited or retried. */
   importedLabel?: string | undefined
   /** The `‹ 2 / 3 ›` control of an edited message (PLAN 5.35), shown in the action row. */
@@ -533,7 +538,19 @@ export function MessageItem({
   const agent =
     author.kind === 'agent' ? agents.find((item) => item.id === author.agentId) : undefined
   const you = author.kind === 'you'
+  const shared = message.parts.find((part) => part.kind === 'shared')
+  const sharedAgent =
+    shared && shared.kind === 'shared'
+      ? agents.find((item) => item.id === shared.from.agentId)
+      : undefined
   const name = you ? 'You' : (agent?.name ?? (author.kind === 'agent' ? author.agentId : 'Agent'))
+  const shownName =
+    bold && sharedAgent ? `${sharedAgent.name}, shared from a one-to-one with you` : name
+  const shownGlyph = bold && sharedAgent ? sharedAgent : !you ? agent : undefined
+  const sharedStyle =
+    bold && sharedAgent
+      ? ({ '--shared-color': sharedAgent.style.color } as CSSProperties)
+      : undefined
   const [expansion, setExpansion] = useState<Expansion>({ open: false, version: 0 })
   const showActions =
     !message.streaming &&
@@ -554,14 +571,18 @@ export function MessageItem({
   return (
     <article
       id={`message-${message.id}`}
-      className={`chat-message${you ? ' chat-message--you' : ''}${message.editedBy ? ' chat-message--edited' : ''}${readOnly ? ' chat-message--previous' : ''}`}
-      aria-label={`Message from ${name}`}
+      className={`chat-message${you ? ' chat-message--you' : ''}${message.editedBy ? ' chat-message--edited' : ''}${readOnly ? ' chat-message--previous' : ''}${bold && sharedAgent ? ' bold-shared' : ''}`}
+      aria-label={`Message from ${shownName}`}
       tabIndex={-1}
+      data-protected={bold && sharedAgent ? 'block' : undefined}
+      style={sharedStyle}
     >
-      {!you && agent && <AgentGlyph agent={agent} size="sm" decorative />}
+      {shownGlyph && <AgentGlyph agent={shownGlyph} size="sm" decorative />}
       <div className="chat-message-body">
         <div className="chat-message-meta">
-          <strong style={agent && { color: agentTextColor(agent.style.color) }}>{name}</strong>
+          <strong style={shownGlyph && { color: agentTextColor(shownGlyph.style.color) }}>
+            {shownName}
+          </strong>
           <time dateTime={message.createdAt}>
             {new Date(message.createdAt).toLocaleTimeString([], {
               hour: '2-digit',
@@ -609,6 +630,7 @@ export function MessageItem({
                 expansion={expansion}
                 authorName={name}
                 readOnly={readOnly}
+                bold={bold}
               />
             )
           })}
