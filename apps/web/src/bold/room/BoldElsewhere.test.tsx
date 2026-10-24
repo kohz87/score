@@ -29,7 +29,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('is read-only and brings the chat into a new team job with the text attached', async () => {
+test('previews the imported chat read-only, then brings it into a new team job with the text attached', async () => {
   const job = makeJob({ id: 'job-launch', title: 'Plan the launch checklist' })
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://x')
@@ -57,7 +57,7 @@ test('is read-only and brings the chat into a new team job with the text attache
       })
     if (parsed.pathname === '/api/rooms/room-1/jobs' && init.method === 'POST')
       return jsonResponse(job)
-    if (parsed.pathname === '/api/messages/import:1/share' && init.method === 'POST')
+    if (parsed.pathname === '/api/messages/import%3A1/share' && init.method === 'POST')
       return jsonResponse({ messageId: 'shared-1' }, 201)
     return jsonResponse({ asOfSeq: 1, items: [] })
   })
@@ -72,17 +72,24 @@ test('is read-only and brings the chat into a new team job with the text attache
   const note = screen.getByText(/From Telegram · read-only/)
   expect(note.getAttribute('data-protected')).toBe('any')
 
+  fireEvent.click(screen.getByRole('button', { name: 'Preview this chat' }))
+  expect(await screen.findByText('Outline the launch checklist.')).toBeDefined()
+  expect(screen.getByText(/Read-only preview · imported from Telegram/)).toBeDefined()
+  expect(screen.queryByRole('textbox')).toBeNull()
+  expect(screen.queryByRole('combobox')).toBeNull()
+
   const bring = screen.getByRole('button', { name: 'Bring into a job' })
   await waitFor(() => expect(bring.hasAttribute('disabled')).toBe(false))
   fireEvent.click(bring)
   await waitFor(() => expect(brought).toHaveBeenCalledWith('job-launch'))
-  expect(fetchMock).toHaveBeenCalledWith(
-    '/api/outside-sessions/import',
-    expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ agentId: 'lead', sessionId: 'ext-telegram-1' }),
-    }),
+  const imported = fetchMock.mock.calls.filter(
+    ([url]) => String(url) === '/api/outside-sessions/import',
   )
+  expect(imported).toHaveLength(1)
+  expect(JSON.parse(String(imported[0]?.[1]?.body))).toEqual({
+    agentId: 'lead',
+    sessionId: 'ext-telegram-1',
+  })
   expect(fetchMock).toHaveBeenCalledWith(
     '/api/messages/import%3A1/share',
     expect.objectContaining({ method: 'POST', body: JSON.stringify({ jobId: 'job-launch' }) }),

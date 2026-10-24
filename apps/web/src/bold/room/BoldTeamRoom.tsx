@@ -284,7 +284,7 @@ export function BoldTeamRoom({
   const rooms = useStreamQuery(roomsQuery).data?.rooms ?? []
   const current =
     room ?? (override === null ? teamRoom : (rooms.find((item) => item.id === override) ?? null))
-  const [sharing, setSharing] = useState<Room | null>(null)
+  const [sharing, setSharing] = useState<{ room: Room; job?: Job } | null>(null)
   const [deleting, setDeleting] = useState<Room | null>(null)
 
   const selectRoom = (target: Room) => {
@@ -319,7 +319,14 @@ export function BoldTeamRoom({
         phoneAction={phoneAction}
         onSelectRoom={selectRoom}
         onOpenElsewhere={(session) => onOpenElsewhere?.(session)}
-        onShare={setSharing}
+        onShare={(room) => {
+          const jobId = params.get('job')
+          const job =
+            room.role === 'team' && jobId && jobId !== 'all'
+              ? teamRead?.jobs.find((item) => item.id === jobId)
+              : undefined
+          setSharing({ room, job })
+        }}
         onDelete={setDeleting}
       />
       {status === 'pending' ? (
@@ -329,7 +336,9 @@ export function BoldTeamRoom({
       ) : (
         <LoadedTeamRoom key={room.id} room={room} agents={agents} onOpenThread={onOpenThread} />
       )}
-      {sharing && <ShareDialog room={sharing} close={() => setSharing(null)} />}
+      {sharing && (
+        <ShareDialog room={sharing.room} job={sharing.job} close={() => setSharing(null)} />
+      )}
       {deleting && (
         <DeleteRoomDialog
           room={deleting}

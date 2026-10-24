@@ -131,10 +131,12 @@ function response(route: Route, body: unknown, status = 200) {
 }
 
 /** The 11.4d room data on top of the stable bold-room fixture: an older room, Elsewhere and the menu endpoints. */
-export async function mockRoomMenus(page: Page) {
+export async function mockRoomMenus(page: Page, options: { failShare?: number } = {}) {
   const requests: RoomRequest[] = []
   let createdJob: Json | null = null
   let roomDeleted = false
+  let shareCalls = 0
+  let failedShare = false
 
   await page.route('**/api/**', async (route) => {
     const request = route.request()
@@ -149,7 +151,7 @@ export async function mockRoomMenus(page: Page) {
         body = request.postData()
       }
     }
-    requests.push({ method, path, search: url.searchParams, body })
+    requests.push({ method, path, search: url.searchParams, body, headers: request.headers() })
 
     if (method === 'GET' && path === '/api/rooms')
       return response(route, {
@@ -205,7 +207,8 @@ export async function mockRoomMenus(page: Page) {
     }
     if (method === 'GET' && path === `/api/rooms/${team.id}/jobs`)
       return response(route, {
-        asOfSeq: 12,
+        // A newer snapshot once the job exists, as the real server's sequence would be.
+        asOfSeq: createdJob ? 13 : 12,
         items: [defaultTeamJob, activityJob, notesJob, ...(createdJob ? [createdJob] : [])],
       })
     if (method === 'POST' && path === `/api/rooms/${team.id}/jobs`) {
@@ -225,8 +228,14 @@ export async function mockRoomMenus(page: Page) {
       })
     if (method === 'POST' && path === '/api/outside-sessions/import')
       return response(route, { roomId: 'room-imported', imported: 2 })
-    if (method === 'POST' && /^\/api\/messages\/import%3A\d+\/share$/.test(path))
+    if (method === 'POST' && /^\/api\/messages\/import%3A\d+\/share$/.test(path)) {
+      shareCalls += 1
+      if (!failedShare && options.failShare === shareCalls) {
+        failedShare = true
+        return response(route, { error: { code: 'boom', message: 'Share failed.' } }, 500)
+      }
       return response(route, { messageId: `shared-${path}` }, 201)
+    }
     if (method === 'GET' && path.endsWith('/export.md'))
       return route.fulfill({
         status: 200,
@@ -248,10 +257,10 @@ export async function mockRoomMenus(page: Page) {
   return { requests }
 }
 
-export async function openMenuRoom(page: Page) {
+export async function openMenuRoom(page: Page, options: { failShare?: number } = {}) {
   await pair(page)
   const base = await mockBoldRoom(page)
-  const menu = await mockRoomMenus(page)
+  const menu = await mockRoomMenus(page, options)
   await page.goto('/b')
   await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
   return { ...base, ...menu }

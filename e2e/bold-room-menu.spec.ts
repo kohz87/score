@@ -16,10 +16,17 @@ async function openRoomPicker(page: Page) {
   return page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
 }
 
+// The prototype drops the composer's "to" chip on phones (bold-room.css); the label stays in the DOM.
+async function expectOlderRoomLabel(page: Page) {
+  const label = page.getByText('Older room · @name')
+  if ((page.viewportSize()?.width ?? 0) > 600) await expect(label).toBeVisible()
+  else await expect(label).toBeAttached()
+}
+
 async function openOlderRoom(page: Page) {
   const picker = await openRoomPicker(page)
   await picker.getByRole('option', { name: /#activity-feed/ }).click()
-  await expect(page.getByText('Older room · @name')).toBeVisible()
+  await expectOlderRoomLabel(page)
   await expect(page.getByRole('button', { name: 'Start a job' })).toHaveCount(0)
 }
 
@@ -56,7 +63,7 @@ for (const viewport of sizes) {
 
       await expect(page).toHaveURL(/room=room-old/)
       await expect(page.locator('.roomtitle')).toHaveText(/#activity-feed/)
-      await expect(page.getByText('Older room · @name')).toBeVisible()
+      await expectOlderRoomLabel(page)
       await expect(page.getByRole('button', { name: 'Start a job' })).toHaveCount(0)
       const composer = page.getByRole('combobox', { name: /^Message #activity-feed/ })
       await composer.fill('@builder Where is the cursor fix?')
@@ -67,6 +74,41 @@ for (const viewport of sizes) {
         (request) => request.method === 'POST' && request.path === '/api/rooms/room-old/messages',
       )
       expect(sent?.body).toMatchObject({ text: '@builder Where is the cursor fix?' })
+    })
+
+    test(`the room dropdown works from the keyboard at ${at}`, async ({ page }) => {
+      await openMenuRoom(page)
+      const trigger = page.locator('.roomtitle')
+      await trigger.click()
+      const picker = page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
+      const team = picker.getByRole('option', { name: /Team room/ })
+      const older = picker.getByRole('option', { name: /#activity-feed/ })
+      const outside = picker.getByRole('option', { name: /Plan the launch checklist/ })
+
+      await expect(team).toBeFocused()
+      await expect(team).toHaveAttribute('aria-selected', 'true')
+      await page.keyboard.press('ArrowDown')
+      await expect(older).toBeFocused()
+      await expect(older).toHaveAttribute('aria-selected', 'false')
+      await page.keyboard.press('Escape')
+      await expect(picker).toHaveCount(0)
+      await expect(trigger).toBeFocused()
+
+      await trigger.click()
+      await expect(team).toBeFocused()
+      await page.keyboard.press('ArrowDown')
+      await expect(older).toBeFocused()
+      await page.keyboard.press('Enter')
+      await expect(page).toHaveURL(/room=room-old/)
+      await expect(trigger).toBeFocused()
+
+      await trigger.click()
+      await expect(outside).toBeVisible()
+      await expect(team).toBeFocused() // the menu's first-focus has landed
+      await page.keyboard.press('End')
+      await expect(outside).toBeFocused()
+      await page.keyboard.press('Tab')
+      await expect(picker).toHaveCount(0)
     })
 
     test(`the room menu exports, shares a read-only link and deletes an older room with confirmation at ${at}`, async ({
@@ -84,7 +126,9 @@ for (const viewport of sizes) {
 
       const download = page.waitForEvent('download')
       await menu.getByRole('menuitem', { name: 'Export this room' }).click()
-      expect((await download).suggestedFilename()).toBe('room.md')
+      const dl = await download
+      // Browser downloads bypass page.route, so the name is the server's; the link's target is what we own.
+      expect(new URL(dl.url()).pathname).toBe('/api/rooms/room-old/export.md')
 
       await page.getByRole('button', { name: 'Room menu' }).click()
       await page.getByRole('menuitem', { name: 'Share a read-only link' }).click()
@@ -120,7 +164,7 @@ for (const viewport of sizes) {
       const menu = page.getByRole('menu', { name: 'Activity feed actions' })
       await expect(menu).toHaveAttribute('data-protected', 'flex')
       await expect(menu).toContainText('Share a read-only link')
-      await expect(menu).toContainText('Export this room as Markdown')
+      await expect(menu).toContainText('Export the whole room as Markdown')
       await expect(menu).not.toContainText('Rename')
       await expect(menu).not.toContainText('Delete job')
 
@@ -137,8 +181,27 @@ for (const viewport of sizes) {
 
       await page.getByRole('button', { name: 'Job menu' }).click()
       const download = page.waitForEvent('download')
-      await page.getByRole('menuitem', { name: 'Export this room as Markdown' }).click()
-      expect((await download).suggestedFilename()).toBe('room.md')
+      await page.getByRole('menuitem', { name: 'Export the whole room as Markdown' }).click()
+      expect(new URL((await download).url()).pathname).toMatch(/^\/api\/rooms\/[^/]+\/export\.md$/)
+    })
+
+    test(`the job menu works from the keyboard at ${at}`, async ({ page }) => {
+      await openMenuRoom(page)
+      await page.getByRole('tab', { name: /Activity feed/ }).click()
+      const trigger = page.getByRole('button', { name: 'Job menu' })
+      await trigger.click()
+      const menu = page.getByRole('menu', { name: 'Activity feed actions' })
+      const shareItem = menu.getByRole('menuitem', { name: 'Share a read-only link' })
+      const exportItem = menu.getByRole('menuitem', { name: 'Export the whole room as Markdown' })
+
+      await expect(shareItem).toBeFocused()
+      await page.keyboard.press('ArrowDown')
+      await expect(exportItem).toBeFocused()
+      await page.keyboard.press('ArrowUp')
+      await expect(shareItem).toBeFocused()
+      await page.keyboard.press('Escape')
+      await expect(menu).toHaveCount(0)
+      await expect(trigger).toBeFocused()
     })
 
     test(`Elsewhere is read-only and brings the chat into a team job with it attached at ${at}`, async ({
@@ -153,12 +216,28 @@ for (const viewport of sizes) {
       await expect(side.getByText(/From Telegram · read-only/)).toBeVisible()
       await expect(side.getByRole('heading', { name: 'Plan the launch checklist' })).toBeVisible()
       await expect(side).toContainText('4 messages')
-      await expect(side.locator('textarea, input:not([type="hidden"])')).toHaveCount(0)
+      await expect(
+        side.locator('.bold-elsewhere').locator('textarea, input:not([type="hidden"])'),
+      ).toHaveCount(0)
+
+      await side.getByRole('button', { name: 'Preview this chat' }).click()
+      await expect(side.getByText('Outline the launch checklist.')).toBeVisible()
+      await expect(side.getByText('Freeze the release branch, test, then announce.')).toBeVisible()
+      await expect(side.getByText(/Read-only preview · imported from Telegram/)).toBeVisible()
+      await expect(side).toContainText('It also keeps the “Imported from Telegram” room')
+      await expect(
+        side.locator('.bold-elsewhere').locator('textarea, input:not([type="hidden"])'),
+      ).toHaveCount(0)
 
       await side.getByRole('button', { name: 'Bring into a job' }).click()
       await expect(page).toHaveURL(/job=job-brought/)
       await expect(page.getByRole('tab', { name: /Plan the launch checklist/ })).toBeVisible()
 
+      expect(
+        state.requests.filter(
+          (request) => request.method === 'POST' && request.path === '/api/outside-sessions/import',
+        ),
+      ).toHaveLength(1)
       expect(
         state.requests.find(
           (request) => request.method === 'POST' && request.path === '/api/outside-sessions/import',
@@ -174,6 +253,50 @@ for (const viewport of sizes) {
           (request) => request.method === 'POST' && request.path.startsWith('/api/messages/import'),
         ),
       ).toHaveLength(2)
+    })
+
+    test(`a failed share is retried with the same job and key, without duplicate copies at ${at}`, async ({
+      page,
+    }) => {
+      const state = await openMenuRoom(page, { failShare: 2 })
+      const picker = await openRoomPicker(page)
+      await picker.getByRole('option', { name: /Plan the launch checklist/ }).click()
+      const side = page.getByRole('complementary', { name: 'Side panel' })
+      await side.getByRole('button', { name: 'Preview this chat' }).click()
+      await expect(side.getByText('Outline the launch checklist.')).toBeVisible()
+
+      await side.getByRole('button', { name: 'Bring into a job' }).click()
+      await expect(side.getByRole('alert')).toContainText(
+        'Couldn’t bring this chat into a job. Try again',
+      )
+      await side.getByRole('button', { name: 'Bring into a job' }).click()
+      await expect(page).toHaveURL(/job=job-brought/)
+
+      const writes = state.requests
+        .filter(
+          (request) =>
+            request.method === 'POST' &&
+            (request.path === '/api/outside-sessions/import' ||
+              request.path === '/api/rooms/team-room/jobs' ||
+              request.path.endsWith('/share')),
+        )
+        .map((request) => request.path)
+      expect(writes).toEqual([
+        '/api/outside-sessions/import',
+        '/api/rooms/team-room/jobs',
+        '/api/messages/import%3A1/share',
+        '/api/messages/import%3A2/share',
+        '/api/messages/import%3A2/share',
+      ])
+      expect(writes.filter((path) => path === '/api/rooms/team-room/jobs')).toHaveLength(1)
+      const keys = state.requests
+        .filter(
+          (request) =>
+            request.method === 'POST' &&
+            (request.path === '/api/rooms/team-room/jobs' || request.path.endsWith('/share')),
+        )
+        .map((request) => request.headers['idempotency-key'])
+      expect(new Set(keys).size).toBe(1)
     })
   })
 }

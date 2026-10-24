@@ -129,6 +129,31 @@ const message = {
   refs: [],
 }
 
+const importedMessages = [
+  {
+    id: 'import:1',
+    roomId: 'room-imported',
+    jobId: 'job-imported',
+    author: { kind: 'you' },
+    to: [],
+    parts: [{ kind: 'text', text: 'Plan the launch checklist.' }],
+    createdAt: '2026-10-23T08:00:00.000Z',
+    streaming: false,
+    refs: [],
+  },
+  {
+    id: 'import:2',
+    roomId: 'room-imported',
+    jobId: 'job-imported',
+    author: { kind: 'agent', agentId: 'lead' },
+    to: [],
+    parts: [{ kind: 'text', text: 'Outline it, then freeze the release branch.' }],
+    createdAt: '2026-10-23T08:01:00.000Z',
+    streaming: false,
+    refs: [],
+  },
+]
+
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -165,6 +190,15 @@ async function serve(route) {
     if (path === '/api/rooms/room-old/jobs') return json(route, { asOfSeq: 12, items: [oldJob] })
     if (path === '/api/rooms/room-old/messages')
       return json(route, { asOfSeq: 12, items: [message], nextCursor: null, jobId: oldJob.id })
+    if (path === '/api/outside-sessions/import')
+      return json(route, { roomId: 'room-imported', imported: 2 })
+    if (path === '/api/rooms/room-imported/messages')
+      return json(route, {
+        asOfSeq: 12,
+        items: importedMessages,
+        nextCursor: null,
+        jobId: 'job-imported',
+      })
     if (path.endsWith('/messages'))
       return json(route, {
         asOfSeq: 12,
@@ -335,6 +369,8 @@ async function appElsewhere(page) {
   await appDropdown(page)
   await page.getByRole('option', { name: /Plan the launch checklist/ }).click()
   await page.locator('.bold-elsewhere').waitFor()
+  await page.getByRole('button', { name: 'Preview this chat' }).click()
+  await page.getByRole('button', { name: 'Bring into a job' }).waitFor()
 }
 
 async function prototypeJobMenu(page) {
@@ -409,6 +445,8 @@ try {
     await appElsewhere(page)
     const elsewhere = page.locator('.bold-elsewhere')
     await expectText(elsewhere, 'From Telegram · read-only. Reply there, or bring it into a job.')
+    await expectText(elsewhere, 'Read-only preview · imported from Telegram')
+    await expectText(elsewhere, 'Outline it, then freeze the release branch.')
     await expectText(elsewhere, 'Bring into a job')
     assert.equal(await elsewhere.locator('textarea, input:not([type="hidden"])').count(), 0)
     await page.screenshot({ path: join(output, `bold-11.4d-app-elsewhere-${size}.png`) })
@@ -422,7 +460,7 @@ try {
     await appJobMenu(page)
     const jobMenu = page.locator('.bold-job-menu')
     await expectText(jobMenu, 'Share a read-only link')
-    await expectText(jobMenu, 'Export this room as Markdown')
+    await expectText(jobMenu, 'Export the whole room as Markdown')
     assert.equal(await jobMenu.locator('.mi[role="menuitem"]').count(), 2)
     await page.screenshot({ path: join(output, `bold-11.4d-app-job-menu-${size}.png`) })
     const appJobMenuValues = await measure(page, menuParts, 'app')

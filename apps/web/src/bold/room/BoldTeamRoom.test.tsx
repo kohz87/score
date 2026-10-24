@@ -31,6 +31,19 @@ const olderRoom: Room = {
   routing: 'mentions',
 }
 
+const importedRoom: Room = {
+  ...olderRoom,
+  id: 'room-imported',
+  name: '#telegram-plan #imported',
+  importedFrom: {
+    agentId: 'lead',
+    sessionId: 'ext-telegram-1',
+    source: 'telegram',
+    label: 'Telegram',
+    continued: null,
+  },
+}
+
 const outsideSession: OutsideSession = {
   id: 'ext-telegram-1',
   agentId: 'lead',
@@ -45,7 +58,7 @@ const outsideSession: OutsideSession = {
 
 function stubRoom(
   jobs = [makeJob({ unread: 2 })],
-  options: { older?: boolean; outside?: OutsideSession[] } = {},
+  options: { older?: boolean; imported?: boolean; outside?: OutsideSession[] } = {},
 ) {
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://x')
@@ -53,7 +66,7 @@ function stubRoom(
     if (parsed.pathname === '/api/rooms')
       return jsonResponse({
         asOfSeq: 1,
-        rooms: options.older ? [olderRoom] : [],
+        rooms: options.older ? [olderRoom] : options.imported ? [importedRoom] : [],
         directs: [],
         projects: [],
       })
@@ -252,6 +265,15 @@ test('the room dropdown opens an older room read-write with today’s @mention r
   })
 })
 
+test('an imported room is not offered as an older room', async () => {
+  stubRoom([makeJob()], { imported: true })
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+
+  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
+  const picker = await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
+  expect(picker.textContent).not.toContain('#telegram-plan')
+})
+
 test('Elsewhere lists the agents’ own sessions as read-only chats to open', async () => {
   stubRoom([makeJob()], { outside: [outsideSession] })
   const opened = vi.fn()
@@ -276,11 +298,27 @@ test('the selected job’s menu offers the contract’s share and classic room e
   fireEvent.click(await screen.findByRole('button', { name: 'Job menu' }))
   const menu = await screen.findByRole('menu', { name: 'Activity feed actions' })
   expect(menu.textContent).toContain('Share a read-only link')
-  expect(menu.textContent).toContain('Export this room as Markdown')
+  expect(menu.textContent).toContain('Export the whole room as Markdown')
   expect(screen.getAllByRole('menuitem').every((item) => item.classList.contains('mi'))).toBe(true)
   // The contract has no job rename, close or delete; those prototype items are reported as gaps, not faked here.
   expect(menu.textContent).not.toContain('Rename')
   expect(menu.textContent).not.toContain('Delete job')
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Share a read-only link' }))
+  const dialog = await screen.findByRole('dialog')
+  expect(dialog.textContent).toContain('Share Activity feed')
+  expect(dialog.textContent).toContain('the job’s messages')
+})
+
+test('the team room’s share uses the selected job thread and says what All shares', async () => {
+  stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Room menu' }))
+  expect(
+    await screen.findByText(
+      /Shares the selected job’s thread; under All, the team room’s default thread/,
+    ),
+  ).toBeDefined()
   fireEvent.click(screen.getByRole('menuitem', { name: 'Share a read-only link' }))
   const dialog = await screen.findByRole('dialog')
   expect(dialog.textContent).toContain('Share Activity feed')

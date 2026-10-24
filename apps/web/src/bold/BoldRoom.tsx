@@ -287,7 +287,12 @@ export function BoldRoom() {
             mode !== 'work' &&
             mode !== 'thread' &&
             (mode === 'elsewhere' && elsewhere ? (
-              <BoldElsewhere session={elsewhere} agents={agents} onBroughtIn={broughtIntoJob} />
+              <BoldElsewhere
+                key={`${elsewhere.agentId}:${elsewhere.id}`}
+                session={elsewhere}
+                agents={agents}
+                onBroughtIn={broughtIntoJob}
+              />
             ) : (
               <div className="sidebody" data-placeholder={mode}>
                 <p className="side-placeholder">{sideCopy(mode, agent)}</p>

@@ -29,6 +29,10 @@ function useMenu(
   root: RefObject<HTMLElement | null>,
   trigger: RefObject<HTMLButtonElement | null>,
 ) {
+  function close(restoreFocus = true) {
+    setOpen(false)
+    if (restoreFocus) trigger.current?.focus()
+  }
   useEffect(() => {
     if (!open) return
     const first = requestAnimationFrame(() => {
@@ -51,6 +55,7 @@ function useMenu(
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [open, root, setOpen, trigger])
+  return close
 }
 
 function moveInMenu(event: KeyboardEvent<HTMLElement>) {
@@ -99,17 +104,21 @@ export function RoomSwitcher({
   const trigger = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const sessions = useOutsideSessions(open)
-  useMenu(open, setOpen, root, trigger)
+  const close = useMenu(open, setOpen, root, trigger)
 
   const older = rooms.filter(
-    (room) => room.id !== teamRoom?.id && room.role !== 'team' && room.kind === 'room',
+    (room) =>
+      room.id !== teamRoom?.id &&
+      room.role !== 'team' &&
+      room.kind === 'room' &&
+      !room.importedFrom,
   )
   const chooseRoom = (room: Room) => {
-    setOpen(false)
+    close()
     onSelectRoom(room)
   }
   const chooseOutside = (session: OutsideSession) => {
-    setOpen(false)
+    close()
     onOpenElsewhere(session)
   }
 
@@ -134,6 +143,9 @@ export function RoomSwitcher({
           role="listbox"
           aria-label="Rooms and chats elsewhere"
           onKeyDown={moveInMenu}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false)
+          }}
         >
           <div className="sec">Rooms</div>
           {teamRoom && (
@@ -247,7 +259,7 @@ export function RoomMenu({
   const root = useRef<HTMLSpanElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const menuId = useId()
-  useMenu(open, setOpen, root, trigger)
+  const close = useMenu(open, setOpen, root, trigger)
   const team = room.role === 'team'
   return (
     <span className="bold-room-menu-wrap" ref={root}>
@@ -271,13 +283,19 @@ export function RoomMenu({
           aria-label={`${room.name} actions`}
           data-protected="flex"
           onKeyDown={moveInMenu}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false)
+          }}
         >
           <a
             className="mi"
             role="menuitem"
             href={`/api/rooms/${encodeURIComponent(room.id)}/export.md`}
             download
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              // Let the browser start the download before the link unmounts, then return focus.
+              window.setTimeout(() => close(), 0)
+            }}
           >
             Export this room
           </a>
@@ -286,12 +304,17 @@ export function RoomMenu({
             className="mi"
             role="menuitem"
             onClick={() => {
-              setOpen(false)
+              close(false)
               onShare(room)
             }}
           >
             Share a read-only link
           </button>
+          {team && (
+            <div className="small muted bold-menu-note">
+              Shares the selected job’s thread; under All, the team room’s default thread.
+            </div>
+          )}
           {team ? (
             <div className="small muted bold-menu-note">
               The team room is always on, so it can’t be deleted. Delete jobs inside it instead.
@@ -302,7 +325,7 @@ export function RoomMenu({
               role="menuitem"
               className="mi bad"
               onClick={() => {
-                setOpen(false)
+                close(false)
                 onDelete(room)
               }}
             >
@@ -329,7 +352,7 @@ export function JobMenu({
   const root = useRef<HTMLSpanElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const menuId = useId()
-  useMenu(open, setOpen, root, trigger)
+  const close = useMenu(open, setOpen, root, trigger)
   if (!job) return null
   return (
     <span className="bold-job-menu-wrap" ref={root}>
@@ -353,13 +376,16 @@ export function JobMenu({
           aria-label={`${job.title} actions`}
           data-protected="flex"
           onKeyDown={moveInMenu}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false)
+          }}
         >
           <button
             type="button"
             className="mi"
             role="menuitem"
             onClick={() => {
-              setOpen(false)
+              close(false)
               onShare(job)
             }}
           >
@@ -370,9 +396,12 @@ export function JobMenu({
             role="menuitem"
             href={`/api/rooms/${encodeURIComponent(room.id)}/export.md`}
             download
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              // Let the browser start the download before the link unmounts, then return focus.
+              window.setTimeout(() => close(), 0)
+            }}
           >
-            Export this room as Markdown
+            Export the whole room as Markdown
           </a>
         </div>
       )}
