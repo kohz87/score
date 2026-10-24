@@ -117,6 +117,8 @@ export function insertWorkflowRun(
       kind: 'room',
       leadAgentId: null,
       members: agents,
+      // The executor routes this room itself (PLAN 11.11 moves only the rooms people talk in).
+      routing: 'mentions',
     },
     now,
   )

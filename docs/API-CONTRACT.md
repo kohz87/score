@@ -575,7 +575,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   §3–§5). Every room has a default job (`isDefault`, titled by the room's name and following a rename); `Message.jobId`
   says which job a message is in. `Room.role`: `team` (the always-on team room of the new shell, members = every agent,
   no lead until the person picks one; `GET /api/rooms` and the classic shell leave it out, `GET /api/rooms/:id` serves
-  it), `direct`, `room`. `Room.routing`: `mentions` (D3.2) or `exchanges` (D3.3: agents act with the exchange actions of
+  it), `direct`, `room`. `Room.routing`: `mentions` (D3.2; since 11.11 only orchestration and workflow run rooms, migration 0086) or
+  `exchanges` (D3.3, every room people talk in: agents act with the exchange actions of
   §11; a prose `@name` from an agent hands nothing off and gets a `notice` part `mention_not_handoff`). In an
   `exchanges` room a person's message goes to the addressed agents, else the lead (`409 no_lead` in the team room
   without one); unaddressed into a job with a live exchange it is a step in and starts nothing. The addressed agent
@@ -586,8 +587,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     default 40); spendCapUsd? (> 0, ≤ 10000; default none); recipe?: { kind: 'orchestration'|'workflow'; ref } }` →
     `201 Job` (the limits and `recipe` from Start a job, PLAN 11.10c: `recipe` names the orchestration or workflow run
     the job belongs to; Score stores the link and doesn't start anything from it); its agents get sessions of their own
-    (`score-<room>-<job>-<agent>`). Emits `job.upserted`. `409 conflict` for a room on `mentions` (one thread until
-    11.11 moves it to exchanges).
+    (`score-<room>-<job>-<agent>`). Emits `job.upserted`. `409 conflict` for a room on `mentions` (since 11.11 only an
+    orchestration or workflow run's room, which its executor routes).
   - The team room can't be deleted, renamed, archived or given members (`409 conflict`); its members follow the team's
     agents at every start, and its lead is set with `PATCH /api/rooms/:roomId { leadAgentId }`.
   - **S** `GET /api/jobs/:jobId/exchanges` → `{ asOfSeq; items: Exchange[] }` (oldest first).
@@ -630,7 +631,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.
   - **S** `GET /api/agents/:agentId/direct` → `{ asOfSeq; room: Room | null; chats: Job[] }` (newest activity first);
     **H** `POST /api/agents/:agentId/chats { title? }` → `201 Job` (a new one-to-one; makes the direct room on first
-    use). Direct rooms keep `routing = mentions` until 11.11 and may hold several jobs. A direct room's summaries run on
+    use). Direct rooms route with exchanges (11.11) and may hold several jobs. A direct room's summaries run on
     its own agent; no other room's turn input includes a one-to-one, except as a reference or a share.
   - **References.** Post body `refs?: { jobId }[]` (≤ 5) adds `ref` parts `{ kind: 'ref'; target: { kind: 'job'; jobId };
     title; summary; frozenAt }`, frozen at send time (the job's usable summary, else its last 10 messages condensed to

@@ -15,6 +15,7 @@ import { messageFromRow, storeMessage } from '../../src/domain/rooms.ts'
 import { RoutingDispatcher } from '../../src/domain/routing-dispatch.ts'
 import { resetDatabaseHistory } from '../../src/history-reset.ts'
 import { reserveMessageRun } from '../../src/domain/message-runs.ts'
+import { onMentions } from '../helpers/on-mentions.ts'
 
 let dir: string
 let db: ScoreDb
@@ -59,6 +60,7 @@ beforeEach(async () => {
   }
   const created = await post('/api/rooms', { name: 'routing', leadAgentId: 'lead' })
   roomId = RoomSchema.parse(created.json()).id
+  onMentions(db, roomId)
 })
 afterEach(async () => {
   await port.stop()
