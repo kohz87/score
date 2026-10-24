@@ -1614,6 +1614,22 @@ creates a missing note). Errors use the standard envelope: `403 knowledge_off` (
 stored; commits are authored `<agentId> (agent)` and `knowledge.changed` carries `by: { agentId }`. There is no delete or
 move for agents.
 
+**Exchange actions** (PLAN 11.1b; design docs/briefs/11.0-bold.md §4; schemas in `packages/contract/src/exchanges.ts`).
+`POST /bridge/v1/exchanges/action`, auth `Bearer <producerToken>`, body `{ capability: "xtc_" + 43 base64url; commandId
+(1–64 `[A-Za-z0-9._:-]`); action: ExchangeAction }` where `ExchangeAction` is one of `{action:"handoff", to, note}`,
+`{action:"ask", to, question}`, `{action:"review", to, note}`, `{action:"approve", note}`, `{action:"send_back", note}`
+(each with optional `replaces: commandId`) or `{action:"reply", text}`; notes and questions ≤ 4000 bytes, reply ≤ 8000.
+The capability names the turn (it is in that turn's input only, valid while the turn is active); the producer's profile
+must be the turn's agent. Answer `200 ExchangeReceipt { status: "staged" | "refused"; commandId; action; code?; message }`:
+`staged` means applied when the turn completes (nothing happens if it fails or is stopped), `refused` carries a `code`
+(`capability_invalid`, `capability_in_text`, `not_member`, `self`, `action_limit`, `not_allowed`, `invalid`). A repeated
+`commandId` in the same turn returns the stored receipt. The bridge plugin exposes these as the model tools
+`score_handoff`, `score_ask`, `score_review`, `score_approve`, `score_send_back`, `score_reply` (toolset
+`score_exchanges`); when the model omits `command_id` the plugin derives one from the capability, action and arguments,
+so an exact repeat is idempotent. Coding agents send the same `ExchangeAction` JSON as exactly one fenced
+` ```score-action ` block in their authoritative final reply (no capability: the turn is known); zero blocks = no action,
+more than one opening marker or an invalid body = no action and a visible notice.
+
 Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload fixtures in
 `apps/server/test/fixtures/bridge/` (seeded from `docs/spike/`).
 
