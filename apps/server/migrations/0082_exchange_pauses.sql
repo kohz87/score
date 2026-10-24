@@ -3,8 +3,10 @@
 -- person decides. Nothing is queued while it waits, so nothing spends.
 ALTER TABLE exchanges ADD COLUMN pause_reason TEXT CHECK (pause_reason IN (
   'exchange_budget', 'job_limit', 'spend_cap', 'cost_unknown', 'turn_failed', 'unreachable', 'asker_gone',
-  'no_decision', 'author_stalled'));
--- The held turn: {"agentId","input","parentMessageId","chainId","fromAgentId"}.
+  'no_decision', 'author_stalled', 'question_stopped'));
+-- The held turn: {"agentId","input","parentMessageId","chainId","fromAgentId","roomId","agents","exchangeId","resume"}
+-- (`exchangeId`: the exchange the turn belongs to, null for an answer back to a turn the person started; `resume`: the
+-- state the exchange goes back to when the turn is released).
 ALTER TABLE exchanges ADD COLUMN held TEXT CHECK (held IS NULL OR json_valid(held));
 -- The room lead's turn deciding a budget pause ("Let lead decide"), while it runs.
 ALTER TABLE exchanges ADD COLUMN decider_turn_id TEXT;
@@ -28,3 +30,6 @@ INSERT INTO exchange_actions_new SELECT turn_id, command_id, action, args, chann
   FROM exchange_actions;
 DROP TABLE exchange_actions;
 ALTER TABLE exchange_actions_new RENAME TO exchange_actions;
+
+-- The person stopped this turn (a job's or an exchange's Stop): when it completes anyway, its actions are dropped.
+ALTER TABLE message_runs ADD COLUMN stop_requested_at TEXT;

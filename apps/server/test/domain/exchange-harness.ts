@@ -124,8 +124,8 @@ export function exchangeHarness() {
     },
     finish(turn: Running, output: string, status = 'completed') {
       db.sqlite
-        .prepare("UPDATE runs SET status = 'completed', updated_at = ? WHERE id = ?")
-        .run(tick(), turn.runId)
+        .prepare('UPDATE runs SET status = ?, updated_at = ?, ended_at = ? WHERE id = ?')
+        .run(status === 'completed' ? 'completed' : 'failed', tick(), tick(), turn.runId)
       return completeRunMessage(db.sqlite, turn.runId, tick(), { output, status, reply: output })
     },
     /** One whole turn: start, act, finish. */

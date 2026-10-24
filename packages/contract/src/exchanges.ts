@@ -158,6 +158,7 @@ export const ExchangePauseReasonSchema = z.enum([
   'asker_gone',
   'no_decision',
   'author_stalled',
+  'question_stopped',
 ])
 export type ExchangePauseReason = z.infer<typeof ExchangePauseReasonSchema>
 export const ExchangeOptionSchema = z.enum([

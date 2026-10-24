@@ -54,6 +54,7 @@ const ExchangeRowSchema = z.object({
       'asker_gone',
       'no_decision',
       'author_stalled',
+      'question_stopped',
     ])
     .nullable(),
   held: z.string().nullable(),
@@ -90,6 +91,9 @@ export function pauseOptions(sqlite: DatabaseSync, row: ExchangeRow): ExchangeOp
     lead !== row.to_agent_id &&
     row.lead_extended === 0 &&
     row.decider_turn_id === null
+  // Reassigning only makes sense for the turn of the agent the exchange was opened to (not its author's side).
+  const heldAgent = row.held ? (JSON.parse(row.held) as { agentId?: string }).agentId : undefined
+  const reassign: ExchangeOption[] = heldAgent === row.to_agent_id ? ['reassign'] : []
   const options: Record<ExchangePauseReason, ExchangeOption[]> = {
     exchange_budget: [
       'more_turns',
@@ -105,11 +109,12 @@ export function pauseOptions(sqlite: DatabaseSync, row: ExchangeRow): ExchangeOp
     ],
     spend_cap: ['more_spend', 'step_in', 'stop'],
     cost_unknown: ['continue', 'step_in', 'stop'],
-    turn_failed: ['retry', 'reassign', 'stop'],
-    unreachable: ['retry', 'reassign', 'stop'],
-    asker_gone: [...(lead ? ['answer_to_lead' as const] : []), 'stop'],
+    turn_failed: ['retry', ...reassign, 'stop'],
+    unreachable: ['retry', ...reassign, 'stop'],
+    asker_gone: ['retry', ...(lead ? ['answer_to_lead' as const] : []), 'stop'],
     no_decision: ['ask_again', 'send_back', 'close'],
     author_stalled: ['ask_again', 'close'],
+    question_stopped: ['continue', 'stop'],
   }
   return row.pause_reason ? options[row.pause_reason] : []
 }
@@ -305,4 +310,15 @@ export function createJob(
     .run(id, roomId, title, now, now)
   const drafts = jobEvent(sqlite, id)
   return { job: (drafts[0] as { data: Job }).data, drafts }
+}
+
+/** The newest visible message of a job: what a turn Score starts on the person's behalf is attached to. */
+export function latestMessage(sqlite: DatabaseSync, jobId: string): string {
+  const row = sqlite
+    .prepare(
+      'SELECT id FROM messages WHERE job_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1',
+    )
+    .get(jobId) as { id: string } | undefined
+  if (!row) throw new HttpError(409, 'conflict', 'This job has no messages to continue from.')
+  return row.id
 }

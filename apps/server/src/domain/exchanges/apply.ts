@@ -9,11 +9,12 @@ import { reserveMessageRun } from '../message-runs.ts'
 import { parseMessage } from '../parse.ts'
 import { actionGroup, roomMembers, stageAction, turnById } from './actions.ts'
 import { parseScoreAction } from './action-block.ts'
-import { hold, limitFor, release, type HeldTurn } from './budget.ts'
+import { hold, jobLimitFor, limitFor, release, type HeldTurn } from './budget.ts'
 import {
   exchangeEvent,
   exchangeRow,
   jobRow,
+  latestMessage,
   openExchange,
   updateExchange,
   updateJob,
@@ -82,9 +83,18 @@ export interface Settled {
  * Queues a turn of a job, or holds it on its exchange when the exchange may not go on (a limit, an agent that can't take
  * work). Returns whether it was queued.
  */
-export type Give = ((agentId: string, input: string, exchangeId: string | null) => boolean) & {
+/**
+ * `holdOn`: the exchange to hold the turn on when it belongs to none (an answer back to a turn the person started is
+ * held on the question it answers).
+ */
+export type Give = ((
+  agentId: string,
+  input: string,
+  exchangeId: string | null,
+  holdOn?: string,
+) => boolean) & {
   /** The turn as it would be held instead. */
-  held: (agentId: string, input: string) => HeldTurn
+  held: (agentId: string, input: string, exchangeId: string | null) => Omit<HeldTurn, 'resume'>
 }
 
 export function makeGive(
@@ -92,11 +102,12 @@ export function makeGive(
   from: Pick<MessageRun, 'room_id' | 'chain_id' | 'agents'> & {
     agentId: string | null
     messageId: string
+    jobId: string
   },
   drafts: DomainEventDraft[],
   now: string,
 ): Give {
-  const heldOf = (agentId: string, input: string): HeldTurn => ({
+  const heldOf = (agentId: string, input: string, exchangeId: string | null) => ({
     agentId,
     input,
     parentMessageId: from.messageId,
@@ -104,29 +115,25 @@ export function makeGive(
     fromAgentId: from.agentId,
     roomId: from.room_id,
     agents: from.agents,
+    exchangeId,
   })
-  const give = (agentId: string, input: string, exchangeId: string | null) => {
-    const held = heldOf(agentId, input)
+  const give = (agentId: string, input: string, exchangeId: string | null, holdOn?: string) => {
+    const held = heldOf(agentId, input, exchangeId)
     const exchange = exchangeId ? exchangeRow(sqlite, exchangeId) : null
-    const open = exchange && !['done', 'stopped'].includes(exchange.state)
+    const open = exchange !== null && !['done', 'stopped'].includes(exchange.state)
+    const target = exchangeId ?? holdOn ?? null
     if (!agentAdmits(sqlite, agentId)) {
-      if (open)
+      if (target)
         drafts.push(
-          ...hold(
-            sqlite,
-            exchange.id,
-            'unreachable',
-            held,
-            now,
-            `${agentId} can't take work right now`,
-          ),
+          ...hold(sqlite, target, 'unreachable', held, now, `${agentId} can't take work right now`),
         )
       return false
     }
-    // A finished exchange's last word (an approval) still goes out; one still going passes its limits first.
-    const limit = open ? limitFor(sqlite, exchange.id) : null
-    if (open && limit) {
-      drafts.push(...hold(sqlite, exchange.id, limit, held, now))
+    // An exchange still going passes its own budget and the job's limits; any other agent-started turn (an approval's
+    // last word, an answer back) passes the job's.
+    const limit = open ? limitFor(sqlite, exchange.id) : jobLimitFor(sqlite, from.jobId)
+    if (limit && target) {
+      drafts.push(...hold(sqlite, target, limit, held, now))
       return false
     }
     reserveMessageRun(
@@ -197,7 +204,7 @@ export function settleExchangeTurn(
     sqlite
       .prepare("UPDATE exchange_actions SET state = ? WHERE turn_id = ? AND state = 'staged'")
       .run(state, mapping.turn_id)
-  const give = makeGive(sqlite, { ...mapping, agentId: me, messageId }, drafts, now)
+  const give = makeGive(sqlite, { ...mapping, agentId: me, messageId, jobId }, drafts, now)
 
   // The room lead's turn deciding a budget pause ("Let lead decide").
   const decided = sqlite
@@ -216,9 +223,11 @@ export function settleExchangeTurn(
     return { drafts, notices }
   }
 
-  if (status !== 'completed') {
+  // A turn the person stopped (or one in an exchange they stopped) routes nothing, even if it completed first.
+  const stopped = mapping.stop_requested_at != null || exchange?.state === 'stopped'
+  if (status !== 'completed' || stopped) {
     settle('dropped')
-    const why = status === 'cancelled' || status === 'stopped' ? 'was stopped' : 'failed'
+    const why = stopped || status === 'cancelled' || status === 'stopped' ? 'was stopped' : 'failed'
     for (const { args } of actions.filter(({ args }) => actionGroup(args.action) === 'routing'))
       notices.push({
         kind: 'notice',
@@ -226,7 +235,7 @@ export function settleExchangeTurn(
         text: `${me}'s ${describe(args, exchange?.from_agent_id ?? null)} was not sent: the turn ${why}.`,
       })
     // Whoever waits on this turn now waits on the person, from either side: try again, give it to someone else, stop.
-    if (exchange && !['done', 'stopped'].includes(exchange.state))
+    if (!stopped && exchange && !['done', 'stopped'].includes(exchange.state))
       drafts.push(
         ...hold(
           sqlite,
@@ -240,6 +249,7 @@ export function settleExchangeTurn(
             fromAgentId: mapping.from_agent_id,
             roomId: mapping.room_id,
             agents: mapping.agents,
+            exchangeId: exchange.id,
           },
           now,
           `${me}'s turn ${why}`,
@@ -339,7 +349,7 @@ function leadDecision(
         .run(turns, exchange.job_id)
     else
       drafts.push(...updateExchange(sqlite, exchangeId, { budget: exchange.budget + turns }, now))
-    return [...drafts, ...release(sqlite, exchangeId, now)]
+    return [...drafts, ...release(sqlite, exchangeId, now, { check: true })]
   }
   if (decision?.action === 'stop_exchange')
     return stopExchanges(sqlite, [exchangeId], `${lead} stopped it`, now).drafts
@@ -347,7 +357,11 @@ function leadDecision(
   return updateExchange(sqlite, exchangeId, { decider_turn_id: null, lead_extended: 1 }, now)
 }
 
-/** Stops exchanges and their open children; their queued turns are failed. Returns the run ids still running. */
+/**
+ * Stops exchanges and their open children: queued turns end, running ones are marked stopped (their actions are
+ * dropped when they complete) and returned for the caller to stop through the port; a lead's deciding turn goes too.
+ * An exchange that was waiting on the answer to a stopped question is handed to the person.
+ */
 export function stopExchanges(
   sqlite: DatabaseSync,
   ids: string[],
@@ -356,15 +370,27 @@ export function stopExchanges(
 ): { drafts: DomainEventDraft[]; running: { agentId: string; runId: string }[] } {
   const drafts: DomainEventDraft[] = []
   const running: { agentId: string; runId: string }[] = []
+  const stopping = new Set<string>()
   const queue = [...ids]
   for (let id = queue.shift(); id; id = queue.shift()) {
     const exchange = exchangeRow(sqlite, id)
-    if (!exchange) continue
+    if (!exchange || stopping.has(id)) continue
+    stopping.add(id)
     for (const child of sqlite
       .prepare("SELECT id FROM exchanges WHERE parent_id = ? AND state NOT IN ('done', 'stopped')")
       .all(id) as { id: string }[])
       queue.push(child.id)
     if (['done', 'stopped'].includes(exchange.state)) continue
+    const turns = z
+      .array(TurnToStopSchema)
+      .parse(
+        sqlite
+          .prepare(
+            "SELECT turn_id, state, run_id, agent_id FROM message_runs WHERE (exchange_id = ? OR turn_id = ?) AND state IN ('pending', 'active')",
+          )
+          .all(id, exchange.decider_turn_id ?? ''),
+      )
+    running.push(...stopTurns(sqlite, turns, now))
     drafts.push(
       ...updateExchange(
         sqlite,
@@ -379,22 +405,71 @@ export function stopExchanges(
         now,
       ),
     )
-    for (const turn of sqlite
-      .prepare(
-        "SELECT turn_id, state, run_id, agent_id FROM message_runs WHERE exchange_id = ? AND state IN ('pending', 'active')",
-      )
-      .all(id) as { turn_id: string; state: string; run_id: string | null; agent_id: string }[]) {
-      if (turn.state === 'active' && turn.run_id)
-        running.push({ agentId: turn.agent_id, runId: turn.run_id })
-      else
-        sqlite
-          .prepare(
-            "UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'",
-          )
-          .run(turn.turn_id)
-    }
+  }
+  // A question stopped under an exchange that waited on its answer: the asker goes on without it, or the person stops it.
+  for (const id of stopping) {
+    const child = exchangeRow(sqlite, id)!
+    const parent = child.parent_id ? exchangeRow(sqlite, child.parent_id) : null
+    if (
+      child.kind !== 'ask' ||
+      !parent ||
+      stopping.has(parent.id) ||
+      parent.state !== 'waiting_on_agent' ||
+      parent.to_agent_id !== child.from_agent_id
+    )
+      continue
+    const message = latestMessage(sqlite, parent.job_id)
+    sqlite.prepare("UPDATE exchanges SET state = 'live' WHERE id = ?").run(parent.id)
+    drafts.push(
+      ...hold(
+        sqlite,
+        parent.id,
+        'question_stopped',
+        {
+          agentId: child.from_agent_id,
+          input: `Your question to ${child.to_agent_id} was stopped. Go on without the answer.`,
+          parentMessageId: message,
+          chainId: message,
+          fromAgentId: null,
+          roomId: parent.room_id,
+          agents: roomMembers(sqlite, parent.room_id),
+          exchangeId: parent.id,
+        },
+        now,
+        `the question to ${child.to_agent_id} was stopped`,
+      ),
+    )
   }
   return { drafts, running }
+}
+
+export const TurnToStopSchema = z.object({
+  turn_id: z.string(),
+  state: z.string(),
+  run_id: z.string().nullable(),
+  agent_id: z.string(),
+})
+type TurnToStop = z.infer<typeof TurnToStopSchema>
+
+/** Ends queued turns and marks running ones stopped; returns the running ones for the port to stop. */
+export function stopTurns(
+  sqlite: DatabaseSync,
+  turns: TurnToStop[],
+  now: string,
+): { agentId: string; runId: string }[] {
+  const running: { agentId: string; runId: string }[] = []
+  for (const turn of turns) {
+    if (turn.state === 'active') {
+      sqlite
+        .prepare('UPDATE message_runs SET stop_requested_at = ? WHERE turn_id = ?')
+        .run(now, turn.turn_id)
+      if (turn.run_id) running.push({ agentId: turn.agent_id, runId: turn.run_id })
+    } else
+      sqlite
+        .prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'")
+        .run(turn.turn_id)
+  }
+  return running
 }
 
 /** The turn of the agent an exchange was opened to has ended. */
@@ -424,7 +499,7 @@ function answerExchange(
           sqlite,
           exchange.id,
           'asker_gone',
-          give.held(author, back),
+          give.held(author, back, parent?.id ?? null),
           now,
           `${author} can't take the answer right now`,
         )
@@ -437,7 +512,7 @@ function answerExchange(
       // Only an exchange that was waiting on the asker's own turn goes on (a reviewer who asked first).
       if (parent?.state === 'waiting_on_agent' && parent.to_agent_id === author)
         drafts.push(...updateExchange(sqlite, parent.id, { state: 'live' }, now))
-      give(author, back, parent?.id ?? null)
+      give(author, back, parent?.id ?? null, exchange.id)
       return drafts
     }
     case 'review': {

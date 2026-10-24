@@ -7,9 +7,17 @@ import { agentAdmits } from '../agent-lifecycle.ts'
 import { reserveMessageRun } from '../message-runs.ts'
 import { storeMessage } from '../rooms.ts'
 import { roomMembers } from './actions.ts'
-import { quote, stopExchanges } from './apply.ts'
-import { heldTurn, release } from './budget.ts'
-import { exchangeRow, jobRow, pauseOptions, updateExchange, updateJob } from './store.ts'
+import { z } from 'zod'
+import { stopExchanges, stopTurns, TurnToStopSchema } from './apply.ts'
+import { heldTurn, hold, release } from './budget.ts'
+import {
+  exchangeRow,
+  jobRow,
+  latestMessage,
+  pauseOptions,
+  updateExchange,
+  updateJob,
+} from './store.ts'
 
 // The person's answer to a paused or stuck exchange (docs/briefs/11.1c-budgets.md). Only the options the exchange
 // offers right now are accepted. Running turns to stop are returned for the caller to stop through the port.
@@ -30,7 +38,21 @@ export function decideExchange(
   if (!pauseOptions(sqlite, exchange).includes(decision.option))
     throw new HttpError(409, 'conflict', 'That choice isn’t open for this exchange right now.')
   const job = jobRow(sqlite, exchange.job_id)!
-  const done = (drafts: DomainEventDraft[]): Decided => ({ drafts, running: [] })
+  // The person decided while the lead was still deciding: the lead's turn stops (it could no longer act anyway).
+  const deciding = exchange.decider_turn_id
+    ? z
+        .array(TurnToStopSchema)
+        .parse(
+          sqlite
+            .prepare(
+              "SELECT turn_id, state, run_id, agent_id FROM message_runs WHERE turn_id = ? AND state IN ('pending', 'active')",
+            )
+            .all(exchange.decider_turn_id),
+        )
+    : []
+  const leadRunning = stopTurns(sqlite, deciding, now)
+  if (exchange.decider_turn_id) updateExchange(sqlite, exchange.id, { decider_turn_id: null }, now)
+  const done = (drafts: DomainEventDraft[]): Decided => ({ drafts, running: leadRunning })
   const lead = (
     sqlite.prepare('SELECT lead_agent_id FROM rooms WHERE id = ?').get(job.room_id) as {
       lead_agent_id: string | null
@@ -60,16 +82,19 @@ export function decideExchange(
           .prepare('UPDATE jobs SET job_turn_limit = job_turn_limit + ? WHERE id = ?')
           .run(decision.turns, job.id)
       else updateExchange(sqlite, exchange.id, { budget: exchange.budget + decision.turns }, now)
-      return done(release(sqlite, exchange.id, now))
+      // Raising one limit doesn't lift the others: the turn is checked again (and held again if another one bites).
+      return done(release(sqlite, exchange.id, now, { check: true }))
     }
     case 'more_spend':
       sqlite
         .prepare('UPDATE jobs SET spend_cap_usd = spend_cap_usd + ? WHERE id = ?')
         .run(decision.usd, job.id)
-      return done(release(sqlite, exchange.id, now))
+      return done(release(sqlite, exchange.id, now, { check: true }))
     case 'continue':
-      sqlite.prepare('UPDATE jobs SET cost_unknown_accepted_at = ? WHERE id = ?').run(now, job.id)
-      return done(release(sqlite, exchange.id, now))
+      // Go on without a stopped question's answer, or accept the unknown costs seen so far.
+      if (exchange.pause_reason === 'cost_unknown')
+        sqlite.prepare('UPDATE jobs SET cost_unknown_accepted_at = ? WHERE id = ?').run(now, job.id)
+      return done(release(sqlite, exchange.id, now, { check: true }))
     case 'step_in': {
       // The person's words go into the job for everyone, and the held turn goes on with them. That one turn is the
       // person's, not the agents' spend: the limit that stopped it grows by one.
@@ -136,7 +161,8 @@ export function decideExchange(
           ),
           ...updateJob(sqlite, job.id, { state: 'waiting_on_you' }, now),
         ])
-      return stopExchanges(sqlite, [exchange.id], 'stopped by you', now)
+      const stopped = stopExchanges(sqlite, [exchange.id], 'stopped by you', now)
+      return { drafts: stopped.drafts, running: [...leadRunning, ...stopped.running] }
     }
     case 'retry':
       return done(release(sqlite, exchange.id, now))
@@ -146,6 +172,12 @@ export function decideExchange(
         !agentAdmits(sqlite, decision.to)
       )
         throw new HttpError(400, 'bad_request', `${decision.to} can’t take this work.`)
+      if (decision.to === exchange.from_agent_id)
+        throw new HttpError(
+          400,
+          'bad_request',
+          `${decision.to} opened this exchange; pick someone else.`,
+        )
       // The exchange now runs between its opener and the new agent.
       sqlite
         .prepare('UPDATE exchanges SET to_agent_id = ? WHERE id = ?')
@@ -161,11 +193,36 @@ export function decideExchange(
         { state: 'done', outcome: 'answered' },
         now,
       )
-      return done([
-        ...drafts,
+      drafts.push(
         ...release(sqlite, exchange.id, now, { agentId: lead, exchangeId: null }),
         ...updateExchange(sqlite, exchange.id, { state: 'done' }, now),
-      ])
+      )
+      // The exchange the question came from waited on the asker, who can't go on: the person picks who does.
+      const parent = exchange.parent_id ? exchangeRow(sqlite, exchange.parent_id) : null
+      if (parent?.state === 'waiting_on_agent' && parent.to_agent_id === exchange.from_agent_id) {
+        const message = latestMessage(sqlite, job.id)
+        sqlite.prepare("UPDATE exchanges SET state = 'live' WHERE id = ?").run(parent.id)
+        drafts.push(
+          ...hold(
+            sqlite,
+            parent.id,
+            'unreachable',
+            {
+              agentId: parent.to_agent_id,
+              input: `Go on with this ${parent.kind}. Your question was answered while you were away; the answer went to ${lead}.`,
+              parentMessageId: message,
+              chainId: message,
+              fromAgentId: null,
+              roomId: job.room_id,
+              agents: roomMembers(sqlite, job.room_id),
+              exchangeId: parent.id,
+            },
+            now,
+            `${parent.to_agent_id} can't take work right now`,
+          ),
+        )
+      }
+      return done(drafts)
     }
     case 'ask_again': {
       const reviewer = exchange.pause_reason === 'no_decision'
@@ -190,7 +247,12 @@ export function decideExchange(
       const round = exchange.round + 1
       turn(
         exchange.from_agent_id,
-        `The person sent your work back (round ${round}) because ${exchange.to_agent_id} didn't decide.\n\n${quote('you', decision.note).replace("you wrote (an agent's words, not the person's)", 'The person wrote')}\n\nFix it, then ask ${exchange.to_agent_id} to review it again (score_review).`,
+        `The person sent your work back (round ${round}) because ${exchange.to_agent_id} didn't decide. They wrote:\n\n${decision.note
+          .split('\n')
+          .map((line) => `> ${line}`)
+          .join(
+            '\n',
+          )}\n\nFix it, then ask ${exchange.to_agent_id} to review it again (score_review).`,
       )
       return done([
         ...updateExchange(
@@ -233,15 +295,4 @@ export function stopJob(sqlite: DatabaseSync, jobId: string, now: string): Decid
       ...running.map((row) => ({ agentId: row.agent_id, runId: row.run_id })),
     ],
   }
-}
-
-/** The newest visible message of a job: what a turn the person's decision starts is attached to. */
-function latestMessage(sqlite: DatabaseSync, jobId: string): string {
-  const row = sqlite
-    .prepare(
-      'SELECT id FROM messages WHERE job_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1',
-    )
-    .get(jobId) as { id: string } | undefined
-  if (!row) throw new HttpError(409, 'conflict', 'This job has no messages to continue from.')
-  return row.id
 }

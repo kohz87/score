@@ -593,13 +593,17 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     'done'|'stopped'; round; turnsUsed; budget; outcome: 'approved'|'answered'|'handed_off'|'no_decision'|null;
     endedReason; pause: { reason; options } | null; queuedBehind: { agentId; since } | null; createdAt; updatedAt }`.
   - **Budgets and pauses** (PLAN 11.1c, docs/briefs/11.1c-budgets.md). Before an exchange gets its next turn: its turns
-    started + queued < `budget` (8), the job's agent-started exchange turns < `jobTurnLimit` (40), and with a spend cap
+    started + queued < `budget` (8), the job's agent-started turns (any turn an agent's action or answer queued, in an
+    exchange or not) < `jobTurnLimit` (40), and with a spend cap
     settled cost + 0.50 per running turn < cap and no run of unknown cost since the last "continue". Otherwise the turn is
     held and the exchange stops with `pause.reason`: `exchange_budget` | `job_limit` (`paused_budget`; options
     `more_turns`, `lead_decides` (not when the room lead is in the exchange or already decided once), `step_in`, `stop`),
     `spend_cap` (`more_spend`, `step_in`, `stop`), `cost_unknown` (`continue`, `step_in`, `stop`), `turn_failed` |
-    `unreachable` (`waiting_on_you`; `retry`, `reassign`, `stop`), `asker_gone` (`answer_to_lead`, `stop`),
-    `no_decision` (`ask_again`, `send_back`, `close`), `author_stalled` (`ask_again`, `close`). `queuedBehind` is set
+    `unreachable` (`waiting_on_you`; `retry`, `reassign` (only for the turn of the agent it was opened to), `stop`),
+    `asker_gone` (`retry`, `answer_to_lead`, `stop`), `no_decision` (`ask_again`, `send_back`, `close`),
+    `author_stalled` (`ask_again`, `close`), `question_stopped` (a question it waited on was stopped: `continue` without
+    the answer, `stop`). A released turn puts the exchange back in the state it had (a review waiting on its author stays
+    so) and is checked against the other limits again; a turn the person stopped routes nothing even if it completes. `queuedBehind` is set
     while its next turn waits on that agent's turn in another job of the room (nothing to decide). Person-started turns
     never count; Pause everyone and agent pauses hold queued turns before they start, so nothing is spent.
   - **H** `POST /api/exchanges/:exchangeId/decision` `ExchangeDecisionRequest` (`{ option: 'more_turns'; turns 1–20 }`
