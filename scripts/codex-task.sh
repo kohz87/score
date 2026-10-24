@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run a docs/PLAN.md task through Codex CLI in its own git worktree. See CLAUDE.md "Task loop".
-#   scripts/codex-task.sh start <plan-id> <slug>        # brief: docs/briefs/<plan-id>.md
+#   scripts/codex-task.sh start <plan-id> <slug>        # brief: docs/briefs/<plan-id>.md (CODEX_BASE=<branch> to fork it)
 #   scripts/codex-task.sh fix   <plan-id> <feedback.md> # fresh Codex session in the task worktree (default)
 #   scripts/codex-task.sh resume <plan-id> <feedback.md> # resume the original session (costs its full context)
 #   scripts/codex-task.sh review <plan-id> <prompt.md> <out.md> [effort]  # read-only review in the task worktree
@@ -53,7 +53,8 @@ case "$cmd" in
     wt="$WT_ROOT/$id-$slug"; branch="task/$id-$slug"
     [[ -e "$wt" ]] && die "worktree exists: $wt"
     mkdir -p "$WT_ROOT"
-    git -C "$REPO" worktree add -b "$branch" "$wt" main
+    # CODEX_BASE: branch the task from another task's branch (a lead task's delegated part), default main.
+    git -C "$REPO" worktree add -b "$branch" "$wt" "${CODEX_BASE:-main}"
     (cd "$wt" && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile --silent)
     # Codex's sandbox has no network, so prepare the plugin's Python env here.
     [[ -f "$wt/hermes-plugin/pyproject.toml" ]] && (cd "$wt/hermes-plugin" && uv sync --frozen --quiet)
