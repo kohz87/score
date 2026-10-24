@@ -7,6 +7,7 @@ import { App, appRoutes } from '../App.tsx'
 import { createQueryClient, StreamContext } from '../data/query-client.ts'
 import { immediateFrameScheduler, createStreamQueryRegistry } from '../data/resync.ts'
 import { createStreamClient } from '../data/stream.ts'
+import { jsonResponse, reportFixture } from '../test/reports-fixtures.ts'
 
 const agents: AgentSummary[] = [
   {
@@ -101,6 +102,38 @@ beforeEach(() => {
       url.searchParams.delete('tz')
       if (url.pathname === '/api/agents')
         return Promise.resolve(Response.json({ asOfSeq: 1, items: agents }))
+      if (url.pathname === '/api/watch/overview')
+        return Promise.resolve(
+          Response.json({
+            items: agents.map((agent) => ({
+              agent,
+              thumbnail: null,
+              status: 'Idle',
+              live: false,
+              surface: null,
+            })),
+          }),
+        )
+      if (url.pathname === '/api/now')
+        return Promise.resolve(
+          Response.json({
+            asOfSeq: 1,
+            now: new Date().toISOString(),
+            paused: false,
+            headline: { working: 1, needsYou: 0, text: 'One agent is working.' },
+            lanes: [],
+            handoffs: [],
+            focusApproval: null,
+            thread: null,
+            madeToday: [],
+          }),
+        )
+      if (url.pathname === '/api/reports')
+        return Promise.resolve(
+          jsonResponse(
+            reportFixture((url.searchParams.get('range') as 'today' | '7d' | '30d' | null) ?? '7d'),
+          ),
+        )
       return Promise.resolve(
         Response.json(
           {
@@ -300,21 +333,21 @@ test('the Library keeps an upload and its state while the phone sheet closes and
   act(() => PendingUpload.last.onload?.())
 })
 
-test('Team and Settings are placeholders, and the search button and Ctrl+K open the palette', async () => {
+test('Team and Settings are real pages, and the search button and Ctrl+K open the palette', async () => {
   open('/b')
   fireEvent.click(screen.getByRole('button', { name: 'Team' }))
-  expect(await screen.findByRole('heading', { name: 'Team' })).toBeDefined()
-  expect(screen.getByText('Team comes in 11.8')).toBeDefined()
+  expect(await screen.findByRole('heading', { name: 'Your team' })).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Pause everyone' })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
   expect(await screen.findByRole('heading', { name: 'Settings' })).toBeDefined()
-  expect(screen.getByText('Settings come in 11.9')).toBeDefined()
+  expect(await screen.findByRole('heading', { name: 'Usage' })).toBeDefined()
 
   fireEvent.click(screen.getByRole('button', { name: 'Search' }))
-  const palette = await screen.findByRole('dialog', { name: 'Search or run a command' })
-  fireEvent.click(within(palette).getByRole('button', { name: 'Close command palette' }))
+  const palette = await screen.findByRole('dialog', { name: 'Search and commands' })
+  fireEvent.click(within(palette).getByRole('button', { name: 'Close search' }))
   expect(screen.queryByRole('dialog')).toBeNull()
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
-  expect(await screen.findByRole('dialog', { name: 'Search or run a command' })).toBeDefined()
+  expect(await screen.findByRole('dialog', { name: 'Search and commands' })).toBeDefined()
 })
 
 test('Settings offers the way back to the classic view', async () => {
@@ -336,10 +369,10 @@ test.each(['ctrlKey', 'metaKey'])(
     const trigger = screen.getByRole('button', { name: 'Search' })
     trigger.focus()
     fireEvent.click(trigger)
-    const palette = await screen.findByRole('dialog', { name: 'Search or run a command' })
+    const palette = await screen.findByRole('dialog', { name: 'Search and commands' })
     fireEvent.keyDown(document, { key: 'k', [modifier]: true })
-    expect(screen.getByRole('dialog', { name: 'Search or run a command' })).toBeDefined()
-    fireEvent.click(within(palette).getByRole('button', { name: 'Close command palette' }))
+    expect(screen.getByRole('dialog', { name: 'Search and commands' })).toBeDefined()
+    fireEvent.click(within(palette).getByRole('button', { name: 'Close search' }))
     await waitFor(() => expect(document.activeElement).toBe(trigger))
   },
 )

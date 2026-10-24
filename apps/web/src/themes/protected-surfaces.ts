@@ -22,6 +22,8 @@ export const protectedClasses = [
   'pair-card',
   // Needs-you markers
   'needs-you-dot',
+  // PLAN 11.3: the bold shell's dock ring of an agent that needs you
+  'bold-needs',
   'orch-pill',
   'orch-node__flag',
   'bold-request',

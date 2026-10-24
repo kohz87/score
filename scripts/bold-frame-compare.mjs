@@ -31,11 +31,144 @@ const contentTypes = {
   '.woff2': 'font/woff2',
 }
 
+const searchRoom = {
+  id: 'team-room',
+  name: 'Team room',
+  kind: 'room',
+  leadAgentId: 'lead',
+  members: ['lead', 'builder', 'reviewer', 'designer'],
+  unread: 0,
+  activeAgents: [],
+  channels: [],
+  role: 'team',
+  routing: 'exchanges',
+}
+
+const searchJob = (id, roomId, title, extra = {}) => ({
+  id,
+  roomId,
+  title,
+  state: 'working',
+  holderAgentId: 'builder',
+  isDefault: false,
+  exchangeBudget: 8,
+  jobTurnLimit: 40,
+  unread: 0,
+  activeAgents: [],
+  lastMessageAt: null,
+  messageCount: 0,
+  summary: null,
+  createdAt: '2026-10-24T10:00:00.000Z',
+  updatedAt: '2026-10-24T10:00:00.000Z',
+  ...extra,
+})
+
+// PLAN 11.10f: representative search rows, so the comparison exercises every prototype group without a server.
+const searchFixtures = {
+  '/api/team-room': {
+    asOfSeq: 1,
+    room: searchRoom,
+    jobs: [
+      searchJob('job-activity', 'team-room', 'Activity feed', { unread: 2 }),
+      searchJob('job-release', 'team-room', 'Release notes 2.4', { state: 'done' }),
+      searchJob('job-queue', 'team-room', 'Queue research', { state: 'closed' }),
+    ],
+  },
+  '/api/agents/builder/direct': {
+    asOfSeq: 1,
+    room: null,
+    chats: [
+      searchJob('chat-cursor', 'direct-builder', 'The cursor bug', {
+        summary: 'Why the cursor jumps',
+      }),
+      searchJob('chat-socket', 'direct-builder', 'Websockets or server-sent events', {
+        summary: 'One connection for the feed',
+      }),
+    ],
+  },
+  ...Object.fromEntries(
+    ['lead', 'reviewer', 'designer'].map((id) => [
+      `/api/agents/${id}/direct`,
+      { asOfSeq: 1, room: null, chats: [] },
+    ]),
+  ),
+  '/api/knowledge/tree': {
+    folders: ['Decisions', 'Projects'],
+    documents: [],
+    notes: [
+      {
+        path: 'Decisions/Event-cursors.md',
+        title: 'Event cursors',
+        mtime: '2026-10-24T09:00:00.000Z',
+        lastAuthor: { agentId: 'reviewer' },
+      },
+      {
+        path: 'Projects/Roadmap.md',
+        title: 'Roadmap',
+        mtime: '2026-10-23T09:00:00.000Z',
+        lastAuthor: { agentId: 'lead' },
+      },
+      {
+        path: 'Decisions/Websockets.md',
+        title: 'Websockets vs SSE',
+        mtime: '2026-10-22T09:00:00.000Z',
+        lastAuthor: { agentId: 'builder' },
+      },
+    ],
+  },
+  '/api/knowledge/search': {
+    items: [
+      {
+        path: 'Decisions/Event-cursors.md',
+        title: 'Event cursors',
+        kind: 'note',
+        type: null,
+        snippet: 'Page task events by (created_at, id), never by a [[cursor]] alone.',
+      },
+    ],
+  },
+  '/api/search/messages': {
+    items: [
+      {
+        messageId: 'message-cursor',
+        roomId: 'team-room',
+        roomName: 'Team room',
+        jobId: 'job-activity',
+        author: { kind: 'agent', agentId: 'reviewer' },
+        createdAt: '2026-10-24T10:00:00.000Z',
+        snippet: 'Make the [[cursor]] (created_at, id) and add a test.',
+      },
+    ],
+  },
+  '/api/commands': {
+    items: [
+      { name: 'assign', usage: '/assign @agent <title>', description: 'Create a task.' },
+      { name: 'model', usage: '/model <model> <message>', description: 'Use a model.' },
+    ],
+  },
+}
+
 async function serve(route) {
   const url = new URL(route.request().url())
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === '/api/stream') return route.fulfill({ status: 204 })
-    const fixture = fixtures[`${url.pathname}${url.search}`] ?? fixtures[url.pathname]
+    const searchFixture = searchFixtures[url.pathname]
+    if (searchFixture)
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(searchFixture),
+      })
+    // Reports requests carry the viewer's time zone; the visual fixture is keyed by range only.
+    const reportFixture =
+      url.pathname === '/api/reports'
+        ? fixtures[`/api/reports?range=${url.searchParams.get('range') ?? '7d'}`]
+        : undefined
+    const fixture =
+      fixtures[`${url.pathname}${url.search}`] ??
+      reportFixture ??
+      (url.pathname === '/api/reports' ? fixtures['/api/reports?range=7d'] : undefined) ??
+      fixtures[url.pathname]
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -132,22 +265,271 @@ const parts = [
   },
 ]
 
-async function measure(page) {
-  return page.evaluate((parts) => {
-    const result = {}
-    for (const part of parts) {
-      const element = globalThis.document.querySelector(part.selector)
-      if (!element) {
-        result[part.name] = null
-        continue
+// PLAN 11.9c: the Settings frame and Usage blocks. Both pages use the prototype's class names.
+const usageParts = [
+  {
+    name: 'Settings grid',
+    selector: '.setgrid',
+    props: ['display', 'gap', 'alignItems', 'width'],
+  },
+  {
+    name: 'Settings nav',
+    selector: '.setnav',
+    props: ['width', 'maxWidth', 'gap', 'flexDirection', 'flexWrap'],
+  },
+  {
+    name: 'Selected section',
+    selector: '.setnav button.on',
+    props: ['padding', 'borderRadius', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Settings main',
+    selector: '.setmain',
+    props: ['minWidth', 'gap', 'flexGrow', 'flexBasis'],
+  },
+  {
+    name: 'Range selector',
+    selector: '.seg',
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Range item',
+    selector: '.seg button.on',
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
+  },
+  {
+    name: 'Numbers',
+    selector: '.grid4',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'Number card',
+    selector: '.grid4 .card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Charts',
+    selector: '.grid2',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'Chart card',
+    selector: '.grid2 .card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+]
+
+// PLAN 11.9b: Rules and System use the prototype's frame but real editors, so their element names differ.
+const rulesParts = [
+  {
+    name: 'Section title',
+    selector: '.setmain > h2',
+    appSelector: '.rules-card > div:first-child h2',
+    props: ['fontSize', 'lineHeight', 'letterSpacing', 'color'],
+  },
+  {
+    name: 'Mode card',
+    selector: '.setmain > .card',
+    appSelector: '.rules-style',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Mode label',
+    selector: '.setmain > .card .lab',
+    appSelector: '.rules-style legend',
+    props: ['fontSize', 'color'],
+  },
+  {
+    name: 'Mode choices',
+    selector: '.setmain > .card .seg',
+    appSelector: '.rules-style .rules-option',
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Mode choice',
+    selector: '.seg button.on',
+    appSelector: '.rules-option:has(input:checked)',
+    props: ['fontSize', 'fontWeight', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Lists',
+    selector: '.setmain > .grid3',
+    appSelector: '.rules-columns',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'List card',
+    selector: '.grid3 > .card',
+    appSelector: '.rules-column',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'List heading',
+    selector: '.grid3 > .card h3',
+    appSelector: '.rules-column .rules-heading',
+    props: ['fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Explanatory note',
+    selector: '.setmain > .row .small.muted',
+    appSelector: '.rules-card > .rules-note',
+    props: ['fontSize', 'color'],
+  },
+]
+
+const systemParts = [
+  {
+    name: 'Section title',
+    selector: '.setmain > h2',
+    appSelector: '.bold-system > h2',
+    props: ['fontSize', 'lineHeight', 'letterSpacing', 'color'],
+  },
+  {
+    name: 'Cards',
+    selector: '.setmain > .grid2',
+    appSelector: '.system-grid',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'Card',
+    selector: '.grid2 > .card:not(.span2)',
+    appSelector: '.system-grid > .settings-card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Card heading',
+    selector: '.grid2 > .card h3',
+    appSelector: '.system-grid > .settings-card h2',
+    props: ['fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Wide card',
+    selector: '.grid2 > .card.span2',
+    appSelector: '.system-logs .settings-card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Log surface',
+    selector: '.grid2 > .card.span2 .term',
+    appSelector: '.system-logs .logs-scroll',
+    props: ['padding', 'borderRadius', 'fontFamily', 'fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Pause row',
+    selector: '.grid2 > .card.span2.row',
+    appSelector: '.system-pause',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Pause button',
+    selector: '.grid2 > .card.span2.row .btn',
+    appSelector: '.system-pause .btn',
+    props: ['minHeight', 'padding', 'borderRadius', 'fontWeight', 'color', 'backgroundColor'],
+  },
+]
+
+// PLAN 11.10f: the prototype's vSearch/searchList and the app's BoldSearch use different class names, so each side
+// gets its own selector while the part names and measured properties stay aligned.
+const searchPrototypeParts = [
+  {
+    name: 'Scrim',
+    selector: '.scrim',
+    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  },
+  {
+    name: 'Dialog',
+    selector: '.scrim .dialog',
+    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
+  },
+  {
+    name: 'Head',
+    selector: '.scrim .dialog > .row',
+    props: ['padding', 'gap', 'borderBottomColor'],
+  },
+  { name: 'Input', selector: '#sq', props: ['fontSize', 'color', 'backgroundColor'] },
+  {
+    name: 'List',
+    selector: '#sres',
+    props: ['padding', 'gap', 'maxHeight', 'overflowY', 'backgroundColor'],
+  },
+  {
+    name: 'Section',
+    selector: '#sres .sec',
+    props: ['padding', 'fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Result',
+    selector: '#sres .mi',
+    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+]
+
+const searchAppParts = [
+  {
+    name: 'Scrim',
+    selector: '.bold-search-scrim',
+    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  },
+  {
+    name: 'Dialog',
+    selector: '.bold-search-dialog',
+    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
+  },
+  {
+    name: 'Head',
+    selector: '.bold-search-head',
+    props: ['padding', 'gap', 'borderBottomColor'],
+  },
+  {
+    name: 'Input',
+    selector: '.bold-search-head input',
+    props: ['fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'List',
+    selector: '.bold-search-list',
+    props: ['padding', 'gap', 'maxHeight', 'overflowY', 'backgroundColor'],
+  },
+  {
+    name: 'Section',
+    selector: '.bold-search-section',
+    props: ['padding', 'fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Result',
+    selector: '.bold-search-result',
+    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+]
+
+async function measure(page, selectedParts = parts, side = 'prototype') {
+  return page.evaluate(
+    ({ selectedParts, side }) => {
+      const result = {}
+      for (const part of selectedParts) {
+        const selector = side === 'app' ? (part.appSelector ?? part.selector) : part.selector
+        const element = globalThis.document.querySelector(selector)
+        if (!element) {
+          result[part.name] = null
+          continue
+        }
+        const style = globalThis.getComputedStyle(element)
+        result[part.name] = Object.fromEntries(
+          [...part.props, 'display'].map((property) => [property, style[property]]),
+        )
       }
-      const style = globalThis.getComputedStyle(element)
-      result[part.name] = Object.fromEntries(
-        [...part.props, 'display'].map((property) => [property, style[property]]),
-      )
-    }
-    return result
-  }, parts)
+      return result
+    },
+    { selectedParts, side },
+  )
 }
 
 function cell(metrics, part) {
@@ -166,6 +548,15 @@ function difference(prototypeMetrics, appMetrics, part) {
       : 'missing on one side'
   const differing = part.props.filter((property) => left[property] !== right[property])
   return differing.length === 0 ? 'same' : differing.join(', ')
+}
+
+async function openPrototypeSettings(page, section) {
+  await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+  await page.locator('.top .word').waitFor()
+  await page.locator('[data-a="go"][data-v="settings"]:visible').click()
+  await page.locator(`[data-a="setSec"][data-v="${section}"]`).click()
+  await page.locator('.setgrid .setnav').waitFor()
+  await page.evaluate(() => globalThis.document.fonts.ready)
 }
 
 let browser
@@ -201,7 +592,94 @@ try {
     await page.screenshot({ path: join(output, `bold-app-${size}.png`) })
     const appMetrics = await measure(page)
 
-    results[size] = { prototype: prototypeMetrics, app: appMetrics }
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.top .word').waitFor()
+    await page.locator('button[data-a="search"]:visible').first().click()
+    await page.locator('#sq').waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-prototype-search-${size}.png`) })
+    const prototypeSearchMetrics = await measure(page, searchPrototypeParts)
+    await page.locator('#sq').fill('cursor')
+    await page.screenshot({ path: join(output, `bold-prototype-search-query-${size}.png`) })
+
+    await page.goto(`${baseURL}/b`)
+    await page.locator('[data-ui="bold"] .top .word').waitFor({ timeout: 20_000 })
+    await page.getByRole('button', { name: 'Search', exact: true }).click()
+    await page.locator('.bold-search-dialog').waitFor({ timeout: 20_000 })
+    await page.locator('.bold-search-result').first().waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-search-${size}.png`) })
+    const appSearchMetrics = await measure(page, searchAppParts)
+    await page.getByRole('combobox', { name: 'Search or run a command' }).fill('cursor')
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: join(output, `bold-app-search-query-${size}.png`) })
+
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.top .word').waitFor()
+    await page.locator('[data-a="go"][data-v="settings"]:visible').click()
+    await page.locator('[data-a="setSec"][data-v="usage"]').click()
+    await page.locator('.setgrid .setnav').waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({
+      path: join(output, `bold-prototype-usage-${size}.png`),
+      fullPage: true,
+    })
+    const prototypeUsageMetrics = await measure(page, usageParts)
+
+    await page.goto(`${baseURL}/b/settings/usage`)
+    await page.locator('[data-ui="bold"] .setgrid .setnav').waitFor({ timeout: 20_000 })
+    await page.getByRole('heading', { name: 'Usage' }).waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({
+      path: join(output, `bold-app-usage-${size}.png`),
+      fullPage: true,
+    })
+    const appUsageMetrics = await measure(page, usageParts)
+
+    await openPrototypeSettings(page, 'rules')
+    await page.screenshot({
+      path: join(output, `bold-prototype-rules-${size}.png`),
+      fullPage: true,
+    })
+    const prototypeRulesMetrics = await measure(page, rulesParts)
+
+    await page.goto(`${baseURL}/b/settings/rules`)
+    await page.locator('[data-ui="bold"] .setgrid .setnav').waitFor({ timeout: 20_000 })
+    await page.getByRole('region', { name: 'Rules' }).waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({
+      path: join(output, `bold-app-rules-${size}.png`),
+      fullPage: true,
+    })
+    const appRulesMetrics = await measure(page, rulesParts, 'app')
+
+    await openPrototypeSettings(page, 'system')
+    await page.screenshot({
+      path: join(output, `bold-prototype-system-${size}.png`),
+      fullPage: true,
+    })
+    const prototypeSystemMetrics = await measure(page, systemParts)
+
+    await page.goto(`${baseURL}/b/settings/system`)
+    await page.locator('[data-ui="bold"] .setgrid .setnav').waitFor({ timeout: 20_000 })
+    await page.getByRole('heading', { name: 'System', exact: true }).waitFor({ timeout: 20_000 })
+    await page.getByText('Score v1.14.0').waitFor({ timeout: 20_000 })
+    await page.getByRole('heading', { name: 'Logs', exact: true }).waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({
+      path: join(output, `bold-app-system-${size}.png`),
+      fullPage: true,
+    })
+    const appSystemMetrics = await measure(page, systemParts, 'app')
+
+    results[size] = {
+      prototype: prototypeMetrics,
+      app: appMetrics,
+      search: { prototype: prototypeSearchMetrics, app: appSearchMetrics },
+      usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
+      rules: { prototype: prototypeRulesMetrics, app: appRulesMetrics },
+      system: { prototype: prototypeSystemMetrics, app: appSystemMetrics },
+    }
   }
 
   writeFileSync(join(output, 'bold-frame-metrics.json'), `${JSON.stringify(results, null, 2)}\n`)
@@ -216,6 +694,58 @@ try {
     lines.push('')
   }
   writeFileSync(join(output, 'bold-frame-metrics.md'), `${lines.join('\n')}\n`)
+
+  const usageLines = ['# Bold usage: prototype vs app', '']
+  for (const size of Object.keys(results)) {
+    usageLines.push(
+      `## ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of usageParts)
+      usageLines.push(
+        `| ${part.name} | ${cell(results[size].usage.prototype, part)} | ${cell(results[size].usage.app, part)} | ${difference(results[size].usage.prototype, results[size].usage.app, part)} |`,
+      )
+    usageLines.push('')
+  }
+  writeFileSync(join(output, 'bold-usage-metrics.md'), `${usageLines.join('\n')}\n`)
+
+  for (const [name, title, sectionParts] of [
+    ['rules', 'Bold rules', rulesParts],
+    ['system', 'Bold system', systemParts],
+  ]) {
+    const sectionLines = [`# ${title}: prototype vs app`, '']
+    for (const size of Object.keys(results)) {
+      sectionLines.push(
+        `## ${size}px`,
+        '',
+        '| Part | Prototype | App | Difference |',
+        '|---|---|---|---|',
+      )
+      for (const part of sectionParts)
+        sectionLines.push(
+          `| ${part.name} | ${cell(results[size][name].prototype, part)} | ${cell(results[size][name].app, part)} | ${difference(results[size][name].prototype, results[size][name].app, part)} |`,
+        )
+      sectionLines.push('')
+    }
+    writeFileSync(join(output, `bold-${name}-metrics.md`), `${sectionLines.join('\n')}\n`)
+  }
+  const searchLines = ['# Bold search: prototype vs app', '']
+  for (const size of Object.keys(results)) {
+    searchLines.push(
+      `## ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of searchPrototypeParts)
+      searchLines.push(
+        `| ${part.name} | ${cell(results[size].search.prototype, part)} | ${cell(results[size].search.app, part)} | ${difference(results[size].search.prototype, results[size].search.app, part)} |`,
+      )
+    searchLines.push('')
+  }
+  writeFileSync(join(output, 'bold-search-metrics.md'), `${searchLines.join('\n')}\n`)
   console.log(`Wrote screenshots and measurements to ${output}`)
 } finally {
   await browser?.close()

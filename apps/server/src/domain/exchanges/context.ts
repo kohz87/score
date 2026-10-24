@@ -2,8 +2,10 @@ import type { DatabaseSync } from 'node:sqlite'
 import { XTC_CAPABILITY_PLACEHOLDER } from '@score/contract'
 import { redact, redactBounded } from '../../redact.ts'
 import type { MessageRun } from '../message-runs.ts'
+import { agentText } from '../message-text.ts'
 import { messageFromRow } from '../rooms.ts'
 import { summaryContext } from '../room-summaries.ts'
+import { crossContext } from './sharing.ts'
 import { exchangeRow, jobRow } from './store.ts'
 
 // What an agent's turn in an exchanges room is given (docs/briefs/11.0-bold.md §5): a short Score preamble (the job,
@@ -16,11 +18,7 @@ const FRESH_TAIL = 10
 
 const speaker = (message: ReturnType<typeof messageFromRow>) =>
   message.author.kind === 'you' ? 'you' : message.author.agentId
-const textOf = (message: ReturnType<typeof messageFromRow>) =>
-  message.parts
-    .filter((part) => part.kind === 'text')
-    .map((part) => redact(part.text))
-    .join('\n')
+const textOf = (message: ReturnType<typeof messageFromRow>) => redact(agentText(message.parts))
 
 function role(sqlite: DatabaseSync, turn: MessageRun): string {
   const exchange = turn.exchange_id ? exchangeRow(sqlite, turn.exchange_id) : null
@@ -46,7 +44,8 @@ function role(sqlite: DatabaseSync, turn: MessageRun): string {
 function howToAct(coding: boolean, capability: boolean): string {
   const actions =
     'handoff {to, note} (pass the work on), ask {to, question} (the answer comes back to you), review {to, note} ' +
-    '(when you have the work), approve {note} / send_back {note} (when you review), reply {text} (marks your answer)'
+    '(when you have the work), approve {note} / send_back {note} (when you review), reply {text} (marks your answer); ' +
+    'review, approve and send_back may add comments: up to 20 {path, line, text} notes pinned to lines of changed files'
   const mention = 'Writing @name only mentions someone; it does not hand anything off.'
   if (coding)
     return [
@@ -136,8 +135,10 @@ export function jobRunInput(
     .filter(Boolean)
     .join('\n')
   const messages = fit(jobMessages(sqlite, turn, job.id))
+  const cross = crossContext(sqlite, turn.room_id, turn.parent_message_id)
   return [
     preamble,
+    ...(cross ? ['', cross] : []),
     ...(messages.length ? ['', 'In this job since your last turn:', ...messages] : []),
     '',
     turn.input,

@@ -1,3 +1,4 @@
+import { listJobs } from '../src/domain/exchanges/store.ts'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -344,7 +345,7 @@ test('uncoveredTokens and shouldAutoSummarise count one job at a time', () => {
   expect(shouldAutoSummarise(db.sqlite, ROOM, SECOND_JOB)).toBe(true)
 })
 
-test("unread sums both jobs; reading one job's newest leaves the other unread", () => {
+test('the room badge counts its default job; each job keeps its own unread (11.2 review)', () => {
   const job = defaultJob()
   const defaultMessage = say('d-agent', job, 'default reply', 1, {
     kind: 'agent',
@@ -354,14 +355,18 @@ test("unread sums both jobs; reading one job's newest leaves the other unread", 
     kind: 'agent',
     agentId: 'reviewer',
   })
-  expect(readRoom(db.sqlite, ROOM, at(3)).unread).toBe(2)
+  // The classic shell's badge: the default job only (it can't open the other one).
+  expect(readRoom(db.sqlite, ROOM, at(3)).unread).toBe(1)
+  const unread = (jobId: string) =>
+    listJobs(db.sqlite, ROOM).find((item) => item.id === jobId)!.unread
 
   markRoomRead(db.sqlite, ROOM, at(4), defaultMessage)
   expect(db.sqlite.prepare('SELECT job_id FROM job_reads').all()).toEqual([{ job_id: job }])
-  expect(readRoom(db.sqlite, ROOM, at(5)).unread).toBe(1)
+  expect(readRoom(db.sqlite, ROOM, at(5)).unread).toBe(0)
+  expect(unread(SECOND_JOB)).toBe(1)
 
   markRoomRead(db.sqlite, ROOM, at(6), storedMessage('j-agent'))
-  expect(readRoom(db.sqlite, ROOM, at(7)).unread).toBe(0)
+  expect(unread(SECOND_JOB)).toBe(0)
 })
 
 test('approval cards and failure notices land in their turn’s job', () => {

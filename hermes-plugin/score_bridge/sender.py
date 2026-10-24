@@ -210,13 +210,17 @@ class Sender:
         if type(command) is not str and type(payload.get("args")) is dict:
             command = payload["args"].get("command")
         command_digest = digest(command) if type(command) is str and not command.startswith("[omitted:") else None
+        # A tool call's exact arguments as one digest (PLAN 11.1d report-back): Score checks that a constrained turn
+        # called the tool with exactly the arguments it rendered, without the arguments themselves leaving Hermes.
+        args_digest = _args_digest(kwargs) if hook == "post_tool_call" else None
         payload = capture(hook, payload, command_digest, raw=kwargs, profile=profile)
         payload.pop("kanbanDenial", None)
         if hook == "post_tool_call":
             denial = capture_denial(kwargs)
             if denial is not None:
                 payload["kanbanDenial"] = denial
-        self.queue.put_nowait({"hook": hook, "at": at, "raw": payload, "digest": command_digest, "watch": watch,
+        self.queue.put_nowait({"hook": hook, "at": at, "raw": payload, "digest": command_digest,
+                               "args_digest": args_digest, "watch": watch,
                                "profile": profile, "context": contextvars.copy_context()})
 
     def _take(self, deadline=None):
@@ -279,6 +283,8 @@ class Sender:
             safe["watch"] = raw["context"].run(redact_watch, raw["watch"], hermes_private.redact)
         if raw["digest"]:
             safe["command_digest"] = raw["digest"]
+        if raw.get("args_digest"):
+            safe["args_digest"] = raw["args_digest"]
         safe = bound_payload(safe)
         safe.update(identifiers)
         def lifted(snake, camel):
@@ -503,3 +509,17 @@ class Sender:
                 client._poller.join(deadline)
             if client._command_poller is not None:
                 client._command_poller.join(deadline)
+
+
+def _args_digest(kwargs):
+    """sha256 of the call's arguments as canonical JSON (sorted keys, no spaces, UTF-8), or None when they aren't JSON."""
+    args = kwargs.get("args") if isinstance(kwargs, dict) else None
+    if not isinstance(args, dict):
+        return None
+    try:
+        text = json.dumps(args, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    except Exception:
+        # Not plain JSON (or too deep): no digest, and the hook path goes on.
+        return None
+    # Bounded work on the hook thread: arguments past 1 MB get no digest (a report-back is never that large).
+    return digest(text) if len(text) <= 1_000_000 else None

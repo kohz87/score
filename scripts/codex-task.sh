@@ -44,6 +44,9 @@ check_quota() {
 cmd="${1:-}"; id="${2:-}"
 [[ -n "$cmd" && -n "$id" ]] || die "usage: $0 start|fix|resume|review|path|clean <plan-id> [...]"
 run_dir="$RUNS/$id"; mkdir -p "$run_dir"
+# Each task's e2e gets its own port pair (web, web+1) and run dir, so parallel tasks never share a pairing lock.
+# 5200–5898, even numbers only; never the live ports 8740/8741.
+export SCORE_WEB_PORT="${SCORE_WEB_PORT:-$((5200 + ($(printf '%s' "$id" | cksum | cut -d' ' -f1) % 350) * 2))}"
 mapfile -t MARGS < <(model_args)
 
 case "$cmd" in

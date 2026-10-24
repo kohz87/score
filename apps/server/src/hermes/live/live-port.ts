@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
-import type { MessagingSetupRequest } from '@score/contract'
+import type { MessagingSetupRequest, RunsOnUpdate } from '@score/contract'
 import { HttpError } from '../../errors.ts'
 import { assertThawed } from './freeze.ts'
 import {
@@ -466,6 +466,13 @@ export class LivePort implements HermesPort {
   async setWorkspaceCwd(agentId: string, cwd: string) {
     this.requireStarted()
     return this.tabs.setWorkspaceCwd(agentId, cwd)
+  }
+  async readRunsOn(agentId: string) {
+    return this.tabs.readRunsOn(agentId)
+  }
+  async setRunsOn(agentId: string, update: RunsOnUpdate) {
+    this.requireStarted()
+    return this.tabs.setRunsOn(agentId, update)
   }
   async setToolEnabled(agentId: string, toolId: string, enabled: boolean) {
     this.requireStarted()

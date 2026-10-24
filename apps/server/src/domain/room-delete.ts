@@ -136,6 +136,7 @@ export function deleteRoom(
     ).map((row) => row.id),
   )
   for (const table of [
+    'room_pins',
     'room_versions',
     'room_shares',
     'room_reads',
