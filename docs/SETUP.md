@@ -408,6 +408,14 @@ Receipts and the single-use spec files live outside the home (`<journal dir>/<id
 Tests: `SCORE_TEST_SYSTEMD=1 pnpm --filter @score/server test coding-units-systemd coding-systemd` runs the opt-in suite
 against the real user manager. Its units are named `score-test-<random>-…` and always stopped and reset by the test.
 
+### Running agents in Docker (PLAN 11.8a, optional)
+An agent page's "Runs on" can switch a profile to Hermes's Docker backend. It needs Docker on this machine and the
+user Score and Hermes run as in the `docker` group (`sudo apt-get install -y docker.io`, `sudo usermod -aG docker
+$USER`). Group membership is root-equivalent on this machine. A systemd user service (`score.service`, the gateways)
+only gets the new group after the user's systemd manager restarts: log out and in, or reboot. Until then Score answers
+"Docker isn't installed or running on this machine". Hermes pulls `nousresearch/hermes-sandbox:desktop` (≈ 4.4 GB) on
+first use. What Docker does and doesn't separate is shown on the agent page and in ARCHITECTURE D7.1.
+
 ## Changelog of this file
 - 2026-10-12: no production switch for the process-group engine; the pass is saved before any unit launch (decision 70).
 - 2026-10-12: supervised services are the only engine once an installation has passed the check; a later failure pauses coding (decision 69).

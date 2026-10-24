@@ -31,6 +31,8 @@ import {
 import { fakeJourneyFacts } from './journey-history.ts'
 import { fakeReportHistory } from './report-history.ts'
 import { FakeWorkspaces } from './fake-workspace.ts'
+import type { RunsOn, RunsOnUpdate } from '@score/contract'
+import { describeRunsOn, type TerminalSettings } from '../runs-on.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
 import { assertNotKanbanAttempt } from '../../domain/brief-flow.ts'
 import { createBrief, linkTask, readBriefRow } from '../../domain/briefs.ts'
@@ -1095,6 +1097,46 @@ export class FakePort implements HermesPort {
   async setWorkspaceCwd(agentId: string, cwd: string): Promise<void> {
     this.agentOrThrow(agentId)
     this.workspaces.set(agentId, cwd)
+  }
+  private readonly terminals = new Map<string, TerminalSettings>()
+  /** Fake mode answers as if Docker were installed, so the card's states can be shown and tested. */
+  async readRunsOn(agentId: string): Promise<RunsOn> {
+    this.agentOrThrow(agentId)
+    return describeRunsOn(this.terminalOf(agentId), 'score-fake')
+  }
+  async setRunsOn(agentId: string, update: RunsOnUpdate): Promise<RunsOn> {
+    this.agentOrThrow(agentId)
+    const current = this.terminalOf(agentId)
+    this.terminals.set(agentId, {
+      ...current,
+      backend: update.backend,
+      ...(update.backend === 'docker'
+        ? {
+            dockerImage: update.image ?? current.dockerImage,
+            dockerNetwork: update.network ?? current.dockerNetwork,
+          }
+        : {}),
+      ...(update.backend === 'ssh'
+        ? { sshHost: update.host, sshUser: update.user, sshPort: update.port ?? current.sshPort }
+        : {}),
+    })
+    this.workspaces.setBackend(agentId, update.backend)
+    return this.readRunsOn(agentId)
+  }
+  private terminalOf(agentId: string): TerminalSettings {
+    return (
+      this.terminals.get(agentId) ?? {
+        backend: this.workspaces.backendOf(agentId),
+        dockerImage: null,
+        dockerNetwork: null,
+        dockerMountCwd: null,
+        dockerRunAsHostUser: null,
+        dockerVolumes: null,
+        sshHost: null,
+        sshUser: null,
+        sshPort: null,
+      }
+    )
   }
   async setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool> {
     this.agentOrThrow(agentId)

@@ -787,3 +787,23 @@ One entry per completed task: what landed, review results, and any **rejected re
   own answer is in the tool result the lead saw), documented; `linkSync` on filesystems without hard links — same as
   `bridge.token`, not a supported setup; `lead_decides` OK = the person's POST (documented). Auto report-back on "done"
   comes with the job menu (11.4d). SETUP §6d "One Score per team". Not deployed.
+- **11.8a Where an agent runs (lead, adapter, 2026-10-24).** `GET`/`PUT /api/agents/:id/runs-on` (both H), contract §
+  "Where an agent runs", `RunsOn*` schemas. Reads `terminal.*` with `hermes config get --json`, writes with `hermes
+  config set` (settings first, `terminal.backend` last, so a failure leaves the agent where it ran; lowercase
+  `terminal.*` keys go to config.yaml, never `.env`, checked in `hermes_cli/config.py`); Docker refused `409
+  backend_unavailable` unless the daemon answers; SSH key stored as a path, never read. **Confinement, per tool (Hermes
+  0.21.5 source, Sonnet inventory, lead spot-checks):** confined = terminal + background processes, file
+  read/write/patch/search (shell commands through the backend), `execute_code` (remote kernel when not local),
+  vision/video file reads (exec-read in the sandbox); host = browsers (all local modes), computer use, web/x search,
+  stdio MCP servers, memory, skills, todo, session search, cron scheduling, kanban, messaging, image/video/TTS
+  generation (host cache), desktop-UI tools, plugins and hooks; delegate_task inherits the parent's container;
+  checkpoints are off for Docker (SSH not in Hermes's container list: possible host snapshots, noted). Docker defaults
+  that weaken it: registered credential files + skills + caches mounted read-only, network on, root in the container,
+  persistent container with `/root` and `/workspace` bind-mounted from `~/.hermes/sandboxes/docker/…`, `docker_volumes`
+  and `docker_extra_args` passed verbatim. **Live check** (owner installed Docker, decision 116; test profile
+  `scoretesta`, gpt-6-luna per decision 1): backend set to docker via the CLI, one-shot turn → terminal saw container
+  hostname and uid 0 and no `/home/raven/score`; `write_file` and `execute_code` files absent from the host `/tmp`;
+  `read_file` of the repo README not found; backend restored to `local`, probe container removed. The API never says
+  "separated": `partly` with both lists and per-config notes; SSH to this machine and `local` are `no`; unknown
+  backends `unknown`. ARCHITECTURE D7.1 updated; SETUP "Running agents in Docker" (the service needs a re-login for
+  the docker group). The card itself comes with 11.9b/11.8b ("Where agents run"). Not deployed.

@@ -11,6 +11,7 @@ export * from './profiles.ts'
 export const CONTRACT_VERSION = 1
 export * from './watch.ts'
 export * from './workspace.ts'
+export * from './runs-on.ts'
 export * from './knowledge.ts'
 export * from './versions.ts'
 export * from './compaction.ts'
