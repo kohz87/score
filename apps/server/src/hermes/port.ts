@@ -2,6 +2,8 @@ import {
   ApprovalChoiceSchema,
   ApprovalSchema,
   type AgentSummary,
+  type RunsOn,
+  type RunsOnUpdate,
   type SystemStatus,
   AgentIdSchema,
   TaskColumnSchema,
@@ -259,6 +261,10 @@ export interface HermesPort extends ProfileManagementPort {
   readWorkspaceConfig(agentId: string): Promise<{ cwd: string | null; backend: string | null }>
   /** Writes `terminal.cwd`. The caller has already run the folder checks. */
   setWorkspaceCwd(agentId: string, cwd: string): Promise<void>
+  /** Where the agent runs (PLAN 11.8a): its terminal backend and what that separates; 502 when Hermes can't answer. */
+  readRunsOn(agentId: string): Promise<RunsOn>
+  /** Sets the terminal backend through the CLI (settings first, `terminal.backend` last); 409 when Docker is absent. */
+  setRunsOn(agentId: string, update: RunsOnUpdate): Promise<RunsOn>
   /** The agent's latest todo list (read-only), or null when it has none. */
   readAgentTodos(agentId: string): Promise<AgentTodos>
   /** Hermes plugins of one profile (`plugins list`). */

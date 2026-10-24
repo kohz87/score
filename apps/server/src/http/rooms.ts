@@ -63,6 +63,7 @@ import { requestSummary, sanitizeSummaryText } from '../domain/room-summaries.ts
 import { visibleSummaries } from '../domain/summary-stale.ts'
 import { defaultJobId } from '../domain/job-sessions.ts'
 import { updateJob } from '../domain/exchanges/store.ts'
+import { freezeRef } from '../domain/exchanges/sharing.ts'
 import { registerJobRoutes } from './jobs.ts'
 import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
@@ -118,6 +119,11 @@ const MessageBodySchema = z
     attachments: z.array(MessageAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
     edits: z.string().min(1).max(200).optional(),
     jobId: z.string().min(1).max(64).optional(),
+    /** PLAN 11.2: jobs this message refers to; each is frozen into a `ref` part when it is sent. */
+    refs: z
+      .array(z.object({ jobId: z.string().min(1).max(64) }).strict())
+      .max(5)
+      .optional(),
   })
   .strict()
 const ParamsSchema = z.object({ roomId: z.string().min(1).max(256) })
@@ -125,6 +131,7 @@ const QuerySchema = z
   .object({
     before: z.string().min(1).max(2048).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
+    jobId: z.string().min(1).max(64).optional(),
   })
   .strict()
 
@@ -372,7 +379,9 @@ export function registerRoomRoutes(
     const query = QuerySchema.parse(request.query)
     const before =
       query.before === undefined ? undefined : decodeMessageCursor(query.before, roomId)
-    const page = snapshot(db, (sqlite) => messagePage(sqlite, roomId, query.limit, before))
+    const page = snapshot(db, (sqlite) =>
+      messagePage(sqlite, roomId, query.limit, before, query.jobId),
+    )
     // Acknowledge only what this snapshot returned; later arrivals must remain unread. An empty streaming
     // placeholder has no content yet, so read state stops before the oldest one (its answer is still unseen).
     const items = page.data.items
@@ -567,7 +576,9 @@ export function registerRoomRoutes(
   app.post('/api/rooms/:roomId/summary', mutation, async (request, reply) => {
     const { roomId } = ParamsSchema.parse(request.params)
     db.read((sqlite) => assertRoomFree(sqlite, roomId, 'summary.create'))
-    z.object({})
+    // PLAN 11.2: one job's summary (a one-to-one, a team-room job); the room's default job when omitted.
+    const { jobId } = z
+      .object({ jobId: z.string().min(1).max(64).optional() })
       .strict()
       .parse(request.body ?? {})
     assertNotRewinding(roomId)
@@ -576,7 +587,12 @@ export function registerRoomRoutes(
       source: 'rooms',
       identity: randomUUID(),
       apply: ({ sqlite, now }) => {
-        messageId = requestSummary(sqlite, roomId, now)
+        if (
+          jobId &&
+          !sqlite.prepare('SELECT 1 FROM jobs WHERE id = ? AND room_id = ?').get(jobId, roomId)
+        )
+          throw new HttpError(404, 'not_found', 'Couldn’t find that job in this room.')
+        messageId = requestSummary(sqlite, roomId, now, jobId)
         return []
       },
     })
@@ -596,7 +612,11 @@ export function registerRoomRoutes(
       identity: randomUUID(),
       apply: ({ sqlite, now }) => {
         roomRow(sqlite, roomId)
-        const current = visibleSummaries(sqlite, roomId, defaultJobId(sqlite, roomId) ?? '')[0]
+        const current = visibleSummaries(
+          sqlite,
+          roomId,
+          summaryJob(request.query) ?? defaultJobId(sqlite, roomId) ?? '',
+        )[0]
         if (!current) throw new HttpError(404, 'not_found', 'This room has no summary.')
         const text = sanitizeSummaryText(body.text)
         if (!text) throw new HttpError(400, 'bad_request', 'The summary can’t be empty.')
@@ -625,7 +645,11 @@ export function registerRoomRoutes(
         identity: randomUUID(),
         apply: ({ sqlite, now }) => {
           roomRow(sqlite, roomId)
-          const current = visibleSummaries(sqlite, roomId, defaultJobId(sqlite, roomId) ?? '')[0]
+          const current = visibleSummaries(
+            sqlite,
+            roomId,
+            summaryJob(request.query) ?? defaultJobId(sqlite, roomId) ?? '',
+          )[0]
           if (!current) throw new HttpError(404, 'not_found', 'This room has no summary.')
           return deleteMessage(sqlite, roomId, current.id, now)
         },
@@ -814,7 +838,11 @@ export function registerRoomRoutes(
           roomId,
           author: { kind: 'you' },
           to,
-          parts: [{ kind: 'text', text: body.text }, ...attached.parts],
+          parts: [
+            { kind: 'text', text: body.text },
+            ...attached.parts,
+            ...(body.refs ?? []).map((ref) => freezeRef(sqlite, ref.jobId, now)),
+          ],
           createdAt: now,
           streaming: false,
           refs: [],
@@ -903,4 +931,12 @@ function openExchangeIn(
       )
       .get(job),
   )
+}
+
+/** `?jobId=` on the summary routes (PLAN 11.2): which job's summary; the room's default job when absent. */
+function summaryJob(query: unknown): string | undefined {
+  return z
+    .object({ jobId: z.string().min(1).max(64).optional() })
+    .loose()
+    .parse(query ?? {}).jobId
 }

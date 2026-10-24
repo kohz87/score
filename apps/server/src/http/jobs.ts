@@ -1,19 +1,28 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import {
+  ChatCreateRequestSchema,
+  DirectChatsResponseSchema,
   ExchangeDecisionRequestSchema,
   ExchangesResponseSchema,
   JobCreateRequestSchema,
+  JobResultsSchema,
   JobSchema,
   JobsResponseSchema,
+  RoomPinsResponseSchema,
+  ShareToJobRequestSchema,
+  TeamRoomResponseSchema,
 } from '@score/contract'
 import type { FastifyInstance, preHandlerHookHandler, onSendHookHandler } from 'fastify'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { decideExchange, stopJob, type Decided } from '../domain/exchanges/decisions.ts'
+import { jobResults } from '../domain/exchanges/results.ts'
 import { createJob, jobRow, listExchanges, listJobs } from '../domain/exchanges/store.ts'
 import type { HermesPort } from '../hermes/index.ts'
-import { roomRow } from '../domain/rooms.ts'
+import { insertRoom, readRoom, roomChanged, roomRow } from '../domain/rooms.ts'
+import { listPins, pinMessage, shareMessage, unpinMessage } from '../domain/exchanges/sharing.ts'
+import { teamRoomId } from '../domain/team-room.ts'
 import { HttpError } from '../errors.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
@@ -90,6 +99,12 @@ export function registerJobRoutes(
     return reply.code(201).send(JobSchema.parse(created))
   })
 
+  app.get('/api/jobs/:jobId/results', async (request) => {
+    const { jobId } = JobParams.parse(request.params)
+    const result = snapshot(db, (sqlite) => jobResults(sqlite, jobId))
+    return JobResultsSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
+  })
+
   app.get('/api/jobs/:jobId/exchanges', async (request) => {
     const { jobId } = JobParams.parse(request.params)
     const result = snapshot(db, (sqlite) => {
@@ -97,5 +112,127 @@ export function registerJobRoutes(
       return listExchanges(sqlite, jobId)
     })
     return ExchangesResponseSchema.parse({ asOfSeq: result.asOfSeq, items: result.data })
+  })
+
+  // PLAN 11.2: the team room, one-to-ones, sharing and pins.
+  const now = () => new Date().toISOString()
+  app.get('/api/team-room', async () => {
+    const result = snapshot(db, (sqlite) => {
+      const id = teamRoomId(sqlite)
+      if (!id)
+        throw new HttpError(
+          404,
+          'not_ready',
+          'The team room appears once Score has listed your agents.',
+        )
+      return { room: readRoom(sqlite, id, now()), jobs: listJobs(sqlite, id) }
+    })
+    return TeamRoomResponseSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
+  })
+
+  const AgentParams = z.object({ agentId: z.string().min(1).max(128) })
+  const directRoomOf = (sqlite: DatabaseSync, agentId: string) =>
+    (
+      sqlite
+        .prepare("SELECT id FROM rooms WHERE kind = 'direct' AND lead_agent_id = ?")
+        .get(agentId) as { id: string } | undefined
+    )?.id ?? null
+
+  app.get('/api/agents/:agentId/direct', async (request) => {
+    const { agentId } = AgentParams.parse(request.params)
+    const result = snapshot(db, (sqlite) => {
+      const id = directRoomOf(sqlite, agentId)
+      if (!id) return { room: null, chats: [] }
+      // Newest activity first: "Earlier chats".
+      const chats = listJobs(sqlite, id).sort((a, b) =>
+        (b.lastMessageAt ?? b.createdAt).localeCompare(a.lastMessageAt ?? a.createdAt),
+      )
+      return { room: readRoom(sqlite, id, now()), chats }
+    })
+    return DirectChatsResponseSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
+  })
+
+  app.post('/api/agents/:agentId/chats', mutation, async (request, reply) => {
+    const { agentId } = AgentParams.parse(request.params)
+    const body = ChatCreateRequestSchema.parse(request.body ?? {})
+    const agent = (await port.listAgents()).find((item) => item.id === agentId)
+    if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
+    let created: unknown
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite, now }) => {
+        const drafts = []
+        let roomId = directRoomOf(sqlite, agentId)
+        // The agent's one-to-one home, made on first use as the room list does.
+        if (!roomId) {
+          roomId = randomUUID()
+          insertRoom(
+            sqlite,
+            {
+              id: roomId,
+              name: agent.name,
+              kind: 'direct',
+              leadAgentId: agentId,
+              members: [agentId],
+            },
+            now,
+          )
+          drafts.push(...roomChanged(sqlite, roomId, now))
+        }
+        const made = createJob(sqlite, roomId, body.title ?? 'New chat', now)
+        created = made.job
+        return [...drafts, ...made.drafts]
+      },
+    })
+    return reply.code(201).send(JobSchema.parse(created))
+  })
+
+  app.post('/api/messages/:messageId/share', mutation, async (request, reply) => {
+    const { messageId } = z.object({ messageId: z.string().min(1).max(200) }).parse(request.params)
+    const body = ShareToJobRequestSchema.parse(request.body)
+    let shared = ''
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite, now }) => {
+        const result = shareMessage(sqlite, messageId, body.jobId, now)
+        shared = result.messageId
+        return result.drafts
+      },
+    })
+    return reply.code(201).send({ messageId: shared })
+  })
+
+  const PinParams = z.object({
+    roomId: z.string().min(1).max(256),
+    messageId: z.string().min(1).max(200),
+  })
+  app.get('/api/rooms/:roomId/pins', async (request) => {
+    const { roomId } = RoomParams.parse(request.params)
+    return RoomPinsResponseSchema.parse({
+      items: db.read((sqlite) => {
+        roomRow(sqlite, roomId)
+        return listPins(sqlite, roomId)
+      }),
+    })
+  })
+  app.post('/api/rooms/:roomId/pins/:messageId', mutation, async (request, reply) => {
+    const { roomId, messageId } = PinParams.parse(request.params)
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite, now }) => pinMessage(sqlite, roomId, messageId, now),
+    })
+    return reply.code(204).send()
+  })
+  app.delete('/api/rooms/:roomId/pins/:messageId', mutation, async (request, reply) => {
+    const { roomId, messageId } = PinParams.parse(request.params)
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite }) => unpinMessage(sqlite, roomId, messageId),
+    })
+    return reply.code(204).send()
   })
 }

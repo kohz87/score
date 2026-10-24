@@ -517,9 +517,9 @@ Proposal `docs/proposals/ui-rework-bold.md` (§6 order, §8 D1–D13, §9 D14–
 lead reviews and merges. Every task also gets a Sonnet findings-only review; `pnpm check` (+ `pnpm e2e` for UI) is the
 gate. **11.5 is DeepSeek's pilot** and runs before any other DeepSeek task; its result decides the split for the rest
 (CLAUDE.md). UI tasks build in the new shell behind its switch, ship Playwright specs (fake adapter, phone width,
-reduced motion) and screenshots the lead compares with the named boards. Migrations pre-assigned: 0080 jobs + sessions,
-0081 exchanges, 0082 budgets and pauses, 0083 job sources + triggers, 0084 one-to-ones + references + pins, 0085 workbench comments, 0086
-recipes (When). 10.15 stays paused.
+reduced motion) and screenshots the lead compares with the named boards. Migrations: 0080 jobs + sessions,
+0081 exchanges, 0082 budgets and pauses, 0083 pins (11.2); later ones (job sources + triggers, workbench comments,
+recipes) take the next number when they merge: the runner refuses gaps. 10.15 stays paused.
 
 **11.0 Design + review** ✅ · **Lead** · brief `docs/briefs/11.0-bold.md` v1.1. Done when: the brief settles jobs,
 sessions, exchanges, agent actions, context, one-to-ones, references, sources/triggers/report-back, shell rules and
@@ -554,7 +554,7 @@ and "Stop" each work (tests); the job-wide 40-turn limit stops nested asks and r
 unknown cost pause before admission; Pause everyone holds exchanges without spending turns; every row of brief §4.6
 ends in a visible card (one test per row).
 
-**11.1d Job sources, webhook triggers, report-back** · **Lead** (security) · brief §7, D13/D17/D18, migration 0083;
+**11.1d Job sources, webhook triggers, report-back** ✅ (merged, not deployed) · **Lead** (security) · brief §7, D13/D17/D18, migration 0083;
 starts with a spike: can the adapter list a profile's MCP server tools without Score reading credentials (result in
 TASKLOG; fallback: tool picked by name). Done when: `POST /hooks/<id>` accepts only valid Standard Webhooks signatures
 within ±5 min, is idempotent on `webhook-id`, refuses non-JSON, > 256 KB and > 60/min (tests); remote mode exposes only
@@ -564,14 +564,14 @@ reaches the lead only quoted and redacted (snapshot test); report-back runs as a
 "Reported back" only on a matching tool-call record, otherwise "not confirmed" with Try again; `docs/SETUP.md` gains
 "One Score per team" (D14–D16).
 
-**11.2 Contract and fake data for the new screens** · **Lead** · one-to-ones as jobs in direct rooms (privacy rules),
+**11.2 Contract and fake data for the new screens** ✅ · **Lead** · one-to-ones as jobs in direct rooms (privacy rules),
 references, share to room, pins (migration 0084), `GET /api/jobs/:id/results` and its derivation from watch frames,
 tool calls and exchange outcomes (brief §6, §10); fake-adapter fixtures that produce a team room with jobs, exchanges,
 results, one-to-ones and a paused exchange. Done when: contract doc + schemas + server routes with `inject()` tests;
 a direct room's summary runs on its own agent and no team-room input contains one-to-one text (test); a reference sends
 only the frozen summary; the fake adapter's seeded team room renders every board state the UI tasks need.
 
-**11.3 New shell** · **Lead** · dark tokens under `[data-ui=bold]` (README values), light alternative, Room · Team ·
+**11.3 New shell** ✅ (protection; Look switch and pairing restyle → 11.9a) · **Lead** · dark tokens under `[data-ui=bold]` (README values), light alternative, Room · Team ·
 Settings + Search (⌘K) frame, side-panel dropdown slot, team dock with rings, pairing page restyle, per-device switch
 (`Settings › Look`, `?ui=bold`); AGENTS.md design rules updated once the owner confirms dark default. Done when: both
 shells run from one build; the old shell is pixel-identical to its baselines; the new frame matches boards 01 and 18 at
@@ -618,7 +618,7 @@ vs 02/12.
 this", earlier chats with search and New chat, reference chips, Share to the team room, "Take it aside", Add someone,
 context meter. Done when: e2e for each; screenshots vs 01/19.
 
-**11.8a Where an agent runs and "Runs on"** · **Lead** (adapter) · D3, D15: read/set the profile's terminal backend
+**11.8a Where an agent runs and "Runs on"** ✅ (API; the card lands with 11.8b) · **Lead** (adapter) · D3, D15: read/set the profile's terminal backend
 through the `hermes` CLI; verify on a test profile which tools Docker/SSH confines and record it; update D7.1. Done
 when: fixture tests for the CLI calls; nothing writes `~/.hermes` directly; the confinement result is in TASKLOG and the
 API says exactly what is confined.

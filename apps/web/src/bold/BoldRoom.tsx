@@ -1,12 +1,13 @@
 import type { AgentSummary } from '@score/contract'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { useOutletContext } from 'react-router'
+import { Link, useOutletContext } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { agentNameColor, agentStateLabel } from './bold-agents.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
+import { BoldResults } from './BoldResults.tsx'
 import { BookIcon, ChevronIcon, CloseIcon, GridIcon, ThreadIcon } from './BoldIcons.tsx'
 import type { BoldSheetState } from './bold-ui.ts'
 
@@ -183,6 +184,16 @@ export function BoldRoom() {
               {label}
               <ChevronIcon />
             </button>
+            {mode === 'work' && (
+              <div className="seg bold-work-tabs" role="tablist" aria-label="How to see the work">
+                <button type="button" role="tab" aria-selected="true" className="on">
+                  Results
+                </button>
+                <Link role="tab" aria-selected="false" to="/b?work=workbench">
+                  Workbench
+                </Link>
+              </div>
+            )}
             {agent && (
               <span className="small muted side-privacy">Only you and {agent.id} see this</span>
             )}
@@ -214,7 +225,7 @@ export function BoldRoom() {
               </div>
             )}
           </div>
-          {mode !== 'library' && (
+          {mode !== 'library' && mode !== 'work' && (
             <div className="sidebody" data-placeholder={mode}>
               <p className="side-placeholder">{sideCopy(mode, agent)}</p>
               {agent && (
@@ -224,6 +235,7 @@ export function BoldRoom() {
               )}
             </div>
           )}
+          <BoldResults agents={agents} hidden={mode !== 'work'} />
           <BoldLibrary agents={agents} hidden={mode !== 'library'} />
         </aside>
       </div>

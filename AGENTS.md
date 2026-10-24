@@ -99,6 +99,18 @@ docs/                plan, architecture, contract, setup, spike, design referenc
    The PNGs in `docs/design/` show personas and are reference-only.
 
 ## Design rules
+**The new shell (`/b`, PLAN 11, decision 113: dark by default).** `docs/design/bold/prototype.html` (an exact copy of
+the owner's live prototype) and the boards in `docs/design/bold/` are the source of truth for every screen of the new
+shell, and they are binding (owner, 2026-10-24): copy values from the prototype's CSS, rebuild in React, never paste its
+HTML; where a brief and the prototype differ, the prototype wins and the difference is reported. The visual system is in
+`docs/design/bold/README.md`: dark ground `#12131A`, panels `#1A1C23`; light objects mean "for you or the result"; pills
+and 20–30px radii; the same three fonts; tokens scoped under `[data-ui='bold']` (never leaking into the classic shell);
+class names prefixed `bold-` where a generic name could collide with classic CSS. **Every new surface that asks the
+person to decide** (needs-you cards, exchange pauses, approvals, the privacy label, "shared from", "Started by", report-
+back state) carries `data-protected` and is added to the protected list (`styles/protected.css`, its test), so no theme
+can hide, cover, relabel or fake it; a fixed or sticky element is added to `KNOWN_OVERLAYS`.
+
+**The classic shell** (until 11.11 retires it):
 - `docs/design/*.png` and their standalone versions in `docs/design/html/` are the source of truth for layout
   and look. Take exact colors, radii and spacing from the HTML (inline styles; fonts are embedded there, but the
   app must load them from `@fontsource`). `docs/design/**/theme-only/` is a Hermes-dashboard skin, out of scope.

@@ -35,7 +35,16 @@ async function serve(route) {
   const url = new URL(route.request().url())
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === '/api/stream') return route.fulfill({ status: 204 })
-    const fixture = fixtures[`${url.pathname}${url.search}`] ?? fixtures[url.pathname]
+    // Reports requests carry the viewer's time zone; the visual fixture is keyed by range only.
+    const reportFixture =
+      url.pathname === '/api/reports'
+        ? fixtures[`/api/reports?range=${url.searchParams.get('range') ?? '7d'}`]
+        : undefined
+    const fixture =
+      fixtures[`${url.pathname}${url.search}`] ??
+      reportFixture ??
+      (url.pathname === '/api/reports' ? fixtures['/api/reports?range=7d'] : undefined) ??
+      fixtures[url.pathname]
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -132,10 +141,72 @@ const parts = [
   },
 ]
 
-async function measure(page) {
-  return page.evaluate((parts) => {
+// PLAN 11.9c: the Settings frame and Usage blocks. Both pages use the prototype's class names.
+const usageParts = [
+  {
+    name: 'Settings grid',
+    selector: '.setgrid',
+    props: ['display', 'gap', 'alignItems', 'width'],
+  },
+  {
+    name: 'Settings nav',
+    selector: '.setnav',
+    props: ['width', 'maxWidth', 'gap', 'flexDirection', 'flexWrap'],
+  },
+  {
+    name: 'Selected section',
+    selector: '.setnav button.on',
+    props: ['padding', 'borderRadius', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Settings main',
+    selector: '.setmain',
+    props: ['minWidth', 'gap', 'flexGrow', 'flexBasis'],
+  },
+  {
+    name: 'Range selector',
+    selector: '.seg',
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Range item',
+    selector: '.seg button.on',
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
+  },
+  {
+    name: 'Numbers',
+    selector: '.grid4',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'Number card',
+    selector: '.grid4 .card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Charts',
+    selector: '.grid2',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'Chart card',
+    selector: '.grid2 .card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+]
+
+async function measure(page, selectedParts = parts) {
+  return page.evaluate((selectedParts) => {
     const result = {}
-    for (const part of parts) {
+    for (const part of selectedParts) {
       const element = globalThis.document.querySelector(part.selector)
       if (!element) {
         result[part.name] = null
@@ -147,7 +218,7 @@ async function measure(page) {
       )
     }
     return result
-  }, parts)
+  }, selectedParts)
 }
 
 function cell(metrics, part) {
@@ -201,7 +272,33 @@ try {
     await page.screenshot({ path: join(output, `bold-app-${size}.png`) })
     const appMetrics = await measure(page)
 
-    results[size] = { prototype: prototypeMetrics, app: appMetrics }
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.top .word').waitFor()
+    await page.locator('[data-a="go"][data-v="settings"]:visible').click()
+    await page.locator('[data-a="setSec"][data-v="usage"]').click()
+    await page.locator('.setgrid .setnav').waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({
+      path: join(output, `bold-prototype-usage-${size}.png`),
+      fullPage: true,
+    })
+    const prototypeUsageMetrics = await measure(page, usageParts)
+
+    await page.goto(`${baseURL}/b/settings/usage`)
+    await page.locator('[data-ui="bold"] .setgrid .setnav').waitFor({ timeout: 20_000 })
+    await page.getByRole('heading', { name: 'Usage' }).waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({
+      path: join(output, `bold-app-usage-${size}.png`),
+      fullPage: true,
+    })
+    const appUsageMetrics = await measure(page, usageParts)
+
+    results[size] = {
+      prototype: prototypeMetrics,
+      app: appMetrics,
+      usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
+    }
   }
 
   writeFileSync(join(output, 'bold-frame-metrics.json'), `${JSON.stringify(results, null, 2)}\n`)
@@ -216,6 +313,22 @@ try {
     lines.push('')
   }
   writeFileSync(join(output, 'bold-frame-metrics.md'), `${lines.join('\n')}\n`)
+
+  const usageLines = ['# Bold usage: prototype vs app', '']
+  for (const size of Object.keys(results)) {
+    usageLines.push(
+      `## ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of usageParts)
+      usageLines.push(
+        `| ${part.name} | ${cell(results[size].usage.prototype, part)} | ${cell(results[size].usage.app, part)} | ${difference(results[size].usage.prototype, results[size].usage.app, part)} |`,
+      )
+    usageLines.push('')
+  }
+  writeFileSync(join(output, 'bold-usage-metrics.md'), `${usageLines.join('\n')}\n`)
   console.log(`Wrote screenshots and measurements to ${output}`)
 } finally {
   await browser?.close()
