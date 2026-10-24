@@ -378,6 +378,8 @@ for (const viewport of sizes) {
       await expect(side.getByRole('alert')).toContainText('kept while this page is open')
 
       if (viewport.width > 860) {
+        // The side panel's mode button names the chat while Elsewhere is open; its menu switches back to Work.
+        await side.locator('.side-toggle').click()
         await side.getByRole('button', { name: /^Work/ }).click()
       } else {
         await side.getByRole('button', { name: 'Close side panel' }).click()
@@ -388,7 +390,10 @@ for (const viewport of sizes) {
         .getByRole('listbox', { name: 'Rooms and chats elsewhere' })
         .getByRole('option', { name: /Plan the launch checklist/ })
         .click()
-      await reopened.getByRole('button', { name: 'Preview this chat' }).click()
+      // On a phone the closed sheet keeps the view (and its loaded preview); on a desktop the view remounts, which is
+      // the case the kept attempt is for.
+      const preview = reopened.getByRole('button', { name: 'Preview this chat' })
+      if (await preview.isVisible()) await preview.click()
       await expect(reopened.getByText('Outline the launch checklist.')).toBeVisible()
       await reopened.getByRole('button', { name: 'Bring into a job' }).click()
       await expect(page).toHaveURL(/job=job-brought/)
