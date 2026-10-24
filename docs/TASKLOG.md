@@ -795,3 +795,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   describe the bold system and the `data-protected` rule for every new decision surface. Full e2e 647/648, the one
   failure (`themes-builtin-visual` harbour light) a flake: 36/36 on rerun. The Look switch and pairing restyle move to
   11.9a. Not deployed.
+- **11.2c Fake team room (DeepSeek, 2026-10-24).** `seedFakeTeam` (fake mode only, after the team room exists; startup
+  waits for it in fake mode only): lead picked, four demo jobs (activity feed with an ask/review exchange and a held
+  turn, release notes, queue research, the default job's pinned decision), direct chats per agent, shares, pins and
+  watch frames, through the domain functions (no raw inserts but two seed messages); idempotent via a marker row.
+  1 round, no fix round. Lead review instead of a Sonnet pass (seed data only, fake-mode guarded, no personas).
+  Full e2e: the first run had 132 failures, all pairing-lock timeouts — the lead had run another spec on the same
+  `SCORE_WEB_PORT` meanwhile; the 181 affected specs pass on their own port. `codex-task.sh` now gives each task its own
+  e2e port. Not deployed.
