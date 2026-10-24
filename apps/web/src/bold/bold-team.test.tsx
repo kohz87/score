@@ -90,6 +90,34 @@ class Source extends EventTarget {
 }
 
 let agentsReply: () => Response
+const localRunsOn = {
+  backend: 'local',
+  raw: 'local',
+  separated: 'no',
+  docker: null,
+  ssh: null,
+  separatedTools: [],
+  hostTools: [],
+  notes: ['Everything the agent does runs on this machine as you.'],
+  checked: { how: 'live', hermes: '0.21.5 (e97923c)', at: '2026-10-24' },
+}
+const dockerRunsOn = {
+  backend: 'docker',
+  raw: 'docker',
+  separated: 'partly',
+  docker: {
+    image: 'sandbox:1',
+    network: false,
+    mountsWorkspace: false,
+    runsAsRoot: true,
+    extraMounts: 0,
+  },
+  separatedTools: ['Terminal commands and background processes'],
+  hostTools: ['MCP servers'],
+  notes: ['Commands run as root inside the container.'],
+}
+let runsOn: Record<string, unknown> = localRunsOn
+let runsOnPuts: unknown[] = []
 let detailReply: () => Response
 let watchReply: () => Response
 let pauseReply: (() => Response) | null
@@ -139,7 +167,13 @@ beforeEach(() => {
         removeEventListener() {},
       }) as unknown as MediaQueryList,
   )
-  agentsReply = () => Response.json({ asOfSeq: 1, items: [builder, coderDetail, { ...builder, id: 'lead', name: 'lead', reportsTo: null }] })
+  agentsReply = () =>
+    Response.json({
+      asOfSeq: 1,
+      items: [builder, coderDetail, { ...builder, id: 'lead', name: 'lead', reportsTo: null }],
+    })
+  runsOn = localRunsOn
+  runsOnPuts = []
   detailReply = () => agentResponse(builder)
   pauseReply = null
   watchReply = () =>
@@ -156,9 +190,16 @@ beforeEach(() => {
     })
   vi.stubGlobal(
     'fetch',
-    vi.fn((input: RequestInfo | URL) => {
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://x')
       if (url.pathname === '/api/agents') return Promise.resolve(agentsReply())
+      if (url.pathname === '/api/agents/builder/runs-on') {
+        if (init?.method === 'PUT') {
+          runsOnPuts.push(JSON.parse(String(init.body)))
+          runsOn = { ...runsOn, ...dockerRunsOn }
+        }
+        return Promise.resolve(Response.json(runsOn))
+      }
       if (
         pauseReply &&
         (url.pathname === '/api/agents/builder/pause' ||
@@ -278,7 +319,8 @@ test('the agent page puts the four cards first and makes every classic tab reach
   expect(screen.getByText('Hermes')).toBeDefined()
   expect(screen.getByText('Next model')).toBeDefined()
   expect(screen.getByText(/Falls back to demo\/safe/)).toBeDefined()
-  expect(screen.getByText('Comes in 11.8a')).toBeDefined()
+  expect(await screen.findByText('This machine, as you')).toBeDefined()
+  expect(screen.getByText('Not separated')).toBeDefined()
   expect(screen.getByText('Asks you first before')).toBeDefined()
   expect(screen.getByText('Installing packages')).toBeDefined()
   expect(screen.getByText('Pushing code')).toBeDefined()
@@ -412,4 +454,22 @@ test('a coding agent gets access, quota, password and the protected Codex note o
     await waitFor(() => expect(document.querySelector(link.getAttribute('href')!)).not.toBeNull())
   }
   expect(within(nav).queryByRole('link', { name: 'Memory' })).toBeNull()
+})
+
+test('Where it works says exactly what Docker separates and changes through the API', async () => {
+  open('/b/team/builder')
+  const card = await screen.findByRole('region', { name: 'Where it works' })
+  expect(await within(card).findByText('Not separated')).toBeDefined()
+  expect(card.getAttribute('data-protected')).toBe('block')
+  fireEvent.click(within(card).getByRole('button', { name: 'Change where it works' }))
+  fireEvent.click(within(card).getByRole('radio', { name: 'Docker' }))
+  fireEvent.click(
+    within(card).getByRole('checkbox', { name: 'Let the container reach the network' }),
+  )
+  fireEvent.click(within(card).getByRole('button', { name: 'Save' }))
+  expect(await within(card).findByText('Partly separated')).toBeDefined()
+  expect(runsOnPuts).toEqual([{ backend: 'docker', network: false }])
+  expect(within(card).getByText(/Still on this machine as you:/)).toBeDefined()
+  expect(within(card).getByText(/MCP servers/)).toBeDefined()
+  expect(within(card).getByText('Commands run as root inside the container.')).toBeDefined()
 })

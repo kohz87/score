@@ -30,6 +30,7 @@ import type { AgentFileName } from '../routes/team/file-queries.ts'
 import { useAgentPause } from '../routes/watch/watch-queries.ts'
 import '../routes/team/team.css'
 import '../components/todo.css'
+import { RunsOnCard } from './BoldRunsOn.tsx'
 import './bold-team.css'
 
 const hermesTabs = [
@@ -113,16 +114,7 @@ function HermesUpFront({
         <ModelTab agent={agent} />
       </section>
 
-      <section className="card bold-up-card" id="agent-where" aria-labelledby="agent-where-title">
-        <span className="lab" id="agent-where-title">
-          Where it works
-        </span>
-        <b>Comes in 11.8a</b>
-        <p className="small muted">
-          The terminal backend and what it confines will appear here. Nothing in this card changes
-          how {agent.id} runs today.
-        </p>
-      </section>
+      <RunsOnCard agent={agent} />
 
       <section
         className="card bold-up-card"

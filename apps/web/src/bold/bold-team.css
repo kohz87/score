@@ -755,3 +755,32 @@
     flex-wrap: nowrap;
   }
 }
+
+/* Where it works (11.8a): the separation badge never reads as "safe"; partly and not-known are warnings. */
+[data-ui='bold'] #agent-where .badge {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+[data-ui='bold'] #agent-where .runs-on-no {
+  background: color-mix(in srgb, var(--bad) 18%, transparent);
+  color: var(--bad);
+}
+[data-ui='bold'] #agent-where .runs-on-partly,
+[data-ui='bold'] #agent-where .runs-on-unknown {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+[data-ui='bold'] .bold-runs-on-notes {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+[data-ui='bold'] .bold-runs-on-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
