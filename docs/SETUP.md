@@ -114,6 +114,29 @@ sudo apt install -y bubblewrap
 codex exec --disable apps -m gpt-6.1-sol -s read-only "run: ls" # should list files, not fail with RTM_NEWADDR
 ```
 
+### DeepSeek through NanoGPT (optional implementer)
+A Codex profile that runs on the owner's NanoGPT subscription instead of ChatGPT. Don't use NanoGPT's one-click
+installer: it makes NanoGPT the default for every `codex` run. Codex 0.160+ keeps profiles in their own files.
+
+1. `export NANOGPT_API_KEY=…` in `~/.bashrc` (key from nano-gpt.com/api).
+2. Append the provider to `~/.codex/config.toml` (it only defines NanoGPT; plain `codex` stays on ChatGPT):
+   ```toml
+   [model_providers.nanogpt]
+   name = "NanoGPT"
+   base_url = "https://api.nano-gpt.com/api/v1"   # direct host: larger requests, longer runs
+   env_key = "NANOGPT_API_KEY"
+   wire_api = "responses"                         # current Codex rejects "chat"
+   ```
+3. Create `~/.codex/deepseek.config.toml` with a model from
+   `curl -s -H "Authorization: Bearer $NANOGPT_API_KEY" https://api.nano-gpt.com/api/v1/models` that the subscription
+   includes and that supports tools:
+   ```toml
+   model_provider = "nanogpt"
+   model = "deepseek/deepseek-v4.1-flash-1017:thinking"
+   ```
+4. Check: `codex exec --profile deepseek --disable apps -s read-only "Reply with one word: ready"`, then confirm on
+   nano-gpt.com/usage that the call cost $0 (subscription). Use it with `CODEX_PROFILE=deepseek scripts/codex-task.sh …`.
+
 ## 6b. Remote access (optional)
 Default is local only (`127.0.0.1`); a non-loopback `SCORE_HOST` without `SCORE_REMOTE=1` is refused. Build the web app first
 (`pnpm build`); remote mode serves `apps/web/dist` itself.
