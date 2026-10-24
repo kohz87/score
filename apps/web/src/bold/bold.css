@@ -1,8 +1,7 @@
 /* The bold shell's frame, rebuilt from docs/design/bold/prototype.html. Every rule is scoped to [data-ui='bold'];
    colours come from tokens.css only. */
 [data-ui='bold'].bold-shell {
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -301,6 +300,10 @@
   color: var(--ink);
 }
 
+[data-ui='bold'] .phone-side-open {
+  margin-left: auto;
+}
+
 [data-ui='bold'] .stream {
   flex: 1;
   display: flex;
@@ -399,6 +402,10 @@
   margin-left: auto;
 }
 
+[data-ui='bold'] .sideclose {
+  margin-left: auto;
+}
+
 [data-ui='bold'] .side-placeholder {
   margin: 0;
   color: var(--muted);
@@ -466,6 +473,11 @@
 
 /* The room fills the window: the page never scrolls, the room and side panel scroll inside. */
 body.fit {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body.fit [data-ui='bold'].bold-shell {
   height: 100dvh;
   overflow: hidden;
 }
@@ -580,11 +592,20 @@ body.fit [data-ui='bold'] .stream {
     padding-bottom: 96px;
   }
 
+  /* Scrolling a control into view (keyboard focus, find-in-page) stops above the fixed tab bar, not under it. */
+  html:has(.bold-shell) {
+    scroll-padding-bottom: 96px;
+  }
+
   [data-ui='bold'] .roomgrid {
     min-height: auto;
   }
 
   [data-ui='bold'] .bold-sidecol {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-sidecol[hidden] {
     display: none;
   }
 

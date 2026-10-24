@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { CommandIdSchema } from './orchestration.ts'
 import { AgentIdSchema, RoomSchema } from './types.ts'
+import { JobReportBackSchema, JobSourceSchema } from './triggers.ts'
 
 // Exchanges and agent actions (PLAN 11.1b; design docs/briefs/11.0-bold.md §3.4, §4). An agent in a room with
 // `routing = exchanges` hands work on, asks, reviews, approves or sends back with one action per turn. Hermes agents
@@ -9,6 +10,9 @@ import { AgentIdSchema, RoomSchema } from './types.ts'
 
 export const EXCHANGE_LIMITS = {
   noteBytes: 4000,
+  /** Line comments on a review, approval or send-back (11.6a). */
+  commentBytes: 1000,
+  commentsPerAction: 20,
   replyBytes: 8000,
   /** Default turns per exchange and per job (brief §4.5; decision 113). */
   exchangeBudget: 8,
@@ -57,6 +61,23 @@ const text = (max: number) =>
 
 const replaces = { replaces: CommandIdSchema.optional() }
 
+/** A review note pinned to a line of a file the job changed (PLAN 11.6a); the path as the agent's edit named it. */
+export const LineCommentSchema = z
+  .object({
+    path: z
+      .string()
+      .min(1)
+      .max(1024)
+      .refine((v) => !/[\0\r\n]/u.test(v), 'One line, no NUL')
+      .refine((v) => v.trim() !== '', 'A path, not only spaces'),
+    line: z.int().min(1).max(1_000_000),
+    text: text(EXCHANGE_LIMITS.commentBytes),
+  })
+  .strict()
+const comments = {
+  comments: z.array(LineCommentSchema).max(EXCHANGE_LIMITS.commentsPerAction).optional(),
+}
+
 /** The action itself, as both channels carry it (the bridge adds capability and commandId around it). */
 export const ExchangeActionSchema = z.discriminatedUnion('action', [
   z
@@ -80,16 +101,23 @@ export const ExchangeActionSchema = z.discriminatedUnion('action', [
       action: z.literal('review'),
       to: AgentIdSchema,
       note: text(EXCHANGE_LIMITS.noteBytes),
+      ...comments,
       ...replaces,
     })
     .strict(),
   z
-    .object({ action: z.literal('approve'), note: text(EXCHANGE_LIMITS.noteBytes), ...replaces })
+    .object({
+      action: z.literal('approve'),
+      note: text(EXCHANGE_LIMITS.noteBytes),
+      ...comments,
+      ...replaces,
+    })
     .strict(),
   z
     .object({
       action: z.literal('send_back'),
       note: text(EXCHANGE_LIMITS.noteBytes),
+      ...comments,
       ...replaces,
     })
     .strict(),
@@ -150,6 +178,10 @@ export const JobSchema = z.object({
   messageCount: z.int().nonnegative(),
   /** One line for lists ("Earlier chats"): the job's summary, else its first message's first line (≤ 160 chars). */
   summary: z.string().nullable(),
+  /** PLAN 11.1d: where a trigger-started job came from ("Started by" card, the tab's reference); null otherwise. */
+  source: JobSourceSchema.nullable(),
+  /** PLAN 11.1d: its report-back to the app; null for jobs without one. */
+  reportBack: JobReportBackSchema.nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })
@@ -288,3 +320,5 @@ export const RoomPinSchema = z.object({
 export type RoomPin = z.infer<typeof RoomPinSchema>
 export const RoomPinsResponseSchema = z.object({ items: z.array(RoomPinSchema) })
 export const RoomPinsChangedSchema = z.object({ roomId: z.string().min(1) })
+
+export type LineComment = z.infer<typeof LineCommentSchema>

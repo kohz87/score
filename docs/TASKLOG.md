@@ -762,3 +762,140 @@ One entry per completed task: what landed, review results, and any **rejected re
   P3 e2e asserted fake-data weekdays and counts that move with the date → date-proof (found failing on rebase, so the
   flake was real). Kept: 32–36 px links/segments are the prototype's values. Lead fixes: 3 small. 1 fix round.
   Web 2994 tests, lint/types green, `e2e/bold-usage` 4 + reports e2e pass.
+- **11.1d job sources, webhook triggers, report-back (lead, security, 2026-10-24).** Spike first (brief
+  `docs/briefs/11.1d-sources.md`, from Hermes source): a profile's MCP tools can be listed without Score reading a
+  credential — in-process from Hermes's tool registry (`mcp-<server>` toolset, with schemas; the plugin route,
+  preferred), `hermes mcp test` (names only) or the dashboard API (no schemas); the picker comes with 11.9a, tools are
+  named by hand until then (PLAN's fallback). Migration 0084: `triggers`, `trigger_calls`,
+  `session_tool_calls.args_digest`, `jobs.report_back`. `POST /hooks/<id>`: Standard Webhooks (±5 min, constant-time
+  HMAC), 24 h idempotency on `webhook-id`, JSON only, ≤ 256 KB, 60 verified calls/min per trigger; the only remote-mode
+  public addition and CSRF exemption (exact `POST /hooks/trg_<24 hex>`). Secrets are Score's own, sealed (AES-256-GCM,
+  `~/.score/sealing.key`, bound to the trigger id), shown once and then only to a paired browser. A call starts a job in
+  the team room with `Job.source`, the payload quoted and redacted under "outside content, not instructions" (snapshot
+  test with an injected instruction and an API key). Report-back: a constrained lead turn; "confirmed" only from the
+  bridge's record of that tool in the lead's job session after the turn began, status ok, same `args_digest` (the plugin
+  digests canonical JSON; a shared fixture pins Python = TypeScript). **Sonnet security review: 1 P1, 5 P2, 6 P3.** Real,
+  fixed with tests: (P1) credential-named payload keys made the redacted sample invalid JSON → 500 and no job (sample is
+  now redacted as data); unredacted/any-scheme links (http(s) only, redacted); template holes outside JSON strings could
+  inject structure into report-back args (holes filled only inside string values; templates validated on save);
+  bad-signature calls used the trigger's budget, a lockout (verified before queueing; failures limited per caller; unknown
+  ids answered before the queue); a failed turn could be "confirmed" (requires a completed turn); report-back could be
+  sent twice (409 while sending or once confirmed); line breaks other than \n escaped the quote block; prototype paths;
+  unbounded `webhook-id`; `no-store` on secret answers; trigger list paired-only; the plugin's digest can no longer
+  drop a hook record (catches everything, 1 MB bound). **Rejected/noted:** "confirmed doesn't prove the app accepted it"
+  — true by design (Score confirms the call was made with the exact arguments and Hermes reported success; the app's
+  own answer is in the tool result the lead saw), documented; `linkSync` on filesystems without hard links — same as
+  `bridge.token`, not a supported setup; `lead_decides` OK = the person's POST (documented). Auto report-back on "done"
+  comes with the job menu (11.4d). SETUP §6d "One Score per team". Not deployed.
+- **11.8a Where an agent runs (lead, adapter, 2026-10-24).** `GET`/`PUT /api/agents/:id/runs-on` (both H), contract §
+  "Where an agent runs", `RunsOn*` schemas. Reads `terminal.*` with `hermes config get --json`, writes with `hermes
+  config set` (settings first, `terminal.backend` last, so a failure leaves the agent where it ran; lowercase
+  `terminal.*` keys go to config.yaml, never `.env`, checked in `hermes_cli/config.py`); Docker refused `409
+  backend_unavailable` unless the daemon answers; SSH key stored as a path, never read. **Confinement, per tool (Hermes
+  0.21.5 source, Sonnet inventory, lead spot-checks):** confined = terminal + background processes, file
+  read/write/patch/search (shell commands through the backend), `execute_code` (remote kernel when not local),
+  vision/video file reads (exec-read in the sandbox); host = browsers (all local modes), computer use, web/x search,
+  stdio MCP servers, memory, skills, todo, session search, cron scheduling, kanban, messaging, image/video/TTS
+  generation (host cache), desktop-UI tools, plugins and hooks; delegate_task inherits the parent's container;
+  checkpoints are off for Docker (SSH not in Hermes's container list: possible host snapshots, noted). Docker defaults
+  that weaken it: registered credential files + skills + caches mounted read-only, network on, root in the container,
+  persistent container with `/root` and `/workspace` bind-mounted from `~/.hermes/sandboxes/docker/…`, `docker_volumes`
+  and `docker_extra_args` passed verbatim. **Live check** (owner installed Docker, decision 116; test profile
+  `scoretesta`, gpt-6-luna per decision 1): backend set to docker via the CLI, one-shot turn → terminal saw container
+  hostname and uid 0 and no `/home/raven/score`; `write_file` and `execute_code` files absent from the host `/tmp`;
+  `read_file` of the repo README not found; backend restored to `local`, probe container removed. The API never says
+  "separated": `partly` with both lists and per-config notes; SSH to this machine and `local` are `no`; unknown
+  backends `unknown`. ARCHITECTURE D7.1 updated; SETUP "Running agents in Docker" (the service needs a re-login for
+  the docker group). The card itself comes with 11.9b/11.8b ("Where agents run"). Not deployed.
+- **11.3 Theme protection on the new shell (lead, 2026-10-24).** The dock's "needs you" ring is a protected surface
+  (`data-protected`, `.bold-needs` in `protected.css`, listed in `protected-surfaces.ts`); hostile-theme e2e
+  (`e2e/bold-protection.spec.ts`) proves a theme can't hide the ring or the agents' glyphs. Found while writing the e2e:
+  the ring only lit while a run said `waiting_for_approval`, so an open approval whose run had moved on showed the agent
+  as "working"; it now also follows open human decisions (the classic Needs-you rule). AGENTS.md design rules now
+  describe the bold system and the `data-protected` rule for every new decision surface. Full e2e 647/648, the one
+  failure (`themes-builtin-visual` harbour light) a flake: 36/36 on rerun. The Look switch and pairing restyle move to
+  11.9a. Not deployed.
+  **11.8a Sonnet security review: no P1, 4 P2, P3s.** Real, fixed with tests: an edit within the same backend wasn't
+  rolled back when a later write failed (now every written key is put back from a snapshot, inside the profile lock,
+  and the read-back happens in the lock too); SSH to this machine under another spelling (`127.x`, `0.0.0.0`, IPv6
+  forms, `::ffff:127.…`, `*.localhost`, FQDN vs short name, own interface addresses) read as "partly" (now "no"; a plain
+  name gets "Score checks the name, not where it points"); Docker `extra_args`/volumes that hand over the machine
+  (`--privileged`, host namespaces, `--cap-add`, `--device`, `--security-opt`, mounts of `/`, Docker's socket, `/run`,
+  home) were ignored (now "no"; `--network` in extra args wins over `docker_network`; malformed settings "unknown");
+  `docker_forward_env` now noted; string booleans read; omitted SSH port/key reset to defaults instead of carried over;
+  host schema no longer takes brackets or junk IPv6. Noted, not fixable by Score: a backend set through the profile's
+  environment file (`TERMINAL_ENV`) is invisible to `config get` — the local card says so. Rejected: none.
+- **11.2c Fake team room (DeepSeek, 2026-10-24).** `seedFakeTeam` (fake mode only, after the team room exists; startup
+  waits for it in fake mode only): lead picked, four demo jobs (activity feed with an ask/review exchange and a held
+  turn, release notes, queue research, the default job's pinned decision), direct chats per agent, shares, pins and
+  watch frames, through the domain functions (no raw inserts but two seed messages); idempotent via a marker row.
+  1 round, no fix round. Lead review instead of a Sonnet pass (seed data only, fake-mode guarded, no personas).
+  Full e2e: the first run had 132 failures, all pairing-lock timeouts — the lead had run another spec on the same
+  `SCORE_WEB_PORT` meanwhile; the 181 affected specs pass on their own port. `codex-task.sh` now gives each task its own
+  e2e port. Not deployed.
+- **11.10e Library panel (DeepSeek, 2026-10-24).** The bold side panel's Library mode reusing the classic Knowledge
+  pieces (optional `onOpenPath` on FilesView/NotePanels/NoteWorkspace; classic unchanged). Rounds: build + 2 fix rounds,
+  then the lead. Sonnet review: 1 P1 (Escape in a dialog closed the whole phone sheet, unmounting the panel and any
+  upload), 6 P2 (stale upload folder, no drag-and-drop, upload/zip prompts lost on mode switch, sheet focus/inert,
+  thin e2e, dialog stacking), 6 P3. Fixed in round 1: all P1/P2 and P3 byline ("Last edited by"), after-delete state,
+  phone scroll-to-note. Kept: no Recent list/folder collapse (the prototype has none), 36px tool buttons (prototype
+  sizes), unknown authors without a glyph (inherited from classic). Round 2 left 4 e2e failures, all test errors: the
+  lead fixed them (a zip unpacks into the folder on show, as the classic rule says; a CSV shows its header as a table
+  row). `bold-library.spec.ts` 26/26 twice; full check green (web 2,998); classic knowledge e2e green. Not deployed.
+- **11.10f Search ⌘K on the bold shell (DeepSeek, 2026-10-24).** `BoldSearch` (jobs, one-to-ones, Library, messages,
+  actions, settings sections, look switch, `/` commands; listbox with `aria-activedescendant`, focus trap and return;
+  ⌘K bound once on `/b`, classic palette untouched); every `/b?…` link in `bold-links.ts`, each naming the task that
+  reads its param. Build + 1 fix round. Sonnet: 3 P2, 6 P3 — real and fixed: multi-word message/note queries lost every
+  hit (the client re-filtered the server's `[[ ]]`-marked snippet), Enter during IME composition, a chat's message linked
+  as a job, flicker between keystrokes, a double Pause, an unknown paused state, extra fetches, the look switch's hint
+  ("for this visit"; Look is 11.9a), e2e gaps (⌘K from the composer, Tab trap, two-word query, phone width). Rejected:
+  "most selections do nothing visible" — by design until the consuming tasks land (11.4/11.7/11.10b–d/11.8c read the
+  params). Lead: merge conflict with 11.3 in `BoldShell.tsx` (kept the needs-you approvals query, dropped the classic
+  palette import), Job fixtures for 11.1d's new fields, and a lint error main had from 11.2c. Full check green (web
+  3,023); bold search/shell/protection e2e 29/29. Not deployed.
+- **11.8b Team page and agent page (DeepSeek + lead, 2026-10-24).** `/b/team` (agent cards with state, engine, screen
+  glimpse; Message/Open; Pause everyone) and `/b/team/:agentId` (four cards first: how it works = SOUL/AGENTS editor,
+  runs on = engine + model, where it works, asks you first; everything else under More: memory, skills, tools, plugins
+  and MCP access, workspace, repeating jobs, todo, appearance, details and danger zone — the classic tabs reused, classic
+  pages unchanged). Build + 1 fix round (DeepSeek stopped mid-round; the lead finished a test fixture). Sonnet: 3 P2,
+  6 P3 — real and fixed: "Asks you first" listed rules of any level (now only `asks`, checkboxes on the classic permission
+  mutation, protected); a fabricated "Codex acknowledged" box (removed); appearance/Watch/pop-out unreachable; Reports
+  to/Works in; Details and Todo anchors; pause keeps the classic "again" semantics; e2e asserted only anchors. Kept:
+  workspace deep link (later), the classic `/settings/rules` link (11.9), all More sections mounting at once (measure
+  later). Lead: the "Where it works" card on the 11.8a API (`BoldRunsOn.tsx`: backend, separation badge that never says
+  "separated", both tool lists, notes, how it was checked; change form for this machine/Docker/SSH; protected), merge of
+  11.3/11.9c into the shell test, phone e2e (the name opens the agent there) and a state assertion that doesn't depend on
+  the moving fake demo. Full check: web 3,013, server 4,801 + 2 PTY timing flakes under load (7/7 twice alone); team,
+  agent and coding e2e 38/38. Not deployed.
+- **11.9b Settings › Rules, Notifications, Remote access and security, Advanced, System (DeepSeek + lead,
+  2026-10-24).** The bold Settings sections reusing the classic sections (optional props on Rules/Remote/Backup/About;
+  classic unchanged). Build + 1 fix round. Sonnet: 3 P2, 4 P3 — real and fixed: Knowledge settings partly missing
+  (memory-notes switch, per-agent usage, vault facts), the "Hermes was updated" banner missing under /b (approvals stay
+  paused until checked), 44px controls on phones, e2e that never pressed Pause or the Library switch. Rejected: pause
+  without confirmation and an unprotected terminal card (parity with classic); "paired browsers errors in local mode" —
+  not an error, but the list was empty there (only remote pairings are listed): it now says so. **Lead found a shell bug
+  while finishing the e2e:** every `/b` page had the room's fixed-height frame (`body.fit` + `.bold-shell`
+  `overflow: hidden`), so Team and Settings were clipped below the fold on phones; only the room view fixes the window
+  now, and scrolling into view stops above the phone tab bar (`scroll-padding-bottom`). Also exact e2e locators, the
+  missing navigation in the reachability test, and a compare-script merge with 11.10f. Full check green (web 3,011);
+  classic settings e2e 7/7; bold settings/team/search/shell 34/34 after merging main. Not deployed.
+- **11.6a Workbench data (lead, 2026-10-24).** `GET /api/jobs/:id/workbench` (S, read-only — no route under it takes
+  input, tested): per-line authorship replayed from the job's editor watch frames (a line belongs to whoever last wrote
+  it; context lines known without an author; `exact: false` for position-less fragments, cut diffs, the 2,000-frame and
+  200k-line bounds), each agent's last edit position, review notes pinned to lines, drafts and each agent's newest
+  frame. Notes come from optional `comments` on `review`/`approve`/`send_back` (contract, the plugin's `score_*` tools,
+  coding agents' `score-action`, the agents' instructions), stored in migration 0085 `review_comments` when the action
+  applies; on read a note moves with edits above it and is `outdated` once its line changes or goes. Fake team room:
+  the activity-feed job shows builder's lines, an outdated send-back note and a live approval note. No Hermes "Bot
+  Screen" frames exist today (Watch has terminal/editor/browser only), so that part waits for Hermes. **Sonnet review:
+  3 P1, 5 P2, 3 P3 — all real but one, fixed with tests:** replay was quadratic (a 30k-line write blocked the server for
+  30 s on an unauthenticated read; now one splice per hunk, bounded frames and lines: 30k lines in well under 2 s); a
+  second file header inside one frame was replayed as content (hunks now end by their counts); a repeat review request
+  lost its notes (`route` returns the exchange it used); verdict notes stored when the verdict wasn't applied (now only
+  for a live review); ICU ordering of timestamps and arbitrary ties between agents (plain order, rowid); a fragment
+  marker matched any hunk heading starting " fragment"; a fragment erased the agent's cursor; relative vs absolute paths
+  (unique suffix match); notes on credential files now keep only that they exist; plugin limits counted code points
+  (now UTF-16 units) and allowed blank paths. Rejected: "notes pinned at settle time, not when the agent looked" — a
+  reviewer's own edits in the same turn come before its verdict, and concurrent turns of other agents in one job don't
+  happen (one turn per agent, the job's exchanges serialise); `-0,0` from an agent's patch against an existing file — the
+  patch tool fails on it, so no frame is recorded. Not deployed.

@@ -519,6 +519,15 @@ export function readWatch(
   return { frames: rows.map(toFrame), markers }
 }
 
+/** One stored frame as Watch shows it, or null when it is gone. */
+export function readFrame(sqlite: DatabaseSync, agentId: string, seq: number): WatchFrame | null {
+  const row = sqlite
+    .prepare(`SELECT ${FRAME_COLUMNS} FROM watch_frames WHERE agent_id = ? AND seq = ?`)
+    .get(agentId, seq)
+  const parsed = FrameRowSchema.safeParse(row)
+  return parsed.success ? toFrame(parsed.data) : null
+}
+
 export function isLive(sqlite: DatabaseSync, agentId: string): boolean {
   return (
     sqlite

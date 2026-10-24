@@ -189,6 +189,27 @@ Wildcard binds (`0.0.0.0`, `::`) additionally need `SCORE_REMOTE_ANY=1`. `SCORE_
 of exact origins (scheme, host, port) browsers use. The bridge plugin keeps using loopback (`SCORE_BRIDGE_PORT`, default
 8740). Type `pair` in the server terminal to mint another pairing link; manage and revoke browsers in Settings.
 
+## 6d. One Score per team, and apps that start jobs (PLAN 11.1d, D14–D16)
+Score is built for one team on one machine: one Score, one set of Hermes profiles, one team room. For a team that
+works for other people (a client, a product), give it its own small VM:
+- **A VM** with Score and Hermes as in §1–§9, running as the service in §9a.
+- **Docker for the agents' work**: set each profile's Hermes terminal backend to Docker so commands run in a
+  container, not on the VM itself (Team › agent › Where it works, PLAN 11.8a). What Docker confines depends on the
+  Hermes tools: the agent's card says exactly what is confined.
+- **Reaching Score**: Tailscale (`tailscale serve` for your devices) or remote mode (§6b, HTTPS with your own
+  certificate). In local mode Score listens on loopback only.
+
+**Webhook triggers** (Settings › Tools and triggers): an app calls `POST <Score address>/hooks/<trigger id>` with a
+Standard Webhooks signature made with the trigger's `whsec_…` secret. Score shows the secret once when the trigger is
+made (and again only to a paired browser); it is sealed in `~/.score/score.db` with the key in `~/.score/sealing.key`
+(owner-only; back it up with the database or rotate the secrets after a restore elsewhere). The app must be able to
+reach that address:
+- **Remote mode**: `/hooks/*` is the only path an unpaired caller can use, and only with a valid signature.
+- **Local mode**: the address is `http://127.0.0.1:…`; an app elsewhere needs a tunnel to it (for example
+  `tailscale funnel` for that one path, or the app running on the same VM).
+Report-back needs the app's tool server (MCP) configured in the **lead's** Hermes profile (`hermes --profile <lead> mcp
+add …`, with its token kept by Hermes): Score names the tool and the arguments; it never holds the app's token.
+
 ## 6c. Web terminal (optional, PLAN 7.3)
 
 Off by default; start Score with `SCORE_TERMINAL=1` to enable it (Settings › Remote access shows the state). It uses
@@ -386,6 +407,14 @@ Receipts and the single-use spec files live outside the home (`<journal dir>/<id
 
 Tests: `SCORE_TEST_SYSTEMD=1 pnpm --filter @score/server test coding-units-systemd coding-systemd` runs the opt-in suite
 against the real user manager. Its units are named `score-test-<random>-…` and always stopped and reset by the test.
+
+### Running agents in Docker (PLAN 11.8a, optional)
+An agent page's "Runs on" can switch a profile to Hermes's Docker backend. It needs Docker on this machine and the
+user Score and Hermes run as in the `docker` group (`sudo apt-get install -y docker.io`, `sudo usermod -aG docker
+$USER`). Group membership is root-equivalent on this machine. A systemd user service (`score.service`, the gateways)
+only gets the new group after the user's systemd manager restarts: log out and in, or reboot. Until then Score answers
+"Docker isn't installed or running on this machine". Hermes pulls `nousresearch/hermes-sandbox:desktop` (≈ 4.4 GB) on
+first use. What Docker does and doesn't separate is shown on the agent page and in ARCHITECTURE D7.1.
 
 ## Changelog of this file
 - 2026-10-12: no production switch for the process-group engine; the pass is saved before any unit launch (decision 70).

@@ -7,6 +7,7 @@ import {
   ExchangesResponseSchema,
   JobCreateRequestSchema,
   JobResultsSchema,
+  WorkbenchSchema,
   JobSchema,
   JobsResponseSchema,
   RoomPinsResponseSchema,
@@ -18,6 +19,7 @@ import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { decideExchange, stopJob, type Decided } from '../domain/exchanges/decisions.ts'
 import { jobResults } from '../domain/exchanges/results.ts'
+import { jobWorkbench } from '../domain/exchanges/workbench.ts'
 import { createJob, jobRow, listExchanges, listJobs } from '../domain/exchanges/store.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import { insertRoom, readRoom, roomChanged, roomRow } from '../domain/rooms.ts'
@@ -103,6 +105,13 @@ export function registerJobRoutes(
     const { jobId } = JobParams.parse(request.params)
     const result = snapshot(db, (sqlite) => jobResults(sqlite, jobId))
     return JobResultsSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
+  })
+
+  // Read-only (PLAN 11.6a): no Workbench route types, clicks or takes over anything.
+  app.get('/api/jobs/:jobId/workbench', async (request) => {
+    const { jobId } = JobParams.parse(request.params)
+    const result = snapshot(db, (sqlite) => jobWorkbench(sqlite, jobId))
+    return WorkbenchSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
   })
 
   app.get('/api/jobs/:jobId/exchanges', async (request) => {
