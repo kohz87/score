@@ -119,6 +119,8 @@ export function Composer({
   messagesKey,
   initialText,
   references = [],
+  draftScope,
+  resolveJob,
 }: {
   roomId: string
   roomName: string
@@ -144,12 +146,16 @@ export function Composer({
   initialText?: string
   /** Jobs this message refers to (PLAN 11.2 §6.3); the server freezes each one into a `ref` part. */
   references?: readonly { jobId: string }[]
+  /** Where the draft is stored when it is not the room's (the one-to-one keeps one per chat). */
+  draftScope?: string
+  /** Makes the job this message goes into on first send (a one-to-one that is only created by its first message). */
+  resolveJob?: () => Promise<string>
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
   const sendKey = useRef<{ signature: string; key: string } | null>(null)
   const ids = useId()
-  const [text, setText] = useState(() => initialText ?? loadDraft(roomId))
+  const [text, setText] = useState(() => initialText ?? loadDraft(draftScope ?? roomId))
   const [caret, setCaret] = useState(0)
   const [to, setTo] = useState<string[]>([])
   const [planFirst, setPlanFirst] = useState(false)
@@ -308,8 +314,8 @@ export function Composer({
   }
 
   useEffect(() => {
-    if (!editId) saveDraft(roomId, text)
-  }, [roomId, text, editId])
+    if (!editId) saveDraft(draftScope ?? roomId, text)
+  }, [draftScope, roomId, text, editId])
 
   const slash = slashQuery(text)
   const mention = slash === null ? mentionAt(text, caret) : null
@@ -521,7 +527,18 @@ export function Composer({
       return
     }
     const sent = attachments
-    const sentJobId = editing?.jobId ?? jobId
+    let sentJobId = editing?.jobId ?? jobId
+    if (resolveJob && !editing) {
+      setPending(true)
+      setNotice(null)
+      try {
+        sentJobId = await resolveJob()
+      } catch {
+        setPending(false)
+        setNotice({ kind: 'error', text: 'Couldn’t start the chat. Try again.' })
+        return
+      }
+    }
     const payload = {
       text: body,
       ...(sent.length ? { attachments: sent.map(toRequest) } : {}),
@@ -575,7 +592,7 @@ export function Composer({
       if (!editing) onSent?.()
       if (!mounted.current) {
         // The composer moved to another conversation mid-send: only drop the stored draft if it is still what we sent.
-        if (loadDraft(roomId).trim() === body) saveDraft(roomId, '')
+        if (loadDraft(draftScope ?? roomId).trim() === body) saveDraft(draftScope ?? roomId, '')
         return
       }
       if (editing) {

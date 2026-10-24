@@ -69,6 +69,39 @@ export async function shareMessageToJob(messageId: string, jobId: string): Promi
   })
 }
 
+/** Step one of Add someone: a team-room job named for the chat. */
+export async function createTeamJob(teamRoomId: string, chat: Job): Promise<Job> {
+  return JobSchema.parse(
+    await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/jobs`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': newId() },
+      body: JSON.stringify({ title: chat.title || 'New chat' }),
+    }),
+  )
+}
+
+/** Step two: one message in that job addressed to `to`, carrying the chat as a frozen reference. */
+export async function postChatHandOff(
+  teamRoomId: string,
+  jobId: string,
+  chat: Job,
+  to: readonly string[],
+): Promise<void> {
+  const added = to.at(-1) ?? ''
+  PostMessageResponseSchema.parse(
+    await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/messages`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': newId() },
+      body: JSON.stringify({
+        text: `@${added} Let’s continue this chat with the team.`,
+        to: [...to],
+        jobId,
+        refs: [{ jobId: chat.id }],
+      }),
+    }),
+  )
+}
+
 /**
  * A direct room holds one agent, so the contract has no route to add a member. Adding someone turns the conversation
  * into a team-room job with the chat referenced, not copied: create the job, then post one addressed message carrying
@@ -77,26 +110,9 @@ export async function shareMessageToJob(messageId: string, jobId: string): Promi
 export async function moveChatToTeamRoom(
   teamRoomId: string,
   chat: Job,
-  agentId: string,
+  to: readonly string[],
 ): Promise<Job> {
-  const job = JobSchema.parse(
-    await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/jobs`, {
-      method: 'POST',
-      headers: { 'Idempotency-Key': newId() },
-      body: JSON.stringify({ title: chat.title || 'New chat' }),
-    }),
-  )
-  PostMessageResponseSchema.parse(
-    await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/messages`, {
-      method: 'POST',
-      headers: { 'Idempotency-Key': newId() },
-      body: JSON.stringify({
-        text: `@${agentId} Let’s continue this chat with the team.`,
-        to: [agentId],
-        jobId: job.id,
-        refs: [{ jobId: chat.id }],
-      }),
-    }),
-  )
+  const job = await createTeamJob(teamRoomId, chat)
+  await postChatHandOff(teamRoomId, job.id, chat, to)
   return job
 }

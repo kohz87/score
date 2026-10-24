@@ -1,5 +1,5 @@
-import type { AgentSummary, Job, Room } from '@score/contract'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import type { AgentSummary, Job, Message, Room } from '@score/contract'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
@@ -10,11 +10,18 @@ import { saveDraft } from '../../routes/chat/composer-model.ts'
 import { useBoldTeamRoom } from '../bold-search-queries.ts'
 import { agentNameColor } from '../bold-agents.ts'
 import { CloseIcon, HistoryIcon, LockIcon } from '../BoldIcons.tsx'
-import { boldChatLink, boldChatRefLink, boldJobLink, boldOneToOneLink } from '../bold-links.ts'
+import {
+  boldAsideLink,
+  boldChatLink,
+  boldChatRefLink,
+  boldJobLink,
+  boldOneToOneLink,
+} from '../bold-links.ts'
 import {
   directChatsQuery,
   createDirectChat,
-  moveChatToTeamRoom,
+  createTeamJob,
+  postChatHandOff,
   shareMessageToJob,
 } from './direct-queries.ts'
 import { roomMessagesQuery } from '../room/room-queries.ts'
@@ -31,10 +38,148 @@ function chatDay(iso: string): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
+/** A default thread nobody wrote in is plumbing, not a chat: it stays out of the lists. */
+function listedChats(chats: readonly Job[]): Job[] {
+  return chats.filter((chat) => !(chat.isDefault && chat.messageCount === 0))
+}
+
+/**
+ * Escape, a press outside, and focus returning to what opened it, for the popover and the two small dialogs. Escape is
+ * taken in the capture phase and marked handled, so on a phone the sheet's own Escape (which closes the whole panel)
+ * only sees the key when no dialog is open.
+ */
+function useDialogDismiss(
+  ref: RefObject<HTMLElement | null>,
+  onClose: () => void,
+  focusRef?: RefObject<HTMLElement | null>,
+) {
+  const close = useRef(onClose)
+  useEffect(() => {
+    close.current = onClose
+  })
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    ;(focusRef?.current ?? ref.current)?.focus()
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      event.preventDefault()
+      close.current()
+    }
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (ref.current?.contains(target) || opener?.contains(target)) return
+      close.current()
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true)
+      document.removeEventListener('pointerdown', onPointerDown)
+      if (opener?.isConnected) opener.focus()
+    }
+  }, [focusRef, ref])
+}
+
 function matchesChat(chat: Job, query: string): boolean {
   const needle = query.trim().toLowerCase()
   if (!needle) return true
   return `${chat.title}\n${chat.summary ?? ''}`.toLowerCase().includes(needle)
+}
+
+function HistoryPopover({
+  agent,
+  chatId,
+  chats,
+  query,
+  onQuery,
+  busy,
+  error,
+  loadFailed,
+  loaded,
+  onPick,
+  onNew,
+  onClose,
+}: {
+  agent: AgentSummary
+  chatId: string | null
+  chats: Job[]
+  query: string
+  onQuery: (value: string) => void
+  busy: boolean
+  error: string | null
+  loadFailed: boolean
+  loaded: boolean
+  onPick: (id: string) => void
+  onNew: () => void
+  onClose: () => void
+}) {
+  const box = useRef<HTMLDivElement>(null)
+  const search = useRef<HTMLInputElement>(null)
+  useDialogDismiss(box, onClose, search)
+  return (
+    <div
+      ref={box}
+      className="menu bold-dm-history"
+      role="dialog"
+      aria-label={`Earlier chats with ${agent.id}`}
+    >
+      <div className="bold-dm-history-search">
+        <HistoryIcon size={15} />
+        <label className="bold-sr-only" htmlFor={`dm-history-${agent.id}`}>
+          Search chats
+        </label>
+        <input
+          ref={search}
+          id={`dm-history-${agent.id}`}
+          value={query}
+          placeholder="Search titles and summaries"
+          onChange={(event) => onQuery(event.target.value)}
+        />
+      </div>
+      <button type="button" className="mi bold-dm-new" disabled={busy} onClick={onNew}>
+        <span className="bold-dm-new-plus" aria-hidden="true">
+          +
+        </span>
+        <b>{busy ? 'Starting…' : `New chat with ${agent.id}`}</b>
+      </button>
+      {chats.map((chat) => (
+        <button
+          key={chat.id}
+          type="button"
+          className={`mi bold-dm-history-row ${chatId === chat.id ? 'sel' : ''}`}
+          aria-current={chatId === chat.id ? 'true' : undefined}
+          onClick={() => onPick(chat.id)}
+        >
+          <span className="bold-dm-history-title">
+            <b>{chat.title}</b>
+            <span className="small muted">{chatDay(chat.lastMessageAt ?? chat.createdAt)}</span>
+          </span>
+          <span className="small muted">{chat.summary ?? 'No messages yet'}</span>
+        </button>
+      ))}
+      {loaded && chats.length === 0 && (
+        <p className="small muted bold-dm-history-empty">
+          {query.trim()
+            ? `No chats match “${query.trim()}”.`
+            : `No earlier chats with ${agent.id} yet.`}
+        </p>
+      )}
+      {loadFailed && (
+        <p className="small bold-dm-error" role="alert">
+          Couldn’t load earlier chats.
+        </p>
+      )}
+      {error && (
+        <p className="small bold-dm-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="bold-dm-history-foot small muted">
+        {agent.id} remembers what matters across chats.{' '}
+        <a href={`/b/team/${encodeURIComponent(agent.id)}#agent-memory`}>See its memory</a>
+      </div>
+    </div>
+  )
 }
 
 /** "Earlier chats" in the side panel head: search, New chat, and this agent's jobs (PLAN 11.7). */
@@ -56,7 +201,7 @@ export function DirectHeaderActions({
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const chats = (state.data?.chats ?? []).filter((chat) => matchesChat(chat, query))
+  const chats = listedChats(state.data?.chats ?? []).filter((chat) => matchesChat(chat, query))
 
   function pick(id: string) {
     setOpen(false)
@@ -97,72 +242,23 @@ export function DirectHeaderActions({
         {!iconOnly && <span>Earlier chats</span>}
       </button>
       {open && (
-        <div
-          className="menu bold-dm-history"
-          role="dialog"
-          aria-label={`Earlier chats with ${agent.id}`}
-        >
-          <div className="bold-dm-history-search">
-            <HistoryIcon size={15} />
-            <label className="bold-sr-only" htmlFor={`dm-history-${agent.id}`}>
-              Search chats
-            </label>
-            <input
-              id={`dm-history-${agent.id}`}
-              value={query}
-              autoFocus
-              placeholder={`Search chats with ${agent.id}`}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
-          <button
-            type="button"
-            className="mi bold-dm-new"
-            disabled={busy}
-            onClick={() => void newChat()}
-          >
-            <span className="bold-dm-new-plus" aria-hidden="true">
-              +
-            </span>
-            <b>{busy ? 'Starting…' : `New chat with ${agent.id}`}</b>
-          </button>
-          {chats.map((chat) => (
-            <button
-              key={chat.id}
-              type="button"
-              className={`mi bold-dm-history-row ${chatId === chat.id ? 'sel' : ''}`}
-              aria-current={chatId === chat.id ? 'true' : undefined}
-              onClick={() => pick(chat.id)}
-            >
-              <span className="bold-dm-history-title">
-                <b>{chat.title}</b>
-                <span className="small muted">{chatDay(chat.lastMessageAt ?? chat.createdAt)}</span>
-              </span>
-              <span className="small muted">{chat.summary ?? 'No messages yet'}</span>
-            </button>
-          ))}
-          {state.status === 'success' && chats.length === 0 && (
-            <p className="small muted bold-dm-history-empty">
-              {query.trim()
-                ? `No chats match “${query.trim()}”.`
-                : `No earlier chats with ${agent.id} yet.`}
-            </p>
-          )}
-          {state.status === 'error' && (
-            <p className="small bold-dm-error" role="alert">
-              Couldn’t load earlier chats.
-            </p>
-          )}
-          {error && (
-            <p className="small bold-dm-error" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="bold-dm-history-foot small muted">
-            {agent.id} remembers what matters across chats.{' '}
-            <a href={`/b/team/${encodeURIComponent(agent.id)}#agent-memory`}>See its memory</a>
-          </div>
-        </div>
+        <HistoryPopover
+          agent={agent}
+          chatId={chatId}
+          chats={chats}
+          query={query}
+          onQuery={setQuery}
+          busy={busy}
+          error={error}
+          loadFailed={state.status === 'error'}
+          loaded={state.status === 'success'}
+          onPick={pick}
+          onNew={() => void newChat()}
+          onClose={() => {
+            setOpen(false)
+            setQuery('')
+          }}
+        />
       )}
     </>
   )
@@ -237,6 +333,8 @@ function ShareMenu({
   onClose: () => void
   onShared: (messageId: string) => void
 }) {
+  const box = useRef<HTMLDivElement>(null)
+  useDialogDismiss(box, onClose)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -256,6 +354,8 @@ function ShareMenu({
 
   return (
     <div
+      ref={box}
+      tabIndex={-1}
       className="bold-dm-share-menu"
       role="dialog"
       aria-label="Share to the team room"
@@ -301,6 +401,11 @@ function ShareMenu({
   )
 }
 
+/**
+ * Adding someone to a one-to-one starts a team-room job, so the dialog says what leaves before anything does: the job's
+ * title and the summary that travels with it. A failed hand-off message keeps the job and offers a retry of just the
+ * message, never a second job.
+ */
 function AddSomeone({
   agents,
   agent,
@@ -316,28 +421,50 @@ function AddSomeone({
   onClose: () => void
   onMoved: (job: Job) => void
 }) {
-  const [busy, setBusy] = useState<string | null>(null)
+  const box = useRef<HTMLDivElement>(null)
+  useDialogDismiss(box, onClose)
+  const [target, setTarget] = useState<AgentSummary | null>(null)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The job exists once step one worked; a retry only repeats the message.
+  const [job, setJob] = useState<Job | null>(null)
   const choices = agents.filter((item) => item.id !== agent.id)
+  const title = chat.title || 'New chat'
 
-  async function add(target: AgentSummary) {
-    if (!team) {
+  async function confirm() {
+    if (!team || !target) {
       setError('The team room isn’t ready yet.')
       return
     }
-    setBusy(target.id)
+    setBusy(true)
     setError(null)
+    let made = job
     try {
-      onMoved(await moveChatToTeamRoom(team.room.id, chat, target.id))
+      if (!made) {
+        made = await createTeamJob(team.room.id, chat)
+        setJob(made)
+      }
     } catch {
       setError('Couldn’t start the team chat. Try again.')
+      setBusy(false)
+      return
+    }
+    try {
+      await postChatHandOff(team.room.id, made.id, chat, [agent.id, target.id])
+      onMoved(made)
+    } catch {
+      setError(
+        `The job “${made.title}” is in the team room, but the message to ${target.id} didn’t send.`,
+      )
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
   return (
     <div
+      ref={box}
+      tabIndex={-1}
       className="bold-dm-add"
       role="dialog"
       aria-label="Add someone to this one-to-one"
@@ -360,25 +487,200 @@ function AddSomeone({
         this chat referenced, not copied; everyone there sees the frozen summary. This chat stays as
         it is.
       </p>
-      <div className="bold-dm-add-list">
-        {choices.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="btn sm"
-            disabled={busy !== null || !team}
-            onClick={() => void add(item)}
-          >
-            <AgentGlyph agent={item} size="xs" bare decorative />
-            {busy === item.id ? 'Starting…' : `Add ${item.id}`}
-          </button>
-        ))}
-      </div>
+      {!target ? (
+        <div className="bold-dm-add-list">
+          {choices.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="btn sm"
+              disabled={!team}
+              onClick={() => setTarget(item)}
+            >
+              <AgentGlyph agent={item} size="xs" bare decorative />
+              {`Add ${item.id}`}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="bold-dm-add-confirm">
+          <p>
+            <b>What leaves this chat</b>
+          </p>
+          <p className="small">
+            Job in the team room: <b>{title}</b>
+          </p>
+          <p className="small muted bold-dm-add-summary">
+            {chat.summary ? `Summary shared: ${chat.summary}` : 'A summary of this chat is shared.'}
+          </p>
+          <p className="small muted">
+            The first message asks {agent.id} and {target.id}; both see the summary.
+          </p>
+          <div className="bold-dm-add-list">
+            <button
+              type="button"
+              className="btn sm bold-dm-primary"
+              disabled={busy || !team}
+              onClick={() => void confirm()}
+            >
+              {busy
+                ? 'Starting…'
+                : job
+                  ? `Retry the message to ${target.id}`
+                  : `Add ${target.id} and share a summary`}
+            </button>
+            <button
+              type="button"
+              className="btn sm ghost"
+              disabled={busy}
+              onClick={() => {
+                setTarget(null)
+                setError(null)
+              }}
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      )}
       {error && (
         <p className="small bold-dm-error" role="alert">
           {error}
         </p>
       )}
+    </div>
+  )
+}
+
+/** Where the person is "near the bottom" of the thread, so streaming text keeps following them. */
+const FOLLOW_SLACK = 80
+
+type OlderState = {
+  chatId: string
+  cursors: string[]
+  pages: Record<string, { items: Message[]; next: string | null }>
+}
+
+function OlderPage({
+  roomId,
+  jobId,
+  before,
+  onPage,
+}: {
+  roomId: string
+  jobId: string
+  before: string
+  onPage: (before: string, items: Message[], next: string | null) => void
+}) {
+  const definition = useMemo(
+    () => roomMessagesQuery(roomId, jobId, before),
+    [before, jobId, roomId],
+  )
+  const { data } = useStreamQuery(definition)
+  useEffect(() => {
+    if (data) onPage(before, data.items, data.nextCursor)
+  }, [before, data, onPage])
+  return null
+}
+
+function ReferenceChip({
+  agent,
+  title,
+  onClear,
+}: {
+  agent: AgentSummary
+  title: string
+  onClear: () => void
+}) {
+  return (
+    <span className="bold-dm-ref" style={{ borderColor: agent.style.color }}>
+      <HistoryIcon />
+      Referring to <b>{title}</b>
+      <button type="button" aria-label="Remove reference" onClick={onClear}>
+        <CloseIcon size={12} />
+      </button>
+    </span>
+  )
+}
+
+/**
+ * "Take it aside" and "Bring into a new chat" open here: the chat is made when the first message is sent (or an empty
+ * chat with the same title is reused), so a look that goes nowhere leaves nothing behind in Earlier chats.
+ */
+function AsideStart({
+  room,
+  chats,
+  agent,
+  referenceJobId,
+  referenceTitle,
+  onClearReference,
+}: {
+  room: Room
+  chats: Job[]
+  agent: AgentSummary
+  referenceJobId: string
+  referenceTitle: string
+  onClearReference: () => void
+}) {
+  const navigate = useNavigate()
+  const made = useRef<string | null>(null)
+  const [starterKey, setStarterKey] = useState(0)
+  const draftScope = `${room.id}:aside:${referenceJobId}`
+
+  async function resolveJob(): Promise<string> {
+    if (made.current) return made.current
+    const empty = chats.find((chat) => chat.title === referenceTitle && chat.messageCount === 0)
+    if (empty) {
+      made.current = empty.id
+      return empty.id
+    }
+    const job = await createDirectChat(agent.id, referenceTitle)
+    made.current = job.id
+    return job.id
+  }
+
+  function prefill(text: string) {
+    saveDraft(draftScope, text)
+    setStarterKey((value) => value + 1)
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLTextAreaElement>('.bold-dm-composer textarea')?.focus(),
+    )
+  }
+
+  return (
+    <div className="bold-dm">
+      <div className="bold-dm-scroll">
+        <div className="bold-dm-thread">
+          <div className="bold-dm-welcome">
+            <AgentGlyph agent={agent} size="lg" decorative />
+            <h2>New chat with {agent.id}</h2>
+            <p className="muted">
+              Nothing here reaches the team room unless you share it. {agent.id} sees a frozen
+              summary of “{referenceTitle}”, not the whole thread.
+            </p>
+            <Starters onAsk={prefill} />
+          </div>
+        </div>
+      </div>
+      <div className="bold-dm-composer">
+        <ReferenceChip agent={agent} title={referenceTitle} onClear={onClearReference} />
+        <Composer
+          key={`aside-${referenceJobId}-${starterKey}`}
+          roomId={room.id}
+          roomName={`${agent.id} privately`}
+          agents={[agent]}
+          leadAgentId={agent.id}
+          roomMode
+          placeholder={`Message ${agent.id} privately`}
+          messagesKey={roomMessagesQuery(room.id, null).key}
+          draftScope={draftScope}
+          references={[{ jobId: referenceJobId }]}
+          resolveJob={resolveJob}
+          onSent={() => {
+            if (made.current) navigate(boldChatLink(agent.id, made.current), { replace: true })
+          }}
+        />
+      </div>
     </div>
   )
 }
@@ -389,6 +691,7 @@ function DirectConversation({
   agent,
   agents,
   referenceJobId,
+  referenceTitle,
   team,
   onClearReference,
   onCloseSheet,
@@ -398,6 +701,7 @@ function DirectConversation({
   agent: AgentSummary
   agents: AgentSummary[]
   referenceJobId: string | null
+  referenceTitle: string | null
   team: { room: Room; jobs: Job[] } | undefined
   onClearReference: () => void
   onCloseSheet?: (() => void) | undefined
@@ -410,54 +714,70 @@ function DirectConversation({
   const [adding, setAdding] = useState(false)
   const [starterKey, setStarterKey] = useState(0)
   const [bringing, setBringing] = useState(false)
-  const [bringError, setBringError] = useState<string | null>(null)
+  const [older, setOlder] = useState<OlderState>({ chatId: chat.id, cursors: [], pages: {} })
+  const ownOlder: OlderState =
+    older.chatId === chat.id ? older : { chatId: chat.id, cursors: [], pages: {} }
+  const draftScope = `${room.id}:${chat.id}`
   // The page arrives newest first; the thread reads oldest to newest.
-  const items = useMemo(
-    () =>
-      [...(page.data?.items ?? [])].sort(
-        (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
-      ),
-    [page.data?.items],
+  const items = useMemo(() => {
+    const byId = new Map<string, Message>()
+    for (const message of page.data?.items ?? []) byId.set(message.id, message)
+    for (const entry of Object.values(ownOlder.pages))
+      for (const message of entry.items) if (!byId.has(message.id)) byId.set(message.id, message)
+    return [...byId.values()].sort(
+      (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    )
+  }, [ownOlder.pages, page.data?.items])
+  const lastCursor = ownOlder.cursors.at(-1)
+  const nextCursor =
+    lastCursor === undefined
+      ? (page.data?.nextCursor ?? null)
+      : (ownOlder.pages[lastCursor]?.next ?? null)
+  const collectOlder = useMemo(
+    () => (before: string, pageItems: Message[], next: string | null) =>
+      setOlder((current) => {
+        const known = current.pages[before]
+        if (known && known.items === pageItems && known.next === next) return current
+        return { ...current, pages: { ...current.pages, [before]: { items: pageItems, next } } }
+      }),
+    [],
   )
+
   const scroller = useRef<HTMLDivElement>(null)
+  const following = useRef(true)
   const last = items.at(-1)
+  const shownChat = useRef<string | null>(null)
   useEffect(() => {
     const element = scroller.current
-    if (element) element.scrollTop = element.scrollHeight
-  }, [chat.id, items.length, last?.parts.length, last?.streaming])
+    if (!element) return
+    // A different chat always starts at its end; the same chat only follows a reader who is still at the end.
+    const changed = shownChat.current !== chat.id
+    shownChat.current = chat.id
+    if (changed) following.current = true
+    if (following.current) element.scrollTop = element.scrollHeight
+  }, [chat.id, items.length, last])
   const lastAgent = [...items]
     .reverse()
     .find(
       (message) =>
         message.author.kind === 'agent' && !message.streaming && !message.id.startsWith('pending-'),
     )
-  const referenceTitle = referenceJobId
-    ? (team?.jobs.find((job) => job.id === referenceJobId)?.title ?? 'the earlier chat')
-    : null
   const finishedReplies = items.filter(
     (message) => message.author.kind === 'agent' && !message.streaming,
   ).length
   const sessionId = `score-${room.id}-${chat.id}-${agent.id}`
 
   function prefill(text: string) {
-    saveDraft(room.id, text)
+    saveDraft(draftScope, text)
     setStarterKey((value) => value + 1)
     requestAnimationFrame(() =>
       document.querySelector<HTMLTextAreaElement>('.bold-dm-composer textarea')?.focus(),
     )
   }
 
-  async function bringIntoNewChat() {
+  function bringIntoNewChat() {
     setBringing(true)
-    setBringError(null)
-    try {
-      const made = await createDirectChat(agent.id, chat.title)
-      navigate(boldChatRefLink(agent.id, made.id, chat.id))
-    } catch {
-      setBringError('Couldn’t start a new chat. Try again.')
-    } finally {
-      setBringing(false)
-    }
+    navigate(boldAsideLink(agent.id, chat.id))
   }
 
   function moved(job: Job) {
@@ -468,10 +788,46 @@ function DirectConversation({
 
   return (
     <div className="bold-dm">
-      <div className="bold-dm-scroll" ref={scroller}>
+      <div
+        className="bold-dm-scroll"
+        ref={scroller}
+        onScroll={(event) => {
+          const el = event.currentTarget
+          following.current = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_SLACK
+        }}
+      >
         <div className="bold-dm-thread">
+          {ownOlder.cursors.map((before) => (
+            <OlderPage
+              key={before}
+              roomId={room.id}
+              jobId={chat.id}
+              before={before}
+              onPage={collectOlder}
+            />
+          ))}
           {chatDay(chat.createdAt) !== 'Today' && (
             <span className="bold-dm-date">{chatDay(chat.createdAt)} · earlier chat</span>
+          )}
+          {page.status === 'success' && nextCursor && (
+            <button
+              type="button"
+              className="btn sm ghost bold-dm-load"
+              onClick={() => {
+                following.current = false
+                setOlder((current) => {
+                  const base =
+                    current.chatId === chat.id
+                      ? current
+                      : { chatId: chat.id, cursors: [], pages: {} }
+                  return base.cursors.includes(nextCursor)
+                    ? base
+                    : { ...base, cursors: [...base.cursors, nextCursor] }
+                })
+              }}
+            >
+              Load earlier
+            </button>
           )}
           {page.status === 'pending' && !page.data && (
             <p className="bold-stream-note" role="status">
@@ -520,9 +876,9 @@ function DirectConversation({
                     type="button"
                     className="btn sm ghost"
                     disabled={bringing}
-                    onClick={() => void bringIntoNewChat()}
+                    onClick={bringIntoNewChat}
                   >
-                    {bringing ? 'Starting…' : 'Bring into a new chat'}
+                    {bringing ? 'Opening…' : 'Bring into a new chat'}
                   </button>
                 </div>
               )}
@@ -536,11 +892,6 @@ function DirectConversation({
               )}
             </div>
           ))}
-          {bringError && (
-            <p className="small bold-dm-error" role="alert">
-              {bringError}
-            </p>
-          )}
           {Object.entries(page.data?.typing ?? {}).map(([agentId, text]) => (
             <p className="bold-dm-typing" key={agentId} role="status">
               <AgentGlyph agent={agent} size="xs" bare decorative />
@@ -550,14 +901,8 @@ function DirectConversation({
         </div>
       </div>
       <div className="bold-dm-composer">
-        {referenceTitle && (
-          <span className="bold-dm-ref" style={{ borderColor: agent.style.color }}>
-            <HistoryIcon />
-            Referring to <b>{referenceTitle}</b>
-            <button type="button" aria-label="Remove reference" onClick={onClearReference}>
-              <CloseIcon size={12} />
-            </button>
-          </span>
+        {referenceJobId && referenceTitle && (
+          <ReferenceChip agent={agent} title={referenceTitle} onClear={onClearReference} />
         )}
         <Composer
           key={`${chat.id}-${starterKey}`}
@@ -569,6 +914,7 @@ function DirectConversation({
           roomMode
           placeholder={`Message ${agent.id} privately`}
           messagesKey={definition.key}
+          draftScope={draftScope}
           references={referenceJobId ? [{ jobId: referenceJobId }] : []}
           onSent={onClearReference}
         />
@@ -581,7 +927,8 @@ function DirectConversation({
               roomId={room.id}
               agentId={agent.id}
               name={agent.name}
-              sessionId={sessionId}
+              // A direct room's default thread runs in the room's own session; every other chat has its job session.
+              sessionId={chat.isDefault ? undefined : sessionId}
               finishedReplies={finishedReplies}
             />
           </span>
@@ -601,7 +948,7 @@ function DirectConversation({
   )
 }
 
-/** The one-to-one body: home (no chats yet), loading, or the selected chat with its composer. */
+/** The one-to-one body: home (no chats yet), loading, a first message to a new chat, or the selected chat. */
 export function BoldDirect({
   agent,
   agents,
@@ -625,16 +972,24 @@ export function BoldDirect({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const room = direct.data?.room ?? null
-  const chats = direct.data?.chats ?? []
-  const chat = chatId ? chats.find((item) => item.id === chatId) : chats[0]
+  const allChats = direct.data?.chats ?? []
+  const chats = listedChats(allChats)
+  const chat = chatId ? allChats.find((item) => item.id === chatId) : chats[0]
   const team = teamRoom.data
+  // A new chat that starts from a reference opens empty and is only made when its first message is sent.
+  const aside = chatId === null && referenceJobId !== null
+  const referenceTitle = referenceJobId
+    ? (team?.jobs.find((job) => job.id === referenceJobId)?.title ??
+      allChats.find((item) => item.id === referenceJobId)?.title ??
+      'the earlier chat')
+    : null
 
   async function newChat(prompt?: string) {
     setBusy(true)
     setError(null)
     try {
       const made = await createDirectChat(agent.id)
-      if (prompt) saveDraft(made.roomId, prompt)
+      if (prompt) saveDraft(`${made.roomId}:${made.id}`, prompt)
       await refetch()
       navigate(boldChatLink(agent.id, made.id))
     } catch {
@@ -646,10 +1001,26 @@ export function BoldDirect({
 
   // Opening an agent's home lands in its latest chat (the dock, Search and Team all link to the home).
   useEffect(() => {
-    if (chatId !== null || direct.status !== 'success') return
-    const latest = direct.data?.chats[0]
+    if (chatId !== null || aside || direct.status !== 'success') return
+    const latest = listedChats(direct.data?.chats ?? [])[0]
     if (latest) navigate(boldChatLink(agent.id, latest.id), { replace: true })
-  }, [agent.id, chatId, direct.data?.chats, direct.status, navigate])
+  }, [agent.id, aside, chatId, direct.data?.chats, direct.status, navigate])
+
+  // An agent with no chat room yet has nowhere to wait: its first chat is made now, already referring to the job.
+  const starting = useRef(false)
+  const needsRoom = aside && direct.status === 'success' && !room && referenceTitle !== null
+  useEffect(() => {
+    if (!needsRoom || starting.current || !referenceJobId || !referenceTitle) return
+    starting.current = true
+    createDirectChat(agent.id, referenceTitle)
+      .then((made) =>
+        navigate(boldChatRefLink(agent.id, made.id, referenceJobId), { replace: true }),
+      )
+      .catch(() => {
+        starting.current = false
+        setError('Couldn’t start a chat. Try again.')
+      })
+  }, [agent.id, needsRoom, navigate, referenceJobId, referenceTitle])
 
   if (direct.status === 'pending' && !direct.data)
     return (
@@ -662,6 +1033,17 @@ export function BoldDirect({
       <p className="bold-stream-note bold-dm-status" role="alert">
         Couldn’t load your chats with {agent.id}. Try again.
       </p>
+    )
+  if (aside && room && referenceJobId && referenceTitle)
+    return (
+      <AsideStart
+        room={room}
+        chats={allChats}
+        agent={agent}
+        referenceJobId={referenceJobId}
+        referenceTitle={referenceTitle}
+        onClearReference={onClearReference}
+      />
     )
   if (!room || chats.length === 0)
     return (
@@ -698,6 +1080,7 @@ export function BoldDirect({
       agent={agent}
       agents={agents}
       referenceJobId={referenceJobId}
+      referenceTitle={referenceTitle}
       team={team}
       onClearReference={onClearReference}
       onCloseSheet={onCloseSheet}

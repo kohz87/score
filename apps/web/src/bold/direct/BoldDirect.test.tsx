@@ -157,7 +157,7 @@ test('sharing posts the reply to the chosen team job and then says it was shared
   })
 })
 
-test('Add someone starts a team-room job that references the chat, not a copy of it', async () => {
+test('Add someone says what leaves, then starts the job and asks both agents', async () => {
   const posts = stub()
   renderDirect()
   fireEvent.click(await screen.findByRole('button', { name: 'Add someone' }))
@@ -165,14 +165,132 @@ test('Add someone starts a team-room job that references the chat, not a copy of
   expect(dialog.getAttribute('data-protected')).toBe('block')
   expect(within(dialog).queryByRole('button', { name: 'Add builder' })).toBeNull()
   fireEvent.click(within(dialog).getByRole('button', { name: 'Add reviewer' }))
+  // Nothing has left yet: the dialog names the job and the summary first.
+  expect(posts).toHaveLength(0)
+  expect(within(dialog).getByText('Websockets or server-sent events')).toBeTruthy()
+  expect(within(dialog).getByText(/Sockets go both ways\./)).toBeTruthy()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Add reviewer and share a summary' }))
   await waitFor(() =>
     expect(posts.find((post) => post.url === '/api/rooms/room-1/messages')).toBeDefined(),
   )
+  expect(posts[0]).toMatchObject({
+    url: '/api/rooms/room-1/jobs',
+    body: { title: 'Websockets or server-sent events' },
+  })
   expect(posts.find((post) => post.url === '/api/rooms/room-1/messages')?.body).toMatchObject({
-    to: ['reviewer'],
+    to: ['builder', 'reviewer'],
     jobId: 'moved',
     refs: [{ jobId: 'chat-new' }],
   })
+})
+
+test('when the hand-off message fails the job is kept and only the message is retried', async () => {
+  const posts = stub()
+  const original = globalThis.fetch
+  let fail = true
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === '/api/rooms/room-1/messages' && init?.method === 'POST' && fail) {
+      posts.push({ url: String(input), body: JSON.parse(String(init.body)) })
+      return Promise.resolve(jsonResponse({ code: 'boom', message: 'No.' }, 500))
+    }
+    return original(input, init)
+  })
+  renderDirect()
+  fireEvent.click(await screen.findByRole('button', { name: 'Add someone' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Add someone to this one-to-one' })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Add reviewer' }))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Add reviewer and share a summary' }))
+  expect((await within(dialog).findByRole('alert')).textContent).toContain('didn’t send')
+  fail = false
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Retry the message to reviewer' }))
+  await waitFor(() =>
+    expect(posts.filter((post) => post.url === '/api/rooms/room-1/jobs')).toHaveLength(1),
+  )
+})
+
+test('Escape closes the share menu and returns focus to the button that opened it', async () => {
+  stub()
+  renderDirect()
+  const open = await screen.findByRole('button', { name: 'Share to the team room' })
+  open.focus()
+  fireEvent.click(open)
+  await screen.findByRole('dialog', { name: 'Share to the team room' })
+  fireEvent.keyDown(document.body, { key: 'Escape' })
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Share to the team room' })).toBeNull(),
+  )
+  expect(document.activeElement).toBe(open)
+})
+
+test('an empty default thread is not listed among the earlier chats', async () => {
+  stub([
+    newer,
+    makeJob({
+      id: 'plumbing',
+      roomId: directRoom.id,
+      title: 'builder',
+      isDefault: true,
+      messageCount: 0,
+    }),
+  ])
+  renderInRoom(<DirectHeaderActions agent={builder} chatId="chat-new" />, ['/b?with=builder'])
+  fireEvent.click(screen.getByRole('button', { name: 'Earlier chats' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Earlier chats with builder' })
+  await within(dialog).findByText('Websockets or server-sent events')
+  expect(dialog.querySelectorAll('.bold-dm-history-row')).toHaveLength(1)
+})
+
+test('"Load earlier" fetches the page before the oldest message', async () => {
+  stub()
+  const base = globalThis.fetch
+  const urls: string[] = []
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.startsWith('/api/rooms/direct-builder/messages')) {
+      urls.push(url)
+      if (url.includes('before=cursor-1'))
+        return Promise.resolve(
+          jsonResponse({
+            asOfSeq: 1,
+            items: [
+              makeMessage({
+                id: 'ancient',
+                roomId: directRoom.id,
+                jobId: 'chat-new',
+                parts: [{ kind: 'text', text: 'The very first question.' }],
+                createdAt: '2026-10-23T09:00:00.000Z',
+              }),
+            ],
+            nextCursor: null,
+            jobId: 'chat-new',
+          }),
+        )
+      return Promise.resolve(
+        jsonResponse({
+          asOfSeq: 1,
+          items: [
+            makeMessage({
+              id: 'recent',
+              roomId: directRoom.id,
+              jobId: 'chat-new',
+              parts: [{ kind: 'text', text: 'A recent line.' }],
+              createdAt: '2026-10-24T11:13:00.000Z',
+            }),
+          ],
+          nextCursor: 'cursor-1',
+          jobId: 'chat-new',
+        }),
+      )
+    }
+    return base(input, init)
+  })
+  const { container } = renderDirect()
+  fireEvent.click(await screen.findByRole('button', { name: 'Load earlier' }))
+  await screen.findByText('The very first question.')
+  const lines = [...container.querySelectorAll('.bold-dm-message')].map((node) => node.textContent)
+  expect(lines[0]).toContain('The very first question.')
+  expect(lines[1]).toContain('A recent line.')
+  expect(screen.queryByRole('button', { name: 'Load earlier' })).toBeNull()
 })
 
 test('earlier chats search by title and summary, and New chat starts one', async () => {
@@ -181,6 +299,7 @@ test('earlier chats search by title and summary, and New chat starts one', async
   fireEvent.click(screen.getByRole('button', { name: 'Earlier chats' }))
   const dialog = await screen.findByRole('dialog', { name: 'Earlier chats with builder' })
   await within(dialog).findByText('The cursor bug')
+  expect(within(dialog).getByPlaceholderText('Search titles and summaries')).toBeTruthy()
   expect(within(dialog).getByText('Websockets or server-sent events')).toBeTruthy()
   fireEvent.change(within(dialog).getByRole('textbox', { name: 'Search chats' }), {
     target: { value: 'created_at' },

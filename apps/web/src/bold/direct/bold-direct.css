@@ -614,3 +614,17 @@
     right: 12px;
   }
 }
+
+[data-ui='bold'] .bold-dm-load {
+  align-self: center;
+}
+
+[data-ui='bold'] .bold-dm-add-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-dm-add-summary {
+  overflow-wrap: anywhere;
+}

@@ -1,11 +1,10 @@
 import type { AgentSummary, Exchange, Job } from '@score/contract'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentNameColor } from '../bold-agents.ts'
-import { boldChatRefLink, boldJobLink } from '../bold-links.ts'
-import { createDirectChat } from '../direct/direct-queries.ts'
+import { boldAsideLink, boldJobLink } from '../bold-links.ts'
 import { exchangeStatus, exchangeTurns, type JobFilter, jobMatchesFilter } from './room-model.ts'
 import { jobExchangesQuery } from './room-queries.ts'
 
@@ -45,24 +44,13 @@ function JobCapsule({ job, agents }: { job: Job; agents: AgentSummary[] }) {
   const definition = useMemo(() => jobExchangesQuery(job.id), [job.id])
   const exchanges = useStreamQuery(definition).data ?? []
   const navigate = useNavigate()
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const latest = exchanges.at(-1)
   if (!latest) return null
   const asideAgent = agents.find((agent) => agent.id === latest.from)
 
-  async function takeAside() {
-    if (!asideAgent) return
-    setBusy(true)
-    setError(null)
-    try {
-      const chat = await createDirectChat(asideAgent.id, job.title)
-      void navigate(boldChatRefLink(asideAgent.id, chat.id, job.id))
-    } catch {
-      setError('Couldn’t start a private chat. Try again.')
-    } finally {
-      setBusy(false)
-    }
+  // The chat is made when the first message is sent, so looking and walking away leaves nothing behind.
+  function takeAside() {
+    if (asideAgent) void navigate(boldAsideLink(asideAgent.id, job.id))
   }
 
   return (
@@ -77,17 +65,11 @@ function JobCapsule({ job, agents }: { job: Job; agents: AgentSummary[] }) {
             type="button"
             className="chip bold-capsule-aside"
             style={{ color: agentNameColor(asideAgent) }}
-            disabled={busy}
-            onClick={() => void takeAside()}
+            onClick={takeAside}
           >
-            {busy ? 'Opening…' : `Take it aside with ${asideAgent.id}`}
+            {`Take it aside with ${asideAgent.id}`}
           </button>
         </span>
-      )}
-      {error && (
-        <p className="small bold-request-error" role="alert">
-          {error}
-        </p>
       )}
     </div>
   )

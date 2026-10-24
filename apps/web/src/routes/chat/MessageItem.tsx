@@ -580,7 +580,9 @@ export function MessageItem({
       {shownGlyph && <AgentGlyph agent={shownGlyph} size="sm" decorative />}
       <div className="chat-message-body">
         <div className="chat-message-meta">
-          <strong style={agent && { color: agentTextColor(agent.style.color) }}>{shownName}</strong>
+          <strong style={shownGlyph && { color: agentTextColor(shownGlyph.style.color) }}>
+            {shownName}
+          </strong>
           <time dateTime={message.createdAt}>
             {new Date(message.createdAt).toLocaleTimeString([], {
               hour: '2-digit',

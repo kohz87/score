@@ -49,6 +49,7 @@ export function BoldRoom() {
   const phoneOpenRef = useRef<HTMLButtonElement>(null)
   const phoneCloseRef = useRef<HTMLButtonElement>(null)
   const menuId = useId()
+  const closeSheetRef = useRef<() => void>(() => undefined)
 
   const directId = params.get('with')
   const directAgent = directId ? agents.find((item) => item.id === directId) : undefined
@@ -99,12 +100,11 @@ export function BoldRoom() {
       // The sheet itself is labelled aria-modal; a dialog *inside* it owns its own Escape.
       if (dialog && dialog !== sideRef.current) return
       event.preventDefault()
-      setSheetOpen(false)
-      requestAnimationFrame(() => phoneOpenRef.current?.focus())
+      closeSheetRef.current()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [phone, setSheetOpen, sheetOpen])
+  }, [phone, sheetOpen])
 
   useEffect(() => {
     if (phone && sheetOpen) phoneCloseRef.current?.focus()
@@ -153,6 +153,11 @@ export function BoldRoom() {
       requestAnimationFrame(() => phoneOpenRef.current?.focus())
     }
   }
+
+  // The sheet's Escape closes it the same way its own close button does (a one-to-one drops `?with=`).
+  useEffect(() => {
+    closeSheetRef.current = closeSheet
+  })
 
   const option = (target: SideMode, icon: ReactNode, name: string, hint: string) => (
     <button

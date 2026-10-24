@@ -84,7 +84,7 @@ test('Add someone creates a team-room job, then posts one addressed reference to
     expect(url).toBe('/api/rooms/team-room/messages')
     expect(JSON.parse(String(init.body))).toEqual({
       text: '@lead Let’s continue this chat with the team.',
-      to: ['lead'],
+      to: ['builder', 'lead'],
       jobId: 'team-chat',
       refs: [{ jobId: 'chat-cursor' }],
     })
@@ -101,11 +101,10 @@ test('Add someone creates a team-room job, then posts one addressed reference to
     })
   })
   vi.stubGlobal('fetch', fetchMock)
-  const made = await moveChatToTeamRoom(
-    'team-room',
-    chat('chat-cursor', 'The cursor bug', null),
+  const made = await moveChatToTeamRoom('team-room', chat('chat-cursor', 'The cursor bug', null), [
+    'builder',
     'lead',
-  )
+  ])
   expect(made.id).toBe('team-chat')
   expect(fetchMock).toHaveBeenCalledTimes(2)
 })
