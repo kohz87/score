@@ -260,6 +260,7 @@ const S = {
     { id: 'feed', room: 'team', name: 'Activity feed', state: 'needs' },
     { id: 'notes', room: 'team', name: 'Release notes 2.4', state: 'paused' },
     { id: 'queue', room: 'team', name: 'Queue research', state: 'done' },
+    { id: 'tck', room: 'team', name: 'Login timeout', state: 'working', source: { app: 'Tickets app', ref: 'TCK-142', title: 'Login times out after 5 minutes', via: 'trigger “New ticket”', report: true, reported: false } },
     { id: 'old1', room: 'r-feed', name: 'Read layer', state: 'done' },
     { id: 'old2', room: 'r-research', name: 'Queue options', state: 'done' }
   ],
@@ -294,7 +295,7 @@ const S = {
   set: 'connections',
   rules: { mode: 'guardian', go: ['Read and edit files in its workspace', 'Run tests', 'Read the web'], ask: ['Install packages', 'Push code', 'Delete files', 'Use the mouse and keyboard on its screen'], never: ['Read keys or password vaults', 'rm -rf /'], saved: null },
   tools: [{ id: 't1', name: 'Tickets app', addr: 'https://tickets.example.com/mcp', status: 'ok', used: ['lead', 'builder'] }, { id: 't2', name: 'GitHub', addr: 'https://api.githubcopilot.com/mcp', status: 'needs sign-in', used: ['builder', 'reviewer'] }],
-  triggers: [{ id: 'w1', name: 'New ticket', job: 'Triage new tickets', recipe: 'lead decides', url: 'https://score.local/hooks/w_8f2c41', secret: 'whsec_Zq7…k2', last: 'today 09:40' }],
+  triggers: [{ id: 'w1', name: 'New ticket', job: 'Triage new tickets', recipe: 'lead decides', reportTo: 'Tickets app', url: 'https://score.local/hooks/w_8f2c41', secret: 'whsec_Zq7…k2', last: 'today 09:40' }],
   notif: { needs: true, paused: true, done: true, daily: false },
   recipes: [
     { id: 'r1', name: 'Build, then review', version: 3, inputs: ['goal'], steps: [
@@ -323,7 +324,7 @@ const S = {
     { key: 'browser.engine', value: 'auto', help: 'Browser used by agents' },
     { key: 'display.tui_native', value: 'false', help: 'Terminal UI uses native scrollback' },
     { key: 'vision.embed_target_bytes', value: '262144', help: 'Size budget for one image' } ] },
-  security: { browsers: [{ id: 'b1', name: 'This laptop · Firefox', when: 'now' }, { id: 'b2', name: 'Phone · Safari', when: '2 days ago' }], passkey: true, terminal: false },
+  security: { where: 'docker', browsers: [{ id: 'b1', name: 'This laptop · Firefox', when: 'now' }, { id: 'b2', name: 'Phone · Safari', when: '2 days ago' }], passkey: true, terminal: false },
   backups: 'tonight at 03:00',
   pausedAll: false,
   first: false,
@@ -342,6 +343,8 @@ S.msgs = [
   m('team', 'notes', 'you', 'Draft the 2.4 release notes and an announcement image.'),
   m('team', 'notes', null, '', { kind: 'capsule', agents: ['lead', 'reviewer'], status: 'paused · needs your call', paused: true, lines: [['lead', 'Draft is ready.'], ['reviewer', 'Sent back: missing migration steps for 2.3 users.'], ['lead', 'Added a short note; full steps take a day.'], ['reviewer', 'Sent back: a short note isn\'t enough for a breaking change.']] }),
   m('team', 'queue', 'lead', 'Queue libraries compared. One clear pick.', { result: { title: 'Queue libraries', sub: 'Summary · 3 options · sources', tint: '#ece8ff', open: 'library:n4' } }),
+  m('team', 'tck', null, '', { kind: 'source' }),
+  m('team', 'tck', 'lead', 'Picked up TCK-142. builder is reproducing it; the fix goes back to the ticket once reviewer approves.'),
   m('r-feed', 'old1', 'you', 'Can you page task events?'),
   m('r-feed', 'old1', 'builder', 'Done: 25 per page, newest first.'),
   m('r-research', 'old2', 'you', 'Compare three queue libraries.'),
@@ -428,7 +431,7 @@ function vRoom() {
   if (S.job !== 'all' && !jobs.find(j => j.id === S.job)) S.job = 'all';
   const tabs = `<div class="tabs" role="tablist" aria-label="Jobs">
     <button class="chip ${S.job === 'all' ? 'on' : ''}" role="tab" aria-selected="${S.job === 'all'}" data-a="job" data-v="all">All</button>
-    ${jobs.map(j => `<button class="chip ${S.job === j.id ? 'on' : ''}" role="tab" aria-selected="${S.job === j.id}" data-a="job" data-v="${j.id}"><span class="dot ${j.state === 'working' ? 'livedot' : ''}" style="background:${stateDot(j.state)}"></span>${esc(j.name)}</button>`).join('')}
+    ${jobs.map(j => `<button class="chip ${S.job === j.id ? 'on' : ''}" role="tab" aria-selected="${S.job === j.id}" data-a="job" data-v="${j.id}"><span class="dot ${j.state === 'working' ? 'livedot' : ''}" style="background:${stateDot(j.state)}"></span>${esc(j.name)}${j.source ? `<span class="small muted" style="margin-left:6px;font-weight:600">${esc(j.source.ref)}</span>` : ''}</button>`).join('')}
     ${room.kind === 'team' ? `<button class="chip" data-a="startJob" aria-label="Start a job">${I.plus}Job</button>` : ''}
     ${S.job !== 'all' ? `<span style="position:relative"><button class="icon-btn sm" data-a="jobMenu" aria-label="Job menu" aria-expanded="${S.jobMenu}">${I.dots}</button>${S.jobMenu ? jobMenu() : ''}</span>` : ''}
   </div>`;
@@ -474,7 +477,8 @@ function roomMenu(room) {
   return `<div class="menu" style="right:0;top:44px"><button class="mi" data-a="exportRoom">Export this room</button><button class="mi" data-a="shareRoom">Share a read-only link</button>${del}</div>`;
 }
 function jobMenu() {
-  return `<div class="menu" style="right:0;top:44px"><button class="mi" data-a="renameJob">Rename</button><button class="mi" data-a="closeJob">${jobOf(S.job).state === 'done' ? 'Reopen' : 'Close as done'}</button><button class="mi" data-a="openThread" data-v="${S.job}">Open thread</button><button class="mi" data-a="shareJob">Share a read-only link</button><button class="mi" data-a="exportJob">Export as Markdown</button><button class="mi bad" data-a="askDeleteJob">${I.trash}Delete job</button></div>`;
+  const src = jobOf(S.job).source;
+  return `<div class="menu" style="right:0;top:44px">${src ? `<button class="mi" data-a="openSource" data-v="${S.job}">Open ${esc(src.ref)} in ${esc(src.app)} ↗</button>` : ''}<button class="mi" data-a="renameJob">Rename</button><button class="mi" data-a="closeJob">${jobOf(S.job).state === 'done' ? 'Reopen' : 'Close as done'}</button><button class="mi" data-a="openThread" data-v="${S.job}">Open thread</button><button class="mi" data-a="shareJob">Share a read-only link</button><button class="mi" data-a="exportJob">Export as Markdown</button><button class="mi bad" data-a="askDeleteJob">${I.trash}Delete job</button></div>`;
 }
 function plusMenu() {
   return `<div class="menu" style="left:0;bottom:60px"><button class="mi" data-a="attachFile">Attach a file</button><button class="mi" data-a="voice">${S.recording ? 'Stop voice input' : 'Voice input'}</button><div class="sec">Commands</div>
@@ -488,7 +492,18 @@ function vRequest(q) {
   if (q.kind === 'approve') return `<div class="pin"><span class="row wrap">${glyph(a, 20)}<span><b>${esc(q.agent)}</b> · ${esc(q.title)}</span><span class="sub">${esc(jobOf(q.job).name)}</span></span><code style="font-size:1.15em;font-weight:500">${esc(q.cmd)}</code><span class="row wrap"><button class="btn sm" data-a="req" data-v="${q.id}|allow">Allow</button><button class="btn sm ghost" data-a="req" data-v="${q.id}|deny">Don't allow</button><button class="btn sm ghost" data-a="req" data-v="${q.id}|always">Always allow for ${esc(q.agent)}</button></span></div>`;
   return `<div class="pin"><span class="row wrap">${glyph(a, 20)}<b>${esc(q.title)}</b><span class="sub">${esc(jobOf(q.job).name)}</span></span><span>${esc(q.ask)}</span><span class="row wrap">${q.opts.map((o, i) => `<button class="btn sm ${i ? 'ghost' : ''}" data-a="req" data-v="${q.id}|${i}">${esc(o)}</button>`).join('')}${q.kind === 'budget' ? `<button class="btn sm ghost" data-a="openThread" data-v="${q.job}">Open thread</button>` : ''}</span></div>`;
 }
+function srcLine(j) {
+  const src = j.source;
+  return `<span class="row wrap" style="gap:8px"><span class="badge" style="background:var(--field);color:var(--ink2)">${esc(src.app)} · ${esc(src.ref)}</span><span class="small">${esc(src.title)}</span><button class="link small" data-a="openSource" data-v="${j.id}">Open in ${esc(src.app)} ↗</button></span>`;
+}
+function srcStatus(j) {
+  const src = j.source;
+  return src.reported ? `<span class="small" style="color:var(--ok);font-weight:700">Reported back to ${esc(src.ref)}: result and summary posted on the ticket</span>`
+    : src.report ? `<span class="small muted">When the job is done, the result goes back to ${esc(src.ref)} through the ${esc(src.app)} tool server.</span>`
+    : `<span class="small muted">Results stay in Score.</span>`;
+}
 function vMsg(x) {
+  if (x.kind === 'source') { const j = jobOf(x.job); return j && j.source ? `<div class="card" style="background:var(--deep);box-shadow:inset 0 0 0 1px var(--line);padding:12px 14px;gap:6px;border-radius:20px"><span class="small muted">Started by ${esc(j.source.app)} through ${esc(j.source.via)}</span>${srcLine(j)}</div>` : ''; }
   if (x.kind === 'note') return `<div class="note">${x.html || esc(x.text)}</div>`;
   if (x.kind === 'capsule') {
     return `<div class="capsule ${x.paused ? 'paused' : ''}"><span class="row wrap"><span class="row" style="gap:0">${x.agents.map((id, i) => `<span style="margin-left:${i ? -5 : 0}px">${glyph(id, 18, false)}</span>`).join('')}</span><b>${x.agents.join(' and ')}</b><span class="small" style="color:${x.paused ? 'var(--warn)' : x.live ? 'var(--ok)' : 'var(--muted)'};font-weight:600">${esc(x.status)}</span></span>
@@ -591,6 +606,7 @@ function vThread() {
   const html = rounds.map(([r, lines]) => `<span class="small muted" style="font-weight:700;letter-spacing:.04em">${r}</span>${lines.map(([w, tag, t]) => `<div class="row" style="align-items:flex-start">${w === 'you' ? '<span class="avatar" style="width:22px;height:22px;font-size:11px">Y</span>' : glyph(w, 22, false)}<span>${w === 'you' ? '<b>you</b>' : aname(w)} ${tag ? `<span class="badge" style="background:${tag === 'Sent back' ? 'rgba(255,182,30,.18)' : tag === 'Approved' ? 'rgba(25,195,154,.18)' : 'var(--field)'};color:${tag === 'Sent back' ? 'var(--warn)' : tag === 'Approved' ? 'var(--ok)' : 'var(--ink)'}">${tag}</span>` : ''} ${esc(t)}</span></div>`).join('')}`).join('');
   const q = S.requests.find(x => x.job === j.id && x.kind === 'budget');
   return `<div class="sidebody"><div class="row wrap"><b style="font-family:var(--font-d);font-size:22px">${esc(j.name)}</b><span class="small muted">${j.id === 'notes' ? '8 of 8 turns used' : j.state === 'done' ? 'done' : 'working'}</span><span style="margin-left:auto" class="row"><button class="btn sm" data-a="pauseJob">${j.state === 'paused' ? 'Resume' : 'Pause'} job</button><button class="btn sm ghost" data-a="stopJob">Stop</button></span></div>
+    ${j.source ? `<div class="card" style="background:var(--panel);gap:8px"><span class="small muted">From ${esc(j.source.app)}</span>${srcLine(j)}<label class="check"><input type="checkbox" ${j.source.report ? 'checked' : ''} ${j.source.reported ? 'disabled' : ''} data-a="srcReport" data-v="${j.id}">Send the result back to ${esc(j.source.ref)} when done</label>${srcStatus(j)}</div>` : ''}
     <div class="card" style="background:var(--panel)"><span class="small muted">Steps</span>${['Plan', 'Do the work', 'Review until right', 'Report back'].map((st, i) => `<label class="check"><input type="checkbox" ${j.state === 'done' || i < 2 ? 'checked' : ''}>${st}</label>`).join('')}</div>
     ${html}
     ${q ? `<div class="pin">${vRequest(q).replace(/^<div class="pin">/, '').replace(/<\/div>$/, '')}</div>` : ''}
@@ -725,7 +741,7 @@ function sTools() {
       <div class="row wrap"><label for="tname" class="sr">Name</label><input id="tname" class="field" style="flex:1 1 160px" placeholder="Name, e.g. Tickets app"><label for="taddr" class="sr">Address or command</label><input id="taddr" class="field" style="flex:2 1 240px" placeholder="https://… or a command"><button class="btn" data-a="addTool">Add tool server</button></div>
       <span class="small muted">Sign-in tokens are kept by Hermes in each agent's own settings, never by Score.</span></section>
     <section class="card"><span class="row wrap"><h3 style="font-size:22px">Triggers</h3><span class="small muted">Let another app start a job by calling an address</span><button class="btn sm primary" style="margin-left:auto" data-a="newTrigger">New trigger</button></span>
-      ${S.triggers.map(w => `<div class="card" style="background:var(--field)"><span class="row wrap"><b>${esc(w.name)}</b><span class="small muted">starts “${esc(w.job)}” · ${esc(w.recipe)} · last call ${esc(w.last)}</span><button class="act" style="margin-left:auto" data-a="rmTrigger" data-v="${w.id}">Delete</button></span>
+      ${S.triggers.map(w => `<div class="card" style="background:var(--field)"><span class="row wrap"><b>${esc(w.name)}</b><span class="small muted">starts “${esc(w.job)}” · ${esc(w.recipe)} · ${w.reportTo ? 'results go back through ' + esc(w.reportTo) : 'results stay in Score'} · last call ${esc(w.last)}</span><button class="act" style="margin-left:auto" data-a="rmTrigger" data-v="${w.id}">Delete</button></span>
         <div class="row wrap"><code class="small grow" style="overflow-wrap:anywhere">${esc(w.url)}</code><button class="btn sm" data-a="copy" data-v="${esc(w.url)}">Copy address</button></div>
         <div class="row wrap"><code class="small grow">${esc(w.secret)}</code><button class="btn sm" data-a="copy" data-v="${esc(w.secret)}">Copy secret</button><button class="btn sm ghost" data-a="testTrigger" data-v="${w.id}">Send a test call</button></div>
         <span class="small muted">Calls must be signed with the secret (Standard Webhooks headers) and arrive within five minutes.</span></div>`).join('') || '<span class="small muted">No triggers yet.</span>'}</section>`;
@@ -763,7 +779,11 @@ function sUsage() {
 }
 function sSec() {
   const s = S.security;
+  const where = [['docker', 'Docker sandbox', 'Recommended. Agents can\'t see your files, your browser or Score\'s data; the worst case is a throwaway container.'], ['ssh', 'Another machine over SSH', 'A VM or spare box. Same protection, more room.'], ['machine', 'This machine, as you', 'No separation: agents can read anything you can, including Score\'s data.']];
   return `<h2 style="font-size:38px">Remote access and security</h2><div class="grid2">
+    <section class="card span2"><span class="row wrap"><h3 style="font-size:22px">Where agents run</h3><span class="small muted">Applies to new sessions; set per agent under Team › More</span></span>
+      <div class="grid3">${where.map(([k, l, d]) => `<label class="card" style="background:var(--field);cursor:pointer;gap:6px;${s.where === k ? 'box-shadow:inset 0 0 0 2px var(--ink)' : ''}"><span class="row"><input type="radio" name="where" ${s.where === k ? 'checked' : ''} data-a="where" data-v="${k}"><b>${l}</b></span><span class="small muted">${d}</span></label>`).join('')}</div>
+      <span class="small muted">Working with other teams? Give each team its own Score (one machine or VM each). Teams share work through the app they work on, with its tool server and triggers, not by sharing a Score.</span></section>
     <section class="card"><h3 style="font-size:22px">Paired devices</h3>${s.browsers.map(b => `<div class="listrow"><span class="grow small">${esc(b.name)} <span class="muted">· ${esc(b.when)}</span></span><button class="act" data-a="revoke" data-v="${b.id}">Revoke</button></div>`).join('')}<button class="btn sm" style="align-self:flex-start" data-a="toast" data-v="Scan the code on your phone to pair it.">Pair a phone</button><span class="small muted">Remote access is HTTPS only.</span></section>
     <section class="card"><h3 style="font-size:22px">Security password</h3><span class="small muted">Needed for full-access coding agents and the terminal. Set or change it on the Score machine: <code>scripts/score password</code></span><label class="check"><input type="checkbox" ${s.passkey ? 'checked' : ''} data-a="passkey">Use a passkey where the browser allows it</label></section>
     <section class="card"><h3 style="font-size:22px">Terminal in the browser</h3><span class="small muted">A shell on the Score machine. Off unless Score was started with it, HTTPS only, closes after 15 minutes idle, at most two open.</span><label class="check"><input type="checkbox" ${s.terminal ? 'checked' : ''} data-a="term">Show the terminal (needs the security password each time)</label></section></div>`;
@@ -806,7 +826,7 @@ function vModal() {
   if (md.type === 'recipe') inner = mRecipe();
   if (md.type === 'addAgent') inner = mAdd(md);
   if (md.type === 'rulesDiff') inner = `<div class="dialog" style="max-width:600px"><h2 style="font-size:26px">Review rule changes</h2><div class="inner mono small" style="display:flex;flex-direction:column;gap:4px">${md.lines.length ? md.lines.map(l => `<span style="color:${l[0] === '+' ? 'var(--ok)' : 'var(--bad)'}">${esc(l)}</span>`).join('') : '<span class="muted">No changes.</span>'}</div><span class="small muted">Written to every agent's Hermes profile. Agents' stricter rules stay.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Back</button><button class="btn primary" data-a="saveRules" ${md.lines.length ? '' : 'disabled'}>Save for the whole team</button></span></div>`;
-  if (md.type === 'trigger') inner = `<div class="dialog" style="max-width:600px"><h2 style="font-size:26px">New trigger</h2><div><label for="tgname" class="lab">Name</label><input id="tgname" class="field" placeholder="e.g. New support ticket"></div><div><label for="tgjob" class="lab">Starts this job</label><input id="tgjob" class="field" placeholder="e.g. Triage the new ticket"></div><div><label for="tgrec" class="lab">Recipe</label><select id="tgrec" class="field"><option>lead decides</option>${S.recipes.map(r => `<option>${esc(r.name)}</option>`).join('')}</select></div><span class="small muted">You get an address and a signing secret to paste into the other app.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="makeTrigger">Create trigger</button></span></div>`;
+  if (md.type === 'trigger') inner = `<div class="dialog" style="max-width:600px"><h2 style="font-size:26px">New trigger</h2><div><label for="tgname" class="lab">Name</label><input id="tgname" class="field" placeholder="e.g. New support ticket"></div><div><label for="tgjob" class="lab">Starts this job</label><input id="tgjob" class="field" placeholder="e.g. Triage the new ticket"></div><div><label for="tgrec" class="lab">Recipe</label><select id="tgrec" class="field"><option>lead decides</option>${S.recipes.map(r => `<option>${esc(r.name)}</option>`).join('')}</select></div><div><label for="tgback" class="lab">Send the result back through</label><select id="tgback" class="field">${S.tools.map(t => `<option>${esc(t.name)}</option>`).join('')}<option value="">Nowhere: results stay in Score</option></select></div><span class="small muted">You get an address and a signing secret to paste into the other app. Calls carry the app's own reference (a ticket number, an issue), so the job links back to it.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="makeTrigger">Create trigger</button></span></div>`;
   if (md.type === 'persona') inner = `<div class="dialog" style="max-width:640px"><h2 style="font-size:26px">Save how ${esc(S.team.sel)} works</h2><div class="inner mono small" style="display:flex;flex-direction:column;gap:6px"><span style="color:var(--bad)">- ${esc(md.from)}</span><span style="color:var(--ok)">+ ${esc(md.to)}</span></div><span class="small muted">If the file changed meanwhile, you'll see both versions and pick one.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="doPersona">Save</button></span></div>`;
   return `<div class="scrim" data-a="scrim">${inner}</div>`;
 }
@@ -893,7 +913,14 @@ function simulate(room, job, to, text) {
   const cap = m(room, job, null, '', { kind: 'capsule', agents: ['builder', 'reviewer'], status: 'working · round 1', live: true, lines: [['builder', 'Starting: ' + text.slice(0, 60)]] });
   later(2600, () => { S.msgs.push(cap); W.builder.ring = Math.max(W.builder.ring, 20); });
   later(4800, () => { cap.lines.push(['reviewer', 'Sent back: one edge case is missing a test.']); cap.status = 'round 2'; W.reviewer.ring = 40; });
-  later(7200, () => { cap.lines.push(['builder', 'Added it.'], ['reviewer', 'Approved.']); cap.status = '2 rounds · approved'; cap.live = false; const j = jobOf(job); if (j) j.state = 'done'; S.msgs.push(m(room, job, 'lead', 'Done. Here it is.', { result: { title: (j ? j.name : 'Result'), sub: 'Approved', tint: '#ddf6ee', open: 'results' } })); toast('“' + (j ? j.name : 'Job') + '” is done.'); });
+  later(7200, () => { cap.lines.push(['builder', 'Added it.'], ['reviewer', 'Approved.']); cap.status = '2 rounds · approved'; cap.live = false; const j = jobOf(job); if (j) finishJob(j); S.msgs.push(m(room, job, 'lead', 'Done. Here it is.', { result: { title: (j ? j.name : 'Result'), sub: 'Approved', tint: '#ddf6ee', open: 'results' } })); toast('“' + (j ? j.name : 'Job') + '” is done.'); });
+}
+function finishJob(j) {
+  j.state = 'done';
+  if (j.source && j.source.report && !j.source.reported) {
+    j.source.reported = true;
+    later(900, () => { S.msgs.push(m(j.room, j.id, null, '', { kind: 'note', text: 'Reported back to ' + j.source.app + ' · ' + j.source.ref + ': result and summary posted on the ticket' })); toast('Result sent back to ' + j.source.ref + ' in ' + j.source.app + '.'); });
+  }
 }
 function newJob(name, room) { const j = { id: nid('j'), room: room || 'team', name: name.length > 34 ? name.slice(0, 32) + '…' : name, state: 'working' }; S.jobs.push(j); return j; }
 function send() {
@@ -937,6 +964,9 @@ const A = {
   job(v) { S.job = v; S.jobMenu = false; },
   plus() { S.plus = !S.plus; },
   pinsMore() { S.pinsOpen = !S.pinsOpen; },
+  openSource(v) { const j = jobOf(v); S.jobMenu = false; toast('In Score this opens ' + j.source.ref + ' in ' + j.source.app + '.'); },
+  srcReport(v, t) { jobOf(v).source.report = t.checked; },
+  where(v) { S.security.where = v; toast(v === 'machine' ? 'Agents now run as your user on this machine. They can read your files and Score\'s data.' : 'New agent sessions start in the ' + (v === 'docker' ? 'Docker sandbox' : 'SSH machine') + '.'); },
   attachFile() { S.attach.push(['screenshot.png', 'notes.pdf', 'data.csv'][S.attach.length % 3]); S.plus = false; },
   unattach(v) { S.attach.splice(+v, 1); },
   voice() { S.recording = !S.recording; S.plus = false; toast(S.recording ? 'Voice input on. Your words appear in the box.' : 'Voice input off.'); },
@@ -990,7 +1020,7 @@ const A = {
   shareRoom() { S.roomMenu = false; copyText('https://score.local/share/r_4k2'); toast('Read-only link copied. It expires in 7 days.'); },
   renameJob() { S.jobMenu = false; S.modal = { type: 'rename' }; setTimeout(() => { const el = document.getElementById('rename'); if (el) el.select(); }, 0); },
   doRename() { const v = document.getElementById('rename').value.trim(); if (v) jobOf(S.job).name = v; S.modal = null; },
-  closeJob() { const j = jobOf(S.job); j.state = j.state === 'done' ? 'working' : 'done'; S.jobMenu = false; toast(j.state === 'done' ? 'Job closed.' : 'Job reopened.'); },
+  closeJob() { const j = jobOf(S.job); if (j.state === 'done') j.state = 'working'; else finishJob(j); S.jobMenu = false; toast(j.state === 'done' ? 'Job closed.' : 'Job reopened.'); },
   shareJob() { S.jobMenu = false; copyText('https://score.local/share/j_9x1'); toast('Read-only link copied. It expires in 7 days.'); },
   exportJob() { S.jobMenu = false; toast('In Score this downloads the job as Markdown.'); },
   askDeleteJob() { const j = jobOf(S.job); S.jobMenu = false; confirmBox('Delete “' + j.name + '”?', 'Its messages and thread are removed. Results saved to the Library stay.', () => { const snap = { j, i: S.jobs.indexOf(j), msgs: S.msgs.filter(x => x.job === j.id), reqs: S.requests.filter(q => q.job === j.id) }; S.jobs.splice(snap.i, 1); S.msgs = S.msgs.filter(x => x.job !== j.id); S.requests = S.requests.filter(q => q.job !== j.id); S.job = 'all'; toast('Job deleted.', () => { S.jobs.splice(snap.i, 0, snap.j); S.msgs.push(...snap.msgs); S.requests.push(...snap.reqs); }); }); },
@@ -1045,9 +1075,9 @@ const A = {
   rmTool(v) { const i = S.tools.findIndex(x => x.id === v); const t = S.tools.splice(i, 1)[0]; toast(t.name + ' removed.', () => S.tools.splice(i, 0, t)); },
   addTool() { const n = document.getElementById('tname').value.trim(); const a = document.getElementById('taddr').value.trim(); if (!n || !a) { toast('Give it a name and an address or command.'); return; } const t = { id: nid('t'), name: n, addr: a, status: 'checking', used: ['lead'] }; S.tools.push(t); later(1200, () => { t.status = 'ok'; }); },
   newTrigger() { S.modal = { type: 'trigger' }; },
-  makeTrigger() { const n = document.getElementById('tgname').value.trim() || 'New trigger'; S.triggers.push({ id: nid('w'), name: n, job: document.getElementById('tgjob').value.trim() || n, recipe: document.getElementById('tgrec').value, url: 'https://score.local/hooks/w_' + Math.random().toString(16).slice(2, 8), secret: 'whsec_' + Math.random().toString(36).slice(2, 6) + '…', last: 'never' }); S.modal = null; toast('Trigger created. Copy its address and secret into the other app.'); },
+  makeTrigger() { const n = document.getElementById('tgname').value.trim() || 'New trigger'; S.triggers.push({ id: nid('w'), name: n, job: document.getElementById('tgjob').value.trim() || n, recipe: document.getElementById('tgrec').value, reportTo: document.getElementById('tgback').value, url: 'https://score.local/hooks/w_' + Math.random().toString(16).slice(2, 8), secret: 'whsec_' + Math.random().toString(36).slice(2, 6) + '…', last: 'never' }); S.modal = null; toast('Trigger created. Copy its address and secret into the other app.'); },
   rmTrigger(v) { const i = S.triggers.findIndex(x => x.id === v); const t = S.triggers.splice(i, 1)[0]; toast('Trigger deleted. Its address stops working.', () => S.triggers.splice(i, 0, t)); },
-  testTrigger(v) { const w = S.triggers.find(x => x.id === v); w.last = 'just now'; const j = newJob(w.job); S.msgs.push(m('team', j.id, null, '', { kind: 'note', text: 'Started by trigger “' + w.name + '”' })); S.msgs.push(m('team', j.id, 'you', w.job)); simulate('team', j.id, 'lead', w.job); toast('Test call received: a job started in the team room.'); },
+  testTrigger(v) { const w = S.triggers.find(x => x.id === v); w.last = 'just now'; const j = newJob(w.job); j.source = { app: w.reportTo || 'Test call', ref: 'TEST-' + (S.jobs.length), title: 'A test call from Settings', via: 'trigger “' + w.name + '”', report: !!w.reportTo, reported: false }; S.msgs.push(m('team', j.id, null, '', { kind: 'source' })); S.msgs.push(m('team', j.id, 'you', w.job)); simulate('team', j.id, 'lead', w.job); toast('Test call received: a job started in the team room.'); },
   ruleMode(v) { if (!S.rules.saved) S.rules.saved = JSON.parse(JSON.stringify(S.rules)); S.rules.mode = v; },
   rmRule(v) { if (!S.rules.saved) S.rules.saved = JSON.parse(JSON.stringify(S.rules)); const [k, i] = v.split('|'); S.rules[k].splice(+i, 1); },
   addRule(v) { const el = document.getElementById('add-' + v); if (!el.value.trim()) return; if (!S.rules.saved) S.rules.saved = JSON.parse(JSON.stringify(S.rules)); S.rules[v].push(el.value.trim()); },

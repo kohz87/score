@@ -162,7 +162,7 @@ Every task ships tests; UI tasks ship Playwright specs against the fake adapter 
 
 The screens for D1–D7 and D13 are in the **clickable prototype** `docs/design/bold/prototype.html`
 (one file, open it in a browser; owner's live copy: https://claude.ai/artifact/4PcQUWnmxeswmpaLTCQZoe), not in separate
-mockups. Taken in the design conversation; they settle parts of §7 and the parity checklist. Still open: §7 items 1, 4, 5 and
+mockups. Taken in the design conversation (§9 adds D14–D17: teams, machines and outside apps); they settle parts of §7 and the parity checklist. Still open: §7 items 1, 4, 5 and
 6, and dropping the Score timeline and the Flow graph as views.
 
 | # | Topic | Decision |
@@ -180,3 +180,25 @@ mockups. Taken in the design conversation; they settle parts of §7 and the pari
 | D11 | Admin view | **Dropped**, with its password and the `/u` chat-first view. |
 | D12 | Usage | Keep **first-time pass rate** and **time waiting on you**; drop median time and the per-agent table. Mockup `05` |
 | D13 | Triggers | Start a job's "Repeat" becomes **When**: once, on a schedule, or on a **webhook** (own address + signing secret, Standard Webhooks headers). Other apps connect the other way through **tool servers (MCP)** that agents call. Mockup `10`; prototype: Settings › Tool servers |
+
+## 9. Teams, machines and outside apps (owner, 2026-10-24)
+
+Score stays a **single-user app**. Teams work together through the app they work on, not through a shared Score.
+Drawn in the prototype: the "Login timeout · TCK-142" job, Settings › Tools and triggers, and Settings › Remote access
+and security › Where agents run.
+
+| # | Topic | Decision |
+|---|---|---|
+| D14 | More than one person | **No accounts in Score.** Each person or team runs its own Score + Hermes on its own machine or VM. Sign-in stays as it is (pairing link, passkeys, HTTPS-only remote, revocable browsers). Multi-user accounts are dropped: they would mean user ids on every stored record, a per-user filter on the event stream, roles, and a memory leak Score can't close (an agent's memory is per profile, not per person). |
+| D15 | Where agents run | Settings › Remote access and security gets **Where agents run**: Docker sandbox (recommended), another machine over SSH, or this machine as you (marked as not separated). Per agent under Team › More. It uses Hermes's existing terminal backends; Score doesn't write `~/.hermes` itself (AGENTS.md). This closes most of the D7.1 same-user gap. |
+| D16 | Teams working together | The shared app is the hub. Each team's agents use it through its **tool server (MCP)**, with a token per team that the app issues and can revoke. The app wakes a team with a **webhook trigger** (D13) rather than the team polling; a daily scheduled job can catch missed calls. **Claiming** a piece of work (so two teams don't take the same one) is the app's job, in its MCP tools; Score can't arbitrate across machines. For code, git and the GitHub MCP server already play this role. |
+| D17 | Job source | A job started by a trigger remembers **where it came from**: app, reference (ticket or issue id), title and the trigger. The job tab shows the reference, the room shows a "Started by" card with "Open in <app> ↗", and the thread header has "Send the result back to <ref> when done" (on by default when the trigger names a tool server). When the job finishes, lead posts the result and summary back through that tool server and the room shows "Reported back". A trigger names its report-back tool server when it's created. |
+
+**Effect on Phase 11 (§6).** D14 removes nothing already planned and adds no accounts work. D15 joins **11.9 Settings**
+(one card, plus the per-agent field in **11.8**). D17 adds a `source` object to jobs in **11.2 Contract** and the
+report-back step to the job's end in **11.1**; the trigger side of D13 lands with it. Add a **"One Score per team"**
+section to `docs/SETUP.md`: a VM, Docker for agents, and Tailscale or Score's HTTPS remote mode to reach it.
+
+**Open:** how a trigger's call names the outside reference (a fixed field in the payload, or a path the trigger maps,
+e.g. `$.ticket.id`), and whether report-back is a fixed MCP tool name the app must offer or a step lead performs
+with whatever tools the app exposes. The design review in 11.0 decides.
