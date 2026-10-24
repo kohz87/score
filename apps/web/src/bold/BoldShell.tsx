@@ -74,10 +74,19 @@ export function BoldShell() {
   const light = manualLight ?? systemLight
   const [commandOpen, setCommandOpen] = useState(false)
   const [startOpen, setStartOpen] = useState(false)
-  // `?start=job` opens the Start a job dialog from any bold address (bold-links.ts).
+  // `?start=job` opens the Start a job dialog from any bold address (bold-links.ts). Drop it at once so a reload
+  // doesn't reopen the dialog, and leave any other query (`job`, `with`, …) alone.
   useEffect(() => {
-    if (new URLSearchParams(location.search).get('start') === 'job') setStartOpen(true)
-  }, [location.search])
+    const params = new URLSearchParams(location.search)
+    if (params.get('start') !== 'job') return
+    setStartOpen(true)
+    params.delete('start')
+    const search = params.toString()
+    void navigate(
+      { pathname: location.pathname, search: search ? `?${search}` : '' },
+      { replace: true },
+    )
+  }, [location.search, location.pathname, navigate])
   const openStartJob = useCallback(() => setStartOpen(true), [])
   const closeStartJob = useCallback(() => {
     setStartOpen(false)

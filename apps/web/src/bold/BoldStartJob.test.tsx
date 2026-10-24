@@ -296,7 +296,9 @@ test('?start=job and the room button open the dialog, and the checklist protects
   fireEvent.click(acknowledgement(dialog))
   await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
 
+  // A filled-in form asks before it is thrown away.
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+  fireEvent.click(await within(dialog).findByRole('button', { name: 'Discard' }))
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Start a job' })).toBeNull())
   fireEvent.click(screen.getByRole('button', { name: 'Start a job' }))
   expect(await startDialog()).toBeDefined()
@@ -319,11 +321,13 @@ test('the recipe, When and required inputs each block and then unblock Start', a
     expect(within(dialog).getByText('The job opens in the team room')).toBeDefined(),
   )
 
+  // A schedule runs as a routine of the lead: the recipe choice goes away and Start stays open.
   fireEvent.click(within(dialog).getByRole('radio', { name: 'On a schedule' }))
-  expect(within(dialog).getByLabelText('Schedule')).toBeDefined()
-  expect(start.hasAttribute('disabled')).toBe(true)
-  expect(within(dialog).getByText(/A saved recipe or a plain job runs now/)).toBeDefined()
+  expect(within(dialog).getByRole('combobox', { name: 'Schedule' })).toBeDefined()
+  expect(within(dialog).queryByRole('radiogroup', { name: 'Recipe' })).toBeNull()
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
 
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'Now, once' }))
   fireEvent.click(within(dialog).getByRole('radio', { name: 'lead decides' }))
   await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
 

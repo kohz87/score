@@ -5,6 +5,8 @@ import {
   oneStepRecipe,
   orchestrationPolicy,
   orchestrationTitleOf,
+  scheduleLabel,
+  scheduleValue,
   titleOf,
   triggerNameOf,
   triggerRequest,
@@ -21,13 +23,22 @@ test('titles come from the first line and stay inside the contract limits', () =
   expect(triggerNameOf('z'.repeat(200), 'Ignored')).toHaveLength(100)
 })
 
-test('a time later today is today; one already passed is tomorrow; no time means no deadline', () => {
-  const now = new Date('2026-10-24T12:30:00.000Z')
-  expect(deadlineIso('18:00', now)).toBe('2026-10-24T18:00:00.000Z')
-  expect(deadlineIso('09:00', now)).toBe('2026-10-25T09:00:00.000Z')
-  expect(deadlineIso('12:30', now)).toBe('2026-10-25T12:30:00.000Z')
-  expect(deadlineIso('', now)).toBeUndefined()
-  expect(deadlineIso('25:00', now)).toBeUndefined()
+test('a datetime-local deadline becomes an ISO instant; empty or unreadable means no deadline', () => {
+  expect(deadlineIso('2026-10-24T18:00')).toBe(new Date('2026-10-24T18:00').toISOString())
+  expect(deadlineIso('2026-10-25T09:30')).toBe(new Date('2026-10-25T09:30').toISOString())
+  expect(deadlineIso('')).toBeUndefined()
+  expect(deadlineIso('not a date')).toBeUndefined()
+})
+
+test('schedule labels send values the Hermes scheduler accepts, and values show as labels', () => {
+  expect(scheduleValue('Every weekday at 9:00')).toBe('0 9 * * 1-5')
+  expect(scheduleValue('Every Monday at 9:00')).toBe('0 9 * * 1')
+  expect(scheduleValue('Every hour')).toBe('every 1h')
+  expect(scheduleValue('0 7 * * *')).toBe('0 7 * * *')
+  expect(scheduleLabel('0 9 * * 1-5')).toBe('Every weekday at 9:00')
+  expect(scheduleLabel('0 9 * * 1')).toBe('Every Monday at 9:00')
+  expect(scheduleLabel('every 1h')).toBe('Every hour')
+  expect(scheduleLabel('0 7 * * *')).toBe('0 7 * * *')
 })
 
 test('the three ask choices map onto the orchestration and workflow gate policies', () => {

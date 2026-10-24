@@ -11,7 +11,27 @@ export type StartCheck = {
   text: string
 }
 
-export const SCHEDULES = ['Every weekday at 9:00', 'Every Monday at 9:00', 'Every hour'] as const
+/**
+ * The labels are what people pick; the values are what Hermes' scheduler takes (cron, or `every 1h`). The classic
+ * Routines tab shows the same placeholder. Sending a label made Hermes reject the routine.
+ */
+export const SCHEDULES = [
+  { label: 'Every weekday at 9:00', value: '0 9 * * 1-5' },
+  { label: 'Every Monday at 9:00', value: '0 9 * * 1' },
+  { label: 'Every hour', value: 'every 1h' },
+] as const
+
+export type ScheduleLabel = (typeof SCHEDULES)[number]['label']
+
+/** The schedule value to send for a label; an unknown label is passed through, as routines may also take cron. */
+export function scheduleValue(label: string): string {
+  return SCHEDULES.find((option) => option.label === label)?.value ?? label
+}
+
+/** A routine's stored schedule as the label people chose, when it is one of them. */
+export function scheduleLabel(value: string): string {
+  return SCHEDULES.find((option) => option.value === value)?.label ?? value
+}
 
 /** The job's name: the first line of what the person asked for, bounded like a job title. */
 export function titleOf(what: string): string {
@@ -30,19 +50,13 @@ export function triggerNameOf(name: string, what: string): string {
 }
 
 /**
- * The prototype asks for a time, not a date. A time already passed means tomorrow's, so the run never starts with a
- * deadline in the past (which the server would refuse). An empty time means no deadline.
+ * A datetime-local value (the date and the time the person sees) as the server's ISO deadline. Empty means no
+ * deadline. A value that does not parse is no deadline; the form blocks Start instead of sending one.
  */
-export function deadlineIso(time: string, now = new Date()): string | undefined {
-  const match = /^(\d{2}):(\d{2})$/.exec(time)
-  if (!match) return undefined
-  const hours = Number(match[1])
-  const minutes = Number(match[2])
-  if (hours > 23 || minutes > 59) return undefined
-  const at = new Date(now)
-  at.setHours(hours, minutes, 0, 0)
-  if (at.getTime() <= now.getTime()) at.setDate(at.getDate() + 1)
-  return at.toISOString()
+export function deadlineIso(value: string): string | undefined {
+  if (value.trim() === '') return undefined
+  const at = new Date(value)
+  return Number.isNaN(at.getTime()) ? undefined : at.toISOString()
 }
 
 /** The three plain-words ask choices map onto the orchestrator's gate policies. Risky actions stay Hermes' own gate. */

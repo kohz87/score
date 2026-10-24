@@ -144,6 +144,23 @@
   gap: 14px;
 }
 
+[data-ui='bold'] .start-controls {
+  display: grid;
+  gap: 14px;
+}
+
+[data-ui='bold'] .start-controls--1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-ui='bold'] .start-controls--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+[data-ui='bold'] .start-controls--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 [data-ui='bold'] .start-when fieldset,
 [data-ui='bold'] .start-inputs {
   border: 0;
@@ -183,6 +200,24 @@
 }
 
 [data-ui='bold'] .start-deadline {
+  margin: 0;
+}
+
+[data-ui='bold'] .start-deadline-block,
+[data-ui='bold'] .start-unknown,
+[data-ui='bold'] .start-confirm,
+[data-ui='bold'] .start-save-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .start-confirm {
+  box-shadow: inset 0 0 0 1px var(--bad);
+}
+
+[data-ui='bold'] .start-unknown {
+  border: 0;
   margin: 0;
 }
 
@@ -341,7 +376,9 @@
     font-size: 28px;
   }
 
-  [data-ui='bold'] .grid3 {
+  [data-ui='bold'] .grid3,
+  [data-ui='bold'] .start-controls--2,
+  [data-ui='bold'] .start-controls--3 {
     grid-template-columns: minmax(0, 1fr);
   }
 }

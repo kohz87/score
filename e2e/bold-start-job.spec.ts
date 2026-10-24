@@ -28,7 +28,9 @@ async function openStart(page: Page, from: 'link' | 'room') {
 
 async function fillAndAcknowledge(page: Page, what: string) {
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
-  await dialog.getByLabel('What should the team do?').fill(what)
+  // A saved recipe takes no free-text "what" (its inputs say what to do).
+  const field = dialog.getByLabel('What should the team do?')
+  if (await field.isVisible().catch(() => false)) await field.fill(what)
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
   const start = dialog.getByRole('button', { name: 'Start the job' })
   await expect(start).toBeEnabled({ timeout: 30_000 })
@@ -66,7 +68,11 @@ async function createWorkflow(page: Page, name: string): Promise<string> {
 async function teamJobs(page: Page) {
   const response = await page.request.get('/api/team-room')
   expect(response.ok()).toBe(true)
-  return ((await response.json()) as { jobs: { id: string; title: string }[] }).jobs
+  return (
+    (await response.json()) as {
+      jobs: { id: string; title: string; recipe: { kind: string; ref: string } | null }[]
+    }
+  ).jobs
 }
 
 for (const size of sizes) {
@@ -89,8 +95,12 @@ for (const size of sizes) {
         .toBe(true)
       const runs = await page.request.get('/api/orchestrations')
       expect(runs.ok()).toBe(true)
-      const body = (await runs.json()) as { items: { title: string }[] }
-      expect(body.items.some((run) => run.title === title)).toBe(true)
+      const body = (await runs.json()) as { items: { id: string; title: string }[] }
+      const run = body.items.find((item) => item.title === title)
+      expect(run).toBeDefined()
+      // The team-room job is linked to the orchestration it started (11.10c contract).
+      const job = (await teamJobs(page)).find((item) => item.title === title)
+      expect(job?.recipe).toEqual({ kind: 'orchestration', ref: run!.id })
     })
 
     test('None starts a plain job in the team room from the room button', async ({ page }) => {
@@ -131,7 +141,10 @@ for (const size of sizes) {
       const title = tag('Scheduled job')
       const dialog = await openStart(page, 'link')
       await dialog.getByRole('radio', { name: 'On a schedule' }).click()
-      await expect(dialog.getByLabel('Schedule')).toHaveValue('Every weekday at 9:00')
+      // People pick the label; the routine gets the value Hermes' scheduler takes (asserted below).
+      await expect(dialog.getByRole('combobox', { name: 'Schedule' })).toHaveValue(
+        'Every weekday at 9:00',
+      )
       const { start } = await fillAndAcknowledge(page, title)
       await start.click()
 
@@ -139,8 +152,8 @@ for (const size of sizes) {
       await expect(dialog).toContainText('It repeats every weekday at 9:00.')
       const routines = await page.request.get('/api/agents/lead/routines')
       expect(routines.ok()).toBe(true)
-      const body = (await routines.json()) as { items: { title: string }[] }
-      expect(body.items.some((routine) => routine.title === title)).toBe(true)
+      const body = (await routines.json()) as { items: { title: string; schedule: string }[] }
+      expect(body.items.find((routine) => routine.title === title)?.schedule).toBe('0 9 * * 1-5')
 
       await dialog.getByRole('button', { name: 'Done' }).click()
       const reopened = await openStart(page, 'room')

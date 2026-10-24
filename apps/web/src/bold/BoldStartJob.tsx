@@ -9,6 +9,7 @@ import {
   WorkflowRunCreatedSchema,
   WorkflowVersionSchema,
   type AgentSummary,
+  type CostSource,
   type OrchestrationCreate,
   type WorkflowRunCreate,
 } from '@score/contract'
@@ -21,15 +22,19 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type ReactNode,
 } from 'react'
+import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../data/api.ts'
 import { copyText } from '../data/clipboard.ts'
+import { newId } from '../data/ids.ts'
 import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { describeCreateError } from '../routes/orchestrations/NewOrchestrationDialog.tsx'
-import { post, usePreflight } from '../routes/orchestrations/orchestration-queries.ts'
+import { usePreflight } from '../routes/orchestrations/orchestration-queries.ts'
+import { sourceName } from '../routes/orchestrations/decision-parts.tsx'
 import { fetchRoutines, routinesKey } from '../routes/team/routine-queries.ts'
 import {
   useWorkflow,
@@ -42,6 +47,8 @@ import {
   oneStepRecipe,
   orchestrationPolicy,
   orchestrationTitleOf,
+  scheduleLabel,
+  scheduleValue,
   SCHEDULES,
   titleOf,
   triggerNameOf,
@@ -58,11 +65,29 @@ type RecipeChoice =
 
 type Result =
   | { kind: 'job'; title: string; jobId: string; orchestrationId?: string }
-  | { kind: 'workflow'; title: string; runId: string }
+  | { kind: 'workflow'; title: string; runId: string; jobId?: string }
   | { kind: 'routine'; title: string; schedule: string }
   | { kind: 'trigger'; title: string; url: string | null; secret: string }
 
+type JobLimits = {
+  exchangeBudget?: number
+  jobTurnLimit?: number
+  spendCapUsd?: number
+}
+
+/** What exists if the second step of a start fails: the run, the job yet to make, and the link to the run. */
+type PartialJob = {
+  kind: 'orchestration' | 'workflow'
+  ref: string
+  title: string
+  briefId: string
+  jobTitle: string
+  limits: JobLimits
+}
+
 const NO_AGENTS: AgentSummary[] = []
+/** The contract's default for a job's whole turn budget; a plain job's exchange slider is per back-and-forth. */
+const JOB_TURN_LIMIT = 40
 
 export const StartJobContext = createContext<{ openStartJob: () => void } | null>(null)
 
@@ -176,6 +201,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDivElement>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
   const titleId = useId()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const agents = useStreamQuery(agentsQuery).data ?? NO_AGENTS
   const workflows = useWorkflows()
@@ -192,10 +218,13 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const [ask, setAsk] = useState<Ask>('risky')
   const [turns, setTurns] = useState(8)
   const [cap, setCap] = useState(5)
-  const [deadline, setDeadline] = useState('18:00')
-  const [schedule, setSchedule] = useState<string>(SCHEDULES[0])
+  const [deadlineEnabled, setDeadlineEnabled] = useState(false)
+  const [deadline, setDeadline] = useState('')
+  const [schedule, setSchedule] = useState<string>(SCHEDULES[0].label)
   const [triggerApp, setTriggerApp] = useState('Another app')
   const [triggerName, setTriggerName] = useState('')
+  const [unknownSpend, setUnknownSpend] = useState<'pause' | 'continue'>('pause')
+  const [unknownCost, setUnknownCost] = useState<CostSource[]>([])
   const [ack, setAck] = useState(false)
   const [reachAccepted, setReachAccepted] = useState(false)
   const [saveRecipe, setSaveRecipe] = useState(false)
@@ -204,6 +233,16 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<Result | null>(null)
+  const [partial, setPartial] = useState<PartialJob | null>(null)
+  const [saveWarning, setSaveWarning] = useState<string | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  // One key for one start attempt; a retry of the job step replays instead of making a second run or job.
+  const attemptKey = useRef<string | null>(null)
+  const starting = useRef(false)
+  const savedRecipeName = useRef<string | null>(null)
+  const returnFocus = useRef<HTMLElement | null>(null)
+  const recipeButtons = useRef(new Map<string, HTMLButtonElement>())
 
   const hermesAgents = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
   const teamLead = teamRoom.data?.room.leadAgentId ?? null
@@ -238,16 +277,14 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   })
 
   useEffect(() => {
+    returnFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
     dialog.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onClose()
-      }
+    return () => {
+      const opener = returnFocus.current
+      if (opener?.isConnected) opener.focus()
     }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+  }, [])
 
   const orchestrationWorkers = orchestrationPreflight.data?.workers ?? []
   const workflowWorkers = workflowPreflight.data?.workers ?? []
@@ -272,15 +309,30 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   )
   const reachCovered = reachAtStake.length === 0 || reachAccepted
 
+  const nowOnce = when === 'once'
+  const isLead = nowOnce && recipe.kind === 'lead'
+  const isPlain = nowOnce && recipe.kind === 'none'
+  const isSavedRecipe = nowOnce && recipe.kind === 'workflow'
+  const showWhat = !isSavedRecipe
+  const showRecipe = nowOnce
+  const showAsk = nowOnce && !isPlain
+  const showDeadline = nowOnce && !isPlain
+  const showUnknownCost = nowOnce && isSavedRecipe
+  const showSaveRecipe = nowOnce && !isSavedRecipe
+  const jobTitle = isSavedRecipe && nowOnce ? titleOf(recipe.name) : titleOf(what)
+  const saveName = orchestrationTitleOf(what)
+  const deadlineAt = deadlineEnabled ? deadlineIso(deadline) : undefined
+  const deadlinePast = deadlineAt !== undefined && Date.parse(deadlineAt) <= Date.now()
+
   const missingInputs =
-    recipe.kind === 'workflow' && workflowDefinition
+    isSavedRecipe && workflowDefinition
       ? workflowDefinition.inputs.filter(
           (input) => input.required && (inputs[input.name] ?? '').trim() === '',
         )
       : []
 
-  let checks: StartCheck[] = [checkOf(teamRoom)]
-  if (recipe.kind === 'workflow') {
+  let checks: StartCheck[] = []
+  if (isSavedRecipe) {
     const preflight = workflowPreflight.data
     checks = [
       checkOf(teamRoom),
@@ -306,10 +358,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
           ]
         : []),
     ]
-  } else if (recipe.kind === 'lead' && when === 'once') {
+  } else if (isLead && nowOnce) {
     const preflight = orchestrationPreflight.data
     checks = [
-      ...checks,
+      checkOf(teamRoom),
       ...checksFromPreflight(
         orchestrationPreflight.isPending,
         orchestrationPreflight.isError,
@@ -325,8 +377,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
           ]
         : []),
     ]
-  } else if (when === 'once') {
-    checks.push({ key: 'job', status: 'ok', text: 'The job opens in the team room' })
+  } else if (nowOnce) {
+    checks = [
+      checkOf(teamRoom),
+      { key: 'job', status: 'ok', text: 'The job opens in the team room' },
+    ]
   } else if (when === 'schedule') {
     checks.push(
       leadId
@@ -354,12 +409,17 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
         : { key: 'trigger-app', status: 'fail', text: 'Name the app it comes from' },
     )
   }
-  if (when !== 'once' && recipe.kind !== 'lead')
+  if (showDeadline && deadlineEnabled) {
     checks.push({
-      key: 'recipe-when',
-      status: 'fail',
-      text: 'A saved recipe or a plain job runs now; schedules and triggers ask the lead. Choose “lead decides”, or “Now, once”.',
+      key: 'deadline',
+      status: deadlineAt && !deadlinePast ? 'ok' : 'fail',
+      text: !deadlineAt
+        ? 'Pick a deadline date and time'
+        : deadlinePast
+          ? 'Pick a deadline in the future'
+          : 'The run stops if that deadline passes',
     })
+  }
   if (!reachCovered)
     checks.push({
       key: 'reach',
@@ -368,47 +428,261 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     })
 
   const checksPass = checks.length > 0 && checks.every((check) => check.status === 'ok')
-  const hasWhat = what.trim().length > 0
+  const hasWhat = (isSavedRecipe && nowOnce) || what.trim().length > 0
+  const needsLead = isLead || when === 'schedule'
   const canStart =
     !busy &&
     !result &&
+    !partial &&
     hasWhat &&
     ack &&
     checksPass &&
     reachCovered &&
     missingInputs.length === 0 &&
-    leadId !== ''
+    (!needsLead || leadId !== '')
 
   const savedRecipes = workflows.data?.items ?? []
+  const recipeOptions: { key: string; label: string; choice: RecipeChoice }[] = [
+    { key: 'lead', label: 'lead decides', choice: { kind: 'lead' } },
+    { key: 'none', label: 'None', choice: { kind: 'none' } },
+    ...savedRecipes.map((item) => ({
+      key: `workflow:${item.id}`,
+      label: item.name,
+      choice: { kind: 'workflow' as const, id: item.id, name: item.name },
+    })),
+  ]
+
+  /** A real radio group: one tab stop, arrows move and choose the next chip. */
+  function onRecipeKeyDown(event: KeyboardEvent<HTMLButtonElement>, key: string) {
+    const index = recipeOptions.findIndex((option) => option.key === key)
+    if (index < 0) return
+    const last = recipeOptions.length - 1
+    let next = index
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
+      next = index === last ? 0 : index + 1
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
+      next = index === 0 ? last : index - 1
+    else if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = last
+    else return
+    event.preventDefault()
+    const option = recipeOptions[next]
+    if (!option) return
+    chooseRecipe(option.choice)
+    recipeButtons.current.get(option.key)?.focus()
+  }
+
+  function touch() {
+    setDirty(true)
+    setConfirmClose(false)
+    attemptKey.current = null
+  }
+
+  /** One key for one attempt: a replayed request returns the first answer, and a retry never makes a second run. */
+  function attemptPost(path: string, body: unknown) {
+    const key = attemptKey.current ?? newId()
+    attemptKey.current = key
+    return apiFetch(path, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': key },
+      body: JSON.stringify(body),
+    })
+  }
+
+  function requestClose() {
+    if ((result?.kind === 'trigger' && !confirmClose) || (!result && !partial && dirty)) {
+      setConfirmClose(true)
+      return
+    }
+    onClose()
+  }
+
+  function onDialogKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      requestClose()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const controls = [
+      ...(dialog.current?.querySelectorAll<HTMLElement>(
+        'input:not([disabled]), button:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]',
+      ) ?? []),
+    ].filter((element) => element.tabIndex >= 0)
+    const first = controls[0]
+    const last = controls[controls.length - 1]
+    if (!first || !last) return
+    const active = document.activeElement
+    if (event.shiftKey && (active === first || active === dialog.current)) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && (active === last || active === dialog.current)) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
 
   function chooseRecipe(next: RecipeChoice) {
     setRecipe(next)
     setReachAccepted(false)
     setError(null)
     setResult(null)
+    setPartial(null)
+    touch()
+  }
+
+  function jobLimits(): JobLimits {
+    if (!nowOnce || isSavedRecipe) return {}
+    return {
+      exchangeBudget: turns,
+      jobTurnLimit: JOB_TURN_LIMIT,
+      ...(cap > 0 ? { spendCapUsd: cap } : {}),
+    }
+  }
+
+  async function createJob(
+    title: string,
+    limits: JobLimits,
+    recipeLink?: { kind: 'orchestration' | 'workflow'; ref: string },
+  ) {
+    if (!teamRoom.data) throw new Error('The team room is not ready yet.')
+    return JobSchema.parse(
+      await attemptPost(`rooms/${encodeURIComponent(teamRoom.data.room.id)}/jobs`, {
+        title,
+        ...limits,
+        ...(recipeLink ? { recipe: recipeLink } : {}),
+      }),
+    )
+  }
+
+  async function startOrchestration() {
+    const data = orchestrationPreflight.data
+    if (!data) throw new Error('The checks are not ready yet.')
+    const codingPolicies = Object.fromEntries(
+      orchestrationWorkers.flatMap((worker) =>
+        worker.policyId ? [[worker.agentId, worker.policyId] as const] : [],
+      ),
+    )
+    const body: OrchestrationCreate = {
+      title: orchestrationTitleOf(what),
+      goal: what.trim(),
+      leadAgentId: leadId,
+      allowedAgents: allowedFor,
+      gatePolicy: orchestrationPolicy(ask),
+      ...(cap > 0 ? { budgetUsd: cap } : {}),
+      ...(deadlineAt ? { deadlineAt } : {}),
+      maxSteps: ORCH_DEFAULTS.maxSteps,
+      maxLeadTurns: turns,
+      maxConcurrentSteps: ORCH_DEFAULTS.maxConcurrentSteps,
+      leadTurnEstimateUsd: ORCH_DEFAULTS.leadTurnEstimateUsd,
+      stepEstimateUsd: ORCH_DEFAULTS.stepEstimateUsd,
+      acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
+      ...(orchestrationWorkers.length > 0
+        ? {
+            codingPolicies,
+            codingSteps: ORCH_DEFAULTS.codingSteps,
+            ...(orchestrationReach.length > 0
+              ? { acknowledgeCodingReach: { policyIds: orchestrationReach } }
+              : {}),
+          }
+        : {}),
+    }
+    return OrchestrationCreatedSchema.parse(await attemptPost('orchestrations', body))
+  }
+
+  async function startWorkflow() {
+    if (recipe.kind !== 'workflow') throw new Error('The recipe is not ready yet.')
+    if (!workflowDefinition || workflowVersion === undefined || !workflowPreflight.data)
+      throw new Error('The recipe is not ready yet.')
+    const data = workflowPreflight.data
+    const codingPolicies = Object.fromEntries(
+      workflowWorkers.flatMap((worker) =>
+        worker.policyId ? [[worker.agentId, worker.policyId] as const] : [],
+      ),
+    )
+    const body: WorkflowRunCreate = {
+      workflowId: recipe.id,
+      version: workflowVersion,
+      inputs: Object.fromEntries(
+        workflowDefinition.inputs.flatMap((input) => {
+          const value = (inputs[input.name] ?? '').trim()
+          return value ? [[input.name, value] as const] : []
+        }),
+      ),
+      agentMap: data.mapping.map(({ agentId, incarnation }) => ({ agentId, incarnation })),
+      gatePolicy: workflowPolicy(ask),
+      ...(cap > 0 ? { budgetUsd: cap } : {}),
+      ...(deadlineAt ? { deadlineAt } : {}),
+      unknownSpend,
+      maxConcurrentSteps: data.defaults.maxConcurrentSteps,
+      stepEstimateUsd: data.defaults.stepEstimateUsd,
+      acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
+      ...(workflowWorkers.length > 0
+        ? {
+            codingPolicies,
+            codingSteps: data.defaults.codingSteps ?? 1,
+            ...(workflowReach.length > 0
+              ? { acknowledgeCodingReach: { policyIds: workflowReach } }
+              : {}),
+            ...(unknownSpend === 'pause' && unknownCost.length > 0
+              ? { acceptUnknownCost: unknownCost }
+              : {}),
+          }
+        : {}),
+    }
+    return WorkflowRunCreatedSchema.parse(await attemptPost('workflow-runs', body))
+  }
+
+  async function createLinkedJob(
+    kind: PartialJob['kind'],
+    ref: string,
+    briefId: string,
+    runTitle: string,
+    title: string,
+  ) {
+    const limits = jobLimits()
+    try {
+      const job = await createJob(title, limits, { kind, ref })
+      return { job, limits }
+    } catch (failure) {
+      setPartial({ kind, ref, briefId, title: runTitle, jobTitle: title, limits })
+      setError(startError(failure))
+      return null
+    }
+  }
+
+  /** Saving a recipe happens after the work exists: a failed start must not leave a recipe behind. */
+  async function saveRecipeAfterStart() {
+    if (!saveRecipe || !showSaveRecipe || !leadId) return
+    if (savedRecipeName.current === saveName) return
+    savedRecipeName.current = saveName
+    try {
+      await attemptPost('workflows', {
+        definition: oneStepRecipe({ name: saveName, instruction: what, agentId: leadId }),
+      }).then((body) => WorkflowVersionSchema.parse(body))
+      await queryClient.invalidateQueries({ queryKey: ['workflows'] })
+      if (savedRecipes.some((item) => item.name === saveName))
+        setSaveWarning(`Saved “${saveName}” again; a recipe with that name already existed.`)
+    } catch (failure) {
+      setSaveWarning(`It started, but saving the recipe failed: ${startError(failure)}`)
+    }
   }
 
   async function start() {
-    if (!canStart) return
+    if (!canStart || starting.current) return
+    starting.current = true
     setBusy(true)
     setError(null)
+    setPartial(null)
+    setSaveWarning(null)
     try {
-      const title = titleOf(what)
-      const deadlineAt = deadlineIso(deadline)
-      if (saveRecipe && recipe.kind !== 'workflow') {
-        await post('workflows', {
-          definition: oneStepRecipe({
-            name: orchestrationTitleOf(what),
-            instruction: what,
-            agentId: leadId,
-          }),
-        }).then((body) => WorkflowVersionSchema.parse(body))
-        await queryClient.invalidateQueries({ queryKey: ['workflows'] })
-      }
-
+      const title = jobTitle
       if (when === 'webhook') {
         const made = TriggerCreatedSchema.parse(
-          await post('triggers', triggerRequest({ name: triggerName, app: triggerApp, what })),
+          await attemptPost(
+            'triggers',
+            triggerRequest({ name: triggerName, app: triggerApp, what }),
+          ),
         )
         setResult({
           kind: 'trigger',
@@ -421,107 +695,93 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
 
       if (when === 'schedule') {
         const made = RoutineSummarySchema.parse(
-          await post(`agents/${encodeURIComponent(leadId)}/routines`, {
+          await attemptPost(`agents/${encodeURIComponent(leadId)}/routines`, {
             title,
-            schedule,
+            schedule: scheduleValue(schedule),
             prompt: what.trim(),
           }),
         )
         await queryClient.invalidateQueries({ queryKey: routinesKey(leadId), exact: true })
-        setResult({ kind: 'routine', title: made.title, schedule: made.schedule })
+        setResult({ kind: 'routine', title: made.title, schedule })
         return
       }
 
-      if (recipe.kind === 'workflow') {
-        if (!workflowDefinition || workflowVersion === undefined || !workflowPreflight.data)
-          throw new Error('The recipe is not ready yet.')
-        const data = workflowPreflight.data
-        const codingPolicies = Object.fromEntries(
-          workflowWorkers.flatMap((worker) =>
-            worker.policyId ? [[worker.agentId, worker.policyId] as const] : [],
-          ),
+      if (isSavedRecipe) {
+        const made = await startWorkflow()
+        const linked = await createLinkedJob(
+          'workflow',
+          made.run.id,
+          made.run.briefId,
+          made.run.title,
+          title,
         )
-        const body: WorkflowRunCreate = {
-          workflowId: recipe.id,
-          version: workflowVersion,
-          inputs: Object.fromEntries(
-            workflowDefinition.inputs.flatMap((input) => {
-              const value = (inputs[input.name] ?? '').trim()
-              return value ? [[input.name, value] as const] : []
-            }),
-          ),
-          agentMap: data.mapping.map(({ agentId, incarnation }) => ({ agentId, incarnation })),
-          gatePolicy: workflowPolicy(ask),
-          ...(cap > 0 ? { budgetUsd: cap } : {}),
-          ...(deadlineAt ? { deadlineAt } : {}),
-          unknownSpend: 'pause',
-          maxConcurrentSteps: data.defaults.maxConcurrentSteps,
-          stepEstimateUsd: data.defaults.stepEstimateUsd,
-          acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
-          ...(workflowWorkers.length > 0
-            ? {
-                codingPolicies,
-                codingSteps: data.defaults.codingSteps ?? 1,
-                ...(workflowReach.length > 0
-                  ? { acknowledgeCodingReach: { policyIds: workflowReach } }
-                  : {}),
-              }
-            : {}),
-        }
-        const made = WorkflowRunCreatedSchema.parse(await post('workflow-runs', body))
-        setResult({ kind: 'workflow', title: made.run.title, runId: made.run.id })
-        return
-      }
-
-      if (!teamRoom.data) throw new Error('The team room is not ready yet.')
-      const job = JobSchema.parse(
-        await post(`rooms/${encodeURIComponent(teamRoom.data.room.id)}/jobs`, { title }),
-      )
-      if (recipe.kind === 'lead') {
-        const data = orchestrationPreflight.data
-        if (!data) throw new Error('The checks are not ready yet.')
-        const codingPolicies = Object.fromEntries(
-          orchestrationWorkers.flatMap((worker) =>
-            worker.policyId ? [[worker.agentId, worker.policyId] as const] : [],
-          ),
+        if (!linked) return
+        setResult({
+          kind: 'workflow',
+          title: made.run.title,
+          runId: made.run.id,
+          jobId: linked.job.id,
+        })
+      } else if (isLead) {
+        const made = await startOrchestration()
+        const linked = await createLinkedJob(
+          'orchestration',
+          made.orchestration.id,
+          made.orchestration.briefId,
+          made.orchestration.title,
+          title,
         )
-        const body: OrchestrationCreate = {
-          title: orchestrationTitleOf(what),
-          goal: what.trim(),
-          leadAgentId: leadId,
-          allowedAgents: allowedFor,
-          gatePolicy: orchestrationPolicy(ask),
-          ...(cap > 0 ? { budgetUsd: cap } : {}),
-          ...(deadlineAt ? { deadlineAt } : {}),
-          maxSteps: ORCH_DEFAULTS.maxSteps,
-          maxLeadTurns: turns,
-          maxConcurrentSteps: ORCH_DEFAULTS.maxConcurrentSteps,
-          leadTurnEstimateUsd: ORCH_DEFAULTS.leadTurnEstimateUsd,
-          stepEstimateUsd: ORCH_DEFAULTS.stepEstimateUsd,
-          acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
-          ...(orchestrationWorkers.length > 0
-            ? {
-                codingPolicies,
-                codingSteps: ORCH_DEFAULTS.codingSteps,
-                ...(orchestrationReach.length > 0
-                  ? { acknowledgeCodingReach: { policyIds: orchestrationReach } }
-                  : {}),
-              }
-            : {}),
-        }
-        const made = OrchestrationCreatedSchema.parse(await post('orchestrations', body))
+        if (!linked) return
         setResult({
           kind: 'job',
           title,
-          jobId: job.id,
+          jobId: linked.job.id,
           orchestrationId: made.orchestration.id,
         })
       } else {
+        const job = await createJob(title, jobLimits())
         setResult({ kind: 'job', title, jobId: job.id })
       }
+      await saveRecipeAfterStart()
     } catch (failure) {
       setError(startError(failure))
     } finally {
+      starting.current = false
+      setBusy(false)
+    }
+  }
+
+  async function createJobAgain() {
+    if (!partial || starting.current) return
+    const pending = partial
+    starting.current = true
+    setBusy(true)
+    setError(null)
+    try {
+      const job = await createJob(pending.jobTitle, pending.limits, {
+        kind: pending.kind,
+        ref: pending.ref,
+      })
+      setPartial(null)
+      if (pending.kind === 'orchestration')
+        setResult({
+          kind: 'job',
+          title: pending.jobTitle,
+          jobId: job.id,
+          orchestrationId: pending.ref,
+        })
+      else
+        setResult({
+          kind: 'workflow',
+          title: pending.title,
+          runId: pending.ref,
+          jobId: job.id,
+        })
+      await saveRecipeAfterStart()
+    } catch (failure) {
+      setError(startError(failure))
+    } finally {
+      starting.current = false
       setBusy(false)
     }
   }
@@ -530,7 +790,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     <div
       className="bold-start-scrim"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
+        if (event.target === event.currentTarget) requestClose()
       }}
     >
       <div
@@ -542,6 +802,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
         tabIndex={-1}
         data-protected="block"
         data-decision
+        onKeyDown={onDialogKeyDown}
       >
         <div className="row">
           <h2 id={titleId} className="grow start-title">
@@ -552,77 +813,107 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
             type="button"
             className="icon-btn"
             aria-label="Close"
-            onClick={onClose}
+            onClick={requestClose}
           >
             <CloseIcon />
           </button>
         </div>
 
+        {confirmClose && (
+          <CloseConfirm
+            secret={result?.kind === 'trigger'}
+            onKeep={() => setConfirmClose(false)}
+            onClose={onClose}
+          />
+        )}
+
         {result ? (
-          <ResultCard result={result} onClose={onClose} />
+          <ResultCard result={result} saveWarning={saveWarning} onClose={onClose} />
+        ) : partial ? (
+          <PartialCard
+            partial={partial}
+            busy={busy}
+            error={error}
+            onRetry={() => void createJobAgain()}
+            onClose={onClose}
+          />
         ) : (
           <>
-            <div>
-              <label htmlFor="start-what" className="lab">
-                What should the team do?
-              </label>
-              <textarea
-                id="start-what"
-                className="field start-what"
-                rows={2}
-                maxLength={4000}
-                value={what}
-                onChange={(event) => setWhat(event.target.value)}
-                autoFocus
-              />
-            </div>
-
-            <div>
-              <span className="lab">Recipe</span>
-              <div className="row wrap" role="radiogroup" aria-label="Recipe">
-                <RecipeChip
-                  chosen={recipe.kind === 'lead'}
-                  label="lead decides"
-                  onClick={() => chooseRecipe({ kind: 'lead' })}
+            {showWhat && (
+              <div>
+                <label htmlFor="start-what" className="lab">
+                  What should the team do?
+                </label>
+                <textarea
+                  id="start-what"
+                  className="field start-what"
+                  rows={2}
+                  maxLength={4000}
+                  value={what}
+                  onChange={(event) => {
+                    setWhat(event.target.value)
+                    touch()
+                  }}
+                  autoFocus
                 />
-                <RecipeChip
-                  chosen={recipe.kind === 'none'}
-                  label="None"
-                  onClick={() => chooseRecipe({ kind: 'none' })}
-                />
-                {savedRecipes.map((item) => (
-                  <RecipeChip
-                    key={item.id}
-                    chosen={recipe.kind === 'workflow' && recipe.id === item.id}
-                    label={item.name}
-                    onClick={() => chooseRecipe({ kind: 'workflow', id: item.id, name: item.name })}
-                  />
-                ))}
-                <button
-                  type="button"
-                  className="link"
-                  disabled
-                  title="The recipe editor comes in 11.10d"
-                >
-                  Edit recipes
-                </button>
               </div>
-              {recipe.kind === 'workflow' && workflowDefinition && (
-                <div className="inner start-recipe-preview">
-                  <span className="small muted">
-                    {recipe.name} · version {workflowVersion}
-                  </span>
-                  <span className="small">
-                    {workflowDefinition.nodes
-                      .filter((node) => node.kind === 'agent')
-                      .map((node) => node.label)
-                      .join(' → ')}
-                  </span>
-                </div>
-              )}
-            </div>
+            )}
 
-            {recipe.kind === 'lead' && when === 'once' && (
+            {showRecipe && (
+              <div>
+                <span className="lab">Recipe</span>
+                <div className="row wrap" role="radiogroup" aria-label="Recipe">
+                  {recipeOptions.map((option) => {
+                    const chosen =
+                      option.choice.kind === 'workflow'
+                        ? isSavedRecipe &&
+                          recipe.kind === 'workflow' &&
+                          recipe.id === option.choice.id
+                        : recipe.kind === option.choice.kind
+                    return (
+                      <RecipeChip
+                        key={option.key}
+                        chosen={chosen}
+                        label={option.label}
+                        tabIndex={chosen ? 0 : -1}
+                        buttonRef={(element) => {
+                          if (element) recipeButtons.current.set(option.key, element)
+                          else recipeButtons.current.delete(option.key)
+                        }}
+                        onKeyDown={(event) => onRecipeKeyDown(event, option.key)}
+                        onClick={() => chooseRecipe(option.choice)}
+                      />
+                    )
+                  })}
+                  <Link
+                    className="link"
+                    to="/b?recipes=1"
+                    onClick={() => {
+                      onClose()
+                      void navigate('/b?recipes=1')
+                    }}
+                  >
+                    Edit recipes
+                  </Link>
+                </div>
+                {isSavedRecipe && workflowDefinition && (
+                  <div className="inner start-recipe-preview">
+                    <span className="small muted">
+                      {recipe.kind === 'workflow' ? recipe.name : 'Recipe'} · version{' '}
+                      {workflowVersion}
+                    </span>
+                    <span className="small">
+                      {workflowDefinition.nodes
+                        .filter((node) => node.kind === 'agent')
+                        .map((node) => node.label)
+                        .join(' → ')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isLead && (
               <>
                 <div className="row wrap start-lead">
                   {leadAgent && (
@@ -639,12 +930,17 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                   agents={agents}
                   leadId={leadId}
                   chosen={allowedFor}
-                  onChange={setAllowed}
+                  onChange={(next) => {
+                    setAllowed(next)
+                    touch()
+                  }}
                 />
               </>
             )}
 
-            <div className="grid3 start-when">
+            <div
+              className={`start-controls start-controls--${!nowOnce ? 1 : showAsk ? 3 : 2} start-when`}
+            >
               <fieldset className="inner" style={{ border: 0, margin: 0 }}>
                 <legend className="lab start-legend">When</legend>
                 <div className="start-clear">
@@ -664,6 +960,8 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                           setWhen(id)
                           setError(null)
                           setResult(null)
+                          setPartial(null)
+                          touch()
                         }}
                       />
                       {label}
@@ -677,10 +975,13 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                       className="field"
                       aria-label="Schedule"
                       value={schedule}
-                      onChange={(event) => setSchedule(event.target.value)}
+                      onChange={(event) => {
+                        setSchedule(event.target.value)
+                        touch()
+                      }}
                     >
                       {SCHEDULES.map((option) => (
-                        <option key={option}>{option}</option>
+                        <option key={option.label}>{option.label}</option>
                       ))}
                     </select>
                   </label>
@@ -694,7 +995,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                         maxLength={100}
                         value={triggerName}
                         placeholder="e.g. New support ticket"
-                        onChange={(event) => setTriggerName(event.target.value)}
+                        onChange={(event) => {
+                          setTriggerName(event.target.value)
+                          touch()
+                        }}
                       />
                     </label>
                     <label className="start-field">
@@ -703,7 +1007,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                         className="field"
                         maxLength={100}
                         value={triggerApp}
-                        onChange={(event) => setTriggerApp(event.target.value)}
+                        onChange={(event) => {
+                          setTriggerApp(event.target.value)
+                          touch()
+                        }}
                       />
                     </label>
                     <span className="small muted">
@@ -715,71 +1022,173 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                 )}
               </fieldset>
 
-              <fieldset className="inner" style={{ border: 0, margin: 0 }}>
-                <legend className="lab start-legend">Ask me before</legend>
-                <div className="start-clear">
-                  {(
-                    [
-                      ['plan', 'The plan starts'],
-                      ['handoff', 'Every hand-off'],
-                      ['risky', 'Only risky actions'],
-                    ] as const
-                  ).map(([id, label]) => (
-                    <label className="check" key={id}>
-                      <input
-                        type="radio"
-                        name="start-ask"
-                        checked={ask === id}
-                        onChange={() => setAsk(id)}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              {showAsk && (
+                <fieldset className="inner" style={{ border: 0, margin: 0 }}>
+                  <legend className="lab start-legend">Ask me before</legend>
+                  <div className="start-clear">
+                    {(
+                      [
+                        ['plan', 'The plan starts'],
+                        ['handoff', 'Every hand-off'],
+                        ['risky', 'Only risky actions'],
+                      ] as const
+                    ).map(([id, label]) => (
+                      <label className="check" key={id}>
+                        <input
+                          type="radio"
+                          name="start-ask"
+                          checked={ask === id}
+                          onChange={() => {
+                            setAsk(id)
+                            touch()
+                          }}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
 
-              <div className="inner start-limits">
-                <span className="lab">Limits</span>
-                <label htmlFor="start-turns" className="row small">
-                  <span className="grow">Turns per back-and-forth</span>
-                  <b>{turns}</b>
-                </label>
-                <input
-                  id="start-turns"
-                  type="range"
-                  min={2}
-                  max={20}
-                  value={turns}
-                  onChange={(event) => setTurns(Number(event.target.value))}
-                  style={{ accentColor: 'var(--ink)' }}
-                />
-                <label htmlFor="start-cap" className="row small">
-                  <span className="grow">Spend cap</span>
-                  <b>{cap > 0 ? `$${cap.toFixed(2)}` : 'No cap'}</b>
-                </label>
-                <input
-                  id="start-cap"
-                  type="range"
-                  min={0}
-                  max={20}
-                  value={cap}
-                  onChange={(event) => setCap(Number(event.target.value))}
-                  style={{ accentColor: 'var(--ink)' }}
-                />
-                <label htmlFor="start-deadline" className="lab start-deadline">
-                  Deadline
-                </label>
-                <input
-                  id="start-deadline"
-                  type="time"
-                  className="field"
-                  value={deadline}
-                  onChange={(event) => setDeadline(event.target.value)}
-                />
-              </div>
+              {nowOnce && (
+                <div className="inner start-limits">
+                  <span className="lab">{isSavedRecipe ? 'Budget and deadline' : 'Limits'}</span>
+                  {!isSavedRecipe && (
+                    <>
+                      <label htmlFor="start-turns" className="row small">
+                        <span className="grow">Turns per back-and-forth</span>
+                        <b>{turns}</b>
+                      </label>
+                      <input
+                        id="start-turns"
+                        type="range"
+                        min={2}
+                        max={20}
+                        value={turns}
+                        onChange={(event) => {
+                          setTurns(Number(event.target.value))
+                          touch()
+                        }}
+                        style={{ accentColor: 'var(--ink)' }}
+                      />
+                    </>
+                  )}
+                  <label htmlFor="start-cap" className="row small">
+                    <span className="grow">Spend cap</span>
+                    <b>{cap > 0 ? `$${cap.toFixed(2)}` : 'No cap'}</b>
+                  </label>
+                  <input
+                    id="start-cap"
+                    type="range"
+                    min={0}
+                    max={20}
+                    value={cap}
+                    onChange={(event) => {
+                      setCap(Number(event.target.value))
+                      touch()
+                    }}
+                    style={{ accentColor: 'var(--ink)' }}
+                  />
+                  {showDeadline && (
+                    <div className="start-deadline-block">
+                      <div className="row small">
+                        <span className="grow">Deadline</span>
+                        <b>
+                          {deadlineEnabled ? deadline || 'Pick a date and time' : 'No deadline'}
+                        </b>
+                      </div>
+                      <label className="check small">
+                        <input
+                          type="checkbox"
+                          checked={deadlineEnabled}
+                          onChange={(event) => {
+                            setDeadlineEnabled(event.target.checked)
+                            touch()
+                          }}
+                        />
+                        Set a deadline
+                      </label>
+                      {deadlineEnabled && (
+                        <input
+                          id="start-deadline"
+                          type="datetime-local"
+                          className="field"
+                          aria-label="Deadline date and time"
+                          value={deadline}
+                          onChange={(event) => {
+                            setDeadline(event.target.value)
+                            touch()
+                          }}
+                        />
+                      )}
+                      <span className="small muted">If the deadline passes, the run stops.</span>
+                    </div>
+                  )}
+                  {isPlain && (
+                    <span className="small muted">
+                      A plain job has no plan to approve and no run deadline.
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
-            {recipe.kind === 'workflow' && workflowDefinition?.inputs.length ? (
+            {showUnknownCost && (
+              <fieldset className="inner start-unknown" data-protected="block">
+                <legend className="lab start-legend">
+                  When Hermes doesn’t say what a step cost
+                </legend>
+                <div className="start-clear">
+                  <label className="check small">
+                    <input
+                      type="radio"
+                      name="start-unknown"
+                      checked={unknownSpend === 'pause'}
+                      onChange={() => {
+                        setUnknownSpend('pause')
+                        touch()
+                      }}
+                    />
+                    Pause the run and ask me (when a budget is set)
+                  </label>
+                  <label className="check small">
+                    <input
+                      type="radio"
+                      name="start-unknown"
+                      checked={unknownSpend === 'continue'}
+                      onChange={() => {
+                        setUnknownSpend('continue')
+                        touch()
+                      }}
+                    />
+                    Keep going (unknown spend is never counted as zero)
+                  </label>
+                  {workflowPreflight.data && (
+                    <span className="small muted">{workflowPreflight.data.spendNote}</span>
+                  )}
+                  {unknownSpend === 'pause' &&
+                    [...new Set(workflowWorkers.map((worker) => worker.runtime))].map((source) => (
+                      <label key={source} className="check small">
+                        <input
+                          type="checkbox"
+                          checked={unknownCost.includes(source)}
+                          onChange={(event) => {
+                            setUnknownCost((list) =>
+                              event.target.checked
+                                ? [...list, source]
+                                : list.filter((item) => item !== source),
+                            )
+                            touch()
+                          }}
+                        />
+                        Keep going when the cost of {sourceName(source)} is unknown
+                      </label>
+                    ))}
+                </div>
+              </fieldset>
+            )}
+
+            {isSavedRecipe && workflowDefinition?.inputs.length ? (
               <fieldset className="inner start-inputs">
                 <legend className="lab start-legend">Inputs</legend>
                 {workflowDefinition.inputs.map((input) => (
@@ -794,9 +1203,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                       maxLength={input.maxChars}
                       required={input.required}
                       value={inputs[input.name] ?? ''}
-                      onChange={(event) =>
+                      onChange={(event) => {
                         setInputs((current) => ({ ...current, [input.name]: event.target.value }))
-                      }
+                        touch()
+                      }}
                     />
                   </label>
                 ))}
@@ -817,7 +1227,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                       <input
                         type="checkbox"
                         checked={reachAccepted}
-                        onChange={(event) => setReachAccepted(event.target.checked)}
+                        onChange={(event) => {
+                          setReachAccepted(event.target.checked)
+                          touch()
+                        }}
                       />
                       I understand what these coding agents can read, and I accept it for this job.
                     </label>
@@ -828,7 +1241,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                 <input
                   type="checkbox"
                   checked={ack}
-                  onChange={(event) => setAck(event.target.checked)}
+                  onChange={(event) => {
+                    setAck(event.target.checked)
+                    touch()
+                  }}
                 />
                 {ORCH_ACKNOWLEDGEMENT_TEXT}
               </label>
@@ -842,7 +1258,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                     <li key={item.id} className="row small">
                       <span className="grow">{item.title}</span>
                       <span className="muted">
-                        {item.agentId} · {item.schedule}
+                        {item.agentId} · {scheduleLabel(item.schedule)}
                         {item.enabled ? '' : ' · paused'}
                       </span>
                     </li>
@@ -858,15 +1274,25 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
             )}
 
             <div className="row wrap start-actions">
-              {recipe.kind !== 'workflow' && (
-                <label className="check small">
-                  <input
-                    type="checkbox"
-                    checked={saveRecipe}
-                    onChange={(event) => setSaveRecipe(event.target.checked)}
-                  />
-                  Save as a recipe
-                </label>
+              {showSaveRecipe && (
+                <div className="start-save-recipe">
+                  <label className="check small">
+                    <input
+                      type="checkbox"
+                      checked={saveRecipe}
+                      onChange={(event) => {
+                        setSaveRecipe(event.target.checked)
+                        touch()
+                      }}
+                    />
+                    Save as a recipe
+                  </label>
+                  {saveRecipe && savedRecipes.some((item) => item.name === saveName) && (
+                    <span className="small muted" role="status">
+                      A recipe called “{saveName}” already exists; saving adds another.
+                    </span>
+                  )}
+                </div>
               )}
               <button type="button" className="btn ghost start-cancel" onClick={onClose}>
                 Cancel
@@ -891,18 +1317,27 @@ function RecipeChip({
   chosen,
   label,
   onClick,
+  tabIndex,
+  buttonRef,
+  onKeyDown,
 }: {
   chosen: boolean
   label: string
   onClick: () => void
+  tabIndex: number
+  buttonRef: (element: HTMLButtonElement | null) => void
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void
 }) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={`chip ${chosen ? 'on' : ''}`}
       role="radio"
       aria-checked={chosen}
+      tabIndex={tabIndex}
       onClick={onClick}
+      onKeyDown={onKeyDown}
       style={{ background: chosen ? undefined : 'var(--field)' }}
     >
       {label}
@@ -910,7 +1345,15 @@ function RecipeChip({
   )
 }
 
-function ResultCard({ result, onClose }: { result: Result; onClose: () => void }) {
+function ResultCard({
+  result,
+  saveWarning,
+  onClose,
+}: {
+  result: Result
+  saveWarning: string | null
+  onClose: () => void
+}) {
   if (result.kind === 'trigger') {
     return (
       <div className="start-result">
@@ -930,7 +1373,8 @@ function ResultCard({ result, onClose }: { result: Result; onClose: () => void }
             <CopyButton text={result.secret} label="Copy secret" />
           </div>
           <span className="small muted">
-            Calls must be signed with the secret and arrive within five minutes.
+            Calls must be signed with the secret and arrive within five minutes. You can show the
+            secret again from Settings › Tools and triggers.
           </span>
         </div>
         <div className="row wrap start-actions">
@@ -956,9 +1400,91 @@ function ResultCard({ result, onClose }: { result: Result; onClose: () => void }
         <b>{result.title}</b>
       </p>
       <p className="muted">{detail}</p>
+      {saveWarning && (
+        <p className="small muted" role="status">
+          {saveWarning}
+        </p>
+      )}
       <div className="row wrap start-actions">
         <button type="button" className="btn primary start-cancel" onClick={onClose}>
           Done
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PartialCard({
+  partial,
+  busy,
+  error,
+  onRetry,
+  onClose,
+}: {
+  partial: PartialJob
+  busy: boolean
+  error: string | null
+  onRetry: () => void
+  onClose: () => void
+}) {
+  const what = partial.kind === 'orchestration' ? 'orchestration' : 'workflow run'
+  return (
+    <div className="start-result">
+      <h3>{partial.kind === 'orchestration' ? 'Orchestration created' : 'Recipe run started'}</h3>
+      <p>
+        <b>{partial.title}</b> exists. The job in the team room was not created.
+      </p>
+      <p className="muted">
+        The {what} is real and will not be started again. Create the job again to link it.
+      </p>
+      <Link to={`/now/flow/${encodeURIComponent(partial.briefId)}`} onClick={onClose}>
+        Open the {what}
+      </Link>
+      {error && (
+        <p className="start-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="row wrap start-actions">
+        <button type="button" className="btn ghost start-cancel" onClick={onClose}>
+          Close
+        </button>
+        <button type="button" className="btn primary" disabled={busy} onClick={onRetry}>
+          {busy ? 'Creating…' : 'Create the job again'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function CloseConfirm({
+  secret,
+  onKeep,
+  onClose,
+}: {
+  secret: boolean
+  onKeep: () => void
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="inner start-confirm"
+      role="alertdialog"
+      aria-label={secret ? 'Close without saving the secret?' : 'Discard this job?'}
+      data-protected="block"
+    >
+      <b>{secret ? 'The secret is shown only once.' : 'Discard this job?'}</b>
+      <span className="small muted">
+        {secret
+          ? 'Close without copying it? You can show it again from Settings › Tools and triggers.'
+          : 'Nothing has been started yet.'}
+      </span>
+      <div className="row wrap">
+        <button type="button" className="btn ghost" onClick={onKeep}>
+          {secret ? 'Keep the secret open' : 'Keep editing'}
+        </button>
+        <button type="button" className="btn primary" onClick={onClose}>
+          {secret ? 'Close anyway' : 'Discard'}
         </button>
       </div>
     </div>
