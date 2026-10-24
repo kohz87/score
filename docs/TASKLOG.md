@@ -1053,3 +1053,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   gaps: no job rename/close/delete, no room-delete undo, no single attach call, outside sessions carry no transcript.
   Lead merge: elsewhere mode beside the one-to-one and the thread. Full check green (coder); units 379, room-menu + room
   + one-to-ones + thread + shell e2e 77/77. Not deployed.
+- **11.11a review and 11.11a2 (lead, 2026-10-24).** Owner: Sonnet reviews every task before the merge checks, lead work
+  included, so 11.11a got a review after its merge: 0 P1. Accepted: plan-first in an exchanges room (the planner got the
+  exchange prompt and a capability, and its job stayed 'working' because the plan-first branch skipped
+  settleExchangeTurn) → 11.11a2: plan-first turns get the room context and no capability, the job state is recomputed
+  when the turn ends (test in briefs.test.ts); RoomSchema's routing default now 'exchanges'. Rejected: in-flight turns at
+  migration (the deploy stops Score first; the live copy has no pending/active turns: 56 completed, 3 failed; pending
+  turns take the new routing at admission, as intended); more exchange variants for brief pause/attachments (covered by
+  the 11.1b/11.1c exchange tests); imported rooms on exchanges (one member, `whyNot` refuses any `to` outside the room,
+  same session context as before); fake.test counts (exact job.upserted counts asserted). 11.11a2's own Sonnet review:
+  0 P1/P2; two P3s taken (comment, 'working' asserted first). Server suite 4824 green.
