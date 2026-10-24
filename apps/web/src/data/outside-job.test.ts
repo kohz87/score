@@ -317,3 +317,88 @@ test('falls back to the source label when the session has no title', async () =>
   )
   expect(JSON.parse(String(created?.[1]?.body))).toEqual({ title: 'From Telegram' })
 })
+
+test('a request still running on the server keeps its key, so the retry gets the stored job', async () => {
+  const calls: Call[] = []
+  let pending = true
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      record(calls, input, init)
+      const url = String(input)
+      if (url === '/api/outside-sessions/import')
+        return Response.json({ roomId: 'room-imported', imported: 1 })
+      if (url.startsWith('/api/rooms/room-imported/messages?'))
+        return Response.json({
+          asOfSeq: 1,
+          items: [message('message-1', 'Only one.', 1)],
+          nextCursor: null,
+          jobId: 'job-imported',
+        })
+      if (url === '/api/rooms/team-room/jobs' && init?.method === 'POST') {
+        if (pending) {
+          pending = false
+          return Response.json(
+            { error: { code: 'idempotency_pending', message: 'Still running.' } },
+            { status: 409 },
+          )
+        }
+        return Response.json(job)
+      }
+      if (url === '/api/messages/message-1/share')
+        return Response.json({ messageId: 'shared-1' }, { status: 201 })
+      return Response.json({ error: { code: 'not_found', message: 'no' } }, { status: 404 })
+    }),
+  )
+
+  const attempt = newBringOutsideSessionAttempt()
+  await expect(bringOutsideSessionIntoJob(session, 'team-room', attempt)).rejects.toThrow()
+  await bringOutsideSessionIntoJob(session, 'team-room', attempt)
+
+  const creates = calls.filter((call) => call.url === '/api/rooms/team-room/jobs')
+  expect(creates).toHaveLength(2)
+  expect(creates[0]!.headers.get('Idempotency-Key')).toBe(
+    creates[1]!.headers.get('Idempotency-Key'),
+  )
+})
+
+test('a job deleted meanwhile starts the attempt over instead of retrying a state that cannot work', async () => {
+  const calls: Call[] = []
+  let deleted = false
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      record(calls, input, init)
+      const url = String(input)
+      if (url === '/api/outside-sessions/import')
+        return Response.json({ roomId: 'room-imported', imported: 1 })
+      if (url.startsWith('/api/rooms/room-imported/messages?'))
+        return Response.json({
+          asOfSeq: 1,
+          items: [message('message-1', 'Only one.', 1)],
+          nextCursor: null,
+          jobId: 'job-imported',
+        })
+      if (url === '/api/rooms/team-room/jobs' && init?.method === 'POST')
+        return Response.json(deleted ? { ...job, id: 'job-again' } : job)
+      if (url === '/api/messages/message-1/share') {
+        const body = JSON.parse(String(init?.body)) as { jobId: string }
+        if (body.jobId === 'job-launch' && !deleted) {
+          deleted = true
+          return Response.json({ error: { code: 'internal', message: 'boom' } }, { status: 500 })
+        }
+        if (body.jobId === 'job-launch')
+          return Response.json({ error: { code: 'not_found', message: 'gone' } }, { status: 404 })
+        return Response.json({ messageId: 'shared-1' }, { status: 201 })
+      }
+      return Response.json({ error: { code: 'not_found', message: 'no' } }, { status: 404 })
+    }),
+  )
+
+  const attempt = newBringOutsideSessionAttempt()
+  await expect(bringOutsideSessionIntoJob(session, 'team-room', attempt)).rejects.toThrow()
+  const result = await bringOutsideSessionIntoJob(session, 'team-room', attempt)
+
+  expect(result.job.id).toBe('job-again')
+  expect(calls.filter((call) => call.url === '/api/rooms/team-room/jobs')).toHaveLength(2)
+})

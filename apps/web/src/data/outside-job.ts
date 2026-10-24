@@ -66,10 +66,14 @@ async function keyedWrite(
     attempt.pendingKeys.delete(call)
     return result
   } catch (error) {
-    // Only a lost connection may have reached the server without its answer reaching us. An HTTP answer, or a
-    // malformed one, means this call's key must not be sent again.
+    // A lost connection may have reached the server without its answer reaching us; so may a request still running
+    // there (`idempotency_pending`) or a gateway's 5xx with no Score answer in it (`request_failed`). Those keep the key
+    // so the retry gets the stored answer. Any answer from Score itself, error or not, is final for this key.
     const lost =
-      (error instanceof ApiError && error.status === 0) ||
+      (error instanceof ApiError &&
+        (error.status === 0 ||
+          error.code === 'idempotency_pending' ||
+          (error.status >= 500 && error.code === 'request_failed'))) ||
       (error instanceof DOMException && error.name === 'AbortError') ||
       error instanceof TypeError
     if (!lost) attempt.pendingKeys.delete(call)
@@ -149,6 +153,26 @@ export async function bringOutsideSessionIntoJob(
   session: OutsideSession,
   teamRoomId: string,
   attempt: BringOutsideSessionAttempt = newBringOutsideSessionAttempt(),
+): Promise<BringOutsideSessionIntoJobResult> {
+  try {
+    return await bringOnce(session, teamRoomId, attempt)
+  } catch (error) {
+    // The job or the imported chat this attempt kept was deleted meanwhile: start over once rather than retrying a
+    // state that can't work any more.
+    const kept = attempt.job !== null || attempt.importedRoomId !== null
+    if (!(error instanceof ApiError && error.status === 404 && kept)) throw error
+    attempt.job = null
+    attempt.importedRoomId = null
+    attempt.sharedMessageIds.clear()
+    attempt.pendingKeys.clear()
+    return bringOnce(session, teamRoomId, attempt)
+  }
+}
+
+async function bringOnce(
+  session: OutsideSession,
+  teamRoomId: string,
+  attempt: BringOutsideSessionAttempt,
 ): Promise<BringOutsideSessionIntoJobResult> {
   const importedRoomId =
     attempt.importedRoomId ??

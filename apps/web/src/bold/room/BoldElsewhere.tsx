@@ -187,7 +187,8 @@ export function BoldElsewhere({
           </button>
           <span className="small muted">
             Starts “{title}” in the team room with these messages attached. It also keeps the
-            “Imported from {source}” room in Score.
+            “Imported from {source}” room in Score. Bringing the same chat in again later makes
+            another job.
           </span>
         </div>
       )}
