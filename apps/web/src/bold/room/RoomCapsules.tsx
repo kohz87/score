@@ -86,7 +86,7 @@ function JobCapsule({
     <div className="bold-capsule-wrap">
       <Capsule exchange={latest} agents={agents} job={job} onOpenThread={onOpenThread} />
       {asideAgent && (
-        <span className="bold-capsule-actions">
+        <span className="bold-capsule-aside-row">
           <button
             type="button"
             className="chip bold-capsule-aside"

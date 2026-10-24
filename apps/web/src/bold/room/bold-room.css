@@ -281,14 +281,14 @@
   gap: 8px;
 }
 
-[data-ui='bold'] .bold-capsule-actions {
+[data-ui='bold'] .bold-capsule-aside-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-left: 36px;
 }
 
-[data-ui='bold'] .bold-capsule-actions .chip {
+[data-ui='bold'] .bold-capsule-aside-row .chip {
   display: inline-flex;
   align-items: center;
   min-height: 34px;
@@ -301,8 +301,10 @@
   font-weight: 600;
 }
 
-[data-ui='bold'] .bold-capsule-actions .chip:disabled {
+[data-ui='bold'] .bold-capsule-aside-row .chip:disabled {
   opacity: 0.6;
+}
+
 [data-ui='bold'] .bold-capsule-actions {
   display: flex;
   flex-wrap: wrap;
