@@ -88,13 +88,14 @@ export function watchQuery(agentId: string, from: number | null = null) {
 }
 
 // The overview is a read model (thumbnails and what each agent is doing), so frames only say "read it again".
-export function useWatchOverview(): {
+export function useWatchOverview(enabled = true): {
   items: WatchOverviewItem[] | undefined
   isError: boolean
 } {
   const stream = useStream()
   const queryClient = useQueryClient()
   useEffect(() => {
+    if (!enabled) return
     let timer: ReturnType<typeof setTimeout> | undefined
     const refresh = () => {
       timer ??= setTimeout(() => {
@@ -113,12 +114,13 @@ export function useWatchOverview(): {
       offControl()
       if (timer !== undefined) clearTimeout(timer)
     }
-  }, [stream, queryClient])
+  }, [enabled, stream, queryClient])
   const query = useQuery({
     queryKey: ['watch-overview'],
     queryFn: async ({ signal }) =>
       WatchOverviewSchema.parse(await apiFetch('watch/overview', { signal })).items,
     retry: false,
+    enabled,
   })
   return { items: query.data, isError: query.isError }
 }
