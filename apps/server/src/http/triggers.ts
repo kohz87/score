@@ -21,6 +21,8 @@ import {
   triggerSecret,
   updateTrigger,
 } from '../domain/triggers/triggers.ts'
+import { startReportBack } from '../domain/triggers/report-back.ts'
+import { jobEvent } from '../domain/exchanges/store.ts'
 import { HttpError } from '../errors.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { RateLimiter } from '../shares/rate-limit.ts'
@@ -58,10 +60,18 @@ export function registerTriggerRoutes(
     hooks.post('/hooks/:triggerId', async (request, reply) => {
       const { triggerId } = Params.parse(request.params)
       if (!limiter.allow(triggerId))
-        throw new HttpError(429, 'rate_limited', 'Too many calls to this trigger. Try again in a minute.')
+        throw new HttpError(
+          429,
+          'rate_limited',
+          'Too many calls to this trigger. Try again in a minute.',
+        )
       const type = String(request.headers['content-type'] ?? '')
       if (!/^application\/(?:[\w.+-]+\+)?json\b/i.test(type))
-        throw new HttpError(415, 'not_json', 'The body must be JSON (Content-Type: application/json).')
+        throw new HttpError(
+          415,
+          'not_json',
+          'The body must be JSON (Content-Type: application/json).',
+        )
       const header = (name: string) => {
         const value = request.headers[name]
         return typeof value === 'string' ? value : undefined
@@ -107,7 +117,9 @@ export function registerTriggerRoutes(
     const { triggerId } = Params.parse(request.params)
     const body = TriggerUpdateRequestSchema.parse(request.body)
     return TriggerSchema.parse(
-      db.tx((sqlite) => updateTrigger(sqlite, triggerId, body, origin, new Date(clock()).toISOString())),
+      db.tx((sqlite) =>
+        updateTrigger(sqlite, triggerId, body, origin, new Date(clock()).toISOString()),
+      ),
     )
   })
   app.delete('/api/triggers/:triggerId', guard, async (request, reply) => {
@@ -115,14 +127,32 @@ export function registerTriggerRoutes(
     db.tx((sqlite) => deleteTrigger(sqlite, triggerId, new Date(clock()).toISOString()))
     return reply.code(204).send()
   })
+  // A trigger-started job's report-back: the person's "Send the result back" and Try again.
+  app.post('/api/jobs/:jobId/report-back', guard, async (request) => {
+    const { jobId } = z.object({ jobId: z.string().min(1).max(64) }).parse(request.params)
+    await ingest.submit({
+      source: 'triggers',
+      identity: randomUUID(),
+      apply: ({ sqlite }) => {
+        startReportBack(sqlite, jobId, new Date(clock()).toISOString())
+        return jobEvent(sqlite, jobId)
+      },
+    })
+    await redispatch()
+    return { ok: true }
+  })
   app.get('/api/triggers/:triggerId/secret', guard, async (request) => {
     const { triggerId } = Params.parse(request.params)
-    return TriggerSecretSchema.parse({ secret: db.read((sqlite) => triggerSecret(sqlite, seal, triggerId)) })
+    return TriggerSecretSchema.parse({
+      secret: db.read((sqlite) => triggerSecret(sqlite, seal, triggerId)),
+    })
   })
   app.post('/api/triggers/:triggerId/rotate', guard, async (request) => {
     const { triggerId } = Params.parse(request.params)
     return TriggerSecretSchema.parse({
-      secret: db.tx((sqlite) => rotateTrigger(sqlite, seal, triggerId, new Date(clock()).toISOString())),
+      secret: db.tx((sqlite) =>
+        rotateTrigger(sqlite, seal, triggerId, new Date(clock()).toISOString()),
+      ),
     })
   })
 }

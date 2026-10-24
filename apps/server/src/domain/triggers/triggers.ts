@@ -64,7 +64,11 @@ function toTrigger(item: Row, origin: string | null): Trigger {
 export function listTriggers(sqlite: DatabaseSync, origin: string | null): Trigger[] {
   return z
     .array(RowSchema)
-    .parse(sqlite.prepare('SELECT * FROM triggers WHERE deleted_at IS NULL ORDER BY created_at, id').all())
+    .parse(
+      sqlite
+        .prepare('SELECT * FROM triggers WHERE deleted_at IS NULL ORDER BY created_at, id')
+        .all(),
+    )
     .map((item) => toTrigger(item, origin))
 }
 
@@ -98,7 +102,8 @@ export function createTrigger(
 
 function live(sqlite: DatabaseSync, id: string): Row {
   const found = row(sqlite, id)
-  if (!found || found.deleted_at) throw new HttpError(404, 'not_found', 'Couldn’t find that trigger.')
+  if (!found || found.deleted_at)
+    throw new HttpError(404, 'not_found', 'Couldn’t find that trigger.')
   return found
 }
 
@@ -115,14 +120,27 @@ export function updateTrigger(
     .prepare(
       'UPDATE triggers SET name = ?, app = ?, mapping = ?, template = ?, report_back = ?, updated_at = ? WHERE id = ?',
     )
-    .run(next.name, next.app, JSON.stringify(next.mapping), next.template, JSON.stringify(next.reportBack), now, id)
+    .run(
+      next.name,
+      next.app,
+      JSON.stringify(next.mapping),
+      next.template,
+      JSON.stringify(next.reportBack),
+      now,
+      id,
+    )
   return toTrigger(row(sqlite, id)!, origin)
 }
 
 /** The full secret again (a paired browser only: the route checks that). */
 export function triggerSecret(sqlite: DatabaseSync, seal: Sealer, id: string): string {
   const secret = seal.unseal(live(sqlite, id).secret_sealed, context(id))
-  if (!secret) throw new HttpError(500, 'secret_unreadable', 'This trigger’s secret can’t be read on this machine. Rotate it.')
+  if (!secret)
+    throw new HttpError(
+      500,
+      'secret_unreadable',
+      'This trigger’s secret can’t be read on this machine. Rotate it.',
+    )
   return secret
 }
 
@@ -137,7 +155,9 @@ export function rotateTrigger(sqlite: DatabaseSync, seal: Sealer, id: string, no
 
 export function deleteTrigger(sqlite: DatabaseSync, id: string, now: string): void {
   live(sqlite, id)
-  sqlite.prepare('UPDATE triggers SET deleted_at = ?, updated_at = ? WHERE id = ?').run(now, now, id)
+  sqlite
+    .prepare('UPDATE triggers SET deleted_at = ?, updated_at = ? WHERE id = ?')
+    .run(now, now, id)
 }
 
 /** A value at a dot path, as plain text (objects as JSON), or null when the payload doesn't have it. */
@@ -229,7 +249,8 @@ export function receiveCall(
   const seen = sqlite
     .prepare('SELECT job_id FROM trigger_calls WHERE trigger_id = ? AND webhook_id = ?')
     .get(id, headers.id!) as { job_id: string | null } | undefined
-  if (seen?.job_id) return { result: { status: 200, jobId: seen.job_id, repeated: true }, drafts: [] }
+  if (seen?.job_id)
+    return { result: { status: 200, jobId: seen.job_id, repeated: true }, drafts: [] }
   let payload: unknown
   try {
     payload = JSON.parse(raw)
@@ -254,9 +275,11 @@ export function receiveCall(
   const made = createJob(sqlite, team, jobTitle, now)
   sqlite.prepare('UPDATE jobs SET source = ? WHERE id = ?').run(JSON.stringify(source), made.job.id)
   const messageId = randomUUID()
-  const lead = (sqlite.prepare('SELECT lead_agent_id FROM rooms WHERE id = ?').get(team) as {
-    lead_agent_id: string | null
-  }).lead_agent_id
+  const lead = (
+    sqlite.prepare('SELECT lead_agent_id FROM rooms WHERE id = ?').get(team) as {
+      lead_agent_id: string | null
+    }
+  ).lead_agent_id
   const drafts = [
     ...made.drafts,
     ...storeMessage(
@@ -270,7 +293,13 @@ export function receiveCall(
           { kind: 'text', text: opening.text },
           ...(lead
             ? []
-            : [{ kind: 'notice' as const, code: 'no_lead' as const, text: 'The team has no lead yet, so nobody was asked to start.' }]),
+            : [
+                {
+                  kind: 'notice' as const,
+                  code: 'no_lead' as const,
+                  text: 'The team has no lead yet, so nobody was asked to start.',
+                },
+              ]),
         ],
         createdAt: now,
         streaming: false,
@@ -299,7 +328,9 @@ export function receiveCall(
     .prepare('UPDATE triggers SET sample = ?, last_called_at = ? WHERE id = ?')
     .run(redactBounded(redact(raw), TRIGGER_LIMITS.bodyBytes), now, id)
   sqlite
-    .prepare('INSERT OR REPLACE INTO trigger_calls (trigger_id, webhook_id, received_at, job_id) VALUES (?, ?, ?, ?)')
+    .prepare(
+      'INSERT OR REPLACE INTO trigger_calls (trigger_id, webhook_id, received_at, job_id) VALUES (?, ?, ?, ?)',
+    )
     .run(id, headers.id!, now, made.job.id)
   return { result: { status: 200, jobId: made.job.id, repeated: false }, drafts }
 }

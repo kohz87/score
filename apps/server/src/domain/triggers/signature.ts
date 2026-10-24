@@ -15,8 +15,7 @@ export function signWebhook(secret: string, id: string, timestamp: number, body:
 }
 
 export type SignatureCheck =
-  | { ok: true }
-  | { ok: false; reason: 'missing_headers' | 'stale_timestamp' | 'bad_signature' }
+  { ok: true } | { ok: false; reason: 'missing_headers' | 'stale_timestamp' | 'bad_signature' }
 
 /** Checks a call's headers against the secret; `nowSeconds` is the server's clock. */
 export function verifyWebhook(

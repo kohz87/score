@@ -55,7 +55,10 @@ beforeEach(async () => {
     headers: { 'x-score-client': 'web' },
     payload: { token: app.pairing.createToken() },
   })
-  headers = { 'x-score-client': 'web', cookie: paired.headers['set-cookie']!.toString().split(';')[0]! }
+  headers = {
+    'x-score-client': 'web',
+    cookie: paired.headers['set-cookie']!.toString().split(';')[0]!,
+  }
 })
 afterEach(async () => {
   await port.stop()
@@ -106,7 +109,9 @@ function call(
   })
 }
 const jobs = () =>
-  db.sqlite.prepare("SELECT id, title, source FROM jobs WHERE source IS NOT NULL ORDER BY created_at").all() as {
+  db.sqlite
+    .prepare('SELECT id, title, source FROM jobs WHERE source IS NOT NULL ORDER BY created_at')
+    .all() as {
     id: string
     title: string
     source: string
@@ -130,7 +135,7 @@ test('a signed call starts a job in the team room with its source, and the lead 
     missing: [],
   })
   const turn = db.sqlite
-    .prepare("SELECT agent_id, input FROM message_runs WHERE job_id = ?")
+    .prepare('SELECT agent_id, input FROM message_runs WHERE job_id = ?')
     .get(job!.id) as { agent_id: string; input: string }
   expect(turn.agent_id).toBe('lead')
   expect(turn.input).not.toContain('sk-live-1234567890abcdef1234')
@@ -144,7 +149,9 @@ test('a call missing a mapped field still starts the job and says which', async 
   const [job] = jobs()
   expect(JSON.parse(job!.source).missing).toEqual(['ticket.title', 'ticket.body', 'ticket.url'])
   const text = (
-    db.sqlite.prepare("SELECT parts FROM messages WHERE job_id = ? AND author_kind = 'you'").get(job!.id) as {
+    db.sqlite
+      .prepare("SELECT parts FROM messages WHERE job_id = ? AND author_kind = 'you'")
+      .get(job!.id) as {
       parts: string
     }
   ).parts
@@ -181,11 +188,13 @@ test('non-JSON, oversized and too frequent calls are refused; unknown and delete
   const huge = JSON.stringify({ blob: 'x'.repeat(256 * 1024) })
   expect((await call(trigger.id, secret, huge)).statusCode).toBe(413)
   expect((await call('trg_000000000000000000000000', secret, '{}')).statusCode).toBe(404)
-  for (let i = 0; i < 57; i++) await call(trigger.id, secret, '{}', { webhookId: `rate_${i}` })
+  // 60 a minute per trigger; the two refused calls above count, the oversized one never reached the route.
+  for (let i = 0; i < 58; i++) await call(trigger.id, secret, '{}', { webhookId: `rate_${i}` })
   expect((await call(trigger.id, secret, '{}', { webhookId: 'one_too_many' })).statusCode).toBe(429)
   now += 61_000
   expect(
-    (await app.inject({ method: 'DELETE', url: `/api/triggers/${trigger.id}`, headers })).statusCode,
+    (await app.inject({ method: 'DELETE', url: `/api/triggers/${trigger.id}`, headers }))
+      .statusCode,
   ).toBe(204)
   expect((await call(trigger.id, secret, '{}', { webhookId: 'after_delete' })).statusCode).toBe(410)
 })
@@ -207,5 +216,167 @@ test('the secret is sealed at rest and shown again only to a paired browser', as
   ).json() as { secret: string }
   expect(rotated.secret).not.toBe(secret)
   expect((await call(trigger.id, secret, '{}', { webhookId: 'old_secret' })).statusCode).toBe(401)
-  expect((await call(trigger.id, rotated.secret, '{}', { webhookId: 'new_secret' })).statusCode).toBe(200)
+  expect(
+    (await call(trigger.id, rotated.secret, '{}', { webhookId: 'new_secret' })).statusCode,
+  ).toBe(200)
+})
+
+test('remote mode: a webhook call needs no pairing; everything else about triggers still does', async () => {
+  await port.stop()
+  await app.close()
+  await ingest.close()
+  db.close()
+  rmSync(home, { recursive: true, force: true })
+  const origin = 'https://score.lan:8741'
+  await start({
+    SCORE_REMOTE: '1',
+    SCORE_TLS_CERT: '/tmp/cert',
+    SCORE_TLS_KEY: '/tmp/key',
+    SCORE_PUBLIC_ORIGINS: origin,
+  })
+  const { createTrigger } = await import('../../src/domain/triggers/triggers.ts')
+  const { loadSealingKey, sealer } = await import('../../src/auth/sealing.ts')
+  const made = db.tx((sqlite) =>
+    createTrigger(
+      sqlite,
+      sealer(loadSealingKey(home)),
+      { ...TRIGGER, reportBack: { mode: 'off' } },
+      origin,
+      new Date(now).toISOString(),
+    ),
+  )
+  expect(made.trigger.url).toBe(`${origin}/hooks/${made.trigger.id}`)
+  const body = JSON.stringify(ticket)
+  const at = Math.floor(now / 1000)
+  const hook = await app.inject({
+    method: 'POST',
+    url: `/hooks/${made.trigger.id}`,
+    headers: {
+      host: 'score.lan:8741',
+      'content-type': 'application/json',
+      'webhook-id': 'msg_r',
+      'webhook-timestamp': String(at),
+      'webhook-signature': signWebhook(made.secret, 'msg_r', at, body),
+    },
+    payload: body,
+  })
+  expect(hook.statusCode).toBe(200)
+  const remote = { host: 'score.lan:8741', origin, 'x-score-client': 'web' }
+  expect((await app.inject({ url: '/api/triggers', headers: remote })).statusCode).toBe(401)
+  expect(
+    (await app.inject({ url: `/api/triggers/${made.trigger.id}/secret`, headers: remote }))
+      .statusCode,
+  ).toBe(401)
+  // Only POST to a trigger's exact path reaches the route; a GET is just an unknown app page (no data).
+  expect(
+    (await app.inject({ url: `/hooks/${made.trigger.id}`, headers: { host: 'score.lan:8741' } }))
+      .statusCode,
+  ).toBe(404)
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/hooks/anything-else',
+        headers: { host: 'score.lan:8741' },
+        payload: '{}',
+      })
+    ).statusCode,
+  ).toBe(401)
+})
+
+test('report-back is a constrained lead turn, reported back only on a matching tool-call record', async () => {
+  const made = await app.inject({
+    method: 'POST',
+    url: '/api/triggers',
+    headers,
+    payload: {
+      ...TRIGGER,
+      reportBack: {
+        mode: 'fixed',
+        tool: 'add_comment',
+        args: '{"ticket":"{{source.ref}}","text":"{{job.summary}}"}',
+      },
+    },
+  })
+  const { trigger, secret } = made.json() as { trigger: { id: string }; secret: string }
+  const answer = (await call(trigger.id, secret, JSON.stringify(ticket))).json() as {
+    jobId: string
+  }
+  const { listJobs } = await import('../../src/domain/exchanges/store.ts')
+  const state = () =>
+    listJobs(
+      db.sqlite,
+      db.sqlite.prepare("SELECT id FROM rooms WHERE role = 'team'").get()!.id as string,
+    ).find((job) => job.id === answer.jobId)!.reportBack
+  expect(state()).toEqual({ state: 'waiting', tool: 'add_comment', at: null })
+  // The lead's opening turn answered; its reply is what the report carries.
+  db.sqlite
+    .prepare("UPDATE message_runs SET state = 'completed' WHERE job_id = ?")
+    .run(answer.jobId)
+  db.sqlite
+    .prepare(
+      `INSERT INTO messages (id, room_id, job_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at)
+       SELECT 'lead-reply', room_id, id, 'agent', 'lead', '[]', '[{"kind":"text","text":"Fixed: the session cookie expired early."}]', '[]', 0, ?, ?
+       FROM jobs WHERE id = ?`,
+    )
+    .run(new Date(now + 1000).toISOString(), new Date(now + 1000).toISOString(), answer.jobId)
+  now += 2000
+  expect(
+    (await app.inject({ method: 'POST', url: `/api/jobs/${answer.jobId}/report-back`, headers }))
+      .statusCode,
+  ).toBe(200)
+  const turn = db.sqlite
+    .prepare(
+      "SELECT turn_id, input, created_at FROM message_runs WHERE job_id = ? AND input LIKE 'Report back%'",
+    )
+    .get(answer.jobId) as { turn_id: string; input: string; created_at: string }
+  expect(turn.input).toContain(
+    'Call exactly the tool `add_comment` once, with exactly these arguments',
+  )
+  expect(turn.input).toContain(
+    '{"text":"Fixed: the session cookie expired early.","ticket":"TCK-142"}',
+  )
+  expect(state()?.state).toBe('sending')
+  db.sqlite
+    .prepare("UPDATE message_runs SET state = 'completed' WHERE turn_id = ?")
+    .run(turn.turn_id)
+  // The turn ended without the call: not confirmed.
+  expect(state()?.state).toBe('not_confirmed')
+  const { canonicalJson } = await import('../../src/domain/triggers/report-back.ts')
+  const { createHash } = await import('node:crypto')
+  const digest = (args: unknown) => createHash('sha256').update(canonicalJson(args)).digest('hex')
+  const { sessionFor } = await import('../../src/domain/job-sessions.ts')
+  const teamId = db.sqlite.prepare("SELECT id FROM rooms WHERE role = 'team'").get()!.id as string
+  // The job's own session: a trigger's job is a new job of the team room.
+  const session = sessionFor(db.sqlite, { roomId: teamId, jobId: answer.jobId, agentId: 'lead' })
+  expect(session).toBe(`score-${teamId}-${answer.jobId}-lead`)
+  const record = (id: string, args: unknown, status: string, startedAt: string) =>
+    db.sqlite
+      .prepare(
+        `INSERT INTO session_tool_calls (profile, session_id, tool_call_id, tool, status, started_at, ended_at, args_digest)
+         VALUES ('lead', ?, ?, 'add_comment', ?, ?, ?, ?)`,
+      )
+      .run(session, id, status, startedAt, startedAt, digest(args))
+  // Other arguments, a failed call, or a call from before the turn don't count.
+  record('c1', { ticket: 'TCK-142', text: 'something else' }, 'ok', turn.created_at)
+  record(
+    'c2',
+    { ticket: 'TCK-142', text: 'Fixed: the session cookie expired early.' },
+    'error',
+    turn.created_at,
+  )
+  record(
+    'c3',
+    { ticket: 'TCK-142', text: 'Fixed: the session cookie expired early.' },
+    'ok',
+    '2000-01-01T00:00:00.000Z',
+  )
+  expect(state()?.state).toBe('not_confirmed')
+  record(
+    'c4',
+    { text: 'Fixed: the session cookie expired early.', ticket: 'TCK-142' },
+    'ok',
+    turn.created_at,
+  )
+  expect(state()?.state).toBe('confirmed')
 })

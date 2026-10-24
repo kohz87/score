@@ -20,7 +20,10 @@ const JsonPathSchema = z
   .string()
   .min(1)
   .max(200)
-  .regex(/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$/, 'A path is keys separated by dots, like ticket.title')
+  .regex(
+    /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$/,
+    'A path is keys separated by dots, like ticket.title',
+  )
 
 export const TriggerMappingSchema = z
   .object({
@@ -81,7 +84,9 @@ export const TriggerCreateRequestSchema = z
   .strict()
 export const TriggerUpdateRequestSchema = TriggerCreateRequestSchema.partial().strict()
 /** The signing secret, shown in full on creation and on rotation, and again only to a paired browser. */
-export const TriggerSecretSchema = z.object({ secret: z.string().regex(/^whsec_[A-Za-z0-9+/]+=*$/) })
+export const TriggerSecretSchema = z.object({
+  secret: z.string().regex(/^whsec_[A-Za-z0-9+/]+=*$/),
+})
 export const TriggerCreatedSchema = z.object({ trigger: TriggerSchema, secret: z.string() })
 export const TriggersResponseSchema = z.object({ items: z.array(TriggerSchema) })
 

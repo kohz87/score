@@ -1,0 +1,212 @@
+import { createHash } from 'node:crypto'
+import type { DatabaseSync } from 'node:sqlite'
+import {
+  JobSourceSchema,
+  ReportBackSchema,
+  type JobReportBack,
+  type ReportBack,
+} from '@score/contract'
+import { z } from 'zod'
+import { HttpError } from '../../errors.ts'
+import { redact } from '../../redact.ts'
+import { sessionFor } from '../job-sessions.ts'
+import { reserveMessageRun } from '../message-runs.ts'
+import { roomMembers } from '../exchanges/actions.ts'
+import { latestMessage } from '../exchanges/store.ts'
+
+// Report-back (PLAN 11.1d, docs/briefs/11.0-bold.md §7, F8). Score never holds the app's credential: the app's tool is
+// one of the lead's Hermes tools. Score renders the exact arguments, asks the lead in a constrained turn to call exactly
+// that tool with exactly them, and calls it reported back only when the bridge's record of that turn's session has the
+// tool with the same argument digest and success. Anything else is "not confirmed" with Try again.
+
+const StoredSchema = z.object({
+  state: z.literal('sending'),
+  tool: z.string(),
+  digest: z.string(),
+  turnId: z.string(),
+  at: z.string(),
+})
+
+/** JSON with sorted keys and no spaces: the form the plugin digests a tool call's arguments in. */
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value !== null && typeof value === 'object')
+    return `{${Object.keys(value)
+      .sort()
+      .map(
+        (key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`,
+      )
+      .join(',')}}`
+  return JSON.stringify(value)
+}
+
+/** The arguments: the trigger's JSON template with {{source.ref}}, {{source.title}}, {{source.link}}, {{job.title}} and
+ * {{job.summary}} filled in as JSON strings. Throws when the result isn't a JSON object. */
+export function renderArgs(
+  template: string,
+  values: Record<string, string>,
+): Record<string, unknown> {
+  const filled = template.replace(/\{\{\s*([a-z]+\.[a-z]+)\s*\}\}/g, (_, key: string) =>
+    JSON.stringify(values[key] ?? '').slice(1, -1),
+  )
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(filled)
+  } catch {
+    throw new HttpError(
+      400,
+      'bad_template',
+      'The report-back arguments aren’t valid JSON once filled in.',
+    )
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw new HttpError(400, 'bad_template', 'The report-back arguments must be a JSON object.')
+  return parsed as Record<string, unknown>
+}
+
+function triggerOf(sqlite: DatabaseSync, jobId: string) {
+  const row = sqlite
+    .prepare(
+      `SELECT j.id, j.room_id, j.title, j.source, j.report_back, t.report_back AS mode FROM jobs j
+       JOIN triggers t ON t.id = json_extract(j.source, '$.triggerId') WHERE j.id = ?`,
+    )
+    .get(jobId) as
+    | {
+        id: string
+        room_id: string
+        title: string
+        source: string
+        report_back: string | null
+        mode: string
+      }
+    | undefined
+  if (!row) return null
+  return {
+    ...row,
+    source: JobSourceSchema.parse(JSON.parse(row.source)),
+    mode: ReportBackSchema.parse(JSON.parse(row.mode)),
+  }
+}
+
+/** Asks the room lead to report back now (the person's "Send the result back", or Try again). */
+export function startReportBack(sqlite: DatabaseSync, jobId: string, now: string): void {
+  const job = triggerOf(sqlite, jobId)
+  if (!job) throw new HttpError(404, 'not_found', 'This job didn’t come from a trigger.')
+  if (job.mode.mode === 'off')
+    throw new HttpError(409, 'conflict', 'This trigger doesn’t report back.')
+  const mode: Exclude<ReportBack, { mode: 'off' }> = job.mode
+  const lead = (
+    sqlite.prepare('SELECT lead_agent_id FROM rooms WHERE id = ?').get(job.room_id) as {
+      lead_agent_id: string | null
+    }
+  ).lead_agent_id
+  if (!lead) throw new HttpError(409, 'no_lead', 'The team has no lead to report back.')
+  const summary = (
+    sqlite
+      .prepare(
+        "SELECT parts FROM messages WHERE job_id = ? AND author_kind = 'agent' AND deleted_at IS NULL AND streaming = 0 ORDER BY created_at DESC, id DESC LIMIT 1",
+      )
+      .get(jobId) as { parts: string } | undefined
+  )?.parts
+  const lastReply = summary
+    ? z
+        .array(z.object({ kind: z.string(), text: z.string().optional() }).loose())
+        .parse(JSON.parse(summary))
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text ?? '')
+        .join('\n')
+    : ''
+  const args = renderArgs(mode.args, {
+    'source.ref': job.source.ref,
+    'source.title': job.source.title ?? '',
+    'source.link': job.source.link ?? '',
+    'job.title': job.title,
+    'job.summary': redact(lastReply).slice(0, 4000),
+  })
+  const json = canonicalJson(args)
+  const parent = latestMessage(sqlite, jobId)
+  const id = reserveMessageRun(
+    sqlite,
+    {
+      parentMessageId: parent,
+      roomId: job.room_id,
+      agentId: lead,
+      chainId: parent,
+      hop: 0,
+      input: [
+        `Report back to ${job.source.app} about ${job.source.ref}.`,
+        `Call exactly the tool \`${mode.tool}\` once, with exactly these arguments and nothing else:`,
+        json,
+        'Do nothing else in this turn. Score checks the call.',
+      ].join('\n'),
+      agents: roomMembers(sqlite, job.room_id),
+      retryNonce: `report-back:${now}`,
+    },
+    now,
+  )
+  sqlite.prepare('UPDATE jobs SET report_back = ? WHERE id = ?').run(
+    JSON.stringify({
+      state: 'sending',
+      tool: mode.tool,
+      digest: createHash('sha256').update(json, 'utf8').digest('hex'),
+      turnId: id.slice('reply:'.length),
+      at: now,
+    }),
+    jobId,
+  )
+}
+
+/**
+ * Where a job's report-back stands, derived on read: `sending` while the lead's turn runs; then `confirmed` only if
+ * the bridge recorded that tool, in the lead's session for this job, with the same argument digest and success, after
+ * the turn began; otherwise `not_confirmed`.
+ */
+export function reportBackOf(sqlite: DatabaseSync, jobId: string): JobReportBack | null {
+  const job = triggerOf(sqlite, jobId)
+  if (!job) return null
+  if (job.mode.mode === 'off') return { state: 'off', tool: null, at: null }
+  const stored = job.report_back ? StoredSchema.safeParse(JSON.parse(job.report_back)) : null
+  if (!stored?.success) {
+    // "Lead decides" asks the person before the trigger's first report-back.
+    const first =
+      job.mode.mode === 'lead_decides' &&
+      !sqlite
+        .prepare(
+          "SELECT 1 FROM jobs WHERE json_extract(source, '$.triggerId') = ? AND report_back IS NOT NULL AND id != ?",
+        )
+        .get(job.source.triggerId, jobId)
+    return { state: first ? 'needs_ok' : 'waiting', tool: job.mode.tool, at: null }
+  }
+  const turn = sqlite
+    .prepare(
+      'SELECT agent_id, state, created_at, room_id, job_id FROM message_runs WHERE turn_id = ?',
+    )
+    .get(stored.data.turnId) as
+    | {
+        agent_id: string
+        state: string
+        created_at: string
+        room_id: string
+        job_id: string | null
+      }
+    | undefined
+  if (!turn) return { state: 'not_confirmed', tool: stored.data.tool, at: stored.data.at }
+  if (turn.state === 'pending' || turn.state === 'active')
+    return { state: 'sending', tool: stored.data.tool, at: stored.data.at }
+  const session = sessionFor(sqlite, {
+    roomId: turn.room_id,
+    jobId: turn.job_id,
+    agentId: turn.agent_id,
+  })
+  const call = sqlite
+    .prepare(
+      `SELECT ended_at FROM session_tool_calls
+       WHERE profile = ? AND session_id = ? AND tool = ? AND args_digest = ? AND status = 'ok' AND started_at >= ?
+       ORDER BY started_at DESC LIMIT 1`,
+    )
+    .get(turn.agent_id, session, stored.data.tool, stored.data.digest, turn.created_at) as
+    { ended_at: string | null } | undefined
+  return call
+    ? { state: 'confirmed', tool: stored.data.tool, at: call.ended_at ?? stored.data.at }
+    : { state: 'not_confirmed', tool: stored.data.tool, at: stored.data.at }
+}
