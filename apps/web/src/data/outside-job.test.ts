@@ -381,6 +381,8 @@ test('a job deleted meanwhile starts the attempt over instead of retrying a stat
         })
       if (url === '/api/rooms/team-room/jobs' && init?.method === 'POST')
         return Response.json(deleted ? { ...job, id: 'job-again' } : job)
+      if (url === '/api/rooms/team-room/jobs')
+        return Response.json({ asOfSeq: 1, items: deleted ? [] : [job] })
       if (url === '/api/messages/message-1/share') {
         const body = JSON.parse(String(init?.body)) as { jobId: string }
         if (body.jobId === 'job-launch' && !deleted) {
@@ -400,5 +402,43 @@ test('a job deleted meanwhile starts the attempt over instead of retrying a stat
   const result = await bringOutsideSessionIntoJob(session, 'team-room', attempt)
 
   expect(result.job.id).toBe('job-again')
-  expect(calls.filter((call) => call.url === '/api/rooms/team-room/jobs')).toHaveLength(2)
+  expect(
+    calls.filter((call) => call.url === '/api/rooms/team-room/jobs' && call.method === 'POST'),
+  ).toHaveLength(2)
+})
+
+test('a message gone from the imported chat is skipped; the job is kept and nothing is made twice', async () => {
+  const calls: Call[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      record(calls, input, init)
+      const url = String(input)
+      if (url === '/api/outside-sessions/import')
+        return Response.json({ roomId: 'room-imported', imported: 1 })
+      if (url.startsWith('/api/rooms/room-imported/messages?'))
+        return Response.json({
+          asOfSeq: 1,
+          items: [message('message-1', 'Gone.', 1), message('message-2', 'Kept.', 2)],
+          nextCursor: null,
+          jobId: 'job-imported',
+        })
+      if (url === '/api/rooms/team-room/jobs' && init?.method === 'POST') return Response.json(job)
+      if (url === '/api/rooms/team-room/jobs') return Response.json({ asOfSeq: 1, items: [job] })
+      if (url === '/api/messages/message-2/share')
+        return Response.json({ messageId: 'shared-2' }, { status: 201 })
+      return Response.json({ error: { code: 'not_found', message: 'gone' } }, { status: 404 })
+    }),
+  )
+
+  const result = await bringOutsideSessionIntoJob(
+    session,
+    'team-room',
+    newBringOutsideSessionAttempt(),
+  )
+
+  expect(result).toMatchObject({ job: { id: 'job-launch' }, attached: 1 })
+  expect(
+    calls.filter((call) => call.url === '/api/rooms/team-room/jobs' && call.method === 'POST'),
+  ).toHaveLength(1)
 })

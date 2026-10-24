@@ -1,6 +1,7 @@
 import {
   ImportSessionResponseSchema,
   JobSchema,
+  JobsResponseSchema,
   MessagePageSchema,
   type Job,
   type Message,
@@ -32,6 +33,8 @@ export interface BringOutsideSessionAttempt {
   sharedMessageIds: Set<string>
   /** Keys for calls that failed before an HTTP response; only those same calls may send them again. */
   pendingKeys: Map<string, string>
+  /** How many times in a row a call was told its first request is still running on the server. */
+  stillRunning: Map<string, number>
 }
 
 export function newBringOutsideSessionAttempt(
@@ -42,8 +45,12 @@ export function newBringOutsideSessionAttempt(
     job: null,
     sharedMessageIds: new Set(),
     pendingKeys: new Map(),
+    stillRunning: new Map(),
   }
 }
+
+/** After this many "still running" answers in a row the server most likely restarted mid-request: give up the key. */
+const STILL_RUNNING_LIMIT = 2
 
 /**
  * Sends one keyed write. An HTTP answer (even an error) is final for its key and is discarded; a transport failure
@@ -64,8 +71,22 @@ async function keyedWrite(
       body: JSON.stringify(body),
     })
     attempt.pendingKeys.delete(call)
+    attempt.stillRunning.delete(call)
     return result
   } catch (error) {
+    // A pending receipt never expires on the server, so a request lost in a server crash answers this forever.
+    if (error instanceof ApiError && error.code === 'idempotency_pending') {
+      const times = (attempt.stillRunning.get(call) ?? 0) + 1
+      attempt.stillRunning.set(call, times)
+      if (times < STILL_RUNNING_LIMIT) throw error
+      attempt.pendingKeys.delete(call)
+      attempt.stillRunning.delete(call)
+      throw new ApiError(
+        409,
+        'idempotency_pending',
+        'Score may have stopped while copying this chat. Check the team room for a job with this title before trying again.',
+      )
+    }
     // A lost connection may have reached the server without its answer reaching us; so may a request still running
     // there (`idempotency_pending`) or a gateway's 5xx with no Score answer in it (`request_failed`). Those keep the key
     // so the retry gets the stored answer. Any answer from Score itself, error or not, is final for this key.
@@ -154,26 +175,37 @@ export async function bringOutsideSessionIntoJob(
   teamRoomId: string,
   attempt: BringOutsideSessionAttempt = newBringOutsideSessionAttempt(),
 ): Promise<BringOutsideSessionIntoJobResult> {
-  try {
-    return await bringOnce(session, teamRoomId, attempt)
-  } catch (error) {
-    // The job or the imported chat this attempt kept was deleted meanwhile: start over once rather than retrying a
-    // state that can't work any more.
-    const kept = attempt.job !== null || attempt.importedRoomId !== null
-    if (!(error instanceof ApiError && error.status === 404 && kept)) throw error
-    attempt.job = null
-    attempt.importedRoomId = null
-    attempt.sharedMessageIds.clear()
-    attempt.pendingKeys.clear()
-    return bringOnce(session, teamRoomId, attempt)
-  }
+  return bringOnce(session, teamRoomId, attempt, true)
 }
+
+/** Forget what this attempt made so it starts over: the job or the imported chat it kept was deleted meanwhile. */
+function startOver(attempt: BringOutsideSessionAttempt): void {
+  attempt.job = null
+  attempt.importedRoomId = null
+  attempt.sharedMessageIds.clear()
+  attempt.pendingKeys.clear()
+  attempt.stillRunning.clear()
+}
+
+async function jobStillThere(teamRoomId: string, jobId: string): Promise<boolean> {
+  const jobs = JobsResponseSchema.parse(
+    await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/jobs`),
+  )
+  return jobs.items.some((item) => item.id === jobId)
+}
+
+const notFound = (error: unknown) => error instanceof ApiError && error.status === 404
 
 async function bringOnce(
   session: OutsideSession,
   teamRoomId: string,
   attempt: BringOutsideSessionAttempt,
+  mayStartOver: boolean,
 ): Promise<BringOutsideSessionIntoJobResult> {
+  const again = () => {
+    startOver(attempt)
+    return bringOnce(session, teamRoomId, attempt, false)
+  }
   const importedRoomId =
     attempt.importedRoomId ??
     ImportSessionResponseSchema.parse(
@@ -184,7 +216,15 @@ async function bringOnce(
     ).roomId
   attempt.importedRoomId = importedRoomId
 
-  const messages = (await importedMessages(importedRoomId)).filter((message) => textOf(message))
+  let read: Message[]
+  try {
+    read = await importedMessages(importedRoomId)
+  } catch (error) {
+    // The imported chat was deleted meanwhile: import it again.
+    if (notFound(error) && mayStartOver) return again()
+    throw error
+  }
+  const messages = read.filter((message) => textOf(message))
   const title = (session.title.trim() || `From ${session.sourceLabel}`).slice(0, 200)
   if (!attempt.job) {
     attempt.job = JobSchema.parse(
@@ -198,12 +238,23 @@ async function bringOnce(
   let attached = 0
   for (const message of messages) {
     if (attempt.sharedMessageIds.has(message.id)) continue
-    await keyedWrite(
-      attempt,
-      `share:${message.id}`,
-      `messages/${encodeURIComponent(message.id)}/share`,
-      { jobId: job.id },
-    )
+    try {
+      await keyedWrite(
+        attempt,
+        `share:${message.id}`,
+        `messages/${encodeURIComponent(message.id)}/share`,
+        { jobId: job.id },
+      )
+    } catch (error) {
+      if (!notFound(error)) throw error
+      // A 404 is either the job (deleted meanwhile: start over with a new one) or this one message (gone: skip it).
+      if (!(await jobStillThere(teamRoomId, job.id))) {
+        if (mayStartOver) return again()
+        throw error
+      }
+      attempt.sharedMessageIds.add(message.id)
+      continue
+    }
     attempt.sharedMessageIds.add(message.id)
     attached += 1
   }
