@@ -22,7 +22,7 @@ function viewOf(path: string): View {
 }
 
 function DockRing({ agent }: { agent: AgentSummary }) {
-  const progress = dockProgress(agent)
+  const progress = dockProgress()
   const state = agentStateLabel(agent)
   return (
     <button
@@ -30,10 +30,10 @@ function DockRing({ agent }: { agent: AgentSummary }) {
       className={`ring ${agent.status === 'waiting' ? 'needs' : ''}`}
       aria-label={`One to one with ${agent.id}, ${state}`}
       title={`${agent.id} · ${state}`}
-      data-progress={progress}
+      data-progress={progress ?? undefined}
       style={{
         background:
-          progress > 0
+          progress !== null
             ? `conic-gradient(${agent.style.color} 0 ${progress}%, var(--line) 0)`
             : 'var(--line)',
       }}
@@ -58,6 +58,7 @@ export function BoldShell() {
   const light = useMediaQuery('(prefers-color-scheme: light)')
   const [commandOpen, setCommandOpen] = useState(false)
   const commandTrigger = useRef<HTMLElement | null>(null)
+  const dockHasProgress = agents.some(() => dockProgress() !== null)
 
   // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside.
   useEffect(() => {
@@ -66,10 +67,11 @@ export function BoldShell() {
   }, [])
 
   const openCommand = useCallback(() => {
+    if (commandOpen) return
     const active = document.activeElement
     commandTrigger.current = active instanceof HTMLElement ? active : null
     setCommandOpen(true)
-  }, [])
+  }, [commandOpen])
   const closeCommand = useCallback(() => {
     setCommandOpen(false)
     requestAnimationFrame(() => commandTrigger.current?.focus())
@@ -125,7 +127,9 @@ export function BoldShell() {
               {agents.map((agent) => (
                 <DockRing key={agent.id} agent={agent} />
               ))}
-              <span className="small muted dock-note">Rings show progress</span>
+              {dockHasProgress && (
+                <span className="small muted dock-note">Rings show progress</span>
+              )}
             </div>
           )}
           {!phone && (
@@ -152,7 +156,7 @@ export function BoldShell() {
               <GearIcon />
             </button>
           )}
-          <span className="avatar" aria-label="You">
+          <span className="bold-avatar" aria-label="You">
             Y
           </span>
         </header>
@@ -162,7 +166,7 @@ export function BoldShell() {
         </main>
 
         {phone && (
-          <nav className="tabbar" aria-label="Main">
+          <nav className="bold-tabbar" aria-label="Main">
             <button
               type="button"
               className={view === 'room' ? 'on' : undefined}

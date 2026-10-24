@@ -123,16 +123,19 @@ function open(path: string) {
   return router
 }
 
-test('/b draws the frame, the dock and the side-panel dropdown', async () => {
+test('/b draws the frame and the dock', async () => {
   open('/b')
   expect(screen.getByRole('banner')).toBeDefined()
   expect(screen.getByRole('main')).toBeDefined()
   expect(screen.getByRole('complementary', { name: 'Side panel' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Score, go to the team room' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Team' })).toBeDefined()
+  const roomTitle = screen.getByRole('button', { name: 'Team room' })
+  expect(roomTitle.hasAttribute('aria-haspopup')).toBe(false)
+  expect(roomTitle.hasAttribute('aria-expanded')).toBe(false)
 
   const dock = screen.getByRole('group', { name: /Your team/ })
-  expect(within(dock).getByText('Rings show progress')).toBeDefined()
+  expect(within(dock).queryByText('Rings show progress')).toBeNull()
   await within(dock).findByRole('button', { name: 'One to one with builder, working' })
   const rings = within(dock).getAllByRole('button')
   expect(rings).toHaveLength(agents.length)
@@ -146,25 +149,48 @@ test('/b draws the frame, the dock and the side-panel dropdown', async () => {
   }
 
   const builder = within(dock).getByRole('button', { name: 'One to one with builder, working' })
-  expect(builder.getAttribute('data-progress')).toBe('65')
-  expect(builder.getAttribute('style')).toContain('conic-gradient')
+  expect(builder.hasAttribute('data-progress')).toBe(false)
+  expect(builder.getAttribute('style')).toContain('var(--line)')
+  expect(builder.getAttribute('style')).not.toContain('conic-gradient')
   const idle = within(dock).getByRole('button', { name: 'One to one with lead, free' })
-  expect(idle.getAttribute('data-progress')).toBe('0')
+  expect(idle.hasAttribute('data-progress')).toBe(false)
   expect(idle.getAttribute('style')).not.toContain('conic-gradient')
   const needs = within(dock).getByRole('button', {
     name: 'One to one with reviewer, needs you',
   })
   expect(needs.className).toContain('needs')
+})
 
-  fireEvent.click(screen.getByRole('button', { name: 'Work' }))
-  const menu = screen.getByRole('listbox', { name: 'Show' })
-  expect(within(menu).getByRole('option', { name: /Work/ })).toBeDefined()
-  expect(within(menu).getByRole('option', { name: /Library/ })).toBeDefined()
-  expect(within(menu).getByRole('option', { name: /Thread/ })).toBeDefined()
-  expect(within(menu).getByRole('option', { name: /builder/ })).toBeDefined()
-  fireEvent.click(within(menu).getByRole('option', { name: /Library/ }))
+test('the side-panel dropdown is a disclosure that closes and restores focus', () => {
+  open('/b')
+  const toggle = screen.getByRole('button', { name: 'Work' })
+  fireEvent.click(toggle)
+  expect(toggle.getAttribute('aria-expanded')).toBe('true')
+  const menuId = toggle.getAttribute('aria-controls')
+  expect(menuId).not.toBeNull()
+  const menu = document.getElementById(menuId!)!
+  expect(menu).not.toBeNull()
+  expect(menu.querySelector('[role="listbox"], [role="option"]')).toBeNull()
+  expect(within(menu).getByRole('button', { name: /^Work/ }).getAttribute('aria-current')).toBe(
+    'true',
+  )
+  expect(
+    within(menu)
+      .getByRole('button', { name: /^Library/ })
+      .hasAttribute('aria-current'),
+  ).toBe(false)
+
+  fireEvent.click(within(menu).getByRole('button', { name: /^Library/ }))
   expect(screen.getByText('The Library panel comes in a later task.')).toBeDefined()
-  expect(screen.queryByRole('listbox', { name: 'Show' })).toBeNull()
+  expect(document.getElementById(menuId!)).toBeNull()
+  expect(document.activeElement).toBe(toggle)
+
+  fireEvent.click(toggle)
+  expect(document.getElementById(menuId!)).not.toBeNull()
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(document.getElementById(menuId!)).toBeNull()
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  expect(document.activeElement).toBe(toggle)
 })
 
 test('a phone keeps the wordmark and avatar, shows the tab bar and hides the side panel', () => {
@@ -195,6 +221,33 @@ test('Team and Settings are placeholders, and the search button and Ctrl+K open 
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
   expect(await screen.findByRole('dialog', { name: 'Search or run a command' })).toBeDefined()
 })
+
+test('Settings offers the way back to the classic view', async () => {
+  const router = open('/b/settings')
+  expect(await screen.findByRole('heading', { name: 'Settings' })).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Use the classic view' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/now'))
+  expect(window.localStorage.getItem('score.ui')).toBeNull()
+})
+
+test.each(['ctrlKey', 'metaKey'])(
+  '%s+K does nothing while the palette is already open',
+  async (modifier) => {
+    vi.stubGlobal('requestAnimationFrame', (run: FrameRequestCallback) => {
+      run(0)
+      return 1
+    })
+    open('/b')
+    const trigger = screen.getByRole('button', { name: 'Search' })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const palette = await screen.findByRole('dialog', { name: 'Search or run a command' })
+    fireEvent.keyDown(document, { key: 'k', [modifier]: true })
+    expect(screen.getByRole('dialog', { name: 'Search or run a command' })).toBeDefined()
+    fireEvent.click(within(palette).getByRole('button', { name: 'Close command palette' }))
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+  },
+)
 
 test('the index follows the per-device choice and ?ui= sets it', async () => {
   const bold = open('/?ui=bold')

@@ -1,7 +1,17 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
 // PLAN 11.3a: the bold shell's frame at a desktop and a phone width, the per-device switch, and reduced motion.
+
+async function addLivedotProbe(page: Page) {
+  await page.locator('[data-ui="bold"]').evaluate((root) => {
+    const probe = document.createElement('span')
+    probe.className = 'livedot'
+    probe.dataset.motionProbe = 'true'
+    root.append(probe)
+  })
+  return page.locator('[data-motion-probe="true"]')
+}
 
 test('?ui=bold opens the frame at 1440×900 and 390×844', async ({ page }) => {
   await pair(page)
@@ -46,6 +56,8 @@ test.describe('reduced motion', () => {
     await pair(page)
     await page.goto('/?ui=bold')
     await expect(page.getByRole('group', { name: /Your team/ })).toBeVisible()
+    const probe = await addLivedotProbe(page)
+    expect(await probe.evaluate((element) => getComputedStyle(element).animationName)).toBe('none')
     const running = await page.locator('[data-ui="bold"]').evaluate((root) =>
       root
         .getAnimations({ subtree: true })
@@ -53,5 +65,19 @@ test.describe('reduced motion', () => {
         .map((animation) => (animation as CSSAnimation).animationName ?? 'transition'),
     )
     expect(running).toEqual([])
+  })
+})
+
+test.describe('normal motion', () => {
+  test.use({ reducedMotion: 'no-preference', viewport: { width: 1440, height: 900 } })
+
+  test('the livedot animation runs without a reduced-motion preference', async ({ page }) => {
+    await pair(page)
+    await page.goto('/?ui=bold')
+    await expect(page.getByRole('group', { name: /Your team/ })).toBeVisible()
+    const probe = await addLivedotProbe(page)
+    expect(await probe.evaluate((element) => getComputedStyle(element).animationName)).not.toBe(
+      'none',
+    )
   })
 })

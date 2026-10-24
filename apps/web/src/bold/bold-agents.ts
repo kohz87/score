@@ -20,7 +20,10 @@ export function agentNameColor(agent: AgentSummary): string {
   return nameTokens[agent.style.color.toUpperCase()] ?? 'var(--ink)'
 }
 
-/** The contract has an agent's status, not a run percentage yet: the frame shows a working arc at the prototype's 65%. */
-export function dockProgress(agent: AgentSummary): number {
-  return agent.status === 'working' ? 65 : 0
+/**
+ * The contract has an agent's status, not a run percentage yet (PLAN 11.2 adds one). Until then no ring draws an arc:
+ * a made-up share would look like real progress.
+ */
+export function dockProgress(): number | null {
+  return null
 }

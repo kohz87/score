@@ -1,5 +1,5 @@
 import type { AgentSummary } from '@score/contract'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
@@ -33,6 +33,8 @@ export function BoldRoom() {
   const [mode, setMode] = useState<SideMode>('work')
   const [menuOpen, setMenuOpen] = useState(false)
   const sideRef = useRef<HTMLElement>(null)
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const menuId = useId()
   const agent = mode.startsWith('agent:')
     ? agents.find((item) => item.id === mode.slice(6))
     : undefined
@@ -51,7 +53,11 @@ export function BoldRoom() {
       if (!sideRef.current?.contains(event.target as Node)) setMenuOpen(false)
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setMenuOpen(false)
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMenuOpen(false)
+        toggleRef.current?.focus()
+      }
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -64,13 +70,13 @@ export function BoldRoom() {
   const choose = (next: SideMode) => {
     setMode(next)
     setMenuOpen(false)
+    toggleRef.current?.focus()
   }
   const option = (target: SideMode, icon: ReactNode, name: string, hint: string) => (
     <button
       key={target}
       type="button"
-      role="option"
-      aria-selected={mode === target}
+      aria-current={mode === target ? 'true' : undefined}
       className={`mi ${mode === target ? 'sel' : ''}`}
       onClick={() => choose(target)}
     >
@@ -86,7 +92,7 @@ export function BoldRoom() {
     <div className="roomgrid">
       <section className="roomcol" aria-label="Team room">
         <div className="roomhead">
-          <button className="roomtitle" type="button" aria-haspopup="listbox" aria-expanded="false">
+          <button className="roomtitle" type="button">
             Team room
             <ChevronIcon />
           </button>
@@ -97,14 +103,15 @@ export function BoldRoom() {
       </section>
 
       {!phone && (
-        <div className="sidecol">
+        <div className="bold-sidecol">
           <aside className="side" ref={sideRef} aria-label="Side panel">
             <div className="sidehead">
               <button
+                ref={toggleRef}
                 type="button"
                 className="btn sm side-toggle"
-                aria-haspopup="listbox"
                 aria-expanded={menuOpen}
+                aria-controls={menuId}
                 onClick={() => setMenuOpen((open) => !open)}
               >
                 {mode === 'work' ? (
@@ -123,7 +130,7 @@ export function BoldRoom() {
                 <span className="small muted side-privacy">Only you and {agent.id} see this</span>
               )}
               {menuOpen && (
-                <div className="menu side-menu" role="listbox" aria-label="Show">
+                <div className="menu side-menu" id={menuId}>
                   {option('work', <GridIcon />, 'Work', 'What the team is making')}
                   {option('library', <BookIcon />, 'Library', 'Notes and files')}
                   {option('thread', <ThreadIcon />, 'Thread', "A job's back-and-forth")}
