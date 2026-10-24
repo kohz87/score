@@ -362,12 +362,7 @@ function RoomApprovals({
           jobs.find((item) => item.isDefault) ??
           jobs[0]
         return (
-          <ApprovalRequestCard
-            key={approval.id}
-            approval={approval}
-            job={job}
-            agents={agents}
-          />
+          <ApprovalRequestCard key={approval.id} approval={approval} job={job} agents={agents} />
         )
       })}
     </>

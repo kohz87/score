@@ -2,7 +2,7 @@ import type { AgentSummary, Job, Message, RoomVersion } from '@score/contract'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { ApiError } from '../../data/api.ts'
+import { apiFetch, ApiError } from '../../data/api.ts'
 import { copyText } from '../../data/clipboard.ts'
 import { newId } from '../../data/ids.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
@@ -20,7 +20,7 @@ import {
 import { saveCandidates, SaveToKnowledge } from '../../routes/knowledge/SaveToKnowledge.tsx'
 import { boldJobLink, boldMessageLink } from '../bold-links.ts'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
-import { roomMessagesQuery, roomPinsQuery, setRoomPin } from './room-queries.ts'
+import { roomMessagesQuery, roomPinsQuery, roomSeekQuery, setRoomPin } from './room-queries.ts'
 
 function messageText(message: Message) {
   return message.parts.flatMap((part) => (part.kind === 'text' ? [part.text] : [])).join('\n\n')
@@ -40,13 +40,17 @@ function atOrAfter(message: Message, anchor: Message) {
 }
 
 type PageState = {
-  data?: MessagePageData
+  data?: MessagePageData & { found?: boolean }
   status: 'pending' | 'success' | 'error'
   error?: unknown
 }
 
 function pageKey(jobId: string | null, before: string | null) {
   return `${jobId ?? 'default'}::${before ?? 'latest'}`
+}
+
+function seekMarker(seek: string) {
+  return `seek:${seek}`
 }
 
 function jobKey(jobId: string | null) {
@@ -75,6 +79,26 @@ function MessagePageCollector({
   useEffect(() => {
     onPage(pageKey(jobId, before), { data, status, error })
   }, [before, data, error, jobId, onPage, status])
+  return null
+}
+
+/** Reads back through the job's history to a `?message=` target without paging state. */
+function MessageSeekCollector({
+  roomId,
+  jobId,
+  seek,
+  onPage,
+}: {
+  roomId: string
+  jobId: string | null
+  seek: string
+  onPage: (key: string, state: PageState) => void
+}) {
+  const definition = useMemo(() => roomSeekQuery(roomId, jobId, seek), [jobId, roomId, seek])
+  const { data, status, error } = useStreamQuery(definition)
+  useEffect(() => {
+    onPage(pageKey(jobId, seekMarker(seek)), { data, status, error })
+  }, [data, error, jobId, onPage, seek, status])
   return null
 }
 
@@ -278,7 +302,6 @@ export function RoomMessageStream({
   const defaultJob = jobs.find((job) => job.isDefault)?.id ?? null
   const [older, setOlder] = useState<Record<string, string[]>>({})
   const [pageStates, setPageStates] = useState<Record<string, PageState>>({})
-  const [seekError, setSeekError] = useState<string | null>(null)
   const seeked = useRef<string | null>(null)
 
   const reportPage = useCallback((key: string, state: PageState) => {
@@ -314,7 +337,13 @@ export function RoomMessageStream({
     [older, visibleJobIds],
   )
 
-  const states = pageRefs.map((ref) => pageStates[pageKey(ref.jobId, ref.before)])
+  const seekJobId = selectedJob === 'all' ? defaultJob : selectedJob
+  const allRefs = useMemo(
+    () => (seek ? [...pageRefs, { jobId: seekJobId, before: seekMarker(seek) }] : pageRefs),
+    [pageRefs, seek, seekJobId],
+  )
+
+  const states = allRefs.map((ref) => pageStates[pageKey(ref.jobId, ref.before)])
   const status = states.some((state) => state?.status === 'success')
     ? 'success'
     : states.some((state) => state?.status === 'error')
@@ -323,14 +352,14 @@ export function RoomMessageStream({
 
   const allItems = useMemo(() => {
     const byId = new Map<string, Message>()
-    for (const ref of pageRefs) {
+    for (const ref of allRefs) {
       const page = pageStates[pageKey(ref.jobId, ref.before)]?.data
       for (const message of page?.items ?? []) byId.set(message.id, message)
     }
     return [...byId.values()].sort(
       (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
     )
-  }, [pageRefs, pageStates])
+  }, [allRefs, pageStates])
 
   const pinsDefinition = useMemo(() => roomPinsQuery(roomId), [roomId])
   const pins = useStreamQuery(pinsDefinition)
@@ -385,9 +414,7 @@ export function RoomMessageStream({
         if (!message.jobId) return true
         return shownJobs.has(message.jobId)
       }
-      return (
-        message.jobId === selectedJob || (message.jobId == null && selectedJob === defaultJob)
-      )
+      return message.jobId === selectedJob || (message.jobId == null && selectedJob === defaultJob)
     })
   }, [allItems, defaultJob, filter, hidden, jobs, selectedJob])
 
@@ -409,27 +436,20 @@ export function RoomMessageStream({
   useEffect(() => {
     if (seek) return
     seeked.current = null
-    setSeekError(null)
   }, [seek])
 
-  // A search target beyond the first page loads page after page until it appears, then says so if the end is reached.
-  useEffect(() => {
-    if (!seek || seeked.current === seek || allItems.some((message) => message.id === seek)) return
-    const jobId = selectedJob === 'all' ? defaultJob : selectedJob
-    const cursors = [null, ...(older[jobKey(jobId)] ?? [])]
-    const last = pageStates[pageKey(jobId, cursors.at(-1) ?? null)]
-    if (!last || last.status === 'pending') return
-    if (last.status === 'error') {
-      setSeekError('Couldn’t load the history to find that message.')
-      return
-    }
-    const next = last.data?.nextCursor ?? null
-    if (!next) {
-      setSeekError('Couldn’t find that message. It may have been deleted or moved.')
-      return
-    }
-    addOlder(jobId, next)
-  }, [addOlder, allItems, defaultJob, older, pageStates, seek, selectedJob])
+  const seekPage = seek ? pageStates[pageKey(seekJobId, seekMarker(seek))] : undefined
+  const seekFound = seek ? allItems.some((message) => message.id === seek) : false
+  // The seek query walks the history itself; these outcomes are derived from its one result rather than set by an
+  // effect that pages backwards.
+  const seekError =
+    !seek || seekFound
+      ? null
+      : seekPage?.status === 'error'
+        ? 'Couldn’t load the history to find that message.'
+        : seekPage?.status === 'success' && seekPage.data?.found === false
+          ? 'Couldn’t find that message. It may have been deleted or moved.'
+          : null
 
   // Once loaded, a target hidden by the D10 filter reveals itself in All; either way the URL keeps the link clean.
   useEffect(() => {
@@ -548,7 +568,10 @@ export function RoomMessageStream({
       }
   }
 
-  const typing = Object.assign({}, ...states.map((state) => state?.data?.typing ?? {}))
+  const typing: Record<string, string> = Object.assign(
+    {},
+    ...states.map((state): Record<string, string> => state?.data?.typing ?? {}),
+  )
 
   return (
     <div className="bold-stream" aria-label="Team room messages">
@@ -562,6 +585,9 @@ export function RoomMessageStream({
           onPage={reportPage}
         />
       ))}
+      {seek && (
+        <MessageSeekCollector roomId={roomId} jobId={seekJobId} seek={seek} onPage={reportPage} />
+      )}
       {status === 'pending' && (
         <p className="bold-stream-note" role="status">
           Loading messages…

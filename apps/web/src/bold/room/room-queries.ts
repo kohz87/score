@@ -9,6 +9,7 @@ import {
   TeamRoomResponseSchema,
   type Exchange,
   type Job,
+  type Message,
   type RoomPin,
   type Room,
 } from '@score/contract'
@@ -99,6 +100,62 @@ export function roomMessagesQuery(
         )
       return reduceMessages(data, event, roomId, before === null)
     },
+  })
+}
+
+export type MessageSeekData = MessagePageData & { found: boolean }
+
+/**
+ * A search target (`?message=`) may be older than the first page. Walk backwards through the job's history in one
+ * fetch until it appears (or the history ends), so seeking needs no state update from an effect. The cap keeps a bad
+ * cursor chain from reading forever.
+ */
+export function roomSeekQuery(roomId: string, jobId: string | null, seek: string) {
+  return defineStreamQuery<MessageSeekData>({
+    key: ['bold', 'room-messages-seek', roomId, jobId, seek],
+    async fetch(signal) {
+      const items = new Map<string, Message>()
+      const cursors = new Set<string>()
+      let before: string | null = null
+      let asOfSeq = 0
+      let pageJobId = jobId
+      let found = false
+      for (let page = 0; page < 40; page += 1) {
+        const params = new URLSearchParams({ limit: '50' })
+        if (jobId !== null) params.set('jobId', jobId)
+        if (before !== null) params.set('before', before)
+        const snapshot = MessagePageSchema.parse(
+          await apiFetch(`rooms/${encodeURIComponent(roomId)}/messages?${params}`, { signal }),
+        )
+        asOfSeq = Math.max(asOfSeq, snapshot.asOfSeq)
+        pageJobId = snapshot.jobId ?? pageJobId
+        for (const message of snapshot.items) items.set(message.id, message)
+        if (items.has(seek)) {
+          found = true
+          break
+        }
+        const next = snapshot.nextCursor
+        if (!next || cursors.has(next)) break
+        cursors.add(next)
+        before = next
+      }
+      return {
+        asOfSeq,
+        data: {
+          asOfSeq,
+          items: [...items.values()].sort(
+            (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+          ),
+          nextCursor: null,
+          jobId: pageJobId,
+          typing: {},
+          found,
+        },
+      }
+    },
+    // The seek is a one-off history read; the room's regular page stays the live one.
+    types: [],
+    reduce: (data) => data,
   })
 }
 

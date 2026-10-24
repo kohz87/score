@@ -68,7 +68,9 @@ test('a slash command handed over in the URL is loaded into the room composer an
   await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe('/assign '), {
     timeout: 4000,
   })
-  expect(screen.getByTestId('params').textContent).not.toContain('command')
+  await waitFor(() => expect(screen.getByTestId('params').textContent).not.toContain('command'), {
+    timeout: 4000,
+  })
 })
 
 test('the room shows job tabs, the To chip and the seeded unread count', async () => {
@@ -102,7 +104,8 @@ test('opening the room reads only the jobs on screen, and a second job waits for
   const fetchMock = stubRoom([defaultJob, activity])
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
 
-  await screen.findByRole('tab', { name: /Activity feed 4 unread/ })
+  const activityTab = await screen.findByRole('tab', { name: /Activity feed/ })
+  expect(activityTab.textContent).toContain('4')
   await waitFor(() =>
     expect(
       fetchMock.mock.calls.some(

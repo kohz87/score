@@ -71,7 +71,19 @@ function LoadedTeamRoom({ room, agents }: { room: Room; agents: AgentSummary[] }
   const [composerKey, setComposerKey] = useState(0)
   const [openedJobs, setOpenedJobs] = useState<string[]>([])
   const showDeleted = useShowDeleted(room.id)
-  const selectedJob = params.get('job') ?? 'all'
+  const requestedJob = params.get('job') ?? 'all'
+  // A tab that no longer exists, or that the D10 filter hides, falls back to All during render: an effect that called
+  // selectJob would set state synchronously in an effect (and cascade a second render for the same event).
+  const requested =
+    requestedJob === 'all' ? undefined : allJobs.find((job) => job.id === requestedJob)
+  const selectedJob =
+    requestedJob === 'all'
+      ? 'all'
+      : jobsStatus !== 'success'
+        ? requestedJob
+        : requested && jobMatchesFilter(requested, filter)
+          ? requestedJob
+          : 'all'
   const seek = params.get('message')
   const command = params.get('command')
 
@@ -98,17 +110,14 @@ function LoadedTeamRoom({ room, agents }: { room: Room; agents: AgentSummary[] }
     [params, setParams],
   )
 
-  useEffect(() => {
-    if (jobsStatus !== 'success' || selectedJob === 'all') return
-    if (allJobs.some((job) => job.id === selectedJob)) return
-    selectJob('all')
-  }, [allJobs, jobsStatus, selectJob, selectedJob])
-
-  useEffect(() => {
-    if (selectedJob === 'all') return
-    const job = allJobs.find((item) => item.id === selectedJob)
-    if (job && !jobMatchesFilter(job, filter)) selectJob('all')
-  }, [allJobs, filter, selectJob, selectedJob])
+  const selectFilter = useCallback(
+    (next: JobFilter) => {
+      setFilter(next)
+      // Leaving a tab it hides is a user action, so the URL is updated here rather than from an effect.
+      if (requested && !jobMatchesFilter(requested, next)) selectJob('all')
+    },
+    [requested, selectJob],
+  )
 
   // Opening a job is what reads it: the job on show counts as opened, and leaving it keeps it in the list (recorded in
   // selectJob), so All keeps showing its pages after a move and no other job's first page is read on mount (that would
@@ -183,7 +192,7 @@ function LoadedTeamRoom({ room, agents }: { room: Room; agents: AgentSummary[] }
           selectedJob={selectedJob}
           filter={filter}
           onSelectJob={selectJob}
-          onSelectFilter={setFilter}
+          onSelectFilter={selectFilter}
         />
       )}
       {jobsStatus === 'success' && !empty && (

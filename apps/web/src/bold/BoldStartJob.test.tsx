@@ -393,7 +393,8 @@ test('a trigger created by the dialog shows its address and secret once, in a pr
     reportBack: { mode: 'off' },
   })
 
-  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+  // The room behind the dialog has its own D10 "Done" filter; this is the result's Done.
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Start a job' })).toBeNull())
   fireEvent.click(screen.getByRole('button', { name: 'Start a job' }))
   const reopened = await startDialog()

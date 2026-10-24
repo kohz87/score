@@ -83,7 +83,12 @@ function stubStream(options: { pages?: Record<string, Message[]>; versions?: Roo
   return fetchMock
 }
 
-function renderStream(selectedJob = 'all', showDeleted = false, seek: string | null = null) {
+function renderStream(
+  selectedJob = 'all',
+  showDeleted = false,
+  seek: string | null = null,
+  onSeeked: () => void = () => undefined,
+) {
   return renderInRoom(
     <RoomMessageStream
       roomId="room-1"
@@ -95,7 +100,7 @@ function renderStream(selectedJob = 'all', showDeleted = false, seek: string | n
       seek={seek}
       openedJobs={[]}
       onRevealSeek={() => undefined}
-      onSeeked={() => undefined}
+      onSeeked={onSeeked}
     />,
   )
 }
@@ -313,4 +318,89 @@ test('an edited message’s version control opens the older read-only branch', a
   fireEvent.click(screen.getByRole('button', { name: 'Previous version' }))
   expect(await screen.findByText(/Viewing version 1 of 2/)).toBeDefined()
   expect(await screen.findByText('First wording.')).toBeDefined()
+})
+
+const olderMessage = makeMessage({
+  id: 'message-older',
+  jobId: 'job-1',
+  author: { kind: 'agent', agentId: 'builder' },
+  parts: [{ kind: 'text', text: 'Older history.' }],
+  createdAt: '2026-10-24T07:00:00.000Z',
+})
+
+function stubPagedHistory() {
+  const fetchMock = stubStream({ pages: { 'job-1': pages['job-1']!, 'job-2': [] } })
+  const base = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+    const parsed = new URL(String(input), 'http://x')
+    if (parsed.pathname === '/api/rooms/room-1/messages') {
+      const before = parsed.searchParams.get('before')
+      return Promise.resolve(
+        jsonResponse({
+          asOfSeq: 1,
+          items: before === 'cursor-older' ? [olderMessage] : pages['job-1'],
+          nextCursor: before === 'cursor-older' ? null : 'cursor-older',
+          jobId: parsed.searchParams.get('jobId'),
+        }),
+      )
+    }
+    return base(input, init)
+  })
+  return fetchMock
+}
+
+test('Load earlier asks for the page before the job’s first page', async () => {
+  const fetchMock = stubPagedHistory()
+  renderStream('job-1')
+  await screen.findByText('Read layer is ready.')
+  fireEvent.click(screen.getByRole('button', { name: 'Load earlier' }))
+  expect(await screen.findByText('Older history.')).toBeDefined()
+  expect(
+    fetchMock.mock.calls.some(
+      ([url, init]) =>
+        String(url).includes('before=cursor-older') &&
+        String(url).includes('jobId=job-1') &&
+        (init?.method ?? 'GET') === 'GET',
+    ),
+  ).toBe(true)
+})
+
+test('a deep ?message= target loads older pages until it is found and is revealed', async () => {
+  const fetchMock = stubPagedHistory()
+  const onSeeked = vi.fn()
+  renderStream('job-1', false, 'message-older', onSeeked)
+  expect(await screen.findByText('Older history.')).toBeDefined()
+  await waitFor(() =>
+    expect(
+      document.getElementById('message-message-older')?.classList.contains('bold-message-hit'),
+    ).toBe(true),
+  )
+  expect(onSeeked).toHaveBeenCalled()
+  expect(
+    fetchMock.mock.calls.filter(([url]) => String(url).includes('before=cursor-older')),
+  ).toHaveLength(1)
+})
+
+test('a ?message= target that is not in the history says it could not be found', async () => {
+  stubStream({ pages: { 'job-1': pages['job-1']!, 'job-2': [] } })
+  renderStream('job-1', false, 'message-gone')
+  expect(
+    await screen.findByText('Couldn’t find that message. It may have been deleted or moved.'),
+  ).toBeDefined()
+})
+
+test('Retry reply posts to the contract endpoint for an agent reply', async () => {
+  const fetchMock = stubStream()
+  renderStream('job-1')
+  await screen.findByText('Read layer is ready.')
+  fireEvent.click(boldButton('Retry reply from builder'))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url) === '/api/rooms/room-1/messages/message-1/retry' && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  )
+  expect(boldButton('Retry reply from builder').textContent).toContain('Retrying')
 })

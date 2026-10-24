@@ -163,9 +163,9 @@ test('a send-back without a note says what is missing and posts nothing', async 
 test('a selected job shows only its own requests', async () => {
   stubRoom(makeExchange({ jobId: 'job-2' }))
   renderInRoom(<RoomRequests jobs={[job, other]} agents={[]} selectedJob="job-2" messages={[]} />)
-  await screen.findByRole('article', { name: /The exchange used its turns/ })
+  const exchange = await screen.findByRole('article', { name: /The exchange used its turns/ })
   expect(screen.queryByText('Activity feed')).toBeNull()
-  expect(screen.getByText('Release notes')).toBeDefined()
+  expect(exchange.textContent).toContain('Release notes')
 })
 
 test('a non-actionable approval is history, not a request card', async () => {

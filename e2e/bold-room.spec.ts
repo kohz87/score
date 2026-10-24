@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { openBoldRoom } from './bold-room-fixtures.ts'
+import { pair } from './pair.ts'
 
 // PLAN 11.4a: the bold team room. The robot room moves over time, so these specs pin the contract-shaped reads to a
 // stable fixture while the shell, pairing, request validation and real-page routing stay the app's own.
@@ -12,6 +13,35 @@ const sizes = [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
 ] as const
+
+test('a second job keeps its unread badge until its own tab is opened (real fake server)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await pair(page)
+  await expect
+    .poll(async () => (await page.request.get('/api/team-room')).status(), { timeout: 30_000 })
+    .toBe(200)
+  const team = (await (await page.request.get('/api/team-room')).json()) as {
+    jobs: { title: string; unread: number }[]
+  }
+  const notes = team.jobs.find((job) => job.title === 'Release notes 2.4')
+  expect(notes?.unread ?? 0).toBeGreaterThan(0)
+
+  await page.goto('/b')
+  const notesTab = page.getByRole('tab', { name: /Release notes 2\.4/ })
+  const badge = notesTab.locator('.bold-unread')
+  await expect(badge).toHaveText(String(notes!.unread), { timeout: 30_000 })
+
+  await page.getByRole('tab', { name: /Activity feed/ }).click()
+  await expect(page.getByText('To: Activity feed')).toBeVisible()
+  await expect(badge).toHaveText(String(notes!.unread))
+
+  await notesTab.click()
+  await expect(page.getByText('To: Release notes 2.4')).toBeVisible()
+  await expect(notesTab.locator('.bold-unread')).toHaveCount(0)
+})
 
 function message(page: Parameters<typeof openBoldRoom>[0], id: string) {
   return page.locator(`[data-message-id="${id}"]`)
@@ -38,7 +68,7 @@ for (const viewport of sizes) {
       await expect(all).toContainText('6')
       await expect(activity).toContainText('2')
       await expect(notes).toContainText('3')
-      await expect(queue).not.toContainText('0')
+      await expect(queue.locator('.bold-unread')).toHaveCount(0)
       await expect(closed).toContainText('1')
 
       await activity.click()

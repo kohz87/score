@@ -620,9 +620,7 @@ export function Composer({
       const noLead = error instanceof ApiError && error.code === 'no_lead'
       setNotice({
         kind: 'error',
-        text: noLead
-          ? 'No lead yet — use @name, or pick a lead in Settings.'
-          : errorText(error),
+        text: noLead ? 'No lead yet — use @name, or pick a lead in Settings.' : errorText(error),
         ...(typeof held === 'string' ? { heldAgent: held } : {}),
         ...(noLead ? { action: { label: 'Pick a lead', to: '/b/settings' } } : {}),
       })
