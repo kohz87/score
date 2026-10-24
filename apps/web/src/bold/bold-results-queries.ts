@@ -3,6 +3,7 @@ import {
   TeamRoomResponseSchema,
   type Job,
   type JobResults,
+  type Room,
   type StreamEvent,
   type WatchOverviewItem,
 } from '@score/contract'
@@ -13,7 +14,7 @@ import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { defineStreamQuery } from '../data/resync.ts'
 import { useWatchOverview } from '../routes/watch/watch-queries.ts'
 
-type TeamRoom = { room: { id: string; name: string }; jobs: Job[] }
+export type TeamRoom = { room: Room; jobs: Job[] }
 
 // The room column owns job selection (11.4a). Results only needs the job list, so it keeps its own read of the same
 // contract endpoint and follows `job.upserted` until that screen exists.
