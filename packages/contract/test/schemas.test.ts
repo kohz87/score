@@ -265,6 +265,8 @@ const job = {
   summary: 'Get the activity feed streaming',
   source: null,
   reportBack: null,
+  spendCapUsd: null,
+  recipe: null,
   createdAt: '2026-10-24T00:00:00.000Z',
   updatedAt: '2026-10-24T00:00:00.000Z',
 }
@@ -1066,6 +1068,7 @@ const cases = [
     { platform: 'slack', label: 'Slack', status: 'on', detail: null, connectCommand: 'x' },
   ],
   ['AgentChannelsResponseSchema', { items: [] }, { items: [{ platform: 'x' }] }],
+  ['JobRecipeSchema', { kind: 'workflow', ref: 'run_1' }, { kind: 'routine', ref: 'r' }],
   ['WorkspaceInfoSchema', { root: '/w', available: true, reason: null }, { root: '/w' }],
   [
     'LineCommentSchema',

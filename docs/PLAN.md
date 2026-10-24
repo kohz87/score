@@ -660,7 +660,7 @@ schedule, webhook, D13; routines carried over), ask-me-before, turn budget, spen
 before-it-starts checklist (D2), save as recipe; maps onto today's orchestration/workflow start APIs (migration 0086
 for When if needed). Done when: e2e starts each kind; a routine appears as a scheduled job.
 
-**11.10d Recipe editor** · **DeepSeek**, lead reviews against 7.1 rules · D1: step list (agent steps, gates, branches,
+**11.10d Recipe editor** ✅ · **DeepSeek**, lead reviews against 7.1 rules · D1: step list (agent steps, gates, branches,
 joins, ends, retries 0–2, failure paths, `{{nodes.*}}`/`{{inputs.*}}`, live checking, undo/redo), versions (immutable,
 conflict, start from older), export (scrubbed), optional read-only graph. Done when: every 7.1 editor e2e has a
 step-list equivalent; saved recipes run unchanged on the workflow engine.
