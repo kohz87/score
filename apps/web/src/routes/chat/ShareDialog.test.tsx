@@ -110,6 +110,46 @@ test('active links for the room can be revoked from the dialog', async () => {
   ).toBe(true)
 })
 
+test('a job share names the job and sends its id in the request', async () => {
+  const job = {
+    id: 'job-activity',
+    roomId: room.id,
+    title: 'Activity feed',
+    state: 'working' as const,
+    holderAgentId: 'builder',
+    isDefault: false,
+    exchangeBudget: 8,
+    jobTurnLimit: 40,
+    spendCapUsd: null,
+    recipe: null,
+    unread: 0,
+    activeAgents: [],
+    lastMessageAt: null,
+    messageCount: 0,
+    summary: null,
+    source: null,
+    reportBack: null,
+    createdAt: '2026-10-24T09:00:00.000Z',
+    updatedAt: '2026-10-24T09:00:00.000Z',
+  }
+  wrap(<ShareDialog room={room} job={job} close={() => {}} />)
+  expect(screen.getByRole('heading', { name: 'Share Activity feed' })).toBeDefined()
+  expect(screen.getByText(/the job’s/)).toBeDefined()
+  fireEvent.change(screen.getByLabelText('Security password'), {
+    target: { value: 'correct horse' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Create link' }))
+  await screen.findByText('https://score.lan/s/TOKEN')
+  expect(posted()).toEqual([
+    {
+      password: 'correct horse',
+      expiresInDays: 7,
+      includeImages: false,
+      jobId: 'job-activity',
+    },
+  ])
+})
+
 test('Settings › Shares lists every link with room, dates and views, and revokes', async () => {
   wrap(<SharesSection />)
   const list = await screen.findByRole('list', { name: 'Share links' })

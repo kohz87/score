@@ -1,6 +1,6 @@
-import type { AgentSummary } from '@score/contract'
+import type { AgentSummary, OutsideSession } from '@score/contract'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Link, useLocation, useOutletContext } from 'react-router'
+import { Link, useLocation, useNavigate, useOutletContext } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
@@ -13,15 +13,17 @@ import { BoldWorkbench } from './BoldWorkbench.tsx'
 import { boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
 import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
+import { BoldElsewhere } from './room/BoldElsewhere.tsx'
 
 const PHONE = '(max-width: 860px)'
 
-type SideMode = 'work' | 'library' | 'thread' | `agent:${string}`
+type SideMode = 'work' | 'library' | 'thread' | 'elsewhere' | `agent:${string}`
 
 function sideCopy(mode: SideMode, agent: AgentSummary | undefined): string {
   if (mode === 'work') return 'The Work panel comes in a later task.'
   if (mode === 'library') return ''
   if (mode === 'thread') return 'The Thread panel comes in a later task.'
+  if (mode === 'elsewhere') return 'A chat from elsewhere.'
   return `Your one-to-one with ${agent?.id ?? 'this agent'} comes in a later task.`
 }
 
@@ -39,7 +41,9 @@ export function BoldRoom() {
   const phone = useMediaQuery(PHONE)
   const { sheetOpen, setSheetOpen } = useOutletContext<BoldSheetState>()
   const location = useLocation()
+  const navigate = useNavigate()
   const [mode, setMode] = useState<SideMode>('work')
+  const [elsewhere, setElsewhere] = useState<OutsideSession | null>(null)
   const workbenchVisible =
     mode === 'work' &&
     ['workbench', 'code', 'screen', 'draft'].includes(
@@ -54,6 +58,9 @@ export function BoldRoom() {
   const agent = mode.startsWith('agent:')
     ? agents.find((item) => item.id === mode.slice(6))
     : undefined
+  const elsewhereAgent = elsewhere
+    ? agents.find((item) => item.id === elsewhere.agentId)
+    : undefined
   const label =
     mode === 'work'
       ? 'Work'
@@ -61,7 +68,9 @@ export function BoldRoom() {
         ? 'Library'
         : mode === 'thread'
           ? 'Thread'
-          : agent?.id
+          : mode === 'elsewhere'
+            ? `${elsewhere?.agentId ?? 'Elsewhere'} · ${elsewhere?.sourceLabel ?? ''}`.trim()
+            : agent?.id
 
   useEffect(() => {
     if (!menuOpen) return
@@ -119,6 +128,16 @@ export function BoldRoom() {
     setMenuOpen(false)
     requestAnimationFrame(() => phoneOpenRef.current?.focus())
   }
+  const openElsewhere = (session: OutsideSession) => {
+    setElsewhere(session)
+    setMode('elsewhere')
+    setSheetOpen(true)
+  }
+  const broughtIntoJob = (jobId: string) => {
+    setMode('work')
+    setSheetOpen(false)
+    navigate(`/b?job=${encodeURIComponent(jobId)}`)
+  }
   const option = (target: SideMode, icon: ReactNode, name: string, hint: string) => (
     <button
       key={target}
@@ -150,7 +169,7 @@ export function BoldRoom() {
   return (
     <div className="roomgrid">
       <section className="roomcol" aria-label="Team room" inert={phone && sheetOpen}>
-        <BoldTeamRoom agents={agents} phoneAction={phoneAction} />
+        <BoldTeamRoom agents={agents} phoneAction={phoneAction} onOpenElsewhere={openElsewhere} />
       </section>
 
       <div
@@ -179,6 +198,8 @@ export function BoldRoom() {
                 <BookIcon />
               ) : mode === 'thread' ? (
                 <ThreadIcon />
+              ) : mode === 'elsewhere' && elsewhereAgent ? (
+                <SideGlyph agent={elsewhereAgent} />
               ) : agent ? (
                 <SideGlyph agent={agent} />
               ) : null}
@@ -234,16 +255,20 @@ export function BoldRoom() {
               </div>
             )}
           </div>
-          {mode !== 'library' && mode !== 'work' && (
-            <div className="sidebody" data-placeholder={mode}>
-              <p className="side-placeholder">{sideCopy(mode, agent)}</p>
-              {agent && (
-                <span className="side-agent-name" style={{ color: agentNameColor(agent) }}>
-                  {agent.id}
-                </span>
-              )}
-            </div>
-          )}
+          {mode !== 'library' &&
+            mode !== 'work' &&
+            (mode === 'elsewhere' && elsewhere ? (
+              <BoldElsewhere session={elsewhere} agents={agents} onBroughtIn={broughtIntoJob} />
+            ) : (
+              <div className="sidebody" data-placeholder={mode}>
+                <p className="side-placeholder">{sideCopy(mode, agent)}</p>
+                {agent && (
+                  <span className="side-agent-name" style={{ color: agentNameColor(agent) }}>
+                    {agent.id}
+                  </span>
+                )}
+              </div>
+            ))}
           <BoldResults agents={agents} hidden={mode !== 'work' || workbenchVisible} />
           <BoldWorkbench agents={agents} hidden={!workbenchVisible} />
           <BoldLibrary agents={agents} hidden={mode !== 'library'} />

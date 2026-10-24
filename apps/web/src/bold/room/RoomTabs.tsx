@@ -1,4 +1,5 @@
 import type { Job } from '@score/contract'
+import type { ReactNode } from 'react'
 import { JOB_FILTERS, jobMatchesFilter, jobStateLabel, type JobFilter } from './room-model.ts'
 import type { JobRead } from './room-queries.ts'
 
@@ -17,12 +18,14 @@ export function RoomTabs({
   filter,
   onSelectJob,
   onSelectFilter,
+  trailing,
 }: {
   jobs: JobRead[]
   selectedJob: string
   filter: JobFilter
   onSelectJob: (jobId: string) => void
   onSelectFilter: (filter: JobFilter) => void
+  trailing?: ReactNode
 }) {
   const named = jobs.filter((job) => !job.isDefault)
   const visible = named.filter((job) => jobMatchesFilter(job, filter))
@@ -68,6 +71,7 @@ export function RoomTabs({
             )}
           </button>
         ))}
+        {trailing}
       </div>
       <div className="bold-job-filters" role="group" aria-label="Filter jobs">
         {JOB_FILTERS.map((item) => (

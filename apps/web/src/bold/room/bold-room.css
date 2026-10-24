@@ -611,6 +611,53 @@
   font-size: 20px;
 }
 
+/* PLAN 11.4d: one of the agents' own chats, read-only until it is brought into a team job. */
+[data-ui='bold'] .bold-elsewhere {
+  gap: 16px;
+}
+
+[data-ui='bold'] .bold-elsewhere-note {
+  align-self: flex-start;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-elsewhere-title {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+[data-ui='bold'] .bold-elsewhere-title h2 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+[data-ui='bold'] .bold-elsewhere-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-elsewhere-card b {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-elsewhere-actions {
+  margin-top: auto;
+  align-items: center;
+}
+
 /* Board 09: a fresh team room. */
 [data-ui='bold'] .bold-empty-room {
   flex: 1;

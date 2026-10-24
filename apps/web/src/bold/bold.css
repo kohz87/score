@@ -303,6 +303,86 @@
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--ink);
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-room-switch-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-room-grow {
+  flex: 1 1 auto;
+}
+
+[data-ui='bold'] .bold-room-menu-wrap,
+[data-ui='bold'] .bold-job-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+[data-ui='bold'] .bold-job-menu-wrap {
+  align-self: center;
+}
+
+[data-ui='bold'] .bold-room-switch {
+  left: 0;
+  top: 52px;
+  width: min(420px, 92vw);
+  max-height: min(620px, calc(100dvh - 180px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+[data-ui='bold'] .bold-room-menu,
+[data-ui='bold'] .bold-job-menu {
+  right: 0;
+  top: 44px;
+  width: min(300px, calc(100vw - 28px));
+}
+
+[data-ui='bold'] .bold-room-menu a,
+[data-ui='bold'] .bold-job-menu a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-menu-note {
+  padding: 8px 12px;
+}
+
+[data-ui='bold'] .bold-room-dot,
+[data-ui='bold'] .bold-outside-glyph {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--faint);
+}
+
+[data-ui='bold'] .bold-room-dot.team {
+  background: var(--ok);
+}
+
+[data-ui='bold'] .bold-outside-glyph {
+  width: 22px;
+  height: 22px;
+  margin-inline: 0 2px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-dots span {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 [data-ui='bold'] .phone-side-open {
@@ -647,5 +727,5 @@ body.fit [data-ui='bold'] .stream {
 
 /* Start a job (11.10c) sits at the end of the room head. */
 [data-ui='bold'] .room-start {
-  margin-left: auto;
+  margin-left: 0;
 }

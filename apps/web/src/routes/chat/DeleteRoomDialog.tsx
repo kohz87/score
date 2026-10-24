@@ -64,7 +64,8 @@ export function DeleteRoomDialog({
     <dialog
       ref={dialog}
       open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
-      className="chat-rewind-dialog"
+      className="chat-rewind-dialog bold-room-delete-dialog"
+      data-protected="any"
       aria-labelledby="delete-room-title"
       onCancel={(event) => {
         event.preventDefault()

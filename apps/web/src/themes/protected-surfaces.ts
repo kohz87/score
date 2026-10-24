@@ -39,6 +39,10 @@ export const protectedClasses = [
   'orch-pill',
   'orch-node__flag',
   'bold-request',
+  // PLAN 11.4d: the room and job menus make destructive or exposing choices; deleting a room asks for its name.
+  'bold-room-menu',
+  'bold-job-menu',
+  'bold-room-delete-dialog',
   // The task drawer's approval and its buttons
   'task-drawer-approval',
   'task-drawer-buttons',

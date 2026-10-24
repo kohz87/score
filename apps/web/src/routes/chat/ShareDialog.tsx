@@ -1,4 +1,4 @@
-import type { Room, ShareSummary } from '@score/contract'
+import type { Job, Room, ShareSummary } from '@score/contract'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { copyText, selectText } from '../../data/clipboard.ts'
 import { shareFailure, useCreateShare, useRevokeShare, useRoomShares } from '../../data/shares.ts'
@@ -43,7 +43,16 @@ export function ShareList({
  * Share a frozen copy of one room as a link (PLAN 5.26). Needs the security password; the link opens a read-only,
  * text-only page for anyone who can reach this Score.
  */
-export function ShareDialog({ room, close }: { room: Room; close: () => void }) {
+export function ShareDialog({
+  room,
+  job,
+  close,
+}: {
+  room: Room
+  /** PLAN 11.1b: share this team-room job instead of the room's default job. */
+  job?: Job
+  close: () => void
+}) {
   const dialog = useRef<HTMLDialogElement>(null)
   const link = useRef<HTMLElement>(null)
   const [password, setPassword] = useState('')
@@ -62,7 +71,12 @@ export function ShareDialog({ room, close }: { room: Room; close: () => void }) 
     event.preventDefault()
     setCopied('idle')
     create.mutate(
-      { password, expiresInDays: days, includeImages: images },
+      {
+        password,
+        expiresInDays: days,
+        includeImages: images,
+        ...(job ? { jobId: job.id } : {}),
+      },
       { onSettled: () => setPassword('') },
     )
   }
@@ -80,16 +94,16 @@ export function ShareDialog({ room, close }: { room: Room; close: () => void }) 
       }}
     >
       <div className="share-heading">
-        <h2 id="share-title">Share {roomLabel(room)}</h2>
+        <h2 id="share-title">Share {job ? job.title : roomLabel(room)}</h2>
         <button type="button" className="chat-small-button" onClick={close}>
           Close
         </button>
       </div>
       <p>
-        This makes a link to a frozen, read-only copy of the room’s messages as they are now. Only
-        the text is shared (secrets are hidden); tool output, files, plans and reasoning are left
-        out. Anyone who has the link <strong>and can reach this Score</strong> (your LAN or
-        Tailscale) can read it until it expires or you revoke it.
+        This makes a link to a frozen, read-only copy of {job ? 'the job’s' : 'the room’s'} messages
+        as they are now. Only the text is shared (secrets are hidden); tool output, files, plans and
+        reasoning are left out. Anyone who has the link <strong>and can reach this Score</strong>{' '}
+        (your LAN or Tailscale) can read it until it expires or you revoke it.
       </p>
       <form className="share-form" onSubmit={submit}>
         <label>
