@@ -220,7 +220,8 @@ for (const size of sizes) {
       )
       const work = panel.getByRole('navigation', { name: 'How to see the work' })
       const link = work.getByRole('link', { name: 'Workbench' })
-      await panel.getByRole('button', { name: /^Work/ }).focus()
+      // The Work nav is Results then Workbench (11.6b): Tab reaches Results first, then Workbench.
+      await work.getByRole('link', { name: 'Results' }).focus()
       await page.keyboard.press('Tab')
       await expect(link).toBeFocused()
       expect(await link.evaluate((element) => element.matches(':focus-visible'))).toBe(true)

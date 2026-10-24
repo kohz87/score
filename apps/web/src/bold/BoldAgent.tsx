@@ -26,6 +26,7 @@ import { RoutinesTab } from '../routes/team/RoutinesTab.tsx'
 import { SkillsTab } from '../routes/team/SkillsTab.tsx'
 import { ToolsTab } from '../routes/team/ToolsTab.tsx'
 import { WorkspaceTab } from '../routes/team/WorkspaceTab.tsx'
+import { boldAgentScreenLink } from './bold-links.ts'
 import type { AgentFileName } from '../routes/team/file-queries.ts'
 import { useAgentPause } from '../routes/watch/watch-queries.ts'
 import '../routes/team/team.css'
@@ -361,11 +362,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
           )}
           {agent.served && (
             <>
-              <Link
-                className="link bold-agent-watch"
-                to={`/now/watch/${encodeURIComponent(agent.id)}`}
-              >
-                Watch {agent.name} work
+              <Link className="link bold-agent-watch" to={boldAgentScreenLink(agent.id)}>
+                Look at its screen
               </Link>
               <PopOutButton
                 agentId={agent.id}

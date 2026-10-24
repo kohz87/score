@@ -87,9 +87,9 @@ for (const viewport of sizes) {
       'href',
       '/b?with=builder',
     )
-    await expect(page.getByRole('link', { name: 'Watch builder work' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Look at its screen' })).toHaveAttribute(
       'href',
-      '/now/watch/builder',
+      '/b/screen/builder',
     )
     await expect(page.getByRole('button', { name: 'Open builder in its own window' })).toBeVisible()
 

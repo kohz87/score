@@ -10,7 +10,8 @@ import { BoldLibrary } from './BoldLibrary.tsx'
 import { BoldResults } from './BoldResults.tsx'
 import { BookIcon, ChevronIcon, CloseIcon, GridIcon, PlusIcon, ThreadIcon } from './BoldIcons.tsx'
 import { useStartJob } from './BoldStartJob.tsx'
-import { boldWorkbenchLink } from './bold-links.ts'
+import { BoldWorkbench } from './BoldWorkbench.tsx'
+import { boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
 
 const PHONE = '(max-width: 860px)'
@@ -40,6 +41,11 @@ export function BoldRoom() {
   const { sheetOpen, setSheetOpen } = useOutletContext<BoldSheetState>()
   const location = useLocation()
   const [mode, setMode] = useState<SideMode>('work')
+  const workbenchVisible =
+    mode === 'work' &&
+    ['workbench', 'code', 'screen', 'draft'].includes(
+      new URLSearchParams(location.search).get('work') ?? '',
+    )
   const [menuOpen, setMenuOpen] = useState(false)
   const sideRef = useRef<HTMLElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -199,10 +205,20 @@ export function BoldRoom() {
             </button>
             {mode === 'work' && (
               <nav className="seg bold-work-tabs" aria-label="How to see the work">
-                <span className="on" aria-current="page">
+                <Link
+                  className={workbenchVisible ? undefined : 'on'}
+                  aria-current={workbenchVisible ? undefined : 'page'}
+                  to={boldResultsLink(location.search)}
+                >
                   Results
-                </span>
-                <Link to={boldWorkbenchLink(location.search)}>Workbench</Link>
+                </Link>
+                <Link
+                  className={workbenchVisible ? 'on' : undefined}
+                  aria-current={workbenchVisible ? 'page' : undefined}
+                  to={boldWorkbenchLink(location.search)}
+                >
+                  Workbench
+                </Link>
               </nav>
             )}
             {agent && (
@@ -246,7 +262,8 @@ export function BoldRoom() {
               )}
             </div>
           )}
-          <BoldResults agents={agents} hidden={mode !== 'work'} />
+          <BoldResults agents={agents} hidden={mode !== 'work' || workbenchVisible} />
+          <BoldWorkbench agents={agents} hidden={!workbenchVisible} />
           <BoldLibrary agents={agents} hidden={mode !== 'library'} />
         </aside>
       </div>

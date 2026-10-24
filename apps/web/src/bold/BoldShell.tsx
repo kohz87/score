@@ -103,7 +103,8 @@ export function BoldShell() {
 
   // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside. Only
   // the room: Team and Settings are ordinary pages, and a fixed-height frame clipped them below the fold on phones.
-  const fit = view === 'room'
+  // The player screen is an ordinary page, even though it belongs to Room in the navigation.
+  const fit = view === 'room' && location.pathname === '/b'
   useEffect(() => {
     if (!fit) return
     document.body.classList.add('fit')

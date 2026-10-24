@@ -13,7 +13,7 @@ import remarkGfm from 'remark-gfm'
 import { copyText } from '../../data/clipboard.ts'
 import { normalizeBullets } from './bullets.ts'
 import { normalizeLanguage, tokenize } from './highlight.ts'
-import { isWorkspaceHref, parseWorkspaceLink } from './workspace-link.ts'
+import { isWorkspaceHref, parseWorkspaceLink, type WorkspaceTarget } from './workspace-link.ts'
 
 /** Shows `text` at most once per animation frame while it streams, so a fast reply does not re-parse on every chunk. */
 export function useFrameText(text: string, streaming: boolean): string {
@@ -82,7 +82,12 @@ export function CodeBlock({ code, language }: { code: string; language: string |
 }
 
 /** Where `workspace://` links point: the agent whose files they are (usually the author) and the agents Score knows. */
-export type WorkspaceLinkContext = { agentId: string | null; agentIds: readonly string[] }
+export type WorkspaceLinkContext = {
+  agentId: string | null
+  agentIds: readonly string[]
+  /** The bold room can send a job's files to its Workbench; the classic screens keep the Workspace tab. */
+  linkFor?: (target: WorkspaceTarget) => string
+}
 
 const baseComponents: Components = {
   // Remote images would be fetched without the person asking: show the alt text instead.
@@ -115,6 +120,7 @@ export function Markdown({
   const inRouter = useInRouterContext()
   const agentId = workspace?.agentId ?? null
   const agentIds = workspace?.agentIds
+  const linkFor = workspace?.linkFor
   const components = useMemo<Components>(
     () => ({
       ...baseComponents,
@@ -131,7 +137,7 @@ export function Markdown({
               </span>
             )
           return (
-            <Link className="chat-workspace-link" to={target.to}>
+            <Link className="chat-workspace-link" to={linkFor?.(target) ?? target.to}>
               {children}
             </Link>
           )
@@ -143,7 +149,7 @@ export function Markdown({
         )
       },
     }),
-    [agentId, agentIds, inRouter],
+    [agentId, agentIds, inRouter, linkFor],
   )
   return (
     <div className="chat-text chat-md">

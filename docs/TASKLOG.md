@@ -975,3 +975,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   caught a real bug — `refetch()` resolved with the cached list while another fetch was in flight, so a recipe saved
   meanwhile was created twice (now read straight from the server); first run scrolls inside the room frame on phones.
   E2E 5/5 twice (fresh SCORE_HOME per test); full check green (web 3,160). Not deployed.
+- **11.6b Workbench and an agent's screen (DeepSeek + lead, 2026-10-24).** Work › Workbench in the side panel (file /
+  screen / draft tabs; numbered lines with the editing agent's colour bar and a text alternative, gaps, the reviewer's
+  notes on their lines, outdated notes, cursors, "authorship may be incomplete" for inexact files; read-only screens)
+  and `/b/screen/:agentId` (plain-step log, time bar, markers, Live, the protected approval bar, "Open in terminal" to
+  the classic page) — it replaces Watch on the agent page ("Look at its screen"). Build + 1 fix round. Sonnet: 2 P1
+  (`workspace://` links not wired — `linkFor` is ready, the lead wires it into the room stream after 11.4a; no e2e),
+  2 P2 (tabs keyed by frame seq, refresh load), P3s — fixed. Lead: merge with main (BoldRoom imports), a stable
+  Markdown dependency, two e2e that predated the Work nav order and the per-job Results. E2E 18/18 twice plus watch,
+  team and shell specs; full check green (web 3,174). Not deployed.
