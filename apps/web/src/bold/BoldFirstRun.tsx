@@ -1,4 +1,4 @@
-import { AboutSchema, RoomSchema, TeamRoomResponseSchema } from '@score/contract'
+import { RoomSchema, TeamRoomResponseSchema } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
@@ -7,15 +7,9 @@ import { apiFetch, ApiError } from '../data/api.ts'
 import { copyText } from '../data/clipboard.ts'
 import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
-import { useSystemStatus } from '../routes/settings/settings-queries.ts'
+import { aboutQuery, useSystemStatus } from '../routes/settings/settings-queries.ts'
 import { useSaveWorkflow, useWorkflows } from '../routes/workflows/workflow-queries.ts'
-import {
-  finishFirstRun,
-  hermesStatusCopy,
-  starterDefinition,
-  starterMissing,
-  starterRecipes,
-} from './bold-first-run.ts'
+import { finishFirstRun, hermesStatusCopy, starterPlan, starterRecipes } from './bold-first-run.ts'
 import { useBoldTeamRoom } from './bold-search-queries.ts'
 import './bold-first-run.css'
 
@@ -24,12 +18,7 @@ const TEAM_ROOM_KEY = ['bold-search', 'team-room'] as const
 type TeamRoomResponse = ReturnType<typeof TeamRoomResponseSchema.parse>
 
 function useServiceStatus() {
-  return useQuery({
-    queryKey: ['about'],
-    queryFn: async ({ signal }) => AboutSchema.parse(await apiFetch('about', { signal })),
-    retry: false,
-    staleTime: Infinity,
-  })
+  return useQuery(aboutQuery)
 }
 
 function CheckMark() {
@@ -97,15 +86,13 @@ function CopyCommand() {
   )
 }
 
-function submitFailure(error: unknown): string {
+function leadFailure(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'not_paired')
       return 'Pair this browser with the link in the server terminal, then try again.'
-    if (error.code === 'invalid_definition')
-      return 'A starter recipe didn’t pass validation. Some may already be saved; open the recipe editor to check.'
-    return error.message
+    return `Couldn’t save the lead: ${error.message}`
   }
-  return 'Couldn’t open the team room. Try again.'
+  return 'Couldn’t save the lead. Try again.'
 }
 
 /** PLAN 11.10b: the first run and starter recipes, as a page in the bold shell's main column. */
@@ -118,12 +105,15 @@ export function BoldFirstRun() {
   const saveWorkflow = useSaveWorkflow()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [lead, setLead] = useState('')
+  const [lead, setLead] = useState<string | null>(null)
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  const [leadSaved, setLeadSaved] = useState(false)
+  const [failedRecipes, setFailedRecipes] = useState<{ id: string; name: string }[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const room = roomQuery.data?.room
+  const selectedLead = lead ?? room?.leadAgentId ?? ''
   const members = room?.members ?? []
   const agentById = new Map(agents.map((agent) => [agent.id, agent]))
   const memberAgents = members.flatMap((id) => {
@@ -132,12 +122,14 @@ export function BoldFirstRun() {
   })
   const hermes = hermesStatusCopy(system.data, system.isError)
   const existingNames = new Set(workflows.data?.items.map((item) => item.name) ?? [])
-  const options = starterRecipes.map((recipe) => ({
-    recipe,
-    definition: starterDefinition(recipe, members),
-    missing: starterMissing(recipe, members),
-    exists: existingNames.has(recipe.name),
-  }))
+  const options = starterRecipes.map((recipe) => {
+    const plan = starterPlan(recipe, {
+      members,
+      agents: memberAgents,
+      leadAgentId: selectedLead,
+    })
+    return { recipe, ...plan, exists: existingNames.has(recipe.name) }
+  })
 
   const toggle = (id: string) => {
     setSelected((current) => {
@@ -148,35 +140,80 @@ export function BoldFirstRun() {
     })
   }
 
-  const open = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!room || lead === '' || busy) return
-    setBusy(true)
-    setError(null)
+  const finish = () => {
+    finishFirstRun()
+    void queryClient.invalidateQueries({ queryKey: ['workflows'] })
+    void navigate('/b', { replace: true })
+  }
+
+  const saveRecipes = async (ids: readonly string[]) => {
+    if (ids.length === 0) {
+      finish()
+      return
+    }
+    let savedNames: Set<string>
     try {
       const latest = await workflows.refetch()
       if (latest.isError) throw latest.error
-      const savedNames = new Set(latest.data?.items.map((item) => item.name) ?? [])
-      for (const option of options) {
-        if (!selected.has(option.recipe.id) || !option.definition) continue
-        if (savedNames.has(option.recipe.name)) continue
-        await saveWorkflow.mutateAsync({ workflowId: null, definition: option.definition })
-        savedNames.add(option.recipe.name)
-      }
-      const updated = RoomSchema.parse(
-        await apiFetch(`rooms/${encodeURIComponent(room.id)}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ leadAgentId: lead }),
+      savedNames = new Set(latest.data?.items.map((item) => item.name) ?? [])
+    } catch {
+      setFailedRecipes(
+        ids.map((id) => {
+          const option = options.find((item) => item.recipe.id === id)
+          return { id, name: option?.recipe.name ?? id }
         }),
       )
-      queryClient.setQueryData<TeamRoomResponse>(TEAM_ROOM_KEY, (current) =>
-        current ? { ...current, room: updated } : current,
-      )
-      finishFirstRun()
-      void queryClient.invalidateQueries({ queryKey: ['workflows'] })
-      void navigate('/b', { replace: true })
+      return
+    }
+
+    const failed: { id: string; name: string }[] = []
+    for (const id of ids) {
+      const option = options.find((item) => item.recipe.id === id)
+      if (!option || savedNames.has(option.recipe.name)) continue
+      try {
+        await saveWorkflow.mutateAsync({ workflowId: null, definition: option.definition })
+        savedNames.add(option.recipe.name)
+      } catch {
+        failed.push({ id, name: option.recipe.name })
+      }
+    }
+    setFailedRecipes(failed)
+    if (failed.length === 0) finish()
+  }
+
+  const open = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!room || selectedLead === '' || busy) return
+    setBusy(true)
+    setError(null)
+    setFailedRecipes([])
+    try {
+      if (!leadSaved) {
+        const updated = RoomSchema.parse(
+          await apiFetch(`rooms/${encodeURIComponent(room.id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ leadAgentId: selectedLead }),
+          }),
+        )
+        queryClient.setQueryData<TeamRoomResponse>(TEAM_ROOM_KEY, (current) =>
+          current ? { ...current, room: updated } : current,
+        )
+        setLeadSaved(true)
+      }
+      await saveRecipes([...selected])
     } catch (failure) {
-      setError(submitFailure(failure))
+      setError(leadFailure(failure))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const retry = async () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await saveRecipes([...selected])
     } finally {
       setBusy(false)
     }
@@ -258,18 +295,18 @@ export function BoldFirstRun() {
             </li>
 
             <li className="bold-first-run-card">
-              <label htmlFor="bold-first-run-lead">
-                <h2>Who leads?</h2>{' '}
-                <span className="small muted">
-                  Messages without an @name go to the lead, who splits up the work.
-                </span>
-              </label>
+              <h2 id="bold-first-run-lead-title">Who leads?</h2>
+              <p id="bold-first-run-lead-help" className="small muted">
+                Messages without an @name go to the lead, who splits up the work.
+              </p>
               <select
                 id="bold-first-run-lead"
                 className="field bold-first-run-select"
-                value={lead}
+                value={selectedLead}
                 required
-                disabled={busy || members.length === 0}
+                disabled={busy || leadSaved || members.length === 0}
+                aria-labelledby="bold-first-run-lead-title"
+                aria-describedby="bold-first-run-lead-help"
                 onChange={(event) => setLead(event.target.value)}
               >
                 <option value="">Pick who leads</option>
@@ -308,13 +345,8 @@ export function BoldFirstRun() {
                 later in the recipe editor.
               </p>
               <ul className="bold-first-run-recipes">
-                {options.map(({ recipe, definition, missing, exists }) => {
-                  const disabled = busy || definition === null || exists
-                  const note = exists
-                    ? 'Already saved'
-                    : missing.length > 0
-                      ? `Needs ${missing.join(', ')} on the team`
-                      : recipe.description
+                {options.map(({ recipe, unmappedSteps, exists }) => {
+                  const disabled = busy || exists
                   return (
                     <li key={recipe.id}>
                       <label className={`bold-first-run-option${disabled ? ' disabled' : ''}`}>
@@ -326,7 +358,15 @@ export function BoldFirstRun() {
                         />
                         <span className="bold-first-run-option-copy">
                           <b>{recipe.name}</b>
-                          <span className="small muted">{note}</span>
+                          <span className="small muted">
+                            {exists ? 'Already saved' : recipe.description}
+                          </span>
+                          {!exists &&
+                            unmappedSteps.map((step) => (
+                              <span key={step} className="small muted">
+                                You pick the agent for {step} in the recipe editor
+                              </span>
+                            ))}
                         </span>
                       </label>
                     </li>
@@ -341,10 +381,23 @@ export function BoldFirstRun() {
                   {error}
                 </p>
               )}
+              {failedRecipes.length > 0 && (
+                <p className="bold-first-run-error" role="alert">
+                  Lead saved. Couldn’t save: {failedRecipes.map(({ name }) => name).join(', ')}{' '}
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={busy}
+                    onClick={() => void retry()}
+                  >
+                    Retry
+                  </button>
+                </p>
+              )}
               <button
                 type="submit"
                 className="btn primary bold-first-run-open"
-                disabled={busy || lead === '' || room === undefined}
+                disabled={busy || selectedLead === '' || room === undefined}
               >
                 {busy ? 'Opening…' : 'Open the team room'}
               </button>

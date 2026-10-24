@@ -4,14 +4,20 @@ import {
   FIRST_RUN_DONE_KEY,
   finishFirstRun,
   firstRunDone,
+  firstRunView,
   hermesStatusCopy,
   shouldShowFirstRun,
-  starterDefinition,
-  starterMissing,
+  starterPlan,
   starterRecipes,
 } from './bold-first-run.ts'
 
-const members = ['lead', 'builder', 'reviewer', 'designer']
+const agents = [
+  { id: 'captain', role: 'Leads the team' },
+  { id: 'maker', role: 'Builds features' },
+  { id: 'checker', role: 'Reviews changes' },
+  { id: 'artist', role: 'Designs interfaces' },
+]
+const members = agents.map((agent) => agent.id)
 
 const system = (overrides: Partial<SystemStatus> = {}): SystemStatus => ({
   mode: 'fake',
@@ -40,6 +46,11 @@ test('first run waits for a room with no lead, unless the link forces it or this
   expect(shouldShowFirstRun(false, false, { leadAgentId: 'lead' })).toBe(false)
   expect(shouldShowFirstRun(false, true, { leadAgentId: null })).toBe(false)
   expect(shouldShowFirstRun(true, true, { leadAgentId: 'lead' })).toBe(true)
+
+  expect(firstRunView(false, false, undefined, true)).toBe('loading')
+  expect(firstRunView(false, false, { leadAgentId: null }, false)).toBe('first-run')
+  expect(firstRunView(false, false, { leadAgentId: 'lead' }, false)).toBe('room')
+  expect(firstRunView(true, true, { leadAgentId: 'lead' }, true)).toBe('first-run')
 })
 
 test('the per-device flag is read and written, and a browser that refuses storage does not break', () => {
@@ -91,15 +102,20 @@ test('Hermes is never called found when it cannot be reached or reports a proble
   expect(degraded.ok).toBe(false)
 })
 
-test('every starter recipe is a valid workflow that uses the team ids', () => {
+test('every starter recipe maps roles to the team ids, not to fixed agent names', () => {
   for (const recipe of starterRecipes) {
-    const definition = starterDefinition(recipe, members)
-    expect(definition, recipe.name).not.toBeNull()
-    expect(WorkflowDefinitionSchema.parse(definition).name).toBe(recipe.name)
-    const agentIds = definition!.nodes.flatMap((node) =>
+    const plan = starterPlan(recipe, { members, agents, leadAgentId: 'captain' })
+    expect(plan.unmapped, recipe.name).toEqual([])
+    expect(plan.unmappedSteps, recipe.name).toEqual([])
+    expect(WorkflowDefinitionSchema.parse(plan.definition).name).toBe(recipe.name)
+    const agentIds = plan.definition.nodes.flatMap((node) =>
       node.kind === 'agent' ? [node.agentId] : [],
     )
-    for (const role of recipe.agents) expect(agentIds, recipe.name).toContain(role)
+    expect(agentIds, recipe.name).not.toContain('')
+    if (recipe.roles.includes('lead')) expect(agentIds).toContain('captain')
+    if (recipe.roles.includes('builder')) expect(agentIds).toContain('maker')
+    if (recipe.roles.includes('reviewer')) expect(agentIds).toContain('checker')
+    if (recipe.roles.includes('designer')) expect(agentIds).toContain('artist')
   }
   expect(starterRecipes.map((recipe) => recipe.name)).toEqual([
     'Build, then review',
@@ -108,8 +124,28 @@ test('every starter recipe is a valid workflow that uses the team ids', () => {
   ])
 })
 
-test('a starter recipe stays unavailable, and names the missing agents, when the team lacks one', () => {
+test('a recipe leaves unmatched steps empty and names the steps the person must fill', () => {
   const buildAndReview = starterRecipes[0]!
-  expect(starterDefinition(buildAndReview, ['lead', 'builder'])).toBeNull()
-  expect(starterMissing(buildAndReview, ['lead', 'builder'])).toEqual(['reviewer'])
+  const plan = starterPlan(buildAndReview, {
+    members: ['captain'],
+    agents: [{ id: 'captain', role: 'Coordinates the work' }],
+    leadAgentId: 'captain',
+  })
+  expect(plan.unmapped).toEqual(['Build it', 'Review it'])
+  expect(plan.unmappedSteps).toEqual(['build it', 'review it'])
+  expect(
+    plan.definition.nodes.flatMap((node) =>
+      node.kind === 'agent' && node.agentId === '' ? [node.label] : [],
+    ),
+  ).toEqual(['Build it', 'Review it'])
+
+  const research = starterPlan(starterRecipes[2]!, {
+    members: ['captain'],
+    agents: [{ id: 'captain', role: 'Coordinates the work' }],
+    leadAgentId: 'captain',
+  })
+  expect(research.unmapped).toEqual([])
+  expect(research.definition.nodes.find((node) => node.kind === 'agent')).toMatchObject({
+    agentId: 'captain',
+  })
 })

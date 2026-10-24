@@ -1,4 +1,5 @@
 import type {
+  AgentSummary,
   SystemStatus,
   WorkflowDefinition,
   WorkflowEdge,
@@ -17,6 +18,18 @@ export function shouldShowFirstRun(
   room: FirstRunRoom | null | undefined,
 ): boolean {
   return forced || (!finished && room !== null && room !== undefined && room.leadAgentId === null)
+}
+
+/** What `/b` shows: the forced/automatic first run, a neutral wait while the room is read, or the room. */
+export function firstRunView(
+  forced: boolean,
+  finished: boolean,
+  room: FirstRunRoom | null | undefined,
+  loading: boolean,
+): 'first-run' | 'loading' | 'room' {
+  if (forced) return 'first-run'
+  if (loading) return 'loading'
+  return shouldShowFirstRun(false, finished, room) ? 'first-run' : 'room'
 }
 
 export function firstRunDone(): boolean {
@@ -90,8 +103,22 @@ export type StarterRecipe = {
   id: 'build-review' | 'write-review-design' | 'research-report'
   name: string
   description: string
-  agents: StarterRole[]
+  roles: StarterRole[]
   build: (agentId: (role: StarterRole) => string) => WorkflowDefinition
+}
+
+export type StarterTeam = {
+  members: readonly string[]
+  agents: readonly Pick<AgentSummary, 'id' | 'role'>[]
+  leadAgentId: string
+}
+
+export type StarterPlan = {
+  definition: WorkflowDefinition
+  /** Agent steps whose role has no matching team member; their agentId is empty for the recipe editor. */
+  unmapped: string[]
+  /** Steps the person must choose an agent for, as the recipe editor will show them. */
+  unmappedSteps: string[]
 }
 
 const input = (name: string, label: string): WorkflowInput => ({
@@ -129,7 +156,7 @@ export const starterRecipes: readonly StarterRecipe[] = [
     id: 'build-review',
     name: 'Build, then review',
     description: 'builder makes it, reviewer checks it',
-    agents: ['builder', 'reviewer'],
+    roles: ['builder', 'reviewer'],
     build: (id) => ({
       name: 'Build, then review',
       description: 'builder makes it, reviewer checks it',
@@ -178,7 +205,7 @@ export const starterRecipes: readonly StarterRecipe[] = [
     id: 'write-review-design',
     name: 'Write, review, design',
     description: 'lead writes, reviewer checks, designer draws',
-    agents: ['lead', 'reviewer', 'designer'],
+    roles: ['lead', 'reviewer', 'designer'],
     build: (id) => ({
       name: 'Write, review, design',
       description: 'lead writes, reviewer checks, designer draws',
@@ -215,7 +242,7 @@ export const starterRecipes: readonly StarterRecipe[] = [
     id: 'research-report',
     name: 'Research report',
     description: 'A short summary with sources',
-    agents: ['lead'],
+    roles: ['lead'],
     build: (id) => ({
       name: 'Research report',
       description: 'A short summary with sources',
@@ -229,17 +256,39 @@ export const starterRecipes: readonly StarterRecipe[] = [
   },
 ] as const
 
-/** A recipe can be saved only when every agent it needs is on the team; the team's ids are used unchanged. */
-export function starterDefinition(
-  recipe: StarterRecipe,
-  members: readonly string[],
-): WorkflowDefinition | null {
-  const available = new Set(members)
-  if (!recipe.agents.every((role) => available.has(role))) return null
-  return recipe.build((role) => role)
+const ROLE_TEXT: Record<Exclude<StarterRole, 'lead'>, RegExp> = {
+  reviewer: /\b(review|reviewer|qa|quality|test|audit|check)/i,
+  designer: /\b(design|designer|ux|ui|visual|brand)/i,
+  builder: /\b(build|builder|develop|implement|engineer|programmer)/i,
 }
 
-export function starterMissing(recipe: StarterRecipe, members: readonly string[]): StarterRole[] {
-  const available = new Set(members)
-  return recipe.agents.filter((role) => !available.has(role))
+/** The role an agent's own description names, with review and design taking precedence over broad build wording. */
+function agentRole(role: string): Exclude<StarterRole, 'lead'> | null {
+  for (const name of ['reviewer', 'designer', 'builder'] as const)
+    if (ROLE_TEXT[name].test(role)) return name
+  return null
+}
+
+/**
+ * Fill a starter recipe from the team without guessing: lead steps use the lead the person chose, and every other
+ * step uses the first team member whose role text names that job. An unmatched step stays empty for the editor.
+ */
+export function starterPlan(recipe: StarterRecipe, team: StarterTeam): StarterPlan {
+  const members = new Set(team.members)
+  const agents = team.agents.filter((agent) => members.has(agent.id))
+  const mapping = new Map<StarterRole, string>()
+  if (members.has(team.leadAgentId)) mapping.set('lead', team.leadAgentId)
+  for (const agent of agents) {
+    const role = agentRole(agent.role)
+    if (role !== null && !mapping.has(role)) mapping.set(role, agent.id)
+  }
+  const definition = recipe.build((role) => mapping.get(role) ?? '')
+  const unmapped = definition.nodes.flatMap((node) =>
+    node.kind === 'agent' && node.agentId === '' ? [node.label] : [],
+  )
+  return {
+    definition,
+    unmapped,
+    unmappedSteps: unmapped.map((label) => label.toLocaleLowerCase()),
+  }
 }

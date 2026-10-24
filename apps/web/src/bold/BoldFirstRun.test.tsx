@@ -36,12 +36,15 @@ const agents = ['lead', 'builder', 'reviewer', 'designer'].map((id) => ({
   served: true,
 }))
 
+let currentAgents = agents
+let currentMembers = agents.map((agent) => agent.id)
+
 const room = (leadAgentId: string | null) => ({
   id: 'team-room',
   name: 'Team room',
   kind: 'room' as const,
   leadAgentId,
-  members: ['lead', 'builder', 'reviewer', 'designer'],
+  members: currentMembers,
   unread: 0,
   activeAgents: [],
   channels: [],
@@ -94,6 +97,9 @@ let calls: { url: string; method: string; body: unknown }[]
 let currentSystem = system()
 let existingRecipes: string[] = []
 let savedLead: string | null = null
+let failLeadPatch = false
+let workflowListFailures = 0
+let failedRecipeNames = new Set<string>()
 const disposed: (() => void)[] = []
 
 function installFetch() {
@@ -106,7 +112,7 @@ function installFetch() {
       const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
       calls.push({ url: `${url.pathname}${url.search}`, method, body })
 
-      if (url.pathname === '/api/agents') return response({ asOfSeq: 1, items: agents })
+      if (url.pathname === '/api/agents') return response({ asOfSeq: 1, items: currentAgents })
       if (url.pathname === '/api/team-room')
         return response({
           asOfSeq: 1,
@@ -127,10 +133,20 @@ function installFetch() {
           checkout: '/home/owner/score',
           service: false,
         })
-      if (url.pathname === '/api/workflows' && method === 'GET')
+      if (url.pathname === '/api/workflows' && method === 'GET') {
+        if (workflowListFailures > 0) {
+          workflowListFailures -= 1
+          return response(
+            { error: { code: 'unavailable', message: 'Recipes are unavailable.' } },
+            503,
+          )
+        }
         return response(workflowList(existingRecipes))
+      }
       if (url.pathname === '/api/workflows' && method === 'POST') {
         const definition = body.definition
+        if (failedRecipeNames.has(definition.name))
+          return response({ error: { code: 'unavailable', message: 'Save failed.' } }, 503)
         existingRecipes = [...existingRecipes, definition.name]
         return response(
           {
@@ -148,6 +164,7 @@ function installFetch() {
         )
       }
       if (url.pathname === '/api/rooms/team-room' && method === 'PATCH') {
+        if (failLeadPatch) return response({ error: { code: 'unavailable', message: 'No.' } }, 503)
         savedLead = body.leadAgentId
         return response(room(savedLead))
       }
@@ -183,6 +200,11 @@ beforeEach(() => {
   window.localStorage.clear()
   savedLead = null
   existingRecipes = []
+  currentAgents = agents
+  currentMembers = agents.map((agent) => agent.id)
+  failLeadPatch = false
+  workflowListFailures = 0
+  failedRecipeNames = new Set()
   currentSystem = system()
   installFetch()
 })
@@ -216,6 +238,12 @@ test('first run lists the team without pretending members are editable, and neve
 
   const lead = screen.getByRole('combobox', { name: /Who leads/ }) as HTMLSelectElement
   expect(lead.value).toBe('')
+  expect(lead.closest('label')).toBeNull()
+  expect(lead.getAttribute('aria-labelledby')).toBe('bold-first-run-lead-title')
+  expect(lead.getAttribute('aria-describedby')).toBe('bold-first-run-lead-help')
+  expect(screen.getByRole('heading', { name: 'Who leads?' }).getAttribute('id')).toBe(
+    'bold-first-run-lead-title',
+  )
   expect(
     (screen.getByRole('button', { name: 'Open the team room' }) as HTMLButtonElement).disabled,
   ).toBe(true)
@@ -241,7 +269,7 @@ test('missing or degraded Hermes says what is wrong and links to the classic set
   )
 })
 
-test('Open saves the chosen recipes and lead, sets the device flag and goes to the team room', async () => {
+test('Open saves the lead first, then the chosen recipes, sets the device flag and opens the room', async () => {
   const router = open()
   fireEvent.change(await screen.findByRole('combobox', { name: /Who leads/ }), {
     target: { value: 'reviewer' },
@@ -260,10 +288,9 @@ test('Open saves the chosen recipes and lead, sets the device flag and goes to t
   ).toEqual(['Build, then review', 'Research report'])
   const patch = calls.find((call) => call.url === '/api/rooms/team-room' && call.method === 'PATCH')
   expect(patch?.body).toEqual({ leadAgentId: 'reviewer' })
-  // The room patch comes after every recipe, so a failed recipe never leaves a lead behind.
   expect(
-    calls.findLastIndex((call) => call.url === '/api/workflows' && call.method === 'POST'),
-  ).toBeLessThan(calls.findIndex((call) => call.url === '/api/rooms/team-room'))
+    calls.findIndex((call) => call.url === '/api/rooms/team-room' && call.method === 'PATCH'),
+  ).toBeLessThan(calls.findIndex((call) => call.url === '/api/workflows' && call.method === 'POST'))
 })
 
 test('an existing recipe is shown as already saved and is never posted twice', async () => {
@@ -285,4 +312,105 @@ test('an existing recipe is shown as already saved and is never posted twice', a
       calls.filter((call) => call.url === '/api/workflows' && call.method === 'POST'),
     ).toHaveLength(1),
   )
+})
+
+test('?first=run pre-selects the lead the team room already has', async () => {
+  savedLead = 'reviewer'
+  open()
+
+  await waitFor(() =>
+    expect((screen.getByRole('combobox', { name: /Who leads/ }) as HTMLSelectElement).value).toBe(
+      'reviewer',
+    ),
+  )
+})
+
+test('a workflows-list failure still saves the lead and Retry only retries the chosen recipes', async () => {
+  const router = open()
+  fireEvent.change(await screen.findByRole('combobox', { name: /Who leads/ }), {
+    target: { value: 'reviewer' },
+  })
+  fireEvent.click(screen.getByRole('checkbox', { name: /Build, then review/ }))
+  workflowListFailures = 1
+  fireEvent.click(screen.getByRole('button', { name: 'Open the team room' }))
+
+  expect(await screen.findByText(/Lead saved\. Couldn’t save: Build, then review/)).toBeDefined()
+  expect(savedLead).toBe('reviewer')
+  expect(window.localStorage.getItem(FIRST_RUN_DONE_KEY)).toBeNull()
+  expect(
+    calls.filter((call) => call.url === '/api/workflows' && call.method === 'POST'),
+  ).toHaveLength(0)
+  expect(router.state.location.pathname).toBe('/b')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(window.localStorage.getItem(FIRST_RUN_DONE_KEY)).toBe('1'))
+  expect(
+    calls
+      .filter((call) => call.url === '/api/workflows' && call.method === 'POST')
+      .map((call) => (call.body as { definition: { name: string } }).definition.name),
+  ).toEqual(['Build, then review'])
+})
+
+test('one recipe failure does not block the others, and the message names only the failed recipe', async () => {
+  open()
+  fireEvent.change(await screen.findByRole('combobox', { name: /Who leads/ }), {
+    target: { value: 'reviewer' },
+  })
+  fireEvent.click(screen.getByRole('checkbox', { name: /Build, then review/ }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /Write, review, design/ }))
+  failedRecipeNames = new Set(['Build, then review'])
+  fireEvent.click(screen.getByRole('button', { name: 'Open the team room' }))
+
+  expect(await screen.findByText(/Lead saved\. Couldn’t save: Build, then review/)).toBeDefined()
+  expect(screen.queryByText(/Couldn’t save: Build, then review, Write/)).toBeNull()
+  expect(savedLead).toBe('reviewer')
+  expect(window.localStorage.getItem(FIRST_RUN_DONE_KEY)).toBeNull()
+  expect(
+    calls
+      .filter((call) => call.url === '/api/workflows' && call.method === 'POST')
+      .map((call) => (call.body as { definition: { name: string } }).definition.name),
+  ).toEqual(['Build, then review', 'Write, review, design'])
+})
+
+test('a lead failure saves nothing else and does not set the device flag', async () => {
+  open()
+  fireEvent.change(await screen.findByRole('combobox', { name: /Who leads/ }), {
+    target: { value: 'reviewer' },
+  })
+  fireEvent.click(screen.getByRole('checkbox', { name: /Build, then review/ }))
+  failLeadPatch = true
+  fireEvent.click(screen.getByRole('button', { name: 'Open the team room' }))
+
+  expect(await screen.findByText(/Couldn’t save the lead/)).toBeDefined()
+  expect(savedLead).toBeNull()
+  expect(window.localStorage.getItem(FIRST_RUN_DONE_KEY)).toBeNull()
+  expect(
+    calls.filter((call) => call.url === '/api/workflows' && call.method === 'POST'),
+  ).toHaveLength(0)
+})
+
+test('unmatched recipe roles stay empty and name the step the person must fill', async () => {
+  currentMembers = ['captain']
+  currentAgents = [
+    {
+      ...agents[0]!,
+      id: 'captain',
+      name: 'captain',
+      role: 'Coordinates the work',
+    },
+  ]
+  savedLead = 'captain'
+  open()
+
+  expect(
+    await screen.findAllByText('You pick the agent for build it in the recipe editor'),
+  ).toHaveLength(1)
+  expect(screen.getByText('You pick the agent for review it in the recipe editor')).toBeDefined()
+  expect(
+    screen.getByText('You pick the agent for review the draft in the recipe editor'),
+  ).toBeDefined()
+  expect(
+    screen.getByText('You pick the agent for draw the image in the recipe editor'),
+  ).toBeDefined()
+  expect(screen.queryByText('You pick the agent for research in the recipe editor')).toBeNull()
 })

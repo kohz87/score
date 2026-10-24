@@ -1,4 +1,5 @@
 import {
+  AboutSchema,
   ConfigApplyResponseSchema,
   ConfigPreviewResponseSchema,
   ConfigSearchResponseSchema,
@@ -25,7 +26,7 @@ import {
   type SystemStatus,
   type ToolServerRequest,
 } from '@score/contract'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 
@@ -42,6 +43,14 @@ const post = (path: string, body?: unknown) =>
   })
 
 const WATCH_MS = 5_000
+
+/** Settings › About and first run share this read (and its cached answer). */
+export const aboutQuery = queryOptions({
+  queryKey: ['about'],
+  queryFn: async ({ signal }) => AboutSchema.parse(await apiFetch('about', { signal })),
+  retry: false,
+  staleTime: Infinity,
+})
 
 export function useProviders(watching = false) {
   return useQuery({
