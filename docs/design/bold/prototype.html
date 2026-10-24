@@ -1,0 +1,1101 @@
+<title>Score prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: top bar, then the team room (left) beside one switchable side panel (right). Phone: one column, side panel as a sheet, tab bar. Dark first; Settings › Look switches to light inside the prototype. */
+:root {
+  --bg: #12131a; --panel: #1a1c23; --deep: #16171e; --field: #23252e; --line: #2c2f38;
+  --ink: #ececf1; --ink2: #c9ccd4; --muted: #a9adb8; --faint: #626670;
+  --hi-bg: #ececf1; --hi-ink: #12131a; --hi-line: #12131a; --hi-sub: #3a3d45;
+  --code-bg: #0f1116; --code-ink: #c9ccd4; --ok: #5ee3bf; --warn: #ffc94d; --bad: #ff97ae; --live: #d93a4e;
+  --font-d: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --font-b: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --font-m: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --scale: 1;
+  color-scheme: dark;
+}
+body[data-look="light"] {
+  --bg: #eceef2; --panel: #ffffff; --deep: #ffffff; --field: #f4f5f8; --line: #dfe2e8;
+  --ink: #12131a; --ink2: #3a3d45; --muted: #5e626c; --faint: #9a9ea7;
+  --hi-bg: #12131a; --hi-ink: #ffffff; --hi-line: #ffffff; --hi-sub: #c9cbd2;
+  --code-bg: #1e2029; --code-ink: #d6d8de; --ok: #00694f; --warn: #8a5a00; --bad: #b01e43;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-b); font-size: calc(15px * var(--scale)); line-height: 1.5; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+h1, h2, h3 { font-family: var(--font-d); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+code, .mono { font-family: var(--font-m); }
+.muted { color: var(--muted); }
+.small { font-size: 0.87em; }
+.row { display: flex; align-items: center; gap: 10px; }
+.wrap { flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+
+/* buttons */
+.btn { border: 0; border-radius: 999px; min-height: 44px; padding: 0 18px; font-weight: 700; font-size: 0.93em; display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--field); color: var(--ink); white-space: nowrap; }
+.btn.sm { min-height: 36px; padding: 0 14px; font-size: 0.87em; }
+.btn.primary { background: var(--hi-bg); color: var(--hi-ink); }
+.btn.ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.btn.danger { background: transparent; box-shadow: inset 0 0 0 1.5px var(--bad); color: var(--bad); }
+.btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+.icon-btn { width: 44px; height: 44px; border-radius: 999px; border: 0; background: var(--field); display: inline-grid; place-items: center; color: var(--ink); flex: none; }
+.icon-btn.sm { width: 36px; height: 36px; }
+.link { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; min-height: 32px; font-size: 0.93em; }
+.chip { border: 0; border-radius: 999px; min-height: 36px; padding: 0 14px; font-size: 0.87em; font-weight: 700; background: var(--panel); color: var(--ink2); display: inline-flex; align-items: center; gap: 7px; }
+.chip.on { background: var(--hi-bg); color: var(--hi-ink); }
+.dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; flex: none; }
+.field { background: var(--field); border: 0; border-radius: 14px; min-height: 46px; padding: 0 14px; width: 100%; }
+textarea.field { padding: 12px 14px; resize: vertical; min-height: 90px; }
+label.lab { font-size: 0.87em; font-weight: 600; color: var(--muted); display: block; margin-bottom: 6px; }
+.check { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.check input { width: 20px; height: 20px; accent-color: var(--ink); flex: none; }
+
+/* shell */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 14px max(20px, env(safe-area-inset-right, 0px)) 14px max(20px, env(safe-area-inset-left, 0px)); }
+.word { font-family: var(--font-d); font-weight: 800; font-size: 24px; letter-spacing: -0.04em; background: none; border: 0; padding: 0; }
+.nav { display: flex; gap: 2px; }
+.nav button { border: 0; background: transparent; color: var(--muted); border-radius: 999px; min-height: 40px; padding: 0 14px; font-weight: 600; font-size: 0.93em; }
+.nav button.on { background: var(--hi-bg); color: var(--hi-ink); }
+.dock { margin: 0 auto; display: flex; align-items: center; gap: 4px; background: var(--panel); border-radius: 999px; padding: 5px 12px 5px 5px; }
+.ring { width: 42px; height: 42px; border-radius: 999px; border: 0; padding: 0; display: grid; place-items: center; }
+.ring > span { width: 36px; height: 36px; border-radius: 999px; background: var(--panel); display: grid; place-items: center; }
+.ring.needs { box-shadow: 0 0 0 2px var(--hi-bg); }
+.searchbtn { display: inline-flex; align-items: center; gap: 10px; border: 0; background: var(--panel); color: var(--muted); border-radius: 999px; min-height: 40px; padding: 0 8px 0 14px; font-size: 0.93em; }
+.kbd { font-family: var(--font-m); font-size: 12px; background: var(--field); border-radius: 8px; padding: 2px 8px; color: var(--ink2); }
+.avatar { width: 36px; height: 36px; border-radius: 999px; background: var(--hi-bg); color: var(--hi-ink); display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: none; }
+.main { padding: 4px max(20px, env(safe-area-inset-right, 0px)) 24px max(20px, env(safe-area-inset-left, 0px)); }
+.tabbar { display: none; }
+
+/* room */
+.roomgrid { display: flex; gap: 20px; align-items: stretch; min-height: calc(100vh - 110px); }
+.roomcol { flex: 1 1 440px; max-width: 600px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.sidecol { flex: 999 1 520px; min-width: 0; display: flex; }
+.roomhead { display: flex; align-items: center; gap: 8px; position: relative; }
+.roomtitle { display: inline-flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; min-height: 44px; font-family: var(--font-d); font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
+.menu { position: absolute; z-index: 30; background: var(--panel); border-radius: 22px; padding: 8px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 20px 50px rgba(0,0,0,.45); min-width: 260px; }
+.menu .mi { border: 0; background: transparent; text-align: left; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px; border-radius: 14px; color: var(--ink); width: 100%; }
+.menu .mi:hover, .menu .mi.sel { background: var(--field); }
+.menu .mi.bad { color: var(--bad); }
+.menu .sec { font-size: 12px; font-weight: 700; color: var(--muted); padding: 8px 12px 4px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pin { background: var(--hi-bg); color: var(--hi-ink); border-radius: 22px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.pin .btn { background: var(--hi-ink); color: var(--hi-bg); }
+.pin .btn.ghost { background: transparent; color: var(--hi-ink); box-shadow: inset 0 0 0 1.5px var(--hi-ink); }
+.pin .sub { color: var(--hi-sub); font-size: 0.87em; }
+.stream { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow-y: auto; min-height: 260px; padding-right: 2px; }
+.mine { align-self: flex-end; max-width: 84%; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; position: relative; }
+.bub { border-radius: 20px 20px 6px 20px; padding: 9px 14px; background: var(--hi-bg); color: var(--hi-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.theirs { display: flex; gap: 10px; align-items: flex-end; max-width: 90%; position: relative; }
+.theirs .bub { background: var(--field); color: var(--ink); border-radius: 20px 20px 20px 6px; }
+.who { font-size: 12px; font-weight: 600; margin: 6px 0 0 36px; }
+.meta { font-size: 11px; color: var(--muted); }
+.acts { display: none; gap: 4px; }
+.mine:hover .acts, .mine:focus-within .acts, .theirs:hover .acts, .theirs:focus-within .acts { display: flex; }
+.act { border: 0; background: var(--panel); color: var(--ink2); border-radius: 999px; min-height: 30px; padding: 0 10px; font-size: 12px; font-weight: 600; }
+.vers { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.vers button { border: 0; background: var(--panel); color: var(--ink); width: 26px; height: 26px; border-radius: 999px; }
+.old { opacity: 0.45; }
+.capsule { border: 1px solid var(--line); border-radius: 20px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; margin-left: 36px; }
+.capsule.paused { border-color: var(--warn); }
+.result { border: 0; text-align: left; background: #fff; color: #12131a; border-radius: 18px; padding: 12px; display: flex; align-items: center; gap: 10px; width: min(280px, 100%); }
+.note { align-self: center; font-size: 12px; color: var(--muted); background: var(--panel); border-radius: 999px; padding: 4px 12px; }
+.composer { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 26px; padding: 6px; position: relative; }
+.composer input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; padding: 10px 0; }
+.composer .to { flex: none; background: var(--field); border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--ink2); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editing { font-size: 12px; color: var(--warn); display: flex; gap: 8px; align-items: center; padding: 0 10px; }
+.attach { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 6px; }
+
+/* side panel */
+.side { flex: 1; background: var(--deep); border-radius: 30px; box-shadow: 0 0 0 1px var(--line); display: flex; flex-direction: column; overflow: hidden; min-height: 560px; position: relative; }
+.sidehead { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; position: relative; }
+.sidebody { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.card { background: var(--panel); border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.white { background: #fff; color: #12131a; border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 10px; border: 0; text-align: left; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.span2 { grid-column: span 2; }
+.code { background: #fff; color: #2a2c33; border-radius: 18px; font-family: var(--font-m); font-size: 13.5px; line-height: 2; overflow-x: auto; padding: 14px 0; white-space: pre; }
+.code .ln { display: flex; }
+.code .no { width: 48px; text-align: right; padding-right: 14px; color: #9a9ea7; flex: none; }
+.code .bar { width: 4px; flex: none; }
+.code .tx { padding-left: 14px; }
+.term { background: var(--code-bg); color: var(--code-ink); border-radius: 18px; font-family: var(--font-m); font-size: 14px; line-height: 1.9; padding: 18px 20px; overflow-x: auto; }
+.caret { display: inline-block; width: 9px; height: 17px; background: var(--code-ink); vertical-align: middle; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
+@keyframes live { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 3px var(--glow, rgba(25,195,154,.25)) } 50% { box-shadow: 0 0 0 6px var(--glow, rgba(25,195,154,.15)) } }
+@keyframes dots { 0%,60%,100% { transform: translateY(0); opacity: .5 } 30% { transform: translateY(-3px); opacity: 1 } }
+.livedot { animation: live 1.6s ease-in-out infinite; }
+.glow { animation: pulse 2.2s ease-in-out infinite; border-radius: 10px; }
+.typing span { width: 7px; height: 7px; border-radius: 999px; display: inline-block; animation: dots 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: .15s } .typing span:nth-child(3) { animation-delay: .3s }
+body.still *, body.still *::before { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+
+/* pages */
+.page { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; padding-top: 8px; }
+.pagehead { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.big { font-family: var(--font-d); font-size: clamp(34px, 5vw, 52px); font-weight: 700; letter-spacing: -0.04em; line-height: 1; }
+.agentcard { background: var(--panel); border-radius: 26px; padding: 20px; display: flex; flex-direction: column; gap: 10px; text-align: left; border: 0; color: var(--ink); }
+.agentcard.sel { box-shadow: inset 0 0 0 2px var(--ink); }
+.thumb { width: 80px; height: 50px; border-radius: 10px; background: var(--code-bg); display: flex; flex-direction: column; gap: 5px; padding: 9px; flex: none; }
+.thumb span { height: 3px; border-radius: 2px; }
+.setgrid { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+.setnav { flex: 1 1 200px; max-width: 240px; display: flex; flex-direction: column; gap: 4px; }
+.setnav button { border: 0; background: transparent; text-align: left; border-radius: 18px; padding: 10px 14px; display: flex; flex-direction: column; color: var(--ink); }
+.setnav button.on { background: var(--panel); }
+.setmain { flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.seg { display: inline-flex; gap: 4px; background: var(--field); border-radius: 999px; padding: 4px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; border-radius: 999px; min-height: 36px; padding: 0 14px; font-weight: 700; font-size: 0.87em; color: var(--ink2); }
+.seg button.on { background: var(--hi-bg); color: var(--hi-ink); }
+.listrow { display: flex; align-items: center; gap: 10px; background: var(--field); border-radius: 14px; padding: 8px 12px; min-height: 44px; }
+.meter { height: 8px; border-radius: 999px; background: var(--field); position: relative; overflow: visible; }
+.meter > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+.meter > i { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--bad); }
+
+/* overlays */
+.scrim { position: fixed; inset: 0; background: rgba(5,6,9,.62); z-index: 50; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; padding: max(40px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 40px max(16px, env(safe-area-inset-left, 0px)); }
+.dialog { width: 100%; max-width: 760px; background: var(--panel); border-radius: 30px; padding: 26px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+.dialog.wide { max-width: 1160px; }
+.dialog .inner { background: var(--deep); border-radius: 20px; padding: 16px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 84px)); z-index: 60; background: var(--hi-bg); color: var(--hi-ink); border-radius: 999px; padding: 10px 12px 10px 20px; display: flex; gap: 12px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.35); max-width: calc(100% - 32px); }
+.toast button { border: 0; background: var(--hi-ink); color: var(--hi-bg); border-radius: 999px; min-height: 34px; padding: 0 14px; font-weight: 700; }
+.step { background: var(--deep); border-radius: 18px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; border: 0; color: var(--ink); text-align: left; width: 100%; }
+.step.sel { box-shadow: inset 0 0 0 2px var(--ink); }
+.badge { border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
+
+@media (max-width: 860px) {
+  .top .nav, .top .dock, .top .searchbtn, .top .gear { display: none; }
+  .tabbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--bg); border-top: 1px solid var(--line); justify-content: space-around; padding: 6px max(10px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); }
+  .tabbar button { border: 0; background: none; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 64px; min-height: 48px; font-size: 12px; font-weight: 600; }
+  .tabbar button.on { color: var(--ink); }
+  .main { padding-bottom: 96px; }
+  .roomgrid { min-height: auto; }
+  .sidecol { display: none; }
+  .sidecol.open { display: flex; position: fixed; inset: 0; z-index: 45; padding: max(10px, env(safe-area-inset-top, 0px)) 10px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--bg); }
+  .grid2, .grid3, .grid4 { grid-template-columns: minmax(0, 1fr); }
+  .span2 { grid-column: auto; }
+  .setnav { max-width: none; flex-direction: row; flex-wrap: wrap; }
+  .stream { min-height: 320px; }
+}
+@media (min-width: 861px) { .sideclose { display: none; } }
+</style>
+
+<div id="app"></div>
+
+<script>
+'use strict';
+// ---------- data ----------
+const SHAPES = {
+  circle: '<circle cx="14" cy="14" r="12"/>',
+  triangle: '<path d="M14 3 L26.5 24.5 H1.5 Z"/>',
+  diamond: '<path d="M14 1.5 L26.5 14 L14 26.5 L1.5 14 Z"/>',
+  square: '<rect x="2" y="2" width="24" height="24" rx="8"/>',
+  hexagon: '<path d="M8 2.5h12l6 11.5-6 11.5H8L2 14z"/>',
+  star: '<path d="M14 1.8l3.6 7.6 8.2 1-6 5.8 1.5 8.2L14 20.4l-7.3 4 1.5-8.2-6-5.8 8.2-1z"/>',
+  pill: '<rect x="1.5" y="7" width="25" height="14" rx="7"/>',
+  cross: '<path d="M10 2h8v8h8v8h-8v8h-8v-8H2v-8h8z"/>'
+};
+const EYE_Y = { triangle: 15.5, diamond: 11.5, pill: 11.8 };
+const PALETTE = [
+  { color: '#6b8cff', tint: '#a9bbff', text: '#3450c9' },
+  { color: '#2bb3c0', tint: '#7fdae3', text: '#0d6b75' },
+  { color: '#ff8a3d', tint: '#ffb98a', text: '#9a4300' },
+  { color: '#8bd450', tint: '#b8e88f', text: '#3f6d16' }
+];
+function mkAgent(o) {
+  return Object.assign({ status: 'free', ring: 0, runsOn: 'hermes', worksOn: 'Docker sandbox', model: 'Team default', asks: { pkg: true, push: true, del: true, screen: false }, memory: [], skills: [], tools: { terminal: true, files: true, browser: true, screen: false, library: true }, paused: false, perm: 'workspace', codexAck: false, floor: 10, quota: null, persona: '' }, o);
+}
+const S = {
+  view: 'room', look: 'dark', motion: 'calm', scale: 1,
+  agents: {
+    lead: mkAgent({ id: 'lead', shape: 'circle', color: '#6b4eff', tint: '#b3a6ff', text: '#4a2fd9', role: 'Plans and hands off work', worksOn: 'Your machine', persona: 'Splits work into clear pieces, picks who does each, and reports back in a few lines.', memory: ['The owner wants a short report when a job finishes.', 'Release notes go through reviewer first.'], skills: ['Planning', 'Release notes'] }),
+    builder: mkAgent({ id: 'builder', shape: 'triangle', color: '#19c39a', tint: '#5ee3bf', text: '#00694f', role: 'Builds features', status: 'needs you', ring: 65, persona: 'Writes small, tested changes. Asks before changing anything outside the task. Explains what changed in two or three sentences.', memory: ['Event cursors are (created_at, id), never a timestamp alone.', 'The owner prefers small, reviewed changes.', 'Package installs always need the owner\'s OK.'], skills: ['Python tests', 'SQL migrations', 'Websockets'] }),
+    reviewer: mkAgent({ id: 'reviewer', shape: 'diamond', color: '#ffb61e', tint: '#ffc94d', text: '#8a5a00', role: 'Checks the work', status: 'paused on a decision', ring: 30, persona: 'Reads every change line by line. Sends work back with one clear reason.', memory: ['Breaking changes need migration steps.'], skills: ['Code review', 'Docs review'] }),
+    designer: mkAgent({ id: 'designer', shape: 'square', color: '#ff6b8a', tint: '#ff97ae', text: '#b01e43', role: 'Designs screens and images', status: 'waiting on its limit', ring: 45, runsOn: 'claude-code', worksOn: 'SSH · design-vm', quota: { five: 8, week: 41 }, persona: 'Sketches two options first, then finishes the one you pick.' })
+  },
+  order: ['lead', 'builder', 'reviewer', 'designer'],
+  rooms: [
+    { id: 'team', name: 'Team room', kind: 'team' },
+    { id: 'r-feed', name: '#activity-feed', kind: 'older', last: 'Oct 19' },
+    { id: 'r-research', name: '#research', kind: 'older', last: 'Oct 12' }
+  ],
+  elsewhere: [
+    { id: 'e1', agent: 'builder', where: 'Telegram', sub: '2 chats · today 08:12', msgs: [['you', 'Can you check why the nightly export failed?'], ['builder', 'It ran out of disk at 02:14. I freed old logs and reran it; it finished at 08:11. Want me to add a disk check before it runs?'], ['you', 'Yes, later.']], job: 'Disk check before the nightly export' },
+    { id: 'e2', agent: 'lead', where: 'terminal', sub: '1 session · yesterday', msgs: [['you', 'Summarise what changed in the repo this week.'], ['lead', '14 commits: the activity feed, a login rate limit and the CSV export. Two are still in review.']], job: 'Weekly change summary' },
+    { id: 'e3', agent: 'reviewer', where: 'scheduled', sub: 'Nightly check · 4 runs this week', msgs: [['reviewer', 'Nightly check: all tests pass. One dependency has a security update available.']], job: 'Apply the dependency security update' }
+  ],
+  room: 'team', job: 'all',
+  jobs: [
+    { id: 'feed', room: 'team', name: 'Activity feed', state: 'needs' },
+    { id: 'notes', room: 'team', name: 'Release notes 2.4', state: 'paused' },
+    { id: 'queue', room: 'team', name: 'Queue research', state: 'done' },
+    { id: 'old1', room: 'r-feed', name: 'Read layer', state: 'done' },
+    { id: 'old2', room: 'r-research', name: 'Queue options', state: 'done' }
+  ],
+  msgs: [],
+  requests: [
+    { id: 'q1', kind: 'approve', job: 'feed', agent: 'builder', title: 'May I install a package?', cmd: 'npm install ws@8' },
+    { id: 'q2', kind: 'budget', job: 'notes', agent: 'reviewer', title: 'lead and reviewer used their 8 turns without agreeing', ask: 'Add migration steps now, or ship the notes and write them for 2.4.1?', opts: ['Ship now, steps in 2.4.1', 'Give 4 more turns', 'Let lead decide'] },
+    { id: 'q3', kind: 'quota', job: 'notes', agent: 'designer', title: 'designer\'s Claude Code limit is at 8%', ask: 'Your floor is 10%. The announcement image is waiting.', opts: ['Use it anyway', 'Wait until it resets', 'Stop this step'] }
+  ],
+  side: { mode: 'work', agent: null, conv: null, work: 'results', bench: 'code', thread: 'feed', note: 'n1', menu: false, hist: false, else: null },
+  sideOpen: false,
+  dms: {
+    builder: [
+      { id: 'c1', title: 'Websockets or server-sent events', date: 'Today', summary: 'You asked why not server-sent events', msgs: [['you', 'Why websockets and not server-sent events?'], ['builder', 'Server-sent events only go one way. We\'ll want to pause and resume the feed from the browser later, and a socket does both over one connection.']] },
+      { id: 'c2', title: 'The cursor bug', date: 'Tue', summary: 'Why reviewer sent the read layer back', msgs: [['you', 'Why did reviewer send the read layer back?'], ['builder', 'Using created_at alone, two events written in the same millisecond collide and one is skipped. I switched the cursor to (created_at, id) and added a test.']] },
+      { id: 'c3', title: 'Working in the Docker sandbox', date: 'Oct 14', summary: 'Moving builder off your machine', msgs: [['you', 'Can you work inside the Docker sandbox from now on?'], ['builder', 'Done. My commands now run in the container, so your own machine is untouched.']] }
+    ],
+    lead: [], reviewer: [{ id: 'c4', title: 'How strict to be on docs', date: 'Oct 16', summary: 'Agreed: block only on missing steps', msgs: [['you', 'How strict should you be on docs?'], ['reviewer', 'I\'ll block only when steps are missing or wrong, and suggest the rest.']] }], designer: []
+  },
+  dmRef: null, dmText: '',
+  library: [
+    { id: 'n1', title: 'Event cursors', folder: 'Decisions', by: 'reviewer', job: 'Activity feed', body: 'Page task events by (created_at, id), never by a timestamp alone. Two events written in the same millisecond otherwise collide and one is skipped.' },
+    { id: 'n2', title: 'Websockets vs SSE', folder: 'Decisions', by: 'builder', job: 'Activity feed', body: 'We use a websocket so the browser can pause and resume the feed over one connection.' },
+    { id: 'n3', title: '2.4 draft', folder: 'Release notes', by: 'lead', job: 'Release notes 2.4', body: 'Activity feed streams live. CSV export. Login rate limit. Migration steps: to follow.' },
+    { id: 'n4', title: 'Queue libraries', folder: 'Research', by: 'lead', job: 'Queue research', body: 'Three options compared on retries, persistence and licence. One clear pick, with sources.' }
+  ],
+  search: { open: false, q: '' },
+  modal: null,
+  composer: '', editing: null, plus: false, recording: false, attach: [],
+  roomDrop: false, roomMenu: false, jobMenu: false,
+  team: { sel: 'builder', more: false },
+  set: 'connections',
+  rules: { mode: 'guardian', go: ['Read and edit files in its workspace', 'Run tests', 'Read the web'], ask: ['Install packages', 'Push code', 'Delete files', 'Use the mouse and keyboard on its screen'], never: ['Read keys or password vaults', 'rm -rf /'], saved: null },
+  tools: [{ id: 't1', name: 'Tickets app', addr: 'https://tickets.example.com/mcp', status: 'ok', used: ['lead', 'builder'] }, { id: 't2', name: 'GitHub', addr: 'https://api.githubcopilot.com/mcp', status: 'needs sign-in', used: ['builder', 'reviewer'] }],
+  triggers: [{ id: 'w1', name: 'New ticket', job: 'Triage new tickets', recipe: 'lead decides', url: 'https://score.local/hooks/w_8f2c41', secret: 'whsec_Zq7…k2', last: 'today 09:40' }],
+  notif: { needs: true, paused: true, done: true, daily: false },
+  recipes: [
+    { id: 'r1', name: 'Build, then review', version: 3, inputs: ['goal'], steps: [
+      { type: 'agent', title: 'Build it', agent: 'builder', text: 'Build {{inputs.goal}}. Small, tested changes.', retries: 1, fail: 'repair' },
+      { type: 'agent', title: 'Review it', agent: 'reviewer', text: 'Review the change from {{nodes.build.output}}. End with a verdict.', retries: 0, fail: 'stop' },
+      { type: 'branch', title: 'Passed?', rule: 'verdict', on: 'Review it' },
+      { type: 'gate', title: 'Your OK before merging' },
+      { type: 'end', title: 'Done' } ] },
+    { id: 'r2', name: 'Write, review, design', version: 1, inputs: ['topic'], steps: [
+      { type: 'agent', title: 'Write the draft', agent: 'lead', text: 'Write {{inputs.topic}}.', retries: 0, fail: 'stop' },
+      { type: 'agent', title: 'Review the draft', agent: 'reviewer', text: 'Review it; send back until right.', retries: 0, fail: 'stop' },
+      { type: 'agent', title: 'Draw the image', agent: 'designer', text: 'An announcement image for {{inputs.topic}}.', retries: 1, fail: 'stop' },
+      { type: 'join', title: 'Wait for both' },
+      { type: 'end', title: 'Done' } ] },
+    { id: 'r3', name: 'Research report', version: 2, inputs: ['question'], steps: [
+      { type: 'agent', title: 'Research', agent: 'lead', text: 'Answer {{inputs.question}} with sources.', retries: 0, fail: 'stop' },
+      { type: 'end', title: 'Done' } ] }
+  ],
+  rec: { sel: 'r1', step: 0, graph: false, dirty: false },
+  usage: 'week',
+  adv: { q: '', staged: [], items: [
+    { key: 'terminal.backend', value: 'docker', help: 'Where agents run commands' },
+    { key: 'bot_desktop.placement', value: 'auto', help: 'Where an agent\'s screen runs' },
+    { key: 'computer_use.capture_after_mode', value: 'som', help: 'What an agent sees after each click' },
+    { key: 'approvals.mode', value: 'smart', help: 'How "ask me" works' },
+    { key: 'browser.engine', value: 'auto', help: 'Browser used by agents' },
+    { key: 'display.tui_native', value: 'false', help: 'Terminal UI uses native scrollback' },
+    { key: 'vision.embed_target_bytes', value: '262144', help: 'Size budget for one image' } ] },
+  security: { browsers: [{ id: 'b1', name: 'This laptop · Firefox', when: 'now' }, { id: 'b2', name: 'Phone · Safari', when: '2 days ago' }], passkey: true, terminal: false },
+  backups: 'tonight at 03:00',
+  pausedAll: false,
+  first: false,
+  toast: null,
+  seq: 100
+};
+const W = S.agents;
+function nid(p) { return p + (++S.seq); }
+function m(room, job, from, text, extra) { const o = Object.assign({ id: nid('m'), room, job, from, text, kind: 'msg' }, extra || {}); return o; }
+S.msgs = [
+  m('team', 'feed', 'you', 'Get the activity feed streaming to the browser. Have it reviewed.'),
+  m('team', 'feed', 'lead', 'On it. builder builds, reviewer checks, designer drafts the empty states.'),
+  m('team', 'feed', null, '', { kind: 'capsule', agents: ['builder', 'reviewer'], status: '2 rounds · approved', lines: [['builder', 'Read layer is ready. Can you review it?'], ['reviewer', 'Sent back: events written in the same millisecond get skipped. Fix the cursor?'], ['builder', 'Fixed, with a test.'], ['reviewer', 'Approved.']] }),
+  m('team', 'feed', 'lead', 'Done. Here it is.', { result: { title: 'Activity feed', sub: 'Live · approved', tint: '#ddf6ee', open: 'results' } }),
+  m('team', 'feed', 'you', 'Switch it to websockets.'),
+  m('team', 'notes', 'you', 'Draft the 2.4 release notes and an announcement image.'),
+  m('team', 'notes', null, '', { kind: 'capsule', agents: ['lead', 'reviewer'], status: 'paused · needs your call', paused: true, lines: [['lead', 'Draft is ready.'], ['reviewer', 'Sent back: missing migration steps for 2.3 users.'], ['lead', 'Added a short note; full steps take a day.'], ['reviewer', 'Sent back: a short note isn\'t enough for a breaking change.']] }),
+  m('team', 'queue', 'lead', 'Queue libraries compared. One clear pick.', { result: { title: 'Queue libraries', sub: 'Summary · 3 options · sources', tint: '#ece8ff', open: 'library:n4' } }),
+  m('r-feed', 'old1', 'you', 'Can you page task events?'),
+  m('r-feed', 'old1', 'builder', 'Done: 25 per page, newest first.'),
+  m('r-research', 'old2', 'you', 'Compare three queue libraries.'),
+  m('r-research', 'old2', 'lead', 'Started. I\'ll keep going in the team room as a job.')
+];
+
+// ---------- helpers ----------
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function lum(hex) { const n = parseInt(hex.slice(1), 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
+function glyph(a, size, eyes) {
+  if (typeof a === 'string') a = W[a];
+  if (!a) return '';
+  const y = EYE_Y[a.shape] || 11;
+  const ec = lum(a.color) > 0.6 ? '#12131a' : '#ffffff';
+  const e = eyes === false ? '' : `<rect x="9.6" y="${y}" width="2.6" height="4.2" rx="1.3" fill="${ec}"/><rect x="15.8" y="${y}" width="2.6" height="4.2" rx="1.3" fill="${ec}"/>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 28 28" aria-hidden="true" style="flex:none"><g fill="${a.color}">${SHAPES[a.shape]}</g>${e}</svg>`;
+}
+function nameColor(a) { if (typeof a === 'string') a = W[a]; return a ? (S.look === 'light' ? a.text : a.tint) : 'inherit'; }
+function aname(id) { return `<b style="color:${nameColor(id)};font-weight:600">${esc(id)}</b>`; }
+const I = {
+  plus: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  send: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+  down: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+  dots: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  gear: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
+  search: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  hist: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>',
+  lock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>',
+  grid: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>',
+  book: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h5v16H4zM10 4h5v16h-5zM16 5l4 1-3 14-4-1z"/></svg>',
+  thread: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h13"/></svg>',
+  room: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  team: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5"/></svg>',
+  up: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>'
+};
+function jobOf(id) { return S.jobs.find(j => j.id === id); }
+function roomOf(id) { return S.rooms.find(r => r.id === id); }
+function stateDot(st) { return { needs: 'var(--hi-bg)', paused: 'var(--warn)', working: '#19c39a', done: 'var(--faint)' }[st] || 'var(--faint)'; }
+function toast(text, undo) { S.toast = { text, undo, id: nid('t') }; const id = S.toast.id; setTimeout(() => { if (S.toast && S.toast.id === id) { S.toast = null; render(); } }, 6000); }
+function later(ms, fn) { setTimeout(() => { fn(); render(); }, ms); }
+function openSide(mode, extra) { Object.assign(S.side, { mode, menu: false, hist: false }, extra || {}); S.sideOpen = true; }
+function copyText(t) { try { navigator.clipboard.writeText(t).then(() => {}, () => {}); } catch (e) { /* the viewer may refuse clipboard access */ } }
+
+// ---------- render: shell ----------
+function render() {
+  const a = document.activeElement; const fid = a && a.id; const sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
+  const stream = document.getElementById('stream'); const atBottom = !stream || stream.scrollHeight - stream.scrollTop - stream.clientHeight < 60;
+  document.body.dataset.look = S.look;
+  document.body.classList.toggle('still', S.motion === 'still');
+  document.documentElement.style.setProperty('--scale', S.scale);
+  let body = '';
+  if (S.first) body = vFirstRun();
+  else body = vTop() + `<main class="main">${S.view === 'room' ? vRoom() : S.view === 'team' ? vTeam() : S.view === 'agent' ? vAgent() : vSettings()}</main>` + tabbar();
+  document.getElementById('app').innerHTML = body + vModal() + vSearch() + vToast();
+  if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
+  const st = document.getElementById('stream'); if (st && atBottom) st.scrollTop = st.scrollHeight;
+  const sb = document.getElementById('dmstream'); if (sb) sb.scrollTop = sb.scrollHeight;
+}
+function vTop() {
+  const dock = S.order.map(id => { const a = W[id]; const deg = a.paused ? 0 : a.ring; return `<button class="ring ${a.status === 'needs you' ? 'needs' : ''}" data-a="dm" data-v="${id}" title="${esc(id)} · ${esc(a.paused ? 'paused' : a.status)}" aria-label="One to one with ${esc(id)}, ${esc(a.paused ? 'paused' : a.status)}" style="background:conic-gradient(${a.color} 0 ${deg}%, var(--line) 0)"><span>${glyph(a, 22, false)}</span></button>`; }).join('');
+  const nav = (v, l) => `<button class="${S.view === v || (v === 'team' && S.view === 'agent') ? 'on' : ''}" data-a="go" data-v="${v}">${l}</button>`;
+  return `<header class="top">
+    <button class="word" data-a="go" data-v="room" aria-label="Score, go to the team room">score</button>
+    <nav class="nav" aria-label="Main">${nav('room', 'Room')}${nav('team', 'Team')}</nav>
+    <div class="dock" aria-label="Your team. Click someone to talk one to one.">${dock}<span class="small muted" style="margin-left:6px">${S.pausedAll ? 'Everyone is paused' : 'Rings show progress'}</span></div>
+    <button class="searchbtn" data-a="search">${I.search}Search<span class="kbd">⌘K</span></button>
+    <button class="icon-btn gear ${S.view === 'settings' ? 'on' : ''}" data-a="go" data-v="settings" aria-label="Settings" style="${S.view === 'settings' ? 'background:var(--hi-bg);color:var(--hi-ink)' : ''}">${I.gear}</button>
+    <span class="avatar" aria-label="You">Y</span>
+  </header>`;
+}
+function tabbar() {
+  const b = (v, l, ic) => `<button class="${S.view === v || (v === 'team' && S.view === 'agent') ? 'on' : ''}" data-a="go" data-v="${v}">${ic}${l}</button>`;
+  return `<nav class="tabbar" aria-label="Main">${b('room', 'Room', I.room)}${b('team', 'Team', I.team)}<button data-a="search">${I.search.replace('16', '22').replace('16', '22')}Search</button>${b('settings', 'Settings', I.gear.replace('18', '22').replace('18', '22'))}</nav>`;
+}
+
+// ---------- room ----------
+function vRoom() {
+  const room = roomOf(S.room) || S.rooms[0];
+  const jobs = S.jobs.filter(j => j.room === room.id);
+  if (S.job !== 'all' && !jobs.find(j => j.id === S.job)) S.job = 'all';
+  const tabs = `<div class="tabs" role="tablist" aria-label="Jobs">
+    <button class="chip ${S.job === 'all' ? 'on' : ''}" role="tab" aria-selected="${S.job === 'all'}" data-a="job" data-v="all">All</button>
+    ${jobs.map(j => `<button class="chip ${S.job === j.id ? 'on' : ''}" role="tab" aria-selected="${S.job === j.id}" data-a="job" data-v="${j.id}"><span class="dot ${j.state === 'working' ? 'livedot' : ''}" style="background:${stateDot(j.state)}"></span>${esc(j.name)}</button>`).join('')}
+    ${room.kind === 'team' ? `<button class="chip" data-a="startJob" aria-label="Start a job">${I.plus}Job</button>` : ''}
+    ${S.job !== 'all' ? `<span style="position:relative"><button class="icon-btn sm" data-a="jobMenu" aria-label="Job menu" aria-expanded="${S.jobMenu}">${I.dots}</button>${S.jobMenu ? jobMenu() : ''}</span>` : ''}
+  </div>`;
+  const reqs = S.requests.filter(q => jobOf(q.job) && jobOf(q.job).room === room.id && (S.job === 'all' || q.job === S.job));
+  const items = S.msgs.filter(x => x.room === room.id && (S.job === 'all' || x.job === S.job));
+  const typing = S.typing && S.typing.room === room.id ? `<div class="theirs">${glyph(S.typing.agent, 26)}<span class="bub typing" aria-label="${esc(S.typing.agent)} is typing" style="display:inline-flex;gap:4px">${'<span style="background:' + nameColor(S.typing.agent) + '"></span>'.repeat(3)}</span></div>` : '';
+  const curJob = jobOf(S.job);
+  const toLabel = room.kind === 'older' ? 'Older room' : S.job === 'all' ? 'To: new job' : 'To: ' + curJob.name;
+  return `<div class="roomgrid">
+    <section class="roomcol" aria-label="${esc(room.name)}">
+      <div class="roomhead">
+        <button class="roomtitle" data-a="roomDrop" aria-haspopup="listbox" aria-expanded="${S.roomDrop}">${esc(room.name)}${S.roomDrop ? I.up : I.down}</button>
+        <span style="margin-left:auto;position:relative"><button class="icon-btn sm" data-a="roomMenu" aria-label="Room menu" aria-expanded="${S.roomMenu}">${I.dots}</button>${S.roomMenu ? roomMenu(room) : ''}</span>
+        ${S.roomDrop ? roomDrop() : ''}
+      </div>
+      ${room.kind === 'older' ? `<div class="note" style="align-self:flex-start">Older room · new jobs start in the team room</div>` : ''}
+      ${tabs}
+      ${reqs.map(vRequest).join('')}
+      <div class="stream" id="stream" aria-live="polite">${items.length ? items.map(vMsg).join('') : `<div class="muted" style="text-align:center;padding:30px">Nothing here yet. Write below to start.</div>`}${typing}</div>
+      ${S.editing ? `<div class="editing">Editing your message. Sending replaces it and rewinds the agents to before it. <button class="link" data-a="cancelEdit">Cancel</button></div>` : ''}
+      ${S.attach.length ? `<div class="attach">${S.attach.map((f, i) => `<span class="chip">${esc(f)}<button class="act" data-a="unattach" data-v="${i}" aria-label="Remove ${esc(f)}">${I.x}</button></span>`).join('')}</div>` : ''}
+      <div class="composer">
+        <button class="icon-btn sm" style="background:transparent" data-a="plus" aria-label="Attach, voice and commands" aria-expanded="${S.plus}">${I.plus}</button>
+        ${S.plus ? plusMenu() : ''}
+        <span class="to">${esc(toLabel)}</span>
+        <label for="composer" class="sr">Message</label>
+        <input id="composer" data-in="composer" value="${esc(S.composer)}" placeholder="${S.recording ? 'Listening… speak, then press send' : 'Message the team. @name for one agent, / for commands'}" autocomplete="off">
+        <button class="icon-btn sm" style="background:var(--hi-bg);color:var(--hi-ink)" data-a="send" aria-label="Send">${I.send}</button>
+      </div>
+    </section>
+    <div class="sidecol ${S.sideOpen ? 'open' : ''}">${vSide()}</div>
+  </div>`;
+}
+function roomDrop() {
+  const rooms = S.rooms.map(r => `<button class="mi ${S.room === r.id ? 'sel' : ''}" role="option" aria-selected="${S.room === r.id}" data-a="room" data-v="${r.id}"><span class="dot" style="background:${r.kind === 'team' ? '#19c39a' : 'var(--faint)'}"></span><span class="grow" style="display:flex;flex-direction:column"><b style="font-weight:600">${esc(r.name)}</b><span class="small muted">${r.kind === 'team' ? 'Always on · ' + S.jobs.filter(j => j.room === 'team').length + ' jobs' : 'Older room · last message ' + esc(r.last)}</span></span></button>`).join('');
+  const els = S.elsewhere.map(e => `<button class="mi" data-a="else" data-v="${e.id}">${glyph(e.agent, 22, false)}<span class="grow" style="display:flex;flex-direction:column"><b style="font-weight:600">${esc(e.agent)} · ${esc(e.where)}</b><span class="small muted">${esc(e.sub)}</span></span></button>`).join('');
+  return `<div class="menu" role="listbox" aria-label="Rooms and chats elsewhere" style="top:52px;left:0;width:min(420px,92vw)"><div class="sec">Rooms</div>${rooms}<div class="sec">Elsewhere · the agents' own chats outside Score</div>${els || '<div class="small muted" style="padding:8px 12px">Nothing yet.</div>'}</div>`;
+}
+function roomMenu(room) {
+  const del = room.kind === 'team'
+    ? `<div class="small muted" style="padding:8px 12px;max-width:260px">The team room is always on, so it can't be deleted. Delete jobs inside it instead.</div>`
+    : `<button class="mi bad" data-a="askDeleteRoom" data-v="${room.id}">${I.trash}Delete ${esc(room.name)}</button>`;
+  return `<div class="menu" style="right:0;top:44px"><button class="mi" data-a="exportRoom">Export this room</button><button class="mi" data-a="shareRoom">Share a read-only link</button>${del}</div>`;
+}
+function jobMenu() {
+  return `<div class="menu" style="right:0;top:44px"><button class="mi" data-a="renameJob">Rename</button><button class="mi" data-a="closeJob">${jobOf(S.job).state === 'done' ? 'Reopen' : 'Close as done'}</button><button class="mi" data-a="openThread" data-v="${S.job}">Open thread</button><button class="mi" data-a="shareJob">Share a read-only link</button><button class="mi" data-a="exportJob">Export as Markdown</button><button class="mi bad" data-a="askDeleteJob">${I.trash}Delete job</button></div>`;
+}
+function plusMenu() {
+  return `<div class="menu" style="left:0;bottom:60px"><button class="mi" data-a="attachFile">Attach a file</button><button class="mi" data-a="voice">${S.recording ? 'Stop voice input' : 'Voice input'}</button><div class="sec">Commands</div>
+  <button class="mi" data-a="insert" data-v="/assign @builder ">/assign <span class="small muted">give one agent a job</span></button>
+  <button class="mi" data-a="insert" data-v="/model fast ">/model <span class="small muted">use another model for one message</span></button>
+  <button class="mi" data-a="startJob">/job <span class="small muted">start a job with options</span></button>
+  <button class="mi" data-a="insert" data-v="Plan first: ">Plan first <span class="small muted">get a plan before work starts</span></button></div>`;
+}
+function vRequest(q) {
+  const a = W[q.agent];
+  if (q.kind === 'approve') return `<div class="pin"><span class="row wrap">${glyph(a, 20)}<span><b>${esc(q.agent)}</b> · ${esc(q.title)}</span><span class="sub">${esc(jobOf(q.job).name)}</span></span><code style="font-size:1.15em;font-weight:500">${esc(q.cmd)}</code><span class="row wrap"><button class="btn sm" data-a="req" data-v="${q.id}|allow">Allow</button><button class="btn sm ghost" data-a="req" data-v="${q.id}|deny">Don't allow</button><button class="btn sm ghost" data-a="req" data-v="${q.id}|always">Always allow for ${esc(q.agent)}</button></span></div>`;
+  return `<div class="pin"><span class="row wrap">${glyph(a, 20)}<b>${esc(q.title)}</b><span class="sub">${esc(jobOf(q.job).name)}</span></span><span>${esc(q.ask)}</span><span class="row wrap">${q.opts.map((o, i) => `<button class="btn sm ${i ? 'ghost' : ''}" data-a="req" data-v="${q.id}|${i}">${esc(o)}</button>`).join('')}${q.kind === 'budget' ? `<button class="btn sm ghost" data-a="openThread" data-v="${q.job}">Open thread</button>` : ''}</span></div>`;
+}
+function vMsg(x) {
+  if (x.kind === 'note') return `<div class="note">${x.html || esc(x.text)}</div>`;
+  if (x.kind === 'capsule') {
+    return `<div class="capsule ${x.paused ? 'paused' : ''}"><span class="row wrap"><span class="row" style="gap:0">${x.agents.map((id, i) => `<span style="margin-left:${i ? -5 : 0}px">${glyph(id, 18, false)}</span>`).join('')}</span><b>${x.agents.join(' and ')}</b><span class="small" style="color:${x.paused ? 'var(--warn)' : x.live ? 'var(--ok)' : 'var(--muted)'};font-weight:600">${esc(x.status)}</span></span>
+      ${x.open ? `<div class="small" style="display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:8px">${x.lines.map(l => `<span>${aname(l[0])} ${esc(l[1])}</span>`).join('')}</div>` : `<span class="small muted">${x.lines.length ? aname(x.lines[x.lines.length - 1][0]) + ' ' + esc(x.lines[x.lines.length - 1][1]) : ''}</span>`}
+      <span class="row wrap"><button class="btn sm" data-a="capsule" data-v="${x.id}">${x.open ? 'Hide' : 'Show'} ${x.lines.length} messages</button><button class="btn sm" data-a="openThread" data-v="${x.job}">Open thread</button><button class="btn sm" style="color:${nameColor(x.agents[0])}" data-a="aside" data-v="${x.agents[0]}|${x.job}">Take it aside with ${esc(x.agents[0])}</button></span></div>`;
+  }
+  const res = x.result ? `<button class="result" data-a="openResult" data-v="${esc(x.result.open)}"><span style="width:40px;height:40px;border-radius:12px;background:${x.result.tint};flex:none"></span><span style="display:flex;flex-direction:column;line-height:1.3"><b style="font-family:var(--font-d);font-size:16px">${esc(x.result.title)}</b><span class="small" style="color:#00694f;font-weight:600">${esc(x.result.sub)}</span></span></button>` : '';
+  if (x.from === 'you') {
+    const v = x.versions ? x.v : null;
+    const text = x.versions ? x.versions[x.v] : x.text;
+    const vers = x.versions && x.versions.length > 1 ? `<span class="vers"><button data-a="ver" data-v="${x.id}|-1" aria-label="Previous version">‹</button>${x.v + 1} / ${x.versions.length}<button data-a="ver" data-v="${x.id}|1" aria-label="Next version">›</button></span>` : '';
+    const oldTail = x.versions && x.v < x.versions.length - 1 && x.hist && x.hist[x.v] ? x.hist[x.v].map(h => `<div class="old">${vMsg(Object.assign({}, h, { readonly: true }))}</div>`).join('') : '';
+    return `<div class="mine"><div class="bub">${esc(text)}</div>${x.files ? `<span class="meta">${x.files.map(esc).join(', ')}</span>` : ''}<span class="row" style="gap:6px">${vers}${x.readonly ? '' : `<span class="acts"><button class="act" data-a="edit" data-v="${x.id}">Edit</button><button class="act" data-a="copyMsg" data-v="${x.id}">Copy</button><button class="act" data-a="askDeleteMsg" data-v="${x.id}">Delete</button></span>`}${x.room !== 'team' ? '' : `<span class="meta">${esc((jobOf(x.job) || {}).name || '')}</span>`}</span></div>${oldTail}`;
+  }
+  const a = W[x.from];
+  return `<div style="display:flex;flex-direction:column;gap:3px"><span class="who" style="color:${nameColor(x.from)}">${esc(x.from)}${x.shared ? ' · shared from a one-to-one with you' : ''}</span><div class="theirs">${glyph(a, 26)}<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><div class="bub" ${x.shared ? `style="box-shadow:inset 0 0 0 1.5px ${a ? a.color : 'var(--line)'}"` : ''}>${esc(x.text)}</div>${res}${x.readonly ? '' : `<span class="acts"><button class="act" data-a="copyMsg" data-v="${x.id}">Copy</button><button class="act" data-a="saveLib" data-v="${x.id}">Save to Library</button><button class="act" data-a="askDeleteMsg" data-v="${x.id}">Delete</button></span>`}</div></div></div>`;
+}
+
+// ---------- side panel ----------
+function sideLabel() {
+  const s = S.side;
+  if (s.mode === 'work') return [I.grid, 'Work'];
+  if (s.mode === 'library') return [I.book, 'Library'];
+  if (s.mode === 'thread') return [I.thread, 'Thread · ' + ((jobOf(s.thread) || {}).name || '')];
+  if (s.mode === 'else') { const e = S.elsewhere.find(x => x.id === s.else); return [glyph(e.agent, 20, false), e.agent + ' · ' + e.where]; }
+  return [glyph(s.agent, 20, false), s.agent];
+}
+function vSide() {
+  const s = S.side; const [ic, label] = sideLabel();
+  const dm = s.mode === 'dm';
+  const a = dm ? W[s.agent] : null;
+  const glow = dm && a ? `box-shadow:0 0 0 2px ${a.color}, 0 0 60px ${a.color}44` : '';
+  let body = '';
+  if (s.mode === 'work') body = vWork();
+  else if (s.mode === 'library') body = vLibrary();
+  else if (s.mode === 'thread') body = vThread();
+  else if (s.mode === 'else') body = vElse();
+  else body = vDM();
+  return `<aside class="side" style="${glow}" aria-label="Side panel">
+    <div class="sidehead">
+      <button class="btn sm" data-a="sideMenu" aria-haspopup="listbox" aria-expanded="${s.menu}" style="font-size:0.93em">${ic}${esc(label)}${I.down}</button>
+      ${dm ? `<button class="btn sm" data-a="hist" aria-expanded="${s.hist}" style="${s.hist ? 'background:var(--hi-bg);color:var(--hi-ink)' : ''}">${I.hist}Earlier chats</button>` : ''}
+      ${s.mode === 'work' ? `<div class="seg" role="tablist" aria-label="How to see the work"><button class="${s.work === 'results' ? 'on' : ''}" data-a="work" data-v="results">Results</button><button class="${s.work === 'bench' ? 'on' : ''}" data-a="work" data-v="bench">Workbench</button></div>` : ''}
+      <span class="small muted row" style="margin-left:auto;gap:6px">${dm ? I.lock + 'Only you and ' + esc(s.agent) + ' see this' : s.mode === 'else' ? 'Read-only here' : ''}</span>
+      <button class="icon-btn sm sideclose" data-a="closeSide" aria-label="Close panel">${I.x}</button>
+      ${s.menu ? sideMenu() : ''}${s.hist && dm ? histPop() : ''}
+    </div>
+    ${body}
+  </aside>`;
+}
+function sideMenu() {
+  const s = S.side;
+  return `<div class="menu" role="listbox" style="left:14px;top:58px;width:300px">
+    <button class="mi ${s.mode === 'work' ? 'sel' : ''}" data-a="sideMode" data-v="work">${I.grid}<span style="display:flex;flex-direction:column"><b>Work</b><span class="small muted">What the team is making</span></span></button>
+    <button class="mi ${s.mode === 'library' ? 'sel' : ''}" data-a="sideMode" data-v="library">${I.book}<span style="display:flex;flex-direction:column"><b>Library</b><span class="small muted">Notes and files</span></span></button>
+    <button class="mi ${s.mode === 'thread' ? 'sel' : ''}" data-a="openThread" data-v="${S.job !== 'all' ? S.job : s.thread}">${I.thread}<span style="display:flex;flex-direction:column"><b>Thread</b><span class="small muted">A job's back-and-forth</span></span></button>
+    <div class="sec">One to one</div>
+    ${S.order.map(id => `<button class="mi ${s.mode === 'dm' && s.agent === id ? 'sel' : ''}" data-a="dm" data-v="${id}">${glyph(id, 22, false)}<span style="display:flex;flex-direction:column"><b>${esc(id)}</b><span class="small muted">${esc(W[id].paused ? 'paused' : W[id].status)}</span></span></button>`).join('')}
+  </div>`;
+}
+function vWork() {
+  const s = S.side;
+  if (s.work === 'results') {
+    const feed = jobOf('feed');
+    return `<div class="sidebody"><div class="grid2">
+      ${feed ? `<article class="white span2"><span class="row wrap"><b style="font-family:var(--font-d);font-size:22px">Activity feed</b><span class="badge" style="background:#ddf6ee;color:#00694f">${I.check} Approved by reviewer</span><span class="row small" style="margin-left:auto;color:#b0283f;font-weight:700;gap:6px"><span class="dot livedot" style="background:var(--live)"></span>Live preview</span></span>
+        <span style="display:flex;flex-direction:column;gap:6px;background:#f4f5f8;border-radius:16px;padding:12px"><span style="background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 0 0 2px #19c39a"><b>Read layer</b> moved to Done · just now</span><span style="background:#fff;border-radius:12px;padding:10px 12px"><b>Empty states</b> picked up · 2 min</span></span>
+        <span class="small" style="color:#5e626c">Running in builder's sandbox. ${S.requests.find(q => q.id === 'q1') ? 'Updates every few seconds until you allow ws@8.' : 'Now updating over a live connection.'}</span></article>
+      <article class="white"><b style="font-family:var(--font-d);font-size:18px">What changed</b><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px"><li>Loads 25 events at a time, newest first</li><li>No events lost when two arrive at once. <b style="color:#8a5a00">reviewer caught this</b>.</li><li>3 checks pass</li></ul><button class="link" style="color:#5e626c" data-a="bench" data-v="code">See the code · 2 files</button></article>` : ''}
+      <article class="white"><b style="font-family:var(--font-d);font-size:18px">Release notes 2.4</b><span style="display:flex;flex-direction:column;gap:6px"><span style="height:8px;width:90%;background:#e8eaee;border-radius:4px"></span><span style="height:8px;width:72%;background:#e8eaee;border-radius:4px"></span><span style="height:8px;width:82%;background:#e8eaee;border-radius:4px"></span></span><span class="small" style="color:#8a5a00;font-weight:600">Paused: lead and reviewer need your call</span><button class="link" style="color:#5e626c" data-a="openThread" data-v="notes">Open thread</button></article>
+      <article class="white"><b style="font-family:var(--font-d);font-size:18px">Announcement image</b><span style="height:70px;border-radius:14px;background:#fff7f9;display:flex;align-items:center;justify-content:center;gap:8px"><span style="width:24px;height:24px;border-radius:999px;background:#ff6b8a"></span><span style="width:32px;height:18px;border-radius:5px;background:#ffd77a"></span></span><span class="small" style="color:#b01e43;font-weight:600">designer waits on its limit</span><button class="link" style="color:#5e626c" data-a="bench" data-v="draft">Open the draft</button></article>
+      <article class="white"><b style="font-family:var(--font-d);font-size:18px">Queue libraries</b><span class="small" style="color:#3a3d45">Three options compared on retries, persistence and licence. One clear pick.</span><button class="link" style="color:#5e626c" data-a="openResult" data-v="library:n4">Open in the Library</button></article>
+      <div class="span2 row wrap small muted">Screens
+        <button class="btn sm" data-a="bench" data-v="screen"><span class="thumb" style="width:56px;height:34px;padding:6px"><span style="background:#5ee3bf;width:80%"></span><span style="background:#c9ccd4;width:50%"></span></span>builder</button>
+        <button class="btn sm" data-a="bench" data-v="draft"><span class="thumb" style="width:56px;height:34px;background:#fff7f9;flex-direction:row;align-items:center;justify-content:center"><span style="width:10px;height:10px;background:#ff6b8a;border-radius:999px"></span></span>designer</button>
+      </div></div></div>`;
+  }
+  const t = (k, l, dot) => `<button class="chip ${s.bench === k ? 'on' : ''}" data-a="bench" data-v="${k}"><span class="dot" style="background:${dot}"></span>${l}</button>`;
+  let inner = '';
+  if (s.bench === 'code') {
+    const L = (n, t, mk) => `<div class="ln" ${mk ? 'style="background:#f2fbf8"' : ''}><span class="no">${n}</span><span class="bar" style="background:${mk ? '#19c39a' : 'transparent'}"></span><span class="tx">${t}</span></div>`;
+    const kw = w => `<span style="color:#4a2fd9">${w}</span>`, str = w => `<span style="color:#00694f">${w}</span>`;
+    inner = `<div class="code">${L(1, kw('from') + ' db ' + kw('import') + ' query, subscribe')}${L(2, '')}${L(3, 'PAGE_SIZE = <span style="color:#b01e43">25</span>')}${L(4, '')}${L(5, kw('def') + ' page(after=' + kw('None') + ', limit=PAGE_SIZE):')}${L(6, '    sql = ' + str('"SELECT * FROM task_events"'), 1)}${L(7, '    ' + kw('if') + ' after:', 1)}${L(8, '        sql += ' + str('" WHERE (created_at, id) &lt; (?, ?)"'), 1)}${L(9, '    sql += ' + str('" ORDER BY created_at DESC, id DESC LIMIT ?"'), 1)}
+      <div style="padding:6px 14px 10px 66px;white-space:normal"><div style="display:flex;gap:10px;background:#fff7e3;border-radius:14px;padding:10px 14px;font-family:var(--font-b);font-size:14px;line-height:1.45;max-width:520px">${glyph('reviewer', 18)}<span><b style="color:#8a5a00">reviewer</b> Round 1: created_at alone skips events written in the same millisecond. Use (created_at, id). <span style="color:#00694f;font-weight:600">Fixed in round 2 · approved</span></span></div></div>
+      ${L(10, '    ' + kw('return') + ' query(sql, *(after ' + kw('or') + ' ()), limit)')}${L(11, '')}${L(12, kw('async def') + ' stream(ws, after=' + kw('None') + '):', 1)}${L(13, '    ' + kw('async for') + ' event ' + kw('in') + ' subscribe(' + str('"task_events"') + ', after):', 1)}${L(14, '        ' + kw('await') + ' ws.send_json(event)<span class="caret" style="width:2px;background:#19c39a;margin-left:2px"></span> <span style="background:#19c39a;color:#12131a;font-family:var(--font-b);font-size:12px;font-weight:700;border-radius:6px 6px 6px 0;padding:1px 8px">builder</span>', 1)}</div>`;
+  } else if (s.bench === 'screen') {
+    inner = `<div class="term"><div class="small" style="font-family:var(--font-b);color:var(--muted);display:flex;justify-content:space-between;margin-bottom:8px"><span>Docker sandbox · read-only</span><button class="link" data-a="go" data-v="replay">Open full screen and replay</button></div><div><span style="color:#5ee3bf">builder@sandbox</span>:<span style="color:#b3a6ff">~/app</span>$ pnpm test api/events</div><div>  <span style="color:#5ee3bf">ok</span>  pages newest first</div><div>  <span style="color:#5ee3bf">ok</span>  keeps same-millisecond events</div><div>${S.requests.find(q => q.id === 'q1') ? '<span style="color:#ffc94d">waiting</span>  for your OK to install ws@8' : '<span style="color:#5ee3bf">builder@sandbox</span>:~/app$ npm install ws@8<br>added 1 package in 2s'}</div><div><span class="caret"></span></div></div>`;
+  } else {
+    inner = `<div class="grid2">${['Quiet so far', 'Lost the connection'].map((t, i) => `<div class="white" style="align-items:center;text-align:center;min-height:220px;justify-content:center"><span style="width:64px;height:64px;border-radius:${i ? '999px' : '20px'};background:${i ? '#fff1d1' : '#ffe3e9'}"></span><b style="font-family:var(--font-d);font-size:20px">${t}</b><span class="small" style="color:#5e626c">${i ? 'Trying again. Nothing you\'ve seen will be lost.' : 'Events show up here the moment your team starts working.'}</span></div>`).join('')}</div><span class="small" style="color:${nameColor('designer')};font-weight:600">designer is still drafting these</span>`;
+  }
+  return `<div class="sidebody"><div class="tabs">${t('code', 'api/events.py', '#19c39a')}${t('screen', "builder's screen", '#19c39a')}${t('draft', 'Empty states', '#ff6b8a')}<span class="row small" style="margin-left:auto;color:var(--live);font-weight:700;gap:6px"><span class="dot livedot" style="background:var(--live)"></span>Live</span></div>${inner}</div>`;
+}
+function vThread() {
+  const j = jobOf(S.side.thread);
+  if (!j) return `<div class="sidebody muted">This job no longer exists.</div>`;
+  let rounds = '';
+  if (j.id === 'feed') rounds = [['ROUND 1', [['builder', 'Review', 'Read layer is in. Can you check it?'], ['reviewer', 'Sent back', 'Events in the same millisecond get skipped. Fix the cursor?']]], ['ROUND 2', [['builder', '', 'Cursor is now (created_at, id), with a test.'], ['reviewer', 'Approved', 'Looks right.']]]];
+  else if (j.id === 'notes') rounds = [['ROUND 1', [['lead', 'Review', 'Draft is ready.'], ['reviewer', 'Sent back', 'Missing migration steps for 2.3 users.']]], ['ROUND 2', [['lead', '', 'Added a short note; full steps take a day.'], ['reviewer', 'Sent back', 'A short note isn\'t enough for a breaking change.']]], ['ROUND 3', [['lead', '', 'I\'d ship now and write full steps for 2.4.1.']]]];
+  else rounds = [['MESSAGES', S.msgs.filter(x => x.job === j.id && x.kind === 'msg').map(x => [x.from === 'you' ? 'you' : x.from, '', x.text])]];
+  const html = rounds.map(([r, lines]) => `<span class="small muted" style="font-weight:700;letter-spacing:.04em">${r}</span>${lines.map(([w, tag, t]) => `<div class="row" style="align-items:flex-start">${w === 'you' ? '<span class="avatar" style="width:22px;height:22px;font-size:11px">Y</span>' : glyph(w, 22, false)}<span>${w === 'you' ? '<b>you</b>' : aname(w)} ${tag ? `<span class="badge" style="background:${tag === 'Sent back' ? 'rgba(255,182,30,.18)' : tag === 'Approved' ? 'rgba(25,195,154,.18)' : 'var(--field)'};color:${tag === 'Sent back' ? 'var(--warn)' : tag === 'Approved' ? 'var(--ok)' : 'var(--ink)'}">${tag}</span>` : ''} ${esc(t)}</span></div>`).join('')}`).join('');
+  const q = S.requests.find(x => x.job === j.id && x.kind === 'budget');
+  return `<div class="sidebody"><div class="row wrap"><b style="font-family:var(--font-d);font-size:22px">${esc(j.name)}</b><span class="small muted">${j.id === 'notes' ? '8 of 8 turns used' : j.state === 'done' ? 'done' : 'working'}</span><span style="margin-left:auto" class="row"><button class="btn sm" data-a="pauseJob">${j.state === 'paused' ? 'Resume' : 'Pause'} job</button><button class="btn sm ghost" data-a="stopJob">Stop</button></span></div>
+    <div class="card" style="background:var(--panel)"><span class="small muted">Steps</span>${['Plan', 'Do the work', 'Review until right', 'Report back'].map((st, i) => `<label class="check"><input type="checkbox" ${j.state === 'done' || i < 2 ? 'checked' : ''}>${st}</label>`).join('')}</div>
+    ${html}
+    ${q ? `<div class="pin">${vRequest(q).replace(/^<div class="pin">/, '').replace(/<\/div>$/, '')}</div>` : ''}
+    <div class="composer"><label for="stepin" class="sr">Step in</label><input id="stepin" data-in="stepin" placeholder="Step in: write to everyone in this job"><button class="icon-btn sm" style="background:var(--hi-bg);color:var(--hi-ink)" data-a="stepIn" aria-label="Send">${I.send}</button></div></div>`;
+}
+function vElse() {
+  const e = S.elsewhere.find(x => x.id === S.side.else);
+  if (!e) return `<div class="sidebody muted">This chat is gone.</div>`;
+  return `<div class="sidebody"><span class="note">From ${esc(e.where)} · read-only. Reply there, or bring it into a job.</span>${e.msgs.map(([w, t]) => w === 'you' ? `<div class="mine"><div class="bub" style="background:var(--field);color:var(--ink)">${esc(t)}</div></div>` : `<div class="theirs">${glyph(w, 24)}<div class="bub">${esc(t)}</div></div>`).join('')}
+    <div class="row wrap" style="margin-top:auto"><button class="btn primary" data-a="bringIn" data-v="${e.id}">Bring into a job</button><span class="small muted">Starts “${esc(e.job)}” in the team room, with this chat attached.</span></div></div>`;
+}
+function histPop() {
+  const s = S.side; const list = S.dms[s.agent] || [];
+  return `<div class="menu" role="dialog" aria-label="Earlier chats with ${esc(s.agent)}" style="left:14px;top:58px;width:min(380px,90vw)">
+    <button class="mi" data-a="newChat"><span style="display:grid;place-items:center;width:22px">${I.plus}</span><b>New chat with ${esc(s.agent)}</b></button>
+    ${list.length ? list.map(c => `<div class="row" style="gap:4px"><button class="mi ${s.conv === c.id ? 'sel' : ''}" data-a="conv" data-v="${c.id}" style="flex-direction:column;align-items:flex-start;gap:0"><span class="row" style="width:100%"><b style="font-weight:600">${esc(c.title)}</b><span class="small muted" style="margin-left:auto">${esc(c.date)}</span></span><span class="small muted">${esc(c.summary)}</span></button><button class="icon-btn sm" style="background:transparent;color:var(--bad)" data-a="askDeleteChat" data-v="${c.id}" aria-label="Delete ${esc(c.title)}">${I.trash}</button></div>`).join('') : `<div class="small muted" style="padding:10px 12px">No earlier chats with ${esc(s.agent)} yet.</div>`}
+    <div class="small muted" style="border-top:1px solid var(--line);padding:10px 12px 4px">${esc(s.agent)} also remembers what matters across chats. <button class="link" data-a="agentPage" data-v="${s.agent}">See its memory</button></div></div>`;
+}
+function curConv() { const list = S.dms[S.side.agent] || []; return list.find(c => c.id === S.side.conv) || null; }
+function vDM() {
+  const s = S.side; const a = W[s.agent]; const c = curConv();
+  const msgs = c ? c.msgs : [];
+  const shareable = c && msgs.length && msgs[msgs.length - 1][0] !== 'you';
+  const content = msgs.length ? `<div id="dmstream" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:16px;justify-content:flex-end;max-width:620px;width:100%;margin:0 auto">
+      ${c.date && c !== (S.dms[s.agent] || [])[0] ? `<span class="note">${esc(c.date)} · earlier chat</span>` : ''}
+      ${msgs.map(([w, t], i) => w === 'you' ? `<div class="mine"><div class="bub">${esc(t)}</div></div>` : `<div class="row" style="align-items:flex-start;gap:12px">${glyph(a, 26)}<div style="display:flex;flex-direction:column;gap:8px"><p style="margin:0;font-size:1.05em;line-height:1.6">${esc(t)}</p>${i === msgs.length - 1 ? `<span class="row wrap"><button class="btn sm primary" data-a="shareDM">Share to the team room</button><button class="btn sm ghost" data-a="refer">Bring into a new chat</button></span>` : ''}</div></div>`).join('')}
+      ${S.dmTyping === s.agent ? `<div class="row">${glyph(a, 26)}<span class="bub typing" style="background:var(--field);display:inline-flex;gap:4px">${'<span style="background:' + nameColor(a) + '"></span>'.repeat(3)}</span></div>` : ''}
+    </div>` : `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center">${glyph(a, 88)}<b style="font-family:var(--font-d);font-size:30px">${c ? 'New chat with ' : 'Just you and '}${esc(s.agent)}</b><span class="muted" style="max-width:420px">${S.dmRef ? esc(s.agent) + ' will read the earlier chat you picked before answering.' : 'Nothing here reaches the team room unless you share it. ' + esc(s.agent) + ' keeps working on its jobs while you talk.'}</span><span class="row wrap" style="justify-content:center">${['What are you working on?', 'What do you need from me?', 'Show me your screen'].map(q => `<button class="btn sm ghost" data-a="dmAsk" data-v="${esc(q)}">${q}</button>`).join('')}</span></div>`;
+  return `<div class="sidebody" style="position:relative">${content}
+    <div style="max-width:620px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:8px">
+      ${S.dmRef ? `<span class="chip" style="align-self:flex-start;box-shadow:inset 0 0 0 1.5px ${a.color}">${I.hist}Referring to <b>${esc(S.dmRef)}</b><button class="act" data-a="clearRef" aria-label="Remove reference">${I.x}</button></span>` : ''}
+      <div class="composer" style="background:var(--field);box-shadow:0 0 0 1.5px ${a.color}"><label for="dmin" class="sr">Private message</label><input id="dmin" data-in="dm" value="${esc(S.dmText)}" placeholder="Message ${esc(s.agent)} privately" autocomplete="off"><button class="icon-btn sm" style="background:var(--hi-bg);color:var(--hi-ink)" data-a="dmSend" aria-label="Send privately">${I.send}</button></div>
+      ${c ? `<button class="link" style="align-self:flex-end;color:var(--bad)" data-a="askDeleteChat" data-v="${c.id}">Delete this chat</button>` : ''}
+    </div></div>`;
+}
+function vLibrary() {
+  const n = S.library.find(x => x.id === S.side.note);
+  const folders = [...new Set(S.library.map(x => x.folder))];
+  return `<div class="sidebody" style="flex-direction:row;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <nav aria-label="Notes" style="flex:1 1 200px;max-width:240px;display:flex;flex-direction:column;gap:2px">
+      ${folders.map(f => `<span class="small muted" style="font-weight:700;padding:8px 10px 4px">${esc(f)}</span>${S.library.filter(x => x.folder === f).map(x => `<button class="mi" style="border:0;background:${S.side.note === x.id ? 'var(--field)' : 'transparent'};color:var(--ink);text-align:left;border-radius:10px;padding:8px 10px;min-height:38px" data-a="note" data-v="${x.id}">${esc(x.title)}</button>`).join('')}`).join('')}
+      <button class="btn sm ghost" style="margin-top:10px" data-a="newNote">${I.plus}New note</button>
+    </nav>
+    <article style="flex:999 1 320px;min-width:0;display:flex;flex-direction:column;gap:12px">${n ? `
+      <span class="small muted row wrap">${W[n.by] ? glyph(n.by, 14, false) : ''}Written by ${esc(n.by)}${n.job ? ' from the ' + esc(n.job) + ' job' : ''}</span>
+      <label for="ntitle" class="sr">Title</label><input id="ntitle" data-in="ntitle" class="field" style="font-family:var(--font-d);font-size:28px;font-weight:700;background:transparent;padding:0" value="${esc(n.title)}">
+      <label for="nbody" class="sr">Note</label><textarea id="nbody" data-in="nbody" class="field" style="min-height:180px;font-size:1.05em;line-height:1.65">${esc(n.body)}</textarea>
+      <span class="row wrap"><span class="small muted">Saves as you type</span><button class="link" style="margin-left:auto;color:var(--bad)" data-a="askDeleteNote" data-v="${n.id}">Delete note</button></span>` : '<span class="muted">Pick a note.</span>'}</article></div>`;
+}
+
+// ---------- team & agent ----------
+function vTeam() {
+  return `<div class="page"><div class="pagehead"><h1 class="big grow">Your team</h1><button class="btn primary" data-a="addAgent">Add an agent</button></div>
+    <div class="grid4">${S.order.map(id => { const a = W[id]; const working = a.ring > 0 && !a.paused;
+      return `<div class="agentcard"><span class="row" style="align-items:flex-start">${working ? `<span class="glow" style="--glow:${a.color}44">${glyph(a, 52)}</span>` : glyph(a, 52)}${working ? `<span class="thumb" style="margin-left:auto"><span style="background:${a.tint};width:80%"></span><span style="background:#c9ccd4;width:55%"></span><span style="background:${a.tint};width:30%"></span></span>` : ''}</span>
+        <span style="display:flex;flex-direction:column"><b style="font-family:var(--font-d);font-size:26px">${esc(id)}</b><span class="small muted">${esc(a.role)}</span></span>
+        <span class="small" style="color:${working ? nameColor(a) : 'var(--ink2)'};font-weight:${working ? 600 : 400}">${esc(a.paused ? 'Paused' : a.status[0].toUpperCase() + a.status.slice(1))}</span>
+        <span class="small muted">${a.runsOn === 'hermes' ? 'Hermes' : RUNS[a.runsOn]} · ${esc(a.worksOn)}</span>
+        <span class="row wrap" style="margin-top:auto"><button class="btn sm primary" data-a="dm" data-v="${id}">Message</button><button class="btn sm" data-a="agentPage" data-v="${id}">Open</button></span></div>`; }).join('')}</div>
+    <div class="card row wrap"><span class="grow"><b>Pause everyone</b> <span class="muted">· agents finish their current step, then wait until you resume</span></span><button class="btn ${S.pausedAll ? 'primary' : 'ghost'}" data-a="pauseAll">${S.pausedAll ? 'Resume everyone' : 'Pause everyone'}</button></div></div>`;
+}
+const RUNS = { hermes: 'Hermes', 'claude-code': 'Claude Code', codex: 'Codex', agy: 'Antigravity (agy)' };
+function vAgent() {
+  const a = W[S.team.sel]; if (!a) { S.view = 'team'; return vTeam(); }
+  const coding = a.runsOn !== 'hermes';
+  const seg = Object.keys(RUNS).map(k => `<button class="${a.runsOn === k ? 'on' : ''}" data-a="runsOn" data-v="${k}">${RUNS[k]}</button>`).join('');
+  const quota = coding ? `<div class="card span2" style="box-shadow:inset 0 0 0 1px var(--line)"><span class="row wrap"><h3 style="font-size:20px">Coding tool settings</h3><span class="small muted">Shown because ${esc(a.id)} runs on ${RUNS[a.runsOn]}</span></span>
+      <div class="grid2"><fieldset style="border:0;margin:0;padding:0"><legend class="lab">What it may change</legend>
+        ${[['read', 'Read only', 'Looks at files, changes nothing'], ['workspace', 'Workspace write', 'Edits files in its workspace'], ['full', 'Full access', 'No sandbox: runs anything as your user']].map(([k, l, d]) => `<label class="check"><input type="radio" name="perm" ${a.perm === k ? 'checked' : ''} data-a="perm" data-v="${k}"><span><b style="font-weight:600">${l}</b> <span class="small muted">${d}</span></span></label>`).join('')}
+        ${a.perm === 'full' ? `<div class="pin" style="margin-top:8px"><span>Full access needs the security password.</span><label for="secpw" class="sr">Security password</label><input id="secpw" type="password" class="field" style="background:var(--hi-ink);color:var(--hi-bg)" placeholder="Security password"><button class="btn sm" data-a="confirmFull">Confirm full access</button></div>` : ''}
+        ${a.runsOn === 'codex' ? `<label class="check" style="margin-top:8px"><input type="checkbox" ${a.codexAck ? 'checked' : ''} data-a="codexAck">I understand this Codex agent can read every file my user can, including secrets outside its workspace.</label>` : ''}
+      </fieldset>
+      <div style="display:flex;flex-direction:column;gap:12px"><span class="lab">Plan limits</span>
+        ${a.quota ? [['5-hour', a.quota.five], ['Weekly', a.quota.week]].map(([l, v]) => `<div><span class="row small"><span class="grow">${l}</span><b>${v}% left</b></span><div class="meter" style="margin-top:6px"><span style="width:${v}%;background:${v < a.floor ? 'var(--bad)' : a.color}"></span><i style="left:${a.floor}%"></i></div></div>`).join('') : '<span class="small muted">No reading yet.</span>'}
+        <label for="floor" class="lab" style="margin:0">Stop giving it new work below <b id="floorv">${a.floor}%</b></label><input id="floor" type="range" min="0" max="50" value="${a.floor}" data-in="floor" style="accent-color:var(--ink)"><span class="small muted">0 turns the guard off. Steps already running are never interrupted.</span></div></div></div>` : '';
+  const more = S.team.more ? `<div class="grid3">
+      ${coding ? '' : `<section class="card"><h3 style="font-size:20px">Remembers <span class="small muted">${a.memory.length}</span></h3>${a.memory.map((t, i) => `<div class="listrow"><span class="grow small">${esc(t)}</span><button class="act" data-a="forget" data-v="${i}" aria-label="Forget this">${I.x}</button></div>`).join('')}<div class="row"><label for="newmem" class="sr">New memory</label><input id="newmem" class="field" placeholder="Something it should remember"><button class="btn sm" data-a="addMem">Add</button></div></section>
+      <section class="card"><h3 style="font-size:20px">Skills</h3><div class="row wrap">${a.skills.map((sk, i) => `<span class="chip">${esc(sk)}<button class="act" data-a="rmSkill" data-v="${i}" aria-label="Remove ${esc(sk)}">${I.x}</button></span>`).join('')}</div><div class="row"><label for="newskill" class="sr">Find a skill</label><input id="newskill" class="field" placeholder="Search the skills hub"><button class="btn sm" data-a="addSkill">Add</button></div></section>`}
+      <section class="card"><h3 style="font-size:20px">Can use</h3>${[['terminal', 'Terminal'], ['files', 'Files'], ['browser', 'Browser'], ['screen', 'Its own screen (mouse and keyboard)'], ['library', 'Library']].map(([k, l]) => `<label class="check"><input type="checkbox" ${a.tools[k] ? 'checked' : ''} data-a="tool" data-v="${k}">${l}</label>`).join('')}<span class="small muted">Tool servers: ${S.tools.filter(t => t.used.includes(a.id)).map(t => esc(t.name)).join(', ') || 'none'} · <button class="link" data-a="setSec" data-v="tools">Manage</button></span></section>
+      <section class="card"><h3 style="font-size:20px">Workspace</h3><span class="small muted">${esc(a.worksOn)} · ~/app · branch main · 2 files changed</span>${['api/events.py', 'api/stream.py', 'tests/test_events.py'].map(f => `<button class="listrow" style="border:0;color:var(--ink);text-align:left" data-a="openFile">${esc(f)}<span class="small muted" style="margin-left:auto">open</span></button>`).join('')}</section>
+      ${coding ? '' : `<section class="card"><h3 style="font-size:20px">Repeating jobs</h3><div class="listrow"><span class="grow small">Nightly test run · every day 02:00</span><button class="act" data-a="runNow">Run now</button></div><button class="link" data-a="startJob">Start a repeating job</button></section>`}
+      <section class="card" style="box-shadow:inset 0 0 0 1px var(--bad)"><h3 style="font-size:20px">Delete ${esc(a.id)}</h3><span class="small muted">Removes the agent from the team. A private export is kept first.</span><button class="btn sm danger" data-a="askDeleteAgent">Delete agent</button></section></div>` : '';
+  return `<div class="page"><div class="pagehead"><button class="link" data-a="go" data-v="team">Team</button><span class="muted">/</span>${glyph(a, 48)}<h1 class="big">${esc(a.id)}</h1><span class="muted">${esc(a.role)}</span>
+      <span class="row" style="margin-left:auto"><button class="btn primary" data-a="dm" data-v="${a.id}">Message</button><button class="btn ghost" data-a="pauseAgent">${a.paused ? 'Resume' : 'Pause'} ${esc(a.id)}</button></span></div>
+    <div class="grid2">
+      <section class="card"><label for="persona" class="lab">How ${esc(a.id)} works</label><textarea id="persona" class="field" data-in="persona">${esc(a.persona)}</textarea><span class="row"><span class="small muted grow">${coding ? 'Given to ' + RUNS[a.runsOn] + ' each session.' : 'Saved to its SOUL.md after you preview the change.'}</span><button class="btn sm" data-a="savePersona">Preview and save</button></span></section>
+      <section class="card"><span class="lab">Runs on</span><div class="seg" role="radiogroup" aria-label="Runs on">${seg}</div>
+        <div class="grid2"><div><label for="model" class="lab">Model</label><select id="model" class="field" data-in="model">${['Team default', 'Fast and cheap', 'Strongest'].map(o => `<option ${a.model === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>
+        <div><label for="where" class="lab">Works on</label><select id="where" class="field" data-in="where">${['Docker sandbox', 'Your machine', 'SSH · design-vm'].map(o => `<option ${a.worksOn === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div></div></section>
+      <section class="card"><span class="lab">Asks you first before</span>${[['pkg', 'Installing packages'], ['push', 'Pushing code'], ['del', 'Deleting files'], ['screen', 'Using the mouse and keyboard on its screen']].map(([k, l]) => `<label class="check"><input type="checkbox" ${a.asks[k] ? 'checked' : ''} data-a="asks" data-v="${k}">${l}</label>`).join('')}<span class="small muted">Stricter than the team rules is fine; looser isn't. <button class="link" data-a="setSec" data-v="rules">Team rules</button></span></section>
+      <section class="card"><span class="lab">Right now</span><span>${esc(a.paused ? 'Paused' : a.status)}</span><span class="row wrap"><button class="btn sm" data-a="go" data-v="replay">Look at its screen</button><button class="btn sm" data-a="copyResume">Copy terminal command</button></span><span class="small muted">Continue its session yourself with <code>hermes -p ${esc(a.id)} --resume</code></span></section>
+      ${quota}
+    </div>
+    <button class="btn ghost" style="align-self:flex-start" data-a="agentMore" aria-expanded="${S.team.more}">${S.team.more ? 'Less' : 'More'}: ${coding ? 'tools, workspace, delete' : 'memory, skills, tools, workspace, repeating jobs, delete'}</button>
+    ${more}</div>`;
+}
+
+// ---------- replay page ----------
+function vReplay() {
+  return `<div class="page"><div class="pagehead"><button class="link" data-a="go" data-v="room">Team room</button><span class="muted">/</span>${glyph('builder', 40)}<h1 style="font-size:30px">builder's screen</h1><span class="muted">Docker sandbox · Activity feed</span></div>
+    <div class="row wrap" style="align-items:stretch;gap:20px">
+      <ol style="flex:1 1 280px;max-width:360px;margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px">${[['21:08', 'Edited api/events.py'], ['21:10', 'Ran the tests: 3 pass'], ['21:14', 'Opened the feed in the browser'], ['21:16', 'Asked you to install ws@8'], ['now', 'Swapping polling for a socket']].map(([t, s], i) => `<li><button class="step ${S.replayAt === i ? 'sel' : ''}" data-a="replayAt" data-v="${i}"><span class="mono small muted">${t}</span>${esc(s)}</button></li>`).join('')}</ol>
+      <div style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:12px"><div class="term" style="min-height:340px;position:relative"><span class="badge" style="position:absolute;right:14px;top:12px;background:var(--field);color:var(--ink)">${S.replayAt == null || S.replayAt === 4 ? 'Live' : 'Replaying ' + ['21:08', '21:10', '21:14', '21:16'][S.replayAt]}</span>${[
+        '<div>diff api/events.py</div><div style="color:#ff97ae">- cursor = row.created_at</div><div style="color:#5ee3bf">+ cursor = (row.created_at, row.id)</div>',
+        '<div>$ pnpm test api/events</div><div><span style="color:#5ee3bf">ok</span> pages newest first</div><div><span style="color:#5ee3bf">ok</span> keeps same-millisecond events</div><div><span style="color:#5ee3bf">ok</span> streams over a socket</div>',
+        '<div style="background:#fff;color:#12131a;border-radius:12px;padding:16px;font-family:var(--font-b)"><b style="font-family:var(--font-d);font-size:22px">Activity</b><div style="margin-top:8px;padding:10px;border-radius:10px;background:#f4f5f8;box-shadow:0 0 0 2px #19c39a"><b>Read layer</b> moved to Done</div></div>',
+        '<div>$ npm install ws@8</div><div style="color:#ffc94d">waiting for your OK</div>',
+        '<div>$ npm install ws@8</div><div>added 1 package in 2s</div><div>$ <span class="caret"></span></div>'][S.replayAt == null ? 4 : S.replayAt]}</div>
+        <div class="card row"><button class="icon-btn sm" data-a="replayStep" data-v="-1" aria-label="Step back">‹</button><button class="icon-btn sm" data-a="replayStep" data-v="1" aria-label="Step forward">›</button><label for="scrub" class="sr">Time</label><input id="scrub" type="range" min="0" max="4" value="${S.replayAt == null ? 4 : S.replayAt}" data-in="scrub" class="grow" style="accent-color:var(--ink)"><button class="btn sm primary" data-a="replayAt" data-v="4"><span class="dot livedot" style="background:var(--live)"></span>Live</button></div>
+        <span class="small muted">You're watching. builder keeps working and can't see you here.</span></div></div></div>`;
+}
+
+// ---------- settings ----------
+const SECS = [['connections', 'Connections', 'Hermes, models, channels'], ['tools', 'Tools and triggers', 'Apps agents use; webhooks that start jobs'], ['rules', 'Rules', 'What agents may do alone'], ['notifications', 'Notifications', 'What reaches you, where'], ['look', 'Look', 'Dark or light, motion, text'], ['usage', 'Usage', 'What got done, what it cost'], ['security', 'Remote access and security', 'Paired devices, password, terminal'], ['advanced', 'Advanced', 'Every Hermes setting'], ['system', 'System', 'Service, backups, logs']];
+function vSettings() {
+  if (S.set === 'replay') return vReplay();
+  const nav = SECS.map(([k, l, d]) => `<button class="${S.set === k ? 'on' : ''}" data-a="setSec" data-v="${k}"><b style="font-weight:600">${l}</b><span class="small muted">${d}</span></button>`).join('');
+  const body = { connections: sConn, tools: sTools, rules: sRules, notifications: sNotif, look: sLook, usage: sUsage, security: sSec, advanced: sAdv, system: sSys }[S.set]();
+  return `<div class="page"><div class="setgrid"><nav class="setnav" aria-label="Settings"><h1 style="font-size:34px;margin:0 0 12px 12px">Settings</h1>${nav}</nav><div class="setmain">${body}</div></div></div>`;
+}
+function sConn() {
+  return `<h2 style="font-size:38px">Connections</h2><div class="grid2">
+    <section class="card"><span class="row"><h3 style="font-size:22px">Hermes</h3><span class="small row" style="margin-left:auto;color:var(--ok);font-weight:700;gap:6px"><span class="dot" style="background:var(--ok)"></span>Connected</span></span><span class="small" style="color:var(--ink2)">Version 0.15.2 · gateway running · ${S.order.length} agents</span><span class="small muted">Score reads Hermes and works through its gateway. It never opens your keys.</span><button class="link" data-a="toast" data-v="Hermes checked: all good.">Check again</button></section>
+    <section class="card"><h3 style="font-size:22px">Model providers</h3>${[['OpenRouter', 1], ['Nous Portal', 1], ['Anthropic', 0], ['A local model', 0]].map(([n, on]) => `<div class="row" style="min-height:40px"><span class="dot" style="background:${on ? 'var(--ok)' : 'var(--faint)'}"></span><span class="grow ${on ? '' : 'muted'}">${n}</span>${on ? '<span class="small muted">signed in</span>' : `<button class="btn sm" data-a="toast" data-v="Run this in your terminal: hermes auth add ${n === 'Anthropic' ? 'anthropic' : 'local'}">Connect</button>`}</div>`).join('')}</section>
+    <section class="card"><h3 style="font-size:22px">Channels</h3><span class="small muted">Talk to the team room from other apps; replies land in the room.</span>${[['Telegram', 1], ['Discord', 0], ['Slack', 0]].map(([n, on]) => `<div class="row" style="min-height:40px"><span class="dot" style="background:${on ? 'var(--ok)' : 'var(--faint)'}"></span><span class="grow ${on ? '' : 'muted'}">${n}</span>${on ? '<span class="small muted">team room + approvals</span>' : `<button class="btn sm" data-a="toast" data-v="${n}: paste the bot token in the form that opens here.">Connect</button>`}</div>`).join('')}</section>
+    <section class="card"><h3 style="font-size:22px">Other apps</h3><span class="small" style="color:var(--ink2)">Apps your agents use are <b>tool servers</b>. Apps that start jobs use <b>webhook triggers</b>.</span><button class="btn sm" data-a="setSec" data-v="tools">Open Tools and triggers</button></section></div>`;
+}
+function sTools() {
+  return `<h2 style="font-size:38px">Tools and triggers</h2>
+    <section class="card"><span class="row wrap"><h3 style="font-size:22px">Tool servers</h3><span class="small muted">Apps that expose actions to your agents (MCP)</span></span>
+      ${S.tools.map(t => `<div class="listrow wrap"><span class="dot" style="background:${t.status === 'ok' ? 'var(--ok)' : t.status === 'checking' ? 'var(--warn)' : 'var(--bad)'}"></span><span class="grow" style="display:flex;flex-direction:column"><b style="font-weight:600">${esc(t.name)}</b><span class="small muted mono" style="overflow-wrap:anywhere">${esc(t.addr)}</span></span><span class="row" style="gap:4px">${S.order.map(id => `<button class="act" style="${t.used.includes(id) ? `box-shadow:inset 0 0 0 1.5px ${W[id].color}` : 'opacity:.5'}" data-a="toolUse" data-v="${t.id}|${id}" aria-pressed="${t.used.includes(id)}" title="${esc(id)}">${glyph(id, 14, false)}</button>`).join('')}</span><span class="small muted">${esc(t.status)}</span><button class="act" data-a="rmTool" data-v="${t.id}" aria-label="Remove ${esc(t.name)}">${I.x}</button></div>`).join('')}
+      <div class="row wrap"><label for="tname" class="sr">Name</label><input id="tname" class="field" style="flex:1 1 160px" placeholder="Name, e.g. Tickets app"><label for="taddr" class="sr">Address or command</label><input id="taddr" class="field" style="flex:2 1 240px" placeholder="https://… or a command"><button class="btn" data-a="addTool">Add tool server</button></div>
+      <span class="small muted">Sign-in tokens are kept by Hermes in each agent's own settings, never by Score.</span></section>
+    <section class="card"><span class="row wrap"><h3 style="font-size:22px">Triggers</h3><span class="small muted">Let another app start a job by calling an address</span><button class="btn sm primary" style="margin-left:auto" data-a="newTrigger">New trigger</button></span>
+      ${S.triggers.map(w => `<div class="card" style="background:var(--field)"><span class="row wrap"><b>${esc(w.name)}</b><span class="small muted">starts “${esc(w.job)}” · ${esc(w.recipe)} · last call ${esc(w.last)}</span><button class="act" style="margin-left:auto" data-a="rmTrigger" data-v="${w.id}">Delete</button></span>
+        <div class="row wrap"><code class="small grow" style="overflow-wrap:anywhere">${esc(w.url)}</code><button class="btn sm" data-a="copy" data-v="${esc(w.url)}">Copy address</button></div>
+        <div class="row wrap"><code class="small grow">${esc(w.secret)}</code><button class="btn sm" data-a="copy" data-v="${esc(w.secret)}">Copy secret</button><button class="btn sm ghost" data-a="testTrigger" data-v="${w.id}">Send a test call</button></div>
+        <span class="small muted">Calls must be signed with the secret (Standard Webhooks headers) and arrive within five minutes.</span></div>`).join('') || '<span class="small muted">No triggers yet.</span>'}</section>`;
+}
+function sRules() {
+  const r = S.rules;
+  const list = (k, l, color) => `<section class="card"><h3 style="font-size:20px;color:${color}">${l}</h3>${r[k].map((t, i) => `<div class="listrow"><span class="grow small">${esc(t)}</span><button class="act" data-a="rmRule" data-v="${k}|${i}" aria-label="Remove">${I.x}</button></div>`).join('')}<div class="row"><label for="add-${k}" class="sr">Add to ${l}</label><input id="add-${k}" class="field" placeholder="${k === 'never' ? 'Text a command must not contain' : 'A kind of action'}"><button class="btn sm" data-a="addRule" data-v="${k}">Add</button></div></section>`;
+  return `<h2 style="font-size:38px">Rules</h2>
+    <section class="card"><span class="lab">How "ask me" works</span><div class="seg" role="radiogroup">${[['guardian', 'Guardian first'], ['always', 'Always ask me'], ['never', 'Never ask']].map(([k, l]) => `<button class="${r.mode === k ? 'on' : ''}" data-a="ruleMode" data-v="${k}">${l}</button>`).join('')}</div><span class="small muted">${r.mode === 'guardian' ? 'A guardian model reviews risky actions and asks you when it is unsure.' : r.mode === 'always' ? 'Every risky action waits for you.' : 'Nothing asks. Use with care: Never rules still apply.'}</span></section>
+    <div class="grid3">${list('go', 'Go ahead', 'var(--ok)')}${list('ask', 'Ask me', 'var(--warn)')}${list('never', 'Never', 'var(--bad)')}</div>
+    <div class="row wrap"><button class="btn primary" data-a="reviewRules">Review changes</button><span class="small muted">Never rules match command text; keep real secrets out of reach in other ways too. Each agent can be stricter on its own page.</span></div>`;
+}
+function sNotif() {
+  const n = S.notif;
+  return `<h2 style="font-size:38px">Notifications</h2><section class="card">${[['needs', 'An agent needs you', 'approvals, questions'], ['paused', 'A back-and-forth paused at its budget', ''], ['done', 'A job finished', ''], ['daily', 'A daily summary at 18:00', '']].map(([k, l, d]) => `<label class="check"><input type="checkbox" ${n[k] ? 'checked' : ''} data-a="notif" data-v="${k}">${l} <span class="small muted">${d}</span></label>`).join('')}
+    <span class="small muted">Sent to this browser and to Telegram. On your phone they arrive through the installed app.</span><button class="btn sm" style="align-self:flex-start" data-a="toast" data-v="Test notification sent to this browser.">Send a test notification</button></section>`;
+}
+function sLook() {
+  return `<h2 style="font-size:38px">Look</h2><div class="grid3">${[['dark', 'Dark', 'The default'], ['light', 'Light', "Score's original ground"]].map(([k, l, d]) => `<button class="agentcard ${S.look === k ? 'sel' : ''}" data-a="look" data-v="${k}" aria-pressed="${S.look === k}"><span style="height:110px;border-radius:16px;background:${k === 'dark' ? '#12131a' : '#eceef2'};display:flex;gap:8px;padding:12px"><span style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:6px"><span style="align-self:flex-end;width:60%;height:14px;border-radius:7px;background:${k === 'dark' ? '#ececf1' : '#12131a'}"></span><span style="width:70%;height:14px;border-radius:7px;background:${k === 'dark' ? '#23252e' : '#fff'}"></span></span><span style="flex:1.3;border-radius:10px;background:#fff"></span></span><b>${l}</b><span class="small muted">${d}</span></button>`).join('')}
+    <section class="card"><span class="lab">Motion</span><div class="seg">${[['calm', 'Calm'], ['still', 'Still']].map(([k, l]) => `<button class="${S.motion === k ? 'on' : ''}" data-a="motion" data-v="${k}">${l}</button>`).join('')}</div><span class="small muted">Calm: glows, typing dots, live dots. Still: nothing moves. Your device's reduce-motion setting always wins.</span>
+    <label for="scale" class="lab" style="margin-top:8px">Text size</label><input id="scale" type="range" min="0.9" max="1.2" step="0.05" value="${S.scale}" data-in="scale" style="accent-color:var(--ink)"></section></div>
+    <section class="card"><span class="row"><h3 style="font-size:20px">Themes</h3><button class="link" style="margin-left:auto" data-a="toast" data-v="The customizer opens with a live preview of these screens.">Open the customizer</button></span><div class="row wrap">${['Score', 'Harbour', 'Paper', 'Ledger'].map((t, i) => `<span class="chip ${i ? '' : 'on'}">${t}</span>`).join('')}</div><span class="small muted">Agents keep their shapes in every theme, and anything that needs you always stands out. Lost? Press Ctrl+Shift+0 to reset the look.</span></section>`;
+}
+const USAGE = { today: { tasks: [1, 0, 2, 1, 0, 0, 3], spend: [0.8, 0.3, 0.2, 0.1], pass: 100, wait: '6 min', done: 3 }, week: { tasks: [3, 5, 2, 6, 4, 1, 2], spend: [3.1, 1.6, 1.4, 0.7], pass: 83, wait: '1 h 12 min', done: 23 }, month: { tasks: [14, 19, 22, 18, 25, 9, 11], spend: [12.4, 6.2, 5.8, 3.1], pass: 79, wait: '5 h 40 min', done: 118 } };
+function sUsage() {
+  const u = USAGE[S.usage]; const max = Math.max(...u.tasks); const days = S.usage === 'month' ? ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const chart = ['#14a985', '#e85a7a', '#c08a10', '#7a61ff']; const who = ['builder', 'designer', 'reviewer', 'lead']; const smax = Math.max(...u.spend); const total = u.spend.reduce((a, b) => a + b, 0);
+  return `<div class="row wrap"><h2 style="font-size:38px" class="grow">Usage</h2><div class="seg">${[['today', 'Today'], ['week', '7 days'], ['month', '30 days']].map(([k, l]) => `<button class="${S.usage === k ? 'on' : ''}" data-a="usage" data-v="${k}">${l}</button>`).join('')}</div><button class="btn sm" data-a="toast" data-v="In Score this downloads a CSV of this range.">Download CSV</button></div>
+    <div class="grid4">${[['Jobs done', u.done, ''], ['Approved first time', u.pass + '%', 'no send-back from reviewer'], ['Waiting on you', u.wait, 'time agents sat blocked on you'], ['Spend', '$' + total.toFixed(2), 'where providers report it']].map(([l, v, d]) => `<div class="card" style="gap:2px"><span class="small muted">${l}</span><b style="font-family:var(--font-d);font-size:42px;letter-spacing:-0.03em;line-height:1.1;font-variant-numeric:tabular-nums">${v}</b><span class="small muted">${d}</span></div>`).join('')}</div>
+    <div class="grid2"><figure class="card" style="margin:0"><figcaption class="row"><b class="grow">Jobs done per ${S.usage === 'month' ? 'week' : 'day'}</b><button class="link" data-a="toast" data-v="Table view: the same numbers as rows.">Show as table</button></figcaption>
+      <div role="img" aria-label="Jobs done: ${u.tasks.join(', ')}" style="height:180px;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid var(--line)">${u.tasks.map((v, i) => `<span style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%" title="${days[i]}: ${v}">${v === max ? `<span class="small" style="font-weight:700">${v}</span>` : ''}<span style="width:60%;height:${max ? Math.max(v / max * 150, v ? 4 : 0) : 0}px;background:${v === max ? 'var(--ink)' : 'var(--ink2)'};border-radius:4px 4px 0 0;opacity:${v === max ? 1 : 0.7}"></span></span>`).join('')}</div>
+      <div class="row small muted" style="gap:2px">${days.map(d => `<span style="flex:1;text-align:center">${d}</span>`).join('')}</div></figure>
+    <figure class="card" style="margin:0"><figcaption class="row"><b class="grow">Spend by agent</b><button class="link" data-a="toast" data-v="Table view: the same numbers as rows.">Show as table</button></figcaption>
+      <div role="img" aria-label="Spend by agent" style="display:flex;flex-direction:column;gap:14px">${who.map((id, i) => `<div class="row"><span style="width:96px" class="row small">${glyph({ shape: W[id].shape, color: chart[i] }, 14, false)}${id}</span><span class="grow row" style="gap:8px"><span title="${id}: $${u.spend[i].toFixed(2)}" style="height:20px;width:${u.spend[i] / smax * 80}%;background:${chart[i]};border-radius:0 4px 4px 0"></span><span class="small" style="font-variant-numeric:tabular-nums">$${u.spend[i].toFixed(2)}</span></span></div>`).join('')}</div><span class="small muted">Free models count as $0. Sample numbers.</span></figure></div>`;
+}
+function sSec() {
+  const s = S.security;
+  return `<h2 style="font-size:38px">Remote access and security</h2><div class="grid2">
+    <section class="card"><h3 style="font-size:22px">Paired devices</h3>${s.browsers.map(b => `<div class="listrow"><span class="grow small">${esc(b.name)} <span class="muted">· ${esc(b.when)}</span></span><button class="act" data-a="revoke" data-v="${b.id}">Revoke</button></div>`).join('')}<button class="btn sm" style="align-self:flex-start" data-a="toast" data-v="Scan the code on your phone to pair it.">Pair a phone</button><span class="small muted">Remote access is HTTPS only.</span></section>
+    <section class="card"><h3 style="font-size:22px">Security password</h3><span class="small muted">Needed for full-access coding agents and the terminal. Set or change it on the Score machine: <code>scripts/score password</code></span><label class="check"><input type="checkbox" ${s.passkey ? 'checked' : ''} data-a="passkey">Use a passkey where the browser allows it</label></section>
+    <section class="card"><h3 style="font-size:22px">Terminal in the browser</h3><span class="small muted">A shell on the Score machine. Off unless Score was started with it, HTTPS only, closes after 15 minutes idle, at most two open.</span><label class="check"><input type="checkbox" ${s.terminal ? 'checked' : ''} data-a="term">Show the terminal (needs the security password each time)</label></section></div>`;
+}
+function sAdv() {
+  const q = S.adv.q.toLowerCase();
+  const rows = S.adv.items.filter(x => !q || x.key.includes(q) || x.help.toLowerCase().includes(q));
+  return `<h2 style="font-size:38px">Advanced</h2><span class="muted">Every Hermes setting. Changes are staged, previewed, then applied through the hermes command.</span>
+    <div class="row"><label for="advq" class="sr">Search settings</label><input id="advq" class="field" data-in="advq" placeholder="Search Hermes settings" value="${esc(S.adv.q)}"></div>
+    <section class="card" id="advlist">${rows.map(x => `<div class="listrow wrap"><span class="grow" style="display:flex;flex-direction:column"><code class="small">${esc(x.key)}</code><span class="small muted">${esc(x.help)}</span></span><label for="adv-${esc(x.key)}" class="sr">${esc(x.key)}</label><input id="adv-${esc(x.key)}" class="field" style="width:160px;min-height:38px;background:var(--panel)" value="${esc(x.value)}"><button class="btn sm" data-a="stage" data-v="${esc(x.key)}">Stage</button></div>`).join('') || '<span class="muted small">No setting matches.</span>'}</section>
+    ${S.adv.staged.length ? `<section class="pin"><b>Pending changes · ${S.adv.staged.length}</b>${S.adv.staged.map(c => `<code class="small">${esc(c.key)}: ${esc(c.from)} → ${esc(c.to)}</code>`).join('')}<span class="row wrap"><button class="btn sm" data-a="applyAdv">Apply</button><button class="btn sm ghost" data-a="clearAdv">Discard</button></span></section>` : ''}`;
+}
+function sSys() {
+  return `<h2 style="font-size:38px">System</h2><div class="grid2">
+    <section class="card"><h3 style="font-size:22px">Score</h3><div class="row"><span class="dot" style="background:var(--ok)"></span><span class="grow">Running as a service</span><span class="small muted">starts with your computer</span></div><div class="row"><span class="grow">Version 1.14.0</span><span class="small muted">up to date</span></div><span class="row wrap"><button class="btn sm" data-a="toast" data-v="Score restarted. The team carried on where it was.">Restart Score</button><button class="btn sm" data-a="toast" data-v="Score is up to date.">Check for updates</button></span></section>
+    <section class="card"><h3 style="font-size:22px">Backups</h3><span class="small" style="color:var(--ink2)">Last backup ${esc(S.backups)} · kept for 14 days</span><span class="row wrap"><button class="btn sm primary" data-a="backup">Back up now</button><button class="btn sm" data-a="toast" data-v="Pick a backup to restore. Score stops agents first.">Restore</button></span></section>
+    <section class="card span2"><h3 style="font-size:22px">Logs</h3><div class="term small">${['approval requested · builder · npm install ws@8', 'exchange paused · lead ⇄ reviewer · budget', 'quota guard · designer · 8% under floor 10%'].map(l => `<div>${esc(l)}</div>`).join('')}</div></section>
+    <section class="card span2 row wrap"><span class="grow"><b>Show the first-run steps again</b> <span class="muted">· useful after reinstalling Hermes</span></span><button class="btn ghost" data-a="firstRun">Show first run</button></section></div>`;
+}
+
+// ---------- first run ----------
+function vFirstRun() {
+  return `<div class="main" style="max-width:1200px;margin:0 auto;padding-block:56px"><div class="row wrap" style="align-items:flex-start;gap:48px">
+    <div style="flex:1 1 380px;display:flex;flex-direction:column;gap:20px"><span class="word">score</span><h1 class="big" style="font-size:clamp(44px,6vw,72px)">Run a team of agents from one room.</h1><p class="muted" style="font-size:19px;margin:0;max-width:480px">Score works with the Hermes agents already on this machine. Nothing leaves it unless you connect a channel.</p><span class="row">${S.order.map(id => glyph(id, 44, false)).join('')}</span></div>
+    <ol style="flex:1 1 480px;max-width:620px;margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px">
+      <li class="card row" style="align-items:flex-start"><span class="avatar" style="background:#19c39a">${I.check}</span><span><b>Hermes found</b><br><span class="small muted">Version 0.15.2, gateway running</span></span></li>
+      <li class="card"><b>Who's on the team?</b><div class="grid2">${S.order.map(id => `<label class="check listrow"><input type="checkbox" checked>${glyph(id, 20, false)}${esc(id)}</label>`).join('')}</div></li>
+      <li class="card"><label for="leadsel"><b>Who leads?</b> <span class="small muted">Messages without an @name go to the lead.</span></label><select id="leadsel" class="field" style="max-width:260px">${S.order.map(id => `<option>${id}</option>`).join('')}</select></li>
+      <li class="card"><label class="check"><input type="checkbox" checked><span><b>Keep Score running</b> <span class="small muted">Start with your computer so the team keeps working when this tab is closed.</span></span></label></li>
+      <li class="row" style="justify-content:flex-end"><button class="btn primary" data-a="finishFirst" style="min-height:52px;padding:0 28px">Open the team room</button></li></ol></div></div>`;
+}
+
+// ---------- modals ----------
+function vModal() {
+  const md = S.modal; if (!md) return '';
+  let inner = '';
+  if (md.type === 'confirm') inner = `<div class="dialog" role="alertdialog" aria-label="${esc(md.title)}" style="max-width:480px"><h2 style="font-size:26px">${esc(md.title)}</h2><p class="muted" style="margin:0">${esc(md.body)}</p><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn danger" data-a="confirmYes">${esc(md.yes || 'Delete')}</button></span></div>`;
+  if (md.type === 'rename') inner = `<div class="dialog" style="max-width:480px"><h2 style="font-size:26px">Rename job</h2><label for="rename" class="sr">Name</label><input id="rename" class="field" value="${esc(jobOf(S.job).name)}"><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="doRename">Rename</button></span></div>`;
+  if (md.type === 'startJob') inner = mStart(md);
+  if (md.type === 'recipe') inner = mRecipe();
+  if (md.type === 'addAgent') inner = mAdd(md);
+  if (md.type === 'rulesDiff') inner = `<div class="dialog" style="max-width:600px"><h2 style="font-size:26px">Review rule changes</h2><div class="inner mono small" style="display:flex;flex-direction:column;gap:4px">${md.lines.length ? md.lines.map(l => `<span style="color:${l[0] === '+' ? 'var(--ok)' : 'var(--bad)'}">${esc(l)}</span>`).join('') : '<span class="muted">No changes.</span>'}</div><span class="small muted">Written to every agent's Hermes profile. Agents' stricter rules stay.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Back</button><button class="btn primary" data-a="saveRules" ${md.lines.length ? '' : 'disabled'}>Save for the whole team</button></span></div>`;
+  if (md.type === 'trigger') inner = `<div class="dialog" style="max-width:600px"><h2 style="font-size:26px">New trigger</h2><div><label for="tgname" class="lab">Name</label><input id="tgname" class="field" placeholder="e.g. New support ticket"></div><div><label for="tgjob" class="lab">Starts this job</label><input id="tgjob" class="field" placeholder="e.g. Triage the new ticket"></div><div><label for="tgrec" class="lab">Recipe</label><select id="tgrec" class="field"><option>lead decides</option>${S.recipes.map(r => `<option>${esc(r.name)}</option>`).join('')}</select></div><span class="small muted">You get an address and a signing secret to paste into the other app.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="makeTrigger">Create trigger</button></span></div>`;
+  if (md.type === 'persona') inner = `<div class="dialog" style="max-width:640px"><h2 style="font-size:26px">Save how ${esc(S.team.sel)} works</h2><div class="inner mono small" style="display:flex;flex-direction:column;gap:6px"><span style="color:var(--bad)">- ${esc(md.from)}</span><span style="color:var(--ok)">+ ${esc(md.to)}</span></div><span class="small muted">If the file changed meanwhile, you'll see both versions and pick one.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="doPersona">Save</button></span></div>`;
+  return `<div class="scrim" data-a="scrim">${inner}</div>`;
+}
+function mStart(md) {
+  const checks = [['ok', 'Hermes is reachable'], ['ok', 'lead, builder and reviewer are free'], ['warn', 'designer\'s Claude Code limit is under its floor; it won\'t get new steps']];
+  return `<div class="dialog" role="dialog" aria-label="Start a job"><span class="row"><h2 style="font-size:32px" class="grow">Start a job</h2><button class="icon-btn" data-a="closeModal" aria-label="Close">${I.x}</button></span>
+    <div><label for="sjwhat" class="lab">What should the team do?</label><textarea id="sjwhat" class="field" style="font-size:17px">${esc(md.what || '')}</textarea></div>
+    <div><span class="lab">Recipe</span><div class="row wrap">${['lead decides'].concat(S.recipes.map(r => r.name)).map(n => `<button class="chip ${md.recipe === n ? 'on' : ''}" data-a="sjRecipe" data-v="${esc(n)}" style="background:${md.recipe === n ? '' : 'var(--field)'}">${esc(n)}</button>`).join('')}<button class="link" data-a="openRecipes">Edit recipes</button></div></div>
+    <div class="grid3">
+      <fieldset class="inner" style="border:0;margin:0"><legend class="lab" style="float:left">When</legend><div style="clear:both">${[['once', 'Now, once'], ['schedule', 'On a schedule'], ['webhook', 'When another app calls']].map(([k, l]) => `<label class="check"><input type="radio" name="when" ${md.when === k ? 'checked' : ''} data-a="sjWhen" data-v="${k}">${l}</label>`).join('')}</div>
+        ${md.when === 'schedule' ? `<label for="sjsched" class="sr">Schedule</label><select id="sjsched" class="field"><option>Every weekday at 9:00</option><option>Every Monday at 9:00</option><option>Every hour</option></select>` : ''}
+        ${md.when === 'webhook' ? `<span class="small muted">A trigger address and secret are made when you start. Find them in Settings › Tools and triggers.</span>` : ''}</fieldset>
+      <fieldset class="inner" style="border:0;margin:0"><legend class="lab" style="float:left">Ask me before</legend><div style="clear:both">${[['plan', 'The plan starts'], ['handoff', 'Every hand-off'], ['risky', 'Only risky actions']].map(([k, l]) => `<label class="check"><input type="radio" name="ask" ${md.ask === k ? 'checked' : ''} data-a="sjAsk" data-v="${k}">${l}</label>`).join('')}</div></fieldset>
+      <div class="inner" style="display:flex;flex-direction:column;gap:8px"><span class="lab">Limits</span><label for="sjturns" class="row small"><span class="grow">Turns per back-and-forth</span><b id="sjturnsv">${md.turns}</b></label><input id="sjturns" type="range" min="2" max="20" value="${md.turns}" data-in="sjturns" style="accent-color:var(--ink)"><label for="sjcap" class="row small"><span class="grow">Spend cap</span><b id="sjcapv">$${md.cap}</b></label><input id="sjcap" type="range" min="0" max="20" value="${md.cap}" data-in="sjcap" style="accent-color:var(--ink)"><label for="sjdue" class="lab" style="margin:0">Deadline</label><input id="sjdue" type="time" class="field" value="18:00"></div></div>
+    <div class="inner" style="display:flex;flex-direction:column;gap:6px"><span class="lab">Before it starts</span>${checks.map(([k, t]) => `<span class="row small"><span class="dot" style="background:${k === 'ok' ? 'var(--ok)' : 'var(--warn)'}"></span>${esc(t)}</span>`).join('')}<label class="check small"><input type="checkbox" id="sjack" ${md.ack ? 'checked' : ''} data-a="sjAck">I understand Score controls the work it starts and can stop it, but agents may still use other tools and start background work Score can't see.</label></div>
+    <span class="row wrap"><label class="check small"><input type="checkbox">Save as a recipe</label><button class="btn ghost" style="margin-left:auto" data-a="closeModal">Cancel</button><button class="btn primary" id="sjgo" data-a="sjStart" ${md.ack ? '' : 'disabled'}>Start the job</button></span></div>`;
+}
+function recipeProblems(r) {
+  const p = [];
+  if (!r.steps.length) p.push('Add at least one step.');
+  r.steps.forEach((s, i) => { if (s.type === 'agent' && (!s.agent || !s.text.trim())) p.push(`Step ${i + 1} needs an agent and an instruction.`); if (s.type === 'gate' && i === r.steps.length - 1) p.push(`Step ${i + 1}: a gate needs a step after it.`); if (s.type === 'branch' && !s.on) p.push(`Step ${i + 1}: a branch needs a step to check.`); });
+  if (r.steps.length && r.steps[r.steps.length - 1].type !== 'end') p.push('The last step should be an End.');
+  return p;
+}
+const STEP_LABEL = { agent: 'Agent step', gate: 'Gate · waits for your OK', branch: 'Branch', join: 'Join · waits for all', end: 'End' };
+function mRecipe() {
+  const r = S.recipes.find(x => x.id === S.rec.sel) || S.recipes[0]; const st = r.steps[S.rec.step];
+  const probs = recipeProblems(r);
+  const stepIcon = s => s.type === 'agent' ? glyph(s.agent || 'lead', 22, false) : `<span style="width:22px;height:22px;display:grid;place-items:center;font-weight:800;color:var(--warn)">${{ gate: '◆', branch: '⬡', join: '⋈', end: '■' }[s.type]}</span>`;
+  const list = S.rec.graph ? `<div class="inner" style="display:flex;flex-direction:column;align-items:center;gap:0">${r.steps.map((s, i) => `<div style="background:var(--panel);border-radius:14px;padding:10px 16px;display:flex;gap:10px;align-items:center;min-width:240px;${i === S.rec.step ? 'box-shadow:inset 0 0 0 2px var(--ink)' : ''}">${stepIcon(s)}${esc(s.title)}</div>${i < r.steps.length - 1 ? `<span style="width:2px;height:18px;background:var(--faint)"></span>${s.type === 'branch' ? '<span class="small muted">passed ↓ · changes requested → back to step ' + Math.max(1, i - 1) + '</span><span style="width:2px;height:10px;background:var(--faint)"></span>' : ''}` : ''}`).join('')}</div>`
+    : r.steps.map((s, i) => `<div class="row" style="gap:6px"><button class="step ${i === S.rec.step ? 'sel' : ''}" data-a="recStep" data-v="${i}"><span class="mono small muted">${i + 1}</span>${stepIcon(s)}<span class="grow" style="display:flex;flex-direction:column"><b style="font-weight:600">${esc(s.title)}</b><span class="small muted">${STEP_LABEL[s.type]}${s.type === 'agent' ? ' · ' + esc(s.agent) + ' · retries ' + s.retries : ''}</span></span></button><button class="icon-btn sm" data-a="recMove" data-v="${i}|-1" aria-label="Move up">↑</button><button class="icon-btn sm" data-a="recMove" data-v="${i}|1" aria-label="Move down">↓</button><button class="icon-btn sm" style="color:var(--bad)" data-a="recDel" data-v="${i}" aria-label="Delete step">${I.trash}</button></div>`).join('');
+  const insp = !st ? '<span class="muted small">Add a step to edit it.</span>' : `<div><label for="rst" class="lab">Title</label><input id="rst" class="field" data-in="rst" value="${esc(st.title)}"></div>
+    ${st.type === 'agent' ? `<div><label for="rsa" class="lab">Agent</label><select id="rsa" class="field" data-in="rsa">${S.order.map(id => `<option ${st.agent === id ? 'selected' : ''}>${id}</option>`).join('')}</select></div><div><label for="rsx" class="lab">Instruction</label><textarea id="rsx" class="field" data-in="rsx">${esc(st.text)}</textarea><span class="small muted">Use <code>{{inputs.${esc(r.inputs[0])}}}</code> or an earlier step's <code>{{nodes.&lt;name&gt;.output}}</code>.</span></div><div class="grid2"><div><label for="rsr" class="lab">Retries</label><select id="rsr" class="field" data-in="rsr">${[0, 1, 2].map(n => `<option ${st.retries === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div><div><label for="rsf" class="lab">If it fails</label><select id="rsf" class="field" data-in="rsf"><option value="stop" ${st.fail === 'stop' ? 'selected' : ''}>Stop the job</option><option value="repair" ${st.fail === 'repair' ? 'selected' : ''}>Go to a repair step</option></select></div></div>` : ''}
+    ${st.type === 'branch' ? `<div><label for="rsrule" class="lab">Decide by</label><select id="rsrule" class="field"><option>The reviewer's verdict (passed / changes requested)</option><option>Whether the step succeeded</option><option>Whether its output contains some text</option></select></div><span class="small muted">Passed continues; changes requested goes back to the step before. Every branch has a default path.</span>` : ''}
+    ${st.type === 'gate' ? `<span class="small muted">The job stops here until you approve or reject. Rejecting stops the job unless you add a rejection path.</span>` : ''}`;
+  return `<div class="dialog wide" role="dialog" aria-label="Recipe editor"><span class="row wrap"><h2 style="font-size:30px">Recipes</h2><div class="seg">${S.recipes.map(x => `<button class="${x.id === r.id ? 'on' : ''}" data-a="recSel" data-v="${x.id}">${esc(x.name)}</button>`).join('')}</div><button class="icon-btn" style="margin-left:auto" data-a="closeRecipe" aria-label="Close">${I.x}</button></span>
+    <div class="row wrap"><span class="badge" style="background:${probs.length ? 'rgba(255,151,174,.18)' : 'rgba(94,227,191,.18)'};color:${probs.length ? 'var(--bad)' : 'var(--ok)'}">${probs.length ? probs.length + ' problem' + (probs.length > 1 ? 's' : '') + ' to fix' : 'Looks good'}</span><span class="small muted">Version ${r.version}${S.rec.dirty ? ' · unsaved changes' : ''} · inputs: ${r.inputs.map(esc).join(', ')}</span>
+      <span class="row" style="margin-left:auto"><button class="btn sm" data-a="recGraph">${S.rec.graph ? 'Show as list' : 'Show as graph'}</button><button class="btn sm" data-a="toast" data-v="Exported with agents as name and role; secrets scrubbed.">Export</button><button class="btn sm primary" data-a="recSave" ${probs.length ? 'disabled' : ''}>Save as version ${r.version + 1}</button></span></div>
+    ${probs.length ? `<div class="small" style="color:var(--bad)">${probs.map(esc).join('<br>')}</div>` : ''}
+    <div class="row wrap" style="align-items:flex-start;gap:18px"><div style="flex:999 1 460px;min-width:0;display:flex;flex-direction:column;gap:8px">${list}
+      ${S.rec.graph ? '' : `<div class="row wrap">${Object.keys(STEP_LABEL).map(t => `<button class="btn sm ghost" data-a="recAdd" data-v="${t}">${I.plus}${STEP_LABEL[t].split(' ·')[0]}</button>`).join('')}</div>`}</div>
+      <div class="inner" style="flex:1 1 320px;display:flex;flex-direction:column;gap:12px"><b>Step ${st ? S.rec.step + 1 : ''}</b>${insp}</div></div></div>`;
+}
+function mAdd(md) {
+  const used = S.order.map(id => W[id].color);
+  return `<div class="dialog" role="dialog" aria-label="Add an agent"><span class="row"><h2 style="font-size:32px" class="grow">Add an agent</h2><button class="icon-btn" data-a="closeModal" aria-label="Close">${I.x}</button></span>
+    <div class="seg">${[['new', 'New agent'], ['import', 'Bring in a Hermes profile'], ['coding', 'A coding tool']].map(([k, l]) => `<button class="${md.from === k ? 'on' : ''}" data-a="addFrom" data-v="${k}">${l}</button>`).join('')}</div>
+    ${md.from === 'import' ? `<div class="inner"><label for="impfile" class="lab">Profile export (.zip, up to 200 MB)</label><input id="impfile" type="file" accept=".zip"></div>` : ''}
+    ${md.from === 'coding' ? `<div class="inner"><span class="lab">Which tool</span><div class="seg">${['claude-code', 'codex', 'agy'].map(k => `<button class="${md.tool === k ? 'on' : ''}" data-a="addTool2" data-v="${k}">${RUNS[k]}</button>`).join('')}</div><span class="small muted" style="display:block;margin-top:8px">Installed · version tested by Score. It uses your own login and plan.</span></div>` : ''}
+    <div class="row wrap" style="align-items:flex-start;gap:22px"><div style="display:flex;flex-direction:column;align-items:center;gap:10px;width:170px">${glyph({ shape: md.shape, color: md.color }, 100)}
+      <div class="row wrap" style="justify-content:center;gap:4px">${Object.keys(SHAPES).map(s => `<button class="icon-btn sm" style="${md.shape === s ? 'background:var(--hi-bg)' : ''}" data-a="addShape" data-v="${s}" aria-label="${s}" aria-pressed="${md.shape === s}">${glyph({ shape: s, color: md.shape === s ? (S.look === 'light' ? '#fff' : '#12131a') : 'var(--ink2)' }, 16, false)}</button>`).join('')}</div>
+      <div class="row" style="gap:6px">${PALETTE.concat(Object.values(W).map(a => ({ color: a.color }))).filter((p, i, arr) => arr.findIndex(q => q.color === p.color) === i).map(p => { const taken = used.includes(p.color); return `<button aria-label="Colour ${p.color}${taken ? ', taken' : ''}" data-a="addColor" data-v="${p.color}" ${taken ? 'disabled' : ''} style="width:24px;height:24px;border:0;border-radius:999px;background:${p.color};opacity:${taken ? 0.3 : 1};box-shadow:${md.color === p.color ? '0 0 0 2px var(--panel), 0 0 0 4px var(--ink)' : 'none'}"></button>`; }).join('')}</div><span class="small muted" style="text-align:center">8 of 20 shapes shown. Faded colours are taken.</span></div>
+    <div style="flex:1;min-width:260px;display:flex;flex-direction:column;gap:14px"><div><label for="anname" class="lab">Name</label><input id="anname" class="field" value="${esc(md.name)}" data-in="anname"></div><div><label for="anrole" class="lab">What does it do?</label><textarea id="anrole" class="field">${md.from === 'coding' ? 'Reviews build scripts.' : 'Finds and compares options, and writes a short summary with sources.'}</textarea></div><div><label for="anwhere" class="lab">Works on</label><select id="anwhere" class="field"><option>Docker sandbox</option><option>Your machine</option><option>Another machine (SSH)</option></select></div></div></div>
+    <span class="row"><span class="small muted grow">It joins the team room. You can change everything later.</span><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="doAdd">Add ${esc(md.name || 'agent')}</button></span></div>`;
+}
+
+// ---------- search ----------
+function searchResults(q) {
+  q = q.trim().toLowerCase(); const out = [];
+  const hit = s => !q || String(s).toLowerCase().includes(q);
+  S.jobs.forEach(j => hit(j.name) && out.push(['Jobs', j.name, roomOf(j.room).name + ' · ' + j.state, 'job:' + j.id]));
+  Object.keys(S.dms).forEach(id => (S.dms[id] || []).forEach(c => (hit(c.title) || c.msgs.some(mm => hit(mm[1]))) && out.push(['One-to-one chats', c.title, 'with ' + id + ' · ' + c.date, 'conv:' + id + ':' + c.id])));
+  S.library.forEach(n => (hit(n.title) || hit(n.body)) && out.push(['Library', n.title, n.folder + ' · by ' + n.by, 'note:' + n.id]));
+  if (q) S.msgs.filter(x => x.kind === 'msg' && hit(x.text)).slice(0, 4).forEach(x => out.push(['Messages', '“' + x.text + '”', (x.from || '') + ' · ' + ((jobOf(x.job) || {}).name || ''), 'job:' + x.job]));
+  [['Start a job', 'act:start'], ['Add an agent', 'act:add'], [S.pausedAll ? 'Resume everyone' : 'Pause everyone', 'act:pause'], ['Switch to ' + (S.look === 'dark' ? 'light' : 'dark'), 'act:look'], ['Edit recipes', 'act:recipes'], ['Show first run', 'act:first']].concat(SECS.map(([k, l]) => ['Settings: ' + l, 'set:' + k])).concat(S.order.map(id => ['Message ' + id, 'dm:' + id])).forEach(([l, k]) => hit(l) && out.push(['Do something', l, '', k]));
+  return out.slice(0, 30);
+}
+function searchList() {
+  const r = searchResults(S.search.q); let g = '';
+  return r.length ? r.map((x, i) => { const head = x[0] !== g ? (g = x[0], `<div class="sec">${esc(x[0])}</div>`) : ''; return head + `<button class="mi" data-a="pick" data-v="${esc(x[3])}" ${i === 0 ? 'style="background:var(--field)"' : ''}><span class="grow" style="display:flex;flex-direction:column"><b style="font-weight:600">${esc(x[1])}</b>${x[2] ? `<span class="small muted">${esc(x[2])}</span>` : ''}</span></button>`; }).join('') : '<div class="muted" style="padding:16px">Nothing matches.</div>';
+}
+function vSearch() {
+  if (!S.search.open) return '';
+  return `<div class="scrim" data-a="scrim" style="padding-top:max(80px, env(safe-area-inset-top, 0px))"><div class="dialog" role="dialog" aria-label="Search and commands" style="padding:0;gap:0;overflow:hidden"><div class="row" style="padding:16px 20px;border-bottom:1px solid var(--line)">${I.search}<label for="sq" class="sr">Search or run a command</label><input id="sq" data-in="sq" value="${esc(S.search.q)}" placeholder="Search jobs, chats, Library, or type a command" style="flex:1;border:0;outline:none;background:transparent;font-size:20px" autocomplete="off"><span class="kbd">esc</span></div><div id="sres" class="menu" style="position:static;box-shadow:none;max-height:60vh;overflow-y:auto;border-radius:0">${searchList()}</div></div></div>`;
+}
+function vToast() { return S.toast ? `<div class="toast" role="status"><span>${esc(S.toast.text)}</span>${S.toast.undo ? '<button data-a="undo">Undo</button>' : ''}</div>` : ''; }
+
+// ---------- simulation ----------
+const REPLIES = { lead: 'On it. I\'ll bring in whoever this needs and report back here.', builder: 'On it. I\'ll start in my sandbox.', reviewer: 'I\'ll take a look and tell you what I find.', designer: 'I\'ll sketch two options first.' };
+function simulate(room, job, to, text) {
+  S.typing = { room, agent: to }; render();
+  later(1100, () => { S.typing = null; S.msgs.push(m(room, job, to, REPLIES[to] || 'On it.')); });
+  if (to !== 'lead' || room !== 'team') return;
+  const cap = m(room, job, null, '', { kind: 'capsule', agents: ['builder', 'reviewer'], status: 'working · round 1', live: true, lines: [['builder', 'Starting: ' + text.slice(0, 60)]] });
+  later(2600, () => { S.msgs.push(cap); W.builder.ring = Math.max(W.builder.ring, 20); });
+  later(4800, () => { cap.lines.push(['reviewer', 'Sent back: one edge case is missing a test.']); cap.status = 'round 2'; W.reviewer.ring = 40; });
+  later(7200, () => { cap.lines.push(['builder', 'Added it.'], ['reviewer', 'Approved.']); cap.status = '2 rounds · approved'; cap.live = false; const j = jobOf(job); if (j) j.state = 'done'; S.msgs.push(m(room, job, 'lead', 'Done. Here it is.', { result: { title: (j ? j.name : 'Result'), sub: 'Approved', tint: '#ddf6ee', open: 'results' } })); toast('“' + (j ? j.name : 'Job') + '” is done.'); });
+}
+function newJob(name, room) { const j = { id: nid('j'), room: room || 'team', name: name.length > 34 ? name.slice(0, 32) + '…' : name, state: 'working' }; S.jobs.push(j); return j; }
+function send() {
+  const text = S.composer.trim(); if (!text && !S.attach.length) return;
+  const room = roomOf(S.room);
+  if (text.startsWith('/job')) { S.composer = ''; openStart(text.slice(4).trim()); return render(); }
+  if (S.editing) {
+    const x = S.msgs.find(y => y.id === S.editing); if (x) {
+      if (!x.versions) { x.versions = [x.text]; x.hist = {}; }
+      const idx = S.msgs.indexOf(x); const after = S.msgs.filter((y, i) => i > idx && y.job === x.job && y.room === x.room);
+      x.hist[x.versions.length - 1] = after; S.msgs = S.msgs.filter(y => !after.includes(y));
+      x.versions.push(text); x.v = x.versions.length - 1; x.text = text;
+      S.editing = null; S.composer = ''; S.msgs.push(m(x.room, x.job, null, '', { kind: 'note', text: 'Agents rewound to before your edit' }));
+      simulate(x.room, x.job, 'lead', text); return render();
+    }
+  }
+  let job = S.job;
+  if (room.kind === 'older') { toast('This is an older room. Start new work in the team room.'); return render(); }
+  if (job === 'all') job = newJob(text.replace(/^@\w+\s*/, '').replace(/^\/\w+\s*/, '') || 'New job').id;
+  const mm = text.match(/^@(\w+)/) || text.match(/^\/assign\s+@(\w+)/); const to = mm && W[mm[1]] ? mm[1] : 'lead';
+  S.msgs.push(m(room.id, job, 'you', text, { files: S.attach.length ? S.attach.slice() : null }));
+  S.composer = ''; S.attach = []; S.recording = false;
+  if (text.startsWith('/model')) toast('This message uses the "fast" model.');
+  simulate(room.id, job, to, text);
+}
+function openStart(what) { S.modal = { type: 'startJob', what: what || '', recipe: 'lead decides', when: 'once', ask: 'risky', turns: 8, cap: 5, ack: false }; }
+
+// ---------- actions ----------
+let pendingConfirm = null;
+function confirmBox(title, body, fn, yes) { S.modal = { type: 'confirm', title, body, yes }; pendingConfirm = fn; }
+const A = {
+  go(v) { if (v === 'replay') { S.view = 'settings'; S.set = 'replay'; } else { S.view = v; if (v === 'settings' && S.set === 'replay') S.set = 'connections'; } S.roomDrop = S.roomMenu = S.jobMenu = S.plus = false; S.sideOpen = false; window.scrollTo(0, 0); },
+  search() { S.search.open = true; S.search.q = ''; setTimeout(() => { const el = document.getElementById('sq'); if (el) el.focus(); }, 0); },
+  scrim(v, t, e) { if (e.target === t) { S.modal = null; S.search.open = false; } },
+  closeModal() { S.modal = null; },
+  roomDrop() { S.roomDrop = !S.roomDrop; S.roomMenu = S.jobMenu = false; },
+  roomMenu() { S.roomMenu = !S.roomMenu; S.roomDrop = S.jobMenu = false; },
+  jobMenu() { S.jobMenu = !S.jobMenu; S.roomDrop = S.roomMenu = false; },
+  room(v) { S.room = v; S.job = 'all'; S.roomDrop = false; },
+  else(v) { S.roomDrop = false; openSide('else', { else: v }); },
+  job(v) { S.job = v; S.jobMenu = false; },
+  plus() { S.plus = !S.plus; },
+  attachFile() { S.attach.push(['screenshot.png', 'notes.pdf', 'data.csv'][S.attach.length % 3]); S.plus = false; },
+  unattach(v) { S.attach.splice(+v, 1); },
+  voice() { S.recording = !S.recording; S.plus = false; toast(S.recording ? 'Voice input on. Your words appear in the box.' : 'Voice input off.'); },
+  insert(v) { S.composer = v; S.plus = false; setTimeout(() => { const el = document.getElementById('composer'); if (el) { el.focus(); el.setSelectionRange(v.length, v.length); } }, 0); },
+  send() { send(); },
+  cancelEdit() { S.editing = null; S.composer = ''; },
+  edit(v) { const x = S.msgs.find(y => y.id === v); S.editing = v; S.composer = x.versions ? x.versions[x.versions.length - 1] : x.text; S.job = x.job; setTimeout(() => { const el = document.getElementById('composer'); if (el) el.focus(); }, 0); },
+  ver(v) { const [id, d] = v.split('|'); const x = S.msgs.find(y => y.id === id); x.v = Math.min(x.versions.length - 1, Math.max(0, x.v + +d)); },
+  copyMsg(v) { const x = S.msgs.find(y => y.id === v); copyText(x.versions ? x.versions[x.v] : x.text); toast('Copied.'); },
+  saveLib(v) { const x = S.msgs.find(y => y.id === v); const n = { id: nid('n'), title: x.text.slice(0, 40), folder: 'Saved from chat', by: x.from, job: (jobOf(x.job) || {}).name, body: x.text }; S.library.push(n); toast('Saved to the Library.'); },
+  askDeleteMsg(v) { const x = S.msgs.find(y => y.id === v); confirmBox('Delete this message?', 'It disappears from the room for everyone. Agents\' memory is not changed.', () => { const i = S.msgs.indexOf(x); S.msgs.splice(i, 1); toast('Message deleted.', () => S.msgs.splice(i, 0, x)); }); },
+  req(v) {
+    const [id, c] = v.split('|'); const q = S.requests.find(x => x.id === id); if (!q) return; const i = S.requests.indexOf(q); S.requests.splice(i, 1);
+    const j = jobOf(q.job); const note = t => S.msgs.push(m(j.room, q.job, null, '', { kind: 'note', text: t }));
+    if (q.kind === 'approve') { if (c === 'deny') { note('You said no to ' + q.cmd + '. builder keeps polling.'); } else { note('You allowed ' + q.cmd + (c === 'always' ? ' (always, for builder)' : '')); later(900, () => S.msgs.push(m(j.room, q.job, 'builder', 'Installed. Swapping polling for a live connection now.'))); } W.builder.status = 'working'; W.builder.ring = 80; j.state = 'working'; }
+    if (q.kind === 'budget') { note('You chose: ' + q.opts[+c]); j.state = +c === 1 ? 'paused' : 'working'; W.reviewer.status = 'reviewing'; W.reviewer.ring = 50; S.msgs.filter(x => x.job === q.job && x.kind === 'capsule').forEach(x => { x.paused = false; x.status = +c === 1 ? 'round 4 · 4 more turns' : 'continuing'; }); later(1000, () => S.msgs.push(m(j.room, q.job, 'lead', +c === 0 ? 'Shipping now. I opened a job for the 2.4.1 migration steps.' : +c === 1 ? 'Thanks, carrying on with 4 more turns.' : 'I\'ll decide: shipping now, steps in 2.4.1.'))); if (+c === 0) newJob('Migration steps for 2.4.1'); }
+    if (q.kind === 'quota') { note('designer: ' + q.opts[+c]); W.designer.status = +c === 0 ? 'drawing' : +c === 1 ? 'waiting for its limit to reset' : 'stopped'; W.designer.ring = +c === 0 ? 55 : 0; }
+    toast('Answered.', () => S.requests.splice(i, 0, q));
+  },
+  capsule(v) { const x = S.msgs.find(y => y.id === v); x.open = !x.open; },
+  openThread(v) { S.jobMenu = false; openSide('thread', { thread: v }); },
+  aside(v) { const [ag] = v.split('|'); A.dm(ag); },
+  openResult(v) { if (v.startsWith('library:')) openSide('library', { note: v.split(':')[1] }); else openSide('work', { work: 'results' }); },
+  sideMenu() { S.side.menu = !S.side.menu; S.side.hist = false; },
+  sideMode(v) { openSide(v); },
+  closeSide() { S.sideOpen = false; },
+  work(v) { S.side.work = v; },
+  bench(v) { openSide('work', { work: 'bench', bench: v }); },
+  dm(v) { S.view = 'room'; S.room = S.room || 'team'; S.roomDrop = false; const list = S.dms[v] || (S.dms[v] = []); openSide('dm', { agent: v, conv: list[0] ? list[0].id : null }); S.dmRef = null; },
+  hist() { S.side.hist = !S.side.hist; S.side.menu = false; },
+  newChat() { const list = S.dms[S.side.agent]; const c = { id: nid('c'), title: 'New chat', date: 'Today', summary: 'Just started', msgs: [] }; list.unshift(c); S.side.conv = c.id; S.side.hist = false; },
+  conv(v) { S.side.conv = v; S.side.hist = false; },
+  askDeleteChat(v) { const list = S.dms[S.side.agent]; const c = list.find(x => x.id === v); confirmBox('Delete “' + c.title + '”?', 'The chat and its Hermes session are removed. What ' + S.side.agent + ' saved to memory stays.', () => { const i = list.indexOf(c); list.splice(i, 1); if (S.side.conv === v) S.side.conv = list[0] ? list[0].id : null; S.side.hist = false; toast('Chat deleted.', () => list.splice(i, 0, c)); }); },
+  refer() { const c = curConv(); S.dmRef = c.title + ' (' + c.date + ')'; A.newChat(); },
+  clearRef() { S.dmRef = null; },
+  dmAsk(v) { S.dmText = v; A.dmSend(); },
+  dmSend() {
+    const t = S.dmText.trim(); if (!t) return; let c = curConv(); const ag = S.side.agent;
+    if (!c) { c = { id: nid('c'), title: t.slice(0, 40), date: 'Today', summary: t.slice(0, 50), msgs: [] }; S.dms[ag].unshift(c); S.side.conv = c.id; }
+    if (c.title === 'New chat') { c.title = t.slice(0, 40); c.summary = t.slice(0, 50); }
+    c.msgs.push(['you', t]); S.dmText = ''; S.dmTyping = ag; const ref = S.dmRef;
+    later(1100, () => { S.dmTyping = null; c.msgs.push([ag, ref ? 'I read “' + ref + '” first. ' + (ag === 'builder' ? 'Same idea applies here: keep the cursor composite and add a test for it.' : 'Here\'s what I\'d do next, in two steps.') : t.toLowerCase().includes('screen') ? 'Here\'s my screen right now: tests are running in my sandbox. Open Work › Workbench to watch.' : t.toLowerCase().includes('need') ? 'Just your OK on the package install in the team room.' : 'Got it. I\'ll look into it and tell you here.']); S.dmRef = null; });
+  },
+  shareDM() { const c = curConv(); const last = c.msgs[c.msgs.length - 1]; S.msgs.push(m('team', S.job !== 'all' ? S.job : (S.jobs.find(j => j.room === 'team') || {}).id, S.side.agent, last[1], { shared: true })); toast('Shared to the team room.'); },
+  bringIn(v) { const e = S.elsewhere.find(x => x.id === v); const j = newJob(e.job); S.room = 'team'; S.job = j.id; S.msgs.push(m('team', j.id, null, '', { kind: 'note', text: 'Brought in from ' + e.agent + ' · ' + e.where })); S.msgs.push(m('team', j.id, 'you', e.job)); simulate('team', j.id, 'lead', e.job); openSide('work'); toast('Job started in the team room.'); },
+  note(v) { S.side.note = v; },
+  newNote() { const n = { id: nid('n'), title: 'Untitled note', folder: 'Notes', by: 'you', job: null, body: '' }; S.library.push(n); S.side.note = n.id; setTimeout(() => { const el = document.getElementById('ntitle'); if (el) el.select(); }, 0); },
+  askDeleteNote(v) { const n = S.library.find(x => x.id === v); confirmBox('Delete “' + n.title + '”?', 'Agents can no longer read it. Its history is kept for 30 days.', () => { const i = S.library.indexOf(n); S.library.splice(i, 1); S.side.note = S.library[0] ? S.library[0].id : null; toast('Note deleted.', () => S.library.splice(i, 0, n)); }); },
+  askDeleteRoom(v) { const r = roomOf(v); confirmBox('Delete ' + r.name + '?', 'Its jobs and messages are removed from Score. Agents\' memory and Library notes stay.', () => { const snap = { r, i: S.rooms.indexOf(r), jobs: S.jobs.filter(j => j.room === v), msgs: S.msgs.filter(x => x.room === v) }; S.rooms.splice(snap.i, 1); S.jobs = S.jobs.filter(j => j.room !== v); S.msgs = S.msgs.filter(x => x.room !== v); S.room = 'team'; S.job = 'all'; S.roomMenu = false; toast(r.name + ' deleted.', () => { S.rooms.splice(snap.i, 0, snap.r); S.jobs.push(...snap.jobs); S.msgs.push(...snap.msgs); }); }); S.roomMenu = false; },
+  exportRoom() { S.roomMenu = false; toast('In Score this downloads the room as Markdown.'); },
+  shareRoom() { S.roomMenu = false; copyText('https://score.local/share/r_4k2'); toast('Read-only link copied. It expires in 7 days.'); },
+  renameJob() { S.jobMenu = false; S.modal = { type: 'rename' }; setTimeout(() => { const el = document.getElementById('rename'); if (el) el.select(); }, 0); },
+  doRename() { const v = document.getElementById('rename').value.trim(); if (v) jobOf(S.job).name = v; S.modal = null; },
+  closeJob() { const j = jobOf(S.job); j.state = j.state === 'done' ? 'working' : 'done'; S.jobMenu = false; toast(j.state === 'done' ? 'Job closed.' : 'Job reopened.'); },
+  shareJob() { S.jobMenu = false; copyText('https://score.local/share/j_9x1'); toast('Read-only link copied. It expires in 7 days.'); },
+  exportJob() { S.jobMenu = false; toast('In Score this downloads the job as Markdown.'); },
+  askDeleteJob() { const j = jobOf(S.job); S.jobMenu = false; confirmBox('Delete “' + j.name + '”?', 'Its messages and thread are removed. Results saved to the Library stay.', () => { const snap = { j, i: S.jobs.indexOf(j), msgs: S.msgs.filter(x => x.job === j.id), reqs: S.requests.filter(q => q.job === j.id) }; S.jobs.splice(snap.i, 1); S.msgs = S.msgs.filter(x => x.job !== j.id); S.requests = S.requests.filter(q => q.job !== j.id); S.job = 'all'; toast('Job deleted.', () => { S.jobs.splice(snap.i, 0, snap.j); S.msgs.push(...snap.msgs); S.requests.push(...snap.reqs); }); }); },
+  pauseJob() { const j = jobOf(S.side.thread); j.state = j.state === 'paused' ? 'working' : 'paused'; toast(j.state === 'paused' ? 'Job paused after the current step.' : 'Job resumed.'); },
+  stopJob() { const j = jobOf(S.side.thread); confirmBox('Stop “' + j.name + '”?', 'Running steps are stopped. If Score can\'t confirm a step ended, it asks you before going on.', () => { j.state = 'done'; toast('Job stopped.'); }, 'Stop job'); },
+  stepIn() { const el = document.getElementById('stepin'); const t = el.value.trim(); if (!t) return; const j = jobOf(S.side.thread); S.msgs.push(m(j.room, j.id, 'you', t)); simulate(j.room, j.id, 'lead', t); },
+  startJob() { S.plus = false; openStart(''); },
+  sjRecipe(v) { S.modal.recipe = v; },
+  sjWhen(v) { S.modal.when = v; },
+  sjAsk(v) { S.modal.ask = v; },
+  sjAck(v, t) { S.modal.ack = t.checked; const b = document.getElementById('sjgo'); if (b) b.disabled = !t.checked; return 'norender'; },
+  sjStart() { const md = S.modal; const what = (document.getElementById('sjwhat').value || '').trim() || 'New job'; const j = newJob(what); S.view = 'room'; S.room = 'team'; S.job = j.id; S.msgs.push(m('team', j.id, 'you', what)); if (md.recipe !== 'lead decides') S.msgs.push(m('team', j.id, null, '', { kind: 'note', text: 'Recipe: ' + md.recipe + ' · up to ' + md.turns + ' turns per back-and-forth · $' + md.cap + ' cap' })); if (md.when === 'webhook') { S.triggers.push({ id: nid('w'), name: what.slice(0, 30), job: what, recipe: md.recipe, url: 'https://score.local/hooks/w_' + Math.random().toString(16).slice(2, 8), secret: 'whsec_' + Math.random().toString(36).slice(2, 6) + '…', last: 'never' }); toast('Trigger made: find its address in Settings › Tools and triggers.'); } else if (md.when === 'schedule') toast('Scheduled. It also runs once now.'); S.modal = null; simulate('team', j.id, 'lead', what); },
+  openRecipes() { S.modal = { type: 'recipe', back: S.modal }; },
+  closeRecipe() { S.modal = S.modal.back || null; },
+  recSel(v) { S.rec.sel = v; S.rec.step = 0; S.rec.dirty = false; },
+  recStep(v) { S.rec.step = +v; },
+  recGraph() { S.rec.graph = !S.rec.graph; },
+  recMove(v) { const [i, d] = v.split('|').map(Number); const r = S.recipes.find(x => x.id === S.rec.sel); const j = i + d; if (j < 0 || j >= r.steps.length) return; [r.steps[i], r.steps[j]] = [r.steps[j], r.steps[i]]; S.rec.step = j; S.rec.dirty = true; },
+  recDel(v) { const r = S.recipes.find(x => x.id === S.rec.sel); const st = r.steps.splice(+v, 1)[0]; S.rec.step = Math.max(0, Math.min(S.rec.step, r.steps.length - 1)); S.rec.dirty = true; toast('Step removed.', () => r.steps.splice(+v, 0, st)); },
+  recAdd(v) { const r = S.recipes.find(x => x.id === S.rec.sel); const st = v === 'agent' ? { type: 'agent', title: 'New step', agent: 'builder', text: '', retries: 0, fail: 'stop' } : v === 'branch' ? { type: 'branch', title: 'Passed?', rule: 'verdict', on: '' } : { type: v, title: STEP_LABEL[v].split(' ·')[0] }; const at = r.steps.length && r.steps[r.steps.length - 1].type === 'end' && v !== 'end' ? r.steps.length - 1 : r.steps.length; r.steps.splice(at, 0, st); S.rec.step = at; S.rec.dirty = true; },
+  recSave() { const r = S.recipes.find(x => x.id === S.rec.sel); r.version++; S.rec.dirty = false; toast('Saved as version ' + r.version + '. Jobs already running keep their version.'); },
+  agentPage(v) { S.team.sel = v; S.view = 'agent'; S.team.more = false; S.sideOpen = false; window.scrollTo(0, 0); },
+  agentMore() { S.team.more = !S.team.more; },
+  runsOn(v) { const a = W[S.team.sel]; a.runsOn = v; if (v !== 'hermes' && !a.quota) a.quota = { five: 64, week: 80 }; },
+  perm(v) { W[S.team.sel].perm = v; if (v !== 'full') toast('Permission set to ' + (v === 'read' ? 'read only.' : 'workspace write.')); },
+  confirmFull() { const pw = document.getElementById('secpw'); if (!pw.value) { toast('Enter the security password first.'); return; } toast('Full access confirmed.'); pw.value = ''; },
+  codexAck(v, t) { W[S.team.sel].codexAck = t.checked; return 'norender'; },
+  asks(v, t) { W[S.team.sel].asks[v] = t.checked; return 'norender'; },
+  tool(v, t) { W[S.team.sel].tools[v] = t.checked; return 'norender'; },
+  savePersona() { const a = W[S.team.sel]; const to = document.getElementById('persona').value; S.modal = { type: 'persona', from: a.persona, to }; },
+  doPersona() { W[S.team.sel].persona = S.modal.to; S.modal = null; toast('Saved.'); },
+  pauseAgent() { const a = W[S.team.sel]; a.paused = !a.paused; toast(a.paused ? a.id + ' pauses after its current step.' : a.id + ' resumed.'); },
+  pauseAll() { S.pausedAll = !S.pausedAll; S.order.forEach(id => W[id].paused = S.pausedAll); toast(S.pausedAll ? 'Everyone pauses after their current step.' : 'Everyone resumed.'); },
+  forget(v) { const a = W[S.team.sel]; const t = a.memory.splice(+v, 1)[0]; toast('Forgotten.', () => a.memory.splice(+v, 0, t)); },
+  addMem() { const el = document.getElementById('newmem'); if (el.value.trim()) W[S.team.sel].memory.push(el.value.trim()); },
+  rmSkill(v) { W[S.team.sel].skills.splice(+v, 1); },
+  addSkill() { const el = document.getElementById('newskill'); if (el.value.trim()) W[S.team.sel].skills.push(el.value.trim()); },
+  runNow() { toast('Started the nightly test run now.'); },
+  openFile() { openSide('work', { work: 'bench', bench: 'code' }); S.view = 'room'; },
+  copyResume() { copyText('hermes -p ' + S.team.sel + ' --resume'); toast('Command copied.'); },
+  askDeleteAgent() { const id = S.team.sel; confirmBox('Delete ' + id + '?', 'A private export of its profile is kept first. Jobs it was on stay, marked as removed.', () => { const i = S.order.indexOf(id); S.order.splice(i, 1); S.view = 'team'; toast(id + ' deleted.', () => S.order.splice(i, 0, id)); }); },
+  addAgent() { S.modal = { type: 'addAgent', from: 'new', tool: 'claude-code', shape: 'hexagon', color: PALETTE[0].color, name: 'researcher' }; },
+  addFrom(v) { S.modal.from = v; },
+  addTool2(v) { S.modal.tool = v; },
+  addShape(v) { S.modal.shape = v; },
+  addColor(v) { S.modal.color = v; },
+  doAdd() { const md = S.modal; const name = (document.getElementById('anname').value || 'agent').trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || 'agent'; if (W[name]) { toast('There is already an agent called ' + name + '.'); return; } const p = PALETTE.find(x => x.color === md.color) || { tint: md.color, text: md.color }; W[name] = mkAgent({ id: name, shape: md.shape, color: md.color, tint: p.tint, text: p.text, role: document.getElementById('anrole').value, worksOn: document.getElementById('anwhere').value, runsOn: md.from === 'coding' ? md.tool : 'hermes', quota: md.from === 'coding' ? { five: 90, week: 95 } : null, persona: document.getElementById('anrole').value }); S.order.push(name); S.dms[name] = []; S.modal = null; toast(name + ' joined the team room.'); },
+  setSec(v) { S.view = 'settings'; S.set = v; window.scrollTo(0, 0); },
+  toast(v) { toast(v); },
+  copy(v) { copyText(v); toast('Copied.'); },
+  toolUse(v) { const [id, ag] = v.split('|'); const t = S.tools.find(x => x.id === id); t.used = t.used.includes(ag) ? t.used.filter(x => x !== ag) : t.used.concat(ag); },
+  rmTool(v) { const i = S.tools.findIndex(x => x.id === v); const t = S.tools.splice(i, 1)[0]; toast(t.name + ' removed.', () => S.tools.splice(i, 0, t)); },
+  addTool() { const n = document.getElementById('tname').value.trim(); const a = document.getElementById('taddr').value.trim(); if (!n || !a) { toast('Give it a name and an address or command.'); return; } const t = { id: nid('t'), name: n, addr: a, status: 'checking', used: ['lead'] }; S.tools.push(t); later(1200, () => { t.status = 'ok'; }); },
+  newTrigger() { S.modal = { type: 'trigger' }; },
+  makeTrigger() { const n = document.getElementById('tgname').value.trim() || 'New trigger'; S.triggers.push({ id: nid('w'), name: n, job: document.getElementById('tgjob').value.trim() || n, recipe: document.getElementById('tgrec').value, url: 'https://score.local/hooks/w_' + Math.random().toString(16).slice(2, 8), secret: 'whsec_' + Math.random().toString(36).slice(2, 6) + '…', last: 'never' }); S.modal = null; toast('Trigger created. Copy its address and secret into the other app.'); },
+  rmTrigger(v) { const i = S.triggers.findIndex(x => x.id === v); const t = S.triggers.splice(i, 1)[0]; toast('Trigger deleted. Its address stops working.', () => S.triggers.splice(i, 0, t)); },
+  testTrigger(v) { const w = S.triggers.find(x => x.id === v); w.last = 'just now'; const j = newJob(w.job); S.msgs.push(m('team', j.id, null, '', { kind: 'note', text: 'Started by trigger “' + w.name + '”' })); S.msgs.push(m('team', j.id, 'you', w.job)); simulate('team', j.id, 'lead', w.job); toast('Test call received: a job started in the team room.'); },
+  ruleMode(v) { if (!S.rules.saved) S.rules.saved = JSON.parse(JSON.stringify(S.rules)); S.rules.mode = v; },
+  rmRule(v) { if (!S.rules.saved) S.rules.saved = JSON.parse(JSON.stringify(S.rules)); const [k, i] = v.split('|'); S.rules[k].splice(+i, 1); },
+  addRule(v) { const el = document.getElementById('add-' + v); if (!el.value.trim()) return; if (!S.rules.saved) S.rules.saved = JSON.parse(JSON.stringify(S.rules)); S.rules[v].push(el.value.trim()); },
+  reviewRules() { const o = S.rules.saved || S.rules; const lines = []; if (o.mode !== S.rules.mode) lines.push('- mode: ' + o.mode, '+ mode: ' + S.rules.mode); ['go', 'ask', 'never'].forEach(k => { o[k].filter(x => !S.rules[k].includes(x)).forEach(x => lines.push('- ' + k + ': ' + x)); S.rules[k].filter(x => !o[k].includes(x)).forEach(x => lines.push('+ ' + k + ': ' + x)); }); S.modal = { type: 'rulesDiff', lines }; },
+  saveRules() { S.rules.saved = null; S.modal = null; toast('Rules saved for the whole team.'); },
+  notif(v, t) { S.notif[v] = t.checked; return 'norender'; },
+  look(v) { S.look = v; },
+  motion(v) { S.motion = v; },
+  usage(v) { S.usage = v; },
+  revoke(v) { const i = S.security.browsers.findIndex(b => b.id === v); const b = S.security.browsers.splice(i, 1)[0]; toast(b.name + ' signed out.', () => S.security.browsers.splice(i, 0, b)); },
+  passkey(v, t) { S.security.passkey = t.checked; return 'norender'; },
+  term(v, t) { S.security.terminal = t.checked; toast(t.checked ? 'Terminal shown. Opening one asks for the security password.' : 'Terminal hidden.'); },
+  stage(v) { const it = S.adv.items.find(x => x.key === v); const el = document.getElementById('adv-' + v); if (el.value === it.value) { toast('No change to stage.'); return; } S.adv.staged = S.adv.staged.filter(c => c.key !== v).concat({ key: v, from: it.value, to: el.value }); },
+  applyAdv() { S.adv.staged.forEach(c => { S.adv.items.find(x => x.key === c.key).value = c.to; }); const n = S.adv.staged.length; S.adv.staged = []; toast('Applied ' + n + ' change' + (n > 1 ? 's' : '') + '. The gateway needs a restart for them to take effect.'); },
+  clearAdv() { S.adv.staged = []; },
+  backup() { S.backups = 'just now'; toast('Backed up.'); },
+  firstRun() { S.first = true; },
+  finishFirst() { S.first = false; S.view = 'room'; },
+  replayAt(v) { S.replayAt = +v === 4 ? null : +v; },
+  replayStep(v) { const cur = S.replayAt == null ? 4 : S.replayAt; const n = Math.max(0, Math.min(4, cur + +v)); S.replayAt = n === 4 ? null : n; },
+  pick(v) {
+    S.search.open = false; const [k, a, b] = v.split(':');
+    if (k === 'job') { const j = jobOf(a); if (j) { S.view = 'room'; S.room = j.room; S.job = j.id; } }
+    if (k === 'conv') { A.dm(a); S.side.conv = b; }
+    if (k === 'note') { S.view = 'room'; openSide('library', { note: a }); }
+    if (k === 'set') A.setSec(a);
+    if (k === 'dm') A.dm(a);
+    if (k === 'act') ({ start: () => openStart(''), add: () => A.addAgent(), pause: () => A.pauseAll(), look: () => { S.look = S.look === 'dark' ? 'light' : 'dark'; }, recipes: () => { S.modal = { type: 'recipe' }; }, first: () => { S.first = true; } })[a]();
+  },
+  undo() { if (S.toast && S.toast.undo) S.toast.undo(); S.toast = null; },
+  confirmYes() { const fn = pendingConfirm; pendingConfirm = null; S.modal = null; if (fn) fn(); }
+};
+
+// ---------- events ----------
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-a]'); if (!t) { if (S.roomDrop || S.roomMenu || S.jobMenu || S.plus || S.side.menu || S.side.hist) { if (!e.target.closest('.menu')) { S.roomDrop = S.roomMenu = S.jobMenu = S.plus = S.side.menu = S.side.hist = false; render(); } } return; }
+  const a = t.dataset.a; if (!A[a]) return;
+  if (t.tagName === 'INPUT' && (t.type === 'checkbox' || t.type === 'radio') && ['sjAck', 'codexAck', 'asks', 'tool', 'notif', 'passkey', 'term'].indexOf(a) < 0) { /* radios re-render */ }
+  if (a === 'scrim' && e.target !== t) return;
+  const r = A[a](t.dataset.v, t, e);
+  if (r !== 'norender') render();
+});
+document.addEventListener('input', e => {
+  const t = e.target; const k = t.dataset && t.dataset.in; if (!k) return;
+  if (k === 'composer') S.composer = t.value;
+  else if (k === 'dm') S.dmText = t.value;
+  else if (k === 'sq') { S.search.q = t.value; const box = document.getElementById('sres'); if (box) box.innerHTML = searchList(); }
+  else if (k === 'ntitle' || k === 'nbody') { const n = S.library.find(x => x.id === S.side.note); if (n) n[k === 'ntitle' ? 'title' : 'body'] = t.value; }
+  else if (k === 'persona') { /* saved through preview */ }
+  else if (k === 'model') W[S.team.sel].model = t.value;
+  else if (k === 'where') W[S.team.sel].worksOn = t.value;
+  else if (k === 'floor') { W[S.team.sel].floor = +t.value; const v = document.getElementById('floorv'); if (v) v.textContent = t.value + '%'; }
+  else if (k === 'sjturns') { S.modal.turns = +t.value; document.getElementById('sjturnsv').textContent = t.value; }
+  else if (k === 'sjcap') { S.modal.cap = +t.value; document.getElementById('sjcapv').textContent = '$' + t.value; }
+  else if (k === 'scale') { S.scale = +t.value; document.documentElement.style.setProperty('--scale', S.scale); }
+  else if (k === 'advq') { S.adv.q = t.value; render(); }
+  else if (k === 'scrub') { S.replayAt = +t.value === 4 ? null : +t.value; render(); }
+  else if (k === 'anname') { /* read on submit */ }
+  else if (['rst', 'rsa', 'rsx', 'rsr', 'rsf'].includes(k)) { const r = S.recipes.find(x => x.id === S.rec.sel); const st = r.steps[S.rec.step]; if (!st) return; const f = { rst: 'title', rsa: 'agent', rsx: 'text', rsr: 'retries', rsf: 'fail' }[k]; st[f] = k === 'rsr' ? +t.value : t.value; S.rec.dirty = true; if (k === 'rsa' || k === 'rsr' || k === 'rsf') render(); }
+});
+document.addEventListener('change', e => { const t = e.target; if (t.dataset && (t.dataset.in === 'rsx' || t.dataset.in === 'rst')) render(); });
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); A.search(); render(); return; }
+  if (e.key === 'Escape') { if (S.search.open || S.modal) { S.search.open = false; S.modal = null; render(); } else if (S.roomDrop || S.roomMenu || S.jobMenu || S.plus || S.side.menu || S.side.hist) { S.roomDrop = S.roomMenu = S.jobMenu = S.plus = S.side.menu = S.side.hist = false; render(); } return; }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    const id = e.target.id;
+    if (id === 'composer') { e.preventDefault(); send(); render(); }
+    else if (id === 'dmin') { e.preventDefault(); A.dmSend(); render(); }
+    else if (id === 'stepin') { e.preventDefault(); A.stepIn(); render(); }
+    else if (id === 'sq') { e.preventDefault(); const r = searchResults(S.search.q); if (r[0]) { A.pick(r[0][3]); render(); } }
+    else if (id === 'rename') { e.preventDefault(); A.doRename(); render(); }
+  }
+});
+render();
+</script>

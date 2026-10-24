@@ -3,6 +3,12 @@
 Mockups for the UI rework proposed in [`docs/proposals/ui-rework-bold.md`](../../proposals/ui-rework-bold.md).
 The live, clickable canvas (owner's account, private): https://claude.ai/artifact/7zF2GJcnzUcArXiWeaRknh
 
+**`prototype.html`** is the whole app as one clickable page (open it in a browser, no build): every screen above plus
+the owner decisions of 2026-10-24 (recipe editor, agent page with "Runs on", message actions, room dropdown, job menu,
+Rules, Tool servers and webhook triggers, Notifications, Advanced, Security), with working delete and undo. It is a
+throwaway mock with fake data; it shows behaviour, not code to reuse. Live copy (owner's account, private):
+https://claude.ai/artifact/4PcQUWnmxeswmpaLTCQZoe
+
 The whole app, in four areas: **Room** (the team room and its side panel), **Team**, **Settings** (a gear), and
 **Search** (⌘K, from anywhere). The side panel is one dropdown: **Work** (Results / Workbench), **Library**, a job's
 **Thread**, or a **one-to-one** with any agent.
@@ -29,6 +35,7 @@ The whole app, in four areas: **Room** (the team room and its side panel), **Tea
 | `18-phone-jobs.dc.html` | Phone: the team room as a job list with the pinned request; tab bar Room · Team · Settings |
 | `19-phone-one-to-one.dc.html` | Phone: a one-to-one in the agent's colour, earlier chats, a reference chip |
 | `20-phone-team.dc.html` | Phone: team list with state and Message |
+| `21-room-dropdown.dc.html` | The room dropdown: the team room, older rooms carried over, and **Elsewhere** (agents' Telegram, terminal and scheduled chats, read-only, "Bring into a job") |
 
 These are `.dc.html` design-canvas files: plain HTML with **inline styles**, plus `<sc-if>` / `<sc-for>` / `{{ }}`
 template tags and a small `class Component` script for the clickable states. They do not open standalone (they need

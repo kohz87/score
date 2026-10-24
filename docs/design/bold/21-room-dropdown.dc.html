@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room dropdown</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#12131a}
+a{color:#ececf1}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #12131a; color: #ececf1; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; line-height: 1.5; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 16px 28px">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px; letter-spacing: -0.04em">score</span>
+<nav aria-label="Main" style="display: flex; gap: 2px">
+<a href="01-team-room.dc.html" aria-current="page" style="text-decoration: none; border-radius: 999px; padding: 0 14px; min-height: 40px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; background: #ececf1; color: #12131a">Room</a>
+<a href="04-team.dc.html" style="text-decoration: none; border-radius: 999px; padding: 0 14px; min-height: 40px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; color: #a9adb8">Team</a>
+</nav>
+<a href="05-settings-usage.dc.html" aria-label="Settings" style="margin-left: auto; width: 40px; height: 40px; border-radius: 999px; background: #1a1c23; display: grid; place-items: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9ccd4" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></a>
+<span aria-label="You" style="width: 36px; height: 36px; border-radius: 999px; background: #ececf1; color: #12131a; display: grid; place-items: center; font-weight: 700; font-size: 14px">Y</span>
+</header>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap; gap: 20px; padding: 4px 24px 24px; box-sizing: border-box">
+
+<!-- Left: the room header is now a dropdown -->
+<section aria-label="Rooms" style="flex: 1 1 460px; max-width: 600px; min-width: 0; display: flex; flex-direction: column; gap: 14px; position: relative">
+<button type="button" aria-haspopup="listbox" aria-expanded="true" style="align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; border: 0; background: transparent; color: #ececf1; padding: 0; min-height: 44px"><span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 30px; font-weight: 700; letter-spacing: -0.03em">Team room</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ececf1" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+
+<div role="listbox" aria-label="Rooms and chats elsewhere" style="background: #1a1c23; border-radius: 24px; padding: 10px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5)">
+<span style="font-size: 12px; font-weight: 700; color: #a9adb8; padding: 6px 12px">Rooms</span>
+<div role="option" aria-selected="true" style="display: flex; align-items: center; gap: 12px; background: #23252e; border-radius: 14px; padding: 10px 12px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #5ee3bf; flex: none"></span><span style="flex: 1; display: flex; flex-direction: column"><b style="font-weight: 600">Team room</b><span style="font-size: 13px; color: #a9adb8">Always on · 3 jobs, 1 needs you</span></span></div>
+<div role="option" aria-selected="false" style="display: flex; align-items: center; gap: 12px; border-radius: 14px; padding: 10px 12px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #3a3d45; flex: none"></span><span style="flex: 1; display: flex; flex-direction: column"><b style="font-weight: 600">#activity-feed</b><span style="font-size: 13px; color: #a9adb8">Older room · last message Oct 19</span></span></div>
+<div role="option" aria-selected="false" style="display: flex; align-items: center; gap: 12px; border-radius: 14px; padding: 10px 12px"><span style="width: 10px; height: 10px; border-radius: 999px; background: #3a3d45; flex: none"></span><span style="flex: 1; display: flex; flex-direction: column"><b style="font-weight: 600">#research</b><span style="font-size: 13px; color: #a9adb8">Older room · last message Oct 12</span></span></div>
+
+<span style="font-size: 12px; font-weight: 700; color: #a9adb8; padding: 12px 12px 6px">Elsewhere · the agents' own chats outside Score</span>
+<div role="option" aria-selected="false" style="display: flex; align-items: center; gap: 12px; border-radius: 14px; padding: 10px 12px; box-shadow: inset 0 0 0 1.5px #19c39a"><svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true" style="flex: none"><path d="M14 3 L26.5 24.5 H1.5 Z" fill="#19c39a"/></svg><span style="flex: 1; display: flex; flex-direction: column"><b style="font-weight: 600">builder · Telegram</b><span style="font-size: 13px; color: #a9adb8">2 chats · today 08:12</span></span></div>
+<div role="option" aria-selected="false" style="display: flex; align-items: center; gap: 12px; border-radius: 14px; padding: 10px 12px"><svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true" style="flex: none"><circle cx="14" cy="14" r="12" fill="#6b4eff"/></svg><span style="flex: 1; display: flex; flex-direction: column"><b style="font-weight: 600">lead · terminal</b><span style="font-size: 13px; color: #a9adb8">1 session · yesterday</span></span></div>
+<div role="option" aria-selected="false" style="display: flex; align-items: center; gap: 12px; border-radius: 14px; padding: 10px 12px"><svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true" style="flex: none"><path d="M14 1.5 L26.5 14 L14 26.5 L1.5 14 Z" fill="#ffb61e"/></svg><span style="flex: 1; display: flex; flex-direction: column"><b style="font-weight: 600">reviewer · scheduled</b><span style="font-size: 13px; color: #a9adb8">Nightly check · 4 runs this week</span></span></div>
+</div>
+<span style="font-size: 13px; color: #a9adb8; padding: 0 6px">Older rooms keep working; new jobs start in the team room.</span>
+</section>
+
+<!-- Right: a chat from elsewhere, read-only -->
+<aside aria-label="builder on Telegram" style="flex: 999 1 520px; min-width: 0; display: flex">
+<div style="flex: 1; background: #16171e; border-radius: 30px; box-shadow: 0 0 0 1px #23252e; display: flex; flex-direction: column; overflow: hidden; min-height: 760px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #23252e">
+<span style="display: inline-flex; align-items: center; gap: 10px; background: #23252e; border-radius: 999px; min-height: 44px; padding: 0 14px 0 10px; font-size: 15px; font-weight: 700"><svg width="20" height="20" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3 L26.5 24.5 H1.5 Z" fill="#19c39a"/></svg>builder · Telegram</span>
+<span style="font-size: 13px; color: #a9adb8">Read-only here. Reply in Telegram, or bring it into a job.</span>
+</div>
+<div style="flex: 1; padding: 24px 32px; display: flex; flex-direction: column; justify-content: flex-end; gap: 16px">
+<span style="align-self: center; font-size: 12px; color: #a9adb8; background: #1a1c23; border-radius: 999px; padding: 4px 12px">Today, 08:10 · from Telegram</span>
+<div style="align-self: flex-end; max-width: 78%; background: #2c2f38; border-radius: 20px 20px 6px 20px; padding: 10px 15px">Can you check why the nightly export failed?</div>
+<div style="display: flex; gap: 12px"><svg width="24" height="24" viewBox="0 0 28 28" aria-hidden="true" style="flex: none"><path d="M14 3 L26.5 24.5 H1.5 Z" fill="#19c39a"/></svg><p style="margin: 0; max-width: 78%">The export ran out of disk at 02:14. I freed old logs and reran it; it finished at 08:11. Want me to add a disk check before it runs?</p></div>
+<div style="align-self: flex-end; max-width: 78%; background: #2c2f38; border-radius: 20px 20px 6px 20px; padding: 10px 15px">Yes, later.</div>
+</div>
+<div style="padding: 0 20px 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<button type="button" style="border: 0; background: #ececf1; color: #12131a; border-radius: 999px; min-height: 48px; padding: 0 22px; font-weight: 700; font-size: 14px">Bring into a job</button>
+<span style="font-size: 13px; color: #a9adb8">Starts "Disk check before nightly export" in the team room, with this chat attached.</span>
+</div>
+</div>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -5,7 +5,11 @@ Companion to [`ui-rework-bold.md`](ui-rework-bold.md). Every user-facing feature
 **Nothing on this list may disappear silently.** The 11.0 brief must give every row a home or an owner-approved drop,
 and the phase gate checks this list.
 
-Mockups are `docs/design/bold/NN-*.dc.html` (numbers below).
+Mockups are `docs/design/bold/NN-*.dc.html` (numbers below). **Owner decisions of 2026-10-24 (D1–D13) are in the
+proposal's §8 and override the statuses below where they differ**: workflows → recipe editor; run safety →
+cards; coding agents share the agent page; message actions; rooms → room dropdown (`21`) + job menu;
+settings sections. Those are drawn in the clickable prototype `docs/design/bold/prototype.html`; pop-out dropped; pet packs, looks, stage and Lively dropped (20 shapes kept); Tasks
+board merged into jobs; admin view and `/u` dropped; Usage keeps first-time pass and waiting-on-you; webhook triggers.
 
 Status:
 - **Drawn**: the mockup shows it.

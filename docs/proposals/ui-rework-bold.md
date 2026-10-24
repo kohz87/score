@@ -157,3 +157,26 @@ Every task ships tests; UI tasks ship Playwright specs against the fake adapter 
 6. The paused **10.15 swipe** work stays paused unless the owner says otherwise.
 7. The six decisions at the end of the parity checklist: the Score timeline and Flow graph, rooms becoming jobs,
    the Tasks board, the room stage and **pet packs / agent looks**, the chat-first view, and the workflow graph editor.
+
+## 8. Owner decisions, 2026-10-24
+
+The screens for D1–D7 and D13 are in the **clickable prototype** `docs/design/bold/prototype.html`
+(one file, open it in a browser; owner's live copy: https://claude.ai/artifact/4PcQUWnmxeswmpaLTCQZoe), not in separate
+mockups. Taken in the design conversation; they settle parts of §7 and the parity checklist. Still open: §7 items 1, 4, 5 and
+6, and dropping the Score timeline and the Flow graph as views.
+
+| # | Topic | Decision |
+|---|---|---|
+| D1 | Workflows | Keep and redesign as the **recipe editor**: a step list (agent steps, gates, branches, joins, retries, on-failure paths, inputs, versions, export), with an optional read-only graph. Prototype: Start a job › Edit recipes |
+| D2 | Run safety | Keep, but as **cards** in the pinned needs-you (quota guard, not confirmed ended, retry / try again / remap, spend not settled) plus a short **before-it-starts checklist** in Start a job. No separate screens. Mockups `10`, `01` |
+| D3 | Coding agents | **One agent page for every agent.** "Runs on: Hermes / Claude Code / Codex / agy" is a setting; coding tools add one card (permission level, quota floor) and hide the Hermes-only sections (memory, skills, repeat). The security password for full access and the Codex read acknowledgement stay. Prototype: Team › an agent |
+| D4 | Agent page | Clean: four things up front (how it works, model and engine, where it works, asks you first); memory, skills, tools and plugins, workspace, repeating jobs and delete behind **More**. Mockup `23` |
+| D5 | Message actions | Like other chat apps: hover row on a bubble (edit with rewind and ‹ 2 / 3 › versions, copy, save to Library, delete); composer `+` (attach, voice, `/` commands). Prototype: the team room |
+| D6 | Rooms | One always-on **team room**, plus a **room dropdown** in its header: existing rooms carried over as older rooms (nothing lost), and **Elsewhere**: each agent's conversations outside Score (Telegram, terminal, …), read-only with "Bring into a job". Jobs get a menu: rename, close, export, share read-only link, delete. Mockup `21`; prototype: room dropdown, job menu |
+| D7 | Settings | Draw the missing sections: Rules (guardian mode, go / ask / never), Tool servers + **webhook triggers**, Notifications, Advanced (every Hermes setting), Remote access, terminal and security password. Prototype: Settings |
+| D8 | Small pages | No mockups: terminal and pairing follow the visual system. Task attempts become job history. **Pop-out windows are dropped.** |
+| D9 | Agent looks | **Drop pet packs**, the Cut-out / Ring looks, eyes following the pointer, the room stage and "Lively" (removes 10.2, 10.8, 10.10 and stored packs). **Keep colour + shape and the 20 shapes** (AGENTS.md requires shape; four run out at a fifth agent). |
+| D10 | Tasks board | **Merged into jobs**: filter chips (needs you · working · done) on the job tabs; the drawer's steps, unblock and comment move into the job thread's header. Hermes's task queue stays behind the scenes. |
+| D11 | Admin view | **Dropped**, with its password and the `/u` chat-first view. |
+| D12 | Usage | Keep **first-time pass rate** and **time waiting on you**; drop median time and the per-agent table. Mockup `05` |
+| D13 | Triggers | Start a job's "Repeat" becomes **When**: once, on a schedule, or on a **webhook** (own address + signing secret, Standard Webhooks headers). Other apps connect the other way through **tool servers (MCP)** that agents call. Mockup `10`; prototype: Settings › Tool servers |
