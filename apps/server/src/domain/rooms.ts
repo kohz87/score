@@ -35,7 +35,7 @@ export const RoomRowSchema = z.object({
   auto_summary: z.string().nullable(),
   active_agents: z.string().default('[]'),
   role: z.enum(['team', 'direct', 'room']).default('room'),
-  routing: z.enum(['mentions', 'exchanges']).default('mentions'),
+  routing: z.enum(['mentions', 'exchanges']).default('exchanges'),
 })
 export const MessageRowSchema = z.object({
   id: z.string(),

@@ -674,6 +674,16 @@ export function completeRunMessage(
             .join('\n')
     const plan = planPart(mapping.chain_id, parsePlanSteps(text, mapping.agents), now)
     if (plan) message.parts.push(plan)
+    // In an exchanges room the planner's turn acted on nothing, so the job stops showing it as working.
+    if (exchangeRoom(sqlite, mapping) && mapping.job_id)
+      drafts.push(
+        ...updateJob(
+          sqlite,
+          mapping.job_id,
+          { state: jobState(sqlite, mapping.job_id, mapping.turn_id) },
+          now,
+        ),
+      )
   } else if (exchangeRoom(sqlite, mapping)) {
     // Agent actions route the work here; a prose @mention hands nothing off (PLAN 11.1b).
     const text =
@@ -899,7 +909,7 @@ export function failMessageRun(
 }
 import { agentAdmits, assertAgentAdmits } from './agent-lifecycle.ts'
 import { defaultJobId, ensureJobSession } from './job-sessions.ts'
-import { exchangeEvent, jobEvent } from './exchanges/store.ts'
+import { exchangeEvent, jobEvent, updateJob } from './exchanges/store.ts'
 import { crossContext } from './exchanges/sharing.ts'
 import { agentText } from './message-text.ts'
-import { settleExchangeTurn } from './exchanges/apply.ts'
+import { jobState, settleExchangeTurn } from './exchanges/apply.ts'
