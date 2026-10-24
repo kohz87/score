@@ -266,8 +266,15 @@
   padding: 24px;
 }
 
+/* The approval bar is a decision for you: the shell's light "for you" object, whose pair the contrast fallback pins to
+   Score's own (the classic bar's white fill under the shell's dark ink would be light on light). */
 [data-ui='bold'] .bold-screen-approval {
   bottom: 16px;
+  background: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-screen-approval .watch-approval__text {
+  color: var(--hi-ink);
 }
 
 [data-ui='bold'] .bold-screen-answer {

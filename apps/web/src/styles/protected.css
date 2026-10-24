@@ -286,7 +286,7 @@
      menus, fields, the dock ring and the Needs-you marker) win automatically, while a surface with no fill of its own
      (a shared message, a Started-by line, report-back text, coding-add-context, bold-add-error) gets this panel. The
      privacy promise below is the one exception, with its own deeper ground. Graphics are left alone: a panel rectangle
-     behind a glyph, pet or room stage is not a text ground. Inline kinds (links, pills, `any` buttons and spans) are
+     behind a glyph or the room stage is not a text ground. Inline kinds (links, pills, `any` buttons and spans) are
      left alone too: a square patch behind a word isn't a ground, and they sit inside a block that gets one. */
   html[data-contrast-fallback][data-contrast-fallback]
     [data-ui='bold']
@@ -295,7 +295,7 @@
       [data-protected='any'],
       [data-protected='inline'],
       [data-protected='inline-flex']
-    ):not(:is(.agent-glyph, .pet-avatar, .room-stage)) {
+    ):not(:is(.agent-glyph, .room-stage)) {
     background-color: var(--panel);
     color: var(--ink);
   }
