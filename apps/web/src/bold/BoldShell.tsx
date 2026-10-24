@@ -5,9 +5,10 @@ import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
-import { CommandPalette } from '../shell/CommandPalette.tsx'
 import { agentStateLabel, dockProgress } from './bold-agents.ts'
+import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
+import type { BoldSheetState } from './bold-ui.ts'
 import { BoldStartJob, StartJobContext } from './BoldStartJob.tsx'
 import './tokens.css'
 import './bold.css'
@@ -66,17 +67,15 @@ export function BoldShell() {
   const location = useLocation()
   const view = viewOf(location.pathname)
   const phone = useMediaQuery(PHONE)
-  const light = useMediaQuery('(prefers-color-scheme: light)')
+  const systemLight = useMediaQuery('(prefers-color-scheme: light)')
+  const [manualLight, setManualLight] = useState<boolean | null>(null)
+  const light = manualLight ?? systemLight
   const [commandOpen, setCommandOpen] = useState(false)
   const [startOpen, setStartOpen] = useState(false)
-  const commandTrigger = useRef<HTMLElement | null>(null)
-  const dockHasProgress = agents.some(() => dockProgress() !== null)
-
-  // `?start=job` opens the Start a job dialog from any bold address (the links in 11.10f will use it).
+  // `?start=job` opens the Start a job dialog from any bold address (bold-links.ts).
   useEffect(() => {
     if (new URLSearchParams(location.search).get('start') === 'job') setStartOpen(true)
   }, [location.search])
-
   const openStartJob = useCallback(() => setStartOpen(true), [])
   const closeStartJob = useCallback(() => {
     setStartOpen(false)
@@ -91,17 +90,29 @@ export function BoldShell() {
     }
   }, [location.pathname, location.search, navigate])
   const startContext = useMemo(() => ({ openStartJob }), [openStartJob])
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const commandTrigger = useRef<HTMLElement | null>(null)
+  const searchTrigger = useRef<HTMLButtonElement>(null)
+  const dockHasProgress = agents.some(() => dockProgress() !== null)
 
-  // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside.
+  // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside. Only
+  // the room: Team and Settings are ordinary pages, and a fixed-height frame clipped them below the fold on phones.
+  const fit = view === 'room'
   useEffect(() => {
+    if (!fit) return
     document.body.classList.add('fit')
     return () => document.body.classList.remove('fit')
-  }, [])
+  }, [fit])
 
   const openCommand = useCallback(() => {
     if (commandOpen) return
     const active = document.activeElement
-    commandTrigger.current = active instanceof HTMLElement ? active : null
+    commandTrigger.current =
+      active instanceof HTMLElement &&
+      active !== document.body &&
+      active !== document.documentElement
+        ? active
+        : searchTrigger.current
     setCommandOpen(true)
   }, [commandOpen])
   const closeCommand = useCallback(() => {
@@ -136,109 +147,118 @@ export function BoldShell() {
     <StartJobContext value={startContext}>
       <div className="bold-shell" data-ui="bold" data-look={light ? 'light' : 'dark'}>
         <div className="bold-frame" inert={commandOpen || startOpen}>
-        <header className="top">
-          <button
-            type="button"
-            className="word"
-            aria-label="Score, go to the team room"
-            onClick={go('/b')}
-          >
-            score
-          </button>
-          {!phone && (
-            <nav className="nav" aria-label="Main">
-              {navButton('room', 'Room', '/b')}
-              {navButton('team', 'Team', '/b/team')}
-            </nav>
-          )}
-          {!phone && (
-            <div
-              className="dock"
-              role="group"
-              aria-label="Your team. Click someone to talk one to one."
-            >
-              {agents.map((agent) => (
-                <DockRing
-                  key={agent.id}
-                  agent={agent}
-                  needsYou={agent.status === 'waiting' || waitingOn.has(agent.id)}
-                />
-              ))}
-              {dockHasProgress && (
-                <span className="small muted dock-note">Rings show progress</span>
-              )}
-            </div>
-          )}
-          {!phone && (
+          <header className="top" inert={phone && sheetOpen}>
             <button
               type="button"
-              className="searchbtn"
-              aria-haspopup="dialog"
-              aria-expanded={commandOpen}
-              aria-label="Search"
-              onClick={openCommand}
-            >
-              <SearchIcon />
-              Search
-              <span className="kbd">⌘K</span>
-            </button>
-          )}
-          {!phone && (
-            <button
-              type="button"
-              className={`icon-btn gear ${view === 'settings' ? 'on' : ''}`}
-              aria-label="Settings"
-              onClick={go('/b/settings')}
-            >
-              <GearIcon />
-            </button>
-          )}
-          <span className="bold-avatar" aria-label="You">
-            Y
-          </span>
-        </header>
-
-        <main className="main">
-          <Outlet />
-        </main>
-
-        {phone && (
-          <nav className="bold-tabbar" aria-label="Main">
-            <button
-              type="button"
-              className={view === 'room' ? 'on' : undefined}
-              aria-current={view === 'room' ? 'page' : undefined}
+              className="word"
+              aria-label="Score, go to the team room"
               onClick={go('/b')}
             >
-              <RoomIcon />
-              Room
+              score
             </button>
-            <button
-              type="button"
-              className={view === 'team' ? 'on' : undefined}
-              aria-current={view === 'team' ? 'page' : undefined}
-              onClick={go('/b/team')}
-            >
-              <TeamIcon />
-              Team
-            </button>
-            <button type="button" onClick={openCommand}>
-              <SearchIcon size={22} />
-              Search
-            </button>
-            <button
-              type="button"
-              className={view === 'settings' ? 'on' : undefined}
-              aria-current={view === 'settings' ? 'page' : undefined}
-              onClick={go('/b/settings')}
-            >
-              <GearIcon size={22} />
-              Settings
-            </button>
-          </nav>
-        )}
+            {!phone && (
+              <nav className="nav" aria-label="Main">
+                {navButton('room', 'Room', '/b')}
+                {navButton('team', 'Team', '/b/team')}
+              </nav>
+            )}
+            {!phone && (
+              <div
+                className="dock"
+                role="group"
+                aria-label="Your team. Click someone to talk one to one."
+              >
+                {agents.map((agent) => (
+                  <DockRing
+                    key={agent.id}
+                    agent={agent}
+                    needsYou={agent.status === 'waiting' || waitingOn.has(agent.id)}
+                  />
+                ))}
+                {dockHasProgress && (
+                  <span className="small muted dock-note">Rings show progress</span>
+                )}
+              </div>
+            )}
+            {!phone && (
+              <button
+                ref={searchTrigger}
+                type="button"
+                className="searchbtn"
+                aria-haspopup="dialog"
+                aria-expanded={commandOpen}
+                aria-label="Search"
+                onClick={openCommand}
+              >
+                <SearchIcon />
+                Search
+                <span className="kbd">⌘K</span>
+              </button>
+            )}
+            {!phone && (
+              <button
+                type="button"
+                className={`icon-btn gear ${view === 'settings' ? 'on' : ''}`}
+                aria-label="Settings"
+                onClick={go('/b/settings')}
+              >
+                <GearIcon />
+              </button>
+            )}
+            <span className="bold-avatar" aria-label="You">
+              Y
+            </span>
+          </header>
+
+          <main className="main">
+            <Outlet context={{ sheetOpen, setSheetOpen } satisfies BoldSheetState} />
+          </main>
+
+          {phone && (
+            <nav className="bold-tabbar" aria-label="Main" inert={phone && sheetOpen}>
+              <button
+                type="button"
+                className={view === 'room' ? 'on' : undefined}
+                aria-current={view === 'room' ? 'page' : undefined}
+                onClick={go('/b')}
+              >
+                <RoomIcon />
+                Room
+              </button>
+              <button
+                type="button"
+                className={view === 'team' ? 'on' : undefined}
+                aria-current={view === 'team' ? 'page' : undefined}
+                onClick={go('/b/team')}
+              >
+                <TeamIcon />
+                Team
+              </button>
+              <button ref={searchTrigger} type="button" onClick={openCommand}>
+                <SearchIcon size={22} />
+                Search
+              </button>
+              <button
+                type="button"
+                className={view === 'settings' ? 'on' : undefined}
+                aria-current={view === 'settings' ? 'page' : undefined}
+                onClick={go('/b/settings')}
+              >
+                <GearIcon size={22} />
+                Settings
+              </button>
+            </nav>
+          )}
         </div>
-        {commandOpen && <CommandPalette onClose={closeCommand} />}
+        {commandOpen && (
+          <BoldSearch
+            agents={agents}
+            light={light}
+            onClose={closeCommand}
+            onToggleLook={() => setManualLight(!light)}
+            onResetLook={() => setManualLight(null)}
+          />
+        )}
         {startOpen && <BoldStartJob onClose={closeStartJob} />}
       </div>
     </StartJobContext>

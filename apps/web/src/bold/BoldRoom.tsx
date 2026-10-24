@@ -1,12 +1,15 @@
 import type { AgentSummary } from '@score/contract'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useOutletContext } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { agentNameColor, agentStateLabel } from './bold-agents.ts'
-import { BookIcon, ChevronIcon, GridIcon, PlusIcon, ThreadIcon } from './BoldIcons.tsx'
+import { BoldLibrary } from './BoldLibrary.tsx'
+import { BookIcon, ChevronIcon, CloseIcon, GridIcon, PlusIcon, ThreadIcon } from './BoldIcons.tsx'
 import { useStartJob } from './BoldStartJob.tsx'
+import type { BoldSheetState } from './bold-ui.ts'
 
 const PHONE = '(max-width: 860px)'
 
@@ -14,7 +17,7 @@ type SideMode = 'work' | 'library' | 'thread' | `agent:${string}`
 
 function sideCopy(mode: SideMode, agent: AgentSummary | undefined): string {
   if (mode === 'work') return 'The Work panel comes in a later task.'
-  if (mode === 'library') return 'The Library panel comes in a later task.'
+  if (mode === 'library') return ''
   if (mode === 'thread') return 'The Thread panel comes in a later task.'
   return `Your one-to-one with ${agent?.id ?? 'this agent'} comes in a later task.`
 }
@@ -32,10 +35,13 @@ export function BoldRoom() {
   const agents = useStreamQuery(agentsQuery).data ?? []
   const startJob = useStartJob()
   const phone = useMediaQuery(PHONE)
+  const { sheetOpen, setSheetOpen } = useOutletContext<BoldSheetState>()
   const [mode, setMode] = useState<SideMode>('work')
   const [menuOpen, setMenuOpen] = useState(false)
   const sideRef = useRef<HTMLElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
+  const phoneOpenRef = useRef<HTMLButtonElement>(null)
+  const phoneCloseRef = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const agent = mode.startsWith('agent:')
     ? agents.find((item) => item.id === mode.slice(6))
@@ -69,10 +75,41 @@ export function BoldRoom() {
     }
   }, [menuOpen])
 
+  useEffect(() => {
+    if (!phone || !sheetOpen) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      const dialog =
+        event.target instanceof Element
+          ? event.target.closest('[role="dialog"], [aria-modal="true"]')
+          : null
+      // The sheet itself is labelled aria-modal; a dialog *inside* it owns its own Escape.
+      if (dialog && dialog !== sideRef.current) return
+      event.preventDefault()
+      setSheetOpen(false)
+      requestAnimationFrame(() => phoneOpenRef.current?.focus())
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [phone, setSheetOpen, sheetOpen])
+
+  useEffect(() => {
+    if (phone && sheetOpen) phoneCloseRef.current?.focus()
+  }, [phone, sheetOpen])
+
+  useEffect(() => {
+    if (!phone) setSheetOpen(false)
+  }, [phone, setSheetOpen])
+
   const choose = (next: SideMode) => {
     setMode(next)
     setMenuOpen(false)
     toggleRef.current?.focus()
+  }
+  const closeSheet = () => {
+    setSheetOpen(false)
+    setMenuOpen(false)
+    requestAnimationFrame(() => phoneOpenRef.current?.focus())
   }
   const option = (target: SideMode, icon: ReactNode, name: string, hint: string) => (
     <button
@@ -92,7 +129,7 @@ export function BoldRoom() {
 
   return (
     <div className="roomgrid">
-      <section className="roomcol" aria-label="Team room">
+      <section className="roomcol" aria-label="Team room" inert={phone && sheetOpen}>
         <div className="roomhead">
           <button className="roomtitle" type="button">
             Team room
@@ -107,56 +144,88 @@ export function BoldRoom() {
             <PlusIcon />
             Job
           </button>
+          {phone && (
+            <button
+              ref={phoneOpenRef}
+              type="button"
+              className="btn sm phone-side-open"
+              aria-expanded={sheetOpen}
+              aria-controls="bold-side-panel"
+              onClick={() => setSheetOpen(true)}
+            >
+              <BookIcon /> Open side panel
+            </button>
+          )}
         </div>
         <div className="stream" aria-live="polite">
           <p className="room-placeholder">The team room comes in 11.4.</p>
         </div>
       </section>
 
-      {!phone && (
-        <div className="bold-sidecol">
-          <aside className="side" ref={sideRef} aria-label="Side panel">
-            <div className="sidehead">
+      <div
+        className={`bold-sidecol${phone && sheetOpen ? ' open' : ''}`}
+        hidden={phone && !sheetOpen}
+      >
+        <aside
+          className="side"
+          id="bold-side-panel"
+          ref={sideRef}
+          aria-label="Side panel"
+          aria-modal={phone && sheetOpen ? true : undefined}
+        >
+          <div className="sidehead">
+            <button
+              ref={toggleRef}
+              type="button"
+              className="btn sm side-toggle"
+              aria-expanded={menuOpen}
+              aria-controls={menuId}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              {mode === 'work' ? (
+                <GridIcon />
+              ) : mode === 'library' ? (
+                <BookIcon />
+              ) : mode === 'thread' ? (
+                <ThreadIcon />
+              ) : agent ? (
+                <SideGlyph agent={agent} />
+              ) : null}
+              {label}
+              <ChevronIcon />
+            </button>
+            {agent && (
+              <span className="small muted side-privacy">Only you and {agent.id} see this</span>
+            )}
+            {phone && (
               <button
-                ref={toggleRef}
+                ref={phoneCloseRef}
                 type="button"
-                className="btn sm side-toggle"
-                aria-expanded={menuOpen}
-                aria-controls={menuId}
-                onClick={() => setMenuOpen((open) => !open)}
+                className="icon-btn sm sideclose"
+                aria-label="Close side panel"
+                onClick={closeSheet}
               >
-                {mode === 'work' ? (
-                  <GridIcon />
-                ) : mode === 'library' ? (
-                  <BookIcon />
-                ) : mode === 'thread' ? (
-                  <ThreadIcon />
-                ) : agent ? (
-                  <SideGlyph agent={agent} />
-                ) : null}
-                {label}
-                <ChevronIcon />
+                <CloseIcon />
               </button>
-              {agent && (
-                <span className="small muted side-privacy">Only you and {agent.id} see this</span>
-              )}
-              {menuOpen && (
-                <div className="menu side-menu" id={menuId}>
-                  {option('work', <GridIcon />, 'Work', 'What the team is making')}
-                  {option('library', <BookIcon />, 'Library', 'Notes and files')}
-                  {option('thread', <ThreadIcon />, 'Thread', "A job's back-and-forth")}
-                  {agents.length > 0 && <div className="sec">One to one</div>}
-                  {agents.map((item) =>
-                    option(
-                      `agent:${item.id}`,
-                      <SideGlyph agent={item} />,
-                      item.id,
-                      agentStateLabel(item),
-                    ),
-                  )}
-                </div>
-              )}
-            </div>
+            )}
+            {menuOpen && (
+              <div className="menu side-menu" id={menuId}>
+                {option('work', <GridIcon />, 'Work', 'What the team is making')}
+                {option('library', <BookIcon />, 'Library', 'Notes and files')}
+                {option('thread', <ThreadIcon />, 'Thread', "A job's back-and-forth")}
+                {agents.length > 0 && <div className="sec">One to one</div>}
+                {agents.map((item) =>
+                  option(
+                    `agent:${item.id}`,
+                    <SideGlyph agent={item} />,
+                    item.id,
+                    agentStateLabel(item),
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+          {mode !== 'library' && (
             <div className="sidebody" data-placeholder={mode}>
               <p className="side-placeholder">{sideCopy(mode, agent)}</p>
               {agent && (
@@ -165,9 +234,10 @@ export function BoldRoom() {
                 </span>
               )}
             </div>
-          </aside>
-        </div>
-      )}
+          )}
+          <BoldLibrary agents={agents} hidden={mode !== 'library'} />
+        </aside>
+      </div>
     </div>
   )
 }

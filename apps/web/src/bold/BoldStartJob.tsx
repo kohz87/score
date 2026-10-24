@@ -25,13 +25,11 @@ import {
 } from 'react'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../data/api.ts'
+import { copyText } from '../data/clipboard.ts'
 import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { describeCreateError } from '../routes/orchestrations/NewOrchestrationDialog.tsx'
-import {
-  post,
-  usePreflight,
-} from '../routes/orchestrations/orchestration-queries.ts'
+import { post, usePreflight } from '../routes/orchestrations/orchestration-queries.ts'
 import { fetchRoutines, routinesKey } from '../routes/team/routine-queries.ts'
 import {
   useWorkflow,
@@ -55,13 +53,16 @@ import {
 } from './bold-start-job.ts'
 import './bold-start.css'
 
-type RecipeChoice = { kind: 'lead' } | { kind: 'none' } | { kind: 'workflow'; id: string; name: string }
+type RecipeChoice =
+  { kind: 'lead' } | { kind: 'none' } | { kind: 'workflow'; id: string; name: string }
 
 type Result =
   | { kind: 'job'; title: string; jobId: string; orchestrationId?: string }
   | { kind: 'workflow'; title: string; runId: string }
   | { kind: 'routine'; title: string; schedule: string }
   | { kind: 'trigger'; title: string; url: string | null; secret: string }
+
+const NO_AGENTS: AgentSummary[] = []
 
 export const StartJobContext = createContext<{ openStartJob: () => void } | null>(null)
 
@@ -70,7 +71,8 @@ export function useStartJob() {
 }
 
 function checkOf(query: { isPending: boolean; isError: boolean }): StartCheck {
-  if (query.isPending) return { key: 'team-room', status: 'pending', text: 'Checking the team room' }
+  if (query.isPending)
+    return { key: 'team-room', status: 'pending', text: 'Checking the team room' }
   if (query.isError)
     return { key: 'team-room', status: 'fail', text: 'The team room could not be read' }
   return { key: 'team-room', status: 'ok', text: 'The team room is ready' }
@@ -81,7 +83,8 @@ function checksFromPreflight(
   failed: boolean,
   checks: { id: string; status: 'ok' | 'fail' | 'unknown'; message: string }[] | undefined,
 ): StartCheck[] {
-  if (pending) return [{ key: 'preflight', status: 'pending', text: 'Checking Hermes and the team' }]
+  if (pending)
+    return [{ key: 'preflight', status: 'pending', text: 'Checking Hermes and the team' }]
   if (failed || !checks)
     return [{ key: 'preflight', status: 'fail', text: 'The checks could not be read' }]
   return checks.map((check) => ({
@@ -95,7 +98,10 @@ function Dot({ status }: { status: StartCheck['status'] }) {
   return (
     <span
       className={`dot start-dot start-dot--${status}`}
-      style={{ background: status === 'ok' ? 'var(--ok)' : status === 'fail' ? 'var(--bad)' : 'var(--warn)' }}
+      style={{
+        background:
+          status === 'ok' ? 'var(--ok)' : status === 'fail' ? 'var(--bad)' : 'var(--warn)',
+      }}
       aria-hidden="true"
     />
   )
@@ -110,7 +116,13 @@ function Checklist({ checks, children }: { checks: StartCheck[]; children?: Reac
           <li key={check.key} className="row small">
             <Dot status={check.status} />
             <span className="grow">{check.text}</span>
-            <span className="sr">{check.status === 'ok' ? 'Passed' : check.status === 'fail' ? 'Blocks starting' : 'Checking'}</span>
+            <span className="sr">
+              {check.status === 'ok'
+                ? 'Passed'
+                : check.status === 'fail'
+                  ? 'Blocks starting'
+                  : 'Checking'}
+            </span>
           </li>
         ))}
       </ul>
@@ -149,13 +161,7 @@ function AgentPick({
                   onChange(checked ? chosen.filter((id) => id !== agent.id) : [...chosen, agent.id])
                 }
               />
-              <AgentGlyph
-                agent={agent}
-                size="sm"
-                plain
-                bare
-                decorative
-              />
+              <AgentGlyph agent={agent} size="sm" plain bare decorative />
               <span>{agent.name}</span>
             </label>
           )
@@ -171,7 +177,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const closeButton = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   const queryClient = useQueryClient()
-  const agents = useStreamQuery(agentsQuery).data ?? []
+  const agents = useStreamQuery(agentsQuery).data ?? NO_AGENTS
   const workflows = useWorkflows()
   const teamRoom = useQuery({
     queryKey: ['bold', 'team-room'],
@@ -251,7 +257,19 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const workflowReach = workflowWorkers.flatMap((worker) =>
     worker.reachBeyondWorkspace && worker.policyId ? [worker.policyId] : [],
   )
-  const reachAtStake = recipe.kind === 'workflow' ? workflowReach : orchestrationReach
+  // A routine or a trigger starts its work through the lead later; only a run started now uses these workers and their
+  // reach. Keeping them out of that decision stops a check for a run that is not being started.
+  const workersAtStake =
+    when === 'once'
+      ? recipe.kind === 'workflow'
+        ? workflowWorkers
+        : recipe.kind === 'lead'
+          ? orchestrationWorkers
+          : []
+      : []
+  const reachAtStake = workersAtStake.flatMap((worker) =>
+    worker.reachBeyondWorkspace && worker.policyId ? [worker.policyId] : [],
+  )
   const reachCovered = reachAtStake.length === 0 || reachAccepted
 
   const missingInputs =
@@ -266,21 +284,45 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     const preflight = workflowPreflight.data
     checks = [
       checkOf(teamRoom),
-      ...checksFromPreflight(workflow.isPending || workflowPreflight.isPending, workflow.isError || workflowPreflight.isError, preflight?.checks),
+      ...checksFromPreflight(
+        workflow.isPending || workflowPreflight.isPending,
+        workflow.isError || workflowPreflight.isError,
+        preflight?.checks,
+      ),
       ...(preflight?.issues ?? [])
         .filter((issue) => issue.severity === 'error')
-        .map((issue) => ({ key: `issue-${issue.code}-${issue.nodeId ?? ''}`, status: 'fail' as const, text: issue.message })),
+        .map((issue) => ({
+          key: `issue-${issue.code}-${issue.nodeId ?? ''}`,
+          status: 'fail' as const,
+          text: issue.message,
+        })),
       ...(missingInputs.length
-        ? [{ key: 'inputs', status: 'fail' as const, text: `Fill in ${missingInputs.map((input) => input.label).join(', ')}` }]
+        ? [
+            {
+              key: 'inputs',
+              status: 'fail' as const,
+              text: `Fill in ${missingInputs.map((input) => input.label).join(', ')}`,
+            },
+          ]
         : []),
     ]
   } else if (recipe.kind === 'lead' && when === 'once') {
     const preflight = orchestrationPreflight.data
     checks = [
       ...checks,
-      ...checksFromPreflight(orchestrationPreflight.isPending, orchestrationPreflight.isError, preflight?.checks),
+      ...checksFromPreflight(
+        orchestrationPreflight.isPending,
+        orchestrationPreflight.isError,
+        preflight?.checks,
+      ),
       ...(allowedFor.length === 0
-        ? [{ key: 'agents', status: 'fail' as const, text: 'Choose at least one agent for the steps' }]
+        ? [
+            {
+              key: 'agents',
+              status: 'fail' as const,
+              text: 'Choose at least one agent for the steps',
+            },
+          ]
         : []),
     ]
   } else if (when === 'once') {
@@ -297,8 +339,16 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   } else {
     checks.push(
       titleOf(what) === 'New job'
-        ? { key: 'trigger-name', status: 'fail', text: 'Give the trigger a name or describe the work' }
-        : { key: 'trigger-name', status: 'ok', text: `It is called ${triggerNameOf(triggerName, what)}` },
+        ? {
+            key: 'trigger-name',
+            status: 'fail',
+            text: 'Give the trigger a name or describe the work',
+          }
+        : {
+            key: 'trigger-name',
+            status: 'ok',
+            text: `It is called ${triggerNameOf(triggerName, what)}`,
+          },
       triggerApp.trim()
         ? { key: 'trigger-app', status: 'ok', text: `Calls come from ${triggerApp.trim()}` }
         : { key: 'trigger-app', status: 'fail', text: 'Name the app it comes from' },
@@ -358,10 +408,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
 
       if (when === 'webhook') {
         const made = TriggerCreatedSchema.parse(
-          await post(
-            'triggers',
-            triggerRequest({ name: triggerName, app: triggerApp, what }),
-          ),
+          await post('triggers', triggerRequest({ name: triggerName, app: triggerApp, what })),
         )
         setResult({
           kind: 'trigger',
@@ -481,7 +528,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="scrim"
+      className="bold-start-scrim"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -494,6 +541,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
         aria-labelledby={titleId}
         tabIndex={-1}
         data-protected="block"
+        data-decision
       >
         <div className="row">
           <h2 id={titleId} className="grow start-title">
@@ -550,7 +598,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                     onClick={() => chooseRecipe({ kind: 'workflow', id: item.id, name: item.name })}
                   />
                 ))}
-                <button type="button" className="link" disabled title="The recipe editor comes in 11.10d">
+                <button
+                  type="button"
+                  className="link"
+                  disabled
+                  title="The recipe editor comes in 11.10d"
+                >
                   Edit recipes
                 </button>
               </div>
@@ -569,7 +622,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
-            {recipe.kind === 'lead' && (
+            {recipe.kind === 'lead' && when === 'once' && (
               <>
                 <div className="row wrap start-lead">
                   {leadAgent && (
@@ -578,7 +631,9 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                       <span>{leadAgent.name} plans</span>
                     </span>
                   )}
-                  <span className="small muted">The lead decides the steps and hands them out.</span>
+                  <span className="small muted">
+                    The lead decides the steps and hands them out.
+                  </span>
                 </div>
                 <AgentPick
                   agents={agents}
@@ -652,8 +707,9 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                       />
                     </label>
                     <span className="small muted">
-                      Calls send <code>ref</code>, and may send <code>title</code>, <code>link</code> and{' '}
-                      <code>details</code>. The address and secret are made when you start.
+                      Calls send <code>ref</code>, and may send <code>title</code>,{' '}
+                      <code>link</code> and <code>details</code>. The address and secret are made
+                      when you start.
                     </span>
                   </div>
                 )}
@@ -748,10 +804,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
             ) : null}
 
             <Checklist checks={checks}>
-              {orchestrationWorkers.length + workflowWorkers.length > 0 && (
+              {workersAtStake.length > 0 && (
                 <div className="start-reach" data-protected="block">
                   <b className="small">Coding agents in this job</b>
-                  {(recipe.kind === 'workflow' ? workflowWorkers : orchestrationWorkers).map((worker) => (
+                  {workersAtStake.map((worker) => (
                     <span key={worker.agentId} className="small muted">
                       {worker.agentId}: {worker.reach ?? worker.detail ?? worker.readiness}
                     </span>
@@ -911,11 +967,7 @@ function ResultCard({ result, onClose }: { result: Result; onClose: () => void }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   return (
-    <button
-      type="button"
-      className="btn sm"
-      onClick={() => void navigator.clipboard?.writeText(text)}
-    >
+    <button type="button" className="btn sm" onClick={() => void copyText(text)}>
       {label}
     </button>
   )

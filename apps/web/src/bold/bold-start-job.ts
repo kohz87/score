@@ -1,9 +1,4 @@
-import type {
-  GatePolicy,
-  Trigger,
-  WorkflowDefinition,
-  WorkflowGatePolicy,
-} from '@score/contract'
+import type { GatePolicy, Trigger, WorkflowDefinition, WorkflowGatePolicy } from '@score/contract'
 
 // The Start a job dialog's pure parts (PLAN 11.10c): titles, When, the policy mappings and the one-step recipe a
 // person can save. Kept out of the component so the same rules are easy to test without a browser.

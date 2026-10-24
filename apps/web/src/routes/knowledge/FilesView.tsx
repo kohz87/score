@@ -25,6 +25,7 @@ export function FilesView({
   tree,
   folder,
   agents,
+  onOpenPath,
   busy,
   onOpenFolder,
   onUpload,
@@ -38,6 +39,8 @@ export function FilesView({
   tree: KnowledgeTree
   folder: string
   agents: AgentSummary[]
+  /** Where a file opens. The classic page uses the router; the bold Library stays in its panel. */
+  onOpenPath?: (path: string) => void
   busy: boolean
   onOpenFolder: (folder: string) => void
   onUpload: (files: File[], folder: string) => void
@@ -278,9 +281,19 @@ export function FilesView({
                       />
                     </td>
                     <td>
-                      <Link to={noteUrl(row.path)}>
-                        {row.kind === 'note' ? baseName(row.path) : row.name}
-                      </Link>
+                      {onOpenPath ? (
+                        <button
+                          type="button"
+                          className="kn-link-button"
+                          onClick={() => onOpenPath(row.path)}
+                        >
+                          {row.kind === 'note' ? baseName(row.path) : row.name}
+                        </button>
+                      ) : (
+                        <Link to={noteUrl(row.path)}>
+                          {row.kind === 'note' ? baseName(row.path) : row.name}
+                        </Link>
+                      )}
                       {!row.versioned && (
                         <span className="kn-type-badge" title="Stored without history">
                           no history

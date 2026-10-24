@@ -1,7 +1,7 @@
 /* Start a job (PLAN 11.10c), rebuilt from the prototype's mStart/modal CSS. Values are copied from
    docs/design/bold/prototype.html and every rule stays under [data-ui='bold']. */
 
-[data-ui='bold'] .scrim {
+[data-ui='bold'] .bold-start-scrim {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -10,8 +10,8 @@
   justify-content: center;
   align-items: flex-start;
   overflow-y: auto;
-  padding: max(40px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
-    40px max(16px, env(safe-area-inset-left, 0px));
+  padding: max(40px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 40px
+    max(16px, env(safe-area-inset-left, 0px));
 }
 
 [data-ui='bold'] .dialog {
@@ -282,8 +282,6 @@
 }
 
 [data-ui='bold'] .start-actions {
-  border-top: 1px solid var(--line);
-  padding-top: 18px;
   gap: 10px;
 }
 
@@ -326,17 +324,15 @@
 }
 
 @media (max-width: 860px) {
-  [data-ui='bold'] .scrim {
+  [data-ui='bold'] .bold-start-scrim {
     padding: 0;
   }
 
   [data-ui='bold'] .dialog {
     max-width: none;
     min-height: 100dvh;
-    padding: max(18px, env(safe-area-inset-top, 0px))
-      max(16px, env(safe-area-inset-right, 0px))
-      calc(24px + env(safe-area-inset-bottom, 0px))
-      max(16px, env(safe-area-inset-left, 0px));
+    padding: max(18px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
+      calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
     border-radius: 0;
     box-shadow: none;
   }
@@ -349,4 +345,3 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-

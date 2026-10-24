@@ -31,10 +31,170 @@ const contentTypes = {
   '.woff2': 'font/woff2',
 }
 
+const searchRoom = {
+  id: 'team-room',
+  name: 'Team room',
+  kind: 'room',
+  leadAgentId: 'lead',
+  members: ['lead', 'builder', 'reviewer', 'designer'],
+  unread: 0,
+  activeAgents: [],
+  channels: [],
+  role: 'team',
+  routing: 'exchanges',
+}
+
+const searchJob = (id, roomId, title, extra = {}) => ({
+  id,
+  roomId,
+  title,
+  state: 'working',
+  holderAgentId: 'builder',
+  isDefault: false,
+  exchangeBudget: 8,
+  jobTurnLimit: 40,
+  unread: 0,
+  activeAgents: [],
+  lastMessageAt: null,
+  messageCount: 0,
+  summary: null,
+  createdAt: '2026-10-24T10:00:00.000Z',
+  updatedAt: '2026-10-24T10:00:00.000Z',
+  ...extra,
+})
+
+// PLAN 11.10f: representative search rows, so the comparison exercises every prototype group without a server.
+const searchFixtures = {
+  '/api/team-room': {
+    asOfSeq: 1,
+    room: searchRoom,
+    jobs: [
+      searchJob('job-activity', 'team-room', 'Activity feed', { unread: 2 }),
+      searchJob('job-release', 'team-room', 'Release notes 2.4', { state: 'done' }),
+      searchJob('job-queue', 'team-room', 'Queue research', { state: 'closed' }),
+    ],
+  },
+  '/api/agents/builder/direct': {
+    asOfSeq: 1,
+    room: null,
+    chats: [
+      searchJob('chat-cursor', 'direct-builder', 'The cursor bug', {
+        summary: 'Why the cursor jumps',
+      }),
+      searchJob('chat-socket', 'direct-builder', 'Websockets or server-sent events', {
+        summary: 'One connection for the feed',
+      }),
+    ],
+  },
+  ...Object.fromEntries(
+    ['lead', 'reviewer', 'designer'].map((id) => [
+      `/api/agents/${id}/direct`,
+      { asOfSeq: 1, room: null, chats: [] },
+    ]),
+  ),
+  '/api/knowledge/tree': {
+    folders: ['Decisions', 'Projects'],
+    documents: [],
+    notes: [
+      {
+        path: 'Decisions/Event-cursors.md',
+        title: 'Event cursors',
+        mtime: '2026-10-24T09:00:00.000Z',
+        lastAuthor: { agentId: 'reviewer' },
+      },
+      {
+        path: 'Projects/Roadmap.md',
+        title: 'Roadmap',
+        mtime: '2026-10-23T09:00:00.000Z',
+        lastAuthor: { agentId: 'lead' },
+      },
+      {
+        path: 'Decisions/Websockets.md',
+        title: 'Websockets vs SSE',
+        mtime: '2026-10-22T09:00:00.000Z',
+        lastAuthor: { agentId: 'builder' },
+      },
+    ],
+  },
+  '/api/knowledge/search': {
+    items: [
+      {
+        path: 'Decisions/Event-cursors.md',
+        title: 'Event cursors',
+        kind: 'note',
+        type: null,
+        snippet: 'Page task events by (created_at, id), never by a [[cursor]] alone.',
+      },
+    ],
+  },
+  '/api/search/messages': {
+    items: [
+      {
+        messageId: 'message-cursor',
+        roomId: 'team-room',
+        roomName: 'Team room',
+        jobId: 'job-activity',
+        author: { kind: 'agent', agentId: 'reviewer' },
+        createdAt: '2026-10-24T10:00:00.000Z',
+        snippet: 'Make the [[cursor]] (created_at, id) and add a test.',
+      },
+    ],
+  },
+  '/api/commands': {
+    items: [
+      { name: 'assign', usage: '/assign @agent <title>', description: 'Create a task.' },
+      { name: 'model', usage: '/model <model> <message>', description: 'Use a model.' },
+    ],
+  },
+  // PLAN 11.10c: the Start a job dialog reads these before it can show an honest checklist.
+  '/api/workflows': {
+    items: [],
+    inventory: {
+      definitions: 0,
+      versions: 0,
+      bytes: 0,
+      maxDefinitions: 200,
+      maxVersionsPerDefinition: 20,
+    },
+  },
+  '/api/orchestrations/preflight': {
+    ok: true,
+    checks: [
+      { id: 'listener', status: 'ok', message: 'Hermes is reachable' },
+      { id: 'lead_ready', status: 'ok', message: 'lead is free' },
+      { id: 'allowed_agents', status: 'ok', message: 'builder, reviewer and designer are free' },
+    ],
+    workers: [],
+    gatePolicyNotes: {
+      'every-step': 'Every step waits for you.',
+      'lead-asks': 'The lead asks when it is unsure.',
+      none: 'The run does not stop for approval.',
+    },
+    acknowledgementText:
+      "Score controls the work it starts (exchanges and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop.",
+    defaults: {
+      maxSteps: 12,
+      maxLeadTurns: 20,
+      maxConcurrentSteps: 2,
+      leadTurnEstimateUsd: 0.25,
+      stepEstimateUsd: 0.5,
+      codingSteps: 10,
+    },
+    reserveBytes: 0,
+  },
+}
+
 async function serve(route) {
   const url = new URL(route.request().url())
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === '/api/stream') return route.fulfill({ status: 204 })
+    const searchFixture = searchFixtures[url.pathname]
+    if (searchFixture)
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(searchFixture),
+      })
     // Reports requests carry the viewer's time zone; the visual fixture is keyed by range only.
     const reportFixture =
       url.pathname === '/api/reports'
@@ -203,6 +363,204 @@ const usageParts = [
   },
 ]
 
+// PLAN 11.10f: the prototype's vSearch/searchList and the app's BoldSearch use different class names, so each side
+// gets its own selector while the part names and measured properties stay aligned.
+const searchPrototypeParts = [
+  {
+    name: 'Scrim',
+    selector: '.scrim',
+    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  },
+  {
+    name: 'Dialog',
+    selector: '.scrim .dialog',
+    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
+  },
+  {
+    name: 'Head',
+    selector: '.scrim .dialog > .row',
+    props: ['padding', 'gap', 'borderBottomColor'],
+  },
+  { name: 'Input', selector: '#sq', props: ['fontSize', 'color', 'backgroundColor'] },
+  {
+    name: 'List',
+    selector: '#sres',
+    props: ['padding', 'gap', 'maxHeight', 'overflowY', 'backgroundColor'],
+  },
+  {
+    name: 'Section',
+    selector: '#sres .sec',
+    props: ['padding', 'fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Result',
+    selector: '#sres .mi',
+    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+]
+
+const searchAppParts = [
+  {
+    name: 'Scrim',
+    selector: '.bold-search-scrim',
+    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  },
+  {
+    name: 'Dialog',
+    selector: '.bold-search-dialog',
+    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
+  },
+  {
+    name: 'Head',
+    selector: '.bold-search-head',
+    props: ['padding', 'gap', 'borderBottomColor'],
+  },
+  {
+    name: 'Input',
+    selector: '.bold-search-head input',
+    props: ['fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'List',
+    selector: '.bold-search-list',
+    props: ['padding', 'gap', 'maxHeight', 'overflowY', 'backgroundColor'],
+  },
+  {
+    name: 'Section',
+    selector: '.bold-search-section',
+    props: ['padding', 'fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Result',
+    selector: '.bold-search-result',
+    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+]
+
+// PLAN 11.10c: the prototype's mStart modal and the app's BoldStartJob. The part names line up even though the
+// selectors do not.
+const startPrototypeParts = [
+  {
+    name: 'Scrim',
+    selector: '.scrim',
+    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  },
+  {
+    name: 'Dialog',
+    selector: '.scrim .dialog',
+    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
+  },
+  {
+    name: 'Title',
+    selector: '.scrim .dialog h2',
+    props: ['fontSize', 'fontWeight', 'letterSpacing', 'color'],
+  },
+  {
+    name: 'Label',
+    selector: '.scrim .dialog .lab',
+    props: ['display', 'marginBottom', 'fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'What field',
+    selector: '#sjwhat',
+    props: ['minHeight', 'padding', 'borderRadius', 'fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Recipe chip',
+    selector: '.scrim .dialog .chip',
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
+  },
+  {
+    name: 'When grid',
+    selector: '.scrim .dialog .grid3',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'When section',
+    selector: '.scrim .dialog .grid3 .inner',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Checklist',
+    selector: '.scrim .dialog > .inner',
+    props: ['padding', 'borderRadius', 'gap', 'flexDirection', 'backgroundColor'],
+  },
+  {
+    name: 'Actions',
+    selector: '.scrim .dialog > .row.wrap',
+    props: ['display', 'paddingTop', 'gap', 'borderTopWidth', 'borderTopColor'],
+  },
+]
+
+const startAppParts = [
+  {
+    name: 'Scrim',
+    selector: '.bold-start-scrim',
+    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  },
+  {
+    name: 'Dialog',
+    selector: '.bold-start-dialog',
+    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
+  },
+  {
+    name: 'Title',
+    selector: '.start-title',
+    props: ['fontSize', 'fontWeight', 'letterSpacing', 'color'],
+  },
+  {
+    name: 'Label',
+    selector: '.bold-start-dialog .lab',
+    props: ['display', 'marginBottom', 'fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'What field',
+    selector: '.start-what',
+    props: ['minHeight', 'padding', 'borderRadius', 'fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Recipe chip',
+    selector: '.bold-start-dialog .chip',
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
+  },
+  {
+    name: 'When grid',
+    selector: '.bold-start-dialog .grid3',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'When section',
+    selector: '.bold-start-dialog .grid3 .inner',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Checklist',
+    selector: '.start-checks',
+    props: ['padding', 'borderRadius', 'gap', 'flexDirection', 'backgroundColor'],
+  },
+  {
+    name: 'Actions',
+    selector: '.start-actions',
+    props: ['display', 'paddingTop', 'gap', 'borderTopWidth', 'borderTopColor'],
+  },
+]
+
 async function measure(page, selectedParts = parts) {
   return page.evaluate((selectedParts) => {
     const result = {}
@@ -274,6 +632,28 @@ try {
 
     await page.goto(prototype, { waitUntil: 'domcontentloaded' })
     await page.locator('.top .word').waitFor()
+    await page.locator('button[data-a="search"]:visible').first().click()
+    await page.locator('#sq').waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-prototype-search-${size}.png`) })
+    const prototypeSearchMetrics = await measure(page, searchPrototypeParts)
+    await page.locator('#sq').fill('cursor')
+    await page.screenshot({ path: join(output, `bold-prototype-search-query-${size}.png`) })
+
+    await page.goto(`${baseURL}/b`)
+    await page.locator('[data-ui="bold"] .top .word').waitFor({ timeout: 20_000 })
+    await page.getByRole('button', { name: 'Search', exact: true }).click()
+    await page.locator('.bold-search-dialog').waitFor({ timeout: 20_000 })
+    await page.locator('.bold-search-result').first().waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-search-${size}.png`) })
+    const appSearchMetrics = await measure(page, searchAppParts)
+    await page.getByRole('combobox', { name: 'Search or run a command' }).fill('cursor')
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: join(output, `bold-app-search-query-${size}.png`) })
+
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.top .word').waitFor()
     await page.locator('[data-a="go"][data-v="settings"]:visible').click()
     await page.locator('[data-a="setSec"][data-v="usage"]').click()
     await page.locator('.setgrid .setnav').waitFor()
@@ -294,10 +674,27 @@ try {
     })
     const appUsageMetrics = await measure(page, usageParts)
 
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.top .word').waitFor()
+    await page.locator('[data-a="startJob"]:visible').first().click()
+    const prototypeStart = page.locator('.scrim .dialog[aria-label="Start a job"]')
+    await prototypeStart.waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-prototype-start-${size}.png`) })
+    const prototypeStartMetrics = await measure(page, startPrototypeParts)
+
+    await page.goto(`${baseURL}/b?start=job`)
+    await page.locator('.bold-start-dialog').waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-start-${size}.png`) })
+    const appStartMetrics = await measure(page, startAppParts)
+
     results[size] = {
       prototype: prototypeMetrics,
       app: appMetrics,
+      search: { prototype: prototypeSearchMetrics, app: appSearchMetrics },
       usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
+      start: { prototype: prototypeStartMetrics, app: appStartMetrics },
     }
   }
 
@@ -329,6 +726,38 @@ try {
     usageLines.push('')
   }
   writeFileSync(join(output, 'bold-usage-metrics.md'), `${usageLines.join('\n')}\n`)
+
+  const searchLines = ['# Bold search: prototype vs app', '']
+  for (const size of Object.keys(results)) {
+    searchLines.push(
+      `## ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of searchPrototypeParts)
+      searchLines.push(
+        `| ${part.name} | ${cell(results[size].search.prototype, part)} | ${cell(results[size].search.app, part)} | ${difference(results[size].search.prototype, results[size].search.app, part)} |`,
+      )
+    searchLines.push('')
+  }
+  writeFileSync(join(output, 'bold-search-metrics.md'), `${searchLines.join('\n')}\n`)
+
+  const startLines = ['# Bold start a job: prototype vs app', '']
+  for (const size of Object.keys(results)) {
+    startLines.push(
+      `## ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of startPrototypeParts)
+      startLines.push(
+        `| ${part.name} | ${cell(results[size].start.prototype, part)} | ${cell(results[size].start.app, part)} | ${difference(results[size].start.prototype, results[size].start.app, part)} |`,
+      )
+    startLines.push('')
+  }
+  writeFileSync(join(output, 'bold-start-metrics.md'), `${startLines.join('\n')}\n`)
   console.log(`Wrote screenshots and measurements to ${output}`)
 } finally {
   await browser?.close()

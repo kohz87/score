@@ -155,7 +155,7 @@ export function PlusIcon({ size = 16 }: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.4"
+      strokeWidth="2.2"
       strokeLinecap="round"
       aria-hidden="true"
     >
@@ -164,7 +164,7 @@ export function PlusIcon({ size = 16 }: IconProps) {
   )
 }
 
-export function CloseIcon({ size = 14 }: IconProps) {
+export function UploadIcon({ size = 16 }: IconProps) {
   return (
     <svg
       width={size}
@@ -172,7 +172,25 @@ export function CloseIcon({ size = 14 }: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.6"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 16V4M7 9l5-5 5 5M4 20h16" />
+    </svg>
+  )
+}
+
+export function CloseIcon({ size = 16 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
       strokeLinecap="round"
       aria-hidden="true"
     >
