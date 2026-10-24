@@ -5,7 +5,12 @@ import type {
   WorkflowNeedsYou,
   WorkflowRunSnapshot,
 } from '../packages/contract/src/index.ts'
-import { openBoldRoom, type BoldRoomReply, type RoomRequest } from './bold-room-fixtures.ts'
+import {
+  openBoldJob,
+  openBoldRoom,
+  type BoldRoomReply,
+  type RoomRequest,
+} from './bold-room-fixtures.ts'
 import { orchestrationEvents, orchestrationSnapshot } from './orchestration-fixtures.ts'
 import { runEvents, runSnapshot } from './workflow-fixtures.ts'
 
@@ -194,7 +199,7 @@ for (const viewport of sizes) {
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await expect(card).toContainText('npm install ws@8')
       // Read the job that owns the approval message; only then can the strip know its real job.
-      await page.getByRole('tab', { name: /Activity feed/ }).click()
+      await openBoldJob(page, /Activity feed/)
       await expect(card).toContainText('Activity feed')
 
       await card.getByRole('button', { name: 'More', exact: true }).click()
@@ -220,6 +225,8 @@ for (const viewport of sizes) {
       await openBoldRoom(page, { jobs: roomJobs(), exchanges: [] })
       const card = page.getByRole('article', { name: /May I install a package/ })
       await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeVisible()
+      // On a phone the stream is the chat of the open job; the pointer lives in the job that holds the approval message.
+      if (page.viewportSize()!.width <= 860) await openBoldJob(page, /^Activity feed\./)
       await expect(page.getByRole('button', { name: 'Allow', exact: true })).toHaveCount(1)
       await expect(page.getByText('Waiting in Needs you')).toBeVisible()
     })
@@ -259,6 +266,7 @@ for (const viewport of sizes) {
       })
       const card = page.getByRole('article', { name: /May I install a package/ })
       await expect(card).toBeVisible()
+      if (page.viewportSize()!.width <= 860) await openBoldJob(page, /^Activity feed\./)
       await expect(page.getByText('Waiting in Needs you')).toBeVisible()
 
       // The decision is now the server's state; reloading is a fresh read of that state.

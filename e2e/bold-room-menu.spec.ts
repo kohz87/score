@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { openBoldJob } from './bold-room-fixtures.ts'
 import { openMenuRoom } from './bold-room-menu-fixtures.ts'
 
 test.use({
@@ -21,7 +22,8 @@ async function expectOlderRoomLabel(page: Page) {
   const label = page.getByText('Older room · @name')
   if ((page.viewportSize()?.width ?? 0) > 600) await expect(label).toBeVisible()
   else {
-    await expect(page.locator('.roomtitle')).toContainText('Older room')
+    await expect(page.locator('[data-phone-chat-title]')).toHaveText('#activity-feed')
+    await expect(page.getByRole('button', { name: 'Back to the team room' })).toBeVisible()
     await expect(label).toBeAttached()
   }
 }
@@ -65,7 +67,9 @@ for (const viewport of sizes) {
       await picker.getByRole('option', { name: /#activity-feed/ }).click()
 
       await expect(page).toHaveURL(/room=room-old/)
-      await expect(page.locator('.roomtitle')).toHaveText(/#activity-feed/)
+      if (viewport.width > 860)
+        await expect(page.locator('.roomtitle')).toHaveText(/#activity-feed/)
+      else await expect(page.locator('[data-phone-chat-title]')).toHaveText('#activity-feed')
       await expectOlderRoomLabel(page)
       await expect(page.getByRole('button', { name: 'Start a job' })).toHaveCount(0)
       const composer = page.getByRole('combobox', { name: /^Message #activity-feed/ })
@@ -88,7 +92,10 @@ for (const viewport of sizes) {
       await imported.click()
 
       await expect(page).toHaveURL(/room=room-imported/)
-      await expect(page.locator('.roomtitle')).toContainText('#telegram-plan #imported')
+      if (viewport.width > 860)
+        await expect(page.locator('.roomtitle')).toContainText('#telegram-plan #imported')
+      else
+        await expect(page.locator('[data-phone-chat-title]')).toHaveText('#telegram-plan #imported')
       const composer = page.getByRole('combobox', { name: /^Message #telegram-plan/ })
       await composer.fill('@builder Continue here?')
       await page.getByRole('button', { name: 'Send', exact: true }).click()
@@ -129,6 +136,10 @@ for (const viewport of sizes) {
       await expect(older).toBeFocused()
       await page.keyboard.press('Enter')
       await expect(page).toHaveURL(/room=room-old/)
+      if (viewport.width <= 860) {
+        await expect(page.locator('[data-phone-chat-title]')).toBeFocused()
+        return
+      }
       await expect(trigger).toBeFocused()
 
       await trigger.click()
@@ -217,7 +228,7 @@ for (const viewport of sizes) {
 
     test(`the job menu shares that job and exports the classic room at ${at}`, async ({ page }) => {
       const state = await openMenuRoom(page)
-      await page.getByRole('tab', { name: /Activity feed/ }).click()
+      await openBoldJob(page, /Activity feed/)
       await page.getByRole('button', { name: 'Job menu' }).click()
       const menu = page.getByRole('menu', { name: 'Activity feed actions' })
       await expect(menu).toHaveAttribute('data-protected', 'flex')
@@ -245,7 +256,7 @@ for (const viewport of sizes) {
 
     test(`the job menu works from the keyboard at ${at}`, async ({ page }) => {
       await openMenuRoom(page)
-      await page.getByRole('tab', { name: /Activity feed/ }).click()
+      await openBoldJob(page, /Activity feed/)
       const trigger = page.getByRole('button', { name: 'Job menu' })
       await trigger.click()
       const menu = page.getByRole('menu', { name: 'Activity feed actions' })
@@ -289,7 +300,12 @@ for (const viewport of sizes) {
 
       await side.getByRole('button', { name: 'Bring into a job' }).click()
       await expect(page).toHaveURL(/job=job-brought/)
-      await expect(page.getByRole('tab', { name: /Plan the launch checklist/ })).toBeVisible()
+      if (viewport.width > 860)
+        await expect(page.getByRole('tab', { name: /Plan the launch checklist/ })).toBeVisible()
+      else {
+        await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
+        await expect(page.locator('.bold-phone-chat-id')).toContainText('Plan the launch checklist')
+      }
 
       expect(
         state.requests.filter(

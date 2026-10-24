@@ -686,6 +686,24 @@ body.fit [data-ui='bold'] .stream {
     font-weight: 600;
   }
 
+  /* PLAN 11.10a: a finger needs 44px, whichever page the control sits on. */
+  [data-ui='bold'] .btn.sm,
+  [data-ui='bold'] .chip,
+  [data-ui='bold'] .seg button,
+  [data-ui='bold'] .link {
+    min-height: 44px;
+  }
+
+  [data-ui='bold'] .icon-btn.sm {
+    width: 44px;
+    height: 44px;
+  }
+
+  [data-ui='bold'] .chat-ctx-ring {
+    width: 44px;
+    height: 44px;
+  }
+
   [data-ui='bold'] .bold-tabbar button.on {
     color: var(--ink);
   }

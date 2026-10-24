@@ -262,6 +262,10 @@ for (const size of sizes) {
       await page.keyboard.press('Enter')
       await expect(page.getByRole('dialog', { name: 'Search and commands' })).toHaveCount(0)
       expect(new URL(page.url()).searchParams.get('job')).toBe(first.id)
+      // A phone moves focus to the opened job's chat title a frame later; let that land, then invoke from the trigger.
+      if (size.viewport.width <= 860)
+        await expect(page.locator('[data-phone-chat-title]')).toBeFocused()
+      await trigger.focus()
 
       await page.keyboard.press('Control+K')
       await expect(input).toBeFocused()

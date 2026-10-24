@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { mockBoldRoom } from './bold-room-fixtures.ts'
+import { mockBoldRoom, openBoldJob } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 
 // PLAN 11.4c: a job's thread in the bold side panel. The seeded fake room moves over time, so the contract-shaped
@@ -125,7 +125,7 @@ async function openThread(page: Page, options: { exchange?: Record<string, unkno
 }
 
 async function openJobThread(page: Page, title: RegExp) {
-  await page.getByRole('tab', { name: title }).click()
+  await openBoldJob(page, title)
   await page.locator('.bold-job-thread').click()
 }
 
