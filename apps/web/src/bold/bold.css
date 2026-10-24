@@ -1,6 +1,7 @@
 /* The bold shell's frame, rebuilt from docs/design/bold/prototype.html. Every rule is scoped to [data-ui='bold'];
    colours come from tokens.css only. */
 [data-ui='bold'].bold-shell {
+  position: relative;
   height: 100dvh;
   overflow: hidden;
   display: flex;

@@ -20,6 +20,100 @@ if (!existsSync(join(dist, 'index.html'))) {
 
 mkdirSync(output, { recursive: true })
 const fixtures = JSON.parse(readFileSync(join(root, 'e2e/fixtures/visual.json'), 'utf8'))
+const recipeDefinition = {
+  name: 'Build, then review',
+  description: 'Build it, review it, then ask before merging.',
+  inputs: [{ name: 'goal', label: 'Goal', required: true, maxChars: 500 }],
+  nodes: [
+    {
+      id: 'step1',
+      kind: 'agent',
+      label: 'Build it',
+      agentId: 'builder',
+      instruction: 'Build {{inputs.goal}}. Small, tested changes.',
+      retries: 1,
+      onFailure: 'route',
+    },
+    {
+      id: 'step2',
+      kind: 'agent',
+      label: 'Review it',
+      agentId: 'reviewer',
+      instruction: 'Review the change from {{nodes.step1.output}}. End with a verdict.',
+      retries: 0,
+      onFailure: 'fail_run',
+    },
+    {
+      id: 'branch1',
+      kind: 'branch',
+      label: 'Passed?',
+      subject: 'step2',
+      rules: [{ id: 'rule1', when: { kind: 'verdict', is: 'passed' } }],
+    },
+    {
+      id: 'gate1',
+      kind: 'gate',
+      label: 'Your OK before merging',
+      question: 'Merge it?',
+      onReject: 'stop_run',
+    },
+    { id: 'end1', kind: 'end', label: 'Done' },
+  ],
+  edges: [
+    { id: 'e1', from: 'step1', port: 'ok', to: 'step2' },
+    { id: 'e2', from: 'step1', port: 'failed', to: 'step2' },
+    { id: 'e3', from: 'step2', port: 'ok', to: 'branch1' },
+    { id: 'e4', from: 'branch1', port: 'rule1', to: 'gate1' },
+    { id: 'e5', from: 'branch1', port: 'default', to: 'end1' },
+    { id: 'e6', from: 'gate1', port: 'ok', to: 'end1' },
+  ],
+}
+const recipeVersion = {
+  version: 3,
+  hash: 'a'.repeat(64),
+  createdAt: '2026-10-08T20:00:00.000Z',
+  used: false,
+  bytes: JSON.stringify(recipeDefinition).length,
+  nodes: recipeDefinition.nodes.length,
+  maxSteps: 3,
+  workflowId: 'wf-recipe',
+  definition: recipeDefinition,
+}
+const recipeSummary = {
+  id: 'wf-recipe',
+  name: recipeDefinition.name,
+  description: recipeDefinition.description,
+  latestVersion: 3,
+  versionCount: 3,
+  used: false,
+  agentIds: ['builder', 'reviewer'],
+  createdAt: '2026-10-08T20:00:00.000Z',
+  updatedAt: '2026-10-08T20:30:00.000Z',
+  activeRuns: 0,
+}
+const recipeFixtures = {
+  '/api/workflows': {
+    items: [recipeSummary],
+    inventory: {
+      definitions: 1,
+      versions: 3,
+      bytes: recipeVersion.bytes * 3,
+      maxDefinitions: 200,
+      maxVersionsPerDefinition: 20,
+    },
+  },
+  '/api/workflows/wf-recipe': {
+    ...recipeSummary,
+    versions: [1, 2, 3].map((version) => ({ ...recipeVersion, version })),
+    latest: recipeVersion,
+  },
+  '/api/workflows/wf-recipe/versions/3': recipeVersion,
+  '/api/workflows/validate': {
+    ok: true,
+    stats: { nodes: 5, edges: 6, maxSteps: 3, bytes: 900 },
+    issues: [],
+  },
+}
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -41,6 +135,7 @@ async function serve(route) {
         ? fixtures[`/api/reports?range=${url.searchParams.get('range') ?? '7d'}`]
         : undefined
     const fixture =
+      recipeFixtures[url.pathname] ??
       fixtures[`${url.pathname}${url.search}`] ??
       reportFixture ??
       (url.pathname === '/api/reports' ? fixtures['/api/reports?range=7d'] : undefined) ??
@@ -203,22 +298,90 @@ const usageParts = [
   },
 ]
 
-async function measure(page, selectedParts = parts) {
-  return page.evaluate((selectedParts) => {
-    const result = {}
-    for (const part of selectedParts) {
-      const element = globalThis.document.querySelector(part.selector)
-      if (!element) {
-        result[part.name] = null
-        continue
+// PLAN 11.10d: the recipe dialog. The app's class names are prefixed, so each row names both selectors.
+const recipeParts = [
+  {
+    name: 'Recipe dialog',
+    selectors: { prototype: '.dialog.wide', app: '.bold-dialog.wide' },
+    props: ['width', 'maxWidth', 'padding', 'gap', 'borderRadius', 'backgroundColor', 'boxShadow'],
+  },
+  {
+    name: 'Recipe switcher',
+    selectors: { prototype: '.seg', app: '.bold-seg' },
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Selected recipe',
+    selectors: { prototype: '.seg button.on', app: '.bold-seg button.on' },
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
+  },
+  {
+    name: 'Problems badge',
+    selectors: { prototype: '.badge', app: '.bold-badge' },
+    props: ['padding', 'borderRadius', 'fontSize', 'fontWeight', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Step',
+    selectors: { prototype: '.step', app: '.bold-step' },
+    props: ['minHeight', 'padding', 'gap', 'borderRadius', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Selected step',
+    selectors: { prototype: '.step.sel', app: '.bold-step.sel' },
+    props: ['boxShadow', 'backgroundColor'],
+  },
+  {
+    name: 'Inspector',
+    selectors: { prototype: '.inner', app: '.bold-recipes-inspector' },
+    props: ['padding', 'gap', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Field',
+    selectors: { prototype: '.field', app: '.bold-recipes-inspector .orch-field select' },
+    props: ['minHeight', 'padding', 'borderRadius', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Save',
+    selectors: { prototype: '.btn.sm.primary', app: '.bold-recipes-actions .btn.primary' },
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
+  },
+]
+
+async function measure(page, selectedParts = parts, side = 'prototype') {
+  return page.evaluate(
+    ({ selectedParts, side }) => {
+      const result = {}
+      for (const part of selectedParts) {
+        const element = globalThis.document.querySelector(part.selectors?.[side] ?? part.selector)
+        if (!element) {
+          result[part.name] = null
+          continue
+        }
+        const style = globalThis.getComputedStyle(element)
+        result[part.name] = Object.fromEntries(
+          [...part.props, 'display'].map((property) => [property, style[property]]),
+        )
       }
-      const style = globalThis.getComputedStyle(element)
-      result[part.name] = Object.fromEntries(
-        [...part.props, 'display'].map((property) => [property, style[property]]),
-      )
-    }
-    return result
-  }, selectedParts)
+      return result
+    },
+    { selectedParts, side },
+  )
 }
 
 function cell(metrics, part) {
@@ -294,10 +457,26 @@ try {
     })
     const appUsageMetrics = await measure(page, usageParts)
 
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.top .word').waitFor()
+    await page.locator('[data-a="search"]:visible').first().click()
+    await page.getByRole('button', { name: 'Edit recipes' }).click()
+    await page.locator('.dialog.wide').waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-prototype-recipes-${size}.png`) })
+    const prototypeRecipeMetrics = await measure(page, recipeParts, 'prototype')
+
+    await page.goto(`${baseURL}/b?recipes=1`)
+    await page.locator('[data-ui="bold"] .bold-recipes-list').waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-recipes-${size}.png`) })
+    const appRecipeMetrics = await measure(page, recipeParts, 'app')
+
     results[size] = {
       prototype: prototypeMetrics,
       app: appMetrics,
       usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
+      recipes: { prototype: prototypeRecipeMetrics, app: appRecipeMetrics },
     }
   }
 
@@ -329,6 +508,22 @@ try {
     usageLines.push('')
   }
   writeFileSync(join(output, 'bold-usage-metrics.md'), `${usageLines.join('\n')}\n`)
+
+  const recipeLines = ['# Bold recipes: prototype vs app', '']
+  for (const size of Object.keys(results)) {
+    recipeLines.push(
+      `## ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of recipeParts)
+      recipeLines.push(
+        `| ${part.name} | ${cell(results[size].recipes.prototype, part)} | ${cell(results[size].recipes.app, part)} | ${difference(results[size].recipes.prototype, results[size].recipes.app, part)} |`,
+      )
+    recipeLines.push('')
+  }
+  writeFileSync(join(output, 'bold-recipes-metrics.md'), `${recipeLines.join('\n')}\n`)
   console.log(`Wrote screenshots and measurements to ${output}`)
 } finally {
   await browser?.close()
