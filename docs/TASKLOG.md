@@ -899,3 +899,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   reviewer's own edits in the same turn come before its verdict, and concurrent turns of other agents in one job don't
   happen (one turn per agent, the job's exchanges serialise); `-0,0` from an agent's patch against an existing file — the
   patch tool fails on it, so no frame is recorded. Not deployed.
+- **11.10d Recipe editor (DeepSeek + lead, 2026-10-24).** `BoldRecipes` (`/b?recipes=1`): the 7.1 workflows as a step
+  list (agent steps, gates, branches with target selects, joins, ends; retries 0–2 and failure paths; template fields;
+  live checking via the shared validator; undo/redo; versions with conflict choices and "start from an older version";
+  scrubbed export; read-only graph view through the classic `EditorCanvas`, whose new `readOnly` prop defaults off).
+  Build in two sessions (the first died on a NanoGPT 502 after 1M tokens) + 1 fix round. Sonnet: 2 P1 — adding a step
+  gave two edges the same id (so "Looks good" never showed: the failing e2e was a product bug) and moving a step could cut
+  a step loose from its upstream — 5 P2 (no-op moves, round trips only over three fixtures, cycles listable, unsaved
+  work lost on Escape/older version, step-list focus and announcements), 1 P3 (failed validation enabled Save); all
+  fixed, with a round trip over every 7.1 fixture. Lead: a version-agnostic e2e assertion, the compare-script merge
+  (one `measure()` for both selector styles), and prototype fidelity from screenshots (no focus ring on the dialog,
+  trash and plus icons, red remove). E2E 61/61 (recipes, classic workflows, coding workflows, workflow visual, shell,
+  search); full check green (web 3,081). Not deployed.
