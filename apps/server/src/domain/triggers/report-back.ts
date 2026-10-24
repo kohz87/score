@@ -40,27 +40,47 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
-/** The arguments: the trigger's JSON template with {{source.ref}}, {{source.title}}, {{source.link}}, {{job.title}} and
- * {{job.summary}} filled in as JSON strings. Throws when the result isn't a JSON object. */
+/**
+ * The arguments: the trigger's JSON template with {{source.ref}}, {{source.title}}, {{source.link}}, {{job.title}} and
+ * {{job.summary}} filled in. Holes are filled only inside the template's string values (never keys, never raw JSON), so
+ * a value can't change the arguments' shape. Throws when the template isn't a JSON object.
+ */
 export function renderArgs(
   template: string,
   values: Record<string, string>,
 ): Record<string, unknown> {
-  const filled = template.replace(/\{\{\s*([a-z]+\.[a-z]+)\s*\}\}/g, (_, key: string) =>
-    JSON.stringify(values[key] ?? '').slice(1, -1),
-  )
+  const parsed = parseArgsTemplate(template)
+  const fill = (value: unknown): unknown => {
+    if (typeof value === 'string')
+      return value.replace(/\{\{\s*([a-z]+\.[a-z]+)\s*\}\}/g, (_, key: string) => values[key] ?? '')
+    if (Array.isArray(value)) return value.map(fill)
+    if (value !== null && typeof value === 'object')
+      return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, fill(child)]))
+    return value
+  }
+  return fill(parsed) as Record<string, unknown>
+}
+
+/** A report-back template must be a JSON object whose holes sit inside string values (checked when it is saved). */
+export function parseArgsTemplate(template: string): Record<string, unknown> {
   let parsed: unknown
   try {
-    parsed = JSON.parse(filled)
+    parsed = JSON.parse(template)
   } catch {
     throw new HttpError(
       400,
       'bad_template',
-      'The report-back arguments aren’t valid JSON once filled in.',
+      'The report-back arguments must be JSON, with each {{…}} inside a quoted string.',
     )
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
     throw new HttpError(400, 'bad_template', 'The report-back arguments must be a JSON object.')
+  const keys = (value: unknown): string[] =>
+    value !== null && typeof value === 'object'
+      ? Object.entries(value).flatMap(([key, child]) => [key, ...keys(child)])
+      : []
+  if (keys(parsed).some((key) => key.includes('{{')))
+    throw new HttpError(400, 'bad_template', 'A {{…}} can’t be part of a key.')
   return parsed as Record<string, unknown>
 }
 
@@ -94,6 +114,14 @@ export function startReportBack(sqlite: DatabaseSync, jobId: string, now: string
   if (!job) throw new HttpError(404, 'not_found', 'This job didn’t come from a trigger.')
   if (job.mode.mode === 'off')
     throw new HttpError(409, 'conflict', 'This trigger doesn’t report back.')
+  // Never twice at once, never again once confirmed: a repeat click would post to the app twice.
+  const current = reportBackOf(sqlite, jobId)?.state
+  if (current === 'sending' || current === 'confirmed')
+    throw new HttpError(
+      409,
+      'conflict',
+      current === 'sending' ? 'It is being sent now.' : 'It was already reported back.',
+    )
   const mode: Exclude<ReportBack, { mode: 'off' }> = job.mode
   const lead = (
     sqlite.prepare('SELECT lead_agent_id FROM rooms WHERE id = ?').get(job.room_id) as {
@@ -193,6 +221,9 @@ export function reportBackOf(sqlite: DatabaseSync, jobId: string): JobReportBack
   if (!turn) return { state: 'not_confirmed', tool: stored.data.tool, at: stored.data.at }
   if (turn.state === 'pending' || turn.state === 'active')
     return { state: 'sending', tool: stored.data.tool, at: stored.data.at }
+  // A turn that failed or was stopped reported nothing, whatever it may have called.
+  if (turn.state !== 'completed')
+    return { state: 'not_confirmed', tool: stored.data.tool, at: stored.data.at }
   const session = sessionFor(sqlite, {
     roomId: turn.room_id,
     jobId: turn.job_id,

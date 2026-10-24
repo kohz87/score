@@ -188,8 +188,8 @@ test('non-JSON, oversized and too frequent calls are refused; unknown and delete
   const huge = JSON.stringify({ blob: 'x'.repeat(256 * 1024) })
   expect((await call(trigger.id, secret, huge)).statusCode).toBe(413)
   expect((await call('trg_000000000000000000000000', secret, '{}')).statusCode).toBe(404)
-  // 60 a minute per trigger; the two refused calls above count, the oversized one never reached the route.
-  for (let i = 0; i < 58; i++) await call(trigger.id, secret, '{}', { webhookId: `rate_${i}` })
+  // 60 verified calls a minute per trigger; the signed non-JSON call above was one of them.
+  for (let i = 0; i < 59; i++) await call(trigger.id, secret, '{}', { webhookId: `rate_${i}` })
   expect((await call(trigger.id, secret, '{}', { webhookId: 'one_too_many' })).statusCode).toBe(429)
   now += 61_000
   expect(
@@ -379,4 +379,91 @@ test('report-back is a constrained lead turn, reported back only on a matching t
     turn.created_at,
   )
   expect(state()?.state).toBe('confirmed')
+})
+
+// Security review (Sonnet, 11.1d).
+
+test('a payload with credential-named keys starts the job; the sample is valid JSON without the values', async () => {
+  const { trigger, secret } = await create()
+  const body = JSON.stringify({
+    ticket: { id: 'TCK-9', title: 'Rotate keys' },
+    password: 'hunter2',
+    auth: { token: 'abc123' },
+  })
+  expect((await call(trigger.id, secret, body)).statusCode).toBe(200)
+  const sample = (
+    db.sqlite.prepare('SELECT sample FROM triggers WHERE id = ?').get(trigger.id) as {
+      sample: string
+    }
+  ).sample
+  expect(JSON.parse(sample)).toEqual({
+    ticket: { id: 'TCK-9', title: 'Rotate keys' },
+    password: '[redacted]',
+    auth: { token: '[redacted]' },
+  })
+})
+
+test('failed calls from a stranger don’t use up the real sender’s budget', async () => {
+  const { trigger, secret } = await create()
+  for (let i = 0; i < 70; i++)
+    await call(trigger.id, 'whsec_' + 'B'.repeat(43) + '=', '{}', { webhookId: `bad_${i}` })
+  expect(
+    (await call(trigger.id, secret, JSON.stringify(ticket), { webhookId: 'real' })).statusCode,
+  ).toBe(200)
+})
+
+test('a link must be http(s) and is redacted; template holes must sit inside strings', async () => {
+  const { trigger, secret } = await create()
+  const body = JSON.stringify({ ticket: { id: 'TCK-1', url: 'javascript:alert(1)' } })
+  await call(trigger.id, secret, body)
+  expect(JSON.parse(jobs()[0]!.source).link).toBeNull()
+  const bad = await app.inject({
+    method: 'POST',
+    url: '/api/triggers',
+    headers,
+    payload: {
+      ...TRIGGER,
+      reportBack: { mode: 'fixed', tool: 'add_comment', args: '{"id": {{source.ref}}}' },
+    },
+  })
+  expect(bad.statusCode).toBe(400)
+  expect(bad.json().error.code).toBe('bad_template')
+  const { renderArgs } = await import('../../src/domain/triggers/report-back.ts')
+  expect(renderArgs('{"text":"{{source.ref}}"}', { 'source.ref': '1", "to": "x' })).toEqual({
+    text: '1", "to": "x',
+  })
+})
+
+test('report-back is refused while sending, and a failed turn is never confirmed', async () => {
+  const made = await app.inject({
+    method: 'POST',
+    url: '/api/triggers',
+    headers,
+    payload: {
+      ...TRIGGER,
+      reportBack: { mode: 'fixed', tool: 'add_comment', args: '{"ticket":"{{source.ref}}"}' },
+    },
+  })
+  const { trigger, secret } = made.json() as { trigger: { id: string }; secret: string }
+  const answer = (await call(trigger.id, secret, JSON.stringify(ticket))).json() as {
+    jobId: string
+  }
+  db.sqlite
+    .prepare("UPDATE message_runs SET state = 'completed' WHERE job_id = ?")
+    .run(answer.jobId)
+  now += 1000
+  const send = () =>
+    app.inject({ method: 'POST', url: `/api/jobs/${answer.jobId}/report-back`, headers })
+  expect((await send()).statusCode).toBe(200)
+  expect((await send()).statusCode).toBe(409)
+  db.sqlite
+    .prepare(
+      "UPDATE message_runs SET state = 'failed' WHERE job_id = ? AND input LIKE 'Report back%'",
+    )
+    .run(answer.jobId)
+  const { reportBackOf } = await import('../../src/domain/triggers/report-back.ts')
+  expect(reportBackOf(db.sqlite, answer.jobId)?.state).toBe('not_confirmed')
+  // Try again is allowed once it wasn't confirmed.
+  now += 1000
+  expect((await send()).statusCode).toBe(200)
 })

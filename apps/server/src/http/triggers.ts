@@ -17,12 +17,14 @@ import {
   deleteTrigger,
   listTriggers,
   receiveCall,
+  verifyCall,
   rotateTrigger,
   triggerSecret,
   updateTrigger,
 } from '../domain/triggers/triggers.ts'
 import { startReportBack } from '../domain/triggers/report-back.ts'
 import { jobEvent } from '../domain/exchanges/store.ts'
+import { HOOK_PATH } from '../auth/remote.ts'
 import { HttpError } from '../errors.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { RateLimiter } from '../shares/rate-limit.ts'
@@ -47,7 +49,10 @@ export function registerTriggerRoutes(
   const { db, ingest, seal, guard, origin, redispatch } = deps
   const clock = deps.clock ?? Date.now
   const Params = z.object({ triggerId: z.string().min(1).max(64) })
+  // Verified calls have their trigger's budget; failed ones are counted per caller, so a stranger who knows a trigger's
+  // address can't use up the real sender's budget.
   const limiter = new RateLimiter(TRIGGER_LIMITS.callsPerMinute, 60_000, clock)
+  const failures = new RateLimiter(TRIGGER_LIMITS.callsPerMinute, 60_000, clock)
 
   // The raw body is what is signed: parsed here as text, checked, then read as JSON.
   void app.register(async (hooks) => {
@@ -59,12 +64,9 @@ export function registerTriggerRoutes(
     )
     hooks.post('/hooks/:triggerId', async (request, reply) => {
       const { triggerId } = Params.parse(request.params)
-      if (!limiter.allow(triggerId))
-        throw new HttpError(
-          429,
-          'rate_limited',
-          'Too many calls to this trigger. Try again in a minute.',
-        )
+      // A malformed id is answered before any lookup or queue.
+      if (!HOOK_PATH.test(`/hooks/${triggerId}`))
+        throw new HttpError(404, 'not_found', 'No such trigger.')
       const type = String(request.headers['content-type'] ?? '')
       if (!/^application\/(?:[\w.+-]+\+)?json\b/i.test(type))
         throw new HttpError(
@@ -76,23 +78,34 @@ export function registerTriggerRoutes(
         const value = request.headers[name]
         return typeof value === 'string' ? value : undefined
       }
+      const signed = {
+        id: header('webhook-id'),
+        timestamp: header('webhook-timestamp'),
+        signature: header('webhook-signature'),
+      }
+      const raw = typeof request.body === 'string' ? request.body : ''
+      // Checked before anything is queued. A failed call counts against its caller, never against the trigger's own
+      // budget, so a stranger who knows the address can't use it up.
+      const caller = `${request.ip}:${triggerId}`
+      try {
+        db.read((sqlite) => verifyCall(sqlite, seal, triggerId, signed, raw, clock()))
+      } catch (error) {
+        if (!failures.allow(caller))
+          throw new HttpError(429, 'rate_limited', 'Too many failed calls. Try again in a minute.')
+        throw error
+      }
+      if (!limiter.allow(triggerId))
+        throw new HttpError(
+          429,
+          'rate_limited',
+          'Too many calls to this trigger. Try again in a minute.',
+        )
       let answer: { jobId: string; repeated: boolean } | undefined
       await ingest.submit({
         source: 'triggers',
         identity: randomUUID(),
         apply: ({ sqlite }) => {
-          const call = receiveCall(
-            sqlite,
-            seal,
-            triggerId,
-            {
-              id: header('webhook-id'),
-              timestamp: header('webhook-timestamp'),
-              signature: header('webhook-signature'),
-            },
-            typeof request.body === 'string' ? request.body : '',
-            clock(),
-          )
+          const call = receiveCall(sqlite, seal, triggerId, signed, raw, clock())
           answer = call.result
           return call.drafts
         },
@@ -102,7 +115,7 @@ export function registerTriggerRoutes(
     })
   })
 
-  app.get('/api/triggers', async () =>
+  app.get('/api/triggers', guard, async () =>
     TriggersResponseSchema.parse({ items: db.read((sqlite) => listTriggers(sqlite, origin)) }),
   )
   app.post('/api/triggers', guard, async (request, reply) => {
@@ -111,7 +124,10 @@ export function registerTriggerRoutes(
       createTrigger(sqlite, seal, body, origin, new Date(clock()).toISOString()),
     )
     // The secret is shown in full here, once; later only to a paired browser (GET …/secret).
-    return reply.code(201).send(TriggerCreatedSchema.parse(made))
+    return reply
+      .code(201)
+      .header('cache-control', 'no-store')
+      .send(TriggerCreatedSchema.parse(made))
   })
   app.patch('/api/triggers/:triggerId', guard, async (request) => {
     const { triggerId } = Params.parse(request.params)
@@ -141,13 +157,15 @@ export function registerTriggerRoutes(
     await redispatch()
     return { ok: true }
   })
-  app.get('/api/triggers/:triggerId/secret', guard, async (request) => {
+  app.get('/api/triggers/:triggerId/secret', guard, async (request, reply) => {
+    void reply.header('cache-control', 'no-store')
     const { triggerId } = Params.parse(request.params)
     return TriggerSecretSchema.parse({
       secret: db.read((sqlite) => triggerSecret(sqlite, seal, triggerId)),
     })
   })
-  app.post('/api/triggers/:triggerId/rotate', guard, async (request) => {
+  app.post('/api/triggers/:triggerId/rotate', guard, async (request, reply) => {
+    void reply.header('cache-control', 'no-store')
     const { triggerId } = Params.parse(request.params)
     return TriggerSecretSchema.parse({
       secret: db.tx((sqlite) =>

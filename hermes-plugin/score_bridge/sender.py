@@ -517,6 +517,9 @@ def _args_digest(kwargs):
     if not isinstance(args, dict):
         return None
     try:
-        return digest(json.dumps(args, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False))
-    except (TypeError, ValueError):
+        text = json.dumps(args, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    except Exception:
+        # Not plain JSON (or too deep): no digest, and the hook path goes on.
         return None
+    # Bounded work on the hook thread: arguments past 1 MB get no digest (a report-back is never that large).
+    return digest(text) if len(text) <= 1_000_000 else None

@@ -17,6 +17,7 @@ import { createJob } from '../exchanges/store.ts'
 import { reserveMessageRun } from '../message-runs.ts'
 import { storeMessage } from '../rooms.ts'
 import { teamRoomId } from '../team-room.ts'
+import { parseArgsTemplate } from './report-back.ts'
 import { newWebhookSecret, verifyWebhook } from './signature.ts'
 
 // Webhook triggers (PLAN 11.1d, docs/briefs/11.0-bold.md §7). A trigger's signing secret is Score's own, sealed at
@@ -79,6 +80,7 @@ export function createTrigger(
   origin: string | null,
   now: string,
 ): { trigger: Trigger; secret: string } {
+  if (req.reportBack.mode !== 'off') parseArgsTemplate(req.reportBack.args)
   const id = `trg_${randomBytes(12).toString('hex')}`
   const secret = newWebhookSecret()
   sqlite
@@ -116,6 +118,7 @@ export function updateTrigger(
 ): Trigger {
   const current = toTrigger(live(sqlite, id), origin)
   const next = { ...current, ...change }
+  if (next.reportBack.mode !== 'off') parseArgsTemplate(next.reportBack.args)
   sqlite
     .prepare(
       'UPDATE triggers SET name = ?, app = ?, mapping = ?, template = ?, report_back = ?, updated_at = ? WHERE id = ?',
@@ -164,11 +167,32 @@ export function deleteTrigger(sqlite: DatabaseSync, id: string, now: string): vo
 export function valueAt(payload: unknown, path: string): string | null {
   let at: unknown = payload
   for (const key of path.split('.')) {
-    if (at === null || typeof at !== 'object') return null
+    // Own keys only: a path never reaches into prototypes ("constructor", "toString").
+    if (at === null || typeof at !== 'object' || !Object.hasOwn(at, key)) return null
     at = (at as Record<string, unknown>)[key]
   }
   if (at === undefined || at === null) return null
-  return typeof at === 'string' ? at : JSON.stringify(at)
+  if (typeof at === 'string') return at
+  return ['number', 'boolean', 'object'].includes(typeof at) ? JSON.stringify(at) : null
+}
+
+/** Every kind of line break (\r, U+2028/2029, U+0085, \v, \f) as \n, so quoting covers every line a model may see. */
+const lines = (text: string) => text.replace(/\r\n?|[\u2028\u2029\u0085\v\f]/g, '\n').split('\n')
+
+const CREDENTIAL_KEY =
+  /pass(word|phrase)?|secret|token|authori[sz]ation|cookie|api[_-]?key|private[_-]?key/i
+/** A payload redacted as data: credential-named keys' values replaced, every string redacted; still valid JSON. */
+export function redactPayload(value: unknown): unknown {
+  if (typeof value === 'string') return redact(value)
+  if (Array.isArray(value)) return value.map(redactPayload)
+  if (value !== null && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        CREDENTIAL_KEY.test(key) ? '[redacted]' : redactPayload(child),
+      ]),
+    )
+  return value
 }
 
 const INLINE = 300
@@ -204,9 +228,9 @@ export function renderOpening(
       missing.add(path)
       return []
     }
-    return [`${field}: ${redactBounded(redact(value), 4000).split('\n').join('\n  ')}`]
+    return [`${field}: ${lines(redactBounded(redact(value), 4000)).join('\n  ')}`]
   })
-  const quoted = fields.flatMap((field) => field.split('\n').map((line) => `> ${line}`))
+  const quoted = fields.flatMap((field) => lines(field).map((line) => `> ${line}`))
   return {
     text: [
       body,
@@ -221,6 +245,50 @@ export function renderOpening(
 
 export type CallResult = { status: 200; jobId: string; repeated: boolean }
 
+/** Checks a call before anything is queued: the trigger exists and the signature is valid now. Throws the answer. */
+export function verifyCall(
+  sqlite: DatabaseSync,
+  seal: Sealer,
+  id: string,
+  headers: { id?: string; timestamp?: string; signature?: string },
+  raw: string,
+  nowMs: number,
+): Row {
+  const trigger = row(sqlite, id)
+  if (!trigger) throw new HttpError(404, 'not_found', 'No such trigger.')
+  if (trigger.deleted_at) throw new HttpError(410, 'gone', 'This trigger was deleted.')
+  if (headers.id !== undefined && (headers.id.length > 128 || !/^[\x21-\x7e]+$/.test(headers.id)))
+    throw new HttpError(
+      401,
+      'missing_headers',
+      'The webhook-id must be 1–128 printable characters.',
+    )
+  const secret = seal.unseal(trigger.secret_sealed, context(id))
+  if (!secret) throw new HttpError(401, 'bad_signature', 'The signature could not be checked.')
+  const check = verifyWebhook(secret, headers, raw, Math.floor(nowMs / 1000))
+  if (!check.ok)
+    throw new HttpError(401, check.reason, 'The webhook signature is missing, stale or wrong.')
+  return trigger
+}
+
+/** An http(s) link, redacted and bounded; anything else (javascript:, data:, …) is no link. */
+function safeLink(value: string | null): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
+  } catch {
+    return null
+  }
+  return redact(value).slice(0, 2000)
+}
+
+/** The trigger's sample: the payload redacted as data, bounded; always valid JSON. */
+function sampleOf(payload: unknown): string {
+  const text = JSON.stringify(redactPayload(payload))
+  return text.length <= TRIGGER_LIMITS.bodyBytes ? text : JSON.stringify({ truncated: true })
+}
+
 /**
  * A call to `POST /hooks/<id>`. The route has checked the size and read the raw body; this checks the signature,
  * remembers the call id, and starts the job. Throws the HTTP error to answer otherwise.
@@ -233,14 +301,7 @@ export function receiveCall(
   raw: string,
   nowMs: number,
 ): { result: CallResult; drafts: DomainEventDraft[] } {
-  const trigger = row(sqlite, id)
-  if (!trigger) throw new HttpError(404, 'not_found', 'No such trigger.')
-  if (trigger.deleted_at) throw new HttpError(410, 'gone', 'This trigger was deleted.')
-  const secret = seal.unseal(trigger.secret_sealed, context(id))
-  if (!secret) throw new HttpError(401, 'bad_signature', 'The signature could not be checked.')
-  const check = verifyWebhook(secret, headers, raw, Math.floor(nowMs / 1000))
-  if (!check.ok)
-    throw new HttpError(401, check.reason, 'The webhook signature is missing, stale or wrong.')
+  const trigger = verifyCall(sqlite, seal, id, headers, raw, nowMs)
   const now = new Date(nowMs).toISOString()
   // Forget calls older than the idempotency window, then answer a repeat with the job it started.
   sqlite
@@ -267,7 +328,7 @@ export function receiveCall(
     app: trigger.app,
     ref: redact(ref ?? '(no reference)').slice(0, 200),
     title: title === null ? null : redact(title).slice(0, 200),
-    link: mapping.link ? (valueAt(payload, mapping.link)?.slice(0, 2000) ?? null) : null,
+    link: mapping.link ? safeLink(valueAt(payload, mapping.link)) : null,
     triggerId: id,
     missing: opening.missing,
   }
@@ -326,7 +387,7 @@ export function receiveCall(
   // The redacted payload is the trigger's sample for building its mapping.
   sqlite
     .prepare('UPDATE triggers SET sample = ?, last_called_at = ? WHERE id = ?')
-    .run(redactBounded(redact(raw), TRIGGER_LIMITS.bodyBytes), now, id)
+    .run(sampleOf(payload), now, id)
   sqlite
     .prepare(
       'INSERT OR REPLACE INTO trigger_calls (trigger_id, webhook_id, received_at, job_id) VALUES (?, ?, ?, ?)',
