@@ -1,6 +1,15 @@
-import { Navigate, useNavigate, useParams } from 'react-router'
+import { Link, Navigate, useNavigate, useParams } from 'react-router'
+import { useStreamQuery } from '../data/query-client.ts'
+import { AdvancedSection } from '../routes/settings/AdvancedSection.tsx'
+import { NotificationsSection } from '../routes/settings/NotificationsSection.tsx'
+import { RulesSection } from '../routes/settings/RulesSection.tsx'
+import { HermesVersionBanner } from '../routes/settings/HermesVersionBanner.tsx'
+import { agentsQuery } from '../routes/team/team-queries.ts'
+import { BoldSecurity } from './BoldSecurity.tsx'
+import { BoldSystem } from './BoldSystem.tsx'
 import { BoldUsage } from './BoldUsage.tsx'
 import { saveUi } from './bold-ui.ts'
+import '../routes/settings/settings.css'
 import './bold-settings.css'
 
 type SettingsSection =
@@ -63,20 +72,66 @@ function Placeholder({ section }: { section: SettingsItem }) {
     <section className="settings-placeholder" aria-labelledby="settings-placeholder-title">
       <h2 id="settings-placeholder-title">{section.title}</h2>
       <p>Comes in {section.phase ?? '11.9b'}</p>
+      {section.id === 'connections' && (
+        <p className="small muted">
+          Until then, the classic page has <Link to="/settings/models">models and keys</Link> and{' '}
+          <Link to="/settings/connections">connections</Link>.
+        </p>
+      )}
+      {section.id === 'tools' && (
+        <p className="small muted">
+          Until then, tool servers are on the classic{' '}
+          <Link to="/settings/connections">Connections</Link> page.
+        </p>
+      )}
+      {section.id === 'look' && (
+        <p className="small muted">
+          Until then, the classic <Link to="/settings/look">Look</Link> page has themes, motion and
+          text size.
+        </p>
+      )}
     </section>
   )
 }
 
-/** PLAN 11.9c: the bold shell's Settings frame. `/b/settings` opens Usage until the other sections land. */
+function Section({
+  section,
+  agents,
+}: {
+  section: SettingsSection
+  agents: ReturnType<typeof useAgents>
+}) {
+  switch (section) {
+    case 'rules':
+      return <RulesSection agents={agents} heading="Rules" />
+    case 'notifications':
+      return <NotificationsSection />
+    case 'security':
+      return <BoldSecurity />
+    case 'advanced':
+      return <AdvancedSection />
+    case 'system':
+      return <BoldSystem />
+    case 'usage':
+      return <BoldUsage />
+    default:
+      return <Placeholder section={SETTINGS_SECTIONS.find((item) => item.id === section)!} />
+  }
+}
+
+function useAgents() {
+  return useStreamQuery(agentsQuery).data ?? []
+}
+
+/** PLAN 11.9c/11.9b: the bold shell's Settings frame. Connections, Tools and Look still belong to 11.9a. */
 export function BoldSettings() {
   const params = useParams()
   const navigate = useNavigate()
+  const agents = useAgents()
   const section = isSettingsSection(params.section) ? params.section : 'usage'
   // An unknown section is not silently Usage under its own name.
   if (params.section !== undefined && !isSettingsSection(params.section))
     return <Navigate to="/b/settings/usage" replace />
-  const current = SETTINGS_SECTIONS.find((item) => item.id === section) ?? SETTINGS_SECTIONS[5]!
-
   return (
     <div className="page bold-settings-page">
       <div className="setgrid">
@@ -106,7 +161,8 @@ export function BoldSettings() {
           </button>
         </nav>
         <div className="setmain">
-          {section === 'usage' ? <BoldUsage /> : <Placeholder section={current} />}
+          <HermesVersionBanner />
+          <Section section={section} agents={agents} />
         </div>
       </div>
     </div>

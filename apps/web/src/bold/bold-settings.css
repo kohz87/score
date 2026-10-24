@@ -92,14 +92,23 @@
 }
 
 .bold-settings-page .grid2,
+.bold-settings-page .grid3,
 .bold-settings-page .grid4 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
+.bold-settings-page .grid3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .bold-settings-page .grid4 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bold-settings-page .span2 {
+  grid-column: span 2;
 }
 
 .bold-settings-page .card {
@@ -123,6 +132,472 @@
   font-size: 0.93em;
   display: inline-flex;
   align-items: center;
+}
+
+.bold-settings-page .field {
+  background: var(--field);
+  border: 0;
+  border-radius: 14px;
+  min-height: 46px;
+  padding: 0 14px;
+  width: 100%;
+}
+
+.bold-settings-page .check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.bold-settings-page .check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+.bold-settings-page .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+  flex: none;
+}
+
+/* The classic Settings cards keep their data and behaviour; the bold shell changes only their surface. */
+.bold-settings-page .settings-card {
+  background: var(--panel);
+  border: 0;
+  border-radius: 24px;
+  padding: 18px;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.bold-settings-page .settings-card h2 {
+  font-family: var(--font-d);
+  font-size: 38px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.bold-settings-page .settings-card h3 {
+  font-family: var(--font-d);
+  font-size: 22px;
+}
+
+.bold-settings-page .settings-muted,
+.bold-settings-page .settings-muted-strong,
+.bold-settings-page .settings-detail {
+  color: var(--muted);
+}
+
+.bold-settings-page .settings-pill,
+.bold-settings-page .settings-primary,
+.bold-settings-page .rules-pill,
+.bold-settings-page .rules-primary {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-weight: 700;
+  font-size: 0.87em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--field);
+  color: var(--ink);
+}
+
+.bold-settings-page .settings-primary,
+.bold-settings-page .rules-primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+.bold-settings-page .settings-pill:disabled,
+.bold-settings-page .settings-primary:disabled,
+.bold-settings-page .rules-pill:disabled,
+.bold-settings-page .rules-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bold-settings-page .settings-link,
+.bold-settings-page .rules-link,
+.bold-settings-page .rules-remove {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.bold-settings-page .settings-form {
+  background: var(--field);
+  border-radius: 16px;
+  padding: 14px 16px;
+  gap: 10px;
+}
+
+.bold-settings-page .settings-form label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .settings-form input,
+.bold-settings-page .advanced-edit input,
+.bold-settings-page .rules-forms input,
+.bold-settings-page .rules-forms select,
+.bold-settings-page .logs-controls select,
+.bold-settings-page .logs-controls input[type='search'] {
+  background: var(--panel);
+  border: 0;
+  border-radius: 14px;
+  color: var(--ink);
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.bold-settings-page .settings-command {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: 18px;
+}
+
+.bold-settings-page .settings-origins {
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.bold-settings-page .settings-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.bold-settings-page .settings-check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+/* Rules: the prototype's heading, one mode card and three coloured lists. */
+.bold-settings-page .rules-card {
+  background: transparent;
+  padding: 0;
+  gap: 16px;
+}
+
+.bold-settings-page .rules-card > div:first-child h2 {
+  font-size: 38px;
+}
+
+.bold-settings-page .rules-style {
+  background: var(--panel);
+  border-radius: 24px;
+  padding: 18px;
+  gap: 10px;
+}
+
+.bold-settings-page .rules-style legend {
+  font-family: var(--font-d);
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.bold-settings-page .rules-option {
+  background: var(--field);
+  border-radius: 14px;
+  color: var(--ink);
+}
+
+.bold-settings-page .rules-option strong {
+  color: var(--ink);
+}
+
+.bold-settings-page .rules-option small,
+.bold-settings-page .rules-note,
+.bold-settings-page .rules-empty,
+.bold-settings-page .rules-item small {
+  color: var(--muted);
+}
+
+.bold-settings-page .rules-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.bold-settings-page .rules-column {
+  background: var(--panel);
+  border-radius: 24px;
+  padding: 18px;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.bold-settings-page .rules-heading {
+  font-family: var(--font-d);
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.bold-settings-page .rules-column[data-kind='go'] .rules-heading {
+  color: var(--ok);
+}
+
+.bold-settings-page .rules-column[data-kind='ask'] .rules-heading {
+  color: var(--warn);
+}
+
+.bold-settings-page .rules-column[data-kind='never'] .rules-heading {
+  color: var(--bad);
+}
+
+.bold-settings-page .rules-forms form {
+  background: var(--field);
+  border-radius: 16px;
+}
+
+.bold-settings-page .rules-forms label {
+  color: var(--muted);
+}
+
+.bold-settings-page .rules-save {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  border-radius: 22px;
+  padding: 14px 16px;
+}
+
+.bold-settings-page .rules-save pre {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: 14px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.bold-settings-page .rules-save .rules-pill,
+.bold-settings-page .rules-save .rules-primary {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+.bold-settings-page .rules-save .rules-link {
+  color: var(--hi-ink);
+}
+
+/* Advanced: a searchable list of fields and the same staged preview/apply flow as the classic page. */
+.bold-settings-page .advanced-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
+}
+
+.bold-settings-page .advanced-intro {
+  flex: 1 1 280px;
+}
+
+.bold-settings-page .advanced-search {
+  flex: 1 1 260px;
+  background: var(--field);
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink);
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.bold-settings-page .advanced-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bold-settings-page .advanced-item {
+  background: var(--field);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bold-settings-page .advanced-line,
+.bold-settings-page .advanced-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bold-settings-page .advanced-key,
+.bold-settings-page .advanced-value {
+  color: var(--ink);
+}
+
+.bold-settings-page .advanced-value[data-staged='true'],
+.bold-settings-page .settings-status {
+  color: var(--ok);
+}
+
+.bold-settings-page .advanced-tray {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  border-radius: 22px;
+  padding: 14px 16px;
+}
+
+.bold-settings-page .advanced-tray h3 {
+  color: var(--hi-ink);
+}
+
+.bold-settings-page .advanced-tray .settings-link {
+  color: var(--hi-ink);
+}
+
+.bold-settings-page .advanced-tray .settings-pill,
+.bold-settings-page .advanced-tray .settings-primary {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+.bold-settings-page .advanced-diff {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: 14px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+/* Remote access and security. */
+.bold-settings-page .bold-security {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bold-settings-page .bold-security > h2,
+.bold-settings-page .bold-system > h2 {
+  font-size: 38px;
+  line-height: 1.1;
+}
+
+.bold-settings-page .settings-remote h3 {
+  margin-top: 4px;
+}
+
+.bold-settings-page .settings-password {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .settings-password input {
+  background: var(--field);
+  border: 0;
+  border-radius: 14px;
+  min-height: 46px;
+  padding: 0 14px;
+  color: var(--ink);
+}
+
+/* System: the board's two-up cards, with logs and Pause everyone across both columns. */
+.bold-settings-page .bold-system {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bold-settings-page .bold-system .settings-card h2 {
+  font-size: 22px;
+}
+
+.bold-settings-page .bold-system .system-logs {
+  grid-column: span 2;
+}
+
+.bold-settings-page .system-pause {
+  grid-column: span 2;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* The prototype's 36px control height on desktop; the phone rule at the end raises it to a 44px touch target. */
+.bold-settings-page .system-pause .btn {
+  min-height: 36px;
+}
+
+.bold-settings-page .rules-save .rules-link,
+.bold-settings-page .advanced-tray .settings-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+}
+
+.bold-settings-page .settings-banner h2 {
+  font-size: 22px;
+}
+
+.bold-settings-page .logs-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.bold-settings-page .logs-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bold-settings-page .logs-controls label:has(input[type='checkbox']) {
+  flex-direction: row;
+  align-items: center;
+}
+
+.bold-settings-page .logs-scroll {
+  background: var(--code-bg);
+  border-radius: 18px;
+  padding: 12px 14px;
+  color: var(--code-ink);
+  font-family: var(--font-m);
+  font-size: 12px;
+}
+
+.bold-settings-page .logs-table {
+  color: inherit;
+}
+
+.bold-settings-page .about-facts dt,
+.bold-settings-page .about-facts dd {
+  color: var(--ink);
+}
+
+.bold-settings-page .about-facts dt {
+  color: var(--muted);
 }
 
 .bold-settings-page .usage {
@@ -413,7 +888,18 @@
   }
 
   .bold-settings-page .grid2,
+  .bold-settings-page .grid3,
   .bold-settings-page .grid4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bold-settings-page .span2,
+  .bold-settings-page .bold-system .system-logs,
+  .bold-settings-page .system-pause {
+    grid-column: auto;
+  }
+
+  .bold-settings-page .rules-columns {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -423,5 +909,17 @@
 
   .bold-settings-page .usage-spend-name {
     width: 88px;
+  }
+}
+
+@media (max-width: 640px) {
+  .bold-settings-page .settings-pill,
+  .bold-settings-page .settings-primary,
+  .bold-settings-page .rules-pill,
+  .bold-settings-page .rules-primary,
+  .bold-settings-page .system-pause .btn,
+  .bold-settings-page .rules-save .rules-link,
+  .bold-settings-page .advanced-tray .settings-link {
+    min-height: 44px;
   }
 }

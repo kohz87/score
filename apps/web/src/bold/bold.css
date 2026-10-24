@@ -1,8 +1,7 @@
 /* The bold shell's frame, rebuilt from docs/design/bold/prototype.html. Every rule is scoped to [data-ui='bold'];
    colours come from tokens.css only. */
 [data-ui='bold'].bold-shell {
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -478,6 +477,11 @@ body.fit {
   overflow: hidden;
 }
 
+body.fit [data-ui='bold'].bold-shell {
+  height: 100dvh;
+  overflow: hidden;
+}
+
 body.fit [data-ui='bold'] .main {
   flex: 1;
   min-height: 0;
@@ -586,6 +590,11 @@ body.fit [data-ui='bold'] .stream {
 
   [data-ui='bold'] .main {
     padding-bottom: 96px;
+  }
+
+  /* Scrolling a control into view (keyboard focus, find-in-page) stops above the fixed tab bar, not under it. */
+  html:has(.bold-shell) {
+    scroll-padding-bottom: 96px;
   }
 
   [data-ui='bold'] .roomgrid {
