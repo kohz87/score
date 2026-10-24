@@ -1,0 +1,457 @@
+/* PLAN 11.10d: the recipe editor, built from docs/design/bold/prototype.html (mRecipe and the .dialog/.seg/.step rules).
+   The scrim is absolute rather than fixed because the bold shell already owns the viewport and clips overflow; keeping
+   it absolute also keeps the theme guard's fixed/sticky allowlist unchanged. */
+[data-ui='bold'] .bold-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: max(40px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 40px
+    max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(5, 6, 9, 0.62);
+}
+
+[data-ui='bold'] .bold-dialog {
+  width: 100%;
+  max-width: 760px;
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 30px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+[data-ui='bold'] .bold-dialog.wide {
+  max-width: 1160px;
+}
+
+[data-ui='bold'] .bold-recipes-title {
+  font-size: 30px;
+  margin-right: 4px;
+}
+
+[data-ui='bold'] .bold-seg {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  background: var(--field);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+[data-ui='bold'] .bold-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--ink2);
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.87em;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-seg button.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-dialog > .row > .icon-btn[aria-label='Close'] {
+  margin-left: auto;
+}
+
+[data-ui='bold'] .bold-badge {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-badge--ok {
+  color: var(--ok);
+  background: rgba(94, 227, 191, 0.18);
+}
+
+[data-ui='bold'] .bold-badge--bad {
+  color: var(--bad);
+  background: rgba(255, 151, 174, 0.18);
+}
+
+[data-ui='bold'] .bold-recipes-actions {
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-recipes-problems {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-recipes-notice {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-inner {
+  background: var(--deep);
+  border-radius: 20px;
+  padding: 16px;
+}
+
+[data-ui='bold'] .bold-recipes-columns {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 18px;
+  min-height: 0;
+}
+
+[data-ui='bold'] .bold-recipes-listcol {
+  flex: 999 1 460px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-recipes-inspector {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-recipes-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+[data-ui='bold'] .bold-recipes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-recipes-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+[data-ui='bold'] .bold-recipes-rowmain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-step {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 18px;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--deep);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-step.sel {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+[data-ui='bold'] .bold-step-copy {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-step-copy > b {
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-step-mark {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--warn);
+  font-weight: 800;
+}
+
+[data-ui='bold'] .bold-step-mark--missing {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-recipes-rowactions {
+  display: flex;
+  gap: 4px;
+}
+
+[data-ui='bold'] .icon-btn.bold-recipes-remove {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-recipes-routes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  padding: 0 10px 4px 48px;
+}
+
+[data-ui='bold'] .bold-recipes-route {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.87em;
+}
+
+[data-ui='bold'] .bold-recipes-route select,
+[data-ui='bold'] .bold-field,
+[data-ui='bold'] .bold-recipes-inspector .orch-field input,
+[data-ui='bold'] .bold-recipes-inspector .orch-field select {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .orch-field textarea {
+  width: 100%;
+  min-height: 90px;
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+[data-ui='bold'] .bold-recipes-route select {
+  width: auto;
+  max-width: 220px;
+}
+
+[data-ui='bold'] .bold-lab {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.87em;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .orch-field {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .orch-field > span,
+[data-ui='bold'] .bold-recipes-inspector .orch-field > label > span {
+  color: var(--muted);
+  font-size: 0.87em;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .orch-field > legend {
+  color: var(--muted);
+  font-size: 0.87em;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .wf-template__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+[data-ui='bold'] .bold-recipes-inspector .wf-template__bar button,
+[data-ui='bold'] .bold-recipes-inspector .wf-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font: inherit;
+  font-size: 0.87em;
+}
+
+[data-ui='bold'] .bold-recipes-inspector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+[data-ui='bold'] .bold-recipes-hint {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-recipes-gate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+[data-ui='bold'] .bold-recipes-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-recipes-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-recipes-rule select,
+[data-ui='bold'] .bold-recipes-rule input {
+  flex: 1 1 180px;
+}
+
+[data-ui='bold'] .bold-recipes-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-recipes-details-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+[data-ui='bold'] .bold-recipes-inputs {
+  font-size: 0.93em;
+}
+
+[data-ui='bold'] .bold-danger {
+  border: 1.5px solid var(--bad);
+  background: transparent;
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-recipes-conflict,
+[data-ui='bold'] .bold-recipes-graphnote {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-recipes-conflict p,
+[data-ui='bold'] .bold-recipes-graphnote p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-error {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-recipes-graph {
+  min-height: 300px;
+}
+
+[data-ui='bold'] .bold-recipes-graph .wf-canvas,
+[data-ui='bold'] .bold-recipes-graph .orch-canvas {
+  background: var(--deep);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-recipes-graph .wf-canvas__viewport {
+  max-height: 540px;
+  background: var(--deep);
+  border-radius: 14px;
+}
+
+[data-ui='bold'] .bold-recipes-graph .origin-top-left {
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+}
+
+[data-ui='bold'] .bold-recipes-graph .orch-node--edit {
+  cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-scrim {
+    padding: 0;
+  }
+
+  [data-ui='bold'] .bold-dialog,
+  [data-ui='bold'] .bold-dialog.wide {
+    max-width: none;
+    min-height: 100%;
+    max-height: none;
+    border-radius: 0;
+    padding: max(16px, env(safe-area-inset-top, 0px)) 14px
+      calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  [data-ui='bold'] .bold-recipes-columns {
+    flex-direction: column;
+  }
+
+  [data-ui='bold'] .bold-recipes-listcol,
+  [data-ui='bold'] .bold-recipes-inspector {
+    flex: none;
+    width: 100%;
+  }
+
+  [data-ui='bold'] .bold-recipes-actions {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  [data-ui='bold'] .bold-recipes-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  [data-ui='bold'] .bold-recipes-inspector-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .bold-dialog,
+  [data-ui='bold'] .bold-dialog *,
+  [data-ui='bold'] .bold-dialog *::before,
+  [data-ui='bold'] .bold-dialog *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* The dialog takes focus only to hand it on; it draws no ring of its own (the prototype has none). */
+[data-ui='bold'] .bold-dialog.wide:focus {
+  outline: none;
+}
+
+[data-ui='bold'] .icon-btn.bold-recipes-remove {
+  color: var(--bad);
+}
