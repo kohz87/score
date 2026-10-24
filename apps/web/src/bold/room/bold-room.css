@@ -1528,8 +1528,9 @@
   }
 
   [data-ui='bold'] .bold-pins {
-    /* The prototype's 40% clips the first card's actions at 360×740; the card is the decision, so let it fit. */
-    max-height: 52%;
+    /* The prototype's 40% clips the first card's actions at 360×740; the card is the decision, so let it fit. Capped so
+       a short screen (the keyboard up) keeps room for the jobs and the stream. */
+    max-height: min(52%, 22rem);
   }
 
   [data-ui='bold'] .bold-starters {

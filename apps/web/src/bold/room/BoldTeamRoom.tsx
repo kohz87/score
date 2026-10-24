@@ -126,10 +126,12 @@ function LoadedTeamRoom({
       if (jobId === 'all') next.delete('job')
       else next.set('job', jobId)
       next.delete('message')
-      if (phone) {
+      // On a phone, opening a job from the list is a step Back undoes; moving from one job to another replaces it and
+      // keeps that entry's mark, so Back still lands on the list.
+      if (phone && !leaving) {
         const previous = (location.state as Record<string, unknown> | null) ?? {}
         setParams(next, { state: { ...previous, phoneJobFromList: true } })
-      } else setParams(next, { replace: true })
+      } else setParams(next, { replace: true, state: location.state })
     },
     [location.state, params, phone, setParams],
   )
@@ -172,8 +174,8 @@ function LoadedTeamRoom({
     const next = new URLSearchParams(params)
     if (!next.has('message')) return
     next.delete('message')
-    setParams(next, { replace: true })
-  }, [params, setParams])
+    setParams(next, { replace: true, state: location.state })
+  }, [location.state, params, setParams])
 
   const revealSeek = useCallback(
     (jobId: string | null) => {
@@ -195,9 +197,9 @@ function LoadedTeamRoom({
     saveDraft(room.id, `/${command} `)
     const next = new URLSearchParams(params)
     next.delete('command')
-    setParams(next, { replace: true })
+    setParams(next, { replace: true, state: location.state })
     focusComposer()
-  }, [command, focusComposer, params, room.id, setParams])
+  }, [command, focusComposer, location.state, params, room.id, setParams])
 
   return (
     <>
@@ -335,7 +337,7 @@ function LoadedTeamRoom({
             if (!params.has('message')) return
             const next = new URLSearchParams(params)
             next.delete('message')
-            setParams(next, { replace: true })
+            setParams(next, { replace: true, state: location.state })
           }}
         />
       </div>
