@@ -20,6 +20,7 @@ import { useStatusLine } from '../../live/use-activity.ts'
 import { nestSubagentCalls, subagentLine, subagentReport } from '../../components/subagent.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { MODEL_DIDNT_ANSWER, formatElapsed, isNotProcessedNotice, stalledFor } from './stall.ts'
+import type { WorkspaceTarget } from './workspace-link.ts'
 
 /** Expand all / Collapse all (PLAN 5.25): a counter, so pressing the same button twice still reaches cards opened by hand. */
 type Expansion = { open: boolean; version: number }
@@ -130,9 +131,11 @@ function Part({
   authorName,
   readOnly,
   nested,
+  workspaceLinkFor,
 }: {
   part: MessagePart
   nested: ToolPart[]
+  workspaceLinkFor?: ((target: WorkspaceTarget) => string) | undefined
   agents: AgentSummary[]
   message: Message
   expansion: Expansion
@@ -160,6 +163,7 @@ function Part({
             workspace={{
               agentId: message.author.kind === 'agent' ? message.author.agentId : null,
               agentIds: agents.map((agent) => agent.id),
+              ...(workspaceLinkFor ? { linkFor: workspaceLinkFor } : {}),
             }}
           />
         </>
@@ -511,9 +515,12 @@ export function MessageItem({
   readOnly = false,
   importedLabel,
   versionControl,
+  workspaceLinkFor,
 }: {
   message: Message
   agents: AgentSummary[]
+  /** Where `workspace://` links open (the bold room: the job's Workbench); classic keeps the Team › Workspace link. */
+  workspaceLinkFor?: (target: WorkspaceTarget) => string
   /** A message of a previous version (PLAN 5.33): greyed, no actions. */
   readOnly?: boolean
   /** Where an imported copy came from ("Telegram"); such messages cannot be edited or retried. */
@@ -590,6 +597,7 @@ export function MessageItem({
             return (
               <Part
                 key={partKey(message.parts, index)}
+                workspaceLinkFor={workspaceLinkFor}
                 nested={
                   part.kind === 'tool' && part.callId
                     ? (nesting.children.get(part.callId) ?? [])
