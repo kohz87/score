@@ -87,11 +87,21 @@ export function ExchangeRequestCard({
   const to = agents.find((agent) => agent.id === exchange.to)
   const [pending, setPending] = useState<PendingOption>(null)
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState<{ pauseKey: string; text: string } | null>(null)
+  const [sent, setSent] = useState<{
+    reason: string | null
+    options: string
+    text: string
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const pauseKey = `${exchange.updatedAt}:${exchange.pause?.reason ?? ''}:${exchange.pause?.options.join(',') ?? ''}`
-  const sentText = sent?.pauseKey === pauseKey ? sent.text : null
   const options = exchange.pause?.options ?? []
+  const pauseReason = exchange.pause?.reason ?? null
+  const pauseOptions = options.join(',')
+  // A server bump of updatedAt is not a new pause: only a cleared pause or a different reason/options releases the
+  // buttons again. This keeps the sent state until the exchange itself changes.
+  const sentMatchesPause =
+    sent !== null && sent.reason === pauseReason && sent.options === pauseOptions
+  if (sent !== null && (!exchange.pause || !sentMatchesPause)) setSent(null)
+  const sentText = sentMatchesPause ? sent.text : null
   const reassignChoices = agents.filter(
     (agent) => agent.id !== exchange.from && agent.id !== exchange.to,
   )
@@ -99,13 +109,15 @@ export function ExchangeRequestCard({
   const [form, setForm] = useState({
     note: '',
     text: '',
-    agent: reassignChoices[0]?.id ?? '',
+    agent: '',
     usd: '10',
     turns: '4',
   })
 
   async function choose(option: ExchangeOption) {
     if (needsForm(option)) {
+      if (option === 'reassign')
+        setForm((current) => ({ ...current, agent: reassignChoices[0]?.id ?? '' }))
       setPending(option)
       setError(null)
       return
@@ -127,8 +139,8 @@ export function ExchangeRequestCard({
     )
       return setError('Choose between 1 and 20 turns.')
     const usd = Number(form.usd)
-    if (option === 'more_spend' && (!Number.isFinite(usd) || usd <= 0))
-      return setError('Enter an amount above zero.')
+    if (option === 'more_spend' && (!Number.isFinite(usd) || usd <= 0 || usd > 1000))
+      return setError('Enter an amount above 0 and at most 1000 dollars.')
     setBusy(true)
     setError(null)
     try {
@@ -137,7 +149,8 @@ export function ExchangeRequestCard({
         body: JSON.stringify(body),
       })
       setSent({
-        pauseKey,
+        reason: pauseReason,
+        options: pauseOptions,
         text: option === 'send_back' ? 'Sent back with your note.' : 'Decision sent.',
       })
       setPending(null)
@@ -213,6 +226,7 @@ export function ExchangeRequestCard({
               <input
                 type="number"
                 min="0.01"
+                max="1000"
                 step="0.01"
                 value={form.usd}
                 onChange={(event) => setForm({ ...form, usd: event.target.value })}
@@ -242,7 +256,9 @@ export function ExchangeRequestCard({
               {busy
                 ? 'Sending…'
                 : pending === 'more_turns'
-                  ? `Give ${form.turns} more turns`
+                  ? form.turns.trim()
+                    ? `Give ${form.turns} more turns`
+                    : 'Give more turns'
                   : optionLabel(pending)}
             </button>
             <button
@@ -454,6 +470,7 @@ function ApprovalRequestCard({
 }
 
 function RoomApprovals({
+  roomId,
   approvals,
   messages,
   jobs,
@@ -461,6 +478,7 @@ function RoomApprovals({
   agents,
   report,
 }: {
+  roomId: string
   approvals: Approval[]
   messages: Message[]
   jobs: Job[]
@@ -469,19 +487,16 @@ function RoomApprovals({
   report: CountCards
 }) {
   const cards = approvals.flatMap((approval) => {
+    // `approvalsQuery` is global. A room ref other than this one means the card belongs to another room's strip.
+    if (approval.refs.some((ref) => ref.kind === 'room' && ref.roomId !== roomId)) return []
     const message = messages.find((item) =>
       item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
     )
     const known = jobs.find((item) => item.id === message?.jobId)
     if (known && selectedJob !== 'all' && known.id !== selectedJob) return []
     // The approvals read is complete; the message window is not. An approval whose message is older than the
-    // loaded page still shows as a request card (with the selected/default job as its reference).
-    const job =
-      known ??
-      jobs.find((item) => item.id === selectedJob) ??
-      jobs.find((item) => item.isDefault) ??
-      jobs[0]
-    return [{ approval, job }]
+    // loaded page still shows as a request card, but with no job chip: the selected/default job is not its job.
+    return [{ approval, job: known }]
   })
   useReportedCount('approvals', cards.length, report)
   return (
@@ -495,11 +510,13 @@ function RoomApprovals({
 
 /** The "Needs you" pins: approvals, paused exchanges and run-safety cards above the stream. */
 export function RoomRequests({
+  roomId,
   jobs,
   agents,
   messages,
   selectedJob,
 }: {
+  roomId: string
   jobs: Job[]
   agents: AgentSummary[]
   messages?: Message[]
@@ -572,6 +589,7 @@ export function RoomRequests({
           Needs you
         </h2>
         <RoomApprovals
+          roomId={roomId}
           approvals={needsApproval}
           messages={messages ?? []}
           jobs={jobs}

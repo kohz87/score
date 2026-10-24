@@ -193,6 +193,9 @@ for (const viewport of sizes) {
       const card = page.getByRole('article', { name: /May I install a package/ })
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await expect(card).toContainText('npm install ws@8')
+      // Read the job that owns the approval message; only then can the strip know its real job.
+      await page.getByRole('tab', { name: /Activity feed/ }).click()
+      await expect(card).toContainText('Activity feed')
 
       await card.getByRole('button', { name: 'More', exact: true }).click()
       await expect(card.getByRole('group', { name: 'More approval choices' })).toBeVisible()
@@ -219,6 +222,53 @@ for (const viewport of sizes) {
       await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Allow', exact: true })).toHaveCount(1)
       await expect(page.getByText('Waiting in Needs you')).toBeVisible()
+    })
+
+    test(`an approval from another room never lands in this strip at ${label}`, async ({
+      page,
+    }) => {
+      const foreign = {
+        ...approval('approval-foreign', 'May I install a package?'),
+        refs: [{ kind: 'room', roomId: 'other-room' }],
+      }
+      await openBoldRoom(page, { jobs: roomJobs(), approvals: [foreign], exchanges: [] })
+      await expect(page.getByRole('article', { name: /May I install a package/ })).toHaveCount(0)
+      await expect(page.locator('.bold-pins')).not.toContainText('May I install a package')
+    })
+
+    test(`an approval leaves when the server resolves it at ${label}`, async ({ page }) => {
+      const served: Json = approval('approval-package', 'May I install a package?')
+      const decided = {
+        ...served,
+        phase: 'decided',
+        status: 'approved',
+        actionable: false,
+        decision: { choice: 'once', by: 'you', at: at(12) },
+        delivery: 'applied',
+      }
+      const state = await openBoldRoom(page, {
+        jobs: roomJobs(),
+        exchanges: [],
+        handle: (request) => {
+          if (request.method === 'GET' && request.path === '/api/approvals')
+            return { body: { asOfSeq: 12, items: [served], nextCursor: null } }
+          if (request.method === 'GET' && request.path === '/api/approvals/approval-package')
+            return { body: served }
+          return undefined
+        },
+      })
+      const card = page.getByRole('article', { name: /May I install a package/ })
+      await expect(card).toBeVisible()
+      await expect(page.getByText('Waiting in Needs you')).toBeVisible()
+
+      // The decision is now the server's state; reloading is a fresh read of that state.
+      Object.assign(served, decided)
+      await page.reload()
+      await expect(card).toHaveCount(0)
+      await expect(page.getByText('Waiting in Needs you')).toHaveCount(0)
+      const stream = page.locator('.stream')
+      await expect(stream.getByText('Approved by you')).toBeVisible()
+      expect(state.requests.some((request) => request.path === '/api/approvals')).toBe(true)
     })
 
     for (const failure of [

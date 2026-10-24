@@ -23,7 +23,7 @@ import {
 import { saveCandidates, SaveToKnowledge } from '../../routes/knowledge/SaveToKnowledge.tsx'
 import { boldJobLink, boldMessageLink, boldWorkspaceLink } from '../bold-links.ts'
 import { jobResultsKey } from '../bold-results-queries.ts'
-import { approvalNeedsYou, jobMatchesFilter, type JobFilter } from './room-model.ts'
+import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomMessagesQuery, roomPinsQuery, roomSeekQuery, setRoomPin } from './room-queries.ts'
 
 function messageText(message: Message) {
@@ -398,8 +398,8 @@ export function RoomMessageStream({
   const versions = useStreamQuery(versionsDefinition).data ?? []
   const approvalsData = useStreamQuery(approvalsQuery).data
   const approvalPointerIds = useMemo(
-    () => new Set((approvalsData ?? []).filter(approvalNeedsYou).map((approval) => approval.id)),
-    [approvalsData],
+    () => approvalPointerSet(approvalsData ?? [], roomId),
+    [approvalsData, roomId],
   )
   const hidden = usePendingDeletes().hidden
   const [view, setView] = useState<

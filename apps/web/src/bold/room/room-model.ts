@@ -117,6 +117,19 @@ export function approvalNeedsYou(approval: Approval): boolean {
   return approval.status === 'pending'
 }
 
+/** Approvals that belong in this room's Needs-you strip: open and either unaddressed or addressed to this room. */
+export function roomApprovals(approvals: Approval[], roomId: string): Approval[] {
+  return approvals.filter(
+    (approval) =>
+      approvalNeedsYou(approval) &&
+      !approval.refs.some((ref) => ref.kind === 'room' && ref.roomId !== roomId),
+  )
+}
+
+export function approvalPointerSet(approvals: Approval[], roomId: string): Set<string> {
+  return new Set(roomApprovals(approvals, roomId).map((approval) => approval.id))
+}
+
 /** The prototype's expand chip: the first card stays visible, the rest wait behind its count. */
 export function pinsMoreLabel(count: number, expanded: boolean): string | null {
   if (count <= 1) return null

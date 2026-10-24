@@ -16,9 +16,9 @@ import { RoomRunPanel } from '../../routes/orchestrations/RoomRunPanel.tsx'
 import { statusLabel } from '../../routes/orchestrations/orch-model.ts'
 import { workflowRunsQuery } from '../../routes/workflows/workflow-queries.ts'
 import { WorkflowRoomPanel } from '../../routes/workflows/WorkflowRoomPanel.tsx'
-import { agentsQuery } from '../../routes/chat/queries.ts'
+import { agentsQuery, approvalsQuery } from '../../routes/chat/queries.ts'
 import { ChevronIcon } from '../BoldIcons.tsx'
-import { exchangeStatus, jobStateLabel, needsYou } from './room-model.ts'
+import { approvalPointerSet, exchangeStatus, jobStateLabel, needsYou } from './room-model.ts'
 import {
   currentExchange,
   type JobRecipe,
@@ -98,10 +98,18 @@ function JobPicker({ jobs, onPick }: { jobs: Job[]; onPick: (jobId: string) => v
   )
 }
 
-function ThreadMessage({ message, agents }: { message: Message; agents: AgentSummary[] }) {
+function ThreadMessage({
+  message,
+  agents,
+  approvalPointerIds,
+}: {
+  message: Message
+  agents: AgentSummary[]
+  approvalPointerIds?: ReadonlySet<string>
+}) {
   return (
     <div className="bold-message bold-thread-message" data-message-id={message.id}>
-      <MessageItem message={message} agents={agents} />
+      <MessageItem message={message} agents={agents} approvalPointerIds={approvalPointerIds} />
     </div>
   )
 }
@@ -247,6 +255,11 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
     [job.id, roomId],
   )
   const messagesState = useStreamQuery(messagesDefinition)
+  const approvals = useStreamQuery(approvalsQuery).data
+  const approvalPointerIds = useMemo(
+    () => approvalPointerSet(approvals ?? [], roomId),
+    [approvals, roomId],
+  )
   const [olderPages, setOlderPages] = useState<MessagePageData[]>([])
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -445,7 +458,12 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
             >
               <h3 className="bold-thread-round-label">{round.label}</h3>
               {round.messages.map((message) => (
-                <ThreadMessage key={message.id} message={message} agents={agents} />
+                <ThreadMessage
+                  key={message.id}
+                  message={message}
+                  agents={agents}
+                  approvalPointerIds={approvalPointerIds}
+                />
               ))}
             </section>
           ))}

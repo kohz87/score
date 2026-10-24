@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { approvalsQuery } from '../../routes/chat/queries.ts'
 import {
+  agents,
   disposeRoomTest,
   jsonResponse,
   makeExchange,
@@ -100,6 +101,7 @@ test('an approval leads the pins, the count expands the rest, and both are prote
   stubRoom(makeExchange())
   renderInRoom(
     <RoomRequests
+      roomId="room-1"
       jobs={[job, other]}
       agents={[]}
       selectedJob="all"
@@ -136,6 +138,7 @@ test('Allow sends the approval decision once and the answered card goes', async 
   const fetchMock = stubRoom(null, approval, decisionGate.promise)
   const { queryClient } = renderInRoom(
     <RoomRequests
+      roomId="room-1"
       jobs={[job]}
       agents={[]}
       selectedJob="all"
@@ -180,7 +183,7 @@ test('send back asks for the note the exchange decision needs, then posts it', a
   const decisionGate = deferred<void>()
   const fetchMock = stubRoom(exchange, approval, decisionGate.promise)
   const { queryClient } = renderInRoom(
-    <RoomRequests jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
   )
 
   fireEvent.click(await screen.findByRole('button', { name: 'Send back' }))
@@ -224,6 +227,7 @@ test('More offers this session and always for the asking agent', async () => {
   const fetchMock = stubRoom(null)
   renderInRoom(
     <RoomRequests
+      roomId="room-1"
       jobs={[job]}
       agents={[]}
       selectedJob="all"
@@ -268,7 +272,9 @@ test('a failed delivery explains the retry and keeps the approval open', async (
       return jsonResponse({ asOfSeq: 0, items: [] })
     }),
   )
-  renderInRoom(<RoomRequests jobs={[job]} agents={[]} selectedJob="all" messages={[]} />)
+  renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
   await screen.findByText('Couldn’t deliver your answer. Try again.')
   const retry = screen.getByRole('button', { name: 'Retry' })
   expect((retry as HTMLButtonElement).disabled).toBe(false)
@@ -288,7 +294,9 @@ test('an approval answered outside Score says where to answer it', async () => {
       return jsonResponse({ asOfSeq: 0, items: [] })
     }),
   )
-  renderInRoom(<RoomRequests jobs={[job]} agents={[]} selectedJob="all" messages={[]} />)
+  renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
   await screen.findByText('Answer it in the chat app the agent asked in.')
   expect(screen.queryByRole('button', { name: 'Allow' })).toBeNull()
 })
@@ -298,7 +306,9 @@ test('a send-back without a note says what is missing and posts nothing', async 
     pause: { reason: 'no_decision', options: ['send_back'] },
   })
   const fetchMock = stubRoom(exchange)
-  renderInRoom(<RoomRequests jobs={[job]} agents={[]} selectedJob="all" messages={[]} />)
+  renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
 
   fireEvent.click(await screen.findByRole('button', { name: 'Send back' }))
   fireEvent.click(screen.getByRole('button', { name: 'Send back' }))
@@ -308,7 +318,15 @@ test('a send-back without a note says what is missing and posts nothing', async 
 
 test('a selected job shows only its own requests', async () => {
   stubRoom(makeExchange({ jobId: 'job-2' }))
-  renderInRoom(<RoomRequests jobs={[job, other]} agents={[]} selectedJob="job-2" messages={[]} />)
+  renderInRoom(
+    <RoomRequests
+      roomId="room-1"
+      jobs={[job, other]}
+      agents={[]}
+      selectedJob="job-2"
+      messages={[]}
+    />,
+  )
   const exchange = await screen.findByRole('article', { name: /The exchange used its turns/ })
   expect(screen.queryByText('Activity feed')).toBeNull()
   expect(exchange.textContent).toContain('Release notes')
@@ -329,6 +347,7 @@ test('a non-actionable approval is history, not a request card', async () => {
   )
   renderInRoom(
     <RoomRequests
+      roomId="room-1"
       jobs={[job]}
       agents={[]}
       selectedJob="all"
@@ -342,4 +361,130 @@ test('a non-actionable approval is history, not a request card', async () => {
     />,
   )
   await waitFor(() => expect(screen.queryByRole('article', { name: /May I install/ })).toBeNull())
+})
+
+test('an approval for another room stays out of this room’s strip', async () => {
+  vi.stubGlobal(
+    'fetch',
+    mockFetch((url) => {
+      if (url === '/api/approvals?status=all')
+        return jsonResponse({
+          asOfSeq: 1,
+          items: [{ ...approval, refs: [{ kind: 'room', roomId: 'room-2' }] }],
+          nextCursor: null,
+        })
+      return jsonResponse({ asOfSeq: 0, items: [] })
+    }),
+  )
+  renderInRoom(<RoomRequests roomId="room-1" jobs={[job]} agents={agents} selectedJob="all" />)
+  await waitFor(() => expect(screen.queryByRole('article', { name: /May I install/ })).toBeNull())
+})
+
+test('an approval without a loaded message gets no invented job chip', async () => {
+  vi.stubGlobal(
+    'fetch',
+    mockFetch((url) => {
+      if (url === '/api/approvals?status=all')
+        return jsonResponse({ asOfSeq: 1, items: [approval], nextCursor: null })
+      return jsonResponse({ asOfSeq: 0, items: [] })
+    }),
+  )
+  renderInRoom(<RoomRequests roomId="room-1" jobs={[job, other]} agents={[]} selectedJob="job-2" />)
+  const card = await screen.findByRole('article', { name: /May I install a package/ })
+  expect(card.textContent).not.toContain('Release notes')
+  expect(card.textContent).not.toContain('Activity feed')
+  expect(card.querySelector('.bold-request-job')).toBeNull()
+})
+
+test('a server updatedAt bump does not bring the exchange buttons back', async () => {
+  const exchange = makeExchange({ pause: { reason: 'no_decision', options: ['send_back'] } })
+  stubRoom(exchange)
+  const { queryClient } = renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Send back' }))
+  fireEvent.change(screen.getByLabelText('Note for the author'), {
+    target: { value: 'Add the migration steps.' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Send back' }))
+  await screen.findByText('Sent back with your note.')
+
+  act(() =>
+    queryClient.setQueryData(roomExchangesQuery([job.id]).key, {
+      asOfSeq: 2,
+      data: [{ ...exchange, updatedAt: '2026-10-24T09:20:00.000Z' }],
+    }),
+  )
+  await waitFor(() => expect(screen.getByText('Sent back with your note.')).toBeDefined())
+  expect(screen.queryByRole('button', { name: 'Send back' })).toBeNull()
+})
+
+test('a cleared or changed pause releases the exchange buttons again', async () => {
+  const exchange = makeExchange({ pause: { reason: 'no_decision', options: ['send_back'] } })
+  stubRoom(exchange)
+  const { queryClient } = renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Send back' }))
+  fireEvent.change(screen.getByLabelText('Note for the author'), {
+    target: { value: 'Add the migration steps.' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Send back' }))
+  await screen.findByText('Sent back with your note.')
+
+  act(() =>
+    queryClient.setQueryData(roomExchangesQuery([job.id]).key, {
+      asOfSeq: 2,
+      data: [{ ...exchange, pause: null, state: 'waiting_on_agent' }],
+    }),
+  )
+  await waitFor(() => expect(screen.queryByText('Sent back with your note.')).toBeNull())
+
+  act(() =>
+    queryClient.setQueryData(roomExchangesQuery([job.id]).key, {
+      asOfSeq: 3,
+      data: [exchange],
+    }),
+  )
+  expect(await screen.findByRole('button', { name: 'Send back' })).toBeDefined()
+})
+
+test('reassign starts on the first legal choice when its form opens', async () => {
+  const exchange = makeExchange({ pause: { reason: 'unreachable', options: ['reassign'] } })
+  const fetchMock = stubRoom(exchange)
+  renderInRoom(<RoomRequests roomId="room-1" jobs={[job]} agents={agents} selectedJob="all" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Reassign' }))
+  expect((screen.getByLabelText('Give the turn to') as HTMLSelectElement).value).toBe('lead')
+  fireEvent.click(screen.getByRole('button', { name: 'Reassign' }))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url) === '/api/exchanges/exchange-1/decision' && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  )
+})
+
+test('more spend rejects 0, more than 1000 and non-numbers with one clear message', async () => {
+  const exchange = makeExchange({ pause: { reason: 'spend_cap', options: ['more_spend'] } })
+  const fetchMock = stubRoom(exchange)
+  renderInRoom(<RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Allow more spend' }))
+  for (const value of ['0', '1000.01', '']) {
+    fireEvent.change(screen.getByLabelText('More spend in dollars'), { target: { value } })
+    fireEvent.click(screen.getByRole('button', { name: 'Allow more spend' }))
+    await screen.findByText('Enter an amount above 0 and at most 1000 dollars.')
+  }
+  expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/decision'))).toBe(false)
+})
+
+test('the more-turns button never shows an empty count', async () => {
+  const exchange = makeExchange()
+  stubRoom(exchange)
+  renderInRoom(<RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Give 4 more turns' }))
+  fireEvent.change(screen.getByLabelText('More turns (1–20)'), { target: { value: '' } })
+  expect(screen.getByRole('button', { name: 'Give more turns' })).toBeDefined()
+  expect(screen.queryByRole('button', { name: /Give {2}more turns/ })).toBeNull()
 })

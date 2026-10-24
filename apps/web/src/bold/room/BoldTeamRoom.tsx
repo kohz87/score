@@ -218,6 +218,7 @@ function LoadedTeamRoom({
       )}
       {!empty && (
         <RoomRequests
+          roomId={room.id}
           jobs={allJobs}
           agents={agents}
           selectedJob={selectedJob}
