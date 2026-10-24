@@ -306,6 +306,20 @@
   cursor: pointer;
 }
 
+[data-ui='bold'] .bold-room-kind {
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+@media (min-width: 861px) {
+  [data-ui='bold'] .bold-room-kind {
+    display: none;
+  }
+}
+
 [data-ui='bold'] .bold-room-switch-wrap {
   position: relative;
   min-width: 0;
