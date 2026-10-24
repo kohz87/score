@@ -71,6 +71,8 @@ export function makeJob(overrides: Partial<Job> = {}): Job {
     summary: null,
     source: null,
     reportBack: null,
+    spendCapUsd: null,
+    recipe: null,
     createdAt: '2026-10-24T09:00:00.000Z',
     updatedAt: '2026-10-24T09:05:00.000Z',
     ...overrides,
