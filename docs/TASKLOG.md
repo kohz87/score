@@ -1104,3 +1104,20 @@ One entry per completed task: what landed, review results, and any **rejected re
   copy says a later bring-in makes another job. Last review: 0 P1/P2; P3 (a job closed in the same moment a message is
   deleted reads as gone) accepted. Lead e2e fixes: Work chosen from the side panel's menu in Elsewhere mode; on phones
   the kept view skips the preview step. Full check green; room-menu + room + shell + needs-you e2e green. Not deployed.
+- **11.9d Themes and Customizer on the new shell (Sonnet coder → DeepSeek on ordeepseek → Sonnet coder + lead,
+  2026-10-24/25).** `bold-theme.css` maps the shell's tokens to a theme's colours (custom themes and the paper/night/
+  dense packs; Score's own look untouched); fonts follow the theme; the Customizer previews Room/Team/Agent/Settings
+  of the new shell; safe mode and the reset shortcut work on /b; the banner links to /b/settings/look. Protected layer
+  strengthened: fonts pinned on decision surfaces; the contrast fallback now covers the shell's own tokens, keyed on the
+  shell's look and winning by specificity (system-dark + Search's switch to light case), with an opaque Score ground
+  for block-level protected text (inline kinds left alone); the screen page's approval bar uses the shell's 'for you'
+  pair; the dock ring reads Score ink (the guard switched failing themes off over it — guard unchanged, its measurement
+  was right); the needs-you strip folds under custom themes too (protected display rule had un-folded it; the re-hide
+  keys only on Score-set attributes). Contrast deviation from the prototype on the light request card (AA) and the
+  Started-by card painted --deep per the prototype. Reviews: build (P2 fallback gap, no hostile-theme e2e), round 1
+  (P2 cascade tie, unfilled protected text), round 2 (P2 inline patches, Started-by fill), lead fix (P2 screen
+  approval bar), final (clean). Baselines: themes-bold-visual 49/63, themes-builtin-visual 11, themes-layout-visual 15
+  regenerated — glyph eyes (11.11c) and today's room merges; diffs checked; main had been red on the two classic
+  visual specs since 11.11c (lead ran only 12 specs there). Contract gap: Job.source has no app name ('through a
+  trigger'); the engine's AA check covers classic pairs only. Full check green; theme/protection/shell/room/screen/
+  Customizer e2e 368 passed. Not deployed.
