@@ -679,4 +679,4 @@ removed code has no route or import left; a copy of the live DB migrates and eve
 approved the removal list.
 
 **11.12 Phase gate** · **Lead** (Codex `gpt-6.1-sol` max if it has quota) · code review against `main` in a fresh
-session, every parity row checked off against the brief's §11, full e2e, then the owner's Gemini review; release.
+session, every parity row checked off against the brief's §11, full e2e, then the owner's own review (no Gemini review, decision 119); release.
