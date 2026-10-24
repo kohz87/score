@@ -6,6 +6,7 @@ import {
   type WorkflowNodeKind,
 } from '@score/contract'
 import {
+  ancestorsOf,
   blankNode,
   nextEdgeId,
   portsOf,
@@ -59,6 +60,15 @@ export interface RecipeAnalysis {
   graphOnlyReasons: string[]
 }
 
+export interface RecipeMovePlan {
+  draft: Draft
+  /** The order the list shows after the move. */
+  order: WorkflowNode[]
+  changed: boolean
+  /** Why the move is disabled; null when it can happen. */
+  reason: string | null
+}
+
 export interface RecipeProblem {
   code: string
   message: string
@@ -101,6 +111,29 @@ export function orderNodes(
   return order
 }
 
+function hasCycle(definition: Pick<WorkflowDefinition, 'nodes' | 'edges'>): boolean {
+  const ids = new Set(definition.nodes.map((node) => node.id))
+  const indegree = new Map([...ids].map((id) => [id, 0]))
+  const outgoing = new Map<string, string[]>()
+  for (const edge of definition.edges) {
+    if (!ids.has(edge.from) || !ids.has(edge.to)) continue
+    indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1)
+    outgoing.set(edge.from, [...(outgoing.get(edge.from) ?? []), edge.to])
+  }
+  const ready = [...ids].filter((id) => indegree.get(id) === 0)
+  const seen = new Set<string>()
+  while (ready.length > 0) {
+    const id = ready.shift()!
+    seen.add(id)
+    for (const next of outgoing.get(id) ?? []) {
+      const left = (indegree.get(next) ?? 0) - 1
+      indegree.set(next, left)
+      if (left === 0) ready.push(next)
+    }
+  }
+  return seen.size < ids.size
+}
+
 /** "passed", "changes requested", "succeeded", "failed", `contains "…"`: the short words the step list uses. */
 export function shortCondition(node: WorkflowNode, port: string): string {
   if (node.kind !== 'branch') return port
@@ -126,6 +159,22 @@ export function routeLabel(node: WorkflowNode, port: string): string {
 export function analyzeRecipe(definition: WorkflowDefinition): RecipeAnalysis {
   const order = orderNodes(definition)
   const graphOnlyReasons: string[] = []
+  const nodeIds = definition.nodes.map((node) => node.id)
+  const byId = new Map(definition.nodes.map((node) => [node.id, node]))
+  if (new Set(nodeIds).size !== nodeIds.length)
+    graphOnlyReasons.push('The recipe uses the same step id twice.')
+  for (const edge of definition.edges) {
+    const from = byId.get(edge.from)
+    const to = byId.get(edge.to)
+    if (!from || !to) {
+      graphOnlyReasons.push(`Edge ${edge.id} points at a step that is not in this recipe.`)
+    } else if (!portsOf(from).some((port) => port.id === edge.port)) {
+      graphOnlyReasons.push(
+        `${from.label || from.id} sends “${edge.port}”, which is not one of its routes.`,
+      )
+    }
+  }
+  if (hasCycle(definition)) graphOnlyReasons.push('The recipe contains a loop.')
   const rows = order.map((node, index) => {
     const incoming = definition.edges.filter((edge) => edge.to === node.id)
     const routes: RecipeRoute[] = portsOf(node).map((port) => {
@@ -236,15 +285,78 @@ function normalLink(
   return outgoing[0]
 }
 
+function orderIds(nodes: readonly WorkflowNode[]): string {
+  return nodes.map((node) => node.id).join('\0')
+}
+
+function edgeIds(definition: Pick<Draft, 'edges'>): string {
+  return definition.edges
+    .map((edge) => edge.id)
+    .sort()
+    .join('\0')
+}
+
+function rootCount(definition: Pick<Draft, 'nodes' | 'edges'>): number {
+  const incoming = new Set(definition.edges.map((edge) => edge.to))
+  return definition.nodes.filter((node) => !incoming.has(node.id)).length
+}
+
+function hasDuplicateEdges(definition: Pick<Draft, 'edges'>): boolean {
+  const ids = new Set<string>()
+  const links = new Set<string>()
+  for (const edge of definition.edges) {
+    if (ids.has(edge.id)) return true
+    ids.add(edge.id)
+    const link = `${edge.from}\0${edge.port}\0${edge.to}`
+    if (links.has(link)) return true
+    links.add(link)
+  }
+  return false
+}
+
+const NODE_REFERENCE = /\{\{\s*nodes\.([a-z][a-z0-9_-]*)/g
+
+function referencesIn(text: string): string[] {
+  return [...text.matchAll(NODE_REFERENCE)].map((match) => match[1]!)
+}
+
+/** Moving a step may reorder its run, but it must not silently break a template read or a branch's subject. */
+function ancestryPreserved(before: Draft, after: Draft): boolean {
+  for (const node of before.nodes) {
+    const text =
+      node.kind === 'agent' ? node.instruction : node.kind === 'gate' ? node.question : ''
+    if (text !== '') {
+      const was = ancestorsOf(before, node.id)
+      const now = ancestorsOf(after, node.id)
+      for (const reference of referencesIn(text))
+        if (was.has(reference) !== now.has(reference)) return false
+    }
+    if (node.kind === 'branch' && node.subject !== '') {
+      const was = ancestorsOf(before, node.id)
+      const now = ancestorsOf(after, node.id)
+      if (was.has(node.subject) !== now.has(node.subject)) return false
+    }
+  }
+  return true
+}
+
+function clientAnswer(definition: Draft, order: readonly WorkflowNode[]): string {
+  return recipeClientProblems(definition, order)
+    .map((problem) => `${problem.code}/${problem.nodeId ?? ''}/${problem.message}`)
+    .sort()
+    .join('\0')
+}
+
 /**
- * Move one step up or down. The nodes are stored in the new order, and a straight run of agent/gate steps has its
- * normal (`ok`) edges relinked so the run keeps meaning "one after another". Branches, joins and ends keep their routes.
+ * Reorder a straight agent/gate run. Every edge into its old first step now comes into the new first step, and the
+ * run's `ok` continuation leaves its new last step, so no upstream route is left behind or lost.
  */
-export function moveRecipeStep(draft: Draft, nodeId: string, direction: -1 | 1): Draft {
-  const order = orderNodes(draft)
-  const from = order.findIndex((node) => node.id === nodeId)
-  const to = from + direction
-  if (from === -1 || to < 0 || to >= order.length) return draft
+function rewriteStraightRun(
+  draft: Draft,
+  order: readonly WorkflowNode[],
+  from: number,
+  to: number,
+): Draft | null {
   const nextOrder = [...order]
   ;[nextOrder[from], nextOrder[to]] = [nextOrder[to]!, nextOrder[from]!]
 
@@ -255,57 +367,134 @@ export function moveRecipeStep(draft: Draft, nodeId: string, direction: -1 | 1):
   while (right < order.length - 1 && normalLink(draft, order[right]!, order[right + 1]!)) right++
   const run = order.slice(left, right + 1)
   const nextRun = nextOrder.slice(left, right + 1)
-  let edges = draft.edges
-  if (run.length > 1) {
-    const internal: WorkflowEdge[] = []
-    for (let index = 0; index < run.length - 1; index++) {
-      const edge = normalLink(draft, run[index]!, run[index + 1]!)
-      if (!edge) return reorderNodes(draft, nextOrder)
-      internal.push(edge)
-    }
-    // A run may not hold a different edge between its own steps (a failure path, say): leave it untouched then.
-    const internalIds = new Set(internal.map((edge) => edge.id))
-    const runIds = new Set(run.map((node) => node.id))
-    if (
-      draft.edges.some(
-        (edge) => runIds.has(edge.from) && runIds.has(edge.to) && !internalIds.has(edge.id),
-      )
-    )
-      return reorderNodes(draft, nextOrder)
-
-    const oldFirst = run[0]!
-    const oldLast = run.at(-1)!
-    const newFirst = nextRun[0]!
-    const newLast = nextRun.at(-1)!
-    const outsideIn = draft.edges.filter((edge) => edge.to === oldFirst.id)
-    const outsideOut = draft.edges.filter((edge) => edge.from === oldLast.id && edge.port === 'ok')
-    const retargetIn =
-      outsideIn.length === 1 && !runIds.has(outsideIn[0]!.from) && outsideIn[0]!.port === 'ok'
-        ? outsideIn[0]!
-        : undefined
-    const retargetOut =
-      outsideOut.length === 1 && !runIds.has(outsideOut[0]!.to) ? outsideOut[0]! : undefined
-
-    edges = draft.edges
-      .filter((edge) => !internalIds.has(edge.id))
-      .map((edge) => {
-        if (retargetIn && edge.id === retargetIn.id && newFirst.id !== oldFirst.id)
-          return { ...edge, to: newFirst.id }
-        if (retargetOut && edge.id === retargetOut.id && newLast.id !== oldLast.id)
-          return { ...edge, from: newLast.id }
-        return edge
-      })
-    edges = [
-      ...edges,
-      ...internal.map((edge, index) => ({
-        ...edge,
-        from: nextRun[index]!.id,
-        to: nextRun[index + 1]!.id,
-        port: 'ok',
-      })),
-    ]
+  if (run.length < 2) return null
+  const internal: WorkflowEdge[] = []
+  for (let index = 0; index < run.length - 1; index++) {
+    const edge = normalLink(draft, run[index]!, run[index + 1]!)
+    if (!edge) return null
+    internal.push(edge)
   }
-  return reorderNodes({ ...draft, edges }, nextOrder)
+  // A run may not hold a different edge between its own steps (a failure path, say).
+  const internalIds = new Set(internal.map((edge) => edge.id))
+  const runIds = new Set(run.map((node) => node.id))
+  if (
+    draft.edges.some(
+      (edge) => runIds.has(edge.from) && runIds.has(edge.to) && !internalIds.has(edge.id),
+    )
+  )
+    return null
+
+  const oldFirst = run[0]!
+  const oldLast = run.at(-1)!
+  const newFirst = nextRun[0]!
+  const newLast = nextRun.at(-1)!
+  const outsideIn = draft.edges.filter((edge) => edge.to === oldFirst.id && !runIds.has(edge.from))
+  const outsideOut = draft.edges.filter(
+    (edge) => edge.from === oldLast.id && edge.port === 'ok' && !runIds.has(edge.to),
+  )
+  // A port with more than one target is graph-only; never flatten that into a different graph here.
+  if (outsideOut.length > 1) return null
+  const outsideInIds = new Set(outsideIn.map((edge) => edge.id))
+  const outsideOutIds = new Set(outsideOut.map((edge) => edge.id))
+  const edges = draft.edges
+    .filter((edge) => !internalIds.has(edge.id))
+    .map((edge) => {
+      if (outsideInIds.has(edge.id)) return { ...edge, to: newFirst.id }
+      if (outsideOutIds.has(edge.id)) return { ...edge, from: newLast.id }
+      return edge
+    })
+  return reorderNodes(
+    {
+      ...draft,
+      edges: [
+        ...edges,
+        ...internal.map((edge, index) => ({
+          ...edge,
+          from: nextRun[index]!.id,
+          to: nextRun[index + 1]!.id,
+          port: 'ok',
+        })),
+      ],
+    },
+    nextOrder,
+  )
+}
+
+/**
+ * Plan one step move. A move is either a stored-order swap of nodes that are already free to trade places, or a
+ * relink of one straight run. Unsafe moves are refused with words the row can show.
+ */
+export function planRecipeMove(draft: Draft, nodeId: string, direction: -1 | 1): RecipeMovePlan {
+  const analysis = analyzeRecipe(draft)
+  const order = analysis.order
+  const from = order.findIndex((node) => node.id === nodeId)
+  const to = from + direction
+  const unchanged = { draft, order, changed: false }
+  if (from === -1) return { ...unchanged, reason: 'That step is not in this recipe.' }
+  if (to < 0) return { ...unchanged, reason: 'It is already the first step.' }
+  if (to >= order.length) return { ...unchanged, reason: 'It is already the last step.' }
+  if (!analysis.listable)
+    return {
+      ...unchanged,
+      reason: 'Only a recipe the step list can show can be reordered.',
+    }
+  const nextOrder = [...order]
+  ;[nextOrder[from], nextOrder[to]] = [nextOrder[to]!, nextOrder[from]!]
+  const desired = orderIds(nextOrder)
+
+  const onlyReordered = reorderNodes(draft, nextOrder)
+  const candidate =
+    orderIds(orderNodes(onlyReordered)) === desired
+      ? onlyReordered
+      : rewriteStraightRun(draft, order, from, to)
+  if (candidate === null)
+    // The stored order alone cannot make these two steps trade places, and there is no straight run to relink.
+    return {
+      ...unchanged,
+      reason: 'This move would not change the visible order of the steps.',
+    }
+  if (orderIds(orderNodes(candidate)) !== desired)
+    return {
+      ...unchanged,
+      reason: 'This move would not change the visible order of the steps.',
+    }
+  const after = analyzeRecipe(candidate)
+  if (!after.listable)
+    return {
+      ...unchanged,
+      reason: 'This move would turn the recipe into one only the graph editor can show.',
+    }
+  if (clientAnswer(draft, order) !== clientAnswer(candidate, after.order))
+    return {
+      ...unchanged,
+      reason: 'This move would leave the recipe with different steps to fix.',
+    }
+  if (
+    edgeIds(candidate) !== edgeIds(draft) ||
+    candidate.edges.length !== draft.edges.length ||
+    hasDuplicateEdges(candidate) ||
+    rootCount(candidate) !== rootCount(draft) ||
+    !ancestryPreserved(draft, candidate)
+  )
+    return {
+      ...unchanged,
+      reason: 'This move would break how the steps connect. Use the graph editor for this one.',
+    }
+  return { draft: candidate, order: after.order, changed: true, reason: null }
+}
+
+/** Move one step, or return the draft unchanged when the move is not safe or would not be visible. */
+export function moveRecipeStep(draft: Draft, nodeId: string, direction: -1 | 1): Draft {
+  return planRecipeMove(draft, nodeId, direction).draft
+}
+
+/** The disabled-arrow reason for a move, or null when the arrow can work. */
+export function moveRecipeStepProblem(
+  draft: Draft,
+  nodeId: string,
+  direction: -1 | 1,
+): string | null {
+  return planRecipeMove(draft, nodeId, direction).reason
 }
 
 /** Point a port at one step (or nowhere). One target per port is what the list shows; fan-out stays graph-only. */
@@ -392,30 +581,58 @@ export function addRecipeStep(
   let next: Draft = { ...draft, nodes: [...draft.nodes, node] }
   const previous = order[insertAt - 1]
   const following = order[insertAt]
-  if (kind === 'branch' && previous?.kind === 'agent')
-    next = updateNode(next, node.id, { subject: previous.id })
-  if (previous && following) {
-    const link = next.edges.find(
-      (edge) => edge.from === previous.id && edge.port === 'ok' && edge.to === following.id,
-    )
-    if (link) {
-      const outgoingPort = portsOf(node)[0]?.id
-      next = { ...next, edges: next.edges.filter((edge) => edge.id !== link.id) }
+  if (kind === 'branch') {
+    // A branch checks the nearest earlier agent, even when the step immediately before it is a gate.
+    const subject = order
+      .slice(0, insertAt)
+      .reverse()
+      .find((step) => step.kind === 'agent')
+    if (subject) next = updateNode(next, node.id, { subject: subject.id })
+  }
+  if (kind === 'join' && following) {
+    // A join inserted before a step that several paths already lead into waits for all of them, not just the last one.
+    const incoming = next.edges.filter((edge) => edge.to === following.id)
+    if (incoming.length >= 2) {
+      const incomingIds = new Set(incoming.map((edge) => edge.id))
+      const outgoingId = nextEdgeId(next)
       next = {
         ...next,
         edges: [
-          ...next.edges,
-          { id: link.id, from: previous.id, port: 'ok', to: node.id },
-          ...(kind === 'end' || !outgoingPort
-            ? []
-            : [
-                {
-                  id: nextEdgeId(next),
-                  from: node.id,
-                  port: outgoingPort,
-                  to: following.id,
-                },
-              ]),
+          ...next.edges.filter((edge) => !incomingIds.has(edge.id)),
+          ...incoming.map((edge) => ({ ...edge, to: node.id })),
+          { id: outgoingId, from: node.id, port: 'ok', to: following.id },
+        ],
+      }
+    }
+  }
+  if (previous && following) {
+    const links = next.edges.filter((edge) => edge.from === previous.id && edge.to === following.id)
+    // A branch has several routes and no `ok`; insert into "otherwise" so the new step follows the usual path.
+    const link =
+      previous.kind === 'branch'
+        ? (links.find((edge) => edge.port === 'default') ?? links[0])
+        : links.find((edge) => edge.port === 'ok')
+    if (link) {
+      const splitPort = link.port
+      const outgoingPort = portsOf(node)[0]?.id
+      // Allocate while the split edge is still in the draft, so the new edge cannot reuse its id.
+      const outgoing =
+        kind === 'end' || !outgoingPort
+          ? []
+          : [
+              {
+                id: nextEdgeId(next),
+                from: node.id,
+                port: outgoingPort,
+                to: following.id,
+              },
+            ]
+      next = {
+        ...next,
+        edges: [
+          ...next.edges.filter((edge) => edge.id !== link.id),
+          { id: link.id, from: previous.id, port: splitPort, to: node.id },
+          ...outgoing,
         ],
       }
     }
@@ -436,6 +653,20 @@ export function addRecipeStep(
         edges: [
           ...next.edges,
           { id: nextEdgeId(next), from: node.id, port: outgoingPort, to: following.id },
+        ],
+      }
+    }
+  }
+  // A new branch shows both of its routes in the list straight away: every rule and the default lead to the step it
+  // was inserted before until the person points one somewhere else.
+  if (kind === 'branch' && following) {
+    for (const port of portsOf(node)) {
+      if (next.edges.some((edge) => edge.from === node.id && edge.port === port.id)) continue
+      next = {
+        ...next,
+        edges: [
+          ...next.edges,
+          { id: nextEdgeId(next), from: node.id, port: port.id, to: following.id },
         ],
       }
     }

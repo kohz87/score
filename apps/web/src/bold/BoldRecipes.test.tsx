@@ -78,9 +78,10 @@ afterEach(() => {
   cleanup()
   disposers.splice(0).forEach((dispose) => dispose())
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
-function mount() {
+function mount(onClose = vi.fn()) {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source })
   const queries = createStreamQueryRegistry(queryClient, client)
@@ -93,11 +94,12 @@ function mount() {
     <QueryClientProvider client={queryClient}>
       <StreamContext value={{ client, queries }}>
         <MemoryRouter>
-          <BoldRecipes onClose={() => undefined} />
+          <BoldRecipes onClose={onClose} />
         </MemoryRouter>
       </StreamContext>
     </QueryClientProvider>,
   )
+  return onClose
 }
 
 const saveButton = () =>
@@ -120,6 +122,42 @@ test('the release recipe loads as seven numbered steps, is checked live, and und
   expect(within(steps).getByRole('button', { name: /^2.*Review the draft/ })).toBeTruthy()
   fireEvent.keyDown(dialog, { key: 'z', ctrlKey: true, shiftKey: true })
   expect(within(steps).getByRole('button', { name: /^2.*Review the copy/ })).toBeTruthy()
+
+  fireEvent.change(title, { target: { value: 'Typed, not undone' } })
+  fireEvent.keyDown(title, { key: 'z', ctrlKey: true })
+  expect((title as HTMLInputElement).value).toBe('Typed, not undone')
+})
+
+test('a dirty draft asks before Escape or a scrim click closes it', async () => {
+  const onClose = mount()
+  await screen.findByRole('list', { name: 'Steps' })
+  const dialog = screen.getByRole('dialog', { name: 'Recipe editor' })
+  fireEvent.change(within(dialog).getByRole('textbox', { name: 'Title' }), {
+    target: { value: 'Changed' },
+  })
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+  fireEvent.keyDown(dialog, { key: 'Escape' })
+  expect(confirm).toHaveBeenCalledWith('You have unsaved changes. Close without saving?')
+  expect(onClose).not.toHaveBeenCalled()
+
+  confirm.mockReturnValue(true)
+  fireEvent.mouseDown(dialog.parentElement!)
+  expect(onClose).toHaveBeenCalledTimes(1)
+})
+
+test('a failed validation check says so and keeps Save disabled', async () => {
+  const fetchMock = vi.mocked(fetch)
+  const original = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation((input, init) => {
+    if (String(input) === '/api/workflows/validate' && init?.method === 'POST')
+      return Promise.resolve(json({ error: { code: 'internal', message: 'check failed' } }, 500))
+    return original(input, init)
+  })
+  mount()
+
+  expect(await screen.findByText("Couldn't check this recipe")).toBeTruthy()
+  await waitFor(() => expect(saveButton().disabled).toBe(true))
 })
 
 test('a branch target changed from its row is saved as the same graph on a new version', async () => {

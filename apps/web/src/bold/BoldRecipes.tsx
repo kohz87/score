@@ -43,7 +43,8 @@ import {
   RECIPE_STEP_MARK,
   addRecipeStep,
   analyzeRecipe,
-  moveRecipeStep,
+  moveRecipeStepProblem,
+  planRecipeMove,
   recipeClientProblems,
   removeRecipeStep,
   setFailureMode,
@@ -351,6 +352,7 @@ function BoldRecipeEditor({
   const [exporting, setExporting] = useState(false)
   const [loadedFrom, setLoadedFrom] = useState<number | null>(null)
   const [saveProblem, setSaveProblem] = useState('')
+  const [announcement, setAnnouncement] = useState('')
   const save = useSaveWorkflow()
   const remove = useDeleteWorkflow()
   const dialog = useRef<HTMLDivElement>(null)
@@ -393,17 +395,33 @@ function BoldRecipeEditor({
   const warnings =
     validation.data?.issues.filter((issue) => issue.severity === 'warning').length ?? 0
   const checking = shape.length === 0 && (validation.pending || validation.isPending)
+  const checkFailed = shape.length === 0 && validation.isError
   const dirty = !sameDraft(draft, saved.definition)
-  const canSave = problems.length === 0 && !checking && analysis.listable && !save.isPending
+  const canSave =
+    problems.length === 0 && !checking && !checkFailed && analysis.listable && !save.isPending
   const selectedRow =
     analysis.rows.find((row) => row.node.id === selectedNodeId) ?? analysis.rows[0] ?? null
   const versions = detail?.versions ?? []
-  const badge =
-    problems.length > 0
+  const badge = checkFailed
+    ? "Couldn't check this recipe"
+    : problems.length > 0
       ? `${problems.length} problem${problems.length === 1 ? '' : 's'} to fix`
       : checking
         ? 'Checking…'
         : 'Looks good'
+  const moveProblems = useMemo(
+    () =>
+      new Map(
+        analysis.rows.map((row) => [
+          row.node.id,
+          {
+            up: moveRecipeStepProblem(draft, row.node.id, -1),
+            down: moveRecipeStepProblem(draft, row.node.id, 1),
+          },
+        ]),
+      ),
+    [analysis.rows, draft],
+  )
 
   const selectNode = useCallback((id: string | null) => setSelectedNodeId(id), [])
 
@@ -436,15 +454,24 @@ function BoldRecipeEditor({
     if (!analysis.listable) return
     const order = analysis.order
     const at = order.findIndex((node) => node.id === id)
+    const label = order[at]?.label || id
     const next = order[at + 1]?.id ?? order[at - 1]?.id ?? null
     commit(removeRecipeStep(draft, id))
     setSelectedNodeId(next)
+    setAnnouncement(`Removed ${label}`)
+    focusStep(next, 'row')
   }
 
   function move(id: string, direction: -1 | 1) {
     if (!analysis.listable) return
-    commit(moveRecipeStep(draft, id, direction))
+    const plan = planRecipeMove(draft, id, direction)
+    if (!plan.changed || plan.reason !== null) return
+    const label = analysis.order.find((node) => node.id === id)?.label || id
+    const at = plan.order.findIndex((node) => node.id === id)
+    commit(plan.draft)
     setSelectedNodeId(id)
+    setAnnouncement(`Moved ${label} to step ${at + 1}`)
+    focusStep(id, direction === -1 ? 'up' : 'down')
   }
 
   function point(nodeId: string, port: string, target: string | null) {
@@ -493,9 +520,17 @@ function BoldRecipeEditor({
 
   async function loadOlder(version: number) {
     if (!saved.workflowId) return
+    if (
+      dirty &&
+      !window.confirm(
+        `You have unsaved changes. Replace them with version ${version}? You can undo this.`,
+      )
+    )
+      return
     try {
       const loaded = await fetchWorkflowVersion(queryClient, saved.workflowId, version)
-      history.reset(loaded.definition)
+      // Load it as an edit, not a reset: the unsaved draft stays one undo away.
+      history.commit(loaded.definition)
       setSelectedNodeId(loaded.definition.nodes[0]?.id ?? null)
       setLoadedFrom(version)
       onNotice(`Loaded version ${version} into the draft. Saving makes it a new version.`)
@@ -515,7 +550,15 @@ function BoldRecipeEditor({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement | null
+    const typing =
+      !!target &&
+      (target.isContentEditable ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) ||
+        !!target.closest('.cm-editor'))
     if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'z') {
+      // A text field keeps its native undo; the recipe history is for the step list itself.
+      if (typing) return
       event.preventDefault()
       if (event.shiftKey) history.redo()
       else history.undo()
@@ -523,8 +566,34 @@ function BoldRecipeEditor({
     }
     if (event.key === 'Escape') {
       event.preventDefault()
-      onClose()
+      requestClose()
     }
+  }
+
+  function requestClose() {
+    if (dirty && !window.confirm('You have unsaved changes. Close without saving?')) return
+    onClose()
+  }
+
+  function focusStep(id: string | null, control: 'row' | 'up' | 'down') {
+    requestAnimationFrame(() => {
+      if (id === null) {
+        dialog.current?.focus()
+        return
+      }
+      const row = dialog.current?.querySelector<HTMLElement>(`[data-recipe-step="${id}"]`)
+      if (control === 'row') {
+        row?.querySelector<HTMLButtonElement>('.bold-step')?.focus()
+        return
+      }
+      const wanted = row?.querySelector<HTMLButtonElement>(`[data-move="${control}"]`)
+      const other = row?.querySelector<HTMLButtonElement>(
+        `[data-move="${control === 'up' ? 'down' : 'up'}"]`,
+      )
+      const target = wanted && !wanted.disabled ? wanted : other
+      if (target && !target.disabled) target.focus()
+      else row?.querySelector<HTMLButtonElement>('.bold-step')?.focus()
+    })
   }
 
   const graphSelection: Selection = selectedRow ? { kind: 'node', id: selectedRow.node.id } : null
@@ -533,7 +602,7 @@ function BoldRecipeEditor({
     <div
       className="bold-scrim"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
+        if (event.target === event.currentTarget) requestClose()
       }}
     >
       <div
@@ -553,7 +622,7 @@ function BoldRecipeEditor({
             onSelect={onSelect}
             onNew={onNew}
           />
-          <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>
             ×
           </button>
         </span>
@@ -563,6 +632,9 @@ function BoldRecipeEditor({
             {notice}
           </p>
         )}
+        <p className="wf-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+          {announcement}
+        </p>
 
         <div className="row wrap">
           <span
@@ -603,11 +675,13 @@ function BoldRecipeEditor({
               title={
                 problems.length > 0
                   ? 'Fix the problems first'
-                  : checking
-                    ? 'Score is still checking the recipe'
-                    : analysis.listable
-                      ? undefined
-                      : 'This recipe can only be edited in the graph editor'
+                  : checkFailed
+                    ? "Score couldn't check this recipe. Try again before saving."
+                    : checking
+                      ? 'Score is still checking the recipe'
+                      : analysis.listable
+                        ? undefined
+                        : 'This recipe can only be edited in the graph editor'
               }
               onClick={onSave}
             >
@@ -801,6 +875,7 @@ function BoldRecipeEditor({
                       agents={agents}
                       editable={analysis.listable}
                       selected={selectedRow?.node.id === row.node.id}
+                      moveProblems={moveProblems.get(row.node.id) ?? { up: null, down: null }}
                       onSelect={() => selectNode(row.node.id)}
                       onMove={(direction) => move(row.node.id, direction)}
                       onRemove={() => removeStep(row.node.id)}
@@ -816,6 +891,7 @@ function BoldRecipeEditor({
                           key={kind}
                           type="button"
                           className="btn sm ghost"
+                          data-add-step={kind}
                           onClick={() => add(kind)}
                         >
                           +{' '}
@@ -866,6 +942,7 @@ function RecipeStepRow({
   agents,
   editable,
   selected,
+  moveProblems,
   onSelect,
   onMove,
   onRemove,
@@ -876,6 +953,7 @@ function RecipeStepRow({
   agents: AgentSummary[]
   editable: boolean
   selected: boolean
+  moveProblems: { up: string | null; down: string | null }
   onSelect: () => void
   onMove: (direction: -1 | 1) => void
   onRemove: () => void
@@ -888,7 +966,7 @@ function RecipeStepRow({
     .map((edge) => analysis.order.find((item) => item.id === edge.from)?.label || edge.from)
     .join(', ')
   return (
-    <li className={`bold-recipes-row${selected ? ' sel' : ''}`}>
+    <li className={`bold-recipes-row${selected ? ' sel' : ''}`} data-recipe-step={node.id}>
       <div className="bold-recipes-rowmain">
         <button
           type="button"
@@ -934,8 +1012,10 @@ function RecipeStepRow({
           <button
             type="button"
             className="icon-btn sm"
+            data-move="up"
             aria-label={`Move ${label} up`}
-            disabled={!editable || row.index === 0}
+            title={moveProblems.up ?? `Move ${label} up`}
+            disabled={!editable || moveProblems.up !== null}
             onClick={() => onMove(-1)}
           >
             ↑
@@ -943,8 +1023,10 @@ function RecipeStepRow({
           <button
             type="button"
             className="icon-btn sm"
+            data-move="down"
             aria-label={`Move ${label} down`}
-            disabled={!editable || row.index === analysis.rows.length - 1}
+            title={moveProblems.down ?? `Move ${label} down`}
+            disabled={!editable || moveProblems.down !== null}
             onClick={() => onMove(1)}
           >
             ↓

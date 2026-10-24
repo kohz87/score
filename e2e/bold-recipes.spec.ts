@@ -7,8 +7,11 @@ import { pair } from './pair.ts'
 
 const web = { 'x-score-client': 'web' }
 const steps = (page: Page) => page.getByRole('list', { name: 'Steps' })
+const exact = (text: string) => new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)
 const step = (page: Page, text: string) =>
-  steps(page).locator('.bold-step').filter({ hasText: text })
+  steps(page)
+    .locator('.bold-step')
+    .filter({ has: page.locator('.bold-step-copy > b', { hasText: exact(text) }) })
 const inspector = (page: Page) => page.locator('.bold-recipes-inspector')
 
 async function openRecipes(page: Page) {
@@ -345,6 +348,8 @@ test('moving and removing steps re-links the saved graph', async ({ page }) => {
     /^3.*Three/,
     /^4.*Done/,
   ])
+  await expect(page.getByRole('status').filter({ hasText: 'Moved Two to step 1' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Move Two down' })).toBeFocused()
   await page.getByRole('button', { name: 'Save as version 2' }).click()
   await expect(page.getByText('Saved as version 2.')).toBeVisible({ timeout: 20_000 })
   const moved = (await workflowDetail(page, id)).latest.definition.edges
@@ -359,6 +364,8 @@ test('moving and removing steps re-links the saved graph', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Remove One' }).click()
   await expect(steps(page).locator('.bold-step')).toHaveText([/^1.*Two/, /^2.*Three/, /^3.*Done/])
+  await expect(page.getByRole('status').filter({ hasText: 'Removed One' })).toBeVisible()
+  await expect(page.locator('[data-recipe-step="three"] .bold-step')).toBeFocused()
   await page.getByRole('button', { name: 'Save as version 3' }).click()
   await expect(page.getByText('Saved as version 3.')).toBeVisible({ timeout: 20_000 })
   const removed = (await workflowDetail(page, id)).latest.definition
@@ -500,9 +507,25 @@ test('conflict, older version, scrubbed export and delete', async ({ page }) => 
 
   const details = await openDetails(page)
   await expect(details.getByLabel('Start from an older version')).toBeVisible()
+  await inspector(page).getByLabel('Title').fill('Mine, unsaved')
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('unsaved changes')
+    await dialog.dismiss()
+  })
+  await details.getByLabel('Start from an older version').selectOption('1')
+  await expect(inspector(page).getByLabel('Title')).toHaveValue('Mine, unsaved')
+  await expect(page.getByText(/editing version 1/)).toBeHidden()
+  await details.getByLabel('Start from an older version').selectOption('')
+
+  page.once('dialog', (dialog) => dialog.accept())
   await details.getByLabel('Start from an older version').selectOption('1')
   await expect(page.getByText(/editing version 1/)).toBeVisible({ timeout: 20_000 })
   await expect(step(page, 'One')).toBeVisible()
+  await chooseStep(page, 'One')
+  await page.keyboard.press('Control+z')
+  await expect(inspector(page).getByLabel('Title')).toHaveValue('Mine, unsaved')
+  await page.keyboard.press('Control+Shift+z')
+  await expect(inspector(page).getByLabel('Title')).toHaveValue('One')
   await page.getByRole('button', { name: 'Save as version 5' }).click()
   await expect(page.getByText('Saved as version 5.')).toBeVisible({ timeout: 20_000 })
 
@@ -517,6 +540,44 @@ test('conflict, older version, scrubbed export and delete', async ({ page }) => 
   await (await openDetails(page)).getByRole('button', { name: 'Delete recipe' }).click()
   await expect(page.getByText('Deleted the recipe.')).toBeVisible({ timeout: 20_000 })
   expect((await workflows(page)).some((workflow) => workflow.id === id)).toBe(false)
+})
+
+test("a failed live check says it couldn't check the recipe and keeps Save disabled", async ({
+  page,
+}) => {
+  await pair(page)
+  await page.route('**/api/workflows/validate', (route) =>
+    route.fulfill({
+      status: 500,
+      json: { error: { code: 'internal', message: 'check failed' } },
+    }),
+  )
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openRecipes(page)
+  await expect(page.getByText("Couldn't check this recipe", { exact: true })).toBeVisible({
+    timeout: 20_000,
+  })
+  // Other tests save versions on the shared fake server, so the number varies.
+  await expect(page.getByRole('button', { name: /^Save as version \d+$/u })).toBeDisabled()
+})
+
+test('Escape and a scrim click ask before closing a dirty recipe', async ({ page }) => {
+  await pair(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openRecipes(page)
+  const dialog = page.getByRole('dialog', { name: 'Recipe editor' })
+  await inspector(page).getByLabel('Title').fill('Changed, not saved')
+
+  page.once('dialog', (prompt) => prompt.dismiss())
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeVisible()
+  await expect(inspector(page).getByLabel('Title')).toHaveValue('Changed, not saved')
+
+  page.once('dialog', (prompt) => prompt.accept())
+  await page.locator('.bold-scrim').click({ position: { x: 2, y: 2 } })
+  await expect(dialog).toBeHidden()
 })
 
 test('a phone turns the recipe dialog into a full-screen sheet with the inspector below the list', async ({
