@@ -582,7 +582,10 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   'action_not_sent' | 'no_lead'; text }` (a line from Score, never agent text).
   - **S** `GET /api/rooms/:roomId/jobs` → `{ asOfSeq; items: Job[] }` (open jobs, the default first).
   - **H** `POST /api/rooms/:roomId/jobs` `{ title (1–200) }` → `201 Job`; its agents get sessions of their own
-    (`score-<room>-<job>-<agent>`). Emits `job.upserted`.
+    (`score-<room>-<job>-<agent>`). Emits `job.upserted`. `409 conflict` for a room on `mentions` (one thread until
+    11.11 moves it to exchanges).
+  - The team room can't be deleted, renamed, archived or given members (`409 conflict`); its members follow the team's
+    agents at every start, and its lead is set with `PATCH /api/rooms/:roomId { leadAgentId }`.
   - **S** `GET /api/jobs/:jobId/exchanges` → `{ asOfSeq; items: Exchange[] }` (oldest first).
   - `Job { id; roomId; title; state: 'open'|'working'|'waiting_on_you'|'done'|'closed'; holderAgentId; isDefault;
     exchangeBudget (8); jobTurnLimit (40); createdAt; updatedAt }`; `Exchange { id; jobId; roomId; kind:

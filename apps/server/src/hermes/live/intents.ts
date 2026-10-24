@@ -110,8 +110,13 @@ async function dispatch(
         payload,
         row.idempotency_key,
         payload.credentialGeneration,
+        // The capability goes into the text whether or not images ride along (11.1b review).
         payload.images?.length
-          ? buildRunInput(payload.input, payload.images, deps.imageReader)
+          ? buildRunInput(
+              render ? render(payload.input) : payload.input,
+              payload.images,
+              deps.imageReader,
+            )
           : render
             ? render(payload.input)
             : undefined,

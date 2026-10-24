@@ -858,15 +858,28 @@ export function failMessageRun(
   const mapping = MessageRunSchema.parse(value)
   if (mapping.state !== 'pending') return []
   sqlite.prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ?").run(turnId)
+  // A turn that never started still ends its part in an exchange: whoever waited on it now waits on the person.
+  const settled = exchangeRoom(sqlite, mapping)
+    ? settleExchangeTurn(
+        sqlite,
+        mapping,
+        mapping.message_id,
+        { status: 'failed', reply: '', coding: false },
+        now,
+      )
+    : { drafts: [], notices: [] }
   // The contract has no system part; a short text notice from the agent explains the silence.
-  return storeMessage(
+  const stored = storeMessage(
     sqlite,
     {
       id: mapping.message_id,
       roomId: mapping.room_id,
       author: { kind: 'agent', agentId: mapping.agent_id },
       to: [],
-      parts: [{ kind: 'text', text: notice ?? `Couldn't start this agent (${code}).` }],
+      parts: [
+        { kind: 'text', text: notice ?? `Couldn't start this agent (${code}).` },
+        ...settled.notices,
+      ],
       createdAt: now,
       streaming: false,
       refs: [],
@@ -874,6 +887,7 @@ export function failMessageRun(
     },
     now,
   )
+  return [...settled.drafts, ...stored]
 }
 import { agentAdmits, assertAgentAdmits } from './agent-lifecycle.ts'
 import { defaultJobId, ensureJobSession } from './job-sessions.ts'

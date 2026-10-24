@@ -144,6 +144,10 @@ export function registerRoomRoutes(
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
     onSend: receipts.onSend,
   }
+  const isTeamRoom = (roomId: string) =>
+    db.read((sqlite) =>
+      Boolean(sqlite.prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team'").get(roomId)),
+    )
   const routing = new RoutingDispatcher(db, ingest, port, (error) =>
     app.log.error({ err: error }, 'Room run admission failed'),
   )
@@ -265,6 +269,16 @@ export function registerRoomRoutes(
   app.patch('/api/rooms/:roomId', mutation, async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)
     const body = PatchSchema.parse(request.body)
+    // The team room always holds the whole team under its own name; only its lead and settings change (11.1b).
+    if (
+      isTeamRoom(roomId) &&
+      (body.name !== undefined || body.archived !== undefined || body.members !== undefined)
+    )
+      throw new HttpError(
+        409,
+        'conflict',
+        'The team room can’t be renamed, archived or given other members.',
+      )
     await validateAgents([...(body.members ?? []), ...(body.leadAgentId ? [body.leadAgentId] : [])])
     let room: Room | undefined
     await ingest.submit({
@@ -326,6 +340,7 @@ export function registerRoomRoutes(
   app.delete('/api/rooms/:roomId', mutation, async (request, reply) => {
     const { roomId } = ParamsSchema.parse(request.params)
     const body = RoomDeleteRequestSchema.parse(request.body)
+    if (isTeamRoom(roomId)) throw new HttpError(409, 'conflict', 'The team room can’t be deleted.')
     await ingest.submit({
       source: 'rooms',
       identity: randomUUID(),

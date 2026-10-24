@@ -192,7 +192,8 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
 
   const latest = sqlite
     .prepare(
-      'SELECT room_id FROM messages WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1',
+      // The team room belongs to the new shell (PLAN 11.1b); the classic Now leaves it out.
+      "SELECT room_id FROM messages WHERE deleted_at IS NULL AND room_id NOT IN (SELECT id FROM rooms WHERE role = 'team') ORDER BY created_at DESC, id DESC LIMIT 1",
     )
     .get()
   const thread = latest

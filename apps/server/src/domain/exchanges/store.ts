@@ -197,8 +197,12 @@ export function createJob(
   title: string,
   now: string,
 ): { job: Job; drafts: DomainEventDraft[] } {
-  if (!sqlite.prepare('SELECT 1 FROM rooms WHERE id = ?').get(roomId))
-    throw new HttpError(404, 'not_found', 'Couldn’t find that room.')
+  const room = sqlite.prepare('SELECT routing FROM rooms WHERE id = ?').get(roomId) as
+    { routing: string } | undefined
+  if (!room) throw new HttpError(404, 'not_found', 'Couldn’t find that room.')
+  // A room on @mentions shows one thread; its jobs come when it moves to exchanges (11.11).
+  if (room.routing !== 'exchanges')
+    throw new HttpError(409, 'conflict', 'Only rooms that route with exchanges hold several jobs.')
   const id = `job_${randomBytes(12).toString('hex')}`
   sqlite
     .prepare(
