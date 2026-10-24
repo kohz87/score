@@ -521,12 +521,12 @@ reduced motion) and screenshots the lead compares with the named boards. Migrati
 0081 exchanges, 0082 job sources + triggers, 0083 one-to-ones + references + pins, 0084 workbench comments, 0085
 recipes (When). 10.15 stays paused.
 
-**11.0 Design + review** · **Lead** · brief `docs/briefs/11.0-bold.md` v1.1. Done when: the brief settles jobs,
+**11.0 Design + review** ✅ · **Lead** · brief `docs/briefs/11.0-bold.md` v1.1. Done when: the brief settles jobs,
 sessions, exchanges, agent actions, context, one-to-ones, references, sources/triggers/report-back, shell rules and
 migration; every parity row has a home, a task or an owner-approved drop (§11); the adversarial review is committed;
 the owner has seen this plan and the open decisions (§12).
 
-**11.1a Jobs and per-job sessions** · **Lead** · contract (jobs, `job.upserted`) → `packages/contract` → server;
+**11.1a Jobs and per-job sessions** ✅ (merged, not deployed) · **Lead** · contract (jobs, `job.upserted`) → `packages/contract` → server;
 migration 0080 (team room, `rooms.role`/`routing`, `jobs`, `messages.job_id`, `job_sessions`, `job_reads`, job-scoped
 summaries, search and shares); `sessionFor` replaces every `score-<room>-<agent>` derivation; ARCHITECTURE D3.2/D3.3.
 Done when: every existing room migrates to `older` with one job holding all its messages and its exact old session
