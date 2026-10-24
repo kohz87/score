@@ -842,3 +842,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   sizes), unknown authors without a glyph (inherited from classic). Round 2 left 4 e2e failures, all test errors: the
   lead fixed them (a zip unpacks into the folder on show, as the classic rule says; a CSV shows its header as a table
   row). `bold-library.spec.ts` 26/26 twice; full check green (web 2,998); classic knowledge e2e green. Not deployed.
+- **11.10f Search ⌘K on the bold shell (DeepSeek, 2026-10-24).** `BoldSearch` (jobs, one-to-ones, Library, messages,
+  actions, settings sections, look switch, `/` commands; listbox with `aria-activedescendant`, focus trap and return;
+  ⌘K bound once on `/b`, classic palette untouched); every `/b?…` link in `bold-links.ts`, each naming the task that
+  reads its param. Build + 1 fix round. Sonnet: 3 P2, 6 P3 — real and fixed: multi-word message/note queries lost every
+  hit (the client re-filtered the server's `[[ ]]`-marked snippet), Enter during IME composition, a chat's message linked
+  as a job, flicker between keystrokes, a double Pause, an unknown paused state, extra fetches, the look switch's hint
+  ("for this visit"; Look is 11.9a), e2e gaps (⌘K from the composer, Tab trap, two-word query, phone width). Rejected:
+  "most selections do nothing visible" — by design until the consuming tasks land (11.4/11.7/11.10b–d/11.8c read the
+  params). Lead: merge conflict with 11.3 in `BoldShell.tsx` (kept the needs-you approvals query, dropped the classic
+  palette import), Job fixtures for 11.1d's new fields, and a lint error main had from 11.2c. Full check green (web
+  3,023); bold search/shell/protection e2e 29/29. Not deployed.
