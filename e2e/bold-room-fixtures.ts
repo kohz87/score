@@ -23,6 +23,10 @@ export interface BoldRoomOptions {
   uploadDelay?: number
   /** Replace the paused review with another contract-valid pause (the seeded fake has no send-back fixture). */
   exchange?: Json
+  /** Add a frozen one-to-one reply to the Activity feed job, as sharing one into the room does. */
+  shared?: boolean
+  /** Give the Activity feed job a trigger source, for the Started-by card. */
+  source?: boolean
   /** Replace the approval list (an empty list isolates a run-safety card). */
   approvals?: Json[]
   /** Replace the room's exchanges, across the named jobs. */
@@ -147,6 +151,15 @@ const approval = {
   delivery: 'none',
   blocking: null,
   refs: [],
+}
+
+const triggerSource = {
+  app: 'Tickets',
+  ref: 'TCK-142',
+  title: 'Checkout drops the last cart line',
+  link: 'https://tickets.example.com/TCK-142',
+  triggerId: 'trigger-support',
+  missing: [],
 }
 
 const messages: Record<string, Json[]> = {
@@ -348,9 +361,39 @@ function sentMessage(body: Json, index: number) {
 
 /** Routes the bold room's reads and mutations to stable contract-shaped fixtures; every other API stays real. */
 export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
-  const visibleJobs = options.empty
-    ? (options.jobs ?? jobs).filter((item) => item.isDefault)
-    : (options.jobs ?? jobs)
+  const baseJobs = options.jobs ?? jobs
+  const visibleJobs = (options.empty ? baseJobs.filter((item) => item.isDefault) : baseJobs).map(
+    (item) =>
+      options.source && item.id === 'job-activity' ? { ...item, source: triggerSource } : item,
+  )
+  const roomMessages: Record<string, Json[]> = { ...messages }
+  if (options.shared)
+    roomMessages['job-activity'] = [
+      ...(roomMessages['job-activity'] ?? []),
+      {
+        id: 'message-shared',
+        roomId: room.id,
+        jobId: 'job-activity',
+        author: { kind: 'you' },
+        to: [],
+        parts: [
+          {
+            kind: 'shared',
+            from: {
+              roomId: 'dm-builder',
+              jobId: 'chat-builder',
+              messageId: 'message-shared-source',
+              agentId: 'builder',
+              at: at(12),
+            },
+            text: 'The cursor is stable when the page reloads.',
+          },
+        ],
+        createdAt: at(12),
+        streaming: false,
+        refs: [],
+      },
+    ]
   let exchanges = options.exchanges ?? [options.exchange ?? defaultExchange]
   let approvals = options.approvals ?? [approval]
   const pins = new Map([['message-pinned', 'Event cursors are (created_at, id).']])
@@ -388,7 +431,7 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
       const jobId = url.searchParams.get('jobId') ?? 'job-default'
       return response(route, {
         asOfSeq: 12,
-        items: options.empty ? [] : (messages[jobId] ?? []),
+        items: options.empty ? [] : (roomMessages[jobId] ?? []),
         nextCursor: null,
         jobId,
       })
@@ -403,7 +446,7 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
       })
     if (method === 'POST' && path.startsWith('/api/rooms/team-room/pins/')) {
       const messageId = decodeURIComponent(path.split('/').pop() ?? '')
-      const message = Object.values(messages)
+      const message = Object.values(roomMessages)
         .flat()
         .find((item) => item.id === messageId)
       const part = Array.isArray(message?.parts) ? (message.parts as Json[])[0] : undefined
@@ -516,8 +559,18 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
 }
 
 export async function openBoldRoom(page: Page, options: BoldRoomOptions = {}) {
+  return openBoldRoomWith(page, options)
+}
+
+/** `before` runs after the room's routes are in place and before the page opens (the theme routes of 11.9d). */
+export async function openBoldRoomWith(
+  page: Page,
+  options: BoldRoomOptions = {},
+  before?: (page: Page) => Promise<unknown>,
+) {
   await pair(page)
   const state = await mockBoldRoom(page, options)
+  await before?.(page)
   await page.goto('/b')
   await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
   return state

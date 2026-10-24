@@ -107,7 +107,7 @@ test('shows the plain-step log, live screen, markers and the protected approval 
   )
 
   const bar = screen.getByRole('group', { name: 'Approval needed' })
-  expect(bar.getAttribute('data-protected')).toBe('any')
+  expect(bar.getAttribute('data-protected')).toBe('flex')
   expect(bar.textContent).toContain('npm install ws@8')
   expect(within(bar).getByRole('button', { name: 'Approve' })).toBeDefined()
   expect(within(bar).getByRole('button', { name: 'Deny' })).toBeDefined()

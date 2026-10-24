@@ -645,7 +645,7 @@ Done when: every current Settings section reachable; e2e; screenshots vs 17.
 agent, first-time pass rate, time waiting on you, approvals, CSV, "Show as table", range. Done when: numbers equal
 today's Reports API for the same fixtures; e2e; screenshots vs 05.
 
-**11.9d Themes and Customizer on the new shell** · **DeepSeek**, lead reviews protection · preview pages for the new
+**11.9d Themes and Customizer on the new shell** ✅ · **DeepSeek**, lead reviews protection · preview pages for the new
 screens, seven built-in themes re-checked, escape hatches. Done when: visual baselines per theme (dark, light, phone;
 Room, Team, Settings); hostile-theme e2e still green.
 

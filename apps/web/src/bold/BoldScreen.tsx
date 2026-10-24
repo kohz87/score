@@ -55,7 +55,7 @@ function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSumm
       className="watch-approval bold-screen-approval"
       role="group"
       aria-label="Approval needed"
-      data-protected="any"
+      data-protected="flex"
     >
       <span className="watch-approval__text">
         {agent.name} stopped
