@@ -68,6 +68,7 @@ let registry: ReturnType<typeof createStreamQueryRegistry>
 let stream: ReturnType<typeof createStreamClient>
 let calls: { url: string; method: string; body: unknown }[]
 let paused = false
+let fenced = false
 let agentAccess = false
 let memoryNotes = true
 let hermesTested = true
@@ -77,6 +78,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/')
   calls = []
   paused = false
+  fenced = false
   agentAccess = false
   memoryNotes = true
   hermesTested = true
@@ -228,14 +230,26 @@ beforeEach(() => {
         })
       if (url.pathname === '/api/orchestrations/fence')
         return jsonResponse({
+          fenced,
+          reason: fenced ? 'restore' : null,
+          untrustedHistory: fenced,
+          revision: fenced ? 1 : 2,
+          since: fenced ? '2026-10-24T09:00:00.000Z' : null,
+          items: [],
+          journal: { ok: true, entries: 4, bytes: 1200, sizeAlarm: false },
+        })
+      if (url.pathname === '/api/orchestrations/fence/lift' && method === 'POST') {
+        fenced = false
+        return jsonResponse({
           fenced: false,
           reason: null,
           untrustedHistory: false,
-          revision: 1,
+          revision: 2,
           since: null,
           items: [],
           journal: { ok: true, entries: 4, bytes: 1200, sizeAlarm: false },
         })
+      }
       if (url.pathname === '/api/system/logs')
         return jsonResponse({
           available: true,
@@ -477,4 +491,26 @@ test('System shows service, updates, backups, logs, Library access, Shares, Term
   )
   fireEvent.click(screen.getByRole('button', { name: 'Pause everyone' }))
   expect(await screen.findByRole('button', { name: 'Resume everyone' })).toBeDefined()
+})
+
+test('System shows the fence review in Backups, and lifting it removes the review', async () => {
+  fenced = true
+  open('/b/settings/system')
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Starting work is blocked until you review this list',
+    }),
+  ).toBeDefined()
+  expect(screen.getByText(/No orchestration starts anything new/)).toBeDefined()
+  fireEvent.click(screen.getByRole('checkbox', { name: /I’ve been through this list/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Lift the block' }))
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('heading', {
+        name: 'Starting work is blocked until you review this list',
+      }),
+    ).toBeNull(),
+  )
+  expect(screen.getByText(/Nothing is blocked/)).toBeDefined()
+  expect(fenced).toBe(false)
 })

@@ -263,6 +263,9 @@ function BoldRecipeShell({
             onSelect={onSelect}
             onNew={onNew}
           />
+          <Link className="btn sm ghost" to="/workflows">
+            Workflow runs and versions
+          </Link>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
             ×
           </button>
@@ -623,6 +626,9 @@ function BoldRecipeEditor({
             onSelect={onSelect}
             onNew={onNew}
           />
+          <Link className="btn sm ghost" to="/workflows">
+            Workflow runs and versions
+          </Link>
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>
             ×
           </button>

@@ -127,7 +127,10 @@ test('palette opens on click, autofocuses, closes on Esc and restores focus', ()
   const input = within(dialog).getByRole('searchbox', { name: 'Search destinations' })
   expect(document.activeElement).toBe(input)
   // The destinations; Settings' sections (PLAN 10.1) appear only once something is typed.
-  expect(within(dialog).getAllByRole('link')).toHaveLength(destinations.length)
+  expect(within(dialog).getAllByRole('link')).toHaveLength(destinations.length + 1)
+  expect(
+    within(dialog).getByRole('link', { name: 'Workflow runs and versions' }).getAttribute('href'),
+  ).toBe('/workflows')
   fireEvent.keyDown(input, { key: 'Escape' })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
@@ -325,6 +328,12 @@ test.each([
 ])('%s redirects to %s', async (path, target) => {
   const router = renderRoute(path)
   await waitFor(() => expect(router.state.location.pathname).toBe(target))
+})
+
+test('old /now links keep their query string when they redirect', async () => {
+  const router = renderRoute('/now/watch/builder?from=12')
+  await waitFor(() => expect(router.state.location.pathname).toBe('/watch/builder'))
+  expect(router.state.location.search).toBe('?from=12')
 })
 
 test('the palette lists matching messages in a Messages section that opens the hit', async () => {

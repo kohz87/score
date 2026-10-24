@@ -83,6 +83,9 @@ beforeEach(() => {
         : json({ asOfSeq: 1, items: [], nextCursor: null }),
     ),
   )
+})
+
+function mount(statusRoom: Room = room, statusAgents: AgentSummary[] = agents) {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source })
   const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)
@@ -94,11 +97,11 @@ beforeEach(() => {
   render(
     <QueryClientProvider client={queryClient}>
       <StreamContext value={{ client, queries }}>
-        <RoomStatus room={room} agents={agents} />
+        <RoomStatus room={statusRoom} agents={statusAgents} />
       </StreamContext>
     </QueryClientProvider>,
   )
-})
+}
 afterEach(() => {
   cleanup()
   disposers.splice(0).forEach((dispose) => dispose())
@@ -106,6 +109,7 @@ afterEach(() => {
 })
 
 test('resting members are not listed, even when the room says they wrote lately', async () => {
+  mount()
   await waitFor(() => expect(screen.getByRole('list', { name: 'Working now' })).toBeDefined())
   expect(
     within(screen.getByRole('list', { name: 'Working now' })).queryAllByRole('listitem'),
@@ -113,6 +117,7 @@ test('resting members are not listed, even when the room says they wrote lately'
 })
 
 test('thinking, working and waiting for you are listed in the stage’s words', async () => {
+  mount()
   await waitFor(() => expect(screen.getByRole('list', { name: 'Working now' })).toBeDefined())
   const list = screen.getByRole('list', { name: 'Working now' })
   emit('typing', { roomId: 'room-1', agentId: 'lead', text: '' })
@@ -124,4 +129,22 @@ test('thinking, working and waiting for you are listed in the stage’s words', 
   expect(within(list).getByText('reviewer').closest('li')!.textContent).toContain('Waiting for you')
   emit('typing', { roomId: 'room-1', agentId: 'lead', text: null })
   expect(within(list).queryByText('lead')).toBeNull()
+})
+
+test('a direct room lists its lead even when the member list is empty', async () => {
+  mount({ ...room, kind: 'direct', members: [], leadAgentId: 'designer' }, [
+    ...agents,
+    agent('designer'),
+  ])
+  const list = await screen.findByRole('list', { name: 'Working now' })
+  emit('typing', { roomId: 'room-1', agentId: 'designer', text: '' })
+  expect(within(list).getByText('designer').closest('li')!.textContent).toContain('Thinking…')
+})
+
+test('a room without a lead does not invent one, and typing text means working', async () => {
+  mount({ ...room, leadAgentId: null, members: ['builder'] })
+  const list = await screen.findByRole('list', { name: 'Working now' })
+  expect(within(list).queryByText('lead')).toBeNull()
+  emit('typing', { roomId: 'room-1', agentId: 'builder', text: 'writing the fix' })
+  expect(within(list).getByText('builder').closest('li')!.textContent).toMatch(/\S+…?/)
 })

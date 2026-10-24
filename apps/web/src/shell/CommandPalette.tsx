@@ -29,6 +29,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const { sections } = useSettingsSections()
   const destinations: { path: string; title: string; name?: string; section?: true }[] = [
     ...menu,
+    { path: '/workflows', title: 'Workflows', name: 'Workflow runs and versions' },
     ...sections.map(({ id, label }) => ({
       path: settingsPath(id),
       title: `Settings: ${label}`,

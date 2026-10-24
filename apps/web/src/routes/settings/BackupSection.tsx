@@ -1,5 +1,6 @@
-import { Link } from 'react-router'
+import { FenceScreen } from '../orchestrations/FenceScreen.tsx'
 import { useFence } from '../orchestrations/orchestration-queries.ts'
+import '../orchestrations/orchestrations.css'
 
 /** Settings › Backup: how to restore without hiding Hermes runs that Score started (orchestrations, PLAN 7.5). */
 export function BackupSection({ heading = 'Backup and restore' }: { heading?: string } = {}) {
@@ -17,16 +18,13 @@ export function BackupSection({ heading = 'Backup and restore' }: { heading?: st
         Hermes runs that Score started after the backup was made would be unknown to it and might
         still be running.
       </p>
-      <p>
-        {fence?.fenced ? (
-          <>
-            Orchestrations can’t start right now.{' '}
-            <Link to="/b">Check the runs waiting for review in Score</Link>.
-          </>
-        ) : (
-          'Nothing is blocked: Score’s record of runs matches its database.'
-        )}
-      </p>
+      {fence?.fenced ? (
+        <div id="global-fence">
+          <FenceScreen fence={fence} />
+        </div>
+      ) : (
+        <p>Nothing is blocked: Score’s record of runs matches its database.</p>
+      )}
     </section>
   )
 }

@@ -50,6 +50,10 @@ function StubPage({ title }: { title: string }) {
   return <h1>{title}</h1>
 }
 
+function keepSearch(request: Request, path: string) {
+  return `${path}${new URL(request.url).search}`
+}
+
 /** Applies `?ui=bold` / `?ui=classic` from any address to this device's choice; the index loader also applies it first. */
 function UiParamBoundary() {
   const location = useLocation()
@@ -155,19 +159,28 @@ export const appRoutes: RouteObject[] = [
           // Stored links and notifications from before 11.11 still open the page they meant.
           {
             path: '/now/watch/:agentId',
-            loader: ({ params }) => redirect(`/watch/${params.agentId ?? ''}`),
+            loader: ({ request, params }) =>
+              redirect(keepSearch(request, `/watch/${params.agentId ?? ''}`)),
           },
-          { path: '/now/flow/workflows', loader: () => redirect('/workflows') },
+          {
+            path: '/now/flow/workflows',
+            loader: ({ request }) => redirect(keepSearch(request, '/workflows')),
+          },
           {
             path: '/now/flow/workflows/:workflowId',
-            loader: ({ params }) => redirect(`/workflows/${params.workflowId ?? ''}`),
+            loader: ({ request, params }) =>
+              redirect(keepSearch(request, `/workflows/${params.workflowId ?? ''}`)),
           },
           {
             path: '/now/flow/:briefId',
-            loader: ({ params }) => redirect(`/runs/${params.briefId ?? ''}`),
+            loader: ({ request, params }) =>
+              redirect(keepSearch(request, `/runs/${params.briefId ?? ''}`)),
           },
-          { path: '/now/routines', loader: () => redirect('/b/team') },
-          { path: '/now/*', loader: () => redirect('/b') },
+          {
+            path: '/now/routines',
+            loader: ({ request }) => redirect(keepSearch(request, '/b/team')),
+          },
+          { path: '/now/*', loader: ({ request }) => redirect(keepSearch(request, '/b')) },
           { path: '/tasks/*', loader: () => redirect('/b') },
           { path: '/u/*', loader: () => redirect('/b') },
           { path: '/terminal', Component: TerminalRoute },

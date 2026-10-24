@@ -175,6 +175,7 @@ test('a job with a recipe that is not in the run list says so', async () => {
   renderInRoom(<BoldThread jobId="job-1" onSelectJob={() => undefined} />, ['/b'])
   expect(await screen.findByLabelText('Recipe run')).toBeTruthy()
   expect(await screen.findByText(/links to workflow wf-9/)).toBeTruthy()
+  expect(screen.queryByRole('link', { name: 'Open the run' })).toBeNull()
 })
 
 test('a 403 on the step-in box asks to pair this browser, and a done job has the box disabled', async () => {

@@ -3,7 +3,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
+import { useStreamQuery } from '../../data/query-client.ts'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
+import { briefHasRun } from '../runs/brief-run.ts'
+import { workflowRunsQuery } from '../workflows/workflow-queries.ts'
 import { agentTextColor } from './agent-text-color.ts'
 
 type PlanPart = Extract<MessagePart, { kind: 'plan' }>
@@ -50,6 +54,11 @@ export function PlanCard({
 }) {
   const axis = planAxis(part.lanes)
   const queryClient = useQueryClient()
+  const orchestrations = useStreamQuery(orchestrationsQuery).data ?? []
+  const workflows = useStreamQuery(workflowRunsQuery).data ?? []
+  const runHref = briefHasRun(part.briefId, orchestrations, workflows)
+    ? `/runs/${encodeURIComponent(part.briefId)}`
+    : null
   // The server waits for this call before it creates any task; it is idempotent per message, so retry is safe.
   const start = useMutation({
     mutationFn: async () =>
@@ -65,7 +74,7 @@ export function PlanCard({
     <section className="chat-plan-card" aria-label="Plan">
       <div className="chat-plan-head">
         <strong>Plan</strong>
-        <Link to={`/runs/${encodeURIComponent(part.briefId)}`}>Open the run</Link>
+        {runHref && <Link to={runHref}>Open the run</Link>}
       </div>
       <div className="chat-plan-start">
         {start.isSuccess ? (

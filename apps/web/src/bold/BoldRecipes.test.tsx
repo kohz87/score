@@ -109,6 +109,9 @@ test('the release recipe loads as seven numbered steps, is checked live, and und
   mount()
   const steps = await screen.findByRole('list', { name: 'Steps' })
   const dialog = screen.getByRole('dialog', { name: 'Recipe editor' })
+  expect(
+    within(dialog).getByRole('link', { name: 'Workflow runs and versions' }).getAttribute('href'),
+  ).toBe('/workflows')
   await waitFor(() => expect(within(steps).getAllByRole('listitem')).toHaveLength(7))
   await waitFor(() => expect(saveButton().disabled).toBe(false))
   expect(requests.some((request) => request.url === '/api/workflows/validate')).toBe(true)
