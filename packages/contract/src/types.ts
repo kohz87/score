@@ -404,6 +404,26 @@ export const MessagePartSchema = z.discriminatedUnion('kind', [
     path: z.string().min(1).max(4096),
   }),
   z.object({ kind: z.literal('approval'), approvalId: z.string().min(1) }),
+  // PLAN 11.2: a reference to another job, frozen when sent; the agent gets `summary`, never the transcript.
+  z.object({
+    kind: z.literal('ref'),
+    target: z.object({ kind: z.literal('job'), jobId: z.string().min(1) }),
+    title: z.string().max(200),
+    summary: z.string().max(4096),
+    frozenAt: z.iso.datetime(),
+  }),
+  // PLAN 11.2: a frozen, redacted copy of a one-to-one message shared into a team-room job.
+  z.object({
+    kind: z.literal('shared'),
+    from: z.object({
+      roomId: z.string().min(1),
+      jobId: z.string().min(1),
+      messageId: z.string().min(1),
+      agentId: AgentIdSchema.nullable(),
+      at: z.iso.datetime(),
+    }),
+    text: z.string().max(16384),
+  }),
   // A short line from Score about the message (PLAN 11.1b): a mention that handed nothing off, an agent action that was
   // ignored or not sent. Never agent text.
   z.object({

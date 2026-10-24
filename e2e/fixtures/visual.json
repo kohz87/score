@@ -1423,5 +1423,111 @@
         "description": "Seconds before a terminal command is stopped."
       }
     ]
+  },
+  "/api/about": {
+    "version": "1.14.0",
+    "commit": "4c1f2e7",
+    "schema": 42,
+    "contract": 1,
+    "hermes": {
+      "version": "0.15.2"
+    },
+    "node": "v24.0.0",
+    "mode": "fake",
+    "repository": "https://github.com/kohz87/score",
+    "checkout": "/home/owner/score",
+    "service": true
+  },
+  "/api/now": {
+    "asOfSeq": 0,
+    "now": "2026-10-24T10:00:00.000Z",
+    "paused": false,
+    "headline": {
+      "working": 0,
+      "needsYou": 0,
+      "text": "Nobody is working."
+    },
+    "lanes": [],
+    "handoffs": [],
+    "focusApproval": null,
+    "thread": null,
+    "madeToday": []
+  },
+  "/api/session/security": {
+    "passwordSet": true,
+    "origins": ["https://score.local"],
+    "terminal": false,
+    "terminalUnavailable": null
+  },
+  "/api/orchestrations/fence": {
+    "fenced": false,
+    "reason": null,
+    "untrustedHistory": false,
+    "revision": 1,
+    "since": null,
+    "items": [],
+    "journal": {
+      "ok": true,
+      "entries": 4,
+      "bytes": 1200,
+      "sizeAlarm": false
+    }
+  },
+  "/api/system/logs": {
+    "available": true,
+    "items": [
+      {
+        "time": "2026-10-24T10:15:42.000Z",
+        "level": "info",
+        "message": "approval requested · builder · npm install ws@8",
+        "method": null,
+        "url": null,
+        "status": null,
+        "durationMs": null
+      },
+      {
+        "time": "2026-10-24T10:15:48.000Z",
+        "level": "info",
+        "message": "approval applied · you",
+        "method": null,
+        "url": null,
+        "status": null,
+        "durationMs": null
+      },
+      {
+        "time": "2026-10-24T10:18:11.000Z",
+        "level": "warn",
+        "message": "exchange paused · builder ⇄ reviewer · budget",
+        "method": null,
+        "url": null,
+        "status": null,
+        "durationMs": null
+      }
+    ]
+  },
+  "/api/knowledge": {
+    "vault": "/home/owner/score/knowledge",
+    "notes": 12,
+    "gitAvailable": true,
+    "agentAccess": true,
+    "memoryNotes": true,
+    "documents": 2,
+    "documentBytes": 43000,
+    "moveIssue": null
+  },
+  "/api/shares": {
+    "items": [
+      {
+        "id": "share-demo",
+        "roomId": "room-activity-feed",
+        "roomName": "#activity-feed",
+        "createdAt": "2026-10-23T09:00:00.000Z",
+        "expiresAt": "2026-10-30T09:00:00.000Z",
+        "views": 3,
+        "includeImages": true,
+        "status": "active",
+        "roomChanged": false
+      }
+    ]
   }
 }

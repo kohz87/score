@@ -80,6 +80,8 @@ export type MessagePageData = {
   items: Message[]
   nextCursor: string | null
   typing: Record<string, string>
+  /** The job the page lists (the room's default job); absent from older servers. */
+  jobId?: string | null
 }
 function applyLane(
   message: Message,
@@ -143,6 +145,9 @@ export function reduceMessages(
     }
   if (event.type === 'message.created') {
     if (!latest) return data
+    // The classic thread shows the room's default job (PLAN 11.2): a message of another job (a one-to-one in the new
+    // shell) is not part of it.
+    if (data.jobId && event.data.jobId && event.data.jobId !== data.jobId) return data
     // Your own message can arrive on the stream before the send's response: it takes the place of its "sending" copy
     // (same text), so the thread never shows it twice.
     const text = (message: Message) =>

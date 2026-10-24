@@ -9,6 +9,7 @@ import {
 import { HttpError } from '../errors.ts'
 import { redact, redactBounded } from '../redact.ts'
 import { assertAgentAdmits } from './agent-lifecycle.ts'
+import { agentText } from './message-text.ts'
 import { defaultJobId } from './job-sessions.ts'
 import { reserveMessageRun } from './message-runs.ts'
 import { rewindingRooms } from './room-rewinding.ts'
@@ -41,11 +42,7 @@ export function sanitizeSummaryText(text: string): string {
   )
 }
 
-const textOf = (message: Message) =>
-  message.parts
-    .filter((part) => part.kind === 'text')
-    .map((part) => part.text)
-    .join('\n')
+const textOf = (message: Message) => agentText(message.parts)
 const isSummary = (message: Message) => message.parts.some((part) => part.kind === 'summary')
 const line = (message: Message) =>
   `${message.author.kind === 'you' ? 'you' : message.author.agentId}: ${redact(textOf(message))}`
