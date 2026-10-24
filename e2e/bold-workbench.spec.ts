@@ -37,6 +37,15 @@ async function activityFeedJob(page: Page): Promise<Job> {
   return job!
 }
 
+async function jobWithDraft(page: Page, title: string): Promise<Job> {
+  for (const job of (await teamRoom(page)).jobs) {
+    const response = await page.request.get(`/api/jobs/${job.id}/results`)
+    const body = (await response.json()) as { items: { kind: string; title?: string }[] }
+    if (body.items.some((item) => item.kind === 'draft' && item.title === title)) return job
+  }
+  throw new Error(`No seeded job has the draft ${title}`)
+}
+
 async function workbenchData(page: Page, job: Job): Promise<WorkbenchData> {
   const response = await page.request.get(`/api/jobs/${encodeURIComponent(job.id)}/workbench`)
   expect(response.status()).toBe(200)
@@ -153,11 +162,10 @@ for (const size of sizes) {
         panel.getByTestId('bold-workbench').getByRole('region', { name: /builder.s screen/ }),
       ).toBeVisible()
 
-      await panel
-        .getByRole('navigation', { name: 'How to see the work' })
-        .getByRole('link', { name: 'Results' })
-        .click()
-      const draft = panel
+      // Results follow the selected job (11.5): the draft belongs to another seeded job, so open that one.
+      const draftJob = await jobWithDraft(page, 'Announcement image.md')
+      const draftPanel = await openPanel(page, size, `/b?job=${encodeURIComponent(draftJob.id)}`)
+      const draft = draftPanel
         .locator('[data-card="draft"]')
         .filter({ hasText: 'Announcement image.md' })
       const draftLink = draft.getByRole('link', { name: 'Open the draft' })
