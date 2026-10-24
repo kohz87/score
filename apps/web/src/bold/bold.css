@@ -192,6 +192,9 @@
   padding: 0;
   display: grid;
   place-items: center;
+  /* Named here: the shell's `button { color: inherit }` is unlayered and beats the contrast fallback's layered
+     `color: var(--ink)`, so a ring would keep the failing theme's ink against its own Score fill. */
+  color: var(--ink);
 }
 
 [data-ui='bold'] .ring > span {

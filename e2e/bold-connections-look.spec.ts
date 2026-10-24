@@ -261,9 +261,15 @@ async function rotateTrigger(
 async function mockSharedLook(page: Page) {
   let shared = { active: 'score', mode: 'system' }
   await page.route('**/api/themes', async (route) => {
-    const response = await route.fetch()
-    const body = (await response.json()) as Record<string, unknown>
-    await route.fulfill({ response, json: { ...body, ...shared } })
+    // The page can go away while the request is in flight (a navigation, the test ending); Playwright then disposes
+    // the fetched response, and there is nobody left to answer.
+    try {
+      const response = await route.fetch()
+      const body = (await response.json()) as Record<string, unknown>
+      await route.fulfill({ response, json: { ...body, ...shared } })
+    } catch {
+      await route.abort().catch(() => undefined)
+    }
   })
   await page.route('**/api/look', async (route) => {
     if (route.request().method() !== 'PUT') return route.continue()
