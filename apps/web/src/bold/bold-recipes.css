@@ -204,7 +204,7 @@
   gap: 4px;
 }
 
-[data-ui='bold'] .bold-recipes-remove {
+[data-ui='bold'] .icon-btn.bold-recipes-remove {
   color: var(--bad);
 }
 
@@ -445,4 +445,13 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* The dialog takes focus only to hand it on; it draws no ring of its own (the prototype has none). */
+[data-ui='bold'] .bold-dialog.wide:focus {
+  outline: none;
+}
+
+[data-ui='bold'] .icon-btn.bold-recipes-remove {
+  color: var(--bad);
 }

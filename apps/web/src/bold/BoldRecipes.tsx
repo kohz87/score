@@ -57,6 +57,7 @@ import {
 } from './recipe-model.ts'
 import '../routes/orchestrations/orchestrations.css'
 import '../routes/workflows/workflows.css'
+import { PlusIcon, TrashIcon } from './BoldIcons.tsx'
 import './bold-recipes.css'
 
 // PLAN 11.10d: the recipe editor on the bold shell. A recipe is a 7.1 workflow; this dialog is a step-list face over
@@ -894,7 +895,7 @@ function BoldRecipeEditor({
                           data-add-step={kind}
                           onClick={() => add(kind)}
                         >
-                          +{' '}
+                          <PlusIcon />
                           {kind === 'agent' ? 'Agent step' : RECIPE_STEP_LABEL[kind].split(' ·')[0]}
                         </button>
                       ),
@@ -1038,7 +1039,7 @@ function RecipeStepRow({
             disabled={!editable}
             onClick={onRemove}
           >
-            ×
+            <TrashIcon />
           </button>
         </div>
       </div>
