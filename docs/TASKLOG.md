@@ -730,3 +730,23 @@ One entry per completed task: what landed, review results, and any **rejected re
   marking failed runs completed and unknown-cost timing on `updated_at`. **Found by tests:** `exchange_actions.action`
   CHECK lacked the new actions (rebuilt in 0082). `pnpm check` green (contract 1454, web 2988, server 4751 + 14
   skipped, plugin 356, licenses). Not deployed.
+- **11.2a/b contract and data for the new screens (lead, 2026-10-24).** Brief `docs/briefs/11.2-contract.md`; migration
+  0083 (pins + `watch_frames(run_id)` index). 11.2a: `Job` read model (unread, activeAgents, lastMessageAt,
+  messageCount, summary line), `GET /api/team-room`, one-to-ones (`GET /api/agents/:id/direct`, `POST …/chats`; direct
+  rooms keep @mention routing until 11.11 and may hold several jobs), references (`ref` parts frozen at send; the agent
+  gets the frozen summary, never the transcript), share to the team room (`shared` parts, frozen and redacted), pins
+  (≤ 10 per room, their text in every turn of the room), per-job message listing and summaries. **The classic shell sees
+  default jobs only** (listing, stream reducer, room badge, search `jobs=default`). 11.2b: `GET /api/jobs/:id/results`
+  (change with files, authors and review outcomes, preview from the newest browser frame, drafts, screens), derived on
+  read. **Sonnet review: 0 privacy leaks; 9 P2 and 5 P3 real, fixed**: shared copies never reached agents (now quoted and
+  labelled via one `agentText` helper in every input builder, summaries and pins); classic thread showed other jobs live
+  and lost them on reload (page reports its job; reducer drops others); classic search could land on another job's
+  message; classic badge counted jobs it can't open; `job.upserted` missing after delete, rewind and summary (and stale
+  summaries shown); summary lookup parsed every message (cheap prefilter); results scanned all watch frames and loaded
+  every payload (index, payloads loaded lazily, malformed rows skipped); pins blocked orchestration pruning (FK); long
+  shares failed validation (bounded); "caught" was per job, now per review. `job.upserted` is not sent for older
+  @mention rooms (the classic stream is unchanged). **Rejected/deferred:** ref to any job incl. another agent's
+  one-to-one — by design (explicit choice), documented; refs reach only the turn answering the message — documented;
+  `listJobs` 4 queries per job — fine at team-room sizes, revisit if a room grows past ~50 jobs. Tests: 10 HTTP
+  (incl. privacy across all agents and the summary run, pins per room) + 4 results; DeepSeek's job-scope unread test
+  updated to the default-job badge. `pnpm check` green apart from that test (fixed after). Not deployed.
