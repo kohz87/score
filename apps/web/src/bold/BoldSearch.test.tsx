@@ -44,6 +44,8 @@ const job = (id: string, title: string): Job => ({
   lastMessageAt: null,
   messageCount: 0,
   summary: null,
+  source: null,
+  reportBack: null,
   createdAt: '2026-10-24T10:00:00.000Z',
   updatedAt: '2026-10-24T10:00:00.000Z',
 })

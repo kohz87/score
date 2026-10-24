@@ -69,7 +69,7 @@ async function makeJobMessage(page: Page, jobId: string, text: string) {
     headers: web,
     data: { text, jobId },
   })
-  expect(sent.ok(), await sent.text()).toBe(true)
+  expect(sent.ok()).toBe(true)
   return ((await sent.json()) as { message: { id: string } }).message.id
 }
 
