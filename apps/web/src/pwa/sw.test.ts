@@ -173,7 +173,7 @@ test('mutations, other origins, range requests and event streams are left alone'
     fetchEvent('/assets/a.js', { origin: 'https://elsewhere.example' }).response,
   ).toBeUndefined()
   expect(fetchEvent('/assets/a.mp4', { headers: { range: 'bytes=0-1' } }).response).toBeUndefined()
-  expect(fetchEvent('/now', { headers: { accept: 'text/event-stream' } }).response).toBeUndefined()
+  expect(fetchEvent('/chat', { headers: { accept: 'text/event-stream' } }).response).toBeUndefined()
   expect(
     fetchEvent('/api/stream', { headers: { accept: 'text/event-stream' } }).response,
   ).toBeUndefined()
@@ -188,8 +188,8 @@ test('hashed assets are cache-first: one network fetch, then the cache', async (
 })
 
 test('page loads are network-first, and keep the newest index.html', async () => {
-  const page = await fetchEvent('/now', { mode: 'navigate' }).response
-  expect(page!.body).toBe('net:/now')
+  const page = await fetchEvent('/chat', { mode: 'navigate' }).response
+  expect(page!.body).toBe('net:/chat')
   // The page itself isn't what gets stored under index.html unless it is html: a JSON error must not be cached.
   network.mockResolvedValueOnce(respond('<html>new</html>', { html: true }))
   await fetchEvent('/chat', { mode: 'navigate' }).response
@@ -202,10 +202,10 @@ test('page loads are network-first, and keep the newest index.html', async () =>
 test('when Score cannot be reached a page load shows the offline page, also for a dead proxy', async () => {
   stores.set('score-shell-test', new Map([['/offline.html', respond('offline page')]]))
   network.mockRejectedValue(new Error('offline'))
-  expect((await fetchEvent('/now', { mode: 'navigate' }).response)!.body).toBe('offline page')
+  expect((await fetchEvent('/chat', { mode: 'navigate' }).response)!.body).toBe('offline page')
   network.mockReset()
   network.mockResolvedValue(respond('Bad gateway', { status: 502 }))
-  expect((await fetchEvent('/now', { mode: 'navigate' }).response)!.body).toBe('offline page')
+  expect((await fetchEvent('/chat', { mode: 'navigate' }).response)!.body).toBe('offline page')
 })
 
 test('SKIP_WAITING activates a waiting worker', () => {

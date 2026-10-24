@@ -68,10 +68,6 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
     await page.getByLabel('Name of Chat in the menu').press('Enter')
     await page.getByRole('button', { name: 'Hide Reports from the menu' }).click()
 
-    await tab(page, 'Now').click()
-    await page.getByRole('button', { name: 'Arrange the cards' }).click()
-    await page.getByRole('button', { name: 'Move Room up' }).click()
-
     await tab(page, 'Chat').click()
     await page
       .getByRole('radiogroup', { name: 'Messages' })
@@ -88,7 +84,7 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
 
     await tab(page, 'Custom CSS').click()
     await page.locator('.cm-content').click()
-    await page.keyboard.type('.now-score { content: "x" } .brand-subtitle { font-weight: 600 }')
+    await page.keyboard.type('.chat-thread { content: "x" } .brand-subtitle { font-weight: 600 }')
     await expect(page.getByRole('region', { name: 'What the checks removed' })).toContainText(
       '1 rule was removed',
     )
@@ -152,7 +148,7 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
     })
     expect(saved.manifest.layout.menu.slice(0, 2)).toEqual([
       { to: '/chat', label: 'Talk' },
-      { to: '/now' },
+      { to: '/team' },
     ])
     expect(saved.manifest.layout.menu.some((m: { to: string }) => m.to === '/reports')).toBe(false)
     expect(saved.assets).toEqual(['img/background.png'])
@@ -245,23 +241,23 @@ test('keyboard only: sections, choices, moving rows, undo and redo', async ({ pa
   await expect(frame(page).locator('html')).toHaveAttribute('data-nav', 'left')
 
   // Menu rows: the buttons, and the arrow keys on the handle.
-  const moveDown = page.getByRole('button', { name: 'Move Now down' })
+  const moveDown = page.getByRole('button', { name: 'Move Chat down' })
   await moveDown.focus()
   await page.keyboard.press('Enter')
   await expect(
-    page.getByRole('status').filter({ hasText: 'Now moved to position 2 of 7' }),
+    page.getByRole('status').filter({ hasText: 'Chat moved to position 2 of 5' }),
   ).toBeVisible()
-  await expect(frame(page).locator('.main-nav-link').first()).toHaveText('Chat')
-  const grip = page.getByRole('button', { name: /^Reorder Now:/ })
+  await expect(frame(page).locator('.main-nav-link').first()).toHaveText('Team')
+  const grip = page.getByRole('button', { name: /^Reorder Chat:/ })
   await grip.focus()
   await page.keyboard.press('ArrowUp')
-  await expect(frame(page).locator('.main-nav-link').first()).toHaveText('Now')
+  await expect(frame(page).locator('.main-nav-link').first()).toHaveText('Chat')
   // Hidden pages can be brought back, and Settings can't be hidden.
-  await page.getByRole('button', { name: 'Hide Tasks from the menu' }).focus()
+  await page.getByRole('button', { name: 'Hide Knowledge from the menu' }).focus()
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('list', { name: 'Hidden from the menu' })).toContainText('Tasks')
+  await expect(page.getByRole('list', { name: 'Hidden from the menu' })).toContainText('Knowledge')
   await expect(page.getByRole('button', { name: 'Hide Settings from the menu' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Show Tasks in the menu' }).focus()
+  await page.getByRole('button', { name: 'Show Knowledge in the menu' }).focus()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('list', { name: 'Hidden from the menu' })).toHaveCount(0)
 
@@ -275,20 +271,6 @@ test('keyboard only: sections, choices, moving rows, undo and redo', async ({ pa
   await expect(frame(page).locator('html')).not.toHaveAttribute('data-width', 'narrow')
   await page.keyboard.press('Control+Shift+z')
   await expect(frame(page).locator('html')).toHaveAttribute('data-width', 'narrow')
-
-  // Now cards: width, order and removal without a pointer.
-  await tab(page, 'Now').click()
-  await page.getByRole('button', { name: 'Arrange the cards' }).click()
-  await page.getByRole('button', { name: 'Move Made today up' }).focus()
-  await page.keyboard.press('Enter')
-  await expect(
-    page.getByRole('status').filter({ hasText: /Made today moved to position/ }),
-  ).toBeVisible()
-  await page.getByLabel('Width of Room').selectOption('3')
-  await expect(page.getByRole('button', { name: 'Remove Needs you from Now' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Remove To do from Now' }).focus()
-  await page.keyboard.press('Enter')
-  await expect(page.getByRole('button', { name: 'Add To do' })).toBeVisible()
 })
 
 test('Discard goes back to the saved theme and Undo brings the changes back', async ({ page }) => {
@@ -530,13 +512,11 @@ test('roles, names and focus order', async ({ page }) => {
     'Fonts',
     'Shape',
     'Layout',
-    'Now',
     'Chat',
     'Background',
     'Custom CSS',
   ]) {
     await tab(page, name).click()
-    if (name === 'Now') await page.getByRole('button', { name: 'Arrange the cards' }).click()
     expect(await unnamed(), `controls without a name in “${name}”`).toEqual([])
     await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', /cz-tab-/)
   }
@@ -574,9 +554,8 @@ test('phone: one pane at a time, nothing wider than the screen', async ({ page }
   await expect(page.getByRole('region', { name: 'Preview' })).toBeHidden()
   const over = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(await over()).toBeLessThanOrEqual(1)
-  for (const name of ['Colours', 'Layout', 'Now']) {
+  for (const name of ['Colours', 'Layout']) {
     await tab(page, name).click()
-    if (name === 'Now') await page.getByRole('button', { name: 'Arrange the cards' }).click()
     expect(await over(), name).toBeLessThanOrEqual(1)
   }
   await page.getByRole('radio', { name: 'Preview' }).click()

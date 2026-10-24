@@ -32,7 +32,7 @@ async function startApproval(page: Page) {
 test('re-gate 3: inherited typography from an ancestor can’t change how a decision reads', async ({
   page,
 }) => {
-  await wear(page, { css: '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
+  await wear(page, { css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
   const card = await startApproval(page)
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   // As if the sanitiser had missed these: an unlayered sheet on the ancestors.
@@ -76,7 +76,7 @@ test('re-gate 5: a translucent rail over a black picture leaves the Settings lin
     },
     css: '.top-bar { background-color: rgb(255 255 255 / 70%); }',
   })
-  await page.goto('/now')
+  await page.goto('/chat')
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   const link = page.locator('a.main-nav-link[href="/settings"]')
   await expect(link).toBeVisible()
@@ -134,7 +134,7 @@ for (const [name, rule] of [
   test(`third gate 2: a ::selection rule on ${name} can’t blank selected text inside a decision`, async ({
     page,
   }) => {
-    await wear(page, { css: '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
+    await wear(page, { css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
     const card = await startApproval(page)
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     // As if the sanitiser had missed it: an unlayered sheet after it.
@@ -165,7 +165,7 @@ test('third gate 2: the same rule in the theme’s own CSS is dropped by the san
   page,
 }) => {
   await wear(page, {
-    css: '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); } :root::selection, body::selection { color: transparent; background-color: transparent; }',
+    css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); } :root::selection, body::selection { color: transparent; background-color: transparent; }',
   })
   const card = await startApproval(page)
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
@@ -272,8 +272,8 @@ test('third gate 3: a Needs-you dot stays distinguishable on a background of its
 test('third gate 3: every agent colour gets a plate of at least 3:1, computed by the browser', async ({
   page,
 }) => {
-  await wear(page, { css: '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
-  await page.goto('/now')
+  await wear(page, { css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
+  await page.goto('/chat')
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   const worst = await page.evaluate(() => {
     const canvas = document.createElement('canvas')
@@ -334,10 +334,10 @@ for (const [name, label] of [
     page,
   }) => {
     await wear(page, {
-      manifest: { layout: { menu: [{ to: '/now' }, { to: '/settings', label }] } },
-      css: '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
+      manifest: { layout: { menu: [{ to: '/chat' }, { to: '/settings', label }] } },
+      css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
     })
-    await page.goto('/now')
+    await page.goto('/chat')
     const link = page.locator('a.main-nav-link[href="/settings"]')
     await expect(link).toBeVisible()
     await expect(link).toHaveAccessibleName(/Settings/)

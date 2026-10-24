@@ -180,7 +180,7 @@
   font-size: 15px;
 }
 
-/* Band actions (design: Message and Pause at the right; Watch and the pop-out window are quieter). */
+/* Band actions (design: Message and Pause at the right; Watch is quieter). */
 .team-band-actions {
   flex: 0 0 auto;
   display: flex;

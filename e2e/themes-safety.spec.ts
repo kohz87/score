@@ -246,22 +246,20 @@ test.describe('a hostile theme', () => {
     })
   }
 
-  test('can’t hide the password dialogs, permission settings and the way back in Settings', async ({
-    page,
-  }) => {
+  test('can’t hide the permission settings and the way back in Settings', async ({ page }) => {
     const look: Look = { active: 'hostile', mode: 'light' }
     await mockThemes(
       page,
       [
         {
           ...hostile,
-          css: '.rules-card, .guard-form, .look-reset { display: none; } main button { opacity: 0; }',
+          css: '.rules-card, .look-reset { display: none; } main button { opacity: 0; }',
         },
       ],
       look,
     )
     await pair(page)
-    // Rules and approvals is a page of its own; the Look page holds the reset and the guard form.
+    // Rules and approvals is a page of its own; the Look page holds the way back.
     await page.goto('/settings/rules')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await expect(page.getByRole('region', { name: /Rules/ })).toBeVisible()
@@ -271,7 +269,6 @@ test.describe('a hostile theme', () => {
       .click()
     const region = page.getByRole('region', { name: 'Look' })
     await expect(region.getByRole('button', { name: 'Reset look on this device' })).toBeVisible()
-    await expect(region.getByLabel(/Ask for the security password/)).toBeVisible()
     // And the reset works from there.
     await region.getByRole('button', { name: 'Reset look on this device' }).click()
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
@@ -288,7 +285,7 @@ test.describe('the way back', () => {
     await pair(page)
     await page.goto('/settings')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
-    await page.goto('/now?look=safe')
+    await page.goto('/chat?look=safe')
     const banner = page.locator('.look-banner')
     await expect(banner).toContainText('Safe look: your theme is off for this visit')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
@@ -304,7 +301,7 @@ test.describe('the way back', () => {
     await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
     // The device choice is untouched: the next ordinary visit has the theme again.
     expect(await page.evaluate(() => localStorage.getItem('score.look.device'))).toBe('hostile')
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   })
 
@@ -312,7 +309,7 @@ test.describe('the way back', () => {
     const look: Look = { active: 'hostile', mode: 'light' }
     await mockThemes(page, [hostile], look)
     await pair(page)
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await page.keyboard.press('Control+Shift+Digit0')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
@@ -329,7 +326,7 @@ test.describe('the way back', () => {
     const look: Look = { active: 'hostile', mode: 'light' }
     await mockThemes(page, [hostile], look)
     await pair(page)
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await page.keyboard.press('Control+k')
     const palette = page.getByRole('dialog', { name: 'Search or run a command' })
@@ -343,7 +340,7 @@ test.describe('the way back', () => {
     const look: Look = { active: 'gone', mode: 'light' }
     await mockThemes(page, [], look)
     await pair(page)
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('.look-banner')).toContainText('Your theme couldn’t be loaded')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
@@ -412,7 +409,7 @@ test.describe('shared and per-device looks', () => {
       })
     })
     await pair(page)
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('html')).toHaveAttribute('data-pack', 'score')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     // Another device saved a new shared theme.
@@ -474,7 +471,7 @@ test.describe('the sanitiser in a real browser', () => {
       mode: 'light',
     })
     await pair(page)
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     const sheets = await sheetsText(page)
     expect(sheets).toContain('.keep')
@@ -594,7 +591,7 @@ async function assertProtectedHolds(card: Locator) {
 
 test.describe('layout options never weaken a protected surface', () => {
   for (const [name, layout] of Object.entries(hostileLayouts)) {
-    test(`${name}: the approval in Chat and the Needs-you card on Now`, async ({ page }) => {
+    test(`${name}: the approval in Chat and the Needs-you marker`, async ({ page }) => {
       const look: Look = { active: layout.id, mode: 'light' }
       await mockThemes(page, [layout], look)
       await page.route('**/api/themes/*/assets/**', (route) =>
@@ -613,13 +610,8 @@ test.describe('layout options never weaken a protected surface', () => {
       }
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await assertProtectedHolds(card)
-      // Needs-you stays in the navigation: on Now, or on the menu button / first entry when Now is not in the menu.
+      // Needs-you stays in the navigation.
       await expect(page.getByRole('img', { name: 'Needs you' }).first()).toBeAttached()
-      // The Needs-you card on Now.
-      await page.goto('/now')
-      const ask = page.getByRole('region', { name: 'Needs you' })
-      await expect(ask).toBeVisible()
-      await assertProtectedHolds(ask)
       // Settings can't be hidden, and the way back is on its page.
       await page.goto('/settings/look')
       await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
@@ -651,7 +643,7 @@ test.describe('layout options never weaken a protected surface', () => {
       const hide = layoutTheme(`hide-${nav}`, { layout: { nav, menu: [{ to: '/chat' }] } })
       await mockThemes(page, [hide], { active: hide.id, mode: 'light' })
       await pair(page)
-      await page.goto('/now')
+      await page.goto('/chat')
       await expect(page.locator('html')).toHaveAttribute('data-nav', nav)
       if (nav === 'launcher') await page.getByRole('button', { name: 'Menu' }).click()
       const links =
@@ -659,7 +651,7 @@ test.describe('layout options never weaken a protected surface', () => {
           ? page.getByRole('dialog', { name: 'Menu' })
           : page.getByRole('navigation', { name: 'Main' })
       await expect(links.getByRole('link', { name: 'Settings' })).toBeVisible()
-      await expect(links.getByRole('link', { name: 'Tasks' })).toHaveCount(0)
+      await expect(links.getByRole('link', { name: 'Now' })).toHaveCount(0)
       await page.unrouteAll({ behavior: 'ignoreErrors' })
     }
   })

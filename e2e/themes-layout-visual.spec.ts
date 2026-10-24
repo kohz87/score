@@ -22,9 +22,7 @@ type Shot = {
   viewportOnly?: boolean
 }
 
-const now = { path: '/now', ready: '.now-score' }
 const chat = { path: '/chat/room-activity-feed', ready: '.chat-message' }
-const user = { path: '/u/rooms/room-activity-feed', ready: '.chat-message' }
 
 /** The thread opens at its end, where the exact offset moves by a pixel: pin it to the top. */
 async function scrollTop(page: Page) {
@@ -36,25 +34,36 @@ async function chatTop(page: Page, variant: Variant) {
 }
 
 const shots: Shot[] = [
-  { name: 'nav-left', theme: t.navLeft, ...now, variants: all },
-  { name: 'nav-right', theme: t.navRight, ...now, variants: ['light', 'phone'] },
-  { name: 'nav-launcher', theme: t.navLauncher, ...now, variants: ['light', 'phone'] },
+  { name: 'nav-left', theme: t.navLeft, ...chat, variants: all, prepare: scrollTop },
+  {
+    name: 'nav-right',
+    theme: t.navRight,
+    ...chat,
+    variants: ['light', 'phone'],
+    prepare: scrollTop,
+  },
+  {
+    name: 'nav-launcher',
+    theme: t.navLauncher,
+    ...chat,
+    variants: ['light', 'phone'],
+    prepare: scrollTop,
+  },
   {
     name: 'nav-launcher-open',
     theme: t.navLauncher,
-    ...now,
+    ...chat,
     variants: ['light', 'dark'],
     viewportOnly: true,
     prepare: async (page) => {
+      await scrollTop(page)
       await page.getByRole('button', { name: 'Menu' }).click()
       await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible()
     },
   },
-  { name: 'menu', theme: t.menu, ...now, variants: ['light', 'phone'] },
-  { name: 'width-narrow', theme: t.narrow, ...now, variants: ['light'] },
-  { name: 'width-full', theme: t.full, ...now, variants: ['light'] },
-  { name: 'now-grid', theme: t.nowGrid, ...now, variants: all },
-  { name: 'now-no-ask', theme: t.nowNoAsk, ...now, variants: ['light'] },
+  { name: 'menu', theme: t.menu, ...chat, variants: ['light', 'phone'], prepare: chatTop },
+  { name: 'width-narrow', theme: t.narrow, ...chat, variants: ['light'], prepare: scrollTop },
+  { name: 'width-full', theme: t.full, ...chat, variants: ['light'], prepare: scrollTop },
   { name: 'chat-bubbles', theme: t.bubbles, ...chat, variants: all, prepare: chatTop },
   { name: 'chat-rooms-right', theme: t.roomsRight, ...chat, variants: ['light'], prepare: chatTop },
   {
@@ -76,10 +85,16 @@ const shots: Shot[] = [
       await expect(page.getByRole('dialog', { name: 'Rooms' })).toBeVisible()
     },
   },
-  { name: 'compact-sharp', theme: t.compactSharp, ...now, variants: all },
-  { name: 'airy-round', theme: t.airyRound, ...now, variants: ['light', 'phone'] },
-  { name: 'px-radius', theme: t.pxRadius, ...now, variants: ['light'] },
-  { name: 'glass-cover', theme: t.glassCover, ...now, variants: all },
+  { name: 'compact-sharp', theme: t.compactSharp, ...chat, variants: all, prepare: scrollTop },
+  {
+    name: 'airy-round',
+    theme: t.airyRound,
+    ...chat,
+    variants: ['light', 'phone'],
+    prepare: scrollTop,
+  },
+  { name: 'px-radius', theme: t.pxRadius, ...chat, variants: ['light'], prepare: scrollTop },
+  { name: 'glass-cover', theme: t.glassCover, ...chat, variants: all, prepare: scrollTop },
   {
     name: 'glass-cover-chat',
     theme: t.glassCover,
@@ -87,9 +102,8 @@ const shots: Shot[] = [
     variants: ['light', 'dark'],
     prepare: chatTop,
   },
-  { name: 'glass-tile', theme: t.glassTile, ...now, variants: ['light'] },
-  { name: 'harbour-now', theme: t.harbour, ...now, variants: all },
-  { name: 'harbour-user', theme: t.harbour, ...user, variants: all, prepare: scrollTop },
+  { name: 'glass-tile', theme: t.glassTile, ...chat, variants: ['light'], prepare: scrollTop },
+  { name: 'harbour-chat', theme: t.harbour, ...chat, variants: all, prepare: scrollTop },
 ]
 
 test.use({ timezoneId: 'UTC', locale: 'en-GB' })

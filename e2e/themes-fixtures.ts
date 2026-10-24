@@ -143,5 +143,5 @@ export const tidyTheme: MockTheme = {
     colors: { light: { ground: '#e8f0e8', card: '#fcfffc' }, dark: { ground: '#0c140c' } },
     shape: { radius: 'round' },
   },
-  css: '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
+  css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
 }

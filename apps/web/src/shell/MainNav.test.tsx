@@ -12,7 +12,7 @@ vi.mock('../routes/settings/settings-queries.ts', () => ({
 vi.mock('./use-needs-you.ts', () => ({ useNeedsYou: () => false }))
 
 const nav = () => (
-  <MemoryRouter initialEntries={['/now']}>
+  <MemoryRouter initialEntries={['/chat']}>
     <MainNav />
   </MemoryRouter>
 )

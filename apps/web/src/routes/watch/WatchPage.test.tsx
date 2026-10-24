@@ -70,8 +70,8 @@ function setup(agentId = 'builder', search = '') {
     client.close()
     queryClient.clear()
   })
-  const router = createMemoryRouter([{ path: '/now/watch/:agentId', element: <WatchPage /> }], {
-    initialEntries: [`/now/watch/${agentId}${search}`],
+  const router = createMemoryRouter([{ path: '/watch/:agentId', element: <WatchPage /> }], {
+    initialEntries: [`/watch/${agentId}${search}`],
   })
   render(
     <QueryClientProvider client={queryClient}>

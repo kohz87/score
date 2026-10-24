@@ -108,7 +108,7 @@ function directory() {
 test.each([
   ['GET', '/api/system'],
   ['GET', '/api/agents'],
-  ['GET', '/api/tasks'],
+  ['GET', '/api/approvals'],
   ['GET', '/api/stream'],
   ['GET', '/api/media/private'],
   ['GET', '/api/reports/export.csv'],
@@ -441,7 +441,7 @@ test('only built assets and the app shell are public; data, maps and odd paths s
   for (const url of ['/', '/pair', '/index.html', '/assets/app.js'])
     expect((await app.inject({ url, headers })).statusCode).toBe(200)
   // An unpaired bookmark gets the same public index.html as "/", so it can show the pairing screen.
-  const shell = await app.inject({ url: '/tasks', headers })
+  const shell = await app.inject({ url: '/runs/demo', headers })
   expect(shell.statusCode).toBe(200)
   expect(shell.body).toContain('<div id="root"></div>')
   // A note deep link (…/Plan%20B.md) is an app route even though it looks like a file.
@@ -463,9 +463,9 @@ test('only built assets and the app shell are public; data, maps and odd paths s
     401,
   )
   const cookie = await pair(app)
-  expect((await app.inject({ url: '/tasks', headers: { ...headers, cookie } })).statusCode).toBe(
-    200,
-  )
+  expect(
+    (await app.inject({ url: '/runs/demo', headers: { ...headers, cookie } })).statusCode,
+  ).toBe(200)
   expect(
     (await app.inject({ url: '/bridge/v1/hello', headers: { ...headers, cookie } })).statusCode,
   ).toBe(404)

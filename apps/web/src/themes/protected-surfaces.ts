@@ -65,8 +65,6 @@ export const protectedClasses = [
   'bold-add-error',
   'bold-add-joined-runs',
   'terminal-auth',
-  'admin-password',
-  'guard-form',
   'security-password',
   // Agent identity and error toasts
   'agent-glyph',
@@ -76,11 +74,8 @@ export const protectedClasses = [
   'command-palette',
   'command-trigger',
   'menu-trigger',
-  'user-way-back',
   'cz-back',
   'cz-error-back',
-  'user-way-link',
-  'user-menu-button',
   'look-reset',
   'look-banner',
 ] as const

@@ -832,13 +832,6 @@ test('the intent is durable before anything spawns', async () => {
   expect(seen).toEqual({ kind: 'start_coding_run', state: 'accepted' })
 })
 
-test('Kanban tasks stay Hermes-only: assigning a task to a coding agent is refused', async () => {
-  await addAgent()
-  const response = await request('POST', '/api/tasks', { title: 'Do it', assignee: 'coder' })
-  expect(response.statusCode).toBe(422)
-  expect(response.json().error.code).toBe('unsupported')
-})
-
 test('Reports: Claude Code spend is estimated, Codex without a cost is unknown and left out of the total', async () => {
   await addAgent()
   await addAgent({ id: 'cx', name: 'Cx', runtime: 'codex', acknowledgeReads: true })
@@ -867,7 +860,7 @@ test('Reports: Claude Code spend is estimated, Codex without a cost is unknown a
   expect(report.totals.spendExcluded).toEqual(['cx'])
 })
 
-test('Now and Flow see the coding agent’s runs with their runtime', async () => {
+test('Now sees the coding agent’s runs with their runtime', async () => {
   await addAgent()
   await makeRoom()
   await say('@coder go')
@@ -875,12 +868,6 @@ test('Now and Flow see the coding agent’s runs with their runtime', async () =
   const now = (await request('GET', '/api/now')).json()
   expect(JSON.stringify(now)).toContain('"coder"')
   expect(JSON.stringify(now)).toContain('"runtime":"claude-code"')
-  const briefId = (db.sqlite.prepare('SELECT id FROM briefs').get() as { id: string }).id
-  const flow = (await request('GET', `/api/briefs/${briefId}/flow`)).json()
-  const node = flow.nodes.find((item: { agentId: string | null }) => item.agentId === 'coder')
-  expect(node).toBeDefined()
-  const detail = (await request('GET', `/api/flow/nodes/${encodeURIComponent(node.id)}`)).json()
-  expect(detail.run).toMatchObject({ runtime: 'claude-code', costKind: 'estimated' })
 })
 
 test('removing an agent hides it; a running turn must be stopped first', async () => {

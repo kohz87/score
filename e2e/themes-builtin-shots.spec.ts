@@ -31,10 +31,6 @@ for (const id of packagedThemeIds) {
         [id, mode],
       )
       await pair(page)
-      await page.goto('/now')
-      await expect(page.locator('.now-score')).toBeVisible({ timeout: 20_000 })
-      await settle(page)
-      await page.screenshot({ path: `${dir}/${id}-now-${variant}.png`, fullPage: true })
       await page.goto('/chat/room-activity-feed')
       await expect(page.locator('.chat-message').first()).toBeVisible({ timeout: 20_000 })
       await settle(page)

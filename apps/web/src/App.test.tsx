@@ -311,9 +311,12 @@ test('/watch/:agentId renders inside the shell', async () => {
 })
 
 test.each([
+  ['/now', '/b'],
   ['/now/routines', '/b/team'],
   ['/now/unknown', '/b'],
+  ['/tasks', '/b'],
   ['/tasks/demo', '/b'],
+  ['/u', '/b'],
   ['/u/rooms/one', '/b'],
   ['/now/watch/builder', '/watch/builder'],
   ['/now/flow/workflows', '/workflows'],

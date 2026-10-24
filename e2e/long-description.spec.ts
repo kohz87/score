@@ -32,9 +32,7 @@ async function cutToOneLine(text: Locator): Promise<void> {
   expect(box.lines).toBeLessThan(1.5)
 }
 
-test('a long agent description stays on one line in the @mention menu', async ({
-  page,
-}) => {
+test('a long agent description stays on one line in the @mention menu', async ({ page }) => {
   test.setTimeout(90_000)
   const suffix = Date.now().toString(36)
   const id = `long-${suffix}`

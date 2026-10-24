@@ -452,6 +452,9 @@ label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }
 
 ### Score view
 
+**Removed in 11.11b.** The Now page is gone; `GET /api/now` remains as the source of Score's paused state for `/b`,
+and `POST /api/team/pause` / `POST /api/team/resume` remain the team controls.
+
 - **S** `GET /api/now?from=<iso>&to=<iso>` →
   ```ts
   { asOfSeq: number; now: string; paused: boolean /* Pause everyone is on */
@@ -2033,8 +2036,7 @@ action }` unless delegated:
 | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------- |
 | Post / edit / delete / retry / rewind a message in the room, room members / archive, summaries (rename is allowed) | 409                                                                                                                                | 409                             | allowed (ordinary room) |
 | `rooms.post` (MCP) into the room                                                                        | 409                                                                                                                                | 409                             | allowed                 |
-| Stop a message run (`…/messages/:id/stop`), stop a flow node (`/api/flow/nodes/:id/stop`)               | 409 (use Stop)                                                                                                                     | 409                             | n/a                     |
-| Brief pause / resume (`/api/briefs/:id/pause                                                            | resume`)                                                                                                                           | delegated to run pause / resume | 409                     | 409 |
+| Stop a message run (`…/messages/:id/stop`)                                                              | 409 (use Stop)                                                                                                                     | 409                             | n/a                     |
 | Plan Start on the room                                                                                  | 409                                                                                                                                | 409                             | 409                     |
 | Team pause / agent pause                                                                                | independent holds: block admission, never cleared by run Resume                                                                    | same                            | n/a                     |
 | Team resume / agent resume                                                                              | clears only its own holds; never lifts a run pause, fence or waiver                                                                | same                            | n/a                     |

@@ -813,7 +813,7 @@
   font-size: 13px;
   font-weight: 600;
 }
-/* Same field look as .settings-form input and .look-guard-form input. */
+/* Same field look as .settings-form input. */
 .plugins-currency input {
   min-width: 0;
   height: 40px;
@@ -1109,29 +1109,6 @@
   min-height: 44px;
   font-weight: 600;
 }
-.look-guard-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: var(--space-3);
-}
-.look-guard-form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: 14px;
-  font-weight: 600;
-}
-.look-guard-form input {
-  min-height: 44px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-m);
-  background: var(--card);
-  color: var(--ink);
-  font: inherit;
-}
-
 /* Look: the way into the Customizer (PLAN 9.4). */
 .look-customize {
   display: flex;

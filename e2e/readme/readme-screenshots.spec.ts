@@ -5,7 +5,6 @@ import { fixtureNow } from '../now-fixture.ts'
 import { orchestrationFixtures } from '../orchestration-fixtures.ts'
 import { okValidation, unfinishedValidation, workflowFixtures } from '../workflow-fixtures.ts'
 import { visualFixtures, visualHello } from '../visual-fixtures.ts'
-import { taskDetailFixture, tasksFixture } from './tasks-fixture.ts'
 import { watchApprovalFixture, watchFixture, watchOverviewFixture } from '../watch-fixture.ts'
 import { mockThemes, type MockTheme } from '../themes-fixtures.ts'
 
@@ -39,14 +38,12 @@ const fixtures: Record<string, unknown> = {
   '/api/coding-agents': { items: [] },
   // No reading yet, so the form shows no limits line.
   '/api/coding-agents/runtimes/claude-code/quota': { quota: null },
-  '/api/tasks': tasksFixture,
-  '/api/tasks/task-docs': taskDetailFixture,
 }
 
 test.use({ timezoneId: 'UTC', locale: 'en-GB', viewport: { width: 1440, height: 900 } })
 
 // Only the orchestration pictures show a run, and only the workflow-run picture a workflow run; everywhere else the
-// team has none (a run in the fixtures would add "Workflow runs need you" to Now and a run panel to the room).
+// team has none (a run in the fixtures would add a run panel to the room).
 let withOrchestration = false
 let withWorkflowRun = false
 
@@ -108,21 +105,11 @@ async function visit(page: Page, path: string, ready: string) {
   await settle(page, ready)
 }
 
-test('now', async ({ page }) => {
-  await visit(page, '/now', '.now-cards')
-  await shot(page, 'now')
-})
-
-test('flow', async ({ page }) => {
-  await visit(page, '/now/flow/fixture-flow', '[data-flow-node]')
-  await shot(page, 'flow')
-})
-
 test('orchestration live', async ({ page }) => {
   withOrchestration = true
   // Taller than the other pictures so the run header, the approval card, the diagram and the log all show.
   await page.setViewportSize({ width: 1440, height: 1660 })
-  await visit(page, '/now/flow/brief-orch-1', '[data-node="s2"]')
+  await visit(page, '/runs/brief-orch-1', '[data-node="s2"]')
   await shot(page, 'orchestration')
 })
 
@@ -144,7 +131,7 @@ test('new orchestration dialog', async ({ page }) => {
 
 test('workflow editor', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 })
-  await visit(page, '/now/flow/workflows/wf-draft', '[data-node="build"]')
+  await visit(page, '/workflows/wf-draft', '[data-node="build"]')
   await page.locator('[data-node="build"]').click()
   await shot(page, 'workflow-editor')
 })
@@ -152,12 +139,12 @@ test('workflow editor', async ({ page }) => {
 test('workflow run', async ({ page }) => {
   withWorkflowRun = true
   await page.setViewportSize({ width: 1440, height: 1300 })
-  await visit(page, '/now/flow/brief-wfrun-1', '[data-node="approve"]')
+  await visit(page, '/runs/brief-wfrun-1', '[data-node="approve"]')
   await shot(page, 'workflow-run')
 })
 
 test('watch', async ({ page }) => {
-  await page.goto('/now/watch/builder')
+  await page.goto('/watch/builder')
   await expect(page.getByRole('heading', { name: 'Watching builder', level: 1 })).toBeVisible()
   await settle(page, 'main')
   await shot(page, 'watch')
@@ -177,13 +164,6 @@ test('chat on a phone', async ({ page }) => {
     window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 16)
   })
   await shot(page, 'chat-phone')
-})
-
-test('tasks', async ({ page }) => {
-  await visit(page, '/tasks', '.task-card')
-  await page.locator('a[href="/tasks/task-docs"]').click()
-  await expect(page.getByRole('complementary', { name: 'Task details' })).toBeVisible()
-  await shot(page, 'tasks')
 })
 
 test('team', async ({ page }) => {
@@ -228,13 +208,6 @@ test('settings', async ({ page }) => {
   await shot(page, 'settings')
 })
 
-test('dark mode', async ({ page }) => {
-  await page.addInitScript(() => window.localStorage.setItem('score.theme', 'dark'))
-  await visit(page, '/now', '.now-cards')
-  expect(await page.locator('html').getAttribute('data-theme')).toBe('dark')
-  await shot(page, 'now-dark')
-})
-
 // Harbour, Ledger and Studio as the server ships them (apps/server/themes/<id>/), read from disk, so the pictures show
 // what a real install lists next to the four packs (which the mock lists itself). Harbour's picture is served from its
 // folder too.
@@ -275,12 +248,6 @@ test('look', async ({ page }) => {
   await shot(page, 'look')
 })
 
-test('theme Harbour', async ({ page }) => {
-  await withShippedThemes(page, 'harbour')
-  await visit(page, '/now', '.now-cards')
-  await shot(page, 'theme-harbour')
-})
-
 test('customizer', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await withShippedThemes(page, 'score')
@@ -294,11 +261,4 @@ test('customizer', async ({ page }) => {
     .locator('.cz-checks')
     .evaluate((element) => ((element as HTMLElement).style.display = 'none'))
   await shot(page, 'customizer')
-})
-
-test('chat-first view', async ({ page }) => {
-  withOrchestration = true
-  await withShippedThemes(page, 'score')
-  await visit(page, '/u/rooms/room-activity-feed', '.user-needs .orch-decision')
-  await shot(page, 'chat-first')
 })

@@ -105,7 +105,7 @@ for (const id of packagedThemeIds) {
             type: response.headers()['content-type'] ?? '',
           })
       })
-      await page.goto('/now')
+      await page.goto('/chat')
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await page.evaluate(() => document.fonts.ready)
       if (id === 'harbour') {
@@ -195,7 +195,7 @@ for (const id of packagedThemeIds) {
       page,
     }) => {
       await useTheme(page, id)
-      await page.goto('/now')
+      await page.goto('/chat')
       const html = page.locator('html')
       await expect(html).toHaveAttribute('data-look', 'custom')
       if (id === 'ledger') await page.getByRole('button', { name: 'Menu' }).click()
@@ -218,12 +218,12 @@ for (const id of packagedThemeIds) {
         }),
       ).toBeVisible()
 
-      await page.goto('/now?look=safe')
+      await page.goto('/chat?look=safe')
       await expect(page.locator('.look-banner')).toContainText('Safe look')
       await expect(html).not.toHaveAttribute('data-look', 'custom')
       await expect(html).toHaveAttribute('data-pack', 'score')
 
-      await page.goto('/now')
+      await page.goto('/chat')
       await expect(html).toHaveAttribute('data-look', 'custom')
       await page.keyboard.press('Control+Shift+Digit0')
       await expect(html).not.toHaveAttribute('data-look', 'custom')

@@ -17,15 +17,9 @@ function sources(dir: string): string[] {
 // Classes that are used as plain markers; chat-toast is only protected on the error toast, agent-glyph is built in code.
 const jsxClasses = protectedClasses.filter(
   (name) =>
-    ![
-      'chat-toast',
-      'agent-glyph',
-      'look-reset',
-      'guard-form',
-      'security-password',
-      'admin-password',
-      'team-permissions',
-    ].includes(name) && !name.startsWith('look-banner'),
+    !['chat-toast', 'agent-glyph', 'look-reset', 'security-password', 'team-permissions'].includes(
+      name,
+    ) && !name.startsWith('look-banner'),
 )
 
 test('every element that wears a protected class is marked data-protected', () => {

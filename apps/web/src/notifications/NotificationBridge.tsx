@@ -24,7 +24,7 @@ function Bridge() {
           .data?.find((agent) => agent.id === id)?.name ?? id,
     })
     const open = (url: string) => {
-      // A browser that lives in the user view opens a room there.
+      // Notification targets are app paths; React Router opens them in the current shell.
       if (isAppPath(url)) void navigate(url)
     }
     const unsubscribe = context.client.subscribe((event) => {

@@ -167,7 +167,7 @@ test.describe('theme CSS stays out of protected subtrees', () => {
   })
 
   test('#3: the guard looks at every element with text, not a list of tags', async ({ page }) => {
-    await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
+    await wear(page, '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
     const { card } = await startApproval(page)
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     // As if a rule had slipped through the sanitiser: the approval's own words go invisible, in the theme's sheet.
@@ -188,7 +188,7 @@ test.describe('theme CSS stays out of protected subtrees', () => {
   test('#5: the guard compares what glyph shapes paint, not just their wrapper', async ({
     page,
   }) => {
-    await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
+    await wear(page, '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
     await startApproval(page)
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     // As if a rule had slipped through the sanitiser: every path takes another shape (the wrapper stays exactly as it was).
@@ -225,45 +225,6 @@ test.describe('theme CSS stays out of protected subtrees', () => {
 })
 
 test.describe('every decision surface is protected, not only the chat card', () => {
-  test('#2: the task drawer’s approval text and its Approve button stay shown', async ({
-    page,
-  }) => {
-    test.setTimeout(240_000)
-    await wear(
-      page,
-      '.task-drawer-approval { display: none; }' +
-        'section[aria-label="Task actions"] div, section[aria-label="Task actions"] button { display: none; }' +
-        'section[aria-label="Task actions"] p, section[aria-label="Task actions"] b, section[aria-label="Task actions"] code { color: transparent; }',
-    )
-    let taskId: string | undefined
-    await expect
-      .poll(
-        async () => {
-          const response = await page.request.get('/api/approvals?status=pending')
-          const { items } = (await response.json()) as {
-            items: { id: string; actionable: boolean; refs: { kind: string; taskId?: string }[] }[]
-          }
-          taskId = items
-            .find((item) => item.id.startsWith('approval-docs') && item.actionable)
-            ?.refs.find((ref) => ref.kind === 'task')?.taskId
-          return taskId
-        },
-        { timeout: 200_000, intervals: [1_000, 2_000, 5_000] },
-      )
-      .toBeTruthy()
-    await page.goto(`/tasks/${taskId}`)
-    const drawer = page.getByRole('complementary', { name: 'Task details' })
-    const actions = drawer.getByRole('region', { name: 'Task actions' })
-    await expect(actions).toBeAttached({ timeout: 20_000 })
-    await settle(page)
-    const request = actions.locator('.task-drawer-approval')
-    const buttons = actions.locator('.task-drawer-buttons')
-    await expect(request).toContainText('asks:')
-    await expect(actions.getByRole('button', { name: /^Approve/ })).toBeVisible()
-    expect(await unreadable(request)).toEqual([])
-    expect(await unreadable(buttons)).toEqual([])
-  })
-
   test('#2: the add-coding-agent form keeps its permission controls, warning and password field', async ({
     page,
   }) => {
@@ -301,7 +262,7 @@ test.describe('the way back is always reachable (gate #8)', () => {
 
   test('#8: Settings stays in the menu and “Reset look” in the palette', async ({ page }) => {
     await wear(page, hideSettings)
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await settle(page)
     const settings = page
@@ -322,7 +283,7 @@ test.describe('the way back is always reachable (gate #8)', () => {
 
   test('#8: the launcher menu keeps Settings', async ({ page }) => {
     await wear(page, hideSettings, { layout: { nav: 'launcher' } })
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('html')).toHaveAttribute('data-nav', 'launcher')
     await page.getByRole('button', { name: 'Menu' }).click()
     const menu = page.getByRole('dialog', { name: 'Menu' })
@@ -332,7 +293,7 @@ test.describe('the way back is always reachable (gate #8)', () => {
 
   test('#8: a theme can’t hide the palette itself', async ({ page }) => {
     await wear(page, '.command-palette { display: none; } .command-backdrop { display: none; }')
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await page.keyboard.press('Control+k')
     const palette = page.getByRole('dialog', { name: 'Search or run a command' })
@@ -369,7 +330,7 @@ test.describe('the guard measures contrast the way the Customizer does (gate #4)
   }
   for (const [name, rule] of Object.entries(cases)) {
     test(`#4: ${name} is switched off`, async ({ page }) => {
-      await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
+      await wear(page, '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
       const { card } = await startApproval(page)
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await slipIn(page, rule)
@@ -409,7 +370,7 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
   }
 
   test('#6: a delayed animation that fades the page is caught when it ends', async ({ page }) => {
-    await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
+    await wear(page, '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
     const rules = await quietSettings(page)
     await slipIn(
       page,
@@ -428,7 +389,7 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
       page,
       '@keyframes gate-fade { from { opacity: 1 } to { opacity: 0 } }' +
         '.page-content { animation: gate-fade 0.4s 2s forwards; transition: opacity 1s; }' +
-        '.now-card { animation-name: gate-fade; transition-delay: 3s; box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
+        '.chat-thread { animation-name: gate-fade; transition-delay: 3s; box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
     )
     const { card } = await startApproval(page)
     await settle(page, 3500)
@@ -448,7 +409,7 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
   }) => {
     // The allowlist keeps `filter` and a faded ancestor out; the guard is the second wall, so the rule is slipped in
     // behind the sanitiser, as if it had missed it.
-    await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
+    await wear(page, '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
     const rules = await quietSettings(page)
     await slipIn(page, '.page-content:hover { opacity: 0; }')
     await page.mouse.move(5, 300)
@@ -461,7 +422,7 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
   test('#6: a focus rule that hides the page is caught when something takes focus', async ({
     page,
   }) => {
-    await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
+    await wear(page, '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
     const rules = await quietSettings(page)
     await slipIn(page, '.page-content:focus-within { filter: blur(8px); opacity: 0.1; }')
     await page.locator('.page-content :is(button, input, select, a[href])').first().focus()
@@ -473,7 +434,7 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
   test('#6: an action on a hidden decision is refused, nothing is sent, and Score says why', async ({
     page,
   }) => {
-    await wear(page, '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
+    await wear(page, '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }')
     const { card } = await startApproval(page)
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     const decisions: string[] = []

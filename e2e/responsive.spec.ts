@@ -77,11 +77,6 @@ async function open(page: Page, where: Where, width: number, height = 900) {
   await page.evaluate(() => document.fonts.ready)
 }
 
-const noPageOverflow = async (page: Page) =>
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
-  ).toBeLessThanOrEqual(1)
-
 for (const width of [360, 390, 768, 1023]) {
   test(`no route scrolls sideways at ${width}px`, async ({ page }) => {
     for (const where of routes) {

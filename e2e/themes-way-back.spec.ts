@@ -16,7 +16,7 @@ test.describe('X15: the way back survives a slow theme list', () => {
       mode: 'light',
       resetGeneration: 0,
     })
-    await page.goto('/now')
+    await page.goto('/chat')
     await custom(page)
     // This device has never seen a reset; the host has reset once since (generation 1), and the list is slow.
     look.resetGeneration = 1
@@ -30,7 +30,7 @@ test.describe('X15: the way back survives a slow theme list', () => {
         await route.fallback()
       },
     )
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.locator('main')).toBeVisible()
     await page.keyboard.press('Control+Shift+Digit0')
     await dropped(page)
@@ -42,26 +42,5 @@ test.describe('X15: the way back survives a slow theme list', () => {
     expect(await page.evaluate(() => window.localStorage.getItem('score.look.device'))).toBe(
       'score',
     )
-  })
-
-  test('the chat-first way back is on the page before the list arrives', async ({ page }) => {
-    test.setTimeout(90_000)
-    await wear(page)
-    await page.goto('/u')
-    await custom(page)
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => (release = resolve))
-    await page.route(
-      (url) => url.pathname === '/api/themes',
-      async (route) => {
-        await gate
-        await route.fallback()
-      },
-    )
-    await page.goto('/u')
-    await custom(page)
-    // The boot cache put the custom look on the page; the list has not answered.
-    await expect(page.getByRole('navigation', { name: 'Way back' })).toBeVisible()
-    release()
   })
 })

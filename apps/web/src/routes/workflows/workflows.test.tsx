@@ -423,14 +423,14 @@ test('the start dialog needs the inputs, shows the exact incarnations and posts 
 
 function mountEditor(path: string) {
   const router = createMemoryRouter(
-    [{ path: '/now/flow/workflows/:workflowId', element: <WorkflowEditorRoute /> }],
+    [{ path: '/workflows/:workflowId', element: <WorkflowEditorRoute /> }],
     { initialEntries: [path] },
   )
   render(providers(<RouterProvider router={router} />))
 }
 
 test('the editor shows every server problem on the node it is about, with words for what to do', async () => {
-  mountEditor('/now/flow/workflows/wf-draft')
+  mountEditor('/workflows/wf-draft')
   const problems = await screen.findByRole('region', { name: 'Problems' })
   await within(problems).findAllByText(/nothing is connected to "when it fails"/)
   expect(within(problems).getByText(/The workflow has no end/)).toBeTruthy()
@@ -455,7 +455,7 @@ test('the editor shows every server problem on the node it is about, with words 
 })
 
 test('typing {{ in an instruction offers the inputs and the earlier steps, and Enter inserts the choice', async () => {
-  mountEditor('/now/flow/wf-release'.replace('/wf-release', '/workflows/wf-release'))
+  mountEditor('/workflows/wf-release')
   const canvasNode = await screen.findByRole('button', { name: /Agent step Review the draft/ })
   fireEvent.click(canvasNode)
   const field = (await screen.findByRole('combobox', {
@@ -479,7 +479,7 @@ test('saving on top of a version someone else saved is explained, keeps the draf
     url === '/api/workflows/wf-release/versions'
       ? json({ error: { code: 'conflict', message: 'stale', details: { latestVersion: 2 } } }, 409)
       : undefined
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   const name = (await screen.findByRole('textbox', { name: 'Workflow name' })) as HTMLInputElement
   fireEvent.change(name, { target: { value: 'Release notes v2' } })
   const save = screen.getByRole('button', { name: 'Save as new version' }) as HTMLButtonElement
@@ -496,7 +496,7 @@ test('saving on top of a version someone else saved is explained, keeps the draf
 })
 
 test('the outline is the canvas as text, and the inspector connects with a select (the keyboard way)', async () => {
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   const outline = await screen.findByRole('region', { name: 'Outline' })
   expect(within(outline).getByText('when done goes to Review the draft')).toBeTruthy()
   expect(within(outline).getByText('otherwise goes to Repair the draft')).toBeTruthy()
@@ -536,7 +536,7 @@ function drag(
 }
 
 test('dragging a node moves it on a 16 px grid, marks the draft unsaved and keeps the others where they were', async () => {
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   const node = await drawnNode(/Agent step Draft the notes/)
   const before = { draft: at('draft'), review: at('review'), publish: at('publish') }
   const start = { x: before.draft.x + 20, y: before.draft.y + 10 }
@@ -556,7 +556,7 @@ test('dragging a node moves it on a 16 px grid, marks the draft unsaved and keep
 })
 
 test('holding Alt places the node exactly under the pointer, and a node never goes off the top left', async () => {
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   const node = await drawnNode(/Agent step Draft the notes/)
   const p = at('draft')
   drag(node, { x: p.x + 5, y: p.y + 5 }, { x: p.x + 5 + 53, y: p.y + 5 + 37 }, true)
@@ -566,7 +566,7 @@ test('holding Alt places the node exactly under the pointer, and a node never go
 })
 
 test('the keyboard moves a node: M, arrows (Shift for big steps), Escape; one undo step per run of presses', async () => {
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   const node = await drawnNode(/Agent step Draft the notes/)
   node.focus()
   const p = at('draft')
@@ -594,7 +594,7 @@ test('the keyboard moves a node: M, arrows (Shift for big steps), Escape; one un
 })
 
 test('Arrange automatically is one undoable step that drops the saved positions', async () => {
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   const node = await drawnNode(/Agent step Draft the notes/)
   const arrange = screen.getByRole('button', { name: 'Arrange automatically' }) as HTMLButtonElement
   expect(arrange.disabled).toBe(true)
@@ -615,7 +615,7 @@ test('saving sends the layout with the definition; a moved node is the only chan
     url === '/api/workflows/wf-release/versions'
       ? json({ error: { code: 'conflict', message: 'stale', details: { latestVersion: 2 } } }, 409)
       : undefined
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   const node = await drawnNode(/Agent step Draft the notes/)
   const save = screen.getByRole('button', { name: 'Save as new version' }) as HTMLButtonElement
   expect(save.disabled).toBe(true)
@@ -648,7 +648,7 @@ test('deleting a node drops its position, and a saved layout is what the editor 
   dispose.push(() => {
     workflowFixtures['/api/workflows/wf-release'] = original
   })
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   await drawnNode(/Agent step Draft the notes/)
   expect(at('draft')).toEqual({ x: 320, y: 160 })
   expect(at('review')).toEqual({ x: 640, y: 48 })
@@ -681,7 +681,7 @@ test('the run view draws the nodes where the saved version put them, and the edg
 })
 
 test('the editor draws a run of the version on screen over the canvas, and links to it', async () => {
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   const live = await screen.findByText(/Live: run started/)
   expect(
     within(live.closest('p')!)
@@ -697,7 +697,7 @@ test('the editor draws a run of the version on screen over the canvas, and links
 })
 
 test('Preview plays the drawn workflow, says nothing runs, and Stop returns to the canvas', async () => {
-  mountEditor('/now/flow/workflows/wf-release')
+  mountEditor('/workflows/wf-release')
   const preview = (await screen.findByRole('button', { name: 'Preview' })) as HTMLButtonElement
   await waitFor(() => expect(preview.disabled).toBe(false))
   fireEvent.click(preview)
@@ -712,7 +712,7 @@ test('Preview plays the drawn workflow, says nothing runs, and Stop returns to t
 })
 
 test('Preview is disabled while the draft has problems, and says why', async () => {
-  mountEditor('/now/flow/workflows/wf-draft')
+  mountEditor('/workflows/wf-draft')
   const preview = (await screen.findByRole('button', { name: 'Preview' })) as HTMLButtonElement
   await screen.findByRole('region', { name: 'Problems' })
   await waitFor(() => expect(preview.disabled).toBe(true))
