@@ -38,6 +38,7 @@ import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 import { FAKE_CLI } from './coding-fixtures.ts'
 import { multipartFiles, webpImage } from '../helpers/pack-images.ts'
 import { readAgent, reconcileAgents, updateProjectedAgent } from '../../src/domain/agents.ts'
+import { onMentions } from '../helpers/on-mentions.ts'
 
 // Every test here spawns real child processes (a version probe per agent and per turn, then the CLI itself). Alone that
 // is ~1-2 s, but in the full parallel run on 4 cores node start-up alone takes seconds, and the two-agent Reports test
@@ -187,6 +188,7 @@ async function makeRoom(): Promise<string> {
     leadAgentId: 'lead',
   })
   roomId = RoomSchema.parse(created.json()).id
+  onMentions(db, roomId)
   return roomId
 }
 async function say(text: string) {

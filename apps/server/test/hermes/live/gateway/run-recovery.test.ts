@@ -56,7 +56,14 @@ async function admittedMessage() {
     apply({ sqlite, now }) {
       insertRoom(
         sqlite,
-        { id: 'chat', name: '#chat', kind: 'room', leadAgentId: 'builder', members: ['builder'] },
+        {
+          id: 'chat',
+          name: '#chat',
+          kind: 'room',
+          leadAgentId: 'builder',
+          members: ['builder'],
+          routing: 'mentions', // D3.2 @mention routing, kept for rooms still on mentions (orchestration runs)
+        },
         now,
       )
       const drafts = storeMessage(

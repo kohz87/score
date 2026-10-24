@@ -9,6 +9,7 @@ import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
 import { useLook } from '../themes/use-look.ts'
 import { agentStateLabel, dockProgress } from './bold-agents.ts'
+import { boldOneToOneLink } from './bold-links.ts'
 import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
 import type { BoldSheetState } from './bold-ui.ts'
@@ -26,7 +27,15 @@ function viewOf(path: string): View {
   return 'room'
 }
 
-function DockRing({ agent, needsYou }: { agent: AgentSummary; needsYou: boolean }) {
+function DockRing({
+  agent,
+  needsYou,
+  onOpen,
+}: {
+  agent: AgentSummary
+  needsYou: boolean
+  onOpen: () => void
+}) {
   const progress = dockProgress()
   const state = needsYou ? 'needs you' : agentStateLabel(agent)
   return (
@@ -37,6 +46,7 @@ function DockRing({ agent, needsYou }: { agent: AgentSummary; needsYou: boolean 
       data-protected={needsYou ? 'grid' : undefined}
       aria-label={`One to one with ${agent.id}, ${state}`}
       title={`${agent.id} · ${state}`}
+      onClick={onOpen}
       data-progress={progress ?? undefined}
       style={{
         background:
@@ -188,6 +198,7 @@ export function BoldShell() {
                     key={agent.id}
                     agent={agent}
                     needsYou={agent.status === 'waiting' || waitingOn.has(agent.id)}
+                    onOpen={() => void navigate(boldOneToOneLink(agent.id))}
                   />
                 ))}
                 {dockHasProgress && (

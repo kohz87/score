@@ -1017,3 +1017,26 @@ One entry per completed task: what landed, review results, and any **rejected re
   errors), P3s — fixed. Contract gaps recorded: no job-level pause (Stop only), no job-scoped steps/unblock/comment,
   the plan card only through the classic run panel. Lead: a Search e2e race (the room drops `?command=` after taking
   it). Thread e2e 14/14 ×3, room + search + shell + protection green; full check green. Not deployed.
+- **11.7 One-to-ones (DeepSeek + Sonnet coder, 2026-10-24).** Side panel › an agent: privacy label, Earlier chats
+  (search titles and summaries; an empty default chat hidden), New chat, per-chat drafts (`room:job`), the context meter
+  on the chat's own session (room session for the default chat), Share to the team room (`{jobId}`), Add someone
+  (confirm step naming the job, summary and who is asked; message to both; retry repeats only the message), Take it
+  aside / Bring into a new chat (`?with&ref`, the chat is made on first send), shared messages in the team room in the
+  sharer's colour. Sonnet review: P1/P2s (Add someone sent without confirming and addressed one agent, Take it aside
+  created empty chats, wrong session for the default chat, drafts shared across chats, dialogs without Escape/focus
+  return) — fixed by a Sonnet coder (DeepSeek at its two-session limit). Lead merge: thread mode beside the one-to-one
+  (opening a thread drops `?with=`), the capsule keeps Take it aside beside 11.4c's thread link; a CSS rule cut by the
+  merge (caught only by `pnpm build`, so the lead's merge gate now includes the build). Full check green (coder);
+  one-to-ones + thread + room + search + shell e2e 87/87. Not deployed.
+- **11.11a Rooms route with exchanges (lead + Sonnet coder for tests, 2026-10-24).** Decision 118, first part: migration
+  0086 moves every `room`/`direct` room on mentions to `routing = exchanges`, except orchestration and workflow run rooms
+  (`orchestrations.room_id`, routed by their executor); `insertRoom` defaults to exchanges, the executor and workflow
+  runs pass `mentions`. Contract §Jobs and exchanges updated (D3.2 mentions only for run rooms; direct rooms on
+  exchanges). Consequences: agents in older rooms and one-to-ones hand off with exchange actions (a prose @name gets the
+  `mention_not_handoff` notice); their jobs emit `job.upserted`. Tests: D3.2 hand-off tests pin their rooms to mentions
+  (`test/helpers/on-mentions.ts`); event-count tests gain exactly the new `job.upserted` events (verified each);
+  new `rooms-exchanges-migration.test.ts`. **Rehearsal on a copy of the live DB** (backup API; live at 0079/v1.14.0, so
+  0080–0086 together): rooms 17 → 17 (9 direct + 5 rooms → exchanges, 3 orchestration rooms stay mentions), default
+  jobs 17, messages 108 → 108 (none without a job, none in another room's job), room_reads 14 → job_reads 14, schema 86.
+  Full check green; chat/room/one-to-one/thread/search e2e 107/107, coding agents/orchestrations/workflows/stage 44/44.
+  11.11b (removals and default shell) follows after 11.9d. Not deployed.
