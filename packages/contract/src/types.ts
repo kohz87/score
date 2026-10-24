@@ -404,6 +404,13 @@ export const MessagePartSchema = z.discriminatedUnion('kind', [
     path: z.string().min(1).max(4096),
   }),
   z.object({ kind: z.literal('approval'), approvalId: z.string().min(1) }),
+  // A short line from Score about the message (PLAN 11.1b): a mention that handed nothing off, an agent action that was
+  // ignored or not sent. Never agent text.
+  z.object({
+    kind: z.literal('notice'),
+    code: z.enum(['mention_not_handoff', 'action_ignored', 'action_not_sent', 'no_lead']),
+    text: z.string().min(1).max(500),
+  }),
   z.object({
     kind: z.literal('review'),
     verdict: z.enum(['approved', 'changes_requested']),

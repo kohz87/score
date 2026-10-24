@@ -1,3 +1,4 @@
+import type { DatabaseSync } from 'node:sqlite'
 import { deleteRoom, roomDeletePlan } from '../domain/room-delete.ts'
 import { assertRoomFree } from '../domain/orchestration/ownership.ts'
 import { randomUUID } from 'node:crypto'
@@ -61,6 +62,8 @@ import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
 import { requestSummary, sanitizeSummaryText } from '../domain/room-summaries.ts'
 import { visibleSummaries } from '../domain/summary-stale.ts'
 import { defaultJobId } from '../domain/job-sessions.ts'
+import { updateJob } from '../domain/exchanges/store.ts'
+import { registerJobRoutes } from './jobs.ts'
 import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
 import { routeMessage, modelCommand } from '../domain/routing.ts'
@@ -147,6 +150,7 @@ export function registerRoomRoutes(
   app.addHook('preClose', async () => {
     await routing.close()
   })
+  registerJobRoutes(app, { db, ingest, mutation })
   registerSessionCompactionRoutes(app, {
     port,
     db,
@@ -698,7 +702,8 @@ export function registerRoomRoutes(
     const attached = await resolveAttachments(body.attachments ?? [], media, workspaces, known)
     const mediaIds = attached.mediaIds
     const room = db.read((sqlite) => readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at))
-    const route = routeMessage(body.text, to, room, known)
+    const stepIn = db.read((sqlite) => openExchangeIn(sqlite, roomId, jobId))
+    const route = routeMessage(body.text, to, room, known, stepIn)
     let command: CommandResult | null = modelCommand(route.model)
     // `/model <alias>` names the model the alias stands for on each recipient (aliases belong to a profile).
     const typedModel = route.model ?? body.model
@@ -801,6 +806,16 @@ export function registerRoomRoutes(
         media?.retain(sqlite, mediaIds, now)
         const drafts = storeMessage(sqlite, message, now)
         message = messageFromRow(sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(id))
+        // In an exchanges room the agent the person addresses has the work (PLAN 11.1b).
+        if (room.routing === 'exchanges' && message.jobId && route.routedTo[0])
+          drafts.push(
+            ...updateJob(
+              sqlite,
+              message.jobId,
+              { holder: route.routedTo[0], state: 'working' },
+              now,
+            ),
+          )
         if (original) drafts.push(...markEdited(sqlite, roomId, original, id, now))
         // Plan first admits only the planner; the others are named in its prompt and start from the plan.
         const team = route.routedTo.filter((agentId) => agentId !== planner)
@@ -851,3 +866,20 @@ export function registerRoomRoutes(
   return () => routing.dispatch()
 }
 import { agentAdmits } from '../domain/agent-lifecycle.ts'
+
+/** A job with an exchange still going (live, waiting on an agent or paused): a message into it steps in. */
+function openExchangeIn(
+  sqlite: DatabaseSync,
+  roomId: string,
+  jobId: string | null | undefined,
+): boolean {
+  const job = jobId ?? defaultJobId(sqlite, roomId)
+  return Boolean(
+    job &&
+    sqlite
+      .prepare(
+        "SELECT 1 FROM exchanges WHERE job_id = ? AND state IN ('live', 'waiting_on_agent', 'paused_budget')",
+      )
+      .get(job),
+  )
+}

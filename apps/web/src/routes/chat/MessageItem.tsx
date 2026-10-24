@@ -211,6 +211,12 @@ function Part({
       )
     case 'approval':
       return <ApprovalCard approvalId={part.approvalId} />
+    case 'notice':
+      return (
+        <p className="chat-compact chat-notice" role="note">
+          {part.text}
+        </p>
+      )
     case 'plan':
       return <PlanCard part={part} agents={agents} roomId={message.roomId} messageId={message.id} />
   }

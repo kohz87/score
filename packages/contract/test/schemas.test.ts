@@ -248,6 +248,63 @@ const flowNode = {
   layout: { col: 1, row: 0 },
 }
 const flowEdge = { id: 'e1', from: 'brief:brief-1', to: 'task:t_1', kind: 'flow', label: null }
+const xtc = `xtc_${'a'.repeat(43)}`
+const job = {
+  id: 'job_1',
+  roomId: 'room-1',
+  title: 'Activity feed',
+  state: 'working',
+  holderAgentId: 'builder',
+  isDefault: false,
+  exchangeBudget: 8,
+  jobTurnLimit: 40,
+  createdAt: '2026-10-24T00:00:00.000Z',
+  updatedAt: '2026-10-24T00:00:00.000Z',
+}
+const exchange = {
+  id: 'xch_1',
+  jobId: 'job_1',
+  roomId: 'room-1',
+  kind: 'review',
+  parentId: null,
+  from: 'builder',
+  to: 'reviewer',
+  state: 'live',
+  round: 1,
+  turnsUsed: 1,
+  budget: 8,
+  outcome: null,
+  endedReason: null,
+  createdAt: '2026-10-24T00:00:00.000Z',
+  updatedAt: '2026-10-24T00:00:00.000Z',
+}
+// PLAN 11.1b: jobs, exchanges and agent actions.
+const exchangeCases = [
+  ['ExchangeActionKindSchema', 'send_back', 'merge'],
+  [
+    'ExchangeActionSchema',
+    { action: 'review', to: 'reviewer', note: 'Check the cursor' },
+    { action: 'approve', note: 'ok', extra: 1 },
+  ],
+  [
+    'BridgeExchangeActionRequestSchema',
+    { capability: xtc, commandId: 'c-1', action: { action: 'reply', text: 'Yes' } },
+    { capability: 'orc_short', commandId: 'c-1', action: { action: 'reply', text: 'Yes' } },
+  ],
+  [
+    'ExchangeReceiptSchema',
+    { status: 'staged', commandId: 'c-1', action: 'handoff', message: 'Will go to builder' },
+    { status: 'applied', commandId: 'c-1', action: 'handoff', message: 'x' },
+  ],
+  ['JobSchema', job, { ...job, state: 'paused' }],
+  ['ExchangeKindSchema', 'ask', 'approve'],
+  ['ExchangeStateSchema', 'paused_budget', 'paused'],
+  ['ExchangeSchema', exchange, { ...exchange, round: 0 }],
+  ['JobsResponseSchema', { asOfSeq: 1, items: [job] }, { items: [job] }],
+  ['JobCreateRequestSchema', { title: 'Release notes' }, { title: '  ' }],
+  ['ExchangesResponseSchema', { asOfSeq: 1, items: [exchange] }, { asOfSeq: 1, items: [job] }],
+] as const
+
 const cases = [
   ['AgentCreateInputSchema', createInput, { ...createInput, id: 'Bad Id' }],
   ['AgentCreateRequestSchema', createRequest, { ...createRequest, previewHash: 'x' }],
@@ -1892,6 +1949,7 @@ const cases = [
   ['OrchReceiptArgsSchema', orcTool, { capability: 'orc_short', commandId: 'c-1' }],
   ['OrchReceiptSchema', { status: 'ok' }, { status: 'maybe' }],
   ...workflowCases,
+  ...exchangeCases,
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {

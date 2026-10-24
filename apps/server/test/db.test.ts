@@ -101,6 +101,8 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'command_intents',
     'credentials',
     'events',
+    'exchange_actions',
+    'exchanges',
     'fake_profiles',
     'gaps',
     'ingest_checkpoints',

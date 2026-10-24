@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
@@ -9,6 +10,8 @@ import { compactingKey, compactingSessions, rewindingRooms } from './room-rewind
 import { continuationFor, markSummarySent } from './outside-sessions.ts'
 import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.ts'
 import { sessionFor, usesRoomSession } from './job-sessions.ts'
+import { hashXtc, mintXtc, withXtc } from './exchanges/capability.ts'
+import { jobRunInput } from './exchanges/context.ts'
 
 /** How long a turn waits for an outside session to go quiet before it fails with `session_busy`. */
 export const SESSION_BUSY_WAIT_MS = 10 * 60_000
@@ -134,13 +137,10 @@ export class RoutingDispatcher {
           identity: `input:${job.turn_id}`,
           apply: ({ sqlite }) => {
             if (job.admission_input !== null) return []
-            let input = roomRunInput(
-              sqlite,
-              job.room_id,
-              job.input,
-              job.parent_message_id,
-              job.job_id,
-            )
+            // A room that routes with exchanges gives the turn its job's context and how to act (PLAN 11.1b).
+            let input = exchangesRoom(sqlite, job.room_id)
+              ? jobRunInput(sqlite, job, { coding: codingAgent(sqlite, job.agent_id) })
+              : roomRunInput(sqlite, job.room_id, job.input, job.parent_message_id, job.job_id)
             // An imported room whose Hermes session could not be continued: the first turn carries a recap (PLAN 5.26).
             // Only the job that runs in the room's own session continues it.
             const continuation = continuationFor(sqlite, job.room_id, job.agent_id)
@@ -195,6 +195,21 @@ export class RoutingDispatcher {
           this.busySince.delete(job.turn_id)
         }
         const images = job.hop === 0 ? this.imageIds(job.parent_message_id) : []
+        // A Hermes agent's turn in an exchanges room acts through the bridge tools with a capability of its own: a
+        // fresh one per start, only its hash stored, filled into the payload in memory (brief §4.2).
+        const capability = this.db.read(
+          (sqlite) => exchangesRoom(sqlite, job.room_id) && !codingAgent(sqlite, job.agent_id),
+        )
+          ? mintXtc()
+          : null
+        if (capability)
+          this.db.tx((sqlite) =>
+            sqlite
+              .prepare(
+                "UPDATE message_runs SET xtc_hash = ? WHERE turn_id = ? AND state = 'pending'",
+              )
+              .run(hashXtc(capability), job.turn_id),
+          )
         await this.port.startRun({
           agentId: job.agent_id,
           input: frozen.admission_input!,
@@ -209,6 +224,7 @@ export class RoutingDispatcher {
           ...(job.model ? { model: job.model } : {}),
           ...(frozen.provider ? { provider: frozen.provider } : {}),
           ...(images.length ? { images } : {}),
+          ...(capability ? { render: (stored: string) => withXtc(stored, capability) } : {}),
         })
       } catch (error) {
         // A permanent refusal (unknown or unserved agent, invalid input) would otherwise be retried every 10 s
@@ -256,4 +272,16 @@ export class RoutingDispatcher {
     clearInterval(this.timer)
     await this.flight?.catch(() => undefined)
   }
+}
+
+function exchangesRoom(sqlite: DatabaseSync, roomId: string): boolean {
+  const row = sqlite.prepare('SELECT routing FROM rooms WHERE id = ?').get(roomId) as
+    { routing: string } | undefined
+  return row?.routing === 'exchanges'
+}
+
+function codingAgent(sqlite: DatabaseSync, agentId: string): boolean {
+  return Boolean(
+    sqlite.prepare('SELECT 1 FROM coding_agents WHERE id = ? AND removed_at IS NULL').get(agentId),
+  )
 }

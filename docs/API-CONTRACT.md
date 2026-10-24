@@ -280,6 +280,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `system.status`      | `SystemStatus`                                                                                | header banner, Settings                                  |
 | `agent.updated`      | `AgentSummary`                                                                                | everywhere agents render                                 |
 | `room.upserted`      | `Room`                                                                                        | Chat rooms list                                          |
+| `job.upserted`       | `Job` (PLAN 11.1b)                                                                            | The new shell's job tabs                                 |
+| `exchange.upserted`  | `Exchange` (PLAN 11.1b)                                                                       | Job capsules and threads                                 |
 | `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
@@ -568,6 +570,25 @@ surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature
 - **S** `GET /api/rooms/:roomId` → `{ asOfSeq; room: Room; filesInPlay: string[]
 learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **S** `GET /api/rooms/:roomId/messages?before=<cursor>&limit=50` → `{ asOfSeq; items: Message[]; nextCursor }`
+- **Jobs and exchanges** (PLAN 11.1b; schemas in `packages/contract/src/exchanges.ts`; design docs/briefs/11.0-bold.md
+  §3–§5). Every room has a default job (`isDefault`, titled by the room's name and following a rename); `Message.jobId`
+  says which job a message is in. `Room.role`: `team` (the always-on team room of the new shell, members = every agent,
+  no lead until the person picks one; `GET /api/rooms` and the classic shell leave it out, `GET /api/rooms/:id` serves
+  it), `direct`, `room`. `Room.routing`: `mentions` (D3.2) or `exchanges` (D3.3: agents act with the exchange actions of
+  §11; a prose `@name` from an agent hands nothing off and gets a `notice` part `mention_not_handoff`). In an
+  `exchanges` room a person's message goes to the addressed agents, else the lead (`409 no_lead` in the team room
+  without one); unaddressed into a job with a live exchange it is a step in and starts nothing. The addressed agent
+  becomes the job's holder. `MessagePart` gains `{ kind: 'notice'; code: 'mention_not_handoff' | 'action_ignored' |
+  'action_not_sent' | 'no_lead'; text }` (a line from Score, never agent text).
+  - **S** `GET /api/rooms/:roomId/jobs` → `{ asOfSeq; items: Job[] }` (open jobs, the default first).
+  - **H** `POST /api/rooms/:roomId/jobs` `{ title (1–200) }` → `201 Job`; its agents get sessions of their own
+    (`score-<room>-<job>-<agent>`). Emits `job.upserted`.
+  - **S** `GET /api/jobs/:jobId/exchanges` → `{ asOfSeq; items: Exchange[] }` (oldest first).
+  - `Job { id; roomId; title; state: 'open'|'working'|'waiting_on_you'|'done'|'closed'; holderAgentId; isDefault;
+    exchangeBudget (8); jobTurnLimit (40); createdAt; updatedAt }`; `Exchange { id; jobId; roomId; kind:
+    'handoff'|'ask'|'review'; parentId; from; to; state: 'live'|'waiting_on_agent'|'waiting_on_you'|'paused_budget'|
+    'done'|'stopped'; round; turnsUsed; budget; outcome: 'approved'|'answered'|'handed_off'|'no_decision'|null;
+    endedReason; createdAt; updatedAt }`.
 - **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
   `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409

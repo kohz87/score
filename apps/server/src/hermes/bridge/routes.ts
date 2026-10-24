@@ -11,6 +11,7 @@ import type { ApprovalOutbox } from '../../domain/approval-outbox.ts'
 import { registerBridgeDecisionRoutes } from './decisions.ts'
 import { registerBridgeCommandRoutes } from './commands.ts'
 import { registerBridgeKnowledgeRoutes } from './knowledge.ts'
+import { registerBridgeExchangeRoutes } from './exchanges.ts'
 import type { RewindBroker } from './rewind-broker.ts'
 import type { KnowledgeAgentApi } from '../../knowledge/agent-api.ts'
 import type { CompatibilityEvaluation } from '../port.ts'
@@ -178,6 +179,7 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
   if (deps.outbox) registerBridgeDecisionRoutes(app, { outbox: deps.outbox, clock, authenticate })
   if (deps.rewind) registerBridgeCommandRoutes(app, { broker: deps.rewind, authenticate })
   if (deps.knowledge) registerBridgeKnowledgeRoutes(app, { api: deps.knowledge, authenticate })
+  registerBridgeExchangeRoutes(app, { db, authenticate, clock })
 
   app.post(
     '/bridge/v1/events',

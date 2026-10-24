@@ -43,6 +43,8 @@ export const MessageRunSchema = z.object({
   orchestration_attempt_id: z.string().nullable().optional(),
   /** The job the turn belongs to (PLAN 11.1a); set by the insert trigger from the message it answers. */
   job_id: z.string().nullable().optional(),
+  /** The exchange the turn works in (PLAN 11.1b); null for a turn the person started. */
+  exchange_id: z.string().nullable().optional(),
 })
 export type MessageRun = z.infer<typeof MessageRunSchema>
 
@@ -66,6 +68,8 @@ export function reserveMessageRun(
     admissionInput?: string
     /** The run writes the room summary instead of answering (PLAN 7.4a). */
     purpose?: 'summary'
+    /** The exchange the turn works in (PLAN 11.1b). */
+    exchangeId?: string | null
   },
   now: string,
 ): string {
@@ -74,8 +78,8 @@ export function reserveMessageRun(
   sqlite
     .prepare(
       `INSERT INTO message_runs
-    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, provider, agents, created_at, plan_first, admission_input, purpose)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, provider, agents, created_at, plan_first, admission_input, purpose, exchange_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
     )
     .run(
       `reply:${turnId}`,
@@ -95,6 +99,7 @@ export function reserveMessageRun(
       req.planFirst ? 1 : 0,
       req.admissionInput ?? null,
       req.purpose ?? null,
+      req.exchangeId ?? null,
     )
   const job = sqlite.prepare('SELECT job_id FROM message_runs WHERE turn_id = ?').get(turnId) as
     { job_id: string | null } | undefined
@@ -195,20 +200,33 @@ export function attachRunMessage(
   sqlite
     .prepare("UPDATE message_runs SET run_id = ?, state = 'active' WHERE turn_id = ?")
     .run(runId, turnId)
-  const drafts = storeMessage(
-    sqlite,
-    {
-      id: mapping.message_id,
-      roomId: mapping.room_id,
-      author: { kind: 'agent', agentId: mapping.agent_id },
-      to: [],
-      parts: [],
-      refs: [{ kind: 'run', runId }],
-      streaming: true,
-      createdAt: now,
-      ...(mapping.job_id ? { jobId: mapping.job_id } : {}),
-    },
-    now,
+  // Every started agent turn in an exchange counts against its budget (brief §4.5).
+  const counted: DomainEventDraft[] = []
+  if (mapping.exchange_id) {
+    sqlite
+      .prepare(
+        'UPDATE exchanges SET turns_used = turns_used + 1, updated_at = ?, version = version + 1 WHERE id = ?',
+      )
+      .run(now, mapping.exchange_id)
+    counted.push(...exchangeEvent(sqlite, mapping.exchange_id))
+  }
+  const drafts = counted
+  drafts.push(
+    ...storeMessage(
+      sqlite,
+      {
+        id: mapping.message_id,
+        roomId: mapping.room_id,
+        author: { kind: 'agent', agentId: mapping.agent_id },
+        to: [],
+        parts: [],
+        refs: [{ kind: 'run', runId }],
+        streaming: true,
+        createdAt: now,
+        ...(mapping.job_id ? { jobId: mapping.job_id } : {}),
+      },
+      now,
+    ),
   )
   if (mapping.from_agent_id)
     drafts.push({
@@ -654,6 +672,24 @@ export function completeRunMessage(
             .join('\n')
     const plan = planPart(mapping.chain_id, parsePlanSteps(text, mapping.agents), now)
     if (plan) message.parts.push(plan)
+  } else if (exchangeRoom(sqlite, mapping)) {
+    // Agent actions route the work here; a prose @mention hands nothing off (PLAN 11.1b).
+    const text =
+      reply !== undefined
+        ? redact(reply ?? '')
+        : message.parts
+            .filter((part) => part.kind === 'text')
+            .map((part) => redact(part.text))
+            .join('\n')
+    const settled = settleExchangeTurn(
+      sqlite,
+      mapping,
+      message.id,
+      { status, reply: text, coding: codingRun(sqlite, runId) },
+      now,
+    )
+    message.parts.push(...settled.notices)
+    drafts.push(...settled.drafts)
   } else if (handoffs) {
     const text =
       reply !== undefined
@@ -700,6 +736,21 @@ export function completeRunMessage(
     .run(JSON.stringify(message.parts), message.id)
   sqlite.prepare("UPDATE message_runs SET state = 'completed' WHERE message_id = ?").run(message.id)
   return [...drafts, ...updateMessage(sqlite, mapping.room_id, message.id, null, now)]
+}
+
+/** A turn of a room that routes with exchanges (orchestration attempts never do: their executor routes them). */
+function exchangeRoom(sqlite: DatabaseSync, mapping: MessageRun): boolean {
+  if (mapping.orchestration_attempt_id) return false
+  const row = sqlite.prepare('SELECT routing FROM rooms WHERE id = ?').get(mapping.room_id) as
+    { routing: string } | undefined
+  return row?.routing === 'exchanges'
+}
+
+/** A coding agent's run: it routes with one `score-action` block instead of tools. */
+function codingRun(sqlite: DatabaseSync, runId: string): boolean {
+  const row = sqlite.prepare('SELECT runtime FROM runs WHERE id = ?').get(runId) as
+    { runtime: string } | undefined
+  return row !== undefined && row.runtime !== 'hermes'
 }
 
 /**
@@ -826,3 +877,5 @@ export function failMessageRun(
 }
 import { agentAdmits, assertAgentAdmits } from './agent-lifecycle.ts'
 import { defaultJobId, ensureJobSession } from './job-sessions.ts'
+import { exchangeEvent } from './exchanges/store.ts'
+import { settleExchangeTurn } from './exchanges/apply.ts'

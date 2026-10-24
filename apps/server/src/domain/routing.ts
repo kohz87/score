@@ -8,8 +8,10 @@ export const HANDOFF_HOP_LIMIT = 4
 export function routeMessage(
   text: string,
   to: string[],
-  room: Pick<Room, 'leadAgentId'>,
+  room: Pick<Room, 'leadAgentId' | 'routing' | 'role'>,
   agents: string[],
+  /** PLAN 11.1b: the job has an open exchange, so an unaddressed message steps in instead of going to the lead. */
+  stepIn = false,
 ) {
   const parsed = parseMessage(text, agents)
   const command = parsed.command
@@ -28,8 +30,18 @@ export function routeMessage(
   const mentions =
     command?.kind === 'model' ? parseMessage(input, agents).mentions : parsed.mentions
   const routedTo = [...new Set([...to, ...mentions])]
+  // In an exchanges room a message into a job with work going on is a step in: kept in the job and read at the next
+  // turn of whoever runs next, starting nothing by itself (brief §4.4).
+  if (!routedTo.length && stepIn && room.routing === 'exchanges')
+    return { parsed, routedTo, input, model: command?.kind === 'model' ? command.model : undefined }
   if (!routedTo.length && room.leadAgentId && agents.includes(room.leadAgentId))
     routedTo.push(room.leadAgentId)
+  if (!routedTo.length && room.role === 'team')
+    throw new HttpError(
+      409,
+      'no_lead',
+      'The team has no lead yet. Pick one in Settings, or address an agent with @name.',
+    )
   if (!routedTo.length)
     throw new HttpError(400, 'no_recipient', 'This room has no agent to receive messages.')
   return { parsed, routedTo, input, model: command?.kind === 'model' ? command.model : undefined }

@@ -111,7 +111,15 @@ export function deleteRoom(
       sqlite.prepare(`DELETE FROM ${table} WHERE brief_id = ?`).run(id)
   sqlite.prepare('DELETE FROM plan_start_runs WHERE room_id = ?').run(roomId)
   sqlite.prepare('DELETE FROM briefs WHERE room_id = ?').run(roomId)
+  sqlite
+    .prepare(
+      'DELETE FROM exchange_actions WHERE turn_id IN (SELECT turn_id FROM message_runs WHERE room_id = ?)',
+    )
+    .run(roomId)
   sqlite.prepare('DELETE FROM message_runs WHERE room_id = ?').run(roomId)
+  sqlite
+    .prepare('DELETE FROM exchanges WHERE job_id IN (SELECT id FROM jobs WHERE room_id = ?)')
+    .run(roomId)
   // Messages already deleted released their media then.
   releaseMessageMedia(
     sqlite,
