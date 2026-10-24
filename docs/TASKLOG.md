@@ -1017,3 +1017,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   errors), P3s — fixed. Contract gaps recorded: no job-level pause (Stop only), no job-scoped steps/unblock/comment,
   the plan card only through the classic run panel. Lead: a Search e2e race (the room drops `?command=` after taking
   it). Thread e2e 14/14 ×3, room + search + shell + protection green; full check green. Not deployed.
+- **11.7 One-to-ones (DeepSeek + Sonnet coder, 2026-10-24).** Side panel › an agent: privacy label, Earlier chats
+  (search titles and summaries; an empty default chat hidden), New chat, per-chat drafts (`room:job`), the context meter
+  on the chat's own session (room session for the default chat), Share to the team room (`{jobId}`), Add someone
+  (confirm step naming the job, summary and who is asked; message to both; retry repeats only the message), Take it
+  aside / Bring into a new chat (`?with&ref`, the chat is made on first send), shared messages in the team room in the
+  sharer's colour. Sonnet review: P1/P2s (Add someone sent without confirming and addressed one agent, Take it aside
+  created empty chats, wrong session for the default chat, drafts shared across chats, dialogs without Escape/focus
+  return) — fixed by a Sonnet coder (DeepSeek at its two-session limit). Lead merge: thread mode beside the one-to-one
+  (opening a thread drops `?with=`), the capsule keeps Take it aside beside 11.4c's thread link; a CSS rule cut by the
+  merge (caught only by `pnpm build`, so the lead's merge gate now includes the build). Full check green (coder);
+  one-to-ones + thread + room + search + shell e2e 87/87. Not deployed.
