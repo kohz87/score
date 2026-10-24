@@ -518,7 +518,7 @@ lead reviews and merges. Every task also gets a Sonnet findings-only review; `pn
 gate. **11.5 is DeepSeek's pilot** and runs before any other DeepSeek task; its result decides the split for the rest
 (CLAUDE.md). UI tasks build in the new shell behind its switch, ship Playwright specs (fake adapter, phone width,
 reduced motion) and screenshots the lead compares with the named boards. Migrations pre-assigned: 0080 jobs + sessions,
-0081 exchanges, 0082 job sources + triggers, 0083 one-to-ones + references + pins, 0084 workbench comments, 0085
+0081 exchanges, 0082 budgets and pauses, 0083 job sources + triggers, 0084 one-to-ones + references + pins, 0085 workbench comments, 0086
 recipes (When). 10.15 stays paused.
 
 **11.0 Design + review** ✅ · **Lead** · brief `docs/briefs/11.0-bold.md` v1.1. Done when: the brief settles jobs,
@@ -548,13 +548,13 @@ action in one turn is refused; a capability from another turn, an ended turn or 
 single `score-action` block routes and two blocks route nothing with a notice; context holds only this job's messages
 since the agent's last turn, pins and references (snapshot test); older rooms still route by @mention.
 
-**11.1c Budgets, pause-and-ask, step in** · **Lead** · brief §4.5–§4.6. Done when: an exchange pauses at 8 of 8
+**11.1c Budgets, pause-and-ask, step in** · **Lead** · brief §4.5–§4.6, migration 0082 (numbers after it moved up one, 2026-10-24). Done when: an exchange pauses at 8 of 8
 turns with a needs-you card; "Give 4 more", "Let lead decide" (lead extends once, never as a participant), "Step in"
 and "Stop" each work (tests); the job-wide 40-turn limit stops nested asks and repeated hand-offs; spend cap and
 unknown cost pause before admission; Pause everyone holds exchanges without spending turns; every row of brief §4.6
 ends in a visible card (one test per row).
 
-**11.1d Job sources, webhook triggers, report-back** · **Lead** (security) · brief §7, D13/D17/D18, migration 0082;
+**11.1d Job sources, webhook triggers, report-back** · **Lead** (security) · brief §7, D13/D17/D18, migration 0083;
 starts with a spike: can the adapter list a profile's MCP server tools without Score reading credentials (result in
 TASKLOG; fallback: tool picked by name). Done when: `POST /hooks/<id>` accepts only valid Standard Webhooks signatures
 within ±5 min, is idempotent on `webhook-id`, refuses non-JSON, > 256 KB and > 60/min (tests); remote mode exposes only
@@ -565,7 +565,7 @@ reaches the lead only quoted and redacted (snapshot test); report-back runs as a
 "One Score per team" (D14–D16).
 
 **11.2 Contract and fake data for the new screens** · **Lead** · one-to-ones as jobs in direct rooms (privacy rules),
-references, share to room, pins (migration 0083), `GET /api/jobs/:id/results` and its derivation from watch frames,
+references, share to room, pins (migration 0084), `GET /api/jobs/:id/results` and its derivation from watch frames,
 tool calls and exchange outcomes (brief §6, §10); fake-adapter fixtures that produce a team room with jobs, exchanges,
 results, one-to-ones and a paused exchange. Done when: contract doc + schemas + server routes with `inject()` tests;
 a direct room's summary runs on its own agent and no team-room input contains one-to-one text (test); a reference sends
@@ -605,7 +605,7 @@ reduced motion; screenshots vs 01/02; TASKLOG records fix rounds, Sonnet finding
 rework, and the owner is told the pilot result.
 
 **11.6a Workbench data** · **Lead** · `GET /api/jobs/:id/workbench`: per-line authorship from ordered diffs
-(`line-diff.ts`), review comments on lines from `review`/`send_back` (migration 0084), last edit position, drafts,
+(`line-diff.ts`), review comments on lines from `review`/`send_back` (migration 0085), last edit position, drafts,
 latest screen frame; Hermes Bot Screen frames read-only when present. Done when: authorship test over interleaved edits
 by two agents; comments survive later edits or are marked outdated; nothing exposes a keyboard or takeover path.
 
@@ -657,7 +657,7 @@ Score running; starter recipes. Done when: e2e from an empty SCORE_HOME in fake 
 
 **11.10c Start a job** · **DeepSeek** · board 10 + prototype: recipe (lead decides / saved / none), When (once,
 schedule, webhook, D13; routines carried over), ask-me-before, turn budget, spend cap, deadline, agents allowed,
-before-it-starts checklist (D2), save as recipe; maps onto today's orchestration/workflow start APIs (migration 0085
+before-it-starts checklist (D2), save as recipe; maps onto today's orchestration/workflow start APIs (migration 0086
 for When if needed). Done when: e2e starts each kind; a routine appears as a scheduled job.
 
 **11.10d Recipe editor** · **DeepSeek**, lead reviews against 7.1 rules · D1: step list (agent steps, gates, branches,
