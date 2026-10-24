@@ -40,6 +40,8 @@ type Props = {
   path: string
   notes: KnowledgeNoteSummary[]
   agents: AgentSummary[]
+  /** Where a wikilink or a moved-note link opens. The classic page uses the router; the bold Library stays in its panel. */
+  onOpenPath?: (path: string) => void
   /** The latest `knowledge.changed` for this note that did not come from this browser. */
   external: KnowledgeChanged | null
   onDismissExternal: () => void
@@ -111,6 +113,7 @@ function Pane({
   path,
   notes,
   agents,
+  onOpenPath,
   external,
   onDismissExternal,
   onCreateLink,
@@ -338,8 +341,10 @@ function Pane({
 
   function openWikilink(target: string) {
     const found = resolveTarget(target, note.links, notesRef.current)
-    if (found) navigate(noteUrl(found))
-    else onCreateLink(target)
+    if (found) {
+      if (onOpenPath) onOpenPath(found)
+      else navigate(noteUrl(found))
+    } else onCreateLink(target)
   }
 
   // Agent edits: "edited by builder · 2 min ago" with Undo (= restore the commit before the agent's).
@@ -354,7 +359,7 @@ function Pane({
       <section className="kn-note-main" aria-label="Editor">
         <header className="kn-note-head">
           <div>
-            <h2>{note.title}</h2>
+            <h2 tabIndex={-1}>{note.title}</h2>
             <p className="kn-path">{path}</p>
             {!note.versioned && (
               <span className="kn-type-badge" data-testid="not-in-history">
@@ -479,7 +484,17 @@ function Pane({
         {external?.kind === 'moved' && external.to && (
           <p className="kn-banner is-warn" role="status">
             Moved by <AuthorLabel author={external.by} agents={agents} /> ·{' '}
-            <Link to={noteUrl(external.to)}>Open the new location</Link>
+            {onOpenPath ? (
+              <button
+                type="button"
+                className="kn-link-button"
+                onClick={() => onOpenPath(external.to!)}
+              >
+                Open the new location
+              </button>
+            ) : (
+              <Link to={noteUrl(external.to)}>Open the new location</Link>
+            )}
           </p>
         )}
         {reloadError && (
@@ -544,6 +559,7 @@ function Pane({
         note={note}
         currentBody={draft}
         agents={agents}
+        onOpenPath={onOpenPath}
         onRestored={() => void doReload()}
         onCreate={onCreateLink}
       />

@@ -1,0 +1,387 @@
+/* The Library side panel, rebuilt from docs/design/bold/prototype.html `vLibrary()` and its side-panel rules.
+   The classic Knowledge editor keeps its behaviour; these rules only give it the bold panel's surface. */
+[data-ui='bold'] .bold-library {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  /* The classic Knowledge components read these tokens; map them onto the bold palette without touching the classic page. */
+  --card: var(--panel);
+  --hairline: var(--line);
+  --subtle: var(--field);
+  --subtle-2: var(--field);
+  --ink-muted: var(--muted);
+  --font-heading: var(--font-d);
+  --font-body: var(--font-b);
+  --font-code: var(--font-m);
+  --agent-violet-text: var(--agent-violet-name);
+  --agent-jade-text: var(--agent-jade-name);
+  --agent-saffron-text: var(--agent-saffron-name);
+  --agent-coral-text: var(--agent-coral-name);
+  --agent-violet-tint: color-mix(in srgb, var(--agent-violet-name) 18%, transparent);
+  --agent-jade-tint: color-mix(in srgb, var(--agent-jade-name) 18%, transparent);
+  --agent-saffron-tint: color-mix(in srgb, var(--agent-saffron-name) 18%, transparent);
+  --agent-coral-tint: color-mix(in srgb, var(--agent-coral-name) 18%, transparent);
+}
+
+[data-ui='bold'] .bold-library[hidden] {
+  display: none;
+}
+
+[data-ui='bold'] .bold-library-nav {
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-library-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin-bottom: 8px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-library-search:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-library-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-library-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-library-folder {
+  margin: 0;
+  padding: 8px 10px 4px;
+  color: var(--muted);
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+[data-ui='bold'] .bold-library-group.is-drop {
+  outline: 2px dashed var(--ink);
+  outline-offset: -2px;
+  border-radius: 10px;
+}
+
+[data-ui='bold'] .bold-library-groups section + section .bold-library-folder {
+  padding-top: 10px;
+}
+
+[data-ui='bold'] .bold-library-item {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-library-item:hover,
+[data-ui='bold'] .bold-library-item.is-selected {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library-item-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-library-by {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+[data-ui='bold'] .bold-library-by.is-detail {
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-library-by .kn-author {
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-library-by .agent-glyph {
+  width: 14px;
+  height: 14px;
+}
+
+[data-ui='bold'] .bold-library-empty-list {
+  margin: 8px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-library-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+[data-ui='bold'] .bold-library-tools button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.87em;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-library-tools button:hover,
+[data-ui='bold'] .bold-library-tools button[aria-pressed='true'] {
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-library-tools button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+[data-ui='bold'] .bold-library-results {
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-library-results > p {
+  margin: 8px 10px;
+}
+
+[data-ui='bold'] .bold-library-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+[data-ui='bold'] .bold-library-results button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-library-results button:hover {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library-results strong {
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-library-results .kn-path {
+  font-size: 11px;
+}
+
+[data-ui='bold'] .bold-library-snippet {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-library-snippet mark {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--agent-saffron-name) 26%, transparent);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-library-main {
+  flex: 999 1 320px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-library-main > .kn-banner,
+[data-ui='bold'] .bold-library-main > .bold-library-by {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-library-blank {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-library-blank b {
+  color: var(--ink);
+  font-family: var(--font-d);
+  font-size: 22px;
+}
+
+[data-ui='bold'] .bold-library-blank span {
+  max-width: 320px;
+  font-size: 14px;
+}
+
+/* Reuse the classic editor and note panels without the classic page's outer cards. */
+[data-ui='bold'] .bold-library .kn-note {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+[data-ui='bold'] .bold-library .kn-note-main {
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-library .kn-note-head {
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-library .kn-note h2 {
+  font-family: var(--font-d);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-library .kn-note-head .kn-path {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-library .kn-edit-area {
+  min-height: 180px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library .kn-editor-host,
+[data-ui='bold'] .bold-library .kn-editor-host .cm-editor {
+  min-height: 180px;
+}
+
+[data-ui='bold'] .bold-library .kn-editor-host .cm-editor:not(.cm-source) .cm-content {
+  font-size: 1.05em;
+  line-height: 1.65;
+}
+
+[data-ui='bold'] .bold-library .kn-side {
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-library .kn-panel {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-library .kn-panel h3 {
+  font-family: var(--font-d);
+  font-size: 16px;
+}
+
+[data-ui='bold'] .bold-library .kn-toolbar {
+  top: 0;
+  border-color: var(--line);
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-library .kn-files,
+[data-ui='bold'] .bold-library .kn-doc {
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-library .kn-files h2,
+[data-ui='bold'] .bold-library .kn-doc h2 {
+  font-family: var(--font-d);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-library .kn-table-wrap {
+  border-color: var(--line);
+}
+
+[data-ui='bold'] .bold-library .kn-table th {
+  border-bottom-color: var(--line);
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library .kn-table td {
+  border-bottom-color: var(--line);
+}
+
+[data-ui='bold'] .bold-library .kn-doc-props,
+[data-ui='bold'] .bold-library .kn-version-body,
+[data-ui='bold'] .bold-library .kn-diff {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library .kn-backdrop {
+  z-index: 70;
+}
+
+[data-ui='bold'] .bold-library .kn-upload-progress {
+  z-index: 70;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-library-nav {
+    flex-basis: 200px;
+  }
+
+  [data-ui='bold'] .bold-library-main {
+    flex-basis: 320px;
+  }
+}
