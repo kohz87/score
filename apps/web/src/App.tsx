@@ -5,6 +5,7 @@ import { applyUiParam, readUi } from './bold/bold-ui.ts'
 import { BoldRoom } from './bold/BoldRoom.tsx'
 import { BoldShell } from './bold/BoldShell.tsx'
 import { BoldAgentPage } from './bold/BoldAgent.tsx'
+import { BoldScreenPage } from './bold/BoldScreen.tsx'
 import { BoldSettings } from './bold/BoldSettings.tsx'
 import { BoldTeam } from './bold/BoldTeam.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
@@ -86,6 +87,7 @@ export const appRoutes: RouteObject[] = [
           { index: true, Component: BoldRoom },
           { path: 'team', Component: BoldTeam },
           { path: 'team/:agentId', Component: BoldAgentPage },
+          { path: 'screen/:agentId', Component: BoldScreenPage },
           { path: 'settings', Component: BoldSettings },
           { path: 'settings/:section', Component: BoldSettings },
           { path: '*', loader: () => redirect('/b') },

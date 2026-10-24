@@ -97,6 +97,25 @@ test('a workspace:// link with no known agent is plain text; other schemes stay 
   expect(screen.getByText('y').getAttribute('href')).toBeFalsy()
 })
 
+test('a bold room can resolve a workspace link through a job before rendering it', () => {
+  render(
+    <MemoryRouter>
+      <Markdown
+        text="[feed](workspace://api/events.py)"
+        workspace={{
+          agentId: 'builder',
+          agentIds: ['builder'],
+          linkFor: (target) =>
+            `/b?job=job-feed&work=code&file=${encodeURIComponent(target.path)}`,
+        }}
+      />
+    </MemoryRouter>,
+  )
+  expect(screen.getByRole('link', { name: 'feed' }).getAttribute('href')).toBe(
+    '/b?job=job-feed&work=code&file=api%2Fevents.py',
+  )
+})
+
 test('a reply written with • bullets shows as a nested list, not one paragraph', () => {
   const { container } = render(
     <Markdown
