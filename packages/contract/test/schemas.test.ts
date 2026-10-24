@@ -1068,6 +1068,32 @@ const cases = [
   ['AgentChannelsResponseSchema', { items: [] }, { items: [{ platform: 'x' }] }],
   ['WorkspaceInfoSchema', { root: '/w', available: true, reason: null }, { root: '/w' }],
   [
+    'RunsOnSchema',
+    {
+      backend: 'docker',
+      raw: 'docker',
+      separated: 'partly',
+      docker: {
+        image: null,
+        network: true,
+        mountsWorkspace: false,
+        runsAsRoot: true,
+        extraMounts: 0,
+      },
+      ssh: null,
+      separatedTools: ['Terminal'],
+      hostTools: ['MCP servers'],
+      notes: [],
+      checked: { how: 'live', hermes: '0.21.5', at: '2026-10-24' },
+    },
+    { backend: 'docker', separated: 'yes' },
+  ],
+  [
+    'RunsOnUpdateSchema',
+    { backend: 'ssh', host: 'build-box', user: 'agent', port: 22, keyPath: '/home/me/.ssh/key' },
+    { backend: 'ssh', host: '-oProxyCommand=x', user: 'agent' },
+  ],
+  [
     'WorkspaceEntrySchema',
     { name: 'a.txt', kind: 'file', size: 1, mtime: 'x', hidden: false },
     { name: 'a.txt', kind: 'socket', size: 1, mtime: 'x', hidden: false },
