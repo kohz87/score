@@ -7,7 +7,7 @@ import {
   type OutsideSession,
 } from '@score/contract'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from './api.ts'
+import { ApiError, apiFetch } from './api.ts'
 import { newId } from './ids.ts'
 
 export interface OutsideSessionPreview {
@@ -22,25 +22,58 @@ export interface BringOutsideSessionIntoJobResult {
 }
 
 /**
- * One person's "bring it in" attempt. A retry keeps the same idempotency key and the job the first try made, so a
- * share that failed halfway is not repeated: the key replays the answer for a request whose response was lost, the job
- * is reused, and the shared message ids are never sent twice.
+ * One person's "bring it in" attempt. The job is reused and shared message ids are never sent twice. Each HTTP call
+ * has its own idempotency key: the server stores every answer, including errors, for 24 hours, so only a call whose
+ * response was never received keeps its key for the retry. A replayed 500 would otherwise make Try again useless.
  */
 export interface BringOutsideSessionAttempt {
-  idempotencyKey: string
   importedRoomId: string | null
   job: Job | null
   sharedMessageIds: Set<string>
+  /** Keys for calls that failed before an HTTP response; only those same calls may send them again. */
+  pendingKeys: Map<string, string>
 }
 
 export function newBringOutsideSessionAttempt(
   importedRoomId: string | null = null,
 ): BringOutsideSessionAttempt {
   return {
-    idempotencyKey: newId(),
     importedRoomId,
     job: null,
     sharedMessageIds: new Set(),
+    pendingKeys: new Map(),
+  }
+}
+
+/**
+ * Sends one keyed write. An HTTP answer (even an error) is final for its key and is discarded; a transport failure
+ * (network error or abort) keeps it so the retry can recover the answer the server may already have stored.
+ */
+async function keyedWrite(
+  attempt: BringOutsideSessionAttempt,
+  call: string,
+  path: string,
+  body: unknown,
+): Promise<unknown> {
+  const key = attempt.pendingKeys.get(call) ?? newId()
+  attempt.pendingKeys.set(call, key)
+  try {
+    const result = await apiFetch(path, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': key },
+      body: JSON.stringify(body),
+    })
+    attempt.pendingKeys.delete(call)
+    return result
+  } catch (error) {
+    // Only a lost connection may have reached the server without its answer reaching us. An HTTP answer, or a
+    // malformed one, means this call's key must not be sent again.
+    const lost =
+      (error instanceof ApiError && error.status === 0) ||
+      (error instanceof DOMException && error.name === 'AbortError') ||
+      error instanceof TypeError
+    if (!lost) attempt.pendingKeys.delete(call)
+    throw error
   }
 }
 
@@ -68,9 +101,22 @@ async function importedMessages(roomId: string): Promise<Message[]> {
     cursors.add(next)
     before = next
   }
-  return [...items.values()].sort(
+  return sortImportedMessages([...items.values()])
+}
+
+function importSequence(id: string): number | null {
+  const match = /(\d+)$/.exec(id)
+  return match ? Number(match[1]) : null
+}
+
+/** Copied messages keep their original times; the import index breaks a tie without sorting `10` before `2`. */
+export function sortImportedMessages(messages: Message[]): Message[] {
+  return [...messages].sort(
     (left, right) =>
-      left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+      left.createdAt.localeCompare(right.createdAt) ||
+      (importSequence(left.id) ?? Number.POSITIVE_INFINITY) -
+        (importSequence(right.id) ?? Number.POSITIVE_INFINITY) ||
+      left.id.localeCompare(right.id),
   )
 }
 
@@ -118,10 +164,8 @@ export async function bringOutsideSessionIntoJob(
   const title = (session.title.trim() || `From ${session.sourceLabel}`).slice(0, 200)
   if (!attempt.job) {
     attempt.job = JobSchema.parse(
-      await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/jobs`, {
-        method: 'POST',
-        headers: { 'Idempotency-Key': attempt.idempotencyKey },
-        body: JSON.stringify({ title }),
+      await keyedWrite(attempt, 'create-job', `rooms/${encodeURIComponent(teamRoomId)}/jobs`, {
+        title,
       }),
     )
   }
@@ -130,11 +174,12 @@ export async function bringOutsideSessionIntoJob(
   let attached = 0
   for (const message of messages) {
     if (attempt.sharedMessageIds.has(message.id)) continue
-    await apiFetch(`messages/${encodeURIComponent(message.id)}/share`, {
-      method: 'POST',
-      headers: { 'Idempotency-Key': attempt.idempotencyKey },
-      body: JSON.stringify({ jobId: job.id }),
-    })
+    await keyedWrite(
+      attempt,
+      `share:${message.id}`,
+      `messages/${encodeURIComponent(message.id)}/share`,
+      { jobId: job.id },
+    )
     attempt.sharedMessageIds.add(message.id)
     attached += 1
   }

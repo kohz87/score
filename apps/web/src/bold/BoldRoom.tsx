@@ -13,7 +13,7 @@ import { BoldWorkbench } from './BoldWorkbench.tsx'
 import { boldOneToOneLink, boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
 import { BoldDirect, DirectHeaderActions, PrivacyNote } from './direct/BoldDirect.tsx'
-import { BoldElsewhere } from './room/BoldElsewhere.tsx'
+import { BoldElsewhere, forgetBroughtOutsideSessions } from './room/BoldElsewhere.tsx'
 import { BoldThread } from './room/BoldThread.tsx'
 import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 
@@ -130,6 +130,8 @@ export function BoldRoom() {
     if (!phone) setSheetOpen(false)
   }, [phone, setSheetOpen])
 
+  useEffect(() => () => forgetBroughtOutsideSessions(), [])
+
   // A direct link (dock, Search, the Team page's Message button) opens the phone sheet itself.
   useEffect(() => {
     if (phone && directMode) setSheetOpen(true)
@@ -159,11 +161,17 @@ export function BoldRoom() {
     setMenuOpen(false)
     setParams(withoutDirect(new URLSearchParams(params)), { replace: true })
     setSheetOpen(true)
+    if (!phone)
+      requestAnimationFrame(() =>
+        sideRef.current?.querySelector<HTMLElement>('.bold-elsewhere h2')?.focus(),
+      )
   }
   const broughtIntoJob = (jobId: string) => {
     setMode('work')
+    setMenuOpen(false)
     setSheetOpen(false)
     void navigate(`/b?job=${encodeURIComponent(jobId)}`)
+    if (phone) requestAnimationFrame(() => phoneOpenRef.current?.focus())
   }
   const openThread = (jobId: string | null) => {
     setThreadJob(jobId)

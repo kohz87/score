@@ -4,6 +4,7 @@ import {
   bringOutsideSessionIntoJob,
   newBringOutsideSessionAttempt,
   previewOutsideSession,
+  sortImportedMessages,
 } from './outside-job.ts'
 
 const session: OutsideSession = {
@@ -156,17 +157,32 @@ test('brings a session in by importing it, creating a team job and sharing each 
     ['/api/messages/message-0/share', { jobId: 'job-launch' }],
     ['/api/messages/message-2/share', { jobId: 'job-launch' }],
   ])
-  expect(shares.every((call) => call.headers.get('Idempotency-Key') === key)).toBe(true)
+  expect(shares.every((call) => Boolean(call.headers.get('Idempotency-Key')))).toBe(true)
+  expect(new Set(shares.map((call) => call.headers.get('Idempotency-Key'))).size).toBe(
+    shares.length,
+  )
+  expect(shares.every((call) => call.headers.get('Idempotency-Key') !== key)).toBe(true)
 })
 
-test('a retry reuses the job and key and shares only the messages that failed', async () => {
+test('a 500 is not replayed: the retry sends a new key and succeeds', async () => {
   const calls: Call[] = []
+  const receipts = new Map<string, number>()
   let failSecondShare = true
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       record(calls, input, init)
       const url = String(input)
+      const route = url.split('?', 1)[0]!
+      const key = new Headers(init?.headers).get('Idempotency-Key')
+      if (key) {
+        const stored = receipts.get(`${key} ${route}`)
+        if (stored !== undefined)
+          return Response.json(
+            { error: { code: 'replayed', message: 'Stored answer.' } },
+            { status: stored },
+          )
+      }
       if (url === '/api/outside-sessions/import')
         return Response.json({ roomId: 'room-imported', imported: 2 })
       if (url.startsWith('/api/rooms/room-imported/messages?'))
@@ -177,13 +193,17 @@ test('a retry reuses the job and key and shares only the messages that failed', 
           jobId: 'job-imported',
         })
       if (url === '/api/rooms/team-room/jobs' && init?.method === 'POST') return Response.json(job)
-      if (url === '/api/messages/message-1/share')
+      if (url === '/api/messages/message-1/share') {
+        if (key) receipts.set(`${key} ${route}`, 201)
         return Response.json({ messageId: 'shared-1' }, { status: 201 })
+      }
       if (url === '/api/messages/message-2/share') {
         if (failSecondShare) {
           failSecondShare = false
+          if (key) receipts.set(`${key} ${route}`, 500)
           return Response.json({ error: { code: 'boom', message: 'nope' } }, { status: 500 })
         }
+        if (key) receipts.set(`${key} ${route}`, 201)
         return Response.json({ messageId: 'shared-2' }, { status: 201 })
       }
       return Response.json({ error: { code: 'not_found', message: 'no' } }, { status: 404 })
@@ -206,10 +226,75 @@ test('a retry reuses the job and key and shares only the messages that failed', 
   ])
   expect(calls.filter((call) => call.url === '/api/rooms/team-room/jobs')).toHaveLength(1)
   expect(calls.filter((call) => call.url === '/api/outside-sessions/import')).toHaveLength(1)
-  const keys = calls
-    .filter((call) => call.url.endsWith('/jobs') || call.url.endsWith('/share'))
-    .map((call) => call.headers.get('Idempotency-Key'))
-  expect(new Set(keys).size).toBe(1)
+  const shares = calls.filter((call) => call.url.endsWith('/share'))
+  const firstKey = shares
+    .find((call) => call.url.endsWith('message-1/share'))
+    ?.headers.get('Idempotency-Key')
+  const failedKey = shares
+    .find((call) => call.url.endsWith('message-2/share'))
+    ?.headers.get('Idempotency-Key')
+  const retryKey = shares.at(-1)?.headers.get('Idempotency-Key')
+  expect(firstKey).toBeTruthy()
+  expect(failedKey).toBeTruthy()
+  expect(failedKey).not.toBe(firstKey)
+  expect(retryKey).toBeTruthy()
+  expect(retryKey).not.toBe(failedKey)
+})
+
+test('a network failure keeps that call’s key for its retry', async () => {
+  const calls: Call[] = []
+  let drop = true
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      record(calls, input, init)
+      const url = String(input)
+      if (url === '/api/outside-sessions/import')
+        return Response.json({ roomId: 'room-imported', imported: 1 })
+      if (url.startsWith('/api/rooms/room-imported/messages?'))
+        return Response.json({
+          asOfSeq: 1,
+          items: [message('message-1', 'Only one.', 1)],
+          nextCursor: null,
+          jobId: 'job-imported',
+        })
+      if (url === '/api/rooms/team-room/jobs' && init?.method === 'POST') return Response.json(job)
+      if (url === '/api/messages/message-1/share') {
+        if (drop) {
+          drop = false
+          throw new TypeError('The connection dropped.')
+        }
+        return Response.json({ messageId: 'shared-1' }, { status: 201 })
+      }
+      return Response.json({ error: { code: 'not_found', message: 'no' } }, { status: 404 })
+    }),
+  )
+
+  const attempt = newBringOutsideSessionAttempt()
+  await expect(bringOutsideSessionIntoJob(session, 'team-room', attempt)).rejects.toThrow(
+    'connection dropped',
+  )
+  await bringOutsideSessionIntoJob(session, 'team-room', attempt)
+
+  const shares = calls.filter((call) => call.url.endsWith('/share'))
+  expect(shares).toHaveLength(2)
+  expect(shares[0]!.headers.get('Idempotency-Key')).toBe(shares[1]!.headers.get('Idempotency-Key'))
+  expect(calls.filter((call) => call.url === '/api/rooms/team-room/jobs')).toHaveLength(1)
+})
+
+test('imported messages with equal times are ordered by their numeric import suffix', () => {
+  const at = '2026-10-23T09:00:00.000Z'
+  const ordered = sortImportedMessages([
+    { ...message('import:room:10', 'Ten.', 1), createdAt: at },
+    { ...message('import:room:2', 'Two.', 1), createdAt: at },
+    { ...message('import:room:1', 'One.', 1), createdAt: at },
+  ])
+
+  expect(ordered.map((item) => item.id)).toEqual([
+    'import:room:1',
+    'import:room:2',
+    'import:room:10',
+  ])
 })
 
 test('falls back to the source label when the session has no title', async () => {

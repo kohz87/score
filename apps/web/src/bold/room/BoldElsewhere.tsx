@@ -1,5 +1,6 @@
-import type { AgentSummary, Message, OutsideSession } from '@score/contract'
-import { useMemo, useRef } from 'react'
+import type { AgentSummary, Job, Message, OutsideSession } from '@score/contract'
+import { useId, useMemo, useSyncExternalStore } from 'react'
+import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import {
@@ -8,7 +9,37 @@ import {
   usePreviewOutsideSession,
   type BringOutsideSessionAttempt,
 } from '../../data/outside-job.ts'
+import { boldJobLink } from '../bold-links.ts'
 import { roomJobsQuery, teamRoomQuery } from './room-queries.ts'
+
+// A side panel is unmounted by closing the phone sheet, changing the side mode and leaving Elsewhere. The attempt and
+// its outcome belong to the page, not that mount: the job must not be made twice, and the view must keep saying where
+// the chat went while this page stays open.
+const attempts = new Map<string, BringOutsideSessionAttempt>()
+const broughtIn = new Map<string, Job>()
+const listeners = new Set<() => void>()
+let revision = 0
+
+function changed(): void {
+  revision += 1
+  for (const listener of listeners) listener()
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+function sessionKey(session: OutsideSession): string {
+  return `${session.agentId}:${session.id}`
+}
+
+/** Leaving the bold room ends the lifetime of these attempts and receipts. */
+export function forgetBroughtOutsideSessions(): void {
+  attempts.clear()
+  broughtIn.clear()
+  changed()
+}
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString([], {
@@ -43,7 +74,8 @@ export function BoldElsewhere({
   const refetchJobs = useStreamQueryRefetch(jobsDefinition)
   const preview = usePreviewOutsideSession()
   const bring = useBringOutsideSessionIntoJob()
-  const attempt = useRef<BringOutsideSessionAttempt | null>(null)
+  const titleId = useId()
+  useSyncExternalStore(subscribe, () => revision)
   const agent = agents.find((item) => item.id === session.agentId)
   const title = session.title.trim() || 'Untitled session'
   const source = session.sourceLabel
@@ -53,9 +85,11 @@ export function BoldElsewhere({
     return agents.find((item) => item.id === agentId)?.name ?? agentId
   }
   const previewed = preview.data
+  const key = sessionKey(session)
+  const brought = broughtIn.get(key)
 
   return (
-    <div className="sidebody bold-elsewhere">
+    <div className="sidebody bold-elsewhere" aria-labelledby={titleId}>
       <span className="note bold-elsewhere-note" data-protected="any">
         From {source} · read-only. Reply there, or bring it into a job.
       </span>
@@ -63,7 +97,9 @@ export function BoldElsewhere({
         <span className="small muted">
           <b>{agent?.name ?? session.agentId}</b> · {source}
         </span>
-        <h2>{title}</h2>
+        <h2 id={titleId} tabIndex={-1}>
+          {title}
+        </h2>
         <span className="small muted">
           {session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'} · started{' '}
           {when(session.startedAt)}
@@ -79,7 +115,7 @@ export function BoldElsewhere({
           original chat.
         </span>
       </div>
-      {previewed ? (
+      {!brought && previewed ? (
         <div className="bold-elsewhere-preview" aria-label="Conversation preview">
           <span className="small muted bold-elsewhere-preview-label">
             Read-only preview · imported from {source}
@@ -108,7 +144,7 @@ export function BoldElsewhere({
             </ol>
           )}
         </div>
-      ) : (
+      ) : !brought ? (
         <div className="row wrap bold-elsewhere-actions">
           <button
             type="button"
@@ -122,8 +158,8 @@ export function BoldElsewhere({
             Previewing adds an “Imported from {source}” room in Score. Hermes isn’t changed.
           </span>
         </div>
-      )}
-      {previewed && (
+      ) : null}
+      {previewed && !brought && (
         <div className="row wrap bold-elsewhere-actions">
           <button
             type="button"
@@ -131,13 +167,15 @@ export function BoldElsewhere({
             disabled={!team || bring.isPending}
             onClick={() => {
               if (!team) return
-              const current = attempt.current ?? newBringOutsideSessionAttempt(previewed.roomId)
-              attempt.current = current
+              const current = attempts.get(key) ?? newBringOutsideSessionAttempt(previewed.roomId)
+              attempts.set(key, current)
               bring.mutate(
                 { session, teamRoomId: team.id, attempt: current },
                 {
                   onSuccess: ({ job }) => {
-                    attempt.current = null
+                    attempts.delete(key)
+                    broughtIn.set(key, job)
+                    changed()
                     void refetchJobs()
                     onBroughtIn(job.id)
                   },
@@ -153,6 +191,11 @@ export function BoldElsewhere({
           </span>
         </div>
       )}
+      {brought && (
+        <p className="bold-elsewhere-brought" role="status">
+          Brought into <Link to={boldJobLink(brought.id)}>{brought.title}</Link>.
+        </p>
+      )}
       {preview.isError && (
         <p className="bold-request-error" role="alert">
           Couldn’t preview this chat. Try again.
@@ -161,7 +204,7 @@ export function BoldElsewhere({
       {bring.isError && (
         <p className="bold-request-error" role="alert">
           Couldn’t bring this chat into a job. Try again: the job and messages already copied are
-          kept.
+          kept while this page is open.
         </p>
       )}
     </div>

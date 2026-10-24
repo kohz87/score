@@ -32,6 +32,24 @@ const older = {
   routing: 'mentions',
 }
 
+const importedRoom = {
+  ...older,
+  id: 'room-imported',
+  name: '#telegram-plan #imported',
+  importedFrom: {
+    agentId: 'lead',
+    sessionId: 'ext-telegram-1',
+    source: 'telegram',
+    label: 'Telegram',
+    continued: null,
+  },
+}
+
+const importedJob = job('job-imported', importedRoom.id, importedRoom.name, {
+  isDefault: true,
+  holderAgentId: 'lead',
+})
+
 function job(id: string, roomId: string, title: string, extra: Json = {}): Json {
   return {
     id,
@@ -133,8 +151,9 @@ function response(route: Route, body: unknown, status = 200) {
 /** The 11.4d room data on top of the stable bold-room fixture: an older room, Elsewhere and the menu endpoints. */
 export async function mockRoomMenus(page: Page, options: { failShare?: number } = {}) {
   const requests: RoomRequest[] = []
+  const receipts = new Map<string, { status: number; body: unknown }>()
   let createdJob: Json | null = null
-  let roomDeleted = false
+  const deletedRooms = new Set<string>()
   let shareCalls = 0
   let failedShare = false
 
@@ -153,10 +172,16 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
     }
     requests.push({ method, path, search: url.searchParams, body, headers: request.headers() })
 
+    const idempotencyKey = request.headers()['idempotency-key']
+    if (method === 'POST' && idempotencyKey) {
+      const receipt = receipts.get(`${idempotencyKey} ${path}`)
+      if (receipt) return response(route, receipt.body, receipt.status)
+    }
+
     if (method === 'GET' && path === '/api/rooms')
       return response(route, {
         asOfSeq: 12,
-        rooms: roomDeleted ? [] : [older],
+        rooms: [older, importedRoom].filter((room) => !deletedRooms.has(room.id)),
         directs: [],
         projects: [],
       })
@@ -166,6 +191,12 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
       return response(route, { asOfSeq: 12, room: older, filesInPlay: [], learned: [] })
     if (method === 'GET' && path === `/api/rooms/${older.id}/jobs`)
       return response(route, { asOfSeq: 12, items: [oldJob] })
+    if (method === 'GET' && path === '/api/rooms/team-room')
+      return response(route, { asOfSeq: 12, room: team, filesInPlay: [], learned: [] })
+    if (method === 'GET' && path === `/api/rooms/${importedRoom.id}`)
+      return response(route, { asOfSeq: 12, room: importedRoom, filesInPlay: [], learned: [] })
+    if (method === 'GET' && path === `/api/rooms/${importedRoom.id}/jobs`)
+      return response(route, { asOfSeq: 12, items: [importedJob] })
     if (method === 'GET' && path === `/api/rooms/${older.id}/messages`)
       return response(route, {
         asOfSeq: 12,
@@ -179,6 +210,21 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
         message: {
           ...oldMessage,
           id: 'message-old-sent',
+          author: { kind: 'you' },
+          to: ['builder'],
+          parts: [{ kind: 'text', text: String(payload.text ?? '') }],
+          createdAt: at(20),
+        },
+        routedTo: ['builder'],
+        command: null,
+      })
+    }
+    if (method === 'POST' && path === `/api/rooms/${importedRoom.id}/messages`) {
+      const payload = (typeof body === 'object' && body !== null ? body : {}) as Json
+      return response(route, {
+        message: {
+          ...importedMessages[0],
+          id: 'message-imported-sent',
           author: { kind: 'you' },
           to: ['builder'],
           parts: [{ kind: 'text', text: String(payload.text ?? '') }],
@@ -202,7 +248,20 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
         blocked: null,
       })
     if (method === 'DELETE' && path === `/api/rooms/${older.id}`) {
-      roomDeleted = true
+      deletedRooms.add(older.id)
+      return route.fulfill({ status: 204 })
+    }
+    if (method === 'GET' && path === `/api/rooms/${importedRoom.id}/delete-plan`)
+      return response(route, {
+        name: importedRoom.name,
+        messages: 2,
+        files: 0,
+        runs: 0,
+        briefs: 0,
+        blocked: null,
+      })
+    if (method === 'DELETE' && path === `/api/rooms/${importedRoom.id}`) {
+      deletedRooms.add(importedRoom.id)
       return route.fulfill({ status: 204 })
     }
     if (method === 'GET' && path === `/api/rooms/${team.id}/jobs`)
@@ -217,6 +276,8 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
         state: 'open',
         holderAgentId: 'lead',
       })
+      if (idempotencyKey)
+        receipts.set(`${idempotencyKey} ${path}`, { status: 201, body: createdJob })
       return response(route, createdJob, 201)
     }
     if (method === 'GET' && path === '/api/rooms/room-imported/messages')
@@ -228,13 +289,21 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
       })
     if (method === 'POST' && path === '/api/outside-sessions/import')
       return response(route, { roomId: 'room-imported', imported: 2 })
+    if (method === 'GET' && path === '/api/rooms/room-imported/pins')
+      return response(route, { items: [] })
+    if (method === 'GET' && path === '/api/rooms/room-imported/versions')
+      return response(route, { asOfSeq: 12, items: [] })
     if (method === 'POST' && /^\/api\/messages\/import%3A\d+\/share$/.test(path)) {
       shareCalls += 1
       if (!failedShare && options.failShare === shareCalls) {
         failedShare = true
-        return response(route, { error: { code: 'boom', message: 'Share failed.' } }, 500)
+        const stored = { error: { code: 'boom', message: 'Share failed.' } }
+        if (idempotencyKey) receipts.set(`${idempotencyKey} ${path}`, { status: 500, body: stored })
+        return response(route, stored, 500)
       }
-      return response(route, { messageId: `shared-${path}` }, 201)
+      const stored = { messageId: `shared-${path}` }
+      if (idempotencyKey) receipts.set(`${idempotencyKey} ${path}`, { status: 201, body: stored })
+      return response(route, stored, 201)
     }
     if (method === 'GET' && path.endsWith('/export.md'))
       return route.fulfill({

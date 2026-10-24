@@ -265,13 +265,102 @@ test('the room dropdown opens an older room read-write with today’s @mention r
   })
 })
 
-test('an imported room is not offered as an older room', async () => {
+test('an imported room is listed under Imported chats, not as an older room', async () => {
   stubRoom([makeJob()], { imported: true })
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
 
   fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
   const picker = await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
-  expect(picker.textContent).not.toContain('#telegram-plan')
+  expect(picker.textContent).toContain('Imported chats')
+  expect(picker.textContent).toContain('Imported from Telegram · read-write')
+  expect(picker.textContent).toContain('#telegram-plan')
+})
+
+test('the room dropdown closes when Tab moves focus outside it', async () => {
+  stubRoom([makeJob()], { older: true })
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+
+  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
+  await screen.findByRole('listbox', { name: 'Rooms and chats elsewhere' })
+  await waitFor(() =>
+    expect(screen.getByRole('option', { name: /Team room/ })).toBe(document.activeElement),
+  )
+  fireEvent.focusIn(document.body)
+  expect(screen.queryByRole('listbox', { name: 'Rooms and chats elsewhere' })).toBeNull()
+})
+
+test('an imported room opens read-write and sends through the normal room route', async () => {
+  const fetchMock = mockFetch((url, init) => {
+    const parsed = new URL(url, 'http://x')
+    if (parsed.pathname === '/api/team-room') return jsonResponse({ asOfSeq: 1, room, jobs: [] })
+    if (parsed.pathname === '/api/rooms')
+      return jsonResponse({ asOfSeq: 1, rooms: [importedRoom], directs: [], projects: [] })
+    if (parsed.pathname === '/api/rooms/room-imported')
+      return jsonResponse({
+        asOfSeq: 1,
+        room: importedRoom,
+        filesInPlay: [],
+        learned: [],
+      })
+    if (parsed.pathname === '/api/rooms/room-imported/jobs')
+      return jsonResponse({
+        asOfSeq: 1,
+        items: [
+          makeJob({
+            id: 'job-imported',
+            roomId: importedRoom.id,
+            title: importedRoom.name,
+            isDefault: true,
+          }),
+        ],
+      })
+    if (parsed.pathname === '/api/rooms/room-imported/messages' && init.method === 'POST')
+      return jsonResponse({
+        message: {
+          id: 'message-imported-sent',
+          roomId: importedRoom.id,
+          jobId: 'job-imported',
+          author: { kind: 'you' },
+          to: ['builder'],
+          parts: [{ kind: 'text', text: JSON.parse(String(init.body)).text }],
+          createdAt: '2026-10-24T10:20:00.000Z',
+          streaming: false,
+          refs: [],
+        },
+        routedTo: ['builder'],
+        command: null,
+      })
+    if (parsed.pathname === '/api/rooms/room-imported/messages')
+      return jsonResponse({ asOfSeq: 1, items: [], nextCursor: null, jobId: 'job-imported' })
+    if (parsed.pathname === '/api/rooms/room-imported/pins') return jsonResponse({ items: [] })
+    if (parsed.pathname === '/api/rooms/room-imported/versions')
+      return jsonResponse({ asOfSeq: 1, items: [] })
+    return jsonResponse({ asOfSeq: 1, items: [] })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+
+  fireEvent.click(await screen.findByRole('button', { name: /^Team room/ }))
+  fireEvent.click(await screen.findByRole('option', { name: /#telegram-plan/ }))
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /^#telegram-plan #imported/ })).toBeDefined(),
+  )
+  const composer = await screen.findByRole('combobox', { name: /^Message #telegram-plan/ })
+  fireEvent.change(composer, { target: { value: '@builder Continue here?' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+  await waitFor(() => {
+    const sent = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url) === '/api/rooms/room-imported/messages' && init?.method === 'POST',
+    )
+    expect(sent).toBeDefined()
+  })
+  expect(
+    fetchMock.mock.calls.some(
+      ([url]) => String(url) === '/api/rooms/room-imported/continue-session',
+    ),
+  ).toBe(false)
 })
 
 test('Elsewhere lists the agents’ own sessions as read-only chats to open', async () => {
