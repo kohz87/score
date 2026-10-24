@@ -8,6 +8,7 @@ import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
 import { agentStateLabel, dockProgress } from './bold-agents.ts'
 import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
+import type { BoldSheetState } from './bold-ui.ts'
 import './tokens.css'
 import './bold.css'
 
@@ -69,6 +70,7 @@ export function BoldShell() {
   const [manualLight, setManualLight] = useState<boolean | null>(null)
   const light = manualLight ?? systemLight
   const [commandOpen, setCommandOpen] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
   const commandTrigger = useRef<HTMLElement | null>(null)
   const searchTrigger = useRef<HTMLButtonElement>(null)
   const dockHasProgress = agents.some(() => dockProgress() !== null)
@@ -121,7 +123,7 @@ export function BoldShell() {
   return (
     <div className="bold-shell" data-ui="bold" data-look={light ? 'light' : 'dark'}>
       <div className="bold-frame" inert={commandOpen}>
-        <header className="top">
+        <header className="top" inert={phone && sheetOpen}>
           <button
             type="button"
             className="word"
@@ -185,11 +187,11 @@ export function BoldShell() {
         </header>
 
         <main className="main">
-          <Outlet />
+          <Outlet context={{ sheetOpen, setSheetOpen } satisfies BoldSheetState} />
         </main>
 
         {phone && (
-          <nav className="bold-tabbar" aria-label="Main">
+          <nav className="bold-tabbar" aria-label="Main" inert={phone && sheetOpen}>
             <button
               type="button"
               className={view === 'room' ? 'on' : undefined}
