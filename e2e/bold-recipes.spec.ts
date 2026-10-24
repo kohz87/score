@@ -134,10 +134,10 @@ test('build a gate and branch as a step list, save, run and approve it', async (
   await instruction.press('End')
   await instruction.pressSequentially(' [fake:verdict:passed]')
 
-  await page.getByRole('button', { name: '+ Gate' }).click()
+  await page.getByRole('button', { name: 'Gate', exact: true }).click()
   await inspector(page).getByLabel('Title').fill('Approve the draft')
   await inspector(page).getByRole('combobox', { name: 'Question' }).fill('Publish it?')
-  await page.getByRole('button', { name: '+ Branch' }).click()
+  await page.getByRole('button', { name: 'Branch', exact: true }).click()
   await inspector(page).getByLabel('Title').fill('Passed review?')
   await inspector(page).getByLabel('Looks at').selectOption({ label: 'Draft' })
   await chooseStep(page, 'Done')
@@ -145,7 +145,7 @@ test('build a gate and branch as a step list, save, run and approve it', async (
 
   // The branch's default path goes to a repair step; the new agent continues into Published. The branch row can
   // always repoint either path afterwards.
-  await page.getByRole('button', { name: '+ Agent step' }).click()
+  await page.getByRole('button', { name: 'Agent step', exact: true }).click()
   await inspector(page).getByLabel('Title').fill('Repair')
   await inspector(page)
     .getByRole('combobox', { name: 'Instruction' })

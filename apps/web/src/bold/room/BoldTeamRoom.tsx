@@ -6,7 +6,7 @@ import { useShowDeleted, setShowDeleted } from '../../routes/chat/deleted-toggle
 import '../../routes/chat/chat.css'
 import { Composer } from '../../routes/chat/Composer.tsx'
 import { saveDraft } from '../../routes/chat/composer-model.ts'
-import { ChevronIcon } from '../BoldIcons.tsx'
+import { ChevronIcon, PlusIcon } from '../BoldIcons.tsx'
 import { RoomCapsules } from './RoomCapsules.tsx'
 import { RoomEmpty } from './RoomEmpty.tsx'
 import { RoomMessageStream } from './RoomMessageStream.tsx'
@@ -14,14 +14,26 @@ import { RoomRequests } from './RoomRequests.tsx'
 import { RoomTabs } from './RoomTabs.tsx'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
+import { useStartJob } from '../BoldStartJob.tsx'
 import './bold-room.css'
 
 function RoomTitle({ name, action }: { name: string; action?: ReactNode }) {
+  const startJob = useStartJob()
   return (
     <div className="roomhead">
       <button className="roomtitle" type="button">
         {name}
         <ChevronIcon />
+      </button>
+      {/* Start a job (11.10c) at the end of the room head. */}
+      <button
+        type="button"
+        className="chip room-start"
+        aria-label="Start a job"
+        onClick={() => startJob?.openStartJob()}
+      >
+        <PlusIcon />
+        Job
       </button>
       {action}
     </div>
@@ -49,13 +61,7 @@ function RoomUnavailable({ error }: { error: boolean }) {
   )
 }
 
-function LoadedTeamRoom({
-  room,
-  agents,
-}: {
-  room: Room
-  agents: AgentSummary[]
-}) {
+function LoadedTeamRoom({ room, agents }: { room: Room; agents: AgentSummary[] }) {
   const [params, setParams] = useSearchParams()
   const jobsDefinition = useMemo(() => roomJobsQuery(room.id), [room.id])
   const { data: jobs, status: jobsStatus } = useStreamQuery(jobsDefinition)
@@ -80,6 +86,9 @@ function LoadedTeamRoom({
 
   const selectJob = useCallback(
     (jobId: string) => {
+      const leaving = params.get('job')
+      if (leaving)
+        setOpenedJobs((current) => (current.includes(leaving) ? current : [...current, leaving]))
       const next = new URLSearchParams(params)
       if (jobId === 'all') next.delete('job')
       else next.set('job', jobId)
@@ -101,15 +110,12 @@ function LoadedTeamRoom({
     if (job && !jobMatchesFilter(job, filter)) selectJob('all')
   }, [allJobs, filter, selectJob, selectedJob])
 
-  // Opening a job is what reads it: remember the tab so All keeps showing its pages after a move, and never read a
-  // different job's first page on mount (that would clear every badge at once).
-  useEffect(() => {
-    if (selectedJob === 'all') return
-    if (!allJobs.some((job) => job.id === selectedJob)) return
-    setOpenedJobs((current) =>
-      current.includes(selectedJob) ? current : [...current, selectedJob],
-    )
-  }, [allJobs, selectedJob])
+  // Opening a job is what reads it: the job on show counts as opened, and leaving it keeps it in the list (recorded in
+  // selectJob), so All keeps showing its pages after a move and no other job's first page is read on mount (that would
+  // clear every badge at once).
+  const shownJob =
+    selectedJob !== 'all' && allJobs.some((job) => job.id === selectedJob) ? selectedJob : null
+  const opened = shownJob && !openedJobs.includes(shownJob) ? [...openedJobs, shownJob] : openedJobs
 
   const namedJobs = allJobs.filter((job) => !job.isDefault)
   const empty =
@@ -119,9 +125,7 @@ function LoadedTeamRoom({
     (baseMessages.data?.items.length ?? 0) === 0
   const job = allJobs.find((item) => item.id === selectedJob)
   const lead = agents.find((agent) => agent.id === room.leadAgentId)
-  const allLabel = lead
-    ? `To: team room (${lead.name})`
-    : 'No lead yet — use @name'
+  const allLabel = lead ? `To: team room (${lead.name})` : 'No lead yet — use @name'
   const toLabel = job ? `To: ${job.title}` : allLabel
 
   const clearSeek = useCallback(() => {
@@ -194,9 +198,7 @@ function LoadedTeamRoom({
           </button>
         </div>
       )}
-      {!empty && (
-        <RoomRequests jobs={allJobs} agents={agents} selectedJob={selectedJob} />
-      )}
+      {!empty && <RoomRequests jobs={allJobs} agents={agents} selectedJob={selectedJob} />}
       {empty ? (
         <RoomEmpty agents={agents} onStart={startWith} />
       ) : (
@@ -210,7 +212,7 @@ function LoadedTeamRoom({
             filter={filter}
             showDeleted={showDeleted}
             seek={seek}
-            openedJobs={openedJobs}
+            openedJobs={opened}
             onRevealSeek={revealSeek}
             onSeeked={clearSeek}
           />

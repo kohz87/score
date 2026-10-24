@@ -949,3 +949,20 @@ One entry per completed task: what landed, review results, and any **rejected re
   follow-up on main. Lead: merges with main (shell look/scale with the recipe dialog's inert), e2e locators.
   E2E 264/264 (connections/look, settings, classic settings/themes/pair, protection, shell, search); full check green
   (web 3,123). Not deployed.
+- **11.9a follow-up (lead, 2026-10-24).** From the trigger wizard's review: closing a new trigger after its address went
+  live but before the mapping was saved (Finish later, Close, Escape) now asks "Keep this unfinished trigger?" — its
+  calls would start jobs with placeholder wording — and offers Delete; the e2e now sends a second signed call after
+  saving and checks its job carries the mapped title, plus a test for the unfinished-trigger prompt.
+- **11.10c Start a job (DeepSeek + lead, 2026-10-24).** `BoldStartJob` (`?start=job` and the room's Job button):
+  recipe (lead decides → orchestration, saved recipe → workflow run, none → plain job), When (now, on a schedule as a
+  lead routine with Hermes schedule values, when an app calls → a trigger with the secret shown once), limits sent where
+  the API takes them (job turn budget/limit/spend cap via the lead's 11.10c contract change; workflow approvals,
+  budget, deadline and unknown cost as the classic dialog), the before-it-starts checklist from the server preflights,
+  Save as a recipe after a successful start; the team-room job carries `recipe { kind, ref }` of the run it started.
+  Build + continuation + 1 fix round. Sonnet: 4 P1 (controls that did nothing, "lead decides" made an unlinked job and
+  orchestration with orphans on failure, schedule labels sent as schedules, "once at" missing — a one-shot time isn't in
+  the routines contract: listed as a gap), 7 P2, P3s — fixed. Lead: the contract change, two merges by hand (DeepSeek's
+  resolution had reverted 11.9b's frame fix; a query-key collision with Results — one shared stream query now), lint,
+  tests updated for the new behaviour, an e2e asserting the job's recipe link and the routine's cron value; and a main
+  fix: 11.10d's e2e named add-step buttons "+ Gate" after the plus became an icon. E2E 52/53 + the recipes spec 8/8 after
+  that fix; full check green (web 3,145). Not deployed.
