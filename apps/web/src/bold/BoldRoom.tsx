@@ -12,6 +12,7 @@ import { BookIcon, ChevronIcon, CloseIcon, GridIcon, ThreadIcon } from './BoldIc
 import { BoldWorkbench } from './BoldWorkbench.tsx'
 import { boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
+import { BoldThread } from './room/BoldThread.tsx'
 import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 
 const PHONE = '(max-width: 860px)'
@@ -21,7 +22,7 @@ type SideMode = 'work' | 'library' | 'thread' | `agent:${string}`
 function sideCopy(mode: SideMode, agent: AgentSummary | undefined): string {
   if (mode === 'work') return 'The Work panel comes in a later task.'
   if (mode === 'library') return ''
-  if (mode === 'thread') return 'The Thread panel comes in a later task.'
+  if (mode === 'thread') return ''
   return `Your one-to-one with ${agent?.id ?? 'this agent'} comes in a later task.`
 }
 
@@ -40,6 +41,14 @@ export function BoldRoom() {
   const { sheetOpen, setSheetOpen } = useOutletContext<BoldSheetState>()
   const location = useLocation()
   const [mode, setMode] = useState<SideMode>('work')
+  const [threadJob, setThreadJob] = useState<string | null>(null)
+  // The thread follows the room's job tab: another tab opens that job's thread, All goes back to the picker.
+  const tabJob = new URLSearchParams(location.search).get('job')
+  const [seenTabJob, setSeenTabJob] = useState(tabJob)
+  if (tabJob !== seenTabJob) {
+    setSeenTabJob(tabJob)
+    setThreadJob(tabJob && tabJob !== 'all' ? tabJob : null)
+  }
   const workbenchVisible =
     mode === 'work' &&
     ['workbench', 'code', 'screen', 'draft'].includes(
@@ -110,8 +119,19 @@ export function BoldRoom() {
   }, [phone, setSheetOpen])
 
   const choose = (next: SideMode) => {
+    if (next === 'thread') {
+      const current = new URLSearchParams(location.search).get('job')
+      if (current && current !== 'all') setThreadJob(current)
+    }
     setMode(next)
     setMenuOpen(false)
+    toggleRef.current?.focus()
+  }
+  const openThread = (jobId: string | null) => {
+    setThreadJob(jobId)
+    setMode('thread')
+    setMenuOpen(false)
+    if (phone) setSheetOpen(true)
     toggleRef.current?.focus()
   }
   const closeSheet = () => {
@@ -150,7 +170,7 @@ export function BoldRoom() {
   return (
     <div className="roomgrid">
       <section className="roomcol" aria-label="Team room" inert={phone && sheetOpen}>
-        <BoldTeamRoom agents={agents} phoneAction={phoneAction} />
+        <BoldTeamRoom agents={agents} phoneAction={phoneAction} onOpenThread={openThread} />
       </section>
 
       <div
@@ -234,7 +254,10 @@ export function BoldRoom() {
               </div>
             )}
           </div>
-          {mode !== 'library' && mode !== 'work' && (
+          {mode === 'thread' && (
+            <BoldThread jobId={threadJob} onSelectJob={(jobId) => setThreadJob(jobId)} />
+          )}
+          {mode !== 'library' && mode !== 'work' && mode !== 'thread' && (
             <div className="sidebody" data-placeholder={mode}>
               <p className="side-placeholder">{sideCopy(mode, agent)}</p>
               {agent && (

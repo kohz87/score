@@ -1007,3 +1007,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   DeepSeek all stopped on `429 Too Many Requests` after 0.7–1.2M tokens each; a probe a few minutes later answered.
   Split the load: DeepSeek continues 11.4b and 11.4d (two sessions at a time), Sonnet coders (the owner's fallback rule)
   finish 11.4c and 11.7. Their work so far was committed and main merged in first.
+- **11.4c A job's thread (DeepSeek + Sonnet coder, 2026-10-24).** The side panel's Thread mode: header (title, "N of M
+  turns used" or "Job turn limit reached", context meter + compact on the job's own session — the room session for the
+  default job, Stop with a protected confirm), rounds split at review verdicts only when one review exchange runs (else
+  "Messages"; "Earlier messages" while older pages aren't loaded), the paused-exchange card and step-in (one rule for
+  "the exchange"), streaming/tool/reasoning/coding cards through the classic MessageItem, load earlier, recipe-run
+  card. DeepSeek's session hit the NanoGPT 429; a Sonnet coder finished it and did the fix round. Sonnet review: 0 P1, 5
+  P2 (default-job session key, round numbers with partial pages, several exchanges merged, job-limit header, pair-first
+  errors), P3s — fixed. Contract gaps recorded: no job-level pause (Stop only), no job-scoped steps/unblock/comment,
+  the plan card only through the classic run panel. Lead: a Search e2e race (the room drops `?command=` after taking
+  it). Thread e2e 14/14 ×3, room + search + shell + protection green; full check green. Not deployed.
