@@ -92,8 +92,9 @@ test('0080 gives every existing room one default job holding all its messages an
   expect(jobOf('messages', 'id', 'm3')).toBe(defaultJobId(db.sqlite, 'd1'))
   expect(jobOf('message_runs', 'message_id', 'reply:1')).toBe(r1)
   expect(db.sqlite.prepare('SELECT id, role, routing FROM rooms ORDER BY id').all()).toEqual([
-    { id: 'd1', role: 'direct', routing: 'mentions' },
-    { id: 'r1', role: 'room', routing: 'mentions' },
+    // 0086 (run with the later migrations) moves both to exchanges; the pre-0086 state is covered in rooms-exchanges-migration.test.ts.
+    { id: 'd1', role: 'direct', routing: 'exchanges' },
+    { id: 'r1', role: 'room', routing: 'exchanges' },
   ])
   expect(
     db.sqlite.prepare('SELECT count(*) AS n FROM messages WHERE job_id IS NULL').get(),

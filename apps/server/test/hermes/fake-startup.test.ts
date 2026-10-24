@@ -66,7 +66,15 @@ test('fake startup streams the scenario and exposes the same adapter status in s
       else if (frame.type === 'room.upserted') derivedRooms += afterApproval ? 1 : 0
       else afterApproval = false
     }
-    const base = createScenario(0).length + 4 + derived + derivedRooms
+    // The scenario's room routes with exchanges (11.11), so its messages bring job.upserted for its one job.
+    const jobFrames = replay.frames.filter((frame) => frame.type === 'job.upserted')
+    expect(
+      jobFrames.every(
+        (frame) =>
+          (frame.data as { data: { roomId: string } }).data.roomId === 'room-activity-feed',
+      ),
+    ).toBe(true)
+    const base = createScenario(0).length + 4 + derived + derivedRooms + jobFrames.length
     const totalNow = () => base + replay.frames.filter(isTeamRoom).length
     await vi.waitFor(() => expect(replay.seqs).toHaveLength(totalNow()), { timeout: 5000 })
     const total = totalNow()
@@ -77,6 +85,7 @@ test('fake startup streams the scenario and exposes the same adapter status in s
           (frame) =>
             frame.id !== undefined &&
             frame.type !== 'room.upserted' &&
+            frame.type !== 'job.upserted' &&
             frame.type !== 'brief.upserted',
         )
         .map((frame) => frame.type),

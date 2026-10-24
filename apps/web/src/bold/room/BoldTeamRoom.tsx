@@ -1,44 +1,23 @@
-import type { AgentSummary, Room } from '@score/contract'
+import type { AgentSummary, Job, OutsideSession, Room } from '@score/contract'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { useStreamQuery } from '../../data/query-client.ts'
+import { DeleteRoomDialog } from '../../routes/chat/DeleteRoomDialog.tsx'
+import { ShareDialog } from '../../routes/chat/ShareDialog.tsx'
 import { useShowDeleted, setShowDeleted } from '../../routes/chat/deleted-toggle.ts'
+import { roomsQuery } from '../../routes/chat/queries.ts'
 import '../../routes/chat/chat.css'
 import { Composer } from '../../routes/chat/Composer.tsx'
 import { saveDraft } from '../../routes/chat/composer-model.ts'
-import { ChevronIcon, PlusIcon } from '../BoldIcons.tsx'
 import { RoomCapsules } from './RoomCapsules.tsx'
 import { RoomEmpty } from './RoomEmpty.tsx'
 import { RoomMessageStream } from './RoomMessageStream.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
 import { RoomTabs } from './RoomTabs.tsx'
+import { JobMenu, RoomTitle } from './RoomMenus.tsx'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
-import { useStartJob } from '../BoldStartJob.tsx'
 import './bold-room.css'
-
-function RoomTitle({ name, action }: { name: string; action?: ReactNode }) {
-  const startJob = useStartJob()
-  return (
-    <div className="roomhead">
-      <button className="roomtitle" type="button">
-        {name}
-        <ChevronIcon />
-      </button>
-      {/* Start a job (11.10c) at the end of the room head. */}
-      <button
-        type="button"
-        className="chip room-start"
-        aria-label="Start a job"
-        onClick={() => startJob?.openStartJob()}
-      >
-        <PlusIcon />
-        Job
-      </button>
-      {action}
-    </div>
-  )
-}
 
 function RoomWaiting() {
   return (
@@ -78,6 +57,7 @@ function LoadedTeamRoom({
   const [filter, setFilter] = useState<JobFilter>('all')
   const [composerKey, setComposerKey] = useState(0)
   const [openedJobs, setOpenedJobs] = useState<string[]>([])
+  const [sharingJob, setSharingJob] = useState<Job | null>(null)
   const showDeleted = useShowDeleted(room.id)
   const requestedJob = params.get('job') ?? 'all'
   // A tab that no longer exists, or that the D10 filter hides, falls back to All during render: an effect that called
@@ -142,7 +122,12 @@ function LoadedTeamRoom({
     (baseMessages.data?.items.length ?? 0) === 0
   const job = allJobs.find((item) => item.id === selectedJob)
   const lead = agents.find((agent) => agent.id === room.leadAgentId)
-  const allLabel = lead ? `To: team room (${lead.name})` : 'No lead yet — use @name'
+  const olderRoom = room.role !== 'team' && room.routing === 'mentions'
+  const allLabel = olderRoom
+    ? 'Older room · @name'
+    : lead
+      ? `To: team room (${lead.name})`
+      : 'No lead yet — use @name'
   const toLabel = job ? `To: ${job.title}` : allLabel
 
   const clearSeek = useCallback(() => {
@@ -201,6 +186,7 @@ function LoadedTeamRoom({
           filter={filter}
           onSelectJob={selectJob}
           onSelectFilter={selectFilter}
+          trailing={<JobMenu room={room} job={job} onShare={setSharingJob} />}
           onOpenThread={onOpenThread}
         />
       )}
@@ -253,7 +239,11 @@ function LoadedTeamRoom({
           roomMode
           toLabel={toLabel}
           placeholder={
-            empty ? 'Describe the work' : 'Message the team. @name for one agent, / for commands'
+            empty
+              ? 'Describe the work'
+              : olderRoom
+                ? 'Message this room. @name for one agent, / for commands'
+                : 'Message the team. @name for one agent, / for commands'
           }
           messagesKey={baseMessagesDefinition.key}
           initialText={command ? `/${command} ` : undefined}
@@ -265,6 +255,7 @@ function LoadedTeamRoom({
           }}
         />
       </div>
+      {sharingJob && <ShareDialog room={room} job={sharingJob} close={() => setSharingJob(null)} />}
     </>
   )
 }
@@ -273,29 +264,90 @@ function LoadedTeamRoom({
 export function BoldTeamRoom({
   agents,
   phoneAction,
+  onOpenElsewhere,
   onOpenThread = () => undefined,
 }: {
   agents: AgentSummary[]
   phoneAction?: ReactNode
+  onOpenElsewhere?: (session: OutsideSession) => void
   onOpenThread?: (jobId: string) => void
 }) {
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const override = params.get('room')
   const definition = useMemo(() => teamRoomQuery(override), [override])
-  const { data: room, status } = useStreamQuery(definition)
-  const name = room?.name ?? 'Team room'
+  const { data: roomRead, status } = useStreamQuery(definition)
+  const room = roomRead?.room ?? null
+  const teamDefinition = useMemo(() => teamRoomQuery(null), [])
+  const { data: teamRead } = useStreamQuery(teamDefinition)
+  const teamRoom = teamRead?.room ?? null
+  const teamJobCount = teamRead?.jobs.filter((job) => !job.isDefault).length ?? null
+  const rooms = useStreamQuery(roomsQuery).data?.rooms ?? []
+  const current =
+    room ?? (override === null ? teamRoom : (rooms.find((item) => item.id === override) ?? null))
+  const [sharing, setSharing] = useState<{ room: Room; job?: Job } | null>(null)
+  const [deleting, setDeleting] = useState<Room | null>(null)
+
+  const selectRoom = (target: Room) => {
+    const next = new URLSearchParams(params)
+    if (target.role === 'team') next.delete('room')
+    else next.set('room', target.id)
+    next.delete('job')
+    next.delete('message')
+    next.delete('command')
+    setParams(next)
+  }
+
+  const returnToTeam = () => {
+    const next = new URLSearchParams(params)
+    next.delete('room')
+    next.delete('job')
+    next.delete('message')
+    next.delete('command')
+    setParams(next)
+  }
 
   // The head (and the phone's side-panel button) stays mounted across loading, error and ready, so focus on that
   // button survives the room's first read.
   return (
     <>
-      <RoomTitle name={name} action={phoneAction} />
+      <RoomTitle
+        current={current}
+        teamRoom={teamRoom}
+        teamJobCount={teamJobCount}
+        rooms={rooms}
+        agents={agents}
+        phoneAction={phoneAction}
+        onSelectRoom={selectRoom}
+        onOpenElsewhere={(session) => onOpenElsewhere?.(session)}
+        onShare={(room) => {
+          const jobId = params.get('job')
+          const job =
+            room.role === 'team' && jobId && jobId !== 'all'
+              ? teamRead?.jobs.find((item) => item.id === jobId)
+              : undefined
+          setSharing({ room, job })
+        }}
+        onDelete={setDeleting}
+      />
       {status === 'pending' ? (
         <RoomWaiting />
       ) : status === 'error' || !room ? (
         <RoomUnavailable error={status === 'error'} />
       ) : (
-        <LoadedTeamRoom room={room} agents={agents} onOpenThread={onOpenThread} />
+        <LoadedTeamRoom key={room.id} room={room} agents={agents} onOpenThread={onOpenThread} />
+      )}
+      {sharing && (
+        <ShareDialog room={sharing.room} job={sharing.job} close={() => setSharing(null)} />
+      )}
+      {deleting && (
+        <DeleteRoomDialog
+          room={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null)
+            returnToTeam()
+          }}
+        />
       )}
     </>
   )

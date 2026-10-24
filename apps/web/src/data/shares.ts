@@ -23,7 +23,12 @@ export function useRoomShares(roomId: string) {
 export function useCreateShare(roomId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (body: { password: string; expiresInDays: number; includeImages: boolean }) =>
+    mutationFn: async (body: {
+      password: string
+      expiresInDays: number
+      includeImages: boolean
+      jobId?: string
+    }) =>
       ShareCreatedSchema.parse(
         await apiFetch(`rooms/${encodeURIComponent(roomId)}/shares`, {
           method: 'POST',

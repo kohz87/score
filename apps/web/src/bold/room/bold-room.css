@@ -292,6 +292,36 @@
   color: var(--warn);
 }
 
+[data-ui='bold'] .bold-capsule-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-capsule-aside-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: 36px;
+}
+
+[data-ui='bold'] .bold-capsule-aside-row .chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-capsule-aside-row .chip:disabled {
+  opacity: 0.6;
+}
+
 [data-ui='bold'] .bold-capsule-actions {
   display: flex;
   flex-wrap: wrap;
@@ -427,6 +457,35 @@
   border-radius: 20px 20px 6px 20px;
   background: var(--hi-bg);
   color: var(--hi-ink);
+}
+
+/* A shared one-to-one copy reads as the agent's own bubble on the left (board 01), with the source named above it. */
+[data-ui='bold'] .bold-message .chat-message.bold-shared {
+  justify-content: flex-start;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-body {
+  flex: 0 1 90%;
+  max-width: 90%;
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-meta {
+  display: flex;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-meta time {
+  display: none;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-parts {
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-message .chat-message.bold-shared .chat-text {
+  border-radius: 20px 20px 20px 6px;
+  background: var(--field);
+  color: var(--ink);
 }
 
 [data-ui='bold'] .bold-message .chat-md p,
@@ -648,6 +707,110 @@
   color: var(--ink);
   font-family: var(--font-d);
   font-size: 20px;
+}
+
+/* PLAN 11.4d: one of the agents' own chats, read-only until it is brought into a team job. */
+[data-ui='bold'] .bold-elsewhere {
+  gap: 16px;
+}
+
+[data-ui='bold'] .bold-elsewhere-note {
+  align-self: flex-start;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-elsewhere-title {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+[data-ui='bold'] .bold-elsewhere-title h2 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+[data-ui='bold'] .bold-elsewhere-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-elsewhere-card b {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-elsewhere-actions {
+  margin-top: auto;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-elsewhere-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-elsewhere-preview-label {
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-elsewhere-messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+[data-ui='bold'] .bold-elsewhere-mine {
+  align-self: flex-end;
+  max-width: 84%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+[data-ui='bold'] .bold-elsewhere-bub {
+  margin: 0;
+  border-radius: 20px 20px 6px 20px;
+  padding: 9px 14px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-elsewhere-theirs {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  max-width: 90%;
+}
+
+[data-ui='bold'] .bold-elsewhere-theirs > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+[data-ui='bold'] .bold-elsewhere-theirs .bold-elsewhere-bub {
+  border-radius: 20px 20px 20px 6px;
+  background: var(--field);
+  color: var(--ink);
 }
 
 /* Board 09: a fresh team room. */

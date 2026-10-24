@@ -1,8 +1,10 @@
 import type { AgentSummary, Exchange, Job } from '@score/contract'
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentNameColor } from '../bold-agents.ts'
+import { boldAsideLink } from '../bold-links.ts'
 import { exchangeStatus, exchangeTurns, type JobFilter, jobMatchesFilter } from './room-model.ts'
 import { jobExchangesQuery } from './room-queries.ts'
 import { currentExchange } from './thread-model.ts'
@@ -70,9 +72,33 @@ function JobCapsule({
 }) {
   const definition = useMemo(() => jobExchangesQuery(job.id), [job.id])
   const exchanges = useStreamQuery(definition).data ?? []
+  const navigate = useNavigate()
   const latest = currentExchange(exchanges)
   if (!latest) return null
-  return <Capsule exchange={latest} agents={agents} job={job} onOpenThread={onOpenThread} />
+  const asideAgent = agents.find((agent) => agent.id === latest.from)
+
+  // The chat is made when the first message is sent, so looking and walking away leaves nothing behind.
+  function takeAside() {
+    if (asideAgent) void navigate(boldAsideLink(asideAgent.id, job.id))
+  }
+
+  return (
+    <div className="bold-capsule-wrap">
+      <Capsule exchange={latest} agents={agents} job={job} onOpenThread={onOpenThread} />
+      {asideAgent && (
+        <span className="bold-capsule-aside-row">
+          <button
+            type="button"
+            className="chip bold-capsule-aside"
+            style={{ color: agentNameColor(asideAgent) }}
+            onClick={takeAside}
+          >
+            {`Take it aside with ${asideAgent.id}`}
+          </button>
+        </span>
+      )}
+    </div>
+  )
 }
 
 /** The prototype's exchange capsules: who is working with whom, and how the round is going. */

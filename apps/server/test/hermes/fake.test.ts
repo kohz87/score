@@ -25,6 +25,8 @@ let sink: ObservationSink
 let observations: Observation[]
 let results: IngestResult[]
 let onError: ReturnType<typeof vi.fn<(error: unknown) => void>>
+// The scenario's room is a room people talk in, so it routes with exchanges (11.11) and its messages emit job.upserted.
+const SCENARIO_JOB_EVENTS = 5
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'score-fake-'))
@@ -104,14 +106,17 @@ test('the whole fake scenario passes real ingest validation and covers every scr
         type !== 'session.compacted' &&
         type !== 'room-project.upserted' &&
         type !== 'room-project.deleted' &&
-        // Jobs and exchanges (11.1b) come from people and agent actions; 11.2's fake team room scripts them.
-        type !== 'job.upserted' &&
+        // Exchanges (11.1b) come from people and agent actions; 11.2's fake team room scripts them.
         type !== 'exchange.upserted' &&
         // Pinning a decision is a person's action (11.2).
         type !== 'room.pins.changed',
     )
   expect([...new Set(stored.map((event) => event.type))].sort()).toEqual(expectedTypes.sort())
-  expect(stored).toHaveLength(createScenario(schedulerStart).length + 4)
+  expect(stored).toHaveLength(createScenario(schedulerStart).length + 4 + SCENARIO_JOB_EVENTS)
+  // The extra events are exactly the scenario room's job following its messages.
+  const jobs = stored.filter((event) => event.type === 'job.upserted')
+  expect(jobs).toHaveLength(SCENARIO_JOB_EVENTS)
+  expect(jobs.every((event) => event.data.roomId === 'room-activity-feed')).toBe(true)
   expect(
     stored.filter((event) => event.type === 'approval.requested').map((event) => event.data.origin),
   ).toEqual(['score-run', 'score-run', 'gateway', 'kanban'])
@@ -163,6 +168,8 @@ test('restart replays scenario observations while keeping durable approval decis
         (event) =>
           !event.type.startsWith('approval.') &&
           !event.type.startsWith('message.') &&
+          // A job follows its messages, which a replay doesn't repeat.
+          event.type !== 'job.upserted' &&
           event.type !== 'room.upserted',
       )
       .map(({ type, data }) => ({ type, data })),
@@ -172,6 +179,8 @@ test('restart replays scenario observations while keeping durable approval decis
         (event) =>
           !event.type.startsWith('approval.') &&
           !event.type.startsWith('message.') &&
+          // A job follows its messages, which a replay doesn't repeat.
+          event.type !== 'job.upserted' &&
           event.type !== 'room.upserted',
       )
       .map(({ type, data }) => ({ type, data })),
@@ -188,6 +197,8 @@ test('restart replays scenario observations while keeping durable approval decis
     decision: { by: 'elsewhere' },
   })
   expect(second.filter((event) => event.type.startsWith('message.'))).toEqual([])
+  expect(second.filter((event) => event.type === 'job.upserted')).toEqual([])
+  expect(first.filter((event) => event.type === 'job.upserted')).toHaveLength(SCENARIO_JOB_EVENTS)
   // The scenario's own room.upserted step replays like every other non-message step; messages add none.
   expect(second.filter((event) => event.type === 'room.upserted')).toHaveLength(
     createScenario(0).filter((step) => step.kind === 'room.upserted').length,
@@ -334,7 +345,7 @@ test('stop is idempotent, drains in-flight submissions and cancels remaining tim
   await scheduler.advance(20000)
   expect(events()).toHaveLength(1)
   await play()
-  expect(events()).toHaveLength(5 + createScenario(schedulerStart).length)
+  expect(events()).toHaveLength(5 + createScenario(schedulerStart).length + SCENARIO_JOB_EVENTS)
 })
 
 test('stopping a scripted run prevents later script steps from undoing the cancellation', async () => {
@@ -358,7 +369,7 @@ test('scheduled ingest failures are reported and do not produce unhandled reject
   vi.spyOn(sink, 'submit').mockRejectedValueOnce(failure)
   await play()
   expect(onError).toHaveBeenCalledExactlyOnceWith(failure)
-  expect(events()).toHaveLength(createScenario(schedulerStart).length + 3)
+  expect(events()).toHaveLength(createScenario(schedulerStart).length + 3 + SCENARIO_JOB_EVENTS)
   expect(scheduler.pending).toBe(0)
 })
 
@@ -399,7 +410,7 @@ test('speed scales timer delays while scenario data stays deterministic', async 
   await scheduler.advance(scenarioDuration / 100 - 1)
   expect(events().at(-1)?.type).toBe('agent.updated')
   await scheduler.advance(1)
-  expect(events()).toHaveLength(createScenario(schedulerStart).length + 4)
+  expect(events()).toHaveLength(createScenario(schedulerStart).length + 4 + SCENARIO_JOB_EVENTS)
   expect(events().at(-1)?.data).toMatchObject({ updatedAt: '2026-01-01T12:03:00.000Z' })
 })
 
@@ -422,6 +433,8 @@ test('overdue timers cannot reorder scripted events or skip the running transiti
       .filter(
         (event) =>
           event.type !== 'room.upserted' &&
+          // The scenario room's job follows its messages (exchanges routing, 11.11).
+          event.type !== 'job.upserted' &&
           // The run's own tool frames (neutral demo content) are not part of the script.
           !(event.type === 'watch.frame' && event.data.runId === runId) &&
           !(event.type === 'run.updated' && event.data.id === runId),
@@ -445,7 +458,7 @@ test('looping pauses ten seconds then emits fresh identities and entities on the
   port = createHermesPort(loadConfig({}), { scheduler, onError })
   await play()
   const first = events()
-  expect(first).toHaveLength(createScenario(schedulerStart).length + 4)
+  expect(first).toHaveLength(createScenario(schedulerStart).length + 4 + SCENARIO_JOB_EVENTS)
   expect(scheduler.pending).toBe(1)
   await scheduler.advance(9999)
   expect(events()).toEqual(first)
