@@ -1,4 +1,6 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { AgentsSnapshotSchema } from '@score/contract'
+import { apiFetch } from '../../data/api.ts'
 import {
   useCallback,
   useDeferredValue,
@@ -69,6 +71,7 @@ import { Modal, Segmented } from './controls.tsx'
 import { PreviewFrame, type PreviewDraft } from './PreviewFrame.tsx'
 import {
   previewDevices,
+  previewAgentId,
   previewPages,
   type PreviewDevice,
   type PreviewPage,
@@ -214,7 +217,18 @@ export function Customizer() {
   const [askStart, setAskStart] = useState<string | null>(null)
   const skipReload = useRef<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const page: PreviewPage = previewPages.find((item) => item.id === pageId)!
+  // The agent page of the new look needs a real agent: the first of the team (the same read the shell makes).
+  const team = useQuery({
+    queryKey: ['customizer', 'preview-agents'],
+    queryFn: async ({ signal }) =>
+      AgentsSnapshotSchema.parse(await apiFetch('agents', { signal })).items,
+    enabled: pageId === 'b-agent',
+    staleTime: 60_000,
+  })
+  const page: PreviewPage = previewAgentId(
+    previewPages.find((item) => item.id === pageId)!,
+    team.data?.[0]?.id ?? null,
+  )
   const device = previewDevices.find((item) => item.id === deviceId)!
 
   // A hidden frame that tells what Score's own values are (to show and to copy), without the page's look leaking in.

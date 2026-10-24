@@ -76,6 +76,200 @@ test('the protected layer re-asserts what a hostile theme would change, with !im
   expect(css).toContain('--font-body')
 })
 
+type Spec = readonly [number, number, number]
+
+type ParsedRule = {
+  /** Rule order in the sheet, including rules nested in @media/@layer blocks. */
+  order: number
+  selector: string
+  /** Whether the rule sits inside `prefers-color-scheme: dark`. */
+  darkMedia: boolean
+}
+
+type GroupRule = CSSRule & { cssRules: CSSRuleList; conditionText?: string }
+type StyleRule = CSSRule & { selectorText: string; style: CSSStyleDeclaration }
+
+const isGroupRule = (rule: CSSRule): rule is GroupRule => 'cssRules' in rule
+const isStyleRule = (rule: CSSRule): rule is StyleRule => 'selectorText' in rule && 'style' in rule
+
+/** The rules of a stylesheet, flattened depth-first so their source order survives @layer and @media. */
+function parsedRules(css: string): ParsedRule[] {
+  const style = document.createElement('style')
+  style.textContent = css
+  document.head.append(style)
+  const found: ParsedRule[] = []
+  let order = 0
+  const walk = (rules: CSSRuleList, darkMedia: boolean) => {
+    for (const rule of Array.from(rules)) {
+      order += 1
+      if (isStyleRule(rule)) {
+        found.push({ order, selector: rule.selectorText, darkMedia })
+        continue
+      }
+      if (isGroupRule(rule))
+        walk(
+          rule.cssRules,
+          darkMedia ||
+            (rule instanceof CSSMediaRule &&
+              rule.conditionText.includes('prefers-color-scheme: dark')),
+        )
+    }
+  }
+  walk(style.sheet!.cssRules, false)
+  style.remove()
+  return found
+}
+
+const add = (a: Spec, b: Spec): Spec => [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+
+const compare = (a: Spec, b: Spec): number => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
+
+function splitSelectorList(text: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let quote = ''
+  let start = 0
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (quote) {
+      if (ch === '\\') i++
+      else if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth--
+    else if (ch === ',' && depth === 0) {
+      parts.push(text.slice(start, i).trim())
+      start = i + 1
+    }
+  }
+  parts.push(text.slice(start).trim())
+  return parts.filter(Boolean)
+}
+
+function maxSpecificity(selector: string): Spec {
+  return splitSelectorList(selector).reduce<Spec>(
+    (best, part) => (compare(specificityOf(part), best) > 0 ? specificityOf(part) : best),
+    [0, 0, 0],
+  )
+}
+
+/** The index of the `close` matching `open` at `start`, skipping quotes and nested brackets/parentheses. */
+function matching(selector: string, start: number, open: string, close: string): number {
+  let depth = 0
+  let quote = ''
+  for (let i = start; i < selector.length; i++) {
+    const ch = selector[i]!
+    if (quote) {
+      if (ch === '\\') i++
+      else if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === '"' || ch === "'") quote = ch
+    else if (ch === open) depth++
+    else if (ch === close && --depth === 0) return i
+  }
+  return selector.length
+}
+
+/** Enough of CSS specificity for protected.css: :where is zero, :not/:is/:has take their argument's maximum. */
+function specificityOf(selector: string): Spec {
+  let spec: Spec = [0, 0, 0]
+  for (let i = 0; i < selector.length;) {
+    const ch = selector[i]!
+    if (ch === '#' || ch === '.') {
+      spec = add(spec, ch === '#' ? [1, 0, 0] : [0, 1, 0])
+      i++
+      while (/[\w-]/.test(selector[i] ?? '')) i++
+    } else if (ch === '[') {
+      spec = add(spec, [0, 1, 0])
+      i = matching(selector, i, '[', ']') + 1
+    } else if (ch === ':') {
+      const element = selector[i + 1] === ':'
+      let j = i + (element ? 2 : 1)
+      const nameStart = j
+      while (/[\w-]/.test(selector[j] ?? '')) j++
+      const name = selector.slice(nameStart, j).toLowerCase()
+      if (selector[j] === '(') {
+        const end = matching(selector, j, '(', ')')
+        const args = selector.slice(j + 1, end)
+        if (name === 'is' || name === 'not' || name === 'has')
+          spec = add(spec, maxSpecificity(args))
+        else if (name !== 'where') spec = add(spec, element ? [0, 0, 1] : [0, 1, 0])
+        i = end + 1
+      } else {
+        if (!name.startsWith('where')) spec = add(spec, element ? [0, 0, 1] : [0, 1, 0])
+        i = j
+      }
+    } else if (/[A-Za-z]/.test(ch)) {
+      spec = add(spec, [0, 0, 1])
+      i++
+      while (/[\w-]/.test(selector[i] ?? '')) i++
+    } else {
+      i++
+    }
+  }
+  return spec
+}
+
+test('the bold fallback follows the shell’s data-look, not the page’s data-theme', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8').replace(/\s+/g, ' ')
+  for (const mode of ['light', 'dark'] as const) {
+    const rule = new RegExp(
+      `html\\[data-contrast-fallback\\]\\[data-contrast-fallback\\] \\[data-ui='bold'\\]\\[data-look='${mode}'\\] \\[data-protected\\]`,
+    )
+    expect(css, mode).toMatch(rule)
+    expect(css, `${mode} decision`).toContain(
+      `[data-ui='bold'][data-look='${mode}'] [data-decision]`,
+    )
+  }
+  // Search's switch changes data-look only: keying the bold fallback on data-theme would miss it.
+  expect(css).not.toMatch(
+    /html\[data-contrast-fallback\]\[data-theme='(light|dark)'\] \[data-ui='bold'\]/,
+  )
+})
+
+test('the bold fallback comes after the system-dark copy and out-specifies it', () => {
+  const rules = parsedRules(readFileSync(join(root, 'styles/protected.css'), 'utf8'))
+  const systemDark = rules.filter(
+    (rule) =>
+      rule.darkMedia &&
+      rule.selector
+        .replace(/\s+/g, ' ')
+        .includes('html[data-contrast-fallback]:not([data-theme])') &&
+      rule.selector.replace(/\s+/g, ' ').includes('[data-protected]'),
+  )
+  const bold = ['light', 'dark'].flatMap((mode) =>
+    rules.filter((rule) => {
+      const selector = rule.selector.replace(/\s+/g, ' ')
+      return (
+        selector.includes(
+          `html[data-contrast-fallback][data-contrast-fallback] [data-ui='bold'][data-look='${mode}']`,
+        ) && selector.includes('[data-protected]')
+      )
+    }),
+  )
+  expect(systemDark).toHaveLength(2)
+  expect(bold).toHaveLength(2)
+  for (const rule of bold) {
+    const specificity = maxSpecificity(rule.selector)
+    for (const dark of systemDark) {
+      expect(rule.order, rule.selector).toBeGreaterThan(dark.order)
+      expect(compare(specificity, maxSpecificity(dark.selector))).toBeGreaterThan(0)
+    }
+  }
+  // The privacy rule is after the media block too, and its doubled attribute keeps it on the shell's ground.
+  const privacy = rules.find((rule) =>
+    rule.selector.replace(/\s+/g, ' ').includes('.bold-dm-privacy[data-protected]'),
+  )
+  expect(privacy).toBeDefined()
+  expect(privacy!.order).toBeGreaterThan(Math.max(...systemDark.map((rule) => rule.order)))
+  expect(privacy!.selector.replace(/\s+/g, ' ')).toContain(
+    "html[data-contrast-fallback][data-contrast-fallback] [data-ui='bold']",
+  )
+})
+
 test('glyph shapes are re-asserted too, and the bare glyph svg is not a flex container', () => {
   const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
   expect(css).toContain("html[data-look='custom'] [data-protected] svg *")

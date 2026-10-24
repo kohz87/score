@@ -149,6 +149,10 @@
     --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif !important;
     --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif !important;
     --font-code: 'JetBrains Mono', ui-monospace, monospace !important;
+    /* The bold shell's own font tokens (bold/bold-theme.css maps them to the theme's fonts): Score's three here too. */
+    --font-d: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif !important;
+    --font-b: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif !important;
+    --font-m: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace !important;
   }
   html[data-look='custom'] [data-protected] {
     isolation: isolate !important;
@@ -157,6 +161,10 @@
     --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif !important;
     --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif !important;
     --font-code: 'JetBrains Mono', ui-monospace, monospace !important;
+    /* The bold shell's own font tokens (bold/bold-theme.css maps them to the theme's fonts): Score's three here too. */
+    --font-d: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif !important;
+    --font-b: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif !important;
+    --font-m: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace !important;
   }
   html[data-look='custom'] [data-protected='block'] {
     display: block !important;
@@ -166,6 +174,15 @@
   }
   html[data-look='custom'] [data-protected='grid'] {
     display: grid !important;
+  }
+  /* The Needs-you strip's own fold (bold/room): the cards behind "N more need you" are hidden by Score, through
+     attributes only Score sets (the fold state and each card's rank), so a theme can't use this to hide a card. It must
+     come after the display rules above, which would otherwise show every folded card. */
+  html[data-look='custom']
+    [data-ui='bold']
+    .bold-pins[data-expanded='false']
+    > [data-protected][data-pin-rank]:not([data-pin-rank='0']) {
+    display: none !important;
   }
   html[data-look='custom'] [data-protected='inline'] {
     display: inline !important;
@@ -226,5 +243,76 @@
       --ink: #eceef2 !important;
       --card: #181a21 !important;
     }
+  }
+  /* The bold shell's own tokens resolve on its root from the theme's `--t-*` values, so the classic fallback above
+     never reaches them. Give its decision surfaces Score's bold sets too, chosen by the root's actual look: Search's
+     switch changes `data-look` without changing `data-theme`.
+
+     This block comes after the `prefers-color-scheme` copy above on purpose. Both used to have the same specificity
+     (0,4,1), so that copy won by order and put light ink on a white panel when Look was "system" on a dark device and
+     Search switched to light. The doubled attribute raises this to (0,5,1): order is no longer what decides. */
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold'][data-look='light']
+    [data-protected],
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold'][data-look='light']
+    [data-decision] {
+    --bg: #eceef2 !important;
+    --panel: #ffffff !important;
+    --deep: #ffffff !important;
+    --field: #f4f5f8 !important;
+    --line: #dfe2e8 !important;
+    --ink: #12131a !important;
+    --ink2: #3a3d45 !important;
+    --muted: #5e626c !important;
+    --faint: #9a9ea7 !important;
+    --hi-bg: #12131a !important;
+    --hi-ink: #ffffff !important;
+    --hi-sub: #c9cbd2 !important;
+  }
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold'][data-look='dark']
+    [data-protected],
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold'][data-look='dark']
+    [data-decision] {
+    --bg: #12131a !important;
+    --panel: #1a1c23 !important;
+    --deep: #16171e !important;
+    --field: #23252e !important;
+    --line: #2c2f38 !important;
+    --ink: #ececf1 !important;
+    --ink2: #c9ccd4 !important;
+    --muted: #a9adb8 !important;
+    --faint: #626670 !important;
+    --hi-bg: #ececf1 !important;
+    --hi-ink: #12131a !important;
+    --hi-sub: #3a3d45 !important;
+  }
+  /* Protected text that sits directly on whatever a theme paints needs an opaque fill of Score's own in the fallback;
+     measured contrast otherwise depends on what happens to be behind it. This is deliberately a normal declaration in
+     the protected layer, not `!important`: Score's own unlayered backgrounds (request and approval cards, dialogs,
+     menus, fields, the dock ring and the Needs-you marker) win automatically, while a surface with no fill of its own
+     (a shared message, a Started-by line, report-back text, coding-add-context, bold-add-error) gets this panel. The
+     privacy promise below is the one exception, with its own deeper ground. Graphics are left alone: a panel rectangle
+     behind a glyph or the room stage is not a text ground. Inline kinds (links, pills, `any` buttons and spans) are
+     left alone too: a square patch behind a word isn't a ground, and they sit inside a block that gets one. */
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold']
+    [data-protected]:not(
+      [data-protected='raised'],
+      [data-protected='any'],
+      [data-protected='inline'],
+      [data-protected='inline-flex']
+    ):not(:is(.agent-glyph, .room-stage)) {
+    background-color: var(--panel);
+    color: var(--ink);
+  }
+  /* The privacy promise sits on the panel a theme paints. In the fallback it wears Score's own ground, so its text is
+     measured against a colour Score chose rather than whatever happens to be behind it. */
+  html[data-contrast-fallback][data-contrast-fallback]
+    [data-ui='bold']
+    .bold-dm-privacy[data-protected] {
+    background-color: var(--deep) !important;
   }
 }

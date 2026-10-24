@@ -1,0 +1,58 @@
+/* PLAN 11.9d: a custom theme (and the built-in Paper, Night shift and Dense packs, which set the same colour tokens
+   through `data-pack`) paints the bold shell through the colours it already sets for the classic one. The
+   engine writes `--ground`, `--card`, `--ink`… on <html>; the bold shell has tokens of its own (tokens.css) and
+   some share a name (`--ink`, `--muted`), so the root's values are first copied to `--t-*` on <html> (a name the
+   shell never redefines) and the shell's tokens read those. Nothing here runs for Score's own look, so the
+   shell's own dark and light sets stay exactly as the prototype draws them. Status colours, code blocks and the
+   agent name tints keep their own values; protected surfaces stay with styles/protected.css. */
+:root:is([data-look='custom'], [data-pack]:not([data-pack='score'])) {
+  --t-ground: var(--ground);
+  --t-card: var(--card);
+  --t-ink: var(--ink);
+  --t-ink-muted: var(--ink-muted);
+  --t-muted: var(--muted);
+  --t-hairline: var(--hairline);
+  --t-subtle: var(--subtle);
+  --t-chat-secondary: var(--chat-secondary);
+  --t-panel-card: var(--panel-card);
+  --t-panel-ink: var(--panel-ink);
+  --t-font-heading: var(--font-heading);
+  --t-font-body: var(--font-body);
+  --t-font-code: var(--font-code);
+}
+
+:root:is([data-look='custom'], [data-pack]:not([data-pack='score'])) [data-ui='bold'] {
+  --bg: var(--t-ground);
+  --panel: var(--t-card);
+  --deep: color-mix(in srgb, var(--t-ground) 50%, var(--t-card));
+  --field: var(--t-subtle);
+  --line: var(--t-hairline);
+  --ink: var(--t-ink);
+  --ink2: var(--t-chat-secondary);
+  --muted: var(--t-ink-muted);
+  --faint: var(--t-muted);
+  --font-d: var(--t-font-heading);
+  --font-b: var(--t-font-body);
+  --font-m: var(--t-font-code);
+  /* Dark: the light object is the theme's inverse panel. */
+  --hi-bg: var(--t-panel-card);
+  --hi-ink: var(--t-panel-ink);
+  --hi-line: var(--t-panel-ink);
+  --hi-sub: color-mix(in srgb, var(--t-panel-ink) 85%, var(--t-panel-card));
+}
+
+/* Light: the object for you is the ink-coloured one, as the theme's own primary buttons are. */
+:root:is([data-look='custom'], [data-pack]:not([data-pack='score']))
+  [data-ui='bold'][data-look='light'] {
+  --hi-bg: var(--t-ink);
+  --hi-ink: var(--t-card);
+  --hi-line: var(--t-card);
+  --hi-sub: color-mix(in srgb, var(--t-card) 85%, var(--t-ink));
+}
+
+/* The escape-hatch banner (themes/look.css) sits above the phone tab bar instead of covering Settings. */
+@media (max-width: 860px) {
+  body:has([data-ui='bold']) .look-banner {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+}
