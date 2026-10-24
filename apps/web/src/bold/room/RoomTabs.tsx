@@ -1,5 +1,6 @@
 import type { Job } from '@score/contract'
 import type { ReactNode } from 'react'
+import { ThreadIcon } from '../BoldIcons.tsx'
 import { JOB_FILTERS, jobMatchesFilter, jobStateLabel, type JobFilter } from './room-model.ts'
 import type { JobRead } from './room-queries.ts'
 
@@ -19,6 +20,7 @@ export function RoomTabs({
   onSelectJob,
   onSelectFilter,
   trailing,
+  onOpenThread,
 }: {
   jobs: JobRead[]
   selectedJob: string
@@ -26,9 +28,11 @@ export function RoomTabs({
   onSelectJob: (jobId: string) => void
   onSelectFilter: (filter: JobFilter) => void
   trailing?: ReactNode
+  onOpenThread?: (jobId: string) => void
 }) {
   const named = jobs.filter((job) => !job.isDefault)
   const visible = named.filter((job) => jobMatchesFilter(job, filter))
+  const selected = named.find((job) => job.id === selectedJob)
   // The default job is the unlabelled bin for new work; its unread count would duplicate what All already shows.
   const allUnread = named.reduce((total, job) => total + (job.unread ?? 0), 0)
   return (
@@ -85,6 +89,17 @@ export function RoomTabs({
             {item.label}
           </button>
         ))}
+        {selected && onOpenThread && (
+          <button
+            type="button"
+            className="bold-filter bold-job-thread"
+            aria-label={`Open thread for ${selected.title}`}
+            onClick={() => onOpenThread(selected.id)}
+          >
+            <ThreadIcon size={14} />
+            Thread
+          </button>
+        )}
       </div>
     </div>
   )

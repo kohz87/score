@@ -40,7 +40,15 @@ function RoomUnavailable({ error }: { error: boolean }) {
   )
 }
 
-function LoadedTeamRoom({ room, agents }: { room: Room; agents: AgentSummary[] }) {
+function LoadedTeamRoom({
+  room,
+  agents,
+  onOpenThread,
+}: {
+  room: Room
+  agents: AgentSummary[]
+  onOpenThread: (jobId: string) => void
+}) {
   const [params, setParams] = useSearchParams()
   const jobsDefinition = useMemo(() => roomJobsQuery(room.id), [room.id])
   const { data: jobs, status: jobsStatus } = useStreamQuery(jobsDefinition)
@@ -179,6 +187,7 @@ function LoadedTeamRoom({ room, agents }: { room: Room; agents: AgentSummary[] }
           onSelectJob={selectJob}
           onSelectFilter={selectFilter}
           trailing={<JobMenu room={room} job={job} onShare={setSharingJob} />}
+          onOpenThread={onOpenThread}
         />
       )}
       {jobsStatus === 'success' && !empty && (
@@ -198,7 +207,13 @@ function LoadedTeamRoom({ room, agents }: { room: Room; agents: AgentSummary[] }
         <RoomEmpty agents={agents} onStart={startWith} />
       ) : (
         <div className="stream" id="bold-room-stream" aria-live="polite">
-          <RoomCapsules jobs={allJobs} agents={agents} selectedJob={selectedJob} filter={filter} />
+          <RoomCapsules
+            jobs={allJobs}
+            agents={agents}
+            selectedJob={selectedJob}
+            filter={filter}
+            onOpenThread={onOpenThread}
+          />
           <RoomMessageStream
             roomId={room.id}
             jobs={allJobs}
@@ -250,10 +265,12 @@ export function BoldTeamRoom({
   agents,
   phoneAction,
   onOpenElsewhere,
+  onOpenThread = () => undefined,
 }: {
   agents: AgentSummary[]
   phoneAction?: ReactNode
   onOpenElsewhere?: (session: OutsideSession) => void
+  onOpenThread?: (jobId: string) => void
 }) {
   const [params, setParams] = useSearchParams()
   const override = params.get('room')
@@ -310,7 +327,7 @@ export function BoldTeamRoom({
       ) : status === 'error' || !room ? (
         <RoomUnavailable error={status === 'error'} />
       ) : (
-        <LoadedTeamRoom key={room.id} room={room} agents={agents} />
+        <LoadedTeamRoom key={room.id} room={room} agents={agents} onOpenThread={onOpenThread} />
       )}
       {sharing && <ShareDialog room={sharing} close={() => setSharing(null)} />}
       {deleting && (

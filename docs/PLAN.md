@@ -589,7 +589,7 @@ answer in Hermes), questions, paused exchanges, run-safety cards (quota guard, n
 remap, spend not settled, D2), answerable in place. Done when: each card kind has an e2e on fake data and is
 protected; decisions need a paired browser as today.
 
-**11.4c A job's thread** · **DeepSeek** · board 11. Rounds, exchange states and "5 of 8 turns", step-in box, thread
+**11.4c A job's thread** ✅ · **DeepSeek** · board 11. Rounds, exchange states and "5 of 8 turns", step-in box, thread
 header (pause/stop, steps, unblock, comment, context meter + compact, job history, D10), plan card, streaming,
 reasoning/tool cards, coding sub-agent cards, stall notice, recipe-run cards. Done when: e2e incl. a paused exchange
 answered from the thread; screenshots vs 11.
