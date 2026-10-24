@@ -34,7 +34,7 @@ for (const size of sizes) {
       await pair(page)
       const panel = await openResults(page, size)
 
-      const change = panel.locator('[data-card="change"]')
+      const change = panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' })
       await expect(change).toContainText('What changed')
       await expect(change).toContainText('Activity feed')
       await expect(change).toContainText('Events in the same millisecond get skipped.')
