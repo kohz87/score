@@ -192,6 +192,30 @@ body.still *, body.still *::before { animation: none !important; transition: non
 .step { background: var(--deep); border-radius: 18px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; border: 0; color: var(--ink); text-align: left; width: 100%; }
 .step.sel { box-shadow: inset 0 0 0 2px var(--ink); }
 .badge { border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
+.wsteps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.wsteps li { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 4px 14px 4px 4px; background: var(--field); color: var(--muted); font-size: 13px; font-weight: 600; }
+.wsteps li span { width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; background: var(--line); font-size: 12px; }
+.wsteps li.on { background: var(--hi-bg); color: var(--hi-ink); }
+.wsteps li.on span { background: var(--hi-ink); color: var(--hi-bg); }
+.wsteps li.done { color: var(--ink2); }
+.wsteps li.done span { background: var(--ok); color: #12131a; }
+.mapgrid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px; }
+.ptree { list-style: none; margin: 0; padding: 0 0 0 14px; display: flex; flex-direction: column; gap: 2px; border-left: 1px dashed var(--line); }
+.inner > .ptree { padding-left: 0; border-left: 0; }
+.pkey { color: var(--muted); }
+.pleaf { border: 0; background: transparent; color: var(--ink); display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 5px 8px; border-radius: 10px; font: inherit; min-height: 30px; }
+.pleaf:hover { background: var(--field); }
+.pleaf.on { background: var(--field); box-shadow: inset 0 0 0 1.5px var(--ink2); }
+.pleaf .pval { color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.slot { display: flex; align-items: center; gap: 4px; background: var(--deep); border-radius: 16px; padding-right: 6px; }
+.slot.on { box-shadow: inset 0 0 0 2px var(--ink); }
+.slotbtn { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 16px; min-height: 52px; }
+.wopt { background: var(--field); cursor: pointer; gap: 6px; padding: 14px 16px; }
+.wopt.on { box-shadow: inset 0 0 0 2px var(--ink); }
+.wopt.off { opacity: .55; cursor: default; }
+.wdot { width: 8px; height: 8px; border-radius: 999px; background: var(--ink2); animation: wpulse 1.2s infinite ease-in-out; }
+.wdot:nth-child(2) { animation-delay: .2s; } .wdot:nth-child(3) { animation-delay: .4s; }
+@keyframes wpulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
 
 @media (max-width: 860px) {
   .top .nav, .top .dock, .top .searchbtn, .top .gear { display: none; }
@@ -202,7 +226,8 @@ body.still *, body.still *::before { animation: none !important; transition: non
   .roomgrid { min-height: auto; }
   .sidecol { display: none; }
   .sidecol.open { display: flex; position: fixed; inset: 0; z-index: 45; padding: max(10px, env(safe-area-inset-top, 0px)) 10px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--bg); }
-  .grid2, .grid3, .grid4 { grid-template-columns: minmax(0, 1fr); }
+  .grid2, .grid3, .grid4, .mapgrid { grid-template-columns: minmax(0, 1fr); }
+  .listrow.wrap > .grow { flex: 1 1 calc(100% - 30px); overflow-wrap: anywhere; }
   .span2 { grid-column: auto; }
   .setnav { max-width: none; flex-direction: row; flex-wrap: wrap; }
   .stream { min-height: 320px; }
@@ -260,7 +285,7 @@ const S = {
     { id: 'feed', room: 'team', name: 'Activity feed', state: 'needs' },
     { id: 'notes', room: 'team', name: 'Release notes 2.4', state: 'paused' },
     { id: 'queue', room: 'team', name: 'Queue research', state: 'done' },
-    { id: 'tck', room: 'team', name: 'Login timeout', state: 'working', source: { app: 'Tickets app', ref: 'TCK-142', title: 'Login times out after 5 minutes', via: 'trigger “New ticket”', report: true, reported: false } },
+    { id: 'tck', room: 'team', name: 'Login timeout', state: 'working', source: { app: 'Tickets app', ref: 'TCK-142', title: 'Login times out after 5 minutes', via: 'trigger “New ticket”', report: true, tool: 'add_comment', reported: false } },
     { id: 'old1', room: 'r-feed', name: 'Read layer', state: 'done' },
     { id: 'old2', room: 'r-research', name: 'Queue options', state: 'done' }
   ],
@@ -295,7 +320,7 @@ const S = {
   set: 'connections',
   rules: { mode: 'guardian', go: ['Read and edit files in its workspace', 'Run tests', 'Read the web'], ask: ['Install packages', 'Push code', 'Delete files', 'Use the mouse and keyboard on its screen'], never: ['Read keys or password vaults', 'rm -rf /'], saved: null },
   tools: [{ id: 't1', name: 'Tickets app', addr: 'https://tickets.example.com/mcp', status: 'ok', used: ['lead', 'builder'] }, { id: 't2', name: 'GitHub', addr: 'https://api.githubcopilot.com/mcp', status: 'needs sign-in', used: ['builder', 'reviewer'] }],
-  triggers: [{ id: 'w1', name: 'New ticket', job: 'Triage new tickets', recipe: 'lead decides', reportTo: 'Tickets app', url: 'https://score.local/hooks/w_8f2c41', secret: 'whsec_Zq7…k2', last: 'today 09:40' }],
+  triggers: [{ id: 'w1', name: 'New ticket', job: 'Triage new tickets', recipe: 'lead decides', reportTo: 'Tickets app', reportTool: 'add_comment', tmpl: 'Fix {{ticket.title}}: {{ticket.body}}', map: { ref: 'ticket.id', title: 'ticket.title', link: 'ticket.url', details: 'ticket.body', reply: '' }, url: 'https://score.local/hooks/w_8f2c41', secret: 'whsec_Zq7…k2', last: 'today 09:40' }],
   notif: { needs: true, paused: true, done: true, daily: false },
   recipes: [
     { id: 'r1', name: 'Build, then review', version: 3, inputs: ['goal'], steps: [
@@ -492,6 +517,68 @@ function vRequest(q) {
   if (q.kind === 'approve') return `<div class="pin"><span class="row wrap">${glyph(a, 20)}<span><b>${esc(q.agent)}</b> · ${esc(q.title)}</span><span class="sub">${esc(jobOf(q.job).name)}</span></span><code style="font-size:1.15em;font-weight:500">${esc(q.cmd)}</code><span class="row wrap"><button class="btn sm" data-a="req" data-v="${q.id}|allow">Allow</button><button class="btn sm ghost" data-a="req" data-v="${q.id}|deny">Don't allow</button><button class="btn sm ghost" data-a="req" data-v="${q.id}|always">Always allow for ${esc(q.agent)}</button></span></div>`;
   return `<div class="pin"><span class="row wrap">${glyph(a, 20)}<b>${esc(q.title)}</b><span class="sub">${esc(jobOf(q.job).name)}</span></span><span>${esc(q.ask)}</span><span class="row wrap">${q.opts.map((o, i) => `<button class="btn sm ${i ? 'ghost' : ''}" data-a="req" data-v="${q.id}|${i}">${esc(o)}</button>`).join('')}${q.kind === 'budget' ? `<button class="btn sm ghost" data-a="openThread" data-v="${q.job}">Open thread</button>` : ''}</span></div>`;
 }
+const SAMPLE_CALL = { event: 'ticket.created', workspace: 'acme', ticket: { id: 'TCK-143', title: 'Export button does nothing in Safari', url: 'https://tickets.example.com/t/143', body: 'Clicking Export on the Reports page does nothing in Safari 18. Works in Chrome.', priority: 'high', labels: ['bug', 'web'], reporter: { name: 'Sam', email: 'sam@example.com' } } };
+const APP_TOOLS = {
+  'Tickets app': [
+    { name: 'add_comment', args: ['ticket_id', 'body'], fit: 'best', why: 'Writes to one ticket and takes its id. Changes nothing else.' },
+    { name: 'update_ticket', args: ['ticket_id', 'status', 'note'], fit: 'good', why: 'Also fits, but changes the ticket status too.' },
+    { name: 'close_ticket', args: ['ticket_id', 'resolution'], fit: 'risky', why: 'Closes the ticket. Someone should check the fix first.' },
+    { name: 'search_tickets', args: ['query'], fit: 'no', why: 'Only reads, so it can’t report back.' }],
+  GitHub: [
+    { name: 'add_issue_comment', args: ['owner', 'repo', 'issue_number', 'body'], fit: 'best', why: 'Comments on one issue. Changes nothing else.' },
+    { name: 'update_issue', args: ['owner', 'repo', 'issue_number', 'state'], fit: 'risky', why: 'Can close the issue.' },
+    { name: 'search_issues', args: ['q'], fit: 'no', why: 'Only reads.' }]
+};
+const SLOTS = [['ref', 'Reference', 'Required. Ties the job to the item'], ['title', 'Title', 'Names the job'], ['link', 'Link', 'Open in the app'], ['details', 'Details', 'Given to agents as quoted outside text'], ['reply', 'Reply tool', 'Optional. Lets the app pick the report-back tool per call']];
+function getPath(o, path) { return path ? path.split('.').reduce((v, k) => (v == null ? undefined : v[k]), o) : undefined; }
+function fillTmpl(t, sample) { return (t || '').replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, p) => { const v = getPath(sample, p); return v == null ? '‹missing ' + p + '›' : Array.isArray(v) ? v.join(', ') : String(v); }); }
+function payloadTree(o, prefix, md) {
+  return `<ul class="ptree">${Object.keys(o).map(k => { const path = prefix ? prefix + '.' + k : k; const v = o[k];
+    if (v && typeof v === 'object' && !Array.isArray(v)) return `<li><span class="pkey">${esc(k)}</span>${payloadTree(v, path, md)}</li>`;
+    const slot = SLOTS.find(([sk]) => md.map[sk] === path);
+    return `<li><button class="pleaf ${slot ? 'on' : ''}" data-a="trPick" data-v="${path}"><span class="pkey">${esc(k)}</span><span class="pval">${esc(Array.isArray(v) ? '[' + v.join(', ') + ']' : JSON.stringify(v))}</span>${slot ? `<span class="badge" style="background:var(--hi-bg);color:var(--hi-ink)">${slot[1]}</span>` : ''}</button></li>`; }).join('')}</ul>`;
+}
+function vTriggerWizard(md) {
+  const steps = ['Set up', 'Test call', 'Map fields', 'Report back'];
+  const head = `<div class="row wrap"><h2 style="font-size:26px">${md.edit ? 'Edit trigger' : 'New trigger'}</h2><button class="icon-btn sm" style="margin-left:auto" data-a="closeModal" aria-label="Close">${I.x}</button></div>
+    <ol class="wsteps">${steps.map((t, i) => `<li class="${md.step === i + 1 ? 'on' : md.step > i + 1 ? 'done' : ''}"><span>${i + 1}</span>${t}</li>`).join('')}</ol>`;
+  let body = '';
+  if (md.step === 1) body = `<div class="grid2"><div><label for="trname" class="lab">Name</label><input id="trname" class="field" data-in="trname" value="${esc(md.name)}" placeholder="e.g. New support ticket"></div>
+      <div><label for="trrec" class="lab">Recipe</label><select id="trrec" class="field" data-in="trrec"><option>lead decides</option>${S.recipes.map(r => `<option ${md.recipe === r.name ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></div></div>
+    <div><label for="trback" class="lab">The app it comes from (its tool server, used to send results back)</label><select id="trback" class="field" data-in="trback">${S.tools.map(t => `<option ${md.reportTo === t.name ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}<option value="" ${md.reportTo === '' ? 'selected' : ''}>Another app, no tool server: results stay in Score</option></select></div>
+    <span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="trNext">Create the address</button></span>`;
+  else if (md.step === 2) body = `<div class="inner" style="display:flex;flex-direction:column;gap:10px"><span class="small muted">Paste these into ${esc(md.reportTo || 'the other app')}'s webhook settings</span>
+      <div class="row wrap"><code class="small grow" style="overflow-wrap:anywhere">${esc(md.url)}</code><button class="btn sm" data-a="copy" data-v="${esc(md.url)}">Copy address</button></div>
+      <div class="row wrap"><code class="small grow">${esc(md.secret)}</code><button class="btn sm" data-a="copy" data-v="${esc(md.secret)}">Copy secret</button></div>
+      <span class="small muted">Calls must be signed with the secret (Standard Webhooks headers) and arrive within five minutes.</span></div>
+    <div class="card" style="background:var(--field);align-items:center;text-align:center;gap:12px;padding:28px"><span class="row" style="gap:6px">${'<span class="wdot"></span>'.repeat(3)}</span><b>Waiting for a test call</b><span class="small muted" style="max-width:440px">Make the app send one, e.g. create a test ticket. Score shows what arrives so you can pick the fields; nothing starts until you save.</span>
+      <button class="btn primary" data-a="trSample">Simulate the app’s test call</button><span class="small muted">(The prototype has no real app; this sends a sample ticket.)</span></div>
+    <span class="row" style="justify-content:space-between"><button class="btn ghost" data-a="trBack">Back</button><button class="btn ghost" data-a="closeModal">Finish later</button></span>`;
+  else if (md.step === 3) {
+    const slotRows = SLOTS.map(([k, l, d]) => { const path = md.map[k]; const v = path ? getPath(md.sample, path) : undefined;
+      return `<div class="slot ${md.slot === k ? 'on' : ''}"><button class="slotbtn" data-a="trSlot" data-v="${k}" aria-pressed="${md.slot === k}"><span class="row"><b>${l}</b>${k === 'ref' ? '<span class="small" style="color:var(--bad)">required</span>' : ''}</span>${path ? `<code class="small">${esc(path)}</code><span class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(String(v))}</span>` : `<span class="small muted">${md.slot === k ? 'Now click a field on the left' : d}</span>`}</button>${path ? `<button class="act" data-a="trClear" data-v="${k}" aria-label="Clear ${l}">${I.x}</button>` : ''}</div>`; }).join('');
+    const mapped = SLOTS.filter(([k]) => md.map[k] && k !== 'reply');
+    body = `<div class="row wrap" style="gap:8px"><span class="small muted grow">Got a call from ${esc(md.reportTo || 'the app')} · ${esc(md.sample.event || 'event')} · just now. Pick a slot on the right, then click the field it comes from.</span><button class="btn sm" data-a="trGuess">Guess from field names</button></div>
+    <div class="mapgrid"><div class="inner mono small" style="overflow:auto;max-height:420px" aria-label="What the app sent">${payloadTree(md.sample, '', md)}</div><div style="display:flex;flex-direction:column;gap:8px">${slotRows}</div></div>
+    <div><label for="trtmpl" class="lab">What the job asks the team to do</label><textarea id="trtmpl" class="field" data-in="trtmpl" rows="2" style="padding:12px 14px;min-height:64px">${esc(md.tmpl)}</textarea>
+      <div class="row wrap" style="gap:6px;margin-top:8px"><span class="small muted">Insert</span>${mapped.map(([k, l]) => `<button class="chip" style="background:var(--field)" data-a="trIns" data-v="${md.map[k]}">+ ${l}</button>`).join('') || '<span class="small muted">map a field first</span>'}</div></div>
+    <div class="inner"><span class="small muted">With this call, the job would read</span><p id="trprev" style="margin:6px 0 0">${esc(fillTmpl(md.tmpl, md.sample))}</p></div>
+    <span class="row" style="justify-content:space-between">${md.edit ? '<button class="btn ghost" data-a="closeModal">Cancel</button>' : '<button class="btn ghost" data-a="trBack">Back</button>'}<span class="row">${md.map.ref ? '' : '<span class="small" style="color:var(--bad)">Map a reference first</span>'}<button class="btn primary" data-a="trNext" ${md.map.ref ? '' : 'disabled'}>Next</button></span></span>`;
+  } else {
+    const tools = APP_TOOLS[md.reportTo] || [];
+    const argFor = a => /id$|number$/.test(a) ? `{{${md.map.ref}}}` : /body|note|resolution/.test(a) ? 'the result and a short summary' : a === 'status' ? '“resolved”' : a === 'owner' || a === 'repo' ? 'from the link' : '—';
+    const fitBadge = { best: ['Best match', 'var(--ok)'], good: ['Fits', 'var(--ink2)'], risky: ['Changes state', 'var(--warn)'], no: ["Can't report", 'var(--faint)'] };
+    const opt = (k, title, sub, extra, disabled) => `<label class="card wopt ${md.tool === k ? 'on' : ''} ${disabled ? 'off' : ''}"><span class="row"><input type="radio" name="trtool" ${md.tool === k ? 'checked' : ''} ${disabled ? 'disabled' : ''} data-a="trTool" data-v="${k}">${title}</span>${sub ? `<span class="small muted">${sub}</span>` : ''}${extra || ''}</label>`;
+    body = md.reportTo ? `<span class="small muted">Score read ${tools.length} tools from ${esc(md.reportTo)} and ranked them for reporting back. The one you pick is used every time, so a job can’t guess differently on another day.</span>
+      <div style="display:flex;flex-direction:column;gap:8px">${tools.map(t => opt(t.name, `<code>${esc(t.name)}</code><span class="badge" style="margin-left:auto;color:${fitBadge[t.fit][1]};box-shadow:inset 0 0 0 1.5px ${fitBadge[t.fit][1]}">${fitBadge[t.fit][0]}</span>`, esc(t.why), md.tool === t.name ? `<div class="mono small" style="display:flex;flex-direction:column;gap:2px;color:var(--ink2)">${t.args.map(a => `<span>${esc(a)} ← ${esc(argFor(a))}</span>`).join('')}</div>` : '', t.fit === 'no')).join('')}
+      ${opt('call', 'Use the tool the call names', md.map.reply ? 'Read from <code>' + esc(md.map.reply) + '</code> on each call; falls back to the pick above if missing.' : 'Map a Reply tool field in step 3 to use this.', '', !md.map.reply)}
+      ${opt('lead', 'Let lead decide', 'Advanced. lead picks a tool each time and asks you before the first report-back.', '')}
+      ${opt('none', "Don't report back", 'Results stay in Score; the job still links to the item.', '')}</div>`
+      : `<div class="card" style="background:var(--field)"><b>No tool server for this app</b><span class="small muted">Jobs still link to the item, but results stay in Score. Add the app's tool server in Tools and triggers to report back.</span></div>`;
+    body += `<span class="row" style="justify-content:space-between"><button class="btn ghost" data-a="trBack">Back</button><button class="btn primary" data-a="trSave">${md.edit ? 'Save changes' : 'Save trigger'}</button></span>`;
+  }
+  return `<div class="dialog ${md.step === 3 ? 'wide' : ''}" role="dialog" aria-label="${md.edit ? 'Edit trigger' : 'New trigger'}">${head}${body}</div>`;
+}
 function srcLine(j) {
   const src = j.source;
   return `<span class="row wrap" style="gap:8px"><span class="badge" style="background:var(--field);color:var(--ink2)">${esc(src.app)} · ${esc(src.ref)}</span><span class="small">${esc(src.title)}</span><button class="link small" data-a="openSource" data-v="${j.id}">Open in ${esc(src.app)} ↗</button></span>`;
@@ -499,11 +586,11 @@ function srcLine(j) {
 function srcStatus(j) {
   const src = j.source;
   return src.reported ? `<span class="small" style="color:var(--ok);font-weight:700">Reported back to ${esc(src.ref)}: result and summary posted on the ticket</span>`
-    : src.report ? `<span class="small muted">When the job is done, the result goes back to ${esc(src.ref)} through the ${esc(src.app)} tool server.</span>`
+    : src.report ? `<span class="small muted">When the job is done, lead posts the result to ${esc(src.ref)} with <code>${esc(src.tool || 'the chosen tool')}</code> (${esc(src.app)} tool server). Set on the trigger.</span>`
     : `<span class="small muted">Results stay in Score.</span>`;
 }
 function vMsg(x) {
-  if (x.kind === 'source') { const j = jobOf(x.job); return j && j.source ? `<div class="card" style="background:var(--deep);box-shadow:inset 0 0 0 1px var(--line);padding:12px 14px;gap:6px;border-radius:20px"><span class="small muted">Started by ${esc(j.source.app)} through ${esc(j.source.via)}</span>${srcLine(j)}</div>` : ''; }
+  if (x.kind === 'source') { const j = jobOf(x.job); return j && j.source ? `<div class="card" style="background:var(--deep);box-shadow:inset 0 0 0 1px var(--line);padding:12px 14px;gap:6px;border-radius:20px"><span class="small muted">Started by ${esc(j.source.app)} through ${esc(j.source.via)}</span>${srcLine(j)}<span class="small muted">The ticket’s text reaches agents quoted as outside content, never as instructions.</span></div>` : ''; }
   if (x.kind === 'note') return `<div class="note">${x.html || esc(x.text)}</div>`;
   if (x.kind === 'capsule') {
     return `<div class="capsule ${x.paused ? 'paused' : ''}"><span class="row wrap"><span class="row" style="gap:0">${x.agents.map((id, i) => `<span style="margin-left:${i ? -5 : 0}px">${glyph(id, 18, false)}</span>`).join('')}</span><b>${x.agents.join(' and ')}</b><span class="small" style="color:${x.paused ? 'var(--warn)' : x.live ? 'var(--ok)' : 'var(--muted)'};font-weight:600">${esc(x.status)}</span></span>
@@ -741,9 +828,10 @@ function sTools() {
       <div class="row wrap"><label for="tname" class="sr">Name</label><input id="tname" class="field" style="flex:1 1 160px" placeholder="Name, e.g. Tickets app"><label for="taddr" class="sr">Address or command</label><input id="taddr" class="field" style="flex:2 1 240px" placeholder="https://… or a command"><button class="btn" data-a="addTool">Add tool server</button></div>
       <span class="small muted">Sign-in tokens are kept by Hermes in each agent's own settings, never by Score.</span></section>
     <section class="card"><span class="row wrap"><h3 style="font-size:22px">Triggers</h3><span class="small muted">Let another app start a job by calling an address</span><button class="btn sm primary" style="margin-left:auto" data-a="newTrigger">New trigger</button></span>
-      ${S.triggers.map(w => `<div class="card" style="background:var(--field)"><span class="row wrap"><b>${esc(w.name)}</b><span class="small muted">starts “${esc(w.job)}” · ${esc(w.recipe)} · ${w.reportTo ? 'results go back through ' + esc(w.reportTo) : 'results stay in Score'} · last call ${esc(w.last)}</span><button class="act" style="margin-left:auto" data-a="rmTrigger" data-v="${w.id}">Delete</button></span>
+      ${S.triggers.map(w => `<div class="card" style="background:var(--field)"><span class="row wrap"><b>${esc(w.name)}</b><span class="small muted">starts “${esc(w.job)}” · ${esc(w.recipe)} · last call ${esc(w.last)}</span><button class="act" style="margin-left:auto" data-a="rmTrigger" data-v="${w.id}">Delete</button></span>
         <div class="row wrap"><code class="small grow" style="overflow-wrap:anywhere">${esc(w.url)}</code><button class="btn sm" data-a="copy" data-v="${esc(w.url)}">Copy address</button></div>
         <div class="row wrap"><code class="small grow">${esc(w.secret)}</code><button class="btn sm" data-a="copy" data-v="${esc(w.secret)}">Copy secret</button><button class="btn sm ghost" data-a="testTrigger" data-v="${w.id}">Send a test call</button></div>
+        <div class="row wrap small" style="gap:6px"><span class="muted">Reference</span><code>${esc((w.map && w.map.ref) || 'not mapped')}</code><span class="muted">· reports back with</span><code>${esc(w.reportTo && w.reportTool && w.reportTool !== 'none' ? (w.reportTool === 'lead' ? 'lead’s choice' : w.reportTool === 'call' ? 'the tool the call names' : w.reportTool) : 'nothing')}</code>${w.reportTo ? `<span class="muted">in ${esc(w.reportTo)}</span>` : ''}<button class="btn sm" style="margin-left:auto" data-a="editTrigger" data-v="${w.id}">Edit mapping</button></div>
         <span class="small muted">Calls must be signed with the secret (Standard Webhooks headers) and arrive within five minutes.</span></div>`).join('') || '<span class="small muted">No triggers yet.</span>'}</section>`;
 }
 function sRules() {
@@ -826,7 +914,7 @@ function vModal() {
   if (md.type === 'recipe') inner = mRecipe();
   if (md.type === 'addAgent') inner = mAdd(md);
   if (md.type === 'rulesDiff') inner = `<div class="dialog" style="max-width:600px"><h2 style="font-size:26px">Review rule changes</h2><div class="inner mono small" style="display:flex;flex-direction:column;gap:4px">${md.lines.length ? md.lines.map(l => `<span style="color:${l[0] === '+' ? 'var(--ok)' : 'var(--bad)'}">${esc(l)}</span>`).join('') : '<span class="muted">No changes.</span>'}</div><span class="small muted">Written to every agent's Hermes profile. Agents' stricter rules stay.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Back</button><button class="btn primary" data-a="saveRules" ${md.lines.length ? '' : 'disabled'}>Save for the whole team</button></span></div>`;
-  if (md.type === 'trigger') inner = `<div class="dialog" style="max-width:600px"><h2 style="font-size:26px">New trigger</h2><div><label for="tgname" class="lab">Name</label><input id="tgname" class="field" placeholder="e.g. New support ticket"></div><div><label for="tgjob" class="lab">Starts this job</label><input id="tgjob" class="field" placeholder="e.g. Triage the new ticket"></div><div><label for="tgrec" class="lab">Recipe</label><select id="tgrec" class="field"><option>lead decides</option>${S.recipes.map(r => `<option>${esc(r.name)}</option>`).join('')}</select></div><div><label for="tgback" class="lab">Send the result back through</label><select id="tgback" class="field">${S.tools.map(t => `<option>${esc(t.name)}</option>`).join('')}<option value="">Nowhere: results stay in Score</option></select></div><span class="small muted">You get an address and a signing secret to paste into the other app. Calls carry the app's own reference (a ticket number, an issue), so the job links back to it.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="makeTrigger">Create trigger</button></span></div>`;
+  if (md.type === 'trigger') inner = vTriggerWizard(md);
   if (md.type === 'persona') inner = `<div class="dialog" style="max-width:640px"><h2 style="font-size:26px">Save how ${esc(S.team.sel)} works</h2><div class="inner mono small" style="display:flex;flex-direction:column;gap:6px"><span style="color:var(--bad)">- ${esc(md.from)}</span><span style="color:var(--ok)">+ ${esc(md.to)}</span></div><span class="small muted">If the file changed meanwhile, you'll see both versions and pick one.</span><span class="row" style="justify-content:flex-end"><button class="btn ghost" data-a="closeModal">Cancel</button><button class="btn primary" data-a="doPersona">Save</button></span></div>`;
   return `<div class="scrim" data-a="scrim">${inner}</div>`;
 }
@@ -919,7 +1007,7 @@ function finishJob(j) {
   j.state = 'done';
   if (j.source && j.source.report && !j.source.reported) {
     j.source.reported = true;
-    later(900, () => { S.msgs.push(m(j.room, j.id, null, '', { kind: 'note', text: 'Reported back to ' + j.source.app + ' · ' + j.source.ref + ': result and summary posted on the ticket' })); toast('Result sent back to ' + j.source.ref + ' in ' + j.source.app + '.'); });
+    later(900, () => { S.msgs.push(m(j.room, j.id, null, '', { kind: 'note', text: 'Reported back to ' + j.source.app + ' · ' + j.source.ref + (j.source.tool ? ' with ' + j.source.tool : '') + ': result and summary posted' })); toast('Result sent back to ' + j.source.ref + ' in ' + j.source.app + '.'); });
   }
 }
 function newJob(name, room) { const j = { id: nid('j'), room: room || 'team', name: name.length > 34 ? name.slice(0, 32) + '…' : name, state: 'working' }; S.jobs.push(j); return j; }
@@ -1074,10 +1162,28 @@ const A = {
   toolUse(v) { const [id, ag] = v.split('|'); const t = S.tools.find(x => x.id === id); t.used = t.used.includes(ag) ? t.used.filter(x => x !== ag) : t.used.concat(ag); },
   rmTool(v) { const i = S.tools.findIndex(x => x.id === v); const t = S.tools.splice(i, 1)[0]; toast(t.name + ' removed.', () => S.tools.splice(i, 0, t)); },
   addTool() { const n = document.getElementById('tname').value.trim(); const a = document.getElementById('taddr').value.trim(); if (!n || !a) { toast('Give it a name and an address or command.'); return; } const t = { id: nid('t'), name: n, addr: a, status: 'checking', used: ['lead'] }; S.tools.push(t); later(1200, () => { t.status = 'ok'; }); },
-  newTrigger() { S.modal = { type: 'trigger' }; },
-  makeTrigger() { const n = document.getElementById('tgname').value.trim() || 'New trigger'; S.triggers.push({ id: nid('w'), name: n, job: document.getElementById('tgjob').value.trim() || n, recipe: document.getElementById('tgrec').value, reportTo: document.getElementById('tgback').value, url: 'https://score.local/hooks/w_' + Math.random().toString(16).slice(2, 8), secret: 'whsec_' + Math.random().toString(36).slice(2, 6) + '…', last: 'never' }); S.modal = null; toast('Trigger created. Copy its address and secret into the other app.'); },
+  newTrigger() { S.modal = { type: 'trigger', step: 1, name: '', recipe: 'lead decides', reportTo: S.tools[0] ? S.tools[0].name : '', map: { ref: '', title: '', link: '', details: '', reply: '' }, tmpl: '', slot: 'ref' }; },
+  trNext() { const md = S.modal; if (md.step === 1) { md.name = md.name.trim() || 'New trigger'; if (!md.url) { md.url = 'https://score.local/hooks/w_' + Math.random().toString(16).slice(2, 8); md.secret = 'whsec_' + Math.random().toString(36).slice(2, 6) + '…'; } md.step = 2; } else if (md.step === 3) { md.step = 4; if (!md.tool) { const best = (APP_TOOLS[md.reportTo] || []).find(t => t.fit === 'best'); md.tool = best ? best.name : 'none'; } } },
+  trBack() { S.modal.step -= 1; },
+  trSample() { const md = S.modal; md.sample = JSON.parse(JSON.stringify(SAMPLE_CALL)); md.step = 3; md.slot = 'ref'; },
+  trSlot(v) { S.modal.slot = v; },
+  trClear(v) { S.modal.map[v] = ''; S.modal.slot = v; },
+  trPick(v) { const md = S.modal; SLOTS.forEach(([k]) => { if (md.map[k] === v) md.map[k] = ''; }); md.map[md.slot] = v; const next = SLOTS.find(([k]) => !md.map[k] && k !== 'reply'); md.slot = next ? next[0] : md.slot; },
+  trGuess() { const md = S.modal; const leaves = []; (function walk(o, pre) { Object.keys(o).forEach(k => { const p = pre ? pre + '.' + k : k; if (o[k] && typeof o[k] === 'object' && !Array.isArray(o[k])) walk(o[k], p); else leaves.push(p); }); })(md.sample, '');
+    const find = re => leaves.find(p => re.test(p.split('.').pop())) || '';
+    md.map = { ref: find(/^(id|number|key|ref)$/), title: find(/^(title|subject|name|summary)$/), link: find(/^(url|link|html_url)$/), details: find(/^(body|description|text|details)$/), reply: find(/^reply_tool$/) };
+    if (!md.tmpl) md.tmpl = 'Fix {{' + md.map.title + '}}: {{' + md.map.details + '}}'; toast('Guessed from field names. Check them before you save.'); },
+  trIns(v) { const md = S.modal; md.tmpl = (md.tmpl ? md.tmpl.replace(/\s*$/, ' ') : '') + '{{' + v + '}}'; setTimeout(() => { const el = document.getElementById('trtmpl'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }); },
+  trTool(v) { S.modal.tool = v; },
+  trSave() { const md = S.modal; const o = { name: md.name, job: md.name, recipe: md.recipe, reportTo: md.reportTo, reportTool: md.reportTo ? md.tool : 'none', tmpl: md.tmpl, map: md.map, url: md.url, secret: md.secret };
+    if (md.edit) Object.assign(S.triggers.find(x => x.id === md.edit), o); else S.triggers.push(Object.assign({ id: nid('w'), last: 'just now (test)' }, o));
+    S.modal = null; toast(md.edit ? 'Trigger saved.' : 'Trigger saved. The next call from ' + (md.reportTo || 'the app') + ' starts a job.'); },
+  editTrigger(v) { const w = S.triggers.find(x => x.id === v); S.modal = { type: 'trigger', edit: v, step: 3, name: w.name, recipe: w.recipe, reportTo: w.reportTo, url: w.url, secret: w.secret, sample: JSON.parse(JSON.stringify(SAMPLE_CALL)), map: Object.assign({ ref: '', title: '', link: '', details: '', reply: '' }, w.map || {}), tmpl: w.tmpl || '', tool: w.reportTool, slot: 'ref' }; },
   rmTrigger(v) { const i = S.triggers.findIndex(x => x.id === v); const t = S.triggers.splice(i, 1)[0]; toast('Trigger deleted. Its address stops working.', () => S.triggers.splice(i, 0, t)); },
-  testTrigger(v) { const w = S.triggers.find(x => x.id === v); w.last = 'just now'; const j = newJob(w.job); j.source = { app: w.reportTo || 'Test call', ref: 'TEST-' + (S.jobs.length), title: 'A test call from Settings', via: 'trigger “' + w.name + '”', report: !!w.reportTo, reported: false }; S.msgs.push(m('team', j.id, null, '', { kind: 'source' })); S.msgs.push(m('team', j.id, 'you', w.job)); simulate('team', j.id, 'lead', w.job); toast('Test call received: a job started in the team room.'); },
+  testTrigger(v) { const w = S.triggers.find(x => x.id === v); w.last = 'just now'; const smp = SAMPLE_CALL; const mp = w.map || {}; const ref = getPath(smp, mp.ref) || '?'; const title = getPath(smp, mp.title) || w.job;
+    const j = newJob(String(title)); const tool = w.reportTool === 'lead' ? 'add_comment' : w.reportTool;
+    j.source = { app: w.reportTo || 'Another app', ref: String(ref), title: String(title), via: 'trigger “' + w.name + '”', report: !!w.reportTo && tool && tool !== 'none', tool: tool === 'call' ? (getPath(smp, mp.reply) || 'add_comment') : tool, reported: false };
+    const text = fillTmpl(w.tmpl || w.job, smp); S.msgs.push(m('team', j.id, null, '', { kind: 'source' })); S.msgs.push(m('team', j.id, null, '', { kind: 'note', text: 'The job: ' + text })); simulate('team', j.id, 'lead', text); toast('Test call received: ' + j.source.ref + ' started a job in the team room.'); },
   ruleMode(v) { if (!S.rules.saved) S.rules.saved = JSON.parse(JSON.stringify(S.rules)); S.rules.mode = v; },
   rmRule(v) { if (!S.rules.saved) S.rules.saved = JSON.parse(JSON.stringify(S.rules)); const [k, i] = v.split('|'); S.rules[k].splice(+i, 1); },
   addRule(v) { const el = document.getElementById('add-' + v); if (!el.value.trim()) return; if (!S.rules.saved) S.rules.saved = JSON.parse(JSON.stringify(S.rules)); S.rules[v].push(el.value.trim()); },
@@ -1127,6 +1233,10 @@ document.addEventListener('input', e => {
   else if (k === 'sq') { S.search.q = t.value; const box = document.getElementById('sres'); if (box) box.innerHTML = searchList(); }
   else if (k === 'ntitle' || k === 'nbody') { const n = S.library.find(x => x.id === S.side.note); if (n) n[k === 'ntitle' ? 'title' : 'body'] = t.value; }
   else if (k === 'persona') { /* saved through preview */ }
+  else if (k === 'trname') S.modal.name = t.value;
+  else if (k === 'trrec') S.modal.recipe = t.value;
+  else if (k === 'trback') { S.modal.reportTo = t.value; S.modal.tool = ''; }
+  else if (k === 'trtmpl') { S.modal.tmpl = t.value; const pv = document.getElementById('trprev'); if (pv) pv.textContent = fillTmpl(t.value, S.modal.sample); }
   else if (k === 'model') W[S.team.sel].model = t.value;
   else if (k === 'where') W[S.team.sel].worksOn = t.value;
   else if (k === 'floor') { W[S.team.sel].floor = +t.value; const v = document.getElementById('floorv'); if (v) v.textContent = t.value + '%'; }

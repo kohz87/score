@@ -162,7 +162,7 @@ Every task ships tests; UI tasks ship Playwright specs against the fake adapter 
 
 The screens for D1–D7 and D13 are in the **clickable prototype** `docs/design/bold/prototype.html`
 (one file, open it in a browser; owner's live copy: https://claude.ai/artifact/4PcQUWnmxeswmpaLTCQZoe), not in separate
-mockups. Taken in the design conversation (§9 adds D14–D17: teams, machines and outside apps); they settle parts of §7 and the parity checklist. Still open: §7 items 1, 4, 5 and
+mockups. Taken in the design conversation (§9 adds D14–D18: teams, machines and outside apps); they settle parts of §7 and the parity checklist. Still open: §7 items 1, 4, 5 and
 6, and dropping the Score timeline and the Flow graph as views.
 
 | # | Topic | Decision |
@@ -184,8 +184,8 @@ mockups. Taken in the design conversation (§9 adds D14–D17: teams, machines a
 ## 9. Teams, machines and outside apps (owner, 2026-10-24)
 
 Score stays a **single-user app**. Teams work together through the app they work on, not through a shared Score.
-Drawn in the prototype: the "Login timeout · TCK-142" job, Settings › Tools and triggers, and Settings › Remote access
-and security › Where agents run.
+Drawn in the prototype: the "Login timeout · TCK-142" job, Settings › Tools and triggers (New trigger, Edit mapping),
+and Settings › Remote access and security › Where agents run.
 
 | # | Topic | Decision |
 |---|---|---|
@@ -199,6 +199,21 @@ and security › Where agents run.
 report-back step to the job's end in **11.1**; the trigger side of D13 lands with it. Add a **"One Score per team"**
 section to `docs/SETUP.md`: a VM, Docker for agents, and Tailscale or Score's HTTPS remote mode to reach it.
 
-**Open:** how a trigger's call names the outside reference (a fixed field in the payload, or a path the trigger maps,
-e.g. `$.ticket.id`), and whether report-back is a fixed MCP tool name the app must offer or a step lead performs
-with whatever tools the app exposes. The design review in 11.0 decides.
+**D18 (owner, 2026-10-24): trigger mapping and report-back tool.** Set up in four steps (Settings › Tools and triggers
+› New trigger; drawn in the prototype):
+1. **Set up:** name, recipe, and the app the trigger belongs to (its tool server, used for report-back).
+2. **Test call:** Score shows the address and signing secret and waits for one real call from the app.
+3. **Map fields from that call**, the way Teams' webhook workflows and Zapier do it: the payload is shown as a tree;
+   pick a slot (**Reference**, required; Title; Link; Details; optional **Reply tool**) and click the field it comes
+   from, or "Guess from field names". Score stores JSON paths. The job text is a template with `{{path}}` holes and a
+   live preview. A later call missing a mapped field still starts the job and says so. Payload text is outside content:
+   redacted before storing (D6) and given to agents quoted, never as instructions.
+4. **Report back:** Score lists the app's MCP tools and ranks them (best match: writes to one item and takes its id;
+   tools that change state are marked; read-only tools can't be picked), pre-selects the best match and shows how its
+   arguments are filled (`ticket_id ← {{ticket.id}}`, `body ←` the result and summary). The pick is **fixed** and used
+   every time, so report-back is predictable and auditable. Overrides: **the tool the call names** (the mapped Reply
+   tool field, falling back to the pick), **Let lead decide** (advanced; asks before the first report-back), or
+   **Don't report back**.
+
+This fixes only the final report-back; while working, agents use whatever app tools the Rules allow. Ready-made
+mappings for common apps (GitHub issues, Linear, Jira) can follow later.
