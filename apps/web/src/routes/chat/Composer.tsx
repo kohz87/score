@@ -107,6 +107,10 @@ export function Composer({
   leadAgentId = null,
   onSent,
   orchestrate,
+  jobId = null,
+  roomMode = false,
+  toLabel,
+  placeholder,
 }: {
   roomId: string
   roomName: string
@@ -119,6 +123,13 @@ export function Composer({
    * and `/orchestrate <goal>` calls this with the goal (empty when none was typed).
    */
   orchestrate?: (goal: string) => void
+  /** The job (thread) a room message is posted in (PLAN 11.1b); null posts in the room's default job. */
+  jobId?: string | null
+  /** The bold team room's one-line composer, using the same send, upload and voice logic. */
+  roomMode?: boolean
+  /** The room composer's fixed To chip ("To: new job" or "To: <job title>"). */
+  toLabel?: string
+  placeholder?: string
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -495,6 +506,7 @@ export function Composer({
       return
     }
     const sent = attachments
+    const sentJobId = editing?.jobId ?? jobId
     const payload = {
       text: body,
       ...(sent.length ? { attachments: sent.map(toRequest) } : {}),
@@ -502,6 +514,7 @@ export function Composer({
       ...(to.length || editing ? { to } : {}),
       ...(planFirst ? { planFirst: true } : {}),
       ...(editing ? { edits: editing.messageId } : {}),
+      ...(sentJobId ? { jobId: sentJobId } : {}),
     }
     const submittedSession = editSession.current
     // A retry of the same payload reuses its key, so a lost response cannot post twice.
@@ -522,6 +535,7 @@ export function Composer({
         roomId,
         author: { kind: 'you' },
         to,
+        ...(sentJobId ? { jobId: sentJobId } : {}),
         ...(editing ? { edits: editing.messageId } : {}),
         parts: [{ kind: 'text', text: body }, ...sent.map(toPart)],
         createdAt: new Date().toISOString(),
@@ -664,6 +678,9 @@ export function Composer({
     to.length ? to.includes(agent.id) : agent.id === (leadAgentId ?? agents[0]?.id),
   )
   const lines = Math.min(Math.max(text.split('\n').length, 1), 8)
+  const roomToLabel = to.length
+    ? `To: ${to.map((id) => `@${id}`).join(', ')}`
+    : (toLabel ?? 'To: new job')
   return (
     <div className="chat-composer">
       {notice && (
@@ -744,7 +761,9 @@ export function Composer({
         <div className="chat-editing" role="status">
           <span>Editing your message</span>
           <span className="chat-edit-note">
-            Sending hides it and everything after it as the previous version.
+            {roomMode
+              ? 'Sending replaces it and rewinds the agents to before it.'
+              : 'Sending hides it and everything after it as the previous version.'}
           </span>
           <button type="button" className="chat-editing-cancel" onClick={leaveEdit}>
             Cancel
@@ -759,7 +778,7 @@ export function Composer({
         />
       )}
       <form
-        className={`chat-composer-box${dragging ? ' chat-dropzone' : ''}`}
+        className={`chat-composer-box${roomMode ? ' chat-composer-box--room' : ''}${dragging ? ' chat-dropzone' : ''}`}
         onDragOver={(event) => {
           if (!event.dataTransfer.types.includes('Files')) return
           event.preventDefault()
@@ -782,12 +801,17 @@ export function Composer({
         <label className="chat-sr-only" htmlFor={`${ids}-text`}>
           Message {roomName}
         </label>
+        {roomMode && (
+          <span className="chat-composer-room-to" title={roomToLabel}>
+            {roomToLabel}
+          </span>
+        )}
         <textarea
           id={`${ids}-text`}
           ref={textarea}
           rows={lines}
           value={text}
-          placeholder="Write a message…"
+          placeholder={placeholder ?? (roomMode ? 'Message the team…' : 'Write a message…')}
           role="combobox"
           aria-expanded={menu !== null && count > 0}
           aria-controls={`${ids}-menu`}
@@ -871,8 +895,10 @@ export function Composer({
         )}
         {knowledgeFlow.dialogs}
         <div className="chat-composer-row">
-          <span className="chat-composer-label">To</span>
-          {to.length === 0 && <span className="chat-composer-default">Room lead</span>}
+          {!roomMode && <span className="chat-composer-label">To</span>}
+          {!roomMode && to.length === 0 && (
+            <span className="chat-composer-default">Room lead</span>
+          )}
           {to.map((id) => {
             const agent = agents.find((item) => item.id === id)
             const color = agent?.style.color
@@ -903,55 +929,59 @@ export function Composer({
               </span>
             )
           })}
-          <span
-            className="chat-add"
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && picker) {
-                event.stopPropagation()
-                setPicker(false)
-              }
-            }}
-          >
+          {!roomMode && (
+            <span
+              className="chat-add"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && picker) {
+                  event.stopPropagation()
+                  setPicker(false)
+                }
+              }}
+            >
+              <button
+                type="button"
+                className="chat-add-trigger"
+                aria-expanded={picker}
+                aria-haspopup="true"
+                disabled={!available.length}
+                onClick={() => setPicker(!picker)}
+              >
+                Add someone
+              </button>
+              {picker && (
+                <ul className="chat-add-list" aria-label="Add someone">
+                  {available.map((agent) => (
+                    <li key={agent.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTo([...to, agent.id])
+                          setPicker(false)
+                          textarea.current?.focus()
+                        }}
+                      >
+                        <AgentGlyph agent={agent} size="xs" bare decorative />
+                        {agent.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </span>
+          )}
+          <span className="chat-grow" />
+          {!roomMode && (
             <button
               type="button"
-              className="chat-add-trigger"
-              aria-expanded={picker}
-              aria-haspopup="true"
-              disabled={!available.length}
-              onClick={() => setPicker(!picker)}
+              className="chat-plan-toggle"
+              aria-pressed={planFirst}
+              onClick={() => setPlanFirst(!planFirst)}
             >
-              Add someone
+              <span className="chat-switch" aria-hidden="true" />
+              Plan first
             </button>
-            {picker && (
-              <ul className="chat-add-list" aria-label="Add someone">
-                {available.map((agent) => (
-                  <li key={agent.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTo([...to, agent.id])
-                        setPicker(false)
-                        textarea.current?.focus()
-                      }}
-                    >
-                      <AgentGlyph agent={agent} size="xs" bare decorative />
-                      {agent.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </span>
-          <span className="chat-grow" />
-          <button
-            type="button"
-            className="chat-plan-toggle"
-            aria-pressed={planFirst}
-            onClick={() => setPlanFirst(!planFirst)}
-          >
-            <span className="chat-switch" aria-hidden="true" />
-            Plan first
-          </button>
+          )}
           <input
             ref={fileInput}
             type="file"
@@ -975,7 +1005,9 @@ export function Composer({
             <button
               type="button"
               className="chat-attach"
-              aria-label={orchestrate ? 'Add' : 'Attach files'}
+              aria-label={
+                roomMode ? 'Attach, voice and commands' : orchestrate ? 'Add' : 'Attach files'
+              }
               aria-haspopup="true"
               aria-expanded={attachMenu}
               title={
@@ -989,7 +1021,7 @@ export function Composer({
               onClick={() => setAttachMenu(!attachMenu)}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                {orchestrate ? (
+                {orchestrate || roomMode ? (
                   <path
                     d="M8 3 V13 M3 8 H13"
                     stroke="currentColor"
@@ -1007,7 +1039,10 @@ export function Composer({
               </svg>
             </button>
             {attachMenu && (
-              <ul className="chat-attach-list" aria-label={orchestrate ? 'Add' : 'Attach'}>
+              <ul
+                className="chat-attach-list"
+                aria-label={roomMode ? 'Attach, voice and commands' : orchestrate ? 'Add' : 'Attach'}
+              >
                 <li>
                   <button
                     type="button"
@@ -1030,6 +1065,33 @@ export function Composer({
                     From workspace…
                   </button>
                 </li>
+                {roomMode && voice.supported && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachMenu(false)
+                        toggleVoice()
+                      }}
+                    >
+                      {voice.listening ? 'Stop voice input' : 'Voice input'}
+                    </button>
+                  </li>
+                )}
+                {roomMode && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachMenu(false)
+                        edit('/', 1)
+                        requestAnimationFrame(() => textarea.current?.focus())
+                      }}
+                    >
+                      Commands…
+                    </button>
+                  </li>
+                )}
                 {orchestrate && (
                   <li>
                     <button
@@ -1077,7 +1139,7 @@ export function Composer({
           {/* The context rings and Send stay together (owner request: rings just left of Send). */}
           <span className="chat-send-group">
             {/* Context rings sit just left of Send (owner request): one per addressed agent. */}
-            {meterAgents.length > 0 && (
+            {!roomMode && meterAgents.length > 0 && (
               <div className="chat-meter" role="group" aria-label="Context use">
                 {meterAgents.map((id) => (
                   <ContextMeter
@@ -1106,7 +1168,24 @@ export function Composer({
                 className="chat-send"
                 disabled={!text.trim() || pending || uploading > 0}
               >
-                {editing ? 'Send correction' : 'Send'}
+                {roomMode ? (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M12 19V5M6 11l6-6 6 6"
+                        stroke="currentColor"
+                        strokeWidth="2.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="chat-sr-only">{editing ? 'Send correction' : 'Send'}</span>
+                  </>
+                ) : editing ? (
+                  'Send correction'
+                ) : (
+                  'Send'
+                )}
               </button>
             )}
           </span>

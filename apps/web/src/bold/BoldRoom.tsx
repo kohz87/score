@@ -9,6 +9,7 @@ import { agentNameColor, agentStateLabel } from './bold-agents.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
 import { BookIcon, ChevronIcon, CloseIcon, GridIcon, ThreadIcon } from './BoldIcons.tsx'
 import type { BoldSheetState } from './bold-ui.ts'
+import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 
 const PHONE = '(max-width: 860px)'
 
@@ -124,31 +125,23 @@ export function BoldRoom() {
       </span>
     </button>
   )
+  const phoneAction = phone ? (
+    <button
+      ref={phoneOpenRef}
+      type="button"
+      className="btn sm phone-side-open"
+      aria-expanded={sheetOpen}
+      aria-controls="bold-side-panel"
+      onClick={() => setSheetOpen(true)}
+    >
+      <BookIcon /> Open side panel
+    </button>
+  ) : undefined
 
   return (
     <div className="roomgrid">
       <section className="roomcol" aria-label="Team room" inert={phone && sheetOpen}>
-        <div className="roomhead">
-          <button className="roomtitle" type="button">
-            Team room
-            <ChevronIcon />
-          </button>
-          {phone && (
-            <button
-              ref={phoneOpenRef}
-              type="button"
-              className="btn sm phone-side-open"
-              aria-expanded={sheetOpen}
-              aria-controls="bold-side-panel"
-              onClick={() => setSheetOpen(true)}
-            >
-              <BookIcon /> Open side panel
-            </button>
-          )}
-        </div>
-        <div className="stream" aria-live="polite">
-          <p className="room-placeholder">The team room comes in 11.4.</p>
-        </div>
+        <BoldTeamRoom agents={agents} phoneAction={phoneAction} />
       </section>
 
       <div
