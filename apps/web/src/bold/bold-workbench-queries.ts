@@ -13,8 +13,8 @@ async function fetchWorkbench(jobId: string, signal?: AbortSignal): Promise<Work
 }
 
 // A Workbench is derived on read, so events only say "look again". The frame event carries no job id, so a frame asks
-// for the visible job's Workbench again; everything else names its job. One window folds a burst into one read.
-const REFRESH_MS = 1000
+// for the visible job's Workbench again when the agent is active in it. One window folds a burst into one read.
+const REFRESH_MS = 3000
 const WORKBENCH_EVENTS = new Set([
   'job.upserted',
   'exchange.upserted',
@@ -26,6 +26,8 @@ const WORKBENCH_EVENTS = new Set([
 export function useBoldWorkbench(
   jobId: string | null,
   visible = true,
+  activeAgentIds: readonly string[] = [],
+  showsScreen = false,
 ): {
   workbench: Workbench | undefined
   pending: boolean
@@ -34,6 +36,7 @@ export function useBoldWorkbench(
 } {
   const stream = useStream()
   const queryClient = useQueryClient()
+  const activeKey = [...new Set(activeAgentIds)].sort().join('\n')
   const query = useQuery({
     queryKey: workbenchKey(jobId ?? ''),
     queryFn: ({ signal }) => fetchWorkbench(jobId!, signal),
@@ -43,6 +46,7 @@ export function useBoldWorkbench(
 
   useEffect(() => {
     if (!visible || !jobId) return
+    const active = new Set(activeKey === '' ? [] : activeKey.split('\n'))
     let timer: ReturnType<typeof setTimeout> | undefined
     const refresh = () => {
       timer ??= setTimeout(() => {
@@ -60,11 +64,11 @@ export function useBoldWorkbench(
         if (event.data.jobId === jobId) refresh()
         return
       }
-      if (
-        event.type === 'watch.frame' ||
-        event.type === 'approval.requested' ||
-        event.type === 'approval.updated'
-      )
+      if (event.type === 'watch.frame') {
+        if (active.has(event.data.agentId)) refresh()
+        return
+      }
+      if (showsScreen && (event.type === 'approval.requested' || event.type === 'approval.updated'))
         refresh()
     })
     const offControl = stream.onControl(({ resync }) => {
@@ -75,7 +79,7 @@ export function useBoldWorkbench(
       offControl()
       if (timer !== undefined) clearTimeout(timer)
     }
-  }, [jobId, queryClient, stream, visible])
+  }, [activeKey, jobId, queryClient, showsScreen, stream, visible])
 
   return {
     workbench: query.data,

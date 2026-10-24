@@ -1,11 +1,13 @@
-import type {
-  AgentSummary,
-  Job,
-  Workbench,
-  WorkbenchComment,
-  WorkbenchFile,
-} from '@score/contract'
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import type { AgentSummary, Job, Workbench, WorkbenchComment, WorkbenchFile } from '@score/contract'
+import {
+  memo,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
@@ -13,11 +15,7 @@ import { tokenize } from '../routes/chat/highlight.ts'
 import { BrowserPane, EditorPane, TerminalPane } from '../routes/watch/WatchStage.tsx'
 import { clock } from '../routes/watch/watch-model.ts'
 import '../routes/watch/watch.css'
-import {
-  boldAgentScreenLink,
-  boldAgentWorkspaceLink,
-  type WorkbenchTab,
-} from './bold-links.ts'
+import { boldAgentScreenLink, boldAgentWorkspaceLink, type WorkbenchTab } from './bold-links.ts'
 import { boldTeamRoomQuery } from './bold-results-queries.ts'
 import { useBoldWorkbench } from './bold-workbench-queries.ts'
 import './bold-workbench.css'
@@ -50,7 +48,13 @@ function party(agents: Map<string, AgentSummary>, agentId: string | undefined) {
 function AgentName({ agent, id }: { agent: AgentSummary | undefined; id: string }) {
   return (
     <span className="bold-bench-agent" style={agent ? { color: agent.style.color } : undefined}>
-      <AgentGlyph agent={agent ?? { id, name: id, style: { color: '#626670', shape: 'circle-dot' } }} size="xs" plain bare decorative />
+      <AgentGlyph
+        agent={agent ?? { id, name: id, style: { color: '#626670', shape: 'circle-dot' } }}
+        size="xs"
+        plain
+        bare
+        decorative
+      />
       {agent?.name ?? id}
     </span>
   )
@@ -66,10 +70,17 @@ function TabDot({ agent }: { agent: AgentSummary | undefined }) {
   )
 }
 
-function CodeText({ text, language }: { text: string; language: string | null }) {
+const CodeText = memo(function CodeText({
+  text,
+  language,
+}: {
+  text: string
+  language: string | null
+}) {
+  const tokens = useMemo(() => tokenize(text, language), [language, text])
   return (
     <>
-      {tokenize(text, language).map((token, index) =>
+      {tokens.map((token, index) =>
         token.type === 'plain' ? (
           token.text
         ) : (
@@ -80,21 +91,17 @@ function CodeText({ text, language }: { text: string; language: string | null })
       )}
     </>
   )
-}
+})
 
 function CommentCard({
   comment,
   agent,
-  approvedLater,
 }: {
   comment: WorkbenchComment
   agent: AgentSummary | undefined
-  approvedLater: boolean
 }) {
   const status = comment.outdated
-    ? approvedLater && comment.kind === 'send_back'
-      ? 'Fixed later · approved'
-      : `Outdated · was line ${comment.originalLine}`
+    ? `Outdated · was line ${comment.originalLine}`
     : COMMENT_LABEL[comment.kind]
   return (
     <div
@@ -109,7 +116,55 @@ function CommentCard({
   )
 }
 
-function CodeView({
+/** The nearest line Score saw, for a cursor whose own line is missing from the file snapshot. */
+function nearestLine(lines: WorkbenchFile['lines'], line: number): number | null {
+  let nearest: number | null = null
+  for (const candidate of lines) {
+    if (
+      nearest === null ||
+      Math.abs(candidate.n - line) < Math.abs(nearest - line) ||
+      (Math.abs(candidate.n - line) === Math.abs(nearest - line) && candidate.n < nearest)
+    )
+      nearest = candidate.n
+  }
+  return nearest
+}
+
+function CursorMark({
+  cursor,
+  agent,
+}: {
+  cursor: WorkbenchFile['cursors'][number]
+  agent: AgentSummary | undefined
+}) {
+  return (
+    <span
+      className="bold-bench-cursor"
+      data-cursor={cursor.agentId}
+      style={{ '--cursor-colour': agent?.style.color ?? 'var(--ok)' } as CSSProperties}
+    >
+      <span className="bold-bench-caret" aria-hidden="true" />
+      <span className="bold-bench-cursor-name">
+        <AgentGlyph
+          agent={
+            agent ?? {
+              id: cursor.agentId,
+              name: cursor.agentId,
+              style: { color: '#5EE3BF', shape: 'triangle' },
+            }
+          }
+          size="xs"
+          plain
+          bare
+          decorative
+        />
+        {agent?.name ?? cursor.agentId}
+      </span>
+    </span>
+  )
+}
+
+const CodeView = memo(function CodeView({
   file,
   agents,
 }: {
@@ -119,6 +174,21 @@ function CodeView({
   const authors = agentsOfFile(file)
   const editing = fileAgent(file)
   const editingAgent = party(agents, editing)
+  const known = new Set(file.lines.map((line) => line.n))
+  const cursorsByLine = new Map<number, WorkbenchFile['cursors']>()
+  const headerCursors: WorkbenchFile['cursors'] = []
+  for (const cursor of file.cursors) {
+    // A cursor can point at a line Score never saw. Show it at the nearest known line instead of dropping it; with no
+    // position at all (or no lines) the file header carries it, so the person still sees who is working where.
+    const line =
+      cursor.line === null
+        ? null
+        : known.has(cursor.line)
+          ? cursor.line
+          : nearestLine(file.lines, cursor.line)
+    if (line === null) headerCursors.push(cursor)
+    else cursorsByLine.set(line, [...(cursorsByLine.get(line) ?? []), cursor])
+  }
   const byLine = new Map<number, WorkbenchComment[]>()
   const earlier: WorkbenchComment[] = []
   for (const comment of file.comments) {
@@ -128,10 +198,6 @@ function CodeView({
     if (!file.lines.some((item) => item.n === line)) earlier.push(comment)
     else byLine.set(line, [...(byLine.get(line) ?? []), comment])
   }
-  const approvedLater = (comment: WorkbenchComment) =>
-    file.comments.some(
-      (other) => other.kind === 'approve' && other.at > comment.at && !other.outdated,
-    )
   let lastNumber = 0
   let key = 0
   const rows: ReactNode[] = []
@@ -144,7 +210,7 @@ function CodeView({
       )
     lastNumber = line.n
     const agent = line.by ? party(agents, line.by) : undefined
-    const cursors = file.cursors.filter((cursor) => cursor.line === line.n)
+    const cursors = cursorsByLine.get(line.n) ?? []
     const rowKey = `line-${line.n}-${key++}`
     rows.push(
       <div
@@ -152,58 +218,30 @@ function CodeView({
         className={`bold-bench-line${line.by ? ' has-author' : ''}`}
         data-line={line.n}
         data-by={line.by ?? undefined}
-        style={
-          agent
-            ? ({ '--line-colour': agent.style.color } as CSSProperties)
-            : undefined
-        }
+        title={line.by ? `Written by ${agent?.name ?? line.by}` : undefined}
+        style={agent ? ({ '--line-colour': agent.style.color } as CSSProperties) : undefined}
       >
         <span className="bold-bench-no" aria-hidden="true">
           {line.n}
         </span>
         <span className="bold-bench-bar" aria-hidden="true" />
+        {line.by && <span className="bold-bench-sr">Written by {agent?.name ?? line.by}</span>}
         <span className="bold-bench-tx">
           <CodeText text={line.text} language={file.language} />
-          {cursors.map((cursor) => {
-            const cursorAgent = party(agents, cursor.agentId)
-            return (
-              <span
-                key={cursor.agentId}
-                className="bold-bench-cursor"
-                data-cursor={cursor.agentId}
-                style={{ '--cursor-colour': cursorAgent?.style.color ?? 'var(--ok)' } as CSSProperties}
-              >
-                <span className="bold-bench-caret" aria-hidden="true" />
-                <span className="bold-bench-cursor-name">
-                  <AgentGlyph
-                    agent={
-                      cursorAgent ?? {
-                        id: cursor.agentId,
-                        name: cursor.agentId,
-                        style: { color: '#5EE3BF', shape: 'triangle' },
-                      }
-                    }
-                    size="xs"
-                    plain
-                    bare
-                    decorative
-                  />
-                  {cursorAgent?.name ?? cursor.agentId}
-                </span>
-              </span>
-            )
-          })}
+          {cursors.map((cursor) => (
+            <CursorMark
+              key={cursor.agentId}
+              cursor={cursor}
+              agent={party(agents, cursor.agentId)}
+            />
+          ))}
         </span>
       </div>,
     )
     for (const comment of byLine.get(line.n) ?? [])
       rows.push(
         <div key={`comment-${comment.id}`} className="bold-bench-comment-row">
-          <CommentCard
-            comment={comment}
-            agent={party(agents, comment.by)}
-            approvedLater={approvedLater(comment)}
-          />
+          <CommentCard comment={comment} agent={party(agents, comment.by)} />
         </div>,
       )
   }
@@ -213,6 +251,17 @@ function CodeView({
         <div className="bold-bench-file-title">
           <span className="bold-bench-kicker">Read-only</span>
           <h2>{file.path}</h2>
+          {headerCursors.length > 0 && (
+            <span className="bold-bench-head-cursors">
+              {headerCursors.map((cursor) => (
+                <CursorMark
+                  key={cursor.agentId}
+                  cursor={cursor}
+                  agent={party(agents, cursor.agentId)}
+                />
+              ))}
+            </span>
+          )}
         </div>
         <div className="bold-bench-authors">
           {authors.map((id) => (
@@ -234,24 +283,23 @@ function CodeView({
         </p>
       )}
       <div className="bold-bench-code-body">
-        {rows.length > 0 ? rows : <p className="bold-bench-empty">No lines Score saw for this file.</p>}
+        {rows.length > 0 ? (
+          rows
+        ) : (
+          <p className="bold-bench-empty">No lines Score saw for this file.</p>
+        )}
       </div>
       {earlier.length > 0 && (
         <div className="bold-bench-earlier" aria-label="Earlier notes">
           <span className="bold-bench-kicker">Earlier notes</span>
           {earlier.map((comment) => (
-            <CommentCard
-              key={comment.id}
-              comment={comment}
-              agent={party(agents, comment.by)}
-              approvedLater={approvedLater(comment)}
-            />
+            <CommentCard key={comment.id} comment={comment} agent={party(agents, comment.by)} />
           ))}
         </div>
       )}
     </section>
   )
-}
+})
 
 function LooseComments({
   comments,
@@ -267,11 +315,7 @@ function LooseComments({
       {comments.map((comment) => (
         <div key={comment.id} className="bold-bench-loose-item">
           <code>{comment.path}</code>
-          <CommentCard
-            comment={comment}
-            agent={party(agents, comment.by)}
-            approvedLater={false}
-          />
+          <CommentCard comment={comment} agent={party(agents, comment.by)} />
         </div>
       ))}
     </section>
@@ -288,12 +332,17 @@ function ScreenView({
   const frame = screen.frame
   const name = agent?.name ?? frame.agentId
   return (
-    <section className="bold-bench-screen" aria-label={`${name}'s screen`}>
+    <section className="bold-bench-screen" aria-label={`${name}’s screen`}>
       <header className="bold-bench-screen-head">
         <span className="bold-bench-screen-who">
           {agent ? <AgentGlyph agent={agent} size="sm" decorative /> : null}
           <b>{name}’s screen</b>
-          {screen.live && <span className="bold-bench-live"><span className="livedot" aria-hidden="true" />Live</span>}
+          {screen.live && (
+            <span className="bold-bench-live">
+              <span className="livedot" aria-hidden="true" />
+              Live
+            </span>
+          )}
         </span>
         <span className="bold-bench-readonly">Read-only · you’re watching</span>
         <Link className="btn sm" to={boldAgentScreenLink(frame.agentId)}>
@@ -312,9 +361,14 @@ function ScreenView({
   )
 }
 
-function DraftView({ draft, agent }: { draft: Workbench['drafts'][number]; agent: AgentSummary | undefined }) {
-  const target =
-    draft.target.kind === 'document' ? 'Attached document' : 'In the workspace'
+function DraftView({
+  draft,
+  agent,
+}: {
+  draft: Workbench['drafts'][number]
+  agent: AgentSummary | undefined
+}) {
+  const target = draft.target.kind === 'document' ? 'Attached document' : 'In the workspace'
   return (
     <article className="bold-bench-draft" data-draft={draft.id}>
       <header className="bold-bench-file-head">
@@ -367,10 +421,11 @@ export function BoldWorkbenchView({
   onWorkChange?: (tab: BenchTab) => void
 }) {
   const byId = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
-  const [picked, setPicked] = useState<string | null>(null)
-  useEffect(() => {
-    setPicked(null)
-  }, [job?.id])
+  const jobKey = job?.id ?? null
+  // Remember the pick with its job: another job starts on its first tab without a reset effect.
+  const [picked, setPicked] = useState<{ job: string | null; key: string } | null>(null)
+  const pickedKey = picked?.job === jobKey ? picked.key : null
+  const tabRefs = useRef(new Map<string, HTMLButtonElement>())
 
   if (pending && !workbench)
     return (
@@ -416,7 +471,8 @@ export function BoldWorkbenchView({
       agentId: fileAgent(file),
     })),
     ...workbench.screens.map((screen) => ({
-      key: `screen:${screen.frame.agentId}:${screen.frame.seq}`,
+      // Keyed by the agent, not the frame: a new frame must not remount the tab and drop its focus.
+      key: `screen:${screen.frame.agentId}`,
       tab: 'screen' as const,
       label: `${byId.get(screen.frame.agentId)?.name ?? screen.frame.agentId}’s screen`,
       agentId: screen.frame.agentId,
@@ -433,13 +489,41 @@ export function BoldWorkbenchView({
   const preferred = preferredFile
     ? inGroup.find((tab) => tab.tab === 'code' && tab.label === preferredFile)
     : undefined
-  const active =
-    inGroup.find((tab) => tab.key === picked) ?? preferred ?? inGroup[0] ?? null
-  const live =
-    workbench.screens.some((screen) => screen.live) || job.state === 'working'
+  const active = inGroup.find((tab) => tab.key === pickedKey) ?? preferred ?? inGroup[0] ?? null
+  const live = workbench.screens.some((screen) => screen.live) || job.state === 'working'
   const choose = (tab: { key: string; tab: BenchTab }) => {
-    setPicked(tab.key)
+    setPicked({ job: jobKey, key: tab.key })
     onWorkChange?.(tab.tab)
+  }
+  const focusKey = active?.key ?? tabs[0]?.key ?? null
+  const onTabsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const moves: Record<string, number | 'first' | 'last'> = {
+      ArrowRight: 1,
+      ArrowDown: 1,
+      ArrowLeft: -1,
+      ArrowUp: -1,
+      Home: 'first',
+      End: 'last',
+    }
+    const move = moves[event.key]
+    if (move === undefined || tabs.length === 0) return
+    event.preventDefault()
+    const focused = (event.target as Element).closest<HTMLElement>('[data-bench-tab]')?.dataset
+      .benchTab
+    const from = Math.max(
+      0,
+      tabs.findIndex((tab) => tab.key === (focused ?? focusKey)),
+    )
+    const next =
+      move === 'first'
+        ? 0
+        : move === 'last'
+          ? tabs.length - 1
+          : (from + move + tabs.length) % tabs.length
+    const target = tabs[next]
+    if (!target) return
+    choose(target)
+    requestAnimationFrame(() => tabRefs.current.get(target.key)?.focus())
   }
 
   let body: ReactNode
@@ -458,9 +542,7 @@ export function BoldWorkbenchView({
       </>
     )
   } else if (active.tab === 'screen') {
-    const screen = workbench.screens.find(
-      (item) => `screen:${item.frame.agentId}:${item.frame.seq}` === active.key,
-    )!
+    const screen = workbench.screens.find((item) => `screen:${item.frame.agentId}` === active.key)!
     body = <ScreenView screen={screen} agent={byId.get(screen.frame.agentId)} />
   } else {
     const draft = workbench.drafts.find((item) => `draft:${item.id}` === active.key)!
@@ -480,13 +562,24 @@ export function BoldWorkbenchView({
         </span>
       </header>
       {tabs.length > 0 && (
-        <div className="bold-bench-tabs" role="group" aria-label="Workbench files and screens">
+        <div
+          className="bold-bench-tabs"
+          role="group"
+          aria-label="Workbench files and screens"
+          onKeyDown={onTabsKeyDown}
+        >
           {tabs.map((tab) => (
             <button
               key={tab.key}
+              ref={(element) => {
+                if (element) tabRefs.current.set(tab.key, element)
+                else tabRefs.current.delete(tab.key)
+              }}
               type="button"
               className={`chip bold-bench-tab${active?.key === tab.key ? ' on' : ''}`}
               aria-pressed={active?.key === tab.key}
+              data-bench-tab={tab.key}
+              tabIndex={tab.key === focusKey ? 0 : -1}
               onClick={() => choose(tab)}
             >
               <TabDot agent={party(byId, tab.agentId)} />
@@ -513,11 +606,21 @@ export function BoldWorkbenchView({
 export function BoldWorkbench({ agents, hidden }: { agents: AgentSummary[]; hidden: boolean }) {
   const [search, setSearchParams] = useSearchParams()
   const room = useStreamQuery(boldTeamRoomQuery)
-  const jobs = (room.data?.jobs ?? []).filter((job) => job.state !== 'closed')
+  const jobs = room.data?.jobs ?? []
   const selectedId = search.get('job')
-  const job = selectedId ? jobs.find((item) => item.id === selectedId) : jobs[0]
+  const named = selectedId ? jobs.find((item) => item.id === selectedId) : undefined
+  const job = named ?? (selectedId ? null : jobs.find((item) => item.state !== 'closed'))
+  // The room list leaves closed jobs out. Their Workbench is still readable by id, so show it with a neutral heading
+  // until a `job.upserted` event supplies the real title.
+  const jobFace: JobFace | null =
+    job ?? (selectedId ? { id: selectedId, title: 'Closed job', state: 'closed' } : null)
   const work = search.get('work')
-  const data = useBoldWorkbench(job?.id ?? selectedId ?? null, !hidden)
+  const data = useBoldWorkbench(
+    jobFace?.id ?? null,
+    !hidden,
+    job?.activeAgents ?? [],
+    work === 'screen',
+  )
   const choose = (tab: BenchTab) => {
     const params = new URLSearchParams(search)
     params.set('work', tab)
@@ -526,7 +629,7 @@ export function BoldWorkbench({ agents, hidden }: { agents: AgentSummary[]; hidd
   }
   return (
     <BoldWorkbenchView
-      job={job ?? null}
+      job={jobFace}
       workbench={data.workbench}
       agents={agents}
       work={work}

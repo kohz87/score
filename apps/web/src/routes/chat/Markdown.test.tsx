@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
+import { boldWorkspaceLink } from '../../bold/bold-links.ts'
 import { tokenize } from './highlight.ts'
 import { Markdown } from './Markdown.tsx'
 
@@ -105,14 +106,35 @@ test('a bold room can resolve a workspace link through a job before rendering it
         workspace={{
           agentId: 'builder',
           agentIds: ['builder'],
-          linkFor: (target) =>
-            `/b?job=job-feed&work=code&file=${encodeURIComponent(target.path)}`,
+          linkFor: (target) => `/b?job=job-feed&work=code&file=${encodeURIComponent(target.path)}`,
         }}
       />
     </MemoryRouter>,
   )
   expect(screen.getByRole('link', { name: 'feed' }).getAttribute('href')).toBe(
     '/b?job=job-feed&work=code&file=api%2Fevents.py',
+  )
+})
+
+test('linkFor sends a job’s changed file to the Workbench and any other path to the author’s Workspace', () => {
+  const job = { id: 'job-feed', files: ['api/events.py'] }
+  render(
+    <MemoryRouter>
+      <Markdown
+        text="[changed](workspace://api/events.py) [other](workspace://reviewer/notes/other.md)"
+        workspace={{
+          agentId: 'builder',
+          agentIds: ['builder', 'reviewer'],
+          linkFor: (target) => boldWorkspaceLink(target.agentId, target.path, job),
+        }}
+      />
+    </MemoryRouter>,
+  )
+  expect(screen.getByRole('link', { name: 'changed' }).getAttribute('href')).toBe(
+    '/b?job=job-feed&work=code&file=api%2Fevents.py',
+  )
+  expect(screen.getByRole('link', { name: 'other' }).getAttribute('href')).toBe(
+    '/b/team/reviewer?path=notes%2Fother.md#agent-workspace',
   )
 })
 

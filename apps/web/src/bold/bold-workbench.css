@@ -193,6 +193,8 @@
   min-height: 27px;
   white-space: pre;
   color: #2a2c33;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 27px;
 }
 
 [data-ui='bold'] .bold-bench-line.has-author {
@@ -212,6 +214,25 @@
   width: 4px;
   flex: none;
   background: transparent;
+}
+
+[data-ui='bold'] .bold-bench-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+[data-ui='bold'] .bold-bench-head-cursors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 [data-ui='bold'] .bold-bench-line.has-author .bold-bench-bar {

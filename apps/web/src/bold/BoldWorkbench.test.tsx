@@ -1,5 +1,5 @@
 import type { AgentSummary, Workbench } from '@score/contract'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { BoldWorkbenchView } from './BoldWorkbench.tsx'
@@ -127,13 +127,17 @@ const workbench: Workbench = {
 
 afterEach(cleanup)
 
-function renderWorkbench(work: string, opts: { hidden?: boolean; failed?: boolean } = {}) {
+function renderWorkbench(
+  work: string,
+  opts: { hidden?: boolean; failed?: boolean } = {},
+  data: Workbench = workbench,
+) {
   const onWorkChange = vi.fn()
   render(
     <MemoryRouter>
       <BoldWorkbenchView
         job={job}
-        workbench={workbench}
+        workbench={data}
         agents={agents}
         work={work}
         hidden={opts.hidden}
@@ -153,10 +157,14 @@ test('code shows builder’s colour bar, both reviewer notes and the cursor with
   expect(authored.length).toBeGreaterThanOrEqual(3)
   expect((authored[0] as HTMLElement).style.getPropertyValue('--line-colour')).toBe('#19C39A')
   expect((authored[0] as HTMLElement).querySelector('.bold-bench-bar')).not.toBeNull()
+  expect((authored[0] as HTMLElement).getAttribute('title')).toBe('Written by builder')
+  expect((authored[0] as HTMLElement).querySelector('.bold-bench-sr')?.textContent).toBe(
+    'Written by builder',
+  )
 
   const sendBack = code.querySelector('[data-comment="send_back"]') as HTMLElement
   expect(sendBack.textContent).toContain('Two events in one millisecond')
-  expect(sendBack.textContent).toContain('Fixed later · approved')
+  expect(sendBack.textContent).toContain('Outdated · was line 2')
   expect(sendBack.getAttribute('data-outdated')).toBe('true')
   expect(code.querySelector('[data-line="2"] + .bold-bench-comment-row')).not.toBeNull()
 
@@ -174,15 +182,17 @@ test('code shows builder’s colour bar, both reviewer notes and the cursor with
 test('tabs choose a file, a screen and a draft, and mark the active one', () => {
   const onWorkChange = renderWorkbench('code')
   const tabs = screen.getByRole('group', { name: 'Workbench files and screens' })
-  expect(within(tabs).getByRole('button', { name: /api\/events\.py/ }).getAttribute('aria-pressed')).toBe(
-    'true',
-  )
+  expect(
+    within(tabs)
+      .getByRole('button', { name: /api\/events\.py/ })
+      .getAttribute('aria-pressed'),
+  ).toBe('true')
   fireEvent.click(within(tabs).getByRole('button', { name: /builder.s screen/ }))
   expect(onWorkChange).toHaveBeenCalledWith('screen')
 
   cleanup()
   renderWorkbench('screen')
-  const stage = screen.getByRole('region', { name: 'builder‘s screen' })
+  const stage = screen.getByRole('region', { name: 'builder’s screen' })
   expect(within(stage).getByText('Read-only · you’re watching')).toBeDefined()
   expect(within(stage).getByText('pnpm test api/events')).toBeDefined()
   expect(
@@ -195,9 +205,85 @@ test('tabs choose a file, a screen and a draft, and mark the active one', () => 
   const draft = screen.getByRole('article')
   expect(within(draft).getByRole('heading', { name: 'Empty states' })).toBeDefined()
   expect(within(draft).getByText('reviewer')).toBeDefined()
-  expect(within(draft).getByRole('link', { name: 'Open in the workspace' }).getAttribute('href')).toBe(
-    '/b/team/reviewer?path=docs%2Fwriting%2Fempty-states.md#agent-workspace',
+  expect(
+    within(draft).getByRole('link', { name: 'Open in the workspace' }).getAttribute('href'),
+  ).toBe('/b/team/reviewer?path=docs%2Fwriting%2Fempty-states.md#agent-workspace')
+})
+
+test('arrow keys move through the tabs and leave one tab in the tab order', async () => {
+  const onWorkChange = renderWorkbench('code')
+  const tabs = screen.getByRole('group', { name: 'Workbench files and screens' })
+  const file = within(tabs).getByRole('button', { name: /api\/events\.py/ })
+  const screenTab = within(tabs).getByRole('button', { name: /builder.s screen/ })
+  expect(file.getAttribute('tabindex')).toBe('0')
+  expect(screenTab.getAttribute('tabindex')).toBe('-1')
+
+  const secondFile = within(tabs).getByRole('button', { name: /api\/test_events\.py/ })
+  secondFile.focus()
+  fireEvent.keyDown(secondFile, { key: 'ArrowRight' })
+  expect(onWorkChange).toHaveBeenCalledWith('screen')
+  await waitFor(() => expect(document.activeElement).toBe(screenTab))
+})
+
+test('a screen tab keeps its node and focus when the agent’s next frame arrives', () => {
+  const { rerender } = render(
+    <MemoryRouter>
+      <BoldWorkbenchView job={job} workbench={workbench} agents={agents} work="screen" />
+    </MemoryRouter>,
   )
+  const tabs = screen.getByRole('group', { name: 'Workbench files and screens' })
+  const before = within(tabs).getByRole('button', { name: /builder.s screen/ })
+  before.focus()
+
+  const next: Workbench = {
+    ...workbench,
+    screens: [
+      {
+        ...workbench.screens[0]!,
+        frame: {
+          ...workbench.screens[0]!.frame,
+          seq: 13,
+          at: '2026-10-24T10:06:00.000Z',
+          caption: 'Ran the tests again',
+        },
+      },
+    ],
+  }
+  rerender(
+    <MemoryRouter>
+      <BoldWorkbenchView job={job} workbench={next} agents={agents} work="screen" />
+    </MemoryRouter>,
+  )
+  expect(within(tabs).getByRole('button', { name: /builder.s screen/ })).toBe(before)
+  expect(document.activeElement).toBe(before)
+})
+
+test('a cursor on a line Score never saw lands on the nearest known line, or in the file header', () => {
+  const file = workbench.files[0]!
+  const unseen: Workbench = {
+    ...workbench,
+    files: [
+      {
+        ...file,
+        cursors: [{ agentId: 'builder', line: 99, at: '2026-10-24T10:04:00.000Z' }],
+      },
+    ],
+  }
+  renderWorkbench('code', {}, unseen)
+  const code = screen.getByRole('region', { name: 'Code in api/events.py' })
+  expect(code.querySelector('[data-line="3"] [data-cursor="builder"]')).not.toBeNull()
+
+  cleanup()
+  renderWorkbench(
+    'code',
+    {},
+    {
+      ...workbench,
+      files: [{ ...file, cursors: [{ ...file.cursors[0]!, line: null }] }],
+    },
+  )
+  const header = screen.getByRole('region', { name: 'Code in api/events.py' })
+  expect(header.querySelector('.bold-bench-head-cursors [data-cursor="builder"]')).not.toBeNull()
 })
 
 test('loading, failure, an empty job and a hidden panel each have a clear state', () => {

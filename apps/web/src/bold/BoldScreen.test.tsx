@@ -85,12 +85,7 @@ afterEach(() => {
 function renderScreen(approvals: Approval[] = [approval]) {
   render(
     <MemoryRouter>
-      <BoldScreenView
-        agent={builder}
-        frames={frames}
-        markers={markers}
-        approvals={approvals}
-      />
+      <BoldScreenView agent={builder} frames={frames} markers={markers} approvals={approvals} />
     </MemoryRouter>,
   )
 }
@@ -102,11 +97,11 @@ test('shows the plain-step log, live screen, markers and the protected approval 
   expect(within(log).getByRole('button', { name: /Ran pnpm test api\/events/ })).toBeDefined()
   expect(within(log).getByRole('button', { name: /Opened the activity feed/ })).toBeDefined()
 
-  expect(screen.getByText('Live')).toBeDefined()
+  expect(screen.getByText('Live', { selector: '.bold-screen-badge' })).toBeDefined()
   expect(screen.getByText('Read-only')).toBeDefined()
   expect(screen.getByText('pnpm test api/events')).toBeDefined()
   expect(screen.getByRole('group', { name: 'Replay timeline' })).toBeDefined()
-  expect(screen.getByText('File changes')).toBeDefined()
+  expect(screen.getByText('File edit')).toBeDefined()
   expect(screen.getByRole('button', { name: 'Back to live' }).getAttribute('aria-pressed')).toBe(
     'true',
   )
@@ -116,9 +111,9 @@ test('shows the plain-step log, live screen, markers and the protected approval 
   expect(bar.textContent).toContain('npm install ws@8')
   expect(within(bar).getByRole('button', { name: 'Approve' })).toBeDefined()
   expect(within(bar).getByRole('button', { name: 'Deny' })).toBeDefined()
-  expect(
-    screen.getByRole('link', { name: 'Open in terminal' }).getAttribute('href'),
-  ).toBe('/terminal')
+  expect(screen.getByRole('link', { name: 'Open in terminal' }).getAttribute('href')).toBe(
+    '/terminal',
+  )
   expect(screen.queryByRole('textbox')).toBeNull()
   expect(document.querySelector('input, textarea, [contenteditable="true"]')).toBeNull()
 })

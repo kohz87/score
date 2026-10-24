@@ -113,7 +113,6 @@ export function boldWorkspaceLink(
   path: string,
   job?: { id: string; files: readonly string[] },
 ): string {
-  if (job?.files.some((file) => samePath(file, path)))
-    return workbenchHref(job.id, 'code', path)
+  if (job?.files.some((file) => samePath(file, path))) return workbenchHref(job.id, 'code', path)
   return boldAgentWorkspaceLink(agentId, path)
 }

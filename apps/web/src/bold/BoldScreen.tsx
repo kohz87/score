@@ -40,7 +40,8 @@ function pendingApproval(approvals: Approval[], agentId: string): Approval | nul
 
 function stateLine(agent: AgentSummary): string {
   if (agent.status === 'working') return agent.activity ? `Working · ${agent.activity}` : 'Working'
-  if (agent.status === 'waiting') return agent.activity ? `Needs you · ${agent.activity}` : 'Needs you'
+  if (agent.status === 'waiting')
+    return agent.activity ? `Needs you · ${agent.activity}` : 'Needs you'
   if (agent.status === 'idle') return 'Free'
   if (agent.status === 'up-next') return 'Up next'
   return agent.status[0]!.toUpperCase() + agent.status.slice(1)
@@ -130,8 +131,7 @@ export function BoldScreenView({
   const live = cursor === null
   const stage = useMemo(() => stageAt(frames, seq), [frames, seq])
   const items = useMemo(() => activityItems(frames, approvals), [frames, approvals])
-  const top =
-    surface && stage.bySurface[surface] ? surface : (stage.front?.surface ?? null)
+  const top = surface && stage.bySurface[surface] ? surface : (stage.front?.surface ?? null)
   const frame = top ? (stage.bySurface[top] ?? null) : null
   const currentKey = live
     ? (items[0]?.key ?? null)
@@ -250,7 +250,10 @@ export function BoldScreenView({
         </section>
 
         <div className="bold-screen-main">
-          <div className="bold-screen-stage" style={{ '--watch-agent': agent.style.color } as CSSProperties}>
+          <div
+            className="bold-screen-stage"
+            style={{ '--watch-agent': agent.style.color } as CSSProperties}
+          >
             <span className="bold-screen-badge">
               {live ? 'Live' : `Replaying ${clock(marker!.at)}`}
             </span>
@@ -281,11 +284,7 @@ export function BoldScreenView({
                 </p>
               )}
               {frame?.terminal && (
-                <TerminalPane
-                  terminal={frame.terminal}
-                  history={history}
-                  live={live}
-                />
+                <TerminalPane terminal={frame.terminal} history={history} live={live} />
               )}
               {frame?.editor && <EditorPane editor={frame.editor} />}
               {frame?.browser && <BrowserPane browser={frame.browser} />}

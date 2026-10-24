@@ -362,10 +362,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
           )}
           {agent.served && (
             <>
-              <Link
-                className="link bold-agent-watch"
-                to={boldAgentScreenLink(agent.id)}
-              >
+              <Link className="link bold-agent-watch" to={boldAgentScreenLink(agent.id)}>
                 Look at its screen
               </Link>
               <PopOutButton
