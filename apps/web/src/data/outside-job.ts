@@ -1,0 +1,173 @@
+import {
+  ImportSessionResponseSchema,
+  JobSchema,
+  MessagePageSchema,
+  type Job,
+  type Message,
+  type OutsideSession,
+} from '@score/contract'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from './api.ts'
+import { newId } from './ids.ts'
+
+export interface OutsideSessionPreview {
+  roomId: string
+  messages: Message[]
+}
+
+export interface BringOutsideSessionIntoJobResult {
+  job: Job
+  importedRoomId: string
+  attached: number
+}
+
+/**
+ * One person's "bring it in" attempt. A retry keeps the same idempotency key and the job the first try made, so a
+ * share that failed halfway is not repeated: the key replays the answer for a request whose response was lost, the job
+ * is reused, and the shared message ids are never sent twice.
+ */
+export interface BringOutsideSessionAttempt {
+  idempotencyKey: string
+  importedRoomId: string | null
+  job: Job | null
+  sharedMessageIds: Set<string>
+}
+
+export function newBringOutsideSessionAttempt(
+  importedRoomId: string | null = null,
+): BringOutsideSessionAttempt {
+  return {
+    idempotencyKey: newId(),
+    importedRoomId,
+    job: null,
+    sharedMessageIds: new Set(),
+  }
+}
+
+function textOf(message: Message): string {
+  return message.parts
+    .filter((part) => part.kind === 'text')
+    .map((part) => (part.kind === 'text' ? part.text : ''))
+    .join('\n')
+    .trim()
+}
+
+async function importedMessages(roomId: string): Promise<Message[]> {
+  const items = new Map<string, Message>()
+  const cursors = new Set<string>()
+  let before: string | null = null
+  for (let page = 0; page < 25; page += 1) {
+    const params = new URLSearchParams({ limit: '100' })
+    if (before !== null) params.set('before', before)
+    const snapshot = MessagePageSchema.parse(
+      await apiFetch(`rooms/${encodeURIComponent(roomId)}/messages?${params}`),
+    )
+    for (const message of snapshot.items) items.set(message.id, message)
+    const next = snapshot.nextCursor
+    if (!next || cursors.has(next)) break
+    cursors.add(next)
+    before = next
+  }
+  return [...items.values()].sort(
+    (left, right) =>
+      left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+  )
+}
+
+/**
+ * The contract has no single "preview and attach this outside chat to a job" call. Its pieces do fit together: import
+ * the session as a read-only room, read the copied messages, then create a team job and share each text message into
+ * it as the frozen copy the share endpoint defines. This exists because `GET /api/outside-sessions` returns session
+ * metadata only, not a transcript.
+ */
+export async function previewOutsideSession(
+  session: OutsideSession,
+): Promise<OutsideSessionPreview> {
+  const imported = ImportSessionResponseSchema.parse(
+    await apiFetch('outside-sessions/import', {
+      method: 'POST',
+      body: JSON.stringify({ agentId: session.agentId, sessionId: session.id }),
+    }),
+  )
+  return {
+    roomId: imported.roomId,
+    messages: (await importedMessages(imported.roomId)).filter((message) => textOf(message)),
+  }
+}
+
+/**
+ * Attaching has no single contract call either: the import (idempotent on its own), a team job and the message share
+ * endpoint are stitched together. The job is made once per attempt and retries share only messages not yet copied.
+ */
+export async function bringOutsideSessionIntoJob(
+  session: OutsideSession,
+  teamRoomId: string,
+  attempt: BringOutsideSessionAttempt = newBringOutsideSessionAttempt(),
+): Promise<BringOutsideSessionIntoJobResult> {
+  const importedRoomId =
+    attempt.importedRoomId ??
+    ImportSessionResponseSchema.parse(
+      await apiFetch('outside-sessions/import', {
+        method: 'POST',
+        body: JSON.stringify({ agentId: session.agentId, sessionId: session.id }),
+      }),
+    ).roomId
+  attempt.importedRoomId = importedRoomId
+
+  const messages = (await importedMessages(importedRoomId)).filter((message) => textOf(message))
+  const title = (session.title.trim() || `From ${session.sourceLabel}`).slice(0, 200)
+  if (!attempt.job) {
+    attempt.job = JobSchema.parse(
+      await apiFetch(`rooms/${encodeURIComponent(teamRoomId)}/jobs`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': attempt.idempotencyKey },
+        body: JSON.stringify({ title }),
+      }),
+    )
+  }
+  const job = attempt.job
+
+  let attached = 0
+  for (const message of messages) {
+    if (attempt.sharedMessageIds.has(message.id)) continue
+    await apiFetch(`messages/${encodeURIComponent(message.id)}/share`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': attempt.idempotencyKey },
+      body: JSON.stringify({ jobId: job.id }),
+    })
+    attempt.sharedMessageIds.add(message.id)
+    attached += 1
+  }
+  return { job, importedRoomId, attached }
+}
+
+export function usePreviewOutsideSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (session: OutsideSession) => previewOutsideSession(session),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['outside-sessions'] })
+    },
+  })
+}
+
+export function useBringOutsideSessionIntoJob() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      session,
+      teamRoomId,
+      attempt,
+    }: {
+      session: OutsideSession
+      teamRoomId: string
+      attempt: BringOutsideSessionAttempt
+    }) => bringOutsideSessionIntoJob(session, teamRoomId, attempt),
+    onSuccess: (result, { teamRoomId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['outside-sessions'] })
+      // The server also emits job.upserted; refetching makes the new tab appear immediately even if the stream is
+      // reconnecting.
+      void queryClient.invalidateQueries({ queryKey: ['bold', 'jobs', teamRoomId] })
+    },
+  })
+}

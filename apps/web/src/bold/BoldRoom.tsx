@@ -1,4 +1,4 @@
-import type { AgentSummary } from '@score/contract'
+import type { AgentSummary, OutsideSession } from '@score/contract'
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
@@ -13,12 +13,13 @@ import { BoldWorkbench } from './BoldWorkbench.tsx'
 import { boldOneToOneLink, boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
 import { BoldDirect, DirectHeaderActions, PrivacyNote } from './direct/BoldDirect.tsx'
+import { BoldElsewhere } from './room/BoldElsewhere.tsx'
 import { BoldThread } from './room/BoldThread.tsx'
 import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 
 const PHONE = '(max-width: 860px)'
 
-type SideMode = 'work' | 'library' | 'thread' | `agent:${string}`
+type SideMode = 'work' | 'library' | 'thread' | 'elsewhere' | `agent:${string}`
 
 function sideCopy(mode: SideMode): string {
   if (mode === 'work') return 'The Work panel comes in a later task.'
@@ -44,6 +45,7 @@ export function BoldRoom() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<SideMode>('work')
+  const [elsewhere, setElsewhere] = useState<OutsideSession | null>(null)
   const [threadJob, setThreadJob] = useState<string | null>(null)
   // The thread follows the room's job tab: another tab opens that job's thread, All goes back to the picker.
   const tabJob = new URLSearchParams(location.search).get('job')
@@ -76,7 +78,12 @@ export function BoldRoom() {
       ? 'Work'
       : mode === 'library'
         ? 'Library'
-        : 'Thread'
+        : mode === 'elsewhere'
+          ? `${elsewhere?.agentId ?? 'Elsewhere'} · ${elsewhere?.sourceLabel ?? ''}`.trim()
+          : 'Thread'
+  const elsewhereAgent = elsewhere
+    ? agents.find((item) => item.id === elsewhere.agentId)
+    : undefined
 
   useEffect(() => {
     if (!menuOpen) return
@@ -146,6 +153,18 @@ export function BoldRoom() {
     toggleRef.current?.focus()
   }
 
+  const openElsewhere = (session: OutsideSession) => {
+    setElsewhere(session)
+    setMode('elsewhere')
+    setMenuOpen(false)
+    setParams(withoutDirect(new URLSearchParams(params)), { replace: true })
+    setSheetOpen(true)
+  }
+  const broughtIntoJob = (jobId: string) => {
+    setMode('work')
+    setSheetOpen(false)
+    void navigate(`/b?job=${encodeURIComponent(jobId)}`)
+  }
   const openThread = (jobId: string | null) => {
     setThreadJob(jobId)
     setMode('thread')
@@ -229,7 +248,12 @@ export function BoldRoom() {
   return (
     <div className="roomgrid">
       <section className="roomcol" aria-label="Team room" inert={phone && sheetOpen}>
-        <BoldTeamRoom agents={agents} phoneAction={phoneAction} onOpenThread={openThread} />
+        <BoldTeamRoom
+          agents={agents}
+          phoneAction={phoneAction}
+          onOpenElsewhere={openElsewhere}
+          onOpenThread={openThread}
+        />
       </section>
 
       <div
@@ -317,6 +341,8 @@ export function BoldRoom() {
                     <GridIcon />
                   ) : mode === 'library' ? (
                     <BookIcon />
+                  ) : mode === 'elsewhere' && elsewhereAgent ? (
+                    <SideGlyph agent={elsewhereAgent} />
                   ) : (
                     <ThreadIcon />
                   )}
@@ -392,6 +418,13 @@ export function BoldRoom() {
             </div>
           ) : mode === 'thread' ? (
             <BoldThread jobId={threadJob} onSelectJob={(jobId) => setThreadJob(jobId)} />
+          ) : mode === 'elsewhere' && elsewhere ? (
+            <BoldElsewhere
+              key={`${elsewhere.agentId}:${elsewhere.id}`}
+              session={elsewhere}
+              agents={agents}
+              onBroughtIn={broughtIntoJob}
+            />
           ) : (
             mode !== 'library' &&
             mode !== 'work' && (

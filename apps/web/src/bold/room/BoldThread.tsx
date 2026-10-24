@@ -506,7 +506,7 @@ export function BoldThread({
     return <ThreadUnavailable failed={roomState.status === 'error'} />
   return (
     <ThreadJobs
-      roomId={roomState.data.id}
+      roomId={roomState.data.room.id}
       jobId={jobId}
       agents={agents}
       onSelectJob={onSelectJob}

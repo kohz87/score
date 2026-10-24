@@ -39,6 +39,10 @@ export const protectedClasses = [
   'orch-pill',
   'orch-node__flag',
   'bold-request',
+  // PLAN 11.4d: the room and job menus make destructive or exposing choices; deleting a room asks for its name.
+  'bold-room-menu',
+  'bold-job-menu',
+  'bold-room-delete-dialog',
   // PLAN 11.7: the privacy label, the share chooser, Add someone, and a shared one-to-one copy in the team room
   'bold-dm-privacy',
   'bold-dm-share-menu',

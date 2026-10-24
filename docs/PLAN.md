@@ -594,7 +594,7 @@ header (pause/stop, steps, unblock, comment, context meter + compact, job histor
 reasoning/tool cards, coding sub-agent cards, stall notice, recipe-run cards. Done when: e2e incl. a paused exchange
 answered from the thread; screenshots vs 11.
 
-**11.4d Room dropdown and job menu** · **DeepSeek** · board 21; prototype. Team room, older rooms, Elsewhere
+**11.4d Room dropdown and job menu** ✅ · **DeepSeek** · board 21; prototype. Team room, older rooms, Elsewhere
 (read-only, "Bring into a job"); job menu rename, close, export, share read-only link, delete with undo. Done when: e2e
 for each; older rooms open read-write with today's routing.
 
