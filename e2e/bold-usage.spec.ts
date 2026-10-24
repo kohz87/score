@@ -35,7 +35,8 @@ test('Usage fits 1440×900 and 390×844 with the phone nav above the content', a
   const jobs = page.getByRole('region', { name: 'Jobs done per day' })
   await expect(jobs.locator('[data-part="bar"]')).toHaveCount(7)
   await expect(jobs.locator('.usage-jobs-bar--busiest')).toHaveCount(1)
-  await expect(jobs.locator('.usage-jobs-value')).toHaveText('6')
+  // The fake report moves with the date: the busiest day carries its count, whatever it is today.
+  await expect(jobs.locator('.usage-jobs-value')).toHaveText(/^[1-9]\d*$/)
   // The fake report is relative to today: seven weekday labels, whichever day the run lands on.
   await expect(jobs.locator('.usage-jobs-label')).toHaveText(
     Array.from({ length: 7 }, () => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/),
