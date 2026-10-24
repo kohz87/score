@@ -737,7 +737,12 @@ export function completeRunMessage(
     .prepare('UPDATE messages SET parts = ? WHERE id = ?')
     .run(JSON.stringify(message.parts), message.id)
   sqlite.prepare("UPDATE message_runs SET state = 'completed' WHERE message_id = ?").run(message.id)
-  return [...drafts, ...updateMessage(sqlite, mapping.room_id, message.id, null, now)]
+  return [
+    ...drafts,
+    ...updateMessage(sqlite, mapping.room_id, message.id, null, now),
+    // Who is busy in the job changed (PLAN 11.2).
+    ...(mapping.job_id ? jobEvent(sqlite, mapping.job_id) : []),
+  ]
 }
 
 /** A turn of a room that routes with exchanges (orchestration attempts never do: their executor routes them). */
@@ -809,6 +814,7 @@ function finishSummaryRun(
     ...drafts,
     ...updateMessage(sqlite, mapping.room_id, message.id, null, now),
     ...markStaleSummaries(sqlite, mapping.room_id, now),
+    ...(mapping.job_id ? jobEvent(sqlite, mapping.job_id) : []),
   ]
 }
 
@@ -822,6 +828,9 @@ export function roomRunInput(
   // Only the turn's own job is context (PLAN 11.1b): a room's other threads are not this conversation.
   const job = jobId ?? defaultJobId(sqlite, roomId) ?? ''
   // A usable summary replaces the plain window: "summary + the messages after it" (PLAN 7.4a).
+  // Pinned decisions and referenced jobs' frozen summaries (PLAN 11.2) come before the room's own context.
+  const cross = crossContext(sqlite, roomId, parentMessageId)
+  if (cross) input = `${input}\n\n${cross}`
   const summarised = summaryContext(sqlite, roomId, job, parentMessageId)
   if (summarised) return `${input}\n\nRoom context:\n${summarised}`
   const messages = sqlite
@@ -837,10 +846,7 @@ export function roomRunInput(
     messages
       .map(
         (message) =>
-          `${message.author.kind === 'you' ? 'you' : message.author.agentId}: ${message.parts
-            .filter((part) => part.kind === 'text')
-            .map((part) => redact(part.text))
-            .join('\n')}`,
+          `${message.author.kind === 'you' ? 'you' : message.author.agentId}: ${redact(agentText(message.parts))}`,
       )
       .join('\n'),
     8192,
@@ -893,5 +899,7 @@ export function failMessageRun(
 }
 import { agentAdmits, assertAgentAdmits } from './agent-lifecycle.ts'
 import { defaultJobId, ensureJobSession } from './job-sessions.ts'
-import { exchangeEvent } from './exchanges/store.ts'
+import { exchangeEvent, jobEvent } from './exchanges/store.ts'
+import { crossContext } from './exchanges/sharing.ts'
+import { agentText } from './message-text.ts'
 import { settleExchangeTurn } from './exchanges/apply.ts'

@@ -217,6 +217,21 @@ function Part({
           {part.text}
         </p>
       )
+    case 'ref':
+      return (
+        <p className="chat-compact chat-notice" role="note">
+          Refers to “{part.title}”
+        </p>
+      )
+    case 'shared':
+      return (
+        <blockquote className="chat-compact">
+          <span className="chat-notice">
+            Shared from a one-to-one{part.from.agentId ? ` with ${part.from.agentId}` : ''}
+          </span>
+          <Markdown text={part.text} streaming={false} />
+        </blockquote>
+      )
     case 'plan':
       return <PlanCard part={part} agents={agents} roomId={message.roomId} messageId={message.id} />
   }

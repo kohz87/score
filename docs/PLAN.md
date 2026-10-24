@@ -517,9 +517,9 @@ Proposal `docs/proposals/ui-rework-bold.md` (§6 order, §8 D1–D13, §9 D14–
 lead reviews and merges. Every task also gets a Sonnet findings-only review; `pnpm check` (+ `pnpm e2e` for UI) is the
 gate. **11.5 is DeepSeek's pilot** and runs before any other DeepSeek task; its result decides the split for the rest
 (CLAUDE.md). UI tasks build in the new shell behind its switch, ship Playwright specs (fake adapter, phone width,
-reduced motion) and screenshots the lead compares with the named boards. Migrations pre-assigned: 0080 jobs + sessions,
-0081 exchanges, 0082 budgets and pauses, 0083 job sources + triggers, 0084 one-to-ones + references + pins, 0085 workbench comments, 0086
-recipes (When). 10.15 stays paused.
+reduced motion) and screenshots the lead compares with the named boards. Migrations: 0080 jobs + sessions,
+0081 exchanges, 0082 budgets and pauses, 0083 pins (11.2); later ones (job sources + triggers, workbench comments,
+recipes) take the next number when they merge: the runner refuses gaps. 10.15 stays paused.
 
 **11.0 Design + review** ✅ · **Lead** · brief `docs/briefs/11.0-bold.md` v1.1. Done when: the brief settles jobs,
 sessions, exchanges, agent actions, context, one-to-ones, references, sources/triggers/report-back, shell rules and

@@ -21,9 +21,13 @@ export function useMessageSearch(text: string, limit = 20) {
     enabled: q.length >= 2,
     queryFn: async ({ signal }) =>
       MessageSearchResponseSchema.parse(
-        await apiFetch(`search/messages?${new URLSearchParams({ q, limit: String(limit) })}`, {
-          signal,
-        }),
+        // The classic shell opens rooms' default jobs only (PLAN 11.2).
+        await apiFetch(
+          `search/messages?${new URLSearchParams({ q, limit: String(limit), jobs: 'default' })}`,
+          {
+            signal,
+          },
+        ),
       ).items,
     staleTime: 10_000,
     retry: false,
