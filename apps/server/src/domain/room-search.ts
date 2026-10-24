@@ -24,6 +24,7 @@ export function searchMessages(
   limit: number,
   roomId?: string,
   jobId?: string,
+  defaultJobsOnly = false,
 ): MessageSearchHit[] {
   const words = (query.match(/[\p{L}\p{N}_]+/gu) ?? []).slice(0, 12)
   if (words.length === 0) return []
@@ -41,6 +42,7 @@ export function searchMessages(
              FROM message_fts JOIN messages m ON m.rowid = message_fts.rowid JOIN rooms r ON r.id = m.room_id
              WHERE message_fts MATCH ? AND m.deleted_at IS NULL AND (? IS NULL OR m.room_id = ?)
                AND (? IS NULL OR m.job_id = ?)
+               AND (? = 0 OR m.job_id IN (SELECT id FROM jobs WHERE is_default = 1))
              ORDER BY bm25(message_fts), m.created_at DESC LIMIT ?`,
           )
           .all(
@@ -49,6 +51,7 @@ export function searchMessages(
             roomId ?? null,
             jobId ?? null,
             jobId ?? null,
+            Number(defaultJobsOnly),
             Math.min(Math.max(limit, 1), 50),
           ),
       )

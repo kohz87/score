@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { CommandIdSchema } from './orchestration.ts'
-import { AgentIdSchema } from './types.ts'
+import { AgentIdSchema, RoomSchema } from './types.ts'
+import { JobReportBackSchema, JobSourceSchema } from './triggers.ts'
 
 // Exchanges and agent actions (PLAN 11.1b; design docs/briefs/11.0-bold.md §3.4, §4). An agent in a room with
 // `routing = exchanges` hands work on, asks, reviews, approves or sends back with one action per turn. Hermes agents
@@ -142,6 +143,18 @@ export const JobSchema = z.object({
   isDefault: z.boolean(),
   exchangeBudget: z.int().positive(),
   jobTurnLimit: z.int().positive(),
+  /** PLAN 11.2: agent messages in the job the person hasn't read. */
+  unread: z.int().nonnegative(),
+  /** Agents busy in this job now (answering, or waiting on an approval). */
+  activeAgents: z.array(AgentIdSchema),
+  lastMessageAt: z.iso.datetime().nullable(),
+  messageCount: z.int().nonnegative(),
+  /** One line for lists ("Earlier chats"): the job's summary, else its first message's first line (≤ 160 chars). */
+  summary: z.string().nullable(),
+  /** PLAN 11.1d: where a trigger-started job came from ("Started by" card, the tab's reference); null otherwise. */
+  source: JobSourceSchema.nullable(),
+  /** PLAN 11.1d: its report-back to the app; null for jobs without one. */
+  reportBack: JobReportBackSchema.nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })
@@ -249,3 +262,34 @@ export const ExchangesResponseSchema = z.object({
   asOfSeq: z.int().nonnegative(),
   items: z.array(ExchangeSchema),
 })
+
+// PLAN 11.2 (docs/briefs/11.2-contract.md): the team room, one-to-ones, sharing and pins.
+
+/** `GET /api/team-room`. */
+export const TeamRoomResponseSchema = z.object({
+  asOfSeq: z.int().nonnegative(),
+  room: RoomSchema,
+  jobs: z.array(JobSchema),
+})
+/** `GET /api/agents/:agentId/direct`: the agent's one-to-one home and its chats, newest activity first. */
+export const DirectChatsResponseSchema = z.object({
+  asOfSeq: z.int().nonnegative(),
+  room: RoomSchema.nullable(),
+  chats: z.array(JobSchema),
+})
+export const ChatCreateRequestSchema = z
+  .object({ title: z.string().trim().min(1).max(200).optional() })
+  .strict()
+/** `POST /api/messages/:messageId/share`: a frozen copy into a team-room job. */
+export const ShareToJobRequestSchema = z.object({ jobId: z.string().min(1).max(64) }).strict()
+
+export const PINS_LIMIT = 10
+export const RoomPinSchema = z.object({
+  messageId: z.string().min(1),
+  /** The pinned message's text, redacted. */
+  text: z.string(),
+  pinnedAt: z.iso.datetime(),
+})
+export type RoomPin = z.infer<typeof RoomPinSchema>
+export const RoomPinsResponseSchema = z.object({ items: z.array(RoomPinSchema) })
+export const RoomPinsChangedSchema = z.object({ roomId: z.string().min(1) })
