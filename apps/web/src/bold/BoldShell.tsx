@@ -8,13 +8,14 @@ import {
   useState,
   type CSSProperties,
 } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { BoldRecipes } from './BoldRecipes.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useTextScale } from '../data/text-scale.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
+import { useFence } from '../routes/orchestrations/orchestration-queries.ts'
 import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
 import { agentStateLabel, dockProgress } from './bold-agents.ts'
@@ -271,6 +272,7 @@ export function BoldShell() {
           </header>
 
           <main className="main">
+            <ShellFenceNotice pathname={location.pathname} />
             <Outlet context={{ sheetOpen, setSheetOpen } satisfies BoldSheetState} />
           </main>
 
@@ -323,5 +325,22 @@ export function BoldShell() {
         {startOpen && <BoldStartJob onClose={closeStartJob} />}
       </div>
     </StartJobContext>
+  )
+}
+
+/**
+ * A restore or lost journal blocks every run. The room's Needs-you strip carries the card; every other page of the
+ * shell says it here, so the person can't miss it wherever they are (the review itself is Settings › System).
+ */
+function ShellFenceNotice({ pathname }: { pathname: string }) {
+  const fence = useFence().data
+  if (!fence?.fenced || pathname === '/b' || pathname === '/b/settings/system') return null
+  return (
+    <div className="bold-fence-notice" role="status" data-protected="flex">
+      <span>Starting work is blocked until you review the runs it stopped.</span>
+      <Link className="btn sm" to="/b/settings/system#global-fence">
+        Review the runs
+      </Link>
+    </div>
   )
 }

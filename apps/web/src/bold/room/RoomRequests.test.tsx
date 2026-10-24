@@ -154,6 +154,8 @@ test('a global fence is a protected review card, and the card goes when the fenc
     name: /Starting work is blocked until you review the runs it stopped/,
   })
   expect(card.getAttribute('data-protected')).toBe('flex')
+  // The fence counts like any card: with the approval also waiting, the folded strip offers the rest.
+  expect(await screen.findByRole('button', { name: '1 more needs you' })).toBeDefined()
   expect(screen.getByRole('link', { name: 'Review the runs' }).getAttribute('href')).toBe(
     '/b/settings/system#global-fence',
   )

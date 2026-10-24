@@ -76,8 +76,10 @@ function useReportedCount(id: string, count: number, report: CountCards) {
 }
 
 /** A restore or lost journal blocks every run: the room says so and opens the review that can lift it. */
-function RoomFence() {
+function RoomFence({ report }: { report: CountCards }) {
   const fence = useFence().data
+  // Counted like every other card, so a folded strip offers "N more" when the fence and a decision are both waiting.
+  useReportedCount('global-fence', fence?.fenced ? 1 : 0, report)
   if (!fence?.fenced) return null
   return (
     <PinCard
@@ -616,7 +618,7 @@ export function RoomRequests({
         <h2 ref={heading} className="bold-pins-title" tabIndex={-1}>
           Needs you
         </h2>
-        <RoomFence />
+        <RoomFence report={report} />
         <RoomApprovals
           roomId={roomId}
           approvals={needsApproval}

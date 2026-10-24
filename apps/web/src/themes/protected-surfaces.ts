@@ -40,6 +40,8 @@ export const protectedClasses = [
   'bold-request',
   // PLAN 11.4b: the count that expands the rest of the needs-you strip (a theme may not hide the way to the cards)
   'bold-pins-more',
+  // PLAN 11.11b: the shell-wide notice that starting work is blocked until the person reviews the fence
+  'bold-fence-notice',
   // PLAN 11.4d: the room and job menus make destructive or exposing choices; deleting a room asks for its name.
   'bold-room-menu',
   'bold-job-menu',

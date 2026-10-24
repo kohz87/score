@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { StreamClient } from '../../data/stream.ts'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
@@ -34,7 +35,9 @@ function mount() {
   render(
     <QueryClientProvider client={queryClient}>
       <StreamContext value={{ client: stream, queries }}>
-        <BackupSection />
+        <MemoryRouter initialEntries={['/b/settings/system#global-fence']}>
+          <BackupSection />
+        </MemoryRouter>
       </StreamContext>
     </QueryClientProvider>,
   )
@@ -63,6 +66,8 @@ test('Backup shows the fence review itself, not a dead link, and removes it when
   ).toBeDefined()
   expect(screen.queryByText(/Check the runs waiting for review/)).toBeNull()
   expect(screen.getByRole('button', { name: 'Lift the block' })).toBeDefined()
+  // The Needs-you card links to #global-fence: the review takes the focus once it shows.
+  await waitFor(() => expect(document.activeElement?.id).toBe('global-fence'))
 
   act(() => queryClient.setQueryData(fenceKey, fence(false)))
   await waitFor(() =>
