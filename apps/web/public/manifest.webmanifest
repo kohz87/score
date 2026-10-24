@@ -2,7 +2,7 @@
   "name": "Score",
   "short_name": "Score",
   "description": "A local-first control room for your team of Hermes agents.",
-  "start_url": "/now",
+  "start_url": "/b",
   "scope": "/",
   "display": "standalone",
   "background_color": "#eceef2",

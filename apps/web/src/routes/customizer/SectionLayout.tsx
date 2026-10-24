@@ -12,9 +12,7 @@ import { Field, MoveButtons, OptionalSegmented, SortableList } from './controls.
 import type { SectionContext } from './section-context.ts'
 
 const titles: Record<string, string> = {
-  '/now': 'Now',
   '/chat': 'Chat',
-  '/tasks': 'Tasks',
   '/team': 'Team',
   '/knowledge': 'Knowledge',
   '/reports': 'Reports',

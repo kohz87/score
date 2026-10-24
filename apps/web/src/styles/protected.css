@@ -6,15 +6,9 @@
    and the built-in packs are untouched (and keep their entrance motion). styles/protected.test.ts keeps this file and
    the markup in step. */
 @layer score-protected {
-  /* The surface itself: always rendered, flat, on top, with its own display. The room stage (PLAN 10.10) moves its own
-     parts: `room-stage__move` (what hops, mirrors or steps forward), `room-stage__anim` and `room-stage__fx`. Pinning
-     their opacity or transform would break the motion, so they are the exception. They carry Score's own class names,
-     which a theme's CSS can't name (the sanitiser), so only Score's rules reach them. (`:where` keeps the exclusion at
-     no specificity, so the disabled-control rule below still out-ranks this one.) */
+  /* The surface itself: always rendered, flat, on top, with its own display. */
   html[data-look='custom'] [data-protected],
-  html[data-look='custom']
-    [data-protected]:not(svg)
-    *:not(svg *):not(:where(.room-stage__move, .room-stage__anim, .room-stage__fx)) {
+  html[data-look='custom'] [data-protected]:not(svg) *:not(svg *) {
     opacity: 1 !important;
     visibility: visible !important;
     transform: none !important;
@@ -199,7 +193,7 @@
     --panel-card: #ffffff !important;
   }
   html[data-contrast-fallback]
-    [data-protected]:not(.chat-approval, .now-asking, .reports-approvals, .rules-card) {
+    [data-protected]:not(.chat-approval, .reports-approvals, .rules-card) {
     --ink: #12131a !important;
     --card: #ffffff !important;
   }
@@ -214,7 +208,7 @@
     --panel-card: #ffffff !important;
   }
   html[data-contrast-fallback][data-theme='dark']
-    [data-protected]:not(.chat-approval, .now-asking, .reports-approvals, .rules-card) {
+    [data-protected]:not(.chat-approval, .reports-approvals, .rules-card) {
     --ink: #eceef2 !important;
     --card: #181a21 !important;
   }
@@ -230,7 +224,7 @@
       --panel-card: #ffffff !important;
     }
     html[data-contrast-fallback]:not([data-theme])
-      [data-protected]:not(.chat-approval, .now-asking, .reports-approvals, .rules-card) {
+      [data-protected]:not(.chat-approval, .reports-approvals, .rules-card) {
       --ink: #eceef2 !important;
       --card: #181a21 !important;
     }
@@ -295,7 +289,7 @@
       [data-protected='any'],
       [data-protected='inline'],
       [data-protected='inline-flex']
-    ):not(:is(.agent-glyph, .room-stage)) {
+    ):not(:is(.agent-glyph)) {
     background-color: var(--panel);
     color: var(--ink);
   }

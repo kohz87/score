@@ -5,7 +5,6 @@ import {
   type ThemeManifest,
 } from '@score/contract'
 import { destinations } from '../../shell/destinations.ts'
-import { DEFAULT_NOW_ARRANGEMENT, type NowCardKind } from '../layout.ts'
 
 // The Customizer's draft (PLAN 9.4): the manifest, the CSS as typed and the files not saved yet. Everything here is
 // pure; the React side only holds a History and calls these. The draft is a value: nothing in it is applied to the
@@ -232,7 +231,11 @@ export function menuRows(manifest: ThemeManifest): MenuRow[] {
   const shown: MenuRow[] = []
   for (const entry of menu) {
     if (shown.some((row) => row.to === entry.to)) continue
-    shown.push({ to: entry.to, ...(entry.label ? { label: entry.label } : {}), hidden: false })
+    // Themes saved before 11.11 may still name /now or /tasks. The manifest keeps accepting them, but the
+    // Customizer only offers the destinations that still exist.
+    const known = destinations.find((item) => item.path === entry.to)
+    if (known)
+      shown.push({ to: known.path, ...(entry.label ? { label: entry.label } : {}), hidden: false })
   }
   if (!shown.some((row) => row.to === '/settings')) shown.push({ to: '/settings', hidden: false })
   const hidden = all
@@ -303,65 +306,6 @@ export function hideMenuRow(draft: Draft, to: string, hidden: boolean): Draft {
 export function resetMenu(draft: Draft): Draft {
   return patch(draft, (m) => {
     if (m.layout) delete m.layout.menu
-  })
-}
-
-// ---------------------------------------------------------------------------------------------------------------
-// Now cards
-
-export type NowArrangement = NonNullable<Layout['now']>
-export const nowCardNames: Record<NowCardKind, string> = {
-  timeline: 'Timeline',
-  room: 'Room',
-  'needs-you': 'Needs you',
-  'made-today': 'Made today',
-  todo: 'To do',
-  composer: 'Message box',
-}
-
-export function startNow(draft: Draft): Draft {
-  return patch(draft, (m) => {
-    ;(m.layout ??= {}).now = structuredClone(DEFAULT_NOW_ARRANGEMENT)
-  })
-}
-export function resetNow(draft: Draft): Draft {
-  return patch(draft, (m) => {
-    if (m.layout) delete m.layout.now
-  })
-}
-function withNow(draft: Draft, change: (now: NowArrangement) => void): Draft {
-  return patch(draft, (m) => {
-    const now = m.layout?.now
-    if (now) change(now)
-  })
-}
-export function setNowColumns(draft: Draft, columns: number): Draft {
-  return withNow(draft, (now) => {
-    now.columns = Math.min(4, Math.max(1, Math.round(columns)))
-    for (const card of now.cards) card.span = Math.min(card.span, now.columns)
-  })
-}
-export function moveNowCard(draft: Draft, from: number, to: number): Draft {
-  return withNow(draft, (now) => {
-    now.cards = moveItem(now.cards, from, to)
-  })
-}
-export function setNowSpan(draft: Draft, card: NowCardKind, span: number): Draft {
-  return withNow(draft, (now) => {
-    const found = now.cards.find((item) => item.card === card)
-    if (found) found.span = Math.min(now.columns, Math.max(1, Math.round(span)))
-  })
-}
-/** Needs you can be moved but not taken off Now. */
-export function removeNowCard(draft: Draft, card: NowCardKind): Draft {
-  if (card === 'needs-you') return draft
-  return withNow(draft, (now) => {
-    now.cards = now.cards.filter((item) => item.card !== card)
-  })
-}
-export function addNowCard(draft: Draft, card: NowCardKind): Draft {
-  return withNow(draft, (now) => {
-    if (!now.cards.some((item) => item.card === card)) now.cards.push({ card, span: 1 })
   })
 }
 

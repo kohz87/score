@@ -4,8 +4,8 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { statusSegments } from '../../live/status-line.ts'
 import { MOTION, loadAnime, playMotion, usePrefersReducedMotion } from '../../motion/motion.ts'
-import { layoutFlow, type Point } from '../now/flow/layout.ts'
-import { withPositions, type PositionMap } from '../now/flow/free-layout.ts'
+import { layoutFlow, type Point } from '../../components/flow-layout/layout.ts'
+import { withPositions, type PositionMap } from '../../components/flow-layout/free-layout.ts'
 import {
   EffectQueue,
   visualLabel,

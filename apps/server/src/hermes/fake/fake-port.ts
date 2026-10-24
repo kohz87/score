@@ -34,7 +34,7 @@ import { FakeWorkspaces } from './fake-workspace.ts'
 import type { RunsOn, RunsOnUpdate } from '@score/contract'
 import { describeRunsOn, type TerminalSettings } from '../runs-on.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
-import { assertNotKanbanAttempt } from '../../domain/brief-flow.ts'
+import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
 import { createBrief, linkTask, readBriefRow } from '../../domain/briefs.ts'
 import {
   recordKanbanDenial,

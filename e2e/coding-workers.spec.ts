@@ -225,7 +225,7 @@ test.describe('a coding step in the live diagram', () => {
     })
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 1280, height: 1100 })
-    await page.goto('/now/flow/brief-orch-1')
+    await page.goto('/runs/brief-orch-1')
     const node = page.locator('[data-node="s2"]')
     await expect(node).toBeVisible()
     await expect(node).toContainText('Claude Code')

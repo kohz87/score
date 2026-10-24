@@ -2,23 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { apiFetch } from '../data/api.ts'
 import { announceLogout, remoteTransport } from '../data/session.ts'
 import { readTheme, saveTheme, themeChoices, type ThemeChoice } from '../data/theme.ts'
-import { useViewSwitch } from '../routes/user/ViewSwitch.tsx'
 
 const themeLabels: Record<ThemeChoice, string> = { light: 'Light', dark: 'Dark', system: 'System' }
 
-/** The avatar and its menu, in both views: switch view, theme, and (in remote mode) log this browser out. */
-export function AvatarMenu({
-  view,
-  placement = 'below',
-}: {
-  view: 'admin' | 'user'
-  placement?: 'below' | 'above'
-}) {
+/** The avatar and its menu: theme, and (in remote mode) log this browser out. */
+export function AvatarMenu({ placement = 'below' }: { placement?: 'below' | 'above' }) {
   const [open, setOpen] = useState(false)
   const [theme, setTheme] = useState<ThemeChoice>(readTheme)
   const [problem, setProblem] = useState('')
   const root = useRef<HTMLDivElement>(null)
-  const { toUser, toAdmin, dialog } = useViewSwitch()
   useEffect(() => {
     if (!open) return
     const onPointer = (event: PointerEvent) => {
@@ -52,17 +44,6 @@ export function AvatarMenu({
       </button>
       {open && (
         <div className="avatar-popover" role="menu" aria-label="Account">
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false)
-              if (view === 'admin') toUser()
-              else toAdmin()
-            }}
-          >
-            {view === 'admin' ? 'Switch to user view' : 'Switch to admin view'}
-          </button>
           <div role="group" aria-label="Theme" className="avatar-theme">
             {themeChoices.map((choice) => (
               <button
@@ -95,7 +76,6 @@ export function AvatarMenu({
           {problem && <p role="alert">{problem}</p>}
         </div>
       )}
-      {dialog}
     </div>
   )
 }

@@ -28,7 +28,7 @@ afterEach(() => {
   sampled.length = 0
 })
 
-test('K3 X16: the chat-first view is measured against its own background, not the operator one', async () => {
+test('K3 X16: a preview page is measured against the applied theme background', async () => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -43,13 +43,13 @@ test('K3 X16: the chat-first view is measured against its own background, not th
     background: { image: 'admin.png', dim: 0.1 },
     views: { user: { background: { image: 'user.png', dim: 0.4 } } },
   } as unknown as ThemeManifest
-  const user = previewPages.find((page) => page.id === 'user')!
+  const chat = previewPages.find((page) => page.id === 'chat')!
   const { container } = render(
     <QueryClientProvider client={new QueryClient()}>
       <PreviewFrame
         draft={{ manifest, css: '', themeId: 'x', resolve: (name: string) => `/assets/${name}` }}
         mode="light"
-        page={user}
+        page={chat}
         device={previewDevices[0]!}
         onText={() => undefined}
       />
@@ -62,5 +62,5 @@ test('K3 X16: the chat-first view is measured against its own background, not th
   frame.contentDocument!.close()
   fireEvent.load(frame)
   await waitFor(() => expect(sampled.length).toBeGreaterThan(0), { timeout: 4000 })
-  expect(sampled[0]).toEqual({ url: '/assets/user.png', dim: 0.4 })
+  expect(sampled[0]).toEqual({ url: '/assets/admin.png', dim: 0.1 })
 })

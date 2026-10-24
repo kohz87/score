@@ -110,8 +110,8 @@ export function NotificationsSection() {
               {
                 kind: 'approvals',
                 title: 'Score notifications work',
-                body: 'This is a test. Tap it to open Now.',
-                url: '/now',
+                body: 'This is a test. Tap it to open Score.',
+                url: '/b',
                 tag: 'test',
               },
               () => {},

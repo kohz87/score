@@ -141,7 +141,7 @@ export function OtherScreens({
       <ul className="watch-others">
         {others.map((item) => (
           <li key={item.agent.id}>
-            <Link to={`/now/watch/${encodeURIComponent(item.agent.id)}`} className="watch-mini">
+            <Link to={`/watch/${encodeURIComponent(item.agent.id)}`} className="watch-mini">
               <span className="watch-mini__screen">
                 <ScreenMiniature item={item} />
               </span>

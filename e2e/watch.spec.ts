@@ -53,7 +53,7 @@ test.beforeEach(async ({ page }) => {
 
 async function open(page: Page, width = 1440) {
   await page.setViewportSize({ width, height: 1100 })
-  await page.goto('/now/watch/builder')
+  await page.goto('/watch/builder')
   await expect(page.getByRole('heading', { name: 'Watching builder', level: 1 })).toBeVisible()
   await expect(page.getByText(/^Loading/)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)

@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { createQueryClient } from '../data/query-client.ts'
-import { nowKey } from '../routes/now/now-queries.ts'
+import { nowKey } from '../data/team-pause.ts'
 import { BoldSearch } from './BoldSearch.tsx'
 
 const agents: AgentSummary[] = [

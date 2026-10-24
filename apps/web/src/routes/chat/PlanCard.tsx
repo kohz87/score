@@ -65,7 +65,7 @@ export function PlanCard({
     <section className="chat-plan-card" aria-label="Plan">
       <div className="chat-plan-head">
         <strong>Plan</strong>
-        <Link to={`/now/flow/${encodeURIComponent(part.briefId)}`}>Open in Flow</Link>
+        <Link to={`/runs/${encodeURIComponent(part.briefId)}`}>Open the run</Link>
       </div>
       <div className="chat-plan-start">
         {start.isSuccess ? (

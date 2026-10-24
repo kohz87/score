@@ -34,10 +34,6 @@
       // A device that picked its own theme since the cache was written must not paint the old one.
       if (usable && device && cache.id !== device) usable = false
       if (usable) {
-        // The chat-first user view (/u) wears the theme's own overrides for it.
-        var onUser = /^\/u(\/|$)/.test(window.location.pathname)
-        if (onUser && cache.user && typeof cache.user === 'object' && cache.user.attributes)
-          cache = { attributes: cache.user.attributes, css: cache.user.css }
         for (var name in cache.attributes) {
           var value = cache.attributes[name]
           if (NAMES[name] === 1 && typeof value === 'string' && /^[a-z0-9-]{0,16}$/.test(value))

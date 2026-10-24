@@ -18,11 +18,11 @@ test('the app is installable: manifest and icons are served, the worker is regis
   expect(manifest.ok()).toBe(true)
   expect(manifest.headers()['content-type']).toContain('application/manifest+json')
   const body = await manifest.json()
-  expect(body).toMatchObject({ name: 'Score', display: 'standalone', start_url: '/now' })
+  expect(body).toMatchObject({ name: 'Score', display: 'standalone', start_url: '/b' })
   for (const icon of body.icons) expect((await request.get(icon.src)).ok()).toBe(true)
   expect((await request.get('/sw.js')).headers()['service-worker-allowed']).toBe('/')
 
-  await page.goto('/now')
+  await page.goto('/b')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope)
   expect(scope).toBe(new URL('/', page.url()).href)
@@ -49,13 +49,13 @@ test('when Score cannot be reached the app shows the offline page and recovers o
   context,
 }) => {
   await pair(page)
-  await page.goto('/now')
+  await page.goto('/b')
   await page.evaluate(async () => navigator.serviceWorker.ready)
   await expect
     .poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
     .toBe(true)
   await context.setOffline(true)
-  await page.goto('/now').catch(() => {})
+  await page.goto('/b').catch(() => {})
   await expect(page.getByRole('heading', { name: /Score can.t be reached/ })).toBeVisible()
   await context.setOffline(false)
   // The page also retries by itself when the connection returns, so the button may already be gone.
@@ -234,7 +234,7 @@ test.describe('passkeys over HTTPS', () => {
       await page.getByRole('button', { name: 'Log out this browser' }).click()
       await expect(page).toHaveURL(`${origin}/pair`)
       await page.getByRole('button', { name: 'Sign in with a passkey' }).click()
-      await expect(page).toHaveURL(`${origin}/now`, { timeout: 15_000 })
+      await expect(page).toHaveURL(`${origin}/b`, { timeout: 15_000 })
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
       expect(await page.evaluate(async () => (await fetch('/api/agents')).status)).toBe(200)
 

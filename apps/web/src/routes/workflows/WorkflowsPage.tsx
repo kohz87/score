@@ -5,7 +5,7 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { ApiError } from '../../data/api.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { statusLabel } from '../orchestrations/orch-model.ts'
-import { taskAgentsQuery } from '../tasks/task-queries.ts'
+import { taskAgentsQuery } from '../../data/task-queries.ts'
 import { ExportDialog } from './ExportDialog.tsx'
 import { StartWorkflowDialog } from './StartWorkflowDialog.tsx'
 import {
@@ -54,7 +54,7 @@ export function WorkflowsPage() {
         name: `${detail.latest.definition.name} (copy)`.slice(0, 120),
       }
       const created = await save.mutateAsync({ workflowId: null, definition })
-      void navigate(`/now/flow/workflows/${encodeURIComponent(created.workflowId)}`)
+      void navigate(`/workflows/${encodeURIComponent(created.workflowId)}`)
     } catch (error) {
       setNotice(
         error instanceof ApiError && error.code === 'quota_exhausted'
@@ -74,7 +74,7 @@ export function WorkflowsPage() {
             Draw it once, then start runs of it.
           </p>
         </div>
-        <Link to="/now/flow/workflows/new" className="wf-button wf-button--primary">
+        <Link to="/workflows/new" className="wf-button wf-button--primary">
           New workflow
         </Link>
       </section>
@@ -95,8 +95,8 @@ export function WorkflowsPage() {
       )}
       {list.data && list.data.items.length === 0 && (
         <p className="wf-empty">
-          No workflows yet. Start with <Link to="/now/flow/workflows/new">a new one</Link>: add an
-          agent step, a gate for your approval and an end.
+          No workflows yet. Start with <Link to="/workflows/new">a new one</Link>: add an agent
+          step, a gate for your approval and an end.
         </p>
       )}
       {list.data && list.data.items.length > 0 && (
@@ -107,7 +107,7 @@ export function WorkflowsPage() {
               <li key={workflow.id} className="wf-card" aria-label={workflow.name}>
                 <div className="wf-card__main">
                   <h3>
-                    <Link to={`/now/flow/workflows/${encodeURIComponent(workflow.id)}`}>
+                    <Link to={`/workflows/${encodeURIComponent(workflow.id)}`}>
                       {workflow.name}
                     </Link>
                   </h3>
@@ -143,7 +143,7 @@ export function WorkflowsPage() {
                     {last ? (
                       <>
                         Last run:{' '}
-                        <Link to={`/now/flow/${encodeURIComponent(last.briefId)}`}>
+                        <Link to={`/runs/${encodeURIComponent(last.briefId)}`}>
                           {statusLabel[last.status]}
                         </Link>
                         {last.graphOutcome
@@ -164,10 +164,7 @@ export function WorkflowsPage() {
                     Run
                     <span className="wf-visually-hidden"> {workflow.name}</span>
                   </button>
-                  <Link
-                    className="wf-button"
-                    to={`/now/flow/workflows/${encodeURIComponent(workflow.id)}`}
-                  >
+                  <Link className="wf-button" to={`/workflows/${encodeURIComponent(workflow.id)}`}>
                     Edit<span className="wf-visually-hidden"> {workflow.name}</span>
                   </Link>
                   <button type="button" onClick={() => void duplicate(workflow)}>
@@ -238,7 +235,7 @@ export function WorkflowsPage() {
           close={() => setStarting(null)}
           created={(run) => {
             setStarting(null)
-            void navigate(`/now/flow/${encodeURIComponent(run.briefId)}`)
+            void navigate(`/runs/${encodeURIComponent(run.briefId)}`)
           }}
         />
       )}

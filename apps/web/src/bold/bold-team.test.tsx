@@ -675,7 +675,7 @@ test('the agent page puts the four cards first and makes every classic tab reach
   expect(screen.getByRole('link', { name: 'Look at its screen' }).getAttribute('href')).toBe(
     '/b/screen/builder',
   )
-  expect(screen.getByRole('button', { name: 'Open builder in its own window' })).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Open builder in its own window' })).toBeNull()
 
   fireEvent.click(screen.getByRole('button', { name: /^More: memory/ }))
   const nav = await screen.findByRole('navigation', { name: 'Agent settings sections' })

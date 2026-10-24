@@ -184,7 +184,7 @@ test('pausing twice in a row keeps the task parked and restorable (no triage)', 
   }
 })
 
-test('a task held by two pauses stays parked until the last one resumes', async () => {
+test('a task held by a team pause and an agent pause stays parked until the last one resumes', async () => {
   const task = await port.createTask({ title: 'Shared', assignee: 'builder', roomId }, 'a')
   const brief = await send({ text: '/assign @builder Shared work' })
   const briefId = brief.json().message.id as string
@@ -195,9 +195,9 @@ test('a task held by two pauses stays parked until the last one resumes', async 
     )
     .run(briefId, task.id)
   await post('/api/agents/builder/pause', {}, 'p')
-  await post(`/api/briefs/${briefId}/pause`, {}, 'bp')
-  expect(rows('SELECT task_id FROM brief_paused_tasks WHERE task_id = ?', task.id)).toHaveLength(1)
-  await post(`/api/briefs/${briefId}/resume`, {}, 'br')
+  await post('/api/team/pause', {}, 'bp')
+  expect(rows('SELECT task_id FROM team_paused_tasks WHERE task_id = ?', task.id)).toHaveLength(1)
+  await post('/api/team/resume', {}, 'br')
   expect((await port.getTask(task.id)).hermesStatus).toBe('scheduled')
   await post('/api/agents/builder/resume', {}, 'r')
   expect((await port.getTask(task.id)).hermesStatus).toBe('ready')

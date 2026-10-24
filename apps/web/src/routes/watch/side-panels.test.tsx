@@ -164,7 +164,7 @@ test('other screens skip this agent and link each of the others to its own watch
   )
   expect(screen.queryByRole('link', { name: /builder/ })).toBeNull()
   const reviewer = screen.getByRole('link', { name: /reviewer/ })
-  expect(reviewer.getAttribute('href')).toBe('/now/watch/reviewer')
+  expect(reviewer.getAttribute('href')).toBe('/watch/reviewer')
   expect(reviewer.textContent).toContain('reviewing')
   const designer = screen.getByRole('link', { name: /designer/ })
   expect(designer.textContent).toContain('No desktop open')

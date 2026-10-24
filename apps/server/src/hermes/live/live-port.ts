@@ -70,7 +70,7 @@ import { runHermes, type HermesRunner, type HermesSpawner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 import { LiveProfileManagement } from './profile-management.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
-import { assertNotKanbanAttempt } from '../../domain/brief-flow.ts'
+import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
 
 const StateSchema = z.object({ served_profiles: z.array(ProfileNameSchema) })
 export interface LivePortOptions extends HermesPortDeps {

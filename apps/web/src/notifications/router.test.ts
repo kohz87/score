@@ -46,13 +46,13 @@ test('nothing is delivered until this device opted in', () => {
   expect(router.handle(ev('approval.requested', approval()))).toBeNull()
 })
 
-test('an approval waiting opens Now, and says nothing about the command without previews', () => {
+test('an approval waiting opens Score, and says nothing about the command without previews', () => {
   const { router, state } = setup()
   const payload = router.handle(ev('approval.requested', approval()))!
   expect(payload).toMatchObject({
     kind: 'approvals',
     title: 'Approval needed',
-    url: '/now',
+    url: '/b',
     tag: 'approval:a1',
   })
   expect(payload.body).toBe('Lead is waiting for your decision.')
@@ -71,7 +71,7 @@ test('a finished routine notifies once, and a failed one is a routine result, no
   const { router } = setup()
   expect(router.handle(ev('run.updated', run({ origin: 'cron', status: 'running' })))).toBeNull()
   const done = router.handle(ev('run.updated', run({ origin: 'cron' })))!
-  expect(done).toMatchObject({ kind: 'routines', title: 'Routine finished', url: '/now/routines' })
+  expect(done).toMatchObject({ kind: 'routines', title: 'Routine finished', url: '/b/team' })
   expect(router.handle(ev('run.updated', run({ origin: 'cron' })))).toBeNull()
   const failed = router.handle(
     ev('run.updated', run({ id: 'r2', origin: 'cron', status: 'failed' })),
@@ -85,7 +85,7 @@ test('a failed run is an agent error and links to Watch; a completed ordinary ru
   expect(router.handle(ev('run.updated', run({ id: 'r3', status: 'failed' })))).toMatchObject({
     kind: 'errors',
     title: 'Builder hit an error',
-    url: '/now/watch/builder',
+    url: '/watch/builder',
   })
 })
 
@@ -141,10 +141,10 @@ const attempt = (over: object = {}) => ({
   ...over,
 })
 
-test('a failed attempt on the current board opens its task, never Watch', () => {
+test('a failed attempt opens its read-only run page, never Watch', () => {
   const { router } = setup()
   const payload = router.handle(ev('attempt.updated', attempt()))!
-  expect(payload).toMatchObject({ kind: 'errors', url: '/tasks/t1', tag: 'attempt:kr_1' })
+  expect(payload).toMatchObject({ kind: 'errors', url: '/attempts/kr_1', tag: 'attempt:kr_1' })
   expect(payload.url).not.toContain('/watch/')
   // Once per attempt.
   expect(router.handle(ev('attempt.updated', attempt()))).toBeNull()

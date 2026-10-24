@@ -11,7 +11,7 @@ import {
   writeDeviceOverride,
   writeLookCache,
 } from './look-store.ts'
-import { DEFAULT_LAYOUT, layoutFromCache, setLayout, viewOfPath, type LookView } from './layout.ts'
+import { DEFAULT_LAYOUT, layoutFromCache, setLayout } from './layout.ts'
 import { themeDetailQuery } from './queries.ts'
 import { useLook } from './use-look.ts'
 import { packs } from '../styles/packs.ts'
@@ -19,19 +19,9 @@ import './look.css'
 
 // The layout of the last applied theme, before the first render: the menu and the Now cards start where they were.
 try {
-  setLayout(layoutFromCache(readCachedLayout(viewOfPath(window.location.pathname))))
+  setLayout(layoutFromCache(readCachedLayout()))
 } catch {
   // No window (tests of other modules): the Score default.
-}
-
-/** Which front end this page is (the user view lives at /u), following the router. */
-function useView(router?: DataRouter): LookView {
-  const path = useSyncExternalStore(
-    (notify) => router?.subscribe(notify) ?? (() => undefined),
-    () => router?.state.location.pathname ?? window.location.pathname,
-    () => '/',
-  )
-  return viewOfPath(path)
 }
 
 function systemMode(): ColorMode {
@@ -88,8 +78,6 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
   const custom = id !== null && !isBuiltinTheme(id)
   const detail = useQuery({ ...themeDetailQuery(id ?? 'score'), enabled: custom })
   const mode = useResolvedMode(look.mode)
-  const view = useView(router)
-
   // Colour mode: this device's choice, else the shared one.
   useEffect(() => {
     applyTheme(look.mode)
@@ -150,9 +138,8 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
       const applied = applyCustom(
         { id, manifest: detail.data.manifest, css: detail.data.css, etag: detail.data.etag },
         mode,
-        view,
       )
-      writeLookCache({ id, ...applied.cache, user: applied.userCache })
+      writeLookCache({ id, ...applied.cache })
       setLayout(applied.layout)
       lookStore.setFailure(null)
     } catch {
@@ -161,17 +148,7 @@ export function LookRuntime({ router }: { router?: DataRouter }) {
       writeLookCache(null)
       lookStore.setFailure('Your theme couldn’t be applied, so Score is showing its own look.')
     }
-  }, [
-    look.safe,
-    look.loading,
-    id,
-    custom,
-    detail.isPending,
-    detail.isError,
-    detail.data,
-    mode,
-    view,
-  ])
+  }, [look.safe, look.loading, id, custom, detail.isPending, detail.isError, detail.data, mode])
 
   return <LookBanner router={router} safe={look.safe} failure={look.failure} />
 }

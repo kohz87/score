@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
-import { taskAgentsQuery } from '../tasks/task-queries.ts'
+import { taskAgentsQuery } from '../../data/task-queries.ts'
 import { LiveDiagram } from './LiveDiagram.tsx'
 import { LiveLog } from './LiveLog.tsx'
 import {

@@ -212,7 +212,7 @@ export function themeAttributes(look: Look): Record<string, string> {
   if (layout?.chat?.roomList)
     out['data-rooms'] =
       layout.chat.roomList === 'hidden-until-opened' ? 'hidden' : layout.chat.roomList
-  // Full-bleed containers that paint the ground over the page (the user view) let the picture through.
+  // Full-bleed containers that paint the ground over the page let the picture through.
   if (look.background?.image && ThemeAssetRefSchema.safeParse(look.background.image).success)
     out['data-backdrop'] = look.background.fit === 'tile' ? 'tile' : 'cover'
   return out
@@ -328,7 +328,7 @@ export type AppliedLook = {
   report: ReturnType<typeof sanitiseCss>['report']
   contrastFallback: boolean
   cache: CachedLook
-  /** The same for the chat-first user view (`views.user` laid over the theme), which lives at /u. */
+  /** The same for the retired user view (`views.user` laid over the theme), kept for old theme tests. */
   userCache: CachedLook
   layout: ReturnType<typeof resolveLayout>
 }
@@ -366,7 +366,7 @@ export function lookParts(
 /**
  * Applies a custom theme: attributes, token sheet, font faces, background and the sanitised theme CSS, in that
  * cascade order. Throws when something is wrong; the caller skips the theme (the engine leaves the look cleared).
- * `view` is which front end this page is: the user view wears `views.user` over the theme.
+ * `view` is kept for the Customizer and old theme checks; the app itself always wears `admin`.
  */
 export function applyCustom(
   detail: LookDetail,

@@ -52,22 +52,14 @@
 }
 :root[data-look='custom'][data-elevation]
   :is(
-    .now-card,
-    .now-score,
-    .now-group-list,
     .chat-thread,
     .chat-side-card,
     .chat-usage-card,
     .chat-composer-box,
-    .user-run,
     .kn-left,
     .kn-main,
     .kn-panel,
     .kn-toolbar,
-    .flow-panel,
-    .flow-inspector,
-    .flow-log,
-    .flow-stats,
     .orch-head,
     .orch-diagram,
     .orch-log,
@@ -79,9 +71,6 @@
     .settings-card,
     .settings-jump,
     .settings-jump-list,
-    .task-card,
-    .tasks-board,
-    .task-placeholder,
     .team-card,
     .team-agent-card,
     .plugins-card,
@@ -92,28 +81,20 @@
     .watch-replay,
     .attempt-card,
     .pair-card,
-    .pop-section
+
   ):not([data-protected]) {
   box-shadow: var(--theme-card-shadow);
 }
 :root[data-look='custom'][data-border]
   :is(
-    .now-card,
-    .now-score,
-    .now-group-list,
     .chat-thread,
     .chat-side-card,
     .chat-usage-card,
     .chat-composer-box,
-    .user-run,
     .kn-left,
     .kn-main,
     .kn-panel,
     .kn-toolbar,
-    .flow-panel,
-    .flow-inspector,
-    .flow-log,
-    .flow-stats,
     .orch-head,
     .orch-diagram,
     .orch-log,
@@ -125,9 +106,6 @@
     .settings-card,
     .settings-jump,
     .settings-jump-list,
-    .task-card,
-    .tasks-board,
-    .task-placeholder,
     .team-card,
     .team-agent-card,
     .plugins-card,
@@ -138,7 +116,7 @@
     .watch-replay,
     .attempt-card,
     .pair-card,
-    .pop-section
+
   ):not([data-protected]) {
   border: var(--theme-card-border);
 }
@@ -147,22 +125,14 @@
    without a solid background of its own stays solid, so a picture never lies behind that text. */
 :root[data-look='custom'][data-surface='glass']
   :is(
-    .now-card,
-    .now-score,
-    .now-group-list,
     .chat-thread,
     .chat-side-card,
     .chat-usage-card,
     .chat-composer-box,
-    .user-run,
     .kn-left,
     .kn-main,
     .kn-panel,
     .kn-toolbar,
-    .flow-panel,
-    .flow-inspector,
-    .flow-log,
-    .flow-stats,
     .orch-head,
     .orch-diagram,
     .orch-log,
@@ -174,9 +144,6 @@
     .settings-card,
     .settings-jump,
     .settings-jump-list,
-    .task-card,
-    .tasks-board,
-    .task-placeholder,
     .team-card,
     .team-agent-card,
     .plugins-card,
@@ -187,7 +154,7 @@
     .watch-replay,
     .attempt-card,
     .pair-card,
-    .pop-section
+
   ):not([data-protected]):not(
     :has([data-protected]:not(.agent-glyph, .needs-you-dot, .chat-approval, .chat-toast))
   ) {
@@ -199,22 +166,14 @@
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root[data-look='custom'][data-surface='glass']
     :is(
-      .now-card,
-      .now-score,
-      .now-group-list,
       .chat-thread,
       .chat-side-card,
       .chat-usage-card,
       .chat-composer-box,
-      .user-run,
       .kn-left,
       .kn-main,
       .kn-panel,
       .kn-toolbar,
-      .flow-panel,
-      .flow-inspector,
-      .flow-log,
-      .flow-stats,
       .orch-head,
       .orch-diagram,
       .orch-log,
@@ -226,9 +185,6 @@
       .settings-card,
       .settings-jump,
       .settings-jump-list,
-      .task-card,
-      .tasks-board,
-      .task-placeholder,
       .team-card,
       .team-agent-card,
       .plugins-card,
@@ -239,7 +195,7 @@
       .watch-replay,
       .attempt-card,
       .pair-card,
-      .pop-section
+
     ):not([data-protected]):not(
       :has([data-protected]:not(.agent-glyph, .needs-you-dot, .chat-approval, .chat-toast))
     ) {
@@ -263,7 +219,3 @@
 }
 
 /* A picture behind the page (backgroundCss, engine.ts): full-bleed containers that paint the ground let it through. */
-:root[data-backdrop] .user-view,
-:root[data-backdrop] .user-main {
-  background: transparent;
-}

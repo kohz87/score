@@ -237,17 +237,6 @@ const operation = {
   error: null,
   exportPath: null,
 }
-const flowNode = {
-  id: 'task:t_1',
-  kind: 'step',
-  title: 'Build',
-  agentId: 'builder',
-  state: 'working',
-  subtitle: 'builder',
-  taskId: 't_1',
-  layout: { col: 1, row: 0 },
-}
-const flowEdge = { id: 'e1', from: 'brief:brief-1', to: 'task:t_1', kind: 'flow', label: null }
 const xtc = `xtc_${'a'.repeat(43)}`
 const job = {
   id: 'job_1',
@@ -536,14 +525,6 @@ const cases = [
     { asOfSeq: 1, items: [], nextCursor: 3 },
   ],
   [
-    'TasksSnapshotSchema',
-    {
-      asOfSeq: 0,
-      columns: { planned: [f.task], working: [], in_review: [], needs_you: [], done: [] },
-    },
-    { asOfSeq: 0, columns: { backlog: [] } },
-  ],
-  [
     'NowSnapshotSchema',
     {
       asOfSeq: 0,
@@ -670,38 +651,7 @@ const cases = [
   ['TaskSummarySchema', f.task, { ...f.task, progress: 1.1 }],
   ['BriefStatusSchema', 'paused', 'queued'],
   ['BriefSummarySchema', f.brief, { ...f.brief, status: 'queued' }],
-  ['BriefsListSchema', { items: [f.brief] }, { items: [{}] }],
-  ['FlowNodeSchema', flowNode, { ...flowNode, state: 'queued' }],
-  ['FlowEdgeSchema', flowEdge, { ...flowEdge, kind: 'other' }],
-  [
-    'BriefFlowSchema',
-    {
-      asOfSeq: 1,
-      brief: f.brief,
-      nodes: [flowNode],
-      edges: [flowEdge],
-      stats: { runningSec: 1, steps: 1, handoffs: 0, spendUsd: null, eta: null, attempts: 2 },
-      notice: null,
-    },
-    { asOfSeq: 1, brief: f.brief, nodes: [flowNode], edges: [flowEdge] },
-  ],
-  [
-    'FlowNodeDetailSchema',
-    {
-      node: flowNode,
-      description: '',
-      steps: [],
-      approval: null,
-      run: null,
-      model: null,
-      tools: [],
-      watch: null,
-    },
-    { node: flowNode },
-  ],
-  ['BriefLogPageSchema', { items: [f.log], nextCursor: null }, { items: [f.log] }],
   ['PlanStartResponseSchema', { briefId: 'b', taskIds: ['t'] }, { briefId: 'b', taskIds: [1] }],
-  ['NodeStopResponseSchema', { ok: true }, { ok: false }],
   ['TaskStepSchema', f.step, { ...f.step, done: 'yes' }],
   ['TaskActivitySchema', f.activity, { ...f.activity, agentId: '' }],
   ['TaskDetailSchema', f.detail, { ...f.detail, dependsOn: [''] }],
@@ -2206,12 +2156,6 @@ test('HTTP snapshots accept asOfSeq 0 (fresh server) and reject negatives', () =
   expect(contract.AgentsSnapshotSchema.parse({ asOfSeq: 0, items: [f.agent] }).asOfSeq).toBe(0)
   expect(contract.AgentsSnapshotSchema.safeParse({ asOfSeq: -1, items: [] }).success).toBe(false)
   expect(
-    contract.TasksSnapshotSchema.parse({
-      asOfSeq: 0,
-      columns: { planned: [], working: [], in_review: [], needs_you: [], done: [] },
-    }).asOfSeq,
-  ).toBe(0)
-  expect(
     contract.ErrorEnvelopeSchema.parse({ error: { code: 'not_found', message: 'Unknown room' } }),
   ).toMatchObject({ error: { code: 'not_found' } })
 })
@@ -2271,21 +2215,6 @@ describe('Kanban attempts (5.17a-1) additions', () => {
       contract.HandoffSchema.safeParse({ ...f.unattributedHandoff, from: { blockId: 'x' } })
         .success,
     ).toBe(false)
-  })
-  test('Flow tools: null = not observed, [] = observed none; attempts list rides along', () => {
-    const base = {
-      node: flowNode,
-      description: '',
-      steps: [],
-      approval: null,
-      run: null,
-      model: null,
-      watch: null,
-    }
-    expect(
-      contract.FlowNodeDetailSchema.parse({ ...base, tools: null, attempts: [f.attempt] }).tools,
-    ).toBeNull()
-    expect(contract.FlowNodeDetailSchema.safeParse({ ...base, tools: [1] }).success).toBe(false)
   })
   test('history rows, task details and reports accept the attempt fields', () => {
     const item = {

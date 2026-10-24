@@ -327,7 +327,6 @@ const consentForms: Record<string, { decisions: number; markers: string[] }> = {
   'routes/pair/PairPage.tsx': { decisions: 1, markers: ['pair-card'] },
   'routes/team/CodingAgent.tsx': { decisions: 1, markers: ['coding-acknowledge'] },
   'bold/BoldAddAgent.tsx': { decisions: 1, markers: ['coding-acknowledge'] },
-  'routes/tasks/TaskDrawer.tsx': { decisions: 1, markers: ['task-drawer-approval'] },
   // Not a consent, but the full-screen Customizer's way back (X7).
   'routes/customizer/Customizer.tsx': { decisions: 0, markers: ['cz-back'] },
 }
@@ -353,50 +352,4 @@ test('every form that posts a consent is a data-decision and wears its protected
     }
   }
   expect(problems).toEqual([])
-})
-
-// The room stage's marks are moved by Score's own CSS (the hop, the mirroring and the overlays). protected.css pins
-// opacity and transform on everything inside a protected surface, so it must leave exactly those parts alone.
-test('protected.css leaves the moving parts of the room stage to Score’s rules, and only those', () => {
-  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
-  const squashed = css.replace(/\s+/g, ' ')
-  const rule =
-    /\[data-protected\]:not\(svg\) \*:not\(svg \*\)([^{]*)\{ opacity: 1 !important;[^}]*transform: none !important/.exec(
-      squashed,
-    )
-  expect(rule, 'the blanket rule').not.toBeNull()
-  // Inside `:where`, so it adds no specificity (the disabled-control rule must still win over this one).
-  // (Prettier wraps the list; the whitespace inside the brackets is not part of the selector.)
-  expect(rule![1]!.replace(/\( /g, '(').replace(/ \)/g, ')')).toBe(
-    ':not(:where(.room-stage__move, .room-stage__anim, .room-stage__fx)) ',
-  )
-})
-
-// The room stage (PLAN 10.10) moves its own parts the same way: the three exempt classes above are the only ones
-// protected.css leaves alone, so every part Score moves must wear one (or sit inside an svg, which the layer never
-// pins), and nothing else may move.
-test('the room stage’s moving parts are exactly the ones that wear an exempt class or live in an svg', () => {
-  const css = readFileSync(join(root, 'routes/chat/stage/room-stage.css'), 'utf8')
-  const moved = new Set<string>()
-  for (const [, selectors, body] of css.matchAll(/^(\.room-stage[^{]*)\{([^}]*)\}/gm)) {
-    if (!/\b(opacity|transform|animation(-name)?):/.test(body!)) continue
-    for (const selector of selectors!.split(',')) {
-      // The element that moves is the last compound selector's own class.
-      const last = selector.trim().split(/\s+/).at(-1)!
-      const own = /\.room-stage__([\w]+)/.exec(last)
-      if (own) moved.add(own[1]!)
-    }
-  }
-  expect([...moved].sort()).toEqual(['anim', 'bang', 'body', 'dot', 'fig', 'mark', 'say', 'z'])
-  const view = readFileSync(join(root, 'routes/chat/stage/RoomStageView.tsx'), 'utf8')
-  for (const part of ['body', 'mark'])
-    expect(view, part).toMatch(new RegExp('room-stage__' + part + '[\'"`,\\s]+room-stage__move'))
-  for (const part of ['bang', 'say'])
-    expect(view, part).toMatch(new RegExp(`room-stage__fx room-stage__${part}`))
-})
-
-test('the room stage is a protected surface a theme cannot name, and its markup says so', () => {
-  expect(protectedClasses).toContain('room-stage')
-  const view = readFileSync(join(root, 'routes/chat/stage/RoomStageView.tsx'), 'utf8')
-  expect(view).toMatch(/className=\{`room-stage[^`]*`\}[\s\S]{0,300}data-protected="any"/)
 })

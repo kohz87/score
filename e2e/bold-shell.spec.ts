@@ -44,7 +44,7 @@ test('?ui=classic returns to the classic shell', async ({ page }) => {
   await page.goto('/?ui=bold')
   await expect(page).toHaveURL('/b')
   await page.goto('/?ui=classic')
-  await expect(page).toHaveURL('/now')
+  await expect(page).toHaveURL('/chat')
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Score, go to the team room' })).toHaveCount(0)
 })

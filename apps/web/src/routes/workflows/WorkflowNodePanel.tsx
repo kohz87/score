@@ -162,7 +162,7 @@ export function WorkflowNodePanel({
 
       {def.kind === 'agent' && (
         <p className="orch-muted">
-          <Link to={`/now/watch/${encodeURIComponent(def.agentId)}`}>Open the agent’s Watch</Link>{' '}
+          <Link to={`/watch/${encodeURIComponent(def.agentId)}`}>Open the agent’s Watch</Link>{' '}
           (shows all the agent’s work, not just this step).
         </p>
       )}

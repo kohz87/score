@@ -122,7 +122,7 @@ function WatchView({ agentId }: { agentId: string }) {
         {watch.status === 'error' ? (
           <p className="watch-state" role="alert">
             {missing ? 'That agent doesn’t exist.' : 'Couldn’t load this screen.'}{' '}
-            <Link to="/now">Back to the run</Link>
+            <Link to="/b">Back to Score</Link>
           </p>
         ) : (
           <p className="watch-state" role="status">
@@ -185,8 +185,8 @@ function WatchView({ agentId }: { agentId: string }) {
         <div className="watch-hero__who">
           <AgentGlyph agent={agent} size="lg" decorative />
           <div className="watch-hero__title">
-            <Link to="/now/flow" className="watch-hero__back">
-              Back to the run
+            <Link to="/b" className="watch-hero__back">
+              Back to Score
             </Link>
             <h1>Watching {agent.name}</h1>
           </div>

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   addFace,
   afterSave,
-  addNowCard,
   canRedo,
   canUndo,
   clearBackground,
@@ -16,23 +15,18 @@ import {
   markSaved,
   menuRows,
   moveMenuRow,
-  moveNowCard,
   redo,
   referencedAssets,
   removeFace,
-  removeNowCard,
   renameMenuRow,
   setBackgroundDim,
   setBackgroundImage,
   setChat,
   setColor,
   setCss,
-  setNowColumns,
-  setNowSpan,
   setDetails,
   setShape,
   startHistory,
-  startNow,
   undo,
   type Draft,
 } from './draft.ts'
@@ -62,7 +56,6 @@ describe('draft edits', () => {
   it('keeps a valid manifest', () => {
     let d = setColor(blank(), 'light', 'ink', '#101010')
     d = setShape(d, 'radius', 'round')
-    d = startNow(d)
     d = moveMenuRow(d, 0, 2)
     expect(manifestProblems(d.manifest)).toEqual([])
     expect(manifestProblems({ ...d.manifest, name: '' })).toEqual([
@@ -74,9 +67,7 @@ describe('draft edits', () => {
 describe('menu', () => {
   it('lists Score’s menu until it is changed', () => {
     expect(menuRows(blank().manifest).map((r) => r.to)).toEqual([
-      '/now',
       '/chat',
-      '/tasks',
       '/team',
       '/knowledge',
       '/reports',
@@ -87,9 +78,9 @@ describe('menu', () => {
 
   it('moves, renames and hides entries; Settings stays', () => {
     let d = moveMenuRow(blank(), 1, 0)
-    expect(d.manifest.layout?.menu?.[0]).toEqual({ to: '/chat' })
-    d = renameMenuRow(d, '/chat', 'Talk')
-    expect(d.manifest.layout?.menu?.[0]).toEqual({ to: '/chat', label: 'Talk' })
+    expect(d.manifest.layout?.menu?.[0]).toEqual({ to: '/team' })
+    d = renameMenuRow(d, '/team', 'Talk')
+    expect(d.manifest.layout?.menu?.[0]).toEqual({ to: '/team', label: 'Talk' })
     d = hideMenuRow(d, '/reports', true)
     expect(d.manifest.layout?.menu?.some((m) => m.to === '/reports')).toBe(false)
     expect(menuRows(d.manifest).at(-1)).toEqual({ to: '/reports', hidden: true })
@@ -102,27 +93,8 @@ describe('menu', () => {
     let d = moveMenuRow(blank(), 0, 1)
     d = moveMenuRow(d, 1, 0)
     expect(d.manifest.layout).toBeUndefined()
-    d = renameMenuRow(renameMenuRow(blank(), '/now', 'Home'), '/now', 'Now')
+    d = renameMenuRow(renameMenuRow(blank(), '/chat', 'Home'), '/chat', 'Chat')
     expect(d.manifest.layout).toBeUndefined()
-  })
-})
-
-describe('Now cards', () => {
-  it('moves, sizes and removes cards; Needs you stays', () => {
-    let d = startNow(blank())
-    const cards = () => d.manifest.layout!.now!.cards.map((c) => c.card)
-    expect(cards()[0]).toBe('timeline')
-    d = moveNowCard(d, 0, 2)
-    expect(cards()[2]).toBe('timeline')
-    d = setNowSpan(d, 'room', 3)
-    expect(d.manifest.layout!.now!.cards.find((c) => c.card === 'room')!.span).toBe(3)
-    d = setNowColumns(d, 2)
-    expect(d.manifest.layout!.now!.cards.every((c) => c.span <= 2)).toBe(true)
-    expect(removeNowCard(d, 'needs-you')).toBe(d)
-    d = removeNowCard(d, 'todo')
-    expect(cards()).not.toContain('todo')
-    d = addNowCard(d, 'todo')
-    expect(cards().at(-1)).toBe('todo')
   })
 })
 

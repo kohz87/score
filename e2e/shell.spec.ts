@@ -1,13 +1,12 @@
 import { expect, test } from '@playwright/test'
 
-// Anchored: an unanchored 'Now' also matches 'Knowledge' (k-now-ledge), and Now's link may read 'Now Needs you'.
+// Anchored: an unanchored title can also match another link that starts with the same letters.
 const navName = (title: string) => new RegExp(`^${title}\\b`)
 
 const destinations = [
-  ['/now', 'Now'],
   ['/chat', 'Chat'],
-  ['/tasks', 'Tasks'],
   ['/team', 'Team'],
+  ['/knowledge', 'Knowledge'],
   ['/reports', 'Reports'],
   ['/settings', 'Settings'],
 ] as const
@@ -24,10 +23,7 @@ for (const [path, title] of destinations) {
       if (request.resourceType() === 'font') fonts.push(request.url())
     })
     await page.goto(path)
-    // Now's headline is the sentence about the team, not the word "Now".
-    await expect(
-      page.getByRole('heading', title === 'Now' ? { level: 1 } : { name: title, level: 1 }),
-    ).toBeVisible()
+    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible()
     await expect(
       page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: navName(title) }),
     ).toHaveAttribute('aria-current', 'page')
@@ -37,17 +33,15 @@ for (const [path, title] of destinations) {
   })
 }
 
-test('each main nav link navigates and the root redirects to Now', async ({ page }) => {
+test('each main nav link navigates and the root redirects to the new shell', async ({ page }) => {
   await page.goto('/')
-  await expect(page).toHaveURL('/now')
+  await expect(page).toHaveURL('/b')
+  await page.goto('/chat')
   const nav = page.getByRole('navigation', { name: 'Main' })
   for (const [path, title] of destinations) {
     await nav.getByRole('link', { name: navName(title) }).click()
-    await expect(page).toHaveURL(path)
-    // Now's headline is the sentence about the team, not the word "Now".
-    await expect(
-      page.getByRole('heading', title === 'Now' ? { level: 1 } : { name: title, level: 1 }),
-    ).toBeVisible()
+    await expect(page).toHaveURL(path === '/settings' ? '/settings/models' : path)
+    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible()
     await expect(nav.getByRole('link', { name: navName(title) })).toHaveAttribute(
       'aria-current',
       'page',
@@ -56,7 +50,7 @@ test('each main nav link navigates and the root redirects to Now', async ({ page
 })
 
 test('Ctrl+K opens the palette, traps focus, navigates and returns focus', async ({ page }) => {
-  await page.goto('/now')
+  await page.goto('/chat')
   const trigger = page.getByRole('button', { name: /Search or run a command/ })
   // The shortcut listener is registered in an effect after first paint; wait for the app to render.
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
@@ -89,7 +83,7 @@ for (const width of [360, 719]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 800 })
-    await page.goto('/now')
+    await page.goto('/chat')
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeHidden()
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       width,

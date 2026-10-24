@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Outlet, redirect, RouterProvider, useLocation } from 'react-router'
 import type { DataRouter, RouteObject } from 'react-router'
-import { applyUiParam, readUi } from './bold/bold-ui.ts'
+import { applyUiParam } from './bold/bold-ui.ts'
 import { BoldHome } from './bold/BoldHome.tsx'
 import { BoldShell } from './bold/BoldShell.tsx'
 import { BoldAgentPage } from './bold/BoldAgent.tsx'
@@ -11,19 +11,16 @@ import { BoldTeam } from './bold/BoldTeam.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
 import { AgentPage } from './routes/team/AgentPage.tsx'
 import { TeamLayout, TeamPage } from './routes/team/TeamPage.tsx'
-import { TasksPage } from './routes/tasks/TasksPage.tsx'
 import { AppShell } from './shell/AppShell.tsx'
 import { destinations } from './shell/destinations.ts'
 import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
-import { NowPage } from './routes/now/NowPage.tsx'
 import { AttemptPage } from './routes/attempts/AttemptPage.tsx'
-import { PopOutPage } from './routes/pop/PopOutPage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
-import { UserHome } from './routes/user/UserHome.tsx'
-import { UserRoom } from './routes/user/UserRoom.tsx'
-import { UserShell } from './routes/user/UserShell.tsx'
-import { readView } from './routes/user/user-view.ts'
+import { RunPage } from './routes/runs/RunPage.tsx'
+import { WatchPage } from './routes/watch/WatchPage.tsx'
+import { WorkflowEditorRoute } from './routes/workflows/WorkflowEditor.tsx'
+import { WorkflowsPage } from './routes/workflows/WorkflowsPage.tsx'
 
 // Knowledge brings CodeMirror and the Markdown renderer: loaded on first visit, not with the shell.
 const LazyKnowledgePage = lazy(async () => ({
@@ -66,8 +63,6 @@ export const appRoutes: RouteObject[] = [
   {
     Component: UiParamBoundary,
     children: [
-      // 7.4b: one agent's compact view for its own browser window; no shell around it.
-      { path: '/agents/:agentId/pop', Component: PopOutPage },
       // 9.4: the theme Customizer is a full-screen editor with no shell around it. It brings CodeMirror and the preview
       // machinery, so it loads on first visit.
       ...['/settings/look/customize', '/settings/look/customize/:themeId'].map(
@@ -93,17 +88,6 @@ export const appRoutes: RouteObject[] = [
           { path: '*', loader: () => redirect('/b') },
         ],
       },
-      // 8.4: the chat-first user view has its own shell; the admin view's routes stay as they were.
-      {
-        path: '/u',
-        Component: UserShell,
-        HydrateFallback: UserShell,
-        children: [
-          { index: true, Component: UserHome },
-          { path: 'rooms/:roomId', Component: UserRoom },
-          { path: '*', loader: () => redirect('/u') },
-        ],
-      },
       {
         Component: AppShell,
         HydrateFallback: AppShell,
@@ -112,19 +96,10 @@ export const appRoutes: RouteObject[] = [
             index: true,
             loader: ({ request }) => {
               applyUiParam(new URL(request.url).search)
-              return redirect(readUi() === 'bold' ? '/b' : readView() === 'user' ? '/u' : '/now')
+              return redirect('/b')
             },
           },
           ...destinations.map(({ path, title }): RouteObject => {
-            if (path === '/tasks')
-              return {
-                path,
-                Component: TasksPage,
-                children: [
-                  { index: true, element: <></> },
-                  { path: ':taskId', element: <></> },
-                ],
-              }
             if (path === '/knowledge')
               return {
                 path,
@@ -156,34 +131,45 @@ export const appRoutes: RouteObject[] = [
                 ],
               }
             // Built destinations render their page; the rest stay stubs until their tasks land.
-            const page =
-              path === '/chat' ? (
-                <ChatPage />
-              ) : path === '/now' ? (
-                <NowPage />
-              ) : (
-                <StubPage title={title} />
-              )
+            const page = path === '/chat' ? <ChatPage /> : <StubPage title={title} />
             return {
               path,
               children: [
                 { index: true, element: page },
-                ...(path === '/now'
-                  ? [
-                      'routines',
-                      'flow',
-                      'flow/workflows',
-                      'flow/workflows/:workflowId',
-                      'flow/:briefId',
-                      'watch/:agentId',
-                    ]
-                  : path === '/chat'
-                    ? [':roomId']
-                    : []
-                ).map((child) => ({ path: child, element: page })),
+                ...(path === '/chat'
+                  ? [':roomId'].map((child) => ({ path: child, element: page }))
+                  : []),
               ],
             }
           }),
+          // Kept classic pages that used to live under /now. The old paths redirect below.
+          {
+            path: '/workflows',
+            children: [
+              { index: true, Component: WorkflowsPage },
+              { path: ':workflowId', Component: WorkflowEditorRoute },
+            ],
+          },
+          { path: '/watch/:agentId', Component: WatchPage },
+          { path: '/runs/:briefId', Component: RunPage },
+          // Stored links and notifications from before 11.11 still open the page they meant.
+          {
+            path: '/now/watch/:agentId',
+            loader: ({ params }) => redirect(`/watch/${params.agentId ?? ''}`),
+          },
+          { path: '/now/flow/workflows', loader: () => redirect('/workflows') },
+          {
+            path: '/now/flow/workflows/:workflowId',
+            loader: ({ params }) => redirect(`/workflows/${params.workflowId ?? ''}`),
+          },
+          {
+            path: '/now/flow/:briefId',
+            loader: ({ params }) => redirect(`/runs/${params.briefId ?? ''}`),
+          },
+          { path: '/now/routines', loader: () => redirect('/b/team') },
+          { path: '/now/*', loader: () => redirect('/b') },
+          { path: '/tasks/*', loader: () => redirect('/b') },
+          { path: '/u/*', loader: () => redirect('/b') },
           { path: '/terminal', Component: TerminalRoute },
           { path: '/attempts/:attemptId', Component: AttemptPage },
           { path: '/pair', loader: pairBrowser, Component: PairPage },

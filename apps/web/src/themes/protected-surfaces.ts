@@ -4,7 +4,6 @@
 export const protectedClasses = [
   // Approval and decision cards: tool approvals, gates, limits, unknown cost, coding reach
   'chat-approval',
-  'now-asking',
   'orch-decision',
   'orch-needs',
   'orch-fence',
@@ -54,9 +53,6 @@ export const protectedClasses = [
   'bold-source',
   // PLAN 11.4c: the thread's confirmation before stopping a job
   'bold-thread-stop-confirm',
-  // The task drawer's approval and its buttons
-  'task-drawer-approval',
-  'task-drawer-buttons',
   // Permission, sandbox and password screens
   'rules-card',
   'team-permissions',
@@ -74,7 +70,6 @@ export const protectedClasses = [
   'security-password',
   // Agent identity and error toasts
   'agent-glyph',
-  'room-stage',
   'chat-toast',
   // The way back
   'command-run',

@@ -2,6 +2,15 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { AttemptDetail, AttemptSummary } from '@score/contract'
 import { z } from 'zod'
 import type { DomainEventDraft } from '../hub/ingest.ts'
+import { HttpError } from '../errors.ts'
+
+/** A run id that names a Kanban attempt (`kr_...`): never stoppable, answered before any profile lookup. */
+export const KANBAN_ATTEMPT_STOP_MESSAGE =
+  'Score can’t stop a single task run: Hermes has no stop for one run. Stop it in Hermes.'
+
+export function assertNotKanbanAttempt(runId: string): void {
+  if (runId.startsWith('kr_')) throw new HttpError(501, 'unsupported', KANBAN_ATTEMPT_STOP_MESSAGE)
+}
 
 // Score's own record of Kanban worker attempts (5.17a-1). Separate from `runs`; stage 2 consumers read it through
 // listAttempts(). Hermes timestamps are epoch seconds; times Score observed are ISO strings.
@@ -292,8 +301,8 @@ export function activeHistoryId(sqlite: DatabaseSync): string | null {
 }
 
 /**
- * A task reference qualified by the board lineage the attempt came from. Only `current` references may navigate to
- * /tasks/:id or allow actions; a task deleted upstream, or from a closed or unverified history, is historical.
+ * A task reference qualified by the board lineage the attempt came from. Only `current` references describe the board
+ * Score follows now; a task deleted upstream, or from a closed or unverified history, is historical.
  */
 export function attemptSummary(attempt: KanbanAttempt): AttemptSummary {
   const startedAt = attempt.startedAt

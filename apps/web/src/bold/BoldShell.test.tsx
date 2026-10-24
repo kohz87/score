@@ -373,8 +373,8 @@ test('Settings offers the way back to the classic view', async () => {
   const router = open('/b/settings')
   expect(await screen.findByRole('heading', { name: 'Settings' })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: 'Use the classic view' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/now'))
-  expect(window.localStorage.getItem('score.ui')).toBeNull()
+  await waitFor(() => expect(router.state.location.pathname).toBe('/chat'))
+  expect(window.localStorage.getItem('score.ui')).toBe('classic')
 })
 
 test('Look choices apply to the whole bold shell', async () => {
@@ -408,11 +408,12 @@ test.each(['ctrlKey', 'metaKey'])(
 test('the index follows the per-device choice and ?ui= sets it', async () => {
   const bold = open('/?ui=bold')
   await waitFor(() => expect(bold.state.location.pathname).toBe('/b'))
-  expect(window.localStorage.getItem('score.ui')).toBe('bold')
+  expect(window.localStorage.getItem('score.ui')).toBeNull()
 })
 
-test('without the bold choice the index stays exactly where it was', async () => {
+test('the index opens the bold shell even after choosing classic', async () => {
+  window.localStorage.setItem('score.ui', 'classic')
   const classic = open('/?ui=classic')
-  await waitFor(() => expect(classic.state.location.pathname).toBe('/now'))
-  expect(window.localStorage.getItem('score.ui')).toBeNull()
+  await waitFor(() => expect(classic.state.location.pathname).toBe('/b'))
+  expect(window.localStorage.getItem('score.ui')).toBe('classic')
 })

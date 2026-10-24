@@ -219,7 +219,7 @@ test('the Hermes banner and the Team note show above every section', async () =>
 })
 
 test('the palette finds each Settings section once something is typed, and opens it', async () => {
-  mount('/now')
+  mount('/chat')
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
   const palette = await screen.findByRole('dialog', { name: 'Search or run a command' })
   expect(within(palette).getByRole('link', { name: 'Settings' })).toBeDefined()

@@ -229,10 +229,6 @@
 .team-band-primary:focus-visible,
 .team-band-secondary:focus-visible,
 .team-band-link:focus-visible,
-.team-band .team-popout-link:focus-visible {
-  outline: 2px solid var(--team-band-ink);
-  outline-offset: 3px;
-}
 .team-band-quiet {
   display: flex;
   align-items: center;
@@ -243,12 +239,6 @@
   font-weight: 600;
   color: inherit;
   text-underline-offset: 3px;
-}
-.team-band .team-popout-link {
-  border: 1.5px solid var(--team-band-ink);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--team-band-ink);
 }
 .team-band .team-band-error {
   font-size: 14px;
@@ -1140,23 +1130,6 @@ a.team-pill-button {
 }
 .team-routine-form .team-coding-permission input {
   width: auto;
-}
-
-.team-popout-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 30px;
-  height: 30px;
-  margin-left: 10px;
-  padding: 0;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  vertical-align: middle;
 }
 
 /* MCP access */

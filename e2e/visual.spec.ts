@@ -4,9 +4,7 @@ import { fixtureNow } from './now-fixture.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
 const destinations = [
-  { name: 'now', path: '/now', ready: '.now-cards' },
   { name: 'chat', path: '/chat/room-activity-feed', ready: '.chat-files' },
-  { name: 'tasks', path: '/tasks', ready: '.task-card' },
   { name: 'team', path: '/team', ready: '.team-agent-card' },
   { name: 'agent', path: '/team/builder', ready: '.team-tabs' },
   { name: 'reports', path: '/reports', ready: '.reports-table tbody tr' },
@@ -14,7 +12,6 @@ const destinations = [
   { name: 'settings', path: '/settings/rules', ready: '.rules-columns' },
   { name: 'settings-models', path: '/settings/models', ready: '.settings-card' },
   { name: 'journey', path: '/reports?tab=journey', ready: '.journey__row' },
-  { name: 'popout', path: '/agents/builder/pop', ready: '.pop-chat textarea' },
   // Last: other tests in this file address destinations by index.
   { name: 'knowledge', path: '/knowledge/projects/launch-plan.md', ready: '.cm-editor' },
 ]
@@ -77,7 +74,7 @@ for (const width of [1440, 390]) {
 // An edited message viewed at its middle version (PLAN 5.35): ‹ 2 / 3 › in the bar, the older branch read-only.
 for (const width of [1440, 390]) {
   test(`chat shows version 2 of 3 of an edited message at ${width}px`, async ({ page }) => {
-    await open(page, destinations[1]!, width)
+    await open(page, destinations[0]!, width)
     // First the latest version, with the control in the message's action row.
     const brief = page.locator('#message-message-brief-0')
     await brief.scrollIntoViewIfNeeded()
@@ -101,7 +98,7 @@ for (const width of [1440, 390]) {
 
 for (const width of [1440, 1024]) {
   test(`header stays on one line at ${width}px`, async ({ page }) => {
-    await open(page, destinations[2]!, width)
+    await open(page, destinations[0]!, width)
     const centers = await page
       .locator('.brand, .main-nav, .command-trigger, .avatar')
       .evaluateAll((elements) =>
@@ -116,7 +113,7 @@ for (const width of [1440, 1024]) {
 }
 
 test('mobile Chat keeps the room title whole and the Score link below it', async ({ page }) => {
-  await open(page, destinations[1]!, 390)
+  await open(page, destinations[0]!, 390)
   const heading = page.getByRole('heading', { name: '#activity-feed', level: 1 })
   const box = (await heading.boundingBox())!
   const lineHeight = await heading.evaluate((element) =>
@@ -131,7 +128,7 @@ test('mobile Chat keeps the room title whole and the Score link below it', async
 test('mobile agent tabs scroll in one row and keyboard focus brings the last tab into view', async ({
   page,
 }) => {
-  await open(page, destinations[4]!, 390)
+  await open(page, destinations[2]!, 390)
   const tabs = page.getByRole('tablist')
   const tops = await tabs
     .getByRole('tab')
@@ -147,7 +144,7 @@ test('mobile agent tabs scroll in one row and keyboard focus brings the last tab
 })
 
 test('mobile Reports scrolls columns and retains readable chart type', async ({ page }) => {
-  await open(page, destinations[5]!, 390)
+  await open(page, destinations[3]!, 390)
   for (const label of [
     'By agent table, scroll to see all columns',
     'Tasks by day chart, scroll to see all days',
@@ -274,7 +271,7 @@ for (const width of [1440, 390]) {
 // The context ring's popover and the delete-room dialog (PLAN 5.36).
 for (const width of [1440, 390]) {
   test(`chat context details popover at ${width}px`, async ({ page }) => {
-    await open(page, destinations[1]!, width)
+    await open(page, destinations[0]!, width)
     await page
       .getByRole('button', { name: /context: 77 % of 128k/ })
       .first()
@@ -287,7 +284,7 @@ for (const width of [1440, 390]) {
     })
   })
   test(`chat delete room dialog at ${width}px`, async ({ page }) => {
-    await open(page, destinations[1]!, width)
+    await open(page, destinations[0]!, width)
     if (width < 1100) await page.getByRole('button', { name: 'Rooms' }).click()
     await page.getByRole('button', { name: 'Actions for #activity-feed' }).click()
     await page.getByRole('menuitem', { name: 'Delete room…' }).click()
@@ -323,7 +320,7 @@ for (const width of [1024, 900, 899, 390]) {
   test(`rules form ${width >= 900 ? 'three columns' : 'one stack'} at ${width}px`, async ({
     page,
   }) => {
-    await open(page, destinations[6]!, width)
+    await open(page, destinations[4]!, width)
     const tops = await page
       .locator('.rules-column')
       .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top))
@@ -331,28 +328,3 @@ for (const width of [1024, 900, 899, 390]) {
     await noPageOverflow(page)
   })
 }
-
-test('selects use a centered chevron in both light and dark variants', async ({ page }) => {
-  await open(page, destinations[2]!, 1440)
-  const select = page.getByRole('combobox', { name: 'Room' })
-  const style = () =>
-    select.evaluate((element) => {
-      const css = getComputedStyle(element)
-      return {
-        appearance: css.appearance,
-        image: css.backgroundImage,
-        position: css.backgroundPosition,
-        padding: css.paddingRight,
-      }
-    })
-  const dark = await style()
-  expect(dark.appearance).toBe('none')
-  expect(dark.image).toContain('%23FFFFFF')
-  expect(dark.position).toContain('50%')
-  expect(dark.padding).toBe('40px')
-  await select.selectOption('room-activity-feed')
-  const light = await style()
-  expect(light.image).toContain('%2312131A')
-  await select.focus()
-  expect(await select.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid')
-})

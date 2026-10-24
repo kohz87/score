@@ -71,7 +71,7 @@ export function RoomRunPanel({
               <p className="orch-muted">
                 This room belongs to the run. Use the run controls instead of the composer while it
                 runs.{' '}
-                <Link to={`/now/flow/${encodeURIComponent(detail.briefId)}`}>
+                <Link to={`/runs/${encodeURIComponent(detail.briefId)}`}>
                   Open the live diagram
                 </Link>
               </p>

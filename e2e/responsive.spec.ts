@@ -3,7 +3,6 @@ import { chatSettled } from './chat-settled.ts'
 import { fixtureNow } from './now-fixture.ts'
 import { orchestrationFixtures } from './orchestration-fixtures.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
-import { taskDetailFixture, tasksFixture } from './readme/tasks-fixture.ts'
 import { watchApprovalFixture, watchFixture, watchOverviewFixture } from './watch-fixture.ts'
 
 // PLAN 5.34: phone (< 600px) and tablet (600-1023px). Every /api call is answered from fixtures, like visual.spec.ts.
@@ -17,24 +16,18 @@ const fixtures: Record<string, unknown> = {
     nextCursor: null,
   },
   '/api/watch/overview': watchOverviewFixture,
-  '/api/tasks': tasksFixture,
-  '/api/tasks/task-docs': taskDetailFixture,
 }
 
 type Where = { name: string; path: string; ready: string; orchestration?: boolean }
 const routes: Where[] = [
-  { name: 'now', path: '/now', ready: '.now-cards' },
-  { name: 'flow', path: '/now/flow/fixture-flow', ready: '[data-flow-node]' },
-  { name: 'routines', path: '/now/routines', ready: 'main h1' },
   {
     name: 'orchestration',
-    path: '/now/flow/brief-orch-1',
+    path: '/runs/brief-orch-1',
     ready: '[data-node="s2"]',
     orchestration: true,
   },
   { name: 'chat-list', path: '/chat', ready: '.chat-conversations nav' },
   { name: 'chat-room', path: '/chat/room-activity-feed', ready: '.chat-scroll' },
-  { name: 'tasks', path: '/tasks', ready: '.task-card' },
   { name: 'team', path: '/team', ready: '.team-agent-card' },
   { name: 'agent', path: '/team/builder', ready: '.team-tabs' },
   {
@@ -44,7 +37,7 @@ const routes: Where[] = [
   },
   { name: 'reports', path: '/reports', ready: '.reports-table tbody tr' },
   { name: 'settings', path: '/settings', ready: '.settings-content' },
-  { name: 'watch', path: '/now/watch/builder', ready: 'main' },
+  { name: 'watch', path: '/watch/builder', ready: 'main' },
 ]
 
 let withOrchestration = false
@@ -118,14 +111,12 @@ test.describe('navigation drawer', () => {
     const drawer = page.getByRole('dialog', { name: 'Menu' })
     await expect(drawer).toBeVisible()
     const pages = drawer.getByRole('navigation', { name: 'Pages' })
-    await expect(pages.getByRole('link', { name: /^Now/ })).toHaveAttribute('aria-current', 'page')
-    for (const title of ['Chat', 'Tasks', 'Team', 'Knowledge', 'Reports', 'Settings'])
+    await expect(pages.getByRole('link', { name: /^Chat/ })).toHaveAttribute('aria-current', 'page')
+    for (const title of ['Team', 'Knowledge', 'Reports', 'Settings'])
       await expect(pages.getByRole('link', { name: title })).toBeVisible()
-    for (const view of ['Score', 'Flow', 'Routines'])
-      await expect(pages.getByRole('link', { name: view, exact: true })).toBeVisible()
     expect(await page.evaluate(() => document.body.classList.contains('scroll-locked'))).toBe(true)
-    await pages.getByRole('link', { name: 'Tasks' }).click()
-    await expect(page).toHaveURL(/\/tasks/)
+    await pages.getByRole('link', { name: 'Team' }).click()
+    await expect(page).toHaveURL(/\/team$/)
     await expect(drawer).toBeHidden()
     await expect(menu).toBeFocused()
     expect(await page.evaluate(() => document.body.classList.contains('scroll-locked'))).toBe(false)
@@ -176,33 +167,6 @@ test('Chat: on a phone the conversation list opens as a drawer next to a room', 
   await expect(page.getByRole('button', { name: 'Rooms' })).toBeFocused()
 })
 
-test('Tasks: on a phone the board shows one column at a time, switched by tabs with counts', async ({
-  page,
-}) => {
-  await open(
-    page,
-    routes.find((r) => r.name === 'tasks')!,
-    390,
-  )
-  const tabs = page.getByRole('group', { name: 'Show column' })
-  await expect(tabs.getByRole('button', { name: /^Planned/ })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  await expect(tabs.getByRole('button', { name: /^Working\s*1/ })).toBeVisible()
-  const scroller = page.getByRole('region', { name: 'Tasks board' })
-  const working = page.getByRole('region', { name: 'Working', exact: true })
-  await expect(working).not.toBeInViewport({ ratio: 0.5 })
-  await tabs.getByRole('button', { name: /^Working/ }).click()
-  await expect(working).toBeInViewport({ ratio: 0.9 })
-  await expect.poll(() => scroller.evaluate((element) => element.scrollLeft)).toBeGreaterThan(100)
-  await expect(tabs.getByRole('button', { name: /^Working/ })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  await noPageOverflow(page)
-})
-
 test('Settings: the section list collapses into one disclosure', async ({ page }) => {
   await open(
     page,
@@ -225,7 +189,7 @@ for (const [width, dark] of [
 ] as const) {
   test.describe(`${width}px ${dark ? 'dark' : 'light'}`, () => {
     for (const where of routes) {
-      if (dark && !['now', 'chat-room', 'tasks', 'agent'].includes(where.name)) continue
+      if (dark && !['chat-room', 'agent'].includes(where.name)) continue
       test(`${where.name}`, async ({ page }) => {
         if (dark) await page.addInitScript(() => window.localStorage.setItem('score.theme', 'dark'))
         await open(page, where, width, width < 600 ? 844 : 1024)

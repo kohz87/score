@@ -687,7 +687,7 @@ test('the editor draws a run of the version on screen over the canvas, and links
     within(live.closest('p')!)
       .getByRole('link', { name: /Open the run/ })
       .getAttribute('href'),
-  ).toBe('/now/flow/brief-wfrun-1')
+  ).toBe('/runs/brief-wfrun-1')
   // The gate of the running run waits for you; the steps before it are done. The draft is untouched.
   expect(
     await screen.findByRole('button', { name: /Gate Approve the draft.*needs you/ }),

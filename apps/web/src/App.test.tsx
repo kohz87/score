@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createBrowserRouter, createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { App, appRoutes } from './App.tsx'
@@ -81,12 +81,8 @@ afterEach(() => {
 })
 
 const routes = [
-  ['/now', 'Now'],
-  ['/now/routines', 'Now'],
   ['/chat', 'Chat'],
   ['/chat/general', 'Chat'],
-  ['/tasks', 'Tasks'],
-  ['/tasks/demo', 'Tasks'],
   ['/team', 'Team'],
   ['/team/lead', 'Team'],
   ['/reports', 'Reports'],
@@ -100,7 +96,7 @@ test.each(routes)('%s renders %s inside the shell with the active nav', async (p
   expect(screen.getByRole('banner')).toBeDefined()
   expect(screen.getByRole('button', { name: 'Your account' }).textContent).toBe('Y')
   const nav = within(screen.getByRole('navigation', { name: 'Main' }))
-  expect(nav.getAllByRole('link')).toHaveLength(7)
+  expect(nav.getAllByRole('link')).toHaveLength(destinations.length)
   for (const destination of destinations) {
     expect(nav.getByRole('link', { name: destination.title }).getAttribute('aria-current')).toBe(
       destination.title === title ? 'page' : null,
@@ -108,40 +104,21 @@ test.each(routes)('%s renders %s inside the shell with the active nav', async (p
   }
 })
 
-test('/ redirects to /now', async () => {
+test('/ redirects to /b', async () => {
   const router = renderRoute('/')
-  await screen.findByRole('heading', { level: 1, name: 'Now' })
-  expect(router.state.location.pathname).toBe('/now')
+  await screen.findByRole('main')
+  expect(router.state.location.pathname).toBe('/b')
 })
 
-test.each(['/unknown', '/now/unknown', '/tasks/demo/unknown'])(
-  '%s shows not-found inside the shell',
-  (path) => {
-    renderRoute(path)
-    expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeDefined()
-    expect(screen.getByRole('banner')).toBeDefined()
-    if (path === '/unknown') {
-      expect(screen.getAllByRole('link').some((link) => link.hasAttribute('aria-current'))).toBe(
-        false,
-      )
-    }
-  },
-)
-
-test('Now has no dot by default', () => {
-  renderRoute('/now')
-  expect(screen.queryByRole('img', { name: 'Needs you' })).toBeNull()
-})
-
-test('Now shows an accessible dot when something needs you, even on another destination', () => {
-  vi.mocked(useNeedsYou).mockReturnValue(true)
-  renderRoute('/chat')
-  const link = screen.getByRole('link', { name: /Now/ })
-  expect(within(link).getByRole('img', { name: 'Needs you' })).toBeDefined()
+test.each(['/unknown'])('%s shows not-found inside the shell', (path) => {
+  renderRoute(path)
+  expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeDefined()
+  expect(screen.getByRole('banner')).toBeDefined()
+  expect(screen.getAllByRole('link').some((link) => link.hasAttribute('aria-current'))).toBe(false)
 })
 
 test('palette opens on click, autofocuses, closes on Esc and restores focus', () => {
-  renderRoute('/now')
+  renderRoute('/chat')
   const trigger = commandButton()
   fireEvent.click(trigger)
   const dialog = screen.getByRole('dialog', { name: 'Search or run a command' })
@@ -149,8 +126,8 @@ test('palette opens on click, autofocuses, closes on Esc and restores focus', ()
   expect(trigger.getAttribute('aria-expanded')).toBe('true')
   const input = within(dialog).getByRole('searchbox', { name: 'Search destinations' })
   expect(document.activeElement).toBe(input)
-  // The seven destinations; Settings' sections (PLAN 10.1) appear only once something is typed.
-  expect(within(dialog).getAllByRole('link')).toHaveLength(7)
+  // The destinations; Settings' sections (PLAN 10.1) appear only once something is typed.
+  expect(within(dialog).getAllByRole('link')).toHaveLength(destinations.length)
   fireEvent.keyDown(input, { key: 'Escape' })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
@@ -158,14 +135,14 @@ test('palette opens on click, autofocuses, closes on Esc and restores focus', ()
 })
 
 test.each(['ctrlKey', 'metaKey'])('palette opens with %s+K anywhere', (modifier) => {
-  renderRoute('/now')
+  renderRoute('/chat')
   fireEvent.keyDown(document, { key: 'k', [modifier]: true })
   expect(screen.getByRole('dialog')).toBeDefined()
   expect(document.activeElement).toBe(screen.getByRole('searchbox'))
 })
 
 test('palette traps forward and backward focus and makes the shell inert', () => {
-  renderRoute('/now')
+  renderRoute('/chat')
   fireEvent.click(commandButton())
   const dialog = screen.getByRole('dialog')
   const first = within(dialog).getByRole('button', { name: 'Close command palette' })
@@ -179,21 +156,21 @@ test('palette traps forward and backward focus and makes the shell inert', () =>
 })
 
 test('Enter on the filtered input navigates and closes the palette', async () => {
-  const router = renderRoute('/now')
+  const router = renderRoute('/chat')
   const trigger = commandButton()
   fireEvent.click(trigger)
   const input = screen.getByRole('searchbox')
-  fireEvent.change(input, { target: { value: '  tasks  ' } })
+  fireEvent.change(input, { target: { value: '  team  ' } })
   expect(within(screen.getByRole('dialog')).getAllByRole('link')).toHaveLength(1)
   fireEvent.keyDown(input, { key: 'Enter' })
-  await screen.findByRole('heading', { level: 1, name: 'Tasks' })
-  expect(router.state.location.pathname).toBe('/tasks')
+  await screen.findByRole('heading', { level: 1, name: 'Team' })
+  expect(router.state.location.pathname).toBe('/team')
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
 })
 
 test('palette options navigate on click', async () => {
-  renderRoute('/now')
+  renderRoute('/chat')
   fireEvent.click(commandButton())
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('link', { name: 'Team' }))
   await screen.findByRole('heading', { level: 1, name: 'Team' })
@@ -201,18 +178,18 @@ test('palette options navigate on click', async () => {
 })
 
 test('no matching option leaves Enter harmless', () => {
-  const router = renderRoute('/now')
+  const router = renderRoute('/chat')
   fireEvent.click(commandButton())
   const input = screen.getByRole('searchbox')
   fireEvent.change(input, { target: { value: 'missing destination' } })
   expect(screen.getByText('No destinations found.')).toBeDefined()
   fireEvent.keyDown(input, { key: 'Enter' })
-  expect(router.state.location.pathname).toBe('/now')
+  expect(router.state.location.pathname).toBe('/chat')
   expect(screen.getByRole('dialog')).toBeDefined()
 })
 
 test('only a backdrop click closes the palette and restores focus', () => {
-  renderRoute('/now')
+  renderRoute('/chat')
   const trigger = commandButton()
   fireEvent.click(trigger)
   const dialog = screen.getByRole('dialog')
@@ -311,7 +288,7 @@ test('pairing handles network failures without losing the shell', async () => {
 })
 
 test('nav links navigate between all destinations', async () => {
-  const router = renderRoute('/now')
+  const router = renderRoute('/chat')
   for (const { path, title } of destinations) {
     await act(async () => {
       fireEvent.click(screen.getByRole('link', { name: title }))
@@ -325,14 +302,26 @@ test('nav links navigate between all destinations', async () => {
   }
 })
 
-// Watch has its own heading (it names the agent), but it sits in the shell under Now.
-test('/now/watch/:agentId renders inside the shell with Now active', async () => {
-  renderRoute('/now/watch/builder')
+test('/watch/:agentId renders inside the shell', async () => {
+  renderRoute('/watch/builder')
   const main = screen.getByRole('main')
   expect(within(main).getByText('Loading the screen…')).toBeDefined()
   expect(screen.getByRole('banner')).toBeDefined()
-  const nav = within(screen.getByRole('navigation', { name: 'Main' }))
-  expect(nav.getByRole('link', { name: 'Now' }).getAttribute('aria-current')).toBe('page')
+  expect(screen.getByRole('navigation', { name: 'Main' })).toBeDefined()
+})
+
+test.each([
+  ['/now/routines', '/b/team'],
+  ['/now/unknown', '/b'],
+  ['/tasks/demo', '/b'],
+  ['/u/rooms/one', '/b'],
+  ['/now/watch/builder', '/watch/builder'],
+  ['/now/flow/workflows', '/workflows'],
+  ['/now/flow/workflows/wf-1', '/workflows/wf-1'],
+  ['/now/flow/brief-1', '/runs/brief-1'],
+])('%s redirects to %s', async (path, target) => {
+  const router = renderRoute(path)
+  await waitFor(() => expect(router.state.location.pathname).toBe(target))
 })
 
 test('the palette lists matching messages in a Messages section that opens the hit', async () => {
@@ -357,7 +346,7 @@ test('the palette lists matching messages in a Messages section that opens the h
         : new Response(JSON.stringify({ asOfSeq: 0, items: [], rooms: [], directs: [] })),
     ),
   )
-  const router = renderRoute('/now')
+  const router = renderRoute('/chat')
   fireEvent.click(commandButton())
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'needle' } })
   const section = await screen.findByRole('region', { name: 'Messages' })

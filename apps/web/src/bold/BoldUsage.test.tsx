@@ -225,6 +225,6 @@ test('the classic view button stays at the bottom of the nav', async () => {
   const router = open('/b/settings/usage')
   await screen.findByRole('region', { name: 'Usage in numbers' })
   fireEvent.click(screen.getByRole('button', { name: 'Use the classic view' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/now'))
-  expect(window.localStorage.getItem('score.ui')).toBeNull()
+  await waitFor(() => expect(router.state.location.pathname).toBe('/chat'))
+  expect(window.localStorage.getItem('score.ui')).toBe('classic')
 })

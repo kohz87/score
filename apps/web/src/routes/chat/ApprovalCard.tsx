@@ -1,7 +1,6 @@
 import { ApprovalSchema, type Approval, type ApprovalChoice } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { useArrival } from '../../motion/Arrival.tsx'
 import { useStream, useStreamQuery } from '../../data/query-client.ts'
@@ -24,14 +23,8 @@ export function approvalOutcome(approval: Approval): string | null {
 
 /** Where a pending approval outside Score must be answered (the bold room shows the same note). */
 export function whereToAnswer(approval: Approval) {
-  const task = approval.refs.find((ref) => ref.kind === 'task')
-  if (approval.origin === 'kanban' && task)
-    return (
-      <p className="chat-approval-note">
-        Answer this on the task.{' '}
-        <Link to={`/tasks/${encodeURIComponent(task.taskId)}`}>Open the task</Link>
-      </p>
-    )
+  if (approval.origin === 'kanban')
+    return <p className="chat-approval-note">Answer this in Hermes where the task was created.</p>
   if (approval.origin === 'gateway')
     return <p className="chat-approval-note">Answer it in the chat app the agent asked in.</p>
   return <p className="chat-approval-note">This approval can only be answered in Hermes.</p>

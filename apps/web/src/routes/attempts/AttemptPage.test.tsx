@@ -94,7 +94,7 @@ test('shows the frozen task read-only, from an earlier copy of the board, with n
   expect(screen.getByText(/No longer seen since/)).toBeTruthy()
   expect(screen.getByText('Source unclear')).toBeTruthy()
   expect(screen.queryAllByRole('button')).toHaveLength(0)
-  expect(screen.queryAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/tasks'])
+  expect(screen.queryAllByRole('link')).toHaveLength(0)
   expect(screen.getByText('Replay in Watch').nextSibling?.textContent).toBe('Not recorded')
 })
 

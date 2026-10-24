@@ -144,6 +144,6 @@ test('the New look switch turns this device back to classic Score', async () => 
   await screen.findByRole('heading', { name: 'Look' })
   fireEvent.click(screen.getByRole('switch', { name: 'Use the new look on this device' }))
   await waitFor(() => expect(router.state.location.pathname).toBe('/settings/look'))
-  expect(window.localStorage.getItem('score.ui')).toBeNull()
+  expect(window.localStorage.getItem('score.ui')).toBe('classic')
   expect(await screen.findByText('Classic Look')).toBeDefined()
 })

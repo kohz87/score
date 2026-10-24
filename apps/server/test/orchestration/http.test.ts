@@ -293,14 +293,20 @@ test('ownership: ordinary actions on the run room and brief are rejected while t
     'message.rewind',
   )
   owned(await post(`/api/rooms/${room}/messages/${d.briefId}/plan/start`), 'plan.start')
-  // The brief's pause and resume are the run's.
-  expect((await post(`/api/briefs/${d.briefId}/pause`)).statusCode).toBe(200)
+  // The run's pause and resume are its own controls.
+  expect(
+    (
+      await post(`/api/orchestrations/${id}/pause`, {
+        orchestrationRevision: detail(id).revision,
+      })
+    ).statusCode,
+  ).toBe(200)
   expect(status(id)).toBe('paused')
   expect(h.orch.summary(id).pauseReason).toBe('person')
   expect(
-    (await get('/api/briefs')).json().items.find((b: { id: string }) => b.id === d.briefId).status,
-  ).toBe('paused')
-  expect((await post(`/api/briefs/${d.briefId}/resume`)).statusCode).toBe(200)
+    (await post(`/api/orchestrations/${id}/resume`, { orchestrationRevision: detail(id).revision }))
+      .statusCode,
+  ).toBe(200)
   expect(status(id)).toBe('running')
   // Team pause is a separate hold: it never pauses the run's brief, and Team Resume never clears the run's own pause.
   await post(`/api/orchestrations/${id}/pause`, { orchestrationRevision: detail(id).revision })
@@ -320,8 +326,11 @@ test('ownership ends with the run: after a quiescent end the room is an ordinary
   expect(detail(id).ownership).toBe('released')
   const sent = await post(`/api/rooms/${detail(id).roomId}/messages`, { text: 'thanks' })
   expect(sent.statusCode).toBe(200)
-  // A finished run has nothing to pause: the brief controls say so instead of acting.
-  expect((await post(`/api/briefs/${detail(id).briefId}/pause`)).statusCode).toBe(409)
+  // A finished run has nothing to pause: its controls say so instead of acting.
+  expect(
+    (await post(`/api/orchestrations/${id}/pause`, { orchestrationRevision: detail(id).revision }))
+      .statusCode,
+  ).toBe(409)
 })
 
 test('draining keeps the guards: a finished run with an owed Stop still owns its room', async () => {

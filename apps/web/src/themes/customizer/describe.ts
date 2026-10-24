@@ -72,10 +72,6 @@ function lookLines(
         `Menu: ${plural(rows.length - hidden, 'page')} shown${hidden ? `, ${hidden} hidden` : ''}${renamed ? `, ${renamed} renamed` : ''}, in its own order.`,
       )
     }
-    if (layout.now)
-      out.push(
-        `Now: ${plural(layout.now.columns, 'column')} and ${plural(layout.now.cards.length, 'card')} in its own order.`,
-      )
     if (layout.chat) {
       const parts = [
         layout.chat.messages ? `messages as ${layout.chat.messages}` : '',

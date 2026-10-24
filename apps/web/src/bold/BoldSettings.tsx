@@ -136,7 +136,7 @@ export function BoldSettings() {
             className="btn sm ghost settings-classic"
             onClick={() => {
               saveUi('classic')
-              void navigate('/now')
+              void navigate('/chat')
             }}
           >
             Use the classic view

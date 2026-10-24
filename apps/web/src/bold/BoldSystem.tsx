@@ -12,7 +12,7 @@ import {
   useKnowledgeActions,
   useKnowledgeInfo,
 } from '../routes/knowledge/knowledge-queries.ts'
-import { useNow, useTeamPause } from '../routes/now/now-queries.ts'
+import { useNow, useTeamPause } from '../data/team-pause.ts'
 
 /** The classic Knowledge settings, with the vault summary and both agent switches. */
 function LibraryAccess() {

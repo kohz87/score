@@ -1,8 +1,6 @@
 import {
   AgentHistoryPageSchema,
   AttemptDetailSchema,
-  BriefFlowSchema,
-  FlowNodeDetailSchema,
   NowSnapshotSchema,
   ReportsSchema,
   StreamEventSchema,
@@ -12,7 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
@@ -20,7 +18,6 @@ import { createBrief } from '../../src/domain/briefs.ts'
 import { attemptUpdates } from '../../src/domain/kanban-attempts.ts'
 import { insertRoom } from '../../src/domain/rooms.ts'
 import { computeReports } from '../../src/domain/reports.ts'
-import { rewriteReceipts } from '../../src/domain/legacy-links.ts'
 import { projectTask } from '../../src/domain/tasks.ts'
 import { HttpError } from '../../src/errors.ts'
 import { decodeReceipt, encodeReceipt } from '../../src/receipt-codec.ts'
@@ -40,7 +37,6 @@ let ingest: Ingest
 let port: HermesPort
 let scheduler: FakeScheduler
 let app: ReturnType<typeof buildApp>
-let headers: { 'x-score-client': string; cookie: string }
 
 beforeEach(async () => {
   withFlag(false)
@@ -61,16 +57,6 @@ beforeEach(async () => {
     port,
     clock: () => NOW,
   })
-  const paired = await app.inject({
-    method: 'POST',
-    url: '/api/session/pair',
-    headers: { 'x-score-client': 'web' },
-    payload: { token: app.pairing.createToken() },
-  })
-  headers = {
-    'x-score-client': 'web',
-    cookie: paired.headers['set-cookie']!.toString().split(';')[0]!,
-  }
 })
 afterEach(async () => {
   withFlag(false)
@@ -236,8 +222,6 @@ const consumerUrls = [
   '/api/reports?range=7d&tz=UTC',
   '/api/reports/export.csv?range=30d&tz=UTC',
   '/api/agents/builder/history',
-  '/api/briefs/brief-1/flow',
-  '/api/flow/nodes/task:t-done',
 ]
 
 describe('with attempts off, every existing response is what it was without any attempt', () => {
@@ -359,36 +343,6 @@ describe('Now', () => {
   })
 })
 
-describe('Flow', () => {
-  test('stats count attempts, their cost is unknown, and a step lists its attempts with tools not observed', async () => {
-    seedWorld()
-    withFlag(true)
-    const flow = BriefFlowSchema.parse(JSON.parse((await body('/api/briefs/brief-1/flow')).text))
-    expect(flow.stats.attempts).toBe(8)
-    expect(flow.stats.spendUsd).toBeNull()
-    const detail = FlowNodeDetailSchema.parse(
-      JSON.parse((await body('/api/flow/nodes/task:t-done')).text),
-    )
-    expect(detail.tools).toBeNull()
-    expect(detail.attempts!.map((attempt) => attempt.order[1])).toEqual([1, 2, 3, 4])
-    expect(detail.attempts![1]).toMatchObject({ status: 'changes_requested', role: 'reviewer' })
-    expect(
-      detail.attempts!.every((attempt) => attempt.model === null && attempt.tools === null),
-    ).toBe(true)
-  })
-
-  test('with attempts off the same step reports an empty tool list and no attempts', async () => {
-    seedWorld()
-    const detail = FlowNodeDetailSchema.parse(
-      JSON.parse((await body('/api/flow/nodes/task:t-done')).text),
-    )
-    expect(detail.tools).toEqual([])
-    expect(detail.attempts).toBeUndefined()
-    const flow = BriefFlowSchema.parse(JSON.parse((await body('/api/briefs/brief-1/flow')).text))
-    expect(flow.stats.attempts).toBeUndefined()
-  })
-})
-
 describe('Reports', () => {
   test('attempts count as runs; partial ones are never working time; unknown agents get their own bucket', async () => {
     seedWorld()
@@ -502,27 +456,6 @@ describe('Stop', () => {
       HttpError,
     )
   })
-
-  test('a step with an attempt that is still observed running answers 501 instead of "nothing is running"', async () => {
-    seedWorld()
-    withFlag(true)
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/flow/nodes/task:t-open/stop',
-      headers,
-      payload: {},
-    })
-    expect(response.statusCode).toBe(501)
-    expect(response.json().error.code).toBe('unsupported')
-    withFlag(false)
-    const off = await app.inject({
-      method: 'POST',
-      url: '/api/flow/nodes/task:t-open/stop',
-      headers,
-      payload: {},
-    })
-    expect(off.statusCode).toBe(409)
-  })
 })
 
 describe('attempt.updated', () => {
@@ -588,121 +521,7 @@ describe('report arithmetic with attempts', () => {
   })
 })
 
-describe('legacy numeric run links', () => {
-  const TASK = 'task-pagination-0'
-  async function world(): Promise<{ mapped: string }> {
-    await port.start(ingest)
-    await scheduler.advance(700 * 18)
-    db.tx((sqlite) => {
-      seedHistory(sqlite)
-      projectTask(sqlite, taskDetail(TASK, { runIds: ['12', '13', '14', '15', 'gw-run'] }))
-    })
-    const mapped = seedAttempt(db.sqlite, {
-      attempt: 12,
-      task: TASK,
-      start: at('10:00'),
-      end: at('10:30'),
-    })
-    const insert = db.sqlite.prepare(
-      `INSERT INTO kanban_upgrade_links (task_id, legacy_id, saved_evidence, status, attempt_key, reason, snapshotted_at)
-       VALUES (?, ?, '{"claims":[]}', ?, ?, ?, '2026-10-01T00:00:00.000Z')`,
-    )
-    insert.run(TASK, '12', 'mapped', mapped, null)
-    insert.run(TASK, '13', 'unresolved', null, 'no_affirmative_evidence')
-    insert.run(TASK, '14', 'pending', null, null)
-    return { mapped }
-  }
-
-  test('the served task has mapped ids, unresolved links and no numeric id; attempts off serves it as stored', async () => {
-    const { mapped } = await world()
-    // 15 is a numeric id first seen after the upgrade: it maps through the followed lineage when Score has it.
-    const fresh = seedAttempt(db.sqlite, {
-      attempt: 15,
-      task: TASK,
-      start: at('11:00'),
-      end: at('11:10'),
-    })
-    withFlag(true)
-    const on = (await app.inject(`/api/tasks/${TASK}`)).json()
-    expect([...on.runIds].sort()).toEqual([fresh, mapped, 'gw-run'].sort())
-    expect(on.unresolvedRunLinks).toEqual([
-      { legacyId: '13', reason: 'no_affirmative_evidence' },
-      { legacyId: '14', reason: 'not_yet_resolved' },
-    ])
-    withFlag(false)
-    const off = (await app.inject(`/api/tasks/${TASK}`)).json()
-    expect(off.runIds).toEqual(['12', '13', '14', '15', 'gw-run'])
-    expect('unresolvedRunLinks' in off).toBe(false)
-  })
-
-  test('a stored receipt is rewritten and keeps its status, so the mutation cannot run again', async () => {
-    const { mapped } = await world()
-    const receipt = db.sqlite.prepare(
-      `INSERT INTO request_receipts (key, route, body_sha256, status, response, created_at)
-       VALUES (?, ?, 'h', 200, ?, '2026-10-09T11:00:00.000Z')`,
-    )
-    const detail = taskDetail(TASK, { runIds: ['12', '13', 'gw-run'] })
-    receipt.run('plain', `/api/tasks/${TASK}`, JSON.stringify(detail))
-    // The largest answer a task route stores (512 KB).
-    receipt.run(
-      'big',
-      `/api/tasks/${TASK}`,
-      JSON.stringify({ ...detail, body: 'z'.repeat(400_000) }),
-    )
-    // Another task, and a route that is not a task route, are left alone.
-    receipt.run('other-task', '/api/tasks/t-other', JSON.stringify({ ...detail, id: 't-other' }))
-    receipt.run('other-route', '/api/rooms', JSON.stringify(detail))
-    withFlag(true)
-    expect(rewriteReceipts(db.sqlite, [TASK])).toBe(2)
-    const read = (key: string) =>
-      db.sqlite.prepare('SELECT status, response FROM request_receipts WHERE key = ?').get(key) as {
-        status: number
-        response: string
-      }
-    for (const key of ['plain', 'big']) {
-      const row = read(key)
-      expect(row.status).toBe(200)
-      const response = decodeReceipt(row.response, 1_000_000) as TaskDetail & {
-        unresolvedRunLinks: unknown[]
-      }
-      expect([...response.runIds].sort()).toEqual([mapped, 'gw-run'].sort())
-      expect(response.unresolvedRunLinks).toHaveLength(2)
-    }
-    for (const key of ['other-task', 'other-route'])
-      expect((decodeReceipt(read(key).response, 1_000_000) as TaskDetail).runIds).toEqual([
-        '12',
-        '13',
-        'gw-run',
-      ])
-    // A second pass has nothing left to change.
-    expect(rewriteReceipts(db.sqlite, [TASK])).toBe(0)
-  })
-
-  test('replaying the same request after the rewrite returns the new ids and does not run the mutation again', async () => {
-    const { mapped } = await world()
-    const patch = vi.spyOn(port, 'patchTask')
-    const request = {
-      method: 'PATCH' as const,
-      url: `/api/tasks/${TASK}`,
-      headers: { ...headers, 'idempotency-key': 'patch-1' },
-      payload: { title: 'Renamed once' },
-    }
-    const first = await app.inject(request)
-    expect(first.statusCode).toBe(200)
-    expect(patch).toHaveBeenCalledTimes(1)
-    // The stored answer carries legacy ids, as a receipt written before the upgrade would.
-    const stored = JSON.parse(first.body) as TaskDetail
-    db.sqlite
-      .prepare("UPDATE request_receipts SET response = ? WHERE key = 'patch-1'")
-      .run(JSON.stringify({ ...stored, runIds: ['12'] }))
-    withFlag(true)
-    expect(rewriteReceipts(db.sqlite, [TASK])).toBe(1)
-    const replay = await app.inject(request)
-    expect(replay.statusCode).toBe(200)
-    expect((replay.json() as TaskDetail).runIds).toEqual([mapped])
-    expect(patch).toHaveBeenCalledTimes(1)
-  })
-
+describe('receipts', () => {
   test('the receipt codec round-trips an answer larger than the table accepts', () => {
     const answer = JSON.stringify({ text: 'q'.repeat(200_000) })
     const stored = encodeReceipt(answer, '/api/rooms')

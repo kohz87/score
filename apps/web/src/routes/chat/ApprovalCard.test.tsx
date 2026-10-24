@@ -249,8 +249,8 @@ test('non-actionable approvals explain where to answer', async () => {
   await screen.findByText('Answer it in the chat app the agent asked in.')
   cleanup()
   renderCard('k')
-  const link = await screen.findByRole('link', { name: 'Open the task' })
-  expect(link.getAttribute('href')).toBe('/tasks/task-1')
+  await screen.findByText('Answer this in Hermes where the task was created.')
+  expect(screen.queryByRole('link', { name: 'Open the task' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
 })
 
@@ -350,7 +350,7 @@ test('Start plan posts to the plan/start endpoint, reports failure with a retry,
   expect(fetchMock.mock.calls[0]![1]?.method).toBe('POST')
 })
 
-test('the plan card renders each block state on a shared axis and links to Flow', () => {
+test('the plan card renders each block state on a shared axis and links to the run', () => {
   renderPlan()
   for (const state of ['done', 'working', 'planned', 'waiting']) {
     const block = screen.getByTitle(new RegExp(`Block ${state}`))
@@ -358,8 +358,8 @@ test('the plan card renders each block state on a shared axis and links to Flow'
   }
   expect(screen.getByText('Builder')).toBeDefined()
   expect(screen.getByText('ghost')).toBeDefined()
-  expect(screen.getByRole('link', { name: 'Open in Flow' }).getAttribute('href')).toBe(
-    '/now/flow/brief%201',
+  expect(screen.getByRole('link', { name: 'Open the run' }).getAttribute('href')).toBe(
+    '/runs/brief%201',
   )
   const axis = planAxis(plan.lanes)!
   expect(axis.get('b-done')!.left).toBe(0)

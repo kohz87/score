@@ -142,7 +142,7 @@ export function PreviewFrame({ draft, mode, page, device, onPainted, onText }: P
     let timer = 0
     const run = async () => {
       const { doc, win } = state
-      // The picture the page really wears: `/u` lays `views.user.background` over the theme's own.
+      // The picture the page really wears for this preview page.
       const background = lookForView(draft.manifest, pageRef.current.view).background
       const image = background?.image
       const url = image ? draft.resolve(image) : null

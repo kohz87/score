@@ -212,7 +212,6 @@
 }
 
 :is(
-  .now-asking,
   .chat-approval,
   .reports-approvals,
   .settings-card.rules-card,

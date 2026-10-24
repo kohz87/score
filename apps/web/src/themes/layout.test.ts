@@ -1,12 +1,11 @@
 import { describe, expect, test } from 'vitest'
+import { ThemeManifestSchema } from '@score/contract'
 import {
   DEFAULT_LAYOUT,
   layoutFromCache,
   lookForView,
   resolveLayout,
   resolveMenu,
-  resolveNow,
-  viewOfPath,
 } from './layout.ts'
 import { applyCustom, clearLook } from './engine.ts'
 
@@ -14,9 +13,7 @@ describe('layout model', () => {
   test('a theme without layout is the Score default', () => {
     expect(resolveLayout({})).toBe(DEFAULT_LAYOUT)
     expect(resolveMenu(null).map((item) => item.path)).toEqual([
-      '/now',
       '/chat',
-      '/tasks',
       '/team',
       '/knowledge',
       '/reports',
@@ -25,14 +22,16 @@ describe('layout model', () => {
   })
 
   test('the menu follows the theme and Settings can never be left out', () => {
-    expect(resolveMenu([{ to: '/chat', label: 'Talk' }, { to: '/now' }, { to: '/chat' }])).toEqual([
-      { path: '/chat', title: 'Talk' },
-      { path: '/now', title: 'Now' },
-      { path: '/settings', title: 'Settings', name: 'Settings' },
-    ])
-    expect(resolveMenu([{ to: '/settings', label: 'Setup' }, { to: '/now' }])).toEqual([
+    expect(resolveMenu([{ to: '/chat', label: 'Talk' }, { to: '/team' }, { to: '/chat' }])).toEqual(
+      [
+        { path: '/chat', title: 'Talk' },
+        { path: '/team', title: 'Team' },
+        { path: '/settings', title: 'Settings', name: 'Settings' },
+      ],
+    )
+    expect(resolveMenu([{ to: '/settings', label: 'Setup' }, { to: '/team' }])).toEqual([
       { path: '/settings', title: 'Setup', name: 'Settings (Setup)' },
-      { path: '/now', title: 'Now' },
+      { path: '/team', title: 'Team' },
     ])
     expect(resolveMenu([])).toEqual([{ path: '/settings', title: 'Settings', name: 'Settings' }])
   })
@@ -41,11 +40,11 @@ describe('layout model', () => {
     expect(
       resolveMenu([
         { to: '/settings', label: ' \u200b ' },
-        { to: '/now', label: '\u2060' },
+        { to: '/team', label: '\u2060' },
       ]),
     ).toEqual([
       { path: '/settings', title: 'Settings', name: 'Settings' },
-      { path: '/now', title: 'Now' },
+      { path: '/team', title: 'Team' },
     ])
   })
 
@@ -58,34 +57,6 @@ describe('layout model', () => {
       title: 'Settings',
       name: 'Settings',
     })
-  })
-
-  test('Needs-you is always on Now, each card once, spans never wider than the grid', () => {
-    expect(
-      resolveNow({
-        columns: 2,
-        cards: [
-          { card: 'room', span: 4 },
-          { card: 'timeline', span: 1 },
-          { card: 'room', span: 1 },
-        ],
-      }),
-    ).toEqual({
-      columns: 2,
-      cards: [
-        { card: 'needs-you', span: 1 },
-        { card: 'room', span: 2 },
-        { card: 'timeline', span: 1 },
-      ],
-    })
-    const kept = resolveNow({
-      columns: 3,
-      cards: [
-        { card: 'timeline', span: 1 },
-        { card: 'needs-you', span: 3 },
-      ],
-    })
-    expect(kept.cards.map((card) => card.card)).toEqual(['timeline', 'needs-you'])
   })
 
   test('views.user is laid over the theme key by key, and only in the user view', () => {
@@ -115,18 +86,38 @@ describe('layout model', () => {
     expect(resolveLayout(user).nav).toBe('left')
   })
 
-  test('/u and below is the user view', () => {
-    expect(viewOfPath('/u')).toBe('user')
-    expect(viewOfPath('/u/rooms/a')).toBe('user')
-    expect(viewOfPath('/now')).toBe('admin')
-    expect(viewOfPath('/users')).toBe('admin')
-  })
-
   test('a cached layout is checked before it is believed', () => {
     expect(layoutFromCache({ nav: 'launcher' }).nav).toBe('launcher')
     expect(layoutFromCache({ nav: 'sideways' })).toBe(DEFAULT_LAYOUT)
     expect(layoutFromCache('x')).toBe(DEFAULT_LAYOUT)
     expect(layoutFromCache(undefined)).toBe(DEFAULT_LAYOUT)
+  })
+
+  test('a theme saved before 11.11 still loads: layout.now is ignored and /now or /tasks leave the menu', () => {
+    const manifest = ThemeManifestSchema.parse({
+      format: 1,
+      id: 'old',
+      name: 'Old',
+      layout: {
+        nav: 'left',
+        menu: [{ to: '/now', label: 'Today' }, { to: '/tasks' }, { to: '/chat', label: 'Talk' }],
+        now: {
+          columns: 2,
+          cards: [
+            { card: 'timeline', span: 2 },
+            { card: 'needs-you', span: 1 },
+          ],
+        },
+        chat: { messages: 'bubbles' },
+      },
+    })
+    const layout = resolveLayout(manifest)
+    expect(layout).not.toHaveProperty('now')
+    expect(layout.chat).toEqual({ messages: 'bubbles', roomList: 'left' })
+    expect(resolveMenu(layout.menu)).toEqual([
+      { path: '/chat', title: 'Talk' },
+      { path: '/settings', title: 'Settings', name: 'Settings' },
+    ])
   })
 
   test('the engine applies the view it is asked for and caches both', () => {
@@ -151,12 +142,4 @@ describe('layout model', () => {
     clearLook()
     for (const name of ['data-pack', 'data-layout', 'data-density']) root.removeAttribute(name)
   })
-})
-
-test('the Needs-you dot is on Now, or on the first entry when the theme left Now out', async () => {
-  const { needsYouPath } = await import('./layout.ts')
-  expect(needsYouPath(resolveMenu(null))).toBe('/now')
-  expect(needsYouPath(resolveMenu([{ to: '/chat' }, { to: '/now' }]))).toBe('/now')
-  expect(needsYouPath(resolveMenu([{ to: '/chat' }, { to: '/tasks' }]))).toBe('/chat')
-  expect(needsYouPath(resolveMenu([]))).toBe('/settings')
 })

@@ -1,9 +1,9 @@
 import { NowSnapshotSchema, type StreamEvent } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { apiFetch } from '../../data/api.ts'
-import { useStream } from '../../data/query-client.ts'
-import { newId } from '../../data/ids.ts'
+import { apiFetch } from './api.ts'
+import { newId } from './ids.ts'
+import { useStream } from './query-client.ts'
 
 export const nowKey = ['now', 'score'] as const
 const REFRESH_MS = 30_000

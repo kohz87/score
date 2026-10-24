@@ -237,6 +237,6 @@ test('clicking a notification focuses an open Score window and sends it to the p
     waitUntil: (promise: Promise<void>) => (done = promise),
   })
   await done
-  // A foreign URL in the data is ignored: it falls back to Now.
-  expect(clients.openWindow).toHaveBeenCalledWith('/now')
+  // A foreign URL in the data is ignored: it falls back to the default shell.
+  expect(clients.openWindow).toHaveBeenCalledWith('/b')
 })

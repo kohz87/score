@@ -6,7 +6,7 @@ import { ResponsiveDrawer } from '../../components/ResponsiveDrawer.tsx'
 import { ApiError } from '../../data/api.ts'
 import { NARROW_QUERY, useMediaQuery } from '../../data/use-media.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
-import { taskAgentsQuery } from '../tasks/task-queries.ts'
+import { taskAgentsQuery } from '../../data/task-queries.ts'
 import { EditorCanvas, type Selection } from './EditorCanvas.tsx'
 import { ExportDialog } from './ExportDialog.tsx'
 import { IssueList, InputsEditor, Outline, Palette } from './EditorParts.tsx'
@@ -45,7 +45,7 @@ import {
 import '../orchestrations/orchestrations.css'
 import './workflows.css'
 
-/** The route: `/now/flow/workflows/new` or `/now/flow/workflows/:workflowId`. */
+/** The route: `/workflows/new` or `/workflows/:workflowId`. */
 export function WorkflowEditorRoute() {
   const { workflowId: param } = useParams()
   const workflowId = param === 'new' ? undefined : param
@@ -54,7 +54,7 @@ export function WorkflowEditorRoute() {
   if (detail.isError)
     return (
       <p role="alert" className="orch-error">
-        Couldn’t load this workflow. <Link to="/now/flow/workflows">Back to the workflows</Link>
+        Couldn’t load this workflow. <Link to="/workflows">Back to the workflows</Link>
       </p>
     )
   if (!detail.data) return <p role="status">Loading the workflow…</p>
@@ -196,7 +196,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
           announce(`Saved as version ${version.version}.`)
           if (saved.workflowId === null) {
             allowLeave.current = true
-            void navigate(`/now/flow/workflows/${encodeURIComponent(version.workflowId)}`, {
+            void navigate(`/workflows/${encodeURIComponent(version.workflowId)}`, {
               replace: true,
               state: { savedVersion: version.version },
             })
@@ -256,7 +256,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
     <div className="wf-editor">
       <header className="wf-editor__head">
         <div className="wf-editor__title">
-          <Link to="/now/flow/workflows" className="wf-back">
+          <Link to="/workflows" className="wf-back">
             All workflows
           </Link>
           <label className="wf-name">
@@ -464,9 +464,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
             <p className="wf-live" role="status">
               <span className="wf-live__dot" aria-hidden="true" />
               Live: run started {clock(overlay.run.createdAt)}{' '}
-              <Link to={`/now/flow/${encodeURIComponent(overlay.run.briefId)}`}>
-                Open the run ›
-              </Link>
+              <Link to={`/runs/${encodeURIComponent(overlay.run.briefId)}`}>Open the run ›</Link>
             </p>
           )}
           {previewing !== null ? (
@@ -540,7 +538,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
           close={() => setStarting(false)}
           created={(run) => {
             setStarting(false)
-            void navigate(`/now/flow/${encodeURIComponent(run.briefId)}`)
+            void navigate(`/runs/${encodeURIComponent(run.briefId)}`)
           }}
         />
       )}

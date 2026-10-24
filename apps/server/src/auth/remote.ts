@@ -94,7 +94,7 @@ function registerLocalHostGuard(app: FastifyInstance, config: Config): void {
   })
 }
 
-// In-app paths (/now, /chat/…) get the same public index.html as "/", so an unpaired browser opening a bookmark sees
+// In-app paths (/b, /chat/…) get the same public index.html as "/", so an unpaired browser opening a bookmark sees
 // the pairing screen instead of a JSON error. API, bridge and file-like paths stay private.
 function isAppPath(path: string): boolean {
   // Knowledge deep links end in .md and may hold encoded spaces.

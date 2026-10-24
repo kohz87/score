@@ -53,7 +53,7 @@ function PasskeySignIn() {
           try {
             await signInWithPasskey()
             // A full load starts the app with the new session cookie.
-            window.location.assign('/now')
+            window.location.assign('/b')
           } catch {
             setState('failed')
           }
@@ -101,7 +101,7 @@ export function PairPage() {
         {status === 'paired' && (
           <>
             <p>This browser is paired</p>
-            {remoteTransport() && <a href="/now">Open Score</a>}
+            {remoteTransport() && <a href="/b">Open Score</a>}
           </>
         )}
         {status !== 'paired' && <PasskeySignIn />}

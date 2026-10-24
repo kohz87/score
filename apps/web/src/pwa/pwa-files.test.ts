@@ -21,11 +21,11 @@ function pngSize(path: string): string {
   return `${data.readUInt32BE(16)}x${data.readUInt32BE(20)}`
 }
 
-test('the manifest names the app, starts at /now and is installable', () => {
+test('the manifest names the app, starts at /b and is installable', () => {
   expect(manifest.name).toBe('Score')
   expect(manifest.short_name).toBe('Score')
   expect(manifest.display).toBe('standalone')
-  expect(manifest.start_url).toBe('/now')
+  expect(manifest.start_url).toBe('/b')
   expect(manifest.scope).toBe('/')
   expect(manifest.theme_color).toBe('#12131a')
   expect(manifest.background_color).toBe('#eceef2')

@@ -104,7 +104,7 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Repor
   await expect(row).toContainText('estimated', { timeout: 15_000 })
 
   // Watch: frames came from the parsed events.
-  await page.goto(`/now/watch/${encodeURIComponent(id)}`)
+  await page.goto(`/watch/${encodeURIComponent(id)}`)
   await expect(page.getByText(/Ran ls -la/).first()).toBeVisible({ timeout: 15_000 })
 
   // Quota meters (PLAN 8.1): the turn's own rate-limit record, as "% left" with when Score saw it.
@@ -234,7 +234,7 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await expect(reply).toContainText('ls -la')
   await page.screenshot({ path: testInfo.outputPath('agy-room.png') })
 
-  await page.goto(`/now/watch/${encodeURIComponent(id)}`)
+  await page.goto(`/watch/${encodeURIComponent(id)}`)
   await expect(page.getByText(/Ran ls -la/).first()).toBeVisible({ timeout: 15_000 })
 
   await page.goto(`/team/${encodeURIComponent(id)}`)

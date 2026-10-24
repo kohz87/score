@@ -334,10 +334,8 @@ test('toggling steps preserves original body bytes even when the read model reda
   )
 })
 
-test('brief review and sent-back edges come from event kinds, survive late links, and deduplicate on restart', async () => {
+test('brief review and sent-back edges survive late links and deduplicate on restart', async () => {
   const { createBrief, linkTask } = await import('../../../src/domain/briefs.ts')
-  const { readBriefFlow, readFlowNode, activeRunOfNode } =
-    await import('../../../src/domain/brief-flow.ts')
   const { insertRoom, storeMessage } = await import('../../../src/domain/rooms.ts')
   upstream.db.exec(`UPDATE tasks SET assignee = 'builder', status = 'running' WHERE id = 't_test';
     INSERT INTO task_events (task_id, kind, payload, created_at) VALUES
@@ -393,21 +391,6 @@ test('brief review and sent-back edges come from event kinds, survive late links
     },
   })
   await tasks.poll()
-  const flow = readBriefFlow(score.sqlite, 'brief-flow', 2300 * 1000)
-  expect(flow.nodes.map((node) => node.id)).toEqual([
-    'brief:brief-flow',
-    'task:t_test',
-    'review:t_test',
-  ])
-  expect(flow.nodes[2]).toMatchObject({ agentId: 'reviewer', state: 'done' })
-  expect(flow.edges).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({ from: 'task:t_test', to: 'review:t_test', kind: 'review' }),
-      expect.objectContaining({ from: 'review:t_test', to: 'task:t_test', kind: 'sent_back' }),
-    ]),
-  )
-  expect(readFlowNode(score.sqlite, 'review:t_test', 2300 * 1000).node.agentId).toBe('reviewer')
-  expect(() => activeRunOfNode(score.sqlite, 'review:t_test')).toThrow('Nothing is running')
   const before = score.sqlite.prepare('SELECT COUNT(*) AS n FROM events').get()
   await tasks.close()
   tasks = new LiveTasks(score, ingest, fixture.home)

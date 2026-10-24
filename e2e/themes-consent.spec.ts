@@ -280,7 +280,7 @@ test.describe('X1: starting a workflow is one decision', () => {
         json: { error: { code: 'conflict', message: 'changed' } },
       })
     })
-    await page.goto('/now/flow/workflows')
+    await page.goto('/workflows')
     await page.getByRole('listitem', { name }).getByRole('button', { name: /^Run/ }).click()
     const dialog = page.getByRole('dialog', { name: new RegExp(`Start ${name}`) })
     await expect(dialog.getByRole('list', { name: 'Agent mapping' })).toContainText('builder')

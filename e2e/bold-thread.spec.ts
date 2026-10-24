@@ -368,7 +368,7 @@ for (const viewport of sizes) {
       await expect(card).toContainText('2 of 4 steps done')
       await expect(card.getByRole('link', { name: 'Open in Flow' })).toHaveAttribute(
         'href',
-        /\/now\/flow\/brief-activity$/,
+        /\/runs\/brief-activity$/,
       )
     })
 

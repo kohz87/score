@@ -7,7 +7,6 @@ import { runtimeLabel } from '../components/runtime-label.ts'
 import { TodoItems, todoProgress, useAgentTodos } from '../components/TodoList.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
-import { PopOutButton } from '../routes/pop/PopOutButton.tsx'
 import { usePermissionAction } from '../routes/settings/rules-queries.ts'
 import { useAgentDetail } from '../routes/team/team-queries.ts'
 import { AgentFiles } from '../routes/team/AgentFiles.tsx'
@@ -362,11 +361,6 @@ function AgentProfile({ agentId }: { agentId: string }) {
               <Link className="link bold-agent-watch" to={boldAgentScreenLink(agent.id)}>
                 Look at its screen
               </Link>
-              <PopOutButton
-                agentId={agent.id}
-                agentName={agent.name}
-                className="team-popout-link bold-agent-popout"
-              />
             </>
           )}
         </span>

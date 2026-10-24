@@ -3,7 +3,7 @@ import { createContext, useContext, useSyncExternalStore } from 'react'
 import { destinations } from '../shell/destinations.ts'
 
 // The layout model (PLAN 9.3, design docs/briefs/9-themes.md §7): what a theme's `layout` asks of the components that
-// can't be done with an attribute and CSS alone (menu order and labels, the Now cards, the chat options). It is
+// can't be done with an attribute and CSS alone (menu order and labels, the chat options). It is
 // resolved here, once, into a plain config with the defaults filled in and the protected parts enforced (Settings
 // and Needs-you can't be left out). The engine publishes it after a theme was applied; components read it with
 // useLayout(). Until then, and in safe mode or after a skipped theme, every component sees the Score default.
@@ -13,8 +13,6 @@ export type LookView = 'admin' | 'user'
 type Layout = NonNullable<ThemeManifest['layout']>
 
 export type Nav = NonNullable<Layout['nav']>
-export type NowCardKind = NonNullable<Layout['now']>['cards'][number]['card']
-export type NowArrangement = { columns: number; cards: { card: NowCardKind; span: number }[] }
 export type RoomListPosition = NonNullable<NonNullable<Layout['chat']>['roomList']>
 
 export type LayoutConfig = {
@@ -22,8 +20,6 @@ export type LayoutConfig = {
   contentWidth: NonNullable<Layout['contentWidth']>
   /** Order, labels and hidden destinations; null = Score's own menu. */
   menu: NonNullable<Layout['menu']> | null
-  /** The Now cards in a grid; null = Score's own arrangement (the cards in the order and widths of today). */
-  now: NowArrangement | null
   chat: { messages: 'plain' | 'bubbles'; roomList: RoomListPosition }
 }
 
@@ -31,24 +27,7 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
   nav: 'top',
   contentWidth: 'wide',
   menu: null,
-  now: null,
   chat: { messages: 'plain', roomList: 'left' },
-}
-
-/**
- * Today's Now as a grid, for a theme (or the Customizer) to start from. Score itself renders it with its own flowing
- * markup, which this approximates: the timeline across, the room beside the other cards.
- */
-export const DEFAULT_NOW_ARRANGEMENT: NowArrangement = {
-  columns: 3,
-  cards: [
-    { card: 'timeline', span: 3 },
-    { card: 'room', span: 2 },
-    { card: 'needs-you', span: 1 },
-    { card: 'todo', span: 1 },
-    { card: 'made-today', span: 1 },
-    { card: 'composer', span: 3 },
-  ],
 }
 
 /** `views.user` laid over the theme, section by section (colours per mode, shape and layout keys one by one). */
@@ -72,20 +51,6 @@ export function lookForView(manifest: Look, view: LookView): Look {
   return merged
 }
 
-/** Needs-you can be moved but never left out (it goes first when missing); each card appears once. */
-export function resolveNow(now: NonNullable<Layout['now']>): NowArrangement {
-  const columns = Math.min(4, Math.max(1, Math.round(now.columns)))
-  const seen = new Set<NowCardKind>()
-  const cards: NowArrangement['cards'] = []
-  for (const entry of now.cards) {
-    if (seen.has(entry.card)) continue
-    seen.add(entry.card)
-    cards.push({ card: entry.card, span: Math.min(columns, Math.max(1, Math.round(entry.span))) })
-  }
-  if (!seen.has('needs-you')) cards.unshift({ card: 'needs-you', span: 1 })
-  return { columns, cards }
-}
-
 export function resolveLayout(look: Look): LayoutConfig {
   const layout = look.layout
   if (!layout) return DEFAULT_LAYOUT
@@ -93,7 +58,6 @@ export function resolveLayout(look: Look): LayoutConfig {
     nav: layout.nav ?? DEFAULT_LAYOUT.nav,
     contentWidth: layout.contentWidth ?? DEFAULT_LAYOUT.contentWidth,
     menu: layout.menu ?? null,
-    now: layout.now ? resolveNow(layout.now) : null,
     chat: {
       messages: layout.chat?.messages ?? DEFAULT_LAYOUT.chat.messages,
       roomList: layout.chat?.roomList ?? DEFAULT_LAYOUT.chat.roomList,
@@ -130,19 +94,6 @@ export function resolveMenu(menu: LayoutConfig['menu']): MenuItem[] {
       ? { ...item, name: item.title === 'Settings' ? 'Settings' : `Settings (${item.title})` }
       : item,
   )
-}
-
-/**
- * Where the Needs-you dot sits: on Now, wherever the theme put it; when the theme left Now out, on the first entry, so
- * the marker is never missing from the navigation.
- */
-export function needsYouPath(menu: MenuItem[]): string | undefined {
-  return menu.some((item) => item.path === '/now') ? '/now' : menu[0]?.path
-}
-
-/** The user view is `/u` and everything below it. */
-export function viewOfPath(pathname: string): LookView {
-  return pathname === '/u' || pathname.startsWith('/u/') ? 'user' : 'admin'
 }
 
 // ---------------------------------------------------------------------------------------------------------------

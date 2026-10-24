@@ -84,7 +84,7 @@ test.each(['tls'])(
     await screen.findByText('This browser is paired')
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({ token: 'one-time-token' })
-    expect(screen.getByRole('link', { name: 'Open Score' }).getAttribute('href')).toBe('/now')
+    expect(screen.getByRole('link', { name: 'Open Score' }).getAttribute('href')).toBe('/b')
   },
 )
 test('a consumed remote link explains terminal regeneration', async () => {

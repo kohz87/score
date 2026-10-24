@@ -21,7 +21,7 @@ export function BackupSection({ heading = 'Backup and restore' }: { heading?: st
         {fence?.fenced ? (
           <>
             Orchestrations can’t start right now.{' '}
-            <Link to="/now">Check the runs waiting for review on Now</Link>.
+            <Link to="/b">Check the runs waiting for review in Score</Link>.
           </>
         ) : (
           'Nothing is blocked: Score’s record of runs matches its database.'

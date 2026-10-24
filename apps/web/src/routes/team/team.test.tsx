@@ -1121,15 +1121,11 @@ test('the History tab lists runs with links, filters by outcome, searches and pa
   fireEvent.click(await screen.findByRole('tab', { name: 'History' }))
   const panel = within(screen.getByRole('tabpanel'))
   expect(await panel.findByText('Run 1')).toBeDefined()
-  expect(panel.getByRole('link', { name: /Task: Wire the stream/ }).getAttribute('href')).toBe(
-    '/tasks/t-1',
-  )
-  expect(panel.getByRole('link', { name: /Run: Ship it/ }).getAttribute('href')).toBe(
-    '/now/flow/b-1',
-  )
+  expect(panel.getByRole('link', { name: /Run: Ship it/ }).getAttribute('href')).toBe('/runs/b-1')
   expect(panel.getByRole('link', { name: 'Replay Run 1 in Watch' }).getAttribute('href')).toBe(
-    '/now/watch/builder?from=4',
+    '/watch/builder?from=4',
   )
+  expect(panel.getByText('Task: Wire the stream')).toBeDefined()
   expect(panel.getByText(/2 min/)).toBeDefined()
   fireEvent.click(panel.getByRole('button', { name: 'Show more' }))
   expect(await panel.findByText('Run 3')).toBeDefined()
@@ -1208,10 +1204,10 @@ test('the History tab shows Kanban attempts with their status and no replay', as
   expect(panel.getAllByText('Not confirmed as ended').length).toBeGreaterThan(1)
   expect(panel.getByText(/no longer seen since/)).toBeDefined()
   expect(panel.getByText(/Source unclear/)).toBeDefined()
-  expect(panel.getByRole('link', { name: /Task: Wire the stream/ })).toBeDefined()
-  expect(panel.getByRole('link', { name: /Open this run/ }).getAttribute('href')).toBe(
-    '/attempts/kr_b',
-  )
+  expect(panel.getByText('Task: Wire the stream')).toBeDefined()
+  expect(
+    panel.getAllByRole('link', { name: /Open this run/ }).map((link) => link.getAttribute('href')),
+  ).toContain('/attempts/kr_b')
   expect(panel.queryByRole('link', { name: /Replay/ })).toBeNull()
 })
 

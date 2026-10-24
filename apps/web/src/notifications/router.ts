@@ -72,7 +72,7 @@ export function createNotificationRouter({ prefs, hidden, nameOf }: RouterOption
               settings.previews && approval.title
                 ? `${nameOf(approval.agentId)}: ${approval.title}`
                 : `${nameOf(approval.agentId)} is waiting for your decision.`,
-            url: '/now',
+            url: '/b',
             tag: `approval:${approval.id}`,
           }
         }
@@ -95,14 +95,14 @@ export function createNotificationRouter({ prefs, hidden, nameOf }: RouterOption
                 kind,
                 title: run.status === 'failed' ? 'Routine failed' : 'Routine finished',
                 body: `${name}’s routine ${run.status === 'failed' ? 'did not finish' : 'is done'}.`,
-                url: '/now/routines',
+                url: '/b/team',
                 tag: `run:${run.id}`,
               }
             : {
                 kind,
                 title: `${name} hit an error`,
                 body: 'A run failed. Open Score to see what happened.',
-                url: `/now/watch/${encodeURIComponent(run.agentId)}`,
+                url: `/watch/${encodeURIComponent(run.agentId)}`,
                 tag: `run:${run.id}`,
               }
         }

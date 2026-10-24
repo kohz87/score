@@ -82,7 +82,6 @@ import { SectionColours } from './SectionColours.tsx'
 import { SectionCss } from './SectionCss.tsx'
 import { SectionFonts } from './SectionFonts.tsx'
 import { SectionLayout } from './SectionLayout.tsx'
-import { SectionNow } from './SectionNow.tsx'
 import { SectionChat, SectionShape } from './SectionShape.tsx'
 import { SectionTheme } from './SectionTheme.tsx'
 import type { SectionContext } from './section-context.ts'
@@ -159,7 +158,6 @@ const tabs = [
   { id: 'fonts', label: 'Fonts' },
   { id: 'shape', label: 'Shape' },
   { id: 'layout', label: 'Layout' },
-  { id: 'now', label: 'Now' },
   { id: 'chat', label: 'Chat' },
   { id: 'background', label: 'Background' },
   { id: 'css', label: 'Custom CSS' },
@@ -203,7 +201,7 @@ export function Customizer() {
     const choice = look.mode
     return choice === 'system' ? systemMode() : choice
   })
-  const [pageId, setPageId] = useState('now')
+  const [pageId, setPageId] = useState('chat')
   const [deviceId, setDeviceId] = useState<PreviewDevice['id']>('desktop')
   const [pane, setPane] = useState<'edit' | 'preview'>('edit')
   const [status, setStatus] = useState('')
@@ -935,7 +933,6 @@ export function Customizer() {
             {tab === 'fonts' && <SectionFonts {...context} />}
             {tab === 'shape' && <SectionShape {...context} />}
             {tab === 'layout' && <SectionLayout {...context} />}
-            {tab === 'now' && <SectionNow {...context} />}
             {tab === 'chat' && <SectionChat {...context} />}
             {tab === 'background' && <SectionBackground {...context} />}
             {tab === 'css' && <SectionCss {...context} />}

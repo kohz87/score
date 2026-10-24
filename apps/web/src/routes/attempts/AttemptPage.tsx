@@ -1,10 +1,10 @@
 import { type ReactNode } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { UnattributedGlyph } from '../../components/UnattributedGlyph.tsx'
 import { ApiError } from '../../data/api.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
-import { taskAgentsQuery } from '../tasks/task-queries.ts'
+import { taskAgentsQuery } from '../../data/task-queries.ts'
 import { attemptStatusLabel, evidenceLabel } from './attempt-format.ts'
 import { useAttempt } from './attempt-queries.ts'
 import './attempts.css'
@@ -41,9 +41,6 @@ export function AttemptPage() {
   const detail = attempt.data
   return (
     <div className="attempt-page">
-      <p className="attempt-back">
-        <Link to="/tasks">Back to Tasks</Link>
-      </p>
       {attempt.isPending && <p role="status">Loading run…</p>}
       {attempt.isError && (
         <div role="alert">
@@ -79,12 +76,6 @@ export function AttemptPage() {
             <p className="attempt-note">
               This run is from an earlier version of the board. It is read-only because its task is
               no longer on the board Score follows.
-            </p>
-          )}
-          {detail.task.current && (
-            <p className="attempt-note">
-              This run belongs to a task on the current board.{' '}
-              <Link to={`/tasks/${encodeURIComponent(detail.task.taskId)}`}>Open the task</Link>
             </p>
           )}
           <section aria-labelledby="attempt-task-heading" className="attempt-section">

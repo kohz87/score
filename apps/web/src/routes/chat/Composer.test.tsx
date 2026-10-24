@@ -236,7 +236,7 @@ test('501 and network errors explain themselves; a retry reuses the idempotency 
   expect(key(0)).toBe(key(1))
 })
 
-test('/assign result links to the created task', async () => {
+test('/assign result names the created task without a dead board link', async () => {
   fetchMock.mockImplementation(async (input, init) =>
     init?.method === 'POST'
       ? json({
@@ -251,7 +251,7 @@ test('/assign result links to the created task', async () => {
   press('Enter')
   const status = await screen.findByRole('status')
   expect(status.textContent).toBe('Created task T-1')
-  expect(within(status).getByRole('link', { name: 'T-1' }).getAttribute('href')).toBe('/tasks/t_1')
+  expect(within(status).queryByRole('link')).toBeNull()
 })
 
 test('drafts persist per room and are restored', () => {

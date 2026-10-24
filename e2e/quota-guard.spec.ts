@@ -114,7 +114,7 @@ test.describe('a step held for a low limit', () => {
   }) => {
     const { answers } = await serveHeldRun(page)
     await page.setViewportSize({ width: 1280, height: 1100 })
-    await page.goto('/now/flow/brief-orch-1')
+    await page.goto('/runs/brief-orch-1')
     const node = page.locator('[data-node="s3"]')
     await expect(node).toBeVisible()
     await expect(node).toContainText(/Held: limit low \(6% left, resets [^)]+\)/)

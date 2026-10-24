@@ -95,18 +95,12 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
                 </p>
               )}
               <p className="team-muted">
-                {run.attempt && !run.attempt.task.current && (
-                  <Link to={attemptPath(run.attempt)}>Open this run (from an earlier board)</Link>
-                )}
-                {run.attempt && !run.attempt.task.current && run.task && ' · '}
-                {run.task && (!run.attempt || run.attempt.task.current) && (
-                  <Link to={`/tasks/${encodeURIComponent(run.task.id)}`}>
-                    Task: {run.task.title}
-                  </Link>
-                )}
+                {run.attempt && <Link to={attemptPath(run.attempt)}>Open this run</Link>}
+                {run.attempt && run.task && ' · '}
+                {run.task && <span>Task: {run.task.title}</span>}
                 {run.task && run.brief && ' · '}
                 {run.brief && (
-                  <Link to={`/now/flow/${encodeURIComponent(run.brief.id)}`}>
+                  <Link to={`/runs/${encodeURIComponent(run.brief.id)}`}>
                     Run: {run.brief.title}
                   </Link>
                 )}
@@ -117,7 +111,7 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
                 <Link
                   className="team-pill-button"
                   aria-label={`Replay ${run.title} in Watch`}
-                  to={`/now/watch/${encodeURIComponent(agentId)}?from=${run.replaySeq}`}
+                  to={`/watch/${encodeURIComponent(agentId)}?from=${run.replaySeq}`}
                 >
                   Replay in Watch
                 </Link>

@@ -11,7 +11,7 @@ import { LiveCount } from '../../live/LiveCount.tsx'
 import { useStatusLines } from '../../live/use-activity.ts'
 import { useRunPlayback } from '../orchestrations/use-run-playback.ts'
 import { AgentChip } from '../orchestrations/RunDecisions.tsx'
-import { taskAgentsQuery } from '../tasks/task-queries.ts'
+import { taskAgentsQuery } from '../../data/task-queries.ts'
 import { StartWorkflowDialog } from './StartWorkflowDialog.tsx'
 import { WorkflowNeeds } from './WorkflowDecisions.tsx'
 import { WorkflowNodePanel } from './WorkflowNodePanel.tsx'
@@ -130,7 +130,7 @@ export function WorkflowRunLive({
           <h3 className="orch-title">{detail.title}</h3>
           <p className="orch-muted">
             Workflow{' '}
-            <Link to={`/now/flow/workflows/${encodeURIComponent(detail.workflowId)}`}>
+            <Link to={`/workflows/${encodeURIComponent(detail.workflowId)}`}>
               {detail.workflowName}
             </Link>
             , version {detail.version}.{' '}

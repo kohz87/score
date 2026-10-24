@@ -40,23 +40,23 @@ test.beforeEach(async ({ page }) => {
 })
 
 const pages = [
-  { name: 'workflows-list', path: '/now/flow/workflows', ready: '.wf-card', widths: [1440, 390] },
+  { name: 'workflows-list', path: '/workflows', ready: '.wf-card', widths: [1440, 390] },
   {
     name: 'workflow-editor',
-    path: '/now/flow/workflows/wf-draft',
+    path: '/workflows/wf-draft',
     ready: '[data-node="build"]',
     widths: [1440, 768, 390],
     select: '[data-node="build"]',
   },
   {
     name: 'workflow-editor-drawn',
-    path: '/now/flow/workflows/wf-drawn',
+    path: '/workflows/wf-drawn',
     ready: '[data-node="draft"]',
     widths: [1440, 390],
   },
   {
     name: 'workflow-run',
-    path: '/now/flow/brief-wfrun-1',
+    path: '/runs/brief-wfrun-1',
     ready: '[data-node="approve"]',
     widths: [1440, 768, 390],
   },

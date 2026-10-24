@@ -105,11 +105,11 @@ const link = (briefId: string, taskId: string) =>
     },
   })
 
-test('a child created by a running step after Pause is held, and released by Resume', async () => {
+test('a child created by a running step after Pause everyone is held, and released by Resume', async () => {
   const first = await port.createTask({ title: 'Step', assignee: 'builder', roomId }, 'step')
   const id = MessageSchema.parse((await send({ text: 'Do the thing' })).json().message).id
   await link(id, first.id)
-  expect((await post(`/api/briefs/${id}/pause`, {}, 'p1')).statusCode).toBe(200)
+  expect((await post('/api/team/pause', {}, 'p1')).statusCode).toBe(200)
   const child = await port.createTask(
     { title: 'Child', assignee: 'reviewer', roomId, dependsOn: [first.id] },
     'child',
@@ -118,14 +118,14 @@ test('a child created by a running step after Pause is held, and released by Res
   expect(rows('SELECT task_id FROM brief_tasks WHERE brief_id = ?', id)).toContainEqual({
     task_id: child.id,
   })
-  expect(rows('SELECT task_id, state FROM brief_paused_tasks')).toContainEqual({
+  expect(rows('SELECT task_id, state FROM team_paused_tasks')).toContainEqual({
     task_id: child.id,
     state: 'held',
   })
   expect(await status(child.id)).toBe('scheduled')
-  expect((await post(`/api/briefs/${id}/resume`, {}, 'r1')).statusCode).toBe(200)
+  expect((await post('/api/team/resume', {}, 'r1')).statusCode).toBe(200)
   expect(await status(child.id)).not.toBe('scheduled')
-  expect(rows('SELECT 1 FROM brief_paused_tasks')).toEqual([])
+  expect(rows('SELECT 1 FROM team_paused_tasks')).toEqual([])
 })
 
 test('a task assigned to a paused agent is held on arrival', async () => {
@@ -222,24 +222,29 @@ test('a plan start that cannot be finished is marked failed with a notice in the
   expect(rows('SELECT state FROM plan_start_runs')).toEqual([{ state: 'done' }])
 })
 
-test('Pause landing while a plan step is being created still holds that step', async () => {
+test('Pause everyone landing while a plan step is being created holds every step', async () => {
   const { briefId, messageId } = await planMessage()
   const create = vi.spyOn(port, 'createTask')
   const real = Object.getPrototypeOf(port).createTask.bind(port)
   create.mockImplementationOnce(async (...args: unknown[]) => {
     const task = await real(...args)
-    expect((await post(`/api/briefs/${briefId}/pause`, {}, 'p1')).statusCode).toBe(200)
+    expect((await post('/api/team/pause', {}, 'p1')).statusCode).toBe(200)
     return task
   })
   create.mockImplementation(real)
   const started = await post(startUrl(messageId), {}, 'k1')
-  expect(started.statusCode).toBe(409)
+  // The plan is not a running brief yet when Pause everyone reads the list, so it finishes creating its steps.
+  // Every step it creates is still held by the team pause, so nothing runs while everyone is paused.
+  expect(started.statusCode).toBe(200)
   await ingest.flushListeners()
-  const [first] = rows('SELECT task_id FROM brief_tasks WHERE brief_id = ?', briefId)
-  expect(first).toBeDefined()
-  expect(await status(String(first!.task_id))).toBe('scheduled')
-  expect(rows('SELECT state FROM brief_paused_tasks')).toEqual([{ state: 'held' }])
-  expect(await port.listTasks()).toHaveLength(1)
+  const created = rows('SELECT task_id FROM brief_tasks WHERE brief_id = ?', briefId)
+  expect(created).toHaveLength(2)
+  for (const row of created) expect(await status(String(row.task_id))).toBe('scheduled')
+  expect(rows('SELECT state FROM team_paused_tasks')).toEqual([
+    { state: 'held' },
+    { state: 'held' },
+  ])
+  expect(await port.listTasks()).toHaveLength(2)
 })
 
 test('a failed park of an arrived task is retried without another task event', async () => {

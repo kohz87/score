@@ -138,7 +138,7 @@ function RecipeRunCard({ recipe, agents }: { recipe: JobRecipe; agents: AgentSum
             </button>
             <Link
               className="bold-thread-link"
-              to={`/now/flow/${encodeURIComponent(match.summary.briefId)}`}
+              to={`/runs/${encodeURIComponent(match.summary.briefId)}`}
             >
               Open in Flow
             </Link>
