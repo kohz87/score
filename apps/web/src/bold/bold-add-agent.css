@@ -1,0 +1,636 @@
+/* PLAN 11.8c: Add an agent. Values are copied from prototype.html's mAdd() and .dialog/.seg/.field rules. */
+[data-ui='bold'] .bold-add-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 80px);
+  overflow: auto;
+  margin: 40px auto;
+  padding: 26px;
+  border: 0;
+  border-radius: 30px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 50%);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+[data-ui='bold'] .bold-add-dialog::backdrop {
+  background: rgb(5 6 9 / 62%);
+}
+
+[data-ui='bold'] .bold-add-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-add-head h2 {
+  flex: 1;
+  font-size: 32px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+[data-ui='bold'] .bold-add-from {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  max-width: 100%;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-from button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink2);
+  font-size: 0.87em;
+}
+
+[data-ui='bold'] .bold-add-from button b {
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-add-from button.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-add-from button:disabled,
+[data-ui='bold'] .bold-add-shapes label:has(input:disabled),
+[data-ui='bold'] .bold-add-colours label:has(input:disabled),
+[data-ui='bold'] .bold-add-tools label:has(input:disabled) {
+  cursor: default;
+}
+
+[data-ui='bold'] .bold-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+[data-ui='bold'] .bold-add-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+[data-ui='bold'] .bold-add-appearance {
+  width: 170px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-add-preview {
+  height: 100px;
+  display: grid;
+  place-items: center;
+}
+
+[data-ui='bold'] .bold-add-preview .agent-glyph {
+  width: 100px;
+  height: 100px;
+  --glyph-svg-size: 62.5px;
+  --glyph-art-size: 100px;
+}
+
+[data-ui='bold'] .bold-add-shapes {
+  display: grid;
+  grid-template-columns: repeat(4, 36px);
+  gap: 4px;
+  justify-content: center;
+}
+
+[data-ui='bold'] .bold-add-shapes label {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+[data-ui='bold'] .bold-add-shapes label.on {
+  background: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-add-shapes .agent-glyph {
+  --glyph-svg-size: 18px;
+}
+
+[data-ui='bold'] .bold-add-colours {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-add-colours label {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+}
+
+[data-ui='bold'] .bold-add-colours label.on {
+  box-shadow:
+    0 0 0 2px var(--panel),
+    0 0 0 4px var(--ink);
+}
+
+[data-ui='bold'] .bold-add-colours label:has(input:disabled) {
+  opacity: 0.3;
+}
+
+[data-ui='bold'] .bold-add-shapes label,
+[data-ui='bold'] .bold-add-colours label,
+[data-ui='bold'] .bold-add-tools label {
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-add-shapes input,
+[data-ui='bold'] .bold-add-colours input,
+[data-ui='bold'] .bold-add-tools input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-add-shapes label:focus-within,
+[data-ui='bold'] .bold-add-colours label:focus-within,
+[data-ui='bold'] .bold-add-tools label:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-add-hint {
+  max-width: 170px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-add-fields {
+  flex: 1 1 280px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+[data-ui='bold'] .bold-add-fields > label,
+[data-ui='bold'] .bold-add-works > label,
+[data-ui='bold'] .bold-add-ssh > label,
+[data-ui='bold'] .bold-add-dialog .model-picker > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-add-dialog .field,
+[data-ui='bold'] .bold-add-dialog .model-picker input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+
+[data-ui='bold'] .bold-add-dialog textarea.field {
+  min-height: 90px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  resize: vertical;
+}
+
+[data-ui='bold'] .bold-add-dialog .bold-add-name {
+  min-height: 50px;
+  padding: 0 16px;
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-add-dialog .lab {
+  display: block;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-add-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+[data-ui='bold'] .bold-add-works {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-add-ssh {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-add-ssh .span2 {
+  grid-column: span 2;
+}
+
+[data-ui='bold'] .bold-add-review,
+[data-ui='bold'] .bold-add-archive,
+[data-ui='bold'] .bold-add-tool,
+[data-ui='bold'] .bold-add-operation .team-card {
+  padding: 16px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--deep);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-add-review h3,
+[data-ui='bold'] .bold-add-archive h3,
+[data-ui='bold'] .bold-add-tool .lab,
+[data-ui='bold'] .bold-add-operation h2 {
+  margin: 0 0 8px;
+  font-family: var(--font-d);
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-add-review ul {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+[data-ui='bold'] .bold-add-review dl,
+[data-ui='bold'] .bold-add-archive dl {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+[data-ui='bold'] .bold-add-review dl > div,
+[data-ui='bold'] .bold-add-archive dl > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-add-review dt,
+[data-ui='bold'] .bold-add-archive dt {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-add-review dd,
+[data-ui='bold'] .bold-add-archive dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-add-dialog .check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  font-weight: 400;
+}
+
+[data-ui='bold'] .bold-add-dialog .check input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+[data-ui='bold'] .bold-add-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-add-footer > .small {
+  flex: 1;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-add-footer .btn {
+  min-height: 48px;
+  padding: 0 24px;
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-add-footer .btn.ghost {
+  padding: 0 16px;
+}
+
+[data-ui='bold'] .bold-add-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--deep);
+}
+
+[data-ui='bold'] .bold-add-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-tools label {
+  position: relative;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink2);
+  font-size: 0.87em;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-add-tools label.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-add-tool-state {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-add-tool-state p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-add-dialog .link {
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-ui='bold'] .bold-add-dialog code {
+  font-family: var(--font-m);
+  font-size: 0.95em;
+}
+
+[data-ui='bold'] .bold-add-dialog .team-card {
+  border: 0;
+  background: var(--deep);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-add-dialog .team-operation-steps {
+  margin: 10px 0;
+  padding-left: 22px;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-add-dialog .team-operation-steps li + li {
+  margin-top: 4px;
+}
+
+[data-ui='bold'] .bold-add-dialog .team-muted,
+[data-ui='bold'] .bold-add-dialog .team-muted-strong,
+[data-ui='bold'] .bold-add-dialog .small.muted {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-add-dialog .team-primary {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-add-dialog .team-coding-permission {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 14px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-dialog .team-coding-permission legend {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-add-dialog .team-coding-permission label {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 32px;
+  font-weight: 400;
+}
+
+[data-ui='bold'] .bold-add-dialog .team-coding-permission input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+[data-ui='bold'] .bold-add-dialog .coding-reach {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-dialog .coding-reach p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-add-dialog .coding-reach p + p {
+  margin-top: 6px;
+}
+
+[data-ui='bold'] .bold-add-dialog .coding-acknowledge {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-operation {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-add-runs-status {
+  margin: 0;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-add-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-error p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-add-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-add-upload {
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--deep);
+}
+
+[data-ui='bold'] .bold-add-upload input[type='file'] {
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-add-upload .small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-add-added {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 26px 10px 10px;
+  text-align: center;
+}
+
+[data-ui='bold'] .bold-add-added h2 {
+  font-size: 30px;
+}
+
+[data-ui='bold'] .bold-add-added p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-add-joined-runs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 560px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--deep);
+}
+
+[data-ui='bold'] .bold-add-joined-runs p {
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-add-added-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+[data-ui='bold'] .bold-add-dialog .upload-progress {
+  color: var(--ink);
+}
+
+@media (max-width: 700px) {
+  [data-ui='bold'] .bold-add-dialog {
+    width: min(760px, calc(100vw - 32px));
+    max-height: calc(100dvh - 80px);
+    margin: 40px auto;
+    padding: 26px;
+    border-radius: 30px;
+  }
+
+  [data-ui='bold'] .bold-add-grid2,
+  [data-ui='bold'] .bold-add-ssh {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-add-ssh .span2 {
+    grid-column: auto;
+  }
+
+  [data-ui='bold'] .bold-add-review dl > div,
+  [data-ui='bold'] .bold-add-archive dl > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-add-footer {
+    flex-wrap: wrap;
+  }
+
+  [data-ui='bold'] .bold-add-footer > .small {
+    flex-basis: 100%;
+  }
+}

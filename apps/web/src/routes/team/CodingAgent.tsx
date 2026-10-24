@@ -85,7 +85,7 @@ const codingAgentsQuery = {
 /** The short name used in "not verified for agy yet". */
 const shortNames: Partial<Record<CodingRuntime, string>> = { antigravity: 'agy' }
 
-function PermissionPicker({
+export function PermissionPicker({
   value,
   onChange,
   name,
@@ -142,12 +142,11 @@ const shortPermission: Record<CodingPermission, string> = {
   full: 'full access',
 }
 
-export function AddCodingAgentForm({
-  onAdded,
-}: {
-  /** The agent and one line about it, for the dialog's "joined the team" view. */
-  onAdded: (agent: CodingAgent, detail: string) => void
-}) {
+/** The coding-agent create fields, validation, consent and mutation, shared by the classic form and the bold dialog. */
+export function useCodingAgentDraft(
+  onAdded: (agent: CodingAgent, detail: string) => void,
+  initialStyle: AgentStyle = { color: '#6B4EFF', shape: 'hexagon' },
+) {
   const queryClient = useQueryClient()
   const runtimes = useQuery(codingRuntimesQuery)
   const [runtime, setRuntime] = useState<CodingRuntime>('claude-code')
@@ -159,11 +158,25 @@ export function AddCodingAgentForm({
   const [permission, setPermission] = useState<CodingPermission>('workspace-write')
   const [password, setPassword] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
-  const [style, setStyle] = useState<AgentStyle>({ color: '#6B4EFF', shape: 'hexagon' })
+  const [style, setStyle] = useState<AgentStyle>(initialStyle)
   const info = runtimes.data?.find((item) => item.runtime === runtime)
   const usable = info?.state === 'ready' || info?.state === 'untested_version'
   const unverified = info?.unverifiedPermissions ?? []
   const needsAck = readsOutsideWorkspace(runtime, permission)
+  const chooseRuntime = (next: CodingRuntime) => {
+    setRuntime(next)
+    // A model name of one CLI means nothing to another.
+    setModel('')
+    // A level that is not verified for the new CLI is never kept selected.
+    const blocked =
+      runtimes.data?.find((item) => item.runtime === next)?.unverifiedPermissions ?? []
+    if (blocked.includes(permission))
+      setPermission(
+        (['read-only', 'workspace-write', 'full'] as const).find(
+          (level) => !blocked.includes(level),
+        ) ?? permission,
+      )
+  }
   const create = useMutation({
     mutationFn: async () =>
       CodingAgentSchema.parse(
@@ -197,6 +210,72 @@ export function AddCodingAgentForm({
       )
     },
   })
+  return {
+    runtimes,
+    runtime,
+    chooseRuntime,
+    id,
+    setId,
+    name,
+    setName,
+    role,
+    setRole,
+    workspace,
+    setWorkspace,
+    model,
+    setModel,
+    permission,
+    setPermission,
+    password,
+    setPassword,
+    acknowledged,
+    setAcknowledged,
+    style,
+    setStyle,
+    info,
+    usable,
+    unverified,
+    needsAck,
+    create,
+  }
+}
+
+export type CodingAgentDraft = ReturnType<typeof useCodingAgentDraft>
+
+export function AddCodingAgentForm({
+  onAdded,
+}: {
+  /** The agent and one line about it, for the dialog's "joined the team" view. */
+  onAdded: (agent: CodingAgent, detail: string) => void
+}) {
+  const draft = useCodingAgentDraft(onAdded)
+  const {
+    runtimes,
+    runtime,
+    chooseRuntime,
+    id,
+    setId,
+    setName,
+    role,
+    setRole,
+    workspace,
+    setWorkspace,
+    model,
+    setModel,
+    permission,
+    setPermission,
+    password,
+    setPassword,
+    acknowledged,
+    setAcknowledged,
+    style,
+    setStyle,
+    info,
+    usable,
+    unverified,
+    needsAck,
+    create,
+  } = draft
   return (
     // One decision: the runtime's message and warning, the permission and read-access context, the fields that carry
     // consent and the button that commits it. Vetting any click or the submit measures all of them (data-decision).
@@ -213,21 +292,7 @@ export function AddCodingAgentForm({
         <select
           aria-label="Kind of coding agent"
           value={runtime}
-          onChange={(event) => {
-            const next = event.target.value as CodingRuntime
-            setRuntime(next)
-            // A model name of one CLI means nothing to another.
-            setModel('')
-            // A level that is not verified for the new CLI is never kept selected.
-            const blocked =
-              runtimes.data?.find((item) => item.runtime === next)?.unverifiedPermissions ?? []
-            if (blocked.includes(permission))
-              setPermission(
-                (['read-only', 'workspace-write', 'full'] as const).find(
-                  (level) => !blocked.includes(level),
-                ) ?? permission,
-              )
-          }}
+          onChange={(event) => chooseRuntime(event.target.value as CodingRuntime)}
         >
           {runtimes.data?.map((item) => (
             <option key={item.runtime} value={item.runtime}>

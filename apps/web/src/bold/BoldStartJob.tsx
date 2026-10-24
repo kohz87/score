@@ -4,7 +4,6 @@ import {
   ORCH_DEFAULTS,
   OrchestrationCreatedSchema,
   RoutineSummarySchema,
-  TeamRoomResponseSchema,
   TriggerCreatedSchema,
   WorkflowRunCreatedSchema,
   WorkflowVersionSchema,
@@ -13,13 +12,12 @@ import {
   type OrchestrationCreate,
   type WorkflowRunCreate,
 } from '@score/contract'
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQueryClient } from '@tanstack/react-query'
 import {
   createContext,
   useContext,
   useEffect,
   useId,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -31,6 +29,7 @@ import { apiFetch, ApiError } from '../data/api.ts'
 import { copyText } from '../data/clipboard.ts'
 import { newId } from '../data/ids.ts'
 import { useStreamQuery } from '../data/query-client.ts'
+import { boldTeamRoomQuery } from './bold-results-queries.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { describeCreateError } from '../routes/orchestrations/NewOrchestrationDialog.tsx'
 import { usePreflight } from '../routes/orchestrations/orchestration-queries.ts'
@@ -205,14 +204,17 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const agents = useStreamQuery(agentsQuery).data ?? NO_AGENTS
   const workflows = useWorkflows()
-  const teamRoom = useQuery({
-    queryKey: ['bold', 'team-room'],
-    queryFn: async ({ signal }) =>
-      TeamRoomResponseSchema.parse(await apiFetch('team-room', { signal })),
-    retry: false,
-  })
+  // The same stream-kept read of the team room as Results (one cache entry per key, one shape).
+  const teamRoomState = useStreamQuery(boldTeamRoomQuery)
+  const teamRoom = {
+    data: teamRoomState.data,
+    isPending: teamRoomState.status === 'pending',
+    isError: teamRoomState.status === 'error',
+  }
 
   const [what, setWhat] = useState('')
+  // When the dialog opened: a deadline before it is already past (read once, not on every render).
+  const [openedAt] = useState(() => Date.now())
   const [recipe, setRecipe] = useState<RecipeChoice>({ kind: 'lead' })
   const [when, setWhen] = useState<When>('once')
   const [ask, setAsk] = useState<Ask>('risky')
@@ -250,10 +252,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     (teamLead && hermesAgents.some((agent) => agent.id === teamLead)
       ? teamLead
       : hermesAgents[0]?.id) ?? ''
-  const defaultAllowed = useMemo(
-    () => agents.filter((agent) => agent.id !== leadId).map((agent) => agent.id),
-    [agents, leadId],
-  )
+  const defaultAllowed = agents.filter((agent) => agent.id !== leadId).map((agent) => agent.id)
   const allowedFor = allowed ?? defaultAllowed
   const leadAgent = agents.find((agent) => agent.id === leadId)
 
@@ -322,7 +321,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const jobTitle = isSavedRecipe && nowOnce ? titleOf(recipe.name) : titleOf(what)
   const saveName = orchestrationTitleOf(what)
   const deadlineAt = deadlineEnabled ? deadlineIso(deadline) : undefined
-  const deadlinePast = deadlineAt !== undefined && Date.parse(deadlineAt) <= Date.now()
+  const deadlinePast = deadlineAt !== undefined && Date.parse(deadlineAt) <= openedAt
 
   const missingInputs =
     isSavedRecipe && workflowDefinition
@@ -457,7 +456,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     const index = recipeOptions.findIndex((option) => option.key === key)
     if (index < 0) return
     const last = recipeOptions.length - 1
-    let next = index
+    let next: number
     if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
       next = index === last ? 0 : index + 1
     else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')

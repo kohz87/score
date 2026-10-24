@@ -1,4 +1,4 @@
-import { Link, Navigate, useNavigate, useParams } from 'react-router'
+import { Navigate, useNavigate, useParams } from 'react-router'
 import { useStreamQuery } from '../data/query-client.ts'
 import { AdvancedSection } from '../routes/settings/AdvancedSection.tsx'
 import { NotificationsSection } from '../routes/settings/NotificationsSection.tsx'
@@ -6,7 +6,10 @@ import { RulesSection } from '../routes/settings/RulesSection.tsx'
 import { HermesVersionBanner } from '../routes/settings/HermesVersionBanner.tsx'
 import { agentsQuery } from '../routes/team/team-queries.ts'
 import { BoldSecurity } from './BoldSecurity.tsx'
+import { BoldConnections } from './BoldConnections.tsx'
+import { BoldLook } from './BoldLook.tsx'
 import { BoldSystem } from './BoldSystem.tsx'
+import { BoldTools } from './BoldTools.tsx'
 import { BoldUsage } from './BoldUsage.tsx'
 import { saveUi } from './bold-ui.ts'
 import '../routes/settings/settings.css'
@@ -67,33 +70,6 @@ function isSettingsSection(value: string | undefined): value is SettingsSection 
   return SETTINGS_SECTIONS.some((section) => section.id === value)
 }
 
-function Placeholder({ section }: { section: SettingsItem }) {
-  return (
-    <section className="settings-placeholder" aria-labelledby="settings-placeholder-title">
-      <h2 id="settings-placeholder-title">{section.title}</h2>
-      <p>Comes in {section.phase ?? '11.9b'}</p>
-      {section.id === 'connections' && (
-        <p className="small muted">
-          Until then, the classic page has <Link to="/settings/models">models and keys</Link> and{' '}
-          <Link to="/settings/connections">connections</Link>.
-        </p>
-      )}
-      {section.id === 'tools' && (
-        <p className="small muted">
-          Until then, tool servers are on the classic{' '}
-          <Link to="/settings/connections">Connections</Link> page.
-        </p>
-      )}
-      {section.id === 'look' && (
-        <p className="small muted">
-          Until then, the classic <Link to="/settings/look">Look</Link> page has themes, motion and
-          text size.
-        </p>
-      )}
-    </section>
-  )
-}
-
 function Section({
   section,
   agents,
@@ -102,6 +78,12 @@ function Section({
   agents: ReturnType<typeof useAgents>
 }) {
   switch (section) {
+    case 'connections':
+      return <BoldConnections agents={agents} />
+    case 'tools':
+      return <BoldTools agents={agents} />
+    case 'look':
+      return <BoldLook />
     case 'rules':
       return <RulesSection agents={agents} heading="Rules" />
     case 'notifications':
@@ -115,7 +97,7 @@ function Section({
     case 'usage':
       return <BoldUsage />
     default:
-      return <Placeholder section={SETTINGS_SECTIONS.find((item) => item.id === section)!} />
+      return <BoldUsage />
   }
 }
 
@@ -123,7 +105,7 @@ function useAgents() {
   return useStreamQuery(agentsQuery).data ?? []
 }
 
-/** PLAN 11.9c/11.9b: the bold shell's Settings frame. Connections, Tools and Look still belong to 11.9a. */
+/** PLAN 11.9a–c: the bold shell's Settings frame. */
 export function BoldSettings() {
   const params = useParams()
   const navigate = useNavigate()

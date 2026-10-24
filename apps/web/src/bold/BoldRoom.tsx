@@ -1,14 +1,16 @@
 import type { AgentSummary } from '@score/contract'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { useOutletContext } from 'react-router'
+import { Link, useLocation, useOutletContext } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { agentNameColor, agentStateLabel } from './bold-agents.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
+import { BoldResults } from './BoldResults.tsx'
 import { BookIcon, ChevronIcon, CloseIcon, GridIcon, PlusIcon, ThreadIcon } from './BoldIcons.tsx'
 import { useStartJob } from './BoldStartJob.tsx'
+import { boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
 
 const PHONE = '(max-width: 860px)'
@@ -36,6 +38,7 @@ export function BoldRoom() {
   const startJob = useStartJob()
   const phone = useMediaQuery(PHONE)
   const { sheetOpen, setSheetOpen } = useOutletContext<BoldSheetState>()
+  const location = useLocation()
   const [mode, setMode] = useState<SideMode>('work')
   const [menuOpen, setMenuOpen] = useState(false)
   const sideRef = useRef<HTMLElement>(null)
@@ -194,6 +197,14 @@ export function BoldRoom() {
               {label}
               <ChevronIcon />
             </button>
+            {mode === 'work' && (
+              <nav className="seg bold-work-tabs" aria-label="How to see the work">
+                <span className="on" aria-current="page">
+                  Results
+                </span>
+                <Link to={boldWorkbenchLink(location.search)}>Workbench</Link>
+              </nav>
+            )}
             {agent && (
               <span className="small muted side-privacy">Only you and {agent.id} see this</span>
             )}
@@ -225,7 +236,7 @@ export function BoldRoom() {
               </div>
             )}
           </div>
-          {mode !== 'library' && (
+          {mode !== 'library' && mode !== 'work' && (
             <div className="sidebody" data-placeholder={mode}>
               <p className="side-placeholder">{sideCopy(mode, agent)}</p>
               {agent && (
@@ -235,6 +246,7 @@ export function BoldRoom() {
               )}
             </div>
           )}
+          <BoldResults agents={agents} hidden={mode !== 'work'} />
           <BoldLibrary agents={agents} hidden={mode !== 'library'} />
         </aside>
       </div>
