@@ -81,9 +81,57 @@ test('without review verdicts the page is called messages rather than inventing 
 })
 
 test('a job session is named score-room-job-agent on both sides of the contract', () => {
-  expect(jobSessionId('team-room', 'job-notes', 'reviewer')).toBe(
+  expect(jobSessionId('team-room', { id: 'job-notes', isDefault: false }, 'reviewer')).toBe(
     'score-team-room-job-notes-reviewer',
   )
+})
+
+test('the default job uses the room session, not a job session', () => {
+  expect(jobSessionId('team-room', { id: 'job-default', isDefault: true }, 'lead')).toBe(
+    'score-team-room-lead',
+  )
+})
+
+test('a job-limit pause names the job limit instead of the exchange budget', () => {
+  const paused = makeExchange({ pause: { reason: 'job_limit', options: ['more_turns', 'stop'] } })
+  expect(threadTurns(paused, { jobTurnLimit: 40 })).toBe('Job turn limit reached (40)')
+  expect(threadTurns(makeExchange({ turnsUsed: 3 }), { jobTurnLimit: 40 })).toBe(
+    '3 of 8 turns used',
+  )
+})
+
+test('the one exchange is the one that needs you, else the latest live one', () => {
+  const live = makeExchange({ id: 'live', state: 'live', pause: null })
+  const waiting = makeExchange({ id: 'waiting' })
+  expect(currentExchange([waiting, live])?.id).toBe('waiting')
+  expect(currentExchange([live, waiting])?.id).toBe('waiting')
+})
+
+test('with older messages unloaded the first chunk is not called Round 1', () => {
+  const rounds = threadRounds(
+    [
+      review('a', 1, 'changes_requested'),
+      message('b', 2),
+      review('c', 3, 'changes_requested'),
+      message('d', 4),
+    ],
+    { hasEarlier: true },
+  )
+  expect(rounds.map((round) => round.label)).toEqual([
+    'Earlier messages',
+    'Later in the review',
+    'Later in the review',
+  ])
+  expect(rounds.map((round) => round.key)).toEqual(['a', 'b', 'd'])
+  expect(rounds.every((round) => round.number === null)).toBe(true)
+})
+
+test('several review exchanges mean no round numbers at all', () => {
+  const rounds = threadRounds([review('a', 1, 'changes_requested'), message('b', 2)], {
+    reviewExchanges: 2,
+  })
+  expect(rounds).toHaveLength(1)
+  expect(rounds[0]?.label).toBe('Messages')
 })
 
 const orchestration: OrchestrationSummary = {

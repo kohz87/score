@@ -130,3 +130,28 @@ test('a job with a recipe that is not in the run list says so', async () => {
   expect(await screen.findByLabelText('Recipe run')).toBeTruthy()
   expect(await screen.findByText(/links to workflow wf-9/)).toBeTruthy()
 })
+
+test('a 403 on the step-in box asks to pair this browser, and a done job has the box disabled', async () => {
+  const fetchMock = mockFetch((url, init) => {
+    if (url === '/api/team-room') return jsonResponse({ asOfSeq: 1, room, jobs: [job] })
+    if (url === '/api/agents') return jsonResponse({ asOfSeq: 1, items: agents })
+    if (url === '/api/rooms/room-1/jobs') return jsonResponse({ asOfSeq: 1, items: [job] })
+    if (init.method === 'POST')
+      return jsonResponse({ error: { code: 'forbidden', message: 'no' } }, 403)
+    if (url.startsWith('/api/rooms/room-1/messages'))
+      return jsonResponse({ asOfSeq: 1, items: [], nextCursor: null, jobId: 'job-1' })
+    return jsonResponse({ asOfSeq: 0, items: [] })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  renderInRoom(<BoldThread jobId="job-1" onSelectJob={() => undefined} />, ['/b'])
+  fireEvent.change(await screen.findByLabelText('Step in'), { target: { value: 'Hello' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Send step-in' }))
+  expect(await screen.findByText('Pair this browser first.')).toBeTruthy()
+})
+
+test('the step-in box is disabled on a closed job', async () => {
+  stub({ jobs: [makeJob({ state: 'closed' })] })
+  renderInRoom(<BoldThread jobId="job-1" onSelectJob={() => undefined} />, ['/b'])
+  const box = (await screen.findByLabelText('Step in')) as HTMLInputElement
+  expect(box.disabled).toBe(true)
+})

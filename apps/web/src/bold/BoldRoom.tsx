@@ -42,6 +42,13 @@ export function BoldRoom() {
   const location = useLocation()
   const [mode, setMode] = useState<SideMode>('work')
   const [threadJob, setThreadJob] = useState<string | null>(null)
+  // The thread follows the room's job tab: another tab opens that job's thread, All goes back to the picker.
+  const tabJob = new URLSearchParams(location.search).get('job')
+  const [seenTabJob, setSeenTabJob] = useState(tabJob)
+  if (tabJob !== seenTabJob) {
+    setSeenTabJob(tabJob)
+    setThreadJob(tabJob && tabJob !== 'all' ? tabJob : null)
+  }
   const workbenchVisible =
     mode === 'work' &&
     ['workbench', 'code', 'screen', 'draft'].includes(

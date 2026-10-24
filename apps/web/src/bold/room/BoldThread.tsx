@@ -1,5 +1,11 @@
-import { MessagePageSchema, type AgentSummary, type Job, type Message } from '@score/contract'
-import { useMemo, useState, type FormEvent } from 'react'
+import {
+  MessagePageSchema,
+  type AgentSummary,
+  type Exchange,
+  type Job,
+  type Message,
+} from '@score/contract'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
@@ -22,7 +28,7 @@ import {
   threadRounds,
   threadTurns,
 } from './thread-model.ts'
-import { ExchangeRequestCard } from './RoomRequests.tsx'
+import { decisionError, ExchangeRequestCard } from './RoomRequests.tsx'
 import {
   jobExchangesQuery,
   roomJobsQuery,
@@ -159,7 +165,7 @@ function ThreadComposer({
 }: {
   roomId: string
   job: Job
-  paused: ReturnType<typeof currentPaused>
+  paused: Exchange | undefined
   onSent: () => void
 }) {
   const [text, setText] = useState('')
@@ -167,10 +173,11 @@ function ThreadComposer({
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const stepInExchange = paused?.pause?.options.includes('step_in') ? paused : undefined
+  const closed = job.state === 'done' || job.state === 'closed'
   async function send(event: FormEvent) {
     event.preventDefault()
     const value = text.trim()
-    if (!value || busy) return
+    if (!value || busy || closed) return
     setBusy(true)
     setError(null)
     setStatus(null)
@@ -187,14 +194,10 @@ function ThreadComposer({
         })
       }
       setText('')
-      setStatus(stepInExchange ? 'Step in sent.' : 'Your step-in was sent.')
+      setStatus(stepInExchange ? 'Step in sent.' : 'Message sent.')
       onSent()
     } catch (failure) {
-      setError(
-        failure instanceof ApiError && failure.status === 409
-          ? failure.message
-          : 'Couldn’t step in. Try again.',
-      )
+      setError(decisionError(failure))
     } finally {
       setBusy(false)
     }
@@ -211,12 +214,13 @@ function ThreadComposer({
           onChange={(event) => setText(event.target.value)}
           placeholder={`Step in: write to everyone in ${job.title}`}
           autoComplete="off"
+          disabled={closed}
         />
         <button
           type="submit"
           className="bold-thread-send"
           aria-label="Send step-in"
-          disabled={!text.trim() || busy}
+          disabled={!text.trim() || busy || closed}
         >
           <SendIcon />
         </button>
@@ -235,10 +239,6 @@ function ThreadComposer({
   )
 }
 
-function currentPaused(exchanges: Parameters<typeof currentExchange>[0]) {
-  return exchanges.filter(needsYou)[0]
-}
-
 function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: AgentSummary[] }) {
   const exchangesDefinition = useMemo(() => jobExchangesQuery(job.id), [job.id])
   const exchanges = useStreamQuery(exchangesDefinition).data ?? []
@@ -255,8 +255,17 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
   const [stopStatus, setStopStatus] = useState<string | null>(null)
   const [stopError, setStopError] = useState<string | null>(null)
   const refetchExchanges = useStreamQueryRefetch(exchangesDefinition)
+  const stopButton = useRef<HTMLButtonElement>(null)
+  const keepGoing = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (confirmingStop) keepGoing.current?.focus()
+  }, [confirmingStop])
+  function cancelStop() {
+    setConfirmingStop(false)
+    stopButton.current?.focus()
+  }
   const current = currentExchange(exchanges)
-  const paused = currentPaused(exchanges)
+  const paused = current && current.pause && needsYou(current) ? current : undefined
   const holder = agents.find((agent) => agent.id === job.holderAgentId)
   const allMessages = useMemo(() => {
     const byId = new Map<string, Message>()
@@ -266,11 +275,19 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
       (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
     )
   }, [messagesState.data, olderPages])
-  const rounds = useMemo(() => threadRounds(allMessages), [allMessages])
+  const olderCursor = olderPages.at(-1)?.nextCursor ?? messagesState.data?.nextCursor ?? null
+  const reviewExchanges = exchanges.filter((item) => item.kind === 'review').length
+  const rounds = useMemo(
+    () =>
+      threadRounds(allMessages, {
+        hasEarlier: olderCursor !== null,
+        reviewExchanges,
+      }),
+    [allMessages, reviewExchanges, olderCursor],
+  )
   const finishedReplies = allMessages.filter(
     (message) => message.author.kind === 'agent' && !message.streaming,
   ).length
-  const olderCursor = olderPages.at(-1)?.nextCursor ?? messagesState.data?.nextCursor ?? null
 
   async function loadOlder() {
     if (!olderCursor || loadingOlder) return
@@ -299,8 +316,8 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
       void refetchExchanges()
     } catch (failure) {
       setStopError(
-        failure instanceof ApiError && failure.status === 409
-          ? failure.message
+        failure instanceof ApiError && [401, 403, 409].includes(failure.status)
+          ? decisionError(failure)
           : 'Couldn’t stop this job. Try again.',
       )
     } finally {
@@ -308,7 +325,7 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
     }
   }
 
-  const turnText = threadTurns(current)
+  const turnText = threadTurns(current, job)
   const stateText = current ? exchangeStatus(current).replace(/^round \d+ · /, '') : null
   const stopDisabled = job.state === 'done' || job.state === 'closed' || stopping
 
@@ -329,12 +346,13 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
                 roomId={roomId}
                 agentId={holder.id}
                 name={holder.name}
-                sessionId={jobSessionId(roomId, job.id, holder.id)}
+                sessionId={jobSessionId(roomId, job, holder.id)}
                 finishedReplies={finishedReplies}
               />
             )}
             <button
               type="button"
+              ref={stopButton}
               className="btn sm bold-thread-stop"
               disabled={stopDisabled}
               onClick={() => setConfirmingStop(true)}
@@ -350,6 +368,12 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
             data-protected="block"
             role="alertdialog"
             aria-label={`Stop ${job.title}?`}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') return
+              event.preventDefault()
+              event.stopPropagation()
+              cancelStop()
+            }}
           >
             <b>Stop “{job.title}”?</b>
             <span>
@@ -357,11 +381,7 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
               going on.
             </span>
             <div className="bold-thread-confirm-actions">
-              <button
-                type="button"
-                className="btn sm ghost"
-                onClick={() => setConfirmingStop(false)}
-              >
+              <button ref={keepGoing} type="button" className="btn sm ghost" onClick={cancelStop}>
                 Keep going
               </button>
               <button
@@ -419,7 +439,7 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
           )}
           {rounds.map((round) => (
             <section
-              key={round.label}
+              key={round.key}
               className="bold-thread-round"
               aria-label={`${round.label} messages`}
             >
@@ -456,19 +476,9 @@ function ThreadRoom({
   agents: AgentSummary[]
   onSelectJob: (jobId: string) => void
 }) {
-  const [picked, setPicked] = useState<string | null>(null)
-  const target = jobId ?? picked
+  const target = jobId
   const job = target ? jobs.find((item) => item.id === target) : undefined
-  if (!target)
-    return (
-      <JobPicker
-        jobs={jobs}
-        onPick={(id) => {
-          setPicked(id)
-          onSelectJob(id)
-        }}
-      />
-    )
+  if (!target) return <JobPicker jobs={jobs} onPick={onSelectJob} />
   if (!job)
     return (
       <div className="sidebody bold-thread">

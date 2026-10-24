@@ -48,7 +48,7 @@ function needsForm(option: ExchangeOption): boolean {
   return ['more_spend', 'step_in', 'reassign', 'send_back'].includes(option)
 }
 
-function decisionError(failure: unknown): string {
+export function decisionError(failure: unknown): string {
   if (failure instanceof ApiError && (failure.status === 401 || failure.status === 403))
     return 'Pair this browser first.'
   if (failure instanceof ApiError && failure.status === 409) return failure.message

@@ -5,10 +5,12 @@ import type {
   OrchestrationSummary,
   WorkflowRunSummary,
 } from '@score/contract'
+import { needsYou } from './room-model.ts'
 
 export type JobRecipe = NonNullable<Job['recipe']>
 
 export type ThreadRound = {
+  key: string
   label: string
   number: number | null
   messages: Message[]
@@ -19,17 +21,33 @@ export type RecipeRunMatch =
   | { kind: 'workflow'; summary: WorkflowRunSummary }
 
 /** The server's name for one agent's session in a job (PLAN 11.1a). */
-export function jobSessionId(roomId: string, jobId: string, agentId: string): string {
-  return `score-${roomId}-${jobId}-${agentId}`
+export function jobSessionId(
+  roomId: string,
+  job: { id: string; isDefault: boolean },
+  agentId: string,
+): string {
+  // The default job is the room's own conversation: it uses the room session, not a job session.
+  return job.isDefault ? `score-${roomId}-${agentId}` : `score-${roomId}-${job.id}-${agentId}`
 }
 
-export function threadTurns(exchange: Exchange | undefined): string | null {
-  return exchange ? `${exchange.turnsUsed} of ${exchange.budget} turns used` : null
+export function threadTurns(
+  exchange: Exchange | undefined,
+  job?: Pick<Job, 'jobTurnLimit'>,
+): string | null {
+  if (!exchange) return null
+  // On a job-limit pause the exchange's own budget is not what stopped it.
+  if (exchange.pause?.reason === 'job_limit' && job)
+    return `Job turn limit reached (${job.jobTurnLimit})`
+  return `${exchange.turnsUsed} of ${exchange.budget} turns used`
 }
 
-/** The exchange whose turns and pause the thread header describes. */
+/**
+ * The exchange the header, the decision card, step-in and the capsule all talk about: the one that needs the person
+ * first, else the latest one still running, else the last one.
+ */
 export function currentExchange(exchanges: Exchange[]): Exchange | undefined {
   return (
+    exchanges.find(needsYou) ??
     [...exchanges].reverse().find((item) => item.state !== 'done' && item.state !== 'stopped') ??
     exchanges.at(-1)
   )
@@ -43,31 +61,39 @@ function reviewState(message: Message): 'approved' | 'changes_requested' | null 
 /**
  * The contract carries the exchange's current round, not which message belongs to which round. Messages do carry
  * review verdicts, and each "changes requested" starts the next review round (contract §5), so those verdicts are the
- * only honest boundaries available. Without one, the whole page is labelled as messages rather than inventing rounds.
+ * only boundaries available, and only when the job has a single review exchange (with several, a verdict can't be
+ * attributed, so the page stays "Messages"). While older messages are not loaded, the first chunk is "Earlier
+ * messages" and only chunks after a loaded verdict are numbered.
  */
-export function threadRounds(messages: Message[]): ThreadRound[] {
+export function threadRounds(
+  messages: Message[],
+  options: { hasEarlier?: boolean; reviewExchanges?: number } = {},
+): ThreadRound[] {
   const sorted = [...messages].sort(
     (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
   )
   if (sorted.length === 0) return []
+  const hasEarlier = options.hasEarlier ?? false
+  const attributable = (options.reviewExchanges ?? 1) <= 1
+  if (!attributable || !sorted.some((message) => reviewState(message) !== null))
+    return [{ key: sorted[0]!.id, label: 'Messages', number: null, messages: sorted }]
   const chunks: Message[][] = [[]]
   sorted.forEach((message, index) => {
     chunks.at(-1)!.push(message)
-    if (
-      reviewState(message) === 'changes_requested' &&
-      index < sorted.length - 1 &&
-      chunks.at(-1)!.length > 0
-    )
-      chunks.push([])
+    if (reviewState(message) === 'changes_requested' && index < sorted.length - 1) chunks.push([])
   })
-  const reviewed = sorted.some((message) => reviewState(message) !== null)
-  return chunks
-    .filter((chunk) => chunk.length > 0)
-    .map((chunk, index) => ({
-      label: reviewed ? `Round ${index + 1}` : 'Messages',
-      number: reviewed ? index + 1 : null,
+  return chunks.map((chunk, index) => {
+    const earlier = hasEarlier && index === 0
+    // Without older pages the first chunk is round 1; with them, numbers would be guesses, so count from the
+    // chunks that start after a loaded send-back as "Review round" only when nothing earlier is unseen.
+    const number = hasEarlier ? null : index + 1
+    return {
+      key: chunk[0]!.id,
+      label: earlier ? 'Earlier messages' : number ? `Round ${number}` : 'Later in the review',
+      number,
       messages: chunk,
-    }))
+    }
+  })
 }
 
 export function recipeRun(

@@ -5,6 +5,7 @@ import { useStreamQuery } from '../../data/query-client.ts'
 import { agentNameColor } from '../bold-agents.ts'
 import { exchangeStatus, exchangeTurns, type JobFilter, jobMatchesFilter } from './room-model.ts'
 import { jobExchangesQuery } from './room-queries.ts'
+import { currentExchange } from './thread-model.ts'
 
 function Capsule({
   exchange,
@@ -69,7 +70,7 @@ function JobCapsule({
 }) {
   const definition = useMemo(() => jobExchangesQuery(job.id), [job.id])
   const exchanges = useStreamQuery(definition).data ?? []
-  const latest = exchanges.at(-1)
+  const latest = currentExchange(exchanges)
   if (!latest) return null
   return <Capsule exchange={latest} agents={agents} job={job} onOpenThread={onOpenThread} />
 }

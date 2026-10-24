@@ -102,7 +102,7 @@ async function openThread(page: Page, options: { exchange?: Record<string, unkno
         compactions: 0,
       })
     if (request.method() === 'POST') {
-      let body: unknown = null
+      let body: unknown
       try {
         body = JSON.parse(request.postData() ?? 'null')
       } catch {
@@ -220,7 +220,7 @@ for (const viewport of sizes) {
       // Step in: an ordinary message to the job.
       await page.getByLabel('Step in', { exact: true }).fill('Also cover the empty state.')
       await page.getByRole('button', { name: 'Send step-in' }).click()
-      await expect(page.getByRole('status').filter({ hasText: 'step-in was sent' })).toBeVisible()
+      await expect(page.getByRole('status').filter({ hasText: 'Message sent.' })).toBeVisible()
       expect(
         state.requests.some(
           (item) =>
@@ -370,6 +370,87 @@ for (const viewport of sizes) {
         'href',
         /\/now\/flow\/brief-activity$/,
       )
+    })
+
+    test(`the default job's thread uses the room session at ${size}`, async ({ page }) => {
+      await pair(page)
+      await mockBoldRoom(page)
+      const asked: string[] = []
+      await page.route('**/api/agents/lead/sessions/**', async (route) => {
+        asked.push(new URL(route.request().url()).pathname)
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            asOfSeq: 12,
+            window: 100000,
+            used: 10000,
+            measuredAt: at(7),
+            model: 'demo-model',
+            source: 'provider_usage',
+            parts: null,
+            autoCompactAt: null,
+            compactions: 0,
+          }),
+        })
+      })
+      await page.goto('/b?job=job-default')
+      await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
+      if (viewport.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
+      await page.locator('button.side-toggle').click()
+      await page.getByRole('button', { name: /^Thread/ }).click()
+      await expect(page.getByRole('button', { name: /lead context: 10 %/ })).toBeVisible()
+      expect(asked.length).toBeGreaterThan(0)
+      expect(
+        asked.every((path) => path === '/api/agents/lead/sessions/score-team-room-lead/context'),
+      ).toBe(true)
+    })
+
+    test(`a job-limit pause says so in the header at ${size}`, async ({ page }) => {
+      await openThread(page, {
+        exchange: {
+          id: 'exchange-notes',
+          jobId: 'job-notes',
+          roomId: 'team-room',
+          kind: 'ask',
+          parentId: null,
+          from: 'lead',
+          to: 'reviewer',
+          state: 'paused_budget',
+          round: 1,
+          turnsUsed: 3,
+          budget: 8,
+          outcome: null,
+          endedReason: null,
+          pause: { reason: 'job_limit', options: ['more_turns', 'stop'] },
+          queuedBehind: null,
+          createdAt: at(8),
+          updatedAt: at(9),
+        },
+      })
+      await openJobThread(page, /Release notes 2\.4/)
+      await expect(page.locator('.bold-thread-status').first()).toContainText(
+        'Job turn limit reached (40)',
+      )
+      await expect(page.locator('.bold-thread-status').first()).not.toContainText('3 of 8')
+    })
+
+    test(`a 403 on the step-in box asks to pair this browser at ${size}`, async ({ page }) => {
+      await openThread(page)
+      await page.route('**/api/rooms/team-room/messages', async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback()
+        return route.fulfill({
+          status: 403,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'forbidden', message: 'no' } }),
+        })
+      })
+      await openJobThread(page, /Activity feed/)
+      await page.getByLabel('Step in', { exact: true }).fill('Hello')
+      await page.getByRole('button', { name: 'Send step-in' }).click()
+      await expect(
+        page.getByRole('alert').filter({ hasText: 'Pair this browser first.' }),
+      ).toBeVisible()
     })
   })
 }
