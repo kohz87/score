@@ -193,13 +193,17 @@ for (const viewport of sizes) {
       const card = page.getByRole('article', { name: /May I install a package/ })
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await expect(card).toContainText('npm install ws@8')
-      await expect(card).toContainText('Activity feed')
 
       await card.getByRole('button', { name: 'More', exact: true }).click()
-      await expect(card.getByRole('menu', { name: 'More approval choices' })).toBeVisible()
-      await card.getByRole('menuitem', { name: 'Approve for this session' }).click()
+      await expect(card.getByRole('group', { name: 'More approval choices' })).toBeVisible()
+      await expect(card.getByRole('button', { name: 'More', exact: true })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      await card.getByRole('button', { name: 'Approve for this session' }).click()
 
-      await expect(card).toHaveCount(0)
+      // The card stays with the answer until the stream says it is resolved (no stream on this mock).
+      await expect(card.getByRole('status')).toContainText('Approved')
       expect(
         state.requests.find(
           (request) =>
@@ -207,6 +211,76 @@ for (const viewport of sizes) {
             request.path === '/api/approvals/approval-package/decision',
         )?.body,
       ).toEqual({ choice: 'session' })
+    })
+
+    test(`the stream shows a pointer, not a second Allow, at ${label}`, async ({ page }) => {
+      await openBoldRoom(page, { jobs: roomJobs(), exchanges: [] })
+      const card = page.getByRole('article', { name: /May I install a package/ })
+      await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Allow', exact: true })).toHaveCount(1)
+      await expect(page.getByText('Waiting in Needs you')).toBeVisible()
+    })
+
+    for (const failure of [
+      { status: 409, code: 'conflict', message: 'Someone already answered this.', shown: null },
+      { status: 403, code: 'forbidden', message: 'Pair first.', shown: 'Pair this browser first.' },
+    ]) {
+      test(`a ${failure.status} on Allow keeps the card and says why at ${label}`, async ({
+        page,
+      }) => {
+        await openBoldRoom(page, {
+          jobs: roomJobs(),
+          exchanges: [],
+          handle: (request) =>
+            request.method === 'POST' && request.path === '/api/approvals/approval-package/decision'
+              ? {
+                  status: failure.status,
+                  body: { error: { code: failure.code, message: failure.message } },
+                }
+              : undefined,
+        })
+        const card = page.getByRole('article', { name: /May I install a package/ })
+        await card.getByRole('button', { name: 'Allow', exact: true }).click()
+        await expect(card.getByRole('alert')).toHaveText(failure.shown ?? failure.message)
+        await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeEnabled()
+      })
+    }
+
+    test(`a failed delivery shows Retry in the strip at ${label}`, async ({ page }) => {
+      const failed = {
+        ...approval('approval-package', 'May I install a package?'),
+        delivery: 'failed',
+      }
+      const state = await openBoldRoom(page, {
+        jobs: roomJobs(),
+        approvals: [failed],
+        exchanges: [],
+      })
+      const card = page.getByRole('article', { name: /May I install a package/ })
+      await expect(card).toContainText('Couldn’t deliver your answer. Try again.')
+      await card.getByRole('button', { name: 'Retry', exact: true }).click()
+      await expect
+        .poll(() =>
+          state.requests.some(
+            (request) =>
+              request.method === 'POST' &&
+              request.path === '/api/approvals/approval-package/decision',
+          ),
+        )
+        .toBe(true)
+    })
+
+    test(`an approval that only Hermes can answer says so at ${label}`, async ({ page }) => {
+      await openBoldRoom(page, {
+        jobs: roomJobs(),
+        approvals: [
+          { ...approval('approval-package', 'May I install a package?'), actionable: false },
+        ],
+        exchanges: [],
+      })
+      const card = page.getByRole('article', { name: /May I install a package/ })
+      await expect(card).toContainText('This approval can only be answered in Hermes.')
+      await expect(card.getByRole('button', { name: 'Allow', exact: true })).toHaveCount(0)
     })
 
     test(`a paused exchange is answered in place at ${label}`, async ({ page }) => {
@@ -218,6 +292,8 @@ for (const viewport of sizes) {
       const card = page.getByRole('article', { name: /The exchange used its turns/ })
       await expect(card).toHaveAttribute('data-protected', 'flex')
       await expect(card).toContainText('Release notes 2.4')
+      await card.getByRole('button', { name: 'Give 4 more turns' }).click()
+      await expect(card.getByLabel('More turns (1–20)')).toHaveValue('4')
       await card.getByRole('button', { name: 'Give 4 more turns' }).click()
 
       await expect(card).toHaveCount(0)
@@ -331,7 +407,7 @@ for (const viewport of sizes) {
       })
       const card = page.getByRole('article', { name: /Quota is low/ })
       await expect(card).toHaveAttribute('data-protected', 'flex')
-      await expect(card).toContainText('has 12% of its 5 hours limit left')
+      await expect(card).toContainText('has 12% of its 5-hour limit left')
       await card.getByRole('button', { name: 'Use it anyway' }).click()
 
       await expect(card).toHaveCount(0)
@@ -407,9 +483,7 @@ for (const viewport of sizes) {
       await refusal.getByRole('button', { name: 'Try again' }).click()
       await expect(refusal).toHaveCount(0)
 
-      const remap = page
-        .getByRole('article', { name: /A step needs another try/ })
-        .filter({ hasText: 'was replaced' })
+      const remap = page.getByRole('article', { name: /An agent was replaced/ })
       await remap.getByRole('button', { name: 'Use the new reviewer for this run' }).click()
       await expect(remap).toHaveCount(0)
 

@@ -1,6 +1,7 @@
 import type { Approval, Exchange } from '@score/contract'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
+import { approvalsQuery } from '../../routes/chat/queries.ts'
 import {
   disposeRoomTest,
   jsonResponse,
@@ -11,6 +12,7 @@ import {
   renderInRoom,
 } from './room-test-utils.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
+import { roomExchangesQuery } from './room-queries.ts'
 
 afterEach(() => {
   disposeRoomTest()
@@ -41,13 +43,35 @@ const approval: Approval = {
 const job = makeJob({ id: 'job-1', title: 'Activity feed' })
 const other = makeJob({ id: 'job-2', title: 'Release notes', state: 'working' })
 
-function stubRoom(exchange: Exchange | null, decided = approval) {
-  const fetchMock = mockFetch((url, init) => {
+const resolvedApproval: Approval = {
+  ...approval,
+  phase: 'decided',
+  status: 'approved',
+  actionable: false,
+  decision: { choice: 'once', by: 'you', at: '2026-10-24T09:05:00.000Z' },
+  delivery: 'applied',
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((settle) => {
+    resolve = settle
+  })
+  return { promise, resolve }
+}
+
+function stubRoom(
+  exchange: Exchange | null,
+  decided = approval,
+  decisionGate: Promise<void> = Promise.resolve(),
+) {
+  const fetchMock = mockFetch(async (url, init) => {
     if (url === '/api/approvals?status=all') {
       if (init.method === 'POST') throw new Error('not the approvals list')
       return jsonResponse({ asOfSeq: 1, items: [approval], nextCursor: null })
     }
-    if (url === '/api/approvals/approval-1/decision')
+    if (url === '/api/approvals/approval-1/decision') {
+      await decisionGate
       return jsonResponse({
         ...approval,
         ...decided,
@@ -57,6 +81,11 @@ function stubRoom(exchange: Exchange | null, decided = approval) {
         decision: { choice: 'once', by: 'you', at: '2026-10-24T09:05:00.000Z' },
         delivery: 'applied',
       })
+    }
+    if (url === '/api/exchanges/exchange-1/decision') {
+      await decisionGate
+      return jsonResponse({ asOfSeq: 0, items: [] })
+    }
     if (url.startsWith('/api/jobs/')) {
       const items = exchange && url.includes(exchange.jobId) ? [exchange] : []
       return jsonResponse({ asOfSeq: 1, items })
@@ -103,8 +132,9 @@ test('an approval leads the pins, the count expands the rest, and both are prote
 })
 
 test('Allow sends the approval decision once and the answered card goes', async () => {
-  const fetchMock = stubRoom(null)
-  renderInRoom(
+  const decisionGate = deferred<void>()
+  const fetchMock = stubRoom(null, approval, decisionGate.promise)
+  const { queryClient } = renderInRoom(
     <RoomRequests
       jobs={[job]}
       agents={[]}
@@ -120,41 +150,74 @@ test('Allow sends the approval decision once and the answered card goes', async 
   )
 
   fireEvent.click(await screen.findByRole('button', { name: 'Allow' }))
-  await waitFor(() =>
-    expect(screen.queryByRole('article', { name: /May I install a package/ })).toBeNull(),
-  )
-  const post = fetchMock.mock.calls.find(
+  await screen.findByText('Sending…')
+  const posts = fetchMock.mock.calls.filter(
     ([url, init]) =>
       String(url) === '/api/approvals/approval-1/decision' && init?.method === 'POST',
   )
-  expect(post).toBeDefined()
-  expect(JSON.parse(String(post![1]!.body))).toEqual({ choice: 'once' })
+  expect(posts).toHaveLength(1)
+  expect(JSON.parse(String(posts[0]![1]!.body))).toEqual({ choice: 'once' })
+
+  decisionGate.resolve()
+  await screen.findByText('Approved by you')
+  expect(screen.getByRole('article', { name: /May I install a package/ })).toBeDefined()
+
+  act(() =>
+    queryClient.setQueryData(approvalsQuery.key, {
+      asOfSeq: 2,
+      data: [resolvedApproval],
+    }),
+  )
+  await waitFor(() =>
+    expect(screen.queryByRole('article', { name: /May I install a package/ })).toBeNull(),
+  )
 })
 
 test('send back asks for the note the exchange decision needs, then posts it', async () => {
   const exchange = makeExchange({
     pause: { reason: 'no_decision', options: ['send_back', 'close'] },
   })
-  const fetchMock = stubRoom(exchange)
-  renderInRoom(<RoomRequests jobs={[job]} agents={[]} selectedJob="all" messages={[]} />)
+  const decisionGate = deferred<void>()
+  const fetchMock = stubRoom(exchange, approval, decisionGate.promise)
+  const { queryClient } = renderInRoom(
+    <RoomRequests jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
 
   fireEvent.click(await screen.findByRole('button', { name: 'Send back' }))
   const note = screen.getByLabelText('Note for the author')
   fireEvent.change(note, { target: { value: 'Add the migration steps.' } })
   fireEvent.click(screen.getByRole('button', { name: 'Send back' }))
 
-  await waitFor(() =>
-    expect(screen.queryByRole('article', { name: /review ended without a verdict/ })).toBeNull(),
-  )
-  const post = fetchMock.mock.calls.find(
+  await screen.findByText('Sending…')
+  const posts = fetchMock.mock.calls.filter(
     ([url, init]) =>
       String(url) === '/api/exchanges/exchange-1/decision' && init?.method === 'POST',
   )
-  expect(post).toBeDefined()
-  expect(JSON.parse(String(post![1]!.body))).toEqual({
+  expect(posts).toHaveLength(1)
+  expect(JSON.parse(String(posts[0]![1]!.body))).toEqual({
     option: 'send_back',
     note: 'Add the migration steps.',
   })
+
+  decisionGate.resolve()
+  await screen.findByText('Sent back with your note.')
+  expect(screen.getByRole('article', { name: /review ended without a verdict/ })).toBeDefined()
+
+  act(() =>
+    queryClient.setQueryData(roomExchangesQuery([job.id]).key, {
+      asOfSeq: 2,
+      data: [
+        makeExchange({
+          pause: null,
+          state: 'waiting_on_agent',
+          updatedAt: '2026-10-24T09:05:00.000Z',
+        }),
+      ],
+    }),
+  )
+  await waitFor(() =>
+    expect(screen.queryByRole('article', { name: /review ended without a verdict/ })).toBeNull(),
+  )
 })
 
 test('More offers this session and always for the asking agent', async () => {
@@ -174,17 +237,22 @@ test('More offers this session and always for the asking agent', async () => {
     />,
   )
 
-  fireEvent.click(await screen.findByRole('button', { name: 'More' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Approve for this session' }))
-  await waitFor(() =>
-    expect(
-      fetchMock.mock.calls.some(
-        ([url, init]) =>
-          String(url) === '/api/approvals/approval-1/decision' && init?.method === 'POST',
-      ),
-    ).toBe(true),
-  )
-  expect(JSON.parse(String(fetchMock.mock.calls.at(-1)![1]!.body))).toEqual({ choice: 'session' })
+  const more = await screen.findByRole('button', { name: 'More' })
+  expect(more.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(more)
+  expect(more.getAttribute('aria-expanded')).toBe('true')
+  expect(screen.queryByRole('menuitem')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Always allow for builder' })).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Approve for this session' }))
+  const post = await waitFor(() => {
+    const call = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url) === '/api/approvals/approval-1/decision' && init?.method === 'POST',
+    )
+    expect(call).toBeDefined()
+    return call!
+  })
+  expect(JSON.parse(String(post[1]!.body))).toEqual({ choice: 'session' })
 })
 
 test('a failed delivery explains the retry and keeps the approval open', async () => {
@@ -202,7 +270,9 @@ test('a failed delivery explains the retry and keeps the approval open', async (
   )
   renderInRoom(<RoomRequests jobs={[job]} agents={[]} selectedJob="all" messages={[]} />)
   await screen.findByText('Couldn’t deliver your answer. Try again.')
-  expect(screen.getByRole('button', { name: 'Allow' })).toBeDefined()
+  const retry = screen.getByRole('button', { name: 'Retry' })
+  expect((retry as HTMLButtonElement).disabled).toBe(false)
+  expect(screen.queryByRole('button', { name: 'Allow' })).toBeNull()
 })
 
 test('an approval answered outside Score says where to answer it', async () => {

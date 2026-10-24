@@ -121,7 +121,13 @@ for (const viewport of sizes) {
     })
 
     test(`approvals and a paused review are protected request cards at ${at}`, async ({ page }) => {
-      const state = await openBoldRoom(page)
+      // The exchange answer comes back without the exchange leaving its pause, so the sent note stays readable.
+      const state = await openBoldRoom(page, {
+        handle: (request) =>
+          request.method === 'POST' && /^\/api\/exchanges\/[^/]+\/decision$/.test(request.path)
+            ? { body: { ok: true } }
+            : undefined,
+      })
 
       const approval = page.getByRole('article', { name: /May I install a package/ })
       const review = page.getByRole('article', {
@@ -136,7 +142,7 @@ for (const viewport of sizes) {
       await expect(review).toContainText('Release notes 2.4')
 
       await approval.getByRole('button', { name: 'Allow', exact: true }).click()
-      await expect(approval).toHaveCount(0)
+      await expect(approval.getByRole('status')).toContainText('Approved by you')
       expect(
         state.requests.find(
           (request) =>
@@ -148,7 +154,7 @@ for (const viewport of sizes) {
       await review.getByRole('button', { name: 'Send back', exact: true }).click()
       await review.getByLabel('Note for the author').fill('Add the 2.3 migration steps.')
       await review.getByRole('button', { name: 'Send back', exact: true }).click()
-      await expect(review).toHaveCount(0)
+      await expect(review.getByRole('status')).toContainText('Sent back with your note.')
       expect(
         state.requests.find(
           (request) =>

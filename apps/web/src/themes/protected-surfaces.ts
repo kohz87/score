@@ -39,6 +39,8 @@ export const protectedClasses = [
   'orch-pill',
   'orch-node__flag',
   'bold-request',
+  // PLAN 11.4b: the count that expands the rest of the needs-you strip (a theme may not hide the way to the cards)
+  'bold-pins-more',
   // PLAN 11.4c: the thread's confirmation before stopping a job
   'bold-thread-stop-confirm',
   // The task drawer's approval and its buttons

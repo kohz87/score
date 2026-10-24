@@ -49,6 +49,7 @@ import {
   useWorkflowRunActions,
   type WorkflowRunActions,
 } from '../../routes/workflows/workflow-queries.ts'
+import { PinCard } from './PinCards.tsx'
 
 export type CountCards = (id: string, count: number) => void
 
@@ -192,15 +193,27 @@ function pinLabel(item: NeedsYou | WorkflowNeedsYou): string {
   }
 }
 
-function RunPin({ label, children }: { label: string; children: ReactNode }) {
+function pinNotice(item: NeedsYou | WorkflowNeedsYou): boolean {
+  return item.kind === 'paused' || item.kind === 'fence'
+}
+
+function RunPin({
+  pinKey,
+  since,
+  notice,
+  label,
+  children,
+}: {
+  pinKey: string
+  since: string
+  notice: boolean
+  label: string
+  children: ReactNode
+}) {
   return (
-    <article
-      className="bold-request bold-run-request"
-      data-protected="flex"
-      aria-label={`Needs you: ${label}`}
-    >
+    <PinCard pinKey={pinKey} since={since} notice={notice} label={label} variant="run-request">
       {children}
-    </article>
+    </PinCard>
   )
 }
 
@@ -232,7 +245,13 @@ function OrchestrationRunRequests({
   return (
     <>
       {entries.map((entry) => (
-        <RunPin key={entry.key} label={pinLabel(entry.item)}>
+        <RunPin
+          key={entry.key}
+          pinKey={`run:${runId}:${entry.key}`}
+          since={detail.updatedAt}
+          notice={pinNotice(entry.item)}
+          label={pinLabel(entry.item)}
+        >
           {orchestrationCard(detail, entry, agents, actions, preflightWorker, coding)}
         </RunPin>
       ))}
@@ -377,7 +396,13 @@ function WorkflowRunRequests({
   return (
     <>
       {entries.map((entry) => (
-        <RunPin key={entry.key} label={pinLabel(entry.item)}>
+        <RunPin
+          key={entry.key}
+          pinKey={`workflow:${runId}:${entry.key}`}
+          since={detail.updatedAt}
+          notice={pinNotice(entry.item)}
+          label={pinLabel(entry.item)}
+        >
           {workflowCard(detail, entry, gateRun, agents, actions, preflightWorker)}
         </RunPin>
       ))}

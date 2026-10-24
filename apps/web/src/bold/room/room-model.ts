@@ -1,4 +1,4 @@
-import type { Exchange, ExchangeOption, Job } from '@score/contract'
+import type { Approval, Exchange, ExchangeOption, Job } from '@score/contract'
 
 export type JobFilter = 'all' | 'needs' | 'working' | 'done'
 
@@ -105,6 +105,16 @@ export function exchangeStatus(exchange: Exchange): string {
 
 export function exchangeTurns(exchange: Exchange): string {
   return `${exchange.turnsUsed} of ${exchange.budget} turns`
+}
+
+/** True while the approval is one the pinned strip shows (open, being delivered, failed or answerable elsewhere). */
+export function approvalNeedsYou(approval: Approval): boolean {
+  if (approval.phase !== 'human_pending') return false
+  if (approval.delivery === 'not_pending' || approval.delivery === 'unknown') return false
+  if (approval.delivery === 'intent' || approval.delivery === 'delivering') return true
+  if (approval.delivery === 'failed') return true
+  if (approval.decision) return false
+  return approval.status === 'pending'
 }
 
 /** The prototype's expand chip: the first card stays visible, the rest wait behind its count. */

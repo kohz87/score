@@ -350,8 +350,8 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
   const visibleJobs = options.empty
     ? (options.jobs ?? jobs).filter((item) => item.isDefault)
     : (options.jobs ?? jobs)
-  const exchanges = options.exchanges ?? [options.exchange ?? defaultExchange]
-  const approvals = options.approvals ?? [approval]
+  let exchanges = options.exchanges ?? [options.exchange ?? defaultExchange]
+  let approvals = options.approvals ?? [approval]
   const pins = new Map([['message-pinned', 'Event cursors are (created_at, id).']])
   const requests: RoomRequest[] = []
   let sent = 0
@@ -458,17 +458,24 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
         typeof body === 'object' && body !== null
           ? (body as { choice?: unknown }).choice
           : undefined
-      return response(route, {
+      const decided = {
         ...approval,
         phase: 'decided',
         status: 'approved',
         actionable: false,
         decision: { choice, by: 'you', at: at(12) },
         delivery: 'applied',
-      })
+      }
+      approvals = approvals.map((item) => (item.id === approval.id ? decided : item))
+      return response(route, decided)
     }
-    if (method === 'POST' && /^\/api\/exchanges\/[^/]+\/decision$/.test(path))
+    if (method === 'POST' && /^\/api\/exchanges\/[^/]+\/decision$/.test(path)) {
+      const exchangeId = decodeURIComponent(path.split('/')[3] ?? '')
+      exchanges = exchanges.map((item) =>
+        item.id === exchangeId ? { ...item, state: 'live', pause: null, updatedAt: at(20) } : item,
+      )
       return response(route, { ok: true })
+    }
     if (method === 'GET' && path === '/api/commands') return response(route, commands)
     if (method === 'POST' && path === '/api/rooms/team-room/messages') {
       sent += 1
