@@ -7,6 +7,21 @@
   padding-block: 56px;
 }
 
+/* First run lives at /b, where the shell fixes the window to the room's height (body.fit): scroll inside it, and stop
+   above the phone tab bar. */
+body.fit [data-ui='bold'] .bold-first-run {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-padding-bottom: 96px;
+}
+
+@media (max-width: 860px) {
+  body.fit [data-ui='bold'] .bold-first-run {
+    padding-bottom: 96px;
+  }
+}
+
 [data-ui='bold'] .bold-first-run-grid {
   display: flex;
   flex-wrap: wrap;

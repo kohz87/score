@@ -1,4 +1,4 @@
-import { RoomSchema, TeamRoomResponseSchema } from '@score/contract'
+import { RoomSchema, TeamRoomResponseSchema, WorkflowListSchema } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
@@ -153,9 +153,10 @@ export function BoldFirstRun() {
     }
     let savedNames: Set<string>
     try {
-      const latest = await workflows.refetch()
-      if (latest.isError) throw latest.error
-      savedNames = new Set(latest.data?.items.map((item) => item.name) ?? [])
+      // Read the list straight from the server: `refetch()` can resolve with the cached list while another fetch of
+      // it is still in flight, and a recipe saved meanwhile (another tab, the classic editor) would be created twice.
+      const latest = WorkflowListSchema.parse(await apiFetch('workflows'))
+      savedNames = new Set(latest.items.map((item) => item.name))
     } catch {
       setFailedRecipes(
         ids.map((id) => {
