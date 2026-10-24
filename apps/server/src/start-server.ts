@@ -39,6 +39,7 @@ import {
   resolveHermesHome,
   RewindBroker,
   seedFakeAttempts,
+  seedFakeTeam,
   sweepKanbanDenials,
   type HermesPort,
 } from './hermes/index.ts'
@@ -573,11 +574,11 @@ export async function startServer(
     // Warm the per-profile caches, so the first page load after a restart doesn't wait ~15 s on cold Hermes reads.
     const warming = port
     const teamIngest = ingest
-    void Promise.resolve()
+    const warmTeam = Promise.resolve()
       .then(() => warming.listAgents())
       // The team room of the new shell (PLAN 11.1b) exists once the team's agents are known.
-      .then((agents) =>
-        teamIngest.submit({
+      .then(async (agents) => {
+        await teamIngest.submit({
           source: 'rooms',
           identity: randomUUID(),
           apply: ({ sqlite, now }) =>
@@ -586,9 +587,13 @@ export async function startServer(
               agents.map((agent) => agent.id),
               now,
             ),
-        }),
-      )
+        })
+        // The fake adapter's seeded team room (PLAN 11.2c), once the room exists.
+        if (config.mode === 'fake') seedFakeTeam(database.sqlite)
+      })
       .catch(() => undefined)
+    // Fake mode's boards load straight after start, so wait for the seed; live warming stays off the startup path.
+    if (config.mode === 'fake') await warmTeam
     await outbox.start()
     const observations = ingest
     deliverySweep = setInterval(() => {

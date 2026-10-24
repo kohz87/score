@@ -564,7 +564,7 @@ reaches the lead only quoted and redacted (snapshot test); report-back runs as a
 "Reported back" only on a matching tool-call record, otherwise "not confirmed" with Try again; `docs/SETUP.md` gains
 "One Score per team" (D14–D16).
 
-**11.2 Contract and fake data for the new screens** · **Lead** · one-to-ones as jobs in direct rooms (privacy rules),
+**11.2 Contract and fake data for the new screens** ✅ · **Lead** · one-to-ones as jobs in direct rooms (privacy rules),
 references, share to room, pins (migration 0084), `GET /api/jobs/:id/results` and its derivation from watch frames,
 tool calls and exchange outcomes (brief §6, §10); fake-adapter fixtures that produce a team room with jobs, exchanges,
 results, one-to-ones and a paused exchange. Done when: contract doc + schemas + server routes with `inject()` tests;
@@ -618,7 +618,7 @@ vs 02/12.
 this", earlier chats with search and New chat, reference chips, Share to the team room, "Take it aside", Add someone,
 context meter. Done when: e2e for each; screenshots vs 01/19.
 
-**11.8a Where an agent runs and "Runs on"** · **Lead** (adapter) · D3, D15: read/set the profile's terminal backend
+**11.8a Where an agent runs and "Runs on"** ✅ (API; the card lands with 11.8b) · **Lead** (adapter) · D3, D15: read/set the profile's terminal backend
 through the `hermes` CLI; verify on a test profile which tools Docker/SSH confines and record it; update D7.1. Done
 when: fixture tests for the CLI calls; nothing writes `~/.hermes` directly; the confinement result is in TASKLOG and the
 API says exactly what is confined.
