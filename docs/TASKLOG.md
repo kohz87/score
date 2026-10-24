@@ -1053,3 +1053,42 @@ One entry per completed task: what landed, review results, and any **rejected re
   gaps: no job rename/close/delete, no room-delete undo, no single attach call, outside sessions carry no transcript.
   Lead merge: elsewhere mode beside the one-to-one and the thread. Full check green (coder); units 379, room-menu + room
   + one-to-ones + thread + shell e2e 77/77. Not deployed.
+- **11.11a review and 11.11a2 (lead, 2026-10-24).** Owner: Sonnet reviews every task before the merge checks, lead work
+  included, so 11.11a got a review after its merge: 0 P1. Accepted: plan-first in an exchanges room (the planner got the
+  exchange prompt and a capability, and its job stayed 'working' because the plan-first branch skipped
+  settleExchangeTurn) → 11.11a2: plan-first turns get the room context and no capability, the job state is recomputed
+  when the turn ends (test in briefs.test.ts); RoomSchema's routing default now 'exchanges'. Rejected: in-flight turns at
+  migration (the deploy stops Score first; the live copy has no pending/active turns: 56 completed, 3 failed; pending
+  turns take the new routing at admission, as intended); more exchange variants for brief pause/attachments (covered by
+  the 11.1b/11.1c exchange tests); imported rooms on exchanges (one member, `whyNot` refuses any `to` outside the room,
+  same session context as before); fake.test counts (exact job.upserted counts asserted). 11.11a2's own Sonnet review:
+  0 P1/P2; two P3s taken (comment, 'working' asserted first). Server suite 4824 green.
+- **11.11c Drop pet packs, portrait looks, eyes, moods and Lively (Sonnet coder → DeepSeek via ordeepseek, 2026-10-24).**
+  Decision 118 / D9. Agents render as colour + shape only; pet packs (web, server routes, `packs/` store, startup
+  recover), Cut-out/Ring, eyes, glyph moods, pointer-following eyes and the `lively` motion value are gone (Look ›
+  Motion keeps Calm and Still; a stored `lively` reads as calm). Contract: AgentLook/PetPack schemas removed; old styles
+  and import files carrying `look`/`pack` still parse (stripped). Migration 0087: the lead replaced the coder's
+  two-table rebuild with clearing only `pack_rev`/`pack_meta` (the unused `look` column keeps its default). Owner asked
+  mid-task to move coding to DeepSeek: the Sonnet coder (~140 files done) was stopped and DeepSeek finished on the
+  `ordeepseek` profile (NanoGPT was rate limited); its sandbox can't listen on loopback, so the lead ran e2e and the
+  full check. Sonnet review: 1 P1 (two `plain` glyph props that came from main after the branch removed the prop — the
+  lead's merge hadn't typechecked web; fixed), 1 P3 (shape-raster.ts kept for its test; left). Lead post-fix: the Motion
+  test now saves Still (Calm is the default), four visual baselines regenerated (only the glyph eyes changed; diff
+  checked), a format slip from 11.11a2. Full check green (contract 1505, web 2896, server 4757); 12 affected specs green.
+  `~/.score/packs` is removed at the release deploy after the backup. Not deployed.
+- **11.4b Pinned needs-you (DeepSeek → Sonnet coder → DeepSeek → lead, 2026-10-24).** The room's protected strip of
+  decisions: approvals (once / this session / always for <agent>, deny; delivery failed → Retry; non-actionable →
+  answer in Hermes), paused exchanges (more turns 1–20, more spend ≤ 1000, step in, reassign, send back, stop/close —
+  no confirm, at classic parity), questions from the lead and the run-safety cards (quota guard, not confirmed ended,
+  retry/try again/remap, spend not settled, gates) through the classic Decision components; oldest first, human
+  decisions before notices, "N more need you" (protected), focus moves to the next card, live count. One live copy per
+  decision in the room stream ("Waiting in Needs you" pointer); the thread shows the real card (the strip may be
+  filtered or covered). Reviews (Sonnet after every round, owner rule): build — 2 P1 (permanent dismissed sets lost
+  re-pauses; approvals hidden while delivering) + 6 P2; round 2 — approvals from other rooms under an invented job;
+  round 3 — two-room approvals hidden in both rooms, thread pointer with no card, a re-held pause hidden by "sent";
+  lead fixes — "sent" holds only for the read it answered (exchange id + updatedAt; a decision is one server write).
+  DeepSeek round 2 hit the NanoGPT 429 (Sonnet coder finished it); round 3 ran on ordeepseek. Rejected/accepted P3s:
+  stop/close confirm (no classic confirm), approvals with no room ref show in every room (as before), same-millisecond
+  updatedAt (accepted). Contract gaps: no Hermes-side clarify endpoint; exchanges carry no pause-start time ("oldest"
+  uses updatedAt). Full check green (contract 1515, web 3248, server 4822); room e2e 103/103 after the last merge.
+  Not deployed.

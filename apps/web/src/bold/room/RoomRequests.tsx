@@ -1,36 +1,47 @@
 import type {
   AgentSummary,
   Approval,
+  ApprovalChoice,
   Exchange,
   ExchangeOption,
   Job,
   Message,
 } from '@score/contract'
-import { useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
-import { useStreamQuery } from '../../data/query-client.ts'
-import { approvalOutcome, useApprovalDecision } from '../../routes/chat/ApprovalCard.tsx'
+import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
+import {
+  approvalOutcome,
+  useApprovalDecision,
+  whereToAnswer,
+} from '../../routes/chat/ApprovalCard.tsx'
 import { approvalsQuery } from '../../routes/chat/queries.ts'
 import { agentNameColor } from '../bold-agents.ts'
+import { ChevronIcon } from '../BoldIcons.tsx'
 import {
   exchangePauseAsk,
   exchangePauseTitle,
   exchangeTurns,
   needsYou,
   optionLabel,
+  pinsMoreLabel,
+  approvalInRoom,
+  approvalNeedsYou,
 } from './room-model.ts'
-import { jobExchangesQuery } from './room-queries.ts'
+import { PinCard, PinsProvider, usePinRegistry } from './PinCards.tsx'
+import { roomExchangesQuery } from './room-queries.ts'
+import { RunSafetyRequests, type CountCards } from './RunSafetyRequests.tsx'
 
 type PendingOption = ExchangeOption | null
 
 function decisionBody(
   option: ExchangeOption,
-  form: { note: string; text: string; agent: string; usd: string },
+  form: { note: string; text: string; agent: string; usd: string; turns: string },
 ) {
   switch (option) {
     case 'more_turns':
-      return { option, turns: 4 }
+      return { option, turns: Number(form.turns) }
     case 'more_spend':
       return { option, usd: Number(form.usd) }
     case 'step_in':
@@ -45,7 +56,7 @@ function decisionBody(
 }
 
 function needsForm(option: ExchangeOption): boolean {
-  return ['more_spend', 'step_in', 'reassign', 'send_back'].includes(option)
+  return ['more_turns', 'more_spend', 'step_in', 'reassign', 'send_back'].includes(option)
 }
 
 export function decisionError(failure: unknown): string {
@@ -55,22 +66,38 @@ export function decisionError(failure: unknown): string {
   return 'Couldn’t send that decision. Try again.'
 }
 
+function useReportedCount(id: string, count: number, report: CountCards) {
+  useEffect(() => {
+    report(id, count)
+  }, [count, id, report])
+  useEffect(() => () => report(id, 0), [id, report])
+}
+
 export function ExchangeRequestCard({
   exchange,
   job,
   agents,
+  onAnswered,
 }: {
   exchange: Exchange
   job: Job
   agents: AgentSummary[]
+  onAnswered?: () => void
 }) {
   const from = agents.find((agent) => agent.id === exchange.from)
   const to = agents.find((agent) => agent.id === exchange.to)
   const [pending, setPending] = useState<PendingOption>(null)
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState<string | null>(null)
+  const [sent, setSent] = useState<{ pause: string; text: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const options = exchange.pause?.options ?? []
+  // The decision is applied (and the limits re-checked) in one server transaction that writes the exchange once, so any
+  // later read has a newer updatedAt: either the pause is gone (the card leaves) or it was held again (the buttons come
+  // back, even with the same reason and options). Until then the "sent" line stays.
+  const pauseIdentity = exchange.pause ? `${exchange.id}|${exchange.updatedAt}` : null
+  const sentMatchesPause = sent !== null && sent.pause === pauseIdentity
+  if (sent !== null && !sentMatchesPause) setSent(null)
+  const sentText = sentMatchesPause ? sent.text : null
   const reassignChoices = agents.filter(
     (agent) => agent.id !== exchange.from && agent.id !== exchange.to,
   )
@@ -78,12 +105,15 @@ export function ExchangeRequestCard({
   const [form, setForm] = useState({
     note: '',
     text: '',
-    agent: reassignChoices[0]?.id ?? '',
+    agent: '',
     usd: '10',
+    turns: '4',
   })
 
   async function choose(option: ExchangeOption) {
     if (needsForm(option)) {
+      if (option === 'reassign')
+        setForm((current) => ({ ...current, agent: reassignChoices[0]?.id ?? '' }))
       setPending(option)
       setError(null)
       return
@@ -98,9 +128,15 @@ export function ExchangeRequestCard({
     if (option === 'step_in' && !('text' in body && body.text))
       return setError('Write what you want to happen.')
     if (option === 'reassign' && !('to' in body && body.to)) return setError('Choose an agent.')
+    const turns = 'turns' in body ? body.turns : undefined
+    if (
+      option === 'more_turns' &&
+      !(typeof turns === 'number' && Number.isInteger(turns) && turns >= 1 && turns <= 20)
+    )
+      return setError('Choose between 1 and 20 turns.')
     const usd = Number(form.usd)
-    if (option === 'more_spend' && (!Number.isFinite(usd) || usd <= 0))
-      return setError('Enter an amount above zero.')
+    if (option === 'more_spend' && (!Number.isFinite(usd) || usd <= 0 || usd > 1000))
+      return setError('Enter an amount above 0 and at most 1000 dollars.')
     setBusy(true)
     setError(null)
     try {
@@ -108,8 +144,13 @@ export function ExchangeRequestCard({
         method: 'POST',
         body: JSON.stringify(body),
       })
-      setSent(option === 'send_back' ? 'Sent back with your note.' : 'Decision sent.')
+      if (pauseIdentity !== null)
+        setSent({
+          pause: pauseIdentity,
+          text: option === 'send_back' ? 'Sent back with your note.' : 'Decision sent.',
+        })
       setPending(null)
+      onAnswered?.()
     } catch (failure) {
       setError(decisionError(failure))
     } finally {
@@ -118,10 +159,10 @@ export function ExchangeRequestCard({
   }
 
   return (
-    <article
-      className="bold-request"
-      data-protected="flex"
-      aria-label={`Needs you: ${exchangePauseTitle(exchange)}`}
+    <PinCard
+      pinKey={`exchange:${exchange.id}`}
+      since={exchange.updatedAt}
+      label={exchangePauseTitle(exchange)}
     >
       <div className="bold-request-head">
         {from && <AgentGlyph agent={from} size="xs" decorative />}
@@ -181,9 +222,23 @@ export function ExchangeRequestCard({
               <input
                 type="number"
                 min="0.01"
+                max="1000"
                 step="0.01"
                 value={form.usd}
                 onChange={(event) => setForm({ ...form, usd: event.target.value })}
+              />
+            </label>
+          )}
+          {pending === 'more_turns' && (
+            <label>
+              More turns (1–20)
+              <input
+                type="number"
+                min="1"
+                max="20"
+                step="1"
+                value={form.turns}
+                onChange={(event) => setForm({ ...form, turns: event.target.value })}
               />
             </label>
           )}
@@ -194,7 +249,13 @@ export function ExchangeRequestCard({
               disabled={busy}
               onClick={() => void send(pending)}
             >
-              {busy ? 'Sending…' : optionLabel(pending)}
+              {busy
+                ? 'Sending…'
+                : pending === 'more_turns'
+                  ? form.turns.trim()
+                    ? `Give ${form.turns} more turns`
+                    : 'Give more turns'
+                  : optionLabel(pending)}
             </button>
             <button
               type="button"
@@ -208,7 +269,7 @@ export function ExchangeRequestCard({
         </div>
       )}
 
-      {pending === null && !sent && (
+      {pending === null && !sentText && (
         <span className="row wrap">
           {options.map((option, index) => (
             <button
@@ -223,9 +284,9 @@ export function ExchangeRequestCard({
           ))}
         </span>
       )}
-      {sent && (
+      {sentText && (
         <span className="bold-request-sent" role="status">
-          {sent}
+          {sentText}
         </span>
       )}
       {error && (
@@ -233,18 +294,38 @@ export function ExchangeRequestCard({
           {error}
         </span>
       )}
-    </article>
+    </PinCard>
   )
 }
 
-function JobRequests({ job, agents }: { job: Job; agents: AgentSummary[] }) {
-  const definition = useMemo(() => jobExchangesQuery(job.id), [job.id])
+function RoomExchanges({
+  jobs,
+  agents,
+  report,
+}: {
+  jobs: Job[]
+  agents: AgentSummary[]
+  report: CountCards
+}) {
+  const definition = useMemo(() => roomExchangesQuery(jobs.map((job) => job.id)), [jobs])
   const exchanges = useStreamQuery(definition).data ?? []
+  const refetch = useStreamQueryRefetch(definition)
+  const visible = exchanges.filter(needsYou)
+  useReportedCount('exchanges', visible.length, report)
   return (
     <>
-      {exchanges.filter(needsYou).map((exchange) => (
-        <ExchangeRequestCard key={exchange.id} exchange={exchange} job={job} agents={agents} />
-      ))}
+      {visible.map((exchange) => {
+        const job = jobs.find((item) => item.id === exchange.jobId)
+        return job ? (
+          <ExchangeRequestCard
+            key={exchange.id}
+            exchange={exchange}
+            job={job}
+            agents={agents}
+            onAnswered={() => void refetch()}
+          />
+        ) : null
+      })}
     </>
   )
 }
@@ -258,17 +339,48 @@ function ApprovalRequestCard({
   job: Job | undefined
   agents: AgentSummary[]
 }) {
-  const { posted, busy, error, decide } = useApprovalDecision(approval.id)
+  const { posted, busy, error, decide: submit } = useApprovalDecision(approval.id)
+  const [more, setMore] = useState(false)
+  const moreButton = useRef<HTMLButtonElement>(null)
+  const menuId = useId()
   const current = posted && approval.delivery === 'none' ? posted : approval
   const agent = agents.find((item) => item.id === current.agentId)
   const outcome = approvalOutcome(current)
-  const open = current.actionable && outcome === null && !busy
+  const retrying = current.actionable && current.delivery === 'failed'
+  const open = current.actionable && (outcome === null || retrying) && !busy
+  const showButtons = current.actionable && (outcome === null || retrying)
   const choices = current.choices
+
+  useEffect(() => {
+    if (!more) return
+    function onPointerDown(event: PointerEvent) {
+      if (!moreButton.current?.parentElement?.contains(event.target as Node)) setMore(false)
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setMore(false)
+      requestAnimationFrame(() => moreButton.current?.focus())
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [more])
+
+  async function decide(choice: ApprovalChoice) {
+    setMore(false)
+    await submit(choice)
+  }
+
   return (
-    <article
-      className="bold-request bold-approval"
-      data-protected="flex"
-      aria-label={`Needs you: ${current.title}`}
+    <PinCard
+      pinKey={`approval:${current.id}`}
+      since={current.createdAt}
+      label={current.title}
+      variant="approval"
     >
       <div className="bold-request-head">
         {agent && <AgentGlyph agent={agent} size="xs" decorative />}
@@ -277,48 +389,68 @@ function ApprovalRequestCard({
         {job && <span className="bold-request-job">{job.title}</span>}
       </div>
       {current.command && <code className="bold-request-command">{current.command}</code>}
-      <span className="row wrap">
-        {choices.includes('once') && (
-          <button
-            type="button"
-            className="btn sm"
-            disabled={!open}
-            onClick={() => void decide('once')}
-          >
-            Allow
-          </button>
-        )}
-        {!choices.includes('once') && choices.includes('session') && (
-          <button
-            type="button"
-            className="btn sm"
-            disabled={!open}
-            onClick={() => void decide('session')}
-          >
-            Allow for this session
-          </button>
-        )}
-        {choices.includes('deny') && (
-          <button
-            type="button"
-            className="btn sm ghost"
-            disabled={!open}
-            onClick={() => void decide('deny')}
-          >
-            Don’t allow
-          </button>
-        )}
-        {choices.includes('always') && (
-          <button
-            type="button"
-            className="btn sm ghost"
-            disabled={!open}
-            onClick={() => void decide('always')}
-          >
-            Always allow for {current.agentId}
-          </button>
-        )}
-      </span>
+      {!current.actionable && outcome === null && whereToAnswer(current)}
+      {retrying && (
+        <span className="bold-request-failed">Couldn’t deliver your answer. Try again.</span>
+      )}
+      {showButtons && (
+        <span className="row wrap bold-approval-actions">
+          {choices.includes('once') && (
+            <button
+              type="button"
+              className="btn sm"
+              disabled={!open}
+              onClick={() => void decide('once')}
+            >
+              {retrying ? 'Retry' : 'Allow'}
+            </button>
+          )}
+          {choices.includes('deny') && (
+            <button
+              type="button"
+              className="btn sm ghost"
+              disabled={!open}
+              onClick={() => void decide('deny')}
+            >
+              Don’t allow
+            </button>
+          )}
+          {(choices.includes('session') || choices.includes('always')) && (
+            <span className="bold-approval-more">
+              <button
+                ref={moreButton}
+                type="button"
+                className="btn sm ghost"
+                aria-expanded={more}
+                aria-controls={menuId}
+                disabled={!open}
+                onClick={() => setMore(!more)}
+              >
+                More
+              </button>
+              {more && (
+                <div
+                  className="bold-approval-menu"
+                  id={menuId}
+                  role="group"
+                  aria-label="More approval choices"
+                >
+                  {choices.includes('session') && (
+                    <button type="button" onClick={() => void decide('session')}>
+                      Approve for this session
+                    </button>
+                  )}
+                  {choices.includes('always') && (
+                    <button type="button" onClick={() => void decide('always')}>
+                      Always allow for {current.agentId}
+                    </button>
+                  )}
+                </div>
+              )}
+            </span>
+          )}
+        </span>
+      )}
       {(busy || outcome) && (
         <span className="bold-request-sent" role="status">
           {busy ? 'Sending…' : outcome}
@@ -329,79 +461,155 @@ function ApprovalRequestCard({
           {error}
         </span>
       )}
-    </article>
+    </PinCard>
   )
 }
 
 function RoomApprovals({
+  roomId,
   approvals,
   messages,
   jobs,
   selectedJob,
   agents,
+  report,
 }: {
+  roomId: string
   approvals: Approval[]
   messages: Message[]
   jobs: Job[]
   selectedJob: string
   agents: AgentSummary[]
+  report: CountCards
 }) {
+  const cards = approvals.flatMap((approval) => {
+    // `approvalsQuery` is global: an approval that names only other rooms belongs to their strips.
+    if (!approvalInRoom(approval, roomId)) return []
+    const message = messages.find((item) =>
+      item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
+    )
+    const known = jobs.find((item) => item.id === message?.jobId)
+    if (known && selectedJob !== 'all' && known.id !== selectedJob) return []
+    // The approvals read is complete; the message window is not. An approval whose message is older than the
+    // loaded page still shows as a request card, but with no job chip: the selected/default job is not its job.
+    return [{ approval, job: known }]
+  })
+  useReportedCount('approvals', cards.length, report)
   return (
     <>
-      {approvals.map((approval) => {
-        const message = messages.find((item) =>
-          item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
-        )
-        const known = jobs.find((item) => item.id === message?.jobId)
-        if (known && selectedJob !== 'all' && known.id !== selectedJob) return null
-        // The approvals read is complete; the message window is not. An approval whose message is older than the
-        // loaded page still shows as a request card (with the selected/default job as its reference).
-        const job =
-          known ??
-          jobs.find((item) => item.id === selectedJob) ??
-          jobs.find((item) => item.isDefault) ??
-          jobs[0]
-        return (
-          <ApprovalRequestCard key={approval.id} approval={approval} job={job} agents={agents} />
-        )
-      })}
+      {cards.map(({ approval, job }) => (
+        <ApprovalRequestCard key={approval.id} approval={approval} job={job} agents={agents} />
+      ))}
     </>
   )
 }
 
-/** The "Needs you" pins: each job's paused exchanges and approvals, shown above the stream and never scrolled away. */
+/** The "Needs you" pins: approvals, paused exchanges and run-safety cards above the stream. */
 export function RoomRequests({
+  roomId,
   jobs,
   agents,
   messages,
   selectedJob,
 }: {
+  roomId: string
   jobs: Job[]
   agents: AgentSummary[]
   messages?: Message[]
   selectedJob: string
 }) {
   const approvals = useStreamQuery(approvalsQuery).data ?? []
-  const cooking = jobs.filter(
-    (job) =>
-      (selectedJob === 'all' || job.id === selectedJob) &&
-      (job.state === 'waiting_on_you' || job.state === 'working'),
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [expanded, setExpanded] = useState(false)
+  const pins = usePinRegistry()
+  const heading = useRef<HTMLHeadingElement>(null)
+  const focusedKey = useRef<string | null>(null)
+  const lastCards = useRef<typeof pins.cards>([])
+  const lastVisible = useRef<string[]>([])
+  const report: CountCards = useMemo(
+    () => (id, count) =>
+      setCounts((current) => (current[id] === count ? current : { ...current, [id]: count })),
+    [],
   )
-  const needsApproval = approvals.filter(
-    (approval) => approval.actionable && approval.phase === 'human_pending',
+  const selectedJobs = jobs.filter((job) => selectedJob === 'all' || job.id === selectedJob)
+  const cooking = selectedJobs.filter(
+    (job) => job.state === 'waiting_on_you' || job.state === 'working',
   )
+  const recipeJobs = selectedJobs.filter((job) => job.recipe !== null)
+  const needsApproval = approvals.filter(approvalNeedsYou)
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
+  const moreLabel = pinsMoreLabel(total, expanded)
+
+  // With one card or none left the strip folds, so the next burst of cards doesn't arrive already expanded.
+  if (expanded && total <= 1) setExpanded(false)
+
+  // A card that goes takes the focus with it: the next card (or the strip's heading) gets it instead.
+  useEffect(() => {
+    const visible = pins.cards.filter((_, index) => expanded || index === 0).map((card) => card.key)
+    const lost = lastVisible.current.find((key) => !visible.includes(key))
+    if (lost && focusedKey.current === lost) {
+      const active = document.activeElement
+      const activeKey =
+        active instanceof Element
+          ? active.closest('[data-pin-key]')?.getAttribute('data-pin-key')
+          : null
+      if (!activeKey || activeKey === lost) {
+        const lostIndex = lastCards.current.findIndex((card) => card.key === lost)
+        const ordered = pins.cards.filter((card) => visible.includes(card.key))
+        const next = ordered[Math.min(Math.max(lostIndex, 0), ordered.length - 1)]
+        const target = next
+          ? document.querySelector<HTMLElement>(`[data-pin-key=${JSON.stringify(next.key)}]`)
+          : null
+        ;(target ?? heading.current)?.focus()
+        focusedKey.current = null
+      }
+    }
+    lastCards.current = pins.cards
+    lastVisible.current = visible
+  }, [expanded, pins.cards])
+
   return (
-    <div className="bold-pins" aria-label="Needs you">
-      {cooking.map((job) => (
-        <JobRequests key={job.id} job={job} agents={agents} />
-      ))}
-      <RoomApprovals
-        approvals={needsApproval}
-        messages={messages ?? []}
-        jobs={jobs}
-        selectedJob={selectedJob}
-        agents={agents}
-      />
-    </div>
+    <PinsProvider value={pins.value}>
+      <div
+        id="bold-pins"
+        className="bold-pins"
+        data-expanded={expanded ? 'true' : 'false'}
+        aria-label="Needs you"
+        onFocusCapture={(event) => {
+          focusedKey.current =
+            (event.target as Element).closest('[data-pin-key]')?.getAttribute('data-pin-key') ??
+            focusedKey.current
+        }}
+      >
+        <h2 ref={heading} className="bold-pins-title" tabIndex={-1}>
+          Needs you
+        </h2>
+        <RoomApprovals
+          roomId={roomId}
+          approvals={needsApproval}
+          messages={messages ?? []}
+          jobs={jobs}
+          selectedJob={selectedJob}
+          agents={agents}
+          report={report}
+        />
+        <RoomExchanges jobs={cooking} agents={agents} report={report} />
+        <RunSafetyRequests jobs={recipeJobs} agents={agents} report={report} />
+      </div>
+      {moreLabel && (
+        <button
+          type="button"
+          className="bold-pins-more"
+          data-protected="inline-flex"
+          aria-expanded={expanded}
+          aria-controls="bold-pins"
+          aria-live="polite"
+          onClick={() => setExpanded((open) => !open)}
+        >
+          {moreLabel}
+          <ChevronIcon />
+        </button>
+      )}
+    </PinsProvider>
   )
 }

@@ -30,7 +30,7 @@ function sideCopy(mode: SideMode): string {
 function SideGlyph({ agent }: { agent: AgentSummary }) {
   return (
     <span className="side-glyph">
-      <AgentGlyph agent={agent} size="sm" plain bare decorative />
+      <AgentGlyph agent={agent} size="sm" bare decorative />
     </span>
   )
 }
@@ -309,7 +309,7 @@ export function BoldRoom() {
                     </svg>
                   </button>
                   <span className="bold-dm-phone-id">
-                    <AgentGlyph agent={directAgent} size="sm" plain bare decorative />
+                    <AgentGlyph agent={directAgent} size="sm" bare decorative />
                     <span>
                       <b style={{ color: agentNameColor(directAgent) }}>{directAgent.id}</b>
                       <PrivacyNote agentId={directAgent.id} />

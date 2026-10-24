@@ -188,7 +188,7 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
                 }}
               />
               <AgentAppearanceFields
-                value={{ ...input.style, look: input.style.look ?? 'cut' }}
+                value={input.style}
                 onChange={(style) => change({ style })}
                 preview={{ id: input.id || 'new', name: input.id || 'New agent' }}
               />

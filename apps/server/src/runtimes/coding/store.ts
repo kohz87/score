@@ -1,5 +1,4 @@
 import {
-  AgentLookSchema,
   DEFAULT_QUOTA_FLOOR_PERCENT,
   CodingPermissionSchema,
   CodingQuotaSchema,
@@ -12,7 +11,6 @@ import {
 } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { parsePack } from '../../packs/meta.ts'
 
 const RowSchema = z.object({
   id: z.string(),
@@ -25,9 +23,6 @@ const RowSchema = z.object({
   model: z.string().nullable(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,
-  look: AgentLookSchema,
-  pack_rev: z.string().nullable(),
-  pack_meta: z.string().nullable(),
   confirmed_version: z.string().nullable(),
   quota_floor_percent: z.int().min(0).max(50),
   created_at: z.iso.datetime(),
@@ -60,12 +55,7 @@ const toAgent = (value: unknown): StoredCodingAgent => {
     workspace: row.workspace,
     permission: row.permission,
     model: row.model,
-    style: {
-      color: row.color,
-      shape: row.shape,
-      look: row.look,
-      pack: parsePack(row.pack_rev, row.pack_meta),
-    },
+    style: { color: row.color, shape: row.shape },
     confirmedVersion: row.confirmed_version,
     quotaFloorPercent: row.quota_floor_percent,
     createdAt: row.created_at,
@@ -108,8 +98,8 @@ export function insertCodingAgent(
 ): void {
   sqlite
     .prepare(
-      `INSERT INTO coding_agents (id, name, role, instructions, runtime, workspace, permission, model, color, shape, look, created_at, quota_floor_percent)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO coding_agents (id, name, role, instructions, runtime, workspace, permission, model, color, shape, created_at, quota_floor_percent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       agent.id,
@@ -122,7 +112,6 @@ export function insertCodingAgent(
       agent.model,
       agent.style.color,
       agent.style.shape,
-      agent.style.look ?? 'cut',
       agent.createdAt,
       agent.quotaFloorPercent ?? DEFAULT_QUOTA_FLOOR_PERCENT,
     )
@@ -160,12 +149,7 @@ export function updateCodingAgent(
   }
 }
 export function removeCodingAgent(sqlite: DatabaseSync, id: string, now: string): void {
-  // The pack goes with the agent (its folder is removed by the caller).
-  sqlite
-    .prepare(
-      'UPDATE coding_agents SET removed_at = ?, pack_rev = NULL, pack_meta = NULL WHERE id = ?',
-    )
-    .run(now, id)
+  sqlite.prepare('UPDATE coding_agents SET removed_at = ? WHERE id = ?').run(now, id)
   // Same transaction: a deleted agent's MCP token and switches must not outlive it.
   sqlite.prepare('DELETE FROM mcp_access WHERE agent_id = ?').run(id)
 }

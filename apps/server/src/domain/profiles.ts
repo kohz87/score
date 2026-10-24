@@ -12,14 +12,13 @@ import {
   type AgentPreviewRequest,
   type ProfileStepName,
 } from '@score/contract'
-import type { PackStore } from '../packs/store.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import { ProfileInventorySchema } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { HttpError } from '../errors.ts'
 import { redact } from '../redact.ts'
-import { clientStyle, readAgent, reconcileAgents, storeAgent, writeAgentStyle } from './agents.ts'
+import { readAgent, reconcileAgents, storeAgent, writeAgentStyle } from './agents.ts'
 import { applyLifecycle, lifecycleOf } from './agent-lifecycle.ts'
 import type { ProfileImportStore } from './profile-imports.ts'
 import { readBaseline } from './team-rules.ts'
@@ -94,7 +93,6 @@ export class ProfileOperations {
     private readonly port: HermesPort,
     private readonly clock = Date.now,
     private readonly imports?: ProfileImportStore,
-    private readonly packs?: PackStore,
   ) {}
 
   get(id: string): AgentOperation {
@@ -221,7 +219,7 @@ export class ProfileOperations {
             id: request.id,
             name: redact(request.name),
             role: redact(request.role),
-            style: clientStyle(request.style),
+            style: request.style,
             model: request.model,
             ...(request.provider ? { provider: request.provider } : {}),
             ...(request.cloneFrom ? { cloneFrom: request.cloneFrom } : {}),
@@ -703,17 +701,9 @@ export class ProfileOperations {
         sqlite
           .prepare('UPDATE producers SET token_expires_at = 0 WHERE profile = ?')
           .run(operation.targetName)
-        // The uploaded pack goes with the agent (PLAN 10.2): the revision here, the folder right after the commit.
-        sqlite
-          .prepare('UPDATE agent_styles SET pack_rev = NULL, pack_meta = NULL WHERE agent_id = ?')
-          .run(operation.targetName)
-        const previous = readAgent(sqlite, operation.targetName)
-        if (previous?.style.pack)
-          storeAgent(sqlite, { ...previous, style: { ...previous.style, pack: null } })
         return events
       },
     })
-    this.packs?.removeAgent(operation.targetName)
   }
   async close() {
     this.closed = true

@@ -129,6 +129,43 @@
   display: none;
 }
 
+/* The prototype keeps one pin in view and puts the rest behind its count. Cards carry their sorted rank;
+   before the registry has measured them they all show, so nothing can hide behind a missing attribute. */
+[data-ui='bold']
+  .bold-pins[data-expanded='false']
+  > .bold-request[data-pin-rank]:not([data-pin-rank='0']) {
+  display: none;
+}
+
+[data-ui='bold'] .bold-pins-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-pins-more {
+  align-self: flex-start;
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 0.87em;
+  font-weight: 700;
+  background: var(--panel);
+  color: var(--ink2);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+[data-ui='bold'] .bold-pins-more[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
 [data-ui='bold'] .bold-request {
   background: var(--hi-bg);
   color: var(--hi-ink);
@@ -168,6 +205,52 @@
 
 [data-ui='bold'] .bold-approval .row {
   gap: 8px;
+}
+
+[data-ui='bold'] .bold-request-failed {
+  color: var(--hi-sub);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-approval-more {
+  position: relative;
+  display: inline-flex;
+}
+
+[data-ui='bold'] .bold-approval-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 230px;
+  max-width: min(280px, calc(100vw - 48px));
+  margin: 0;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-approval-menu button {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+}
+
+[data-ui='bold'] .bold-approval-menu button:hover,
+[data-ui='bold'] .bold-approval-menu button:focus-visible {
+  background: var(--field);
 }
 
 [data-ui='bold'] .bold-request .small,
@@ -222,6 +305,71 @@
 
 [data-ui='bold'] .bold-request-error {
   color: var(--bad);
+}
+
+/* The classic run cards keep their decision logic and only take the pin's colours and spacing. */
+[data-ui='bold'] .bold-run-request .orch-decision {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-run-request .orch-decision h3 {
+  color: var(--hi-ink);
+  font-family: var(--font-d);
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-run-request .orch-decision h3 small,
+[data-ui='bold'] .bold-run-request .orch-muted,
+[data-ui='bold'] .bold-run-request .orch-facts dt {
+  color: var(--hi-sub);
+}
+
+[data-ui='bold'] .bold-run-request .orch-quote,
+[data-ui='bold'] .bold-run-request .orch-pre,
+[data-ui='bold'] .bold-run-request .orch-ack {
+  background: color-mix(in srgb, var(--hi-bg) 78%, var(--hi-ink));
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-run-request .orch-field > span,
+[data-ui='bold'] .bold-run-request .orch-field > legend {
+  color: var(--hi-sub);
+}
+
+[data-ui='bold'] .bold-run-request .orch-field input,
+[data-ui='bold'] .bold-run-request .orch-field textarea,
+[data-ui='bold'] .bold-run-request .orch-field select {
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--hi-bg) 78%, var(--hi-ink));
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-run-request .orch-actions button {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--hi-ink);
+  box-shadow: inset 0 0 0 1.5px var(--hi-ink);
+  font: inherit;
+  font-size: 0.87em;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-run-request .orch-actions button.orch-primary {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+  box-shadow: none;
+}
+
+[data-ui='bold'] .bold-run-request .orch-actions button:disabled {
+  opacity: 0.55;
 }
 
 [data-ui='bold'] .bold-capsules {

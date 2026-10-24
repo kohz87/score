@@ -233,7 +233,7 @@ export function BoldFirstRun() {
           {memberAgents.length > 0 && (
             <span className="bold-first-run-glyphs" aria-hidden="true">
               {memberAgents.map((agent) => (
-                <AgentGlyph key={agent.id} agent={agent} size="lg" plain bare decorative />
+                <AgentGlyph key={agent.id} agent={agent} size="lg" bare decorative />
               ))}
             </span>
           )}

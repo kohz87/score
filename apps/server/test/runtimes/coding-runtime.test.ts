@@ -36,7 +36,6 @@ import { CodingRuntime, type CodingRuntimeDeps } from '../../src/runtimes/coding
 import { SecurityPassword } from '../../src/auth/security-password.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 import { FAKE_CLI } from './coding-fixtures.ts'
-import { multipartFiles, webpImage } from '../helpers/pack-images.ts'
 import { readAgent, reconcileAgents, updateProjectedAgent } from '../../src/domain/agents.ts'
 import { onMentions } from '../helpers/on-mentions.ts'
 
@@ -274,19 +273,18 @@ test('Add agent lists the CLIs and creates a coding agent that shows up as a tea
   expect(team.find((item) => item.id === 'lead')!.runtime).toBeUndefined()
 })
 
-test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at creation and by the style route', async () => {
+test('PLAN 10.2: a coding agent has any of the 20 shapes, set at creation and by the style route', async () => {
   const forged = { rev: 'forged', activities: ['idle'], name: null, credits: null, floor: 0 }
   const created = await addAgent({
     style: { color: '#19C39A', shape: 'cylinder', look: 'ring', pack: forged },
   })
-  expect(created.style).toEqual({ color: '#19C39A', shape: 'cylinder', look: 'ring', pack: null })
+  expect(created.style).toEqual({ color: '#19C39A', shape: 'cylinder' })
   const patched = await request('PATCH', '/api/agents/coder/style', {
     shape: 'gem',
     color: '#102030',
-    look: 'cut',
   })
   expect(patched.statusCode, patched.body).toBe(200)
-  const expected = { color: '#102030', shape: 'gem', look: 'cut', pack: null }
+  const expected = { color: '#102030', shape: 'gem' }
   expect(patched.json().style).toEqual(expected)
   // Every view of the agent agrees, and the style lives in the agent's own row only.
   const listed = (await request('GET', '/api/coding-agents')).json().items[0]
@@ -296,9 +294,9 @@ test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at crea
     style: unknown
   }[]
   expect(team.find((item) => item.id === 'coder')!.style).toEqual(expected)
-  expect(
-    db.sqlite.prepare('SELECT color, shape, look, pack_rev, pack_meta FROM coding_agents').all(),
-  ).toEqual([{ color: '#102030', shape: 'gem', look: 'cut', pack_rev: null, pack_meta: null }])
+  expect(db.sqlite.prepare('SELECT color, shape FROM coding_agents').all()).toEqual([
+    { color: '#102030', shape: 'gem' },
+  ])
   expect(db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
   const events = db.sqlite
     .prepare("SELECT data FROM events WHERE type = 'agent.updated' ORDER BY seq")
@@ -310,67 +308,15 @@ test('PLAN 10.2: a coding agent has a look and any of the 20 shapes, set at crea
     (await request('PATCH', '/api/agents/coder/style', { shape: 'dodecagon' })).statusCode,
   ).toBe(400)
 })
-test('PLAN 10.2: a coding agent can have a pet pack, and removing the agent removes the folder', async () => {
-  await addAgent()
-  const body = multipartFiles([
-    { name: 'idle.webp', bytes: webpImage(128, 128, 'VP8X', { animated: true }) },
-    { name: 'pet.json', bytes: Buffer.from('{"name":"Round","floor":0.1}') },
-  ])
-  const uploaded = await app.inject({
-    method: 'PUT',
-    url: '/api/agents/coder/pack',
-    headers: { ...headers, ...body.headers },
-    payload: body.payload,
-  })
-  expect(uploaded.statusCode, uploaded.body).toBe(200)
-  const pack = uploaded.json().agent.style.pack
-  expect(pack).toMatchObject({ activities: ['idle'], name: 'Round', credits: null, floor: 0.1 })
-  // One place for the style: the agent's own row, seen the same from every list.
-  expect(db.sqlite.prepare('SELECT pack_rev FROM coding_agents').all()).toEqual([
-    { pack_rev: pack.rev },
-  ])
-  expect(db.sqlite.prepare('SELECT * FROM agent_styles').all()).toEqual([])
-  expect((await request('GET', '/api/coding-agents')).json().items[0].style.pack).toEqual(pack)
-  const served = await app.inject({ url: `/api/agents/coder/pack/idle?rev=${pack.rev}`, headers })
-  expect(served.statusCode).toBe(200)
-  expect(served.headers['content-type']).toBe('image/webp')
-  expect(existsSync(join(home, 'packs', 'coder', pack.rev, 'idle.webp'))).toBe(true)
-  // The look and shape can change without losing it.
-  await request('PATCH', '/api/agents/coder/style', { look: 'ring', shape: 'bubble' })
-  expect((await request('GET', '/api/coding-agents')).json().items[0].style).toMatchObject({
-    look: 'ring',
-    shape: 'bubble',
-    pack,
-  })
-  expect((await request('DELETE', '/api/coding-agents/coder')).statusCode).toBe(204)
-  expect(existsSync(join(home, 'packs', 'coder'))).toBe(false)
-  expect(
-    (await app.inject({ url: `/api/agents/coder/pack/idle?rev=${pack.rev}`, headers })).statusCode,
-  ).toBe(404)
-  expect(db.sqlite.prepare('SELECT pack_rev, pack_meta FROM coding_agents').all()).toEqual([
-    { pack_rev: null, pack_meta: null },
-  ])
-})
-test('PLAN 10.2: a refresh that read the agent before a style or pack save cannot write the old look back', async () => {
+test('PLAN 10.2: a refresh that read the agent before a style save cannot write the old style back', async () => {
   await addAgent()
   // The list a slow refresh fetched before the person changed anything.
   const stale = await coding.details()
-  expect(stale[0]!.style).toMatchObject({ look: 'cut', pack: null })
-  const body = multipartFiles([
-    { name: 'idle.webp', bytes: webpImage(128, 128, 'VP8X', { animated: true }) },
-  ])
-  const uploaded = await app.inject({
-    method: 'PUT',
-    url: '/api/agents/coder/pack',
-    headers: { ...headers, ...body.headers },
-    payload: body.payload,
-  })
-  expect(uploaded.statusCode, uploaded.body).toBe(200)
-  await request('PATCH', '/api/agents/coder/style', { look: 'ring', shape: 'gem' })
+  await request('PATCH', '/api/agents/coder/style', { shape: 'gem' })
   const saved = (await request('GET', '/api/agents'))
     .json()
     .items.find((item: { id: string }) => item.id === 'coder').style
-  expect(saved).toMatchObject({ look: 'ring', shape: 'gem', pack: { activities: ['idle'] } })
+  expect(saved).toMatchObject({ shape: 'gem' })
   const eventsBefore = db.sqlite
     .prepare("SELECT count(*) AS n FROM events WHERE type = 'agent.updated'")
     .get()

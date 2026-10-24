@@ -39,6 +39,8 @@ export const protectedClasses = [
   'orch-pill',
   'orch-node__flag',
   'bold-request',
+  // PLAN 11.4b: the count that expands the rest of the needs-you strip (a theme may not hide the way to the cards)
+  'bold-pins-more',
   // PLAN 11.4d: the room and job menus make destructive or exposing choices; deleting a room asks for its name.
   'bold-room-menu',
   'bold-job-menu',
@@ -70,7 +72,6 @@ export const protectedClasses = [
   'security-password',
   // Agent identity and error toasts
   'agent-glyph',
-  'pet-avatar',
   'room-stage',
   'chat-toast',
   // The way back

@@ -185,7 +185,7 @@ function AgentPick({
                   onChange(checked ? chosen.filter((id) => id !== agent.id) : [...chosen, agent.id])
                 }
               />
-              <AgentGlyph agent={agent} size="sm" plain bare decorative />
+              <AgentGlyph agent={agent} size="sm" bare decorative />
               <span>{agent.name}</span>
             </label>
           )
@@ -917,7 +917,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                 <div className="row wrap start-lead">
                   {leadAgent && (
                     <span className="chip start-agent-chip">
-                      <AgentGlyph agent={leadAgent} size="sm" plain bare decorative />
+                      <AgentGlyph agent={leadAgent} size="sm" bare decorative />
                       <span>{leadAgent.name} plans</span>
                     </span>
                   )}

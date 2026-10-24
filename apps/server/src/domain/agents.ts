@@ -1,10 +1,7 @@
 import {
-  AgentLookSchema,
   AgentStyleSchema,
   AgentSummarySchema,
   ShapeSchema,
-  type PetPack,
-  type AgentLook,
   type AgentStyle,
   type AgentSummary,
 } from '@score/contract'
@@ -15,7 +12,6 @@ import type { Ingest } from '../hub/ingest.ts'
 import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 import { withInheritance } from './team-rules.ts'
 import { applyLifecycle } from './agent-lifecycle.ts'
-import { packMeta, parsePack } from '../packs/meta.ts'
 import { getCodingAgent, isCodingAgent } from '../runtimes/coding/store.ts'
 
 // Defaults stay on the original eight shapes (the rest, PLAN 10.2, are chosen), so no agent's default look changes.
@@ -31,24 +27,7 @@ const DetailRowSchema = z.object({ detail: z.string() })
 const StyleRowSchema = z.object({
   color: AgentStyleSchema.shape.color,
   shape: AgentStyleSchema.shape.shape,
-  look: AgentLookSchema,
-  pack_rev: z.string().nullable(),
-  pack_meta: z.string().nullable(),
-  updated_at: z.iso.datetime(),
 })
-/** A style with every optional part spelled out (absent look = cut, absent pack = none), so styles compare equal. */
-export function completeStyle(
-  style: AgentStyle,
-): AgentStyle & { look: AgentLook; pack: PetPack | null } {
-  return { ...style, look: style.look ?? 'cut', pack: style.pack ?? null }
-}
-/**
- * What a client may put in a style it sends (create, import, patch): colour, shape and look. The pack has its own
- * routes and is never taken from a request body.
- */
-export function clientStyle(style: AgentStyle): AgentStyle {
-  return { color: style.color, shape: style.shape, look: style.look ?? 'cut', pack: null }
-}
 export function readAgent(sqlite: DatabaseSync, id: string): AgentDetail | null {
   const row = sqlite.prepare('SELECT detail FROM agents_proj WHERE id = ?').get(id)
   return row ? AgentDetailSchema.parse(JSON.parse(DetailRowSchema.parse(row).detail)) : null
@@ -71,57 +50,31 @@ export function readAgentNames(sqlite: DatabaseSync): { id: string; name: string
 export function readAgentStyle(sqlite: DatabaseSync, id: string): AgentStyle | null {
   const coding = getCodingAgent(sqlite, id)
   if (coding) return AgentStyleSchema.parse(coding.style)
-  const row = sqlite
-    .prepare(
-      'SELECT color, shape, look, pack_rev, pack_meta, updated_at FROM agent_styles WHERE agent_id = ?',
-    )
-    .get(id)
-  if (!row) return null
-  const parsed = StyleRowSchema.parse(row)
-  return AgentStyleSchema.parse({
-    color: parsed.color,
-    shape: parsed.shape,
-    look: parsed.look,
-    pack: parsePack(parsed.pack_rev, parsed.pack_meta),
-  })
+  const row = sqlite.prepare('SELECT color, shape FROM agent_styles WHERE agent_id = ?').get(id)
+  return row ? AgentStyleSchema.parse(StyleRowSchema.parse(row)) : null
 }
 /**
  * Writes the style of an agent where it lives: a coding agent in its own row, a Hermes profile in `agent_styles`.
- * The pet pack is left alone unless `pack` is given (only the pack routes do that).
+ * (The `look`, `pack_rev` and `pack_meta` columns of both tables are unused from 11.11; see migration 0087.)
  */
 export function writeAgentStyle(
   sqlite: DatabaseSync,
   agentId: string,
   style: AgentStyle,
   now: string,
-  options: { pack?: boolean } = {},
 ): void {
-  const full = completeStyle(style)
-  // Validated on the way in as on the way out.
-  const pack = packMeta(full.pack)
   if (isCodingAgent(sqlite, agentId)) {
     sqlite
-      .prepare(
-        `UPDATE coding_agents SET color = ?, shape = ?, look = ?${options.pack ? ', pack_rev = ?, pack_meta = ?' : ''} WHERE id = ?`,
-      )
-      .run(
-        ...[
-          full.color,
-          full.shape,
-          full.look,
-          ...(options.pack ? [pack.rev, pack.meta] : []),
-          agentId,
-        ],
-      )
+      .prepare('UPDATE coding_agents SET color = ?, shape = ? WHERE id = ?')
+      .run(style.color, style.shape, agentId)
     return
   }
   sqlite
     .prepare(
-      `INSERT INTO agent_styles (agent_id, color, shape, look, pack_rev, pack_meta, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (agent_id) DO UPDATE SET color = excluded.color, shape = excluded.shape, look = excluded.look,
-         ${options.pack ? 'pack_rev = excluded.pack_rev, pack_meta = excluded.pack_meta,' : ''} updated_at = excluded.updated_at`,
+      `INSERT INTO agent_styles (agent_id, color, shape, updated_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (agent_id) DO UPDATE SET color = excluded.color, shape = excluded.shape, updated_at = excluded.updated_at`,
     )
-    .run(agentId, full.color, full.shape, full.look, pack.rev, pack.meta, now)
+    .run(agentId, style.color, style.shape, now)
 }
 export function storeAgent(sqlite: DatabaseSync, raw: AgentDetail): void {
   const agent = applyLifecycle(sqlite, withInheritance(sqlite, raw))

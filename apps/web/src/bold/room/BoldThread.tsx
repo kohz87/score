@@ -98,6 +98,8 @@ function JobPicker({ jobs, onPick }: { jobs: Job[]; onPick: (jobId: string) => v
   )
 }
 
+// The thread shows an approval's real card, not the room stream's pointer: the strip may be filtered to another job or
+// covered by the phone sheet. A second answer from the strip gets the server's 409, explained there.
 function ThreadMessage({ message, agents }: { message: Message; agents: AgentSummary[] }) {
   return (
     <div className="bold-message bold-thread-message" data-message-id={message.id}>
@@ -451,7 +453,9 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
           ))}
         </div>
 
-        {paused && <ExchangeRequestCard exchange={paused} job={job} agents={agents} />}
+        {paused && (
+          <ExchangeRequestCard key={paused.id} exchange={paused} job={job} agents={agents} />
+        )}
       </div>
       <ThreadComposer
         roomId={roomId}
