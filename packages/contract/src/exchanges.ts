@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { CommandIdSchema } from './orchestration.ts'
 import { AgentIdSchema, RoomSchema } from './types.ts'
+import { JobReportBackSchema, JobSourceSchema } from './triggers.ts'
 
 // Exchanges and agent actions (PLAN 11.1b; design docs/briefs/11.0-bold.md §3.4, §4). An agent in a room with
 // `routing = exchanges` hands work on, asks, reviews, approves or sends back with one action per turn. Hermes agents
@@ -150,6 +151,10 @@ export const JobSchema = z.object({
   messageCount: z.int().nonnegative(),
   /** One line for lists ("Earlier chats"): the job's summary, else its first message's first line (≤ 160 chars). */
   summary: z.string().nullable(),
+  /** PLAN 11.1d: where a trigger-started job came from ("Started by" card, the tab's reference); null otherwise. */
+  source: JobSourceSchema.nullable(),
+  /** PLAN 11.1d: its report-back to the app; null for jobs without one. */
+  reportBack: JobReportBackSchema.nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })

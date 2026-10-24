@@ -4,10 +4,11 @@ import { Outlet, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
-import { agentsQuery } from '../routes/chat/queries.ts'
+import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
 import { CommandPalette } from '../shell/CommandPalette.tsx'
 import { agentStateLabel, dockProgress } from './bold-agents.ts'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
+import type { BoldSheetState } from './bold-ui.ts'
 import './tokens.css'
 import './bold.css'
 
@@ -21,13 +22,15 @@ function viewOf(path: string): View {
   return 'room'
 }
 
-function DockRing({ agent }: { agent: AgentSummary }) {
+function DockRing({ agent, needsYou }: { agent: AgentSummary; needsYou: boolean }) {
   const progress = dockProgress()
-  const state = agentStateLabel(agent)
+  const state = needsYou ? 'needs you' : agentStateLabel(agent)
   return (
     <button
       type="button"
-      className={`ring ${agent.status === 'waiting' ? 'needs' : ''}`}
+      className={`ring ${needsYou ? 'needs bold-needs' : ''}`}
+      // A ring that says "needs you" is a decision marker no theme may hide (PLAN 11.3, AGENTS.md design rules).
+      data-protected={needsYou ? 'grid' : undefined}
       aria-label={`One to one with ${agent.id}, ${state}`}
       title={`${agent.id} · ${state}`}
       data-progress={progress ?? undefined}
@@ -51,12 +54,21 @@ function DockRing({ agent }: { agent: AgentSummary }) {
  */
 export function BoldShell() {
   const agents = useStreamQuery(agentsQuery).data ?? []
+  // An agent needs you while a decision of yours is open for it (as the classic Needs-you dot), not only while a run
+  // says it waits.
+  const approvals = useStreamQuery(approvalsQuery).data ?? []
+  const waitingOn = new Set(
+    approvals
+      .filter((item) => item.actionable && item.phase === 'human_pending')
+      .map((item) => item.agentId),
+  )
   const navigate = useNavigate()
   const location = useLocation()
   const view = viewOf(location.pathname)
   const phone = useMediaQuery(PHONE)
   const light = useMediaQuery('(prefers-color-scheme: light)')
   const [commandOpen, setCommandOpen] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
   const commandTrigger = useRef<HTMLElement | null>(null)
   const dockHasProgress = agents.some(() => dockProgress() !== null)
 
@@ -103,7 +115,7 @@ export function BoldShell() {
   return (
     <div className="bold-shell" data-ui="bold" data-look={light ? 'light' : 'dark'}>
       <div className="bold-frame" inert={commandOpen}>
-        <header className="top">
+        <header className="top" inert={phone && sheetOpen}>
           <button
             type="button"
             className="word"
@@ -125,7 +137,11 @@ export function BoldShell() {
               aria-label="Your team. Click someone to talk one to one."
             >
               {agents.map((agent) => (
-                <DockRing key={agent.id} agent={agent} />
+                <DockRing
+                  key={agent.id}
+                  agent={agent}
+                  needsYou={agent.status === 'waiting' || waitingOn.has(agent.id)}
+                />
               ))}
               {dockHasProgress && (
                 <span className="small muted dock-note">Rings show progress</span>
@@ -162,11 +178,11 @@ export function BoldShell() {
         </header>
 
         <main className="main">
-          <Outlet />
+          <Outlet context={{ sheetOpen, setSheetOpen } satisfies BoldSheetState} />
         </main>
 
         {phone && (
-          <nav className="bold-tabbar" aria-label="Main">
+          <nav className="bold-tabbar" aria-label="Main" inert={phone && sheetOpen}>
             <button
               type="button"
               className={view === 'room' ? 'on' : undefined}

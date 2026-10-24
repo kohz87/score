@@ -301,6 +301,10 @@
   color: var(--ink);
 }
 
+[data-ui='bold'] .phone-side-open {
+  margin-left: auto;
+}
+
 [data-ui='bold'] .stream {
   flex: 1;
   display: flex;
@@ -396,6 +400,10 @@
 }
 
 [data-ui='bold'] .side-privacy {
+  margin-left: auto;
+}
+
+[data-ui='bold'] .sideclose {
   margin-left: auto;
 }
 
@@ -585,6 +593,10 @@ body.fit [data-ui='bold'] .stream {
   }
 
   [data-ui='bold'] .bold-sidecol {
+    display: none;
+  }
+
+  [data-ui='bold'] .bold-sidecol[hidden] {
     display: none;
   }
 

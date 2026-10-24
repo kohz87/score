@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import {
+  JobSourceSchema,
   ExchangeSchema,
   JobSchema,
   type Exchange,
@@ -11,6 +12,7 @@ import {
 import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
 import { redact } from '../../redact.ts'
+import { reportBackOf } from '../triggers/report-back.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 
 // Rows of jobs and exchanges as the contract shapes them, and the events that announce them (PLAN 11.1b).
@@ -22,6 +24,7 @@ const JobRowSchema = z.object({
   state: JobSchema.shape.state,
   holder_agent_id: z.string().nullable(),
   is_default: z.union([z.literal(0), z.literal(1)]),
+  source: z.string().nullable(),
   exchange_budget: z.int(),
   job_turn_limit: z.int(),
   created_at: z.string(),
@@ -95,6 +98,8 @@ function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
     lastMessageAt: counts.last,
     messageCount: counts.n,
     summary: jobSummaryLine(sqlite, row),
+    source: row.source === null ? null : JobSourceSchema.parse(JSON.parse(row.source)),
+    reportBack: row.source === null ? null : reportBackOf(sqlite, row.id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
