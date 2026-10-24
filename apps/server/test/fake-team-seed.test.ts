@@ -278,3 +278,22 @@ test('seeding twice changes nothing', () => {
   seedFakeTeam(db.sqlite, nowMs)
   expect(counts()).toEqual(before)
 })
+
+test('the activity feed job has a Workbench: builder’s lines, an outdated send-back note and a live approval note', async () => {
+  const answer = await get(`/api/jobs/${feedId}/workbench`)
+  expect(answer.statusCode).toBe(200)
+  const [file] = answer.json().files as {
+    path: string
+    lines: { n: number; text: string; by: string | null }[]
+    comments: { text: string; outdated: boolean; line: number | null }[]
+  }[]
+  expect(file!.path).toBe('api/events.py')
+  expect(file!.lines.find((line) => line.text.includes('order_by("created_at", "id")'))?.by).toBe(
+    'builder',
+  )
+  const notes = Object.fromEntries(file!.comments.map((note) => [note.text, note]))
+  expect(notes['Two events in one millisecond: the second is skipped.']).toMatchObject({
+    outdated: true,
+  })
+  expect(notes['Nice: the page size is one constant.']).toMatchObject({ outdated: false, line: 7 })
+})

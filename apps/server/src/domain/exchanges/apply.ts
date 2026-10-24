@@ -1,3 +1,4 @@
+import { recordComments } from './review-comments.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { ExchangeActionSchema, type ExchangeAction, type MessagePart } from '@score/contract'
 import { z } from 'zod'
@@ -287,16 +288,30 @@ export function settleExchangeTurn(
 
   // 2. The routing action, unless it was the verdict handled above; against the exchange as step 1 left it.
   const current = exchange ? exchangeRow(sqlite, exchange.id) : null
-  if (routing?.action === 'handoff' || routing?.action === 'ask' || routing?.action === 'review')
-    drafts.push(
-      ...route(
-        sqlite,
-        { me, jobId, turnId: mapping.turn_id, exchange: current },
-        routing,
-        give,
-        now,
-      ),
+  let routed: string | null = null
+  if (routing?.action === 'handoff' || routing?.action === 'ask' || routing?.action === 'review') {
+    const sent = route(
+      sqlite,
+      { me, jobId, turnId: mapping.turn_id, exchange: current },
+      routing,
+      give,
+      now,
     )
+    drafts.push(...sent.drafts)
+    routed = sent.exchangeId
+  }
+  // Line notes (11.6a): a verdict's notes belong to the review it answered — only when step 1 applied it (a live
+  // review opened to this agent); a review request's to the exchange it opened or reopened.
+  const where = { jobId, turnId: mapping.turn_id, agentId: me }
+  if (
+    (routing?.action === 'approve' || routing?.action === 'send_back') &&
+    exchange?.kind === 'review' &&
+    exchange.to_agent_id === me &&
+    exchange.state === 'live'
+  )
+    recordComments(sqlite, { ...where, exchangeId: exchange.id }, routing, now)
+  if (routing?.action === 'review' && routed)
+    recordComments(sqlite, { ...where, exchangeId: routed }, routing, now)
   settle('applied')
 
   // 3. A prose @mention of a teammate hands nothing off in this room: say so, so it isn't mistaken for one.
@@ -559,9 +574,10 @@ function route(
   action: Extract<ExchangeAction, { action: 'handoff' | 'ask' | 'review' }>,
   give: Give,
   now: string,
-): DomainEventDraft[] {
+): { drafts: DomainEventDraft[]; exchangeId: string } {
   const { me, jobId, turnId, exchange } = turn
   const drafts: DomainEventDraft[] = []
+  let used = ''
   const open = (kind: ExchangeRow['kind'], parentId: string | null) => {
     const id = openExchange(sqlite, { jobId, kind, parentId, from: me, to: action.to, turnId }, now)
     drafts.push(...exchangeEvent(sqlite, id))
@@ -570,6 +586,7 @@ function route(
   switch (action.action) {
     case 'handoff': {
       const id = open('handoff', null)
+      used = id
       drafts.push(...updateJob(sqlite, jobId, { holder: action.to }, now))
       give(action.to, `${me} handed this work to you.\n\n${quote(me, action.note)}`, id)
       break
@@ -577,6 +594,7 @@ function route(
     case 'ask': {
       const waiting = exchange && !['done', 'stopped'].includes(exchange.state) ? exchange : null
       const id = open('ask', waiting?.id ?? null)
+      used = id
       // The exchange whose turn this was now waits on the answer (a reviewer asking before deciding).
       if (waiting?.state === 'live' && waiting.to_agent_id === me)
         drafts.push(...updateExchange(sqlite, waiting.id, { state: 'waiting_on_agent' }, now))
@@ -595,6 +613,7 @@ function route(
         )
         .get(jobId, me, action.to) as { id: string } | undefined
       const id = again?.id ?? open('review', null)
+      used = id
       if (again) drafts.push(...updateExchange(sqlite, id, { state: 'live' }, now))
       const round = exchangeRow(sqlite, id)!.round
       give(
@@ -605,5 +624,5 @@ function route(
       break
     }
   }
-  return drafts
+  return { drafts, exchangeId: used }
 }
