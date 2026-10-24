@@ -984,3 +984,18 @@ One entry per completed task: what landed, review results, and any **rejected re
   2 P2 (tabs keyed by frame seq, refresh load), P3s — fixed. Lead: merge with main (BoldRoom imports), a stable
   Markdown dependency, two e2e that predated the Work nav order and the per-job Results. E2E 18/18 twice plus watch,
   team and shell specs; full check green (web 3,174). Not deployed.
+- **11.4a Team room: stream, job tabs, composer (DeepSeek + Sonnet coder + lead, 2026-10-24).** `BoldTeamRoom`: job
+  tabs with unread from the API (a job is read only when opened) and filter chips (needs you · working · done), the
+  stream (requests for you with `data-protected`, result cards, capsules), the composer ("To:" with `@name`, `+`
+  attach with progress, voice, `/` commands; the classic Composer gained props with classic defaults), the hover row
+  (edit with rewind and versions, copy, save to Library, pin, delete, retry; keyboard-reachable), deleted show/hide,
+  "Load earlier", `?job=&message=` seeks. Build died twice on NanoGPT (503) + 2 fix rounds; then a Sonnet coder (the
+  lead's takeover rule) made the e2e match the intended behaviour and found a real bug — "Save to Knowledge" opened
+  under the stream's fade mask and couldn't be clicked (now portaled to the shell). Sonnet review: 1 P1 (unread
+  badges: a stale reducer, and reading every job on mount marked all read), 6 P2 (50-message cap, hover row not
+  keyboard-reachable, reassign default, destination wording, Retry missing; "Save to Library = Knowledge" rejected —
+  Library is Knowledge in the bold shell), P3s — fixed. Lead: merges with main (Start a job in the room head, opened
+  jobs derived without an effect, 11.6b's Workbench), the classic chat keeps `no_lead` without a link into /b. E2E
+  109/110 (room, library, results, workbench, shell, first run, start job, classic chat/composer) — the one failure,
+  classic `chat-rooms` "finished orchestration room can be deleted", passes alone 3/3 here and on main: order-dependent
+  in long runs, to settle at the 11.12 full e2e. Full check green (web 3,210). Not deployed.

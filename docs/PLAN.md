@@ -578,7 +578,7 @@ shells run from one build; the old shell is pixel-identical to its baselines; th
 desktop and phone width; the protected-surface list includes the new decision surfaces and the hostile-theme e2e passes
 on the new shell; reduced motion stops every glow and dot.
 
-**11.4a Team room: stream, tabs, composer** · **DeepSeek** (after the pilot) · boards 01, 09; prototype room. Job tabs
+**11.4a Team room: stream, tabs, composer** ✅ · **DeepSeek** (after the pilot) · boards 01, 09; prototype room. Job tabs
 with unread and filter chips (needs you · working · done, D10), the main stream (requests, result cards, capsules,
 requests for you), composer "To:" with `@name`, `+` (attach with progress, voice) and `/` commands, hover row (edit
 with rewind and ‹ 2 / 3 ›, copy, save to Library, pin, delete, D5), deleted show/hide. Done when: e2e for each,

@@ -29,7 +29,7 @@ async function openLibrary(page: Page, size: (typeof sizes)[number]) {
   await page.goto('/b')
   await expect(page.locator('[data-ui="bold"]')).toBeVisible()
   if (size.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
-  await page.getByRole('button', { name: /^Work/ }).click()
+  await page.locator('button.side-toggle').click()
   await page.getByRole('button', { name: /^Library/ }).click()
   await expect(page.getByTestId('bold-library')).toBeVisible()
 }

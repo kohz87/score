@@ -38,6 +38,7 @@ export const protectedClasses = [
   'bold-trigger-confirm',
   'orch-pill',
   'orch-node__flag',
+  'bold-request',
   // The task drawer's approval and its buttons
   'task-drawer-approval',
   'task-drawer-buttons',

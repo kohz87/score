@@ -10,6 +10,8 @@ export interface Editing {
   text: string
   to: string[]
   attachments: Attachment[]
+  /** The message's job (PLAN 11.1b), so a correction stays in the job it came from. */
+  jobId?: string | null
   /** The rewind for this edit already happened (an interrupted edit resumed): sending posts the correction at once. */
   rewound?: boolean
 }
@@ -28,6 +30,7 @@ export function startEdit(message: Message, options: { rewound?: boolean } = {})
     text: message.parts.flatMap((part) => (part.kind === 'text' ? [part.text] : [])).join('\n\n'),
     to: message.to,
     attachments: attachmentsOf(message),
+    jobId: message.jobId,
     ...(options.rewound ? { rewound: true } : {}),
   })
 }

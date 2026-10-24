@@ -294,7 +294,8 @@ test('a phone keeps the wordmark and avatar, shows the tab bar and opens the sid
   expect(screen.getByRole('banner').hasAttribute('inert')).toBe(false)
   expect(nav.hasAttribute('inert')).toBe(false)
   expect(document.querySelector('.roomcol')?.hasAttribute('inert')).toBe(false)
-  await waitFor(() => expect(document.activeElement).toBe(openPanel))
+  const openPanelAgain = screen.getByRole('button', { name: 'Open side panel' })
+  await waitFor(() => expect(document.activeElement).toBe(openPanelAgain))
 })
 
 test('Escape in a Library dialog closes the dialog, not the phone sheet', async () => {

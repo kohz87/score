@@ -193,7 +193,7 @@ for (const size of sizes) {
         panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' }),
       ).toBeVisible()
 
-      await panel.getByRole('button', { name: /^Work/ }).click()
+      await panel.locator('button.side-toggle').click()
       await page.getByRole('button', { name: /^Library/ }).click()
       const library = page.getByTestId('bold-library')
       await expect(library).toBeVisible()
@@ -201,7 +201,7 @@ for (const size of sizes) {
       await expect(panel.getByTestId('bold-results')).toBeHidden()
 
       await page.getByRole('button', { name: /^Library/ }).click()
-      await page.getByRole('button', { name: /^Work/ }).click()
+      await page.getByRole('button', { name: /^Work What/ }).click()
       await expect(panel.getByTestId('bold-results')).toBeVisible()
       await expect(
         panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' }),
