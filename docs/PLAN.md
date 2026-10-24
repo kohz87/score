@@ -669,7 +669,7 @@ step-list equivalent; saved recipes run unchanged on the workflow engine.
 properties, history, upload ≤ 256 MB with progress, zip preview/keep, files view, folders, export. Done when: today's
 Knowledge e2e pass against the Library panel.
 
-**11.10f Search** · **DeepSeek** · board 14: jobs, one-to-ones, Library, messages, actions, settings sections, "Reset
+**11.10f Search** ✅ · **DeepSeek** · board 14: jobs, one-to-ones, Library, messages, actions, settings sections, "Reset
 look", `/` commands. Done when: e2e for each result kind and keyboard use.
 
 **11.11 Retire old destinations** · **Lead**, only with the owner's OK · switch the default to the new shell; move
