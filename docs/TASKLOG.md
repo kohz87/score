@@ -1092,3 +1092,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   updatedAt (accepted). Contract gaps: no Hermes-side clarify endpoint; exchanges carry no pause-start time ("oldest"
   uses updatedAt). Full check green (contract 1515, web 3248, server 4822); room e2e 103/103 after the last merge.
   Not deployed.
+- **11.4d2 Bring into a job retries safely (DeepSeek on ordeepseek + lead, 2026-10-24).** Follow-up from the Sonnet review
+  of 11.4d run after its merge (owner: Sonnet reviews before every merge): 2 P1 (a reused Idempotency-Key replays the
+  server's stored 500 forever; the attempt lived in a component ref, so closing the panel duplicated the job), 2 P2
+  (imported chats unreachable in /b; onBlur closing menus before a click on Safari/Firefox). DeepSeek: a fresh key per
+  HTTP call (reused only after no response), attempts in a module map by agent:session, "Brought into …" with a link,
+  "Imported chats" in the dropdown (normal send, typed-name delete), menus close on focusin/pointerdown outside, the
+  e2e mock stores receipts like the server. Review of that round → lead fixes: `idempotency_pending` and a gateway 5xx
+  with no Score body keep the key (pending at most twice, then "check the team room for a duplicate"); a share 404 starts
+  over only when the job is gone (GET the room's jobs), else skips that message; a gone imported chat is imported again;
+  copy says a later bring-in makes another job. Last review: 0 P1/P2; P3 (a job closed in the same moment a message is
+  deleted reads as gone) accepted. Lead e2e fixes: Work chosen from the side panel's menu in Elsewhere mode; on phones
+  the kept view skips the preview step. Full check green; room-menu + room + shell + needs-you e2e green. Not deployed.

@@ -16,11 +16,14 @@ async function openRoomPicker(page: Page) {
   return page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
 }
 
-// The prototype drops the composer's "to" chip on phones (bold-room.css); the label stays in the DOM.
+// The app's phone composer hides the "to" chip (bold-room.css); the label stays in the DOM.
 async function expectOlderRoomLabel(page: Page) {
   const label = page.getByText('Older room · @name')
   if ((page.viewportSize()?.width ?? 0) > 600) await expect(label).toBeVisible()
-  else await expect(label).toBeAttached()
+  else {
+    await expect(page.locator('.roomtitle')).toContainText('Older room')
+    await expect(label).toBeAttached()
+  }
 }
 
 async function openOlderRoom(page: Page) {
@@ -74,6 +77,32 @@ for (const viewport of sizes) {
         (request) => request.method === 'POST' && request.path === '/api/rooms/room-old/messages',
       )
       expect(sent?.body).toMatchObject({ text: '@builder Where is the cursor fix?' })
+    })
+
+    test(`an imported chat opens read-write and sends normally at ${at}`, async ({ page }) => {
+      const state = await openMenuRoom(page)
+      const picker = await openRoomPicker(page)
+      await expect(picker).toContainText('Imported chats')
+      const imported = picker.getByRole('option', { name: /#telegram-plan #imported/ })
+      await expect(imported).toContainText('Imported from Telegram · read-write')
+      await imported.click()
+
+      await expect(page).toHaveURL(/room=room-imported/)
+      await expect(page.locator('.roomtitle')).toContainText('#telegram-plan #imported')
+      const composer = page.getByRole('combobox', { name: /^Message #telegram-plan/ })
+      await composer.fill('@builder Continue here?')
+      await page.getByRole('button', { name: 'Send', exact: true }).click()
+      await expect(composer).toHaveValue('')
+
+      expect(
+        state.requests.find(
+          (request) =>
+            request.method === 'POST' && request.path === '/api/rooms/room-imported/messages',
+        )?.body,
+      ).toMatchObject({ text: '@builder Continue here?' })
+      expect(state.requests.some((request) => request.path.endsWith('/continue-session'))).toBe(
+        false,
+      )
     })
 
     test(`the room dropdown works from the keyboard at ${at}`, async ({ page }) => {
@@ -153,6 +182,35 @@ for (const viewport of sizes) {
       expect(
         state.requests.some(
           (request) => request.method === 'DELETE' && request.path === '/api/rooms/room-old',
+        ),
+      ).toBe(true)
+    })
+
+    test(`an imported chat can be deleted with the same typed confirmation at ${at}`, async ({
+      page,
+    }) => {
+      const state = await openMenuRoom(page)
+      const picker = await openRoomPicker(page)
+      await picker.getByRole('option', { name: /#telegram-plan #imported/ }).click()
+      await expect(page).toHaveURL(/room=room-imported/)
+
+      await page.getByRole('button', { name: 'Room menu' }).click()
+      await page.getByRole('menuitem', { name: 'Delete #telegram-plan #imported' }).click()
+      const dialog = page.getByRole('dialog')
+      await expect(
+        dialog.getByRole('heading', { name: 'Delete #telegram-plan #imported?' }),
+      ).toBeVisible()
+      await expect(dialog).toContainText('2 messages')
+      await dialog
+        .getByLabel(/Type #telegram-plan #imported to confirm/)
+        .fill('#telegram-plan #imported')
+      await dialog.getByRole('button', { name: 'Delete room' }).click()
+
+      await expect(page).toHaveURL(/\/b$/)
+      await expect(page.locator('.roomtitle')).toHaveText('Team room')
+      expect(
+        state.requests.some(
+          (request) => request.method === 'DELETE' && request.path === '/api/rooms/room-imported',
         ),
       ).toBe(true)
     })
@@ -255,7 +313,7 @@ for (const viewport of sizes) {
       ).toHaveLength(2)
     })
 
-    test(`a failed share is retried with the same job and key, without duplicate copies at ${at}`, async ({
+    test(`a failed share is retried with the same job, a new key and no duplicate copies at ${at}`, async ({
       page,
     }) => {
       const state = await openMenuRoom(page, { failShare: 2 })
@@ -289,14 +347,74 @@ for (const viewport of sizes) {
         '/api/messages/import%3A2/share',
       ])
       expect(writes.filter((path) => path === '/api/rooms/team-room/jobs')).toHaveLength(1)
-      const keys = state.requests
-        .filter(
+      const writesWithKeys = state.requests.filter(
+        (request) =>
+          request.method === 'POST' &&
+          (request.path === '/api/rooms/team-room/jobs' || request.path.endsWith('/share')),
+      )
+      const keys = writesWithKeys.map((request) => request.headers['idempotency-key'])
+      expect(keys.every(Boolean)).toBe(true)
+      expect(new Set(keys).size).toBe(writesWithKeys.length)
+      // The failed call and its retry are different HTTP calls, so they must not share a key.
+      const secondShare = writesWithKeys.filter(
+        (request) => request.path === '/api/messages/import%3A2/share',
+      )
+      expect(secondShare).toHaveLength(2)
+      expect(secondShare[0]!.headers['idempotency-key']).not.toBe(
+        secondShare[1]!.headers['idempotency-key'],
+      )
+    })
+
+    test(`closing the panel mid-way keeps the attempt, and a retry makes one job at ${at}`, async ({
+      page,
+    }) => {
+      const state = await openMenuRoom(page, { failShare: 2 })
+      const picker = await openRoomPicker(page)
+      await picker.getByRole('option', { name: /Plan the launch checklist/ }).click()
+      const side = page.getByRole('complementary', { name: 'Side panel' })
+      await side.getByRole('button', { name: 'Preview this chat' }).click()
+      await expect(side.getByText('Outline the launch checklist.')).toBeVisible()
+      await side.getByRole('button', { name: 'Bring into a job' }).click()
+      await expect(side.getByRole('alert')).toContainText('kept while this page is open')
+
+      if (viewport.width > 860) {
+        // The side panel's mode button names the chat while Elsewhere is open; its menu switches back to Work.
+        await side.locator('.side-toggle').click()
+        await side.getByRole('button', { name: /^Work/ }).click()
+      } else {
+        await side.getByRole('button', { name: 'Close side panel' }).click()
+      }
+      const reopened = page.getByRole('complementary', { name: 'Side panel' })
+      await page.locator('.roomtitle').click()
+      await page
+        .getByRole('listbox', { name: 'Rooms and chats elsewhere' })
+        .getByRole('option', { name: /Plan the launch checklist/ })
+        .click()
+      // On a phone the closed sheet keeps the view (and its loaded preview); on a desktop the view remounts, which is
+      // the case the kept attempt is for.
+      const preview = reopened.getByRole('button', { name: 'Preview this chat' })
+      if (await preview.isVisible()) await preview.click()
+      await expect(reopened.getByText('Outline the launch checklist.')).toBeVisible()
+      await reopened.getByRole('button', { name: 'Bring into a job' }).click()
+      await expect(page).toHaveURL(/job=job-brought/)
+
+      expect(
+        state.requests.filter(
+          (request) => request.method === 'POST' && request.path === '/api/rooms/team-room/jobs',
+        ),
+      ).toHaveLength(1)
+      expect(
+        state.requests.filter(
           (request) =>
-            request.method === 'POST' &&
-            (request.path === '/api/rooms/team-room/jobs' || request.path.endsWith('/share')),
-        )
-        .map((request) => request.headers['idempotency-key'])
-      expect(new Set(keys).size).toBe(1)
+            request.method === 'POST' && request.path === '/api/messages/import%3A1/share',
+        ),
+      ).toHaveLength(1)
+      expect(
+        state.requests.filter(
+          (request) =>
+            request.method === 'POST' && request.path === '/api/messages/import%3A2/share',
+        ),
+      ).toHaveLength(2)
     })
   })
 }
