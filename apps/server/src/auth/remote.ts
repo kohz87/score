@@ -18,6 +18,8 @@ const publicRoutes = new Set([
 // Share links (PLAN 5.26): the one public, token-guarded page and its images. GET only; the route answers every
 // failure with the same static page.
 const SHARE_PATH = /^\/s\/[A-Za-z0-9_-]{1,64}(?:\/media\/\d{1,4})?$/
+/** PLAN 11.1d: an outside app's webhook call; its Standard Webhooks signature is what authenticates it. */
+export const HOOK_PATH = /^\/hooks\/trg_[a-f0-9]{24}$/
 
 export function registerRemoteGuard(
   app: FastifyInstance,
@@ -43,6 +45,7 @@ export function registerRemoteGuard(
     if (
       publicRoutes.has(`${request.method} ${path}`) ||
       (request.method === 'GET' && SHARE_PATH.test(path)) ||
+      (request.method === 'POST' && HOOK_PATH.test(path)) ||
       (request.method === 'GET' && (assets.has(path) || isAppPath(path)))
     )
       return

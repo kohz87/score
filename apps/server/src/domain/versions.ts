@@ -14,6 +14,7 @@ import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
 import { IMPORTED_ID_PREFIX } from './outside-sessions.ts'
 import { defaultJobId, sessionFor } from './job-sessions.ts'
+import { jobEvent } from './exchanges/store.ts'
 import { markStaleSummaries } from './summary-stale.ts'
 import { MessageRowSchema, messageFromRow, readRoom, roomChanged, roomRow } from './rooms.ts'
 
@@ -287,6 +288,8 @@ export function createVersion(
       })),
       ...markStaleSummaries(sqlite, roomId, now),
       ...roomChanged(sqlite, roomId, now, before),
+      // The job's count, unread and summary line changed (PLAN 11.2).
+      ...jobEvent(sqlite, jobOfMessage(sqlite, anchor)),
       { type: 'room.version.created' as const, data: version },
     ],
   }

@@ -1143,7 +1143,9 @@ test('searching messages lists hits that open the room at that message', async (
   const results = await screen.findByRole('list', { name: 'Search results' })
   expect((await within(results).findByText('hello')).tagName).toBe('MARK')
   expect(
-    fetchMock.mock.calls.some(([url]) => String(url) === '/api/search/messages?q=hello&limit=20'),
+    fetchMock.mock.calls.some(
+      ([url]) => String(url) === '/api/search/messages?q=hello&limit=20&jobs=default',
+    ),
   ).toBe(true)
   fireEvent.click(within(results).getByRole('link'))
   await waitFor(() => expect(router.state.location.pathname).toBe('/chat/general'))

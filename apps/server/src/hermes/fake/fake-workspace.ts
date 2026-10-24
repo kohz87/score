@@ -15,8 +15,12 @@ export class FakeWorkspaces {
   private readonly exitHook = () => this.dispose()
 
   /** Agents with a remote terminal backend, to exercise the unavailable state. */
+  private readonly backends = new Map<string, string>()
   backendOf(agentId: string): string {
-    return agentId === 'designer' ? 'docker' : 'local'
+    return this.backends.get(agentId) ?? (agentId === 'designer' ? 'docker' : 'local')
+  }
+  setBackend(agentId: string, backend: string): void {
+    this.backends.set(agentId, backend)
   }
 
   cwdOf(agentId: string): string | null {

@@ -7,7 +7,7 @@ import { RoomDeletedSchema, SessionCompactedSchema } from './compaction.ts'
 import { GlobalFenceSchema, OrchestrationSummarySchema } from './orchestration.ts'
 import { WorkflowRunSummarySchema } from './workflows.ts'
 import { LookChangedSchema } from './themes.ts'
-import { ExchangeSchema, JobSchema } from './exchanges.ts'
+import { ExchangeSchema, JobSchema, RoomPinsChangedSchema } from './exchanges.ts'
 import {
   AgentIdSchema,
   AgentSummarySchema,
@@ -124,6 +124,10 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('room.upserted'), data: RoomSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('job.upserted'), data: JobSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('exchange.upserted'), data: ExchangeSchema }),
+  StreamEnvelopeSchema.extend({
+    type: z.literal('room.pins.changed'),
+    data: RoomPinsChangedSchema,
+  }),
   StreamEnvelopeSchema.extend({ type: z.literal('room.deleted'), data: RoomDeletedSchema }),
   StreamEnvelopeSchema.extend({
     type: z.literal('session.compacted'),

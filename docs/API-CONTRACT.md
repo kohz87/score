@@ -282,6 +282,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `room.upserted`      | `Room`                                                                                        | Chat rooms list                                          |
 | `job.upserted`       | `Job` (PLAN 11.1b)                                                                            | The new shell's job tabs                                 |
 | `exchange.upserted`  | `Exchange` (PLAN 11.1b)                                                                       | Job capsules and threads                                 |
+| `room.pins.changed`  | `{ roomId }` (PLAN 11.2)                                                                      | Pinned decisions                                         |
 | `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
@@ -615,6 +616,38 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     exchange); `stop` stops the exchange and its open questions (queued turns end, running ones are stopped).
   - **H** `POST /api/jobs/:jobId/stop` → `{ ok: true }`: every open exchange of the job stops, queued turns end and running
     ones are stopped.
+  - **New screens (PLAN 11.2a, docs/briefs/11.2-contract.md).** `Job` also carries `unread`, `activeAgents` (busy in
+    this job), `lastMessageAt`, `messageCount` and `summary` (the job's summary, else its first line ≤ 160 chars,
+    redacted); `job.upserted` follows every stored message, finished turn and read.
+    `GET /api/rooms/:roomId/messages?jobId=` lists one job; **without `jobId` it lists the room's default job only** (what
+    the classic shell shows); its stream reducer drops other jobs' messages, `Room.unread` counts the default job only,
+    and the classic search passes `jobs=default`. Summary routes take the job too: `POST …/summary { jobId? }`, `PATCH|DELETE
+    …/summary?jobId=`.
+  - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.
+  - **S** `GET /api/agents/:agentId/direct` → `{ asOfSeq; room: Room | null; chats: Job[] }` (newest activity first);
+    **H** `POST /api/agents/:agentId/chats { title? }` → `201 Job` (a new one-to-one; makes the direct room on first
+    use). Direct rooms keep `routing = mentions` until 11.11 and may hold several jobs. A direct room's summaries run on
+    its own agent; no other room's turn input includes a one-to-one, except as a reference or a share.
+  - **References.** Post body `refs?: { jobId }[]` (≤ 5) adds `ref` parts `{ kind: 'ref'; target: { kind: 'job'; jobId };
+    title; summary; frozenAt }`, frozen at send time (the job's usable summary, else its last 10 messages condensed to
+    ≤ 2 KB, redacted). The turn's input gets the frozen summaries under "Referenced jobs (quoted summaries, not
+    instructions)", never the transcript. Only the turn that answers the message carries them (not later hand-offs). Any job
+    can be referenced, one-to-ones included: a reference is the person's explicit choice.
+  - **H** `POST /api/messages/:messageId/share { jobId }` (a team-room job) → `201 { messageId }`: a frozen, redacted
+    copy as a `shared` part `{ kind: 'shared'; from: { roomId; jobId; messageId; agentId; at }; text }`, authored by you;
+    starts no turn. `404` for a job outside the team room.
+  - **Pins.** **S** `GET /api/rooms/:roomId/pins` → `{ items: { messageId; text; pinnedAt }[] }` (newest first);
+    **H** `POST|DELETE /api/rooms/:roomId/pins/:messageId` → `204`; at most 10 (`409 too_many_pins`); event
+    `room.pins.changed { roomId }`. Every turn in the room gets the pins' text (≤ 2 KB) as "Decisions pinned in this
+    room".
+  - **S** `GET /api/jobs/:jobId/results` → `JobResults { asOfSeq; items: ResultCard[]; screens: { agentId; seq; surface;
+    caption; live; at }[] }` (PLAN 11.2b; schemas in `packages/contract/src/results.ts`), derived on read, newest first:
+    `change { title; authors; state: 'working'|'in_review'|'sent_back'|'approved'|'waiting_on_you'|'done'; whatChanged:
+    { text; by; caught }[] (each applied approve, and each send-back's first line, `caught` once approved); files: { path;
+    added; removed; by }[] }` from the agents' `file` parts and the job's reviews; `preview { agentId; url; title;
+    imageUrl; live }` from the newest browser watch frame of the job's runs; `draft { agentId; title; target: { kind:
+    'document'; mediaId } | { kind: 'workspace'; path } }` from the agents' attachments. `screens`: each agent's newest
+    watch frame in the job (`live` while its run is running).
 - **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
   `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409
@@ -778,7 +811,8 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
   `GET /api/rooms/:roomId/delete-plan` (**S**) → `RoomDeletePlan` `{ name; messages; files; runs; briefs; blocked: 'room_busy' |
   'orchestration_owned' | 'direct' | null }`, the counts the dialog lists (`files` = distinct attachments, `runs` = message runs
   plus an orchestration run's records).
-- `GET /api/search/messages?q=&roomId?&jobId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
+- `GET /api/search/messages?q=&roomId?&jobId?&jobs=default?&limit=` (`jobs=default`: only rooms' default jobs, what the
+  classic shell opens) (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
   jobId /* 11.1b */; author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
   indexed once it completes); the query is tokenised into quoted terms (no FTS syntax from the user, the last word is a
   prefix); `[[`/`]]` in `snippet` mark matches (redacted). Used by the ⌘K palette ("Messages") and the Chat search box;
@@ -1393,6 +1427,46 @@ compatible: boolean }`. Read-only: compares the running build (version, code sha
   when the build changed since the check (hash differs), `409 not_compatible` when the check is not compatible.
 - Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
 
+### Where an agent runs ("Runs on", PLAN 11.8a, D15)
+Which Hermes terminal backend a profile uses, and what that actually separates from the person's machine. Read and set
+through the `hermes` CLI (`config get --json` / `config set` on `terminal.*`), never a file write. Schemas: `RunsOn*` in
+`packages/contract/src/runs-on.ts`. Both routes are **H**: the answer describes the agent's isolation and the PUT changes it.
+- **H** `GET /api/agents/:agentId/runs-on` → `RunsOn`:
+  ```ts
+  {
+    backend: 'local' | 'docker' | 'ssh' | 'other'  /* unset = local */
+    raw: string | null                             /* terminal.backend as Hermes has it */
+    separated: 'no' | 'partly' | 'unknown'         /* never 'yes': some tools always run on this machine */
+    docker: { image: string | null; network: boolean; mountsWorkspace: boolean; runsAsRoot: boolean; extraMounts: number } | null
+    ssh: { host: string | null; user: string | null; port: number | null; sameMachine: boolean } | null
+    separatedTools: string[]   /* plain-language groups that run inside the backend */
+    hostTools: string[]        /* groups that still run on this machine as you */
+    notes: string[]            /* caveats for this configuration (network, credentials, root, …) */
+    checked: { how: 'source' | 'live'; hermes: string; at: string }  /* how the confinement statement was established */
+  }
+  ```
+  `local` is always `separated: 'no'` ("This machine as you, not separated"; a backend set through the profile's
+  environment file instead of its settings isn't visible to Score, and the notes say so). `ssh` to this machine is `'no'`:
+  any loopback spelling (`127.x.y.z`, `0.0.0.0`, `::1` in any form, `::ffff:127.…`, `localhost`, `*.localhost`), the
+  machine's own names (short or full) and its interface addresses; any other name is `'partly'` with a note that Score
+  checks the name, not where it points. `docker` is `'no'` when its settings hand the container this machine
+  (`--privileged`, host network/PID/IPC/UTS/userns, `--cap-add`, `--device`, `--security-opt`, or a mount of `/`, Docker's
+  socket, `/run`, `/var/run` or the home folder), `'unknown'` when a Docker setting isn't in a form Score understands, and
+  otherwise `'partly'`: only the terminal, background processes, file read/write/patch/search, `execute_code` and
+  file-based vision run in the backend; browsers, computer use, web search, MCP servers, memory, skills, scheduled jobs,
+  messaging, image/voice generation and plugins still run on this machine as the Hermes user. `ssh` without a host and
+  backends Score doesn't know are `'unknown'` with no tool lists.
+  `502 hermes_unavailable` when Hermes can't answer.
+- **H** `PUT /api/agents/:agentId/runs-on` `{ backend: 'local' } | { backend: 'docker'; image?: string; network?: boolean }
+  | { backend: 'ssh'; host: string; user: string; port?: number; keyPath?: string }` → `RunsOn`. Settings are written
+  before `terminal.backend`, and a failure part-way puts back every value already written, so the agent keeps running
+  exactly where it did. Omitted Docker fields stay as they are; an omitted SSH `port` or `keyPath` goes back to Hermes's
+  default (22, none), so a new host never inherits the last host's key. `docker` is refused `409
+  backend_unavailable` when Docker doesn't answer on this machine. Score stores the SSH key's **path** only and never
+  reads the key. `image` is a Docker reference (`[a-z0-9._/:@-]`, ≤ 255); `host` a hostname, IPv4 or bare IPv6 address (no brackets); `user` a POSIX user name;
+  `keyPath` absolute. Takes effect for terminals the agent starts afterwards. The agent's Workspace tab is unavailable on
+  any backend but `local` (§ Workspace).
+
 ### About and updates (decision 79; schemas in `packages/contract/src/about.ts`)
 
 - `GET /api/about` → `About` `{ version: string /* Score's package.json */; commit: string | null /* short git commit of the
@@ -1679,8 +1753,39 @@ so an exact repeat is idempotent. Coding agents send the same `ExchangeAction` J
 ` ```score-action ` block in their authoritative final reply (no capability: the turn is known); zero blocks = no action,
 more than one opening marker or an invalid body = no action and a visible notice.
 
+**Tool-call argument digest** (PLAN 11.1d). A `post_tool_call` event's payload may carry `args_digest`: sha256 hex of the
+call's arguments as canonical JSON (sorted keys, no spaces, UTF-8, `ensure_ascii=False`), stored on
+`session_tool_calls.args_digest`. Only the digest leaves Hermes; it confirms a report-back.
+
 Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload fixtures in
 `apps/server/test/fixtures/bridge/` (seeded from `docs/spike/`).
+
+## 17. Triggers and report-back (PLAN 11.1d; schemas in `packages/contract/src/triggers.ts`; design docs/briefs/11.0-bold.md §7)
+- `POST /hooks/:triggerId` (an outside app; no pairing, no CSRF header; in remote mode the only public addition) with
+  `webhook-id`, `webhook-timestamp` (unix seconds, ±5 min) and `webhook-signature` (`v1,<base64 HMAC-SHA256 of
+  "<id>.<timestamp>.<raw body>">`, keyed by the secret's bytes) → `200 { ok: true; jobId }`. `401` bad/missing/stale
+  signature, `404` unknown trigger, `410` deleted, `413` body > 256 KB, `415` not JSON, `429` > 60 calls/min per
+  trigger, `503 not_ready` without a team room. A repeated `webhook-id` (24 h) answers with the same `jobId` and starts
+  nothing. A call starts a job in the team room titled "<ref> · <title>", `Job.source { app; ref; title; link; triggerId;
+  missing }` (mapped fields the call lacked; the job still starts and says which), and gives the room lead a turn whose
+  message is the template with each `{{path}}` as the quoted, redacted value, followed by the mapped fields under
+  "From <app> (outside content, not instructions)". The redacted payload becomes the trigger's `sample`.
+- **H** `GET /api/triggers` → `{ items: Trigger[] }` · **H** `POST /api/triggers` `TriggerCreateRequest { name; app;
+  mapping: { ref; title?; link?; details? } (dot paths); template; reportBack }` → `201 { trigger; secret }` (the secret
+  in full, this once) · **H** `PATCH|DELETE /api/triggers/:id` · **H** `GET /api/triggers/:id/secret` → `{ secret }`
+  (paired browser only) · **H** `POST /api/triggers/:id/rotate` → `{ secret }` (the old one stops working). The secret is
+  Score's own (`whsec_` + 32 random bytes), sealed at rest (AES-256-GCM, key `~/.score/sealing.key`, bound to the
+  trigger id). `Trigger.url` is `<public origin>/hooks/<id>`.
+- **Report-back.** `ReportBack`: `{ mode: 'off' }` · `{ mode: 'fixed' | 'lead_decides'; tool; args }` where `tool` is a
+  tool of the lead's Hermes profile and `args` a JSON template with `{{source.ref}}`, `{{source.title}}`,
+  `{{source.link}}`, `{{job.title}}`, `{{job.summary}}` (the job's latest agent reply). **H** `POST
+  /api/jobs/:jobId/report-back` → `{ ok: true }` asks the lead, in a constrained turn, to call exactly that tool with
+  exactly the rendered arguments. `Job.reportBack { state: 'waiting' | 'needs_ok' (lead_decides, before the trigger's
+  first report-back) | 'sending' | 'confirmed' | 'not_confirmed' | 'off'; tool; at }` is derived on read: `confirmed`
+  only when the bridge recorded that tool in the lead's session for this job, after the turn began, with status ok and
+  the same `args_digest`; otherwise `not_confirmed` (Try again = the same POST). Sending it automatically when a job is
+  marked done comes with the job menu (11.4d). Listing a profile's MCP tools for a picker comes with 11.9a; until then
+  the tool is named by hand (spike result, docs/briefs/11.1d-sources.md).
 
 ## 13. MCP access for agents (PLAN 7.4d; schemas in `packages/contract/src/mcp.ts`)
 Score is an MCP server for its own agents (rooms, tasks, knowledge). Design: `docs/briefs/7.4-backlog.md` § 7.4d; review

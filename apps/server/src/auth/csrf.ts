@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { serverOrigin, type Config } from '../config.ts'
 import { HttpError } from '../errors.ts'
+import { HOOK_PATH } from './remote.ts'
 
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const loopbackHosts = ['127.0.0.1', 'localhost', '[::1]']
@@ -28,6 +29,8 @@ export function registerCsrfGuard(app: FastifyInstance, config: Config): void {
     const path = (request.routeOptions.url ?? request.url).split('?', 1)[0] ?? ''
     if ((!config.remote && !path.startsWith('/api/')) || !mutatingMethods.has(request.method))
       return
+    // A webhook call comes from an outside app, not a browser; its signature authenticates it (PLAN 11.1d).
+    if (request.method === 'POST' && HOOK_PATH.test(request.url.split('?', 1)[0] ?? '')) return
 
     const origin = request.headers.origin
     if (

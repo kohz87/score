@@ -48,6 +48,8 @@ export const MessagePageSchema = z.object({
   asOfSeq: AsOfSeqSchema,
   items: z.array(MessageSchema),
   nextCursor: z.string().nullable(),
+  /** PLAN 11.2: the job these messages are from (the room's default job when none was asked for). */
+  jobId: z.string().min(1).nullish(),
 })
 
 // §6 Approvals

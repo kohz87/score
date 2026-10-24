@@ -7,6 +7,7 @@ import { App, appRoutes } from '../App.tsx'
 import { createQueryClient, StreamContext } from '../data/query-client.ts'
 import { immediateFrameScheduler, createStreamQueryRegistry } from '../data/resync.ts'
 import { createStreamClient } from '../data/stream.ts'
+import { jsonResponse, reportFixture } from '../test/reports-fixtures.ts'
 
 const agents: AgentSummary[] = [
   {
@@ -104,6 +105,12 @@ beforeEach(() => {
             thread: null,
             madeToday: [],
           }),
+        )
+      if (url.pathname === '/api/reports')
+        return Promise.resolve(
+          jsonResponse(
+            reportFixture((url.searchParams.get('range') as 'today' | '7d' | '30d' | null) ?? '7d'),
+          ),
         )
       return Promise.resolve(
         Response.json(
@@ -231,14 +238,14 @@ test('a phone keeps the wordmark and avatar, shows the tab bar and hides the sid
   expect(screen.getByText('Y')).toBeDefined()
 })
 
-test('Team is a real page, Settings is still a placeholder, and the search button and Ctrl+K open the palette', async () => {
+test('Team and Settings are real pages, and the search button and Ctrl+K open the palette', async () => {
   open('/b')
   fireEvent.click(screen.getByRole('button', { name: 'Team' }))
   expect(await screen.findByRole('heading', { name: 'Your team' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Pause everyone' })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
   expect(await screen.findByRole('heading', { name: 'Settings' })).toBeDefined()
-  expect(screen.getByText('Settings come in 11.9')).toBeDefined()
+  expect(await screen.findByRole('heading', { name: 'Usage' })).toBeDefined()
 
   fireEvent.click(screen.getByRole('button', { name: 'Search' }))
   const palette = await screen.findByRole('dialog', { name: 'Search or run a command' })
