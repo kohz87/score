@@ -269,3 +269,42 @@ def test_extend_turns_are_checked_before_sending(bridge, turns):
     out = json.loads(handlers["score_extend"]({"capability": "xtc_" + "a" * 43, "turns": turns, "note": "x"}))
     assert out["success"] is False
     assert exchange_calls(bridge) == []
+
+
+# PLAN 11.6a: line notes on review, approve and send_back.
+NOTES = [{"path": "src/feed.ts", "line": 12, "text": "Off by one"}]
+
+
+@pytest.mark.parametrize(
+    "name,args,action",
+    [
+        ("score_review", {"to": "reviewer", "note": "Look", "comments": NOTES}, {"action": "review", "to": "reviewer", "note": "Look", "comments": NOTES}),
+        ("score_approve", {"note": "Good", "comments": NOTES}, {"action": "approve", "note": "Good", "comments": NOTES}),
+        ("score_send_back", {"note": "Fix", "comments": NOTES}, {"action": "send_back", "note": "Fix", "comments": NOTES}),
+    ],
+)
+def test_review_tools_send_their_line_notes(bridge, name, args, action):
+    bridge.reply = receipt
+    run(handlers(bridge)[name], capability=CAP, **args)
+    assert exchange_calls(bridge)[-1][2]["action"] == action
+
+
+@pytest.mark.parametrize(
+    "comments,message",
+    [
+        ([{"path": "a", "line": 0, "text": "x"}], "comment line must be between 1 and 1000000"),
+        ([{"path": "a\nb", "line": 1, "text": "x"}], "comment path is not valid"),
+        ([{"path": "a", "line": 1, "text": "x" * 1001}], "comment text must be 1 to 1000 UTF-8 bytes"),
+        ([{"path": "a", "line": 1}], "each comment needs exactly path, line and text"),
+        ([{"path": "a", "line": 1, "text": "x"}] * 21, "comments: at most 20"),
+    ],
+)
+def test_bad_line_notes_are_refused_without_a_call(bridge, comments, message):
+    out = run(handlers(bridge)["score_send_back"], capability=CAP, note="Fix", comments=comments)
+    assert out["success"] is False and message in out["error"]
+    assert exchange_calls(bridge) == []
+
+
+def test_handoff_takes_no_line_notes(bridge):
+    out = run(handlers(bridge)["score_handoff"], capability=CAP, to="builder", note="Go", comments=NOTES)
+    assert out["success"] is False and "unknown argument: comments" in out["error"]

@@ -57,7 +57,14 @@ const sameDraft = (a: Draft, b: Draft) =>
 // Same normalisation as the server: one line, single spaces.
 const normalise = (glob: string) => glob.trim().replace(/\s+/g, ' ')
 
-export function RulesSection({ agents }: { agents: AgentSummary[] }) {
+export function RulesSection({
+  agents,
+  heading = 'Rules and approvals',
+}: {
+  agents: AgentSummary[]
+  /** The bold shell calls the section simply Rules; the classic page keeps its longer name. */
+  heading?: string
+}) {
   const rules = useRules()
   const { preview, save, apply } = useRulesActions()
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -145,7 +152,7 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
       data-protected="block"
     >
       <div>
-        <h2 id="settings-rules">Rules and approvals</h2>
+        <h2 id="settings-rules">{heading}</h2>
         <p className="rules-lead">
           What agents may do alone, what they ask you first, and what they never do. Agents can be
           stricter on their own page, never looser.

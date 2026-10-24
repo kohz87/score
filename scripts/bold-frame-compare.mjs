@@ -146,42 +146,6 @@ const searchFixtures = {
       { name: 'model', usage: '/model <model> <message>', description: 'Use a model.' },
     ],
   },
-  // PLAN 11.10c: the Start a job dialog reads these before it can show an honest checklist.
-  '/api/workflows': {
-    items: [],
-    inventory: {
-      definitions: 0,
-      versions: 0,
-      bytes: 0,
-      maxDefinitions: 200,
-      maxVersionsPerDefinition: 20,
-    },
-  },
-  '/api/orchestrations/preflight': {
-    ok: true,
-    checks: [
-      { id: 'listener', status: 'ok', message: 'Hermes is reachable' },
-      { id: 'lead_ready', status: 'ok', message: 'lead is free' },
-      { id: 'allowed_agents', status: 'ok', message: 'builder, reviewer and designer are free' },
-    ],
-    workers: [],
-    gatePolicyNotes: {
-      'every-step': 'Every step waits for you.',
-      'lead-asks': 'The lead asks when it is unsure.',
-      none: 'The run does not stop for approval.',
-    },
-    acknowledgementText:
-      "Score controls the work it starts (exchanges and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop.",
-    defaults: {
-      maxSteps: 12,
-      maxLeadTurns: 20,
-      maxConcurrentSteps: 2,
-      leadTurnEstimateUsd: 0.25,
-      stepEstimateUsd: 0.5,
-      codingSteps: 10,
-    },
-    reserveBytes: 0,
-  },
 }
 
 async function serve(route) {
@@ -363,6 +327,115 @@ const usageParts = [
   },
 ]
 
+// PLAN 11.9b: Rules and System use the prototype's frame but real editors, so their element names differ.
+const rulesParts = [
+  {
+    name: 'Section title',
+    selector: '.setmain > h2',
+    appSelector: '.rules-card > div:first-child h2',
+    props: ['fontSize', 'lineHeight', 'letterSpacing', 'color'],
+  },
+  {
+    name: 'Mode card',
+    selector: '.setmain > .card',
+    appSelector: '.rules-style',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Mode label',
+    selector: '.setmain > .card .lab',
+    appSelector: '.rules-style legend',
+    props: ['fontSize', 'color'],
+  },
+  {
+    name: 'Mode choices',
+    selector: '.setmain > .card .seg',
+    appSelector: '.rules-style .rules-option',
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Mode choice',
+    selector: '.seg button.on',
+    appSelector: '.rules-option:has(input:checked)',
+    props: ['fontSize', 'fontWeight', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Lists',
+    selector: '.setmain > .grid3',
+    appSelector: '.rules-columns',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'List card',
+    selector: '.grid3 > .card',
+    appSelector: '.rules-column',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'List heading',
+    selector: '.grid3 > .card h3',
+    appSelector: '.rules-column .rules-heading',
+    props: ['fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Explanatory note',
+    selector: '.setmain > .row .small.muted',
+    appSelector: '.rules-card > .rules-note',
+    props: ['fontSize', 'color'],
+  },
+]
+
+const systemParts = [
+  {
+    name: 'Section title',
+    selector: '.setmain > h2',
+    appSelector: '.bold-system > h2',
+    props: ['fontSize', 'lineHeight', 'letterSpacing', 'color'],
+  },
+  {
+    name: 'Cards',
+    selector: '.setmain > .grid2',
+    appSelector: '.system-grid',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'Card',
+    selector: '.grid2 > .card:not(.span2)',
+    appSelector: '.system-grid > .settings-card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Card heading',
+    selector: '.grid2 > .card h3',
+    appSelector: '.system-grid > .settings-card h2',
+    props: ['fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Wide card',
+    selector: '.grid2 > .card.span2',
+    appSelector: '.system-logs .settings-card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Log surface',
+    selector: '.grid2 > .card.span2 .term',
+    appSelector: '.system-logs .logs-scroll',
+    props: ['padding', 'borderRadius', 'fontFamily', 'fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Pause row',
+    selector: '.grid2 > .card.span2.row',
+    appSelector: '.system-pause',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Pause button',
+    selector: '.grid2 > .card.span2.row .btn',
+    appSelector: '.system-pause .btn',
+    props: ['minHeight', 'padding', 'borderRadius', 'fontWeight', 'color', 'backgroundColor'],
+  },
+]
+
 // PLAN 11.10f: the prototype's vSearch/searchList and the app's BoldSearch use different class names, so each side
 // gets its own selector while the part names and measured properties stay aligned.
 const searchPrototypeParts = [
@@ -437,146 +510,26 @@ const searchAppParts = [
   },
 ]
 
-// PLAN 11.10c: the prototype's mStart modal and the app's BoldStartJob. The part names line up even though the
-// selectors do not.
-const startPrototypeParts = [
-  {
-    name: 'Scrim',
-    selector: '.scrim',
-    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
-  },
-  {
-    name: 'Dialog',
-    selector: '.scrim .dialog',
-    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
-  },
-  {
-    name: 'Title',
-    selector: '.scrim .dialog h2',
-    props: ['fontSize', 'fontWeight', 'letterSpacing', 'color'],
-  },
-  {
-    name: 'Label',
-    selector: '.scrim .dialog .lab',
-    props: ['display', 'marginBottom', 'fontSize', 'fontWeight', 'color'],
-  },
-  {
-    name: 'What field',
-    selector: '#sjwhat',
-    props: ['minHeight', 'padding', 'borderRadius', 'fontSize', 'color', 'backgroundColor'],
-  },
-  {
-    name: 'Recipe chip',
-    selector: '.scrim .dialog .chip',
-    props: [
-      'minHeight',
-      'padding',
-      'borderRadius',
-      'fontSize',
-      'fontWeight',
-      'color',
-      'backgroundColor',
-    ],
-  },
-  {
-    name: 'When grid',
-    selector: '.scrim .dialog .grid3',
-    props: ['display', 'gap', 'gridTemplateColumns'],
-  },
-  {
-    name: 'When section',
-    selector: '.scrim .dialog .grid3 .inner',
-    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
-  },
-  {
-    name: 'Checklist',
-    selector: '.scrim .dialog > .inner',
-    props: ['padding', 'borderRadius', 'gap', 'flexDirection', 'backgroundColor'],
-  },
-  {
-    name: 'Actions',
-    selector: '.scrim .dialog > .row.wrap',
-    props: ['display', 'paddingTop', 'gap', 'borderTopWidth', 'borderTopColor'],
-  },
-]
-
-const startAppParts = [
-  {
-    name: 'Scrim',
-    selector: '.bold-start-scrim',
-    props: ['position', 'inset', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
-  },
-  {
-    name: 'Dialog',
-    selector: '.bold-start-dialog',
-    props: ['width', 'maxWidth', 'borderRadius', 'padding', 'gap', 'overflow', 'backgroundColor'],
-  },
-  {
-    name: 'Title',
-    selector: '.start-title',
-    props: ['fontSize', 'fontWeight', 'letterSpacing', 'color'],
-  },
-  {
-    name: 'Label',
-    selector: '.bold-start-dialog .lab',
-    props: ['display', 'marginBottom', 'fontSize', 'fontWeight', 'color'],
-  },
-  {
-    name: 'What field',
-    selector: '.start-what',
-    props: ['minHeight', 'padding', 'borderRadius', 'fontSize', 'color', 'backgroundColor'],
-  },
-  {
-    name: 'Recipe chip',
-    selector: '.bold-start-dialog .chip',
-    props: [
-      'minHeight',
-      'padding',
-      'borderRadius',
-      'fontSize',
-      'fontWeight',
-      'color',
-      'backgroundColor',
-    ],
-  },
-  {
-    name: 'When grid',
-    selector: '.bold-start-dialog .grid3',
-    props: ['display', 'gap', 'gridTemplateColumns'],
-  },
-  {
-    name: 'When section',
-    selector: '.bold-start-dialog .grid3 .inner',
-    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
-  },
-  {
-    name: 'Checklist',
-    selector: '.start-checks',
-    props: ['padding', 'borderRadius', 'gap', 'flexDirection', 'backgroundColor'],
-  },
-  {
-    name: 'Actions',
-    selector: '.start-actions',
-    props: ['display', 'paddingTop', 'gap', 'borderTopWidth', 'borderTopColor'],
-  },
-]
-
-async function measure(page, selectedParts = parts) {
-  return page.evaluate((selectedParts) => {
-    const result = {}
-    for (const part of selectedParts) {
-      const element = globalThis.document.querySelector(part.selector)
-      if (!element) {
-        result[part.name] = null
-        continue
+async function measure(page, selectedParts = parts, side = 'prototype') {
+  return page.evaluate(
+    ({ selectedParts, side }) => {
+      const result = {}
+      for (const part of selectedParts) {
+        const selector = side === 'app' ? (part.appSelector ?? part.selector) : part.selector
+        const element = globalThis.document.querySelector(selector)
+        if (!element) {
+          result[part.name] = null
+          continue
+        }
+        const style = globalThis.getComputedStyle(element)
+        result[part.name] = Object.fromEntries(
+          [...part.props, 'display'].map((property) => [property, style[property]]),
+        )
       }
-      const style = globalThis.getComputedStyle(element)
-      result[part.name] = Object.fromEntries(
-        [...part.props, 'display'].map((property) => [property, style[property]]),
-      )
-    }
-    return result
-  }, selectedParts)
+      return result
+    },
+    { selectedParts, side },
+  )
 }
 
 function cell(metrics, part) {
@@ -595,6 +548,15 @@ function difference(prototypeMetrics, appMetrics, part) {
       : 'missing on one side'
   const differing = part.props.filter((property) => left[property] !== right[property])
   return differing.length === 0 ? 'same' : differing.join(', ')
+}
+
+async function openPrototypeSettings(page, section) {
+  await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+  await page.locator('.top .word').waitFor()
+  await page.locator('[data-a="go"][data-v="settings"]:visible').click()
+  await page.locator(`[data-a="setSec"][data-v="${section}"]`).click()
+  await page.locator('.setgrid .setnav').waitFor()
+  await page.evaluate(() => globalThis.document.fonts.ready)
 }
 
 let browser
@@ -674,27 +636,49 @@ try {
     })
     const appUsageMetrics = await measure(page, usageParts)
 
-    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
-    await page.locator('.top .word').waitFor()
-    await page.locator('[data-a="startJob"]:visible').first().click()
-    const prototypeStart = page.locator('.scrim .dialog[aria-label="Start a job"]')
-    await prototypeStart.waitFor()
-    await page.evaluate(() => globalThis.document.fonts.ready)
-    await page.screenshot({ path: join(output, `bold-prototype-start-${size}.png`) })
-    const prototypeStartMetrics = await measure(page, startPrototypeParts)
+    await openPrototypeSettings(page, 'rules')
+    await page.screenshot({
+      path: join(output, `bold-prototype-rules-${size}.png`),
+      fullPage: true,
+    })
+    const prototypeRulesMetrics = await measure(page, rulesParts)
 
-    await page.goto(`${baseURL}/b?start=job`)
-    await page.locator('.bold-start-dialog').waitFor({ timeout: 20_000 })
+    await page.goto(`${baseURL}/b/settings/rules`)
+    await page.locator('[data-ui="bold"] .setgrid .setnav').waitFor({ timeout: 20_000 })
+    await page.getByRole('region', { name: 'Rules' }).waitFor({ timeout: 20_000 })
     await page.evaluate(() => globalThis.document.fonts.ready)
-    await page.screenshot({ path: join(output, `bold-app-start-${size}.png`) })
-    const appStartMetrics = await measure(page, startAppParts)
+    await page.screenshot({
+      path: join(output, `bold-app-rules-${size}.png`),
+      fullPage: true,
+    })
+    const appRulesMetrics = await measure(page, rulesParts, 'app')
+
+    await openPrototypeSettings(page, 'system')
+    await page.screenshot({
+      path: join(output, `bold-prototype-system-${size}.png`),
+      fullPage: true,
+    })
+    const prototypeSystemMetrics = await measure(page, systemParts)
+
+    await page.goto(`${baseURL}/b/settings/system`)
+    await page.locator('[data-ui="bold"] .setgrid .setnav').waitFor({ timeout: 20_000 })
+    await page.getByRole('heading', { name: 'System', exact: true }).waitFor({ timeout: 20_000 })
+    await page.getByText('Score v1.14.0').waitFor({ timeout: 20_000 })
+    await page.getByRole('heading', { name: 'Logs', exact: true }).waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({
+      path: join(output, `bold-app-system-${size}.png`),
+      fullPage: true,
+    })
+    const appSystemMetrics = await measure(page, systemParts, 'app')
 
     results[size] = {
       prototype: prototypeMetrics,
       app: appMetrics,
       search: { prototype: prototypeSearchMetrics, app: appSearchMetrics },
       usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
-      start: { prototype: prototypeStartMetrics, app: appStartMetrics },
+      rules: { prototype: prototypeRulesMetrics, app: appRulesMetrics },
+      system: { prototype: prototypeSystemMetrics, app: appSystemMetrics },
     }
   }
 
@@ -727,6 +711,26 @@ try {
   }
   writeFileSync(join(output, 'bold-usage-metrics.md'), `${usageLines.join('\n')}\n`)
 
+  for (const [name, title, sectionParts] of [
+    ['rules', 'Bold rules', rulesParts],
+    ['system', 'Bold system', systemParts],
+  ]) {
+    const sectionLines = [`# ${title}: prototype vs app`, '']
+    for (const size of Object.keys(results)) {
+      sectionLines.push(
+        `## ${size}px`,
+        '',
+        '| Part | Prototype | App | Difference |',
+        '|---|---|---|---|',
+      )
+      for (const part of sectionParts)
+        sectionLines.push(
+          `| ${part.name} | ${cell(results[size][name].prototype, part)} | ${cell(results[size][name].app, part)} | ${difference(results[size][name].prototype, results[size][name].app, part)} |`,
+        )
+      sectionLines.push('')
+    }
+    writeFileSync(join(output, `bold-${name}-metrics.md`), `${sectionLines.join('\n')}\n`)
+  }
   const searchLines = ['# Bold search: prototype vs app', '']
   for (const size of Object.keys(results)) {
     searchLines.push(
@@ -742,22 +746,6 @@ try {
     searchLines.push('')
   }
   writeFileSync(join(output, 'bold-search-metrics.md'), `${searchLines.join('\n')}\n`)
-
-  const startLines = ['# Bold start a job: prototype vs app', '']
-  for (const size of Object.keys(results)) {
-    startLines.push(
-      `## ${size}px`,
-      '',
-      '| Part | Prototype | App | Difference |',
-      '|---|---|---|---|',
-    )
-    for (const part of startPrototypeParts)
-      startLines.push(
-        `| ${part.name} | ${cell(results[size].start.prototype, part)} | ${cell(results[size].start.app, part)} | ${difference(results[size].start.prototype, results[size].start.app, part)} |`,
-      )
-    startLines.push('')
-  }
-  writeFileSync(join(output, 'bold-start-metrics.md'), `${startLines.join('\n')}\n`)
   console.log(`Wrote screenshots and measurements to ${output}`)
 } finally {
   await browser?.close()

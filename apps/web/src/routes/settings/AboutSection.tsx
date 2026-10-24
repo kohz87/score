@@ -116,7 +116,7 @@ const rows = (about: About): [string, string][] => [
 ]
 
 /** Settings › About: what is running, and an update check that only happens when you press the button. */
-export function AboutSection() {
+export function AboutSection({ heading = 'About Score' }: { heading?: string } = {}) {
   const about = useQuery({
     queryKey: ['about'],
     queryFn: async ({ signal }) => AboutSchema.parse(await apiFetch('about', { signal })),
@@ -130,7 +130,7 @@ export function AboutSection() {
   const data = about.data
   return (
     <section id="about" className="settings-card" aria-labelledby="settings-about">
-      <h2 id="settings-about">About Score</h2>
+      <h2 id="settings-about">{heading}</h2>
       {data ? (
         <>
           <p className="about-version">Score v{data.version}</p>
