@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Message, MessagePart } from '@score/contract'
+import { MemoryRouter } from 'react-router'
 import { MessageItem } from './MessageItem.tsx'
 
 const tool = (name: string, status: 'running' | 'ok' | 'error' = 'ok'): MessagePart => ({
@@ -154,4 +155,34 @@ test('a reply being written says what the agent is doing right now, and nothing 
     <MessageItem message={make([{ kind: 'text', text: 'Found two entries' }])} agents={[]} />,
   )
   expect(screen.queryByText('Writing the reply…')).toBeNull()
+})
+
+test('workspace links follow the caller’s linkFor (the bold room’s Workbench) and stay classic without it', () => {
+  const agents = [
+    {
+      id: 'builder',
+      name: 'builder',
+      style: { color: '#19C39A', shape: 'triangle' },
+    } as unknown as Parameters<typeof MessageItem>[0]['agents'][number],
+  ]
+  const message = make([{ kind: 'text', text: 'See [the feed](workspace://api/events.py).' }])
+  const { unmount } = render(
+    <MemoryRouter>
+      <MessageItem
+        message={message}
+        agents={agents}
+        workspaceLinkFor={(target) => `/b?job=j1&work=code&file=${target.path}`}
+      />
+    </MemoryRouter>,
+  )
+  expect(screen.getByRole('link', { name: 'the feed' }).getAttribute('href')).toBe(
+    '/b?job=j1&work=code&file=api/events.py',
+  )
+  unmount()
+  render(
+    <MemoryRouter>
+      <MessageItem message={message} agents={agents} />
+    </MemoryRouter>,
+  )
+  expect(screen.getByRole('link', { name: 'the feed' }).getAttribute('href')).not.toContain('/b?')
 })
