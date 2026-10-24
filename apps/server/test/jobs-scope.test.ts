@@ -391,7 +391,13 @@ test('approval cards and failure notices land in their turn’s job', () => {
 
   addTurn('j-parent', 'builder', 'failure-run', 'pending')
   const failure = failMessageRun(db.sqlite, 'turn-failure-run', 'boom', at(4), 'It failed.')
-  expect(failure[0]).toMatchObject({
+  // The default room routes with exchanges now (11.11): settling the failed turn and storing the message each emit job.upserted.
+  expect(failure.map((event) => event.type)).toEqual([
+    'job.upserted',
+    'message.created',
+    'job.upserted',
+  ])
+  expect(failure[1]).toMatchObject({
     type: 'message.created',
     data: { id: 'reply:failure-run', jobId: SECOND_JOB },
   })

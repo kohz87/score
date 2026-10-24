@@ -257,6 +257,8 @@ export function insertRoom(
   room: Pick<Room, 'id' | 'name' | 'kind' | 'leadAgentId' | 'members'> & {
     /** Stored as given (agentId, sessionId, source, label); `continued` is derived from room_sessions. */
     importedFrom?: { agentId: string; sessionId: string; source: string; label: string }
+    /** Rooms people talk in route with exchanges (11.11); an orchestration or workflow run's room keeps mentions. */
+    routing?: Room['routing']
   },
   now: string,
 ): void {
@@ -264,8 +266,8 @@ export function insertRoom(
     throw new HttpError(409, 'conflict', 'A room with that name already exists.')
   sqlite
     .prepare(
-      `INSERT INTO rooms (id, name, kind, lead_agent_id, members, created_at, updated_at, imported_from)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO rooms (id, name, kind, lead_agent_id, members, created_at, updated_at, imported_from, routing)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       room.id,
@@ -276,6 +278,7 @@ export function insertRoom(
       now,
       now,
       room.importedFrom ? JSON.stringify(room.importedFrom) : null,
+      room.routing ?? 'exchanges',
     )
 }
 

@@ -43,6 +43,7 @@ import {
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 import { FakeSystemd } from '../helpers/fake-systemd.ts'
 import { FAKE_CLI } from './coding-fixtures.ts'
+import { onMentions } from '../helpers/on-mentions.ts'
 
 // 7.7a part 3: the real CodingRuntime on the unit backend, with the real supervisor and Score socket and a fake
 // systemd boundary (test/helpers/fake-systemd.ts). Nothing here starts a real unit.
@@ -228,6 +229,7 @@ async function makeRoom(): Promise<string> {
     leadAgentId: 'lead',
   })
   roomId = RoomSchema.parse(created.json()).id
+  onMentions(db, roomId)
   return roomId
 }
 async function say(text: string) {

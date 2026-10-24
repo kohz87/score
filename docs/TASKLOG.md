@@ -1028,3 +1028,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   (opening a thread drops `?with=`), the capsule keeps Take it aside beside 11.4c's thread link; a CSS rule cut by the
   merge (caught only by `pnpm build`, so the lead's merge gate now includes the build). Full check green (coder);
   one-to-ones + thread + room + search + shell e2e 87/87. Not deployed.
+- **11.11a Rooms route with exchanges (lead + Sonnet coder for tests, 2026-10-24).** Decision 118, first part: migration
+  0086 moves every `room`/`direct` room on mentions to `routing = exchanges`, except orchestration and workflow run rooms
+  (`orchestrations.room_id`, routed by their executor); `insertRoom` defaults to exchanges, the executor and workflow
+  runs pass `mentions`. Contract §Jobs and exchanges updated (D3.2 mentions only for run rooms; direct rooms on
+  exchanges). Consequences: agents in older rooms and one-to-ones hand off with exchange actions (a prose @name gets the
+  `mention_not_handoff` notice); their jobs emit `job.upserted`. Tests: D3.2 hand-off tests pin their rooms to mentions
+  (`test/helpers/on-mentions.ts`); event-count tests gain exactly the new `job.upserted` events (verified each);
+  new `rooms-exchanges-migration.test.ts`. **Rehearsal on a copy of the live DB** (backup API; live at 0079/v1.14.0, so
+  0080–0086 together): rooms 17 → 17 (9 direct + 5 rooms → exchanges, 3 orchestration rooms stay mentions), default
+  jobs 17, messages 108 → 108 (none without a job, none in another room's job), room_reads 14 → job_reads 14, schema 86.
+  Full check green; chat/room/one-to-one/thread/search e2e 107/107, coding agents/orchestrations/workflows/stage 44/44.
+  11.11b (removals and default shell) follows after 11.9d. Not deployed.

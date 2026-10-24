@@ -26,6 +26,7 @@ import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { scenarioDuration } from '../../src/hermes/fake/scenario.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
+import { onMentions } from '../helpers/on-mentions.ts'
 
 let dir: string
 let db: ScoreDb
@@ -79,6 +80,7 @@ beforeEach(async () => {
   roomId = RoomSchema.parse(
     (await post('/api/rooms', { name: 'briefs', leadAgentId: 'lead' })).json(),
   ).id
+  onMentions(db, roomId)
 })
 afterEach(async () => {
   await port.stop()

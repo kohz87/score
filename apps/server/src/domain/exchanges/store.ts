@@ -259,8 +259,8 @@ export function listExchanges(sqlite: DatabaseSync, jobId: string): Exchange[] {
 }
 
 /**
- * `job.upserted` for a job the new shell shows. An older room on @mentions has its one default job and the classic shell
- * reads it as a room, so its jobs send nothing (the classic stream stays as it was).
+ * `job.upserted` for a job the new shell shows. A room still on @mentions (an orchestration or workflow run's, since
+ * 11.11) has its one default job and the classic shell reads it as a room, so its jobs send nothing.
  */
 export const jobEvent = (sqlite: DatabaseSync, jobId: string): DomainEventDraft[] => {
   const row = jobRow(sqlite, jobId)
@@ -371,8 +371,8 @@ export function createJob(
   const room = sqlite.prepare('SELECT routing, role FROM rooms WHERE id = ?').get(roomId) as
     { routing: string; role: string } | undefined
   if (!room) throw new HttpError(404, 'not_found', 'Couldn’t find that room.')
-  // A room on @mentions shows one thread in the classic shell; its jobs come when it moves to exchanges (11.11). A
-  // direct room may hold one-to-ones (11.2): the classic shell shows only its default job, and it has one agent.
+  // A room on @mentions (an orchestration or workflow run's since 11.11) is one thread its executor routes. A direct
+  // room may hold one-to-ones (11.2): the classic shell shows only its default job, and it has one agent.
   if (room.routing !== 'exchanges' && room.role !== 'direct')
     throw new HttpError(409, 'conflict', 'Only rooms that route with exchanges hold several jobs.')
   const id = `job_${randomBytes(12).toString('hex')}`
