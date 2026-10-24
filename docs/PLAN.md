@@ -623,7 +623,7 @@ through the `hermes` CLI; verify on a test profile which tools Docker/SSH confin
 when: fixture tests for the CLI calls; nothing writes `~/.hermes` directly; the confinement result is in TASKLOG and the
 API says exactly what is confined.
 
-**11.8b Team page and agent page** · **DeepSeek** · boards 04, 06, 20; prototype Team › agent (D3, D4). Four up front
+**11.8b Team page and agent page** ✅ · **DeepSeek** · boards 04, 06, 20; prototype Team › agent (D3, D4). Four up front
 (how it works with SOUL/AGENTS editor + diff + conflict, model + fallback + engine, where it works, asks you first),
 More (memory, skills + hub search, tools + helper count, plugins and MCP, workspace, repeating jobs, todo, danger zone
 with export); coding agents on the same page (permission, quota floor, password, Codex ack). Done when: every tab of

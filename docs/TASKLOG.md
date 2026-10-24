@@ -853,3 +853,17 @@ One entry per completed task: what landed, review results, and any **rejected re
   params). Lead: merge conflict with 11.3 in `BoldShell.tsx` (kept the needs-you approvals query, dropped the classic
   palette import), Job fixtures for 11.1d's new fields, and a lint error main had from 11.2c. Full check green (web
   3,023); bold search/shell/protection e2e 29/29. Not deployed.
+- **11.8b Team page and agent page (DeepSeek + lead, 2026-10-24).** `/b/team` (agent cards with state, engine, screen
+  glimpse; Message/Open; Pause everyone) and `/b/team/:agentId` (four cards first: how it works = SOUL/AGENTS editor,
+  runs on = engine + model, where it works, asks you first; everything else under More: memory, skills, tools, plugins
+  and MCP access, workspace, repeating jobs, todo, appearance, details and danger zone — the classic tabs reused, classic
+  pages unchanged). Build + 1 fix round (DeepSeek stopped mid-round; the lead finished a test fixture). Sonnet: 3 P2,
+  6 P3 — real and fixed: "Asks you first" listed rules of any level (now only `asks`, checkboxes on the classic permission
+  mutation, protected); a fabricated "Codex acknowledged" box (removed); appearance/Watch/pop-out unreachable; Reports
+  to/Works in; Details and Todo anchors; pause keeps the classic "again" semantics; e2e asserted only anchors. Kept:
+  workspace deep link (later), the classic `/settings/rules` link (11.9), all More sections mounting at once (measure
+  later). Lead: the "Where it works" card on the 11.8a API (`BoldRunsOn.tsx`: backend, separation badge that never says
+  "separated", both tool lists, notes, how it was checked; change form for this machine/Docker/SSH; protected), merge of
+  11.3/11.9c into the shell test, phone e2e (the name opens the agent there) and a state assertion that doesn't depend on
+  the moving fake demo. Full check: web 3,013, server 4,801 + 2 PTY timing flakes under load (7/7 twice alone); team,
+  agent and coding e2e 38/38. Not deployed.
