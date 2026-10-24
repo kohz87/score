@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { redact, redactBounded } from '../../redact.ts'
+import { agentText } from '../message-text.ts'
 import { usableSummary } from '../room-summaries.ts'
 import { messageFromRow, storeMessage } from '../rooms.ts'
 import { jobRow } from './store.ts'
@@ -15,12 +16,9 @@ import { jobRow } from './store.ts'
 
 const REF_SUMMARY_BYTES = 2048
 const PINS_CONTEXT_BYTES = 2048
+const SHARED_CHARS = 16384
 
-const textOf = (parts: MessagePart[]) =>
-  parts
-    .filter((part) => part.kind === 'text')
-    .map((part) => part.text)
-    .join('\n')
+const textOf = (parts: MessagePart[]) => agentText(parts)
 
 /** A `ref` part for a job, frozen now: the job's usable summary, else its last 10 messages condensed. */
 export function freezeRef(
@@ -95,7 +93,12 @@ export function shareMessage(
     : undefined
   if (!target || !team)
     throw new HttpError(404, 'not_found', 'Couldn’t find that job in the team room.')
-  const text = redact(textOf(source.parts))
+  // Bounded like a message part; a longer reply is shared up to the limit with a note.
+  const full = redact(textOf(source.parts))
+  const text =
+    full.length > SHARED_CHARS
+      ? `${full.slice(0, SHARED_CHARS - 40)}\n… (shortened when shared)`
+      : full
   if (!text) throw new HttpError(400, 'bad_request', 'That message has no text to share.')
   const id = randomUUID()
   const drafts = storeMessage(

@@ -320,7 +320,6 @@ test('room creates, updates and message posts replay exact receipts with no repe
     'room.upserted',
     'room.upserted',
     'message.created',
-    'job.upserted',
     'brief.upserted',
   ])
   expect(

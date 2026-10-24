@@ -51,8 +51,14 @@ function pruneAssociated(tx: DatabaseSync, o: OrchRow): void {
          AND (orchestration_attempt_id IS NULL OR orchestration_attempt_id NOT IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?2)) LIMIT 1`,
     )
     const drop = (messageId: string) => {
-      if (referenced.get(messageId, o.id) === undefined)
+      if (referenced.get(messageId, o.id) === undefined) {
+        // A pinned decision goes with its message (PLAN 11.2).
+        tx.prepare('DELETE FROM room_pins WHERE room_id = ? AND message_id = ?').run(
+          o.room_id,
+          messageId,
+        )
         tx.prepare('DELETE FROM messages WHERE room_id = ? AND id = ?').run(o.room_id, messageId)
+      }
     }
     drop(attempt.message_id)
     // Every dispatch generation streamed into a reply of its own.

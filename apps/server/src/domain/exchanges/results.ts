@@ -16,7 +16,6 @@ const FrameRowSchema = z.object({
   at: z.string(),
   run_id: z.string().nullable(),
   surface: z.enum(['terminal', 'editor', 'browser']),
-  payload: z.string(),
   caption: z.string(),
 })
 
@@ -71,13 +70,15 @@ export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults
       z.object({
         args: z.string().transform((value) => ExchangeActionSchema.parse(JSON.parse(value))),
         agent_id: z.string(),
+        exchange_id: z.string().nullable(),
         created_at: z.string(),
       }),
     )
     .parse(
       sqlite
         .prepare(
-          `SELECT a.args, mr.agent_id, a.created_at FROM exchange_actions a JOIN message_runs mr ON mr.turn_id = a.turn_id
+          `SELECT a.args, mr.agent_id, mr.exchange_id, a.created_at
+           FROM exchange_actions a JOIN message_runs mr ON mr.turn_id = a.turn_id
            WHERE mr.job_id = ? AND a.state = 'applied' AND a.action IN ('approve', 'send_back')
            ORDER BY a.created_at, a.turn_id`,
         )
@@ -89,21 +90,22 @@ export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults
     )
     .get(jobId) as { state: string; outcome: string | null } | undefined
   if (files.size || outcomes.length) {
-    const approved = review?.outcome === 'approved'
     items.push({
       kind: 'change',
       id: `change:${jobId}`,
       title: job.is_default ? room.name : job.title,
       authors: [...new Set([...files.values()].flatMap((file) => [...file.by]))].sort(),
       state: changeState(review, job.state),
-      // A send-back that a later approval settled is something the reviewer caught.
-      whatChanged: outcomes.map(({ args, agent_id }) =>
+      // A send-back that an approval of the same review settled is something the reviewer caught.
+      whatChanged: outcomes.map(({ args, agent_id, exchange_id }) =>
         args.action === 'approve'
           ? { text: `Approved by ${agent_id}`, by: agent_id, caught: false }
           : {
               text: firstLine(args.action === 'send_back' ? args.note : ''),
               by: agent_id,
-              caught: approved,
+              caught: outcomes.some(
+                (other) => other.args.action === 'approve' && other.exchange_id === exchange_id,
+              ),
             },
       ),
       files: [...files.entries()]
@@ -122,7 +124,7 @@ export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults
   const frames = z.array(FrameRowSchema).parse(
     sqlite
       .prepare(
-        `SELECT f.agent_id, f.seq, f.at, f.run_id, f.surface, f.payload, f.caption FROM watch_frames f
+        `SELECT f.agent_id, f.seq, f.at, f.run_id, f.surface, f.caption FROM watch_frames f
            WHERE f.run_id IN (SELECT run_id FROM message_runs WHERE job_id = ? AND run_id IS NOT NULL)
            ORDER BY f.at DESC, f.seq DESC`,
       )
@@ -137,27 +139,35 @@ export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults
         .all(jobId) as { run_id: string }[]
     ).map((row) => row.run_id),
   )
-  const browser = frames.find((frame) => frame.surface === 'browser')
-  if (browser) {
-    const page = z
-      .object({
-        url: z.string(),
-        title: z.string().nullable().optional(),
-        imageUrl: z.string().nullable().optional(),
-      })
-      .loose()
-      .safeParse(JSON.parse(browser.payload))
-    if (page.success)
-      items.push({
-        kind: 'preview',
-        id: `preview:${browser.agent_id}:${browser.seq}`,
-        agentId: browser.agent_id,
-        url: page.data.url,
-        title: page.data.title ?? null,
-        imageUrl: page.data.imageUrl ?? null,
-        live: browser.run_id !== null && running.has(browser.run_id),
-        at: browser.at,
-      })
+  // The newest browser frame whose page reads cleanly; payloads are loaded one at a time, newest first.
+  const PageSchema = z
+    .object({
+      url: z.string(),
+      title: z.string().nullable().optional(),
+      imageUrl: z.string().nullable().optional(),
+    })
+    .loose()
+  for (const frame of frames.filter((item) => item.surface === 'browser')) {
+    const row = sqlite
+      .prepare('SELECT payload FROM watch_frames WHERE agent_id = ? AND seq = ?')
+      .get(frame.agent_id, frame.seq) as { payload: string } | undefined
+    let page: z.infer<typeof PageSchema>
+    try {
+      page = PageSchema.parse(JSON.parse(row?.payload ?? 'null'))
+    } catch {
+      continue
+    }
+    items.push({
+      kind: 'preview',
+      id: `preview:${frame.agent_id}:${frame.seq}`,
+      agentId: frame.agent_id,
+      url: page.url,
+      title: page.title ?? null,
+      imageUrl: page.imageUrl ?? null,
+      live: frame.run_id !== null && running.has(frame.run_id),
+      at: frame.at,
+    })
+    break
   }
 
   // Drafts: documents and workspace files agents attached in the job.

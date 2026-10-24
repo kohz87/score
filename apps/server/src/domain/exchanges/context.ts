@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { XTC_CAPABILITY_PLACEHOLDER } from '@score/contract'
 import { redact, redactBounded } from '../../redact.ts'
 import type { MessageRun } from '../message-runs.ts'
+import { agentText } from '../message-text.ts'
 import { messageFromRow } from '../rooms.ts'
 import { summaryContext } from '../room-summaries.ts'
 import { crossContext } from './sharing.ts'
@@ -17,11 +18,7 @@ const FRESH_TAIL = 10
 
 const speaker = (message: ReturnType<typeof messageFromRow>) =>
   message.author.kind === 'you' ? 'you' : message.author.agentId
-const textOf = (message: ReturnType<typeof messageFromRow>) =>
-  message.parts
-    .filter((part) => part.kind === 'text')
-    .map((part) => redact(part.text))
-    .join('\n')
+const textOf = (message: ReturnType<typeof messageFromRow>) => redact(agentText(message.parts))
 
 function role(sqlite: DatabaseSync, turn: MessageRun): string {
   const exchange = turn.exchange_id ? exchangeRow(sqlite, turn.exchange_id) : null

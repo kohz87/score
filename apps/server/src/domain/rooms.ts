@@ -203,7 +203,9 @@ export function readRoom(
     sqlite
       .prepare(
         `
-    SELECT count(*) AS count FROM messages m LEFT JOIN job_reads r ON r.job_id = m.job_id
+    SELECT count(*) AS count FROM messages m
+      JOIN jobs j ON j.id = m.job_id AND j.is_default = 1
+      LEFT JOIN job_reads r ON r.job_id = m.job_id
     WHERE m.room_id = ? AND m.author_kind = 'agent' AND m.deleted_at IS NULL AND
       (r.job_id IS NULL OR (m.created_at, m.id) > (r.last_read_message_created_at, r.last_read_message_id))
   `,
@@ -524,10 +526,16 @@ export function deleteMessage(
     )
     .run(now, now, messageId)
   releaseMessageMedia(sqlite, [messageId])
+  const job = (
+    sqlite.prepare('SELECT job_id FROM messages WHERE id = ?').get(messageId) as {
+      job_id: string | null
+    }
+  ).job_id
   return [
     { type: 'message.deleted', data: { roomId, messageId } },
     ...markStaleSummaries(sqlite, roomId, now),
     ...roomChanged(sqlite, roomId, now, before),
+    ...(job ? jobEvent(sqlite, job) : []),
   ]
 }
 
@@ -582,7 +590,7 @@ export function messagePage(
           'base64url',
         )
       : null
-  return { items, nextCursor }
+  return { items, nextCursor, jobId: job || null }
 }
 
 export function markRoomRead(

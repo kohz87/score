@@ -620,7 +620,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     this job), `lastMessageAt`, `messageCount` and `summary` (the job's summary, else its first line ≤ 160 chars,
     redacted); `job.upserted` follows every stored message, finished turn and read.
     `GET /api/rooms/:roomId/messages?jobId=` lists one job; **without `jobId` it lists the room's default job only** (what
-    the classic shell shows). Summary routes take the job too: `POST …/summary { jobId? }`, `PATCH|DELETE
+    the classic shell shows); its stream reducer drops other jobs' messages, `Room.unread` counts the default job only,
+    and the classic search passes `jobs=default`. Summary routes take the job too: `POST …/summary { jobId? }`, `PATCH|DELETE
     …/summary?jobId=`.
   - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.
   - **S** `GET /api/agents/:agentId/direct` → `{ asOfSeq; room: Room | null; chats: Job[] }` (newest activity first);
@@ -630,7 +631,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   - **References.** Post body `refs?: { jobId }[]` (≤ 5) adds `ref` parts `{ kind: 'ref'; target: { kind: 'job'; jobId };
     title; summary; frozenAt }`, frozen at send time (the job's usable summary, else its last 10 messages condensed to
     ≤ 2 KB, redacted). The turn's input gets the frozen summaries under "Referenced jobs (quoted summaries, not
-    instructions)", never the transcript.
+    instructions)", never the transcript. Only the turn that answers the message carries them (not later hand-offs). Any job
+    can be referenced, one-to-ones included: a reference is the person's explicit choice.
   - **H** `POST /api/messages/:messageId/share { jobId }` (a team-room job) → `201 { messageId }`: a frozen, redacted
     copy as a `shared` part `{ kind: 'shared'; from: { roomId; jobId; messageId; agentId; at }; text }`, authored by you;
     starts no turn. `404` for a job outside the team room.
@@ -809,7 +811,8 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
   `GET /api/rooms/:roomId/delete-plan` (**S**) → `RoomDeletePlan` `{ name; messages; files; runs; briefs; blocked: 'room_busy' |
   'orchestration_owned' | 'direct' | null }`, the counts the dialog lists (`files` = distinct attachments, `runs` = message runs
   plus an orchestration run's records).
-- `GET /api/search/messages?q=&roomId?&jobId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
+- `GET /api/search/messages?q=&roomId?&jobId?&jobs=default?&limit=` (`jobs=default`: only rooms' default jobs, what the
+  classic shell opens) (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
   jobId /* 11.1b */; author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
   indexed once it completes); the query is tokenised into quoted terms (no FTS syntax from the user, the last word is a
   prefix); `[[`/`]]` in `snippet` mark matches (redacted). Used by the ⌘K palette ("Messages") and the Chat search box;

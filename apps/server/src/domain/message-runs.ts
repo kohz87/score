@@ -814,6 +814,7 @@ function finishSummaryRun(
     ...drafts,
     ...updateMessage(sqlite, mapping.room_id, message.id, null, now),
     ...markStaleSummaries(sqlite, mapping.room_id, now),
+    ...(mapping.job_id ? jobEvent(sqlite, mapping.job_id) : []),
   ]
 }
 
@@ -845,10 +846,7 @@ export function roomRunInput(
     messages
       .map(
         (message) =>
-          `${message.author.kind === 'you' ? 'you' : message.author.agentId}: ${message.parts
-            .filter((part) => part.kind === 'text')
-            .map((part) => redact(part.text))
-            .join('\n')}`,
+          `${message.author.kind === 'you' ? 'you' : message.author.agentId}: ${redact(agentText(message.parts))}`,
       )
       .join('\n'),
     8192,
@@ -903,4 +901,5 @@ import { agentAdmits, assertAgentAdmits } from './agent-lifecycle.ts'
 import { defaultJobId, ensureJobSession } from './job-sessions.ts'
 import { exchangeEvent, jobEvent } from './exchanges/store.ts'
 import { crossContext } from './exchanges/sharing.ts'
+import { agentText } from './message-text.ts'
 import { settleExchangeTurn } from './exchanges/apply.ts'

@@ -103,8 +103,9 @@ function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
 const SUMMARY_LINE = 160
 /** The job's summary (its newest visible one), else the first line of its first message, redacted and bounded. */
 function jobSummaryLine(sqlite: DatabaseSync, row: JobRow): string | null {
-  const isSummary =
-    "EXISTS (SELECT 1 FROM json_each(messages.parts) WHERE json_extract(value, '$.kind') = 'summary')"
+  // A cheap text match first, so a job without summaries never has every message's parts parsed.
+  const isSummary = `parts LIKE '%"kind":"summary"%' AND EXISTS (SELECT 1 FROM json_each(messages.parts)
+       WHERE json_extract(value, '$.kind') = 'summary' AND COALESCE(json_extract(value, '$.stale'), 0) = 0)`
   const visible = 'job_id = ? AND deleted_at IS NULL AND streaming = 0'
   const found = (sqlite
     .prepare(
@@ -244,9 +245,17 @@ export function listExchanges(sqlite: DatabaseSync, jobId: string): Exchange[] {
     .map((row) => exchangeFromRow(sqlite, row))
 }
 
+/**
+ * `job.upserted` for a job the new shell shows. An older room on @mentions has its one default job and the classic shell
+ * reads it as a room, so its jobs send nothing (the classic stream stays as it was).
+ */
 export const jobEvent = (sqlite: DatabaseSync, jobId: string): DomainEventDraft[] => {
   const row = jobRow(sqlite, jobId)
-  return row ? [{ type: 'job.upserted', data: jobFromRow(sqlite, row) }] : []
+  if (!row) return []
+  const room = sqlite.prepare('SELECT role, routing FROM rooms WHERE id = ?').get(row.room_id) as
+    { role: string; routing: string } | undefined
+  if (room?.role === 'room' && room.routing === 'mentions') return []
+  return [{ type: 'job.upserted', data: jobFromRow(sqlite, row) }]
 }
 export const exchangeEvent = (sqlite: DatabaseSync, id: string): DomainEventDraft[] => {
   const row = exchangeRow(sqlite, id)

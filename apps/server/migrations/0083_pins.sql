@@ -5,3 +5,6 @@ CREATE TABLE room_pins (
   pinned_at TEXT NOT NULL,
   PRIMARY KEY (room_id, message_id)
 ) STRICT;
+
+-- A job's results read its runs' watch frames (PLAN 11.2b).
+CREATE INDEX watch_frames_run ON watch_frames (run_id) WHERE run_id IS NOT NULL;

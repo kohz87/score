@@ -241,3 +241,82 @@ test('pins: at most ten per room, listed newest first, and every turn in the roo
   expect((await del(`/api/rooms/${roomId}/pins/${first.id}`)).statusCode).toBe(204)
   expect((await get(`/api/rooms/${roomId}/pins`)).json().items).toHaveLength(9)
 })
+
+// Review findings (Sonnet, 11.2).
+
+test('a shared copy reaches the next turn in its job, quoted and labelled', async () => {
+  const chat = JobSchema.parse((await post('/api/agents/builder/chats', {})).json())
+  await post(`/api/rooms/${chat.roomId}/messages`, { text: 'Page size?', jobId: chat.id })
+  await advance(60_000)
+  const reply = db.sqlite
+    .prepare("SELECT id FROM messages WHERE job_id = ? AND author_kind = 'agent'")
+    .get(chat.id) as { id: string }
+  const team = await teamRoom()
+  const job = team.jobs[0]!
+  expect((await post(`/api/messages/${reply.id}/share`, { jobId: job.id })).statusCode).toBe(201)
+  const copy = (await get(`/api/rooms/${team.room.id}/messages?jobId=${job.id}`)).json().items[0]
+  expect(copy.parts[0].from.agentId).toBe('builder')
+  await post(`/api/rooms/${team.room.id}/messages`, { text: '@lead What did builder say?' })
+  await advance(60_000)
+  expect(inputOf('lead')).toContain(
+    '(shared from a one-to-one with builder, quoted)\n> Working on it.',
+  )
+})
+
+test('no turn of any agent in the team room sees a one-to-one, summaries included', async () => {
+  const chat = JobSchema.parse((await post('/api/agents/builder/chats', {})).json())
+  await post(`/api/rooms/${chat.roomId}/messages`, {
+    text: 'PRIVATE-NOTE for builder',
+    jobId: chat.id,
+  })
+  await advance(60_000)
+  const team = await teamRoom()
+  for (const agent of ['lead', 'reviewer', 'designer'])
+    await post(`/api/rooms/${team.room.id}/messages`, { text: `@${agent} Status?` })
+  await advance(60_000)
+  db.sqlite
+    .prepare(
+      'UPDATE rooms SET auto_summary = \'{"enabled":true,"thresholdTokens":1}\' WHERE id = ?',
+    )
+    .run(team.room.id)
+  await post(`/api/rooms/${team.room.id}/summary`, {})
+  await advance(60_000)
+  const inputs = db.sqlite
+    .prepare('SELECT admission_input FROM message_runs WHERE room_id = ?')
+    .all(team.room.id) as { admission_input: string | null }[]
+  expect(inputs.length).toBeGreaterThan(3)
+  for (const { admission_input } of inputs)
+    expect(admission_input ?? '').not.toContain('PRIVATE-NOTE')
+  expect(
+    wire
+      .filter((item) => item.agentId !== 'builder')
+      .map((item) => item.input)
+      .join('\n'),
+  ).not.toContain('PRIVATE-NOTE')
+})
+
+test('pins stay in their room, and a deleted pinned message leaves the list', async () => {
+  const pinned = (await send({ text: 'Decision: ship Friday.', to: ['builder'] })).json().message
+  await advance(60_000)
+  await post(`/api/rooms/${roomId}/pins/${pinned.id}`, {})
+  const other = RoomSchema.parse(
+    (await post('/api/rooms', { name: 'other', leadAgentId: 'lead' })).json(),
+  )
+  expect((await get(`/api/rooms/${other.id}/pins`)).json().items).toEqual([])
+  // Pinning a message of another room through this room is refused.
+  expect((await post(`/api/rooms/${other.id}/pins/${pinned.id}`, {})).statusCode).toBe(404)
+  await app.inject({ method: 'DELETE', url: `/api/rooms/${roomId}/messages/${pinned.id}`, headers })
+  expect((await get(`/api/rooms/${roomId}/pins`)).json().items).toEqual([])
+})
+
+test('the classic room badge counts the default job only; another job’s unread lives on the job', async () => {
+  const chat = JobSchema.parse((await post('/api/agents/builder/chats', {})).json())
+  await post(`/api/rooms/${chat.roomId}/messages`, { text: 'Hi', jobId: chat.id })
+  await advance(60_000)
+  const room = (await get(`/api/rooms/${chat.roomId}`)).json().room
+  expect(room.unread).toBe(0)
+  const listed = (await get('/api/agents/builder/direct'))
+    .json()
+    .chats.find((job: Job) => job.id === chat.id)
+  expect(listed.unread).toBe(1)
+})
