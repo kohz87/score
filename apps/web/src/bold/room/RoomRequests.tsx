@@ -1,8 +1,17 @@
-import type { AgentSummary, Exchange, ExchangeOption, Job } from '@score/contract'
+import type {
+  AgentSummary,
+  Approval,
+  Exchange,
+  ExchangeOption,
+  Job,
+  Message,
+} from '@score/contract'
 import { useMemo, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
+import { approvalOutcome, useApprovalDecision } from '../../routes/chat/ApprovalCard.tsx'
+import { approvalsQuery } from '../../routes/chat/queries.ts'
 import { agentNameColor } from '../bold-agents.ts'
 import {
   exchangePauseAsk,
@@ -10,8 +19,6 @@ import {
   exchangeTurns,
   needsYou,
   optionLabel,
-  type JobFilter,
-  jobMatchesFilter,
 } from './room-model.ts'
 import { jobExchangesQuery } from './room-queries.ts'
 
@@ -77,8 +84,7 @@ function ExchangeRequestCard({
       return setError('Write a short note for the author.')
     if (option === 'step_in' && !('text' in body && body.text))
       return setError('Write what you want to happen.')
-    if (option === 'reassign' && !('to' in body && body.to))
-      return setError('Choose an agent.')
+    if (option === 'reassign' && !('to' in body && body.to)) return setError('Choose an agent.')
     const usd = Number(form.usd)
     if (option === 'more_spend' && (!Number.isFinite(usd) || usd <= 0))
       return setError('Enter an amount above zero.')
@@ -222,13 +228,7 @@ function ExchangeRequestCard({
   )
 }
 
-function JobRequests({
-  job,
-  agents,
-}: {
-  job: Job
-  agents: AgentSummary[]
-}) {
+function JobRequests({ job, agents }: { job: Job; agents: AgentSummary[] }) {
   const definition = useMemo(() => jobExchangesQuery(job.id), [job.id])
   const exchanges = useStreamQuery(definition).data ?? []
   return (
@@ -240,26 +240,143 @@ function JobRequests({
   )
 }
 
-/** The "Needs you" pins: each job's paused exchanges, shown above the stream and never scrolled away. */
+function ApprovalRequestCard({
+  approval,
+  job,
+  agents,
+}: {
+  approval: Approval
+  job: Job
+  agents: AgentSummary[]
+}) {
+  const { posted, busy, error, decide } = useApprovalDecision(approval.id)
+  const current = posted && approval.delivery === 'none' ? posted : approval
+  const agent = agents.find((item) => item.id === current.agentId)
+  const outcome = approvalOutcome(current)
+  const open = current.actionable && outcome === null && !busy
+  const choices = current.choices
+  return (
+    <article
+      className="bold-request bold-approval"
+      data-protected="flex"
+      aria-label={`Needs you: ${current.title}`}
+    >
+      <div className="bold-request-head">
+        {agent && <AgentGlyph agent={agent} size="xs" decorative />}
+        <b style={agent ? { color: agentNameColor(agent) } : undefined}>{current.agentId}</b>
+        <span>· {current.title}</span>
+        <span className="bold-request-job">{job.title}</span>
+      </div>
+      {current.command && <code className="bold-request-command">{current.command}</code>}
+      <span className="row wrap">
+        {choices.includes('once') && (
+          <button
+            type="button"
+            className="btn sm"
+            disabled={!open}
+            onClick={() => void decide('once')}
+          >
+            Allow
+          </button>
+        )}
+        {!choices.includes('once') && choices.includes('session') && (
+          <button
+            type="button"
+            className="btn sm"
+            disabled={!open}
+            onClick={() => void decide('session')}
+          >
+            Allow for this session
+          </button>
+        )}
+        {choices.includes('deny') && (
+          <button
+            type="button"
+            className="btn sm ghost"
+            disabled={!open}
+            onClick={() => void decide('deny')}
+          >
+            Don’t allow
+          </button>
+        )}
+        {choices.includes('always') && (
+          <button
+            type="button"
+            className="btn sm ghost"
+            disabled={!open}
+            onClick={() => void decide('always')}
+          >
+            Always allow for {current.agentId}
+          </button>
+        )}
+      </span>
+      {(busy || outcome) && (
+        <span className="bold-request-sent" role="status">
+          {busy ? 'Sending…' : outcome}
+        </span>
+      )}
+      {error && (
+        <span className="bold-request-error" role="alert">
+          {error}
+        </span>
+      )}
+    </article>
+  )
+}
+
+function RoomApprovals({
+  approvals,
+  messages,
+  jobs,
+  selectedJob,
+  agents,
+}: {
+  approvals: Approval[]
+  messages: Message[]
+  jobs: Job[]
+  selectedJob: string
+  agents: AgentSummary[]
+}) {
+  const shown = approvals.flatMap((approval) => {
+    const message = messages.find((item) =>
+      item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
+    )
+    const job = jobs.find((item) => item.id === message?.jobId)
+    if (!job || (selectedJob !== 'all' && job.id !== selectedJob)) return []
+    return [<ApprovalRequestCard key={approval.id} approval={approval} job={job} agents={agents} />]
+  })
+  return <>{shown}</>
+}
+
+/** The "Needs you" pins: each job's paused exchanges and approvals, shown above the stream and never scrolled away. */
 export function RoomRequests({
   jobs,
   agents,
+  messages,
   selectedJob,
-  filter,
 }: {
   jobs: Job[]
   agents: AgentSummary[]
+  messages: Message[]
   selectedJob: string
-  filter: JobFilter
 }) {
-  const cooking = jobs.filter(
-    (job) => jobMatchesFilter(job, filter) && (selectedJob === 'all' || job.id === selectedJob),
+  const approvals = useStreamQuery(approvalsQuery).data ?? []
+  const cooking = jobs.filter((job) => selectedJob === 'all' || job.id === selectedJob)
+  const needsApproval = approvals.filter(
+    (approval) => approval.actionable && approval.phase === 'human_pending',
   )
   return (
     <div className="bold-pins" aria-label="Needs you">
       {cooking.map((job) => (
         <JobRequests key={job.id} job={job} agents={agents} />
       ))}
+      <RoomApprovals
+        approvals={needsApproval}
+        messages={messages}
+        jobs={jobs}
+        selectedJob={selectedJob}
+        agents={agents}
+      />
     </div>
   )
 }

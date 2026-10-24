@@ -3,16 +3,18 @@ import {
   ExchangesResponseSchema,
   JobSchema,
   JobsResponseSchema,
-  parseStreamFrame,
+  MessagePageSchema,
   RoomDetailSnapshotSchema,
-  RoomSchema,
-  RoomsSnapshotSchema,
+  RoomPinsResponseSchema,
+  TeamRoomResponseSchema,
   type Exchange,
   type Job,
+  type RoomPin,
   type Room,
 } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
+import { reduceMessages, type MessagePageData } from '../../routes/chat/queries.ts'
 
 /**
  * The read-model fields 11.2a adds to a job. They are optional here because this branch's contract predates that
@@ -63,62 +65,8 @@ export function readJobs(raw: unknown): JobRead[] {
 }
 
 /**
- * The hidden team room has no list route in this branch's contract. It is still announced by `room.upserted` on the
- * stream, so replay the retained events from the start once and take the room from there. The read stops as soon as
- * the event at the hello's head has been seen (or earlier, when the room is found), so it never stays connected.
- */
-async function discoverTeamRoom(signal: AbortSignal): Promise<Room | null> {
-  const controller = new AbortController()
-  const abort = () => controller.abort()
-  signal.addEventListener('abort', abort, { once: true })
-  try {
-    const response = await fetch('/api/stream?since=0', {
-      signal: controller.signal,
-      headers: { accept: 'text/event-stream' },
-    })
-    if (!response.ok || !response.body) return null
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let head: number | null = null
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) return null
-      buffer += decoder.decode(value, { stream: true })
-      for (let end = buffer.indexOf('\n\n'); end >= 0; end = buffer.indexOf('\n\n')) {
-        const frame = buffer.slice(0, end)
-        buffer = buffer.slice(end + 2)
-        const data = frame
-          .split('\n')
-          .filter((line) => line.startsWith('data:'))
-          .map((line) => line.slice(5).trimStart())
-          .join('\n')
-        if (!data) continue
-        const parsed = parseStreamFrame(data)
-        if (parsed.kind === 'control' && parsed.frame.type === 'stream.hello') {
-          head = parsed.frame.data.headSeq
-        } else if (parsed.kind === 'event') {
-          if (parsed.event.type === 'room.upserted' && parsed.event.data.role === 'team') {
-            return RoomSchema.parse(parsed.event.data)
-          }
-          if (head !== null && parsed.event.seq >= head) return null
-        } else if (parsed.kind === 'control' && parsed.frame.type === 'stream.reset') {
-          return null
-        }
-      }
-    }
-  } catch {
-    return null
-  } finally {
-    signal.removeEventListener('abort', abort)
-    controller.abort()
-  }
-}
-
-/**
- * The always-on team room. `?room=` opens a room directly for the current shell and e2e; without it the list is
- * checked (newer servers may include it) and then the stream's retained room events are replayed once. A missing room
- * is a normal empty result, not an error.
+ * The always-on team room. `?room=` opens a room directly for the shell's own tests; without it the contract's
+ * `GET /api/team-room` names the room (404 `not_ready` until the agents are known, which the room shows as a state).
  */
 export function teamRoomQuery(roomIdOverride: string | null) {
   return defineStreamQuery<Room | null>({
@@ -130,12 +78,8 @@ export function teamRoomQuery(roomIdOverride: string | null) {
         )
         return { asOfSeq: snapshot.asOfSeq, data: snapshot.room }
       }
-      const snapshot = RoomsSnapshotSchema.parse(await apiFetch('rooms', { signal }))
-      const listed = [...snapshot.rooms, ...snapshot.directs].find((room) => room.role === 'team')
-      return {
-        asOfSeq: snapshot.asOfSeq,
-        data: listed ?? (signal ? await discoverTeamRoom(signal) : null),
-      }
+      const snapshot = TeamRoomResponseSchema.parse(await apiFetch('team-room', { signal }))
+      return { asOfSeq: snapshot.asOfSeq, data: snapshot.room }
     },
     types: ['room.upserted', 'room.deleted'],
     reduce(data, event) {
@@ -145,6 +89,84 @@ export function teamRoomQuery(roomIdOverride: string | null) {
       if (event.data.role === 'team') return event.data
       return data?.id === event.data.id ? event.data : data
     },
+  })
+}
+
+/**
+ * Every job's messages for the room's All view. The contract's message read is job-scoped (a room's default job when
+ * no job is asked for), so the room reads each job and folds them together; the stream then keeps the folded list live.
+ */
+export function roomMessagesQuery(roomId: string, jobIds: string[], defaultJobId: string | null) {
+  const ids = [...jobIds].sort()
+  return defineStreamQuery<MessagePageData>({
+    key: ['bold', 'room-messages', roomId, ids],
+    async fetch(signal) {
+      const pages = await Promise.all(
+        ids.map(async (jobId) => {
+          const params = new URLSearchParams({ limit: '50', jobId })
+          return MessagePageSchema.parse(
+            await apiFetch(`rooms/${encodeURIComponent(roomId)}/messages?${params}`, { signal }),
+          )
+        }),
+      )
+      return {
+        asOfSeq: pages.reduce((max, page) => Math.max(max, page.asOfSeq), 0),
+        data: {
+          items: pages.flatMap((page) => page.items),
+          nextCursor: null,
+          typing: {},
+          jobId: null,
+        },
+      }
+    },
+    types: [
+      'message.created',
+      'message.delta',
+      'message.completed',
+      'message.deleted',
+      'message.updated',
+      'message.progressed',
+      'typing',
+      'lane.upserted',
+    ],
+    reduce(data, event) {
+      // A created message without a job belongs to the room's default thread; keep it visible in All.
+      if (event.type === 'message.created' && event.data.jobId == null && defaultJobId !== null)
+        return reduceMessages(
+          data,
+          { ...event, data: { ...event.data, jobId: defaultJobId } },
+          roomId,
+          true,
+        )
+      return reduceMessages(data, event, roomId, true)
+    },
+  })
+}
+
+export type RoomPinsState = { items: RoomPin[]; revision: number }
+
+/** The room's pins (at most ten decisions) plus a revision bumped by `room.pins.changed` so the room can refetch. */
+export function roomPinsQuery(roomId: string) {
+  return defineStreamQuery<RoomPinsState>({
+    key: ['bold', 'room-pins', roomId],
+    async fetch(signal) {
+      const response = RoomPinsResponseSchema.parse(
+        await apiFetch(`rooms/${encodeURIComponent(roomId)}/pins`, { signal }),
+      )
+      return { asOfSeq: 0, data: { items: response.items, revision: 0 } }
+    },
+    types: ['room.pins.changed'],
+    reduce(data, event) {
+      return event.type === 'room.pins.changed' && event.data.roomId === roomId
+        ? { ...data, revision: data.revision + 1 }
+        : data
+    },
+  })
+}
+
+export async function setRoomPin(roomId: string, messageId: string, pinned: boolean) {
+  await apiFetch(`rooms/${encodeURIComponent(roomId)}/pins/${encodeURIComponent(messageId)}`, {
+    method: pinned ? 'POST' : 'DELETE',
   })
 }
 
@@ -170,7 +192,8 @@ export function roomJobsQuery(roomId: string) {
         ...(previous?.messageCount === undefined ? {} : { messageCount: previous.messageCount }),
       } satisfies JobRead
       return [...data.filter((job) => job.id !== next.id), next].sort(
-        (a, b) => Number(b.isDefault) - Number(a.isDefault) || a.createdAt.localeCompare(b.createdAt),
+        (a, b) =>
+          Number(b.isDefault) - Number(a.isDefault) || a.createdAt.localeCompare(b.createdAt),
       )
     },
   })

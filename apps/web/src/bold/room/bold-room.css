@@ -159,6 +159,17 @@
   line-height: 1.25;
 }
 
+[data-ui='bold'] .bold-request-command {
+  font-family: var(--font-m);
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-approval .row {
+  gap: 8px;
+}
+
 [data-ui='bold'] .bold-request .small,
 [data-ui='bold'] .bold-request-form label {
   color: var(--hi-sub);

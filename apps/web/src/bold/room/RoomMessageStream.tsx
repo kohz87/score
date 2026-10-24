@@ -1,11 +1,12 @@
 import type { AgentSummary, Job, Message, RoomVersion } from '@score/contract'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { ApiError } from '../../data/api.ts'
 import { copyText } from '../../data/clipboard.ts'
-import { useStreamQuery } from '../../data/query-client.ts'
+import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { MessageItem } from '../../routes/chat/MessageItem.tsx'
-import { messagesQuery, versionsQuery } from '../../routes/chat/queries.ts'
+import { versionsQuery } from '../../routes/chat/queries.ts'
 import { requestDelete, usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { startEdit } from '../../routes/chat/message-edit.ts'
 import { RewindDialog } from '../../routes/chat/RewindDialog.tsx'
@@ -16,12 +17,12 @@ import {
   type VersionView,
 } from '../../routes/chat/versions.tsx'
 import { saveCandidates, SaveToKnowledge } from '../../routes/knowledge/SaveToKnowledge.tsx'
+import { boldJobLink, boldMessageLink } from '../bold-links.ts'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
+import { roomMessagesQuery, roomPinsQuery, setRoomPin } from './room-queries.ts'
 
 function messageText(message: Message) {
-  return message.parts
-    .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
-    .join('\n\n')
+  return message.parts.flatMap((part) => (part.kind === 'text' ? [part.text] : [])).join('\n\n')
 }
 
 function authorName(message: Message, agents: AgentSummary[]) {
@@ -42,11 +43,17 @@ function MessageWithActions({
   agents,
   versions,
   onView,
+  pinned,
+  pinBusy,
+  onTogglePin,
 }: {
   message: Message
   agents: AgentSummary[]
   versions: RoomVersion[]
   onView: (version: RoomVersion) => void
+  pinned: boolean
+  pinBusy: boolean
+  onTogglePin: () => void
 }) {
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -77,11 +84,7 @@ function MessageWithActions({
         }
       />
       {finished && (
-        <div
-          className="bold-acts"
-          role="group"
-          aria-label={`Actions for message from ${author}`}
-        >
+        <div className="bold-acts" role="group" aria-label={`Actions for message from ${author}`}>
           {mine && !imported && !message.editedBy && (
             <button
               type="button"
@@ -110,6 +113,18 @@ function MessageWithActions({
               onClick={() => setSaving(true)}
             >
               Save to Library
+            </button>
+          )}
+          {!imported && (
+            <button
+              type="button"
+              className="bold-act"
+              aria-label={`${pinned ? 'Unpin' : 'Pin'} message from ${author}`}
+              aria-pressed={pinned}
+              disabled={pinBusy}
+              onClick={onTogglePin}
+            >
+              {pinned ? 'Unpin' : 'Pin'}
             </button>
           )}
           {!imported && (
@@ -168,13 +183,55 @@ export function RoomMessageStream({
   seek: string | null
 }) {
   const defaultJob = jobs.find((job) => job.isDefault)?.id ?? null
-  const definition = useMemo(() => messagesQuery(roomId), [roomId])
+  const jobIds = useMemo(() => jobs.map((job) => job.id), [jobs])
+  const definition = useMemo(
+    () => roomMessagesQuery(roomId, jobIds, defaultJob),
+    [defaultJob, jobIds, roomId],
+  )
   const { data, status } = useStreamQuery(definition)
-  const versions = useStreamQuery(useMemo(() => versionsQuery(roomId), [roomId])).data ?? []
+  const pinsDefinition = useMemo(() => roomPinsQuery(roomId), [roomId])
+  const pins = useStreamQuery(pinsDefinition)
+  const refetchPins = useStreamQueryRefetch(pinsDefinition)
+  const [pinOverrides, setPinOverrides] = useState<Record<string, boolean>>({})
+  const [pinBusy, setPinBusy] = useState<string | null>(null)
+  const [pinError, setPinError] = useState<string | null>(null)
+  const versionsDefinition = useMemo(() => versionsQuery(roomId), [roomId])
+  const versions = useStreamQuery(versionsDefinition).data ?? []
   const hidden = usePendingDeletes().hidden
-  const [view, setView] = useState<VersionView>(null)
+  const [view, setView] = useState<
+    (NonNullable<VersionView> & { filter: JobFilter; selectedJob: string }) | null
+  >(null)
   const seeked = useRef<string | null>(null)
-  const [params] = useSearchParams()
+  const pinnedIds = useMemo(
+    () => new Set((pins.data?.items ?? []).map((pin) => pin.messageId)),
+    [pins.data],
+  )
+  const pinsRevision = pins.data?.revision ?? 0
+
+  useEffect(() => {
+    if (pinsRevision > 0) void refetchPins()
+  }, [pinsRevision, refetchPins])
+
+  function isPinned(messageId: string) {
+    return pinOverrides[messageId] ?? pinnedIds.has(messageId)
+  }
+
+  async function togglePin(messageId: string) {
+    const next = !isPinned(messageId)
+    setPinBusy(messageId)
+    setPinError(null)
+    try {
+      await setRoomPin(roomId, messageId, next)
+      setPinOverrides((current) => ({ ...current, [messageId]: next }))
+      void refetchPins()
+    } catch (failure) {
+      setPinError(
+        failure instanceof ApiError ? failure.message : 'Couldn’t change the pin. Try again.',
+      )
+    } finally {
+      setPinBusy(null)
+    }
+  }
 
   const items = useMemo(() => {
     const shownJobs = new Set(
@@ -187,12 +244,12 @@ export function RoomMessageStream({
           if (!message.jobId) return true
           return shownJobs.has(message.jobId)
         }
-        return message.jobId === selectedJob || (message.jobId == null && selectedJob === defaultJob)
+        return (
+          message.jobId === selectedJob || (message.jobId == null && selectedJob === defaultJob)
+        )
       })
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
   }, [data, defaultJob, filter, hidden, jobs, selectedJob])
-
-  useEffect(() => setView(null), [filter, roomId, selectedJob])
 
   useEffect(() => {
     if (!seek || status !== 'success' || seeked.current === seek) return
@@ -207,16 +264,16 @@ export function RoomMessageStream({
     })
   }, [data, seek, status])
 
-  const anchor = view ? items.find((message) => message.id === view.messageId) : undefined
-  const effectiveView = anchor ? view : null
+  const branch = view?.filter === filter && view.selectedJob === selectedJob ? view : null
+  const anchor = branch ? items.find((message) => message.id === branch.messageId) : undefined
+  const effectiveView = anchor ? branch : null
   const nodes: ReactNode[] = []
   if (status === 'success') {
-    const markers =
-      showDeleted && selectedJob === 'all'
-        ? versions
-            .filter((version) => version.mode === 'delete')
-            .sort((a, b) => a.anchorCreatedAt.localeCompare(b.anchorCreatedAt))
-        : []
+    const markers = showDeleted
+      ? versions
+          .filter((version) => version.mode === 'delete')
+          .sort((a, b) => a.anchorCreatedAt.localeCompare(b.anchorCreatedAt))
+      : []
     let marker = 0
     const flush = (until: string | null) => {
       while (markers[marker] && (until === null || markers[marker]!.anchorCreatedAt <= until)) {
@@ -227,6 +284,7 @@ export function RoomMessageStream({
             version={version}
             versions={versions}
             agents={agents}
+            onlyJobId={selectedJob === 'all' ? undefined : selectedJob}
           />,
         )
       }
@@ -242,7 +300,7 @@ export function RoomMessageStream({
               versions={versions}
               agents={agents}
               onSelect={(version) =>
-                setView(version ? { messageId: anchor.id, version } : null)
+                setView(version ? { messageId: anchor.id, version, filter, selectedJob } : null)
               }
             />,
           )
@@ -255,7 +313,10 @@ export function RoomMessageStream({
           message={message}
           agents={agents}
           versions={versions}
-          onView={(version) => setView({ messageId: message.id, version })}
+          onView={(version) => setView({ messageId: message.id, version, filter, selectedJob })}
+          pinned={isPinned(message.id)}
+          pinBusy={pinBusy === message.id}
+          onTogglePin={() => void togglePin(message.id)}
         />,
       )
     }
@@ -275,18 +336,13 @@ export function RoomMessageStream({
               !message.streaming &&
               messageText(message),
           )
-          .sort(
-            (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
-          )[0]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0]
         const holder = agents.find((agent) => agent.id === job.holderAgentId)
-        const search = new URLSearchParams(params)
-        search.set('job', job.id)
-        if (latest) search.set('message', latest.id)
         nodes.push(
           <Link
             key={`result-${job.id}`}
             className="bold-result"
-            to={`/b?${search.toString()}`}
+            to={latest ? boldMessageLink(job.id, latest.id) : boldJobLink(job.id)}
             aria-label={`Open result: ${job.title}`}
           >
             <span
@@ -315,6 +371,11 @@ export function RoomMessageStream({
       {status === 'error' && (
         <p className="bold-stream-note" role="alert">
           Couldn’t load messages. Try again.
+        </p>
+      )}
+      {pinError && (
+        <p className="bold-stream-note" role="alert">
+          {pinError}
         </p>
       )}
       {status === 'success' && items.length === 0 && !showDeleted && (

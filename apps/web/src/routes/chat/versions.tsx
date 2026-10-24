@@ -147,30 +147,51 @@ function useVersionDetail(version: RoomVersion) {
 
 const NOT_REWOUND = 'Agents weren’t rewound, so they may still remember it.'
 
+function VersionDetailItems({
+  detail,
+  anchorId,
+  versions,
+  agents,
+  onlyJobId,
+}: {
+  detail: ReturnType<typeof useVersionDetail>
+  anchorId: string
+  versions: RoomVersion[]
+  agents: AgentSummary[]
+  /** Room column only: a selected job shows its own deleted messages, not every job's. */
+  onlyJobId?: string
+}) {
+  if (detail.isPending) return <p role="status">Loading…</p>
+  if (detail.isError) return <p role="alert">Couldn’t load that version.</p>
+  if (!detail.data) return null
+  const items = onlyJobId
+    ? detail.data.items.filter((message) => message.jobId === onlyJobId)
+    : detail.data.items
+  if (onlyJobId && items.length === 0) return null
+  return <ReadOnlyMessages items={items} anchorId={anchorId} versions={versions} agents={agents} />
+}
+
 /** The hidden messages of a version, read-only. A message that is itself a correction keeps its own control. */
 function VersionItems({
   version,
   versions,
   agents,
+  onlyJobId,
 }: {
   version: RoomVersion
   versions: RoomVersion[]
   agents: AgentSummary[]
+  onlyJobId?: string
 }) {
   const detail = useVersionDetail(version)
   return (
-    <>
-      {detail.isPending && <p role="status">Loading…</p>}
-      {detail.isError && <p role="alert">Couldn’t load that version.</p>}
-      {detail.data && (
-        <ReadOnlyMessages
-          items={detail.data.items}
-          anchorId={version.anchorId}
-          versions={versions}
-          agents={agents}
-        />
-      )}
-    </>
+    <VersionDetailItems
+      detail={detail}
+      anchorId={version.anchorId}
+      versions={versions}
+      agents={agents}
+      onlyJobId={onlyJobId}
+    />
   )
 }
 
@@ -284,11 +305,17 @@ export function DeletedBlock({
   version,
   versions,
   agents,
+  onlyJobId,
 }: {
   version: RoomVersion
   versions: RoomVersion[]
   agents: AgentSummary[]
+  /** A selected job's view: hide this block unless one of its messages belongs to that job. */
+  onlyJobId?: string
 }) {
+  const detail = useVersionDetail(version)
+  if (onlyJobId && detail.data && !detail.data.items.some((message) => message.jobId === onlyJobId))
+    return null
   return (
     <div
       className="chat-previous chat-deleted"
@@ -301,7 +328,13 @@ export function DeletedBlock({
         {version.hiddenCount === 1 ? 'message' : 'messages'}.
         {version.skipped.length > 0 && ` ${NOT_REWOUND}`}
       </p>
-      <VersionItems version={version} versions={versions} agents={agents} />
+      <VersionDetailItems
+        detail={detail}
+        anchorId={version.anchorId}
+        versions={versions}
+        agents={agents}
+        onlyJobId={onlyJobId}
+      />
     </div>
   )
 }

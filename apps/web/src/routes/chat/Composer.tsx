@@ -1,6 +1,6 @@
 import type { AgentSummary } from '@score/contract'
 import { sendsOnKey } from '../../data/send-key.ts'
-import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
+import { skipToken, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import {
   useEffect,
   useId,
@@ -111,6 +111,8 @@ export function Composer({
   roomMode = false,
   toLabel,
   placeholder,
+  messagesKey,
+  initialText,
 }: {
   roomId: string
   roomName: string
@@ -130,12 +132,16 @@ export function Composer({
   /** The room composer's fixed To chip ("To: new job" or "To: <job title>"). */
   toLabel?: string
   placeholder?: string
+  /** The live message page the composer sends into; defaults to the classic room's default-job thread. */
+  messagesKey?: QueryKey
+  /** Text to load once on mount, taking precedence over the stored draft (the bold room's command hand-off). */
+  initialText?: string
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
   const sendKey = useRef<{ signature: string; key: string } | null>(null)
   const ids = useId()
-  const [text, setText] = useState(() => loadDraft(roomId))
+  const [text, setText] = useState(() => initialText ?? loadDraft(roomId))
   const [caret, setCaret] = useState(0)
   const [to, setTo] = useState<string[]>([])
   const [planFirst, setPlanFirst] = useState(false)
@@ -229,8 +235,9 @@ export function Composer({
   })
 
   // The room's messages are kept live by the stream; a reply being written turns Send into Stop (PLAN 5.25).
+  const roomMessagesKey: QueryKey = messagesKey ?? messagesQuery(roomId).key
   const thread = useQuery<{ asOfSeq: number; data: MessagePageData } | undefined>({
-    queryKey: messagesQuery(roomId).key,
+    queryKey: roomMessagesKey,
     queryFn: skipToken,
   })
   const items = thread.data?.data.items
@@ -522,7 +529,7 @@ export function Composer({
     if (sendKey.current?.signature !== signature) sendKey.current = { signature, key: newId() }
     const key = sendKey.current.key
     const temporary = `pending-${key}`
-    const queryKey = messagesQuery(roomId).key
+    const queryKey = roomMessagesKey
     const update = (change: (data: MessagePageData) => MessagePageData) => {
       const snapshot = queryClient.getQueryData<Snapshot>(queryKey)
       if (snapshot) queryClient.setQueryData(queryKey, { ...snapshot, data: change(snapshot.data) })
@@ -896,9 +903,7 @@ export function Composer({
         {knowledgeFlow.dialogs}
         <div className="chat-composer-row">
           {!roomMode && <span className="chat-composer-label">To</span>}
-          {!roomMode && to.length === 0 && (
-            <span className="chat-composer-default">Room lead</span>
-          )}
+          {!roomMode && to.length === 0 && <span className="chat-composer-default">Room lead</span>}
           {to.map((id) => {
             const agent = agents.find((item) => item.id === id)
             const color = agent?.style.color
@@ -1041,7 +1046,9 @@ export function Composer({
             {attachMenu && (
               <ul
                 className="chat-attach-list"
-                aria-label={roomMode ? 'Attach, voice and commands' : orchestrate ? 'Add' : 'Attach'}
+                aria-label={
+                  roomMode ? 'Attach, voice and commands' : orchestrate ? 'Add' : 'Attach'
+                }
               >
                 <li>
                   <button

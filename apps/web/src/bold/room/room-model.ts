@@ -91,8 +91,7 @@ export function optionLabel(option: ExchangeOption): string {
 
 export function needsYou(exchange: Exchange): boolean {
   return Boolean(
-    exchange.pause &&
-      (exchange.state === 'paused_budget' || exchange.state === 'waiting_on_you'),
+    exchange.pause && (exchange.state === 'paused_budget' || exchange.state === 'waiting_on_you'),
   )
 }
 
@@ -107,4 +106,3 @@ export function exchangeStatus(exchange: Exchange): string {
 export function exchangeTurns(exchange: Exchange): string {
   return `${exchange.turnsUsed} of ${exchange.budget} turns`
 }
-

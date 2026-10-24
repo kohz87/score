@@ -12,6 +12,8 @@ const dist = join(root, 'apps/web/dist')
 // /b is still the built app's route, with no server and no port.
 const baseURL = 'http://score.local'
 const prototype = pathToFileURL(join(root, 'docs/design/bold/prototype.html')).href
+const board01 = pathToFileURL(join(root, 'docs/design/bold/01-team-room.dc.html')).href
+const board09 = pathToFileURL(join(root, 'docs/design/bold/09-empty-room.dc.html')).href
 
 if (!existsSync(join(dist, 'index.html'))) {
   console.error('Score is not built. Run `pnpm build`, then try again.')
@@ -63,6 +65,124 @@ const searchJob = (id, roomId, title, extra = {}) => ({
   ...extra,
 })
 
+const readAt = (minute) => `2026-10-24T10:${String(minute).padStart(2, '0')}:00.000Z`
+const roomMessage = (id, jobId, author, text, minute) => ({
+  id,
+  roomId: 'team-room',
+  jobId,
+  author,
+  to: [],
+  parts: [{ kind: 'text', text }],
+  createdAt: readAt(minute),
+  streaming: false,
+  refs: [],
+})
+
+const roomMessages = {
+  'job-activity': [
+    roomMessage('message-activity', 'job-activity', { kind: 'you' }, 'Build the activity feed.', 3),
+    roomMessage(
+      'message-builder',
+      'job-activity',
+      { kind: 'agent', agentId: 'builder' },
+      'Read layer is ready. The feed renders newest first.',
+      4,
+    ),
+  ],
+  'job-release': [
+    roomMessage(
+      'message-release',
+      'job-release',
+      { kind: 'you' },
+      'Draft the 2.4 release notes.',
+      5,
+    ),
+    roomMessage(
+      'message-lead',
+      'job-release',
+      { kind: 'agent', agentId: 'lead' },
+      'Draft is ready. The migration steps are still open.',
+      6,
+    ),
+  ],
+  'job-queue': [
+    roomMessage(
+      'message-queue',
+      'job-queue',
+      { kind: 'agent', agentId: 'lead' },
+      'Queue libraries compared. One clear pick, with sources and licence notes.',
+      7,
+    ),
+  ],
+}
+
+const roomExchange = {
+  id: 'exchange-release',
+  jobId: 'job-release',
+  roomId: 'team-room',
+  kind: 'review',
+  parentId: null,
+  from: 'lead',
+  to: 'reviewer',
+  state: 'paused_budget',
+  round: 5,
+  turnsUsed: 8,
+  budget: 8,
+  outcome: null,
+  endedReason: null,
+  pause: { reason: 'exchange_budget', options: ['more_turns', 'step_in', 'stop'] },
+  queuedBehind: null,
+  createdAt: readAt(5),
+  updatedAt: readAt(6),
+}
+
+const emptyRoom = {
+  ...searchRoom,
+  id: 'empty-room',
+  unread: 0,
+  activeAgents: [],
+}
+
+function roomFixture(url) {
+  if (url.pathname === '/api/rooms/empty-room')
+    return { asOfSeq: 1, room: emptyRoom, filesInPlay: [], learned: [] }
+  if (url.pathname === '/api/rooms/empty-room/jobs') return { asOfSeq: 1, items: [] }
+  if (url.pathname === '/api/rooms/empty-room/messages')
+    return {
+      asOfSeq: 1,
+      items: [],
+      nextCursor: null,
+      jobId: url.searchParams.get('jobId'),
+    }
+  if (url.pathname === '/api/rooms/empty-room/pins') return { items: [] }
+  if (url.pathname === '/api/rooms/empty-room/versions') return { asOfSeq: 1, items: [] }
+  if (url.pathname === '/api/rooms/team-room/jobs')
+    return { asOfSeq: 1, items: searchFixtures['/api/team-room'].jobs }
+  if (url.pathname === '/api/rooms/team-room/messages') {
+    const jobId = url.searchParams.get('jobId') ?? ''
+    return { asOfSeq: 1, items: roomMessages[jobId] ?? [], nextCursor: null, jobId }
+  }
+  if (url.pathname === '/api/rooms/team-room/pins')
+    return {
+      items: [
+        {
+          messageId: 'message-builder',
+          text: 'Read layer is ready.',
+          pinnedAt: readAt(4),
+        },
+      ],
+    }
+  if (url.pathname === '/api/rooms/team-room/versions') return { asOfSeq: 1, items: [] }
+  if (url.pathname === '/api/approvals') return { asOfSeq: 1, items: [], nextCursor: null }
+  const exchange = /^\/api\/jobs\/([^/]+)\/exchanges$/.exec(url.pathname)
+  if (exchange)
+    return {
+      asOfSeq: 1,
+      items: decodeURIComponent(exchange[1]) === 'job-release' ? [roomExchange] : [],
+    }
+  return undefined
+}
+
 // PLAN 11.10f: representative search rows, so the comparison exercises every prototype group without a server.
 const searchFixtures = {
   '/api/team-room': {
@@ -70,7 +190,10 @@ const searchFixtures = {
     room: searchRoom,
     jobs: [
       searchJob('job-activity', 'team-room', 'Activity feed', { unread: 2 }),
-      searchJob('job-release', 'team-room', 'Release notes 2.4', { state: 'done' }),
+      searchJob('job-release', 'team-room', 'Release notes 2.4', {
+        state: 'waiting_on_you',
+        unread: 3,
+      }),
       searchJob('job-queue', 'team-room', 'Queue research', { state: 'closed' }),
     ],
   },
@@ -152,6 +275,13 @@ async function serve(route) {
   const url = new URL(route.request().url())
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === '/api/stream') return route.fulfill({ status: 204 })
+    const room = roomFixture(url)
+    if (room)
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(room),
+      })
     const searchFixture = searchFixtures[url.pathname]
     if (searchFixture)
       return route.fulfill({
@@ -262,6 +392,175 @@ const parts = [
     name: 'Tab item',
     selector: '.tabbar button',
     props: ['fontSize', 'height', 'minWidth', 'gap', 'color'],
+  },
+]
+
+// PLAN 11.4a: the prototype's room classes and the app's bold-room classes line up part by part.
+const roomParts = [
+  {
+    name: 'Room column',
+    selector: '.roomcol',
+    props: ['display', 'gap', 'maxWidth', 'flexGrow', 'flexBasis'],
+  },
+  {
+    name: 'Room title',
+    selector: '.roomtitle',
+    props: ['fontSize', 'fontWeight', 'height', 'gap', 'letterSpacing', 'color'],
+  },
+  {
+    name: 'Job tabs',
+    selector: '.tabs',
+    appSelector: '.bold-job-tabs',
+    props: ['display', 'gap', 'flexWrap'],
+  },
+  {
+    name: 'Selected job',
+    selector: '.tabs .chip.on',
+    appSelector: '.bold-job-tab.on',
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
+  },
+  {
+    name: 'Filter row',
+    selector: '.tabs',
+    appSelector: '.bold-job-filters',
+    props: ['display', 'gap', 'paddingLeft'],
+  },
+  {
+    name: 'Request card',
+    selector: '.pin',
+    appSelector: '.bold-request',
+    props: ['padding', 'borderRadius', 'gap', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Request title',
+    selector: '.pin > b:not(.small)',
+    appSelector: '.bold-request-title',
+    props: ['fontSize', 'fontWeight', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Stream',
+    selector: '.stream',
+    props: ['display', 'gap', 'minHeight', 'padding', 'overflowY'],
+  },
+  {
+    name: 'Agent bubble',
+    selector: '.theirs .bub',
+    appSelector: '.bold-message .chat-message:not(.chat-message--you) .chat-text',
+    props: ['padding', 'borderRadius', 'fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Own bubble',
+    selector: '.mine .bub',
+    appSelector: '.bold-message .chat-message--you .chat-text',
+    props: ['padding', 'borderRadius', 'fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Capsule',
+    selector: '.capsule',
+    appSelector: '.bold-capsule',
+    props: ['padding', 'borderRadius', 'gap', 'marginLeft', 'borderTopColor'],
+  },
+  {
+    name: 'Result card',
+    selector: '.result',
+    appSelector: '.bold-result',
+    props: ['width', 'padding', 'borderRadius', 'gap', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Composer',
+    selector: '.composer',
+    appSelector: '.chat-composer-box--room',
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'To chip',
+    selector: '.composer .to',
+    appSelector: '.chat-composer-room-to',
+    props: ['padding', 'borderRadius', 'fontSize', 'fontWeight', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Composer input',
+    selector: '.composer input',
+    appSelector: '.chat-composer-box--room > textarea',
+    props: ['fontSize', 'padding', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Send',
+    selector: '.composer button[aria-label="Send"]',
+    appSelector: '.chat-send',
+    props: ['width', 'height', 'borderRadius', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Plus',
+    selector: '.composer button[aria-label="Attach, voice and commands"]',
+    appSelector: '.chat-attach',
+    props: ['width', 'height', 'borderRadius', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Actions',
+    selector: '.acts',
+    appSelector: '.bold-acts',
+    props: ['gap', 'alignItems', 'flexWrap'],
+  },
+]
+
+// Board 09 has inline layout rather than the prototype's classes, so the empty room gets its own paired selectors.
+const emptyParts = [
+  {
+    name: 'Room column',
+    selector: 'section[aria-label="Team room"]',
+    appSelector: '.roomcol',
+    props: ['display', 'gap', 'maxWidth', 'flexGrow', 'flexBasis'],
+  },
+  {
+    name: 'Empty heading',
+    selector: 'section h1 + div > p:first-child',
+    appSelector: '.bold-empty-copy h2',
+    props: ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Empty description',
+    selector: 'section h1 + div > p:nth-child(2)',
+    appSelector: '.bold-empty-copy p',
+    props: ['fontSize', 'lineHeight', 'color'],
+  },
+  {
+    name: 'Starters grid',
+    selector: 'section h1 + div > div',
+    appSelector: '.bold-starters',
+    props: ['display', 'gridTemplateColumns', 'gap'],
+  },
+  {
+    name: 'Starter',
+    selector: 'section button:has(b)',
+    appSelector: '.bold-starter',
+    props: ['padding', 'borderRadius', 'gap', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Composer',
+    selector: 'section > div:last-child',
+    appSelector: '.chat-composer-box--room',
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor', 'boxShadow'],
+  },
+  {
+    name: 'Composer input',
+    selector: '#first',
+    appSelector: '.chat-composer-box--room > textarea',
+    props: ['fontSize', 'padding', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Send',
+    selector: 'section button[aria-label="Send"]',
+    appSelector: '.chat-send',
+    props: ['width', 'height', 'borderRadius', 'color', 'backgroundColor'],
   },
 ]
 
@@ -581,9 +880,17 @@ try {
     await page.evaluate(() => globalThis.document.fonts.ready)
     await page.screenshot({ path: join(output, `bold-prototype-${size}.png`) })
     const prototypeMetrics = await measure(page)
+    const prototypeRoomMetrics = await measure(page, roomParts)
+
+    await page.goto(board01, { waitUntil: 'domcontentloaded' })
+    await page.locator('section[aria-label="Team room"]').waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-board-01-${size}.png`) })
 
     await page.goto(`${baseURL}/b`)
     await page.locator('[data-ui="bold"] .top .word').waitFor({ timeout: 20_000 })
+    await page.locator('[data-ui="bold"] .bold-job-tab').first().waitFor({ timeout: 20_000 })
+    await page.locator('[data-ui="bold"] .bold-request').first().waitFor({ timeout: 20_000 })
     if (viewport.width > 860) {
       await page.getByRole('group', { name: /Your team/ }).waitFor({ timeout: 20_000 })
       await page.getByRole('complementary', { name: 'Side panel' }).waitFor({ timeout: 20_000 })
@@ -591,6 +898,19 @@ try {
     await page.evaluate(() => globalThis.document.fonts.ready)
     await page.screenshot({ path: join(output, `bold-app-${size}.png`) })
     const appMetrics = await measure(page)
+    const appRoomMetrics = await measure(page, roomParts, 'app')
+
+    await page.goto(board09, { waitUntil: 'domcontentloaded' })
+    await page.getByText('Your team is ready. What first?').waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-board-09-${size}.png`) })
+    const prototypeEmptyMetrics = await measure(page, emptyParts)
+
+    await page.goto(`${baseURL}/b?room=empty-room`)
+    await page.locator('[data-ui="bold"] .bold-empty-room').waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-empty-${size}.png`) })
+    const appEmptyMetrics = await measure(page, emptyParts, 'app')
 
     await page.goto(prototype, { waitUntil: 'domcontentloaded' })
     await page.locator('.top .word').waitFor()
@@ -675,6 +995,8 @@ try {
     results[size] = {
       prototype: prototypeMetrics,
       app: appMetrics,
+      room: { prototype: prototypeRoomMetrics, app: appRoomMetrics },
+      empty: { prototype: prototypeEmptyMetrics, app: appEmptyMetrics },
       search: { prototype: prototypeSearchMetrics, app: appSearchMetrics },
       usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
       rules: { prototype: prototypeRulesMetrics, app: appRulesMetrics },
@@ -694,6 +1016,33 @@ try {
     lines.push('')
   }
   writeFileSync(join(output, 'bold-frame-metrics.md'), `${lines.join('\n')}\n`)
+
+  const roomLines = ['# Bold team room: prototype / board 09 vs app', '']
+  for (const size of Object.keys(results)) {
+    roomLines.push(
+      `## Team room — ${size}px`,
+      '',
+      '| Part | Prototype | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of roomParts)
+      roomLines.push(
+        `| ${part.name} | ${cell(results[size].room.prototype, part)} | ${cell(results[size].room.app, part)} | ${difference(results[size].room.prototype, results[size].room.app, part)} |`,
+      )
+    roomLines.push(
+      '',
+      `## Empty room — ${size}px`,
+      '',
+      '| Part | Board 09 | App | Difference |',
+      '|---|---|---|---|',
+    )
+    for (const part of emptyParts)
+      roomLines.push(
+        `| ${part.name} | ${cell(results[size].empty.prototype, part)} | ${cell(results[size].empty.app, part)} | ${difference(results[size].empty.prototype, results[size].empty.app, part)} |`,
+      )
+    roomLines.push('')
+  }
+  writeFileSync(join(output, 'bold-room-metrics.md'), `${roomLines.join('\n')}\n`)
 
   const usageLines = ['# Bold usage: prototype vs app', '']
   for (const size of Object.keys(results)) {

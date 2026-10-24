@@ -6,13 +6,7 @@ import { agentNameColor } from '../bold-agents.ts'
 import { exchangeStatus, exchangeTurns, type JobFilter, jobMatchesFilter } from './room-model.ts'
 import { jobExchangesQuery } from './room-queries.ts'
 
-function Capsule({
-  exchange,
-  agents,
-}: {
-  exchange: Exchange
-  agents: AgentSummary[]
-}) {
+function Capsule({ exchange, agents }: { exchange: Exchange; agents: AgentSummary[] }) {
   const from = agents.find((agent) => agent.id === exchange.from)
   const to = agents.find((agent) => agent.id === exchange.to)
   const paused = Boolean(exchange.pause)
@@ -44,13 +38,7 @@ function Capsule({
   )
 }
 
-function JobCapsule({
-  job,
-  agents,
-}: {
-  job: Job
-  agents: AgentSummary[]
-}) {
+function JobCapsule({ job, agents }: { job: Job; agents: AgentSummary[] }) {
   const definition = useMemo(() => jobExchangesQuery(job.id), [job.id])
   const exchanges = useStreamQuery(definition).data ?? []
   const latest = exchanges.at(-1)
@@ -81,4 +69,3 @@ export function RoomCapsules({
     </div>
   )
 }
-

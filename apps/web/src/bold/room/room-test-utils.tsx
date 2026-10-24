@@ -64,6 +64,13 @@ export function makeJob(overrides: Partial<Job> = {}): Job {
     isDefault: false,
     exchangeBudget: 8,
     jobTurnLimit: 40,
+    unread: 0,
+    activeAgents: [],
+    lastMessageAt: null,
+    messageCount: 0,
+    summary: null,
+    source: null,
+    reportBack: null,
     createdAt: '2026-10-24T09:00:00.000Z',
     updatedAt: '2026-10-24T09:05:00.000Z',
     ...overrides,
@@ -136,7 +143,9 @@ export function renderInRoom(ui: ReactNode, entries: string[] = ['/b?room=room-1
   return { ...result, queryClient, queries }
 }
 
-export function mockFetch(handler: (url: string, init: RequestInit) => Response | Promise<Response>) {
+export function mockFetch(
+  handler: (url: string, init: RequestInit) => Response | Promise<Response>,
+) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
     Promise.resolve(handler(String(input), init ?? {})),
   )

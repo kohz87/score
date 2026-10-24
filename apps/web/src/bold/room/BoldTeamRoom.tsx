@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useSearchParams } from 'react-router'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { useShowDeleted, setShowDeleted } from '../../routes/chat/deleted-toggle.ts'
-import { messagesQuery } from '../../routes/chat/queries.ts'
 import '../../routes/chat/chat.css'
 import { Composer } from '../../routes/chat/Composer.tsx'
 import { saveDraft } from '../../routes/chat/composer-model.ts'
@@ -14,7 +13,7 @@ import { RoomMessageStream } from './RoomMessageStream.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
 import { RoomTabs } from './RoomTabs.tsx'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
-import { roomJobsQuery, teamRoomQuery } from './room-queries.ts'
+import { roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
 import './bold-room.css'
 
 function RoomTitle({ name, action }: { name: string; action?: ReactNode }) {
@@ -40,7 +39,15 @@ function RoomWaiting({ name, action }: { name: string; action?: ReactNode }) {
   )
 }
 
-function RoomUnavailable({ name, action, error }: { name: string; action?: ReactNode; error: boolean }) {
+function RoomUnavailable({
+  name,
+  action,
+  error,
+}: {
+  name: string
+  action?: ReactNode
+  error: boolean
+}) {
   return (
     <>
       <RoomTitle name={name} action={action} />
@@ -68,14 +75,20 @@ function LoadedTeamRoom({
   const [params, setParams] = useSearchParams()
   const jobsDefinition = useMemo(() => roomJobsQuery(room.id), [room.id])
   const { data: jobs, status: jobsStatus } = useStreamQuery(jobsDefinition)
-  const messagesDefinition = useMemo(() => messagesQuery(room.id), [room.id])
+  const allJobs = useMemo(() => jobs ?? [], [jobs])
+  const defaultJobId = allJobs.find((job) => job.isDefault)?.id ?? null
+  const jobIds = useMemo(() => allJobs.map((job) => job.id), [allJobs])
+  const messagesDefinition = useMemo(
+    () => roomMessagesQuery(room.id, jobIds, defaultJobId),
+    [defaultJobId, jobIds, room.id],
+  )
   const { data: messages, status: messagesStatus } = useStreamQuery(messagesDefinition)
   const [filter, setFilter] = useState<JobFilter>('all')
   const [composerKey, setComposerKey] = useState(0)
   const showDeleted = useShowDeleted(room.id)
   const selectedJob = params.get('job') ?? 'all'
   const seek = params.get('message')
-  const allJobs = jobs ?? []
+  const command = params.get('command')
 
   const selectJob = useCallback(
     (jobId: string) => {
@@ -117,6 +130,20 @@ function LoadedTeamRoom({
     )
   }
 
+  // A slash command from Search (`/b?command=assign`) loads into the same composer the prototype's menu feeds.
+  useEffect(() => {
+    if (!command) return
+    saveDraft(room.id, `/${command} `)
+    const next = new URLSearchParams(params)
+    next.delete('command')
+    setParams(next, { replace: true })
+    requestAnimationFrame(() => {
+      const box = document.querySelector<HTMLTextAreaElement>('.bold-room-composer textarea')
+      box?.focus()
+      box?.setSelectionRange(box.value.length, box.value.length)
+    })
+  }, [command, params, room.id, setParams])
+
   return (
     <>
       <RoomTitle name={room.name} action={phoneAction} />
@@ -152,18 +179,18 @@ function LoadedTeamRoom({
         </div>
       )}
       {!empty && (
-        <RoomRequests jobs={allJobs} agents={agents} selectedJob={selectedJob} filter={filter} />
+        <RoomRequests
+          jobs={allJobs}
+          agents={agents}
+          messages={messages?.items ?? []}
+          selectedJob={selectedJob}
+        />
       )}
       {empty ? (
         <RoomEmpty agents={agents} onStart={startWith} />
       ) : (
         <div className="stream" id="bold-room-stream" aria-live="polite">
-          <RoomCapsules
-            jobs={allJobs}
-            agents={agents}
-            selectedJob={selectedJob}
-            filter={filter}
-          />
+          <RoomCapsules jobs={allJobs} agents={agents} selectedJob={selectedJob} filter={filter} />
           <RoomMessageStream
             roomId={room.id}
             jobs={allJobs}
@@ -177,7 +204,7 @@ function LoadedTeamRoom({
       )}
       <div className="bold-room-composer">
         <Composer
-          key={composerKey}
+          key={`${composerKey}-${command ?? ''}`}
           roomId={room.id}
           roomName={room.name}
           agents={agents}
@@ -186,10 +213,10 @@ function LoadedTeamRoom({
           roomMode
           toLabel={toLabel}
           placeholder={
-            empty
-              ? 'Describe the work'
-              : 'Message the team. @name for one agent, / for commands'
+            empty ? 'Describe the work' : 'Message the team. @name for one agent, / for commands'
           }
+          messagesKey={messagesDefinition.key}
+          initialText={command ? `/${command} ` : undefined}
           onSent={() => {
             if (!params.has('message')) return
             const next = new URLSearchParams(params)
