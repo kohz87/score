@@ -1,0 +1,384 @@
+/* Start a job (PLAN 11.10c), rebuilt from the prototype's mStart/modal CSS. Values are copied from
+   docs/design/bold/prototype.html and every rule stays under [data-ui='bold']. */
+
+[data-ui='bold'] .bold-start-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(5, 6, 9, 0.62);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: max(40px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 40px
+    max(16px, env(safe-area-inset-left, 0px));
+}
+
+[data-ui='bold'] .dialog {
+  width: 100%;
+  max-width: 760px;
+  background: var(--panel);
+  border-radius: 30px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+[data-ui='bold'] .dialog .inner {
+  background: var(--deep);
+  border-radius: 20px;
+  padding: 16px;
+}
+
+[data-ui='bold'] .dialog:focus {
+  outline: none;
+}
+
+[data-ui='bold'] .start-title {
+  font-size: 32px;
+}
+
+[data-ui='bold'] .lab {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.87em;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .field {
+  min-height: 46px;
+  width: 100%;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--ink);
+}
+
+[data-ui='bold'] textarea.field {
+  min-height: 90px;
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+[data-ui='bold'] .start-what {
+  font-size: 17px;
+}
+
+[data-ui='bold'] .chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.87em;
+  font-weight: 700;
+  background: var(--panel);
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .chip.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .link {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.93em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-ui='bold'] .link:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+[data-ui='bold'] .btn.primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .btn.ghost {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+[data-ui='bold'] .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-ui='bold'] .check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+[data-ui='bold'] .check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+[data-ui='bold'] .check.small {
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.4;
+}
+
+[data-ui='bold'] .grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+[data-ui='bold'] .start-controls {
+  display: grid;
+  gap: 14px;
+}
+
+[data-ui='bold'] .start-controls--1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-ui='bold'] .start-controls--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+[data-ui='bold'] .start-controls--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+[data-ui='bold'] .start-when fieldset,
+[data-ui='bold'] .start-inputs {
+  border: 0;
+  margin: 0;
+}
+
+[data-ui='bold'] .start-legend {
+  float: left;
+  padding: 0;
+}
+
+[data-ui='bold'] .start-clear {
+  clear: both;
+}
+
+[data-ui='bold'] .start-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .start-trigger-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+[data-ui='bold'] .start-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .start-limits input[type='range'] {
+  width: 100%;
+}
+
+[data-ui='bold'] .start-deadline {
+  margin: 0;
+}
+
+[data-ui='bold'] .start-deadline-block,
+[data-ui='bold'] .start-unknown,
+[data-ui='bold'] .start-confirm,
+[data-ui='bold'] .start-save-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .start-confirm {
+  box-shadow: inset 0 0 0 1px var(--bad);
+}
+
+[data-ui='bold'] .start-unknown {
+  border: 0;
+  margin: 0;
+}
+
+[data-ui='bold'] .start-agent-chip {
+  cursor: pointer;
+}
+
+[data-ui='bold'] .start-agent-chip input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ink);
+}
+
+[data-ui='bold'] .start-agent-chip .agent-glyph {
+  width: 20px;
+  height: 20px;
+}
+
+[data-ui='bold'] .bold-agent-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 16px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--deep);
+}
+
+[data-ui='bold'] .start-pick {
+  gap: 8px;
+}
+
+[data-ui='bold'] .start-pick-note {
+  margin: 0;
+}
+
+[data-ui='bold'] .start-lead {
+  gap: 8px;
+}
+
+[data-ui='bold'] .start-recipe-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+[data-ui='bold'] .start-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .start-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .start-checks ul,
+[data-ui='bold'] .start-scheduled ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .start-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+
+[data-ui='bold'] .start-ack {
+  margin-top: 6px;
+}
+
+[data-ui='bold'] .start-reach {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+[data-ui='bold'] .start-scheduled li {
+  min-height: 32px;
+}
+
+[data-ui='bold'] .start-error {
+  margin: 0;
+  color: var(--bad);
+}
+
+[data-ui='bold'] .start-actions {
+  gap: 10px;
+}
+
+[data-ui='bold'] .start-cancel {
+  margin-left: auto;
+}
+
+[data-ui='bold'] .start-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .start-result h3 {
+  font-size: 26px;
+}
+
+[data-ui='bold'] .start-result p {
+  margin: 0;
+}
+
+[data-ui='bold'] .start-secret {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+[data-ui='bold'] .start-secret code {
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-start-scrim {
+    padding: 0;
+  }
+
+  [data-ui='bold'] .dialog {
+    max-width: none;
+    min-height: 100dvh;
+    padding: max(18px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
+      calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  [data-ui='bold'] .start-title {
+    font-size: 28px;
+  }
+
+  [data-ui='bold'] .grid3,
+  [data-ui='bold'] .start-controls--2,
+  [data-ui='bold'] .start-controls--3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

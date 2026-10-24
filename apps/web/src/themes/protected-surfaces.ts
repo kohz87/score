@@ -26,6 +26,10 @@ export const protectedClasses = [
   'bold-needs',
   // PLAN 11.10b: first run asks for the lead, the service choice and the starter recipes
   'bold-first-run-decision',
+  // PLAN 11.10c: Start a job's checks and acknowledgement, and the trigger secret shown once
+  'bold-start-dialog',
+  'start-checks',
+  'start-secret',
   // PLAN 11.9a: bold credential panels, the Add tool server form, and trigger secrets / rotate-delete decisions
   'bold-connect-panel',
   'bold-tool-add',

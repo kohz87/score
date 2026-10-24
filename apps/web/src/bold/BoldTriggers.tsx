@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ReportBack, Trigger, TriggerMapping } from '@score/contract'
 import { ApiError } from '../data/api.ts'
@@ -45,7 +45,17 @@ type Wizard = {
 }
 
 type Secret = { triggerId: string; name: string; value: string }
-type Confirmation = { kind: 'rotate' | 'delete'; trigger: Trigger }
+const CONFIRM_TITLE: Record<'rotate' | 'delete' | 'unfinished', string> = {
+  rotate: 'Rotate the secret?',
+  delete: 'Delete this trigger?',
+  unfinished: 'Keep this unfinished trigger?',
+}
+
+type Confirmation = {
+  /** `unfinished`: the wizard closed after its address went live but before the mapping was saved. */
+  kind: 'rotate' | 'delete' | 'unfinished'
+  trigger: Pick<Trigger, 'id' | 'name'>
+}
 
 const STEPS = ['Set up', 'Test call', 'Map fields', 'Report back'] as const
 const DEFAULT_ARGS = '{\n  "id": "{{source.ref}}"\n}'
@@ -728,28 +738,35 @@ export function BoldTriggers({ appSuggestions = [] }: { appSuggestions?: string[
   const sample = live?.sample ?? wizard?.sample ?? null
   const url = live?.url ?? wizard?.url ?? null
 
+  // The contract has no draft trigger: once step 1 made the address it is live, and every call starts a job with the
+  // placeholder wording. Closing before the mapping is saved asks whether to keep it.
+  const closeWizard = useCallback(
+    ({ saved = false }: { saved?: boolean } = {}) => {
+      if (!saved && wizard?.mode === 'create' && wizard.triggerId)
+        setConfirm({
+          kind: 'unfinished',
+          trigger: { id: wizard.triggerId, name: wizard.name.trim() },
+        })
+      setWizard(null)
+      setSecret(null)
+    },
+    [wizard],
+  )
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       if (secret) setSecret(null)
       else if (confirm) setConfirm(null)
-      else if (wizard) {
-        setWizard(null)
-        setSecret(null)
-      }
+      else if (wizard) closeWizard()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [confirm, secret, wizard])
+  }, [closeWizard, confirm, secret, wizard])
 
   const update = (change: Partial<Wizard>) =>
     setWizard((current) => (current ? { ...current, ...change } : current))
   const invalidate = () => queryClient.invalidateQueries({ queryKey: triggersKey })
-
-  function closeWizard() {
-    setWizard(null)
-    setSecret(null)
-  }
 
   async function createAddress() {
     if (!wizard) return
@@ -804,7 +821,7 @@ export function BoldTriggers({ appSuggestions = [] }: { appSuggestions?: string[
           ? 'Trigger saved.'
           : `Trigger saved. The next call from ${wizard.app} starts a job in the team room.`,
       )
-      closeWizard()
+      closeWizard({ saved: true })
       void invalidate()
     } catch (error) {
       update({ busy: false, problem: plainProblem(error, 'save this trigger') })
@@ -950,13 +967,15 @@ export function BoldTriggers({ appSuggestions = [] }: { appSuggestions?: string[
             data-protected="flex"
             role="alertdialog"
             aria-modal="true"
-            aria-label={confirm.kind === 'rotate' ? 'Rotate the secret?' : 'Delete this trigger?'}
+            aria-label={CONFIRM_TITLE[confirm.kind]}
           >
-            <h3>{confirm.kind === 'rotate' ? 'Rotate the secret?' : 'Delete this trigger?'}</h3>
+            <h3>{CONFIRM_TITLE[confirm.kind]}</h3>
             <p>
               {confirm.kind === 'rotate'
                 ? 'The old secret stops working immediately. Every app sending this trigger must be updated with the new one.'
-                : `Calls to ${confirm.trigger.name} will stop working. Past jobs stay in the team room.`}
+                : confirm.kind === 'unfinished'
+                  ? `${confirm.trigger.name} is already live: until you finish it, every call to its address starts a job with placeholder wording. Delete it, or keep it and finish it later from its Edit button.`
+                  : `Calls to ${confirm.trigger.name} will stop working. Past jobs stay in the team room.`}
             </p>
             {pending === confirm.kind && <p role="status">Working…</p>}
             <div className="row wrap bold-trigger-actions">
@@ -966,11 +985,11 @@ export function BoldTriggers({ appSuggestions = [] }: { appSuggestions?: string[
                 onClick={() => setConfirm(null)}
                 disabled={pending !== null}
               >
-                Cancel
+                {confirm.kind === 'unfinished' ? 'Keep it for now' : 'Cancel'}
               </button>
               <button
                 type="button"
-                className={`btn primary bold-trigger-push${confirm.kind === 'delete' ? ' bold-trigger-danger' : ''}`}
+                className={`btn primary bold-trigger-push${confirm.kind === 'rotate' ? '' : ' bold-trigger-danger'}`}
                 disabled={pending !== null}
                 onClick={() => void confirmAction()}
               >
