@@ -113,7 +113,20 @@ function SetPassword({ change, onDone }: { change: boolean; onDone: () => void }
   )
 }
 
-export function RemoteSection() {
+export function RemoteSection({
+  available,
+  heading = 'Remote access',
+  labelledBy,
+  showTerminal = true,
+}: {
+  /** The bold shell shows the controls in local mode too, so the person can still set a password and review devices. */
+  available?: boolean
+  /** `null` when the caller supplies the heading; the section is then labelled by `labelledBy`. */
+  heading?: string | null
+  labelledBy?: string
+  /** The bold Security page has its own terminal card and link. */
+  showTerminal?: boolean
+} = {}) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const [password, setPassword] = useState('')
@@ -129,7 +142,7 @@ export function RemoteSection() {
   const [copied, setCopied] = useState<'idle' | 'copied' | 'manual'>('idle')
   const link = useRef<HTMLElement>(null)
   const queryClient = useQueryClient()
-  const remote = remoteTransport() !== undefined
+  const remote = available ?? remoteTransport() !== undefined
   // The password lives only in this component while the page is open.
   useEffect(() => () => setPassword(''), [])
   const browsers = useQuery({
@@ -222,11 +235,11 @@ export function RemoteSection() {
     <section
       id="remote-access"
       className="settings-card settings-remote"
-      aria-labelledby="settings-remote-access"
+      aria-labelledby={labelledBy ?? 'settings-remote-access'}
       data-decision
       data-protected="flex"
     >
-      <h2 id="settings-remote-access">Remote access</h2>
+      {heading !== null && <h2 id="settings-remote-access">{heading}</h2>}
       <p>
         Paired browsers can read all conversations and control Score. Pair only browsers you trust.
         Ending access can’t erase data already downloaded.
@@ -428,15 +441,19 @@ export function RemoteSection() {
       {notice && !actionError && <p role="status">{notice}</p>}
       {browsers.isError && <p role="alert">Couldn’t load paired browsers.</p>}
 
-      <h3>Web terminal</h3>
-      <p>
-        The web terminal is <strong>{security.data?.terminal ? 'enabled' : 'disabled'}</strong>.
-        {security.data?.terminal
-          ? ' Open terminals are listed under Terminal below.'
-          : security.data?.terminalUnavailable
-            ? ` Unavailable: ${security.data.terminalUnavailable} (see docs/SETUP.md).`
-            : ' Start Score with SCORE_TERMINAL=1 to turn it on (a shell on this machine, for paired browsers).'}
-      </p>
+      {showTerminal && (
+        <>
+          <h3>Web terminal</h3>
+          <p>
+            The web terminal is <strong>{security.data?.terminal ? 'enabled' : 'disabled'}</strong>.
+            {security.data?.terminal
+              ? ' Open terminals are listed under Terminal below.'
+              : security.data?.terminalUnavailable
+                ? ` Unavailable: ${security.data.terminalUnavailable} (see docs/SETUP.md).`
+                : ' Start Score with SCORE_TERMINAL=1 to turn it on (a shell on this machine, for paired browsers).'}
+          </p>
+        </>
+      )}
 
       {passwordSet && <PasskeysPanel password={password} origins={origins} />}
 

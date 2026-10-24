@@ -2,11 +2,11 @@ import { Link } from 'react-router'
 import { useFence } from '../orchestrations/orchestration-queries.ts'
 
 /** Settings › Backup: how to restore without hiding Hermes runs that Score started (orchestrations, PLAN 7.5). */
-export function BackupSection() {
+export function BackupSection({ heading = 'Backup and restore' }: { heading?: string } = {}) {
   const fence = useFence().data
   return (
     <section id="backup" className="settings-card" aria-labelledby="settings-backup">
-      <h2 id="settings-backup">Backup and restore</h2>
+      <h2 id="settings-backup">{heading}</h2>
       <p>
         Orchestrations start Hermes runs on their own. Score keeps a separate record of those runs
         outside its home folder and compares it with its database each time it starts.

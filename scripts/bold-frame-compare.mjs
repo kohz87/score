@@ -203,22 +203,135 @@ const usageParts = [
   },
 ]
 
-async function measure(page, selectedParts = parts) {
-  return page.evaluate((selectedParts) => {
-    const result = {}
-    for (const part of selectedParts) {
-      const element = globalThis.document.querySelector(part.selector)
-      if (!element) {
-        result[part.name] = null
-        continue
+// PLAN 11.9b: Rules and System use the prototype's frame but real editors, so their element names differ.
+const rulesParts = [
+  {
+    name: 'Section title',
+    selector: '.setmain > h2',
+    appSelector: '.rules-card > div:first-child h2',
+    props: ['fontSize', 'lineHeight', 'letterSpacing', 'color'],
+  },
+  {
+    name: 'Mode card',
+    selector: '.setmain > .card',
+    appSelector: '.rules-style',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Mode label',
+    selector: '.setmain > .card .lab',
+    appSelector: '.rules-style legend',
+    props: ['fontSize', 'color'],
+  },
+  {
+    name: 'Mode choices',
+    selector: '.setmain > .card .seg',
+    appSelector: '.rules-style .rules-option',
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
+  },
+  {
+    name: 'Mode choice',
+    selector: '.seg button.on',
+    appSelector: '.rules-option:has(input:checked)',
+    props: ['fontSize', 'fontWeight', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Lists',
+    selector: '.setmain > .grid3',
+    appSelector: '.rules-columns',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'List card',
+    selector: '.grid3 > .card',
+    appSelector: '.rules-column',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'List heading',
+    selector: '.grid3 > .card h3',
+    appSelector: '.rules-column .rules-heading',
+    props: ['fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Explanatory note',
+    selector: '.setmain > .row .small.muted',
+    appSelector: '.rules-card > .rules-note',
+    props: ['fontSize', 'color'],
+  },
+]
+
+const systemParts = [
+  {
+    name: 'Section title',
+    selector: '.setmain > h2',
+    appSelector: '.bold-system > h2',
+    props: ['fontSize', 'lineHeight', 'letterSpacing', 'color'],
+  },
+  {
+    name: 'Cards',
+    selector: '.setmain > .grid2',
+    appSelector: '.system-grid',
+    props: ['display', 'gap', 'gridTemplateColumns'],
+  },
+  {
+    name: 'Card',
+    selector: '.grid2 > .card:not(.span2)',
+    appSelector: '.system-grid > .settings-card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Card heading',
+    selector: '.grid2 > .card h3',
+    appSelector: '.system-grid > .settings-card h2',
+    props: ['fontSize', 'fontWeight', 'color'],
+  },
+  {
+    name: 'Wide card',
+    selector: '.grid2 > .card.span2',
+    appSelector: '.system-logs .settings-card',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Log surface',
+    selector: '.grid2 > .card.span2 .term',
+    appSelector: '.system-logs .logs-scroll',
+    props: ['padding', 'borderRadius', 'fontFamily', 'fontSize', 'color', 'backgroundColor'],
+  },
+  {
+    name: 'Pause row',
+    selector: '.grid2 > .card.span2.row',
+    appSelector: '.system-pause',
+    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+  },
+  {
+    name: 'Pause button',
+    selector: '.grid2 > .card.span2.row .btn',
+    appSelector: '.system-pause .btn',
+    props: ['minHeight', 'padding', 'borderRadius', 'fontWeight', 'color', 'backgroundColor'],
+  },
+]
+
+async function measure(page, selectedParts = parts, side = 'prototype') {
+  return page.evaluate(
+    ({ selectedParts, side }) => {
+      const result = {}
+      for (const part of selectedParts) {
+        const selector = side === 'app' ? (part.appSelector ?? part.selector) : part.selector
+        const element = globalThis.document.querySelector(selector)
+        if (!element) {
+          result[part.name] = null
+          continue
+        }
+        const style = globalThis.getComputedStyle(element)
+        result[part.name] = Object.fromEntries(
+          [...part.props, 'display'].map((property) => [property, style[property]]),
+        )
       }
-      const style = globalThis.getComputedStyle(element)
-      result[part.name] = Object.fromEntries(
-        [...part.props, 'display'].map((property) => [property, style[property]]),
-      )
-    }
-    return result
-  }, selectedParts)
+      return result
+    },
+    { selectedParts, side },
+  )
 }
 
 function cell(metrics, part) {
@@ -237,6 +350,15 @@ function difference(prototypeMetrics, appMetrics, part) {
       : 'missing on one side'
   const differing = part.props.filter((property) => left[property] !== right[property])
   return differing.length === 0 ? 'same' : differing.join(', ')
+}
+
+async function openPrototypeSettings(page, section) {
+  await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+  await page.locator('.top .word').waitFor()
+  await page.locator('[data-a="go"][data-v="settings"]:visible').click()
+  await page.locator(`[data-a="setSec"][data-v="${section}"]`).click()
+  await page.locator('.setgrid .setnav').waitFor()
+  await page.evaluate(() => globalThis.document.fonts.ready)
 }
 
 let browser
@@ -294,10 +416,48 @@ try {
     })
     const appUsageMetrics = await measure(page, usageParts)
 
+    await openPrototypeSettings(page, 'rules')
+    await page.screenshot({
+      path: join(output, `bold-prototype-rules-${size}.png`),
+      fullPage: true,
+    })
+    const prototypeRulesMetrics = await measure(page, rulesParts)
+
+    await page.goto(`${baseURL}/b/settings/rules`)
+    await page.locator('[data-ui="bold"] .setgrid .setnav').waitFor({ timeout: 20_000 })
+    await page.getByRole('region', { name: 'Rules' }).waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({
+      path: join(output, `bold-app-rules-${size}.png`),
+      fullPage: true,
+    })
+    const appRulesMetrics = await measure(page, rulesParts, 'app')
+
+    await openPrototypeSettings(page, 'system')
+    await page.screenshot({
+      path: join(output, `bold-prototype-system-${size}.png`),
+      fullPage: true,
+    })
+    const prototypeSystemMetrics = await measure(page, systemParts)
+
+    await page.goto(`${baseURL}/b/settings/system`)
+    await page.locator('[data-ui="bold"] .setgrid .setnav').waitFor({ timeout: 20_000 })
+    await page.getByRole('heading', { name: 'System', exact: true }).waitFor({ timeout: 20_000 })
+    await page.getByText('Score v1.14.0').waitFor({ timeout: 20_000 })
+    await page.getByRole('heading', { name: 'Logs', exact: true }).waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({
+      path: join(output, `bold-app-system-${size}.png`),
+      fullPage: true,
+    })
+    const appSystemMetrics = await measure(page, systemParts, 'app')
+
     results[size] = {
       prototype: prototypeMetrics,
       app: appMetrics,
       usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
+      rules: { prototype: prototypeRulesMetrics, app: appRulesMetrics },
+      system: { prototype: prototypeSystemMetrics, app: appSystemMetrics },
     }
   }
 
@@ -329,6 +489,27 @@ try {
     usageLines.push('')
   }
   writeFileSync(join(output, 'bold-usage-metrics.md'), `${usageLines.join('\n')}\n`)
+
+  for (const [name, title, sectionParts] of [
+    ['rules', 'Bold rules', rulesParts],
+    ['system', 'Bold system', systemParts],
+  ]) {
+    const sectionLines = [`# ${title}: prototype vs app`, '']
+    for (const size of Object.keys(results)) {
+      sectionLines.push(
+        `## ${size}px`,
+        '',
+        '| Part | Prototype | App | Difference |',
+        '|---|---|---|---|',
+      )
+      for (const part of sectionParts)
+        sectionLines.push(
+          `| ${part.name} | ${cell(results[size][name].prototype, part)} | ${cell(results[size][name].app, part)} | ${difference(results[size][name].prototype, results[size][name].app, part)} |`,
+        )
+      sectionLines.push('')
+    }
+    writeFileSync(join(output, `bold-${name}-metrics.md`), `${sectionLines.join('\n')}\n`)
+  }
   console.log(`Wrote screenshots and measurements to ${output}`)
 } finally {
   await browser?.close()

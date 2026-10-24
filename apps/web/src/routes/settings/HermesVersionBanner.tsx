@@ -38,6 +38,7 @@ export function HermesVersionBanner() {
       id="hermes-version"
       className="settings-card settings-banner"
       aria-labelledby="settings-hermes-version"
+      data-protected="block"
     >
       <h2 id="settings-hermes-version">Hermes was updated</h2>
       <p>

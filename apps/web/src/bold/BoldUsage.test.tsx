@@ -116,7 +116,6 @@ test('the prototype Settings nav has nine sections, opens Usage and selects a se
 
   fireEvent.click(within(nav).getByRole('button', { name: /^Rules/ }))
   expect(await screen.findByRole('heading', { name: 'Rules' })).toBeDefined()
-  expect(screen.getByText('Comes in 11.9b')).toBeDefined()
 })
 
 test('every headline number equals the Reports API fixture and approvals stay folded in', async () => {
