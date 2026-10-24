@@ -5,7 +5,8 @@ import { useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { agentNameColor, agentStateLabel } from './bold-agents.ts'
-import { BookIcon, ChevronIcon, GridIcon, ThreadIcon } from './BoldIcons.tsx'
+import { BookIcon, ChevronIcon, GridIcon, PlusIcon, ThreadIcon } from './BoldIcons.tsx'
+import { useStartJob } from './BoldStartJob.tsx'
 
 const PHONE = '(max-width: 860px)'
 
@@ -29,6 +30,7 @@ function SideGlyph({ agent }: { agent: AgentSummary }) {
 /** The room column and the switchable side panel: the frame only, until 11.4/11.5 bring the screens inside it. */
 export function BoldRoom() {
   const agents = useStreamQuery(agentsQuery).data ?? []
+  const startJob = useStartJob()
   const phone = useMediaQuery(PHONE)
   const [mode, setMode] = useState<SideMode>('work')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -95,6 +97,15 @@ export function BoldRoom() {
           <button className="roomtitle" type="button">
             Team room
             <ChevronIcon />
+          </button>
+          <button
+            type="button"
+            className="chip room-start"
+            aria-label="Start a job"
+            onClick={() => startJob?.openStartJob()}
+          >
+            <PlusIcon />
+            Job
           </button>
         </div>
         <div className="stream" aria-live="polite">

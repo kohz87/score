@@ -1,5 +1,5 @@
 import type { AgentSummary } from '@score/contract'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
@@ -8,6 +8,7 @@ import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
 import { CommandPalette } from '../shell/CommandPalette.tsx'
 import { agentStateLabel, dockProgress } from './bold-agents.ts'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
+import { BoldStartJob, StartJobContext } from './BoldStartJob.tsx'
 import './tokens.css'
 import './bold.css'
 
@@ -67,8 +68,29 @@ export function BoldShell() {
   const phone = useMediaQuery(PHONE)
   const light = useMediaQuery('(prefers-color-scheme: light)')
   const [commandOpen, setCommandOpen] = useState(false)
+  const [startOpen, setStartOpen] = useState(false)
   const commandTrigger = useRef<HTMLElement | null>(null)
   const dockHasProgress = agents.some(() => dockProgress() !== null)
+
+  // `?start=job` opens the Start a job dialog from any bold address (the links in 11.10f will use it).
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('start') === 'job') setStartOpen(true)
+  }, [location.search])
+
+  const openStartJob = useCallback(() => setStartOpen(true), [])
+  const closeStartJob = useCallback(() => {
+    setStartOpen(false)
+    const params = new URLSearchParams(location.search)
+    if (params.get('start') === 'job') {
+      params.delete('start')
+      const search = params.toString()
+      void navigate(
+        { pathname: location.pathname, search: search ? `?${search}` : '' },
+        { replace: true },
+      )
+    }
+  }, [location.pathname, location.search, navigate])
+  const startContext = useMemo(() => ({ openStartJob }), [openStartJob])
 
   // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside.
   useEffect(() => {
@@ -111,8 +133,9 @@ export function BoldShell() {
   )
 
   return (
-    <div className="bold-shell" data-ui="bold" data-look={light ? 'light' : 'dark'}>
-      <div className="bold-frame" inert={commandOpen}>
+    <StartJobContext value={startContext}>
+      <div className="bold-shell" data-ui="bold" data-look={light ? 'light' : 'dark'}>
+        <div className="bold-frame" inert={commandOpen || startOpen}>
         <header className="top">
           <button
             type="button"
@@ -214,8 +237,10 @@ export function BoldShell() {
             </button>
           </nav>
         )}
+        </div>
+        {commandOpen && <CommandPalette onClose={closeCommand} />}
+        {startOpen && <BoldStartJob onClose={closeStartJob} />}
       </div>
-      {commandOpen && <CommandPalette onClose={closeCommand} />}
-    </div>
+    </StartJobContext>
   )
 }

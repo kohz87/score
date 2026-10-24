@@ -24,6 +24,10 @@ export const protectedClasses = [
   'needs-you-dot',
   // PLAN 11.3: the bold shell's dock ring of an agent that needs you
   'bold-needs',
+  // PLAN 11.10c: Start a job's checks and acknowledgement, and the trigger secret shown once
+  'bold-start-dialog',
+  'start-checks',
+  'start-secret',
   'orch-pill',
   'orch-node__flag',
   // The task drawer's approval and its buttons

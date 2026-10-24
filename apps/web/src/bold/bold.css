@@ -301,6 +301,10 @@
   color: var(--ink);
 }
 
+[data-ui='bold'] .room-start {
+  margin-left: auto;
+}
+
 [data-ui='bold'] .stream {
   flex: 1;
   display: flex;
