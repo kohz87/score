@@ -167,7 +167,6 @@ function AskingBody({
               agent={{ ...agent, style: { ...agent.style, color: '#08241C' } }}
               bare
               decorative
-              plain
               size="sm"
             />
           )}

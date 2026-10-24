@@ -406,7 +406,7 @@ function ResultGroup({
           ) : result.kind === 'note' ? (
             <BookIcon size={22} />
           ) : agent ? (
-            <AgentGlyph agent={agent} size="sm" plain bare decorative />
+            <AgentGlyph agent={agent} size="sm" bare decorative />
           ) : null
         return (
           <button

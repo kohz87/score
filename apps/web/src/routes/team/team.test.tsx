@@ -256,13 +256,10 @@ test('the glyph popover saves a new color and shape with the CSRF header', async
     }
     return baseline(path, init)
   }
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Change Builder’s look, colour and shape' }),
-  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Change Builder’s colour and shape' }))
   const dialog = screen.getByRole('dialog', { name: 'Agent appearance' })
   fireEvent.change(within(dialog).getByLabelText('Colour'), { target: { value: '#ff6b8a' } })
   fireEvent.click(within(dialog).getByRole('radio', { name: 'star' }))
-  fireEvent.click(within(dialog).getByRole('radio', { name: 'Ring' }))
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save appearance' }))
   await waitFor(() => expect(calls).toHaveLength(1))
   expect(calls[0]!.path).toBe('/api/agents/builder/style')
@@ -270,13 +267,12 @@ test('the glyph popover saves a new color and shape with the CSRF header', async
   expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
     color: '#ff6b8a',
     shape: 'star',
-    look: 'ring',
   })
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   // The server also announces the change; the page follows the stream.
   agentUpdated(source, 1, { ...builder, style: { color: '#ff6b8a', shape: 'star' } })
   expect(document.activeElement).toBe(
-    screen.getByRole('button', { name: 'Change Builder’s look, colour and shape' }),
+    screen.getByRole('button', { name: 'Change Builder’s colour and shape' }),
   )
 })
 
@@ -288,7 +284,7 @@ test('the glyph popover closes with Escape and reports a failed save', async () 
       ? json({ error: { code: 'not_paired', message: 'Pair first' } }, 403)
       : baseline(path, init)
   const trigger = await screen.findByRole('button', {
-    name: 'Change Builder’s look, colour and shape',
+    name: 'Change Builder’s colour and shape',
   })
   fireEvent.click(trigger)
   fireEvent.click(screen.getByRole('button', { name: 'Save appearance' }))
@@ -298,17 +294,10 @@ test('the glyph popover closes with Escape and reports a failed save', async () 
   expect(document.activeElement).toBe(trigger)
 })
 
-test('the appearance popover offers two looks and twenty shapes as radio groups, with the agent’s own selected', async () => {
+test('the appearance popover offers twenty shapes as radio groups, with the agent’s own selected', async () => {
   renderTeam('/team/builder')
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Change Builder’s look, colour and shape' }),
-  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Change Builder’s colour and shape' }))
   const dialog = screen.getByRole('dialog', { name: 'Agent appearance' })
-  const looks = within(within(dialog).getByRole('radiogroup', { name: 'Look' })).getAllByRole(
-    'radio',
-  )
-  expect(looks.map((radio) => (radio as HTMLInputElement).value)).toEqual(['cut', 'ring'])
-  expect((looks[0] as HTMLInputElement).checked).toBe(true)
   const shapes = within(within(dialog).getByRole('radiogroup', { name: 'Shape' })).getAllByRole(
     'radio',
   )
@@ -321,31 +310,9 @@ test('the appearance popover offers two looks and twenty shapes as radio groups,
   expect(within(dialog).getByRole('radio', { name: 'circle dot' })).toBeDefined()
 })
 
-test('team cards move their glyph to match the live status', async () => {
-  renderTeam('/team')
-  const builderCard = (await screen.findByRole('heading', { name: 'Builder' })).closest('a')!
-  const leadCard = screen.getByRole('heading', { name: 'Lead' }).closest('a')!
-  expect(builderCard.querySelector('.agent-glyph--working')).not.toBeNull()
-  expect(leadCard.querySelector('.agent-glyph--idle')).not.toBeNull()
-})
-
-function packFile(name: string, type = 'image/webp', size = 1200) {
-  return new File([new Uint8Array(size)], name, { type })
-}
-
 async function openPicker() {
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Change Builder’s look, colour and shape' }),
-  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Change Builder’s colour and shape' }))
   return screen.getByRole('dialog', { name: 'Agent appearance' })
-}
-
-const pack = {
-  rev: 'r1',
-  activities: ['idle' as const, 'work' as const],
-  name: 'Test pack',
-  credits: 'Generated for tests',
-  floor: 0,
 }
 
 test('the appearance panel is bounded by the window below its top and scrolls inside that', async () => {
@@ -370,339 +337,6 @@ test('the appearance panel is bounded by the window below its top and scrolls in
   })
   expect(dialog.style.getPropertyValue('--team-popover-top')).toBe('60px')
   rect.mockRestore()
-})
-
-test('the look choices are a cut-out and a ring', async () => {
-  renderTeam('/team/builder')
-  const dialog = await openPicker()
-  const looks = within(dialog.querySelector('[aria-label="Look"]') as HTMLElement).getAllByRole(
-    'radio',
-  )
-  expect(looks.map((radio) => radio.closest('label')?.textContent)).toEqual(['Cut-out', 'Ring'])
-})
-
-test('a pet pack is chosen, then sent as multipart files to the pack route, and its ignored files are listed', async () => {
-  renderTeam('/team/builder')
-  const calls: { path: string; init?: RequestInit }[] = []
-  const baseline = respond
-  respond = (path, init) => {
-    if (path.includes('/pack')) {
-      calls.push({ path, init })
-      return json({
-        agent: { ...builder, style: { ...builder.style, pack } },
-        ignored: ['notes.txt', '__MACOSX/idle.webp'],
-      })
-    }
-    return baseline(path, init)
-  }
-  const dialog = await openPicker()
-  expect(within(dialog).getByRole('button', { name: 'Upload a pet pack…' })).toBeDefined()
-  expect(within(dialog).queryByRole('button', { name: 'Remove pack' })).toBeNull()
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
-    target: {
-      files: [
-        packFile('idle.webp'),
-        packFile('work.webp'),
-        packFile('pet.json', 'application/json'),
-      ],
-    },
-  })
-  const chosen = within(dialog).getByRole('list', { name: 'Chosen files' })
-  expect(
-    within(chosen)
-      .getAllByRole('listitem')
-      .map((item) => item.textContent),
-  ).toEqual(['idle.webp', 'work.webp', 'pet.json'])
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
-  await waitFor(() => expect(calls).toHaveLength(1))
-  expect(calls[0]!.path).toBe('/api/agents/builder/pack')
-  expect(calls[0]!.init?.method).toBe('PUT')
-  expect(new Headers(calls[0]!.init?.headers).get('X-Score-Client')).toBe('web')
-  const sent = (calls[0]!.init?.body as FormData).getAll('file') as File[]
-  expect(sent.map((file) => file.name)).toEqual(['idle.webp', 'work.webp', 'pet.json'])
-  const status = await within(dialog).findByRole('status')
-  expect(status.textContent).toContain('Pack added: idle, work.')
-  // Listed by path, sorted.
-  expect(
-    within(status)
-      .getAllByRole('listitem')
-      .map((item) => item.textContent),
-  ).toEqual(['__MACOSX/idle.webp', 'notes.txt'])
-})
-
-test('a zip goes up as one file', async () => {
-  renderTeam('/team/builder')
-  const calls: { init?: RequestInit }[] = []
-  const baseline = respond
-  respond = (path, init) => {
-    if (path.includes('/pack')) {
-      calls.push({ init })
-      return json({ agent: { ...builder, style: { ...builder.style, pack } }, ignored: [] })
-    }
-    return baseline(path, init)
-  }
-  const dialog = await openPicker()
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
-    target: { files: [packFile('luna.zip', 'application/zip')] },
-  })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
-  await waitFor(() => expect(calls).toHaveLength(1))
-  const sent = (calls[0]!.init?.body as FormData).getAll('file') as File[]
-  expect(sent.map((file) => file.name)).toEqual(['luna.zip'])
-  expect(within(dialog).queryByText(/Left out/)).toBeNull()
-})
-
-test('the server’s reasons for refusing a pack are shown as they are, and the choice stays', async () => {
-  renderTeam('/team/builder')
-  const baseline = respond
-  respond = (path, init) =>
-    path.includes('/pack')
-      ? json(
-          {
-            error: {
-              code: 'pack_rejected',
-              message: 'That pack can’t be used.',
-              details: { reasons: ['idle is missing.', 'sparkle is not an activity.'] },
-            },
-          },
-          422,
-        )
-      : baseline(path, init)
-  const dialog = await openPicker()
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
-    target: { files: [packFile('work.webp'), packFile('sparkle.webp')] },
-  })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
-  const alert = await within(dialog).findByRole('alert')
-  expect(alert.textContent).toContain('idle is missing.')
-  expect(alert.textContent).toContain('sparkle is not an activity.')
-  // Which upload the reasons are about (owner, 2026-10-19: "include … which file failed the check").
-  expect(within(alert).getByText('The pack (2 files) wasn’t accepted:')).toBeDefined()
-  expect(within(dialog).getByRole('button', { name: 'Cancel pack' })).toBeDefined()
-})
-
-test('a refused zip is named above the server’s reasons, which name the file inside it', async () => {
-  renderTeam('/team/builder')
-  const baseline = respond
-  const reason =
-    'idle.webp: This WebP breaks off: its header says it ends at 1.8 MB, but the file is 5.1 MB, so only its first 35 frames would play. Export it again.'
-  respond = (path, init) =>
-    path.includes('/pack')
-      ? json(
-          {
-            error: {
-              code: 'pack_rejected',
-              message: 'That pack can’t be used.',
-              details: { reasons: [reason] },
-            },
-          },
-          422,
-        )
-      : baseline(path, init)
-  const dialog = await openPicker()
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
-    target: { files: [packFile('luna.zip', 'application/zip')] },
-  })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
-  const alert = await within(dialog).findByRole('alert')
-  expect(alert.querySelector('p')?.textContent).toBe('luna.zip wasn’t accepted:')
-  expect(within(alert).getByRole('listitem').textContent).toBe(reason)
-})
-
-test('a zip chosen with other files, a file over 32 MB, or a pack over 256 MB, is refused without an upload', async () => {
-  renderTeam('/team/builder')
-  const calls: string[] = []
-  const baseline = respond
-  respond = (path, init) => {
-    if (path.includes('/pack')) calls.push(path)
-    return baseline(path, init)
-  }
-  const dialog = await openPicker()
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), {
-    target: { files: [packFile('luna.zip', 'application/zip'), packFile('idle.webp')] },
-  })
-  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/one \.zip/)
-  const big = packFile('idle.webp')
-  Object.defineProperty(big, 'size', { value: 33 * 1024 * 1024 })
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [big] } })
-  expect((await within(dialog).findByRole('alert')).textContent).toBe(
-    'idle.webp is larger than 32 MB.',
-  )
-  const parts = Array.from({ length: 9 }, (_, index) => {
-    const part = packFile(`work${index}.webp`)
-    Object.defineProperty(part, 'size', { value: 30 * 1024 * 1024 })
-    return part
-  })
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: parts } })
-  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 256 MB/)
-  expect(within(dialog).queryByRole('button', { name: 'Use this pack' })).toBeNull()
-  expect(calls).toEqual([])
-})
-
-test('a valid zip over 32 MB goes up (32 MB is the limit of one image, a zip is held to 256 MB)', async () => {
-  renderTeam('/team/builder')
-  const calls: { init?: RequestInit }[] = []
-  const baseline = respond
-  respond = (path, init) => {
-    if (path.includes('/pack')) {
-      calls.push({ init })
-      return json({ agent: { ...builder, style: { ...builder.style, pack } }, ignored: [] })
-    }
-    return baseline(path, init)
-  }
-  const dialog = await openPicker()
-  const zip = packFile('luna.zip', 'application/zip')
-  Object.defineProperty(zip, 'size', { value: 80 * 1024 * 1024 })
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [zip] } })
-  expect(within(dialog).queryByRole('alert')).toBeNull()
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
-  await waitFor(() => expect(calls).toHaveLength(1))
-  // But not past the pack's 256 MB, and an image is still held to 32 MB.
-  const huge = packFile('luna.zip', 'application/zip')
-  Object.defineProperty(huge, 'size', { value: 257 * 1024 * 1024 })
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [huge] } })
-  expect((await within(dialog).findByRole('alert')).textContent).toMatch(/larger than 256 MB/)
-})
-
-test('an upload shows how far it has got, then that the pack is being checked', async () => {
-  class Controlled {
-    static last: Controlled
-    headers: Record<string, string> = {}
-    upload: {
-      onprogress: ((event: ProgressEvent) => void) | null
-      onload: (() => void) | null
-    } = { onprogress: null, onload: null }
-    onload: (() => void) | null = null
-    onerror: (() => void) | null = null
-    status = 200
-    responseText = ''
-    responseType = ''
-    sent: unknown
-    constructor() {
-      Controlled.last = this
-    }
-    open() {}
-    setRequestHeader(name: string, value: string) {
-      this.headers[name.toLowerCase()] = value
-    }
-    send(body: unknown) {
-      this.sent = body
-    }
-  }
-  vi.stubGlobal('XMLHttpRequest', Controlled)
-  renderTeam('/team/builder')
-  const dialog = await openPicker()
-  const big = packFile('luna.zip', 'application/zip')
-  Object.defineProperty(big, 'size', { value: 7.4 * 1024 * 1024 })
-  fireEvent.change(within(dialog).getByLabelText('Pet pack files'), { target: { files: [big] } })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Use this pack' }))
-  await waitFor(() => expect(Controlled.last?.sent).toBeInstanceOf(FormData))
-  const xhr = Controlled.last
-  // The browser sets the multipart type; Score adds its own header and the idempotency key.
-  expect(xhr.headers['content-type']).toBeUndefined()
-  expect(xhr.headers['x-score-client']).toBe('web')
-  expect(xhr.headers['idempotency-key']).toBeTruthy()
-  const total = 7.4 * 1024 * 1024
-  act(() => {
-    xhr.upload.onprogress?.({
-      loaded: 3.1 * 1024 * 1024,
-      total,
-      lengthComputable: true,
-    } as ProgressEvent)
-  })
-  const status = within(dialog).getByRole('status')
-  expect(status.textContent).toContain('luna.zip')
-  expect(status.textContent).toContain('Uploading · 42% · 3.1 MB of 7.4 MB')
-  expect(status.querySelector('progress')?.getAttribute('value')).toBe(String(3.1 * 1024 * 1024))
-  act(() => {
-    xhr.upload.onprogress?.({ loaded: total, total, lengthComputable: true } as ProgressEvent)
-    xhr.upload.onload?.()
-  })
-  expect(status.textContent).toContain('Checking the pack…')
-  expect(status.textContent).not.toContain('%')
-  expect(status.querySelector('progress')?.hasAttribute('value')).toBe(false)
-  // The answer ends it: the pack is added and the progress is gone.
-  xhr.responseText = JSON.stringify({
-    agent: { ...builder, style: { ...builder.style, pack } },
-    ignored: [],
-  })
-  act(() => xhr.onload?.())
-  expect(await within(dialog).findByText(/Pack added: idle, work/)).toBeDefined()
-  expect(within(dialog).queryByText(/Checking the pack/)).toBeNull()
-})
-
-test('an agent with a pack shows it, and can replace or remove it', async () => {
-  const source = renderTeam('/team/builder')
-  agentUpdated(source, 1, { ...builder, style: { ...builder.style, pack } })
-  const calls: { path: string; method?: string | undefined }[] = []
-  const baseline = respond
-  respond = (path, init) => {
-    if (path.includes('/pack') && !path.includes('/pack/')) {
-      calls.push({ path, method: init?.method })
-      return json(builder)
-    }
-    return baseline(path, init)
-  }
-  const dialog = await openPicker()
-  expect(within(dialog).getByText(/Test pack/)).toBeDefined()
-  expect(within(dialog).getByText(/Generated for tests/)).toBeDefined()
-  expect(within(dialog).getByRole('button', { name: 'Replace pet pack…' })).toBeDefined()
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Remove pack' }))
-  await waitFor(() =>
-    expect(calls).toEqual([{ path: '/api/agents/builder/pack', method: 'DELETE' }]),
-  )
-})
-
-test('How to make a pack is a disclosure with the naming table and the rules', async () => {
-  renderTeam('/team/builder')
-  const dialog = await openPicker()
-  const guide = within(dialog).getByText('How to make a pack').closest('details')!
-  expect(guide.open).toBe(false)
-  const table = within(guide).getByRole('table')
-  const names = within(table)
-    .getAllByRole('rowheader')
-    .map((cell) => cell.textContent)
-  expect(names).toEqual([
-    'idle',
-    'work',
-    'think',
-    'needs',
-    'sleep',
-    'walk',
-    'stretch, coffee, read',
-    'greet, happy',
-  ])
-  expect(guide.textContent).toContain('required')
-  expect(guide.textContent).toContain('32 MB per file and 256 MB per pack')
-  expect(guide.textContent).toContain('64–2048 px per side')
-  expect(guide.textContent).toContain('pet.json')
-  expect(guide.textContent).toContain('"floor": 0.03')
-})
-
-test('an agent with a pack wears its pet on the team card and in the page header, with its mark as the badge', async () => {
-  const source = renderTeam('/team')
-  agentUpdated(source, 1, { ...builder, style: { ...builder.style, pack } })
-  const card = (await screen.findByRole('heading', { name: 'Builder' })).closest('a')!
-  await waitFor(() => expect(card.querySelector('.pet-avatar')).not.toBeNull())
-  expect(card.querySelector('.pet-avatar .pet-avatar__badge .agent-glyph')).not.toBeNull()
-  // The agent is working: its work file is the one that plays.
-  expect(card.querySelector('img[data-anim="work"]')?.getAttribute('src')).toBe(
-    '/api/agents/builder/pack/work?rev=r1',
-  )
-  // Lead has none and keeps its mark.
-  const leadCard = screen.getByRole('heading', { name: 'Lead' }).closest('a')!
-  expect(leadCard.querySelector('.pet-avatar')).toBeNull()
-  expect(leadCard.querySelector('.agent-glyph--cut')).not.toBeNull()
-})
-
-test('the agent page header button shows the pet too', async () => {
-  const source = renderTeam('/team/builder')
-  agentUpdated(source, 1, { ...builder, style: { ...builder.style, pack } })
-  const trigger = await screen.findByRole('button', {
-    name: 'Change Builder’s look, colour and shape',
-  })
-  await waitFor(() => expect(trigger.querySelector('.pet-avatar')).not.toBeNull())
-  expect(trigger.className).toContain('team-glyph-trigger--pet')
 })
 
 const digest = {

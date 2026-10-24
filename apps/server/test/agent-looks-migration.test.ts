@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -124,4 +124,49 @@ test('0078 gives coding agents look, pack_rev and pack_meta, and a style overrid
   expect(() =>
     db.sqlite.prepare("UPDATE coding_agents SET look = 'robot' WHERE id = 'coder'").run(),
   ).toThrow()
+})
+
+// PLAN 11.11c: 0087 clears the unused look and pack columns; the columns stay.
+test('0087 clears looks and packs on both tables, keeps the columns, and is idempotent', () => {
+  const migrations = join(dir, 'migrations')
+  mkdirSync(migrations)
+  for (const name of readdirSync(SRC).filter((file) => file.endsWith('.sql')))
+    if (name < '0087') copyFileSync(join(SRC, name), join(migrations, name))
+  migrate(db, migrations)
+  addCoding('coder', '#111111', 'square')
+  db.sqlite
+    .prepare(
+      "INSERT INTO agent_styles (agent_id, color, shape, look, pack_rev, pack_meta, updated_at) VALUES ('lead', '#6B4EFF', 'star', 'ring', 'r1', '{}', ?)",
+    )
+    .run(at)
+  db.sqlite
+    .prepare(
+      "UPDATE coding_agents SET look = 'ring', pack_rev = 'r2', pack_meta = '{}' WHERE id = 'coder'",
+    )
+    .run()
+  copyFileSync(
+    join(SRC, '0087_drop_agent_looks.sql'),
+    join(migrations, '0087_drop_agent_looks.sql'),
+  )
+  migrate(db, migrations)
+  const rows = () => [
+    db.sqlite.prepare('SELECT color, shape, look, pack_rev, pack_meta FROM agent_styles').all(),
+    db.sqlite.prepare('SELECT color, shape, look, pack_rev, pack_meta FROM coding_agents').all(),
+  ]
+  const cleared = [
+    [{ color: '#6B4EFF', shape: 'star', look: null, pack_rev: null, pack_meta: null }],
+    [{ color: '#111111', shape: 'square', look: null, pack_rev: null, pack_meta: null }],
+  ]
+  expect(rows()).toEqual(cleared)
+  // The columns stay (unused), and `look` now accepts NULL.
+  for (const table of ['agent_styles', 'coding_agents']) {
+    const look = db.sqlite
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .find((column) => (column as { name: string }).name === 'look') as
+      { notnull: number } | undefined
+    expect(look?.notnull).toBe(0)
+  }
+  db.sqlite.exec(readFileSync(join(SRC, '0087_drop_agent_looks.sql'), 'utf8'))
+  expect(rows()).toEqual(cleared)
 })

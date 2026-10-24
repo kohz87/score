@@ -1,5 +1,4 @@
-import { existsSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   AgentOperationSchema,
@@ -15,7 +14,6 @@ import { ProfileOperations } from '../../src/domain/profiles.ts'
 import { writeBaseline } from '../../src/domain/team-rules.ts'
 import { McpAccessStore } from '../../src/mcp/access.ts'
 import { setup } from '../hermes/live/gateway/helpers.ts'
-import { multipartFiles, webpImage } from '../helpers/pack-images.ts'
 
 let env: ReturnType<typeof setup>
 let app: ReturnType<typeof buildApp>
@@ -127,7 +125,7 @@ test('create is observable as Setting up, then verifies every step and preserves
     lifecycle: { state: 'ready', incarnationId: operation.incarnationId },
   })
 })
-test('PLAN 10.2: a new agent keeps its look and new shape, and a pack in the request is never taken', async () => {
+test('PLAN 10.2: a new agent keeps its new shape, and a look or pack in the request is dropped', async () => {
   const forged = {
     rev: 'forged',
     activities: ['idle' as const],
@@ -137,57 +135,20 @@ test('PLAN 10.2: a new agent keeps its look and new shape, and a pack in the req
   }
   const body = {
     ...input,
-    style: { color: '#19C39A', shape: 'cloud' as const, look: 'ring' as const, pack: forged },
+    style: { color: '#19C39A', shape: 'cloud' as const, look: 'ring', pack: forged },
   }
   const operation = await create(body)
   await finished(operation.id)
   expect((await app.inject('/api/agents/helper')).json().style).toEqual({
     color: '#19C39A',
     shape: 'cloud',
-    look: 'ring',
-    pack: null,
   })
   expect(env.db.sqlite.prepare('SELECT look, pack_rev, pack_meta FROM agent_styles').all()).toEqual(
-    [{ look: 'ring', pack_rev: null, pack_meta: null }],
+    [{ look: null, pack_rev: null, pack_meta: null }],
   )
   // Nothing of it is kept in the operation journal either.
   const operations = env.db.sqlite.prepare('SELECT request FROM profile_operations').all()
   expect(JSON.stringify(operations)).not.toContain('forged')
-})
-test('PLAN 10.2: deleting an agent removes its pack folder and clears the revision', async () => {
-  await finished((await create()).id)
-  const body = multipartFiles([
-    { name: 'idle.webp', bytes: webpImage(128, 128, 'VP8X', { animated: true }) },
-  ])
-  const uploaded = await app.inject({
-    method: 'PUT',
-    url: '/api/agents/helper/pack',
-    headers: { cookie, 'x-score-client': 'web', ...body.headers },
-    payload: body.payload,
-  })
-  expect(uploaded.statusCode, uploaded.body).toBe(200)
-  const rev = uploaded.json().agent.style.pack.rev
-  const folder = join(env.home, 'packs', 'helper')
-  expect(existsSync(join(folder, rev, 'idle.webp'))).toBe(true)
-  const preview = (
-    await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })
-  ).json()
-  const response = await mutate(
-    '/api/agents/helper',
-    { typedName: 'helper', previewHash: preview.hash },
-    'DELETE',
-  )
-  expect((await finished(response.json().id)).state).toBe('completed')
-  expect(existsSync(folder)).toBe(false)
-  expect(
-    env.db.sqlite
-      .prepare('SELECT pack_rev, pack_meta FROM agent_styles WHERE agent_id = ?')
-      .get('helper'),
-  ).toEqual({ pack_rev: null, pack_meta: null })
-  const removed = (await app.inject('/api/agents/helper')).json()
-  expect(removed.lifecycle.state).toBe('removed')
-  expect(removed.style.pack ?? null).toBeNull()
-  expect((await app.inject(`/api/agents/helper/pack/idle?rev=${rev}`)).statusCode).toBe(404)
 })
 test('clone previews inherited names, requires confirmation and applies the team baseline', async () => {
   const body = { ...input, cloneFrom: 'builder' }

@@ -467,16 +467,7 @@ const cases = [
   ['AgentIdSchema', 'lead', ''],
   ['ShapeSchema', 'cloud', 'oval'],
   ['AgentStyleSchema', f.style, { ...f.style, color: '#abc' }],
-  ['AgentLookSchema', 'ring', 'chibi'],
-  ['PetActivitySchema', 'work', 'dance'],
-  ['PetPackManifestSchema', { name: 'Luna', floor: 0.03 }, { floor: 0.5 }],
-  ['PackRevSchema', 'r7Kq-2', '../x'],
-  [
-    'PetPackSchema',
-    { rev: 'a1', activities: ['idle', 'work'], name: 'Luna', credits: null, floor: 0 },
-    { rev: 'a1', activities: [], name: null, credits: null, floor: 0 },
-  ],
-  ['AgentStylePatchSchema', { look: 'ring', shape: 'cylinder' }, { look: 'chibi' }],
+  ['AgentStylePatchSchema', { shape: 'cylinder' }, { shape: 'oval' }],
   ['AgentStatusSchema', 'working', 'busy'],
   ['AgentSummarySchema', f.agent, { ...f.agent, id: '' }],
   ['AsOfSeqSchema', 0, -1],
@@ -2496,10 +2487,14 @@ describe('third gate 5: manifest menu labels need a visible character', () => {
   })
 })
 
-test('PLAN 10.2: a style without look or pack (stored before 10.2) still parses; a client patch cannot set the pack', () => {
-  const old = contract.AgentStyleSchema.parse({ color: '#6B4EFF', shape: 'circle-dot' })
-  expect(old.look).toBeUndefined()
-  expect(old.pack).toBeUndefined()
+test('PLAN 11.11: an old style that still carries look or pack parses and the fields are dropped', () => {
+  const old = contract.AgentStyleSchema.parse({
+    color: '#6B4EFF',
+    shape: 'circle-dot',
+    look: 'cut',
+    pack: { rev: 'a1', activities: ['idle'], name: null, credits: null, floor: 0 },
+  })
+  expect(old).toEqual({ color: '#6B4EFF', shape: 'circle-dot' })
   const patch = contract.AgentStylePatchSchema.parse({ look: 'ring', pack: { rev: 'x' } })
-  expect(patch).toEqual({ look: 'ring' })
+  expect(patch).toEqual({})
 })

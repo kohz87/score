@@ -45,7 +45,7 @@ function bodySize(body: Blob | FormData): number {
 /**
  * A PUT (or POST, via `method`) of a file body that reports how much has been sent (fetch can't): XMLHttpRequest with the same headers and
  * errors as apiFetch. `onProgress` gets bytes sent; once all are sent the server is still working on them. A `Blob`
- * goes as `application/octet-stream`; a `FormData` (several files, a pet pack) is left to the browser, which sets its
+ * goes as `application/octet-stream`; a `FormData` (several files) is left to the browser, which sets its
  * multipart type and boundary. `headers` adds any more, such as an `Idempotency-Key`.
  */
 export function apiUpload(

@@ -3,7 +3,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { PopOutButton } from '../pop/PopOutButton.tsx'
 import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { activityOfStatus } from '../../components/agent-activity.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { UnattributedGlyph } from '../../components/UnattributedGlyph.tsx'
 import { StatusLine } from '../../live/StatusLine.tsx'
@@ -214,11 +213,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
             <div className="now-axis-spacer" />
             {owners.map(({ key, agent, name, role }) => (
               <div key={key} className="now-lane-label">
-                {agent ? (
-                  <AgentGlyph agent={agent} size="lg" activity={activityOfStatus(agent.status)} />
-                ) : (
-                  <UnattributedGlyph />
-                )}
+                {agent ? <AgentGlyph agent={agent} size="lg" /> : <UnattributedGlyph />}
                 <div className="now-lane-name">
                   <span className="now-lane-title">
                     {agent ? (

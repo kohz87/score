@@ -102,7 +102,7 @@ test('passes an AbortSignal through to fetch', async () => {
   expect(fetch.mock.calls[0]![1].signal).toBe(controller.signal)
 })
 
-// apiUpload: a PUT with progress. A file goes as octet-stream; a form (a pet pack) is left to the browser.
+// apiUpload: a PUT with progress. A file goes as octet-stream; a form is left to the browser.
 class FakeXhr {
   static last: FakeXhr
   headers: Record<string, string> = {}

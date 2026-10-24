@@ -2,7 +2,6 @@ import type { AgentSummary, WatchOverviewItem } from '@score/contract'
 import { useContext, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
-import { activityOfStatus } from '../components/agent-activity.ts'
 import { runtimeLabel } from '../components/runtime-label.ts'
 import { StreamContext, useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
@@ -73,20 +72,10 @@ function AgentCard({
       <div className="bold-agentcard-top">
         {working ? (
           <span className="glow bold-agentcard-glow">
-            <AgentGlyph
-              agent={agent}
-              size="lg"
-              activity={activityOfStatus(agent.status)}
-              decorative
-            />
+            <AgentGlyph agent={agent} size="lg" decorative />
           </span>
         ) : (
-          <AgentGlyph
-            agent={agent}
-            size="lg"
-            activity={activityOfStatus(agent.status)}
-            decorative
-          />
+          <AgentGlyph agent={agent} size="lg" decorative />
         )}
         <ScreenGlimpse agent={agent} item={watch} />
       </div>
