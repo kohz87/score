@@ -358,6 +358,15 @@ test('Settings offers the way back to the classic view', async () => {
   expect(window.localStorage.getItem('score.ui')).toBeNull()
 })
 
+test('Look choices apply to the whole bold shell', async () => {
+  window.localStorage.setItem('score.theme', 'light')
+  window.localStorage.setItem('score.textScale', '1.15')
+  open('/b')
+  const shell = document.querySelector<HTMLElement>('.bold-shell')!
+  await waitFor(() => expect(shell.dataset.look).toBe('light'))
+  expect(shell.style.getPropertyValue('--scale')).toBe('1.15')
+})
+
 test.each(['ctrlKey', 'metaKey'])(
   '%s+K does nothing while the palette is already open',
   async (modifier) => {

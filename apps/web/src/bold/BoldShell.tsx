@@ -1,11 +1,13 @@
 import type { AgentSummary } from '@score/contract'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { BoldRecipes } from './BoldRecipes.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
+import { useTextScale } from '../data/text-scale.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
+import { useLook } from '../themes/use-look.ts'
 import { agentStateLabel, dockProgress } from './bold-agents.ts'
 import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
@@ -51,7 +53,7 @@ function DockRing({ agent, needsYou }: { agent: AgentSummary; needsYou: boolean 
 
 /**
  * The bold shell's frame (PLAN 11.3a): the top bar and, on a phone, the fixed tab bar. The room and its side panel are
- * the index child; Team and Settings are placeholders until 11.8 and 11.9.
+ * the index child; Settings' Look choices apply to this whole shell, not only its own page.
  */
 export function BoldShell() {
   const agents = useStreamQuery(agentsQuery).data ?? []
@@ -69,8 +71,12 @@ export function BoldShell() {
   const view = viewOf(location.pathname)
   const phone = useMediaQuery(PHONE)
   const systemLight = useMediaQuery('(prefers-color-scheme: light)')
+  const look = useLook()
+  const scale = useTextScale()
+  // The Look setting (11.9a) decides; Search's "Switch to dark/light" (11.10f) overrides it for this visit only.
   const [manualLight, setManualLight] = useState<boolean | null>(null)
-  const light = manualLight ?? systemLight
+  const light = manualLight ?? (look.mode === 'system' ? systemLight : look.mode === 'light')
+  const resolvedLook = light ? 'light' : 'dark'
   const [commandOpen, setCommandOpen] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const commandTrigger = useRef<HTMLElement | null>(null)
@@ -127,7 +133,12 @@ export function BoldShell() {
   )
 
   return (
-    <div className="bold-shell" data-ui="bold" data-look={light ? 'light' : 'dark'}>
+    <div
+      className="bold-shell"
+      data-ui="bold"
+      data-look={resolvedLook}
+      style={{ '--scale': scale } as CSSProperties}
+    >
       <div className="bold-frame" inert={commandOpen || recipesOpen}>
         <header className="top" inert={phone && sheetOpen}>
           <button

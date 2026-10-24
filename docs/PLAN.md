@@ -632,7 +632,7 @@ today's agent page is reachable; e2e; screenshots vs 04/06/20.
 **11.8c Add an agent** ✅ · **DeepSeek** · board 07: new, copy from, import a Hermes profile (progress), coding CLI
 (install + version check); 20 shapes, taken colours fade, preview of changes. Done when: e2e for each path.
 
-**11.9a Settings › Connections and Look** · **DeepSeek** · boards 15, 16: Hermes, providers (local endpoint),
+**11.9a Settings › Connections and Look** ✅ (trigger follow-ups on main) · **DeepSeek** · boards 15, 16: Hermes, providers (local endpoint),
 channels, your phone; tool servers + Tools and triggers UI (D18 four steps, data from 11.1d); Look (dark/light/match,
 motion, text size, per-device vs shared, send key, currency, New look switch). Done when: e2e; screenshots vs 15/16.
 
