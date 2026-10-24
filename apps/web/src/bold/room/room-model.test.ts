@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 import type { Exchange, ExchangeOption, Job } from '@score/contract'
 import {
+  approvalInRoom,
   exchangePauseAsk,
   exchangePauseTitle,
   exchangeStatus,
@@ -105,4 +106,12 @@ test('the pins chip uses the prototype’s singular and plural count', () => {
   expect(pinsMoreLabel(2, false)).toBe('1 more needs you')
   expect(pinsMoreLabel(3, false)).toBe('2 more need you')
   expect(pinsMoreLabel(3, true)).toBe('Show fewer')
+})
+
+test('an approval belongs to every room its run touched, and to every room when it names none', () => {
+  const room = (roomId: string) => ({ kind: 'room' as const, roomId })
+  expect(approvalInRoom({ refs: [room('a'), room('b')] }, 'a')).toBe(true)
+  expect(approvalInRoom({ refs: [room('a'), room('b')] }, 'b')).toBe(true)
+  expect(approvalInRoom({ refs: [room('b')] }, 'a')).toBe(false)
+  expect(approvalInRoom({ refs: [] }, 'a')).toBe(true)
 })

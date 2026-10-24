@@ -112,7 +112,9 @@ test('a paused exchange shows a protected decision card and step-in answers it',
   expect(JSON.parse(String(call.init.body))).toEqual({ option: 'step_in', text: 'Carry on' })
 })
 
-test('a pending approval in the thread is a pointer to Needs you, not a second decision', async () => {
+// The strip may be filtered to another job or covered by the phone sheet, so the thread never points at a card it
+// can't guarantee is visible: it shows the approval itself.
+test('a pending approval in the thread is its real card, never a pointer to a strip that may be hidden', async () => {
   const approval: Approval = {
     id: 'approval-1',
     origin: 'score-run',
@@ -145,8 +147,8 @@ test('a pending approval in the thread is a pointer to Needs you, not a second d
     ],
   })
   renderInRoom(<BoldThread jobId="job-1" onSelectJob={() => undefined} />, ['/b'])
-  expect(await screen.findByText('Waiting in Needs you')).toBeTruthy()
-  expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+  expect(await screen.findByText('May I install a package?')).toBeTruthy()
+  expect(screen.queryByText('Waiting in Needs you')).toBeNull()
 })
 
 test('stop asks first and sends once confirmed; a finished job cannot be stopped', async () => {

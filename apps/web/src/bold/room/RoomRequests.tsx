@@ -26,6 +26,7 @@ import {
   needsYou,
   optionLabel,
   pinsMoreLabel,
+  approvalInRoom,
   approvalNeedsYou,
 } from './room-model.ts'
 import { PinCard, PinsProvider, usePinRegistry } from './PinCards.tsx'
@@ -87,20 +88,22 @@ export function ExchangeRequestCard({
   const to = agents.find((agent) => agent.id === exchange.to)
   const [pending, setPending] = useState<PendingOption>(null)
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState<{
-    reason: string | null
-    options: string
-    text: string
-  } | null>(null)
+  const [sent, setSent] = useState<{ pause: string; text: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const options = exchange.pause?.options ?? []
-  const pauseReason = exchange.pause?.reason ?? null
-  const pauseOptions = options.join(',')
-  // A server bump of updatedAt is not a new pause: only a cleared pause or a different reason/options releases the
-  // buttons again. This keeps the sent state until the exchange itself changes.
-  const sentMatchesPause =
-    sent !== null && sent.reason === pauseReason && sent.options === pauseOptions
-  if (sent !== null && (!exchange.pause || !sentMatchesPause)) setSent(null)
+  // Which pause this is: the exchange, why it stopped, the choices, and how far it had got. A bare updatedAt bump keeps
+  // the sent line; the same exchange pausing again later (more turns used, a bigger budget) brings the buttons back.
+  const pauseIdentity = exchange.pause
+    ? [
+        exchange.id,
+        exchange.pause.reason,
+        options.join(','),
+        exchange.turnsUsed,
+        exchange.budget,
+      ].join('|')
+    : null
+  const sentMatchesPause = sent !== null && sent.pause === pauseIdentity
+  if (sent !== null && !sentMatchesPause) setSent(null)
   const sentText = sentMatchesPause ? sent.text : null
   const reassignChoices = agents.filter(
     (agent) => agent.id !== exchange.from && agent.id !== exchange.to,
@@ -148,11 +151,11 @@ export function ExchangeRequestCard({
         method: 'POST',
         body: JSON.stringify(body),
       })
-      setSent({
-        reason: pauseReason,
-        options: pauseOptions,
-        text: option === 'send_back' ? 'Sent back with your note.' : 'Decision sent.',
-      })
+      if (pauseIdentity !== null)
+        setSent({
+          pause: pauseIdentity,
+          text: option === 'send_back' ? 'Sent back with your note.' : 'Decision sent.',
+        })
       setPending(null)
       onAnswered?.()
     } catch (failure) {
@@ -487,8 +490,8 @@ function RoomApprovals({
   report: CountCards
 }) {
   const cards = approvals.flatMap((approval) => {
-    // `approvalsQuery` is global. A room ref other than this one means the card belongs to another room's strip.
-    if (approval.refs.some((ref) => ref.kind === 'room' && ref.roomId !== roomId)) return []
+    // `approvalsQuery` is global: an approval that names only other rooms belongs to their strips.
+    if (!approvalInRoom(approval, roomId)) return []
     const message = messages.find((item) =>
       item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
     )

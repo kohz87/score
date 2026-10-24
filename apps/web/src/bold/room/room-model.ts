@@ -120,10 +120,14 @@ export function approvalNeedsYou(approval: Approval): boolean {
 /** Approvals that belong in this room's Needs-you strip: open and either unaddressed or addressed to this room. */
 export function roomApprovals(approvals: Approval[], roomId: string): Approval[] {
   return approvals.filter(
-    (approval) =>
-      approvalNeedsYou(approval) &&
-      !approval.refs.some((ref) => ref.kind === 'room' && ref.roomId !== roomId),
+    (approval) => approvalNeedsYou(approval) && approvalInRoom(approval, roomId),
   )
+}
+
+/** An approval names every room its run touched; it belongs elsewhere only when it names rooms and none is this one. */
+export function approvalInRoom(approval: Pick<Approval, 'refs'>, roomId: string): boolean {
+  const rooms = approval.refs.flatMap((ref) => (ref.kind === 'room' ? [ref.roomId] : []))
+  return rooms.length === 0 || rooms.includes(roomId)
 }
 
 export function approvalPointerSet(approvals: Approval[], roomId: string): Set<string> {
