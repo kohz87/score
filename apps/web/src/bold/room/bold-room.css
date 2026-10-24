@@ -139,6 +139,22 @@
   gap: 10px;
 }
 
+/* Agent names read against the light object (dark mode) or the dark one (light mode): the other mode's tints. The
+   prototype's name tints are one set per mode, chosen for the ground, and unreadable on the object for you. */
+[data-ui='bold'] .bold-request {
+  --agent-violet-name: #4a2fd9;
+  --agent-jade-name: #00694f;
+  --agent-saffron-name: #8a5a00;
+  --agent-coral-name: #b01e43;
+}
+
+[data-ui='bold'][data-look='light'] .bold-request {
+  --agent-violet-name: #b3a6ff;
+  --agent-jade-name: #5ee3bf;
+  --agent-saffron-name: #ffc94d;
+  --agent-coral-name: #ff97ae;
+}
+
 [data-ui='bold'] .bold-request-head {
   display: flex;
   align-items: center;
@@ -171,6 +187,7 @@
 }
 
 [data-ui='bold'] .bold-request .small,
+[data-ui='bold'] .bold-request .muted,
 [data-ui='bold'] .bold-request-form label {
   color: var(--hi-sub);
 }

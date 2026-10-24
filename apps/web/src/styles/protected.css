@@ -182,6 +182,10 @@
     --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif !important;
     --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif !important;
     --font-code: 'JetBrains Mono', ui-monospace, monospace !important;
+    /* The bold shell's own font tokens (bold/bold-theme.css maps them to the theme's fonts): Score's three here too. */
+    --font-d: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif !important;
+    --font-b: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif !important;
+    --font-m: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace !important;
   }
   html[data-look='custom'] [data-protected] {
     isolation: isolate !important;
@@ -190,6 +194,10 @@
     --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif !important;
     --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif !important;
     --font-code: 'JetBrains Mono', ui-monospace, monospace !important;
+    /* The bold shell's own font tokens (bold/bold-theme.css maps them to the theme's fonts): Score's three here too. */
+    --font-d: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif !important;
+    --font-b: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif !important;
+    --font-m: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace !important;
   }
   html[data-look='custom'] [data-protected='block'] {
     display: block !important;

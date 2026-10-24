@@ -489,8 +489,18 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
 }
 
 export async function openBoldRoom(page: Page, options: BoldRoomOptions = {}) {
+  return openBoldRoomWith(page, options)
+}
+
+/** `before` runs after the room's routes are in place and before the page opens (the theme routes of 11.9d). */
+export async function openBoldRoomWith(
+  page: Page,
+  options: BoldRoomOptions = {},
+  before?: (page: Page) => Promise<unknown>,
+) {
   await pair(page)
   const state = await mockBoldRoom(page, options)
+  await before?.(page)
   await page.goto('/b')
   await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
   return state

@@ -7,6 +7,7 @@ import { useStreamQuery } from '../data/query-client.ts'
 import { useTextScale } from '../data/text-scale.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
+import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
 import { agentStateLabel, dockProgress } from './bold-agents.ts'
 import { BoldSearch } from './BoldSearch.tsx'
@@ -15,6 +16,7 @@ import type { BoldSheetState } from './bold-ui.ts'
 import { BoldStartJob, StartJobContext } from './BoldStartJob.tsx'
 import './tokens.css'
 import './bold.css'
+import './bold-theme.css'
 
 const PHONE = '(max-width: 860px)'
 
@@ -73,10 +75,25 @@ export function BoldShell() {
   const phone = useMediaQuery(PHONE)
   const systemLight = useMediaQuery('(prefers-color-scheme: light)')
   const look = useLook()
+  const preview = usePreview()
+  const shellRef = useRef<HTMLDivElement>(null)
+  // The Customizer's frame (11.9d) has a document of its own: the colour mode it previews is on its <html>, not the
+  // host's Look, and the shell must never touch the Customizer page's body or keys.
+  const [previewLight, setPreviewLight] = useState<boolean | null>(null)
+  useEffect(() => {
+    const html = shellRef.current?.ownerDocument.documentElement
+    if (!preview || !html) return
+    const read = () => setPreviewLight(html.getAttribute('data-theme') === 'light')
+    read()
+    const observer = new MutationObserver(read)
+    observer.observe(html, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [preview])
   const scale = useTextScale()
   // The Look setting (11.9a) decides; Search's "Switch to dark/light" (11.10f) overrides it for this visit only.
   const [manualLight, setManualLight] = useState<boolean | null>(null)
-  const light = manualLight ?? (look.mode === 'system' ? systemLight : look.mode === 'light')
+  const light =
+    manualLight ?? previewLight ?? (look.mode === 'system' ? systemLight : look.mode === 'light')
   const resolvedLook = light ? 'light' : 'dark'
   const [commandOpen, setCommandOpen] = useState(false)
   // Start a job is open while the address says `?start=job` (bold-links.ts) or the room's button opened it.
@@ -106,9 +123,10 @@ export function BoldShell() {
   // The player screen is an ordinary page, even though it belongs to Room in the navigation.
   const fit = view === 'room' && location.pathname === '/b'
   useEffect(() => {
-    if (!fit) return
-    document.body.classList.add('fit')
-    return () => document.body.classList.remove('fit')
+    const body = shellRef.current?.ownerDocument.body
+    if (!fit || !body) return
+    body.classList.add('fit')
+    return () => body.classList.remove('fit')
   }, [fit])
 
   const openCommand = useCallback(() => {
@@ -128,6 +146,7 @@ export function BoldShell() {
   }, [])
 
   useEffect(() => {
+    if (preview) return
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
@@ -136,7 +155,7 @@ export function BoldShell() {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [openCommand])
+  }, [openCommand, preview])
 
   const go = (to: string) => () => void navigate(to)
   const navButton = (target: View, label: string, to: string) => (
@@ -153,6 +172,7 @@ export function BoldShell() {
   return (
     <StartJobContext value={startContext}>
       <div
+        ref={shellRef}
         className="bold-shell"
         data-ui="bold"
         data-look={resolvedLook}

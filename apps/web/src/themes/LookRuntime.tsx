@@ -185,16 +185,23 @@ function LookBanner({
   safe: boolean
   failure: string | null
 }): ReactNode {
+  const path = useSyncExternalStore(
+    (notify) => router?.subscribe(notify) ?? (() => undefined),
+    () => router?.state.location.pathname ?? window.location.pathname,
+    () => '/',
+  )
   if (!safe && !failure) return null
+  // The way back leads to the Look settings of the shell the person is in (11.9d).
+  const lookPath = path === '/b' || path.startsWith('/b/') ? '/b/settings/look' : '/settings/look'
   return (
     <div className="look-banner" role="status" data-protected="flex">
       <span>{safe ? 'Safe look: your theme is off for this visit' : failure}</span>
       <a
-        href="/settings/look"
+        href={lookPath}
         onClick={(event) => {
           if (!router) return
           event.preventDefault()
-          void router.navigate('/settings/look')
+          void router.navigate(lookPath)
         }}
       >
         Settings › Look
