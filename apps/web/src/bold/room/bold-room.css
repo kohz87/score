@@ -233,8 +233,8 @@
   font-weight: 700;
 }
 
-/* A trigger-started job's source. It paints no ground of its own: under a failing theme the protected fallback gives it
-   an opaque panel, and the theme's own surface shows through in every other case. */
+/* A trigger-started job's source: the prototype's deep card. Under a failing theme the fallback's tokens make it Score's
+   own deep. */
 [data-ui='bold'] .bold-source {
   display: flex;
   flex-direction: column;
@@ -242,6 +242,7 @@
   gap: 5px;
   padding: 12px 14px;
   border-radius: 20px;
+  background: var(--deep);
   box-shadow: inset 0 0 0 1px var(--line);
   font-size: 13px;
 }

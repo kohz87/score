@@ -42,23 +42,6 @@ const protectedPair = {
   },
 } as const
 
-/** Reads an element's text colour and its nearest opaque background, from computed styles. */
-async function computedPair(locator: Locator): Promise<[string, string]> {
-  return locator.evaluate((element) => {
-    const rgb = (value: string) => {
-      const parts = value.match(/\d+/g)?.map(Number) ?? []
-      return `rgb(${parts[0] ?? 0}, ${parts[1] ?? 0}, ${parts[2] ?? 0})`
-    }
-    const colour = getComputedStyle(element).color
-    for (let node: Element | null = element; node; node = node.parentElement) {
-      const background = getComputedStyle(node).backgroundColor
-      if (background && background !== 'rgba(0, 0, 0, 0)' && background !== 'transparent')
-        return [rgb(colour), rgb(background)]
-    }
-    return [rgb(colour), 'rgb(255, 255, 255)']
-  })
-}
-
 /** WCAG AA for the text and the fill a person reads it on. */
 async function expectReadable(locator: Locator, [colour, background]: readonly [string, string]) {
   await expect(locator).toBeVisible()
@@ -171,16 +154,18 @@ test('a failing theme gives protected text with no fill an opaque Score ground',
   await page.getByRole('tab', { name: /Activity feed/ }).click()
   const shared = page.locator('[data-ui="bold"] .bold-shared')
   await expect(shared).toContainText('shared from a one-to-one with you')
-  const [sharedInk, sharedGround] = await computedPair(shared)
-  expect([sharedInk, sharedGround]).toEqual(expected)
+  // Asserted on the element itself, so an ancestor's fill can't stand in for the fallback's.
+  await expect(shared).toHaveCSS('background-color', expected[1])
+  await expect(shared).toHaveCSS('color', expected[0])
   await expectReadable(shared, expected)
 
-  // Started by has no fill of its own: the fallback panel is its ground.
+  // Started by paints the prototype's deep card; in the fallback that is Score's own deep, not the theme's.
   const started = page.getByRole('article', { name: /^Started by Tickets/ })
   await expect(started).toContainText('TCK-142')
-  await expect(started).toHaveCSS('background-color', expected[1])
-  await expect(started).toHaveCSS('color', expected[0])
-  await expectReadable(started, expected)
+  const deep: [string, string] = [expected[0], 'rgb(22, 23, 30)']
+  await expect(started).toHaveCSS('background-color', deep[1])
+  await expect(started).toHaveCSS('color', deep[0])
+  await expectReadable(started, deep)
 })
 
 for (const id of themed) {
