@@ -13,6 +13,7 @@
   --font-b: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
   --font-m: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   --scale: 1;
+  --thumb: rgba(236, 238, 241, 0.14); --thumb-hi: rgba(236, 238, 241, 0.34);
   color-scheme: dark;
 }
 body[data-look="light"] {
@@ -20,9 +21,19 @@ body[data-look="light"] {
   --ink: #12131a; --ink2: #3a3d45; --muted: #5e626c; --faint: #9a9ea7;
   --hi-bg: #12131a; --hi-ink: #ffffff; --hi-line: #ffffff; --hi-sub: #c9cbd2;
   --code-bg: #1e2029; --code-ink: #d6d8de; --ok: #00694f; --warn: #8a5a00; --bad: #b01e43;
+  --thumb: rgba(18, 19, 26, 0.14); --thumb-hi: rgba(18, 19, 26, 0.38);
   color-scheme: light;
 }
 * { box-sizing: border-box; }
+/* Scrollbars: a thin pill that floats in the gutter, faint until the area is hovered. Chrome and Safari take the
+   ::-webkit rules (setting scrollbar-color there would switch them off); Firefox takes scrollbar-color. */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--thumb); border-radius: 999px; border: 4px solid transparent; background-clip: padding-box; min-height: 40px; }
+:hover::-webkit-scrollbar-thumb { background-color: var(--thumb-hi); }
+::-webkit-scrollbar-thumb:active { background-color: var(--ink2); }
+::-webkit-scrollbar-button { display: none; }
+@supports (-moz-appearance: none) { * { scrollbar-width: thin; scrollbar-color: var(--thumb) transparent; } *:hover { scrollbar-color: var(--thumb-hi) transparent; } }
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-b); font-size: calc(15px * var(--scale)); line-height: 1.5; }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -89,7 +100,7 @@ label.lab { font-size: 0.87em; font-weight: 600; color: var(--muted); display: b
 .pin .btn { background: var(--hi-ink); color: var(--hi-bg); }
 .pin .btn.ghost { background: transparent; color: var(--hi-ink); box-shadow: inset 0 0 0 1.5px var(--hi-ink); }
 .pin .sub { color: var(--hi-sub); font-size: 0.87em; }
-.stream { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; min-height: 260px; padding-right: 2px; }
+.stream { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; min-height: 260px; padding: 14px 2px 4px 0; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px); mask-image: linear-gradient(to bottom, transparent 0, #000 22px); }
 .stream > :first-child, #dmstream > :first-child { margin-top: auto; }
 .pins { flex: none; display: flex; flex-direction: column; gap: 12px; max-height: 40%; overflow-y: auto; overscroll-behavior: contain; border-radius: 22px; }
 /* The room fills the window: the page never scrolls, the stream, the pinned requests and the side panel scroll inside. */
@@ -125,7 +136,7 @@ body.fit .stream { min-height: 120px; }
 /* side panel */
 .side { flex: 1; background: var(--deep); border-radius: 30px; box-shadow: 0 0 0 1px var(--line); display: flex; flex-direction: column; overflow: hidden; min-height: 560px; position: relative; }
 .sidehead { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; position: relative; }
-.sidebody { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.sidebody { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .card { background: var(--panel); border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
 .white { background: #fff; color: #12131a; border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 10px; border: 0; text-align: left; }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
