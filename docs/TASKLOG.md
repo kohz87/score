@@ -999,3 +999,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   109/110 (room, library, results, workbench, shell, first run, start job, classic chat/composer) — the one failure,
   classic `chat-rooms` "finished orchestration room can be deleted", passes alone 3/3 here and on main: order-dependent
   in long runs, to settle at the 11.12 full e2e. Full check green (web 3,210). Not deployed.
+- **11.6b wiring (lead, 2026-10-24).** `workspace://` links in the bold room's messages open the job's Workbench at that
+  file when the job changed it (from the Results data the side panel already holds), else the agent's workspace;
+  `MessageItem` takes an optional `workspaceLinkFor`, so the classic chat keeps its Team › Workspace links (unit test
+  for both). Room, Workbench, classic chat and workspace e2e 44/44.

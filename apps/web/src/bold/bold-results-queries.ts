@@ -36,7 +36,7 @@ export const boldTeamRoomQuery = defineStreamQuery<TeamRoom>({
   },
 })
 
-const jobResultsKey = (jobId: string) => ['bold', 'job-results', jobId] as const
+export const jobResultsKey = (jobId: string) => ['bold', 'job-results', jobId] as const
 
 async function fetchJobResults(jobId: string, signal?: AbortSignal): Promise<JobResults> {
   return JobResultsSchema.parse(
