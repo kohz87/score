@@ -14,6 +14,7 @@ afterEach(() => {
   cleanup()
   routers.splice(0).forEach((router) => router.dispose())
   document.documentElement.removeAttribute('data-score-transport')
+  window.localStorage.clear()
   window.history.replaceState(null, '', '/')
   vi.unstubAllGlobals()
 })
@@ -26,11 +27,47 @@ function pairPage(transport = 'tls') {
   })
   routers.push(router)
   render(
-    <StrictMode>
-      <RouterProvider router={router} />
-    </StrictMode>,
+    withClient(
+      <StrictMode>
+        <RouterProvider router={router} />
+      </StrictMode>,
+    ),
   )
 }
+
+test('the New look restyles pairing without changing its protected consent card', async () => {
+  window.localStorage.setItem('score.ui', 'bold')
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+  pairPage()
+  await screen.findByRole('button', { name: 'Pair this browser' })
+  const frame = await waitFor(() => {
+    const element = document.querySelector<HTMLElement>('.bold-pair-page')
+    expect(element).not.toBeNull()
+    return element
+  })
+  expect(frame).not.toBeNull()
+  expect(frame?.dataset.ui).toBe('bold')
+  expect(frame?.dataset.look).toBe('dark')
+  const card = document.querySelector('.pair-card')!
+  expect(card.getAttribute('data-protected')).toBe('block')
+  expect(screen.getByRole('button', { name: 'Pair this browser' })).toBeDefined()
+})
+
+test('the bold pairing page paints from the stored theme without asking the server for themes', async () => {
+  window.localStorage.setItem('score.ui', 'bold')
+  window.localStorage.setItem('score.theme', 'light')
+  const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+  vi.stubGlobal('fetch', fetch)
+  pairPage()
+  await screen.findByRole('button', { name: 'Pair this browser' })
+  const frame = await waitFor(() => {
+    const element = document.querySelector<HTMLElement>('.bold-pair-page')
+    expect(element).not.toBeNull()
+    return element
+  })
+  expect(frame?.dataset.look).toBe('light')
+  expect(fetch).not.toHaveBeenCalled()
+})
 
 test.each(['tls'])(
   'remote %s pairing clears the fragment and waits for explicit consent',

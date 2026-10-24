@@ -937,3 +937,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   colours, e2e gaps), 4 P3 — all fixed. Lead: e2e assertions matched the unit-test mock instead of the server's preview,
   and inexact text matches. E2E 55/55 (add agent, team, classic team/agent/coding, shell, protection); full check green
   (web 3,107). Not deployed.
+- **11.9a Settings › Connections, Tools and triggers, Look (DeepSeek + lead, 2026-10-24).** Connections (Hermes,
+  providers incl. local endpoint, channels, phone), Tools and triggers (tool servers list/add — test/remove stay in
+  Hermes, a contract gap; the D18 trigger wizard: pick the app, map fields from the payload sample, test call, report
+  back; secret shown once in component state inside a protected card, rotate/delete confirm), Look (dark/light/match,
+  motion, text size, per-device vs shared, send key, currency, the way back to classic; the shell's light/dark follows
+  the Look setting, Search's switch overrides it for the visit), pairing page restyle without fetching before pairing.
+  Build + 1 fix round. Sonnet: 1 P1 (the Triggers UI wasn't built — the branch predated 11.1d), 3 P2, 2 P3 — fixed;
+  second focused review of the trigger wizard: secret handling, XSS and confirmations sound; 2 P2 follow-ups (a
+  half-made trigger stays live after "Finish later"; the e2e's job came from the pre-mapping test call) — lead
+  follow-up on main. Lead: merges with main (shell look/scale with the recipe dialog's inert), e2e locators.
+  E2E 264/264 (connections/look, settings, classic settings/themes/pair, protection, shell, search); full check green
+  (web 3,123). Not deployed.

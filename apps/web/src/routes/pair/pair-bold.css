@@ -1,0 +1,85 @@
+/* The pairing page under the bold tokens (PLAN 11.9a). Scoped to the bold wrapper; the classic page is untouched. */
+[data-ui='bold'].bold-pair-page {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-b);
+  font-size: calc(15px * var(--scale));
+  line-height: 1.5;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top, 0px)) 20px max(24px, env(safe-area-inset-bottom, 0px));
+}
+
+[data-ui='bold'].bold-pair-page *,
+[data-ui='bold'].bold-pair-page *::before,
+[data-ui='bold'].bold-pair-page *::after {
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .bold-pair-content {
+  width: 100%;
+  max-width: 560px;
+}
+
+[data-ui='bold'] .bold-pair-content h1 {
+  font-family: var(--font-d);
+  font-size: clamp(34px, 7vw, 46px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  margin: 0 0 20px;
+}
+
+[data-ui='bold'] .bold-pair-content .pair-card {
+  margin: 0;
+  padding: 24px;
+  background: var(--panel);
+  border: 0;
+  border-radius: 28px;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+[data-ui='bold'] .bold-pair-content .pair-card p {
+  margin: 0;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-pair-content .pair-card button {
+  align-self: flex-start;
+  margin: 0;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-pair-content .pair-card button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+[data-ui='bold'] .bold-pair-content .pair-card a {
+  color: var(--ink);
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+
+[data-ui='bold'] .bold-pair-content .pair-card [role='alert'] {
+  color: var(--bad);
+}
+
+@media (max-width: 599px) {
+  [data-ui='bold'].bold-pair-page {
+    padding-inline: 14px;
+    place-items: start center;
+    padding-top: max(48px, env(safe-area-inset-top, 0px));
+  }
+}
