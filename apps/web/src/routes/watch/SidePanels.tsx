@@ -88,7 +88,7 @@ export function WhatTheyAreDoing({
   )
 }
 
-function Miniature({ item }: { item: WatchOverviewItem }) {
+export function ScreenMiniature({ item }: { item: WatchOverviewItem }) {
   if (item.thumbnail)
     return (
       <img className="watch-mini__img" src={item.thumbnail} alt={`${item.agent.name}’s screen`} />
@@ -143,7 +143,7 @@ export function OtherScreens({
           <li key={item.agent.id}>
             <Link to={`/now/watch/${encodeURIComponent(item.agent.id)}`} className="watch-mini">
               <span className="watch-mini__screen">
-                <Miniature item={item} />
+                <ScreenMiniature item={item} />
               </span>
               <span className="watch-mini__meta">
                 <AgentGlyph agent={item.agent} size="xs" decorative />

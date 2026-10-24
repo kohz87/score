@@ -44,9 +44,18 @@ for (const viewport of sizes) {
         level: 1,
       }),
     ).toBeVisible()
+    const add = page.getByRole('button', {
+      name: viewport.width > 860 ? 'Add an agent' : 'Add',
+    })
+    await expect(add).toBeEnabled()
+    await add.click()
+    const addDialog = page.getByRole('dialog', { name: 'Add an agent' })
+    await expect(addDialog.getByText('New agent', { exact: true })).toBeVisible()
     await expect(
-      page.getByRole('button', { name: viewport.width > 860 ? 'Add an agent' : 'Add' }),
-    ).toBeDisabled()
+      addDialog.getByRole('radiogroup', { name: 'Shape' }).getByRole('radio'),
+    ).toHaveCount(20)
+    await addDialog.getByRole('button', { name: 'Close' }).click()
+    await expect(addDialog).toHaveCount(0)
     await expect(page.locator('.bold-agentcard')).toHaveCount(4)
 
     const builder = page

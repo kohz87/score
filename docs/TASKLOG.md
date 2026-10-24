@@ -915,3 +915,37 @@ One entry per completed task: what landed, review results, and any **rejected re
   `spendCapUsd` and `recipe { kind: orchestration|workflow; ref }`; `Job` shows `spendCapUsd` and `recipe`. The columns
   existed since 0080; the Start-a-job review showed the dialog had no way to set limits on a plain job or to link a job
   to the orchestration or workflow run it starts. Route test for the fields and their bounds; check green.
+- **11.5 Side panel › Results (DeepSeek pilot + lead, 2026-10-24).** Work › Results in the side panel: change cards
+  ("What changed" from exchange outcomes, who caught what), live preview, drafts, small screens; links to Workbench tabs
+  (`workbenchHref`); never raw code. Rounds: build, a continuation (the first session stopped mid-run) and 1 fix round.
+  Sonnet: 0 P1, 6 P2 — the Workbench switch dropped the job, a refresh storm (every job, every event, even hidden),
+  invented labels ("Saved to the Library", "run has finished", "0 files"), screen tiles contradicting their card, tab
+  semantics and focus — all fixed; judged: a room-wide list matches the prototype's vWork (kept; follows `?job=`).
+  Lead rework: two merges with main by hand (DeepSeek left its resolutions unstaged), and three e2e test errors (two
+  change cards in the room; the stream needs `{ seq, ts, type, data }` envelopes). **Pilot result (owner's rule:
+  ≤ 2 fix rounds and clean code → keep the split):** 1 fix round, code clean after review; the lead's rework was
+  integration and test plumbing, not UI code. Split kept. E2E 67/67 (results, library, shell, protection, search);
+  full check green (web 3,054). Not deployed.
+- **11.8c Add an agent (DeepSeek + lead, 2026-10-24).** The bold add-agent dialog: new, copy from, import a Hermes
+  profile (upload progress, size limit from the shared constant), a coding tool (state and version check; the contract
+  has no install endpoint), 20 shapes, taken colours disabled with unused colours offered, preview of changes, and "Works
+  on" for Hermes agents only (this machine / Docker (partly separated) / SSH) through the 11.8a runs-on API, with the
+  honest outcome on the joined screen. Classic flows shared through hooks (the classic import now also deletes an
+  abandoned upload on unmount — correct, classic e2e green). Build + 1 fix round. Sonnet: 1 P1 (Works on offered for
+  coding tools, which aren't Hermes profiles — the server already answered 404 in live and fake; the UI no longer offers
+  it), 4 P2 (unclear failed runs-on outcome, an overclaiming "Docker sandbox" label, a colour cap that reused taken
+  colours, e2e gaps), 4 P3 — all fixed. Lead: e2e assertions matched the unit-test mock instead of the server's preview,
+  and inexact text matches. E2E 55/55 (add agent, team, classic team/agent/coding, shell, protection); full check green
+  (web 3,107). Not deployed.
+- **11.9a Settings › Connections, Tools and triggers, Look (DeepSeek + lead, 2026-10-24).** Connections (Hermes,
+  providers incl. local endpoint, channels, phone), Tools and triggers (tool servers list/add — test/remove stay in
+  Hermes, a contract gap; the D18 trigger wizard: pick the app, map fields from the payload sample, test call, report
+  back; secret shown once in component state inside a protected card, rotate/delete confirm), Look (dark/light/match,
+  motion, text size, per-device vs shared, send key, currency, the way back to classic; the shell's light/dark follows
+  the Look setting, Search's switch overrides it for the visit), pairing page restyle without fetching before pairing.
+  Build + 1 fix round. Sonnet: 1 P1 (the Triggers UI wasn't built — the branch predated 11.1d), 3 P2, 2 P3 — fixed;
+  second focused review of the trigger wizard: secret handling, XSS and confirmations sound; 2 P2 follow-ups (a
+  half-made trigger stays live after "Finish later"; the e2e's job came from the pre-mapping test call) — lead
+  follow-up on main. Lead: merges with main (shell look/scale with the recipe dialog's inert), e2e locators.
+  E2E 264/264 (connections/look, settings, classic settings/themes/pair, protection, shell, search); full check green
+  (web 3,123). Not deployed.

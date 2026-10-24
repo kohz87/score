@@ -11,6 +11,7 @@ import {
   boldRecipesLink,
   boldSettingsSectionLink,
   boldStartJobLink,
+  boldWorkbenchLink,
 } from './bold-links.ts'
 
 test('every bold-shell destination keeps its query parameters in one place', () => {
@@ -25,4 +26,7 @@ test('every bold-shell destination keeps its query parameters in one place', () 
   expect(boldCommandLink('assign')).toBe('/b?command=assign')
   expect(boldAddAgentLink()).toBe('/b/team?add=agent')
   expect(boldSettingsSectionLink('look')).toBe('/b/settings/look')
+  expect(boldWorkbenchLink('?job=job+1&note=Projects%2FRoadmap.md')).toBe(
+    '/b?job=job+1&note=Projects%2FRoadmap.md&work=workbench',
+  )
 })

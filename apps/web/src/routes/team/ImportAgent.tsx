@@ -1,25 +1,14 @@
-import {
-  AgentOperationSchema,
-  ImportInspectionSchema,
-  PROFILE_IMPORT_MAX_BYTES,
-  type AgentOperation,
-  type AgentStyle,
-  type AgentSummary,
-  type ImportInspection,
-} from '@score/contract'
-import { useMutation } from '@tanstack/react-query'
+import { type AgentSummary } from '@score/contract'
 import { useEffect, useRef, useState } from 'react'
 import { AgentAppearanceFields } from './AgentAppearanceFields.tsx'
-import { apiFetch, apiUpload, type UploadProgress as Progress } from '../../data/api.ts'
 import { UploadProgress } from '../../components/UploadProgress.tsx'
-import { newId } from '../../data/ids.ts'
 import { AgentAdded } from './AgentAdded.tsx'
-import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
+import { ProfileOperation } from './ProfileOperation.tsx'
+import { useAgentImport } from './use-agent-import.ts'
 
 const MiB = 1024 * 1024
 const size = (bytes: number) =>
   bytes >= MiB ? `${(bytes / MiB).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
-const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/
 
 export function ImportAgent({ agents }: { agents: AgentSummary[] }) {
   const [open, setOpen] = useState(false)
@@ -53,72 +42,32 @@ function List({ label, values }: { label: string; values: string[] }) {
 
 function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const [inspection, setInspection] = useState<ImportInspection | null>(null)
-  const [id, setId] = useState('')
-  const [name, setName] = useState('')
-  const [role, setRole] = useState('')
-  const [style, setStyle] = useState<AgentStyle>({ color: '#19C39A', shape: 'triangle' })
-  const [credentialsOk, setCredentialsOk] = useState(false)
-  const [accepted, setAccepted] = useState<AgentOperation | null>(null)
-  const status = useProfileOperation(accepted?.id ?? null)
-  const operation = status.data ?? accepted
+  const draft = useAgentImport(agents, close)
+  const {
+    inspection,
+    id,
+    setId,
+    name,
+    setName,
+    role,
+    setRole,
+    style,
+    setStyle,
+    credentialsOk,
+    setCredentialsOk,
+    status,
+    operation,
+    sending,
+    upload,
+    start,
+    leave,
+    taken,
+    idValid,
+    blocked,
+  } = draft
   useEffect(() => {
     dialog.current?.showModal?.()
   }, [])
-
-  const [sending, setSending] = useState<{ name: string; progress: Progress } | null>(null)
-  const upload = useMutation({
-    mutationFn: async (file: File) => {
-      if (file.size > PROFILE_IMPORT_MAX_BYTES)
-        throw new Error('The archive is larger than 200 MB.')
-      setSending({ name: file.name, progress: { loaded: 0, total: file.size } })
-      return ImportInspectionSchema.parse(
-        await apiUpload(
-          'agents/imports',
-          file,
-          (progress) => setSending({ name: file.name, progress }),
-          {},
-          'POST',
-        ),
-      )
-    },
-    onSettled: () => setSending(null),
-    onSuccess: (result) => {
-      setInspection(result)
-      setId(result.suggestedId ?? '')
-      setName(result.suggestedId ?? '')
-      setRole(result.description ?? '')
-    },
-  })
-  const start = useMutation({
-    mutationFn: async () =>
-      AgentOperationSchema.parse(
-        await apiFetch('agents/import', {
-          method: 'POST',
-          headers: { 'Idempotency-Key': newId() },
-          body: JSON.stringify({
-            uploadId: inspection!.uploadId,
-            id,
-            name: name || id,
-            role,
-            style,
-            ...(inspection!.credentialFiles.length ? { confirmCredentials: credentialsOk } : {}),
-          }),
-        }),
-      ),
-    onSuccess: setAccepted,
-  })
-  // Leaving the preview drops the stored upload; once an import runs, the server owns it.
-  const leave = () => {
-    if (inspection && !accepted)
-      void apiFetch(`agents/imports/${inspection.uploadId}`, { method: 'DELETE' }).catch(() => {})
-    close()
-  }
-
-  const taken = agents.some((agent) => agent.id === id)
-  const idValid = ID_PATTERN.test(id) && id !== 'default'
-  const needsCredentialOk = Boolean(inspection?.credentialFiles.length) && !credentialsOk
-  const blocked = !idValid || taken || !role.trim() || needsCredentialOk || start.isPending
 
   return (
     <dialog

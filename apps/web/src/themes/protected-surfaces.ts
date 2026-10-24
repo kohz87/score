@@ -26,6 +26,12 @@ export const protectedClasses = [
   'bold-needs',
   // PLAN 11.10b: first run asks for the lead, the service choice and the starter recipes
   'bold-first-run-decision',
+  // PLAN 11.9a: bold credential panels, the Add tool server form, and trigger secrets / rotate-delete decisions
+  'bold-connect-panel',
+  'bold-tool-add',
+  'bold-trigger-card',
+  'bold-trigger-secret',
+  'bold-trigger-confirm',
   'orch-pill',
   'orch-node__flag',
   // The task drawer's approval and its buttons
@@ -39,6 +45,9 @@ export const protectedClasses = [
   'coding-acknowledge',
   'coding-add-context',
   'coding-add-commit',
+  'bold-add-confirm',
+  'bold-add-error',
+  'bold-add-joined-runs',
   'terminal-auth',
   'admin-password',
   'guard-form',
