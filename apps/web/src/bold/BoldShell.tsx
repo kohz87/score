@@ -72,11 +72,14 @@ export function BoldShell() {
   const commandTrigger = useRef<HTMLElement | null>(null)
   const dockHasProgress = agents.some(() => dockProgress() !== null)
 
-  // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside.
+  // The room fills the window: body.fit stops the page scrolling and lets the room and side panel scroll inside. Only
+  // the room: Team and Settings are ordinary pages, and a fixed-height frame clipped them below the fold on phones.
+  const fit = view === 'room'
   useEffect(() => {
+    if (!fit) return
     document.body.classList.add('fit')
     return () => document.body.classList.remove('fit')
-  }, [])
+  }, [fit])
 
   const openCommand = useCallback(() => {
     if (commandOpen) return

@@ -391,6 +391,11 @@ export function RemoteSection({
       )}
 
       <h3>Paired browsers</h3>
+      {/* Only browsers paired for remote access are listed; on this machine alone (the bold Security page shows the
+          section there too) the list is empty, so say why instead of drawing nothing. */}
+      {browsers.data?.length === 0 && (
+        <p className="small muted">No browser is paired for remote access yet.</p>
+      )}
       <ul aria-label="Paired browsers">
         {browsers.data?.map((browser) => (
           <li key={browser.id}>

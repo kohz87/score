@@ -132,6 +132,7 @@ test.describe('bold Settings', () => {
       await allowNotifications(page)
       await mockRules(page)
       await pair(page)
+      await page.goto('/b/settings')
 
       const nav = page.getByRole('navigation', { name: 'Settings' })
       await expect(nav.getByRole('button')).toHaveCount(10)
@@ -182,17 +183,21 @@ test.describe('bold Settings', () => {
       const rulesRegion = page.getByRole('region', { name: 'Rules' })
       await expect(rulesRegion).toHaveAttribute('data-protected', 'block')
       await expect(rulesRegion.getByRole('radio', { name: 'Guardian first' })).toBeVisible()
-      await expect(rulesRegion.getByRole('group', { name: 'Go ahead' })).toBeVisible()
-      await expect(rulesRegion.getByRole('group', { name: 'Ask me' })).toBeVisible()
-      await expect(rulesRegion.getByRole('group', { name: 'Never' })).toBeVisible()
+      await expect(rulesRegion.getByRole('group', { name: 'Go ahead', exact: true })).toBeVisible()
+      await expect(rulesRegion.getByRole('group', { name: 'Ask me', exact: true })).toBeVisible()
+      await expect(rulesRegion.getByRole('group', { name: 'Never', exact: true })).toBeVisible()
       await rulesRegion.getByRole('radio', { name: /Always ask me/ }).click()
       await rulesRegion.getByRole('button', { name: 'Add a rule' }).click()
       const never = rulesRegion.getByRole('form', { name: 'Add a Never rule' })
       await never.getByLabel(/Never allow commands that match/).fill('rm   -rf /tmp/*')
       await never.getByRole('button', { name: 'Add to Never' }).click()
-      await expect(rulesRegion.getByRole('group', { name: 'Never' })).toContainText('rm -rf /tmp/*')
+      await expect(rulesRegion.getByRole('group', { name: 'Never', exact: true })).toContainText(
+        'rm -rf /tmp/*',
+      )
       await rulesRegion.getByRole('button', { name: 'Review changes' }).click()
-      await expect(rulesRegion.getByLabel('Changes')).toContainText('+never: rm -rf /tmp/*')
+      await expect(rulesRegion.getByLabel('Changes', { exact: true })).toContainText(
+        '+never: rm -rf /tmp/*',
+      )
       const saveRules = rulesRegion.getByRole('button', { name: 'Save for the whole team' })
       await expectMinHeight(saveRules, viewport.width <= 640 ? 44 : 36)
       await expectMinHeight(
@@ -268,7 +273,8 @@ test.describe('bold Settings', () => {
       await expect(remote).toHaveAttribute('data-protected', 'flex')
       await expect(remote.getByLabel('Security password', { exact: true })).toBeVisible()
       await expect(remote.getByRole('button', { name: 'Pair another device' })).toBeVisible()
-      await expect(remote.getByRole('list', { name: 'Paired browsers' })).not.toBeEmpty()
+      // Local mode: only remote pairings are listed, so the list explains itself.
+      await expect(remote.getByText('No browser is paired for remote access yet.')).toBeVisible()
       await expect(remote.getByRole('heading', { name: 'Passkeys' })).toBeVisible()
       const signOut = remote.getByRole('button', { name: 'Log out this browser' })
       const removePasskey = remote.getByRole('button', { name: 'Remove passkey Phone' })
