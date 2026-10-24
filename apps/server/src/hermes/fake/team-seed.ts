@@ -14,6 +14,7 @@ import {
 } from '../../domain/message-runs.ts'
 import { insertRoom, storeMessage, updateMessage } from '../../domain/rooms.ts'
 import { teamRoomId } from '../../domain/team-room.ts'
+import { unifiedDiff } from '../../domain/line-diff.ts'
 import { recordFrame } from '../../domain/watch-frames.ts'
 
 // The fake adapter's demo team room (PLAN 11.2c). Every board state the bold-shell UI tasks need is real data in
@@ -138,6 +139,54 @@ function finishTurn(sqlite: DatabaseSync, turn: Turn, at: string, output: string
     .prepare("UPDATE runs SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ?")
     .run(at, at, turn.runId)
   completeRunMessage(sqlite, turn.runId, at, { output, status: 'completed', reply: output })
+}
+
+const FEED_FILE = 'api/events.py'
+const FEED_V1 = [
+  'PAGE_SIZE = 50',
+  '',
+  '',
+  'def page(after):',
+  '    rows = db.events.where(created_at__gt=after).order_by("created_at")',
+  '    return rows[:PAGE_SIZE]',
+  '',
+  '',
+  'def newest():',
+  '    return page(after=None)',
+  '',
+].join('\n')
+const FEED_V2 = [
+  'PAGE_SIZE = 50',
+  '',
+  '',
+  'def page(after):',
+  '    # (created_at, id): two events in the same millisecond both come through.',
+  '    rows = db.events.where(cursor__gt=after).order_by("created_at", "id")',
+  '    return rows[:PAGE_SIZE]',
+  '',
+  '',
+  'def newest():',
+  '    return page(after=None)',
+  '',
+].join('\n')
+
+function feedEdit(
+  sqlite: DatabaseSync,
+  runId: string,
+  seq: number,
+  at: string,
+  before: string,
+  after: string,
+) {
+  recordFrame(sqlite, {
+    agentId: 'builder',
+    runId,
+    at,
+    callKey: `seed:feed:edit:${seq}`,
+    surface: 'editor',
+    payload: { path: FEED_FILE, diff: unifiedDiff(before, after), language: 'python' },
+    caption: `Edited ${FEED_FILE}`,
+  })
 }
 
 function playTurn(
@@ -317,13 +366,21 @@ function seedActivityFeed(
     'Read layer is ready. Can you review it?',
     'seed-feed-1',
   )
+  // The Workbench (11.6a): builder wrote the read layer, the reviewer's note lands on the cursor line the fix rewrites.
+  feedEdit(sqlite, 'seed_run_feed_1', 1, minutes(nowMs, 49), '', FEED_V1)
   playTurn(
     sqlite,
     job.id,
     'reviewer',
     'seed_run_feed_2',
     minutes(nowMs, 47),
-    { action: 'send_back', note: 'Events in the same millisecond get skipped.\nFix the cursor?' },
+    {
+      action: 'send_back',
+      note: 'Events in the same millisecond get skipped.\nFix the cursor?',
+      comments: [
+        { path: FEED_FILE, line: 5, text: 'Two events in one millisecond: the second is skipped.' },
+      ],
+    },
     'Sent back: events in the same millisecond get skipped. Fix the cursor?',
     'seed-feed-2',
   )
@@ -337,13 +394,18 @@ function seedActivityFeed(
     'Cursor is now (created_at, id), with a test.',
     'seed-feed-3',
   )
+  feedEdit(sqlite, 'seed_run_feed_3', 2, minutes(nowMs, 45), FEED_V1, FEED_V2)
   playTurn(
     sqlite,
     job.id,
     'reviewer',
     'seed_run_feed_4',
     minutes(nowMs, 43),
-    { action: 'approve', note: 'Looks right.' },
+    {
+      action: 'approve',
+      note: 'Looks right.',
+      comments: [{ path: FEED_FILE, line: 7, text: 'Nice: the page size is one constant.' }],
+    },
     'Approved. Looks right.',
     'seed-feed-4',
   )

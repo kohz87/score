@@ -604,7 +604,7 @@ its Workbench tab; never opens on raw code; empty state (09). Done when: e2e on 
 reduced motion; screenshots vs 01/02; TASKLOG records fix rounds, Sonnet findings (real vs rejected) and the lead's
 rework, and the owner is told the pilot result.
 
-**11.6a Workbench data** · **Lead** · `GET /api/jobs/:id/workbench`: per-line authorship from ordered diffs
+**11.6a Workbench data** ✅ · **Lead** · `GET /api/jobs/:id/workbench`: per-line authorship from ordered diffs
 (`line-diff.ts`), review comments on lines from `review`/`send_back` (migration 0085), last edit position, drafts,
 latest screen frame; Hermes Bot Screen frames read-only when present. Done when: authorship test over interleaved edits
 by two agents; comments survive later edits or are marked outdated; nothing exposes a keyboard or takeover path.
@@ -660,7 +660,7 @@ schedule, webhook, D13; routines carried over), ask-me-before, turn budget, spen
 before-it-starts checklist (D2), save as recipe; maps onto today's orchestration/workflow start APIs (migration 0086
 for When if needed). Done when: e2e starts each kind; a routine appears as a scheduled job.
 
-**11.10d Recipe editor** · **DeepSeek**, lead reviews against 7.1 rules · D1: step list (agent steps, gates, branches,
+**11.10d Recipe editor** ✅ · **DeepSeek**, lead reviews against 7.1 rules · D1: step list (agent steps, gates, branches,
 joins, ends, retries 0–2, failure paths, `{{nodes.*}}`/`{{inputs.*}}`, live checking, undo/redo), versions (immutable,
 conflict, start from older), export (scrubbed), optional read-only graph. Done when: every 7.1 editor e2e has a
 step-list equivalent; saved recipes run unchanged on the workflow engine.

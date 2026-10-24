@@ -582,14 +582,18 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   becomes the job's holder. `MessagePart` gains `{ kind: 'notice'; code: 'mention_not_handoff' | 'action_ignored' |
   'action_not_sent' | 'no_lead'; text }` (a line from Score, never agent text).
   - **S** `GET /api/rooms/:roomId/jobs` → `{ asOfSeq; items: Job[] }` (open jobs, the default first).
-  - **H** `POST /api/rooms/:roomId/jobs` `{ title (1–200) }` → `201 Job`; its agents get sessions of their own
+  - **H** `POST /api/rooms/:roomId/jobs` `{ title (1–200); exchangeBudget? (1–100, default 8); jobTurnLimit? (1–1000,
+    default 40); spendCapUsd? (> 0, ≤ 10000; default none); recipe?: { kind: 'orchestration'|'workflow'; ref } }` →
+    `201 Job` (the limits and `recipe` from Start a job, PLAN 11.10c: `recipe` names the orchestration or workflow run
+    the job belongs to; Score stores the link and doesn't start anything from it); its agents get sessions of their own
     (`score-<room>-<job>-<agent>`). Emits `job.upserted`. `409 conflict` for a room on `mentions` (one thread until
     11.11 moves it to exchanges).
   - The team room can't be deleted, renamed, archived or given members (`409 conflict`); its members follow the team's
     agents at every start, and its lead is set with `PATCH /api/rooms/:roomId { leadAgentId }`.
   - **S** `GET /api/jobs/:jobId/exchanges` → `{ asOfSeq; items: Exchange[] }` (oldest first).
   - `Job { id; roomId; title; state: 'open'|'working'|'waiting_on_you'|'done'|'closed'; holderAgentId; isDefault;
-    exchangeBudget (8); jobTurnLimit (40); createdAt; updatedAt }`; `Exchange { id; jobId; roomId; kind:
+    exchangeBudget (8); jobTurnLimit (40); spendCapUsd: number | null; recipe: { kind; ref } | null; createdAt;
+    updatedAt }`; `Exchange { id; jobId; roomId; kind:
     'handoff'|'ask'|'review'; parentId; from; to; state: 'live'|'waiting_on_agent'|'waiting_on_you'|'paused_budget'|
     'done'|'stopped'; round; turnsUsed; budget; outcome: 'approved'|'answered'|'handed_off'|'no_decision'|null;
     endedReason; pause: { reason; options } | null; queuedBehind: { agentId; since } | null; createdAt; updatedAt }`.
@@ -648,6 +652,17 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     imageUrl; live }` from the newest browser watch frame of the job's runs; `draft { agentId; title; target: { kind:
     'document'; mediaId } | { kind: 'workspace'; path } }` from the agents' attachments. `screens`: each agent's newest
     watch frame in the job (`live` while its run is running).
+  - **S** `GET /api/jobs/:jobId/workbench` → `Workbench` (PLAN 11.6a; schemas in `packages/contract/src/workbench.ts`),
+    derived on read and **read-only** (no route under it accepts input; nothing types, clicks or takes over): `files:
+    { path; language; exact; lines: { n; text; by: agentId | null }[]; cursors: { agentId; line | null; at }[];
+    comments: WorkbenchComment[]; editedBy; lastEditAt }[]` replayed from the job's editor watch frames in order (a line
+    belongs to the agent whose edit last wrote it; `by: null` = seen only as context; only lines Score saw are listed;
+    `exact: false` when an edit had no file position or a diff was cut short); `WorkbenchComment { id; by; line | null;
+    originalLine; text; outdated; exchangeId; kind: 'review'|'approve'|'send_back'; at }` — a note moves with later
+    insertions and deletions above it and is `outdated` (line `null`) once its line was changed or removed;
+    `looseComments` (notes on paths the job never edited, with `path`); `drafts` (the Results draft cards); `screens:
+    { frame: WatchFrame; live }[]` (each agent's newest frame in the job, as Watch shows it). Credential files' frames
+    carry no diff, so they add no lines. `404` for an unknown job.
 - **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
   `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409
@@ -1742,6 +1757,10 @@ move for agents.
 (1–64 `[A-Za-z0-9._:-]`); action: ExchangeAction }` where `ExchangeAction` is one of `{action:"handoff", to, note}`,
 `{action:"ask", to, question}`, `{action:"review", to, note}`, `{action:"approve", note}`, `{action:"send_back", note}`
 (each with optional `replaces: commandId`) or `{action:"reply", text}`; notes and questions ≤ 4000 bytes, reply ≤ 8000.
+`review`, `approve` and `send_back` also take optional `comments: { path; line; text }[]` (≤ 20; path ≤ 1024 chars, one
+line; line ≥ 1; text ≤ 1000 bytes): notes pinned to lines of files changed in the job (PLAN 11.6a). They are stored,
+redacted, when the action applies — a verdict's with the review it answered, a review request's with the exchange it
+opened — and shown in the job's Workbench; notes of a verdict that answered nothing are dropped with it.
 The capability names the turn (it is in that turn's input only, valid while the turn is active); the producer's profile
 must be the turn's agent. Answer `200 ExchangeReceipt { status: "staged" | "refused"; commandId; action; code?; message }`:
 `staged` means applied when the turn completes (nothing happens if it fails or is stopped), `refused` carries a `code`

@@ -20,6 +20,100 @@ if (!existsSync(join(dist, 'index.html'))) {
 
 mkdirSync(output, { recursive: true })
 const fixtures = JSON.parse(readFileSync(join(root, 'e2e/fixtures/visual.json'), 'utf8'))
+const recipeDefinition = {
+  name: 'Build, then review',
+  description: 'Build it, review it, then ask before merging.',
+  inputs: [{ name: 'goal', label: 'Goal', required: true, maxChars: 500 }],
+  nodes: [
+    {
+      id: 'step1',
+      kind: 'agent',
+      label: 'Build it',
+      agentId: 'builder',
+      instruction: 'Build {{inputs.goal}}. Small, tested changes.',
+      retries: 1,
+      onFailure: 'route',
+    },
+    {
+      id: 'step2',
+      kind: 'agent',
+      label: 'Review it',
+      agentId: 'reviewer',
+      instruction: 'Review the change from {{nodes.step1.output}}. End with a verdict.',
+      retries: 0,
+      onFailure: 'fail_run',
+    },
+    {
+      id: 'branch1',
+      kind: 'branch',
+      label: 'Passed?',
+      subject: 'step2',
+      rules: [{ id: 'rule1', when: { kind: 'verdict', is: 'passed' } }],
+    },
+    {
+      id: 'gate1',
+      kind: 'gate',
+      label: 'Your OK before merging',
+      question: 'Merge it?',
+      onReject: 'stop_run',
+    },
+    { id: 'end1', kind: 'end', label: 'Done' },
+  ],
+  edges: [
+    { id: 'e1', from: 'step1', port: 'ok', to: 'step2' },
+    { id: 'e2', from: 'step1', port: 'failed', to: 'step2' },
+    { id: 'e3', from: 'step2', port: 'ok', to: 'branch1' },
+    { id: 'e4', from: 'branch1', port: 'rule1', to: 'gate1' },
+    { id: 'e5', from: 'branch1', port: 'default', to: 'end1' },
+    { id: 'e6', from: 'gate1', port: 'ok', to: 'end1' },
+  ],
+}
+const recipeVersion = {
+  version: 3,
+  hash: 'a'.repeat(64),
+  createdAt: '2026-10-08T20:00:00.000Z',
+  used: false,
+  bytes: JSON.stringify(recipeDefinition).length,
+  nodes: recipeDefinition.nodes.length,
+  maxSteps: 3,
+  workflowId: 'wf-recipe',
+  definition: recipeDefinition,
+}
+const recipeSummary = {
+  id: 'wf-recipe',
+  name: recipeDefinition.name,
+  description: recipeDefinition.description,
+  latestVersion: 3,
+  versionCount: 3,
+  used: false,
+  agentIds: ['builder', 'reviewer'],
+  createdAt: '2026-10-08T20:00:00.000Z',
+  updatedAt: '2026-10-08T20:30:00.000Z',
+  activeRuns: 0,
+}
+const recipeFixtures = {
+  '/api/workflows': {
+    items: [recipeSummary],
+    inventory: {
+      definitions: 1,
+      versions: 3,
+      bytes: recipeVersion.bytes * 3,
+      maxDefinitions: 200,
+      maxVersionsPerDefinition: 20,
+    },
+  },
+  '/api/workflows/wf-recipe': {
+    ...recipeSummary,
+    versions: [1, 2, 3].map((version) => ({ ...recipeVersion, version })),
+    latest: recipeVersion,
+  },
+  '/api/workflows/wf-recipe/versions/3': recipeVersion,
+  '/api/workflows/validate': {
+    ok: true,
+    stats: { nodes: 5, edges: 6, maxSteps: 3, bytes: 900 },
+    issues: [],
+  },
+}
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -58,8 +152,6 @@ const searchJob = (id, roomId, title, extra = {}) => ({
   lastMessageAt: null,
   messageCount: 0,
   summary: null,
-  source: null,
-  reportBack: null,
   createdAt: '2026-10-24T10:00:00.000Z',
   updatedAt: '2026-10-24T10:00:00.000Z',
   ...extra,
@@ -150,93 +242,11 @@ const searchFixtures = {
   },
 }
 
-// PLAN 11.5: deterministic Results for the activity-feed and release-notes jobs, so both review sizes render the same
-// cards without a server. The prototype's Queue libraries summary has no ResultCard kind in the contract; it is left out.
-const resultAgents = fixtures['/api/agents'].items
-const resultFixtures = {
-  '/api/watch/overview': {
-    items: resultAgents.map((agent) =>
-      agent.id === 'builder'
-        ? { agent, thumbnail: null, status: 'working', live: true, surface: 'terminal' }
-        : { agent, thumbnail: null, status: 'idle', live: false, surface: null },
-    ),
-  },
-  '/api/jobs/job-activity/results': {
-    asOfSeq: 53,
-    items: [
-      {
-        kind: 'preview',
-        id: 'preview:builder:12',
-        agentId: 'builder',
-        url: 'http://localhost:5173/feed',
-        title: 'Activity feed',
-        imageUrl: null,
-        live: true,
-        at: '2026-10-24T10:03:00.000Z',
-      },
-      {
-        kind: 'change',
-        id: 'change:job-activity',
-        title: 'Activity feed',
-        authors: ['builder'],
-        state: 'approved',
-        whatChanged: [
-          {
-            text: 'Events in the same millisecond get skipped.',
-            by: 'reviewer',
-            caught: true,
-          },
-          { text: 'Approved by reviewer', by: 'reviewer', caught: false },
-        ],
-        files: [
-          { path: 'api/events.py', added: 15, removed: 3, by: ['builder'] },
-          { path: 'api/test_events.py', added: 20, removed: 0, by: ['builder'] },
-        ],
-        at: '2026-10-24T10:02:00.000Z',
-      },
-    ],
-    screens: [
-      {
-        agentId: 'builder',
-        seq: 12,
-        surface: 'terminal',
-        caption: 'Ran pnpm test api/events',
-        live: true,
-        at: '2026-10-24T10:03:00.000Z',
-      },
-    ],
-  },
-  '/api/jobs/job-release/results': {
-    asOfSeq: 54,
-    items: [
-      {
-        kind: 'draft',
-        id: 'draft:notes:document',
-        agentId: 'designer',
-        title: 'Announcement image.md',
-        target: { kind: 'document', mediaId: 'media-notes' },
-        at: '2026-10-24T09:58:00.000Z',
-      },
-    ],
-    screens: [
-      {
-        agentId: 'designer',
-        seq: 4,
-        surface: 'browser',
-        caption: 'Opened the announcement draft',
-        live: false,
-        at: '2026-10-24T09:58:00.000Z',
-      },
-    ],
-  },
-  '/api/jobs/job-queue/results': { asOfSeq: 55, items: [], screens: [] },
-}
-
 async function serve(route) {
   const url = new URL(route.request().url())
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === '/api/stream') return route.fulfill({ status: 204 })
-    const searchFixture = searchFixtures[url.pathname] ?? resultFixtures[url.pathname]
+    const searchFixture = searchFixtures[url.pathname]
     if (searchFixture)
       return route.fulfill({
         status: 200,
@@ -249,6 +259,7 @@ async function serve(route) {
         ? fixtures[`/api/reports?range=${url.searchParams.get('range') ?? '7d'}`]
         : undefined
     const fixture =
+      recipeFixtures[url.pathname] ??
       fixtures[`${url.pathname}${url.search}`] ??
       reportFixture ??
       (url.pathname === '/api/reports' ? fixtures['/api/reports?range=7d'] : undefined) ??
@@ -594,151 +605,68 @@ const searchAppParts = [
   },
 ]
 
-// PLAN 11.5: the prototype has no role-specific classes for the Results cards, so its selectors use card order while
-// the app's use their card classes. Part names and measured properties stay aligned for the report.
-const resultsPrototypeParts = [
+// PLAN 11.10d: the recipe dialog. The app's class names are prefixed, so each row names both selectors.
+const recipeParts = [
   {
-    name: 'Side body',
-    selector: '.side .sidebody',
-    props: ['padding', 'gap', 'backgroundColor'],
+    name: 'Recipe dialog',
+    selectors: { prototype: '.dialog.wide', app: '.bold-dialog.wide' },
+    props: ['width', 'maxWidth', 'padding', 'gap', 'borderRadius', 'backgroundColor', 'boxShadow'],
   },
   {
-    name: 'Grid',
-    selector: '.side .grid2',
-    props: ['display', 'gap', 'gridTemplateColumns'],
+    name: 'Recipe switcher',
+    selectors: { prototype: '.seg', app: '.bold-seg' },
+    props: ['display', 'gap', 'padding', 'borderRadius', 'backgroundColor'],
   },
   {
-    name: 'Preview card',
-    selector: '.side .grid2 > article:nth-of-type(1)',
-    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
+    name: 'Selected recipe',
+    selectors: { prototype: '.seg button.on', app: '.bold-seg button.on' },
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
   },
   {
-    name: 'Preview title',
-    selector: '.side .grid2 > article:nth-of-type(1) .row b',
-    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
-  },
-  {
-    name: 'Change card',
-    selector: '.side .grid2 > article:nth-of-type(2)',
-    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
-  },
-  {
-    name: 'Change title',
-    selector: '.side .grid2 > article:nth-of-type(2) > b',
-    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
-  },
-  {
-    name: 'Draft card',
-    selector: '.side .grid2 > article:nth-of-type(4)',
-    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
-  },
-  {
-    name: 'Draft title',
-    selector: '.side .grid2 > article:nth-of-type(4) > b',
-    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
-  },
-  {
-    name: 'Badge',
-    selector: '.side .grid2 .badge',
+    name: 'Problems badge',
+    selectors: { prototype: '.badge', app: '.bold-badge' },
     props: ['padding', 'borderRadius', 'fontSize', 'fontWeight', 'color', 'backgroundColor'],
   },
   {
-    name: 'Live dot',
-    selector: '.side .grid2 .dot.livedot',
-    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
+    name: 'Step',
+    selectors: { prototype: '.step', app: '.bold-step' },
+    props: ['minHeight', 'padding', 'gap', 'borderRadius', 'color', 'backgroundColor'],
   },
   {
-    name: 'Change link',
-    selector: '.side .grid2 .link',
-    props: ['minHeight', 'fontSize', 'color', 'textDecorationLine'],
+    name: 'Selected step',
+    selectors: { prototype: '.step.sel', app: '.bold-step.sel' },
+    props: ['boxShadow', 'backgroundColor'],
   },
   {
-    name: 'Screens',
-    selector: '.side .grid2 > .row',
-    props: ['display', 'gap', 'flexWrap', 'color'],
+    name: 'Inspector',
+    selectors: { prototype: '.inner', app: '.bold-recipes-inspector' },
+    props: ['padding', 'gap', 'borderRadius', 'backgroundColor'],
   },
   {
-    name: 'Screen chip',
-    selector: '.side .grid2 > .row .btn',
-    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'color', 'backgroundColor'],
+    name: 'Field',
+    selectors: { prototype: '.field', app: '.bold-recipes-inspector .orch-field select' },
+    props: ['minHeight', 'padding', 'borderRadius', 'color', 'backgroundColor'],
   },
   {
-    name: 'Screen thumb',
-    selector: '.side .grid2 > .row .btn .thumb',
-    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
-  },
-]
-
-const resultsAppParts = [
-  {
-    name: 'Side body',
-    selector: '.side .bold-results',
-    props: ['padding', 'gap', 'backgroundColor'],
-  },
-  {
-    name: 'Grid',
-    selector: '.bold-results-grid',
-    props: ['display', 'gap', 'gridTemplateColumns'],
-  },
-  {
-    name: 'Preview card',
-    selector: '.bold-results-preview',
-    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
-  },
-  {
-    name: 'Preview title',
-    selector: '.bold-results-preview h2',
-    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
-  },
-  {
-    name: 'Change card',
-    selector: '.bold-results-change',
-    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
-  },
-  {
-    name: 'Change title',
-    selector: '.bold-results-change h2',
-    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
-  },
-  {
-    name: 'Draft card',
-    selector: '.bold-results-draft',
-    props: ['padding', 'borderRadius', 'gap', 'backgroundColor'],
-  },
-  {
-    name: 'Draft title',
-    selector: '.bold-results-draft h2',
-    props: ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'color'],
-  },
-  {
-    name: 'Badge',
-    selector: '.bold-results-badge',
-    props: ['padding', 'borderRadius', 'fontSize', 'fontWeight', 'color', 'backgroundColor'],
-  },
-  {
-    name: 'Live dot',
-    selector: '.bold-results-live .bold-results-dot',
-    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
-  },
-  {
-    name: 'Change link',
-    selector: '.bold-results-link',
-    props: ['minHeight', 'fontSize', 'color', 'textDecorationLine'],
-  },
-  {
-    name: 'Screens',
-    selector: '.bold-results-screens',
-    props: ['display', 'gap', 'flexWrap', 'color'],
-  },
-  {
-    name: 'Screen chip',
-    selector: '.bold-results-screen',
-    props: ['minHeight', 'padding', 'borderRadius', 'gap', 'color', 'backgroundColor'],
-  },
-  {
-    name: 'Screen thumb',
-    selector: '.bold-results-screen-thumb',
-    props: ['width', 'height', 'borderRadius', 'backgroundColor'],
+    name: 'Save',
+    selectors: { prototype: '.btn.sm.primary', app: '.bold-recipes-actions .btn.primary' },
+    props: [
+      'minHeight',
+      'padding',
+      'borderRadius',
+      'fontSize',
+      'fontWeight',
+      'color',
+      'backgroundColor',
+    ],
   },
 ]
 
@@ -747,7 +675,10 @@ async function measure(page, selectedParts = parts, side = 'prototype') {
     ({ selectedParts, side }) => {
       const result = {}
       for (const part of selectedParts) {
-        const selector = side === 'app' ? (part.appSelector ?? part.selector) : part.selector
+        // Parts name their selectors either as `selectors: { prototype, app }` (11.10d) or `appSelector` (11.9b).
+        const selector =
+          part.selectors?.[side] ??
+          (side === 'app' ? (part.appSelector ?? part.selector) : part.selector)
         const element = globalThis.document.querySelector(selector)
         if (!element) {
           result[part.name] = null
@@ -868,20 +799,6 @@ try {
     })
     const appUsageMetrics = await measure(page, usageParts)
 
-    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
-    await page.locator('.side .grid2 > article').first().waitFor()
-    await page.evaluate(() => globalThis.document.fonts.ready)
-    await page.screenshot({ path: join(output, `bold-prototype-results-${size}.png`) })
-    const prototypeResultsMetrics = await measure(page, resultsPrototypeParts)
-
-    await page.goto(`${baseURL}/b`)
-    await page.locator('[data-ui="bold"] .top .word').waitFor({ timeout: 20_000 })
-    if (viewport.width < 861) await page.getByRole('button', { name: 'Open side panel' }).click()
-    await page.getByRole('complementary', { name: 'Side panel' }).waitFor({ timeout: 20_000 })
-    await page.locator('[data-card="change"]').waitFor({ timeout: 20_000 })
-    await page.evaluate(() => globalThis.document.fonts.ready)
-    await page.screenshot({ path: join(output, `bold-app-results-${size}.png`) })
-    const appResultsMetrics = await measure(page, resultsAppParts)
     await openPrototypeSettings(page, 'rules')
     await page.screenshot({
       path: join(output, `bold-prototype-rules-${size}.png`),
@@ -918,12 +835,27 @@ try {
     })
     const appSystemMetrics = await measure(page, systemParts, 'app')
 
+    await page.goto(prototype, { waitUntil: 'domcontentloaded' })
+    await page.locator('.top .word').waitFor()
+    await page.locator('[data-a="search"]:visible').first().click()
+    await page.getByRole('button', { name: 'Edit recipes' }).click()
+    await page.locator('.dialog.wide').waitFor()
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-prototype-recipes-${size}.png`) })
+    const prototypeRecipeMetrics = await measure(page, recipeParts, 'prototype')
+
+    await page.goto(`${baseURL}/b?recipes=1`)
+    await page.locator('[data-ui="bold"] .bold-recipes-list').waitFor({ timeout: 20_000 })
+    await page.evaluate(() => globalThis.document.fonts.ready)
+    await page.screenshot({ path: join(output, `bold-app-recipes-${size}.png`) })
+    const appRecipeMetrics = await measure(page, recipeParts, 'app')
+
     results[size] = {
       prototype: prototypeMetrics,
       app: appMetrics,
       search: { prototype: prototypeSearchMetrics, app: appSearchMetrics },
       usage: { prototype: prototypeUsageMetrics, app: appUsageMetrics },
-      results: { prototype: prototypeResultsMetrics, app: appResultsMetrics },
+      recipes: { prototype: prototypeRecipeMetrics, app: appRecipeMetrics },
       rules: { prototype: prototypeRulesMetrics, app: appRulesMetrics },
       system: { prototype: prototypeSystemMetrics, app: appSystemMetrics },
     }
@@ -993,22 +925,21 @@ try {
     searchLines.push('')
   }
   writeFileSync(join(output, 'bold-search-metrics.md'), `${searchLines.join('\n')}\n`)
-
-  const resultsLines = ['# Bold Results: prototype vs app', '']
+  const recipeLines = ['# Bold recipes: prototype vs app', '']
   for (const size of Object.keys(results)) {
-    resultsLines.push(
+    recipeLines.push(
       `## ${size}px`,
       '',
       '| Part | Prototype | App | Difference |',
       '|---|---|---|---|',
     )
-    for (const part of resultsPrototypeParts)
-      resultsLines.push(
-        `| ${part.name} | ${cell(results[size].results.prototype, part)} | ${cell(results[size].results.app, part)} | ${difference(results[size].results.prototype, results[size].results.app, part)} |`,
+    for (const part of recipeParts)
+      recipeLines.push(
+        `| ${part.name} | ${cell(results[size].recipes.prototype, part)} | ${cell(results[size].recipes.app, part)} | ${difference(results[size].recipes.prototype, results[size].recipes.app, part)} |`,
       )
-    resultsLines.push('')
+    recipeLines.push('')
   }
-  writeFileSync(join(output, 'bold-results-metrics.md'), `${resultsLines.join('\n')}\n`)
+  writeFileSync(join(output, 'bold-recipes-metrics.md'), `${recipeLines.join('\n')}\n`)
   console.log(`Wrote screenshots and measurements to ${output}`)
 } finally {
   await browser?.close()
