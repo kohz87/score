@@ -3,6 +3,22 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.3.0] — 2026-10-26
+
+### Added
+- **Agents can ask you questions.** When an agent stops to ask something (Hermes' clarify tool), the question shows up
+  under Needs you, in the team room, in your one-to-one with that agent and on the dock: answer in writing, pick an
+  option, or pick several. Before, the agent waited silently for up to an hour. Answered and ended questions leave a
+  short line in the conversation.
+
+### Fixed
+- **A conversation deleted in Hermes no longer stalls the room.** Hermes never lets a deleted conversation id be used
+  again (also when it tidies up empty ones). Score now starts a fresh conversation for that agent, says so in the room
+  and sends your message again once.
+- **"Ran out of steps"**: a turn that used up its tool calls keeps its summary and says how to carry on ("continue"),
+  instead of "This run failed".
+- New Hermes 0.22.5 events (queued, steered, tool progress) are recognised instead of counted as unknown.
+
 ## [2.2.0] — 2026-10-26
 
 ### Added

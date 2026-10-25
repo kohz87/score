@@ -1366,3 +1366,17 @@ One entry per completed task: what landed, review results, and any **rejected re
   (bold-start-job known flake; bold-thread job-limit pause) passed on rerun with 166 more (faces, visual, classic
   pages, settings looks) = 168/168; pnpm check green (server 4768, web 3105, contract 1496).
 - **v2.2.0 deployed live** (~15:22 UTC): backup score-pre-2.2.0-20261026.db, restart, migration 0088 applied (3 styles kept), 1 known error (the parked scoretestb run's status poll).
+- **v2.3.0 Hermes 0.22.5 follow-ups (lead: contract §6a, migration 0089, server/adapter; Sonnet coder: question UI;
+  2026-10-26, decision 128).** Agent questions (clarify.request → AgentQuestion, POST /api/questions/:id/answer →
+  /v1/runs/{id}/clarify {request_id, execution_generation, answer}; fake "ask me" hooks outside the adapter queue);
+  deleted sessions (Hermes answers a run into a retired id with a plain 409, so Score checks the retirement fence in
+  state_meta read-only; successors `<id>~N`, a notice, one best-effort automatic retry of a reply to the person);
+  ran-out-of-steps notice from turn_exit_reason; run.queued/run.steered/tool.progress/clarify.* known. Lead found the
+  retry-throw rollback before review. Server review (Sonnet): 5 P2 — questions closed on polled/lost/gap run ends and
+  not raised on ended runs; a failed delivery to an ended run closes the question; options trimmed + multi-select size
+  check; report-back reads the run's own session_id; the retry rollback (already fixed). **Partly rejected:** "rewind
+  (versions.ts) looks in the successor" — turns of a deleted session are gone with it; only the current session can be
+  rewound, so sessionFor is right there. Web review (Sonnet): 2 P2 fixed (late POST response vs newer question.updated;
+  question announcement masking the strip's count → separate status regions). Gates: full e2e 990 passed, 2 failures
+  (terminal, themes-safety sanitiser) passed on rerun with the affected specs, 123/123; pnpm check green (server 4780,
+  web 3116, contract 1510).
