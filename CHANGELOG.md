@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.1.1] — 2026-10-26
+
+### Fixed
+- **Approvals work again with Hermes 0.22.5.** Its session authority sends approval requests with a new id
+  (`prompt_id`) and accepts answers only with the run's current execution generation; Score read the old shape, so
+  approvals for runs Score started never reached Score after the upgrade. Score now reads both shapes, answers in the
+  one Hermes expects, and treats an answer for an older generation as already settled.
+
 ## [2.1.0] — 2026-10-26
 
 ### Changed

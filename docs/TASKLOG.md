@@ -1331,3 +1331,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   used by Score; no persona names), new agents get Tool Search off in `enable_bridge` (best effort). Sonnet review:
   0 P1; the stale config index (P2) fixed. Shipped with 2.0.13 (the + menu anchored left; review clean).
 - **v2.1.0 deployed live** (~13:17 UTC): backup score-pre-2.1.0-20261026.db, restart, 0 errors.
+- **v2.1.1 (lead, 2026-10-26).** Live approval round trip on scoretestb (approvals.mode temporarily manual on that test
+  profile only): no approval reached Score; Score's log showed `Hermes observation failed: ZodError request_id` from
+  translate.ts — Hermes 0.22.5 under its session authority (gateway/session_pending_controls.py) emits approval.request
+  as {kind, prompt_id, execution_generation, command, description, choices, timeout_s} and answers only
+  {request_id, execution_generation, choice} (api_server_authority_runs.py respond_run), replying {status}. Fix:
+  ApprovalSchema takes prompt_id or request_id, timeout_s as expiry, approval.settled known; submitApproval reads the
+  run projection's execution_generation (404/unreadable → older body; transient errors stay retryable), accepts both
+  reply shapes, stale_generation → not_pending. Research (Sonnet, read-only): the rest of the feature list needs no
+  change except a deleted-session refusal and clarify prompts (2.1.x). Reviews: 0 P1; P2s fixed. pnpm check (one
+  failure from a check started mid-edit; the server suite re-run: 4767 passed).
