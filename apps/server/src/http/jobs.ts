@@ -36,7 +36,7 @@ import {
   restoreJob,
 } from '../domain/exchanges/job-life.ts'
 import type { HermesPort } from '../hermes/index.ts'
-import { insertRoom, readRoom, roomChanged, roomRow } from '../domain/rooms.ts'
+import { freeRoomName, insertRoom, readRoom, roomChanged, roomRow } from '../domain/rooms.ts'
 import { listPins, pinMessage, shareMessage, unpinMessage } from '../domain/exchanges/sharing.ts'
 import { teamRoomId } from '../domain/team-room.ts'
 import { HttpError } from '../errors.ts'
@@ -238,7 +238,7 @@ export function registerJobRoutes(
             sqlite,
             {
               id: roomId,
-              name: agent.name,
+              name: freeRoomName(sqlite, agent.name),
               kind: 'direct',
               leadAgentId: agentId,
               members: [agentId],

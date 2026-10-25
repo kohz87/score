@@ -1786,7 +1786,10 @@ Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload 
   `webhook-id`, `webhook-timestamp` (unix seconds, ±5 min) and `webhook-signature` (`v1,<base64 HMAC-SHA256 of
   "<id>.<timestamp>.<raw body>">`, keyed by the secret's bytes) → `200 { ok: true; jobId }`. `401` bad/missing/stale
   signature, `404` unknown trigger, `410` deleted, `413` body > 256 KB, `415` not JSON, `429` > 60 calls/min per
-  trigger, `503 not_ready` without a team room. A repeated `webhook-id` (24 h) answers with the same `jobId` and starts
+  trigger (failed calls count per caller and trigger; calls to trigger ids that don't exist share one budget per
+  address), `429 trigger_busy` when the trigger already has 10 open jobs or started 100 in the last 24 h
+  (`TRIGGER_LIMITS.openJobs`, `jobsPerDay`; decision 121), `503 not_ready` without a team room. A trigger's job starts
+  with `spendCapUsd` = `TRIGGER_LIMITS.jobSpendCapUsd` ($5); the person can raise it on the job. A repeated `webhook-id` (24 h) answers with the same `jobId` and starts
   nothing. A call starts a job in the team room titled "<ref> · <title>", `Job.source { app; ref; title; link; triggerId;
   missing }` (mapped fields the call lacked; the job still starts and says which), and gives the room lead a turn whose
   message is the template with each `{{path}}` as the quoted, redacted value, followed by the mapped fields under

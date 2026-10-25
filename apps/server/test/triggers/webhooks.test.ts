@@ -486,3 +486,14 @@ test('a trigger’s jobs start with a spend cap, and a trigger can hold only so 
   db.sqlite.prepare("UPDATE jobs SET state = 'done' WHERE id = ?").run(jobs()[0]!.id)
   expect((await call(trigger.id, secret, body, { webhookId: 'after_done' })).statusCode).toBe(200)
 })
+
+test('spraying random trigger ids from one address shares one failure budget', async () => {
+  const random = () => 'trg_' + Math.random().toString(16).slice(2).padEnd(24, '0').slice(0, 24)
+  const answers: number[] = []
+  for (let i = 0; i < TRIGGER_LIMITS.callsPerMinute + 5; i++)
+    answers.push((await call(random(), 'whsec_' + 'B'.repeat(43) + '=', '{}')).statusCode)
+  expect(answers.slice(0, TRIGGER_LIMITS.callsPerMinute).every((status) => status === 404)).toBe(
+    true,
+  )
+  expect(answers.slice(TRIGGER_LIMITS.callsPerMinute)).toEqual(Array(5).fill(429))
+})

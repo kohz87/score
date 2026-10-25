@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
+import { insertRoom } from '../../src/domain/rooms.ts'
 import { ensureTeamRoom, teamRoomId } from '../../src/domain/team-room.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
@@ -149,4 +150,22 @@ test('the room’s own thread can’t be closed or deleted', async () => {
   const fallback = (await jobs()).find((item) => item.isDefault)!
   expect((await send('POST', `/api/jobs/${fallback.id}/close`)).statusCode).toBe(409)
   expect((await send('DELETE', `/api/jobs/${fallback.id}`)).statusCode).toBe(409)
+})
+
+test('a room already named after the agent doesn’t block the agent’s first one-to-one', async () => {
+  const agentName = (await port.listAgents()).find((agent) => agent.id === 'builder')!.name
+  // An older room already has the agent's name (room names are unique), and builder has no direct room yet.
+  db.tx((sqlite) =>
+    insertRoom(
+      sqlite,
+      { id: 'room-named', name: agentName, kind: 'room', leadAgentId: 'lead', members: ['lead'] },
+      new Date(scheduler.now()).toISOString(),
+    ),
+  )
+  const chat = await send('POST', '/api/agents/builder/chats', { title: 'First chat' })
+  expect(chat.statusCode).toBe(201)
+  const direct = db.sqlite
+    .prepare("SELECT name FROM rooms WHERE kind = 'direct' AND lead_agent_id = 'builder'")
+    .get() as { name: string }
+  expect(direct.name).toBe(`${agentName} (one to one)`)
 })

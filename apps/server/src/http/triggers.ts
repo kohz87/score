@@ -86,10 +86,13 @@ export function registerTriggerRoutes(
       const raw = typeof request.body === 'string' ? request.body : ''
       // Checked before anything is queued. A failed call counts against its caller, never against the trigger's own
       // budget, so a stranger who knows the address can't use it up.
-      const caller = `${request.ip}:${triggerId}`
       try {
         db.read((sqlite) => verifyCall(sqlite, seal, triggerId, signed, raw, clock()))
       } catch (error) {
+        // Calls to trigger ids that don't exist share one bucket per address: spraying fresh random ids gets no fresh
+        // budget (and keeps the limiter's map small). A known trigger's failures stay per caller and trigger.
+        const unknown = error instanceof HttpError && error.status === 404
+        const caller = unknown ? `${request.ip}:unknown` : `${request.ip}:${triggerId}`
         if (!failures.allow(caller))
           throw new HttpError(429, 'rate_limited', 'Too many failed calls. Try again in a minute.')
         throw error
