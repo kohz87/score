@@ -6,7 +6,7 @@ import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../components/runtime-label.ts'
 import { TodoItems, todoProgress, useAgentTodos } from '../components/TodoList.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
-import { agentsQuery } from '../routes/chat/queries.ts'
+import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
 import { usePermissionAction } from '../routes/settings/rules-queries.ts'
 import { useAgentDetail } from '../routes/team/team-queries.ts'
 import { AgentFiles } from '../routes/team/AgentFiles.tsx'
@@ -27,6 +27,9 @@ import { WorkspaceTab } from '../routes/team/WorkspaceTab.tsx'
 import { boldAgentScreenLink } from './bold-links.ts'
 import type { AgentFileName } from '../routes/team/file-queries.ts'
 import { useAgentPause } from '../routes/watch/watch-queries.ts'
+import { agentDisplayName, agentStateLabel } from './bold-agents.ts'
+import { pairingProblem } from './bold-errors.ts'
+import { approvalNeedsYou } from './room/room-model.ts'
 import '../routes/team/team.css'
 import '../components/todo.css'
 import { RunsOnCard } from './BoldRunsOn.tsx'
@@ -70,16 +73,6 @@ const sectionIds: Record<(typeof hermesTabs)[number], string> = {
   Details: 'agent-details',
 }
 
-function statusText(agent: AgentDetail): string {
-  if (agent.status === 'paused') return 'Paused'
-  if (agent.status === 'working') return agent.activity ? `Working · ${agent.activity}` : 'Working'
-  if (agent.status === 'waiting')
-    return agent.activity ? `Needs you · ${agent.activity}` : 'Needs you'
-  if (agent.status === 'offline') return 'Offline'
-  if (agent.status === 'up-next') return 'Up next'
-  return 'Free'
-}
-
 /** The four cards the prototype puts first: how it works, what runs it, where, and what it asks first. */
 function HermesUpFront({
   agent,
@@ -98,7 +91,7 @@ function HermesUpFront({
   return (
     <div className="grid2 bold-upfront">
       <section className="card bold-up-card" id="agent-personality" aria-label="How it works">
-        <span className="lab">How {agent.id} works</span>
+        <span className="lab">How {agentDisplayName(agent)} works</span>
         <AgentFiles agent={agent} file={file} onFile={onFile} />
       </section>
 
@@ -270,6 +263,7 @@ export function BoldAgentPage() {
 function AgentProfile({ agentId }: { agentId: string }) {
   const detail = useAgentDetail(agentId)
   const agents = useStreamQuery(agentsQuery)
+  const approvals = useStreamQuery(approvalsQuery).data ?? []
   const location = useLocation()
   const [search] = useSearchParams()
   const [file, setFile] = useState<AgentFileName>('SOUL.md')
@@ -306,6 +300,10 @@ function AgentProfile({ agentId }: { agentId: string }) {
   // The server can commit a pause and still answer with an error. While that error shows, the button repeats the
   // action that failed, whatever the status says now (the classic header's rule).
   const failed = pause.isError ? pause.variables : null
+  const needsYou = approvals.some(
+    (approval) => approval.agentId === agent.id && approvalNeedsYou(approval),
+  )
+  const waiting = needsYou || agent.status === 'waiting'
 
   function reveal(id: string) {
     setMore(true)
@@ -334,7 +332,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
         </span>
         <AgentGlyph agent={agent} size="md" decorative />
         <h1 className="big" id="agent-title">
-          {agent.id}
+          {agentDisplayName(agent)}
         </h1>
         <span className="muted bold-agent-role">{agent.role}</span>
         <span className="row wrap bold-agent-actions">
@@ -353,7 +351,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
                 : paused
                   ? 'Resume'
                   : 'Pause'}{' '}
-              {agent.id}
+              {agentDisplayName(agent)}
             </button>
           )}
           {agent.served && (
@@ -367,14 +365,25 @@ function AgentProfile({ agentId }: { agentId: string }) {
       </div>
       <div className="row wrap bold-agent-now">
         <span className="bold-agent-state" aria-live="polite">
-          {statusText(agent)}
+          {waiting ? (
+            <Link className="link" to="/b">
+              {agentStateLabel({ ...agent, status: 'waiting' })}
+              {agent.activity ? ` · ${agent.activity}` : ''}
+            </Link>
+          ) : (
+            <>
+              {agentStateLabel(agent)}
+              {agent.activity && agent.status === 'working' ? ` · ${agent.activity}` : ''}
+            </>
+          )}
         </span>
         {summary?.runtimeNote && <span className="small muted">{summary.runtimeNote}</span>}
       </div>
       {!coding && <OverviewFacts agent={agent} agents={agents.data ?? []} />}
       {pause.error && (
         <p role="alert" className="bold-team-error">
-          Couldn’t {paused ? 'resume' : 'pause'} {agent.id}. Try again.
+          {pairingProblem(pause.error) ??
+            `Couldn’t ${paused ? 'resume' : 'pause'} ${agentDisplayName(agent)}. Try again.`}
         </p>
       )}
       {detail.isError && (

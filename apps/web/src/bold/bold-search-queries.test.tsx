@@ -2,9 +2,9 @@ import type { AgentSummary, Job, Room, StreamEvent } from '@score/contract'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { createQueryClient, StreamContext } from '../data/query-client.ts'
-import type { StreamQueryRegistry } from '../data/resync.ts'
+import { createStreamQueryRegistry, immediateFrameScheduler } from '../data/resync.ts'
 import type { StreamClient } from '../data/stream.ts'
 import { useBoldDirectChats, useBoldTeamRoom } from './bold-search-queries.ts'
 
@@ -54,6 +54,8 @@ const job = (id: string, roomId: string, title: string): Job => ({
   updatedAt: '2026-10-24T10:00:00.000Z',
 })
 
+afterEach(() => vi.unstubAllGlobals())
+
 function setup() {
   const queryClient = createQueryClient()
   const listeners = new Set<(event: StreamEvent) => void>()
@@ -66,7 +68,12 @@ function setup() {
   } as unknown as StreamClient
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <StreamContext value={{ client: stream, queries: {} as StreamQueryRegistry }}>
+      <StreamContext
+        value={{
+          client: stream,
+          queries: createStreamQueryRegistry(queryClient, stream, immediateFrameScheduler),
+        }}
+      >
         {children}
       </StreamContext>
     </QueryClientProvider>
@@ -85,11 +92,18 @@ test('job.deleted leaves the team-room and one-to-one search caches while they a
   const { queryClient, wrapper, emit, listenerCount } = setup()
   const teamJob = job('team-job', teamRoom.id, 'Release notes')
   const directJob = job('direct-job', 'direct-lead', 'Catch up')
-  queryClient.setQueryData(['bold-search', 'team-room'], {
-    asOfSeq: 1,
-    room: teamRoom,
-    jobs: [teamJob],
-  })
+  // The shared team-room read starts from the server, then follows the stream.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const path = new URL(String(input), 'http://x').pathname
+      if (path === '/api/team-room')
+        return Response.json({ asOfSeq: 1, room: teamRoom, jobs: [teamJob] })
+      if (path === `/api/rooms/${teamRoom.id}/jobs`)
+        return Response.json({ asOfSeq: 1, items: [teamJob] })
+      return Response.json({ asOfSeq: 1, items: [] })
+    }),
+  )
   queryClient.setQueryData(
     ['bold-search', 'directs', 'lead'],
     [{ agentId: 'lead', chats: [directJob] }],
@@ -98,7 +112,8 @@ test('job.deleted leaves the team-room and one-to-one search caches while they a
     () => ({ team: useBoldTeamRoom(), directs: useBoldDirectChats([lead]) }),
     { wrapper },
   )
-  expect(listenerCount()).toBe(2)
+  await waitFor(() => expect(result.current.team.data?.jobs).toEqual([teamJob]))
+  expect(listenerCount()).toBeGreaterThanOrEqual(2)
 
   act(() =>
     emit({
@@ -108,7 +123,6 @@ test('job.deleted leaves the team-room and one-to-one search caches while they a
       data: { id: teamJob.id, roomId: teamRoom.id },
     }),
   )
-  expect(queryClient.getQueryData(['bold-search', 'team-room'])).toMatchObject({ jobs: [] })
   await waitFor(() => expect(result.current.team.data?.jobs).toEqual([]))
 
   act(() =>

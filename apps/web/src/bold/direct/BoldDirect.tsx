@@ -8,7 +8,7 @@ import { ContextMeter } from '../../routes/chat/ContextMeter.tsx'
 import { MessageItem } from '../../routes/chat/MessageItem.tsx'
 import { saveDraft } from '../../routes/chat/composer-model.ts'
 import { useBoldTeamRoom } from '../bold-search-queries.ts'
-import { agentNameColor } from '../bold-agents.ts'
+import { agentDisplayName, agentNameColor } from '../bold-agents.ts'
 import { CloseIcon, HistoryIcon, LockIcon } from '../BoldIcons.tsx'
 import {
   boldAsideLink,
@@ -121,7 +121,7 @@ function HistoryPopover({
       ref={box}
       className="menu bold-dm-history"
       role="dialog"
-      aria-label={`Earlier chats with ${agent.id}`}
+      aria-label={`Earlier chats with ${agentDisplayName(agent)}`}
     >
       <div className="bold-dm-history-search">
         <HistoryIcon size={15} />
@@ -140,7 +140,7 @@ function HistoryPopover({
         <span className="bold-dm-new-plus" aria-hidden="true">
           +
         </span>
-        <b>{busy ? 'Starting…' : `New chat with ${agent.id}`}</b>
+        <b>{busy ? 'Starting…' : `New chat with ${agentDisplayName(agent)}`}</b>
       </button>
       {chats.map((chat) => (
         <button
@@ -161,7 +161,7 @@ function HistoryPopover({
         <p className="small muted bold-dm-history-empty">
           {query.trim()
             ? `No chats match “${query.trim()}”.`
-            : `No earlier chats with ${agent.id} yet.`}
+            : `No earlier chats with ${agentDisplayName(agent)} yet.`}
         </p>
       )}
       {loadFailed && (
@@ -175,7 +175,7 @@ function HistoryPopover({
         </p>
       )}
       <div className="bold-dm-history-foot small muted">
-        {agent.id} remembers what matters across chats.{' '}
+        {agentDisplayName(agent)} remembers what matters across chats.{' '}
         <a href={`/b/team/${encodeURIComponent(agent.id)}#agent-memory`}>See its memory</a>
       </div>
     </div>
@@ -265,11 +265,11 @@ export function DirectHeaderActions({
 }
 
 /** The promise that a one-to-one is private; a protected label no theme may hide or relabel. */
-export function PrivacyNote({ agentId }: { agentId: string }) {
+export function PrivacyNote({ agent }: { agent: Pick<AgentSummary, 'id' | 'name'> }) {
   return (
     <span className="small muted side-privacy bold-dm-privacy" data-protected="inline-flex">
       <LockIcon />
-      Only you and {agentId} see this
+      Only you and {agentDisplayName(agent)} see this
     </span>
   )
 }
@@ -312,10 +312,10 @@ function EmptyHome({
   return (
     <div className="bold-dm-empty">
       <AgentGlyph agent={agent} size="lg" decorative />
-      <h2>Just you and {agent.id}</h2>
+      <h2>Just you and {agentDisplayName(agent)}</h2>
       <p>
-        Nothing here reaches the team room unless you share it. {agent.id} keeps working on its jobs
-        while you talk.
+        Nothing here reaches the team room unless you share it. {agentDisplayName(agent)} keeps
+        working on its jobs while you talk.
       </p>
       <Starters onAsk={onAsk} disabled={busy} />
     </div>
@@ -417,7 +417,7 @@ function AddSomeone({
   agents: AgentSummary[]
   agent: AgentSummary
   chat: Job
-  team: { room: Room; jobs: Job[] } | undefined
+  team: { room: Room; jobs: Job[] } | null | undefined
   onClose: () => void
   onMoved: (job: Job) => void
 }) {
@@ -498,7 +498,7 @@ function AddSomeone({
               onClick={() => setTarget(item)}
             >
               <AgentGlyph agent={item} size="xs" bare decorative />
-              {`Add ${item.id}`}
+              {`Add ${agentDisplayName(item)}`}
             </button>
           ))}
         </div>
@@ -514,7 +514,8 @@ function AddSomeone({
             {chat.summary ? `Summary shared: ${chat.summary}` : 'A summary of this chat is shared.'}
           </p>
           <p className="small muted">
-            The first message asks {agent.id} and {target.id}; both see the summary.
+            The first message asks {agentDisplayName(agent)} and {agentDisplayName(target)}; both
+            see the summary.
           </p>
           <div className="bold-dm-add-list">
             <button
@@ -653,10 +654,10 @@ function AsideStart({
         <div className="bold-dm-thread">
           <div className="bold-dm-welcome">
             <AgentGlyph agent={agent} size="lg" decorative />
-            <h2>New chat with {agent.id}</h2>
+            <h2>New chat with {agentDisplayName(agent)}</h2>
             <p className="muted">
-              Nothing here reaches the team room unless you share it. {agent.id} sees a frozen
-              summary of “{referenceTitle}”, not the whole thread.
+              Nothing here reaches the team room unless you share it. {agentDisplayName(agent)} sees
+              a frozen summary of “{referenceTitle}”, not the whole thread.
             </p>
             <Starters onAsk={prefill} />
           </div>
@@ -667,11 +668,11 @@ function AsideStart({
         <Composer
           key={`aside-${referenceJobId}-${starterKey}`}
           roomId={room.id}
-          roomName={`${agent.id} privately`}
+          roomName={`${agentDisplayName(agent)} privately`}
           agents={[agent]}
           leadAgentId={agent.id}
           roomMode
-          placeholder={`Message ${agent.id} privately`}
+          placeholder={`Message ${agentDisplayName(agent)} privately`}
           messagesKey={roomMessagesQuery(room.id, null).key}
           draftScope={draftScope}
           references={[{ jobId: referenceJobId }]}
@@ -702,7 +703,7 @@ function DirectConversation({
   agents: AgentSummary[]
   referenceJobId: string | null
   referenceTitle: string | null
-  team: { room: Room; jobs: Job[] } | undefined
+  team: { room: Room; jobs: Job[] } | null | undefined
   onClearReference: () => void
   onCloseSheet?: (() => void) | undefined
 }) {
@@ -842,10 +843,10 @@ function DirectConversation({
           {page.status === 'success' && items.length === 0 && (
             <div className="bold-dm-welcome">
               <AgentGlyph agent={agent} size="lg" decorative />
-              <h2>New chat with {agent.id}</h2>
+              <h2>New chat with {agentDisplayName(agent)}</h2>
               <p className="muted">
-                Nothing here reaches the team room unless you share it. {agent.id} keeps working on
-                its jobs while you talk.
+                Nothing here reaches the team room unless you share it. {agentDisplayName(agent)}{' '}
+                keeps working on its jobs while you talk.
               </p>
               <Starters onAsk={prefill} />
             </div>
@@ -907,12 +908,12 @@ function DirectConversation({
         <Composer
           key={`${chat.id}-${starterKey}`}
           roomId={room.id}
-          roomName={`${agent.id} privately`}
+          roomName={`${agentDisplayName(agent)} privately`}
           agents={[agent]}
           leadAgentId={agent.id}
           jobId={chat.id}
           roomMode
-          placeholder={`Message ${agent.id} privately`}
+          placeholder={`Message ${agentDisplayName(agent)} privately`}
           messagesKey={definition.key}
           draftScope={draftScope}
           references={referenceJobId ? [{ jobId: referenceJobId }] : []}
@@ -1025,13 +1026,13 @@ export function BoldDirect({
   if (direct.status === 'pending' && !direct.data)
     return (
       <p className="bold-stream-note bold-dm-status" role="status">
-        Opening your chats with {agent.id}…
+        Opening your chats with {agentDisplayName(agent)}…
       </p>
     )
   if (direct.status === 'error')
     return (
       <p className="bold-stream-note bold-dm-status" role="alert">
-        Couldn’t load your chats with {agent.id}. Try again.
+        Couldn’t load your chats with {agentDisplayName(agent)}. Try again.
       </p>
     )
   if (aside && room && referenceJobId && referenceTitle)
@@ -1062,13 +1063,15 @@ export function BoldDirect({
         <div className="bold-dm-welcome">
           <AgentGlyph agent={agent} size="lg" decorative />
           <h2>This chat isn’t here any more</h2>
-          <p className="muted">Pick an earlier chat to keep talking with {agent.id}.</p>
+          <p className="muted">
+            Pick an earlier chat to keep talking with {agentDisplayName(agent)}.
+          </p>
           <button
             type="button"
             className="btn sm"
             onClick={() => navigate(boldOneToOneLink(agent.id))}
           >
-            Back to {agent.id}
+            Back to {agentDisplayName(agent)}
           </button>
         </div>
       </div>

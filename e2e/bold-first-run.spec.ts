@@ -210,7 +210,7 @@ test('degraded Hermes says what needs attention and links to setup', async ({ pa
     await expect(page.getByText('The bridge is out of date.')).toBeVisible()
     await expect(page.getByRole('link', { name: 'Open the setup help' })).toHaveAttribute(
       'href',
-      '/settings/connections',
+      '/b/settings/connections',
     )
   })
 })

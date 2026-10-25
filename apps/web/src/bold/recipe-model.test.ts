@@ -16,9 +16,7 @@ import { starterDraft, type Draft } from '../routes/workflows/workflow-model.ts'
 import {
   addRecipeStep,
   analyzeRecipe,
-  moveRecipeStep,
   moveRecipeStepProblem,
-  orderNodes,
   planRecipeMove,
   recipeClientProblems,
   removeRecipeStep,
@@ -75,7 +73,10 @@ describe('the step list is a faithful face of the workflow definition', () => {
       expect(analysis.rows.map((row) => row.node.id).sort()).toEqual(
         definition.nodes.map((node) => node.id).sort(),
       )
-      expect(analysis.order).toEqual(orderNodes(definition))
+      // The order is topological: every edge's source appears before its target.
+      const position = new Map(analysis.order.map((node, index) => [node.id, index]))
+      for (const edge of definition.edges)
+        expect(position.get(edge.from)!).toBeLessThan(position.get(edge.to)!)
 
       const seen = analysis.rows.flatMap((row) =>
         row.routes.flatMap((route) =>
@@ -266,7 +267,7 @@ describe('moving, adding and removing steps edits the same graph', () => {
   }
 
   test('moving a straight run relinks its normal path and keeps every edge id', () => {
-    const moved = moveRecipeStep(straight, 'two', -1)
+    const moved = planRecipeMove(straight, 'two', -1).draft
     expect(analyzeRecipe(moved).order.map((node) => node.id)).toEqual([
       'two',
       'one',

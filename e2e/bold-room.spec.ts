@@ -56,6 +56,29 @@ function message(page: Parameters<typeof openBoldRoom>[0], id: string) {
   return page.locator(`[data-message-id="${id}"]`)
 }
 
+function pendingApproval() {
+  return {
+    id: 'approval-empty-room',
+    origin: 'score-run',
+    phase: 'human_pending',
+    status: 'pending',
+    actionable: true,
+    linkedTo: null,
+    agentId: 'builder',
+    title: 'May I install a package?',
+    command: 'npm install ws@8',
+    cwd: '~/app',
+    description: 'The websocket feed needs ws.',
+    choices: ['once', 'session', 'always', 'deny'],
+    createdAt: '2026-10-24T10:07:00.000Z',
+    expiresAt: null,
+    decision: null,
+    delivery: 'none',
+    blocking: null,
+    refs: [],
+  }
+}
+
 for (const viewport of sizes) {
   const at = `${viewport.width}×${viewport.height}`
 
@@ -461,6 +484,33 @@ for (const viewport of sizes) {
       await page.getByRole('button', { name: /Build something, reviewed/ }).click()
       await expect(composer).toHaveValue('Build a small feature and have reviewer check it.')
       await expect(composer).toBeFocused()
+    })
+
+    test(`a fresh team room still shows an approval that names no room at ${at}`, async ({
+      page,
+    }) => {
+      await openBoldRoom(page, {
+        empty: true,
+        handle: (request) =>
+          request.method === 'GET' && request.path === '/api/approvals'
+            ? {
+                body: {
+                  asOfSeq: 12,
+                  items: [pendingApproval()],
+                  nextCursor: null,
+                },
+              }
+            : undefined,
+      })
+      await expect(
+        page.getByRole('heading', { name: 'Your team is ready. What first?' }),
+      ).toBeVisible()
+      const strip = page.getByRole('region', { name: 'Needs you' })
+      await expect(strip).toBeVisible()
+      const card = strip.getByRole('article', { name: /May I install a package/ })
+      await expect(card).toBeVisible()
+      await expect(card).toHaveAttribute('data-protected', 'flex')
+      await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeVisible()
     })
   })
 }

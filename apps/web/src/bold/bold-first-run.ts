@@ -12,7 +12,7 @@ export const FIRST_RUN_DONE_KEY = 'score.bold.first-run.done'
 export type FirstRunRoom = { leadAgentId: string | null }
 
 /** The automatic screen waits for the room; an explicit `?first=run` always wins. */
-export function shouldShowFirstRun(
+function shouldShowFirstRun(
   forced: boolean,
   finished: boolean,
   room: FirstRunRoom | null | undefined,

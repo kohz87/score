@@ -6,7 +6,6 @@ import {
   firstRunDone,
   firstRunView,
   hermesStatusCopy,
-  shouldShowFirstRun,
   starterPlan,
   starterRecipes,
 } from './bold-first-run.ts'
@@ -41,13 +40,10 @@ afterEach(() => {
 })
 
 test('first run waits for a room with no lead, unless the link forces it or this device finished it', () => {
-  expect(shouldShowFirstRun(false, false, undefined)).toBe(false)
-  expect(shouldShowFirstRun(false, false, { leadAgentId: null })).toBe(true)
-  expect(shouldShowFirstRun(false, false, { leadAgentId: 'lead' })).toBe(false)
-  expect(shouldShowFirstRun(false, true, { leadAgentId: null })).toBe(false)
-  expect(shouldShowFirstRun(true, true, { leadAgentId: 'lead' })).toBe(true)
-
   expect(firstRunView(false, false, undefined, true)).toBe('loading')
+  expect(firstRunView(false, false, undefined, false)).toBe('room')
+  expect(firstRunView(false, false, null, false)).toBe('room')
+  expect(firstRunView(false, true, { leadAgentId: null }, false)).toBe('room')
   expect(firstRunView(false, false, { leadAgentId: null }, false)).toBe('first-run')
   expect(firstRunView(false, false, { leadAgentId: 'lead' }, false)).toBe('room')
   expect(firstRunView(true, true, { leadAgentId: 'lead' }, true)).toBe('first-run')

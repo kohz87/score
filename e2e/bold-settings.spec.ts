@@ -329,7 +329,7 @@ test.describe('bold Settings', () => {
       await expect(memory).not.toBeChecked()
       await expect(page.getByRole('link', { name: 'Open Library' })).toHaveAttribute(
         'href',
-        '/knowledge',
+        '/b?library=1',
       )
       await expect(page.getByRole('heading', { name: 'Shares', exact: true })).toBeVisible()
       await expect(page.getByRole('link', { name: 'Open the terminal' })).toHaveAttribute(

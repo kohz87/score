@@ -210,6 +210,32 @@ for (const size of sizes) {
       })
     })
 
+    test('a replay hands an open approval back to live through the protected chip', async ({
+      page,
+    }) => {
+      await pair(page)
+      await page.setViewportSize({ width: size.width, height: size.height })
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.goto('/b/screen/builder')
+      await expect(page.getByRole('heading', { name: 'builder’s screen' })).toBeVisible()
+
+      const bar = page.getByRole('group', { name: 'Approval needed' })
+      await expect(bar).toBeVisible()
+      await page
+        .getByRole('region', { name: 'What builder did' })
+        .getByRole('button', { name: /Opened the activity feed/ })
+        .click()
+
+      const chip = page.getByRole('button', { name: 'Needs you — go live' })
+      await expect(chip).toBeVisible()
+      await expect(chip).toHaveAttribute('data-protected', 'inline-flex')
+      await expect(bar).toHaveCount(0)
+
+      await chip.click()
+      await expect(bar).toBeVisible()
+      await expect(chip).toHaveCount(0)
+    })
+
     test('deleting the open Workbench job returns to the room with a note', async ({ page }) => {
       await pair(page)
       const job = await activityFeedJob(page)

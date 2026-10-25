@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph, agentTint } from '../components/AgentGlyph.tsx'
 import { ScreenMiniature } from '../routes/watch/SidePanels.tsx'
 import '../routes/watch/watch.css'
-import { agentNameColor } from './bold-agents.ts'
+import { agentDisplayName, agentNameColor } from './bold-agents.ts'
 import { workbenchHref } from './bold-links.ts'
 import { useBoldResults, type ResultsJob } from './bold-results-queries.ts'
 import './bold-results.css'
@@ -16,7 +16,7 @@ const STATE_LABEL: Record<Extract<ResultCard, { kind: 'change' }>['state'], stri
   in_review: 'In review',
   sent_back: 'Sent back',
   approved: 'Approved',
-  waiting_on_you: 'Waiting on you',
+  waiting_on_you: 'Needs you',
   done: 'Done',
 }
 
@@ -26,7 +26,7 @@ function AgentLine({ agent }: { agent: AgentSummary }) {
   return (
     <span className="bold-results-agent" style={{ color: agentNameColor(agent) }}>
       <AgentGlyph agent={agent} size="xs" bare decorative />
-      {agent.name}
+      {agentDisplayName(agent)}
     </span>
   )
 }
@@ -72,7 +72,7 @@ function ChangeCard({
                 {line.caught && (
                   <>
                     {' '}
-                    <b>{agent?.name ?? line.by ?? 'Someone'} caught this</b>.
+                    <b>{agent ? agentDisplayName(agent) : (line.by ?? 'Someone')} caught this</b>.
                   </>
                 )}
               </span>
@@ -211,7 +211,7 @@ function ScreenCard({
     <Link
       className="bold-results-screen"
       to={workbenchHref(job.id, 'screen')}
-      aria-label={`Watch ${agent.name}’s screen`}
+      aria-label={`Watch ${agentDisplayName(agent)}’s screen`}
       data-card="screen"
     >
       <span className="watch-mini__screen bold-results-screen-thumb">
@@ -219,7 +219,7 @@ function ScreenCard({
       </span>
       <span className="bold-results-screen-meta">
         <AgentGlyph agent={agent} size="xs" bare decorative />
-        <b>{agent.name}</b>
+        <b>{agentDisplayName(agent)}</b>
         {screen.live && <span className="bold-results-dot livedot" aria-label="Live" />}
       </span>
       <span className="bold-results-screen-caption" title={screen.caption}>

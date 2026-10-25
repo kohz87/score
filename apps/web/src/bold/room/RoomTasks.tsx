@@ -1,12 +1,11 @@
 import type { AgentSummary, TaskSummary } from '@score/contract'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { ApiError } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentNameColor } from '../bold-agents.ts'
 import { PinCard } from './PinCards.tsx'
-import type { CountCards } from './RunSafetyRequests.tsx'
 import {
   blockedTask,
   roomTasksQuery,
@@ -137,21 +136,15 @@ function BlockedTaskCard({ task, agents }: { task: TaskSummary; agents: AgentSum
 export function RoomTaskRequests({
   roomId,
   agents,
-  report,
   teamRoom,
 }: {
   roomId: string
   agents: AgentSummary[]
-  report: CountCards
   teamRoom: boolean
 }) {
   const definition = useMemo(() => roomTasksQuery(roomId, teamRoom, true), [roomId, teamRoom])
   const tasks = useStreamQuery(definition).data?.tasks ?? []
   const blocked = tasks.filter(blockedTask)
-  useEffect(() => {
-    report('tasks', blocked.length)
-  }, [blocked.length, report])
-  useEffect(() => () => report('tasks', 0), [report])
   if (blocked.length === 0) return null
   return (
     <>

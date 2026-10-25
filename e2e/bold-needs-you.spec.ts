@@ -135,6 +135,9 @@ function orchestrationRun(
     return base
   }
   return (request: RoomRequest): BoldRoomReply | undefined => {
+    // The strip's count reads the list; the cards read the run. Serve both from the same state.
+    if (request.method === 'GET' && request.path === '/api/orchestrations')
+      return { body: { asOfSeq: 1, items: [snapshot().orchestration] } }
     if (request.method === 'GET' && request.path === '/api/orchestrations/orch-needs')
       return { body: snapshot() }
     if (request.method === 'GET' && request.path === '/api/orchestrations/orch-needs/events')
@@ -163,6 +166,8 @@ function workflowRun(initial: WorkflowNeedsYou[]) {
     return base
   }
   return (request: RoomRequest): BoldRoomReply | undefined => {
+    if (request.method === 'GET' && request.path === '/api/workflow-runs')
+      return { body: { asOfSeq: 1, items: [snapshot().run] } }
     if (request.method === 'GET' && request.path === '/api/workflow-runs/wfrun-needs')
       return { body: snapshot() }
     if (request.method === 'GET' && request.path === '/api/workflow-runs/wfrun-needs/events')
@@ -240,7 +245,7 @@ for (const viewport of sizes) {
       }
       await openBoldRoom(page, { jobs: roomJobs(), approvals: [foreign], exchanges: [] })
       await expect(page.getByRole('article', { name: /May I install a package/ })).toHaveCount(0)
-      await expect(page.locator('.bold-pins')).not.toContainText('May I install a package')
+      await expect(page.getByText('May I install a package')).toHaveCount(0)
     })
 
     test(`a blocked Hermes task is a protected card, and unblock leaves it at ${label}`, async ({

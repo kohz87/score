@@ -305,6 +305,25 @@ test('a phone opens a job full screen and Back returns to the job list', async (
   )
 })
 
+test('moving to another job drops its file and keeps the other parameters', async () => {
+  stubRoom([
+    makeJob({ id: 'job-activity', title: 'Activity feed' }),
+    makeJob({ id: 'job-notes', title: 'Release notes 2.4' }),
+  ])
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} />
+      <ParamsProbe />
+    </>,
+    ['/b?job=job-activity&file=api%2Fevents.py&work=code'],
+  )
+
+  fireEvent.click(await screen.findByRole('tab', { name: /Release notes 2\.4/ }))
+  await waitFor(() => expect(screen.getByTestId('params').textContent).toContain('job=job-notes'))
+  expect(screen.getByTestId('params').textContent).toContain('work=code')
+  expect(screen.getByTestId('params').textContent).not.toContain('file=')
+})
+
 test('the phone list puts the default Team room row first and opens its chat', async () => {
   stubRoom([
     makeJob({ id: 'job-default', title: 'Team room', isDefault: true, unread: 4 }),
@@ -456,6 +475,17 @@ test('a fresh team room shows board 09 and a starter fills the composer', async 
       'Build a small feature and have reviewer check it.',
     ),
   )
+})
+
+test('a fresh team room still shows an approval that names no job', async () => {
+  stubRoom([], { approvals: [phoneApproval] })
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+  expect(
+    await screen.findByRole('heading', { name: 'Your team is ready. What first?' }),
+  ).toBeDefined()
+  expect(
+    await screen.findByRole('article', { name: /Needs you: May I install a package/ }),
+  ).toBeDefined()
 })
 
 test('the room dropdown opens an older room read-write with today’s @mention routing', async () => {

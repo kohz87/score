@@ -53,30 +53,17 @@ export function changeCachedJob(queryClient: QueryClient, job: Job, change: JobL
     snapshot ? { ...snapshot, data: jobs(snapshot.data) } : snapshot,
   )
 
-  const teamRooms: StreamSnapshot<TeamRoomRead>[] = []
-  const teamRoom = queryClient.getQueryData<StreamSnapshot<TeamRoomRead>>(teamRoomQuery(null).key)
-  if (teamRoom) teamRooms.push(teamRoom)
-  const results = queryClient.getQueryData<StreamSnapshot<TeamRoomRead>>(['bold', 'team-room'])
-  if (results) teamRooms.push(results)
-  for (const snapshot of teamRooms) {
-    if (snapshot.data.room.id !== job.roomId) continue
-    const key = snapshot === teamRoom ? teamRoomQuery(null).key : (['bold', 'team-room'] as const)
-    queryClient.setQueryData<StreamSnapshot<TeamRoomRead>>(key, {
-      ...snapshot,
-      data: { ...snapshot.data, jobs: jobs(snapshot.data.jobs) },
-    })
-  }
+  // Every team-room read (the room, Results, Search) shares this one query, so one write reaches them all.
+  queryClient.setQueryData<StreamSnapshot<TeamRoomRead | null>>(
+    teamRoomQuery(null).key,
+    (snapshot) =>
+      snapshot?.data && snapshot.data.room.id === job.roomId
+        ? { ...snapshot, data: { ...snapshot.data, jobs: jobs(snapshot.data.jobs) } }
+        : snapshot,
+  )
 
-  // Search reads the team room and one-to-one chats through plain TanStack queries rather than the stream registry.
+  // Search still reads one-to-one chats through plain TanStack queries.
   if (change === 'delete') dropCachedJobFromSearch(queryClient, job)
-  else
-    queryClient.setQueryData<{ asOfSeq: number; room: Room; jobs: Job[] }>(
-      ['bold-search', 'team-room'],
-      (snapshot) =>
-        snapshot && snapshot.room.id === job.roomId
-          ? { ...snapshot, jobs: jobs(snapshot.jobs) }
-          : snapshot,
-    )
 
   // One-to-one chats can hold a job too; they key by agent rather than room, so match the cached room.
   for (const query of queryClient.getQueryCache().findAll({ queryKey: ['bold', 'direct'] })) {

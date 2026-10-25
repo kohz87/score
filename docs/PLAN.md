@@ -678,7 +678,7 @@ packs and stored packs, Cut-out/Ring/eyes, Lively, pop-outs (D8, D9, D11); keep 
 removed code has no route or import left; a copy of the live DB migrates and every parity row still works; the owner
 approved the removal list.
 
-**11.12 Phase gate** · **Lead** (Codex `gpt-6.1-sol` max if it has quota) · code review against `main` in a fresh
+**11.12 Phase gate** ✅ · **Lead** (Codex `gpt-6.1-sol` max if it has quota) · code review against `main` in a fresh
 session, every parity row checked off against the brief's §11, full e2e, then the owner's own review (no Gemini review, decision 119); release.
 
 ## Post-release list (after the Phase 11 release; owner, 2026-10-25)

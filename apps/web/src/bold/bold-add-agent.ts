@@ -2,7 +2,7 @@ import { RunsOnSchema, type AgentStyle, type AgentSummary, type RunsOn } from '@
 import { apiFetch } from '../data/api.ts'
 
 /** The prototype's four open colours; the colours already on the team are listed after them and faded. */
-export const addAgentPalette = ['#6b8cff', '#2bb3c0', '#ff8a3d', '#8bd450'] as const
+const addAgentPalette = ['#6b8cff', '#2bb3c0', '#ff8a3d', '#8bd450'] as const
 
 export type ColourChoice = { colour: string; takenBy: string | null }
 

@@ -5,7 +5,7 @@ import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
-import { agentNameColor, agentStateLabel } from './bold-agents.ts'
+import { agentDisplayName, agentNameColor, agentStateLabel } from './bold-agents.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
 import { BoldResults } from './BoldResults.tsx'
 import { BookIcon, ChevronIcon, CloseIcon, GridIcon, ThreadIcon } from './BoldIcons.tsx'
@@ -20,12 +20,6 @@ import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 const PHONE = '(max-width: 860px)'
 
 type SideMode = 'work' | 'library' | 'thread' | 'elsewhere' | `agent:${string}`
-
-function sideCopy(mode: SideMode): string {
-  if (mode === 'work') return 'The Work panel comes in a later task.'
-  if (mode === 'library') return ''
-  return ''
-}
 
 function SideGlyph({ agent }: { agent: AgentSummary }) {
   return (
@@ -55,6 +49,16 @@ export function BoldRoom() {
     setSeenTabJob(tabJob)
     setThreadJob(tabJob && tabJob !== 'all' ? tabJob : null)
   }
+  // Search's Library result (`?note=`) and System's "Open Library" (`?library=1`) are one-shot requests: open the
+  // Library, then remove the parameter so a later visit cannot reopen it and the same note can be requested again.
+  const notePath = params.get('note')
+  const libraryOpen = params.get('library') === '1'
+  const libraryRequest = notePath ?? (libraryOpen ? 'library' : null)
+  const [seenLibraryRequest, setSeenLibraryRequest] = useState<string | null>(null)
+  if (libraryRequest !== seenLibraryRequest) {
+    setSeenLibraryRequest(libraryRequest)
+    if (libraryRequest) setMode('library')
+  }
   const [menuOpen, setMenuOpen] = useState(false)
   const sideRef = useRef<HTMLElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -75,7 +79,9 @@ export function BoldRoom() {
     ['workbench', 'code', 'screen', 'draft'].includes(params.get('work') ?? '')
   const activeMode: SideMode = directAgent ? `agent:${directAgent.id}` : mode
   const label = directMode
-    ? (directAgent?.id ?? directId)
+    ? directAgent
+      ? agentDisplayName(directAgent)
+      : directId
     : mode === 'work'
       ? 'Work'
       : mode === 'library'
@@ -93,17 +99,18 @@ export function BoldRoom() {
       if (!sideRef.current?.contains(event.target as Node)) setMenuOpen(false)
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setMenuOpen(false)
-        toggleRef.current?.focus()
-      }
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      event.preventDefault()
+      event.stopPropagation()
+      setMenuOpen(false)
+      toggleRef.current?.focus()
     }
     document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
+    // The phone sheet listens in the bubble phase: closing the top layer here keeps one Escape to one layer.
+    document.addEventListener('keydown', onKeyDown, true)
     return () => {
       document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keydown', onKeyDown, true)
     }
   }, [menuOpen])
 
@@ -165,6 +172,19 @@ export function BoldRoom() {
     if (phone && directMode) setSheetOpen(true)
   }, [directMode, phone, setSheetOpen])
 
+  // The Library can live behind the phone sheet, so a Library request also opens that layer.
+  useEffect(() => {
+    if (phone && libraryRequest) setSheetOpen(true)
+  }, [libraryRequest, phone, setSheetOpen])
+
+  useEffect(() => {
+    if (!libraryRequest) return
+    const next = new URLSearchParams(params)
+    next.delete('note')
+    next.delete('library')
+    setParams(next, { replace: true })
+  }, [libraryRequest, params, setParams])
+
   const withoutDirect = (next: URLSearchParams) => {
     next.delete('with')
     next.delete('chat')
@@ -213,7 +233,7 @@ export function BoldRoom() {
 
   const chooseAgent = (agentId: string) => {
     setMenuOpen(false)
-    void navigate(boldOneToOneLink(agentId))
+    void navigate(boldOneToOneLink(agentId, location.search))
   }
 
   const backToRoom = () => {
@@ -263,7 +283,7 @@ export function BoldRoom() {
     >
       <SideGlyph agent={item} />
       <span className="menu-copy">
-        <b>{item.id}</b>
+        <b>{agentDisplayName(item)}</b>
         <span className="small muted">{agentStateLabel(item)}</span>
       </span>
     </button>
@@ -348,8 +368,10 @@ export function BoldRoom() {
                   <span className="bold-dm-phone-id">
                     <AgentGlyph agent={directAgent} size="sm" bare decorative />
                     <span>
-                      <b style={{ color: agentNameColor(directAgent) }}>{directAgent.id}</b>
-                      <PrivacyNote agentId={directAgent.id} />
+                      <b style={{ color: agentNameColor(directAgent) }}>
+                        {agentDisplayName(directAgent)}
+                      </b>
+                      <PrivacyNote agent={directAgent} />
                     </span>
                   </span>
                   <DirectHeaderActions agent={directAgent} chatId={chatId} iconOnly />
@@ -365,11 +387,11 @@ export function BoldRoom() {
                     onClick={() => setMenuOpen((open) => !open)}
                   >
                     <SideGlyph agent={directAgent} />
-                    {directAgent.id}
+                    {agentDisplayName(directAgent)}
                     <ChevronIcon />
                   </button>
                   <DirectHeaderActions agent={directAgent} chatId={chatId} />
-                  <PrivacyNote agentId={directAgent.id} />
+                  <PrivacyNote agent={directAgent} />
                 </>
               )
             ) : (
@@ -470,17 +492,14 @@ export function BoldRoom() {
               agents={agents}
               onBroughtIn={broughtIntoJob}
             />
-          ) : (
-            mode !== 'library' &&
-            mode !== 'work' && (
-              <div className="sidebody" data-placeholder={mode}>
-                <p className="side-placeholder">{sideCopy(mode)}</p>
-              </div>
-            )
-          )}
+          ) : null}
           <BoldResults agents={agents} hidden={directMode || mode !== 'work' || workbenchVisible} />
           <BoldWorkbench agents={agents} hidden={directMode || !workbenchVisible} />
-          <BoldLibrary agents={agents} hidden={directMode || mode !== 'library'} />
+          <BoldLibrary
+            agents={agents}
+            hidden={directMode || mode !== 'library'}
+            openPath={notePath}
+          />
         </aside>
       </div>
     </div>

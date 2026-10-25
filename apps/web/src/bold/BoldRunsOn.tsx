@@ -1,6 +1,8 @@
 import type { AgentDetail, RunsOn, RunsOnUpdate } from '@score/contract'
 import { useState } from 'react'
 import { ApiError } from '../data/api.ts'
+import { agentDisplayName } from './bold-agents.ts'
+import { pairingProblem } from './bold-errors.ts'
 import { useRunsOn, useSetRunsOn } from './runs-on-queries.ts'
 
 const SEPARATED: Record<RunsOn['separated'], string> = {
@@ -38,7 +40,7 @@ export function RunsOnCard({ agent }: { agent: AgentDetail }) {
         <span className="small muted">Reading Hermes…</span>
       ) : runsOn.isError ? (
         <span className="small" role="alert">
-          Couldn’t read where {agent.id} runs. {runsOn.error.message}
+          Couldn’t read where {agentDisplayName(agent)} runs. {runsOn.error.message}
         </span>
       ) : (
         <>
@@ -116,7 +118,7 @@ function RunsOnForm({
   return (
     <form
       className="bold-runs-on-form"
-      aria-label={`Change where ${agent.id} works`}
+      aria-label={`Change where ${agentDisplayName(agent)} works`}
       onSubmit={(event) => {
         event.preventDefault()
         save.mutate(update(), { onSuccess: onDone })
@@ -194,14 +196,15 @@ function RunsOnForm({
         </div>
       )}
       <span className="small muted">
-        Takes effect for terminals {agent.id} starts afterwards.
+        Takes effect for terminals {agentDisplayName(agent)} starts afterwards.
         {backend !== 'local' && ' Its Workspace tab is only available on this machine.'}
       </span>
       {save.isError && (
         <span className="small" role="alert">
-          {save.error instanceof ApiError && save.error.code === 'bad_request'
-            ? 'Check the host, user, port and key path.'
-            : save.error.message}
+          {pairingProblem(save.error) ??
+            (save.error instanceof ApiError && save.error.code === 'bad_request'
+              ? 'Check the host, user, port and key path.'
+              : save.error.message)}
         </span>
       )}
       <span className="row">

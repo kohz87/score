@@ -11,6 +11,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { useStream, useStreamQuery } from '../../data/query-client.ts'
+import { agentDisplayName } from '../bold-agents.ts'
 import { DeleteRoomDialog } from '../../routes/chat/DeleteRoomDialog.tsx'
 import { ShareDialog } from '../../routes/chat/ShareDialog.tsx'
 import { useShowDeleted, setShowDeleted } from '../../routes/chat/deleted-toggle.ts'
@@ -203,6 +204,8 @@ function LoadedTeamRoom({
       if (jobId === 'all') next.delete('job')
       else next.set('job', jobId)
       next.delete('message')
+      // A file belongs to the job it was opened from; another job must not inherit it.
+      if (jobId !== leaving) next.delete('file')
       // On a phone, opening a job from the list is a step Back undoes; moving from one job to another replaces it and
       // keeps that entry's mark, so Back still lands on the list.
       if (phone && !leaving) {
@@ -374,7 +377,7 @@ function LoadedTeamRoom({
   const allLabel = olderRoom
     ? 'Older room · @name'
     : lead
-      ? `To: team room (${lead.name})`
+      ? `To: team room (${agentDisplayName(lead)})`
       : 'No lead yet — use @name'
   // An older room's one job is an implementation detail on a phone; it stays "Older room · @name" there too.
   const toLabel = job && !olderRoom ? `To: ${job.title}` : allLabel
@@ -520,16 +523,14 @@ function LoadedTeamRoom({
           </button>
         </div>
       )}
-      {!empty && (
-        <RoomRequests
-          roomId={room.id}
-          jobs={allJobs}
-          agents={agents}
-          selectedJob={selectedJob}
-          teamRoom={room.role === 'team'}
-          messages={baseMessages.data?.items ?? []}
-        />
-      )}
+      <RoomRequests
+        roomId={room.id}
+        jobs={allJobs}
+        agents={agents}
+        selectedJob={selectedJob}
+        teamRoom={room.role === 'team'}
+        messages={baseMessages.data?.items ?? []}
+      />
       {phone && room.role === 'team' && phoneJobMissing ? (
         <PhoneJobList
           jobs={allJobs}
@@ -553,7 +554,7 @@ function LoadedTeamRoom({
           Opening the room…
         </p>
       ) : (
-        <div className="stream" id="bold-room-stream" aria-live="polite">
+        <div className="stream" id="bold-room-stream">
           {job && <StartedBy job={job} />}
           {/* On a phone the capsule (and its Take it aside) sits in the open job's chat, as the prototype shows it. */}
           {(!phone || phoneJob) && (

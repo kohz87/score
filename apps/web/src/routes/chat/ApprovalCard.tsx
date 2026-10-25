@@ -8,6 +8,7 @@ import { approvalsQuery } from './queries.ts'
 import { newId } from '../../data/ids.ts'
 import { approvalChip, YOUR_CHOICE } from '../../live/resolved.ts'
 import { ResolvedChip } from '../../live/ResolvedChip.tsx'
+import { pairingProblem } from '../../bold/bold-errors.ts'
 
 function idempotencyKey() {
   return newId()
@@ -78,11 +79,8 @@ export function useApprovalDecision(approvalId: string) {
       return result
     } catch (caught) {
       setError(
-        caught instanceof ApiError && (caught.status === 401 || caught.status === 403)
-          ? 'Pair this browser first.'
-          : caught instanceof ApiError
-            ? caught.message
-            : 'Couldn’t send your answer. Try again.',
+        pairingProblem(caught) ??
+          (caught instanceof ApiError ? caught.message : 'Couldn’t send your answer. Try again.'),
       )
       return null
     } finally {

@@ -7,34 +7,27 @@ import {
   NowSnapshotSchema,
   type AgentSummary,
   type Job,
-  type Room,
 } from '@score/contract'
 import { useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { apiFetch } from '../data/api.ts'
+import { useOptionalStream, useStreamQuery, useStreamQueryRefetch } from '../data/query-client.ts'
 import { useDebounced } from '../data/message-search.ts'
-import { useOptionalStream } from '../data/query-client.ts'
 import { nowKey } from '../data/team-pause.ts'
 import { fetchRoutines, routinesKey } from '../routes/team/routine-queries.ts'
-import { fetchCompleteTeamRoom } from './bold-job-reads.ts'
 import type { BoldSearchCommand, BoldSearchNote, BoldSearchRoutine } from './bold-search-model.ts'
+import { teamRoomQuery } from './room/room-queries.ts'
 
-const BOLD_SEARCH_TEAM_KEY = ['bold-search', 'team-room'] as const
 const BOLD_SEARCH_DIRECTS_KEY = ['bold-search', 'directs'] as const
 
-type SearchTeamRoom = { asOfSeq: number; room: Room; jobs: Job[] }
 type SearchDirects = { agentId: string; chats: Job[] }[]
 
-/** A job deleted in another tab or by the server must leave Search's own caches too, not only the stream reads. */
+/** A job deleted in another tab or by the server must leave Search's one-to-one chat reads too. The team room read
+ * is the shared `teamRoomQuery`, which drops it itself. */
 export function dropCachedJobFromSearch(
   queryClient: QueryClient,
   deleted: { id: string; roomId: string },
 ): void {
-  queryClient.setQueryData<SearchTeamRoom>(BOLD_SEARCH_TEAM_KEY, (snapshot) =>
-    snapshot && snapshot.room.id === deleted.roomId
-      ? { ...snapshot, jobs: snapshot.jobs.filter((job) => job.id !== deleted.id) }
-      : snapshot,
-  )
   for (const query of queryClient.getQueryCache().findAll({ queryKey: BOLD_SEARCH_DIRECTS_KEY })) {
     queryClient.setQueryData<SearchDirects>(query.queryKey, (entries) =>
       entries?.map((entry) => ({
@@ -59,14 +52,19 @@ function useBoldSearchJobDeletions(): void {
 /** The team room and its jobs. `fresh`: read again whenever the caller mounts (Search opens), so a job made moments
  * ago is found even though the first-run routing (BoldHome) read the same key when /b opened. */
 export function useBoldTeamRoom({ fresh = false }: { fresh?: boolean } = {}) {
-  useBoldSearchJobDeletions()
-  return useQuery({
-    queryKey: BOLD_SEARCH_TEAM_KEY,
-    queryFn: ({ signal }) => fetchCompleteTeamRoom(signal),
-    staleTime: 5_000,
-    ...(fresh ? { refetchOnMount: 'always' as const } : {}),
-    retry: false,
-  })
+  const definition = useMemo(() => teamRoomQuery(null), [])
+  const state = useStreamQuery(definition)
+  const refetch = useStreamQueryRefetch(definition)
+  useEffect(() => {
+    if (fresh) void refetch()
+  }, [fresh, refetch])
+  return {
+    data: state.data,
+    // A refetch behind a usable snapshot is not a cold read: `/b` keeps showing the room while it refreshes.
+    isPending: state.data === undefined && state.status === 'pending',
+    isError: state.status === 'error',
+    refetch,
+  }
 }
 
 /** Every agent's one-to-one chats; one failing agent must not blank the other agents' results. */

@@ -79,10 +79,14 @@ class PendingUpload {
 }
 
 let phone = false
+let approvalFixture = false
+let teamRoomFixture: unknown = null
 const disposers: (() => void)[] = []
 
 beforeEach(() => {
   phone = false
+  approvalFixture = false
+  teamRoomFixture = null
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
   vi.stubGlobal(
@@ -102,6 +106,118 @@ beforeEach(() => {
       url.searchParams.delete('tz')
       if (url.pathname === '/api/agents')
         return Promise.resolve(Response.json({ asOfSeq: 1, items: agents }))
+      if (url.pathname === '/api/team-room' && teamRoomFixture)
+        return Promise.resolve(Response.json({ asOfSeq: 1, ...(teamRoomFixture as object) }))
+      if (url.pathname === '/api/approvals' && approvalFixture)
+        return Promise.resolve(
+          Response.json({
+            asOfSeq: 1,
+            items: [
+              {
+                id: 'approval-notes',
+                origin: 'score-run',
+                phase: 'human_pending',
+                status: 'pending',
+                actionable: true,
+                linkedTo: null,
+                agentId: 'builder',
+                title: 'May I install a package?',
+                command: 'npm install ws@8',
+                cwd: '~/app',
+                description: 'The notes job needs ws.',
+                choices: ['once', 'deny'],
+                createdAt: '2026-10-24T09:03:00.000Z',
+                expiresAt: null,
+                decision: null,
+                delivery: 'none',
+                blocking: null,
+                refs: [],
+              },
+            ],
+            nextCursor: null,
+          }),
+        )
+      if (url.pathname === '/api/knowledge')
+        return Promise.resolve(
+          Response.json({
+            vault: '/vault',
+            notes: 1,
+            gitAvailable: true,
+            agentAccess: true,
+            memoryNotes: true,
+            documents: 0,
+            documentBytes: 0,
+            moveIssue: null,
+          }),
+        )
+      if (url.pathname === '/api/knowledge/tree')
+        return Promise.resolve(
+          Response.json({
+            folders: ['Decisions'],
+            notes: [
+              {
+                path: 'Decisions/Source.md',
+                title: 'Source',
+                mtime: '2026-10-24T09:00:00.000Z',
+                lastAuthor: 'you',
+              },
+            ],
+            documents: [],
+          }),
+        )
+      if (url.pathname === '/api/knowledge/notes/Decisions/Source.md')
+        return Promise.resolve(
+          Response.json({
+            path: 'Decisions/Source.md',
+            title: 'Source',
+            frontmatter: {},
+            body: '# Source\n\nThe source of truth.\n',
+            etag: 'etag-source',
+            mtime: '2026-10-24T09:00:00.000Z',
+            links: [],
+            backlinks: [],
+            lastAuthor: 'you',
+            versioned: true,
+            history: 'unchanged',
+          }),
+        )
+      if (url.pathname === '/api/orchestrations')
+        return Promise.resolve(Response.json({ asOfSeq: 1, items: [] }))
+      if (url.pathname === '/api/workflow-runs')
+        return Promise.resolve(Response.json({ asOfSeq: 1, items: [] }))
+      if (url.pathname === '/api/orchestrations/fence')
+        return Promise.resolve(
+          Response.json({
+            fenced: false,
+            reason: null,
+            untrustedHistory: false,
+            revision: 1,
+            since: null,
+            items: [],
+            journal: { ok: true, entries: 0, bytes: 0, sizeAlarm: false },
+          }),
+        )
+      if (url.pathname === '/api/rooms/team-room/messages' && approvalFixture)
+        return Promise.resolve(
+          Response.json({
+            asOfSeq: 1,
+            items: [
+              {
+                id: 'approval:approval-notes',
+                roomId: 'team-room',
+                jobId: 'job-notes',
+                author: { kind: 'agent', agentId: 'builder' },
+                to: [],
+                parts: [{ kind: 'approval', approvalId: 'approval-notes' }],
+                createdAt: '2026-10-24T09:03:00.000Z',
+                streaming: false,
+                refs: [],
+              },
+            ],
+            nextCursor: null,
+            jobId: 'job-notes',
+          }),
+        )
       if (url.pathname === '/api/watch/overview')
         return Promise.resolve(
           Response.json({
@@ -157,12 +273,19 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function open(path: string) {
+function open(
+  path: string,
+  teamJobs: {
+    id: string
+    title: string
+    state: 'working' | 'waiting_on_you'
+    isDefault: boolean
+  }[] = [],
+) {
   const queryClient = createQueryClient()
   // The shell reads the team room before deciding between first run and the room. These frame tests start with that
   // read already cached, as it is on a normal navigation inside the app; the first-run spec covers the cold read.
-  queryClient.setQueryData(['bold-search', 'team-room'], {
-    asOfSeq: 1,
+  const teamRoom = {
     room: {
       id: 'team-room',
       name: 'Team room',
@@ -175,8 +298,27 @@ function open(path: string) {
       role: 'team',
       routing: 'exchanges',
     },
-    jobs: [],
-  })
+    jobs: teamJobs.map((job) => ({
+      roomId: 'team-room',
+      holderAgentId: 'lead',
+      exchangeBudget: 8,
+      jobTurnLimit: 40,
+      unread: 0,
+      activeAgents: [],
+      lastMessageAt: null,
+      messageCount: 0,
+      summary: null,
+      source: null,
+      reportBack: null,
+      spendCapUsd: null,
+      recipe: null,
+      createdAt: '2026-10-24T09:00:00.000Z',
+      updatedAt: '2026-10-24T09:00:00.000Z',
+      ...job,
+    })),
+  }
+  if (approvalFixture) teamRoomFixture = teamRoom
+  queryClient.setQueryData(['bold', 'team-room', null], { asOfSeq: 1, data: teamRoom })
   const client = createStreamClient({ EventSourceImpl: Source as never })
   const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)
   const router = createMemoryRouter(appRoutes, { initialEntries: [path] })
@@ -298,6 +440,22 @@ test('a phone keeps the wordmark and avatar, shows the tab bar and opens the sid
   await waitFor(() => expect(document.activeElement).toBe(openPanelAgain))
 })
 
+test('the phone Room badge waits for the team room and counts the job in the URL', async () => {
+  phone = true
+  approvalFixture = true
+  open('/b?job=job-notes', [
+    { id: 'job-default', title: 'Team room', state: 'working', isDefault: true },
+    { id: 'job-notes', title: 'Release notes', state: 'waiting_on_you', isDefault: false },
+  ])
+  const nav = screen.getByRole('navigation', { name: 'Main' })
+  const room = within(nav).getByRole('button', { name: /^Room/ })
+  // The cached team-room read is already successful in this harness; the selected job has one approval to answer.
+  await waitFor(() => expect(room.getAttribute('aria-label')).toBe('Room, 1 need you'))
+  const badge = room.querySelector('.bold-tab-count')
+  expect(badge?.textContent).toBe('1')
+  expect(badge?.getAttribute('data-protected')).toBe('inline-flex')
+})
+
 test('Escape in a Library dialog closes the dialog, not the phone sheet', async () => {
   phone = true
   open('/b')
@@ -350,6 +508,21 @@ test('the Library keeps an upload and its state while the phone sheet closes and
     history: 'committed',
   })
   act(() => PendingUpload.last.onload?.())
+})
+
+test('a Library note request is consumed and can be repeated after another mode', async () => {
+  const router = open('/b?note=Decisions%2FSource.md')
+  const library = await screen.findByTestId('bold-library')
+  expect(await screen.findByLabelText('Contents of Decisions/Source.md')).toBeDefined()
+  await waitFor(() => expect(router.state.location.search).not.toContain('note='))
+
+  fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  expect(screen.getByTestId('bold-library')).toBe(library)
+  expect(library.hasAttribute('hidden')).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: /^Work/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Library/ }))
+  expect(screen.getByLabelText('Contents of Decisions/Source.md')).toBeDefined()
 })
 
 test('Team and Settings are real pages, and the search button and Ctrl+K open the palette', async () => {

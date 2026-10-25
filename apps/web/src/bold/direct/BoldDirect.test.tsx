@@ -111,7 +111,7 @@ function renderDirect(chatId: string | null = 'chat-new') {
 }
 
 test('the privacy label is a protected surface that names the agent', () => {
-  renderInRoom(<PrivacyNote agentId="builder" />)
+  renderInRoom(<PrivacyNote agent={builder} />)
   const label = screen.getByText('Only you and builder see this')
   expect(label.closest('[data-protected]')).not.toBeNull()
   expect(label.className).toContain('bold-dm-privacy')

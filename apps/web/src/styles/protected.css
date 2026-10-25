@@ -92,6 +92,12 @@
       0 0 0 2px #ececf1,
       0 0 0 4px #12131a !important;
   }
+  /* The phone tab bar's Needs-you count (11.12c): a solid badge a theme may not blend into the tab bar. */
+  html[data-look='custom'] .bold-tab-count[data-protected] {
+    background-color: var(--bad) !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 2px var(--bg) !important;
+  }
   /* Glyph shapes: a path stays visible, unfiltered and unclipped. (Transforms are left alone: Score's own glyph CSS
      may use them. The `d` geometry can't be re-asserted from CSS, `d: none` removes the path: the sanitiser drops
      the property instead, and theme rules never match in here.) */

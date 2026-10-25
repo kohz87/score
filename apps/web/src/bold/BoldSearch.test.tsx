@@ -3,9 +3,15 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { createQueryClient } from '../data/query-client.ts'
+import { createQueryClient, StreamContext } from '../data/query-client.ts'
+import { createStreamQueryRegistry, immediateFrameScheduler } from '../data/resync.ts'
+import { createStreamClient } from '../data/stream.ts'
 import { nowKey } from '../data/team-pause.ts'
 import { BoldSearch } from './BoldSearch.tsx'
+
+class Source extends EventTarget {
+  close() {}
+}
 
 const agents: AgentSummary[] = [
   {
@@ -127,6 +133,8 @@ function installFetch(overrides: Record<string, unknown | Promise<Response>> = {
 function open({ now }: { now?: NowSnapshot } = {}) {
   const queryClient = createQueryClient()
   if (now !== undefined) queryClient.setQueryData(nowKey, now)
+  const client = createStreamClient({ EventSourceImpl: Source as never })
+  const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)
   const onClose = vi.fn()
   const router = createMemoryRouter(
     [
@@ -147,16 +155,26 @@ function open({ now }: { now?: NowSnapshot } = {}) {
   )
   render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <StreamContext value={{ client, queries }}>
+        <RouterProvider router={router} />
+      </StreamContext>
     </QueryClientProvider>,
   )
+  cleanupCallbacks.push(() => {
+    queries.dispose()
+    client.close()
+    queryClient.clear()
+  })
   return { router, onClose, queryClient }
 }
+
+const cleanupCallbacks: (() => void)[] = []
 
 beforeEach(() => installFetch())
 
 afterEach(() => {
   cleanup()
+  cleanupCallbacks.splice(0).forEach((dispose) => dispose())
   vi.unstubAllGlobals()
 })
 

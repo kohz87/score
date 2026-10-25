@@ -16,7 +16,8 @@ import { BrowserPane, EditorPane, TerminalPane } from '../routes/watch/WatchStag
 import { clock } from '../routes/watch/watch-model.ts'
 import '../routes/watch/watch.css'
 import { boldAgentScreenLink, boldAgentWorkspaceLink, type WorkbenchTab } from './bold-links.ts'
-import { boldTeamRoomQuery } from './bold-results-queries.ts'
+import { agentDisplayName } from './bold-agents.ts'
+import { teamRoomQuery } from './room/room-queries.ts'
 import { useBoldWorkbench } from './bold-workbench-queries.ts'
 import './bold-workbench.css'
 
@@ -54,7 +55,7 @@ function AgentName({ agent, id }: { agent: AgentSummary | undefined; id: string 
         bare
         decorative
       />
-      {agent?.name ?? id}
+      {agent ? agentDisplayName(agent) : id}
     </span>
   )
 }
@@ -156,7 +157,7 @@ function CursorMark({
           bare
           decorative
         />
-        {agent?.name ?? cursor.agentId}
+        {agent ? agentDisplayName(agent) : cursor.agentId}
       </span>
     </span>
   )
@@ -216,14 +217,18 @@ const CodeView = memo(function CodeView({
         className={`bold-bench-line${line.by ? ' has-author' : ''}`}
         data-line={line.n}
         data-by={line.by ?? undefined}
-        title={line.by ? `Written by ${agent?.name ?? line.by}` : undefined}
+        title={line.by ? `Written by ${agent ? agentDisplayName(agent) : line.by}` : undefined}
         style={agent ? ({ '--line-colour': agent.style.color } as CSSProperties) : undefined}
       >
         <span className="bold-bench-no" aria-hidden="true">
           {line.n}
         </span>
         <span className="bold-bench-bar" aria-hidden="true" />
-        {line.by && <span className="bold-bench-sr">Written by {agent?.name ?? line.by}</span>}
+        {line.by && (
+          <span className="bold-bench-sr">
+            Written by {agent ? agentDisplayName(agent) : line.by}
+          </span>
+        )}
         <span className="bold-bench-tx">
           <CodeText text={line.text} language={file.language} />
           {cursors.map((cursor) => (
@@ -328,7 +333,7 @@ function ScreenView({
   agent: AgentSummary | undefined
 }) {
   const frame = screen.frame
-  const name = agent?.name ?? frame.agentId
+  const name = agent ? agentDisplayName(agent) : frame.agentId
   return (
     <section className="bold-bench-screen" aria-label={`${name}’s screen`}>
       <header className="bold-bench-screen-head">
@@ -472,7 +477,11 @@ export function BoldWorkbenchView({
       // Keyed by the agent, not the frame: a new frame must not remount the tab and drop its focus.
       key: `screen:${screen.frame.agentId}`,
       tab: 'screen' as const,
-      label: `${byId.get(screen.frame.agentId)?.name ?? screen.frame.agentId}’s screen`,
+      label: `${
+        byId.get(screen.frame.agentId)
+          ? agentDisplayName(byId.get(screen.frame.agentId)!)
+          : screen.frame.agentId
+      }’s screen`,
       agentId: screen.frame.agentId,
     })),
     ...workbench.drafts.map((draft) => ({
@@ -603,7 +612,7 @@ export function BoldWorkbenchView({
 
 export function BoldWorkbench({ agents, hidden }: { agents: AgentSummary[]; hidden: boolean }) {
   const [search, setSearchParams] = useSearchParams()
-  const room = useStreamQuery(boldTeamRoomQuery)
+  const room = useStreamQuery(teamRoomQuery(null))
   const jobs = room.data?.jobs ?? []
   const selectedId = search.get('job')
   const named = selectedId ? jobs.find((item) => item.id === selectedId) : undefined

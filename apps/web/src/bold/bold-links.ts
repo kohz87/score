@@ -34,9 +34,13 @@ export function boldAsideLink(agentId: string, jobId: string): string {
   return boldQuery({ with: agentId, ref: jobId })
 }
 
-/** 11.7 one-to-ones: open an agent's home. */
-export function boldOneToOneLink(agentId: string): string {
-  return boldQuery({ with: agentId })
+/** 11.7 one-to-ones: open an agent's home, keeping the room's job and any other unrelated parameters. */
+export function boldOneToOneLink(agentId: string, search = ''): string {
+  const params = new URLSearchParams(search)
+  params.set('with', agentId)
+  params.delete('chat')
+  params.delete('ref')
+  return `/b?${params.toString()}`
 }
 
 /** 11.12b search: a repeating job lives in the agent's Team page, under More › Routines. */
@@ -57,6 +61,13 @@ export function boldStartJobLink(): string {
 /** 11.10d Recipe editor: open it. */
 export function boldRecipesLink(): string {
   return boldQuery({ recipes: '1' })
+}
+
+/** Closing Recipes keeps the room, job, message, Workbench tab and file the person was looking at. */
+export function boldCloseRecipesLink(search: string): string {
+  const params = new URLSearchParams(search)
+  params.delete('recipes')
+  return params.size > 0 ? `/b?${params.toString()}` : '/b'
 }
 
 /** 11.10b First run: replay it. */

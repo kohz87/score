@@ -1,5 +1,5 @@
-import type { AgentSummary, Approval, WatchFrame, WatchMarker } from '@score/contract'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import type { AgentSummary, Approval, Job, Message, WatchFrame, WatchMarker } from '@score/contract'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link, useParams } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { ApiError } from '../data/api.ts'
@@ -25,31 +25,38 @@ import {
   type ActivityItem,
   type Surface,
 } from '../routes/watch/watch-model.ts'
+import { agentDisplayName, agentStateLabel } from './bold-agents.ts'
+import { boldJobLink } from './bold-links.ts'
+import { approvalNeedsYou } from './room/room-model.ts'
+import { roomMessagesQuery, teamRoomQuery } from './room/room-queries.ts'
 import './bold-screen.css'
 
 const surfaces: Surface[] = ['terminal', 'editor', 'browser']
 const PLAY_MS = 1000
 
 function pendingApproval(approvals: Approval[], agentId: string): Approval | null {
-  const open = approvals.filter(
-    (item) =>
-      item.agentId === agentId && item.status === 'pending' && item.phase !== 'guardian_evaluating',
-  )
+  const open = approvals.filter((item) => item.agentId === agentId && approvalNeedsYou(item))
   return open.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
 }
 
-function stateLine(agent: AgentSummary): string {
-  if (agent.status === 'working') return agent.activity ? `Working · ${agent.activity}` : 'Working'
-  if (agent.status === 'waiting')
-    return agent.activity ? `Needs you · ${agent.activity}` : 'Needs you'
-  if (agent.status === 'idle') return 'Free'
-  if (agent.status === 'up-next') return 'Up next'
-  return agent.status[0]!.toUpperCase() + agent.status.slice(1)
-}
-
-function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSummary }) {
+function ApprovalBar({
+  approval,
+  agent,
+  jobs,
+  messages,
+}: {
+  approval: Approval
+  agent: AgentSummary
+  jobs: Job[]
+  messages: Message[]
+}) {
   const { busy, error, posted, decide } = useApprovalDecision(approval.id)
   const answered = posted !== null && posted.status !== 'pending'
+  const current = posted ?? approval
+  const sending = current.delivery === 'intent' || current.delivery === 'delivering'
+  const retrying = current.actionable && current.delivery === 'failed'
+  const disabled = busy || answered || sending
+  const jobId = approvalJobId(current, jobs, messages)
   return (
     <div
       className="watch-approval bold-screen-approval"
@@ -58,7 +65,7 @@ function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSumm
       data-protected="flex"
     >
       <span className="watch-approval__text">
-        {agent.name} stopped
+        {agentDisplayName(agent)} stopped
         {approval.command ? (
           <>
             {' '}
@@ -68,6 +75,10 @@ function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSumm
           <>: {approval.title}</>
         )}{' '}
         and is waiting for you
+        {sending && <span className="bold-screen-answer"> Sending…</span>}
+        {retrying && (
+          <span className="bold-screen-answer"> Couldn’t deliver your answer. Try again.</span>
+        )}
         {error && (
           <span className="watch-approval__error" role="alert">
             {' '}
@@ -80,29 +91,37 @@ function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSumm
         <button
           type="button"
           className="watch-approval__go"
-          disabled={busy || answered}
+          disabled={disabled}
           onClick={() => void decide('once')}
         >
-          Approve
+          {sending ? 'Sending…' : retrying ? 'Retry' : 'Approve'}
         </button>
       )}
       {approval.actionable && approval.choices.includes('deny') && (
         <button
           type="button"
           className="watch-approval__no"
-          disabled={busy || answered}
+          disabled={disabled}
           onClick={() => void decide('deny')}
         >
-          Deny
+          {sending ? 'Sending…' : 'Deny'}
         </button>
       )}
       {!approval.actionable && (
-        <Link className="watch-approval__link" to="/chat">
-          Answer in Chat
+        <Link className="watch-approval__link" to={jobId ? boldJobLink(jobId) : '/b'}>
+          {jobId ? 'Answer in the job' : 'Answer in the team room'}
         </Link>
       )}
     </div>
   )
+}
+
+/** The job that holds the approval's card message; the contract's Approval itself has no job id. */
+function approvalJobId(approval: Approval, jobs: Job[], messages: Message[]): string | null {
+  const message = messages.find((item) =>
+    item.parts.some((part) => part.kind === 'approval' && part.approvalId === approval.id),
+  )
+  return message?.jobId && jobs.some((job) => job.id === message.jobId) ? message.jobId : null
 }
 
 export function BoldScreenView({
@@ -110,11 +129,16 @@ export function BoldScreenView({
   frames,
   markers,
   approvals,
+  jobs = [],
+  messages = [],
 }: {
   agent: AgentSummary
   frames: WatchFrame[]
   markers: WatchMarker[]
   approvals: Approval[]
+  /** The team room's jobs and loaded messages: an approval's card names its job there. */
+  jobs?: Job[]
+  messages?: Message[]
 }) {
   const [selected, setSelected] = useState<WatchMarker | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -208,8 +232,8 @@ export function BoldScreenView({
         <span className="muted">/</span>
         <AgentGlyph agent={agent} size="lg" decorative />
         <div className="bold-screen-title">
-          <h1 id="bold-screen-title">{agent.name}’s screen</h1>
-          <span className="muted">{stateLine(agent)}</span>
+          <h1 id="bold-screen-title">{agentDisplayName(agent)}’s screen</h1>
+          <span className="muted">{agentStateLabel(agent)}</span>
         </div>
         <Link className="btn ghost bold-screen-terminal" to="/terminal">
           Open in terminal
@@ -217,8 +241,8 @@ export function BoldScreenView({
       </div>
 
       <div className="bold-screen-layout">
-        <section className="bold-screen-log" aria-label={`What ${agent.name} did`}>
-          <h2 className="bold-screen-log-title">What {agent.name} did</h2>
+        <section className="bold-screen-log" aria-label={`What ${agentDisplayName(agent)} did`}>
+          <h2 className="bold-screen-log-title">What {agentDisplayName(agent)} did</h2>
           {chronological.length === 0 && (
             <p className="bold-screen-empty">Nothing yet. Steps show up here as they happen.</p>
           )}
@@ -258,7 +282,7 @@ export function BoldScreenView({
               {live ? 'Live' : `Replaying ${clock(marker!.at)}`}
             </span>
             <div className="bold-screen-stage-head">
-              <span className="bold-screen-who">{agent.name}’s screen</span>
+              <span className="bold-screen-who">{agentDisplayName(agent)}’s screen</span>
               <div role="group" aria-label="Screens" className="bold-screen-surfaces">
                 {surfaces.map((name) => (
                   <button
@@ -279,7 +303,7 @@ export function BoldScreenView({
               {!frame && (
                 <p className="bold-screen-empty">
                   {live
-                    ? `${agent.name} hasn’t opened anything yet.`
+                    ? `${agentDisplayName(agent)} hasn’t opened anything yet.`
                     : 'Nothing was on screen at that moment.'}
                 </p>
               )}
@@ -289,7 +313,28 @@ export function BoldScreenView({
               {frame?.editor && <EditorPane editor={frame.editor} />}
               {frame?.browser && <BrowserPane browser={frame.browser} />}
             </div>
-            {live && waiting && <ApprovalBar key={waiting.id} approval={waiting} agent={agent} />}
+            {live && waiting && (
+              <ApprovalBar
+                key={waiting.id}
+                approval={waiting}
+                agent={agent}
+                jobs={jobs}
+                messages={messages}
+              />
+            )}
+            {!live && waiting && (
+              <button
+                type="button"
+                className="bold-screen-needs-live"
+                data-protected="inline-flex"
+                onClick={() => {
+                  setPlaying(false)
+                  setSelected(null)
+                }}
+              >
+                Needs you — go live
+              </button>
+            )}
           </div>
 
           <ScrubTimeline
@@ -313,12 +358,30 @@ export function BoldScreenView({
             }}
           />
           <p className="bold-screen-note">
-            You’re watching. {agent.name} keeps working and can’t see you here.
+            You’re watching. {agentDisplayName(agent)} keeps working and can’t see you here.
           </p>
         </div>
       </div>
     </section>
   )
+}
+
+/** Reads one job's latest message page; the screen needs the page that holds an approval's card message. */
+function ApprovalMessagesCollector({
+  roomId,
+  jobId,
+  onMessages,
+}: {
+  roomId: string
+  jobId: string
+  onMessages: (messages: Message[]) => void
+}) {
+  const definition = useMemo(() => roomMessagesQuery(roomId, jobId, null, jobId), [jobId, roomId])
+  const page = useStreamQuery(definition)
+  useEffect(() => {
+    if (page.data) onMessages(page.data.items)
+  }, [onMessages, page.data])
+  return null
 }
 
 export function BoldScreenPage() {
@@ -328,6 +391,19 @@ export function BoldScreenPage() {
 
 function BoldScreenAgent({ agentId }: { agentId: string }) {
   const watch = useStreamQuery(watchQuery(agentId))
+  const team = useStreamQuery(teamRoomQuery(null))
+  const teamData = team.data
+  const jobs = teamData?.jobs ?? []
+  const [messagesByJob, setMessagesByJob] = useState<Record<string, Message[] | undefined>>({})
+  const reportMessages = useCallback((jobId: string, items: Message[]) => {
+    setMessagesByJob((current) =>
+      current[jobId] === items ? current : { ...current, [jobId]: items },
+    )
+  }, [])
+  const messages = useMemo(
+    () => Object.values(messagesByJob).flatMap((items) => items ?? []),
+    [messagesByJob],
+  )
   useWatchLiveRefresh(agentId, null, watch.data?.agent.status === 'paused')
   const all = useStreamQuery(approvalsQuery)
   const pending = useStreamQuery(pendingApprovalsQuery(agentId))
@@ -356,11 +432,23 @@ function BoldScreenAgent({ agentId }: { agentId: string }) {
     )
   }
   return (
-    <BoldScreenView
-      agent={watch.data.agent}
-      frames={watch.data.frames}
-      markers={watch.data.markers}
-      approvals={approvals}
-    />
+    <>
+      {teamData?.jobs.map((job) => (
+        <ApprovalMessagesCollector
+          key={job.id}
+          roomId={teamData.room.id}
+          jobId={job.id}
+          onMessages={(items) => reportMessages(job.id, items)}
+        />
+      ))}
+      <BoldScreenView
+        agent={watch.data.agent}
+        frames={watch.data.frames}
+        markers={watch.data.markers}
+        approvals={approvals}
+        jobs={jobs}
+        messages={messages}
+      />
+    </>
   )
 }

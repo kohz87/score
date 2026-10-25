@@ -20,6 +20,7 @@ import { newId } from '../../data/ids.ts'
 import { useOutsideSessions } from '../../data/outside-sessions.ts'
 import { ChevronIcon, PlusIcon, TrashIcon } from '../BoldIcons.tsx'
 import { useStartJob } from '../BoldStartJob.tsx'
+import { agentDisplayName } from '../bold-agents.ts'
 import { PhonePresence } from './PhoneJobList.tsx'
 import { jobStateLine } from './room-model.ts'
 
@@ -57,17 +58,19 @@ function useMenu(
     function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       event.preventDefault()
+      event.stopPropagation()
       setOpen(false)
       trigger.current?.focus()
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('focusin', onFocusIn)
-    document.addEventListener('keydown', onKeyDown)
+    // The room and job menus also live in the phone's side sheet: one Escape closes the menu, not both layers.
+    document.addEventListener('keydown', onKeyDown, true)
     return () => {
       cancelAnimationFrame(first)
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('focusin', onFocusIn)
-      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keydown', onKeyDown, true)
     }
   }, [open, root, setOpen, trigger])
   return close
@@ -246,8 +249,11 @@ export function RoomSwitcher({
                 <OutsideGlyph agent={agents.find((item) => item.id === session.agentId)} />
                 <span className="menu-copy">
                   <b>
-                    {agents.find((item) => item.id === session.agentId)?.name ?? session.agentId} ·{' '}
-                    {session.sourceLabel}
+                    {(() => {
+                      const agent = agents.find((item) => item.id === session.agentId)
+                      return agent ? agentDisplayName(agent) : session.agentId
+                    })()}{' '}
+                    · {session.sourceLabel}
                   </b>
                   <span className="small muted">
                     {session.title || 'Untitled session'} · {session.messageCount}{' '}

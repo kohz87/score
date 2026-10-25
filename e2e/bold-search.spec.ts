@@ -103,7 +103,7 @@ for (const size of sizes) {
       expect(url.searchParams.get('chat')).toBe(chat.id)
     })
 
-    test('a Library note opens with its path', async ({ page }) => {
+    test('a Library note opens in the Library with its path', async ({ page }) => {
       await pair(page)
       await openBold(page)
       await openSearch(page)
@@ -112,9 +112,35 @@ for (const size of sizes) {
         .getByRole('option', { name: /Roadmap/ })
         .first()
         .click()
-      const url = new URL(page.url())
-      expect(url.pathname).toBe('/b')
-      expect(url.searchParams.get('note')).toBe('Projects/Roadmap.md')
+      const library = page.getByTestId('bold-library')
+      await expect(library).toBeVisible()
+      await expect(library.locator('.kn-note-head h2')).toHaveText('Roadmap')
+      // The request is one-shot: the parameter is consumed once the Library has it.
+      await expect.poll(() => new URL(page.url()).searchParams.get('note')).toBeNull()
+    })
+
+    test('the same Library note opens again after a visit to Work', async ({ page }) => {
+      await pair(page)
+      await openBold(page)
+      const openRoadmap = async () => {
+        await openSearch(page)
+        await page.getByRole('combobox', { name: 'Search or run a command' }).fill('Roadmap')
+        await page
+          .getByRole('option', { name: /Roadmap/ })
+          .first()
+          .click()
+        const library = page.getByTestId('bold-library')
+        await expect(library).toBeVisible()
+        await expect(library.locator('.kn-note-head h2')).toHaveText('Roadmap')
+        await expect.poll(() => new URL(page.url()).searchParams.get('note')).toBeNull()
+      }
+      await openRoadmap()
+      await page.locator('.side-toggle').click()
+      await page.getByRole('button', { name: 'Work What the team is making' }).click()
+      await expect(page.getByTestId('bold-library')).toBeHidden()
+      const close = page.getByRole('button', { name: 'Close side panel' })
+      if (await close.isVisible()) await close.click()
+      await openRoadmap()
     })
 
     test('a team-room message opens its job and message', async ({ page }) => {

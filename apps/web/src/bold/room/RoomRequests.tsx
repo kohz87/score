@@ -19,7 +19,8 @@ import {
 } from '../../routes/chat/ApprovalCard.tsx'
 import { approvalsQuery } from '../../routes/chat/queries.ts'
 import { useFence } from '../../routes/orchestrations/orchestration-queries.ts'
-import { agentNameColor } from '../bold-agents.ts'
+import { agentDisplayName, agentNameColor } from '../bold-agents.ts'
+import { pairingProblem } from '../bold-errors.ts'
 import { ChevronIcon } from '../BoldIcons.tsx'
 import {
   exchangePauseAsk,
@@ -30,13 +31,15 @@ import {
   pinsMoreLabel,
   approvalInRoom,
   approvalNeedsYou,
+  reportBackWaiting,
 } from './room-model.ts'
 import { PinCard, PinsProvider, usePinRegistry } from './PinCards.tsx'
 import { reportBackText } from './ReportBack.tsx'
 import { useReportBack } from './report-back-store.ts'
 import { roomExchangesQuery, roomJobsQuery } from './room-queries.ts'
 import { RoomTaskRequests } from './RoomTasks.tsx'
-import { RunSafetyRequests, type CountCards } from './RunSafetyRequests.tsx'
+import { RunSafetyRequests } from './RunSafetyRequests.tsx'
+import { useRoomNeedsYouState } from './use-needs-you.ts'
 
 type PendingOption = ExchangeOption | null
 
@@ -65,24 +68,15 @@ function needsForm(option: ExchangeOption): boolean {
 }
 
 export function decisionError(failure: unknown): string {
-  if (failure instanceof ApiError && (failure.status === 401 || failure.status === 403))
-    return 'Pair this browser first.'
+  const pairing = pairingProblem(failure)
+  if (pairing) return pairing
   if (failure instanceof ApiError && failure.status === 409) return failure.message
   return 'Couldn’t send that decision. Try again.'
 }
 
-function useReportedCount(id: string, count: number, report: CountCards) {
-  useEffect(() => {
-    report(id, count)
-  }, [count, id, report])
-  useEffect(() => () => report(id, 0), [id, report])
-}
-
 /** A restore or lost journal blocks every run: the room says so and opens the review that can lift it. */
-function RoomFence({ report }: { report: CountCards }) {
+function RoomFence() {
   const fence = useFence().data
-  // Counted like every other card, so a folded strip offers "N more" when the fence and a decision are both waiting.
-  useReportedCount('global-fence', fence?.fenced ? 1 : 0, report)
   if (!fence?.fenced) return null
   return (
     <PinCard
@@ -150,24 +144,11 @@ function ReportBackRequestCard({ job, refetch }: { job: Job; refetch: () => void
   )
 }
 
-function RoomReportBacks({
-  roomId,
-  jobs,
-  report,
-}: {
-  roomId: string
-  jobs: Job[]
-  report: CountCards
-}) {
+function RoomReportBacks({ roomId, jobs }: { roomId: string; jobs: Job[] }) {
   const jobsDefinition = useMemo(() => roomJobsQuery(roomId), [roomId])
   const refetch = useStreamQueryRefetch(jobsDefinition)
-  // A closed job asks nothing (reopen it to send its result back); the reads now include closed jobs.
-  const waiting = jobs.filter(
-    (job) =>
-      job.state !== 'closed' &&
-      (job.reportBack?.state === 'needs_ok' || job.reportBack?.state === 'not_confirmed'),
-  )
-  useReportedCount('report-back', waiting.length, report)
+  // A closed job asks nothing (reopen it to send its result back); the reads include closed jobs.
+  const waiting = reportBackWaiting(jobs)
   return (
     <>
       {waiting.map((job) => (
@@ -270,11 +251,13 @@ export function ExchangeRequestCard({
     >
       <div className="bold-request-head">
         {from && <AgentGlyph agent={from} size="xs" decorative />}
-        <b style={from ? { color: agentNameColor(from) } : undefined}>{exchange.from}</b>
+        <b style={from ? { color: agentNameColor(from) } : undefined}>
+          {from ? agentDisplayName(from) : exchange.from}
+        </b>
         {to && (
           <>
             <span className="muted">with</span>
-            <b style={{ color: agentNameColor(to) }}>{exchange.to}</b>
+            <b style={{ color: agentNameColor(to) }}>{agentDisplayName(to)}</b>
           </>
         )}
         <span className="bold-request-job">{job.title}</span>
@@ -314,7 +297,7 @@ export function ExchangeRequestCard({
               >
                 {reassignChoices.map((agent) => (
                   <option key={agent.id} value={agent.id}>
-                    {agent.name}
+                    {agentDisplayName(agent)}
                   </option>
                 ))}
               </select>
@@ -402,20 +385,11 @@ export function ExchangeRequestCard({
   )
 }
 
-function RoomExchanges({
-  jobs,
-  agents,
-  report,
-}: {
-  jobs: Job[]
-  agents: AgentSummary[]
-  report: CountCards
-}) {
+function RoomExchanges({ jobs, agents }: { jobs: Job[]; agents: AgentSummary[] }) {
   const definition = useMemo(() => roomExchangesQuery(jobs.map((job) => job.id)), [jobs])
   const exchanges = useStreamQuery(definition).data ?? []
   const refetch = useStreamQueryRefetch(definition)
   const visible = exchanges.filter(needsYou)
-  useReportedCount('exchanges', visible.length, report)
   return (
     <>
       {visible.map((exchange) => {
@@ -461,16 +435,18 @@ function ApprovalRequestCard({
       if (!moreButton.current?.parentElement?.contains(event.target as Node)) setMore(false)
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return
+      if (event.key !== 'Escape' || event.defaultPrevented) return
       event.preventDefault()
+      event.stopPropagation()
       setMore(false)
       requestAnimationFrame(() => moreButton.current?.focus())
     }
     document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
+    // This menu can sit inside the phone's side sheet; the menu is the top layer, so it owns the first Escape.
+    document.addEventListener('keydown', onKeyDown, true)
     return () => {
       document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keydown', onKeyDown, true)
     }
   }, [more])
 
@@ -488,7 +464,9 @@ function ApprovalRequestCard({
     >
       <div className="bold-request-head">
         {agent && <AgentGlyph agent={agent} size="xs" decorative />}
-        <b style={agent ? { color: agentNameColor(agent) } : undefined}>{current.agentId}</b>
+        <b style={agent ? { color: agentNameColor(agent) } : undefined}>
+          {agent ? agentDisplayName(agent) : current.agentId}
+        </b>
         <span>· {current.title}</span>
         {job && <span className="bold-request-job">{job.title}</span>}
       </div>
@@ -546,7 +524,7 @@ function ApprovalRequestCard({
                   )}
                   {choices.includes('always') && (
                     <button type="button" onClick={() => void decide('always')}>
-                      Always allow for {current.agentId}
+                      Always allow for {agent ? agentDisplayName(agent) : current.agentId}
                     </button>
                   )}
                 </div>
@@ -576,7 +554,6 @@ function RoomApprovals({
   jobs,
   selectedJob,
   agents,
-  report,
 }: {
   roomId: string
   approvals: Approval[]
@@ -584,7 +561,6 @@ function RoomApprovals({
   jobs: Job[]
   selectedJob: string
   agents: AgentSummary[]
-  report: CountCards
 }) {
   const cards = approvals.flatMap((approval) => {
     // `approvalsQuery` is global: an approval that names only other rooms belongs to their strips.
@@ -598,7 +574,6 @@ function RoomApprovals({
     // loaded page still shows as a request card, but with no job chip: the selected/default job is not its job.
     return [{ approval, job: known }]
   })
-  useReportedCount('approvals', cards.length, report)
   return (
     <>
       {cards.map(({ approval, job }) => (
@@ -625,18 +600,12 @@ export function RoomRequests({
   teamRoom?: boolean
 }) {
   const approvals = useStreamQuery(approvalsQuery).data ?? []
-  const [counts, setCounts] = useState<Record<string, number>>({})
   const [expanded, setExpanded] = useState(false)
   const pins = usePinRegistry()
   const heading = useRef<HTMLHeadingElement>(null)
   const focusedKey = useRef<string | null>(null)
   const lastCards = useRef<typeof pins.cards>([])
   const lastVisible = useRef<string[]>([])
-  const report: CountCards = useMemo(
-    () => (id, count) =>
-      setCounts((current) => (current[id] === count ? current : { ...current, [id]: count })),
-    [],
-  )
   const selectedJobs = jobs.filter(
     (job) => job.state !== 'closed' && (selectedJob === 'all' || job.id === selectedJob),
   )
@@ -645,8 +614,26 @@ export function RoomRequests({
   )
   const recipeJobs = selectedJobs.filter((job) => job.recipe !== null)
   const needsApproval = approvals.filter(approvalNeedsYou)
-  const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
+  const needs = useRoomNeedsYouState({ roomId, jobs, messages, selectedJob, teamRoom })
+  const total = needs.total
   const moreLabel = pinsMoreLabel(total, expanded)
+  const lastTotal = useRef<number | null>(null)
+  const settled = useRef(false)
+  const [announcement, setAnnouncement] = useState('')
+
+  useEffect(() => {
+    if (!needs.ready) return
+    if (!settled.current) {
+      settled.current = true
+      lastTotal.current = total
+      return
+    }
+    // A status region only announces text that changes. Clear it when the count falls, so the same text can announce
+    // again on the next rise (2 → 1 → 2).
+    if (total < (lastTotal.current ?? 0)) setAnnouncement('')
+    else if (total > (lastTotal.current ?? 0)) setAnnouncement(`${total} need you`)
+    lastTotal.current = total
+  }, [needs.ready, total])
 
   // With one card or none left the strip folds, so the next burst of cards doesn't arrive already expanded.
   if (expanded && total <= 1) setExpanded(false)
@@ -678,36 +665,42 @@ export function RoomRequests({
 
   return (
     <PinsProvider value={pins.value}>
-      <div
-        id="bold-pins"
-        className="bold-pins"
-        data-expanded={expanded ? 'true' : 'false'}
-        aria-label="Needs you"
-        onFocusCapture={(event) => {
-          focusedKey.current =
-            (event.target as Element).closest('[data-pin-key]')?.getAttribute('data-pin-key') ??
-            focusedKey.current
-        }}
-      >
-        <h2 ref={heading} className="bold-pins-title" tabIndex={-1}>
-          Needs you
-        </h2>
-        <RoomFence report={report} />
-        <RoomApprovals
-          roomId={roomId}
-          approvals={needsApproval}
-          messages={messages ?? []}
-          jobs={jobs}
-          selectedJob={selectedJob}
-          agents={agents}
-          report={report}
-        />
-        <RoomExchanges jobs={cooking} agents={agents} report={report} />
-        <RoomReportBacks roomId={roomId} jobs={jobs} report={report} />
-        <RunSafetyRequests jobs={recipeJobs} agents={agents} report={report} />
-        <RoomTaskRequests roomId={roomId} agents={agents} report={report} teamRoom={teamRoom} />
-      </div>
-      {moreLabel && (
+      {/* The status node stays mounted at zero so its first 0 → 1 change is announced. */}
+      <span className="bold-sr-only" role="status">
+        {announcement}
+      </span>
+      {total > 0 && (
+        <div
+          id="bold-pins"
+          className="bold-pins"
+          data-expanded={expanded ? 'true' : 'false'}
+          role="region"
+          aria-label="Needs you"
+          onFocusCapture={(event) => {
+            focusedKey.current =
+              (event.target as Element).closest('[data-pin-key]')?.getAttribute('data-pin-key') ??
+              focusedKey.current
+          }}
+        >
+          <h2 ref={heading} className="bold-pins-title" tabIndex={-1}>
+            Needs you
+          </h2>
+          <RoomFence />
+          <RoomApprovals
+            roomId={roomId}
+            approvals={needsApproval}
+            messages={messages ?? []}
+            jobs={jobs}
+            selectedJob={selectedJob}
+            agents={agents}
+          />
+          <RoomExchanges jobs={cooking} agents={agents} />
+          <RoomReportBacks roomId={roomId} jobs={jobs} />
+          <RunSafetyRequests jobs={recipeJobs} agents={agents} />
+          <RoomTaskRequests roomId={roomId} agents={agents} teamRoom={teamRoom} />
+        </div>
+      )}
+      {total > 0 && moreLabel && (
         <button
           type="button"
           className="bold-pins-more"

@@ -22,7 +22,8 @@ import {
 } from '../../routes/chat/versions.tsx'
 import { saveCandidates, SaveToKnowledge } from '../../routes/knowledge/SaveToKnowledge.tsx'
 import { boldJobLink, boldMessageLink, boldWorkspaceLink } from '../bold-links.ts'
-import { jobResultsKey } from '../bold-results-queries.ts'
+import { fetchJobResults, jobResultsKey } from '../bold-results-queries.ts'
+import { agentDisplayName } from '../bold-agents.ts'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomMessagesQuery, roomPinsQuery, roomSeekQuery, setRoomPin } from './room-queries.ts'
 
@@ -33,7 +34,8 @@ function messageText(message: Message) {
 function authorName(message: Message, agents: AgentSummary[]) {
   if (message.author.kind === 'you') return 'You'
   const id = message.author.agentId
-  return agents.find((agent) => agent.id === id)?.name ?? id
+  const agent = agents.find((item) => item.id === id)
+  return agent ? agentDisplayName(agent) : id
 }
 
 function atOrAfter(message: Message, anchor: Message) {
@@ -158,6 +160,20 @@ function MessageWithActions({
     return boldWorkspaceLink(target.agentId, target.path, jobId ? { id: jobId, files } : undefined)
   }
 
+  async function prepareWorkspaceLink() {
+    const jobId = message.jobId ?? null
+    if (!jobId) return
+    const key = jobResultsKey(jobId)
+    const query = queryClient.getQueryCache().find({ queryKey: key, exact: true })
+    if (!query || (!query.isStale() && query.state.fetchStatus !== 'fetching')) return
+    await queryClient.fetchQuery({
+      queryKey: key,
+      queryFn: ({ signal }) => fetchJobResults(jobId, signal),
+      staleTime: 0,
+      retry: false,
+    })
+  }
+
   async function copy() {
     if (!(await copyText(text))) return
     setCopied(true)
@@ -193,6 +209,7 @@ function MessageWithActions({
         agents={agents}
         bold
         workspaceLinkFor={workspaceLinkFor}
+        workspacePrepare={prepareWorkspaceLink}
         approvalPointerIds={approvalPointerIds}
         versionControl={
           <MessageVersionControl messageId={message.id} versions={versions} onSelect={onView} />
@@ -331,6 +348,19 @@ export function RoomMessageStream({
   const [older, setOlder] = useState<Record<string, string[]>>({})
   const [pageStates, setPageStates] = useState<Record<string, PageState>>({})
   const seeked = useRef<string | null>(null)
+  const [messageNotice, setMessageNotice] = useState('')
+  // The newest message time seen so far: only agent messages after it are news. Ids alone would call a tab switch, an
+  // earlier page or an undone delete "new" (those messages merely became visible).
+  const newestSeen = useRef<string | null>(null)
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastNoticeAt = useRef(0)
+
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    },
+    [],
+  )
 
   const reportPage = useCallback((key: string, state: PageState) => {
     setPageStates((current) => {
@@ -450,6 +480,35 @@ export function RoomMessageStream({
       return message.jobId === selectedJob || (message.jobId == null && selectedJob === defaultJob)
     })
   }, [allItems, defaultJob, filter, hidden, jobs, selectedJob])
+
+  useEffect(() => {
+    if (status !== 'success') return
+    const latest = items.reduce<string>(
+      (newest, message) => (message.createdAt > newest ? message.createdAt : newest),
+      '',
+    )
+    if (newestSeen.current === null) {
+      // The first page is history, not news: remember how far it goes without speaking.
+      newestSeen.current = latest
+      return
+    }
+    const since = newestSeen.current
+    const fresh = items.filter(
+      (message) => message.createdAt > since && message.author.kind === 'agent',
+    )
+    if (latest > since) newestSeen.current = latest
+    if (fresh.length === 0) return
+    const newest = fresh.at(-1)!
+    if (newest.author.kind !== 'agent') return
+    const delay = Math.max(0, 2_000 - (Date.now() - lastNoticeAt.current))
+    if (noticeTimer.current) return
+    const announce = () => {
+      noticeTimer.current = null
+      lastNoticeAt.current = Date.now()
+      setMessageNotice(`New message from ${authorName(newest, agents)}`)
+    }
+    noticeTimer.current = setTimeout(announce, delay)
+  }, [agents, items, status])
 
   const addOlder = useCallback((jobId: string | null, cursor: string) => {
     setOlder((current) => {
@@ -595,7 +654,7 @@ export function RoomMessageStream({
             </span>
             <span className="bold-result-copy">
               <b>{job.title}</b>
-              <span>{holder ? `Done · ${holder.name}` : 'Done'}</span>
+              <span>{holder ? `Done · ${agentDisplayName(holder)}` : 'Done'}</span>
             </span>
           </Link>,
         )
@@ -609,6 +668,9 @@ export function RoomMessageStream({
 
   return (
     <div className="bold-stream" aria-label="Team room messages">
+      <span className="bold-sr-only" role="status" aria-live="polite">
+        {messageNotice}
+      </span>
       {pageRefs.map((ref) => (
         <MessagePageCollector
           key={pageKey(ref.jobId, ref.before)}
@@ -664,7 +726,7 @@ export function RoomMessageStream({
         if (!agent) return null
         return (
           <p className="bold-typing" key={agentId} role="status">
-            <b>{agent.name}</b> {text}
+            <b>{agentDisplayName(agent)}</b> {text}
           </p>
         )
       })}

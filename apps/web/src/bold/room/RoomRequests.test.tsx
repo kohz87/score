@@ -72,6 +72,7 @@ function stubRoom(
   decisionGate: Promise<void> = Promise.resolve(),
   fenced = false,
   tasks: TaskSummary[] = [],
+  initialApprovals: Approval[] = [approval],
 ) {
   const fetchMock = mockFetch(async (url, init) => {
     if (url === '/api/orchestrations/fence')
@@ -86,7 +87,7 @@ function stubRoom(
       })
     if (url === '/api/approvals?status=all') {
       if (init.method === 'POST') throw new Error('not the approvals list')
-      return jsonResponse({ asOfSeq: 1, items: [approval], nextCursor: null })
+      return jsonResponse({ asOfSeq: 1, items: initialApprovals, nextCursor: null })
     }
     if (url === '/api/approvals/approval-1/decision') {
       await decisionGate
@@ -573,6 +574,60 @@ test('the more-turns button never shows an empty count', async () => {
   fireEvent.change(screen.getByLabelText('More turns (1–20)'), { target: { value: '' } })
   expect(screen.getByRole('button', { name: 'Give more turns' })).toBeDefined()
   expect(screen.queryByRole('button', { name: /Give {2}more turns/ })).toBeNull()
+})
+
+test('the strip announces the first need and repeats the same count after it drops', async () => {
+  stubRoom(null, approval, Promise.resolve(), false, [], [])
+  const { queryClient } = renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
+  const status = screen.getByRole('status')
+  expect(status.textContent).toBe('')
+  await waitFor(() => expect(queryClient.getQueryState(approvalsQuery.key)?.status).toBe('success'))
+
+  // 0 → 1: the always-mounted status region hears its first change.
+  act(() =>
+    queryClient.setQueryData(approvalsQuery.key, {
+      asOfSeq: 2,
+      data: [approval],
+    }),
+  )
+  await waitFor(() => expect(status.textContent).toBe('1 need you'))
+
+  // 1 → 2 announces the new total.
+  act(() =>
+    queryClient.setQueryData(approvalsQuery.key, {
+      asOfSeq: 3,
+      data: [approval, { ...approval, id: 'approval-2' }],
+    }),
+  )
+  await waitFor(() => expect(status.textContent).toBe('2 need you'))
+
+  // 2 → 1 clears the text; 1 → 2 can then announce the same sentence again.
+  act(() =>
+    queryClient.setQueryData(approvalsQuery.key, {
+      asOfSeq: 4,
+      data: [approval],
+    }),
+  )
+  await waitFor(() => expect(status.textContent).toBe(''))
+  act(() =>
+    queryClient.setQueryData(approvalsQuery.key, {
+      asOfSeq: 5,
+      data: [approval, { ...approval, id: 'approval-2' }],
+    }),
+  )
+  await waitFor(() => expect(status.textContent).toBe('2 need you'))
+})
+
+test('a room with nothing waiting renders no Needs-you region', async () => {
+  stubRoom(null, approval)
+  const { queryClient } = renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
+  await screen.findByRole('article', { name: /May I install a package/ })
+  act(() => queryClient.setQueryData(approvalsQuery.key, { asOfSeq: 2, data: [] }))
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull())
 })
 
 test('a room’s blocked task is a protected card; unblock takes an optional note', async () => {

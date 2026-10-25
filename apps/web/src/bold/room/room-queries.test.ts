@@ -143,15 +143,6 @@ test('a local delete reaches every job list without touching another room', () =
     asOfSeq: 1,
     data: { room, jobs: [one, two] },
   })
-  queryClient.setQueryData(['bold', 'team-room'], {
-    asOfSeq: 1,
-    data: { room, jobs: [one, two] },
-  })
-  queryClient.setQueryData(['bold-search', 'team-room'], {
-    asOfSeq: 1,
-    room,
-    jobs: [one, two],
-  })
   queryClient.setQueryData(['bold-search', 'directs', 'lead'], [{ agentId: 'lead', chats: [one] }])
   queryClient.setQueryData(
     ['bold-search', 'directs', 'builder'],
@@ -172,8 +163,6 @@ test('a local delete reaches every job list without touching another room', () =
   expect(queryClient.getQueryData(teamRoomQuery(null).key)).toMatchObject({
     data: { jobs: [two] },
   })
-  expect(queryClient.getQueryData(['bold', 'team-room'])).toMatchObject({ data: { jobs: [two] } })
-  expect(queryClient.getQueryData(['bold-search', 'team-room'])).toMatchObject({ jobs: [two] })
   expect(queryClient.getQueryData(['bold-search', 'directs', 'lead'])).toMatchObject([
     { agentId: 'lead', chats: [] },
   ])
@@ -215,23 +204,15 @@ test('a local delete drops the deleted job’s message pages so undo reads its t
 
 test('a local upsert puts a restored or renamed job back in the room and team reads', () => {
   const queryClient = createQueryClient()
-  const one = makeJob({ id: 'job-1' })
   const renamed = makeJob({ id: 'job-1', title: 'Renamed' })
 
   queryClient.setQueryData(roomJobsQuery(room.id).key, { asOfSeq: 1, data: [] })
   queryClient.setQueryData(teamRoomQuery(null).key, { asOfSeq: 1, data: { room, jobs: [] } })
-  queryClient.setQueryData(['bold', 'team-room'], {
-    asOfSeq: 1,
-    data: { room, jobs: [one] },
-  })
 
   changeCachedJob(queryClient, renamed, 'upsert')
 
   expect(queryClient.getQueryData(roomJobsQuery(room.id).key)).toMatchObject({ data: [renamed] })
   expect(queryClient.getQueryData(teamRoomQuery(null).key)).toMatchObject({
-    data: { jobs: [renamed] },
-  })
-  expect(queryClient.getQueryData(['bold', 'team-room'])).toMatchObject({
     data: { jobs: [renamed] },
   })
 })

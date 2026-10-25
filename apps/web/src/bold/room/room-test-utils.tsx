@@ -154,17 +154,23 @@ export function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-export function renderInRoom(ui: ReactNode, entries: string[] = ['/b?room=room-1']) {
+export function renderInRoom(
+  ui: ReactNode,
+  entries: string[] = ['/b?room=room-1'],
+  client?: StreamClient,
+) {
   const queryClient = createQueryClient()
   queryClient.setDefaultOptions({ queries: { retry: false } })
   const listeners = new Set<(event: StreamEvent) => void>()
-  const stream = {
-    subscribe: (listener: (event: StreamEvent) => void) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
-    },
-    onControl: () => () => undefined,
-  } as unknown as StreamClient
+  const stream =
+    client ??
+    ({
+      subscribe: (listener: (event: StreamEvent) => void) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      onControl: () => () => undefined,
+    } as unknown as StreamClient)
   const queries = createStreamQueryRegistry(queryClient, stream, immediateFrameScheduler)
   const result = render(
     <QueryClientProvider client={queryClient}>
