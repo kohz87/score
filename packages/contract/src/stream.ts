@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AgentQuestionSchema } from './questions.ts'
 import { RoomProjectEventSchema, RoomProjectSchema } from './conversations.ts'
 import { KnowledgeChangedSchema } from './knowledge.ts'
 import { BriefSummarySchema } from './briefs.ts'
@@ -165,6 +166,8 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('typing'), data: TypingSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('approval.requested'), data: ApprovalSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('approval.updated'), data: ApprovalSchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('question.requested'), data: AgentQuestionSchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('question.updated'), data: AgentQuestionSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('task.upserted'), data: TaskSummarySchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('task.activity'), data: TaskActivityDataSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('lane.upserted'), data: LaneUpsertedSchema }),

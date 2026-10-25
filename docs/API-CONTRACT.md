@@ -300,6 +300,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
 | `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
 | `approval.updated`   | `Approval` (phase / decision / delivery changes)                                              | same                                                     |
+| `question.requested` | `AgentQuestion` (§6a, 2.3.0)                                                                  | same                                                     |
+| `question.updated`   | `AgentQuestion` (status / answer / delivery changes)                                          | same                                                     |
 | `task.upserted`      | `TaskSummary`                                                                                 | Tasks, Now, Flow                                         |
 | `task.activity`      | `{ taskId, item: TaskActivity }`                                                              | task drawer, Flow inspector                              |
 | `lane.upserted`      | `{ briefId \| null, agentId, block: LaneBlock }`                                              | Now › Score, Chat plan card                              |
@@ -953,6 +955,26 @@ Score's own runs (`score-<room>-<agent>`), compression children and empty sessio
   `409 conflict` (current `Approval` in `details`) if already decided or `actionable: false`.
   `403 feature_disabled` when the compatibility gate disables that origin.
 - "Always allow installs for X" = `choice: 'always'` when offered; otherwise the UI links to Rules (§9).
+
+## 6a. Agent questions (2.3.0, decision 128; schemas in `packages/contract/src/questions.ts`)
+
+An agent on a Score run can stop and ask the person something (Hermes' clarify tool). Hermes waits for the answer (by
+default up to an hour) and the run sits still meanwhile, so a pending question is a needs-you item. A question is never
+an approval: Guardian, rules and "always" never answer one.
+
+`AgentQuestion` = `{ id; agentId; runId; roomId: string|null; jobId: string|null; question; options: string[] /* empty =
+free text */; multiSelect; status: 'pending'|'answered'|'expired'|'withdrawn'; answer: string|string[]|null;
+answeredBy: 'you'|'elsewhere'|'timeout'|null; delivery: 'none'|'delivering'|'applied'|'failed'; createdAt; expiresAt:
+string|null; answeredAt: string|null }`.
+
+- **S** `GET /api/questions?status=pending|all&room=` → `{ asOfSeq; items: AgentQuestion[] }` (newest first, at most 200).
+- **S** `GET /api/questions/:questionId` → `AgentQuestion` (`404 not_found`).
+- **H** `POST /api/questions/:questionId/answer` `{ answer: string | string[] }` → `202 AgentQuestion` with `delivery:
+  'delivering'`; the outcome arrives as `question.updated` (`answered`/`applied`, or `failed` with the question still
+  pending so the person can answer again). A free-text question takes a string (≤ 16 384 characters); one with options
+  takes one of them (string), or with `multiSelect` an array of distinct options. `400 bad_request` for an answer that
+  doesn't fit; `409 conflict` (current `AgentQuestion` in `details`) when it is no longer pending.
+- A question ends `withdrawn` when its run ends or Hermes settles it without Score's answer, `expired` at `expiresAt`.
 
 ## 7. Tasks
 
