@@ -94,7 +94,11 @@ export function syncTeamRoomMembers(
     ...new Set(
       readAgentNames(sqlite)
         .map((agent) => agent.id)
-        .filter((agent) => !gone.has(agent) && agentAdmits(sqlite, agent)),
+        // The lead stays a member while it is briefly not ready (only leaving the team unseats it).
+        .filter(
+          (agent) =>
+            !gone.has(agent) && (agent === room.lead_agent_id || agentAdmits(sqlite, agent)),
+        ),
     ),
   ].sort()
   if (ids.length === 0 && removed.length === 0) return events

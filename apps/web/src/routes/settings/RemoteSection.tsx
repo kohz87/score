@@ -231,7 +231,8 @@ export function RemoteSection({
   if (!remote) return null
   const passwordSet = security.data?.passwordSet === true
   const ready = passwordSet && password.length >= 8
-  const hint = pairHint(passwordSet, password.length)
+  // Only once the server has said whether a password is set: while loading (or on an error) there is nothing to point at.
+  const hint = security.isSuccess ? pairHint(passwordSet, password.length) : null
   const focusPassword = () => {
     const field = passwordSet
       ? passwordField.current
