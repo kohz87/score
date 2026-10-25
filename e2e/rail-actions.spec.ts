@@ -18,7 +18,7 @@ for (const theme of ['harbour', 'studio'] as const) {
         json: { passwordSet: false, origins: [], terminal: true, terminalUnavailable: null },
       }),
     )
-    await page.goto('/now')
+    await page.goto('/chat/room-activity-feed')
     await expect(page.locator('html')).toHaveAttribute('data-layout', 'side')
     const terminal = page.locator('.top-bar-terminal')
     const avatar = page.locator('.avatar-menu > button').first()

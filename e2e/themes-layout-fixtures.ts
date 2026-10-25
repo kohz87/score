@@ -62,37 +62,22 @@ export const layoutThemes = {
     layout: {
       menu: [
         { to: '/chat', label: 'Talk' },
-        { to: '/now', label: 'Today' },
-        { to: '/tasks' },
+        { to: '/team', label: 'Today' },
         { to: '/reports', label: 'Numbers' },
       ],
     },
   }),
   narrow: theme('narrow', { layout: { contentWidth: 'narrow' } }),
   full: theme('full', { layout: { contentWidth: 'full' } }),
-  nowGrid: theme('now-grid', {
+  /** A theme saved before 11.11: both retired destinations and the Now grid are still in its manifest. */
+  legacy: theme('legacy-now', {
     layout: {
+      menu: [{ to: '/now', label: 'Today' }, { to: '/tasks' }, { to: '/chat', label: 'Talk' }],
       now: {
         columns: 2,
         cards: [
-          { card: 'room', span: 2 },
-          { card: 'made-today', span: 1 },
-          { card: 'needs-you', span: 1 },
           { card: 'timeline', span: 2 },
-          { card: 'composer', span: 2 },
-        ],
-      },
-    },
-  }),
-  /** No needs-you card listed: Score adds it. */
-  nowNoAsk: theme('now-no-ask', {
-    layout: {
-      now: {
-        columns: 3,
-        cards: [
-          { card: 'timeline', span: 3 },
-          { card: 'room', span: 2 },
-          { card: 'made-today', span: 1 },
+          { card: 'needs-you', span: 1 },
         ],
       },
     },
@@ -134,7 +119,7 @@ export const layoutThemes = {
     shape: { surface: 'glass', elevation: 'floating' },
     background: { image: 'asset:img/bg.png', fit: 'tile', dim: 40 },
   }),
-  /** Everything at once, with the user view overriding some of it (not the built-in Harbour of 9.5). */
+  /** Everything at once (not the built-in Harbour of 9.5). */
   harbour: theme('everything', {
     colors: { light: { 'bubble-own': '#1f4e79', 'bubble-own-ink': '#ffffff' } },
     shape: { surface: 'glass', elevation: 'raised', border: 'hairline', radius: 'round' },
@@ -144,12 +129,5 @@ export const layoutThemes = {
       chat: { messages: 'bubbles', roomList: 'left' },
     },
     background: { image: 'asset:img/bg.png', fit: 'cover', dim: 30 },
-    views: {
-      user: {
-        shape: { radius: 'sharp', surface: 'solid' },
-        layout: { contentWidth: 'narrow', chat: { roomList: 'right' } },
-        background: { image: 'asset:img/bg.png', fit: 'cover', dim: 55 },
-      },
-    },
   }),
 }

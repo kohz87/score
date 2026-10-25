@@ -14,6 +14,7 @@ import { ContextMeter } from '../../routes/chat/ContextMeter.tsx'
 import { orchestrationsQuery } from '../../routes/orchestrations/orchestration-queries.ts'
 import { RoomRunPanel } from '../../routes/orchestrations/RoomRunPanel.tsx'
 import { statusLabel } from '../../routes/orchestrations/orch-model.ts'
+import { briefHasRun } from '../../routes/runs/brief-run.ts'
 import { workflowRunsQuery } from '../../routes/workflows/workflow-queries.ts'
 import { WorkflowRoomPanel } from '../../routes/workflows/WorkflowRoomPanel.tsx'
 import { agentsQuery } from '../../routes/chat/queries.ts'
@@ -113,6 +114,10 @@ function RecipeRunCard({ recipe, agents }: { recipe: JobRecipe; agents: AgentSum
   const workflows = useStreamQuery(workflowRunsQuery).data ?? []
   const [open, setOpen] = useState(false)
   const match = recipeRun(recipe, orchestrations, workflows)
+  const runHref =
+    match && briefHasRun(match.summary.briefId, orchestrations, workflows)
+      ? `/runs/${encodeURIComponent(match.summary.briefId)}`
+      : null
   const title =
     match?.summary.title ?? (recipe.kind === 'workflow' ? 'Workflow run' : 'Orchestration')
   const kind = recipe.kind === 'workflow' ? 'Workflow run' : 'Orchestration'
@@ -136,12 +141,11 @@ function RecipeRunCard({ recipe, agents }: { recipe: JobRecipe; agents: AgentSum
             <button type="button" className="btn sm" onClick={() => setOpen((value) => !value)}>
               {open ? 'Hide plan and steps' : 'Show plan and steps'}
             </button>
-            <Link
-              className="bold-thread-link"
-              to={`/now/flow/${encodeURIComponent(match.summary.briefId)}`}
-            >
-              Open in Flow
-            </Link>
+            {runHref && (
+              <Link className="bold-thread-link" to={runHref}>
+                Open the run
+              </Link>
+            )}
           </div>
           {open &&
             (match.kind === 'orchestration' ? (

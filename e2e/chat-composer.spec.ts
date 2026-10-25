@@ -46,10 +46,4 @@ test('the composer sends a message that gets a streamed reply, and an /assign th
   await composer.press('Enter')
   const created = page.getByRole('status').filter({ hasText: 'Created task' })
   await expect(created).toBeVisible()
-
-  await created.getByRole('link').click()
-  await expect(page).toHaveURL(/\/tasks\//)
-  // In-app navigation: a full page load of the dev build can lose module requests (see now.spec.ts).
-  await page.getByRole('navigation', { name: /main/i }).getByRole('link', { name: 'Tasks' }).click()
-  await expect(page.getByText(title).first()).toBeVisible({ timeout: 15_000 })
 })

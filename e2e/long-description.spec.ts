@@ -1,8 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
-// A long agent description (coding agents often have one) stays on one line in the Now lanes and the @mention menu,
-// with the full text on hover; it used to wrap over the next lanes and options (owner report, 2026-10-16).
+// A long agent description (coding agents often have one) stays on one line in the @mention menu, with the full text on
+// hover; it used to wrap over the next options (owner report, 2026-10-16).
 const role =
   'Example builder. Implements changes in its workspace on the agent branch, following AGENTS.md and CLAUDE.md; ' +
   'hands finished work to the reviewer, which reads the diff against main and checks correctness, security and tests.'
@@ -32,9 +32,7 @@ async function cutToOneLine(text: Locator): Promise<void> {
   expect(box.lines).toBeLessThan(1.5)
 }
 
-test('a long agent description stays on one line in Now and in the @mention menu', async ({
-  page,
-}) => {
+test('a long agent description stays on one line in the @mention menu', async ({ page }) => {
   test.setTimeout(90_000)
   const suffix = Date.now().toString(36)
   const id = `long-${suffix}`
@@ -50,7 +48,7 @@ test('a long agent description stays on one line in Now and in the @mention menu
     }),
   ).toMatchObject({ id })
   try {
-    await checkBoth(page, id, suffix)
+    await checkMention(page, id, suffix)
   } finally {
     // Other specs count the team's agents: never leave this one behind.
     await page.goto(`/team/${encodeURIComponent(id)}`)
@@ -60,14 +58,7 @@ test('a long agent description stays on one line in Now and in the @mention menu
   }
 })
 
-async function checkBoth(page: Page, id: string, suffix: string): Promise<void> {
-  await page.goto('/now')
-  const lane = page.locator('.now-lane-label').filter({ hasText: id })
-  await expect(lane).toBeVisible({ timeout: 15_000 })
-  await cutToOneLine(lane.locator('.now-lane-role').first())
-  const laneBox = await lane.boundingBox()
-  expect(laneBox?.height).toBe(76)
-
+async function checkMention(page: Page, id: string, suffix: string): Promise<void> {
   await api(page, 'rooms', { name: `desc-${suffix}`, leadAgentId: 'lead' })
   await page.goto('/chat')
   await page

@@ -275,52 +275,7 @@ describe('third gate finding 3: non-text contrast of glyphs and Needs-you dots',
   })
 })
 
-// PLAN 10.10: the room stage's own overlays read a different `transform` every time they are sampled. The shape
-// signature must not call Score's own motion a theme's doing, and must still catch a theme that hides or moves the real
-// shapes.
-describe('10.10: the shape signature with the room stage’s animated parts', () => {
-  const mark = `<div id="row"><span id="g" class="agent-glyph" data-protected="inline-flex" role="img" aria-label="lead" style="--glyph-color: #6b4eff; background-color: #ffffff"><svg viewBox="0 0 20 20"><path id="body" class="agent-glyph__solid" d="M10 3 L17.5 16 H2.5 Z"/><g id="bang" class="room-stage__fx"><rect id="bang-body" x="0" y="0" width="22" height="22" rx="11" fill="#12131a"/></g></svg></span></div>`
-  const staged = () => {
-    document.body.innerHTML = mark
-    rects = { row: [0, 0, 80, 40], g: [0, 0, 34, 34] }
-  }
-  /** Every read of these parts answers a new transform, as a running animation would. */
-  function animate(ids: string[]) {
-    const real = window.getComputedStyle.bind(window)
-    let tick = 0
-    vi.spyOn(window, 'getComputedStyle').mockImplementation(
-      (element: Element, pseudo?: string | null) => {
-        const style = real(element, pseudo)
-        if (!ids.includes(element.id)) return style
-        return new Proxy(style, {
-          get(target, key) {
-            if (key === 'transform') return `translateY(-${++tick}px)`
-            const value = Reflect.get(target, key)
-            return typeof value === 'function' ? value.bind(target) : value
-          },
-        })
-      },
-    )
-  }
-
-  test('a moving room-stage overlay is not a changed shape', () => {
-    staged()
-    animate(['bang', 'bang-body'])
-    expect(findProtectedViolation()).toBeNull()
-  })
-
-  test('a transform on the real shape is still a changed shape', () => {
-    staged()
-    animate(['body'])
-    expect(findProtectedViolation()).toBe('lead changed shape')
-  })
-
-  test('a mask a theme puts on the mark is a changed shape', () => {
-    staged()
-    stage({ body: { maskImage: 'linear-gradient(#000, transparent)' } })
-    expect(findProtectedViolation()).toBe('lead changed shape')
-  })
-
+describe('the shape signature and protected override', () => {
   test('protected.css pins every glyph part, with no clip or mask', () => {
     const css = readFileSync('src/styles/protected.css', 'utf8')
     const pinned = /\[data-protected\] svg \*,[^{]*\{([^}]*)\}/.exec(css)![1]!

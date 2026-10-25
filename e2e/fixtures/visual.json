@@ -468,50 +468,6 @@
     ],
     "nextCursor": null
   },
-  "/api/tasks": {
-    "asOfSeq": 52,
-    "columns": {
-      "planned": [],
-      "working": [],
-      "in_review": [],
-      "needs_you": [
-        {
-          "id": "task-docs-0",
-          "key": "T-102",
-          "title": "Publish the pagination notes",
-          "column": "needs_you",
-          "hermesStatus": "running",
-          "assignee": "designer",
-          "reviewer": "reviewer",
-          "roomId": "room-activity-feed",
-          "badge": {
-            "kind": "needs_you",
-            "label": "Needs you"
-          },
-          "progress": null,
-          "elapsedSec": 30,
-          "note": "Wants to install a package",
-          "updatedAt": "2026-01-01T12:00:02.700Z"
-        },
-        {
-          "id": "task-pagination-0",
-          "key": "T-101",
-          "title": "Add pagination to the activity feed",
-          "column": "needs_you",
-          "hermesStatus": "running",
-          "assignee": "builder",
-          "reviewer": "reviewer",
-          "roomId": "room-activity-feed",
-          "badge": null,
-          "progress": null,
-          "elapsedSec": 66,
-          "note": "Keep the newest activity visible",
-          "updatedAt": "2026-01-01T12:01:06.600Z"
-        }
-      ],
-      "done": []
-    }
-  },
   "/api/reports?range=7d": {
     "range": "7d",
     "summary": "26 tasks finished in the last 7 days, typically in 42 minutes.",

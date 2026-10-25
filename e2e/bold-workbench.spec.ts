@@ -195,7 +195,7 @@ for (const size of sizes) {
 
       const bar = page.getByRole('group', { name: 'Approval needed' })
       await expect(bar).toBeVisible()
-      await expect(bar).toHaveAttribute('data-protected', 'any')
+      await expect(bar).toHaveAttribute('data-protected', 'flex')
       await expect(bar).toContainText('npm install ws@8')
       await expect(bar.getByRole('button', { name: 'Approve' })).toBeVisible()
       await expect(bar.getByRole('button', { name: 'Deny' })).toBeVisible()

@@ -5,11 +5,10 @@ import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { roomsQuery } from '../chat/queries.ts'
-import { PopOutButton } from '../pop/PopOutButton.tsx'
 
 /**
- * The right of the agent band (design: team.png): Message and Pause as the two main actions, Watch and the pop-out
- * window as quieter ones. The same for Hermes agents and coding agents.
+ * The right of the agent band (design: team.png): Message and Pause as the two main actions, with Watch as the quieter
+ * one. The same for Hermes agents and coding agents.
  */
 export function AgentHeaderActions({
   agentId,
@@ -77,10 +76,9 @@ export function AgentHeaderActions({
       </div>
       {served && (
         <div className="team-band-quiet">
-          <Link className="team-band-link" to={`/now/watch/${encodeURIComponent(agentId)}`}>
+          <Link className="team-band-link" to={`/watch/${encodeURIComponent(agentId)}`}>
             Watch {agentName} work
           </Link>
-          <PopOutButton agentId={agentId} agentName={agentName} className="team-popout-link" />
         </div>
       )}
       {toggle.error && (

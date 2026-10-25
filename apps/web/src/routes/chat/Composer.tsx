@@ -94,13 +94,7 @@ function errorText(error: unknown): string {
 
 function CommandNotice({ command }: { command: CommandResult | null }) {
   if (!command) return null
-  if (command.kind === 'assign')
-    return (
-      <>
-        Created task{' '}
-        <Link to={`/tasks/${encodeURIComponent(command.taskId)}`}>{command.taskKey}</Link>
-      </>
-    )
+  if (command.kind === 'assign') return <>Created task {command.taskKey}</>
   if (command.kind === 'model') return <>Sent using {command.model}</>
   return <>Command applied</>
 }

@@ -145,7 +145,7 @@ test('the room and brief of a workflow run are owned like an orchestration, and 
   })
 })
 
-test('Pause and Resume on the brief of a workflow run go to the workflow run', async () => {
+test('Pause and Resume on a workflow run are the workflow run controls', async () => {
   const headers = await boot()
   const id = await start(
     h!,
@@ -153,17 +153,13 @@ test('Pause and Resume on the brief of a workflow run go to the workflow run', a
   )
   await h!.until(() => runIdOf(h!, id, 'a') !== undefined)
   await h!.settle(1500)
-  const briefId = h!.rows<{ brief_id: string }>(
-    'SELECT brief_id FROM orchestrations WHERE id = ?',
-    id,
-  )[0]!.brief_id
   expect(
     (
       await app!.inject({
         method: 'POST',
-        url: `/api/briefs/${briefId}/pause`,
+        url: `/api/workflow-runs/${id}/pause`,
         headers,
-        payload: {},
+        payload: { orchestrationRevision: run(h!, id).revision },
       })
     ).statusCode,
   ).toBe(200)
@@ -173,9 +169,9 @@ test('Pause and Resume on the brief of a workflow run go to the workflow run', a
     (
       await app!.inject({
         method: 'POST',
-        url: `/api/briefs/${briefId}/resume`,
+        url: `/api/workflow-runs/${id}/resume`,
         headers,
-        payload: {},
+        payload: { orchestrationRevision: run(h!, id).revision },
       })
     ).statusCode,
   ).toBe(200)

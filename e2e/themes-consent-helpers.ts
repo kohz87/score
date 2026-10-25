@@ -6,7 +6,7 @@ import { mockThemes, type Look } from './themes-fixtures.ts'
 // sanitiser ACCEPTED (nothing here slips in afterwards unless the test says so) can neither hide nor fake any part of it.
 // Real forms in Chromium, real submits; every request that would commit something is answered by the spec and counted.
 
-export const ACCEPTED_TOKEN = '.now-card { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }'
+export const ACCEPTED_TOKEN = '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }'
 
 export async function wear(
   page: Page,

@@ -279,23 +279,24 @@ test.describe('bold Settings', () => {
       )
       await expectNoOverflow(page, 'Remote access and security')
 
-      // Advanced: real search, staging and diff preview, without changing the shared fake server.
+      // Advanced: real search, staging and diff preview, without changing the shared fake server. (advanced-config.spec
+      // applies display.compact on that server, so this one stages a setting nothing else touches.)
       await page.goto('/b/settings/advanced')
       const advanced = page.getByRole('region', { name: 'Advanced' })
-      await advanced.getByRole('searchbox', { name: 'Search settings' }).fill('compact')
-      await expect(advanced.getByText('display.compact')).toBeVisible()
-      await advanced.getByRole('button', { name: 'Edit display.compact' }).click()
-      await advanced.getByLabel('New value for display.compact').fill('true')
+      await advanced.getByRole('searchbox', { name: 'Search settings' }).fill('max_turns')
+      await expect(advanced.getByText('agent.max_turns')).toBeVisible()
+      await advanced.getByRole('button', { name: 'Edit agent.max_turns' }).click()
+      await advanced.getByLabel('New value for agent.max_turns').fill('61')
       await advanced.getByRole('button', { name: 'Add change' }).click()
       const pending = advanced.getByRole('group', { name: 'Pending changes' })
-      await expect(pending).toContainText('display.compact = true')
+      await expect(pending).toContainText('agent.max_turns = 61')
       await pending.getByRole('button', { name: 'Preview' }).click()
-      await expect(pending.getByLabel('Changes preview')).toContainText('+display.compact: true')
+      await expect(pending.getByLabel('Changes preview')).toContainText('+agent.max_turns: 61')
       const apply = pending.getByRole('button', { name: 'Apply' })
       await expect(apply).toBeEnabled()
       await expectMinHeight(apply, viewport.width <= 640 ? 44 : 36)
       await expectMinHeight(
-        pending.getByRole('button', { name: 'Discard display.compact' }),
+        pending.getByRole('button', { name: 'Discard agent.max_turns' }),
         viewport.width <= 640 ? 44 : 36,
       )
       await expectNoOverflow(page, 'Advanced')

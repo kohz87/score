@@ -8,7 +8,7 @@ test('app shell loads, API proxy works, no external font requests', async ({ pag
   })
 
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('banner')).toBeVisible()
 
   const health = await page.request.get('/api/health')
   expect(health.ok()).toBe(true)

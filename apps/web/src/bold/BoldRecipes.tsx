@@ -13,7 +13,7 @@ import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../components/runtime-label.ts'
 import { ApiError } from '../data/api.ts'
 import { useStreamQuery } from '../data/query-client.ts'
-import { taskAgentsQuery } from '../routes/tasks/task-queries.ts'
+import { taskAgentsQuery } from '../data/task-queries.ts'
 import { EditorCanvas, type Selection } from '../routes/workflows/EditorCanvas.tsx'
 import { ExportDialog } from '../routes/workflows/ExportDialog.tsx'
 import { InputsEditor } from '../routes/workflows/EditorParts.tsx'
@@ -263,6 +263,9 @@ function BoldRecipeShell({
             onSelect={onSelect}
             onNew={onNew}
           />
+          <Link className="btn sm ghost" to="/workflows">
+            Workflow runs and versions
+          </Link>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
             ×
           </button>
@@ -623,6 +626,9 @@ function BoldRecipeEditor({
             onSelect={onSelect}
             onNew={onNew}
           />
+          <Link className="btn sm ghost" to="/workflows">
+            Workflow runs and versions
+          </Link>
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>
             ×
           </button>
@@ -770,10 +776,7 @@ function BoldRecipeEditor({
               so it is read-only here.
             </p>
             {saved.workflowId && (
-              <Link
-                className="btn sm"
-                to={`/now/flow/workflows/${encodeURIComponent(saved.workflowId)}`}
-              >
+              <Link className="btn sm" to={`/workflows/${encodeURIComponent(saved.workflowId)}`}>
                 Edit this one in the graph editor
               </Link>
             )}
@@ -859,7 +862,7 @@ function BoldRecipeEditor({
                 {saved.workflowId && (
                   <Link
                     className="btn sm"
-                    to={`/now/flow/workflows/${encodeURIComponent(saved.workflowId)}`}
+                    to={`/workflows/${encodeURIComponent(saved.workflowId)}`}
                   >
                     Open the graph editor
                   </Link>

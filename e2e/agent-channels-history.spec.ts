@@ -52,5 +52,5 @@ test('Channels shows the connect command and History lists runs with a Watch rep
   await panel.getByRole('combobox', { name: 'Outcome' }).selectOption('completed')
   await expect(panel.getByText('$0.12', { exact: false })).toBeVisible()
   await panel.getByRole('link', { name: 'Replay Fix the pager in Watch' }).click()
-  await expect(page).toHaveURL(/\/now\/watch\/builder\?from=3/)
+  await expect(page).toHaveURL(/\/watch\/builder\?from=3/)
 })

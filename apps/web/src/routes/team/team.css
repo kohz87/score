@@ -180,7 +180,7 @@
   font-size: 15px;
 }
 
-/* Band actions (design: Message and Pause at the right; Watch and the pop-out window are quieter). */
+/* Band actions (design: Message and Pause at the right; Watch is quieter). */
 .team-band-actions {
   flex: 0 0 auto;
   display: flex;
@@ -229,10 +229,6 @@
 .team-band-primary:focus-visible,
 .team-band-secondary:focus-visible,
 .team-band-link:focus-visible,
-.team-band .team-popout-link:focus-visible {
-  outline: 2px solid var(--team-band-ink);
-  outline-offset: 3px;
-}
 .team-band-quiet {
   display: flex;
   align-items: center;
@@ -243,12 +239,6 @@
   font-weight: 600;
   color: inherit;
   text-underline-offset: 3px;
-}
-.team-band .team-popout-link {
-  border: 1.5px solid var(--team-band-ink);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--team-band-ink);
 }
 .team-band .team-band-error {
   font-size: 14px;
@@ -587,6 +577,9 @@
     flex-wrap: nowrap;
     align-items: stretch;
     gap: var(--space-4);
+    /* The member strip bleeds to the screen edge (negative margin); a theme with a thin page gutter must not turn
+       that bleed into sideways page scroll. */
+    overflow-x: clip;
   }
   .team-members {
     flex: none;
@@ -1140,23 +1133,6 @@ a.team-pill-button {
 }
 .team-routine-form .team-coding-permission input {
   width: auto;
-}
-
-.team-popout-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 30px;
-  height: 30px;
-  margin-left: 10px;
-  padding: 0;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  vertical-align: middle;
 }
 
 /* MCP access */

@@ -37,7 +37,7 @@ const pages = [
     path: '/chat/room-activity-feed',
     ready: '.orch-room-body .orch-step',
   },
-  { name: 'orchestration-live', path: '/now/flow/brief-orch-1', ready: '[data-node="s2"]' },
+  { name: 'orchestration-live', path: '/runs/brief-orch-1', ready: '[data-node="s2"]' },
 ]
 
 async function open(page: Page, target: (typeof pages)[number], width: number, dark = false) {

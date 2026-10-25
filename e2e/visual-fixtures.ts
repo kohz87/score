@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
 import { samplePng } from './png.ts'
-import { flowFixture } from './flow-fixture.ts'
 import {
   AgentDetailSchema,
   AgentsSnapshotSchema,
@@ -27,7 +26,6 @@ import {
   KnowledgeDocumentSchema,
   KnowledgeZipPreviewSchema,
   KnowledgeHistorySchema,
-  TasksSnapshotSchema,
 } from '../packages/contract/src/index.ts'
 import { fixtureNow, nowFixture } from './now-fixture.ts'
 
@@ -111,7 +109,7 @@ const extras = {
     spendUsd: day < 6 ? null : Math.round((1.4 + ((day * 5) % 7) * 0.6) * 100) / 100,
   })),
 }
-const popFlow = flowFixture('room-activity-feed')
+const focusApproval = nowFixture('room-activity-feed').focusApproval
 // 7.4c: a week of marks (the page asks for the 7 days up to the fixed "today").
 const journeyDay = (back: number, hour: number) =>
   new Date(Date.parse(fixtureNow) - back * 86_400_000 - (21 - hour) * 3_600_000).toISOString()
@@ -188,11 +186,7 @@ export const visualFixtures: Record<string, unknown> = {
     terminalUnavailable: null,
   },
   [`/api/reports/journey?from=${journeyFixture.from}&to=${journeyFixture.to}`]: journeyFixture,
-  '/api/briefs?status=active': { items: [popFlow.flow.brief] },
-  '/api/briefs?status=recent': { items: [] },
-  [`/api/briefs/${popFlow.flow.brief.id}/flow`]: popFlow.flow,
-  '/api/flow/nodes/task%3Astream': popFlow.detail,
-  '/api/approvals/fixture-approval': popFlow.detail.approval,
+  '/api/approvals/fixture-approval': focusApproval,
   '/api/settings/currency': { code: 'USD', rate: 1 },
   '/api/settings/model-visibility': { items: [] },
   '/api/agents/lead/model-settings': {
@@ -362,8 +356,6 @@ export const visualFixtures: Record<string, unknown> = {
     ['lead', 'builder', 'reviewer', 'designer'].map((id) => [`/api/agents/${id}/todos`, null]),
   ),
   '/api/approvals?status=all': ApprovalsPageSchema.parse(recorded['/api/approvals?status=all']),
-  '/api/tasks': TasksSnapshotSchema.parse(recorded['/api/tasks']),
-  '/api/tasks?room=room-activity-feed': TasksSnapshotSchema.parse(recorded['/api/tasks']),
   '/api/reports?range=7d': ReportsSchema.parse({ ...recordedReport, ...extras }),
   // Reports warms the other presets once the first one loads; the picture only needs them to exist.
   '/api/reports?range=today': ReportsSchema.parse({

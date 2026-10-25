@@ -11,7 +11,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../data/api.ts'
 import { useDebounced } from '../data/message-search.ts'
-import { nowKey } from '../routes/now/now-queries.ts'
+import { nowKey } from '../data/team-pause.ts'
 import type { BoldSearchCommand, BoldSearchNote } from './bold-search-model.ts'
 
 /** The team room and its jobs. `fresh`: read again whenever the caller mounts (Search opens), so a job made moments

@@ -36,7 +36,7 @@ test('local mode serves the built web app next to the API and keeps unknown API 
     },
   })
   cleanup.push(() => server.close())
-  const page = await server.app.inject({ method: 'GET', url: '/now' })
+  const page = await server.app.inject({ method: 'GET', url: '/b' })
   expect(page.statusCode).toBe(200)
   expect(page.headers['content-type']).toContain('text/html')
   // Settings sections are app routes (PLAN 10.1), with or without a query.
@@ -63,7 +63,7 @@ test('without the flag a missing build is not an error', async () => {
     },
   })
   cleanup.push(() => server.close())
-  expect((await server.app.inject({ method: 'GET', url: '/now' })).statusCode).toBe(404)
+  expect((await server.app.inject({ method: 'GET', url: '/b' })).statusCode).toBe(404)
 })
 
 test('serving the web app without a build fails before opening state', async () => {
@@ -86,7 +86,7 @@ test('served pages carry a strict content security policy and framing protection
       ],
     ]),
   )
-  for (const url of ['/', '/index.html', '/now']) {
+  for (const url of ['/', '/index.html', '/b']) {
     const response = await app.inject({ url })
     expect(response.headers['content-security-policy']).toContain("script-src 'self'")
     expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'")

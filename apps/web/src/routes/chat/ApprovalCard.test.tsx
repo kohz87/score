@@ -45,6 +45,7 @@ const base: Approval = {
 let current: Approval[]
 // Approvals beyond the list's first page: only reachable by id.
 let older: Approval[]
+let planHasRun = false
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
 const cleanups: (() => void)[] = []
 
@@ -80,9 +81,41 @@ function emitApproval(approval: Approval, seq: number) {
 beforeEach(() => {
   current = [base]
   older = []
+  planHasRun = false
   fetchMock = vi.fn(async (input) => {
     if (String(input).startsWith('/api/approvals?'))
       return new Response(JSON.stringify({ asOfSeq: 1, items: current, nextCursor: null }))
+    if (String(input) === '/api/orchestrations')
+      return new Response(
+        JSON.stringify({
+          asOfSeq: 1,
+          items: planHasRun
+            ? [
+                {
+                  id: 'orch-plan',
+                  title: 'Plan',
+                  status: 'running',
+                  pauseReason: null,
+                  leadAgentId: 'lead',
+                  roomId: 'room 1',
+                  briefId: 'brief 1',
+                  gatePolicy: 'every-step',
+                  revision: 1,
+                  ownership: 'owned',
+                  steps: { total: 1, active: 1, succeeded: 0, failed: 0 },
+                  leadTurnsUsed: 0,
+                  maxLeadTurns: 20,
+                  needsYou: [],
+                  createdAt: '2026-10-08T10:00:00.000Z',
+                  updatedAt: '2026-10-08T10:01:00.000Z',
+                  endedAt: null,
+                },
+              ]
+            : [],
+        }),
+      )
+    if (String(input) === '/api/workflow-runs')
+      return new Response(JSON.stringify({ asOfSeq: 1, items: [] }))
     const byId = /^\/api\/approvals\/([^/?]+)$/.exec(String(input))
     if (byId) {
       const found = older.find((item) => item.id === byId[1])
@@ -249,8 +282,8 @@ test('non-actionable approvals explain where to answer', async () => {
   await screen.findByText('Answer it in the chat app the agent asked in.')
   cleanup()
   renderCard('k')
-  const link = await screen.findByRole('link', { name: 'Open the task' })
-  expect(link.getAttribute('href')).toBe('/tasks/task-1')
+  await screen.findByText('Answer this in Hermes where the task was created.')
+  expect(screen.queryByRole('link', { name: 'Open the task' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
 })
 
@@ -316,41 +349,55 @@ const plan: Extract<MessagePart, { kind: 'plan' }> = {
   ],
 }
 
-function renderPlan() {
+function renderPlan(withRun = true) {
   const queryClient = createQueryClient()
+  planHasRun = withRun
+  const client = createStreamClient({ EventSourceImpl: Source })
+  const queries = createStreamQueryRegistry(queryClient, client)
+  cleanups.push(() => {
+    queries.dispose()
+    client.close()
+    queryClient.clear()
+  })
   render(
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
-        <PlanCard part={plan} agents={[agent]} roomId="room 1" messageId="m 1" />
+        <StreamContext value={{ client, queries }}>
+          <PlanCard part={plan} agents={[agent]} roomId="room 1" messageId="m 1" />
+        </StreamContext>
       </QueryClientProvider>
     </MemoryRouter>,
   )
 }
 
 test('Start plan posts to the plan/start endpoint, reports failure with a retry, then the result', async () => {
-  fetchMock.mockImplementationOnce(
-    async () =>
-      new Response(
-        JSON.stringify({ error: { code: 'upstream_failed', message: 'Kanban is down.' } }),
-        {
-          status: 502,
-        },
-      ),
-  )
-  fetchMock.mockImplementationOnce(
-    async () => new Response(JSON.stringify({ briefId: 'brief 1', taskIds: ['t1', 't2'] })),
-  )
-  renderPlan()
+  const fallback = fetchMock.getMockImplementation()!
+  let attempts = 0
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input).endsWith('/plan/start')) {
+      attempts += 1
+      return attempts === 1
+        ? new Response(
+            JSON.stringify({ error: { code: 'upstream_failed', message: 'Kanban is down.' } }),
+            { status: 502 },
+          )
+        : new Response(JSON.stringify({ briefId: 'brief 1', taskIds: ['t1', 't2'] }))
+    }
+    return fallback(input, init)
+  })
+  renderPlan(false)
   fireEvent.click(screen.getByRole('button', { name: 'Start plan' }))
   expect((await screen.findByRole('alert')).textContent).toBe('Kanban is down.')
   fireEvent.click(screen.getByRole('button', { name: 'Try starting again' }))
   expect((await screen.findByRole('status')).textContent).toContain('2 tasks created')
-  const [first] = fetchMock.mock.calls[0]!
+  const [first] = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/plan/start'))!
   expect(first).toBe('/api/rooms/room%201/messages/m%201/plan/start')
-  expect(fetchMock.mock.calls[0]![1]?.method).toBe('POST')
+  expect(
+    fetchMock.mock.calls.find(([url]) => String(url).endsWith('/plan/start'))![1]?.method,
+  ).toBe('POST')
 })
 
-test('the plan card renders each block state on a shared axis and links to Flow', () => {
+test('the plan card renders each block state on a shared axis and links to the run', async () => {
   renderPlan()
   for (const state of ['done', 'working', 'planned', 'waiting']) {
     const block = screen.getByTitle(new RegExp(`Block ${state}`))
@@ -358,11 +405,21 @@ test('the plan card renders each block state on a shared axis and links to Flow'
   }
   expect(screen.getByText('Builder')).toBeDefined()
   expect(screen.getByText('ghost')).toBeDefined()
-  expect(screen.getByRole('link', { name: 'Open in Flow' }).getAttribute('href')).toBe(
-    '/now/flow/brief%201',
+  expect((await screen.findByRole('link', { name: 'Open the run' })).getAttribute('href')).toBe(
+    '/runs/brief%201',
   )
   const axis = planAxis(plan.lanes)!
   expect(axis.get('b-done')!.left).toBe(0)
   expect(axis.get('b-planned')!.left).toBeGreaterThan(axis.get('b-working')!.left)
   expect(planAxis([{ agentId: 'builder', blocks: [] }])).toBeNull()
+})
+
+test('the plan card has no run link when no orchestration or workflow run owns the brief', () => {
+  renderPlan(false)
+  expect(
+    fetchMock.mock.calls.some(
+      ([url]) => String(url) === '/api/orchestrations' || String(url) === '/api/workflow-runs',
+    ),
+  ).toBe(true)
+  expect(screen.queryByRole('link', { name: 'Open the run' })).toBeNull()
 })

@@ -764,3 +764,17 @@ body.fit [data-ui='bold'] .stream {
 [data-ui='bold'] .room-start {
   margin-left: 0;
 }
+
+/* The fence notice: a light "for you" object above the page, like the room's Needs-you card. */
+[data-ui='bold'] .bold-fence-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0 0 14px;
+  padding: 12px 16px;
+  border-radius: 20px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 600;
+}

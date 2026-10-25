@@ -31,7 +31,7 @@ async function room(page: Page, text: string, lead = 'builder') {
   )
 }
 
-test('a running reply shows its status line in Chat (under the reply and in the room header) and on Now', async ({
+test('a running reply shows its status line in Chat (under the reply and in the room header)', async ({
   page,
 }) => {
   test.setTimeout(90_000)
@@ -43,14 +43,6 @@ test('a running reply shows its status line in Chat (under the reply and in the 
   const history = page.getByRole('region', { name: 'Message history' })
   await expect(history.locator('.live-status').last()).toHaveText('Thinking…', { timeout: 30_000 })
   await expect(page.getByRole('list', { name: 'Working now' })).toContainText('Thinking…')
-
-  // The same agent on Now: its lane says it too.
-  await page.goto('/now')
-  // By the agent's own link, not by text: another spec's agent can have "builder" in its role while it runs.
-  const lane = page
-    .locator('.now-lane-label')
-    .filter({ has: page.getByRole('link', { name: 'builder', exact: true }) })
-  await expect(lane.locator('.live-status')).not.toHaveText('', { timeout: 30_000 })
 
   // End the run so it doesn't linger for the other specs.
   await page.goto(`/chat/${id}`)
@@ -213,7 +205,7 @@ test('the workflow editor previews a gate and a branch without calling the serve
     if (request.method() === 'POST' && !request.url().endsWith('/api/workflows/validate'))
       posts.push(request.url())
   })
-  await page.goto(`/now/flow/workflows/${id}`)
+  await page.goto(`/workflows/${id}`)
   const preview = page.getByRole('button', { name: 'Preview' })
   await expect(preview).toBeEnabled({ timeout: 20_000 })
   await preview.click()
@@ -253,7 +245,7 @@ test('the editor draws a run of the version on screen over the canvas and links 
   await pair(page)
   const name = `Overlay ${Date.now().toString(36)}`
   const id = await createWorkflow(page, name)
-  await page.goto(`/now/flow/workflows/${id}`)
+  await page.goto(`/workflows/${id}`)
   await page.getByRole('button', { name: 'Run…' }).click()
   const dialog = page.getByRole('dialog', { name: /Start/ })
   await dialog.getByLabel(/^Topic/).fill('the live overlay')
@@ -265,7 +257,7 @@ test('the editor draws a run of the version on screen over the canvas and links 
   await expect(approve).toBeVisible({ timeout: 60_000 })
 
   // Back in the editor, the run is drawn over the version that is open.
-  await page.goto(`/now/flow/workflows/${id}`)
+  await page.goto(`/workflows/${id}`)
   const live = page.getByText(/Live: run started/)
   await expect(live).toBeVisible({ timeout: 20_000 })
   await expect(page.locator('[data-node="approve"]')).toHaveClass(/orch-node--gate/)

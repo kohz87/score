@@ -1,12 +1,12 @@
 # Score
 
 Score is a local-first web app for running a team of [Hermes Agent](https://github.com/NousResearch/hermes-agent)
-profiles. One screen shows what every agent is doing right now, agents hand work to each other with `@mentions`
-in Chat rooms, and anything that needs your decision (an approval, a review) waits for you in one place.
+profiles. A room brings the team's work together, agents hand work to each other with `@mentions`, and anything that
+needs your decision (an approval, a review) waits for you in one place.
 It runs on your machine, keeps its own data in `~/.score`, and talks to Hermes through the `hermes` CLI and the
 gateway API. It never reads your Hermes credential files and never writes Hermes databases.
 
-![Score's Now page: a timeline of four agents, a thread, an approval card and a message box](docs/screenshots/now.png)
+![Score's room: a conversation with the team, tool cards and a message box](docs/screenshots/chat.png)
 
 (The screenshots show the built-in demo team: `lead`, `builder`, `reviewer`, `designer`.)
 
@@ -172,24 +172,11 @@ export in `$SCORE_HOME/profile-backups/`. Details: [docs/SETUP.md](docs/SETUP.md
 
 ## What is in the app
 
-Score has seven destinations along the top: Now, Chat, Tasks, Team, Knowledge, Reports and Settings.
-[docs/USER-GUIDE.md](docs/USER-GUIDE.md) describes the main ones in detail. All pictures below come from the built-in
-demo team (`lead`, `builder`, `reviewer`, `designer`); `pnpm screenshots` regenerates them.
-
-### Now: Score, the live timeline
-
-![The Now page: a timeline with one row per agent, a thread, an approval waiting for you and what the team made today](docs/screenshots/now.png)
-
-One row per agent, time running left to right. Solid blocks are work in progress, dashed blocks are what the lead
-has planned, and a dark block means an agent is waiting on you. Below it sit the latest thread, any approval that
-needs your decision and a message box. **Pause everyone** stops all agents at once.
-
-### Flow: the graph of one run
-
-![Flow: a run drawn as a graph of steps, hand-offs and a review that sent work back, with a side panel for the selected step](docs/screenshots/flow.png)
-
-A run is one of your messages plus everything it caused. Click a step to see who is doing it, its checklist and any
-approval it is waiting on, and to stop it or pause the whole run.
+Score opens in the new shell at `/b`: a room with your team, the Team page and Settings. Workflows, Watch,
+orchestration runs, and the classic Chat, Team, Knowledge, Reports and Settings pages stay reachable; use **Use the
+classic view** in Settings to browse those. [docs/USER-GUIDE.md](docs/USER-GUIDE.md) describes the main pages in
+detail. All pictures below come from the built-in demo team (`lead`, `builder`, `reviewer`, `designer`);
+`pnpm screenshots` regenerates them.
 
 ### Orchestrations: a lead agent runs a goal
 
@@ -201,7 +188,7 @@ against the limits, the budget and your approval choice, and steps can wait for 
 
 ![The New orchestration dialog with a goal, a lead, the agents it may use, an approval setting, a budget and the checks that run before it starts](docs/screenshots/new-orchestration.png)
 
-Start one from Chat or from Flow with **New orchestration**: choose the lead, which agents it may hand work to, when
+Start one from Chat with **New orchestration**: choose the lead, which agents it may hand work to, when
 you want to be asked (before each step, only when the lead asks, or never) and an optional budget or deadline.
 
 ### Workflows: draw the steps yourself
@@ -236,13 +223,6 @@ tasks and schedules, and expand tool cards to see what an agent ran. Rooms keep 
 
 Score is usable on a phone: the same pages reflow to one column.
 
-### Tasks: the board
-
-![The Tasks board with five columns and a task drawer open on the right](docs/screenshots/tasks.png)
-
-Planned, Working, In review, Needs you and Done, with filters by room and agent. Open a card to see its steps and
-activity, and approve or comment right in the drawer.
-
 ### Team and agent pages
 
 ![The Team page: four agent cards with their status and current activity](docs/screenshots/team.png)
@@ -263,7 +243,7 @@ workspace folder and a permission level (read only, workspace write or full acce
 any other member. They use your own CLI login and plan quota (every CLI shows the limits left, and a **quota guard**
 stops runs from giving an agent new steps once a limit falls below its floor, 10% by default). Each has a Personality
 card (a role and instructions that Score hands to the CLI) and Claude Code can use sub-agents, whose steps show nested
-in Chat and Flow. For Claude
+in Chat and runs. For Claude
 Code and Codex the permission level limits what they can change, not what they can read; Antigravity's sandbox also keeps
 reads inside the workspace below full access.
 
@@ -289,8 +269,6 @@ Tasks finished per day, where each agent's time goes, review pass rate, spend an
 Models and keys, connections, rules and approvals (what agents may do alone, what they ask first and what they never
 do), notifications, Knowledge, shares, every Hermes setting under Advanced, backup, logs and remote access.
 
-![Now in dark mode](docs/screenshots/now-dark.png)
-
 Settings › Look switches between light and dark.
 
 ### Themes and the Customizer
@@ -298,28 +276,18 @@ Settings › Look switches between light and dark.
 ![Settings › Look: seven theme cards in their own colours, the Customize button and the way back from a theme](docs/screenshots/look.png)
 
 Score ships seven themes (Score, Paper, Night shift, Dense, Harbour, Ledger and Studio). Pick one for this device or
-save one for every device. A theme changes colours, fonts, corners and spacing, where the navigation sits, what Now
-shows and how chat looks, but it is only data: **no theme code runs**, and approvals, decisions, password screens and
+save one for every device. A theme changes colours, fonts, corners and spacing, where the navigation sits and how
+chat looks, but it is only data: **no theme code runs**, and approvals, decisions, password screens and
 the way back to the default look can't be hidden or made unreadable. If a theme gets in the way, press Ctrl+Shift+0,
 search for "Reset look" in the command palette, open Score with `?look=safe`, or run `scripts/score look reset` on the
 host.
 
-![Now wearing the Harbour theme: frosted glass cards over a harbour picture, the navigation on the left](docs/screenshots/theme-harbour.png)
-
 ![The Customizer: a live preview of the app on the left, the theme's settings on the right](docs/screenshots/customizer.png)
 
 **Customize…** opens the Customizer: a live preview of any page (light or dark, desktop, tablet or phone) next to the
-controls for colours, fonts, shape, layout, the Now cards, chat, a background picture and custom CSS. It checks contrast
+controls for colours, fonts, shape, layout, chat, a background picture and custom CSS. It checks contrast
 as you go, **Start from** copies any built-in theme exactly, and themes can be saved with their pictures and fonts,
 exported as a `.zip` and imported again. The guide for writing a theme is [docs/THEMES.md](docs/THEMES.md).
-
-### The chat-first view
-
-![The chat-first view: rooms and agents in a sidebar, a running orchestration shown as status lines between the messages, Pause and Stop at the top](docs/screenshots/chat-first.png)
-
-For a conversation instead of a dashboard, choose **Switch to user view** in the avatar menu (or open `/u`). One room at a
-time with a large message box; start an orchestration with the plus button or `/orchestrate <goal>`, and answer
-everything it needs (approvals, questions, limits) right in the chat. Reports, Team and Settings stay in the admin view.
 
 ### Terminal
 

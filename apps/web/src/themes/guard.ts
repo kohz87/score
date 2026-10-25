@@ -100,11 +100,6 @@ export const KNOWN_OVERLAYS = [
   '.update-banner',
   '.look-banner',
   '.top-bar',
-  '.now-lane-label',
-  '.now-axis-spacer',
-  '.user-sidebar',
-  '.user-sidebar-foot',
-  '.user-run',
   '.orch-room-head',
   '.kn-left',
   '.kn-upload-progress',
@@ -112,7 +107,6 @@ export const KNOWN_OVERLAYS = [
   '.kn-toolbar',
   '.chat-version-bar',
   '.chat-doc-table',
-  '.task-drawer',
   '.chat-toast',
   '.bold-tabbar',
   '.bold-sidecol',
@@ -322,11 +316,6 @@ function parts(surface: HTMLElement): HTMLElement[] {
 // Glyph shapes (finding #5): an agent is told apart by its shape, so what the shapes paint is compared, not just
 // whether their wrapper is shown: geometry (`d`, size), paint and everything that can hide or move a path.
 const SHAPES = 'image, path, circle, rect, ellipse, polygon, polyline, line'
-// Parts Score itself animates with `transform` (the room stage's overlays): their transform is whatever the keyframes
-// say at the moment of reading, so it can't be compared; a theme can't style them (the sanitiser guard), and everything
-// else about them (geometry, paint, display, clip, mask, filter) is still compared.
-const ANIMATED_BY_SCORE = '.room-stage__fx *'
-
 function shapes(surface: HTMLElement): SVGGraphicsElement[] {
   return Array.from(surface.querySelectorAll<SVGGraphicsElement>(SHAPES)).filter(
     (el) => !el.closest('[hidden]'),
@@ -353,7 +342,7 @@ function shapeSignature(el: SVGGraphicsElement): string {
     style.opacity,
     style.visibility,
     style.display,
-    el.matches(ANIMATED_BY_SCORE) ? 'animated' : style.transform,
+    style.transform,
     // Colours follow the theme's tokens (currentColor): what counts is that something is painted at all.
     paints(style.fill, 1) || paints(style.stroke, Number.parseFloat(style.strokeWidth) || 0),
     style.clipPath,
@@ -438,7 +427,7 @@ export function findProtectedViolation(root: ParentNode = document): string | nu
 // The way back must always work, so an action on one of these is never refused: if its surroundings are damaged the
 // periodic guard drops the theme, and the action goes ahead.
 const WAY_BACK =
-  '.look-reset, .look-banner, .command-run, .command-palette, .command-trigger, .menu-trigger, .user-way-back, .main-nav-link, .nav-drawer-link, .needs-you-dot, .chat-toast'
+  '.look-reset, .look-banner, .command-run, .command-palette, .command-trigger, .menu-trigger, .main-nav-link, .nav-drawer-link, .needs-you-dot, .chat-toast'
 const ACTIONABLE =
   'button, a[href], input, select, textarea, summary, [role=button], [role=menuitem], [role=radio], [role=checkbox], [role=switch]'
 

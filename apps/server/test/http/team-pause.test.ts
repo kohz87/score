@@ -116,9 +116,7 @@ test('pause everyone holds every brief and the queue; resume releases them', asy
   expect(run.mock.calls.map(([req]) => req.agentId)).toEqual(['lead'])
   const now = NowSnapshotSchema.parse((await get('/api/now')).json())
   expect(now.headline.text.startsWith('Everyone is paused.')).toBe(true)
-  expect((await get('/api/briefs?status=active')).json().items[0]).toMatchObject({
-    status: 'paused',
-  })
+  expect(rows('SELECT paused_at FROM briefs WHERE id = ?', id)[0]!.paused_at).not.toBeNull()
   const resumed = await post('/api/team/resume')
   expect(resumed.statusCode).toBe(200)
   expect(resumed.json()).toMatchObject({ paused: false })
@@ -132,12 +130,10 @@ test('pause everyone holds every brief and the queue; resume releases them', asy
 
 test('resume everyone leaves a brief the person paused on its own alone', async () => {
   const mine = await ask('mine')
-  await post(`/api/briefs/${mine}/pause`)
+  // A brief can be paused on its own by an orchestration or workflow run; Team Resume must not lift that hold.
+  db.sqlite.prepare('UPDATE briefs SET paused_at = ? WHERE id = ?').run('x', mine)
   await post('/api/team/pause')
   expect(rows('SELECT brief_id FROM team_paused_briefs')).toEqual([])
   await post('/api/team/resume')
-  expect((await get('/api/briefs?status=active')).json().items[0]).toMatchObject({
-    id: mine,
-    status: 'paused',
-  })
+  expect(rows('SELECT paused_at FROM briefs WHERE id = ?', mine)).toEqual([{ paused_at: 'x' }])
 })

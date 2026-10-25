@@ -118,7 +118,7 @@ test('on a phone the Section picker shows the current section and navigates', as
 })
 
 test('the palette lists each Settings section', async ({ page }) => {
-  await page.goto('/now')
+  await page.goto('/chat')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await page.keyboard.press('Control+k')
   const dialog = page.getByRole('dialog', { name: 'Search or run a command' })

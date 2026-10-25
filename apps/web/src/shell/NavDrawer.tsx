@@ -2,16 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import { prefersReducedMotion } from '../data/use-media.ts'
-import { needsYouPath, useLayout, useMenu } from '../themes/layout.ts'
+import { useLayout, useMenu } from '../themes/layout.ts'
 import { HermesCheckDot, NeedsYouDot } from './MainNav.tsx'
 
 export const NAV_DRAWER_ID = 'nav-drawer'
-
-const nowViews = [
-  { to: '/now', label: 'Score', end: true },
-  { to: '/now/flow', label: 'Flow', end: false },
-  { to: '/now/routines', label: 'Routines', end: false },
-] as const
 
 type NavDrawerProps = { open: boolean; onClose: () => void; terminalOffered: boolean }
 
@@ -22,7 +16,7 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
   const panelRef = useRef<HTMLElement>(null)
   const { pathname } = useLocation()
   const menu = useMenu()
-  const dotOn = needsYouPath(menu)
+  const dotOn = menu[0]?.path
   // The launcher layout opens this drawer at every width; the others only below the desktop breakpoint.
   const persistent = useLayout().nav === 'launcher'
   const pairing = pathname === '/pair'
@@ -121,20 +115,6 @@ export function NavDrawer({ open, onClose, terminalOffered }: NavDrawerProps) {
                 {path === dotOn && !pairing && <NeedsYouDot />}
                 {path === '/settings' && !pairing && <HermesCheckDot />}
               </NavLink>
-              {path === '/now' && (
-                <div className="nav-drawer-sub" role="group" aria-label="Now views">
-                  {nowViews.map((view) => (
-                    <NavLink
-                      key={view.to}
-                      to={view.to}
-                      end={view.end}
-                      className="nav-drawer-sublink"
-                    >
-                      {view.label}
-                    </NavLink>
-                  ))}
-                </div>
-              )}
             </div>
           ))}
           {terminalOffered && (

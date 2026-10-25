@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router'
 import { needsHermesCheck, useSystemStatus } from '../routes/settings/settings-queries.ts'
-import { needsYouPath, useLayout, useMenu } from '../themes/layout.ts'
+import { useLayout, useMenu } from '../themes/layout.ts'
 import { useNeedsYou } from './use-needs-you.ts'
 
 // Only mounted where the query client exists (the pairing page renders outside it).
@@ -24,7 +24,8 @@ export function NeedsYouDot() {
 export function MainNav() {
   const { pathname } = useLocation()
   const menu = useMenu()
-  const dotOn = needsYouPath(menu)
+  // Now is gone; the marker stays on the first destination, wherever the theme put it.
+  const dotOn = menu[0]?.path
   // A theme's own labels can be long: they are cut short with an ellipsis (shell.css) and keep their full name as a tooltip.
   const renamed = useLayout().menu !== null
   return (

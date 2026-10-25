@@ -197,19 +197,21 @@ test('reduced motion: no travelling dot, the nodes and the edge light up instead
   }
 })
 
-test('the lead asks a question: it appears on Now, the answer reaches the lead and the run finishes', async ({
+test('the lead asks a question: it appears on the run, the answer reaches the lead and the run finishes', async ({
   page,
 }) => {
   test.setTimeout(120_000)
   await pair(page)
   await start(page, 'Ask first [fake:ask] e2e-d', 'Never ask')
-  await page.goto('/now')
-  const needs = page.getByRole('region', { name: 'Orchestrations that need you' })
+  await openLive(page)
+  // The run page carries the question inside its protected Needs-you wrapper.
+  const needs = page.locator('.orch-needs[aria-label="Needs you"]')
+  await expect(needs).toHaveAttribute('data-protected', 'grid')
   const question = needs.getByRole('region', { name: 'Question from the lead' })
   await expect(question).toContainText('Which audience is this for?', { timeout: 30_000 })
   await question.getByLabel(/Your answer/).fill('ANSWER q1: engineers')
   await question.getByRole('button', { name: 'Send answer' }).click()
-  await expect(needs).toBeHidden({ timeout: 60_000 })
+  await expect(question).toBeHidden({ timeout: 60_000 })
 })
 
 test('Stop: the run is Stopping and its attempts are not confirmed ended until the person abandons them, then it is Stopped', async ({

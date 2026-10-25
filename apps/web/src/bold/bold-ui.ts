@@ -19,15 +19,16 @@ export function readUi(): Ui {
     // No window (a plain module test) or blocked location access: the stored choice below still applies.
   }
   try {
-    return window.localStorage.getItem(UI_KEY) === 'bold' ? 'bold' : 'classic'
+    return window.localStorage.getItem(UI_KEY) === 'classic' ? 'classic' : 'bold'
   } catch {
-    return 'classic'
+    return 'bold'
   }
 }
 
 export function saveUi(ui: Ui): void {
   try {
-    if (ui === 'bold') window.localStorage.setItem(UI_KEY, 'bold')
+    // Bold is the default, so only the exception needs a stored value.
+    if (ui === 'classic') window.localStorage.setItem(UI_KEY, 'classic')
     else window.localStorage.removeItem(UI_KEY)
   } catch {
     // Blocked storage still chooses for this visit.

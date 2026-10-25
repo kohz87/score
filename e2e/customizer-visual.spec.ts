@@ -17,7 +17,7 @@ async function open(page: Page, variant: Variant) {
   await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()
   if (variant !== 'phone') {
     const frame = page.frameLocator('iframe[title="Preview of your theme"]')
-    await expect(frame.locator('.now-score')).toBeVisible({ timeout: 30_000 })
+    await expect(frame.locator('.page-content')).toBeVisible({ timeout: 30_000 })
     await expect(frame.getByText(/^Loading/)).toHaveCount(0)
     await expect(frame.locator('html[data-motion]')).toHaveCount(0)
     await page.evaluate(() => document.fonts.ready)
@@ -46,7 +46,7 @@ test('Customizer, phone preview', async ({ page }) => {
   await open(page, 'phone')
   await page.getByRole('radio', { name: 'Preview' }).click()
   const frame = page.frameLocator('iframe[title="Preview of your theme"]')
-  await expect(frame.locator('.now-score')).toBeVisible({ timeout: 30_000 })
+  await expect(frame.locator('.page-content')).toBeVisible({ timeout: 30_000 })
   await page.waitForTimeout(800)
   await expect(page).toHaveScreenshot('customizer-phone-preview.png', {
     fullPage: true,

@@ -84,7 +84,7 @@ test('guide-only mode: the guide is a static page, /api answers 426 https_requir
   for (const url of [
     '/',
     '/pair',
-    '/now',
+    '/b',
     '/index.html',
     '/assets/app.js',
     '/bridge/v1/hello',

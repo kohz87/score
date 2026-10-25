@@ -1101,6 +1101,32 @@ test('the History tab lists runs with links, filters by outcome, searches and pa
   const urls: string[] = []
   const base = respond
   respond = (path, init) => {
+    if (path === '/api/orchestrations')
+      return json({
+        asOfSeq: 1,
+        items: [
+          {
+            id: 'orch-history',
+            title: 'Ship it',
+            status: 'running',
+            pauseReason: null,
+            leadAgentId: 'lead',
+            roomId: 'room-history',
+            briefId: 'b-1',
+            gatePolicy: 'every-step',
+            revision: 1,
+            ownership: 'owned',
+            steps: { total: 1, active: 1, succeeded: 0, failed: 0 },
+            leadTurnsUsed: 0,
+            maxLeadTurns: 20,
+            needsYou: [],
+            createdAt: '2026-01-01T12:00:00.000Z',
+            updatedAt: '2026-01-01T12:01:00.000Z',
+            endedAt: null,
+          },
+        ],
+      })
+    if (path === '/api/workflow-runs') return json({ asOfSeq: 1, items: [] })
     if (!path.startsWith('/api/agents/builder/history')) return base(path, init)
     urls.push(path)
     if (path.includes('cursor=50')) return json({ items: [run(3, 'completed')], nextCursor: null })
@@ -1113,6 +1139,7 @@ test('the History tab lists runs with links, filters by outcome, searches and pa
           brief: { id: 'b-1', title: 'Ship it' },
           replaySeq: 4,
         }),
+        run(4, 'completed', { brief: { id: 'b-2', title: 'Not a run' } }),
       ],
       nextCursor: '50',
     })
@@ -1121,16 +1148,14 @@ test('the History tab lists runs with links, filters by outcome, searches and pa
   fireEvent.click(await screen.findByRole('tab', { name: 'History' }))
   const panel = within(screen.getByRole('tabpanel'))
   expect(await panel.findByText('Run 1')).toBeDefined()
-  expect(panel.getByRole('link', { name: /Task: Wire the stream/ }).getAttribute('href')).toBe(
-    '/tasks/t-1',
-  )
-  expect(panel.getByRole('link', { name: /Run: Ship it/ }).getAttribute('href')).toBe(
-    '/now/flow/b-1',
-  )
+  expect(panel.getByRole('link', { name: /Run: Ship it/ }).getAttribute('href')).toBe('/runs/b-1')
+  expect(await panel.findByText('Run 4')).toBeDefined()
+  expect(panel.queryByRole('link', { name: /Run: Not a run/ })).toBeNull()
   expect(panel.getByRole('link', { name: 'Replay Run 1 in Watch' }).getAttribute('href')).toBe(
-    '/now/watch/builder?from=4',
+    '/watch/builder?from=4',
   )
-  expect(panel.getByText(/2 min/)).toBeDefined()
+  expect(panel.getByText('Task: Wire the stream')).toBeDefined()
+  expect(panel.getAllByText(/2 min/).length).toBeGreaterThan(0)
   fireEvent.click(panel.getByRole('button', { name: 'Show more' }))
   expect(await panel.findByText('Run 3')).toBeDefined()
   fireEvent.change(panel.getByRole('combobox', { name: 'Outcome' }), {
@@ -1208,10 +1233,10 @@ test('the History tab shows Kanban attempts with their status and no replay', as
   expect(panel.getAllByText('Not confirmed as ended').length).toBeGreaterThan(1)
   expect(panel.getByText(/no longer seen since/)).toBeDefined()
   expect(panel.getByText(/Source unclear/)).toBeDefined()
-  expect(panel.getByRole('link', { name: /Task: Wire the stream/ })).toBeDefined()
-  expect(panel.getByRole('link', { name: /Open this run/ }).getAttribute('href')).toBe(
-    '/attempts/kr_b',
-  )
+  expect(panel.getByText('Task: Wire the stream')).toBeDefined()
+  expect(
+    panel.getAllByRole('link', { name: /Open this run/ }).map((link) => link.getAttribute('href')),
+  ).toContain('/attempts/kr_b')
   expect(panel.queryByRole('link', { name: /Replay/ })).toBeNull()
 })
 

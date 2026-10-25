@@ -11,8 +11,8 @@ import {
 } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../../components/runtime-label.ts'
-import { layoutFlow, type Point } from '../now/flow/layout.ts'
-import { withPositions } from '../now/flow/free-layout.ts'
+import { layoutFlow, type Point } from '../../components/flow-layout/layout.ts'
+import { withPositions } from '../../components/flow-layout/free-layout.ts'
 import { KIND_LABEL, portsOf, type Draft } from './workflow-model.ts'
 import {
   BIG_STEP,

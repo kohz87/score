@@ -28,16 +28,8 @@ describe('sanitiseCss', () => {
     expect(reasons('.chat-approval button { display: none }')).toEqual(['protected_selector'])
     expect(reasons('.orch-decision--gate { color: red }')).toEqual(['protected_selector'])
     expect(reasons('.agent-glyph__ring { fill: none }')).toEqual(['protected_selector'])
-    // The room stage and every part of it (PLAN 10.10).
-    expect(reasons('.room-stage { display: none }')).toEqual(['protected_selector'])
-    expect(reasons('.room-stage__body { color: red }')).toEqual(['protected_selector'])
-    expect(reasons('.chat-thread .room-stage__badge { display: none }')).toEqual([
-      'protected_selector',
-    ])
     expect(reasons('.orch-decisions { color: red }')).toEqual(['protected_selector'])
-    // Gate #2: the task drawer's approval and the add-coding-agent permission controls are protected too.
-    expect(reasons('.task-drawer-approval { display: none }')).toEqual(['protected_selector'])
-    expect(reasons('.task-drawer-buttons button { display: none }')).toEqual(['protected_selector'])
+    // Gate #2: the add-coding-agent permission controls are protected too.
     expect(reasons('.team-coding-permission { display: none }')).toEqual(['protected_selector'])
     expect(reasons('.coding-reach, .coding-acknowledge { display: none }')).toEqual([
       'protected_selector',
@@ -100,7 +92,7 @@ describe('sanitiseCss', () => {
     expect(reasons('.card:has([data-protected]) { opacity: 0 }')).toEqual(['protected_selector'])
     expect(reasons('main:has(.chat-approval) { display: none }')).toEqual(['protected_selector'])
     expect(
-      reasons('@media (min-width: 1px) { body:has(.now-asking) { filter: blur(3px) } }'),
+      reasons('@media (min-width: 1px) { body:has(.chat-approval) { filter: blur(3px) } }'),
     ).toEqual(['protected_selector'])
     expect(reasons('.card:has(.plain) { opacity: 0.5 }')).toEqual([])
   })

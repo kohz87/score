@@ -26,7 +26,6 @@ import { registerMcpCredentialGuard, registerMcpRoutes, type McpRouteDeps } from
 import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
 import type { KnowledgeVault } from './knowledge/vault.ts'
 import { registerReportRoutes } from './http/reports.ts'
-import { registerTaskRoutes } from './http/tasks.ts'
 import { registerRoutineRoutes } from './http/routines.ts'
 import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
@@ -276,7 +275,6 @@ export function buildApp({
     registerMediaRoutes(app, mediaStore)
   }
   const workspaces = createAgentWorkspaces(port, config)
-  registerTaskRoutes(app, port, ingest, db, clock)
   registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
   // Start-up cleanups delete what the database doesn't name, so they only run against the home that database lives in:
@@ -418,12 +416,8 @@ export function buildApp({
     const plans = createPlanStarter({ port, db, ingest })
     app.decorate('recoverPlanStarts', () => plans.recover())
     registerBriefRoutes(app, {
-      port,
       db,
-      ingest,
-      control,
       plans,
-      ...(orchestrator ? { orchestrator } : {}),
       ...(clock ? { clock } : {}),
     })
     if (orchestrator) {

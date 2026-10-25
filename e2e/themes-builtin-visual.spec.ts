@@ -2,16 +2,15 @@ import { expect, test, type Page } from '@playwright/test'
 import { openPackagedTheme, packagedThemeIds } from './themes-builtin-fixtures.ts'
 
 // Baselines for the built-in themes of PLAN 9.5 (Harbour, Ledger, Studio), from the shipped theme files on the frozen
-// visual data: Now, Chat, Settings and the chat-first user view, in light, dark and at phone width.
+// visual data: Chat, Team and Settings, in light, dark and at phone width.
 type Variant = 'light' | 'dark' | 'phone'
 const widths: Record<Variant, number> = { light: 1440, dark: 1440, phone: 390 }
 const variants: Variant[] = ['light', 'dark', 'phone']
 
 const pages = [
-  { name: 'now', path: '/now', ready: '.now-score' },
   { name: 'chat', path: '/chat/room-activity-feed', ready: '.chat-message' },
+  { name: 'team', path: '/team', ready: '.team-agent-card' },
   { name: 'settings', path: '/settings/rules', ready: '.rules-columns' },
-  { name: 'user', path: '/u/rooms/room-activity-feed', ready: '.chat-message' },
 ] as const
 
 test.use({ timezoneId: 'UTC', locale: 'en-GB' })
@@ -31,7 +30,7 @@ for (const id of packagedThemeIds) {
         const mode = variant === 'dark' ? 'dark' : 'light'
         await page.setViewportSize({ width: widths[variant], height: 1100 })
         await page.addInitScript((m) => localStorage.setItem('score.theme', m), mode)
-        // The room stage's members animate: a Chat shot needs them where they start.
+        // Chat's arrival motion starts from a fixed point.
         if (target.name === 'chat') await page.emulateMedia({ reducedMotion: 'reduce' })
         await openPackagedTheme(page, id, mode)
         await page.goto(target.path)
@@ -50,7 +49,7 @@ for (const id of packagedThemeIds) {
             return first === (await page.evaluate(() => document.documentElement.scrollHeight))
           })
           .toBe(true)
-        if (target.name === 'chat' || target.name === 'user') await pinThread(page)
+        if (target.name === 'chat') await pinThread(page)
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
         ).toBeLessThanOrEqual(1)

@@ -19,7 +19,7 @@ async function createWorkflow(page: Page, definition: unknown): Promise<string> 
 }
 
 async function startFromList(page: Page, name: string, inputs: Record<string, string> = {}) {
-  await page.goto('/now/flow/workflows')
+  await page.goto('/workflows')
   const card = page.getByRole('listitem', { name })
   await card.getByRole('button', { name: /^Run/ }).click()
   const dialog = page.getByRole('dialog', { name: new RegExp(`Start ${name}`) })
@@ -40,7 +40,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   test.setTimeout(180_000)
   await pair(page)
   const unique = `Release notes ${Date.now().toString(36)}`
-  await page.goto('/now/flow/workflows')
+  await page.goto('/workflows')
   await expect(page.getByRole('heading', { name: 'Workflows', level: 2 })).toBeVisible()
   await page.getByRole('link', { name: 'New workflow' }).click()
 
@@ -296,7 +296,7 @@ test('drag a node, save, reload: it is where it was left, and the run view draws
     ],
     edges: [{ id: 'e1', from: 'one', port: 'ok', to: 'finish' }],
   })
-  await page.goto(`/now/flow/workflows/${id}`)
+  await page.goto(`/workflows/${id}`)
   const box = (nodeId: string) => page.locator(`.wf-node[data-wf-node="${nodeId}"]`)
   const place = async (nodeId: string) => ({
     left: await box(nodeId).evaluate((el) => (el as HTMLElement).style.left),

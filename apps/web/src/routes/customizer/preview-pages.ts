@@ -6,14 +6,11 @@ const previewAgentFallback = 'lead'
 export type PreviewPage = { id: string; label: string; path: string; view: LookView }
 
 export const previewPages: PreviewPage[] = [
-  { id: 'now', label: 'Now', path: '/now', view: 'admin' },
   { id: 'chat', label: 'Chat', path: '/chat', view: 'admin' },
-  { id: 'tasks', label: 'Tasks', path: '/tasks', view: 'admin' },
   { id: 'team', label: 'Team', path: '/team', view: 'admin' },
   { id: 'knowledge', label: 'Knowledge', path: '/knowledge', view: 'admin' },
   { id: 'reports', label: 'Reports', path: '/reports', view: 'admin' },
   { id: 'settings', label: 'Settings', path: '/settings', view: 'admin' },
-  { id: 'user', label: 'Chat-first view', path: '/u', view: 'user' },
   // PLAN 11.9d: the new look's screens (the bold shell). The agent page's id is filled in from the team (below).
   { id: 'b-room', label: 'New look: Room', path: '/b', view: 'admin' },
   { id: 'b-team', label: 'New look: Team', path: '/b/team', view: 'admin' },

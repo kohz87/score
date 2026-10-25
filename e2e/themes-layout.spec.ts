@@ -1,5 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import type { MockTheme } from './themes-fixtures.ts'
+import { mockThemes, type MockTheme } from './themes-fixtures.ts'
+import { pair } from './pair.ts'
+import { samplePng } from './png.ts'
+import { makeRoom, say } from './rooms.ts'
 import { layoutThemes as t, openWithTheme, theme } from './themes-layout-fixtures.ts'
 
 // The layout model (PLAN 9.3, design docs/briefs/9-themes.md § 7): every layout, shape and background option of a
@@ -11,7 +14,7 @@ test.use({ timezoneId: 'UTC', locale: 'en-GB', viewport: { width: 1440, height: 
 async function open(
   page: Page,
   theme: MockTheme | null,
-  path = '/now',
+  path = '/chat/room-activity-feed',
   mode: 'light' | 'dark' = 'light',
 ) {
   await page.addInitScript((m) => localStorage.setItem('score.theme', m), mode)
@@ -19,7 +22,7 @@ async function open(
   await page.goto(path)
   if (theme) await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   else await expect(page.locator('html')).toHaveAttribute('data-pack', 'score')
-  if (!path.startsWith('/u')) await expect(page.getByRole('main')).toBeVisible()
+  await expect(page.getByRole('main')).toBeVisible()
 }
 
 const box = async (page: Page, selector: string) => {
@@ -55,18 +58,16 @@ test.describe('navigation', () => {
       const nav = await page.getByRole('navigation', { name: 'Main' }).boundingBox()
       const main = await box(page, 'main')
       // A column of links beside the page, from the top of the window.
-      expect(nav!.height).toBeGreaterThan(200)
+      expect(nav!.height).toBeGreaterThan(150)
       if (name === 'left') expect(nav!.x + nav!.width).toBeLessThanOrEqual(main.x + 1)
       else expect(nav!.x).toBeGreaterThanOrEqual(main.x + main.width - 1)
-      // Same links, same order, same keyboard path: Tab reaches Now first, then Chat.
+      // Same links, same order, same keyboard path: Tab reaches Chat first.
       const labels = await page
         .getByRole('navigation', { name: 'Main' })
         .getByRole('link')
         .allInnerTexts()
       expect(labels.map((label) => label.trim())).toEqual([
-        'Now',
         'Chat',
-        'Tasks',
         'Team',
         'Knowledge',
         'Reports',
@@ -95,9 +96,9 @@ test.describe('navigation', () => {
     await expect(drawer).toBeVisible()
     await expect(drawer.getByRole('link', { name: 'Chat' })).toBeVisible()
     await expect(drawer.getByRole('link', { name: 'Settings' })).toBeVisible()
-    // The dot is on Now inside the drawer (and not twice on the page).
+    // The dot is on the first destination inside the drawer (and not twice on the page).
     await expect(
-      drawer.getByRole('link', { name: /^Now/ }).getByRole('img', { name: 'Needs you' }),
+      drawer.getByRole('link', { name: /^Chat/ }).getByRole('img', { name: 'Needs you' }),
     ).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(drawer).toBeHidden()
@@ -151,16 +152,16 @@ test.describe('navigation', () => {
   })
 
   for (const width of [1440, 1100]) {
-    test(`seven 24-character labels keep Settings and the controls on screen at ${width}px`, async ({
+    test(`five 24-character labels keep Settings and the controls on screen at ${width}px`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 })
-      // The widest letters, 24 of them: Now, Chat, ... each padded with W.
-      const labels = ['Now', 'Chat', 'Tasks', 'Team', 'Knowledge', 'Reports', 'Settings'].map(
-        (name) => (name + 'W'.repeat(24)).slice(0, 24),
+      // The widest letters, 24 of them: Chat, Team, ... each padded with W.
+      const labels = ['Chat', 'Team', 'Knowledge', 'Reports', 'Settings'].map((name) =>
+        (name + 'W'.repeat(24)).slice(0, 24),
       )
       expect(labels.every((label) => label.length === 24)).toBe(true)
-      const paths = ['/now', '/chat', '/tasks', '/team', '/knowledge', '/reports', '/settings']
+      const paths = ['/chat', '/team', '/knowledge', '/reports', '/settings']
       await open(
         page,
         theme('long-labels', {
@@ -168,11 +169,11 @@ test.describe('navigation', () => {
         }),
       )
       const nav = page.getByRole('navigation', { name: 'Main' })
-      const settings = nav.getByRole('link', { name: labels[6]! })
+      const settings = nav.getByRole('link', { name: labels[4]! })
       await expect(settings).toBeVisible()
       // The full name is still the link's text and its tooltip.
-      await expect(settings).toHaveAttribute('title', labels[6]!)
-      await expect(settings).toHaveText(labels[6]!)
+      await expect(settings).toHaveAttribute('title', labels[4]!)
+      await expect(settings).toHaveText(labels[4]!)
       const fits = async (locator: Locator) => {
         const rect = (await locator.boundingBox())!
         expect(rect.x).toBeGreaterThanOrEqual(0)
@@ -204,10 +205,10 @@ test.describe('menu', () => {
     await open(page, t.menu)
     const nav = page.getByRole('navigation', { name: 'Main' })
     const labels = (await nav.getByRole('link').allInnerTexts()).map((text) => text.trim())
-    expect(labels).toEqual(['Talk', 'Today', 'Tasks', 'Numbers', 'Settings'])
-    // The Needs-you dot stays on Now, under its new name.
+    expect(labels).toEqual(['Talk', 'Today', 'Numbers', 'Settings'])
+    // The Needs-you dot sits on the first destination, under its new name.
     await expect(
-      nav.getByRole('link', { name: /^Today/ }).getByRole('img', { name: 'Needs you' }),
+      nav.getByRole('link', { name: /^Talk/ }).getByRole('img', { name: 'Needs you' }),
     ).toBeVisible()
     await nav.getByRole('link', { name: 'Talk' }).click()
     await expect(page).toHaveURL(/\/chat/)
@@ -216,19 +217,21 @@ test.describe('menu', () => {
     const palette = page.getByRole('dialog', { name: 'Search or run a command' })
     await expect(palette.getByRole('link', { name: 'Numbers' })).toBeVisible()
     await expect(palette.getByRole('link', { name: 'Team' })).toHaveCount(0)
+    await expect(palette.getByRole('link', { name: 'Knowledge' })).toHaveCount(0)
     await expect(palette.getByRole('link', { name: 'Settings', exact: true })).toBeVisible()
   })
 
-  test('a menu that leaves Now out puts the Needs-you dot on its first entry', async ({ page }) => {
+  test('a menu that starts elsewhere puts the Needs-you dot on its first entry', async ({
+    page,
+  }) => {
     await open(page, {
       ...t.menu,
-      id: 'no-now',
-      manifest: { layout: { menu: [{ to: '/chat' }, { to: '/tasks' }] } },
+      id: 'team-first',
+      manifest: { layout: { menu: [{ to: '/team' }, { to: '/reports' }] } },
     })
     const nav = page.getByRole('navigation', { name: 'Main' })
-    await expect(nav.getByRole('link', { name: 'Now' })).toHaveCount(0)
     await expect(
-      nav.getByRole('link', { name: /^Chat/ }).getByRole('img', { name: 'Needs you' }),
+      nav.getByRole('link', { name: /^Team/ }).getByRole('img', { name: 'Needs you' }),
     ).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Settings' })).toBeVisible()
   })
@@ -239,7 +242,7 @@ test.describe('menu', () => {
     await page.getByRole('button', { name: 'Menu' }).click()
     const drawer = page.getByRole('dialog', { name: 'Menu' })
     await expect(drawer.getByRole('link', { name: 'Talk' })).toBeVisible()
-    await expect(drawer.getByRole('link', { name: 'Team' })).toHaveCount(0)
+    await expect(drawer.getByRole('link', { name: 'Knowledge' })).toHaveCount(0)
     await expect(drawer.getByRole('link', { name: 'Settings' })).toBeVisible()
   })
 })
@@ -271,56 +274,6 @@ test.describe('content width', () => {
       manifest: { layout: { contentWidth: 'wide' } },
     })
     expect(wide).toBeCloseTo(own, 0)
-  })
-})
-
-test.describe('Now cards', () => {
-  test('the default arrangement is Score’s own', async ({ page }) => {
-    await open(page, t.navTop)
-    await expect(page.locator('.now-arrangement')).toHaveCount(0)
-    await expect(page.locator('.now-cards')).toBeVisible()
-  })
-
-  test('columns, order and spans follow the theme', async ({ page }) => {
-    await open(page, t.nowGrid)
-    const grid = page.locator('.now-arrangement')
-    await expect(grid).toBeVisible()
-    const columns = await grid.evaluate(
-      (el) => getComputedStyle(el).gridTemplateColumns.split(' ').length,
-    )
-    expect(columns).toBe(2)
-    const slots = await grid.locator('.now-slot').evaluateAll((els) =>
-      els.map((el) => {
-        const rect = el.getBoundingClientRect()
-        return {
-          name: el.firstElementChild?.getAttribute('aria-label') ?? el.className,
-          x: rect.x,
-          y: rect.y,
-          w: rect.width,
-        }
-      }),
-    )
-    expect(slots.slice(0, 3).map((slot) => slot.name)).toEqual(['Room', 'Made today', 'Needs you'])
-    const room = slots[0]!
-    const made = slots[1]!
-    const ask = slots[2]!
-    expect(room.w).toBeGreaterThan(made.w * 1.9) // span 2 of 2
-    expect(Math.abs(made.y - ask.y)).toBeLessThan(2) // side by side
-    expect(ask.x).toBeGreaterThan(made.x)
-    // The timeline and the composer each take the full row.
-    expect(slots[3]!.w).toBeGreaterThan(made.w * 1.9)
-    // Phone: one column.
-    await page.setViewportSize({ width: 390, height: 900 })
-    expect(
-      await grid.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length),
-    ).toBe(1)
-  })
-
-  test('Needs-you is added first when the theme leaves it out', async ({ page }) => {
-    await open(page, t.nowNoAsk)
-    const first = page.locator('.now-arrangement .now-slot').first()
-    await expect(first.getByRole('region', { name: 'Needs you' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible()
   })
 })
 
@@ -401,43 +354,43 @@ test.describe('Chat', () => {
 })
 
 test.describe('shape', () => {
-  const thread = '.now-thread'
+  const thread = '.chat-thread'
+  const header = '.chat-thread-header'
   test('Score’s own cards, then flat/sharp/strong/compact', async ({ page }) => {
     await open(page, t.navTop)
     const own = {
       radius: await style(page, thread, 'border-top-left-radius'),
       shadow: await style(page, thread, 'box-shadow'),
       border: await style(page, thread, 'border-top-width'),
-      padding: await style(page, thread, 'padding-top'),
+      padding: await style(page, header, 'padding-top'),
     }
-    expect(own).toEqual({ radius: '28px', shadow: 'none', border: '1px', padding: '24px' })
+    expect(own).toEqual({ radius: '28px', shadow: 'none', border: '1px', padding: '20px' })
 
     await open(page, t.compactSharp)
     expect(await style(page, thread, 'border-top-left-radius')).toBe('4px')
     expect(await style(page, thread, 'border-top-width')).toBe('2px')
     expect(await style(page, thread, 'box-shadow')).toBe('none')
-    expect(parseFloat(await style(page, thread, 'padding-top'))).toBeCloseTo(24 * 0.85, 1)
-    expect(await style(page, '.now-cards', 'column-gap')).toBe(`${20 * 0.85}px`)
+    expect(parseFloat(await style(page, header, 'padding-top'))).toBeCloseTo(20 * 0.85, 1)
   })
 
   test('floating/round/none/airy', async ({ page }) => {
     await open(page, t.airyRound)
-    expect(await style(page, '.now-thread', 'border-top-left-radius')).toBe('36px')
-    expect(await style(page, '.now-thread', 'border-top-width')).toBe('0px')
-    expect(await style(page, '.now-thread', 'box-shadow')).not.toBe('none')
-    expect(parseFloat(await style(page, '.now-thread', 'padding-top'))).toBeCloseTo(24 * 1.2, 1)
+    expect(await style(page, thread, 'border-top-left-radius')).toBe('36px')
+    expect(await style(page, thread, 'border-top-width')).toBe('0px')
+    expect(await style(page, thread, 'box-shadow')).not.toBe('none')
+    expect(parseFloat(await style(page, header, 'padding-top'))).toBeCloseTo(20 * 1.2, 1)
     // A protected card is never restyled by the shape settings.
-    expect(await style(page, '.now-asking', 'box-shadow')).toBe('none')
+    expect(await style(page, '.chat-approval', 'box-shadow')).toBe('none')
   })
 
   test('a radius in pixels and a raised card with a hairline', async ({ page }) => {
     await open(page, t.pxRadius)
-    expect(await style(page, '.now-thread', 'border-top-left-radius')).toBe('18px')
-    expect(await style(page, '.now-thread', 'box-shadow')).not.toBe('none')
-    expect(await style(page, '.now-thread', 'border-top-width')).toBe('1px')
+    expect(await style(page, thread, 'border-top-left-radius')).toBe('18px')
+    expect(await style(page, thread, 'box-shadow')).not.toBe('none')
+    expect(await style(page, thread, 'border-top-width')).toBe('1px')
   })
 
-  test('the shape reaches the other families too (Settings, Team, Tasks)', async ({ page }) => {
+  test('the shape reaches the other families too (Settings, Team, Chat)', async ({ page }) => {
     await open(page, t.airyRound, '/settings')
     expect(await style(page, '.settings-card', 'border-top-left-radius')).toBe('36px')
     expect(await style(page, '.settings-card', 'box-shadow')).not.toBe('none')
@@ -467,9 +420,9 @@ test.describe('glass and background', () => {
     )
     expect(await style(page, 'body', 'background-size')).toContain('cover')
     expect(assets).toContain('/api/themes/glass-cover/assets/img/bg.png')
-    expect(await style(page, '.now-thread', 'backdrop-filter')).toContain('blur')
+    expect(await style(page, '.chat-thread', 'backdrop-filter')).toContain('blur')
     // The card colour at 70%: translucent, so the picture shows through.
-    expect(await style(page, '.now-thread', 'background-color')).toMatch(/\/ 0\.7\)$|, 0\.7\)$/)
+    expect(await style(page, '.chat-thread', 'background-color')).toMatch(/\/ 0\.7\)$|, 0\.7\)$/)
   })
 
   test('tile repeats the picture and the dim veil is part of it', async ({ page }) => {
@@ -480,8 +433,19 @@ test.describe('glass and background', () => {
   })
 
   test('a protected card keeps a solid background in front of the picture', async ({ page }) => {
-    await open(page, t.glassCover)
-    const ask = page.getByRole('region', { name: 'Needs you' })
+    // The frozen fixture has no pending approval on a classic page any more (Now showed it), so this one asks the
+    // fake server for a real one, with the theme routes mocked as in themes-boundary.
+    await mockThemes(page, [t.glassCover], { active: t.glassCover.id, mode: 'light' })
+    await page.route('**/api/themes/*/assets/**', async (route) =>
+      route.fulfill({ body: samplePng(960, 640), contentType: 'image/png' }),
+    )
+    await pair(page)
+    const room = await makeRoom(page, 'glass')
+    await say(page, room.id, `Please ask for approval before installing ${Date.now()}`)
+    await page.goto(`/chat/${room.id}`)
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    const ask = page.getByRole('group', { name: /^Approval: / }).last()
+    await expect(ask.getByRole('button', { name: 'Approve' })).toBeAttached({ timeout: 20_000 })
     await expect(ask).toBeVisible()
     const paint = await ask.evaluate((el) => {
       const style = getComputedStyle(el)
@@ -520,44 +484,32 @@ test.describe('glass and background', () => {
   })
 })
 
-test.describe('the user view reads views.user', () => {
-  test('the chat-first view wears the overrides, the admin view the theme', async ({ page }) => {
-    await open(page, t.harbour, '/u/rooms/room-activity-feed')
-    const html = page.locator('html')
-    await expect(html).toHaveAttribute('data-radius', 'sharp')
-    await expect(html).toHaveAttribute('data-surface', 'solid')
-    await expect(html).toHaveAttribute('data-width', 'narrow')
-    await expect(html).toHaveAttribute('data-rooms', 'right')
-    await expect(html).toHaveAttribute('data-chat', 'bubbles')
-    // Narrow column, sidebar on the right, the picture shows through.
-    await expect(page.locator('.chat-message').first()).toBeVisible()
-    expect((await box(page, '.chat-messages')).width).toBeLessThanOrEqual(680)
-    const sidebar = await box(page, '.user-sidebar')
-    expect(sidebar.x).toBeGreaterThan(900)
-    expect(await style(page, '.user-view', 'background-color')).toBe('rgba(0, 0, 0, 0)')
-    expect(await style(page, 'body', 'background-image')).toContain('linear-gradient')
-
-    await page.goto('/now')
-    await expect(html).toHaveAttribute('data-radius', 'round')
-    await expect(html).toHaveAttribute('data-surface', 'glass')
-    await expect(html).toHaveAttribute('data-nav', 'left')
-    await expect(html).not.toHaveAttribute('data-width', 'narrow')
-    await expect(html).toHaveAttribute('data-rooms', 'left')
+test.describe('old themes still load', () => {
+  test('layout.now and /now or /tasks menu paths are accepted and dropped from the menu', async ({
+    page,
+  }) => {
+    // The new shell (/b) has its own look system and needs more of the API than the frozen fixture offers, so only
+    // the classic shell's menu is checked here.
+    await open(page, t.legacy)
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    const labels = (await nav.getByRole('link').allInnerTexts()).map((text) => text.trim())
+    expect(labels).toEqual(['Talk', 'Settings'])
+    await expect(nav.getByRole('link', { name: 'Today' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Tasks' })).toHaveCount(0)
   })
 
-  test('the boot cache holds both views and the layout', async ({ page }) => {
-    await open(page, t.harbour, '/now')
+  test('the boot cache holds the resolved layout', async ({ page }) => {
+    await open(page, t.harbour, '/chat/room-activity-feed')
     const cache = await page.evaluate(() => JSON.parse(localStorage.getItem('score.look.cache')!))
     expect(cache.attributes['data-radius']).toBe('round')
-    expect(cache.user.attributes['data-radius']).toBe('sharp')
     expect(cache.layout.nav).toBe('left')
-    expect(cache.user.layout.chat.roomList).toBe('right')
   })
 
   test('the menu is on screen before the theme arrives, from the cached layout', async ({
     page,
   }) => {
-    await open(page, t.menu, '/now')
+    await open(page, t.menu)
     await expect(page.getByRole('link', { name: 'Talk' })).toBeVisible()
     // Second visit: the theme detail answers late; the cached layout already shows the menu.
     await page.route('**/api/themes/menu', async (route) => {

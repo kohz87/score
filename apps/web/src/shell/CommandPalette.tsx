@@ -18,17 +18,7 @@ const commands = [
   },
 ]
 
-/**
- * `userView` is the chat-first view's palette (re-gate #8): no admin destinations or message hits of its own, only the
- * way back, which goes through the view switch (the security password, when this browser asks for it).
- */
-export function CommandPalette({
-  onClose,
-  userView,
-}: {
-  onClose: () => void
-  userView?: { toAdmin: (path: string) => void }
-}) {
+export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [search, setSearch] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -36,20 +26,16 @@ export function CommandPalette({
   const navigate = useNavigate()
   const menu = useMenu()
   // Settings is one page per section (PLAN 10.1): each is a destination of its own besides plain Settings.
-  const { sections } = useSettingsSections(userView !== undefined)
-  const destinations: { path: string; title: string; name?: string; section?: true }[] = userView
-    ? [
-        { path: '/now', title: 'Admin view' },
-        { path: '/settings', title: 'Settings' },
-      ]
-    : [
-        ...menu,
-        ...sections.map(({ id, label }) => ({
-          path: settingsPath(id),
-          title: `Settings: ${label}`,
-          section: true as const,
-        })),
-      ]
+  const { sections } = useSettingsSections()
+  const destinations: { path: string; title: string; name?: string; section?: true }[] = [
+    ...menu,
+    { path: '/workflows', title: 'Workflows', name: 'Workflow runs and versions' },
+    ...sections.map(({ id, label }) => ({
+      path: settingsPath(id),
+      title: `Settings: ${label}`,
+      section: true as const,
+    })),
+  ]
   // Settings' sections only once something is typed: the empty palette stays the short list of destinations.
   const options = destinations.filter(
     ({ title, name, section }) =>
@@ -59,7 +45,7 @@ export function CommandPalette({
   const matchingCommands = commands.filter(({ title }) =>
     title.toLowerCase().includes(search.trim().toLowerCase()),
   )
-  const messages = useMessageSearch(userView ? '' : search, 8)
+  const messages = useMessageSearch(search, 8)
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
@@ -80,8 +66,7 @@ export function CommandPalette({
       }
     } else if (event.key === 'Enter' && event.target === inputRef.current && options[0]) {
       event.preventDefault()
-      if (userView) userView.toAdmin(options[0].path)
-      else void navigate(options[0].path)
+      void navigate(options[0].path)
       onClose()
     } else if (
       event.key === 'Enter' &&
@@ -133,27 +118,13 @@ export function CommandPalette({
         <ul className="command-options">
           {options.map(({ path, title, name }) => (
             <li key={path}>
-              {userView ? (
-                <button
-                  type="button"
-                  className="command-run"
-                  data-protected="any"
-                  onClick={() => {
-                    userView.toAdmin(path)
-                    onClose()
-                  }}
-                >
-                  {title}
-                </button>
-              ) : (
-                <Link
-                  to={path}
-                  onClick={onClose}
-                  aria-label={name !== undefined && name !== title ? name : undefined}
-                >
-                  {title}
-                </Link>
-              )}
+              <Link
+                to={path}
+                onClick={onClose}
+                aria-label={name !== undefined && name !== title ? name : undefined}
+              >
+                {title}
+              </Link>
             </li>
           ))}
         </ul>

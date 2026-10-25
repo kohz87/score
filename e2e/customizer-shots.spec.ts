@@ -21,7 +21,7 @@ async function open(
   await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()
   if (width >= 900) {
     const frame = page.frameLocator('iframe[title="Preview of your theme"]')
-    await expect(frame.locator('.now-score, .page-content').first()).toBeVisible({
+    await expect(frame.locator('.page-content').first()).toBeVisible({
       timeout: 20_000,
     })
   }
@@ -30,17 +30,7 @@ async function open(
 
 test('one picture per section', async ({ page }) => {
   await open(page)
-  const tabs = [
-    'Theme',
-    'Colours',
-    'Fonts',
-    'Shape',
-    'Layout',
-    'Now',
-    'Chat',
-    'Background',
-    'Custom CSS',
-  ]
+  const tabs = ['Theme', 'Colours', 'Fonts', 'Shape', 'Layout', 'Chat', 'Background', 'Custom CSS']
   for (const name of tabs) {
     await page.getByRole('tab', { name, exact: true }).click()
     await page.waitForTimeout(300)
@@ -58,7 +48,7 @@ test('contrast warning and custom CSS report', async ({ page }) => {
   await page.getByRole('tab', { name: 'Custom CSS', exact: true }).click()
   await page.locator('.cm-content').click()
   await page.keyboard.type(
-    '.now-score { content: "x"; position: fixed } .chat-approval { color: red }',
+    '.chat-thread { content: "x"; position: fixed } .chat-approval { color: red }',
   )
   await page.waitForTimeout(600)
   await page.screenshot({ path: `${dir}/section-custom-css-report.png` })

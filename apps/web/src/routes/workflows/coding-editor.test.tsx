@@ -125,8 +125,8 @@ function mountEditor() {
     queryClient.clear()
   })
   const router = createMemoryRouter(
-    [{ path: '/now/flow/workflows/:workflowId', element: <WorkflowEditorRoute /> }],
-    { initialEntries: ['/now/flow/workflows/wf-release'] },
+    [{ path: '/workflows/:workflowId', element: <WorkflowEditorRoute /> }],
+    { initialEntries: ['/workflows/wf-release'] },
   )
   render(
     <QueryClientProvider client={queryClient}>

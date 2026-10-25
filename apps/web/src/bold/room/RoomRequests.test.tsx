@@ -14,6 +14,7 @@ import {
 } from './room-test-utils.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
 import { roomExchangesQuery } from './room-queries.ts'
+import { fenceKey } from '../../routes/orchestrations/orchestration-queries.ts'
 
 afterEach(() => {
   disposeRoomTest()
@@ -65,8 +66,19 @@ function stubRoom(
   exchange: Exchange | null,
   decided = approval,
   decisionGate: Promise<void> = Promise.resolve(),
+  fenced = false,
 ) {
   const fetchMock = mockFetch(async (url, init) => {
+    if (url === '/api/orchestrations/fence')
+      return jsonResponse({
+        fenced,
+        reason: fenced ? 'restore' : null,
+        untrustedHistory: fenced,
+        revision: 1,
+        since: fenced ? '2026-10-24T09:00:00.000Z' : null,
+        items: [],
+        journal: { ok: true, entries: 4, bytes: 1200, sizeAlarm: false },
+      })
     if (url === '/api/approvals?status=all') {
       if (init.method === 'POST') throw new Error('not the approvals list')
       return jsonResponse({ asOfSeq: 1, items: [approval], nextCursor: null })
@@ -131,6 +143,41 @@ test('an approval leads the pins, the count expands the rest, and both are prote
   })
   expect(exchangeCard.getAttribute('data-protected')).toBe('flex')
   expect(exchangeCard.textContent).toContain('8 of 8 turns')
+})
+
+test('a global fence is a protected review card, and the card goes when the fence lifts', async () => {
+  stubRoom(null, approval, Promise.resolve(), true)
+  const { queryClient } = renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
+  const card = await screen.findByRole('article', {
+    name: /Starting work is blocked until you review the runs it stopped/,
+  })
+  expect(card.getAttribute('data-protected')).toBe('flex')
+  // The fence counts like any card: with the approval also waiting, the folded strip offers the rest.
+  expect(await screen.findByRole('button', { name: '1 more needs you' })).toBeDefined()
+  expect(screen.getByRole('link', { name: 'Review the runs' }).getAttribute('href')).toBe(
+    '/b/settings/system#global-fence',
+  )
+
+  act(() =>
+    queryClient.setQueryData(fenceKey, {
+      fenced: false,
+      reason: null,
+      untrustedHistory: false,
+      revision: 2,
+      since: null,
+      items: [],
+      journal: { ok: true, entries: 4, bytes: 1200, sizeAlarm: false },
+    }),
+  )
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('article', {
+        name: /Starting work is blocked until you review the runs it stopped/,
+      }),
+    ).toBeNull(),
+  )
 })
 
 test('Allow sends the approval decision once and the answered card goes', async () => {

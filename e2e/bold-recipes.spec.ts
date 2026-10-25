@@ -93,7 +93,7 @@ async function withCodingAgents(page: Page) {
 }
 
 async function startFromList(page: Page, name: string, inputs: Record<string, string> = {}) {
-  await page.goto('/now/flow/workflows')
+  await page.goto('/workflows')
   const card = page.getByRole('listitem', { name })
   await card.getByRole('button', { name: /^Run/ }).click()
   const dialog = page.getByRole('dialog', { name: new RegExp(`Start ${name}`) })

@@ -119,7 +119,7 @@ type TaskDetail = TaskSummary & {
   blocks: string[]
   runIds: string[]
   completedAt?: string | null /* kanban completed_at; "Made today" uses it, not updatedAt */
-  briefId?: string | null /* newest brief Score linked this task to (GET /api/tasks/:taskId); "See it in Flow" opens /now/flow/:briefId */
+  briefId?: string | null /* newest brief Score linked this task to; run links open /runs/:briefId */
 }
 
 type Room = {
@@ -225,7 +225,7 @@ type Handoff = {
 type TaskRef = {
   taskId: string
   historyId: string /* the board lineage ("history") the task id belongs to */
-  current: boolean /* only `current` refs may navigate to /tasks/:id or allow actions */
+  current: boolean /* only `current` refs may allow actions; the task board itself was removed in 11.11b */
 }
 type AttemptSummary = {
   id: string /* opaque `kr_<uuid>`: never parsed, never sorted by */
@@ -452,6 +452,9 @@ label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }
 
 ### Score view
 
+**Removed in 11.11b.** The Now page is gone; `GET /api/now` remains as the source of Score's paused state for `/b`,
+and `POST /api/team/pause` / `POST /api/team/resume` remain the team controls.
+
 - **S** `GET /api/now?from=<iso>&to=<iso>` →
   ```ts
   { asOfSeq: number; now: string; paused: boolean /* Pause everyone is on */
@@ -479,9 +482,12 @@ label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }
 
 ### Flow view
 
-- **S** `GET /api/briefs?status=active|recent` → `{ items: BriefSummary[] }`
+**Removed in 11.11b.** The Score and Flow views are gone; `/b` shows what needs you, and the surviving run pages are
+`/runs/:briefId`, `/workflows[/:workflowId]` and `/watch/:agentId`. The entries below are historical.
+
+- ~~**S** `GET /api/briefs?status=active|recent` → `{ items: BriefSummary[] }`~~ (removed in 11.11b)
   `type BriefSummary = { id; title; roomId; startedAt; startedBy: 'you' | AgentId; status: 'running'|'paused'|'done'|'failed' }`
-- **S** `GET /api/briefs/:briefId/flow` →
+- ~~**S** `GET /api/briefs/:briefId/flow`~~ (removed in 11.11b; use `/runs/:briefId`)
   ```ts
   {
     asOfSeq
@@ -520,16 +526,16 @@ label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }
       null /* the brief's agents also worked on tasks not linked to it; links stay exact */
   }
   ```
-- **S** `GET /api/flow/nodes/:nodeId` → `{ node; description: string; steps: TaskStep[]; approval: Approval | null
+- ~~**S** `GET /api/flow/nodes/:nodeId`~~ (removed in 11.11b)
 run: RunSummary | null; model: string | null; tools: string[] | null; attempts?: AttemptSummary[]; watch: { agentId; thumbnail: string | null; front: string } | null }`
   `tools: null` = not observed (a step that only Kanban attempts worked on); `[]` = observed, none used. `attempts` (5.17a-1,
   attempts on) lists the step's attempts of the board lineage Score follows, by `order`. With any attempt in the brief
   `stats.spendUsd` is `null`: an attempt's cost is unknown, so the total would be partial.
-- **S** `GET /api/briefs/:briefId/log?agent=&kind=tool|all&cursor=` → `{ items: LogLine[]; nextCursor }`
+- ~~**S** `GET /api/briefs/:briefId/log?agent=&kind=tool|all&cursor=`~~ (removed in 11.11b)
   `type LogLine = { id; at; agentId; kind: 'tool' | 'message' | 'handoff' | 'approval' | 'system'; text; callId?; parentCallId?; subagent? }` (the last three: PLAN 8.7, on `kind: 'tool'` lines of coding agents that used sub-agents; same meaning as on the tool message part)
-- **H** `POST /api/briefs/:briefId/pause` / `/resume` → `BriefSummary`. Pause holds Score's queue for the brief and blocks
+- ~~**H** `POST /api/briefs/:briefId/pause` / `/resume`~~ (removed in 11.11b; use the run controls)
   its not-started tasks (`hermes kanban block`); running steps finish. Resume unblocks only what Score blocked.
-- **H** `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`: stops that node's active run (409 when nothing is running; 501 `unsupported` with a message when the active run was not started by Score, e.g. a Kanban or gateway run). A Kanban attempt is never stoppable from Score (Hermes has no stop that targets one attempt): a step whose task has an attempt that is still observed running, or a run id `kr_…`, answers the same 501 before any profile or run lookup.
+- ~~**H** `POST /api/flow/nodes/:nodeId/stop`~~ (removed in 11.11b)
 - **H** `POST /api/rooms/:roomId/messages/:messageId/plan/start` → `{ briefId; taskIds: string[] }`: creates one Kanban task
   per plan step of that `plan` message (idempotent per message).
 - A brief is a human room message plus what it causes (`briefId` = that message id; turns, hand-offs, and tasks Score
@@ -933,8 +939,11 @@ Score's own runs (`score-<room>-<agent>`), compression children and empty sessio
 
 ## 7. Tasks
 
-- **S** `GET /api/tasks?room=&agent=&needsYou=true&column=` → `{ asOfSeq; columns: Record<TaskColumn, TaskSummary[]> }`
-- **S** `GET /api/tasks/:taskId` → `TaskDetail`. With attempts on (5.17a-1) `TaskDetail.runIds` holds no numeric Kanban ids any more: a legacy
+**Removed in 11.11b.** The Tasks board and its REST routes are gone; tasks remain a domain/event source for jobs,
+pauses, orchestrations, reports and MCP tools. The attempt page at `/attempts/:attemptId` remains.
+
+- ~~**S** `GET /api/tasks?room=&agent=&needsYou=true&column=`~~ (removed in 11.11b)
+- ~~**S** `GET /api/tasks/:taskId`~~ (removed in 11.11b). With attempts on (5.17a-1) `TaskDetail.runIds` holds no numeric Kanban ids any more: a legacy
   numeric link maps to its attempt's `kr_` id only with affirmative proof (a saved "claimed" activity item with the attempt's frozen start
   second and claim profile); every other legacy link is reported in `unresolvedRunLinks: { legacyId; reason }[]` ("an earlier attempt,
   details not kept"; `not_yet_resolved` while the upgrade has not run). Responses of `POST /api/tasks` and `PATCH /api/tasks/:taskId` and
@@ -944,10 +953,10 @@ Score's own runs (`score-<room>-<agent>`), compression children and empty sessio
   release skips and reports them. An unqualified denial never authorizes task actions.
 - **S** `GET /api/attempts/:attemptId` → `AttemptDetail` (5.17a-1; `404 not_found` when attempts are off or the id is unknown). Also for
   an attempt of an earlier copy of the board (read-only, "from an earlier copy of the board").
-- `POST /api/tasks` `{ title; body?; assignee?: AgentId; reviewer?: AgentId; roomId?; dependsOn?: string[]; steps?: string[] }` → `TaskDetail`
+- ~~`POST /api/tasks`~~ (removed in 11.11b)
   `reviewer` on create and on `PATCH` answers 501 `not_implemented` (Hermes names a reviewer only when review is requested); `roomId` is kept by Score, must name an existing room (else 400) and is shown on `TaskDetail.roomId`.
-- `PATCH /api/tasks/:taskId` `{ title?; body?; assignee?; reviewer?; steps?: TaskStep[] }` → `TaskDetail`
-- **H** `POST /api/tasks/:taskId/actions`
+- ~~`PATCH /api/tasks/:taskId`~~ (removed in 11.11b)
+- ~~**H** `POST /api/tasks/:taskId/actions`~~ (removed in 11.11b)
   `{ action: 'start' | 'block' | 'unblock' | 'request_review' | 'request_changes' | 'complete' | 'archive' | 'comment'; text?: string }`
   → `200 { taskId; action; hermesStatus: string }` after the Hermes CLI accepted it; the task's new state arrives on the
   stream (`task.upserted`). `409 conflict` when the Hermes state machine rejects the transition (e.g. `unblock` on a
@@ -1106,7 +1115,7 @@ incarnation-aware reuse confirmation contract is agreed.
 costUsd: number | null; task: { id; title } | null; brief: { id; title } | null; replaySeq: number | null; attempt?: AttemptSummary }[]; nextCursor }`.
   Score's own runs for the agent (all origins), newest first, 50 per page; the cursor is an offset. `outcome` filters,
   `q` matches task/brief title and model. `stopped` is a cancelled run; `interrupted` is a reclaimed attempt (not proof the
-  worker stopped); `unknown` is any status Score does not recognise (never shown as running). Replay opens `/now/watch/:agentId?from=<replaySeq>`.
+  worker stopped); `unknown` is any status Score does not recognise (never shown as running). Replay opens `/watch/:agentId?from=<replaySeq>`.
   With attempts on (5.17a-1) the agent's Kanban attempts are merged in (`runId` = the `kr_` id, `origin: 'kanban'`, `attempt` set, `replaySeq: null`):
   a normal finish (completed, review handoff, changes requested) is `completed`, a failure `failed`, a blocked, unknown or no-longer-observed end
   `unknown`. `task`/`brief` are null for an attempt of an earlier copy of the board.
@@ -2027,8 +2036,7 @@ action }` unless delegated:
 | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------- |
 | Post / edit / delete / retry / rewind a message in the room, room members / archive, summaries (rename is allowed) | 409                                                                                                                                | 409                             | allowed (ordinary room) |
 | `rooms.post` (MCP) into the room                                                                        | 409                                                                                                                                | 409                             | allowed                 |
-| Stop a message run (`…/messages/:id/stop`), stop a flow node (`/api/flow/nodes/:id/stop`)               | 409 (use Stop)                                                                                                                     | 409                             | n/a                     |
-| Brief pause / resume (`/api/briefs/:id/pause                                                            | resume`)                                                                                                                           | delegated to run pause / resume | 409                     | 409 |
+| Stop a message run (`…/messages/:id/stop`)                                                              | 409 (use Stop)                                                                                                                     | 409                             | n/a                     |
 | Plan Start on the room                                                                                  | 409                                                                                                                                | 409                             | 409                     |
 | Team pause / agent pause                                                                                | independent holds: block admission, never cleared by run Resume                                                                    | same                            | n/a                     |
 | Team resume / agent resume                                                                              | clears only its own holds; never lifts a run pause, fence or waiver                                                                | same                            | n/a                     |

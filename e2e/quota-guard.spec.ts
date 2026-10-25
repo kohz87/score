@@ -8,8 +8,8 @@ import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
 // PLAN 8.6: the quota guard in the browser, against the fake adapter. No model is called and no real CLI is started.
 // The coding agent's setting runs against the real server and the fake CLI's own rate-limit record; the held step's card
-// is put in front of the real live diagram and the real user view by answering the browser's own requests (the technique
-// of coding-workers.spec.ts). The server's side of the guard is covered by the server tests.
+// is put in front of the real live diagram by answering the browser's own requests (the technique of
+// coding-workers.spec.ts). The server's side of the guard is covered by the server tests.
 
 const shots = process.env['SCORE_UI_SHOTS']
 const shot = async (page: Page, name: string, selector?: string) => {
@@ -114,7 +114,7 @@ test.describe('a step held for a low limit', () => {
   }) => {
     const { answers } = await serveHeldRun(page)
     await page.setViewportSize({ width: 1280, height: 1100 })
-    await page.goto('/now/flow/brief-orch-1')
+    await page.goto('/runs/brief-orch-1')
     const node = page.locator('[data-node="s3"]')
     await expect(node).toBeVisible()
     await expect(node).toContainText(/Held: limit low \(6% left, resets [^)]+\)/)
@@ -137,31 +137,6 @@ test.describe('a step held for a low limit', () => {
       { answer: 'use_anyway', orchestrationRevision: 9 },
       { answer: 'stop', orchestrationRevision: 9 },
     ])
-  })
-
-  test('user view: the same card appears at the end of the conversation and answers the same way', async ({
-    page,
-  }) => {
-    const { answers } = await serveHeldRun(page)
-    await page.setViewportSize({ width: 1280, height: 900 })
-    await page.goto('/u/rooms/room-activity-feed')
-    const card = page
-      .locator('.user-needs')
-      .getByRole('region', { name: 'reviewer’s limit is low' })
-    await expect(card).toBeVisible()
-    await expect(card).toContainText('Steps that are already running carry on.')
-    await page.evaluate(() => document.fonts.ready)
-    await page.evaluate(() => {
-      const scroll = document.querySelector('.chat-scroll')
-      if (scroll) scroll.scrollTop = scroll.scrollHeight
-    })
-    await shot(page, 'user')
-    await card.getByRole('button', { name: 'Use it anyway' }).click()
-    await expect.poll(() => answers.length).toBe(1)
-    expect(answers[0]).toEqual({
-      url: '/api/orchestrations/orch-1/steps/s3/quota',
-      body: { answer: 'use_anyway', orchestrationRevision: 9 },
-    })
   })
 })
 

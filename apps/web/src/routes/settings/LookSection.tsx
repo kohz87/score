@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query'
 import {
   DisplayCurrencySchema,
@@ -21,8 +21,7 @@ import { saveTheme, themeChoices, type ThemeChoice } from '../../data/theme.ts'
 import { packs } from '../../styles/packs.ts'
 import { themeDetailQuery } from '../../themes/queries.ts'
 import { useLook } from '../../themes/use-look.ts'
-import { checkSecurityPassword, passwordCheckProblem } from '../user/ViewSwitch.tsx'
-import { readGuard, saveGuard } from '../user/user-view.ts'
+import { saveUi } from '../../bold/bold-ui.ts'
 
 const themeLabels: Record<ThemeChoice, string> = { light: 'Light', dark: 'Dark', system: 'System' }
 
@@ -348,77 +347,26 @@ function sendKeyNote(choice: SendKey): string {
     : 'Ctrl+Enter (or Cmd+Enter) sends; Enter adds a new line.'
 }
 
-/** Decision 87: a per-browser convenience for a shared screen, checked with the security password. */
-function AdminGuardCard() {
-  const [on, setOn] = useState(readGuard)
-  const [asking, setAsking] = useState(false)
-  const [password, setPassword] = useState('')
-  const [problem, setProblem] = useState('')
-  const [pending, setPending] = useState(false)
-  async function turnOn(event: FormEvent) {
-    event.preventDefault()
-    if (pending || !password) return
-    setPending(true)
-    setProblem('')
-    try {
-      await checkSecurityPassword(password)
-      saveGuard(true)
-      setOn(true)
-      setAsking(false)
-      setPassword('')
-    } catch (error) {
-      setProblem(passwordCheckProblem(error))
-    } finally {
-      setPending(false)
-    }
-  }
+/** The classic shell's way back to the default, kept beside the other per-device look choices. */
+function BoldViewCard() {
+  const navigate = useNavigate()
   return (
-    <div className="plugins-card plugins-theme plugins-sendkey guard-form" data-protected="any">
-      <span className="plugins-card-name" id="plugins-guard-label">
-        Admin view on this browser
-      </span>
-      <label className="look-check">
-        <input
-          type="checkbox"
-          checked={on || asking}
-          aria-describedby="plugins-guard-help"
-          onChange={(event) => {
-            setProblem('')
-            if (!event.target.checked) {
-              saveGuard(false)
-              setOn(false)
-              setAsking(false)
-              setPassword('')
-            } else setAsking(true)
-          }}
-        />
-        <span>Ask for the security password to open the admin view</span>
-      </label>
-      <p className="settings-muted" id="plugins-guard-help">
-        Only this browser asks. It is a convenience for a shared screen, not access control: the
-        same Score stays open to anyone who can reach it.
+    <div className="plugins-card plugins-theme plugins-sendkey">
+      <span className="plugins-card-name">The new look</span>
+      <p className="settings-muted">
+        The new Score shell is the default on this device. Classic pages stay available while you
+        use it.
       </p>
-      {asking && !on && (
-        <form
-          className="look-guard-form"
-          onSubmit={(event) => void turnOn(event)}
-          aria-label="Turn on the password check"
-        >
-          <label>
-            Security password
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
-          <button type="submit" className="settings-pill" disabled={pending || !password}>
-            {pending ? 'Checking…' : 'Turn on'}
-          </button>
-        </form>
-      )}
-      {problem && <p role="alert">{problem}</p>}
+      <button
+        type="button"
+        className="settings-pill"
+        onClick={() => {
+          saveUi('bold')
+          void navigate('/b')
+        }}
+      >
+        Use the new look
+      </button>
     </div>
   )
 }
@@ -498,9 +446,9 @@ export function LookSection() {
       <div className="look-stack">
         <ThemeCard />
         <ResetLookCard />
+        <BoldViewCard />
         <SendKeyCard />
         <LivelinessCard />
-        <AdminGuardCard />
         <CurrencyCard />
       </div>
     </section>

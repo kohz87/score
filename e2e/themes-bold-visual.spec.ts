@@ -33,6 +33,40 @@ async function settle(page: Page) {
   ).toBeLessThanOrEqual(1)
 }
 
+/**
+ * Other specs rename, restyle and add agents on the shared fake team, and the header dock and the Room grow with them:
+ * every baseline shows the four example agents as the fake adapter seeds them (apps/server/src/hermes/fake/scenario.ts).
+ */
+async function exampleTeam(page: Page) {
+  const example: Record<string, { role: string; color: string; shape: string }> = {
+    lead: { role: 'Leads the team', color: '#6B4EFF', shape: 'circle-dot' },
+    builder: { role: 'Builds features', color: '#19C39A', shape: 'triangle' },
+    reviewer: { role: 'Reviews changes', color: '#FFB61E', shape: 'diamond' },
+    designer: { role: 'Designs interfaces', color: '#FF6B8A', shape: 'square' },
+  }
+  await page.route('**/api/agents', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const response = await route.fetch()
+    const body = (await response.json()) as { items: { id: string }[] }
+    const items = body.items
+      .filter((item) => item.id in example)
+      // The server lists agents by recent activity, which other specs change: the baseline needs a fixed order.
+      .sort((a, b) => Object.keys(example).indexOf(a.id) - Object.keys(example).indexOf(b.id))
+      .map((item) => {
+        const { role, color, shape } = example[item.id]!
+        return {
+          ...item,
+          name: item.id,
+          role,
+          style: { color, shape },
+          status: 'idle',
+          activity: null,
+        }
+      })
+    await route.fulfill({ response, json: { ...body, items } })
+  })
+}
+
 for (const id of boldThemeIds) {
   for (const variant of variants) {
     const mode = variant === 'dark' ? 'dark' : 'light'
@@ -45,6 +79,7 @@ for (const id of boldThemeIds) {
       test('Room', async ({ page }) => {
         await openBoldRoomWith(page, {}, async (p) => {
           await wearBuiltin(p, id, mode)
+          await exampleTeam(p)
           // The room fixture has no Results or Workbench: empty ones keep the side panel from showing an error.
           await p.route('**/api/jobs/*/results*', (route) =>
             route.fulfill({ json: { asOfSeq: 12, items: [], screens: [] } }),
@@ -55,7 +90,16 @@ for (const id of boldThemeIds) {
             }),
           )
         })
-        await expect(page.getByRole('tab', { name: /Release notes 2\.4/ })).toBeVisible()
+        // Desktop lists the jobs as tabs; the phone's Jobs list (11.10a) uses buttons.
+        await expect(
+          page
+            .getByRole('tab', { name: /Release notes 2\.4/ })
+            .or(
+              page
+                .getByRole('region', { name: 'Jobs' })
+                .getByRole('button', { name: /Release notes 2\.4/ }),
+            ),
+        ).toBeVisible()
         await settle(page)
         await expect(page).toHaveScreenshot(`bold-${id}-room-${variant}.png`, {
           animations: 'disabled',
@@ -66,35 +110,7 @@ for (const id of boldThemeIds) {
       test('Team', async ({ page }) => {
         await pair(page)
         await wearBuiltin(page, id, mode)
-        // Other specs rename, restyle and add agents on the shared fake team: the baseline shows the four example agents
-        // as the fake adapter seeds them (apps/server/src/hermes/fake/scenario.ts).
-        const example: Record<string, { role: string; color: string; shape: string }> = {
-          lead: { role: 'Leads the team', color: '#6B4EFF', shape: 'circle-dot' },
-          builder: { role: 'Builds features', color: '#19C39A', shape: 'triangle' },
-          reviewer: { role: 'Reviews changes', color: '#FFB61E', shape: 'diamond' },
-          designer: { role: 'Designs interfaces', color: '#FF6B8A', shape: 'square' },
-        }
-        await page.route('**/api/agents', async (route) => {
-          if (route.request().method() !== 'GET') return route.fallback()
-          const response = await route.fetch()
-          const body = (await response.json()) as { items: { id: string }[] }
-          const items = body.items
-            .filter((item) => item.id in example)
-            // The server lists agents by recent activity, which other specs change: the baseline needs a fixed order.
-            .sort((a, b) => Object.keys(example).indexOf(a.id) - Object.keys(example).indexOf(b.id))
-            .map((item) => {
-              const { role, color, shape } = example[item.id]!
-              return {
-                ...item,
-                name: item.id,
-                role,
-                style: { color, shape },
-                status: 'idle',
-                activity: null,
-              }
-            })
-          await route.fulfill({ response, json: { ...body, items } })
-        })
+        await exampleTeam(page)
         // Other specs run agents on the shared fake: whether a card has a screen glimpse depends on that. None here.
         await page.route('**/api/watch/overview*', (route) =>
           route.fulfill({ json: { items: [] } }),
@@ -119,6 +135,7 @@ for (const id of boldThemeIds) {
       test('Settings', async ({ page }) => {
         await pair(page)
         await wearBuiltin(page, id, mode)
+        await exampleTeam(page)
         await page.goto('/b/settings/look')
         await expect(page.getByRole('heading', { name: 'Look', exact: true })).toBeVisible()
         await settle(page)

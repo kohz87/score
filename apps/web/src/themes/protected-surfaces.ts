@@ -4,7 +4,6 @@
 export const protectedClasses = [
   // Approval and decision cards: tool approvals, gates, limits, unknown cost, coding reach
   'chat-approval',
-  'now-asking',
   'orch-decision',
   'orch-needs',
   'orch-fence',
@@ -41,6 +40,8 @@ export const protectedClasses = [
   'bold-request',
   // PLAN 11.4b: the count that expands the rest of the needs-you strip (a theme may not hide the way to the cards)
   'bold-pins-more',
+  // PLAN 11.11b: the shell-wide notice that starting work is blocked until the person reviews the fence
+  'bold-fence-notice',
   // PLAN 11.4d: the room and job menus make destructive or exposing choices; deleting a room asks for its name.
   'bold-room-menu',
   'bold-job-menu',
@@ -54,9 +55,6 @@ export const protectedClasses = [
   'bold-source',
   // PLAN 11.4c: the thread's confirmation before stopping a job
   'bold-thread-stop-confirm',
-  // The task drawer's approval and its buttons
-  'task-drawer-approval',
-  'task-drawer-buttons',
   // Permission, sandbox and password screens
   'rules-card',
   'team-permissions',
@@ -69,23 +67,17 @@ export const protectedClasses = [
   'bold-add-error',
   'bold-add-joined-runs',
   'terminal-auth',
-  'admin-password',
-  'guard-form',
   'security-password',
   // Agent identity and error toasts
   'agent-glyph',
-  'room-stage',
   'chat-toast',
   // The way back
   'command-run',
   'command-palette',
   'command-trigger',
   'menu-trigger',
-  'user-way-back',
   'cz-back',
   'cz-error-back',
-  'user-way-link',
-  'user-menu-button',
   'look-reset',
   'look-banner',
 ] as const

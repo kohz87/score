@@ -1,13 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import type { HistoryOutcome } from '@score/contract'
+import { useStreamQuery } from '../../data/query-client.ts'
 import {
   attemptEndText,
   attemptPath,
   attemptStatusLabel,
   evidenceLabel,
 } from '../attempts/attempt-format.ts'
+import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
 import { formatDuration, formatUsd } from '../reports/reports-format.ts'
+import { briefHasRun } from '../runs/brief-run.ts'
+import { workflowRunsQuery } from '../workflows/workflow-queries.ts'
 import { useHistory } from './agent-tab-queries.ts'
 
 const outcomeLabels: Record<HistoryOutcome, string> = {
@@ -25,6 +29,8 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
   const [query, setQuery] = useState('')
   const [outcome, setOutcome] = useState<HistoryOutcome | ''>('')
   const history = useHistory(agentId, query, outcome)
+  const orchestrations = useStreamQuery(orchestrationsQuery).data ?? []
+  const workflows = useStreamQuery(workflowRunsQuery).data ?? []
   const items = history.data?.pages.flatMap((page) => page.items) ?? []
   function search(event: FormEvent) {
     event.preventDefault()
@@ -95,18 +101,12 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
                 </p>
               )}
               <p className="team-muted">
-                {run.attempt && !run.attempt.task.current && (
-                  <Link to={attemptPath(run.attempt)}>Open this run (from an earlier board)</Link>
-                )}
-                {run.attempt && !run.attempt.task.current && run.task && ' · '}
-                {run.task && (!run.attempt || run.attempt.task.current) && (
-                  <Link to={`/tasks/${encodeURIComponent(run.task.id)}`}>
-                    Task: {run.task.title}
-                  </Link>
-                )}
+                {run.attempt && <Link to={attemptPath(run.attempt)}>Open this run</Link>}
+                {run.attempt && run.task && ' · '}
+                {run.task && <span>Task: {run.task.title}</span>}
                 {run.task && run.brief && ' · '}
-                {run.brief && (
-                  <Link to={`/now/flow/${encodeURIComponent(run.brief.id)}`}>
+                {run.brief && briefHasRun(run.brief.id, orchestrations, workflows) && (
+                  <Link to={`/runs/${encodeURIComponent(run.brief.id)}`}>
                     Run: {run.brief.title}
                   </Link>
                 )}
@@ -117,7 +117,7 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
                 <Link
                   className="team-pill-button"
                   aria-label={`Replay ${run.title} in Watch`}
-                  to={`/now/watch/${encodeURIComponent(agentId)}?from=${run.replaySeq}`}
+                  to={`/watch/${encodeURIComponent(agentId)}?from=${run.replaySeq}`}
                 >
                   Replay in Watch
                 </Link>
