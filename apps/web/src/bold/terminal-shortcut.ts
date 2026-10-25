@@ -6,12 +6,18 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }
 
+/** xterm's hidden input: typing in the shell itself, where Ctrl+` still means "back out of the terminal". */
+function isTerminalInput(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
+}
+
 /**
- * Ctrl+` (Cmd+` on a Mac) opens the terminal or returns from it. The terminal's own xterm input is a textarea, so the
- * shortcut does not fire from inside the shell it controls; the Back button covers that.
+ * Ctrl+` (Cmd+` on a Mac) opens the terminal or returns from it, also from inside the shell (a shell has no use for
+ * it). Held keys and IME composition never toggle it; other text fields keep the keystroke.
  */
 export function isTerminalShortcut(event: KeyboardEvent): boolean {
+  if (event.repeat || event.isComposing) return false
   if (event.key !== '`' || event.altKey || event.shiftKey) return false
   if (!(event.ctrlKey || event.metaKey)) return false
-  return !isTypingTarget(event.target)
+  return isTerminalInput(event.target) || !isTypingTarget(event.target)
 }

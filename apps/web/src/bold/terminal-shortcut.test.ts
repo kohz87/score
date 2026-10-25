@@ -31,3 +31,22 @@ test('is ignored while typing in an input, textarea or editable element', () => 
   expect(press(editable, { ctrlKey: true })).toBe(false)
   editable.remove()
 })
+
+test('a held key or IME composition never toggles; inside the shell it still backs out', () => {
+  const base = { key: '`', ctrlKey: true }
+  expect(isTerminalShortcut(new KeyboardEvent('keydown', { ...base, repeat: true }))).toBe(false)
+  expect(isTerminalShortcut(new KeyboardEvent('keydown', { ...base, isComposing: true }))).toBe(
+    false,
+  )
+  const shell = document.createElement('textarea')
+  shell.className = 'xterm-helper-textarea'
+  document.body.append(shell)
+  const event = new KeyboardEvent('keydown', { ...base, bubbles: true })
+  let seen = false
+  shell.addEventListener('keydown', (e) => {
+    seen = isTerminalShortcut(e)
+  })
+  shell.dispatchEvent(event)
+  expect(seen).toBe(true)
+  shell.remove()
+})
