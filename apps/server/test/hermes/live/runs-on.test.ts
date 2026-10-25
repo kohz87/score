@@ -236,6 +236,21 @@ test('Docker options or mounts that hand over this machine make it "not separate
     { dockerExtraArgs: ['--mount', 'type=bind,source=/,target=/host'] },
     { dockerVolumes: ['/:/host:ro'] },
     { dockerVolumes: ['/home/me:/me'] },
+    // Phase-gate review (decision 121): parents of the home, its hidden folders, system paths, other containers.
+    { dockerVolumes: ['/home:/h'] },
+    { dockerVolumes: ['/home/me/.ssh:/keys:ro'] },
+    { dockerVolumes: ['~/.hermes:/hermes'] },
+    { dockerVolumes: ['/etc:/etc:ro'] },
+    { dockerVolumes: ['/proc:/host-proc'] },
+    { dockerExtraArgs: ['--mount', 'type=bind,src=/root,dst=/r'] },
+    { dockerExtraArgs: ['--privileged=1'] },
+    { dockerExtraArgs: ['--volumes-from', 'other'] },
+    // Normalized before checking: these all reach the home's keys or a system folder.
+    { dockerVolumes: ['/home/me/project/../.ssh:/k'] },
+    { dockerVolumes: ['/home/me/..:/h'] },
+    { dockerVolumes: ['/tmp/../etc:/e'] },
+    { dockerVolumes: ['//etc:/e'] },
+    { dockerVolumes: ['$HOME/.aws:/aws'] },
   ]) {
     const runsOn = describeRunsOn(docker(extra), me, '/home/me')
     expect(runsOn.separated, JSON.stringify(extra)).toBe('no')
@@ -247,6 +262,15 @@ test('Docker options or mounts that hand over this machine make it "not separate
     '/home/me',
   )
   expect(projects.separated).toBe('partly')
+  // An app's data under /var, a project under a root home, and a named volume stay "partly".
+  for (const volume of ['/var/lib/app:/data', '/var/www/site:/site', 'data:/data'])
+    expect(
+      describeRunsOn(docker({ dockerVolumes: [volume] }), me, '/home/me').separated,
+      volume,
+    ).toBe('partly')
+  expect(
+    describeRunsOn(docker({ dockerVolumes: ['/root/project:/w'] }), me, '/root').separated,
+  ).toBe('partly')
   // An explicit --network none wins over the docker_network setting.
   expect(
     describeRunsOn(docker({ dockerExtraArgs: ['--network=none'], dockerNetwork: true }), me).docker

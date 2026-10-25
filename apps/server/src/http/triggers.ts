@@ -26,6 +26,7 @@ import { startReportBack } from '../domain/triggers/report-back.ts'
 import { jobEvent } from '../domain/exchanges/store.ts'
 import { HOOK_PATH } from '../auth/remote.ts'
 import { HttpError } from '../errors.ts'
+import { assertJobOpen } from '../domain/exchanges/job-life.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { RateLimiter } from '../shares/rate-limit.ts'
 
@@ -86,10 +87,13 @@ export function registerTriggerRoutes(
       const raw = typeof request.body === 'string' ? request.body : ''
       // Checked before anything is queued. A failed call counts against its caller, never against the trigger's own
       // budget, so a stranger who knows the address can't use it up.
-      const caller = `${request.ip}:${triggerId}`
       try {
         db.read((sqlite) => verifyCall(sqlite, seal, triggerId, signed, raw, clock()))
       } catch (error) {
+        // Calls to trigger ids that don't exist share one bucket per address: spraying fresh random ids gets no fresh
+        // budget (and keeps the limiter's map small). A known trigger's failures stay per caller and trigger.
+        const unknown = error instanceof HttpError && error.status === 404
+        const caller = unknown ? `${request.ip}:unknown` : `${request.ip}:${triggerId}`
         if (!failures.allow(caller))
           throw new HttpError(429, 'rate_limited', 'Too many failed calls. Try again in a minute.')
         throw error
@@ -150,6 +154,8 @@ export function registerTriggerRoutes(
       source: 'triggers',
       identity: randomUUID(),
       apply: ({ sqlite }) => {
+        // Report-back starts a lead turn in the job: not in a closed or deleted one (decision 121).
+        assertJobOpen(sqlite, jobId)
         startReportBack(sqlite, jobId, new Date(clock()).toISOString())
         return jobEvent(sqlite, jobId)
       },

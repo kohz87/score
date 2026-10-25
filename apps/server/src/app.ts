@@ -39,6 +39,7 @@ import { registerOutsideSessionRoutes } from './http/outside-sessions.ts'
 import { registerShareRoutes } from './http/shares.ts'
 import { registerConversationRoutes } from './http/conversations.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
+import { registerTaskRoutes } from './http/tasks.ts'
 import { registerOrchestrationRoutes } from './http/orchestrations.ts'
 import { registerWorkflowRoutes } from './http/workflows.ts'
 import type { Orchestrator } from './domain/orchestration/executor.ts'
@@ -275,6 +276,7 @@ export function buildApp({
     registerMediaRoutes(app, mediaStore)
   }
   const workspaces = createAgentWorkspaces(port, config)
+  registerTaskRoutes(app, port, ingest, db, clock)
   registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
   // Start-up cleanups delete what the database doesn't name, so they only run against the home that database lives in:

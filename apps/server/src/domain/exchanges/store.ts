@@ -74,7 +74,7 @@ const ExchangeRowSchema = z.object({
 export type ExchangeRow = z.infer<typeof ExchangeRowSchema>
 
 /** What lists show about a job besides its row (PLAN 11.2): unread, who is busy, last activity, a one-line summary. */
-function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
+export function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
   const counts = sqlite
     .prepare(
       `SELECT count(*) AS n, MAX(m.created_at) AS last,
@@ -240,7 +240,7 @@ export function listJobs(sqlite: DatabaseSync, roomId: string): Job[] {
     .parse(
       sqlite
         .prepare(
-          "SELECT * FROM jobs WHERE room_id = ? AND state != 'closed' ORDER BY is_default DESC, created_at, id",
+          "SELECT * FROM jobs WHERE room_id = ? AND state != 'closed' AND deleted_at IS NULL ORDER BY is_default DESC, created_at, id",
         )
         .all(roomId),
     )
@@ -268,6 +268,10 @@ export const jobEvent = (sqlite: DatabaseSync, jobId: string): DomainEventDraft[
   const room = sqlite.prepare('SELECT role, routing FROM rooms WHERE id = ?').get(row.room_id) as
     { role: string; routing: string } | undefined
   if (room?.role === 'room' && room.routing === 'mentions') return []
+  // A deleted job was announced as gone (`job.deleted`); nothing brings it back but its restore.
+  const deleted = sqlite.prepare('SELECT deleted_at FROM jobs WHERE id = ?').get(jobId) as
+    { deleted_at: string | null } | undefined
+  if (deleted?.deleted_at) return []
   return [{ type: 'job.upserted', data: jobFromRow(sqlite, row) }]
 }
 export const exchangeEvent = (sqlite: DatabaseSync, id: string): DomainEventDraft[] => {
@@ -285,7 +289,8 @@ export function updateJob(
   const before = jobRow(sqlite, jobId)
   if (!before) return []
   const holder = change.holder ?? before.holder_agent_id
-  const state = change.state ?? before.state
+  // A closed job stays closed whatever settles in it afterwards (Stop, a late turn): only Reopen opens it.
+  const state = before.state === 'closed' ? 'closed' : (change.state ?? before.state)
   if (holder === before.holder_agent_id && state === before.state) return []
   sqlite
     .prepare(
