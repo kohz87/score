@@ -1182,3 +1182,23 @@ One entry per completed task: what landed, review results, and any **rejected re
   P2s; fix round (moved from DeepSeek to a Sonnet coder mid-round at the owner's request) — review 0 P1, 2 P2 (closed
   jobs raising report-back cards; a restore in flight wiping a newer Undo) fixed by the lead. Known: one workbench e2e
   flaky only in long multi-spec runs (passes alone) — checked in the release's full e2e. Not deployed.
+- **11.12c The new shell's seams (DeepSeek on ordeepseek → Sonnet coders → lead, 2026-10-25).** Decision 121. Needs-you
+  in an empty room, a protected count on the phone Room tab (shows what has loaded; a short count reads N+ or !, never a
+  confident 0), the agent page's needs-you line links to the room, a protected "Needs you — go live" chip during a
+  screen replay, one shared `approvalNeedsYou` (dock, strip, screen bar — which now waits on delivery and offers Retry),
+  the strip a labelled region with an always-mounted status announcing count growth, new agent messages announced
+  (newer than anything seen; debounced), Search → Library note via one-shot `?note=`/`?library=`, one Escape per layer,
+  params kept across navigations, bold links instead of retired classic ones, one label per state, one team-room read
+  (`teamRoomQuery`, Search fresh on open), dead code removed; first-run refetch after recipes are saved (product bug the
+  e2e found). Merge with 11.12b (Sonnet coder): the strip keeps 11.12c's structure and gains report-back and
+  blocked-task cards, all counted once by `use-needs-you`; 21 Settings theme baselines after 11.12b's new cards.
+  Reviews: build — 0 P1, P2s (first card not announced, Library twice) + P3s; fix round (moved to a Sonnet coder at the
+  owner's request) — P2s (badge confident 0 on a failed read, history announced as new) fixed by the lead; merge — clean
+  (closed jobs show in Search labelled Closed: kept, it's how one is found to reopen). Full e2e 856 passed / 0 failed;
+  full check green (contract 1496, web 2854, server 4726). Flakes seen once under full-suite load and passing in
+  isolation: themes-protection #6, chat-follow layout, bold-workbench screen bar. Not deployed.
+- **11.12 Phase gate (lead, 2026-10-25).** Decision 119: the lead's review instead of Gemini. Three Sonnet reviewers
+  over Phase 11 (server/boundary, new-shell seams, parity walk against §11 and the parity list) → decision 121 (owner:
+  fix all before release) → 11.12a (lead), 11.12b, 11.12c, each reviewed after every round. Deferred to the post-release
+  list (PLAN): Bot Screen (needs a design), Hermes v0.22.5 upgrade, P3 review items. Release v2.0.0 next; the owner
+  tests on live (no preview).
