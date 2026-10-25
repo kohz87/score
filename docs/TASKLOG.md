@@ -1248,3 +1248,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   live check found the only tool server is `score` (Score's own MCP entry) with a Remove button: 2.0.4 refuses
   `DELETE /api/settings/tool-servers/score` (409, names the agent page's Revoke) and hides its Remove. Sonnet review 0
   P1/P2 (wording nit fixed). pnpm check green (server 4748, web 2880, contract 1496); e2e remove/look/tools 12/12.
+- **v2.0.4 deployed live (2026-10-25 ~09:15 UTC):** backup score-pre-2.0.4-20261025.db, restart, 0 errors. Owner on live
+  2.0.3: "remove agent opened v1 agent screen which scroll all the way down and do nothing" — the 2.0.3 "Remove agent…"
+  only jumped to the classic Danger zone in More. 2.0.5 (Sonnet coder): a new-design remove panel in place on the agent
+  page (preview, blockers, typed name, progress; coding agents too), protected.
