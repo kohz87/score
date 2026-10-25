@@ -12,7 +12,10 @@ import {
 } from '../room/room-test-utils.tsx'
 import { BoldDirect, DirectHeaderActions, PrivacyNote } from './BoldDirect.tsx'
 
+let questionItems: unknown[] = []
+
 afterEach(() => {
+  questionItems = []
   disposeRoomTest()
   vi.unstubAllGlobals()
 })
@@ -61,6 +64,8 @@ function stub(chats = [newer, older]) {
         return jsonResponse(makeJob({ id: 'moved', roomId: teamRoom.id }), 201)
       return jsonResponse({ message: makeMessage({ id: 'posted' }) }, 201)
     }
+    if (url === '/api/questions?status=all')
+      return jsonResponse({ asOfSeq: 1, items: questionItems })
     if (url === '/api/agents/builder/direct')
       return jsonResponse({ asOfSeq: 1, room: chats.length ? directRoom : null, chats })
     if (url === '/api/team-room')
@@ -398,4 +403,44 @@ test('Clear chat shows the server’s 409 message verbatim', async () => {
   expect((await within(dialog).findByRole('alert')).textContent).toBe(
     'A message is still being written.',
   )
+})
+
+test('an open question is a card in the thread and an ended one a muted line where it was asked', async () => {
+  const asked = {
+    id: 'q-1',
+    agentId: 'builder',
+    runId: 'run-1',
+    roomId: directRoom.id,
+    jobId: 'chat-new',
+    question: 'Which port?',
+    options: ['8080', '9090'],
+    multiSelect: false,
+    status: 'pending',
+    answer: null,
+    answeredBy: null,
+    delivery: 'none',
+    createdAt: '2026-10-24T11:13:30.000Z',
+    expiresAt: null,
+    answeredAt: null,
+  }
+  questionItems = [
+    asked,
+    {
+      ...asked,
+      id: 'q-0',
+      question: 'Keep the cursor?',
+      status: 'answered',
+      answer: 'Yes',
+      answeredBy: 'you',
+      delivery: 'applied',
+      createdAt: '2026-10-24T11:12:30.000Z',
+    },
+  ]
+  stub()
+  renderDirect()
+  const card = await screen.findByRole('region', { name: 'builder asks' })
+  expect(card.getAttribute('data-protected')).toBe('flex')
+  expect(within(card).getByRole('button', { name: '9090' })).toBeTruthy()
+  const note = await screen.findByText(/builder asked: Keep the cursor\?/)
+  expect(note.textContent).toContain('you answered: Yes')
 })

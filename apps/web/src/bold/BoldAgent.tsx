@@ -16,6 +16,7 @@ import type { AgentFileName } from '../routes/team/file-queries.ts'
 import { useAgentPause } from '../routes/watch/watch-queries.ts'
 import { agentDisplayName, agentMood, agentStateLabel } from './bold-agents.ts'
 import { pairingProblem } from './bold-errors.ts'
+import { questionNeedsYou, questionsQuery } from '../data/question-queries.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import '../routes/team/team.css'
 import '../components/todo.css'
@@ -141,6 +142,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const detail = useAgentDetail(agentId)
   const agents = useStreamQuery(agentsQuery)
   const approvals = useStreamQuery(approvalsQuery).data ?? []
+  const questions = useStreamQuery(questionsQuery).data ?? []
   const location = useLocation()
   const [search] = useSearchParams()
   const [file, setFile] = useState<AgentFileName>('SOUL.md')
@@ -192,9 +194,9 @@ function AgentProfile({ agentId }: { agentId: string }) {
   // The server can commit a pause and still answer with an error. While that error shows, the button repeats the
   // action that failed, whatever the status says now (the classic header's rule).
   const failed = pause.isError ? pause.variables : null
-  const needsYou = approvals.some(
-    (approval) => approval.agentId === agent.id && approvalNeedsYou(approval),
-  )
+  const needsYou =
+    approvals.some((approval) => approval.agentId === agent.id && approvalNeedsYou(approval)) ||
+    questions.some((question) => question.agentId === agent.id && questionNeedsYou(question))
   const inFlight =
     agent.lifecycle?.state === 'setting_up' ||
     agent.lifecycle?.state === 'needs_attention' ||

@@ -32,6 +32,8 @@ import {
   retryableIds,
   type BranchSelection,
 } from '../room/BoldMessage.tsx'
+import { questionNeedsYou, questionsQuery } from '../../data/question-queries.ts'
+import { QuestionCard, QuestionNote, useQuestionAnnouncement } from '../room/QuestionCard.tsx'
 import { beginJobUndo } from '../room/job-undo.ts'
 import { ChatMenu, ClearChatDialog, DeleteChatDialog } from '../room/RoomMenus.tsx'
 import { changeCachedJob, roomMessagesQuery } from '../room/room-queries.ts'
@@ -833,6 +835,29 @@ function DirectConversation({
   const finishedReplies = items.filter(
     (message) => message.author.kind === 'agent' && !message.streaming,
   ).length
+  // This agent's questions in this one-to-one room (decision 128): the open ones are cards in the thread, the ended
+  // ones muted lines where they were asked.
+  const questionList = useStreamQuery(questionsQuery)
+  const roomQuestionsAll = (questionList.data ?? []).filter(
+    (question) => question.roomId === room.id && question.agentId === agent.id,
+  )
+  const pendingQuestions = roomQuestionsAll
+    .filter(questionNeedsYou)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const questionNotes = roomQuestionsAll
+    .filter((question) => !questionNeedsYou(question))
+    .filter((question) => question.jobId === null || question.jobId === chat.id)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((question) => ({
+      id: question.id,
+      at: question.createdAt,
+      node: <QuestionNote question={question} agents={agents} />,
+    }))
+  const questionAnnouncement = useQuestionAnnouncement(
+    pendingQuestions,
+    questionList.status === 'success',
+    agents,
+  )
   const sessionId = `score-${room.id}-${chat.id}-${agent.id}`
 
   function prefill(text: string) {
@@ -926,6 +951,11 @@ function DirectConversation({
               showDeleted,
               branch: view?.chatId === chat.id ? view : null,
               onlyJobId: chat.id,
+              notes: {
+                items: questionNotes,
+                used: new Set<string>(),
+                tail: true,
+              },
               onBranchSelect: (messageId, version) =>
                 setView(version ? { messageId, version, chatId: chat.id } : null),
               renderMessage: (message) => (
@@ -985,6 +1015,12 @@ function DirectConversation({
               {tools.pinError}
             </p>
           )}
+          <span className="bold-sr-only" role="status">
+            {questionAnnouncement}
+          </span>
+          {pendingQuestions.map((question) => (
+            <QuestionCard key={question.id} question={question} agent={agent} />
+          ))}
           {Object.entries(page.data?.typing ?? {}).map(([agentId, text]) => (
             <p className="bold-dm-typing" key={agentId} role="status">
               <AgentGlyph

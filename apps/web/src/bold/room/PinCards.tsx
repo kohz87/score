@@ -59,6 +59,7 @@ export function PinCard({
   notice = false,
   label,
   variant,
+  region = false,
   children,
 }: {
   pinKey: string
@@ -66,7 +67,9 @@ export function PinCard({
   notice?: boolean
   label: string
   /** Extra class beside the base one, e.g. `approval` gives `bold-approval`. */
-  variant?: 'approval' | 'run-request'
+  variant?: 'approval' | 'run-request' | 'question'
+  /** The card is its own labelled region and `label` is the whole name (an agent's question: "builder asks"). */
+  region?: boolean
   children: ReactNode
 }) {
   const context = useContext(PinsContext)
@@ -84,7 +87,8 @@ export function PinCard({
       data-pin-rank={rank}
       tabIndex={-1}
       style={rank === undefined ? undefined : { order: rank }}
-      aria-label={`Needs you: ${label}`}
+      role={region ? 'region' : undefined}
+      aria-label={region ? label : `Needs you: ${label}`}
     >
       {children}
     </article>
