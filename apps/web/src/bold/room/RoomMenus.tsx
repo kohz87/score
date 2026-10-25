@@ -256,7 +256,10 @@ export function RoomSwitcher({
                     · {session.sourceLabel}
                   </b>
                   <span className="small muted bold-menu-preview">
-                    <span className="bold-menu-preview-title">
+                    <span
+                      className="bold-menu-preview-title"
+                      title={session.title || 'Untitled session'}
+                    >
                       {session.title || 'Untitled session'}
                     </span>
                     <span className="bold-menu-preview-count">

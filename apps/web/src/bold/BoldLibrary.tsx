@@ -108,6 +108,20 @@ export function BoldLibrary({
   openPath?: string | null
 }) {
   const phone = useMediaQuery(PHONE)
+  // The panel's width picks the layout (rail ≥ 1180, two-column panels ≥ 860): measured, since a CSS container would
+  // also contain the editor's fixed dialogs and upload toast.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState<'narrow' | 'mid' | 'wide'>('narrow')
+  useEffect(() => {
+    const element = rootRef.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => {
+      const size = entry?.contentRect.width ?? 0
+      setWidth(size >= 1180 ? 'wide' : size >= 860 ? 'mid' : 'narrow')
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
   const info = useKnowledgeInfo()
   const tree = useKnowledgeTree()
   const actions = useKnowledgeActions()
@@ -266,8 +280,10 @@ export function BoldLibrary({
 
   return (
     <div
+      ref={rootRef}
       className={`sidebody bold-library${dragging ? ' is-dragging' : ''}`}
       data-testid="bold-library"
+      data-width={width}
       hidden={hidden}
       onDragOver={(event) => {
         if (!filesInDrag(event)) return
