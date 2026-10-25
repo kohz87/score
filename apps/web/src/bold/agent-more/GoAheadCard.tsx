@@ -5,7 +5,7 @@ import {
   useUseTeamRule,
 } from '../../routes/settings/rules-queries.ts'
 import { tabFailure } from '../../routes/team/tab-errors.ts'
-import { Fail, MoreCard, problem } from './MoreCard.tsx'
+import { Fail, MoreCard, problem, useFoldedList } from './MoreCard.tsx'
 
 /**
  * What the agent may do without asking, so a standing go-ahead can be taken back here. "Ask first" changes only this
@@ -20,6 +20,8 @@ export function GoAheadCard({ agent }: { agent: AgentDetail }) {
   const takenBack = (rules.data?.goAhead ?? []).filter(
     (rule) => !rule.readOnly && !goAhead.some((row) => row.id === rule.id),
   )
+  const list = useFoldedList(`goahead:${agent.id}`, goAhead)
+  const back2 = useFoldedList(`goahead-back:${agent.id}`, takenBack)
   const busy = change.isPending || back.isPending
   return (
     <MoreCard
@@ -39,39 +41,45 @@ export function GoAheadCard({ agent }: { agent: AgentDetail }) {
           Nothing is allowed without asking. Risky commands follow the team’s approval style.
         </p>
       )}
-      {goAhead.map((row) => (
-        <div className="listrow wrap" key={row.id}>
-          <span className="grow small">
-            {row.label}{' '}
-            <span className="muted">{row.inherited ? 'From the team' : 'Only this agent'}</span>
-          </span>
-          <button
-            type="button"
-            className="act"
-            disabled={busy}
-            aria-label={`Ask first before: ${row.label}`}
-            onClick={() => change.mutate({ id: row.id, level: 'asks' })}
-          >
-            Ask first
-          </button>
-        </div>
-      ))}
-      {takenBack.map((rule) => (
-        <div className="listrow wrap" key={rule.id}>
-          <span className="grow small">
-            {rule.label} <span className="muted">Only this agent asks first</span>
-          </span>
-          <button
-            type="button"
-            className="act"
-            disabled={busy}
-            aria-label={`Use team rule: ${rule.label}`}
-            onClick={() => back.mutate(rule.id)}
-          >
-            Use team rule
-          </button>
-        </div>
-      ))}
+      <div id={list.id} className="bold-fold-list">
+        {list.shown.map((row) => (
+          <div className="listrow wrap" key={row.id}>
+            <span className="grow small">
+              {row.label}{' '}
+              <span className="muted">{row.inherited ? 'From the team' : 'Only this agent'}</span>
+            </span>
+            <button
+              type="button"
+              className="act"
+              disabled={busy}
+              aria-label={`Ask first before: ${row.label}`}
+              onClick={() => change.mutate({ id: row.id, level: 'asks' })}
+            >
+              Ask first
+            </button>
+          </div>
+        ))}
+      </div>
+      {list.toggle}
+      <div id={back2.id} className="bold-fold-list">
+        {back2.shown.map((rule) => (
+          <div className="listrow wrap" key={rule.id}>
+            <span className="grow small">
+              {rule.label} <span className="muted">Only this agent asks first</span>
+            </span>
+            <button
+              type="button"
+              className="act"
+              disabled={busy}
+              aria-label={`Use team rule: ${rule.label}`}
+              onClick={() => back.mutate(rule.id)}
+            >
+              Use team rule
+            </button>
+          </div>
+        ))}
+      </div>
+      {back2.toggle}
     </MoreCard>
   )
 }

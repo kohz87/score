@@ -39,19 +39,26 @@ const posts = () =>
   fetchMock.mock.calls.filter(
     ([input, init]) => init?.method === 'POST' && String(input).endsWith('/messages'),
   )
-// Since 5.33 a correction first confirms the rewind; the send under test happens after that.
+// Since 2.0.12 a correction rewinds on Send by itself when every agent can be rewound (the dialog only when not).
 async function sendCorrection() {
   fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
-  const confirm = await screen.findByRole('button', { name: 'Rewind and edit' })
-  // Enabled once the rewind plan has loaded.
-  await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false))
-  fireEvent.click(confirm)
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) => String(input).endsWith('/rewind') && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  )
 }
+let plan: { hiddenCount: number; blocked: string | null; agents: unknown[] }
+let shares: Record<string, unknown>[] = []
 
 beforeEach(() => {
   localStorage.clear()
   stopEdit()
   finishPost = null
+  plan = { hiddenCount: 1, blocked: null, agents: [{ agentId: 'lead', turns: 1, cannot: null }] }
+  shares = []
   queryClient = createQueryClient()
   queryClient.setQueryData(messagesQuery('general').key, {
     asOfSeq: 1,
@@ -59,12 +66,8 @@ beforeEach(() => {
   })
   fetchMock = vi.fn(async (input, init) => {
     if (String(input) === '/api/commands') return json({ items: [] })
-    if (String(input).endsWith('/rewind-plan'))
-      return json({
-        hiddenCount: 1,
-        blocked: null,
-        agents: [{ agentId: 'lead', turns: 1, cannot: null }],
-      })
+    if (String(input).endsWith('/rewind-plan')) return json(plan)
+    if (String(input).endsWith('/shares')) return json({ items: shares })
     if (String(input).endsWith('/rewind'))
       return json({
         version: {
@@ -165,5 +168,79 @@ test('a resumed edit whose rewind already happened posts the correction without 
   await waitFor(() => expect(posts()).toHaveLength(1))
   expect(screen.queryByRole('button', { name: 'Rewind and edit' })).toBeNull()
   expect(JSON.parse(String(posts()[0]![1]!.body))).toMatchObject({ edits: 'a' })
+  await act(async () => finishPost?.())
+})
+
+test('a correction rewinds and sends without a dialog when every agent can be rewound (2.0.12)', async () => {
+  act(() => startEdit(mine('a', 'text A')))
+  await sendCorrection()
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  expect(screen.queryByRole('button', { name: 'Rewind and edit' })).toBeNull()
+  const rewinds = fetchMock.mock.calls.filter(
+    ([input, init]) => String(input).endsWith('/rewind') && init?.method === 'POST',
+  )
+  expect(rewinds).toHaveLength(1)
+  // The rewind comes before the correction.
+  const order = fetchMock.mock.calls.map(([input]) => String(input))
+  expect(order.findIndex((url) => url.endsWith('/rewind'))).toBeLessThan(
+    order.findIndex((url) => url.endsWith('/messages')),
+  )
+  await act(async () => finishPost?.())
+})
+
+test('the dialog explains when an agent can’t be rewound or work is still running, and nothing is sent', async () => {
+  plan = {
+    hiddenCount: 1,
+    blocked: null,
+    agents: [{ agentId: 'lead', turns: 1, cannot: 'compressed' }],
+  }
+  act(() => startEdit(mine('a', 'text A')))
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  expect(await screen.findByRole('button', { name: 'Hide in Score only' })).toBeTruthy()
+  expect(posts()).toHaveLength(0)
+  expect(
+    fetchMock.mock.calls.some(
+      ([input, init]) => String(input).endsWith('/rewind') && init?.method === 'POST',
+    ),
+  ).toBe(false)
+})
+
+test('a live share link sends the edit through the dialog, which offers to revoke it', async () => {
+  shares = [
+    {
+      id: 's1',
+      roomId: 'general',
+      roomName: 'general',
+      createdAt: '2026-10-09T10:00:00.000Z',
+      expiresAt: '2026-11-09T10:00:00.000Z',
+      views: 0,
+      includeImages: false,
+      status: 'active',
+      roomChanged: false,
+    },
+  ]
+  act(() => startEdit(mine('a', 'text A')))
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  expect(await screen.findByRole('button', { name: 'Rewind and edit' })).toBeTruthy()
+  expect(posts()).toHaveLength(0)
+})
+
+test('Cancel is off while Send is rewinding, and back once the correction is being posted', async () => {
+  let release: (() => void) | null = null
+  const base = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input).endsWith('/rewind-plan'))
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+    return base(input, init)
+  })
+  act(() => startEdit(mine('a', 'text A')))
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  await waitFor(() => expect(release).not.toBeNull())
+  expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(true)
+  await act(async () => release?.())
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(false)
   await act(async () => finishPost?.())
 })

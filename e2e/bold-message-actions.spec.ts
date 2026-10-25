@@ -84,15 +84,13 @@ for (const { name, viewport, agent } of sizes) {
       await mine.getByRole('button', { name: 'Pin message from You' }).click()
       await expect(mine.getByRole('button', { name: 'Unpin message from You' })).toBeVisible()
 
-      // Edit: the message loads into this chat's composer, the rewind is confirmed, the correction replaces it.
+      // Edit: the message loads into this chat's composer; on Send the rewind happens and the correction replaces it.
       await mine.getByRole('button', { name: 'Edit message from You' }).click()
       const composer = side(page).getByPlaceholder(`Message ${agent} privately`)
       await expect(composer).toHaveValue(`First ${tag}`)
       await composer.fill(`Corrected ${tag}`)
       await side(page).getByRole('button', { name: 'Send correction', exact: true }).click()
-      const dialog = page.getByRole('dialog', { name: 'Edit and send again?' })
-      await expect(dialog).toBeVisible()
-      await dialog.getByRole('button', { name: 'Rewind and edit' }).click()
+      // 2.0.12: Send rewinds and posts by itself when every agent can be rewound.
       await expect(
         side(page).locator('.bold-dm-message', { hasText: `Corrected ${tag}` }),
       ).toBeVisible({

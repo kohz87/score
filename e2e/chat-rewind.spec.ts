@@ -75,9 +75,8 @@ test('Edit rewinds, then the correction shows ‹ 2 / 2 › and the original is 
   const composer = page.getByRole('combobox', { name: /^Message/ })
   await composer.fill(fixed)
   await composer.press('Enter')
-  const dialog = page.getByRole('dialog', { name: 'Edit and send again?' })
-  await expect(dialog.getByText(/Agents rewound:.*lead −\d+ exchanges?/)).toBeVisible()
-  await dialog.getByRole('button', { name: 'Rewind and edit' }).click()
+  // 2.0.12: every agent can be rewound, so Send rewinds and posts without a dialog.
+  await expect(page.getByRole('dialog', { name: 'Edit and send again?' })).toHaveCount(0)
   const corrected = history
     .getByRole('article', { name: /Message from You/ })
     .filter({ hasText: fixed })

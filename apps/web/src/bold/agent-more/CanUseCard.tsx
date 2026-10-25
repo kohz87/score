@@ -7,7 +7,7 @@ import {
 } from '../../routes/team/knowledge-access-queries.ts'
 import { tabFailure } from '../../routes/team/tab-errors.ts'
 import { boldSettingsSectionLink } from '../bold-links.ts'
-import { Fail, MoreCard } from './MoreCard.tsx'
+import { Fail, MoreCard, useFoldedList } from './MoreCard.tsx'
 
 export function CanUseCard({ agent, coding }: { agent: AgentDetail; coding: boolean }) {
   const change = useToolAction(agent.id)
@@ -15,6 +15,7 @@ export function CanUseCard({ agent, coding }: { agent: AgentDetail; coding: bool
   const setKnowledge = useSetKnowledgeAccess(agent.id)
   const servers = agent.tools.filter((tool) => tool.kind === 'mcp')
   const builtin = agent.tools.filter((tool) => tool.kind === 'builtin')
+  const list = useFoldedList(`tools:${agent.id}`, builtin, 8)
   return (
     <MoreCard id="agent-tools" title="Can use">
       {!builtin.length && (
@@ -25,17 +26,20 @@ export function CanUseCard({ agent, coding }: { agent: AgentDetail; coding: bool
         </p>
       )}
       {change.isError && <Fail>{tabFailure(change.error, 'change the tool')}</Fail>}
-      {builtin.map((tool) => (
-        <label className="check" key={tool.id}>
-          <input
-            type="checkbox"
-            checked={tool.enabled}
-            disabled={change.isPending}
-            onChange={() => change.mutate({ id: tool.id, enabled: !tool.enabled })}
-          />
-          {tool.label}
-        </label>
-      ))}
+      <div id={list.id} className="bold-fold-list">
+        {list.shown.map((tool) => (
+          <label className="check" key={tool.id}>
+            <input
+              type="checkbox"
+              checked={tool.enabled}
+              disabled={change.isPending}
+              onChange={() => change.mutate({ id: tool.id, enabled: !tool.enabled })}
+            />
+            {tool.label}
+          </label>
+        ))}
+      </div>
+      {list.toggle}
       {!coding && !knowledge.isError && (
         <label className="check">
           <input

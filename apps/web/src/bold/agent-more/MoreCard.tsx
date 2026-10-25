@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { ApiError } from '../../data/api.ts'
 
 /** The server's own sentence when it sent one (pairing aside), else the card's fallback. */
@@ -60,3 +60,60 @@ export const Loading = ({ what }: { what: string }) => (
     Loading {what}…
   </p>
 )
+
+/* Folding long cards (2.0.12). Expanded state lives for the page session only. */
+const expandedKeys = new Set<string>()
+
+function useExpanded(key: string): [boolean, () => void] {
+  const [open, setOpen] = useState(() => expandedKeys.has(key))
+  return [
+    open,
+    () => {
+      if (expandedKeys.has(key)) expandedKeys.delete(key)
+      else expandedKeys.add(key)
+      setOpen((value) => !value)
+    },
+  ]
+}
+
+function FoldButton({
+  open,
+  controls,
+  all,
+  onClick,
+}: {
+  open: boolean
+  controls: string
+  all: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="bold-fold-btn"
+      aria-expanded={open}
+      aria-controls={controls}
+      onClick={onClick}
+    >
+      {open ? 'Show less' : all}
+    </button>
+  )
+}
+
+/** Fold a long list by count: the first `limit` rows, then "Show all N". Inputs and decision buttons go outside. */
+export function useFoldedList<T>(
+  key: string,
+  items: T[],
+  limit = 6,
+): { shown: T[]; toggle: ReactNode; id: string } {
+  const [open, flip] = useExpanded(key)
+  const id = useId()
+  const folds = items.length > limit
+  return {
+    shown: folds && !open ? items.slice(0, limit) : items,
+    id,
+    toggle: folds ? (
+      <FoldButton open={open} controls={id} all={`Show all ${items.length}`} onClick={flip} />
+    ) : null,
+  }
+}

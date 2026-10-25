@@ -12,6 +12,20 @@ export function useAllShares() {
     queryFn: async () => SharesResponseSchema.parse(await apiFetch('shares')).items,
   })
 }
+/** Whether the room has a live share link, read now (an edit checks it before it rewinds by itself). */
+export async function roomHasLiveShare(
+  client: ReturnType<typeof useQueryClient>,
+  roomId: string,
+): Promise<boolean> {
+  const items = await client.fetchQuery({
+    queryKey: roomKey(roomId),
+    queryFn: async () =>
+      SharesResponseSchema.parse(await apiFetch(`rooms/${encodeURIComponent(roomId)}/shares`))
+        .items,
+    staleTime: 0,
+  })
+  return items.some((share) => share.status === 'active')
+}
 export function useRoomShares(roomId: string) {
   return useQuery({
     queryKey: roomKey(roomId),
