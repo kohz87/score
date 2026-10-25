@@ -63,6 +63,22 @@ test('New chat posts an idempotent chat create and validates the created job', a
   expect(await createDirectChat('builder')).toMatchObject({ id: 'chat-made', title: 'New chat' })
 })
 
+test('a deleted direct chat leaves the history at once', () => {
+  const definition = directChatsQuery('builder')
+  const older = chat('chat-old', 'Old', '2026-10-20T10:00:00.000Z')
+  const newer = chat('chat-new', 'New', '2026-10-24T10:00:00.000Z')
+  const next = definition.reduce(
+    { room: directRoom, chats: [older, newer] },
+    {
+      seq: 4,
+      ts: '2026-10-24T10:02:00.000Z',
+      type: 'job.deleted',
+      data: { id: 'chat-new', roomId: directRoom.id },
+    },
+  )
+  expect(next.chats.map((item) => item.id)).toEqual(['chat-old'])
+})
+
 test('Share sends the chosen team-room job and starts no turn of its own', async () => {
   const fetchMock = mockFetch((url, init) => {
     expect(url).toBe('/api/messages/message-1/share')

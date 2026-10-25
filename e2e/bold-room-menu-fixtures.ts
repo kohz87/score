@@ -1,5 +1,5 @@
 import { expect, type Page, type Route } from '@playwright/test'
-import { mockBoldRoom, type RoomRequest } from './bold-room-fixtures.ts'
+import { mockBoldRoom, type BoldRoomReply, type RoomRequest } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 
 type Json = Record<string, unknown>
@@ -89,6 +89,7 @@ const notesJob = job('job-notes', team.id, 'Release notes 2.4', {
   holderAgentId: 'lead',
   unread: 3,
 })
+const closedJob = job('job-closed', team.id, 'Old import', { state: 'closed' })
 const oldJob = job('job-old', older.id, older.name, { isDefault: true, holderAgentId: null })
 
 const oldMessage = {
@@ -149,7 +150,15 @@ function response(route: Route, body: unknown, status = 200) {
 }
 
 /** The 11.4d room data on top of the stable bold-room fixture: an older room, Elsewhere and the menu endpoints. */
-export async function mockRoomMenus(page: Page, options: { failShare?: number } = {}) {
+export async function mockRoomMenus(
+  page: Page,
+  options: {
+    failShare?: number
+    handle?: (
+      request: RoomRequest,
+    ) => BoldRoomReply | undefined | Promise<BoldRoomReply | undefined>
+  } = {},
+) {
   const requests: RoomRequest[] = []
   const receipts = new Map<string, { status: number; body: unknown }>()
   let createdJob: Json | null = null
@@ -171,6 +180,15 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
       }
     }
     requests.push({ method, path, search: url.searchParams, body, headers: request.headers() })
+
+    const handled = await options.handle?.({
+      method,
+      path,
+      search: url.searchParams,
+      body,
+      headers: request.headers(),
+    })
+    if (handled) return response(route, handled.body, handled.status)
 
     const idempotencyKey = request.headers()['idempotency-key']
     if (method === 'POST' && idempotencyKey) {
@@ -268,7 +286,13 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
       return response(route, {
         // A newer snapshot once the job exists, as the real server's sequence would be.
         asOfSeq: createdJob ? 13 : 12,
-        items: [defaultTeamJob, activityJob, notesJob, ...(createdJob ? [createdJob] : [])],
+        items: [
+          defaultTeamJob,
+          activityJob,
+          notesJob,
+          ...(url.searchParams.get('closed') === 'include' ? [closedJob] : []),
+          ...(createdJob ? [createdJob] : []),
+        ],
       })
     if (method === 'POST' && path === `/api/rooms/${team.id}/jobs`) {
       const payload = (typeof body === 'object' && body !== null ? body : {}) as Json
@@ -326,7 +350,15 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
   return { requests }
 }
 
-export async function openMenuRoom(page: Page, options: { failShare?: number } = {}) {
+export async function openMenuRoom(
+  page: Page,
+  options: {
+    failShare?: number
+    handle?: (
+      request: RoomRequest,
+    ) => BoldRoomReply | undefined | Promise<BoldRoomReply | undefined>
+  } = {},
+) {
   await pair(page)
   const base = await mockBoldRoom(page)
   const menu = await mockRoomMenus(page, options)

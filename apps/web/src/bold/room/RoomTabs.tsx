@@ -34,7 +34,10 @@ export function RoomTabs({
   const visible = named.filter((job) => jobMatchesFilter(job, filter))
   const selected = named.find((job) => job.id === selectedJob)
   // The default job is the unlabelled bin for new work; its unread count would duplicate what All already shows.
-  const allUnread = named.reduce((total, job) => total + (job.unread ?? 0), 0)
+  const allUnread = named.reduce(
+    (total, job) => total + (job.state === 'closed' ? 0 : (job.unread ?? 0)),
+    0,
+  )
   return (
     <div className="bold-room-tabs">
       <div className="bold-job-tabs" role="tablist" aria-label="Jobs">

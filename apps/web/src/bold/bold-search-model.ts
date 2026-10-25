@@ -1,4 +1,10 @@
-import type { AgentSummary, Job, KnowledgeAuthor, MessageSearchHit } from '@score/contract'
+import type {
+  AgentSummary,
+  Job,
+  KnowledgeAuthor,
+  MessageSearchHit,
+  RoutineSummary,
+} from '@score/contract'
 
 export type BoldSearchCommand = { name: string; usage: string; description: string }
 
@@ -48,6 +54,12 @@ export type BoldSearchResult =
   | (ResultBase & { kind: 'action'; action: BoldSearchAction })
   | (ResultBase & { kind: 'setting'; sectionId: string })
   | (ResultBase & { kind: 'command'; name: string })
+  | (ResultBase & {
+      kind: 'routine'
+      agentId: string
+      routineId: string
+      schedule: string
+    })
 
 export type BoldSearchGroup = { key: string; label: string; items: BoldSearchResult[] }
 
@@ -58,6 +70,8 @@ export type BoldSearchNote = {
   snippet?: string
 }
 
+export type BoldSearchRoutine = RoutineSummary & { agentId: string }
+
 export type BoldSearchInput = {
   query: string
   agents: readonly AgentSummary[]
@@ -65,6 +79,7 @@ export type BoldSearchInput = {
   roomName: string
   directChats: readonly { agentId: string; chats: readonly Job[] }[]
   notes: readonly BoldSearchNote[]
+  routines: readonly BoldSearchRoutine[]
   messages: readonly MessageSearchHit[]
   commands: readonly BoldSearchCommand[]
   paused: boolean | null
@@ -208,6 +223,19 @@ export function buildBoldSearchGroups(input: BoldSearchInput): BoldSearchGroup[]
         }))
     : []
 
+  // A repeating job lives on its agent's Team page, under More › Routines (11.12b): the result opens that anchor.
+  const routines: BoldSearchResult[] = input.routines
+    .filter((routine) => matches(query, routine.title, routine.description, routine.schedule))
+    .map((routine) => ({
+      kind: 'routine',
+      id: `routine:${routine.agentId}:${routine.id}`,
+      title: routine.title,
+      hint: `${routine.agentId} · ${routine.schedule}${routine.enabled ? '' : ' · paused'}`,
+      agentId: routine.agentId,
+      routineId: routine.id,
+      schedule: routine.schedule,
+    }))
+
   const candidates: BoldSearchResult[] = [
     {
       kind: 'action',
@@ -278,6 +306,7 @@ export function buildBoldSearchGroups(input: BoldSearchInput): BoldSearchGroup[]
 
   const groups: BoldSearchGroup[] = [
     { key: 'jobs', label: 'Jobs', items: jobs },
+    { key: 'routines', label: 'Routines', items: routines },
     { key: 'chats', label: 'One-to-one chats', items: chats },
     { key: 'notes', label: 'Library', items: notes },
     { key: 'messages', label: 'Messages', items: messages },

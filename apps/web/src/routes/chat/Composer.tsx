@@ -71,6 +71,7 @@ type Notice =
       text: string
       heldAgent?: string
       action?: { label: string; to: string }
+      retry?: { label: string; run: () => void }
     }
   | { kind: 'info'; text: string }
   | { kind: 'result'; command: CommandResult | null }
@@ -115,6 +116,7 @@ export function Composer({
   references = [],
   draftScope,
   resolveJob,
+  onClosedJob,
 }: {
   roomId: string
   roomName: string
@@ -144,6 +146,8 @@ export function Composer({
   draftScope?: string
   /** Makes the job this message goes into on first send (a one-to-one that is only created by its first message). */
   resolveJob?: () => Promise<string>
+  /** The bold room reopens a job the server refused as closed, then sends the same message into it. */
+  onClosedJob?: (jobId: string) => Promise<void>
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -158,6 +162,7 @@ export function Composer({
   const [closed, setClosed] = useState(false)
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const latestSend = useRef<(force?: boolean) => Promise<void>>(async () => {})
   // "Also save to Knowledge" (PLAN 6.6): mediaId -> folder for attachments the person chose to keep.
   const [saveTo, setSaveTo] = useState<Record<string, string>>({})
   const knowledgeFlow = useUploadFlow((summary) => {
@@ -502,9 +507,11 @@ export function Composer({
     }
   }
 
-  async function send() {
+  async function send(force = false) {
     const body = text.trim()
-    if (!body || pending || uploading) return
+    // Reopen resends through the closure captured before the failed send; only that retry may bypass its stale
+    // `pending` flag (the request it belonged to has already failed).
+    if (!body || (pending && !force) || uploading) return
     const orchestration =
       orchestrate && !editing ? /^\/orchestrate(?:\s+([\s\S]*))?$/i.exec(body) : null
     if (orchestrate && orchestration) {
@@ -635,10 +642,45 @@ export function Composer({
           ? (error.details as { agentId?: unknown } | undefined)?.agentId
           : undefined
       const noLead = error instanceof ApiError && error.code === 'no_lead'
+      const jobClosed =
+        error instanceof ApiError &&
+        error.status === 409 &&
+        Boolean(sentJobId) &&
+        Boolean(onClosedJob) &&
+        /job is closed/i.test(error.message)
       setNotice({
         kind: 'error',
-        text: noLead ? 'No lead yet — use @name, or pick a lead in Settings.' : errorText(error),
+        text: jobClosed
+          ? 'This job is closed. Reopen it to write in it.'
+          : noLead
+            ? 'No lead yet — use @name, or pick a lead in Settings.'
+            : errorText(error),
         ...(typeof held === 'string' ? { heldAgent: held } : {}),
+        ...(jobClosed && sentJobId && onClosedJob
+          ? {
+              retry: {
+                label: 'Reopen',
+                run: () => {
+                  void (async () => {
+                    setPending(true)
+                    setNotice(null)
+                    try {
+                      await onClosedJob(sentJobId)
+                    } catch {
+                      setNotice({
+                        kind: 'error',
+                        text: 'Couldn’t reopen this job. Try again.',
+                      })
+                      setPending(false)
+                      return
+                    }
+                    setPending(false)
+                    await latestSend.current(true)
+                  })()
+                },
+              },
+            }
+          : {}),
         // Only the new shell's room links into it; the classic chat keeps the plain sentence.
         ...(noLead && roomMode ? { action: { label: 'Pick a lead', to: '/b/settings' } } : {}),
       })
@@ -677,6 +719,10 @@ export function Composer({
         folder,
       )
   }
+
+  useEffect(() => {
+    latestSend.current = send
+  })
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.nativeEvent.isComposing) return
@@ -731,6 +777,19 @@ export function Composer({
                   <Link className="link" to={notice.action.to}>
                     {notice.action.label}
                   </Link>
+                </>
+              )}
+              {notice.kind === 'error' && notice.retry && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={pending}
+                    onClick={notice.retry.run}
+                  >
+                    {notice.retry.label}
+                  </button>
                 </>
               )}
             </span>

@@ -1,5 +1,5 @@
-import type { Approval, Exchange } from '@score/contract'
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import type { Approval, Exchange, TaskSummary } from '@score/contract'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { approvalsQuery } from '../../routes/chat/queries.ts'
 import {
@@ -9,16 +9,20 @@ import {
   makeExchange,
   makeJob,
   makeMessage,
+  makeTask,
   mockFetch,
   renderInRoom,
 } from './room-test-utils.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
 import { roomExchangesQuery } from './room-queries.ts'
 import { fenceKey } from '../../routes/orchestrations/orchestration-queries.ts'
+import { roomTasksQuery } from './task-queries.ts'
+import { resetReportBackStore } from './report-back-store.ts'
 
 afterEach(() => {
   disposeRoomTest()
   vi.unstubAllGlobals()
+  resetReportBackStore()
 })
 
 const approval: Approval = {
@@ -67,6 +71,7 @@ function stubRoom(
   decided = approval,
   decisionGate: Promise<void> = Promise.resolve(),
   fenced = false,
+  tasks: TaskSummary[] = [],
 ) {
   const fetchMock = mockFetch(async (url, init) => {
     if (url === '/api/orchestrations/fence')
@@ -99,6 +104,29 @@ function stubRoom(
       await decisionGate
       return jsonResponse({ asOfSeq: 0, items: [] })
     }
+    if (url.startsWith('/api/tasks?'))
+      return jsonResponse({
+        asOfSeq: 1,
+        columns: {
+          planned: [],
+          working: [],
+          in_review: [],
+          needs_you: tasks,
+          done: [],
+        },
+      })
+    if (url.startsWith('/api/tasks/'))
+      return jsonResponse({
+        ...tasks[0],
+        body: 'The timeout needs a decision.',
+        createdBy: 'you',
+        steps: [],
+        activity: [],
+        pendingApproval: null,
+        dependsOn: [],
+        blocks: [],
+        runIds: [],
+      })
     if (url.startsWith('/api/jobs/')) {
       const items = exchange && url.includes(exchange.jobId) ? [exchange] : []
       return jsonResponse({ asOfSeq: 1, items })
@@ -545,4 +573,248 @@ test('the more-turns button never shows an empty count', async () => {
   fireEvent.change(screen.getByLabelText('More turns (1–20)'), { target: { value: '' } })
   expect(screen.getByRole('button', { name: 'Give more turns' })).toBeDefined()
   expect(screen.queryByRole('button', { name: /Give {2}more turns/ })).toBeNull()
+})
+
+test('a room’s blocked task is a protected card; unblock takes an optional note', async () => {
+  const task = makeTask()
+  const fetchMock = stubRoom(null, approval, Promise.resolve(), false, [task])
+  renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={agents} selectedJob="all" messages={[]} />,
+  )
+
+  const card = await screen.findByRole('article', {
+    name: `Needs you: Blocked task: ${task.title}`,
+  })
+  expect(card.getAttribute('data-protected')).toBe('flex')
+  expect(card.textContent).toContain('TASK-1')
+  expect(card.textContent).toContain('Needs a decision on the timeout')
+  expect(card.textContent).toContain('builder')
+
+  fireEvent.click(within(card).getByRole('button', { name: 'Unblock' }))
+  const form = within(card).getByLabelText('Note (optional)') as HTMLTextAreaElement
+  fireEvent.change(form, { target: { value: 'Use a 30 second timeout.' } })
+  fireEvent.click(within(card).getByRole('button', { name: 'Unblock' }))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url) === '/api/tasks/task-1/actions' && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  )
+  const call = fetchMock.mock.calls.find(
+    ([url, init]) => String(url) === '/api/tasks/task-1/actions' && init?.method === 'POST',
+  )!
+  expect(JSON.parse(String(call[1]!.body))).toEqual({
+    action: 'unblock',
+    text: 'Use a 30 second timeout.',
+  })
+  expect(new Headers(call[1]!.headers).get('Idempotency-Key')).toBeTruthy()
+})
+
+test('a comment needs text, and the task leaves when the stream says it is no longer blocked', async () => {
+  const task = makeTask()
+  const fetchMock = stubRoom(null, approval, Promise.resolve(), false, [task])
+  const mounted = renderInRoom(
+    <RoomRequests
+      roomId="room-1"
+      jobs={[job]}
+      agents={agents}
+      selectedJob="all"
+      messages={[]}
+      teamRoom
+    />,
+  )
+  const card = await screen.findByRole('article', {
+    name: `Needs you: Blocked task: ${task.title}`,
+  })
+  fireEvent.click(within(card).getByRole('button', { name: 'Comment' }))
+  const send = within(card).getByRole('button', { name: 'Comment' }) as HTMLButtonElement
+  expect(send.disabled).toBe(true)
+  fireEvent.change(within(card).getByLabelText(`Comment on ${task.title}`), {
+    target: { value: 'Check the staging logs.' },
+  })
+  expect(send.disabled).toBe(false)
+  fireEvent.click(send)
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url) === '/api/tasks/task-1/actions' && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  )
+  const call = fetchMock.mock.calls.find(
+    ([url, init]) => String(url) === '/api/tasks/task-1/actions' && init?.method === 'POST',
+  )!
+  expect(JSON.parse(String(call[1]!.body))).toEqual({
+    action: 'comment',
+    text: 'Check the staging logs.',
+  })
+
+  act(() =>
+    mounted.emit({
+      seq: 2,
+      ts: '2026-10-24T09:07:00.000Z',
+      type: 'task.upserted',
+      data: makeTask({ column: 'working', hermesStatus: 'running', badge: null }),
+    }),
+  )
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('article', { name: `Needs you: Blocked task: ${task.title}` }),
+    ).toBeNull(),
+  )
+})
+
+test('a task action says it is waiting for Hermes and keeps its key across a network retry', async () => {
+  const task = makeTask()
+  let attempts = 0
+  const fetchMock = stubRoom(null, approval, Promise.resolve(), false, [task])
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (url, init) => {
+    if (url === '/api/tasks/task-1/actions' && init?.method === 'POST') {
+      attempts += 1
+      if (attempts === 1) throw new Error('connection dropped')
+      return jsonResponse({ ok: true })
+    }
+    return fallback(url, init)
+  })
+  renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={agents} selectedJob="all" messages={[]} />,
+  )
+  const card = await screen.findByRole('article', {
+    name: `Needs you: Blocked task: ${task.title}`,
+  })
+  fireEvent.click(within(card).getByRole('button', { name: 'Unblock' }))
+  fireEvent.click(within(card).getByRole('button', { name: 'Unblock' }))
+  expect(await within(card).findByText(/Couldn’t unblock this task/)).toBeDefined()
+  fireEvent.click(within(card).getByRole('button', { name: 'Unblock' }))
+
+  expect(await within(card).findByText('Sent — waiting for Hermes')).toBeDefined()
+  expect((within(card).getByRole('button', { name: 'Sent' }) as HTMLButtonElement).disabled).toBe(
+    true,
+  )
+  const keys = fetchMock.mock.calls
+    .filter(([url, init]) => String(url) === '/api/tasks/task-1/actions' && init?.method === 'POST')
+    .map(([, init]) => new Headers(init?.headers).get('Idempotency-Key'))
+  expect(keys).toHaveLength(2)
+  expect(keys[0]).toBe(keys[1])
+})
+
+test('a task action uses a fresh key after a 4xx', async () => {
+  const task = makeTask()
+  let attempts = 0
+  const fetchMock = stubRoom(null, approval, Promise.resolve(), false, [task])
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (url, init) => {
+    if (url === '/api/tasks/task-1/actions' && init?.method === 'POST') {
+      attempts += 1
+      if (attempts === 1)
+        return jsonResponse({ error: { code: 'conflict', message: 'Try again.' } }, 409)
+      return jsonResponse({ ok: true })
+    }
+    return fallback(url, init)
+  })
+  renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={agents} selectedJob="all" messages={[]} />,
+  )
+  const card = await screen.findByRole('article', {
+    name: `Needs you: Blocked task: ${task.title}`,
+  })
+  fireEvent.click(within(card).getByRole('button', { name: 'Unblock' }))
+  fireEvent.click(within(card).getByRole('button', { name: 'Unblock' }))
+  expect(await within(card).findByText('Try again.')).toBeDefined()
+  fireEvent.click(within(card).getByRole('button', { name: 'Unblock' }))
+  expect(await within(card).findByText('Sent — waiting for Hermes')).toBeDefined()
+
+  const keys = fetchMock.mock.calls
+    .filter(([url, init]) => String(url) === '/api/tasks/task-1/actions' && init?.method === 'POST')
+    .map(([, init]) => new Headers(init?.headers).get('Idempotency-Key'))
+  expect(keys).toHaveLength(2)
+  expect(keys[0]).not.toBe(keys[1])
+})
+
+test('only the team room includes a blocked task with no room', async () => {
+  const unassigned = makeTask({ id: 'task-unassigned', roomId: null })
+  stubRoom(null, approval, Promise.resolve(), false, [unassigned])
+
+  const roomView = renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={agents} selectedJob="all" messages={[]} />,
+  )
+  await waitFor(() =>
+    expect(
+      roomView.queryClient.getQueryData(roomTasksQuery('room-1', false, true).key),
+    ).toBeDefined(),
+  )
+  expect(
+    screen.queryByRole('article', { name: /task-unassigned|Fix the login timeout/ }),
+  ).toBeNull()
+  roomView.unmount()
+
+  renderInRoom(
+    <RoomRequests
+      roomId="room-1"
+      jobs={[job]}
+      agents={agents}
+      selectedJob="all"
+      messages={[]}
+      teamRoom
+    />,
+  )
+  expect(
+    await screen.findByRole('article', { name: `Needs you: Blocked task: ${unassigned.title}` }),
+  ).toBeDefined()
+})
+
+test('report-back decisions are protected cards counted with the strip', async () => {
+  const fetchMock = stubRoom(null, approval)
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (url, init) => {
+    if (url === '/api/jobs/job-2/report-back' && init?.method === 'POST')
+      return jsonResponse({ ok: true })
+    return fallback(url, init)
+  })
+  const source = {
+    app: 'Tickets app',
+    ref: 'TCK-142',
+    title: 'Login times out',
+    link: null,
+    triggerId: 'trigger-1',
+    missing: [],
+  }
+  const needsOk = makeJob({
+    id: 'job-2',
+    title: 'Release notes',
+    source,
+    reportBack: { state: 'needs_ok', tool: 'add_comment', at: null },
+  })
+  const notConfirmed = makeJob({
+    id: 'job-3',
+    title: 'Queue research',
+    source,
+    reportBack: { state: 'not_confirmed', tool: 'add_comment', at: null },
+  })
+  renderInRoom(
+    <RoomRequests
+      roomId="room-1"
+      jobs={[job, needsOk, notConfirmed]}
+      agents={agents}
+      selectedJob="all"
+      messages={[]}
+    />,
+  )
+
+  const cards = await screen.findAllByRole('article', { name: /Report back:/ })
+  expect(cards).toHaveLength(2)
+  expect(cards.every((card) => card.getAttribute('data-protected') === 'flex')).toBe(true)
+  expect(await screen.findByRole('button', { name: '2 more need you' })).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: '2 more need you' }))
+  const card = screen.getByRole('article', { name: 'Needs you: Report back: Release notes' })
+  fireEvent.click(within(card).getByRole('button', { name: 'Send' }))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url) === '/api/jobs/job-2/report-back' && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  )
 })

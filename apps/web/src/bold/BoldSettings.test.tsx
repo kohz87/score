@@ -101,7 +101,40 @@ beforeEach(() => {
       const body = init?.body ? JSON.parse(String(init.body)) : null
       calls.push({ url: `${url.pathname}${url.search}`, method, body })
 
-      if (url.pathname === '/api/agents') return jsonResponse({ asOfSeq: 0, items: [] })
+      if (url.pathname === '/api/agents')
+        return jsonResponse({
+          asOfSeq: 0,
+          items: [
+            {
+              id: 'builder',
+              name: 'builder',
+              role: 'Builds features',
+              style: { color: '#19C39A', shape: 'triangle' },
+              status: 'idle',
+              activity: null,
+              model: { id: 'fake-model', label: 'Demo model' },
+              served: true,
+            },
+          ],
+        })
+      if (url.pathname === '/api/agents/builder/runs-on')
+        return jsonResponse({
+          backend: 'docker',
+          raw: 'docker',
+          docker: {
+            image: 'node:24',
+            network: true,
+            mountsWorkspace: true,
+            runsAsRoot: false,
+            extraMounts: 0,
+          },
+          ssh: null,
+          separated: 'partly',
+          separatedTools: [],
+          hostTools: [],
+          notes: [],
+          checked: { how: 'live', hermes: '0.15.2', at: '2026-10-24T09:00:00.000Z' },
+        })
       if (url.pathname === '/api/system')
         return jsonResponse({
           mode: 'fake',
@@ -386,7 +419,13 @@ test('Remote access and security keeps the protected password, browsers and pass
   open('/b/settings/security')
   expect(await screen.findByRole('heading', { name: 'Remote access and security' })).toBeDefined()
   expect(screen.getByRole('heading', { name: 'Where agents run' })).toBeDefined()
-  expect(screen.getByText('Comes in 11.8a')).toBeDefined()
+  const where = await screen.findByRole('list', { name: 'Where agents run' })
+  expect(where.textContent).toContain('builder')
+  expect(where.textContent).toContain('Docker · node:24')
+  expect(where.textContent).toContain('Partly separated')
+  expect(within(where).getByRole('link', { name: 'Runs on' }).getAttribute('href')).toBe(
+    '/b/team/builder#agent-where',
+  )
   const remote = document.querySelector('#remote-access')!
   expect(remote.getAttribute('data-protected')).toBe('flex')
   expect(remote.getAttribute('data-decision')).not.toBeNull()

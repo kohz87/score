@@ -1,6 +1,5 @@
 import {
   JobResultsSchema,
-  TeamRoomResponseSchema,
   type Job,
   type JobResults,
   type Room,
@@ -13,6 +12,7 @@ import { apiFetch } from '../data/api.ts'
 import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { defineStreamQuery } from '../data/resync.ts'
 import { useWatchOverview } from '../routes/watch/watch-queries.ts'
+import { fetchCompleteTeamRoom } from './bold-job-reads.ts'
 
 export type TeamRoom = { room: Room; jobs: Job[] }
 
@@ -21,15 +21,17 @@ export type TeamRoom = { room: Room; jobs: Job[] }
 export const boldTeamRoomQuery = defineStreamQuery<TeamRoom>({
   key: ['bold', 'team-room'],
   async fetch(signal) {
-    const { asOfSeq, room, jobs } = TeamRoomResponseSchema.parse(
-      await apiFetch('team-room', { signal }),
-    )
+    const { asOfSeq, room, jobs } = await fetchCompleteTeamRoom(signal)
     return { asOfSeq, data: { room, jobs } }
   },
-  types: ['job.upserted', 'room.upserted'],
+  types: ['job.upserted', 'job.deleted', 'room.upserted'],
   reduce(data, event) {
     if (event.type === 'room.upserted' && event.data.id === data.room.id)
       return { ...data, room: event.data }
+    if (event.type === 'job.deleted') {
+      if (event.data.roomId !== data.room.id) return data
+      return { ...data, jobs: data.jobs.filter((job) => job.id !== event.data.id) }
+    }
     if (event.type !== 'job.upserted' || event.data.roomId !== data.room.id) return data
     const rest = data.jobs.filter((job) => job.id !== event.data.id)
     return { ...data, jobs: [...rest, event.data] }
@@ -50,12 +52,13 @@ async function fetchJobResults(jobId: string, signal?: AbortSignal): Promise<Job
 const REFRESH_MS = 1000
 const RESULT_EVENTS = new Set<StreamEvent['type']>([
   'job.upserted',
+  'job.deleted',
   'exchange.upserted',
   'watch.frame',
 ])
 
 function eventJobId(event: StreamEvent): string | undefined {
-  if (event.type === 'job.upserted') return event.data.id
+  if (event.type === 'job.upserted' || event.type === 'job.deleted') return event.data.id
   if (event.type === 'exchange.upserted') return event.data.jobId
   return undefined
 }

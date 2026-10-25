@@ -597,7 +597,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     (D6). `409 conflict` for the room's own thread (it follows the room: rename or delete the room) and, for close and
     delete, while the job still has work running or queued (stop it first). A person's message into a closed job is
     `409`, into a deleted one `404`. Idempotent: closing a closed job or deleting a deleted one changes nothing.
-  - **S** `GET /api/rooms/:roomId/jobs` → `{ asOfSeq; items: Job[] }` (open jobs, the default first).
+  - **S** `GET /api/rooms/:roomId/jobs` → `{ asOfSeq; items: Job[] }` (open jobs, the default first; `?closed=include`
+    adds the closed ones, for the job menu's "Closed jobs", decision 121).
   - **H** `POST /api/rooms/:roomId/jobs` `{ title (1–200); exchangeBudget? (1–100, default 8); jobTurnLimit? (1–1000,
     default 40); spendCapUsd? (> 0, ≤ 10000; default none); recipe?: { kind: 'orchestration'|'workflow'; ref } }` →
     `201 Job` (the limits and `recipe` from Start a job, PLAN 11.10c: `recipe` names the orchestration or workflow run

@@ -2,27 +2,24 @@ import {
   ExchangeSchema,
   ExchangesResponseSchema,
   JobSchema,
-  JobsResponseSchema,
   MessagePageSchema,
   RoomDetailSnapshotSchema,
   RoomPinsResponseSchema,
-  TeamRoomResponseSchema,
   type Exchange,
   type Job,
   type Message,
   type RoomPin,
   type Room,
 } from '@score/contract'
+import type { QueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
-import { defineStreamQuery } from '../../data/resync.ts'
+import { defineStreamQuery, type StreamSnapshot } from '../../data/resync.ts'
 import { reduceMessages, type MessagePageData } from '../../routes/chat/queries.ts'
+import { fetchCompleteJobs, fetchCompleteTeamRoom } from '../bold-job-reads.ts'
+import { dropCachedJobFromSearch } from '../bold-search-queries.ts'
 
 /** The job read model as it now ships: `job.upserted` carries every field the tabs need. */
 export type JobRead = Job
-
-export function readJobs(raw: unknown): JobRead[] {
-  return JobsResponseSchema.parse(raw).items
-}
 
 /** The team-room read also carries the jobs that make the room switcher's "N jobs" honest. */
 export interface TeamRoomRead {
@@ -30,10 +27,80 @@ export interface TeamRoomRead {
   jobs: JobRead[]
 }
 
-function withJob(jobs: JobRead[], job: Job): JobRead[] {
+export function withJob(jobs: JobRead[], job: Job): JobRead[] {
   return [...jobs.filter((item) => item.id !== job.id), job].sort(
     (a, b) => Number(b.isDefault) - Number(a.isDefault) || a.createdAt.localeCompare(b.createdAt),
   )
+}
+
+/** A deleted job leaves every list at once; its undo arrives later as a normal `job.upserted`. */
+export function withoutJob(jobs: JobRead[], jobId: string): JobRead[] {
+  return jobs.filter((item) => item.id !== jobId)
+}
+
+type JobListChange = 'upsert' | 'delete'
+
+/**
+ * Applies a job lifecycle mutation to every list that carries jobs. The server also emits `job.upserted` or
+ * `job.deleted`, but a mutation must not wait for that round trip to update the tab the person just acted on (and
+ * the stream may be disconnected). A later event replaces the same read model, so this stays a local preview.
+ */
+export function changeCachedJob(queryClient: QueryClient, job: Job, change: JobListChange): void {
+  const jobs = (items: JobRead[]): JobRead[] =>
+    change === 'delete' ? withoutJob(items, job.id) : withJob(items, job)
+
+  queryClient.setQueryData<StreamSnapshot<JobRead[]>>(roomJobsQuery(job.roomId).key, (snapshot) =>
+    snapshot ? { ...snapshot, data: jobs(snapshot.data) } : snapshot,
+  )
+
+  const teamRooms: StreamSnapshot<TeamRoomRead>[] = []
+  const teamRoom = queryClient.getQueryData<StreamSnapshot<TeamRoomRead>>(teamRoomQuery(null).key)
+  if (teamRoom) teamRooms.push(teamRoom)
+  const results = queryClient.getQueryData<StreamSnapshot<TeamRoomRead>>(['bold', 'team-room'])
+  if (results) teamRooms.push(results)
+  for (const snapshot of teamRooms) {
+    if (snapshot.data.room.id !== job.roomId) continue
+    const key = snapshot === teamRoom ? teamRoomQuery(null).key : (['bold', 'team-room'] as const)
+    queryClient.setQueryData<StreamSnapshot<TeamRoomRead>>(key, {
+      ...snapshot,
+      data: { ...snapshot.data, jobs: jobs(snapshot.data.jobs) },
+    })
+  }
+
+  // Search reads the team room and one-to-one chats through plain TanStack queries rather than the stream registry.
+  if (change === 'delete') dropCachedJobFromSearch(queryClient, job)
+  else
+    queryClient.setQueryData<{ asOfSeq: number; room: Room; jobs: Job[] }>(
+      ['bold-search', 'team-room'],
+      (snapshot) =>
+        snapshot && snapshot.room.id === job.roomId
+          ? { ...snapshot, jobs: jobs(snapshot.jobs) }
+          : snapshot,
+    )
+
+  // One-to-one chats can hold a job too; they key by agent rather than room, so match the cached room.
+  for (const query of queryClient.getQueryCache().findAll({ queryKey: ['bold', 'direct'] })) {
+    queryClient.setQueryData<StreamSnapshot<{ room: Room | null; chats: Job[] }>>(
+      query.queryKey,
+      (snapshot) =>
+        snapshot && snapshot.data.room?.id === job.roomId
+          ? { ...snapshot, data: { ...snapshot.data, chats: jobs(snapshot.data.chats) } }
+          : snapshot,
+    )
+  }
+
+  if (change === 'delete') {
+    // A deleted job's pages are not trustworthy after undo: the delete hid their messages, and the restored job
+    // needs a fresh read. Dropping them now makes reopening the job fetch its restored thread rather than an empty one.
+    queryClient.removeQueries({
+      queryKey: ['bold', 'room-messages', job.roomId, job.id],
+      exact: false,
+    })
+    queryClient.removeQueries({
+      queryKey: ['bold', 'room-messages-seek', job.roomId, job.id],
+      exact: false,
+    })
+  }
 }
 
 /**
@@ -50,12 +117,16 @@ export function teamRoomQuery(roomIdOverride: string | null) {
         )
         return { asOfSeq: snapshot.asOfSeq, data: { room: snapshot.room, jobs: [] } }
       }
-      const snapshot = TeamRoomResponseSchema.parse(await apiFetch('team-room', { signal }))
+      const snapshot = await fetchCompleteTeamRoom(signal)
       return { asOfSeq: snapshot.asOfSeq, data: { room: snapshot.room, jobs: snapshot.jobs } }
     },
-    types: ['room.upserted', 'room.deleted', 'job.upserted'],
+    types: ['room.upserted', 'room.deleted', 'job.upserted', 'job.deleted'],
     reduce(data, event) {
       if (event.type === 'room.deleted') return data?.room.id === event.data.id ? null : data
+      if (event.type === 'job.deleted') {
+        if (!data || event.data.roomId !== data.room.id) return data
+        return { ...data, jobs: withoutJob(data.jobs, event.data.id) }
+      }
       if (event.type === 'job.upserted') {
         if (roomIdOverride !== null || !data || event.data.roomId !== data.room.id) return data
         return { ...data, jobs: withJob(data.jobs, JobSchema.parse(event.data)) }
@@ -100,8 +171,15 @@ export function roomMessagesQuery(
       'message.progressed',
       'typing',
       'lane.upserted',
+      'job.deleted',
     ],
     reduce(data, event) {
+      // A job delete hides its messages with it. The page's own job is the direct case; a page for another job
+      // (All reads several) may also hold a message that moved between jobs, so filter by jobId in both.
+      if (event.type === 'job.deleted') {
+        if (event.data.roomId !== roomId) return data
+        return { ...data, items: data.items.filter((message) => message.jobId !== event.data.id) }
+      }
       // A created message without a job belongs to the room's default thread; keep it visible where that thread is.
       if (
         event.type === 'message.created' &&
@@ -209,12 +287,15 @@ export function roomJobsQuery(roomId: string | null) {
     async fetch(signal) {
       // The room is still resolving: the jobs read starts as soon as its id is known.
       if (roomId === null) return { asOfSeq: 0, data: [] }
-      const raw: unknown = await apiFetch(`rooms/${encodeURIComponent(roomId)}/jobs`, { signal })
-      const response = JobsResponseSchema.parse(raw)
-      return { asOfSeq: response.asOfSeq, data: readJobs(raw) }
+      const response = await fetchCompleteJobs(roomId, signal)
+      return { asOfSeq: response.asOfSeq, data: response.items }
     },
-    types: ['job.upserted'],
+    types: ['job.upserted', 'job.deleted'],
     reduce(data, event) {
+      if (event.type === 'job.deleted') {
+        if (roomId === null || event.data.roomId !== roomId) return data
+        return withoutJob(data, event.data.id)
+      }
       if (event.type !== 'job.upserted' || roomId === null || event.data.roomId !== roomId)
         return data
       // `job.upserted` carries the whole read model. Keeping the previous snapshot's unread/active fields would

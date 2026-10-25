@@ -110,6 +110,7 @@ export const KNOWN_OVERLAYS = [
   '.chat-toast',
   '.bold-tabbar',
   '.bold-sidecol',
+  '.bold-job-toasts',
   '.bold-start-scrim',
   '.bold-trigger-scrim',
 ].join(', ')

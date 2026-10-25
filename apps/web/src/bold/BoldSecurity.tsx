@@ -1,10 +1,55 @@
 import { Link } from 'react-router'
+import type { AgentSummary } from '@score/contract'
+import { AgentGlyph } from '../components/AgentGlyph.tsx'
+import { useStreamQuery } from '../data/query-client.ts'
+import { agentsQuery } from '../routes/chat/queries.ts'
 import { RemoteSection } from '../routes/settings/RemoteSection.tsx'
 import { useSecurityStatus } from '../routes/settings/settings-queries.ts'
+import { useRunsOn } from './runs-on-queries.ts'
+
+const SEPARATED = {
+  no: 'Not separated',
+  partly: 'Partly separated',
+  unknown: 'Not known',
+} as const
+
+function runsOnLine(runsOn: ReturnType<typeof useRunsOn>): string {
+  if (runsOn.isPending) return 'Reading Hermes…'
+  if (runsOn.isError) return 'Couldn’t read where it runs.'
+  const data = runsOn.data
+  if (data.backend === 'local') return 'This machine, as you'
+  if (data.backend === 'docker')
+    return `Docker${data.docker?.image ? ` · ${data.docker.image}` : ''}`
+  if (data.backend === 'ssh')
+    return `SSH · ${data.ssh?.user ? `${data.ssh.user}@` : ''}${data.ssh?.host ?? 'no host'}`
+  return `Another backend (${data.raw ?? 'unknown'})`
+}
+
+function AgentWhere({ agent }: { agent: AgentSummary }) {
+  const runsOn = useRunsOn(agent.id)
+  return (
+    <li className="bold-agent-where">
+      <span className="bold-agent-where-name">
+        <AgentGlyph agent={agent} size="xs" bare decorative />
+        <b>{agent.name}</b>
+      </span>
+      <span className="small muted">{runsOnLine(runsOn)}</span>
+      {runsOn.data && (
+        <span className={`badge runs-on-${runsOn.data.separated}`}>
+          {SEPARATED[runsOn.data.separated]}
+        </span>
+      )}
+      <Link className="link" to={`/b/team/${encodeURIComponent(agent.id)}#agent-where`}>
+        Runs on
+      </Link>
+    </li>
+  )
+}
 
 /** PLAN 11.9b: Remote access and security, with the Where agents run card filled in by 11.8a. */
 export function BoldSecurity() {
   const security = useSecurityStatus()
+  const agents = useStreamQuery(agentsQuery).data ?? []
 
   return (
     <div className="bold-security">
@@ -12,7 +57,15 @@ export function BoldSecurity() {
 
       <section className="card" aria-labelledby="security-where">
         <h3 id="security-where">Where agents run</h3>
-        <p className="small muted">Comes in 11.8a</p>
+        {agents.length === 0 ? (
+          <p className="small muted">No agents yet.</p>
+        ) : (
+          <ul className="bold-agent-where-list" aria-label="Where agents run">
+            {agents.map((agent) => (
+              <AgentWhere key={agent.id} agent={agent} />
+            ))}
+          </ul>
+        )}
         <p className="small muted">
           Working with other teams? Give each team its own Score (one machine or VM each). Teams
           share work through the app they work on, with its tool server and triggers, not by sharing

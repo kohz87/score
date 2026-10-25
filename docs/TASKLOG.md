@@ -1169,3 +1169,16 @@ One entry per completed task: what landed, review results, and any **rejected re
   fix-round review — 1 P2 (history reset left staged actions unredacted) fixed. Accepted P3s: same-millisecond restore,
   relative binds over-warn, Windows paths, a trigger with 10 jobs waiting on the person stays busy until some close
   (by design). Server suite 4725 green. Not deployed.
+- **11.12b Parity gaps in the new shell (DeepSeek on ordeepseek → Sonnet coder → lead, 2026-10-25).** Decision 121. Job
+  menu: rename, close/reopen (Closed jobs listed via `?closed=include`, survive reloads), delete with a typed confirm
+  and a 10 s Undo that survives leaving the room (shell-level toast above the phone tab bar), Stop offered on a
+  "still working" 409, `job.deleted` handled in every job read and in an open Workbench/Results; report-back state on
+  the Started-by card and the thread header, and `needs_ok`/`not_confirmed` as protected, counted Needs-you cards with
+  one Idempotency-Key per job and one capped poll; Hermes tasks: blocked tasks as protected Needs-you cards
+  (Unblock with a note, Comment; "Sent — waiting for Hermes" until the stream says otherwise) and a "Room tasks"
+  section in the thread (tasks carry no job yet); Customizer link in Look, Where agents run list in Security, answered
+  approvals + Review rules in Usage, routines in Search. Lead contract additions: `GET /api/rooms/:id/jobs?closed=include`,
+  `TasksSnapshotSchema`. Reviews: build — 3 P1 (closed jobs lost on reload, report-back not counted, double send) +
+  P2s; fix round (moved from DeepSeek to a Sonnet coder mid-round at the owner's request) — review 0 P1, 2 P2 (closed
+  jobs raising report-back cards; a restore in flight wiping a newer Undo) fixed by the lead. Known: one workbench e2e
+  flaky only in long multi-spec runs (passes alone) — checked in the release's full e2e. Not deployed.

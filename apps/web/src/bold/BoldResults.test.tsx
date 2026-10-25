@@ -425,6 +425,7 @@ function mountLiveResults({
   const fetchMock = vi.fn(async (input: string | URL | Request) => {
     const path = new URL(String(input), 'http://score.test').pathname
     if (path === '/api/team-room') return Response.json({ asOfSeq: 1, room: teamRoom, jobs })
+    if (path === `/api/rooms/${teamRoom.id}/jobs`) return Response.json({ asOfSeq: 1, items: jobs })
     if (path === '/api/watch/overview') return Response.json({ items: [] })
     const match = /^\/api\/jobs\/([^/]+)\/results$/.exec(path)
     if (match) {

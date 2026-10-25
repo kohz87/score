@@ -215,3 +215,13 @@ test('a deleted job’s results, workbench and exchanges answer 404', async () =
   for (const part of ['results', 'workbench', 'exchanges'])
     expect((await app.inject({ url: `/api/jobs/${job.id}/${part}` })).statusCode, part).toBe(404)
 })
+
+test('closed jobs come back in the list when asked for, so the job menu can find and reopen them', async () => {
+  const job = await makeJob('Old idea')
+  await send('POST', `/api/jobs/${job.id}/close`)
+  const all = JobsResponseSchema.parse(
+    (await app.inject({ url: `/api/rooms/${roomId}/jobs?closed=include` })).json(),
+  ).items
+  expect(all.find((item) => item.id === job.id)?.state).toBe('closed')
+  expect((await jobs()).map((item) => item.id)).not.toContain(job.id)
+})

@@ -24,6 +24,7 @@ import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
 import type { BoldSheetState } from './bold-ui.ts'
 import { BoldStartJob, StartJobContext } from './BoldStartJob.tsx'
+import { JobUndoToast } from './room/JobUndoToast.tsx'
 import './tokens.css'
 import './bold.css'
 import './bold-theme.css'
@@ -323,6 +324,7 @@ export function BoldShell() {
           />
         )}
         {startOpen && <BoldStartJob onClose={closeStartJob} />}
+        <JobUndoToast />
       </div>
     </StartJobContext>
   )

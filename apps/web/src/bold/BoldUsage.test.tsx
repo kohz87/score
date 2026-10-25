@@ -126,7 +126,10 @@ test('every headline number equals the Reports API fixture and approvals stay fo
   expect(value('jobs-done')).toContain('38')
   expect(value('first-pass')).toContain('71%')
   expect(value('waiting-on-you')).toContain('4 min')
-  expect(value('waiting-on-you')).toContain('median wait for your approval')
+  expect(value('waiting-on-you')).toContain('24 approvals answered')
+  expect(screen.getByRole('link', { name: 'Review rules' }).getAttribute('href')).toBe(
+    '/b/settings/rules',
+  )
   expect(value('spend')).toContain('$41.20')
   expect(screen.queryByRole('region', { name: 'Your approvals' })).toBeNull()
 })

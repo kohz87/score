@@ -39,6 +39,11 @@ export function boldOneToOneLink(agentId: string): string {
   return boldQuery({ with: agentId })
 }
 
+/** 11.12b search: a repeating job lives in the agent's Team page, under More › Routines. */
+export function boldAgentRoutinesLink(agentId: string): string {
+  return `/b/team/${encodeURIComponent(agentId)}#agent-routines`
+}
+
 /** 11.10e Library: open a note. */
 export function boldNoteLink(path: string): string {
   return boldQuery({ note: path })

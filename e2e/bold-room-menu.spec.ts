@@ -59,7 +59,7 @@ for (const viewport of sizes) {
       const state = await openMenuRoom(page)
       const picker = await openRoomPicker(page)
       await expect(picker).toBeVisible()
-      await expect(picker).toContainText('Always on · 4 jobs')
+      await expect(picker).toContainText('Always on · 2 jobs')
       await expect(picker).toContainText('Elsewhere · the agents’ own chats outside Score')
       const outside = picker.getByRole('option', { name: /Plan the launch checklist/ })
       await expect(outside).toContainText('lead · Telegram')
@@ -232,10 +232,11 @@ for (const viewport of sizes) {
       await page.getByRole('button', { name: 'Job menu' }).click()
       const menu = page.getByRole('menu', { name: 'Activity feed actions' })
       await expect(menu).toHaveAttribute('data-protected', 'flex')
+      await expect(menu).toContainText('Rename…')
+      await expect(menu).toContainText('Close')
       await expect(menu).toContainText('Share a read-only link')
       await expect(menu).toContainText('Export the whole room as Markdown')
-      await expect(menu).not.toContainText('Rename')
-      await expect(menu).not.toContainText('Delete job')
+      await expect(menu).toContainText('Delete job')
 
       await menu.getByRole('menuitem', { name: 'Share a read-only link' }).click()
       await share(page, 'Activity feed')
@@ -254,15 +255,228 @@ for (const viewport of sizes) {
       expect(new URL((await download).url()).pathname).toMatch(/^\/api\/rooms\/[^/]+\/export\.md$/)
     })
 
+    test(`rename, close and reopen a job from its menu at ${at}`, async ({ page }) => {
+      let jobs = [
+        {
+          id: 'job-activity',
+          roomId: 'team-room',
+          title: 'Activity feed',
+          state: 'working',
+          holderAgentId: 'builder',
+          isDefault: false,
+          exchangeBudget: 8,
+          jobTurnLimit: 40,
+          unread: 0,
+          activeAgents: [],
+          lastMessageAt: null,
+          messageCount: 0,
+          summary: null,
+          source: null,
+          reportBack: null,
+          spendCapUsd: null,
+          recipe: null,
+          createdAt: '2026-10-24T10:00:00.000Z',
+          updatedAt: '2026-10-24T10:15:00.000Z',
+        },
+      ]
+      const state = await openMenuRoom(page, {
+        handle: (request) => {
+          const item = jobs[0]!
+          if (request.method === 'PATCH' && request.path === '/api/jobs/job-activity') {
+            const body = request.body as { title?: string }
+            jobs = [{ ...item, title: body.title ?? item.title }]
+            return { body: jobs[0] }
+          }
+          if (request.method === 'POST' && request.path === '/api/jobs/job-activity/close') {
+            jobs = [{ ...item, state: 'closed' }]
+            return { body: jobs[0] }
+          }
+          if (request.method === 'POST' && request.path === '/api/jobs/job-activity/reopen') {
+            jobs = [{ ...item, state: 'open' }]
+            return { body: jobs[0] }
+          }
+          return undefined
+        },
+      })
+      await openBoldJob(page, /Activity feed/)
+      await page.getByRole('button', { name: 'Job menu' }).click()
+      await page.getByRole('menuitem', { name: 'Rename…' }).click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toHaveAttribute('data-protected', 'any')
+      await dialog.getByLabel('Name').fill('Activity feed v2')
+      await dialog.getByRole('button', { name: 'Rename' }).click()
+      await expect(page.getByRole('status').filter({ hasText: 'Renamed' })).toBeVisible()
+      if (viewport.width > 860)
+        await expect(page.getByRole('tab', { name: /Activity feed v2/ })).toBeVisible()
+      else await expect(page.locator('[data-phone-chat-title]')).toHaveText('Activity feed v2')
+      expect(
+        state.requests.find(
+          (request) => request.method === 'PATCH' && request.path === '/api/jobs/job-activity',
+        )?.body,
+      ).toEqual({ title: 'Activity feed v2' })
+
+      await page.getByRole('button', { name: 'Job menu' }).click()
+      await page.getByRole('menuitem', { name: 'Close' }).click()
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Closed “Activity feed v2”' }),
+      ).toBeVisible()
+      if (viewport.width > 860) {
+        await expect(page.getByRole('tab', { name: /Activity feed v2/ })).toHaveCount(0)
+        await page.getByRole('button', { name: 'Closed jobs', exact: true }).click()
+        await expect(page.getByRole('tab', { name: /Activity feed v2/ })).toBeVisible()
+        await page.getByRole('tab', { name: /Activity feed v2/ }).click()
+      } else {
+        await expect(page.getByRole('button', { name: /^Activity feed v2\./ })).toHaveCount(0)
+        await page.getByRole('button', { name: 'Closed jobs (2)' }).click()
+        await page.getByRole('button', { name: /^Activity feed v2\./ }).click()
+      }
+      await page.getByRole('button', { name: 'Job menu' }).click()
+      await page.getByRole('menuitem', { name: 'Reopen' }).click()
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Reopened “Activity feed v2”' }),
+      ).toBeVisible()
+    })
+
+    test(`delete asks for the typed title and offers Undo at ${at}`, async ({ page }) => {
+      const state = await openMenuRoom(page, {
+        handle: (request) => {
+          if (request.method === 'DELETE' && request.path === '/api/jobs/job-activity')
+            return { status: 204, body: null }
+          if (request.method === 'POST' && request.path === '/api/jobs/job-activity/restore')
+            return {
+              body: {
+                id: 'job-activity',
+                roomId: 'team-room',
+                title: 'Activity feed',
+                state: 'working',
+                holderAgentId: 'builder',
+                isDefault: false,
+                exchangeBudget: 8,
+                jobTurnLimit: 40,
+                unread: 0,
+                activeAgents: [],
+                lastMessageAt: null,
+                messageCount: 0,
+                summary: null,
+                source: null,
+                reportBack: null,
+                spendCapUsd: null,
+                recipe: null,
+                createdAt: '2026-10-24T10:00:00.000Z',
+                updatedAt: '2026-10-24T10:15:00.000Z',
+              },
+            }
+          return undefined
+        },
+      })
+      await openBoldJob(page, /Activity feed/)
+      await page.getByRole('button', { name: 'Job menu' }).click()
+      await page.getByRole('menuitem', { name: 'Delete job' }).click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toHaveAttribute('data-protected', 'any')
+      await dialog.getByLabel(/Type Activity feed to confirm/).fill('Activity feed')
+      await dialog.getByRole('button', { name: 'Delete job' }).click()
+      const undo = page.getByRole('status').filter({ hasText: 'Job deleted' })
+      await expect(undo).toBeVisible()
+      if (viewport.width > 860)
+        await expect(page.getByRole('tab', { name: /Activity feed/ })).toHaveCount(0)
+      else await expect(page.getByRole('button', { name: /^Activity feed\./ })).toHaveCount(0)
+      await undo.getByRole('button', { name: 'Undo' }).click()
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Restored “Activity feed”' }),
+      ).toBeVisible()
+      if (viewport.width > 860)
+        await expect(page.getByRole('tab', { name: /Activity feed/ })).toBeVisible()
+      else await expect(page.getByRole('button', { name: /^Activity feed\./ })).toBeVisible()
+      expect(
+        state.requests.some(
+          (request) =>
+            request.method === 'POST' && request.path === '/api/jobs/job-activity/restore',
+        ),
+      ).toBe(true)
+    })
+
+    test(`a closed job survives a reload under Closed jobs at ${at}`, async ({ page }) => {
+      await openMenuRoom(page)
+      await page.reload()
+      await expect(page.locator('[data-ui="bold"] .top .word')).toBeVisible({ timeout: 20_000 })
+      if (viewport.width > 860) {
+        await page.getByRole('button', { name: 'Closed jobs', exact: true }).click()
+        await expect(page.getByRole('tab', { name: /Old import/ })).toBeVisible()
+      } else {
+        await page.getByRole('button', { name: 'Closed jobs (1)' }).click()
+        await expect(page.getByRole('button', { name: /^Old import\./ })).toBeVisible()
+      }
+    })
+
+    test(`Undo survives leaving the room at ${at}`, async ({ page }) => {
+      const state = await openMenuRoom(page, {
+        handle: (request) => {
+          if (request.method === 'DELETE' && request.path === '/api/jobs/job-activity')
+            return { status: 204, body: null }
+          if (request.method === 'POST' && request.path === '/api/jobs/job-activity/restore')
+            return {
+              body: {
+                id: 'job-activity',
+                roomId: 'team-room',
+                title: 'Activity feed',
+                state: 'working',
+                holderAgentId: 'builder',
+                isDefault: false,
+                exchangeBudget: 8,
+                jobTurnLimit: 40,
+                unread: 0,
+                activeAgents: [],
+                lastMessageAt: null,
+                messageCount: 0,
+                summary: null,
+                source: null,
+                reportBack: null,
+                spendCapUsd: null,
+                recipe: null,
+                createdAt: '2026-10-24T10:00:00.000Z',
+                updatedAt: '2026-10-24T10:15:00.000Z',
+              },
+            }
+          return undefined
+        },
+      })
+      await openBoldJob(page, /Activity feed/)
+      await page.getByRole('button', { name: 'Job menu' }).click()
+      await page.getByRole('menuitem', { name: 'Delete job' }).click()
+      const dialog = page.getByRole('dialog')
+      await dialog.getByLabel(/Type Activity feed to confirm/).fill('Activity feed')
+      await dialog.getByRole('button', { name: 'Delete job' }).click()
+      await page.getByRole('button', { name: 'Team', exact: true }).click()
+      const undo = page.getByRole('status').filter({ hasText: 'Job deleted' })
+      await expect(undo).toBeVisible()
+      await undo.getByRole('button', { name: 'Undo' }).click()
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Restored “Activity feed”' }),
+      ).toBeVisible()
+      expect(
+        state.requests.some(
+          (request) =>
+            request.method === 'POST' && request.path === '/api/jobs/job-activity/restore',
+        ),
+      ).toBe(true)
+    })
+
     test(`the job menu works from the keyboard at ${at}`, async ({ page }) => {
       await openMenuRoom(page)
       await openBoldJob(page, /Activity feed/)
       const trigger = page.getByRole('button', { name: 'Job menu' })
       await trigger.click()
       const menu = page.getByRole('menu', { name: 'Activity feed actions' })
+      const renameItem = menu.getByRole('menuitem', { name: 'Rename…' })
+      const closeItem = menu.getByRole('menuitem', { name: 'Close' })
       const shareItem = menu.getByRole('menuitem', { name: 'Share a read-only link' })
       const exportItem = menu.getByRole('menuitem', { name: 'Export the whole room as Markdown' })
 
+      await expect(renameItem).toBeFocused()
+      await page.keyboard.press('ArrowDown')
+      await expect(closeItem).toBeFocused()
+      await page.keyboard.press('ArrowDown')
       await expect(shareItem).toBeFocused()
       await page.keyboard.press('ArrowDown')
       await expect(exportItem).toBeFocused()

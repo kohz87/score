@@ -5,22 +5,64 @@ import {
   KnowledgeTreeSchema,
   MessageSearchResponseSchema,
   NowSnapshotSchema,
-  TeamRoomResponseSchema,
   type AgentSummary,
+  type Job,
+  type Room,
 } from '@score/contract'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { apiFetch } from '../data/api.ts'
 import { useDebounced } from '../data/message-search.ts'
+import { useOptionalStream } from '../data/query-client.ts'
 import { nowKey } from '../data/team-pause.ts'
-import type { BoldSearchCommand, BoldSearchNote } from './bold-search-model.ts'
+import { fetchRoutines, routinesKey } from '../routes/team/routine-queries.ts'
+import { fetchCompleteTeamRoom } from './bold-job-reads.ts'
+import type { BoldSearchCommand, BoldSearchNote, BoldSearchRoutine } from './bold-search-model.ts'
+
+const BOLD_SEARCH_TEAM_KEY = ['bold-search', 'team-room'] as const
+const BOLD_SEARCH_DIRECTS_KEY = ['bold-search', 'directs'] as const
+
+type SearchTeamRoom = { asOfSeq: number; room: Room; jobs: Job[] }
+type SearchDirects = { agentId: string; chats: Job[] }[]
+
+/** A job deleted in another tab or by the server must leave Search's own caches too, not only the stream reads. */
+export function dropCachedJobFromSearch(
+  queryClient: QueryClient,
+  deleted: { id: string; roomId: string },
+): void {
+  queryClient.setQueryData<SearchTeamRoom>(BOLD_SEARCH_TEAM_KEY, (snapshot) =>
+    snapshot && snapshot.room.id === deleted.roomId
+      ? { ...snapshot, jobs: snapshot.jobs.filter((job) => job.id !== deleted.id) }
+      : snapshot,
+  )
+  for (const query of queryClient.getQueryCache().findAll({ queryKey: BOLD_SEARCH_DIRECTS_KEY })) {
+    queryClient.setQueryData<SearchDirects>(query.queryKey, (entries) =>
+      entries?.map((entry) => ({
+        ...entry,
+        chats: entry.chats.filter((chat) => chat.id !== deleted.id),
+      })),
+    )
+  }
+}
+
+function useBoldSearchJobDeletions(): void {
+  const stream = useOptionalStream()
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    if (!stream) return
+    return stream.subscribe((event) => {
+      if (event.type === 'job.deleted') dropCachedJobFromSearch(queryClient, event.data)
+    })
+  }, [queryClient, stream])
+}
 
 /** The team room and its jobs. `fresh`: read again whenever the caller mounts (Search opens), so a job made moments
  * ago is found even though the first-run routing (BoldHome) read the same key when /b opened. */
 export function useBoldTeamRoom({ fresh = false }: { fresh?: boolean } = {}) {
+  useBoldSearchJobDeletions()
   return useQuery({
-    queryKey: ['bold-search', 'team-room'],
-    queryFn: async ({ signal }) =>
-      TeamRoomResponseSchema.parse(await apiFetch('team-room', { signal })),
+    queryKey: BOLD_SEARCH_TEAM_KEY,
+    queryFn: ({ signal }) => fetchCompleteTeamRoom(signal),
     staleTime: 5_000,
     ...(fresh ? { refetchOnMount: 'always' as const } : {}),
     retry: false,
@@ -30,8 +72,9 @@ export function useBoldTeamRoom({ fresh = false }: { fresh?: boolean } = {}) {
 /** Every agent's one-to-one chats; one failing agent must not blank the other agents' results. */
 export function useBoldDirectChats(agents: readonly AgentSummary[]) {
   const ids = agents.map((agent) => agent.id)
+  useBoldSearchJobDeletions()
   return useQuery({
-    queryKey: ['bold-search', 'directs', ...ids],
+    queryKey: [...BOLD_SEARCH_DIRECTS_KEY, ...ids],
     enabled: ids.length > 0,
     queryFn: async ({ signal }) => {
       const answers = await Promise.allSettled(
@@ -46,6 +89,22 @@ export function useBoldDirectChats(agents: readonly AgentSummary[]) {
     },
     staleTime: 5_000,
     retry: false,
+  })
+}
+
+/** Every agent's routines; one failing agent must not blank the other agents' results. */
+export function useBoldRoutines(agents: readonly AgentSummary[]): BoldSearchRoutine[] {
+  const results = useQueries({
+    queries: agents.map((agent) => ({
+      queryKey: routinesKey(agent.id),
+      queryFn: ({ signal }: { signal: AbortSignal }) => fetchRoutines(agent.id, signal),
+      staleTime: 5_000,
+      retry: false,
+    })),
+  })
+  return agents.flatMap((agent, index) => {
+    const routines = results[index]?.data
+    return routines ? routines.map((routine) => ({ ...routine, agentId: agent.id })) : []
   })
 }
 

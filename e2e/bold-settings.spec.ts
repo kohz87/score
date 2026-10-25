@@ -256,7 +256,10 @@ test.describe('bold Settings', () => {
       await page.goto('/b/settings/security')
       await expect(page.getByRole('heading', { name: 'Remote access and security' })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Where agents run' })).toBeVisible()
-      await expect(page.getByText('Comes in 11.8a')).toBeVisible()
+      // 11.12b: the list of agents and what each runs on replaces the old placeholder.
+      const where = page.getByRole('list', { name: 'Where agents run' })
+      await expect(where).toBeVisible()
+      await expect(where.getByRole('listitem').first()).toBeVisible()
       await expect(page.getByRole('form', { name: 'Set a security password' })).toBeVisible()
       passwordSet = true
       await page.reload()
