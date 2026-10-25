@@ -87,6 +87,8 @@ const HealthSchema = z.object({ status: z.string(), platform: z.string(), versio
 const errorCodes = z.enum([
   'approval_not_pending',
   'approval_not_active',
+  // Hermes 0.22.5 (session authority): the answer was for an older execution generation of the run.
+  'stale_generation',
   'gateway_auth_failed',
   'run_not_found',
   'invalid_request',
@@ -389,21 +391,45 @@ export class GatewayClient {
       })
       .parse(request)
     try {
+      // Hermes 0.22.5 under its session authority answers only `{request_id, execution_generation, choice}` for the
+      // run's current generation (api_server_authority_runs.py respond_run); its run projection says which. Older
+      // builds and the non-authority path take `{choice, request_id}` and have no generation.
+      // A projection that can't be read falls back to the older body; Hermes then refuses or applies it as usual.
+      const projection = await this.json(
+        profile,
+        `/v1/runs/${encodeURIComponent(parsed.runId)}`,
+        z.object({ execution_generation: z.int().nonnegative().optional() }).passthrough(),
+        undefined,
+        undefined,
+        generation,
+      ).catch(() => null)
+      const body =
+        projection?.execution_generation === undefined
+          ? { choice: parsed.choice, request_id: parsed.requestId }
+          : {
+              request_id: parsed.requestId,
+              execution_generation: projection.execution_generation,
+              choice: parsed.choice,
+            }
       const result = await this.json(
         profile,
         `/v1/runs/${encodeURIComponent(parsed.runId)}/approval`,
-        z.object({ resolved: z.int().nonnegative() }),
-        { choice: parsed.choice, ...(parsed.requestId ? { request_id: parsed.requestId } : {}) },
+        z.union([
+          z.object({ resolved: z.int().nonnegative() }),
+          z.object({ status: z.enum(['resolved', 'already_resolved']) }).passthrough(),
+        ]),
+        body,
         undefined,
         generation,
       )
+      if ('status' in result) return result.status === 'resolved' ? 'applied' : 'not_pending'
       if (result.resolved !== 1) throw new HermesHttpError(200, 'invalid_response')
       return 'applied'
     } catch (error) {
       if (
         error instanceof HermesHttpError &&
         error.status === 409 &&
-        ['approval_not_pending', 'approval_not_active'].includes(error.code)
+        ['approval_not_pending', 'approval_not_active', 'stale_generation'].includes(error.code)
       )
         return 'not_pending'
       throw error

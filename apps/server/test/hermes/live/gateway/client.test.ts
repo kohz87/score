@@ -197,7 +197,7 @@ test('real HTTP transport enforces bearer and idempotency and streams a fixture'
 test.each([0, 1, 2])('approval resolved=%i requires exactly one target', async (resolved) => {
   const fetch = vi
     .fn<typeof globalThis.fetch>()
-    .mockResolvedValue(new Response(JSON.stringify({ resolved }), { status: 200 }))
+    .mockImplementation(async () => new Response(JSON.stringify({ resolved }), { status: 200 }))
   const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
   const request = { runId: 'run-exact', requestId: 'request-exact', choice: 'once' as const }
   if (resolved === 1) expect(await client.submitApproval('builder', request, 1)).toBe('applied')
@@ -207,13 +207,53 @@ test.each([0, 1, 2])('approval resolved=%i requires exactly one target', async (
       code: 'invalid_response',
       maybeApplied: true,
     })
-  expect(fetch.mock.calls[0]?.[0]).toBe(
+  // The run's projection is read first (0.22.5 needs its execution generation); this one has none.
+  expect(fetch.mock.calls[0]?.[0]).toBe('http://127.0.0.1:8642/p/builder/v1/runs/run-exact')
+  expect(fetch.mock.calls[1]?.[0]).toBe(
     'http://127.0.0.1:8642/p/builder/v1/runs/run-exact/approval',
   )
-  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+  expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toEqual({
     choice: 'once',
     request_id: 'request-exact',
   })
+})
+
+test('Hermes 0.22.5 under its session authority gets exactly {request_id, execution_generation, choice}', async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify({ status: 'resolved', prompt_id: 'prompt-7' }), { status: 200 })
+      : new Response(JSON.stringify({ status: 'started', execution_generation: 3 }), {
+          status: 200,
+        }),
+  )
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
+  expect(
+    await client.submitApproval(
+      'builder',
+      { runId: 'run-a', requestId: 'prompt-7', choice: 'deny' },
+      1,
+    ),
+  ).toBe('applied')
+  expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toEqual({
+    request_id: 'prompt-7',
+    execution_generation: 3,
+    choice: 'deny',
+  })
+})
+
+test.each([
+  ['already_resolved', 200, { status: 'already_resolved', prompt_id: 'p' }],
+  ['stale_generation', 409, { error: { code: 'stale_generation' } }],
+])('a 0.22.5 %s answer is not_pending', async (_name, status, payload) => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify(payload), { status })
+      : new Response(JSON.stringify({ execution_generation: 1 }), { status: 200 }),
+  )
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
+  expect(
+    await client.submitApproval('builder', { runId: 'run-b', requestId: 'p', choice: 'once' }, 1),
+  ).toBe('not_pending')
 })
 test.each(['approval_not_pending', 'approval_not_active'])(
   'approval %s is not_pending',
