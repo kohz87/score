@@ -12,26 +12,8 @@ const sizes = [
   { width: 390, height: 844 },
 ] as const
 
-const sections = [
-  ['Overview', 'agent-overview'],
-  ['Personality', 'agent-personality'],
-  ['Model', 'agent-model'],
-  ['Skills', 'agent-skills'],
-  ['Memory', 'agent-memory'],
-  ['Tools', 'agent-tools'],
-  ['Plugins', 'agent-plugins'],
-  ['Workspace', 'agent-workspace'],
-  ['Routines', 'agent-routines'],
-  ['Channels', 'agent-channels'],
-  ['Permissions', 'agent-permissions'],
-  ['History', 'agent-history'],
-  ['Appearance', 'agent-appearance'],
-  ['Todo', 'agent-todo'],
-  ['Details', 'agent-details'],
-] as const
-
 for (const viewport of sizes) {
-  test(`Team cards open the agent and every classic tab is reachable at ${viewport.width}×${viewport.height}`, async ({
+  test(`Team cards open the agent and More shows its compact cards at ${viewport.width}×${viewport.height}`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport)
@@ -95,39 +77,67 @@ for (const viewport of sizes) {
       0,
     )
 
-    await page.getByRole('button', { name: /^More: memory/ }).click()
-    const nav = page.getByRole('navigation', { name: 'Agent settings sections' })
-    await expect(nav.getByRole('link')).toHaveCount(sections.length)
-    for (const [name, id] of sections) {
-      await nav.getByRole('link', { name, exact: true }).click()
-      await expect(page).toHaveURL(new RegExp(`#${id}$`))
-      const section = page.locator(`#${id}`)
-      await expect(section).toBeVisible()
-      if (name === 'Overview') {
-        await expect(section.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
-      } else if (name === 'Personality') {
-        await expect(section.getByRole('textbox', { name: 'SOUL.md contents' })).toBeVisible()
-      } else if (name === 'Appearance') {
-        await section.getByRole('button', { name: /Change builder.s colour and shape/ }).click()
-        const dialog = page.getByRole('dialog', { name: 'Agent appearance' })
-        await expect(dialog.getByRole('radio', { name: 'star' })).toBeVisible()
-        await dialog.getByRole('button', { name: 'Cancel' }).click()
-        await expect(dialog).toHaveCount(0)
-      } else if (name === 'Todo') {
-        await expect(section.getByRole('heading', { name: 'Todo' })).toBeVisible()
-      } else if (name === 'Details') {
-        await expect(section.getByRole('heading', { name: 'Agent details' })).toBeVisible()
-        await expect(section.getByRole('heading', { name: 'Danger zone' })).toBeVisible()
-        const remove = section.getByRole('button', { name: 'Delete agent' })
-        await remove.click()
-        await expect(section.getByRole('heading', { name: 'Review deletion' })).toBeVisible()
-        await expect(section.getByLabel('Type builder to confirm')).toBeVisible()
-        await section.getByRole('button', { name: 'Cancel' }).click()
-        await expect(section.getByRole('heading', { name: 'Review deletion' })).toHaveCount(0)
-        await expect(remove).toBeVisible()
-      } else {
-        await expect(section.getByRole('heading', { name, level: 2, exact: true })).toBeVisible()
-      }
+    const toggle = page.getByRole('button', {
+      name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
+    })
+    await toggle.click()
+    await expect(page.getByRole('navigation', { name: 'Agent settings sections' })).toHaveCount(0)
+    const more = page.locator('#agent-more')
+    for (const title of [
+      'Remembers',
+      'Skills',
+      'Can use',
+      'Workspace',
+      'Repeating jobs',
+      'Delete builder',
+      'Plugins',
+      'Channels',
+      'Never rules',
+      'Looks',
+      'Name and role',
+      'Recent runs',
+      'Todo',
+    ]) {
+      await expect(more.getByRole('heading', { name: title, level: 3 })).toBeVisible()
+    }
+    // No classic Team editor is left under More.
+    await expect(more.locator('.team-card')).toHaveCount(0)
+
+    // Add a memory and forget it again.
+    const text = `Check the feed twice ${viewport.width}`
+    const remembers = more.locator('#agent-memory')
+    await remembers.getByLabel('New memory').fill(text)
+    await remembers.getByRole('button', { name: 'Add' }).click()
+    const added = remembers.locator('.listrow', { hasText: text })
+    await expect(added).toBeVisible()
+    await added.getByRole('button', { name: /^Forget:/ }).click()
+    await expect(added).toHaveCount(0)
+
+    // Switch a tool off and on again.
+    const tool = more.locator('#agent-tools').getByRole('checkbox').first()
+    const was = await tool.isChecked()
+    await tool.click()
+    await expect(tool).toBeChecked({ checked: !was })
+    await tool.click()
+    await expect(tool).toBeChecked({ checked: was })
+
+    // Delete opens the same Remove panel as the header button; nothing is removed.
+    await more.locator('#agent-delete').getByRole('button', { name: 'Delete agent' }).click()
+    const panel = page.getByRole('group', { name: 'Remove builder' })
+    await expect(panel).toBeVisible()
+    await panel.getByRole('button', { name: 'Cancel' }).click()
+    await expect(panel).toHaveCount(0)
+
+    // The cards never push the page sideways.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+    if (viewport.width < 500) {
+      const columns = await more
+        .locator('.bold-more-grid')
+        .evaluate((grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length)
+      expect(columns).toBe(1)
     }
 
     const running = await page
@@ -186,23 +196,18 @@ test('a coding agent keeps permission, quota floor, password and the protected C
     await page.getByRole('button', { name: 'Cancel' }).click()
 
     await page.getByRole('button', { name: /^More: tools, workspace, delete/ }).click()
-    const nav = page.getByRole('navigation', { name: 'Agent settings sections' })
-    await expect(nav.getByRole('link')).toHaveCount(4)
-    for (const [tab, sectionId] of [
-      ['Overview', 'agent-overview'],
-      ['Workspace', 'agent-workspace'],
-      ['History', 'agent-history'],
-      ['Appearance', 'agent-appearance'],
-    ] as const) {
-      await nav.getByRole('link', { name: tab, exact: true }).click()
-      await expect(page).toHaveURL(new RegExp(`#${sectionId}$`))
-      if (tab === 'Overview') await expect(page.locator('#agent-title')).toHaveText(id)
-      else
-        await expect(
-          page.locator(`#${sectionId}`).getByRole('heading', { name: tab }),
-        ).toBeVisible()
-    }
-    await expect(nav.getByRole('link', { name: 'Memory' })).toHaveCount(0)
+    await expect(page.getByRole('navigation', { name: 'Agent settings sections' })).toHaveCount(0)
+    const more = page.locator('#agent-more')
+    for (const title of [
+      'Can use',
+      'Workspace',
+      'Recent runs',
+      'Looks',
+      'Name and role',
+      `Delete ${id}`,
+    ])
+      await expect(more.getByRole('heading', { name: title, level: 3 })).toBeVisible()
+    await expect(more.getByRole('heading', { name: 'Remembers' })).toHaveCount(0)
   } finally {
     if (created) {
       await page.evaluate(async (agentId) => {
