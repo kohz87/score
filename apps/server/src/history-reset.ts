@@ -1,3 +1,4 @@
+import { redactValue } from './redact.ts'
 import {
   closeSync,
   existsSync,
@@ -295,8 +296,33 @@ export function resetDatabaseHistory(
              WHERE id IN (SELECT message_id FROM message_runs WHERE state IN ('pending', 'active'))`,
           )
           .run()
+      // The turns that stop here never settle: their staged exchange actions are dropped and redacted now, and their
+      // capabilities end, as a settled turn's would (D6, decision 121).
+      const turns = (
+        sqlite
+          .prepare(`SELECT DISTINCT turn_id FROM message_runs WHERE state IN ('pending', 'active')`)
+          .all() as { turn_id: string }[]
+      ).map((row) => row.turn_id)
+      if (has('exchange_actions'))
+        for (const turnId of turns) {
+          sqlite
+            .prepare(
+              "UPDATE exchange_actions SET state = 'dropped' WHERE turn_id = ? AND state = 'staged'",
+            )
+            .run(turnId)
+          // Inline rather than the exchanges module's helper: this runs as a plain Node script (strip-only TypeScript).
+          const rows = sqlite
+            .prepare('SELECT rowid, args FROM exchange_actions WHERE turn_id = ?')
+            .all(turnId) as { rowid: number; args: string }[]
+          for (const row of rows)
+            sqlite
+              .prepare('UPDATE exchange_actions SET args = ? WHERE rowid = ?')
+              .run(JSON.stringify(redactValue(JSON.parse(row.args))), row.rowid)
+        }
       sqlite
-        .prepare(`UPDATE message_runs SET state = 'failed' WHERE state IN ('pending', 'active')`)
+        .prepare(
+          `UPDATE message_runs SET state = 'failed', xtc_hash = NULL WHERE state IN ('pending', 'active')`,
+        )
         .run()
     }
     // The run rows are the handles Stop, the follower, recovery and approvals look up: a retired run has none.

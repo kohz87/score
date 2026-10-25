@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import type { ExchangeDecisionRequest } from '@score/contract'
 import { HttpError } from '../../errors.ts'
+import { assertJobOpen } from './job-life.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { agentAdmits } from '../agent-lifecycle.ts'
 import { reserveMessageRun } from '../message-runs.ts'
@@ -35,6 +36,8 @@ export function decideExchange(
 ): Decided {
   const exchange = exchangeRow(sqlite, exchangeId)
   if (!exchange) throw new HttpError(404, 'not_found', 'Couldn’t find that exchange.')
+  // A closed or deleted job takes no decisions: reopen it (or undo the delete) first.
+  assertJobOpen(sqlite, exchange.job_id)
   if (!pauseOptions(sqlite, exchange).includes(decision.option))
     throw new HttpError(409, 'conflict', 'That choice isn’t open for this exchange right now.')
   const job = jobRow(sqlite, exchange.job_id)!

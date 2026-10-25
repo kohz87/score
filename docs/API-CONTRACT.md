@@ -281,6 +281,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `agent.updated`      | `AgentSummary`                                                                                | everywhere agents render                                 |
 | `room.upserted`      | `Room`                                                                                        | Chat rooms list                                          |
 | `job.upserted`       | `Job` (PLAN 11.1b)                                                                            | The new shell's job tabs                                 |
+| `job.deleted`        | `{ id; roomId }` (decision 121: a named job was deleted, undoable)                             | The new shell's job tabs and streams                     |
 | `exchange.upserted`  | `Exchange` (PLAN 11.1b)                                                                       | Job capsules and threads                                 |
 | `room.pins.changed`  | `{ roomId }` (PLAN 11.2)                                                                      | Pinned decisions                                         |
 | `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
@@ -588,6 +589,14 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   without one); unaddressed into a job with a live exchange it is a step in and starts nothing. The addressed agent
   becomes the job's holder. `MessagePart` gains `{ kind: 'notice'; code: 'mention_not_handoff' | 'action_ignored' |
   'action_not_sent' | 'no_lead'; text }` (a line from Score, never agent text).
+  - **H** `PATCH /api/jobs/:jobId { title (1–200) }` → `Job`; **H** `POST /api/jobs/:jobId/close` → `Job` (`state:
+    closed`, it leaves the room's job lists); **H** `POST /api/jobs/:jobId/reopen` → `Job` (`state: open`); **H** `DELETE
+    /api/jobs/:jobId` → `204` (soft: the job and its messages leave every read — room reads, unread counts, search,
+    exports, agents' context — and the job lists; emits `job.deleted { id; roomId }`); **H** `POST
+    /api/jobs/:jobId/restore` → `Job` (undo: brings back the job and exactly the messages its delete hid). Decision 121
+    (D6). `409 conflict` for the room's own thread (it follows the room: rename or delete the room) and, for close and
+    delete, while the job still has work running or queued (stop it first). A person's message into a closed job is
+    `409`, into a deleted one `404`. Idempotent: closing a closed job or deleting a deleted one changes nothing.
   - **S** `GET /api/rooms/:roomId/jobs` → `{ asOfSeq; items: Job[] }` (open jobs, the default first).
   - **H** `POST /api/rooms/:roomId/jobs` `{ title (1–200); exchangeBudget? (1–100, default 8); jobTurnLimit? (1–1000,
     default 40); spendCapUsd? (> 0, ≤ 10000; default none); recipe?: { kind: 'orchestration'|'workflow'; ref } }` →
@@ -942,8 +951,8 @@ Score's own runs (`score-<room>-<agent>`), compression children and empty sessio
 **Removed in 11.11b.** The Tasks board and its REST routes are gone; tasks remain a domain/event source for jobs,
 pauses, orchestrations, reports and MCP tools. The attempt page at `/attempts/:attemptId` remains.
 
-- ~~**S** `GET /api/tasks?room=&agent=&needsYou=true&column=`~~ (removed in 11.11b)
-- ~~**S** `GET /api/tasks/:taskId`~~ (removed in 11.11b). With attempts on (5.17a-1) `TaskDetail.runIds` holds no numeric Kanban ids any more: a legacy
+- **S** `GET /api/tasks?room=&agent=&needsYou=true&column=` (kept after the board went, decision 121: the new shell lists a room's Hermes tasks and the blocked ones that need the person)
+- **S** `GET /api/tasks/:taskId` (kept, decision 121). With attempts on (5.17a-1) `TaskDetail.runIds` holds no numeric Kanban ids any more: a legacy
   numeric link maps to its attempt's `kr_` id only with affirmative proof (a saved "claimed" activity item with the attempt's frozen start
   second and claim profile); every other legacy link is reported in `unresolvedRunLinks: { legacyId; reason }[]` ("an earlier attempt,
   details not kept"; `not_yet_resolved` while the upgrade has not run). Responses of `POST /api/tasks` and `PATCH /api/tasks/:taskId` and
@@ -956,7 +965,7 @@ pauses, orchestrations, reports and MCP tools. The attempt page at `/attempts/:a
 - ~~`POST /api/tasks`~~ (removed in 11.11b)
   `reviewer` on create and on `PATCH` answers 501 `not_implemented` (Hermes names a reviewer only when review is requested); `roomId` is kept by Score, must name an existing room (else 400) and is shown on `TaskDetail.roomId`.
 - ~~`PATCH /api/tasks/:taskId`~~ (removed in 11.11b)
-- ~~**H** `POST /api/tasks/:taskId/actions`~~ (removed in 11.11b)
+- **H** `POST /api/tasks/:taskId/actions` (kept, decision 121: unblock and comment from the new shell)
   `{ action: 'start' | 'block' | 'unblock' | 'request_review' | 'request_changes' | 'complete' | 'archive' | 'comment'; text?: string }`
   → `200 { taskId; action; hermesStatus: string }` after the Hermes CLI accepted it; the task's new state arrives on the
   stream (`task.upserted`). `409 conflict` when the Hermes state machine rejects the transition (e.g. `unblock` on a
@@ -1777,7 +1786,10 @@ Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload 
   `webhook-id`, `webhook-timestamp` (unix seconds, ±5 min) and `webhook-signature` (`v1,<base64 HMAC-SHA256 of
   "<id>.<timestamp>.<raw body>">`, keyed by the secret's bytes) → `200 { ok: true; jobId }`. `401` bad/missing/stale
   signature, `404` unknown trigger, `410` deleted, `413` body > 256 KB, `415` not JSON, `429` > 60 calls/min per
-  trigger, `503 not_ready` without a team room. A repeated `webhook-id` (24 h) answers with the same `jobId` and starts
+  trigger (failed calls count per caller and trigger; calls to trigger ids that don't exist share one budget per
+  address), `429 trigger_busy` when the trigger already has 10 open jobs or started 100 in the last 24 h
+  (`TRIGGER_LIMITS.openJobs`, `jobsPerDay`; decision 121), `503 not_ready` without a team room. A trigger's job starts
+  with `spendCapUsd` = `TRIGGER_LIMITS.jobSpendCapUsd` ($5); the person can raise it on the job. A repeated `webhook-id` (24 h) answers with the same `jobId` and starts
   nothing. A call starts a job in the team room titled "<ref> · <title>", `Job.source { app; ref; title; link; triggerId;
   missing }` (mapped fields the call lacked; the job still starts and says which), and gives the room lead a turn whose
   message is the template with each `{{path}}` as the quoted, redacted value, followed by the mapped fields under

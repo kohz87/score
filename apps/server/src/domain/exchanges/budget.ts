@@ -74,9 +74,10 @@ export function jobLimitFor(sqlite: DatabaseSync, jobId: string): ExchangePauseR
       usd: number
     }
   ).usd
+  // Queued turns will run too: reserve for them as for the running ones, so parallel hand-offs can't all pass the cap.
   const running = count(
     sqlite,
-    "SELECT count(*) AS n FROM message_runs WHERE job_id = ? AND state = 'active'",
+    "SELECT count(*) AS n FROM message_runs WHERE job_id = ? AND state IN ('pending', 'active') AND purpose IS NULL",
     job.id,
   )
   const reserved = (running + 1) * EXCHANGE_LIMITS.turnEstimateUsd

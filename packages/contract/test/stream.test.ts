@@ -15,6 +15,7 @@ const eventData = {
   'agent.updated': f.agent,
   'room.upserted': f.room,
   'room.pins.changed': { roomId: 'room-1' },
+  'job.deleted': { id: 'job_1', roomId: 'room-team' },
   'job.upserted': {
     id: 'job_1',
     roomId: 'room-1',

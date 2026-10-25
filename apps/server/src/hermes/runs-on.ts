@@ -1,3 +1,4 @@
+import { posix } from 'node:path'
 import type { RunsOn } from '@score/contract'
 import { isIP } from 'node:net'
 
@@ -89,7 +90,10 @@ export function hostIs(host: string, self: ThisMachine): 'same' | 'other' | 'nam
 
 // Docker options that hand the container this machine (any one makes it "not separated").
 const HOST_OPTIONS = [
-  /^--privileged(=true)?$/u,
+  // Any value but an explicit false (`--privileged=1`, `=yes`) still means privileged.
+  /^--privileged(?!=(false|0)$)/u,
+  // Another container's volumes can be anything, this machine's root included.
+  /^--volumes-from/u,
   /^--(network|net)(=|$)host$/u,
   /^--(pid|ipc|uts|userns)=host$/u,
   /^--cap-add/u,
@@ -119,17 +123,31 @@ function networkFromArgs(args: string[]): boolean | null {
   }
   return null
 }
-// A mount that gives the container this machine's root, Docker itself, or the person's home.
+// Paths whose mount gives the container this machine. Whole subtrees: system configuration and kernel views, Docker's
+// socket and data. Exactly (a parent of everything below it, not its everyday subfolders): `/`, `/var`, `/usr`, `/home`.
+// The person's home, any parent of it, and its hidden folders (SSH keys, Hermes's and Score's data, cloud credentials)
+// count too. A project folder inside the home, or an app's data folder under /var, is the usual workspace: "partly".
+const HOST_TREES = ['/etc', '/proc', '/sys', '/dev', '/boot', '/run', '/var/run', '/var/lib/docker']
+const HOST_EXACT = ['/', '/var', '/usr', '/home', '/root']
 function mountGivesHost(volume: string, home: string): boolean {
-  const source = volume.split(':')[0] ?? ''
-  const clean = source.replace(/\/+$/u, '') || '/'
+  const homeDir = home === '' ? '' : posix.normalize(home).replace(/\/+$/u, '')
+  const raw = volume.split(':')[0] ?? ''
+  // A named volume (no slash, no ~ or $) lives in Docker's own store, not on this machine's paths.
+  if (!/^[~/.$]/u.test(raw)) return false
+  const expanded = raw.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/u, homeDir)
+  // Anything still relative or unexpanded (`.`, `~other`, `$VAR`) can't be checked: count it as handing over.
+  if (!expanded.startsWith('/')) return true
+  const clean = posix.normalize(expanded).replace(/(?<=.)\/+$/u, '')
+  const within = (parent: string) => clean === parent || clean.startsWith(parent + '/')
+  const holds = (child: string) => child !== '' && (clean === '/' || child.startsWith(clean + '/'))
+  const inHome = homeDir !== '' && clean.startsWith(homeDir + '/')
   return (
-    clean === '/' ||
+    HOST_EXACT.includes(clean) ||
     clean.endsWith('docker.sock') ||
-    clean === '/var/run' ||
-    clean === '/run' ||
-    clean === home.replace(/\/+$/u, '') ||
-    clean === '~'
+    HOST_TREES.some((path) => within(path)) ||
+    clean === homeDir ||
+    holds(homeDir) ||
+    (inHome && clean.slice(homeDir.length + 1).startsWith('.'))
   )
 }
 

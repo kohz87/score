@@ -286,6 +286,16 @@ export const ExchangeDecisionRequestSchema = z.discriminatedUnion('option', [
 ])
 export type ExchangeDecisionRequest = z.infer<typeof ExchangeDecisionRequestSchema>
 
+/** `PATCH /api/jobs/:jobId` (decision 121): a named job's title; the room's own thread follows the room's name. */
+export const JobRenameRequestSchema = z
+  .object({ title: z.string().trim().min(1).max(200) })
+  .strict()
+export type JobRenameRequest = z.infer<typeof JobRenameRequestSchema>
+
+/** `job.deleted`: a named job was deleted (soft, undoable); its messages leave every read with it. */
+export const JobDeletedSchema = z.object({ id: z.string().min(1), roomId: z.string().min(1) })
+export type JobDeleted = z.infer<typeof JobDeletedSchema>
+
 export const JobsResponseSchema = z.object({
   asOfSeq: z.int().nonnegative(),
   items: z.array(JobSchema),

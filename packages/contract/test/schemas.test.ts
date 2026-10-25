@@ -301,6 +301,8 @@ const exchangeCases = [
   ['ExchangeStateSchema', 'paused_budget', 'paused'],
   ['ExchangeSchema', exchange, { ...exchange, round: 0 }],
   ['JobsResponseSchema', { asOfSeq: 1, items: [job] }, { items: [job] }],
+  ['JobRenameRequestSchema', { title: 'Release notes 2.5' }, { title: '   ' }],
+  ['JobDeletedSchema', { id: 'job_1', roomId: 'room-team' }, { id: '' }],
   ['JobCreateRequestSchema', { title: 'Release notes' }, { title: '  ' }],
   ['ExchangesResponseSchema', { asOfSeq: 1, items: [exchange] }, { asOfSeq: 1, items: [job] }],
   ['ExchangePauseReasonSchema', 'asker_gone', 'tired'],

@@ -8,7 +8,7 @@ import { agentAdmits } from '../agent-lifecycle.ts'
 import type { MessageRun } from '../message-runs.ts'
 import { reserveMessageRun } from '../message-runs.ts'
 import { parseMessage } from '../parse.ts'
-import { actionGroup, roomMembers, stageAction, turnById } from './actions.ts'
+import { actionGroup, redactSettledActions, roomMembers, stageAction, turnById } from './actions.ts'
 import { parseScoreAction } from './action-block.ts'
 import { hold, jobLimitFor, limitFor, release, type HeldTurn } from './budget.ts'
 import {
@@ -201,10 +201,13 @@ export function settleExchangeTurn(
   }
 
   const actions = staged(sqlite, mapping.turn_id)
-  const settle = (state: 'applied' | 'dropped') =>
+  // `actions` is read above, so redacting the stored copy as the turn settles can't change what gets applied.
+  const settle = (state: 'applied' | 'dropped') => {
     sqlite
       .prepare("UPDATE exchange_actions SET state = ? WHERE turn_id = ? AND state = 'staged'")
       .run(state, mapping.turn_id)
+    redactSettledActions(sqlite, mapping.turn_id)
+  }
   const give = makeGive(sqlite, { ...mapping, agentId: me, messageId, jobId }, drafts, now)
 
   // The room lead's turn deciding a budget pause ("Let lead decide").

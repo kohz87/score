@@ -6,6 +6,7 @@ import {
   ExchangeDecisionRequestSchema,
   ExchangesResponseSchema,
   JobCreateRequestSchema,
+  JobRenameRequestSchema,
   JobResultsSchema,
   WorkbenchSchema,
   JobSchema,
@@ -20,13 +21,27 @@ import type { ScoreDb } from '../db/index.ts'
 import { decideExchange, stopJob, type Decided } from '../domain/exchanges/decisions.ts'
 import { jobResults } from '../domain/exchanges/results.ts'
 import { jobWorkbench } from '../domain/exchanges/workbench.ts'
-import { createJob, jobRow, listExchanges, listJobs } from '../domain/exchanges/store.ts'
+import {
+  createJob,
+  jobFromRow,
+  jobRow,
+  listExchanges,
+  listJobs,
+} from '../domain/exchanges/store.ts'
+import {
+  closeJob,
+  deleteJob,
+  jobDeleted,
+  renameJob,
+  reopenJob,
+  restoreJob,
+} from '../domain/exchanges/job-life.ts'
 import type { HermesPort } from '../hermes/index.ts'
-import { insertRoom, readRoom, roomChanged, roomRow } from '../domain/rooms.ts'
+import { freeRoomName, insertRoom, readRoom, roomChanged, roomRow } from '../domain/rooms.ts'
 import { listPins, pinMessage, shareMessage, unpinMessage } from '../domain/exchanges/sharing.ts'
 import { teamRoomId } from '../domain/team-room.ts'
 import { HttpError } from '../errors.ts'
-import type { Ingest } from '../hub/ingest.ts'
+import type { DomainEventDraft, Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
 
 // Jobs and their exchanges (contract §5 "Jobs", PLAN 11.1b).
@@ -76,6 +91,49 @@ export function registerJobRoutes(
   const RoomParams = z.object({ roomId: z.string().min(1).max(256) })
   const JobParams = z.object({ jobId: z.string().min(1).max(64) })
 
+  // Decision 121 (D6): the job menu's rename, close and reopen, and delete with undo.
+  async function jobChange(
+    jobId: string,
+    apply: (sqlite: DatabaseSync, now: string) => DomainEventDraft[],
+  ) {
+    let job: unknown = null
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite, now }) => {
+        const drafts = apply(sqlite, now)
+        const row = jobRow(sqlite, jobId)
+        job = row ? jobFromRow(sqlite, row) : null
+        return drafts
+      },
+    })
+    return job
+  }
+  app.patch('/api/jobs/:jobId', mutation, async (request) => {
+    const { jobId } = JobParams.parse(request.params)
+    const { title } = JobRenameRequestSchema.parse(request.body)
+    return JobSchema.parse(
+      await jobChange(jobId, (sqlite, now) => renameJob(sqlite, jobId, title, now)),
+    )
+  })
+  app.post('/api/jobs/:jobId/close', mutation, async (request) => {
+    const { jobId } = JobParams.parse(request.params)
+    return JobSchema.parse(await jobChange(jobId, (sqlite, now) => closeJob(sqlite, jobId, now)))
+  })
+  app.post('/api/jobs/:jobId/reopen', mutation, async (request) => {
+    const { jobId } = JobParams.parse(request.params)
+    return JobSchema.parse(await jobChange(jobId, (sqlite, now) => reopenJob(sqlite, jobId, now)))
+  })
+  app.delete('/api/jobs/:jobId', mutation, async (request, reply) => {
+    const { jobId } = JobParams.parse(request.params)
+    await jobChange(jobId, (sqlite, now) => deleteJob(sqlite, jobId, now))
+    return reply.code(204).send()
+  })
+  app.post('/api/jobs/:jobId/restore', mutation, async (request) => {
+    const { jobId } = JobParams.parse(request.params)
+    return JobSchema.parse(await jobChange(jobId, (sqlite, now) => restoreJob(sqlite, jobId, now)))
+  })
+
   app.get('/api/rooms/:roomId/jobs', async (request) => {
     const { roomId } = RoomParams.parse(request.params)
     const result = snapshot(db, (sqlite) => {
@@ -104,6 +162,8 @@ export function registerJobRoutes(
 
   app.get('/api/jobs/:jobId/results', async (request) => {
     const { jobId } = JobParams.parse(request.params)
+    if (db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
     const result = snapshot(db, (sqlite) => jobResults(sqlite, jobId))
     return JobResultsSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
   })
@@ -111,12 +171,16 @@ export function registerJobRoutes(
   // Read-only (PLAN 11.6a): no Workbench route types, clicks or takes over anything.
   app.get('/api/jobs/:jobId/workbench', async (request) => {
     const { jobId } = JobParams.parse(request.params)
+    if (db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
     const result = snapshot(db, (sqlite) => jobWorkbench(sqlite, jobId))
     return WorkbenchSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
   })
 
   app.get('/api/jobs/:jobId/exchanges', async (request) => {
     const { jobId } = JobParams.parse(request.params)
+    if (db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
     const result = snapshot(db, (sqlite) => {
       if (!jobRow(sqlite, jobId)) throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
       return listExchanges(sqlite, jobId)
@@ -181,7 +245,7 @@ export function registerJobRoutes(
             sqlite,
             {
               id: roomId,
-              name: agent.name,
+              name: freeRoomName(sqlite, agent.name),
               kind: 'direct',
               leadAgentId: agentId,
               members: [agentId],
