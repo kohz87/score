@@ -840,18 +840,15 @@ test('sending an edit posts `edits`; the original greys with a link to the new v
   )
   fireEvent.click(screen.getByRole('button', { name: 'Edit message from You' }))
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Ship it today' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
-  // The confirmation says what happens, then the room is rewound and the correction is posted.
-  const dialog = await screen.findByRole('dialog', { name: 'Edit and send again?' })
-  expect(await within(dialog).findByText(/Lead −2 exchanges/)).toBeDefined()
-  expect(within(dialog).getByText(/Long-term memory .* isn’t rewound/)).toBeDefined()
   rewindResponse = () =>
     response({
       version: { ...editVersion },
       rewound: [{ agentId: 'lead', turnsUndone: 2 }],
       skipped: [],
     })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Rewind and edit' }))
+  // 2.0.12: every agent can be rewound and nothing is shared, so Send rewinds and posts without a dialog.
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  expect(screen.queryByRole('dialog', { name: 'Edit and send again?' })).toBeNull()
   await waitFor(() =>
     expect(
       fetchMock.mock.calls.some(

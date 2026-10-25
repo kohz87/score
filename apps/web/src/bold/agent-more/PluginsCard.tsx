@@ -17,22 +17,24 @@ export function PluginsCard({ agent }: { agent: AgentDetail }) {
         </Fail>
       )}
       {plugins.data && !plugins.data.length && <p className="small muted">No plugins installed.</p>}
-      {list.shown.map((plugin) => (
-        <label className="check" key={plugin.id}>
-          <input
-            type="checkbox"
-            checked={plugin.enabled}
-            disabled={plugin.locked || toggle.isPending}
-            onChange={() => toggle.mutate({ id: plugin.id, enabled: !plugin.enabled })}
-          />
-          <span>
-            {plugin.label}
-            {plugin.locked && (
-              <span className="small muted"> Always on: Score needs it to see what it does.</span>
-            )}
-          </span>
-        </label>
-      ))}
+      <div id={list.id} className="bold-fold-list">
+        {list.shown.map((plugin) => (
+          <label className="check" key={plugin.id}>
+            <input
+              type="checkbox"
+              checked={plugin.enabled}
+              disabled={plugin.locked || toggle.isPending}
+              onChange={() => toggle.mutate({ id: plugin.id, enabled: !plugin.enabled })}
+            />
+            <span>
+              {plugin.label}
+              {plugin.locked && (
+                <span className="small muted"> Always on: Score needs it to see what it does.</span>
+              )}
+            </span>
+          </label>
+        ))}
+      </div>
       {list.toggle}
       {plugins.data && plugins.data.length > 0 && (
         <span className="small muted">

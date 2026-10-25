@@ -26,17 +26,19 @@ export function CanUseCard({ agent, coding }: { agent: AgentDetail; coding: bool
         </p>
       )}
       {change.isError && <Fail>{tabFailure(change.error, 'change the tool')}</Fail>}
-      {list.shown.map((tool) => (
-        <label className="check" key={tool.id}>
-          <input
-            type="checkbox"
-            checked={tool.enabled}
-            disabled={change.isPending}
-            onChange={() => change.mutate({ id: tool.id, enabled: !tool.enabled })}
-          />
-          {tool.label}
-        </label>
-      ))}
+      <div id={list.id} className="bold-fold-list">
+        {list.shown.map((tool) => (
+          <label className="check" key={tool.id}>
+            <input
+              type="checkbox"
+              checked={tool.enabled}
+              disabled={change.isPending}
+              onChange={() => change.mutate({ id: tool.id, enabled: !tool.enabled })}
+            />
+            {tool.label}
+          </label>
+        ))}
+      </div>
       {list.toggle}
       {!coding && !knowledge.isError && (
         <label className="check">

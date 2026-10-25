@@ -42,6 +42,7 @@ import { newId } from '../../data/ids.ts'
 import { stopEdit, useEditing } from './message-edit.ts'
 import { RewindDialog } from './RewindDialog.tsx'
 import { fetchRewindPlan, postRewind } from './rewind.ts'
+import { roomHasLiveShare } from '../../data/shares.ts'
 import {
   ACCEPT,
   attachmentKey,
@@ -242,6 +243,7 @@ export function Composer({
   const rewoundEdit = useRef<string | null>(null)
   // One rewind request per edited message, so a retried Send can't rewind twice.
   const rewindKey = useRef<{ messageId: string; key: string } | null>(null)
+  const [rewinding, setRewinding] = useState(false)
   const [confirmEdit, setConfirmEdit] = useState(false)
 
   const commands = useQuery({
@@ -530,23 +532,42 @@ export function Composer({
     // out (stop the work first, or hide in Score only).
     if (editing && !editing.rewound && rewoundEdit.current !== editing.messageId) {
       setPending(true)
+      setRewinding(true)
       setNotice(null)
       let clean: boolean
       try {
-        const plan = await fetchRewindPlan(roomId, editing.messageId)
-        clean = !plan.blocked && plan.agents.every((agent) => !agent.cannot)
+        // A rewind already sent for this message (its answer lost) is repeated with the same key, not re-planned: the
+        // server returns the stored result, and a plan for an already-hidden message would fail.
+        const retrying = rewindKey.current?.messageId === editing.messageId
+        if (retrying) clean = true
+        else {
+          const plan = await fetchRewindPlan(roomId, editing.messageId)
+          // A live share link keeps showing the old message: the dialog says so and offers to revoke it.
+          clean =
+            !plan.blocked &&
+            plan.agents.every((agent) => !agent.cannot) &&
+            !(await roomHasLiveShare(queryClient, roomId))
+        }
         if (clean) {
-          rewindKey.current ??= { messageId: editing.messageId, key: newId() }
-          if (rewindKey.current.messageId !== editing.messageId)
-            rewindKey.current = { messageId: editing.messageId, key: newId() }
-          await postRewind(roomId, editing.messageId, 'edit', false, rewindKey.current.key)
+          if (!retrying) rewindKey.current = { messageId: editing.messageId, key: newId() }
+          await postRewind(roomId, editing.messageId, 'edit', false, rewindKey.current!.key)
           rewoundEdit.current = editing.messageId
         }
-      } catch {
-        // A refusal or an incomplete rewind: the dialog reads the plan again and says what happened.
+      } catch (caught) {
+        // A refusal or an incomplete rewind: the dialog reads the plan again and says what happened. Anything else (a
+        // dropped connection) keeps the edit as it is; Send again repeats the same rewind request.
+        if (!(caught instanceof ApiError && caught.status === 409)) {
+          setPending(false)
+          setRewinding(false)
+          setNotice({ kind: 'error', text: 'Couldn’t send the correction. Try again.' })
+          return
+        }
+        // A refusal is final for that request: the next Send plans again.
+        rewindKey.current = null
         clean = false
       }
       setPending(false)
+      setRewinding(false)
       if (!clean) {
         setConfirmEdit(true)
         return
@@ -891,7 +912,13 @@ export function Composer({
               ? 'Sending replaces it and rewinds the agents to before it (long-term memory stays).'
               : 'Sending hides it and everything after it as the previous version.'}
           </span>
-          <button type="button" className="chat-editing-cancel" onClick={leaveEdit}>
+          <button
+            type="button"
+            className="chat-editing-cancel"
+            onClick={leaveEdit}
+            // While Send rewinds, Cancel can't take it back (the correction's post can still be left, as before).
+            disabled={rewinding}
+          >
             Cancel
           </button>
         </div>

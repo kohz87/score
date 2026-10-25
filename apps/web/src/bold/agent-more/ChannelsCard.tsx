@@ -21,44 +21,46 @@ export function ChannelsCard({ agent }: { agent: AgentDetail }) {
           </button>
         </Fail>
       )}
-      {list.shown.map((row) => (
-        <div className="bold-mc-channel" key={row.platform}>
-          <div className="listrow wrap">
-            <span className="grow small">
-              <b>{row.label}</b>{' '}
-              <span className="muted">
-                {row.status === 'connected' ? 'Connected' : 'Not connected'}
+      <div id={list.id} className="bold-fold-list">
+        {list.shown.map((row) => (
+          <div className="bold-mc-channel" key={row.platform}>
+            <div className="listrow wrap">
+              <span className="grow small">
+                <b>{row.label}</b>{' '}
+                <span className="muted">
+                  {row.status === 'connected' ? 'Connected' : 'Not connected'}
+                </span>
+                {row.status !== 'connected' && row.detail && (
+                  <span className="muted"> · {row.detail.replace(/_/g, ' ')}</span>
+                )}
               </span>
-              {row.status !== 'connected' && row.detail && (
-                <span className="muted"> · {row.detail.replace(/_/g, ' ')}</span>
+              {row.status !== 'connected' && open !== row.platform && (
+                <button
+                  type="button"
+                  className="btn sm"
+                  aria-label={`Connect ${row.label}`}
+                  onClick={() => setOpen(row.platform)}
+                >
+                  Connect
+                </button>
               )}
-            </span>
-            {row.status !== 'connected' && open !== row.platform && (
-              <button
-                type="button"
-                className="btn sm"
-                aria-label={`Connect ${row.label}`}
-                onClick={() => setOpen(row.platform)}
-              >
-                Connect
-              </button>
+            </div>
+            {open === row.platform && (
+              <MessagingSetup
+                platform={row.platform}
+                label={row.label}
+                agentId={agent.id}
+                terminalCommand={row.connectCommand}
+                onSaved={() => void channels.refetch()}
+                onClose={() => {
+                  setOpen(null)
+                  void channels.refetch()
+                }}
+              />
             )}
           </div>
-          {open === row.platform && (
-            <MessagingSetup
-              platform={row.platform}
-              label={row.label}
-              agentId={agent.id}
-              terminalCommand={row.connectCommand}
-              onSaved={() => void channels.refetch()}
-              onClose={() => {
-                setOpen(null)
-                void channels.refetch()
-              }}
-            />
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
       {list.toggle}
     </MoreCard>
   )

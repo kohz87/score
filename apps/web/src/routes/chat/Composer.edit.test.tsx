@@ -51,12 +51,14 @@ async function sendCorrection() {
   )
 }
 let plan: { hiddenCount: number; blocked: string | null; agents: unknown[] }
+let shares: Record<string, unknown>[] = []
 
 beforeEach(() => {
   localStorage.clear()
   stopEdit()
   finishPost = null
   plan = { hiddenCount: 1, blocked: null, agents: [{ agentId: 'lead', turns: 1, cannot: null }] }
+  shares = []
   queryClient = createQueryClient()
   queryClient.setQueryData(messagesQuery('general').key, {
     asOfSeq: 1,
@@ -65,6 +67,7 @@ beforeEach(() => {
   fetchMock = vi.fn(async (input, init) => {
     if (String(input) === '/api/commands') return json({ items: [] })
     if (String(input).endsWith('/rewind-plan')) return json(plan)
+    if (String(input).endsWith('/shares')) return json({ items: shares })
     if (String(input).endsWith('/rewind'))
       return json({
         version: {
@@ -200,4 +203,44 @@ test('the dialog explains when an agent can’t be rewound or work is still runn
       ([input, init]) => String(input).endsWith('/rewind') && init?.method === 'POST',
     ),
   ).toBe(false)
+})
+
+test('a live share link sends the edit through the dialog, which offers to revoke it', async () => {
+  shares = [
+    {
+      id: 's1',
+      roomId: 'general',
+      roomName: 'general',
+      createdAt: '2026-10-09T10:00:00.000Z',
+      expiresAt: '2026-11-09T10:00:00.000Z',
+      views: 0,
+      includeImages: false,
+      status: 'active',
+      roomChanged: false,
+    },
+  ]
+  act(() => startEdit(mine('a', 'text A')))
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  expect(await screen.findByRole('button', { name: 'Rewind and edit' })).toBeTruthy()
+  expect(posts()).toHaveLength(0)
+})
+
+test('Cancel is off while Send is rewinding, and back once the correction is being posted', async () => {
+  let release: (() => void) | null = null
+  const base = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input).endsWith('/rewind-plan'))
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+    return base(input, init)
+  })
+  act(() => startEdit(mine('a', 'text A')))
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  await waitFor(() => expect(release).not.toBeNull())
+  expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(true)
+  await act(async () => release?.())
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(false)
+  await act(async () => finishPost?.())
 })

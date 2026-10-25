@@ -174,24 +174,3 @@
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
-
-[data-ui='bold'] .bold-fold-clipped {
-  position: relative;
-  max-height: 320px;
-  overflow: hidden;
-}
-
-[data-ui='bold'] .bold-fold-clipped::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0;
-  height: 64px;
-  pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--panel));
-}
-
-@media (max-width: 640px) {
-  [data-ui='bold'] .bold-fold-clipped {
-    max-height: 260px;
-  }
-}

@@ -41,40 +41,44 @@ export function GoAheadCard({ agent }: { agent: AgentDetail }) {
           Nothing is allowed without asking. Risky commands follow the team’s approval style.
         </p>
       )}
-      {list.shown.map((row) => (
-        <div className="listrow wrap" key={row.id}>
-          <span className="grow small">
-            {row.label}{' '}
-            <span className="muted">{row.inherited ? 'From the team' : 'Only this agent'}</span>
-          </span>
-          <button
-            type="button"
-            className="act"
-            disabled={busy}
-            aria-label={`Ask first before: ${row.label}`}
-            onClick={() => change.mutate({ id: row.id, level: 'asks' })}
-          >
-            Ask first
-          </button>
-        </div>
-      ))}
+      <div id={list.id} className="bold-fold-list">
+        {list.shown.map((row) => (
+          <div className="listrow wrap" key={row.id}>
+            <span className="grow small">
+              {row.label}{' '}
+              <span className="muted">{row.inherited ? 'From the team' : 'Only this agent'}</span>
+            </span>
+            <button
+              type="button"
+              className="act"
+              disabled={busy}
+              aria-label={`Ask first before: ${row.label}`}
+              onClick={() => change.mutate({ id: row.id, level: 'asks' })}
+            >
+              Ask first
+            </button>
+          </div>
+        ))}
+      </div>
       {list.toggle}
-      {back2.shown.map((rule) => (
-        <div className="listrow wrap" key={rule.id}>
-          <span className="grow small">
-            {rule.label} <span className="muted">Only this agent asks first</span>
-          </span>
-          <button
-            type="button"
-            className="act"
-            disabled={busy}
-            aria-label={`Use team rule: ${rule.label}`}
-            onClick={() => back.mutate(rule.id)}
-          >
-            Use team rule
-          </button>
-        </div>
-      ))}
+      <div id={back2.id} className="bold-fold-list">
+        {back2.shown.map((rule) => (
+          <div className="listrow wrap" key={rule.id}>
+            <span className="grow small">
+              {rule.label} <span className="muted">Only this agent asks first</span>
+            </span>
+            <button
+              type="button"
+              className="act"
+              disabled={busy}
+              aria-label={`Use team rule: ${rule.label}`}
+              onClick={() => back.mutate(rule.id)}
+            >
+              Use team rule
+            </button>
+          </div>
+        ))}
+      </div>
       {back2.toggle}
     </MoreCard>
   )

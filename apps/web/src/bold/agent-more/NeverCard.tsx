@@ -42,23 +42,25 @@ export function NeverCard({ agent }: { agent: AgentDetail }) {
       {change.isError && <Fail>{failure(change.error, 'change the permission')}</Fail>}
       {back.isError && <Fail>{failure(back.error, 'use the team rule')}</Fail>}
       {!never.length && <p className="small muted">No Never rules yet.</p>}
-      {list.shown.map((row) => (
-        <div className="listrow" key={row.id}>
-          <code className="grow small">{row.label}</code>
-          <span className="small muted">{row.inherited ? 'Team' : 'Only this agent'}</span>
-          {!row.inherited && (
-            <button
-              type="button"
-              className="act"
-              aria-label={`Use team rule instead of: ${row.label}`}
-              disabled={busy}
-              onClick={() => back.mutate(row.id)}
-            >
-              <CloseIcon size={12} />
-            </button>
-          )}
-        </div>
-      ))}
+      <div id={list.id} className="bold-fold-list">
+        {list.shown.map((row) => (
+          <div className="listrow" key={row.id}>
+            <code className="grow small">{row.label}</code>
+            <span className="small muted">{row.inherited ? 'Team' : 'Only this agent'}</span>
+            {!row.inherited && (
+              <button
+                type="button"
+                className="act"
+                aria-label={`Use team rule instead of: ${row.label}`}
+                disabled={busy}
+                onClick={() => back.mutate(row.id)}
+              >
+                <CloseIcon size={12} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
       {list.toggle}
       <form className="row" onSubmit={add} aria-label="Add a Never rule">
         <label htmlFor={`never-${agent.id}`} className="sr">

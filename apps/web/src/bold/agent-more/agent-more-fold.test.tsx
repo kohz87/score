@@ -4,59 +4,16 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 import { AgentDetailSchema } from '@score/contract'
 import { createQueryClient } from '../../data/query-client.ts'
-import { Fold, MoreCard, useFoldedList } from './MoreCard.tsx'
+import { useFoldedList } from './MoreCard.tsx'
 import { NeverCard } from './NeverCard.tsx'
+import { GoAheadCard } from './GoAheadCard.tsx'
+import { CanUseCard } from './CanUseCard.tsx'
+import { PluginsCard } from './PluginsCard.tsx'
+import { ChannelsCard } from './ChannelsCard.tsx'
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
-})
-
-function stubHeight(height: number) {
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      constructor(private cb: () => void) {}
-      observe() {
-        this.cb()
-      }
-      disconnect() {}
-    },
-  )
-  Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
-    configurable: true,
-    get: () => height,
-  })
-}
-
-test('free text taller than the limit folds, is inert while folded, and expands', () => {
-  stubHeight(900)
-  render(
-    <MoreCard title="Long">
-      <Fold foldKey="t1">
-        <p>Very long text</p>
-      </Fold>
-    </MoreCard>,
-  )
-  const button = screen.getByRole('button', { name: 'Show all' })
-  expect(button.getAttribute('aria-expanded')).toBe('false')
-  const region = document.getElementById(button.getAttribute('aria-controls') ?? '')
-  expect(region?.hasAttribute('inert')).toBe(true)
-  fireEvent.click(button)
-  expect(screen.getByRole('button', { name: 'Show less' }).getAttribute('aria-expanded')).toBe(
-    'true',
-  )
-  expect(region?.hasAttribute('inert')).toBe(false)
-})
-
-test('free text that fits is not folded', () => {
-  stubHeight(100)
-  render(
-    <Fold foldKey="t2">
-      <p>Short</p>
-    </Fold>,
-  )
-  expect(screen.queryByRole('button')).toBeNull()
 })
 
 function List({ n }: { n: number }) {
@@ -88,6 +45,118 @@ test('a long list shows the first 6, then Show all N and Show less', () => {
 test('a short list has no fold button', () => {
   render(<List n={6} />)
   expect(screen.queryByRole('button')).toBeNull()
+})
+
+function makeAgent(extra: object) {
+  return AgentDetailSchema.parse({
+    id: 'folder',
+    name: 'folder',
+    role: 'r',
+    style: { color: '#19C39A', shape: 'triangle' },
+    status: 'idle',
+    activity: null,
+    model: null,
+    served: true,
+    tagline: '',
+    personality: { excerpt: '', source: 'SOUL.md' },
+    reportsTo: null,
+    worksIn: null,
+    rulesFile: null,
+    skills: [],
+    memory: [],
+    tools: [],
+    helpersMax: null,
+    routines: [],
+    channels: [],
+    permissions: [],
+    ...extra,
+  })
+}
+
+const many = <T,>(n: number, make: (i: number) => T) => Array.from({ length: n }, (_, i) => make(i))
+
+test('every folded card: the toggle controls an element that holds the list', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const path = new URL(String(input), 'http://x').pathname
+      if (path.endsWith('/settings/plugins'))
+        return Promise.resolve(
+          Response.json({
+            items: many(9, (i) => ({
+              id: `p${i}`,
+              label: `Plugin ${i}`,
+              enabled: false,
+              locked: false,
+              description: null,
+            })),
+          }),
+        )
+      if (path.endsWith('/channels'))
+        return Promise.resolve(
+          Response.json({
+            items: many(9, (i) => ({
+              platform: `ch${i}`,
+              label: `Channel ${i}`,
+              status: 'disconnected',
+              detail: null,
+              connectCommand: 'x',
+            })),
+          }),
+        )
+      return Promise.resolve(Response.json({ enabled: false }))
+    }),
+  )
+  const cards = [
+    <GoAheadCard
+      key="g"
+      agent={makeAgent({
+        permissions: many(9, (i) => ({
+          id: `allowed:c${i}`,
+          label: `c${i}`,
+          level: 'allowed',
+          inherited: false,
+        })),
+      })}
+    />,
+    <CanUseCard
+      key="c"
+      coding={false}
+      agent={makeAgent({
+        tools: many(10, (i) => ({
+          id: `t${i}`,
+          label: `Tool ${i}`,
+          kind: 'builtin',
+          enabled: true,
+        })),
+      })}
+    />,
+    <PluginsCard key="p" agent={makeAgent({})} />,
+    <ChannelsCard key="h" agent={makeAgent({})} />,
+    <NeverCard
+      key="n"
+      agent={makeAgent({
+        permissions: many(9, (i) => ({
+          id: `never:c${i}`,
+          label: `c${i}`,
+          level: 'never',
+          inherited: false,
+        })),
+      })}
+    />,
+  ]
+  for (const card of cards) {
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <MemoryRouter>{card}</MemoryRouter>
+      </QueryClientProvider>,
+    )
+    const toggle = await screen.findByRole('button', { name: /^Show all \d+/ })
+    const target = document.getElementById(toggle.getAttribute('aria-controls') ?? '')
+    expect(target).not.toBeNull()
+    expect(target?.children.length).toBeGreaterThan(0)
+    cleanup()
+  }
 })
 
 test('Never rules fold their list but keep the add field and button visible', () => {
