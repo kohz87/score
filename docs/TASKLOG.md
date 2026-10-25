@@ -1291,3 +1291,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   its mocks' "Response disposed" race — fixed in the spec, 16/16 repeated); after the final merge 124/124 on the
   affected specs; pnpm check green (server 4759, web 2925, contract 1496).
 - **v2.0.10 deployed live** (~10:47 UTC): no migration or plugin change; backup score-pre-2.0.10-20261025.db, restart, 0 errors.
+- **v2.0.11 (Sonnet coder + lead, 2026-10-25/26).** Owner on live: "no delete old chat, cannot edit message, cannot
+  swipe…"; "in one-to-one chat, I don't see any of them on desktop". The team room's action row (edit/rewind, copy,
+  save, retry, pin, delete, versions, show deleted) was only in RoomMessageStream; extracted to BoldMessage and used in
+  one-to-ones and job threads. A direct room can't be deleted (server), so: Delete chat = the chat's job (soft, undo);
+  Clear chat (lead: `POST /api/rooms/:roomId/clear`, the default thread's messages deleted with a delete's own checks,
+  all or nothing, one room/summary/job update). Reviews (3 rounds): Delete chat on the new-chat state targeted the
+  latest chat (fixed); phone Edit from a thread into an inert composer (fixed); no Undo/failure toast in the new shell
+  (fixed); Retry only on the first of several replies (fixed: decided per job on the unfiltered list); Clear chat's
+  per-message event burst (batched). Accepted: a reply that came from a hand-off still shows Retry and gets the neutral
+  refusal — the Message has no hop field; per-message eligibility from the server comes with swipes (2.0.12, U6).
+  Gates: full e2e 961 passed, 0 failed, 19 skipped; pnpm check green (server 4761, web 2949, contract 1496). The
+  session was restarted mid-round; the coder was resumed with its context.

@@ -3,6 +3,20 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.11] — 2026-10-25
+
+### Added
+- **Message actions everywhere**: Edit (your own messages; the agents rewind to before it), Copy, Save to Library,
+  Retry, Pin and Delete now work in one-to-one chats and job threads too, not only in the team room, with the
+  versions of an edited message (‹ 2 / 3 ›) and Show deleted.
+- **Delete chat** for a chat you started with an agent (undo for 10 seconds), and **Clear chat** for a one-to-one's
+  main chat. Both are Score-side: the agent's Hermes session may still remember.
+- Deleting a message shows Undo and says when a delete failed.
+
+### Fixed
+- Retry is offered on every agent reply to your message (also when two agents answered), not just the first.
+- Edit from a job thread on a phone closes the thread and puts the message in the composer.
+
 ## [2.0.10] — 2026-10-25
 
 ### Added
