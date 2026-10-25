@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { AgentSummary } from '@score/contract'
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { apiFetch } from '../data/api.ts'
-import { ProfileOperation } from '../routes/team/ProfileOperation.tsx'
+import { ProfileOperation, useProfileOperation } from '../routes/team/ProfileOperation.tsx'
 import { useAgentDelete } from '../routes/team/use-agent-delete.ts'
+import { useOperationDone } from './BoldAgentOperation.tsx'
 import { removeProblem } from './RemoveConfirm.tsx'
 
 /**
@@ -15,11 +17,13 @@ export function BoldRemoveAgent({
   agentId,
   name,
   coding,
+  lifecycle,
   onClose,
 }: {
   agentId: string
   name: string
   coding: boolean
+  lifecycle?: AgentSummary['lifecycle']
   onClose: () => void
 }) {
   const navigate = useNavigate()
@@ -68,7 +72,28 @@ export function BoldRemoveAgent({
   useEffect(() => {
     if (ended) closeButton.current?.focus()
   }, [ended])
-  const blocked = Boolean(preview?.blockers.length)
+  // 2.0.6: an operation that stopped partway holds the agent. Its Retry / Confirm is shown here, and the preview
+  // runs again once it finishes, so Remove is never a dead button with the way out buried elsewhere.
+  const needsAttention =
+    !coding &&
+    !del.operation &&
+    lifecycle?.state === 'needs_attention' &&
+    Boolean(lifecycle.operationId)
+  const held = useProfileOperation(needsAttention ? (lifecycle?.operationId ?? null) : null)
+  const heldDone = held.data?.state === 'completed'
+  const stuck = needsAttention && !heldDone && held.data ? held.data : null
+  useOperationDone(heldDone, heldDone && held.data?.kind === 'delete')
+  useEffect(() => {
+    if (heldDone && held.data?.kind !== 'delete') review.mutate()
+    // Once per completion of the held operation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heldDone])
+  // The server's "an operation holds this agent" blocker is replaced by the step's own card, only while that card
+  // shows; every other blocker stays. If the operation can't be read, all blockers stay and Remove stays off.
+  const blockers = (preview?.blockers ?? []).filter(
+    (text) => !(stuck && /operation already holds/i.test(text)),
+  )
+  const blocked = Boolean(preview?.blockers.length) || (needsAttention && !heldDone)
   const problem = coding
     ? removeCoding.error
     : (del.remove.error ?? (review.error && !preview ? review.error : null))
@@ -115,12 +140,13 @@ export function BoldRemoveAgent({
                   A private copy is kept first: <code>{preview.exportPath}</code>. It leaves out
                   credentials and isn’t a full undo.
                 </p>
-                {preview.blockers.map((blocker) => (
+                {blockers.map((blocker) => (
                   <p role="alert" key={blocker}>
                     {blocker}
                   </p>
                 ))}
-                {!del.operation && (
+                {stuck && <p>Finish or retry the stopped step first:</p>}
+                {!del.operation && !stuck && (
                   <label className="bold-remove-agent-type">
                     Type {agentId} to confirm
                     <input
@@ -153,12 +179,15 @@ export function BoldRemoveAgent({
             >
               Cancel
             </button>
-            <button type="submit" className="btn sm primary" disabled={!canRemove}>
-              {pending ? 'Removing…' : 'Remove'}
-            </button>
+            {!stuck && (
+              <button type="submit" className="btn sm primary" disabled={!canRemove}>
+                {pending ? 'Removing…' : 'Remove'}
+              </button>
+            )}
           </div>
         )}
       </form>
+      {stuck && <ProfileOperation operation={stuck} />}
       {del.operation && <ProfileOperation operation={del.operation} />}
     </div>
   )

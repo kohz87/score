@@ -40,6 +40,8 @@ export const protectedClasses = [
   'bold-remove-confirm',
   // 2.0.5: Remove agent… on the agent page (preview, typed name, progress)
   'bold-remove-agent',
+  // 2.0.6: what an agent that is setting up, stopped or being removed says, with Retry / Confirm
+  'bold-agent-status',
   'bold-trigger-card',
   'bold-trigger-secret',
   'bold-trigger-confirm',
