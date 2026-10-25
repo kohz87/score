@@ -1259,3 +1259,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   confirmed by the lead: the phone agent page overflowed 62 px (`.bold-more-toggle`, also on main) — fixed, e2e checks
   scrollWidth again. Review 2: 0 P1/P2. pnpm check green (web 2888); full e2e 934 passed, 0 failed, 19 skipped.
 - **v2.0.5 deployed live** (~09:18 UTC): backup score-pre-2.0.5-20261025.db, restart, 0 errors.
+- **Owner on live 2.0.5: "after typing the name of the agent, the remove button is still grey out".** Live check (preview
+  per agent, read-only DB): `g3`'s create (2026-10-25 07:41 UTC, on 2.0.1) stopped `needs_attention` at `model` with
+  the old local-provider refusal (`retryable: true`), so its delete preview carries "An operation already holds this
+  agent."; Retry lived only in More › Details. Owner told to press Retry (writes to g3's real profile: theirs to do).
+  2.0.6 (Sonnet coder): the stopped operation with Retry/Confirm at the top of the bold agent page and inside the Remove
+  panel. Abandoning a create that can't be retried → PLAN post-release P2.

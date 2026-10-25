@@ -716,6 +716,12 @@ together with 2.0.2 as v2.0.3.
 (`/runs/:id`), Watch (`/watch/:agent`) and the Customizer open under `/b` with the new shell's chrome; old paths
 redirect; Back returns to the room. Their insides stay v1 until the rebuild below.
 
+**P2 Removing an agent whose setup stopped** (owner on live 2.0.5, 2026-10-25: g3's create stopped at `model` with the
+pre-2.0.3 local-provider refusal; its delete preview is blocked by "An operation already holds this agent."). 2.0.6 puts
+the stopped operation and its Retry on the agent page and in the Remove panel. Still missing: a way to abandon a create
+whose retry keeps failing (delete allowed from `needs_attention` after a create: export what exists, delete the profile,
+retire). Lifecycle change at the adapter boundary: lead, with a short design note first.
+
 **P2 Rebuild the remaining v1 pages in the new design** (decision 123): runs as a Runs view in the side panel and a run
 as a job thread with its steps; the workflow list in Recipes; Watch folded into the agent's screen page; the Customizer
 restyled. Design pass first (prototype additions), then build.
