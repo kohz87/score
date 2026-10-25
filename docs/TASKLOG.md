@@ -1303,3 +1303,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   refusal — the Message has no hop field; per-message eligibility from the server comes with swipes (2.0.12, U6).
   Gates: full e2e 961 passed, 0 failed, 19 skipped; pnpm check green (server 4761, web 2949, contract 1496). The
   session was restarted mid-round; the coder was resumed with its context.
+- **v2.0.11 deployed live** (~12:04 UTC): no migration or plugin change; backup score-pre-2.0.11-20261026.db, restart, 0 errors.
