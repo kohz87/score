@@ -85,3 +85,23 @@ export async function saveRunsOn(agentId: string, choice: WorksOnChoice): Promis
     }),
   )
 }
+
+/** Every reason the Add button stays off, in words: the server's blockers first, then what the form still needs. */
+export function addBlockReasons(
+  blockers: readonly string[],
+  input: { cloneFrom?: string | undefined },
+  confirmed: boolean,
+  runs: { backend: string; sshHost: string; sshUser: string },
+): string[] {
+  const reasons = blockers.map((blocker) =>
+    /bridge installation URL/i.test(blocker)
+      ? `${blocker} Set SCORE_BRIDGE_INSTALL_URL and SCORE_BRIDGE_INSTALL_REF where the Score server runs, then restart it (docs/SETUP.md).`
+      : blocker,
+  )
+  if (input.cloneFrom && !confirmed) reasons.push('Tick “I’ve checked what this agent inherits.”')
+  if (runs.backend === 'ssh') {
+    if (!runs.sshHost.trim()) reasons.push('Enter the SSH host this agent runs on.')
+    if (!runs.sshUser.trim()) reasons.push('Enter the SSH user this agent runs as.')
+  }
+  return reasons
+}

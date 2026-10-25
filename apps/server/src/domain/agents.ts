@@ -23,6 +23,7 @@ export function defaultAgentStyle(index: number): AgentStyle {
     shape: defaultShapes[index % defaultShapes.length]!,
   }
 }
+import { syncTeamRoomMembers } from './team-room.ts'
 const DetailRowSchema = z.object({ detail: z.string() })
 const StyleRowSchema = z.object({
   color: AgentStyleSchema.shape.color,
@@ -92,8 +93,8 @@ export async function reconcileAgents(
   await ingest.submit({
     source: 'agents',
     identity: randomUUID(),
-    apply({ sqlite }) {
-      return agents.flatMap((detail) => {
+    apply({ sqlite, now }) {
+      const events = agents.flatMap((detail) => {
         const agent = applyLifecycle(
           sqlite,
           AgentDetailSchema.parse({
@@ -110,6 +111,8 @@ export async function reconcileAgents(
           ? []
           : [{ type: 'agent.updated' as const, data: summary }]
       })
+      // The team room's members follow the team (an added, removed or renamed agent changes the projection).
+      return events.length ? [...events, ...syncTeamRoomMembers(sqlite, now)] : events
     },
   })
 }

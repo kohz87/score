@@ -182,6 +182,92 @@ for (const [index, size] of [
   })
 }
 
+for (const [index, size] of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'phone', width: 390, height: 844 },
+].entries()) {
+  test(`Recipes opens over a room with no lead and closes back to first run at ${size.name} (${size.width}×${size.height})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.width, height: size.height })
+    await withFreshServer(page, webPort + 70 + index, async (origin, pairingToken, home) => {
+      clearTeamLead(home)
+      await pair(page, origin, pairingToken)
+      await page.goto(`${origin}/b?recipes=1`)
+      const recipes = page.getByRole('dialog', { name: 'Recipe editor' })
+      await expect(recipes).toBeVisible()
+      // Nothing of the first run sits over or inside Recipes.
+      await expect(page.getByRole('heading', { name: 'Hermes found' })).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Who’s on the team?' })).toHaveCount(0)
+      await page.screenshot({ path: `test-results/recipes-${size.name}.png` })
+      const topmost = await recipes.evaluate((element) => {
+        const box = element.getBoundingClientRect()
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + 24)
+        return hit !== null && element.contains(hit)
+      })
+      expect(topmost).toBe(true)
+      await recipes.getByRole('button', { name: /^Close/ }).click()
+      await expect(recipes).toHaveCount(0)
+      // First run stays reachable from the room.
+      await expect(
+        page.getByRole('heading', { name: 'Run a team of agents from one room.' }),
+      ).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Hermes found' })).toBeVisible()
+    })
+  })
+}
+
+test('a coding agent is offered as the lead in first run and saved as the team room lead', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  // The server runs in this process: it needs the fake coding CLI that the shared e2e server gets from the config.
+  process.env.SCORE_CODING_FAKE_CLI = fileURLToPath(
+    new URL('../apps/server/test/fixtures/coding/fake-cli.mjs', import.meta.url),
+  )
+  process.env.CODEX_HOME = mkdtempSync(join(tmpdir(), 'score-codex-home-'))
+  await withFreshServer(page, webPort + 72, async (origin, pairingToken, home) => {
+    clearTeamLead(home)
+    await pair(page, origin, pairingToken)
+    await page.goto(`${origin}/b`)
+    await page.evaluate(async () => {
+      const response = await fetch('/api/coding-agents', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'X-Score-Client': 'web' },
+        body: JSON.stringify({
+          id: 'coder',
+          name: 'Coder',
+          role: 'Writes code',
+          runtime: 'codex',
+          permission: 'workspace-write',
+          style: { color: '#6B4EFF', shape: 'hexagon' },
+          acknowledgeReads: true,
+        }),
+      })
+      if (!response.ok) throw new Error(await response.text())
+    })
+    const lead = page.getByLabel('Who leads?')
+    await expect(lead.getByRole('option', { name: 'coder' })).toHaveCount(1)
+    await lead.selectOption('coder')
+    await page.getByRole('button', { name: 'Open the team room' }).click()
+    await expect(page.getByRole('region', { name: 'Team room' })).toBeVisible()
+    const db = new DatabaseSync(join(home, 'score.db'), { readOnly: true })
+    try {
+      expect(
+        db.prepare("SELECT lead_agent_id AS lead FROM rooms WHERE role = 'team'").get(),
+      ).toEqual({
+        lead: 'coder',
+      })
+    } finally {
+      db.close()
+    }
+  }).finally(() => {
+    delete process.env.SCORE_CODING_FAKE_CLI
+    rmSync(process.env.CODEX_HOME ?? '', { recursive: true, force: true })
+    delete process.env.CODEX_HOME
+  })
+})
+
 test('degraded Hermes says what needs attention and links to setup', async ({ page }) => {
   await withFreshServer(page, webPort + 60, async (origin, pairingToken) => {
     await pair(page, origin, pairingToken)

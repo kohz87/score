@@ -23,6 +23,7 @@ import { humanGuard } from '../auth/human.ts'
 import type { SecurityPassword } from '../auth/security-password.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { readAgent, reconcileAgents } from '../domain/agents.ts'
+import { syncTeamRoomMembers } from '../domain/team-room.ts'
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
@@ -270,7 +271,7 @@ export function registerCodingAgentRoutes(
     await ingest.submit({
       source: `coding:${agentId}`,
       identity: `removed:${agentId}:${randomUUID()}`,
-      apply({ sqlite }) {
+      apply({ sqlite, now }) {
         const previous = readAgent(sqlite, agentId)
         sqlite.prepare('DELETE FROM agents_proj WHERE id = ?').run(agentId)
         return previous
@@ -284,6 +285,7 @@ export function registerCodingAgentRoutes(
                   lifecycle: { state: 'removed', incarnationId: randomUUID(), operationId: null },
                 }),
               },
+              ...syncTeamRoomMembers(sqlite, now, [agentId]),
             ]
           : []
       },

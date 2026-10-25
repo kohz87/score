@@ -19,7 +19,13 @@ import {
 } from '../routes/team/CodingAgent.tsx'
 import { ModelPicker as CodingModelPicker } from '../routes/team/ModelPicker.tsx'
 import { ProfileOperation } from '../routes/team/ProfileOperation.tsx'
-import { availableStyle, colourChoices, saveRunsOn, type WorksOnChoice } from './bold-add-agent.ts'
+import {
+  addBlockReasons,
+  availableStyle,
+  colourChoices,
+  saveRunsOn,
+  type WorksOnChoice,
+} from './bold-add-agent.ts'
 import { emptyAgentInput, useAgentCreateDraft } from '../routes/team/use-agent-create.ts'
 import { useAgentImport } from '../routes/team/use-agent-import.ts'
 import './bold-add-agent.css'
@@ -621,6 +627,7 @@ function NewAgentPanel({
     (!input.cloneFrom || confirmed) &&
     (runs.backend !== 'ssh' || (runs.sshHost.trim() && runs.sshUser.trim())),
   )
+  const reasons = preview ? addBlockReasons(preview.blockers, input, confirmed, runs) : []
   return (
     <form
       className="bold-add-form"
@@ -716,6 +723,16 @@ function NewAgentPanel({
           )}
         </div>
       </div>
+      {reasons.length > 0 && (
+        <div className="bold-add-blockers" role="alert" data-protected="block">
+          <strong>Why “Add” is off</strong>
+          <ul>
+            {reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <footer className="bold-add-footer">
         <span className="small muted">
           It joins the team room. You can change everything later.
@@ -790,11 +807,6 @@ function ReviewChanges({
           </label>
         </>
       )}
-      {preview.blockers.map((blocker) => (
-        <p role="alert" key={blocker}>
-          {blocker}
-        </p>
-      ))}
     </section>
   )
 }
