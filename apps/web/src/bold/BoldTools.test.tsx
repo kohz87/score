@@ -129,4 +129,15 @@ test('a tool server is removed only after the protected confirm', async () => {
       ),
     ).toBe(true),
   )
+  const heading = screen.getByRole('heading', { name: 'Tool servers' })
+  await waitFor(() => expect(document.activeElement).toBe(heading))
+})
+
+test('Cancel puts focus back on the tool server’s Remove button', async () => {
+  mount()
+  const row = (await screen.findByText('notes')).closest('[data-tool-server]') as HTMLElement
+  const trigger = within(row).getByRole('button', { name: 'Remove notes' })
+  fireEvent.click(trigger)
+  fireEvent.click(within(row).getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
 })

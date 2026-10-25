@@ -192,8 +192,9 @@ export async function sendProviderKey(id: string, req: ProviderKeyRequest): Prom
 }
 
 /** Form fields for a platform's browser setup. */
-export function useMessagingFields(platform: string) {
+export function useMessagingFields(platform: string, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['settings', 'messaging-fields', platform] as const,
     queryFn: async ({ signal }) =>
       MessagingFieldsResponseSchema.parse(

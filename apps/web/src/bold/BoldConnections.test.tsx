@@ -319,3 +319,30 @@ test('the local model form says every agent can use it', async () => {
   fireEvent.click(within(local).getByRole('button', { name: 'Add' }))
   expect(within(local).getByText('Every agent can use it.')).toBeDefined()
 })
+
+test('focus returns to the row’s Remove button after Cancel, and to the notice after a removal', async () => {
+  mount()
+  const row = await waitFor(() => {
+    const found = document.querySelector('[data-provider-id="demo"]')
+    expect(found).not.toBeNull()
+    return found as HTMLElement
+  })
+  const trigger = within(row).getByRole('button', { name: 'Remove Demo' })
+  fireEvent.click(trigger)
+  fireEvent.click(within(row).getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
+  fireEvent.click(trigger)
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove' }))
+  const notice = await screen.findByText('Removed Demo.')
+  await waitFor(() => expect(document.activeElement).toBe(notice))
+})
+
+test('idle channels do not read their setup fields', async () => {
+  mount()
+  await waitFor(() => expect(document.querySelector('[data-channel="discord"]')).not.toBeNull())
+  await within(document.querySelector('[data-channel="telegram"]') as HTMLElement).findByRole(
+    'button',
+    { name: 'Disconnect Telegram' },
+  )
+  expect(calls.some(({ url }) => url === '/api/settings/messaging/discord/fields')).toBe(false)
+})

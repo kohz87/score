@@ -45,3 +45,8 @@ export function RemoveConfirm({
     </div>
   )
 }
+
+/** Focus an element once React has committed the change that put it (back) on the page. */
+export function focusSoon(id: string) {
+  window.setTimeout(() => document.getElementById(id)?.focus(), 0)
+}

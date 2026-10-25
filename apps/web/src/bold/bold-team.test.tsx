@@ -827,3 +827,9 @@ test('Remove agent… on a coding agent focuses its existing remove button witho
   expect(document.activeElement?.textContent).toBe('Remove agent')
   expect(document.getElementById('agent-more')).toBeNull()
 })
+
+test('the default agent has no Remove agent… action', async () => {
+  open('/b/team/default')
+  expect(await screen.findByRole('heading', { level: 1 })).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Remove agent…' })).toBeNull()
+})

@@ -8,7 +8,7 @@ import {
   useRemoveConnection,
   useSettingsActions,
 } from '../routes/settings/settings-queries.ts'
-import { RemoveConfirm } from './RemoveConfirm.tsx'
+import { focusSoon, RemoveConfirm } from './RemoveConfirm.tsx'
 import { BoldTriggers } from './BoldTriggers.tsx'
 import { parseToolCommand } from './tool-command.ts'
 
@@ -57,7 +57,9 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
 
       <section className="card bold-tool-servers" aria-labelledby="bold-tool-servers-title">
         <div className="row wrap">
-          <h3 id="bold-tool-servers-title">Tool servers</h3>
+          <h3 id="bold-tool-servers-title" tabIndex={-1}>
+            Tool servers
+          </h3>
           <span className="small muted">Apps that expose actions to your agents (MCP)</span>
         </div>
         {connections.isPending && <p role="status">Loading tool servers…</p>}
@@ -101,6 +103,7 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
               <button
                 type="button"
                 className="btn sm ghost"
+                id={`remove-tool-${server.id}`}
                 aria-label={`Remove ${server.label}`}
                 aria-expanded={removing === server.id}
                 onClick={() => {
@@ -116,9 +119,17 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
                   text={`Removes ${server.label} from Hermes. Agents drop it when the gateway restarts.`}
                   pending={removeToolServer.isPending}
                   error={removeToolServer.error}
-                  onCancel={() => setRemoving(null)}
+                  onCancel={() => {
+                    setRemoving(null)
+                    focusSoon(`remove-tool-${server.id}`)
+                  }}
                   onRemove={() =>
-                    removeToolServer.mutate(server.id, { onSuccess: () => setRemoving(null) })
+                    removeToolServer.mutate(server.id, {
+                      onSuccess: () => {
+                        setRemoving(null)
+                        focusSoon('bold-tool-servers-title')
+                      },
+                    })
                   }
                 />
               )}

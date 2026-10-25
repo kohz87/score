@@ -8,7 +8,7 @@ import { ApiKeyPanel } from '../routes/settings/ApiKeyPanel.tsx'
 import { MessagingSetup } from '../routes/settings/MessagingSetup.tsx'
 import { providerAction } from '../routes/settings/ProvidersSection.tsx'
 import { SignInPanel } from '../routes/settings/SignInPanel.tsx'
-import { RemoveConfirm } from './RemoveConfirm.tsx'
+import { focusSoon, RemoveConfirm } from './RemoveConfirm.tsx'
 import { failure, TerminalCommand } from '../routes/settings/TerminalCommand.tsx'
 import {
   useConnections,
@@ -200,6 +200,7 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
               <button
                 type="button"
                 className="btn sm ghost"
+                id={`remove-provider-${item.id}`}
                 aria-label={`Remove ${item.label}`}
                 aria-expanded={removing === item.id}
                 onClick={() => {
@@ -220,12 +221,16 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
                 }
                 pending={removeProvider.isPending}
                 error={removeProvider.error}
-                onCancel={() => setRemoving(null)}
+                onCancel={() => {
+                  setRemoving(null)
+                  focusSoon(`remove-provider-${item.id}`)
+                }}
                 onRemove={() =>
                   removeProvider.mutate(item.id, {
                     onSuccess: () => {
                       setRemoving(null)
                       setNotice(`Removed ${item.label}.`)
+                      focusSoon('bold-providers-notice')
                     },
                   })
                 }
@@ -347,7 +352,11 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
       {connectProvider.isError && (
         <p role="alert">{failure(connectProvider.error, 'start the sign-in')}</p>
       )}
-      {notice && <p role="status">{notice}</p>}
+      {notice && (
+        <p role="status" id="bold-providers-notice" tabIndex={-1}>
+          {notice}
+        </p>
+      )}
     </section>
   )
 }
@@ -355,15 +364,15 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
 /** Disconnect for a platform that is set up in the browser; others are cleared from the terminal. */
 function ChannelRemove({ row }: { row: MessagingPlatform }) {
   const [open, setOpen] = useState(false)
-  const fields = useMessagingFields(row.platform)
+  const fields = useMessagingFields(row.platform, row.status === 'connected' || Boolean(row.detail))
   const { removeMessaging } = useRemoveConnection()
   if (fields.data?.browserSetup !== true) return null
-  if (row.status !== 'connected' && !row.detail) return null
   return (
     <>
       <button
         type="button"
         className="btn sm ghost"
+        id={`remove-channel-${row.platform}`}
         aria-label={`${row.status === 'connected' ? 'Disconnect' : 'Remove'} ${row.label}`}
         aria-expanded={open}
         onClick={() => {
@@ -379,8 +388,18 @@ function ChannelRemove({ row }: { row: MessagingPlatform }) {
           text={`Clears ${row.label}’s settings. It disconnects when the gateway restarts.`}
           pending={removeMessaging.isPending}
           error={removeMessaging.error}
-          onCancel={() => setOpen(false)}
-          onRemove={() => removeMessaging.mutate(row.platform, { onSuccess: () => setOpen(false) })}
+          onCancel={() => {
+            setOpen(false)
+            focusSoon(`remove-channel-${row.platform}`)
+          }}
+          onRemove={() =>
+            removeMessaging.mutate(row.platform, {
+              onSuccess: () => {
+                setOpen(false)
+                focusSoon('bold-channels-title')
+              },
+            })
+          }
         />
       )}
     </>
@@ -393,7 +412,9 @@ function ChannelsCard() {
   const recheck = useRecheckSettings()
   return (
     <section className="card" aria-labelledby="bold-channels-title">
-      <h3 id="bold-channels-title">Channels</h3>
+      <h3 id="bold-channels-title" tabIndex={-1}>
+        Channels
+      </h3>
       <span className="small muted">
         Talk to the team room from other apps; replies land in the room.
       </span>

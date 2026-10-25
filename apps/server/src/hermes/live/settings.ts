@@ -352,15 +352,15 @@ export class LiveSettings {
       kinds.set(id, signInKind(id, authType))
     }
     for (const item of pooled) items.set(item.id, item)
-    // Local endpoints have no sign-in of their own.
+    // Local endpoints have no sign-in of their own, and no `signIn` either: that is how the web tells them apart (2.0.3).
+    const localIds = new Set(local.map((item) => item.id))
     for (const item of local) {
       items.set(item.id, item)
       kinds.delete(item.id)
     }
-    return [...items.values()].map((item) => ({
-      ...item,
-      signIn: kinds.get(item.id) ?? 'terminal',
-    }))
+    return [...items.values()].map((item) =>
+      localIds.has(item.id) ? item : { ...item, signIn: kinds.get(item.id) ?? 'terminal' },
+    )
   }
   /** The sign-in kind of one provider, from the gateway catalog (or the built-in list). */
   private async kindOf(id: string): Promise<SignInKind | null> {

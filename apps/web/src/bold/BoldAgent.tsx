@@ -1,5 +1,5 @@
 import type { AgentDetail, AgentSummary } from '@score/contract'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
@@ -270,6 +270,9 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const [more, setMore] = useState(() => location.hash.startsWith('#agent-'))
   const client = useQueryClient()
   const pause = useAgentPause(agentId)
+  // Stops a running "go to the delete button" watch (observers and timer) when it ends, restarts or the page goes.
+  const stopJump = useRef<(() => void) | null>(null)
+  useEffect(() => () => stopJump.current?.(), [])
 
   if (!detail.data && detail.isPending) return <p role="status">Loading agent…</p>
   if (!detail.data && detail.isError)
@@ -313,20 +316,53 @@ function AgentProfile({ agentId }: { agentId: string }) {
   }
 
   // The delete flow lives in More › Details (a Hermes agent) or the coding card's danger zone; this only takes the
-  // person there. The More cell mounts after the state change, so look for the button for a moment.
+  // person there. The More cell mounts after the state change, so watch for the button; once it is there, keep it
+  // centred while the cards around it finish loading, until the person scrolls or a moment has passed.
   function jumpToDelete() {
+    stopJump.current?.()
     if (!coding) setMore(true)
-    let tries = 0
-    const find = () => {
-      const button = document.getElementById('agent-delete')
-      if (button) {
-        button.scrollIntoView?.({ block: 'center' })
-        button.focus({ preventScroll: true })
-        // The cards above it finish loading after the jump and push it down: settle once more.
-        window.setTimeout(() => button.scrollIntoView?.({ block: 'center' }), 400)
-      } else if (tries++ < 20) window.setTimeout(find, 50)
+    const cleanups: (() => void)[] = []
+    const stop = () => {
+      cleanups.splice(0).forEach((fn) => fn())
+      stopJump.current = null
     }
-    window.setTimeout(find, 0)
+    stopJump.current = stop
+    const arrive = (button: HTMLElement) => {
+      const centre = () => button.scrollIntoView?.({ block: 'center' })
+      centre()
+      button.focus({ preventScroll: true })
+      const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(centre)
+      resize?.observe(document.body)
+      const timer = window.setTimeout(stop, 1500)
+      const onUser = () => stop()
+      for (const type of ['wheel', 'touchstart', 'keydown'] as const)
+        window.addEventListener(type, onUser, { once: true, passive: true })
+      cleanups.push(
+        () => resize?.disconnect(),
+        () => window.clearTimeout(timer),
+        () => {
+          for (const type of ['wheel', 'touchstart', 'keydown'] as const)
+            window.removeEventListener(type, onUser)
+        },
+      )
+    }
+    const existing = document.getElementById('agent-delete')
+    if (existing) {
+      arrive(existing)
+      return
+    }
+    const watch = new MutationObserver(() => {
+      const button = document.getElementById('agent-delete')
+      if (!button) return
+      watch.disconnect()
+      arrive(button)
+    })
+    watch.observe(document.body, { childList: true, subtree: true })
+    const giveUp = window.setTimeout(stop, 5000)
+    cleanups.push(
+      () => watch.disconnect(),
+      () => window.clearTimeout(giveUp),
+    )
   }
 
   function togglePause() {
@@ -371,7 +407,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
               {agentDisplayName(agent)}
             </button>
           )}
-          {agent.lifecycle?.state !== 'removed' && (
+          {agent.lifecycle?.state !== 'removed' && agent.id !== 'default' && (
             <button type="button" className="link bold-agent-remove" onClick={jumpToDelete}>
               Remove agent…
             </button>
