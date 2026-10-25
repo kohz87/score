@@ -8,8 +8,8 @@ import { HttpError } from '../errors.ts'
 import { requestSummary, shouldAutoSummarise } from './room-summaries.ts'
 import { compactingKey, compactingSessions, rewindingRooms } from './room-rewinding.ts'
 import { continuationFor, markSummarySent } from './outside-sessions.ts'
-import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.ts'
-import { sessionFor, usesRoomSession } from './job-sessions.ts'
+import { failMessageRun, MessageRunSchema, retryReply, roomRunInput } from './message-runs.ts'
+import { isSuccessorSession, retireSession, sessionFor, usesRoomSession } from './job-sessions.ts'
 import { hashXtc, mintXtc, withXtc } from './exchanges/capability.ts'
 import { jobRunInput } from './exchanges/context.ts'
 
@@ -130,6 +130,7 @@ export class RoutingDispatcher {
       )
       if (!job) break
       attempted.add(job.turn_id)
+      let sessionId: string | undefined
       try {
         // Freeze the admission context once: a crash retry must match the adapter's intent payload.
         await this.ingest.submit({
@@ -215,23 +216,56 @@ export class RoutingDispatcher {
               )
               .run(hashXtc(capability), job.turn_id),
           )
+        sessionId = this.db.read((sqlite) =>
+          sessionFor(sqlite, {
+            roomId: job.room_id,
+            jobId: job.job_id ?? null,
+            agentId: job.agent_id,
+          }),
+        )
         await this.port.startRun({
           agentId: job.agent_id,
           input: frozen.admission_input!,
           turnId: job.turn_id,
-          sessionId: this.db.read((sqlite) =>
-            sessionFor(sqlite, {
-              roomId: job.room_id,
-              jobId: job.job_id ?? null,
-              agentId: job.agent_id,
-            }),
-          ),
+          sessionId,
           ...(job.model ? { model: job.model } : {}),
           ...(frozen.provider ? { provider: frozen.provider } : {}),
           ...(images.length ? { images } : {}),
           ...(capability ? { render: (stored: string) => withXtc(stored, capability) } : {}),
         })
       } catch (error) {
+        // Hermes 0.22.5 refuses a deleted session id for good (decision 128): the turn fails with a plain notice, the
+        // agent continues in a successor session, and a reply to the person is sent again there once.
+        if (error instanceof HttpError && error.code === 'session_deleted' && sessionId) {
+          const refused = sessionId
+          await this.ingest.submit({
+            source: 'routing',
+            identity: `session-deleted:${job.turn_id}`,
+            apply: ({ sqlite, now }) => {
+              // Only the first refusal retries: a successor refused again just gets the notice (no loop).
+              const first = !isSuccessorSession(sqlite, job.agent_id, refused)
+              retireSession(sqlite, job.agent_id, refused, now)
+              const drafts = failMessageRun(
+                sqlite,
+                job.turn_id,
+                'session_deleted',
+                now,
+                'My earlier conversation for this room was deleted in Hermes, so I’m starting a fresh one here. I won’t remember what was said before it.',
+              )
+              const retry = first ? sessionRetryable(sqlite, job.turn_id) : null
+              if (retry)
+                retryReply(
+                  sqlite,
+                  retry.roomId,
+                  retry.messageId,
+                  `session-deleted:${job.turn_id}`,
+                  now,
+                )
+              return drafts
+            },
+          })
+          continue
+        }
         // A permanent refusal (unknown or unserved agent, invalid input) would otherwise be retried every 10 s
         // forever: fail the turn once and tell the room. Transient errors keep retrying.
         if (
@@ -289,4 +323,29 @@ function codingAgent(sqlite: DatabaseSync, agentId: string): boolean {
   return Boolean(
     sqlite.prepare('SELECT 1 FROM coding_agents WHERE id = ? AND removed_at IS NULL').get(agentId),
   )
+}
+
+/** A reply to the person's own message (not a hand-off, orchestration or other purpose turn): sent again once. */
+function sessionRetryable(
+  sqlite: DatabaseSync,
+  turnId: string,
+): { roomId: string; messageId: string } | null {
+  const row = sqlite
+    .prepare(
+      `SELECT room_id, message_id, hop, from_agent_id, purpose, orchestration_attempt_id
+       FROM message_runs WHERE turn_id = ?`,
+    )
+    .get(turnId) as
+    | {
+        room_id: string
+        message_id: string
+        hop: number
+        from_agent_id: string | null
+        purpose: string | null
+        orchestration_attempt_id: string | null
+      }
+    | undefined
+  if (!row || row.hop !== 0 || row.from_agent_id || row.purpose || row.orchestration_attempt_id)
+    return null
+  return { roomId: row.room_id, messageId: row.message_id }
 }

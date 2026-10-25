@@ -373,3 +373,38 @@ test('an authority approval_not_pending refusal is not_pending', async () => {
     await client.submitApproval('builder', { runId: 'run-e', requestId: 'p', choice: 'deny' }, 1),
   ).toBe('not_pending')
 })
+
+test('a clarify answer is exactly {request_id, execution_generation, answer}; Hermes no longer waiting is not_pending (decision 128)', async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/clarify')
+      ? new Response(JSON.stringify({ status: 'resolved', prompt_id: 'clarify-1' }), {
+          status: 200,
+        })
+      : new Response(JSON.stringify({ status: 'started', execution_generation: 4 }), {
+          status: 200,
+        }),
+  )
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
+  const request = { runId: 'run-q', promptId: 'clarify-1', generation: 2, answer: 'main' }
+  expect(await client.submitClarify('builder', request, 1)).toBe('applied')
+  // The question's own generation is used as asked; no projection read.
+  expect(fetch.mock.calls).toHaveLength(1)
+  expect(fetch.mock.calls[0]?.[0]).toBe('http://127.0.0.1:8642/p/builder/v1/runs/run-q/clarify')
+  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+    request_id: 'clarify-1',
+    execution_generation: 2,
+    answer: 'main',
+  })
+  // Without a recorded generation the run's current one is read first.
+  expect(await client.submitClarify('builder', { ...request, generation: null }, 1)).toBe('applied')
+  expect(JSON.parse(String(fetch.mock.calls[2]?.[1]?.body))).toMatchObject({
+    execution_generation: 4,
+  })
+
+  const gone = vi.fn<typeof globalThis.fetch>(
+    async () =>
+      new Response(JSON.stringify({ error: { code: 'stale_generation' } }), { status: 409 }),
+  )
+  const refused = new GatewayClient({ scoreHome: env.home, db: env.db, fetch: gone })
+  expect(await refused.submitClarify('builder', request, 1)).toBe('not_pending')
+})

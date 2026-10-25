@@ -90,6 +90,8 @@ const errorCodes = z.enum([
   // Hermes 0.22.5 (session authority): the answer was for an older execution generation of the run.
   'stale_generation',
   'invalid_params',
+  // 0.22.5: a session id that was deleted can never be used again (decision 128).
+  'session_deleted',
   'gateway_auth_failed',
   'run_not_found',
   'invalid_request',
@@ -379,6 +381,61 @@ export class GatewayClient {
       generation,
     )
   }
+  /**
+   * Answers a clarify question (decision 128): `{request_id, execution_generation, answer}`, the generation the
+   * question was asked in (or the run's current one). `not_pending` when Hermes no longer waits for it.
+   */
+  async submitClarify(
+    profile: string,
+    request: { runId: string; promptId: string; generation: number | null; answer: string },
+    credentialGeneration?: number,
+  ): Promise<'applied' | 'not_pending'> {
+    const parsed = z
+      .object({
+        runId: z.string().min(1),
+        promptId: z.string().min(1),
+        generation: z.int().nonnegative().nullable(),
+        answer: z.string().min(1).max(16384),
+      })
+      .parse(request)
+    try {
+      const executionGeneration =
+        parsed.generation ??
+        (
+          await this.json(
+            profile,
+            `/v1/runs/${encodeURIComponent(parsed.runId)}`,
+            z.object({ execution_generation: z.int().nonnegative() }).passthrough(),
+            undefined,
+            undefined,
+            credentialGeneration,
+          )
+        ).execution_generation
+      const result = await this.json(
+        profile,
+        `/v1/runs/${encodeURIComponent(parsed.runId)}/clarify`,
+        z.object({ status: z.enum(['resolved', 'already_resolved']) }).passthrough(),
+        {
+          request_id: parsed.promptId,
+          execution_generation: executionGeneration,
+          answer: parsed.answer,
+        },
+        undefined,
+        credentialGeneration,
+      )
+      return result.status === 'resolved' ? 'applied' : 'not_pending'
+    } catch (error) {
+      if (
+        error instanceof HermesHttpError &&
+        (error.status === 404 ||
+          (error.status === 409 &&
+            ['approval_not_pending', 'stale_generation', 'run_not_found'].includes(error.code)))
+      )
+        return 'not_pending'
+      throw error
+    }
+  }
+
   async submitApproval(
     profile: string,
     request: { runId: string; choice: z.infer<typeof ApprovalChoiceSchema>; requestId: string },

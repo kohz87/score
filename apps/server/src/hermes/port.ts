@@ -390,6 +390,17 @@ export interface HermesPort extends ProfileManagementPort {
   deliverDecision(
     req: z.infer<typeof DecisionDeliveryRequestSchema>,
   ): Promise<'applied' | 'not_pending' | 'failed'>
+  /**
+   * Answers an agent's clarify question on a Score run (decision 128). `not_pending`: Hermes no longer waits for it.
+   * Throws when the answer may not have arrived (the person can answer again).
+   */
+  answerQuestion(req: {
+    agentId: string
+    runId: string
+    promptId: string
+    generation: number | null
+    answer: string
+  }): Promise<'applied' | 'not_pending'>
 }
 
 export type CompactSessionResult =

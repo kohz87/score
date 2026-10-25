@@ -30,6 +30,7 @@ import {
 import { chargeObservation } from '../../domain/orchestration/ops.ts'
 import { recordRunResult } from '../../domain/workflows/verdict.ts'
 import { ProfileNameSchema } from './paths.ts'
+import { closeRunQuestions, requestRunQuestion, settleRunQuestion } from '../../domain/questions.ts'
 
 export const terminalStatuses = ['completed', 'failed', 'cancelled', 'interrupted'] as const
 export const runLifecycle: Lifecycle<RunSummary['status']> = {
@@ -131,7 +132,22 @@ const TerminalSchema = z.object({
   output: z.string().nullish(),
   error: z.string().nullish(),
   usage: UsageSchema.nullish(),
+  // 0.22.5: why a turn that did not complete stopped (e.g. `max_iterations_reached(90/90)`).
+  turn_exit_reason: z.string().max(200).nullish(),
 })
+// 0.22.5 clarify (decision 128): an agent's question to the person, answered at /v1/runs/{id}/clarify.
+const ClarifySchema = z.object({
+  prompt_id: z.string().min(1),
+  execution_generation: z.int().nullish(),
+  question: z.string(),
+  choices: z.array(z.string()).nullish(),
+  multi_select: z.boolean().nullish(),
+  timeout_s: z.number().finite().positive().max(86400).nullish(),
+})
+const SettledSchema = z.object({ prompt_id: z.string().min(1) })
+// Known 0.22.5 events Score has no use for: admission queueing, steer acknowledgements, and tool progress (the
+// started/completed pair already carries the tool).
+const PASSIVE_EVENTS = new Set(['run.queued', 'run.steered', 'tool.progress'])
 // Hermes 0.22.5 under its session authority (gateway/session_pending_controls.py) names the prompt `prompt_id` and
 // adds `execution_generation`, `kind` and `timeout_s`; older builds and the non-authority path send `request_id`.
 const ApprovalSchema = z
@@ -220,6 +236,10 @@ export function translateRunEvent(
   // 0.22.5 announces a prompt that left the queue (answered anywhere, withdrawn, or of an older generation) without
   // the choice: known, and the approval closes with the run or Score's own answer.
   const settled = event === 'approval.settled'
+  const question = event === 'clarify.request' ? ClarifySchema.parse(safe) : undefined
+  const questionSettled =
+    event === 'clarify.settled' ? SettledSchema.safeParse(safe).data : undefined
+  const passive = PASSIVE_EVENTS.has(event) || event === 'clarify.settled'
   const terminal =
     event.startsWith('run.') && runLifecycle.isTerminal(event.slice(4) as RunSummary['status'])
       ? TerminalSchema.parse(safe)
@@ -239,6 +259,8 @@ export function translateRunEvent(
     interim ||
     event === 'approval.responded' ||
     settled ||
+    question ||
+    passive ||
     ignored,
   )
   return {
@@ -287,6 +309,27 @@ export function translateRunEvent(
         if (runLifecycle.isTerminal(row.status))
           drafts.push(...closeRunApprovals(sqlite, row.id, at))
       }
+      if (question)
+        drafts.push(
+          ...requestRunQuestion(
+            sqlite,
+            {
+              profile: row.profile,
+              runId: row.id,
+              promptId: question.prompt_id,
+              generation: question.execution_generation ?? null,
+              question: question.question,
+              options: question.choices ?? [],
+              multiSelect: question.multi_select ?? false,
+              expiresAt: question.timeout_s
+                ? new Date(Date.parse(at) + question.timeout_s * 1000).toISOString()
+                : null,
+            },
+            at,
+          ),
+        )
+      if (questionSettled)
+        drafts.push(...settleRunQuestion(sqlite, row.id, questionSettled.prompt_id, at))
       if (responded?.request_id && (responded.resolved === undefined || responded.resolved === 1))
         drafts.push(
           ...respondRunApproval(
@@ -307,7 +350,7 @@ export function translateRunEvent(
       drafts.push(...progress)
       // Approval evidence may refine a closed row even when run lifecycle observations are stale.
       if (runLifecycle.isTerminal(row.status) || seq <= (row.last_seq ?? -1)) return drafts
-      if (delta || interim || ignored || !known) {
+      if (delta || interim || ignored || passive || !known) {
         sqlite
           .prepare('UPDATE runs SET last_seq = ?, updated_at = ? WHERE id = ?')
           .run(seq, at, row.id)
@@ -319,7 +362,8 @@ export function translateRunEvent(
             )
             .run(row.id, seq, redactBounded(reasoning.text, MAX_THINKING_CHARS))
         return [
-          ...progress,
+          // `drafts` holds the progress note and any question raised or settled by this event.
+          ...drafts,
           // Reasoning that was kept appears as a collapsed card while the reply is written (PLAN 5.39).
           ...(reasoning?.text.trim() ? liveActivityDraft(sqlite, row.id) : []),
           ...(delta
@@ -386,7 +430,10 @@ export function translateRunEvent(
         })
       if (approval) values.status = 'waiting_for_approval'
       if (terminal) {
-        drafts.push(...closeRunApprovals(sqlite, row.id, at))
+        drafts.push(
+          ...closeRunApprovals(sqlite, row.id, at),
+          ...closeRunQuestions(sqlite, row.id, at),
+        )
         values.status = event.slice(4)
         values.ended_at = at
         values.output = terminal.output == null ? null : redactBounded(terminal.output, 8192)
@@ -409,6 +456,7 @@ export function translateRunEvent(
             handoffs: event === 'run.completed',
             status: event.slice(4),
             error: terminal.error,
+            exitReason: terminal.turn_exit_reason ?? null,
           }),
         )
       return drafts

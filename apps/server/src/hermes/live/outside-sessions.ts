@@ -11,7 +11,13 @@ import {
 } from '../outside-sessions.ts'
 import { compressionLineage } from './recover.ts'
 import { hermesPaths, ProfileNameSchema, resolveHermesHome } from './paths.ts'
-import { HermesDbMissing, HermesSchemaDrift, openReadOnly, readBatch } from './sqlite.ts'
+import {
+  closeReadOnly,
+  HermesDbMissing,
+  HermesSchemaDrift,
+  openReadOnly,
+  readBatch,
+} from './sqlite.ts'
 
 const SessionRowSchema = z.object({
   id: z.string(),
@@ -125,6 +131,35 @@ export function listOutsideSessions(
   }
   items.sort((a, b) => b.startedAt.localeCompare(a.startedAt))
   return { items, unavailable }
+}
+
+/**
+ * Whether Hermes retired `sessionId` (deleted it; 0.22.5 never lets the id be used again, decision 128). Read from the
+ * profile's own state database, read-only; anything unreadable is "not known to be retired".
+ */
+export function sessionRetired(
+  agentId: string,
+  sessionId: string,
+  hermesHome: string | undefined,
+): boolean {
+  if (!ProfileNameSchema.safeParse(agentId).success) return false
+  let db
+  try {
+    db = openReadOnly(hermesPaths(resolveHermesHome(hermesHome)).stateDb(agentId))
+  } catch {
+    return false
+  }
+  try {
+    return (
+      db
+        .prepare('SELECT 1 FROM state_meta WHERE key = ?')
+        .get(`gateway.retired_session.v1.${sessionId}`) !== undefined
+    )
+  } catch {
+    return false
+  } finally {
+    closeReadOnly(db)
+  }
 }
 
 /** One session's user and assistant text, oldest first. Null when the session does not exist (or is not a conversation). */

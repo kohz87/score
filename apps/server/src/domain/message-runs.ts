@@ -574,7 +574,16 @@ export function liveActivityDraft(sqlite: DatabaseSync, runId: string): DomainEv
   ]
 }
 
-function failureNotice(status: string, error: string | null | undefined): string {
+function failureNotice(
+  status: string,
+  error: string | null | undefined,
+  exitReason?: string | null,
+): string {
+  // Hermes 0.22.5 ends a turn that used up its tool-call budget with a summary and this reason (decision 128): not a
+  // failure, the work just isn't finished.
+  const steps = /^max_iterations_reached\((\d+)\/(\d+)\)$/.exec(exitReason ?? '')
+  if (steps)
+    return `I ran out of steps for this turn (${steps[2]} tool calls) before finishing. Send “continue” to keep going.`
   const detail = error ? `: ${redactBounded(error, 300)}` : ''
   if (status === 'cancelled') return 'This run was stopped.'
   if (status === 'interrupted') return `This run was interrupted${detail}`
@@ -591,11 +600,14 @@ export function completeRunMessage(
     status = 'completed',
     error,
     reply,
+    exitReason,
   }: {
     output?: string | null
     handoffs?: boolean
     status?: string
     error?: string | null
+    /** Hermes' `turn_exit_reason` on a run that did not complete. */
+    exitReason?: string | null
     /**
      * The eligible authoritative reply (7.7a v3 §5): when given, plans and hand-offs read only this text, never the
      * rest of what was streamed (commentary, earlier messages). `null` = there is none, so nothing is parsed.
@@ -650,7 +662,7 @@ export function completeRunMessage(
   )
   // A run that did not complete would otherwise end as an empty or truncated bubble with no explanation.
   if (status !== 'completed')
-    message.parts.push({ kind: 'text', text: failureNotice(status, error) })
+    message.parts.push({ kind: 'text', text: failureNotice(status, error, exitReason) })
   if (mapping.purpose === 'summary')
     return [...drafts, ...finishSummaryRun(sqlite, mapping, message, status, now)]
   const tools = z
