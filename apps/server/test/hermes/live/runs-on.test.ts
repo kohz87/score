@@ -236,6 +236,15 @@ test('Docker options or mounts that hand over this machine make it "not separate
     { dockerExtraArgs: ['--mount', 'type=bind,source=/,target=/host'] },
     { dockerVolumes: ['/:/host:ro'] },
     { dockerVolumes: ['/home/me:/me'] },
+    // Phase-gate review (decision 121): parents of the home, its hidden folders, system paths, other containers.
+    { dockerVolumes: ['/home:/h'] },
+    { dockerVolumes: ['/home/me/.ssh:/keys:ro'] },
+    { dockerVolumes: ['~/.hermes:/hermes'] },
+    { dockerVolumes: ['/etc:/etc:ro'] },
+    { dockerVolumes: ['/proc:/host-proc'] },
+    { dockerExtraArgs: ['--mount', 'type=bind,src=/root,dst=/r'] },
+    { dockerExtraArgs: ['--privileged=1'] },
+    { dockerExtraArgs: ['--volumes-from', 'other'] },
   ]) {
     const runsOn = describeRunsOn(docker(extra), me, '/home/me')
     expect(runsOn.separated, JSON.stringify(extra)).toBe('no')

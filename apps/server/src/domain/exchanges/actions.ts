@@ -7,6 +7,7 @@ import {
   type ExchangeReceipt,
 } from '@score/contract'
 import { z } from 'zod'
+import { redactValue } from '../../redact.ts'
 import { agentAdmits } from '../agent-lifecycle.ts'
 import { exchangeRow, jobRow, type ExchangeRow } from './store.ts'
 import { hasCapabilityText, hashXtc } from './capability.ts'
@@ -211,7 +212,9 @@ export function stageAction(
         turn.turn_id,
         commandId,
         action.action,
-        JSON.stringify(action),
+        // Redacted before storing (D6): a note, question or text may carry a token the agent saw. Ids and action names
+        // don't match the redaction patterns, so applying the staged action later reads the same routing.
+        JSON.stringify(redactValue(action)),
         req.channel,
         state,
         JSON.stringify(receipt),

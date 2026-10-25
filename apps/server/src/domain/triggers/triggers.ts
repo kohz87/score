@@ -320,6 +320,28 @@ export function receiveCall(
   }
   const team = teamRoomId(sqlite)
   if (!team) throw new HttpError(503, 'not_ready', 'Score has no team room yet.')
+  // Each call starts a job and a lead turn: bound how many a trigger can have open and start in a day (decision 121).
+  const ofTrigger = "json_extract(source, '$.triggerId') = ?"
+  const open = sqlite
+    .prepare(
+      `SELECT count(*) AS n FROM jobs WHERE ${ofTrigger} AND state NOT IN ('done', 'closed') AND deleted_at IS NULL`,
+    )
+    .get(id) as { n: number }
+  if (open.n >= TRIGGER_LIMITS.openJobs)
+    throw new HttpError(
+      429,
+      'trigger_busy',
+      `This trigger already has ${TRIGGER_LIMITS.openJobs} open jobs. Finish or close some, then call again.`,
+    )
+  const today = sqlite
+    .prepare(`SELECT count(*) AS n FROM jobs WHERE ${ofTrigger} AND created_at > ?`)
+    .get(id, new Date(nowMs - 24 * 3600_000).toISOString()) as { n: number }
+  if (today.n >= TRIGGER_LIMITS.jobsPerDay)
+    throw new HttpError(
+      429,
+      'trigger_busy',
+      `This trigger started ${TRIGGER_LIMITS.jobsPerDay} jobs in the last day. Call again later.`,
+    )
   const mapping = TriggerMappingSchema.parse(JSON.parse(trigger.mapping))
   const opening = renderOpening(trigger.app, trigger.template, mapping, payload)
   const ref = valueAt(payload, mapping.ref)
@@ -333,7 +355,9 @@ export function receiveCall(
     missing: opening.missing,
   }
   const jobTitle = [source.ref, source.title].filter(Boolean).join(' · ').slice(0, 200)
-  const made = createJob(sqlite, team, jobTitle, now)
+  const made = createJob(sqlite, team, jobTitle, now, {
+    spendCapUsd: TRIGGER_LIMITS.jobSpendCapUsd,
+  })
   sqlite.prepare('UPDATE jobs SET source = ? WHERE id = ?').run(JSON.stringify(source), made.job.id)
   const messageId = randomUUID()
   const lead = (

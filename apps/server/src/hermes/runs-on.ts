@@ -89,7 +89,10 @@ export function hostIs(host: string, self: ThisMachine): 'same' | 'other' | 'nam
 
 // Docker options that hand the container this machine (any one makes it "not separated").
 const HOST_OPTIONS = [
-  /^--privileged(=true)?$/u,
+  // Any value but an explicit false (`--privileged=1`, `=yes`) still means privileged.
+  /^--privileged(?!=(false|0)$)/u,
+  // Another container's volumes can be anything, this machine's root included.
+  /^--volumes-from/u,
   /^--(network|net)(=|$)host$/u,
   /^--(pid|ipc|uts|userns)=host$/u,
   /^--cap-add/u,
@@ -119,17 +122,37 @@ function networkFromArgs(args: string[]): boolean | null {
   }
   return null
 }
-// A mount that gives the container this machine's root, Docker itself, or the person's home.
+// Paths whose mount gives the container this machine: its root and system directories, Docker itself, the person's home,
+// or one of its hidden folders (SSH keys, Hermes's and Score's own data, cloud credentials). A parent of one of them
+// counts too (`/home` holds the home). A project folder inside the home is the usual workspace and stays "partly".
+const HOST_PATHS = [
+  '/etc',
+  '/root',
+  '/proc',
+  '/sys',
+  '/dev',
+  '/boot',
+  '/var',
+  '/usr',
+  '/run',
+  '/var/run',
+]
 function mountGivesHost(volume: string, home: string): boolean {
-  const source = volume.split(':')[0] ?? ''
-  const clean = source.replace(/\/+$/u, '') || '/'
+  const homeDir = home.replace(/\/+$/u, '')
+  const raw = volume.split(':')[0] ?? ''
+  const expanded = raw === '~' || raw.startsWith('~/') ? homeDir + raw.slice(1) : raw
+  const clean = expanded.replace(/\/+$/u, '') || '/'
+  const within = (parent: string) =>
+    parent !== '' && (clean === parent || clean.startsWith(parent + '/'))
+  const holds = (child: string) =>
+    child !== '' && child.startsWith(clean === '/' ? '/' : clean + '/')
   return (
     clean === '/' ||
     clean.endsWith('docker.sock') ||
-    clean === '/var/run' ||
-    clean === '/run' ||
-    clean === home.replace(/\/+$/u, '') ||
-    clean === '~'
+    HOST_PATHS.some((path) => within(path)) ||
+    clean === homeDir ||
+    holds(homeDir) ||
+    (homeDir !== '' && /^\.[^/]/u.test(clean.slice(homeDir.length + 1)) && within(homeDir))
   )
 }
 
