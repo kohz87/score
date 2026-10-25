@@ -1351,3 +1351,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   2.1.3 review: key repeat/IME guard, Ctrl+` backs out from inside xterm. Gates: full e2e 968 passed / 7 phone Room
   screenshots (the one-line composer; baselines updated, then 207/207 on the affected specs incl. themes-bold-visual);
   pnpm check green (server 4767, web 2969→2975 after the merge, contract 1496).
+- **v2.1.3 deployed live** (~14:21 UTC): backup score-pre-2.1.3-20261026.db, restart, 0 errors.
