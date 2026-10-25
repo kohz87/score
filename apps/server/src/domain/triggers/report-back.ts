@@ -207,7 +207,7 @@ export function reportBackOf(sqlite: DatabaseSync, jobId: string): JobReportBack
   }
   const turn = sqlite
     .prepare(
-      'SELECT agent_id, state, created_at, room_id, job_id FROM message_runs WHERE turn_id = ?',
+      'SELECT r.agent_id, r.state, r.created_at, r.room_id, r.job_id, x.session_id FROM message_runs r LEFT JOIN runs x ON x.id = r.run_id WHERE r.turn_id = ?',
     )
     .get(stored.data.turnId) as
     | {
@@ -216,6 +216,7 @@ export function reportBackOf(sqlite: DatabaseSync, jobId: string): JobReportBack
         created_at: string
         room_id: string
         job_id: string | null
+        session_id: string | null
       }
     | undefined
   if (!turn) return { state: 'not_confirmed', tool: stored.data.tool, at: stored.data.at }
@@ -224,11 +225,14 @@ export function reportBackOf(sqlite: DatabaseSync, jobId: string): JobReportBack
   // A turn that failed or was stopped reported nothing, whatever it may have called.
   if (turn.state !== 'completed')
     return { state: 'not_confirmed', tool: stored.data.tool, at: stored.data.at }
-  const session = sessionFor(sqlite, {
-    roomId: turn.room_id,
-    jobId: turn.job_id,
-    agentId: turn.agent_id,
-  })
+  // The session the turn ran in (a later successor of a deleted session holds none of its calls, decision 128).
+  const session =
+    turn.session_id ??
+    sessionFor(sqlite, {
+      roomId: turn.room_id,
+      jobId: turn.job_id,
+      agentId: turn.agent_id,
+    })
   const call = sqlite
     .prepare(
       `SELECT ended_at FROM session_tool_calls

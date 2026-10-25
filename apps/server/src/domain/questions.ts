@@ -108,7 +108,11 @@ export function requestRunQuestion(
     .prepare('SELECT room_id, job_id FROM message_runs WHERE run_id = ? LIMIT 1')
     .get(req.runId) as { room_id: string; job_id: string | null } | undefined
   const id = randomUUID()
-  const options = req.options.map((option) => redactBounded(option, 512)).slice(0, 50)
+  // Trimmed like the answers they are compared with.
+  const options = req.options
+    .map((option) => redactBounded(option, 512).trim())
+    .filter(Boolean)
+    .slice(0, 50)
   sqlite
     .prepare(
       `INSERT INTO agent_questions (id, profile, run_id, prompt_id, generation, room_id, job_id, question, options,
@@ -202,7 +206,10 @@ export function answerText(question: QuestionRow, answer: AgentQuestionAnswer): 
     const picked = typeof answer === 'string' ? [answer] : answer
     if (new Set(picked).size !== picked.length || picked.some((value) => !options.includes(value)))
       throw bad('Pick from the options the agent offered.')
-    return JSON.stringify(picked)
+    const text = JSON.stringify(picked)
+    // Hermes takes at most 16 384 characters.
+    if (text.length > 16384) throw bad('That’s too many options to send at once.')
+    return text
   }
   if (typeof answer !== 'string' || !options.includes(answer))
     throw bad('Pick one of the options the agent offered.')
@@ -249,6 +256,31 @@ export function finishAnswer(
       sqlite,
       id,
       { status: 'withdrawn', answer: null, delivery: 'failed', answered_at: at },
+      at,
+    )
+  // Delivery failed: if Hermes stopped waiting meanwhile (the run ended, or the question timed out) the question
+  // closes, since a settle that arrived during the delivery was set aside for it.
+  const row = readQuestionRow(sqlite, id)
+  const run = sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(row?.run_id ?? '') as
+    { status: string } | undefined
+  if (run && ['completed', 'failed', 'cancelled', 'interrupted'].includes(run.status))
+    return patch(
+      sqlite,
+      id,
+      { status: 'withdrawn', delivery: 'failed', answer: null, answered_at: at },
+      at,
+    )
+  if (row?.expires_at && Date.parse(row.expires_at) <= Date.parse(at))
+    return patch(
+      sqlite,
+      id,
+      {
+        status: 'expired',
+        answered_by: 'timeout',
+        delivery: 'failed',
+        answer: null,
+        answered_at: at,
+      },
       at,
     )
   return patch(sqlite, id, { delivery: 'failed', answer: null }, at)

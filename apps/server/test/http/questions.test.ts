@@ -229,3 +229,25 @@ test('a deleted session while the team is paused keeps the successor and the not
   expect(texts().join(' ')).toContain('was deleted in Hermes')
   expect(db.sqlite.prepare('SELECT count(*) AS n FROM session_successors').get()).toEqual({ n: 1 })
 })
+
+test('a delivery that fails after the run ended closes the question instead of stranding it', async () => {
+  await send('@builder ask me')
+  await advance(2000)
+  const [question] = await pending()
+  let fail: (error: Error) => void = () => {}
+  vi.spyOn(port, 'answerQuestion').mockImplementationOnce(
+    () => new Promise((_, reject) => (fail = reject)),
+  )
+  await post(`/api/questions/${question!.id}/answer`, { answer: 'late' })
+  await port.stopRun({ agentId: 'builder', runId: question!.runId })
+  await advance(2000)
+  // Still delivering: the run's close leaves it to the delivery.
+  expect((await pending())[0]).toMatchObject({ delivery: 'delivering' })
+  fail(new Error('gateway down'))
+  await advance(100)
+  expect(await pending()).toEqual([])
+  const final = (
+    await app.inject({ method: 'GET', url: `/api/questions/${question!.id}`, headers })
+  ).json()
+  expect(final).toMatchObject({ status: 'withdrawn', delivery: 'failed', answer: null })
+})

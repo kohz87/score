@@ -309,7 +309,7 @@ export function translateRunEvent(
         if (runLifecycle.isTerminal(row.status))
           drafts.push(...closeRunApprovals(sqlite, row.id, at))
       }
-      if (question)
+      if (question && !runLifecycle.isTerminal(row.status))
         drafts.push(
           ...requestRunQuestion(
             sqlite,
@@ -551,6 +551,7 @@ export function runStatusObservation(context: RunContext, run: GatewayRun): Obse
       return [
         ...(changed ? [runDraft(sqlite, row.id)] : []),
         ...(terminal ? closeRunApprovals(sqlite, row.id, now) : []),
+        ...(terminal ? closeRunQuestions(sqlite, row.id, now) : []),
         ...(terminal
           ? completeRunMessage(sqlite, row.id, now, {
               output: safe.output,
@@ -581,6 +582,7 @@ export function runLostObservation(context: RunContext): Observation {
       return [
         ...(changed ? [runDraft(sqlite, row.id)] : []),
         ...closeRunApprovals(sqlite, row.id, now),
+        ...closeRunQuestions(sqlite, row.id, now),
         ...completeRunMessage(sqlite, row.id, now, {
           handoffs: false,
           status: 'interrupted',
@@ -623,6 +625,7 @@ export function runRecoveredObservation(context: RunContext, output: string): Ob
         },
         ...(changed ? [runDraft(sqlite, row.id)] : []),
         ...closeRunApprovals(sqlite, row.id, now),
+        ...closeRunQuestions(sqlite, row.id, now),
         ...completeRunMessage(sqlite, row.id, now, { output, handoffs: true, status: 'completed' }),
       ]
     },
