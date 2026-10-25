@@ -63,7 +63,6 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
       .getByRole('radiogroup', { name: 'Navigation' })
       .getByRole('radio', { name: 'Left rail' })
       .click()
-    await page.getByRole('button', { name: 'Move Chat up' }).click()
     await page.getByLabel('Name of Chat in the menu').fill('Talk')
     await page.getByLabel('Name of Chat in the menu').press('Enter')
     await page.getByRole('button', { name: 'Hide Reports from the menu' }).click()

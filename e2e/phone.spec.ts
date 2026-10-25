@@ -23,7 +23,7 @@ test('the app is installable: manifest and icons are served, the worker is regis
   expect((await request.get('/sw.js')).headers()['service-worker-allowed']).toBe('/')
 
   await page.goto('/b')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('banner')).toBeVisible()
   const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope)
   expect(scope).toBe(new URL('/', page.url()).href)
   // Wait for the worker to control the page, then check what it has stored: shell files only.
@@ -31,7 +31,7 @@ test('the app is installable: manifest and icons are served, the worker is regis
     .poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
     .toBe(true)
   await page.reload()
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('banner')).toBeVisible()
   const cached = await page.evaluate(async () => {
     const urls: string[] = []
     for (const name of await caches.keys())
@@ -63,7 +63,7 @@ test('when Score cannot be reached the app shows the offline page and recovers o
     .getByRole('button', { name: 'Try again' })
     .click({ timeout: 1000 })
     .catch(() => {})
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('banner')).toBeVisible()
   await expect(page.getByRole('heading', { name: /Score can.t be reached/ })).toHaveCount(0)
 })
 
@@ -235,7 +235,7 @@ test.describe('passkeys over HTTPS', () => {
       await expect(page).toHaveURL(`${origin}/pair`)
       await page.getByRole('button', { name: 'Sign in with a passkey' }).click()
       await expect(page).toHaveURL(`${origin}/b`, { timeout: 15_000 })
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await expect(page.getByRole('banner')).toBeVisible()
       expect(await page.evaluate(async () => (await fetch('/api/agents')).status)).toBe(200)
 
       // On an IP address passkeys are not offered, and Settings explains why.

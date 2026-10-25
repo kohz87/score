@@ -31,6 +31,14 @@ async function fillAndAcknowledge(page: Page, what: string) {
   // A saved recipe takes no free-text "what" (its inputs say what to do).
   const field = dialog.getByLabel('What should the team do?')
   if (await field.isVisible().catch(() => false)) await field.fill(what)
+  // Agents other specs added to the shared fake server are not team members for the lead's preflight: allow only the
+  // seeded ones, as the person would.
+  const picker = dialog.getByRole('group', { name: 'Agents allowed' })
+  if (await picker.isVisible().catch(() => false))
+    for (const box of await picker.getByRole('checkbox').all()) {
+      const name = (await box.locator('xpath=ancestor::label').innerText()).trim()
+      if (!['builder', 'reviewer', 'designer'].includes(name)) await box.uncheck()
+    }
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
   const start = dialog.getByRole('button', { name: 'Start the job' })
   await expect(start).toBeEnabled({ timeout: 30_000 })

@@ -91,7 +91,9 @@ for (const viewport of sizes) {
       'href',
       '/b/screen/builder',
     )
-    await expect(page.getByRole('button', { name: 'Open builder in its own window' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Open builder in its own window' })).toHaveCount(
+      0,
+    )
 
     await page.getByRole('button', { name: /^More: memory/ }).click()
     const nav = page.getByRole('navigation', { name: 'Agent settings sections' })

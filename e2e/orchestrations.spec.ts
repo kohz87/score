@@ -204,7 +204,9 @@ test('the lead asks a question: it appears on the run, the answer reaches the le
   await pair(page)
   await start(page, 'Ask first [fake:ask] e2e-d', 'Never ask')
   await openLive(page)
-  const needs = page.getByRole('region', { name: 'Needs you' })
+  // The run page carries the question inside its protected Needs-you wrapper.
+  const needs = page.locator('.orch-needs[aria-label="Needs you"]')
+  await expect(needs).toHaveAttribute('data-protected', 'grid')
   const question = needs.getByRole('region', { name: 'Question from the lead' })
   await expect(question).toContainText('Which audience is this for?', { timeout: 30_000 })
   await question.getByLabel(/Your answer/).fill('ANSWER q1: engineers')

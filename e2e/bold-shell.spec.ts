@@ -39,11 +39,14 @@ test('?ui=bold opens the frame at 1440×900 and 390×844', async ({ page }) => {
   await expect(page.getByText('Y', { exact: true })).toBeVisible()
 })
 
-test('?ui=classic returns to the classic shell', async ({ page }) => {
+test('the root always opens the new shell; Settings › Use the classic view opens the classic shell', async ({
+  page,
+}) => {
   await pair(page)
-  await page.goto('/?ui=bold')
-  await expect(page).toHaveURL('/b')
   await page.goto('/?ui=classic')
+  await expect(page).toHaveURL('/b')
+  await page.goto('/b/settings')
+  await page.getByRole('button', { name: 'Use the classic view' }).click()
   await expect(page).toHaveURL('/chat')
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Score, go to the team room' })).toHaveCount(0)

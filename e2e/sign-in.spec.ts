@@ -27,7 +27,7 @@ test('a pasted key connects a key provider and is never shown again', async ({ p
   await pair(page)
   await page.goto('/settings')
   const models = page.getByRole('region', { name: 'Models and keys' })
-  await models.getByRole('button', { name: /^(Connect|Edit) OpenRouter$/ }).click()
+  await models.getByRole('button', { name: /^(Connect|Add key) OpenRouter$/ }).click()
   const form = models.getByRole('form', { name: 'Add a key for OpenRouter' })
   const input = form.getByLabel('API key')
   await expect(input).toHaveAttribute('type', 'password')

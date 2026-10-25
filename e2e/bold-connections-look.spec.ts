@@ -446,7 +446,7 @@ test.describe('bold Connections, Tools and Look', () => {
       await expect(page).toHaveURL('/settings/look')
       await expect(page.locator('[data-ui="bold"]')).toHaveCount(0)
       await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
-      expect(await page.evaluate(() => localStorage.getItem('score.ui'))).toBeNull()
+      expect(await page.evaluate(() => localStorage.getItem('score.ui'))).toBe('classic')
       await page.reload()
       await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
       expect(currency()).toEqual({ code: 'EUR', rate: 0.92 })

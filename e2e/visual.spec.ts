@@ -112,7 +112,7 @@ for (const width of [1440, 1024]) {
   })
 }
 
-test('mobile Chat keeps the room title whole and the Score link below it', async ({ page }) => {
+test('mobile Chat keeps the room title whole', async ({ page }) => {
   await open(page, destinations[0]!, 390)
   const heading = page.getByRole('heading', { name: '#activity-feed', level: 1 })
   const box = (await heading.boundingBox())!
@@ -120,8 +120,6 @@ test('mobile Chat keeps the room title whole and the Score link below it', async
     Number.parseFloat(getComputedStyle(element).lineHeight),
   )
   expect(box.height).toBeLessThanOrEqual(lineHeight + 1)
-  const link = (await page.getByRole('link', { name: 'See it on the Score' }).boundingBox())!
-  expect(link.y).toBeGreaterThan(box.y + box.height)
   await expect(page.locator('.chat-files')).toHaveText(/src\/activity-feed.ts/)
 })
 

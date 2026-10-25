@@ -136,8 +136,9 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     await expect(page.getByText('This browser is paired')).toBeVisible()
     expect(redeemed).toBe(1)
     await page.getByRole('link', { name: 'Open Score' }).click()
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    await page.getByRole('link', { name: 'Settings', exact: true }).click()
+    await expect(page.getByRole('banner')).toBeVisible()
+    // The new shell is the landing page; the remote-access controls live in the classic Settings.
+    await page.goto(`${origin}/settings`)
     const sections = page.getByRole('navigation', { name: 'Settings sections' })
     await sections.getByRole('link', { name: 'Remote access' }).click()
     await expect(page).toHaveURL(`${origin}/settings/remote-access`)

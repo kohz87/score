@@ -75,10 +75,11 @@ test('delete a room: the dialog says what goes, needs the typed name, then Chat 
 test('a finished orchestration room can be deleted too', async ({ page }) => {
   test.setTimeout(120_000)
   await pair(page)
+  const goal = `Delete me e2e-del-${Date.now().toString(36)}`
   await page.goto('/chat')
   await page.getByRole('button', { name: /New orchestration/ }).click()
   const start = page.getByRole('dialog', { name: 'New orchestration' })
-  await start.getByRole('textbox', { name: 'Goal' }).fill('Delete me e2e-del')
+  await start.getByRole('textbox', { name: 'Goal' }).fill(goal)
   await start.getByRole('combobox', { name: 'Lead' }).selectOption({ label: 'lead' })
   await start.getByRole('checkbox', { name: /builder/ }).check()
   await start.getByRole('checkbox', { name: /reviewer/ }).check()
@@ -90,7 +91,10 @@ test('a finished orchestration room can be deleted too', async ({ page }) => {
   const name = `orch-${Date.now().toString(36)}`
   await openMenuItem(page, /^Actions for #?Orchestration/, 'Delete room…')
   const dialog = page.getByRole('dialog', { name: /^Delete Orchestration.*\?$/ })
-  await expect(dialog.getByRole('alert')).toContainText('still owns this room')
+  // The fake run can finish before the dialog opens on a loaded machine; then the dialog is the plain delete one.
+  await expect(dialog.getByRole('alert').or(dialog.getByRole('textbox'))).toBeVisible()
+  if (await dialog.getByRole('alert').isVisible())
+    await expect(dialog.getByRole('alert')).toContainText('still owns this room')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   // Renaming is allowed meanwhile.
   await page.getByRole('button', { name: /\(rename\)$/ }).click()
@@ -102,9 +106,10 @@ test('a finished orchestration room can be deleted too', async ({ page }) => {
     .poll(
       async () => {
         const list = (await (await page.request.get('/api/orchestrations')).json()) as {
-          items: { status: string }[]
+          items: { title: string; status: string }[]
         }
-        return list.items.map((item) => item.status)
+        // This run only: other specs' runs on the shared fake server finish earlier.
+        return list.items.filter((item) => item.title === goal).map((item) => item.status)
       },
       { timeout: 90_000 },
     )

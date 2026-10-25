@@ -577,6 +577,9 @@
     flex-wrap: nowrap;
     align-items: stretch;
     gap: var(--space-4);
+    /* The member strip bleeds to the screen edge (negative margin); a theme with a thin page gutter must not turn
+       that bleed into sideways page scroll. */
+    overflow-x: clip;
   }
   .team-members {
     flex: none;

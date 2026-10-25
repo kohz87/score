@@ -89,9 +89,12 @@ for (const width of [360, 390, 768, 1023]) {
   })
 }
 
+// The drawer opens over Chat, the first destination, so its link is the marked page.
+const drawerHome = routes.find((where) => where.name === 'chat-list')!
+
 test.describe('navigation drawer', () => {
   test.beforeEach(async ({ page }) => {
-    await open(page, routes[0]!, 390)
+    await open(page, drawerHome, 390)
   })
 
   test('opens from the hamburger, marks the page, navigates and returns focus', async ({
@@ -199,7 +202,7 @@ for (const [width, dark] of [
 }
 
 test('drawer open at 390px', async ({ page }) => {
-  await open(page, routes[0]!, 390, 844)
+  await open(page, drawerHome, 390, 844)
   await page.getByRole('button', { name: 'Menu', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible()
   await expect(page).toHaveScreenshot('drawer-390.png', { animations: 'disabled' })

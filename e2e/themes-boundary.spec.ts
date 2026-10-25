@@ -258,6 +258,9 @@ test('third gate 3: a Needs-you dot stays distinguishable on a background of its
 }) => {
   await wear(page, { css: '.main-nav-link, .top-bar { background-color: #ff6b8a; }' })
   await startApproval(page)
+  // The marker rides on Chat, the first destination; off Chat its link is not the current page (whose own ink
+  // background would sit behind the dot).
+  await page.goto('/team')
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   const dot = page.locator('.needs-you-dot').first()
   await expect(dot).toBeAttached({ timeout: 20_000 })
