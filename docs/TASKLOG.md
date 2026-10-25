@@ -1265,3 +1265,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   agent."; Retry lived only in More › Details. Owner told to press Retry (writes to g3's real profile: theirs to do).
   2.0.6 (Sonnet coder): the stopped operation with Retry/Confirm at the top of the bold agent page and inside the Remove
   panel. Abandoning a create that can't be retried → PLAN post-release P2.
+- **v2.0.8 = 2.0.6 + 2.0.7 + 2.0.8 (2026-10-25).** 2.0.6 (Sonnet coder): BoldAgentStatus card + stuck step in the Remove
+  panel; reviews: P2s fixed (removal seen in the list first, duplicate alert, stuck from lifecycle not blocker text,
+  Pause hidden while not ready, then "removed agents' pages bounced to Team" fixed: navigate only on an observed
+  transition). 2.0.7 (Sonnet coder, decision 124): More as 14 bold cards on the existing hooks; review P2 fixed: the
+  go-ahead grants list (revoking an agent-only "allowed") had been dropped — GoAheadCard, protected; Score access keeps
+  Revoke on error; server messages on every card. Classic bits still inside: the Files panel (WorkspaceTab), channel
+  setup form, style picker — P2 list. 2.0.8 (lead, decision 125): reusing a retired name with `confirmReuse`
+  (incarnation-aware, as the contract had deferred); review P2 fixed: the new agent started from the removed one's
+  projection. Pauses cleared at retire and on reuse. Gates on the merged branch: full e2e 939 passed, 0 failed, 19
+  skipped; pnpm check green (server 4751, web 2921, contract 1496).
