@@ -1,49 +1,23 @@
-import type { AgentSummary, Job, JobResults, Message, RoomVersion } from '@score/contract'
-import { useQueryClient } from '@tanstack/react-query'
+import type { AgentSummary, Job, Message } from '@score/contract'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { apiFetch, ApiError } from '../../data/api.ts'
-import { copyText } from '../../data/clipboard.ts'
-import { newId } from '../../data/ids.ts'
-import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
-import { MessageItem } from '../../routes/chat/MessageItem.tsx'
-import { approvalsQuery, versionsQuery, type MessagePageData } from '../../routes/chat/queries.ts'
-import { requestDelete, usePendingDeletes } from '../../routes/chat/message-deletion.ts'
-import { startEdit } from '../../routes/chat/message-edit.ts'
-import type { WorkspaceTarget } from '../../routes/chat/workspace-link.ts'
-import { RewindDialog } from '../../routes/chat/RewindDialog.tsx'
-import {
-  BranchView,
-  DeletedBlock,
-  MessageVersionControl,
-  type VersionView,
-} from '../../routes/chat/versions.tsx'
-import { saveCandidates, SaveToKnowledge } from '../../routes/knowledge/SaveToKnowledge.tsx'
-import { boldJobLink, boldMessageLink, boldWorkspaceLink } from '../bold-links.ts'
-import { fetchJobResults, jobResultsKey } from '../bold-results-queries.ts'
+import { useStreamQuery } from '../../data/query-client.ts'
+import { approvalsQuery, type MessagePageData } from '../../routes/chat/queries.ts'
+import { usePendingDeletes } from '../../routes/chat/message-deletion.ts'
+import { type VersionView } from '../../routes/chat/versions.tsx'
+import { boldJobLink, boldMessageLink } from '../bold-links.ts'
 import { agentDisplayName } from '../bold-agents.ts'
+import {
+  authorName,
+  BoldMessage,
+  buildMessageNodes,
+  retryableIds,
+  messageText,
+} from './BoldMessage.tsx'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
-import { roomMessagesQuery, roomPinsQuery, roomSeekQuery, setRoomPin } from './room-queries.ts'
-
-function messageText(message: Message) {
-  return message.parts.flatMap((part) => (part.kind === 'text' ? [part.text] : [])).join('\n\n')
-}
-
-function authorName(message: Message, agents: AgentSummary[]) {
-  if (message.author.kind === 'you') return 'You'
-  const id = message.author.agentId
-  const agent = agents.find((item) => item.id === id)
-  return agent ? agentDisplayName(agent) : id
-}
-
-function atOrAfter(message: Message, anchor: Message) {
-  return (
-    message.createdAt > anchor.createdAt ||
-    (message.createdAt === anchor.createdAt && message.id >= anchor.id)
-  )
-}
+import { roomMessagesQuery, roomSeekQuery } from './room-queries.ts'
+import { useMessageTools } from './use-message-tools.ts'
 
 type PageState = {
   data?: MessagePageData & { found?: boolean }
@@ -106,217 +80,6 @@ function MessageSeekCollector({
     onPage(pageKey(jobId, seekMarker(seek)), { data, status, error })
   }, [data, error, jobId, onPage, seek, status])
   return null
-}
-
-function MessageWithActions({
-  message,
-  agents,
-  versions,
-  onView,
-  pinned,
-  pinBusy,
-  onTogglePin,
-  approvalPointerIds,
-}: {
-  message: Message
-  agents: AgentSummary[]
-  versions: RoomVersion[]
-  onView: (version: RoomVersion) => void
-  pinned: boolean
-  pinBusy: boolean
-  onTogglePin: () => void
-  approvalPointerIds?: ReadonlySet<string>
-}) {
-  const [copied, setCopied] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [retry, setRetry] = useState<'idle' | 'busy' | 'queued'>('idle')
-  const [retryError, setRetryError] = useState<string | null>(null)
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(
-    () => () => {
-      clearTimeout(timer.current)
-      clearTimeout(retryTimer.current)
-    },
-    [],
-  )
-  const imported = message.id.startsWith('import:')
-  const mine = message.author.kind === 'you'
-  const author = authorName(message, agents)
-  const text = messageText(message)
-  const finished = !message.streaming && !message.id.startsWith('pending-')
-  const canSave = saveCandidates(message, author).length > 0
-  // `workspace://` links (11.6b): a file this message's job changed opens in its Workbench, any other file in the agent's
-  // workspace. The job's changed files come from the Results data the side panel already holds (no extra request).
-  const queryClient = useQueryClient()
-  const workspaceLinkFor = (target: WorkspaceTarget) => {
-    const jobId = message.jobId ?? null
-    const results = jobId ? queryClient.getQueryData<JobResults>(jobResultsKey(jobId)) : undefined
-    const files =
-      results?.items.flatMap((item) =>
-        item.kind === 'change' ? item.files.map((file) => file.path) : [],
-      ) ?? []
-    return boldWorkspaceLink(target.agentId, target.path, jobId ? { id: jobId, files } : undefined)
-  }
-
-  async function prepareWorkspaceLink() {
-    const jobId = message.jobId ?? null
-    if (!jobId) return
-    const key = jobResultsKey(jobId)
-    const query = queryClient.getQueryCache().find({ queryKey: key, exact: true })
-    if (!query || (!query.isStale() && query.state.fetchStatus !== 'fetching')) return
-    await queryClient.fetchQuery({
-      queryKey: key,
-      queryFn: ({ signal }) => fetchJobResults(jobId, signal),
-      staleTime: 0,
-      retry: false,
-    })
-  }
-
-  async function copy() {
-    if (!(await copyText(text))) return
-    setCopied(true)
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => setCopied(false), 2000)
-  }
-
-  async function retryReply() {
-    setRetry('busy')
-    setRetryError(null)
-    try {
-      await apiFetch(
-        `rooms/${encodeURIComponent(message.roomId)}/messages/${encodeURIComponent(message.id)}/retry`,
-        { method: 'POST', headers: { 'Idempotency-Key': newId() }, body: '{}' },
-      )
-      setRetry('queued')
-      clearTimeout(retryTimer.current)
-      retryTimer.current = setTimeout(() => setRetry('idle'), 2000)
-    } catch (failure) {
-      setRetry('idle')
-      setRetryError(
-        failure instanceof ApiError && failure.status === 409
-          ? 'Can’t retry right now: it is already being answered, or work is paused.'
-          : 'Couldn’t retry. Try again.',
-      )
-    }
-  }
-
-  return (
-    <div className="bold-message" data-message-id={message.id} tabIndex={0}>
-      <MessageItem
-        message={message}
-        agents={agents}
-        bold
-        workspaceLinkFor={workspaceLinkFor}
-        workspacePrepare={prepareWorkspaceLink}
-        approvalPointerIds={approvalPointerIds}
-        versionControl={
-          <MessageVersionControl messageId={message.id} versions={versions} onSelect={onView} />
-        }
-      />
-      {finished && (
-        <div className="bold-acts" role="group" aria-label={`Actions for message from ${author}`}>
-          {mine && !imported && !message.editedBy && (
-            <button
-              type="button"
-              className="bold-act"
-              aria-label={`Edit message from ${author}`}
-              onClick={() => startEdit(message)}
-            >
-              Edit
-            </button>
-          )}
-          {text && (
-            <button
-              type="button"
-              className="bold-act"
-              aria-label={`Copy message from ${author}`}
-              onClick={() => void copy()}
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          )}
-          {canSave && (
-            <button
-              type="button"
-              className="bold-act"
-              aria-label={`Save message from ${author} to Library`}
-              onClick={() => setSaving(true)}
-            >
-              Save to Library
-            </button>
-          )}
-          {!mine && !imported && (
-            <button
-              type="button"
-              className="bold-act"
-              aria-label={`Retry reply from ${author}`}
-              disabled={retry !== 'idle'}
-              onClick={() => void retryReply()}
-            >
-              {retry === 'idle' ? 'Retry reply' : 'Retrying'}
-            </button>
-          )}
-          {!imported && (
-            <button
-              type="button"
-              className="bold-act"
-              aria-label={`${pinned ? 'Unpin' : 'Pin'} message from ${author}`}
-              aria-pressed={pinned}
-              disabled={pinBusy}
-              onClick={onTogglePin}
-            >
-              {pinned ? 'Unpin' : 'Pin'}
-            </button>
-          )}
-          {!imported && (
-            <button
-              type="button"
-              className="bold-act"
-              aria-label={`Delete message from ${author}`}
-              onClick={() => {
-                if (mine) setConfirmDelete(true)
-                else requestDelete(message.roomId, message.id)
-              }}
-            >
-              Delete
-            </button>
-          )}
-        </div>
-      )}
-      {saving &&
-        // The stream is masked (its top fade), which would clip a fixed dialog inside it: render it at the shell.
-        createPortal(
-          <SaveToKnowledge
-            message={message}
-            authorName={author}
-            onClose={() => setSaving(false)}
-          />,
-          document.querySelector('[data-ui="bold"]') ?? document.body,
-        )}
-      {confirmDelete && (
-        <RewindDialog
-          roomId={message.roomId}
-          messageId={message.id}
-          mode="delete"
-          agents={agents}
-          onDone={() => setConfirmDelete(false)}
-          onClose={() => setConfirmDelete(false)}
-        />
-      )}
-      {copied && (
-        <span className="small muted" role="status">
-          Copied
-        </span>
-      )}
-      {retryError && (
-        <span className="bold-act-error" role="alert">
-          {retryError}
-        </span>
-      )}
-    </div>
-  )
 }
 
 /** The live stream for All or one job, with the classic message cards and the prototype's hover row. */
@@ -419,14 +182,8 @@ export function RoomMessageStream({
     )
   }, [allRefs, pageStates])
 
-  const pinsDefinition = useMemo(() => roomPinsQuery(roomId), [roomId])
-  const pins = useStreamQuery(pinsDefinition)
-  const refetchPins = useStreamQueryRefetch(pinsDefinition)
-  const [pinOverrides, setPinOverrides] = useState<Record<string, boolean>>({})
-  const [pinBusy, setPinBusy] = useState<string | null>(null)
-  const [pinError, setPinError] = useState<string | null>(null)
-  const versionsDefinition = useMemo(() => versionsQuery(roomId), [roomId])
-  const versions = useStreamQuery(versionsDefinition).data ?? []
+  const retryable = useMemo(() => retryableIds(allItems), [allItems])
+  const { versions, isPinned, pinBusy, pinError, togglePin } = useMessageTools(roomId)
   const approvalsData = useStreamQuery(approvalsQuery).data
   const approvalPointerIds = useMemo(
     () => approvalPointerSet(approvalsData ?? [], roomId),
@@ -436,36 +193,6 @@ export function RoomMessageStream({
   const [view, setView] = useState<
     (NonNullable<VersionView> & { filter: JobFilter; selectedJob: string }) | null
   >(null)
-  const pinnedIds = useMemo(
-    () => new Set((pins.data?.items ?? []).map((pin) => pin.messageId)),
-    [pins.data],
-  )
-  const pinsRevision = pins.data?.revision ?? 0
-
-  useEffect(() => {
-    if (pinsRevision > 0) void refetchPins()
-  }, [pinsRevision, refetchPins])
-
-  function isPinned(messageId: string) {
-    return pinOverrides[messageId] ?? pinnedIds.has(messageId)
-  }
-
-  async function togglePin(messageId: string) {
-    const next = !isPinned(messageId)
-    setPinBusy(messageId)
-    setPinError(null)
-    try {
-      await setRoomPin(roomId, messageId, next)
-      setPinOverrides((current) => ({ ...current, [messageId]: next }))
-      void refetchPins()
-    } catch (failure) {
-      setPinError(
-        failure instanceof ApiError ? failure.message : 'Couldn’t change the pin. Try again.',
-      )
-    } finally {
-      setPinBusy(null)
-    }
-  }
 
   const items = useMemo(() => {
     const shownJobs = new Set(
@@ -564,63 +291,34 @@ export function RoomMessageStream({
   }, [allItems, defaultJob, items, onRevealSeek, onSeeked, seek])
 
   const branch = view?.filter === filter && view.selectedJob === selectedJob ? view : null
-  const anchor = branch ? items.find((message) => message.id === branch.messageId) : undefined
-  const effectiveView = anchor ? branch : null
-  const nodes: ReactNode[] = []
+  let nodes: ReactNode[] = []
   if (status === 'success') {
-    const markers = showDeleted
-      ? versions
-          .filter((version) => version.mode === 'delete')
-          .sort((a, b) => a.anchorCreatedAt.localeCompare(b.anchorCreatedAt))
-      : []
-    let marker = 0
-    const flush = (until: string | null) => {
-      while (markers[marker] && (until === null || markers[marker]!.anchorCreatedAt <= until)) {
-        const version = markers[marker++]!
-        nodes.push(
-          <DeletedBlock
-            key={`deleted-${version.id}`}
-            version={version}
-            versions={versions}
-            agents={agents}
-            onlyJobId={selectedJob === 'all' ? undefined : selectedJob}
-          />,
-        )
-      }
-    }
-    for (const message of items) {
-      if (effectiveView && anchor && atOrAfter(message, anchor)) {
-        if (message.id === anchor.id)
-          nodes.push(
-            <BranchView
-              key={`branch-${anchor.id}`}
-              messageId={anchor.id}
-              version={effectiveView.version}
-              versions={versions}
-              agents={agents}
-              onSelect={(version) =>
-                setView(version ? { messageId: anchor.id, version, filter, selectedJob } : null)
-              }
-            />,
-          )
-        break
-      }
-      flush(message.createdAt)
-      nodes.push(
-        <MessageWithActions
+    const built = buildMessageNodes({
+      items,
+      versions,
+      agents,
+      showDeleted,
+      branch,
+      onlyJobId: selectedJob === 'all' ? undefined : selectedJob,
+      onBranchSelect: (messageId, version) =>
+        setView(version ? { messageId, version, filter, selectedJob } : null),
+      renderMessage: (message) => (
+        <BoldMessage
           key={message.id}
           message={message}
           agents={agents}
           versions={versions}
           approvalPointerIds={approvalPointerIds}
+          canRetry={retryable.has(message.id)}
           onView={(version) => setView({ messageId: message.id, version, filter, selectedJob })}
           pinned={isPinned(message.id)}
           pinBusy={pinBusy === message.id}
           onTogglePin={() => void togglePin(message.id)}
-        />,
-      )
-    }
-    flush(null)
+        />
+      ),
+    })
+    nodes = built.nodes
+    const effectiveView = built.branched
     if (!effectiveView)
       for (const job of jobs.filter(
         (item) =>

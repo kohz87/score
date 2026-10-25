@@ -5,11 +5,19 @@ import {
   type Job,
   type Message,
 } from '@score/contract'
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { Link, useLocation } from 'react-router'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
-import { MessageItem } from '../../routes/chat/MessageItem.tsx'
+import { usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { ContextMeter } from '../../routes/chat/ContextMeter.tsx'
 import { orchestrationsQuery } from '../../routes/orchestrations/orchestration-queries.ts'
 import { RoomRunPanel } from '../../routes/orchestrations/RoomRunPanel.tsx'
@@ -30,7 +38,9 @@ import {
   threadRounds,
   threadTurns,
 } from './thread-model.ts'
+import { BoldMessage, retryableIds } from './BoldMessage.tsx'
 import { decisionError, ExchangeRequestCard } from './RoomRequests.tsx'
+import { useMessageTools } from './use-message-tools.ts'
 import { ReportBackLine } from './ReportBack.tsx'
 import { ThreadTasks } from './RoomTasks.tsx'
 import {
@@ -102,15 +112,8 @@ function JobPicker({ jobs, onPick }: { jobs: Job[]; onPick: (jobId: string) => v
   )
 }
 
-// The thread shows an approval's real card, not the room stream's pointer: the strip may be filtered to another job or
-// covered by the phone sheet. A second answer from the strip gets the server's 409, explained there.
-function ThreadMessage({ message, agents }: { message: Message; agents: AgentSummary[] }) {
-  return (
-    <div className="bold-message bold-thread-message" data-message-id={message.id}>
-      <MessageItem message={message} agents={agents} />
-    </div>
-  )
-}
+/** The phone sheet hides the room composer an Edit loads into: the room passes a way to close it and focus the composer. */
+const ThreadEditContext = createContext<(() => void) | undefined>(undefined)
 
 function RecipeRunCard({ recipe, agents }: { recipe: JobRecipe; agents: AgentSummary[] }) {
   const orchestrations = useStreamQuery(orchestrationsQuery).data ?? []
@@ -267,6 +270,9 @@ function JobThread({
     [defaultJobId, job.id, roomId],
   )
   const messagesState = useStreamQuery(messagesDefinition)
+  const tools = useMessageTools(roomId)
+  const onEdit = useContext(ThreadEditContext)
+  const hidden = usePendingDeletes().hidden
   const [olderPages, setOlderPages] = useState<MessagePageData[]>([])
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -287,7 +293,7 @@ function JobThread({
   const current = currentExchange(exchanges)
   const paused = current && current.pause && needsYou(current) ? current : undefined
   const holder = agents.find((agent) => agent.id === job.holderAgentId)
-  const allMessages = useMemo(() => {
+  const everyMessage = useMemo(() => {
     const byId = new Map<string, Message>()
     for (const page of olderPages) for (const message of page.items) byId.set(message.id, message)
     for (const message of messagesState.data?.items ?? []) byId.set(message.id, message)
@@ -295,6 +301,11 @@ function JobThread({
       (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
     )
   }, [messagesState.data, olderPages])
+  const retryable = useMemo(() => retryableIds(everyMessage), [everyMessage])
+  const allMessages = useMemo(
+    () => everyMessage.filter((message) => !hidden.has(message.id)),
+    [everyMessage, hidden],
+  )
   const olderCursor = olderPages.at(-1)?.nextCursor ?? messagesState.data?.nextCursor ?? null
   const reviewExchanges = exchanges.filter((item) => item.kind === 'review').length
   const rounds = useMemo(
@@ -456,6 +467,11 @@ function JobThread({
               {loadingOlder ? 'Loading…' : 'Load earlier messages'}
             </button>
           )}
+          {tools.pinError && (
+            <p className="bold-thread-error" role="alert">
+              {tools.pinError}
+            </p>
+          )}
           {historyError && (
             <p className="bold-thread-error" role="alert">
               {historyError}
@@ -469,7 +485,23 @@ function JobThread({
             >
               <h3 className="bold-thread-round-label">{round.label}</h3>
               {round.messages.map((message) => (
-                <ThreadMessage key={message.id} message={message} agents={agents} />
+                // The thread shows an approval's real card, not the room stream's pointer: the strip may be filtered to
+                // another job or covered by the phone sheet. Edit hands the message to the room's composer (its
+                // `jobId` keeps the correction in this job); there is no version branch view in this narrow panel.
+                <BoldMessage
+                  key={message.id}
+                  message={message}
+                  agents={agents}
+                  versions={[]}
+                  canRetry={retryable.has(message.id)}
+                  {...(onEdit ? { onEdit } : {})}
+                  onView={() => undefined}
+                  pinned={tools.isPinned(message.id)}
+                  pinBusy={tools.pinBusy === message.id}
+                  onTogglePin={() => void tools.togglePin(message.id)}
+                  className="bold-thread-message"
+                  bold={false}
+                />
               ))}
             </section>
           ))}
@@ -518,9 +550,12 @@ function ThreadRoom({
 export function BoldThread({
   jobId,
   onSelectJob,
+  onEdit,
 }: {
   jobId: string | null
   onSelectJob: (jobId: string) => void
+  /** Runs when Edit is chosen on a message in the thread (the phone closes its sheet). */
+  onEdit?: (() => void) | undefined
 }) {
   const location = useLocation()
   const override = new URLSearchParams(location.search).get('room')
@@ -531,12 +566,14 @@ export function BoldThread({
   if (roomState.status === 'error' || !roomState.data)
     return <ThreadUnavailable failed={roomState.status === 'error'} />
   return (
-    <ThreadJobs
-      roomId={roomState.data.room.id}
-      jobId={jobId}
-      agents={agents}
-      onSelectJob={onSelectJob}
-    />
+    <ThreadEditContext value={onEdit}>
+      <ThreadJobs
+        roomId={roomState.data.room.id}
+        jobId={jobId}
+        agents={agents}
+        onSelectJob={onSelectJob}
+      />
+    </ThreadEditContext>
   )
 }
 

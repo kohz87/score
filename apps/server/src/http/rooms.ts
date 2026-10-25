@@ -25,6 +25,7 @@ import type { ScoreDb } from '../db/index.ts'
 import {
   decodeMessageCursor,
   deleteMessage,
+  clearDirectThread,
   freeRoomName,
   insertRoom,
   markRoomRead,
@@ -421,6 +422,27 @@ export function registerRoomRoutes(
         apply: ({ sqlite, now }) => deleteMessage(sqlite, roomId, messageId, now),
       })
       return reply.code(204).send()
+    },
+  )
+
+  // Clear a one-to-one's main chat (2.0.11): its messages deleted as one by one would, in one transaction.
+  app.post(
+    '/api/rooms/:roomId/clear',
+    { preHandler: [humanGuard(app.pairing)] },
+    async (request) => {
+      const { roomId } = ParamsSchema.pick({ roomId: true }).parse(request.params)
+      db.read((sqlite) => assertRoomFree(sqlite, roomId, 'message.delete'))
+      let cleared = 0
+      await ingest.submit({
+        source: 'rooms',
+        identity: randomUUID(),
+        apply: ({ sqlite, now }) => {
+          const result = clearDirectThread(sqlite, roomId, now)
+          cleared = result.cleared
+          return result.events
+        },
+      })
+      return { cleared }
     },
   )
 

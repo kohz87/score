@@ -1,11 +1,13 @@
 import type { AgentSummary, Job, Message, Room } from '@score/contract'
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { Composer } from '../../routes/chat/Composer.tsx'
 import { ContextMeter } from '../../routes/chat/ContextMeter.tsx'
-import { MessageItem } from '../../routes/chat/MessageItem.tsx'
+import { usePendingDeletes } from '../../routes/chat/message-deletion.ts'
+import { setShowDeleted, useShowDeleted } from '../../routes/chat/deleted-toggle.ts'
 import { saveDraft } from '../../routes/chat/composer-model.ts'
 import { useBoldTeamRoom } from '../bold-search-queries.ts'
 import { agentDisplayName, agentNameColor } from '../bold-agents.ts'
@@ -24,7 +26,16 @@ import {
   postChatHandOff,
   shareMessageToJob,
 } from './direct-queries.ts'
-import { roomMessagesQuery } from '../room/room-queries.ts'
+import {
+  BoldMessage,
+  buildMessageNodes,
+  retryableIds,
+  type BranchSelection,
+} from '../room/BoldMessage.tsx'
+import { beginJobUndo } from '../room/job-undo.ts'
+import { ChatMenu, ClearChatDialog, DeleteChatDialog } from '../room/RoomMenus.tsx'
+import { changeCachedJob, roomMessagesQuery } from '../room/room-queries.ts'
+import { useMessageTools } from '../room/use-message-tools.ts'
 import './bold-direct.css'
 
 function chatDay(iso: string): string {
@@ -197,11 +208,25 @@ export function DirectHeaderActions({
   const state = useStreamQuery(definition)
   const refetch = useStreamQueryRefetch(definition)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const chats = listedChats(state.data?.chats ?? []).filter((chat) => matchesChat(chat, query))
+  const [deleting, setDeleting] = useState<Job | null>(null)
+  const [clearing, setClearing] = useState(false)
+  const roomId = state.data?.room?.id ?? ''
+  const showDeleted = useShowDeleted(roomId)
+  const allChats = state.data?.chats ?? []
+  const chats = listedChats(allChats).filter((chat) => matchesChat(chat, query))
+  // The chat on show: the one in the URL, or the latest when the home is open.
+  const shown = chatId ? allChats.find((item) => item.id === chatId) : listedChats(allChats)[0]
+  // Delete and Clear act only on a real chat named in the URL, never on the new-chat state (no chat yet).
+  const target = chatId ? allChats.find((item) => item.id === chatId) : undefined
+  const messagesDefinition = useMemo(
+    () => (roomId && target ? roomMessagesQuery(roomId, target.id) : null),
+    [roomId, target],
+  )
 
   function pick(id: string) {
     setOpen(false)
@@ -241,6 +266,39 @@ export function DirectHeaderActions({
         <HistoryIcon />
         {!iconOnly && <span>Earlier chats</span>}
       </button>
+      {roomId && shown && (
+        <ChatMenu
+          showDeleted={showDeleted}
+          onToggleDeleted={() => setShowDeleted(roomId, !showDeleted)}
+          // A room's own thread follows the room: the server refuses to delete it, so it is cleared instead.
+          onDelete={target && !target.isDefault ? () => setDeleting(target) : undefined}
+          onClear={target?.isDefault ? () => setClearing(true) : undefined}
+        />
+      )}
+      {clearing && roomId && (
+        <ClearChatDialog
+          roomId={roomId}
+          agentName={agentDisplayName(agent)}
+          onClose={() => setClearing(false)}
+          onCleared={() => {
+            if (messagesDefinition)
+              void queryClient.invalidateQueries({ queryKey: messagesDefinition.key })
+          }}
+        />
+      )}
+      {deleting && (
+        <DeleteChatDialog
+          chat={deleting}
+          agentName={agentDisplayName(agent)}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            changeCachedJob(queryClient, deleting, 'delete')
+            beginJobUndo(queryClient, deleting)
+            setDeleting(null)
+            navigate(boldOneToOneLink(agent.id))
+          }}
+        />
+      )}
       {open && (
         <HistoryPopover
           agent={agent}
@@ -719,8 +777,12 @@ function DirectConversation({
   const ownOlder: OlderState =
     older.chatId === chat.id ? older : { chatId: chat.id, cursors: [], pages: {} }
   const draftScope = `${room.id}:${chat.id}`
+  const tools = useMessageTools(room.id)
+  const showDeleted = useShowDeleted(room.id)
+  const hidden = usePendingDeletes().hidden
+  const [view, setView] = useState<(BranchSelection & { chatId: string }) | null>(null)
   // The page arrives newest first; the thread reads oldest to newest.
-  const items = useMemo(() => {
+  const everyMessage = useMemo(() => {
     const byId = new Map<string, Message>()
     for (const message of page.data?.items ?? []) byId.set(message.id, message)
     for (const entry of Object.values(ownOlder.pages))
@@ -729,6 +791,11 @@ function DirectConversation({
       (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
     )
   }, [ownOlder.pages, page.data?.items])
+  const retryable = useMemo(() => retryableIds(everyMessage), [everyMessage])
+  const items = useMemo(
+    () => everyMessage.filter((message) => !hidden.has(message.id)),
+    [everyMessage, hidden],
+  )
   const lastCursor = ownOlder.cursors.at(-1)
   const nextCursor =
     lastCursor === undefined
@@ -851,48 +918,73 @@ function DirectConversation({
               <Starters onAsk={prefill} />
             </div>
           )}
-          {items.map((message) => (
-            <div
-              className="bold-message bold-dm-message"
-              key={message.id}
-              data-message-id={message.id}
-            >
-              <MessageItem message={message} agents={agents} bold />
-              {message.id === lastAgent?.id && (
-                <div className="bold-dm-msg-actions">
-                  {shared.has(message.id) ? (
-                    <span className="bold-dm-shared-sent" role="status">
-                      Shared to the team room
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn sm bold-dm-primary"
-                      onClick={() => setShareFor((id) => (id === message.id ? null : message.id))}
-                    >
-                      Share to the team room
-                    </button>
+          {
+            buildMessageNodes({
+              items,
+              versions: tools.versions,
+              agents,
+              showDeleted,
+              branch: view?.chatId === chat.id ? view : null,
+              onlyJobId: chat.id,
+              onBranchSelect: (messageId, version) =>
+                setView(version ? { messageId, version, chatId: chat.id } : null),
+              renderMessage: (message) => (
+                <BoldMessage
+                  key={message.id}
+                  message={message}
+                  agents={agents}
+                  versions={tools.versions}
+                  onView={(version) => setView({ messageId: message.id, version, chatId: chat.id })}
+                  pinned={tools.isPinned(message.id)}
+                  pinBusy={tools.pinBusy === message.id}
+                  onTogglePin={() => void tools.togglePin(message.id)}
+                  className="bold-dm-message"
+                  canRetry={retryable.has(message.id)}
+                >
+                  {message.id === lastAgent?.id && (
+                    <div className="bold-dm-msg-actions">
+                      {shared.has(message.id) ? (
+                        <span className="bold-dm-shared-sent" role="status">
+                          Shared to the team room
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn sm bold-dm-primary"
+                          onClick={() =>
+                            setShareFor((id) => (id === message.id ? null : message.id))
+                          }
+                        >
+                          Share to the team room
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn sm ghost"
+                        disabled={bringing}
+                        onClick={bringIntoNewChat}
+                      >
+                        {bringing ? 'Opening…' : 'Bring into a new chat'}
+                      </button>
+                    </div>
                   )}
-                  <button
-                    type="button"
-                    className="btn sm ghost"
-                    disabled={bringing}
-                    onClick={bringIntoNewChat}
-                  >
-                    {bringing ? 'Opening…' : 'Bring into a new chat'}
-                  </button>
-                </div>
-              )}
-              {shareFor === message.id && (
-                <ShareMenu
-                  messageId={message.id}
-                  jobs={team?.jobs ?? []}
-                  onClose={() => setShareFor(null)}
-                  onShared={(id) => setShared((current) => new Set(current).add(id))}
-                />
-              )}
-            </div>
-          ))}
+                  {shareFor === message.id && (
+                    <ShareMenu
+                      messageId={message.id}
+                      jobs={team?.jobs ?? []}
+                      onClose={() => setShareFor(null)}
+                      onShared={(id) => setShared((current) => new Set(current).add(id))}
+                    />
+                  )}
+                </BoldMessage>
+              ),
+            }).nodes
+          }
+          {tools.pinError && (
+            <p className="bold-stream-note" role="alert">
+              {tools.pinError}
+            </p>
+          )}
           {Object.entries(page.data?.typing ?? {}).map(([agentId, text]) => (
             <p className="bold-dm-typing" key={agentId} role="status">
               <AgentGlyph agent={agent} size="xs" bare decorative />

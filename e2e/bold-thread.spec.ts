@@ -307,6 +307,49 @@ for (const viewport of sizes) {
       )
     })
 
+    test(`a thread message has the action row and delete works at ${size}`, async ({ page }) => {
+      const deletes: string[] = []
+      await openThread(page, {
+        handle: (path, method) => {
+          if (method === 'DELETE' && path.startsWith('/api/rooms/team-room/messages/')) {
+            deletes.push(path)
+            return { body: null, status: 204 }
+          }
+          return undefined
+        },
+      })
+      await openJobThread(page, /Activity feed/)
+      const own = page.locator('.bold-thread-message[data-message-id="t-1"]')
+      await own.hover()
+      await expect(own.getByRole('button', { name: 'Edit message from You' })).toBeVisible()
+      await expect(own.getByRole('button', { name: 'Copy message from You' })).toBeVisible()
+      await expect(own.getByRole('button', { name: 'Pin message from You' })).toBeVisible()
+      const reply = page.locator('.bold-thread-message[data-message-id="t-2"]')
+      await reply.hover()
+      await expect(reply.getByRole('button', { name: 'Retry reply from builder' })).toBeVisible()
+      // A later agent message in the same run of replies answers the person too.
+      const later = page.locator('.bold-thread-message[data-message-id="t-4"]')
+      await later.hover()
+      await expect(later.getByRole('button', { name: /^Retry reply/ })).toHaveCount(1)
+
+      // An agent's message goes at once (undo window), then the DELETE is sent.
+      await reply.hover()
+      await reply.getByRole('button', { name: 'Delete message from builder' }).click()
+      await expect(page.getByText('First cut is ready for review.')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible()
+      await expect
+        .poll(() => deletes, { timeout: 15_000 })
+        .toEqual(['/api/rooms/team-room/messages/t-2'])
+      // On a phone Edit closes the sheet so the team-room composer, which holds the message now, can be used.
+      await own.hover()
+      await own.getByRole('button', { name: 'Edit message from You' }).click()
+      if (viewport.width <= 860) {
+        await expect(page.locator('.bold-sidecol')).toBeHidden()
+        await expect(page.locator('.bold-room-composer textarea')).toBeFocused()
+      }
+      await expect(page.getByText('Editing your message')).toBeVisible()
+    })
+
     test(`a paused exchange is answered from the thread at ${size}`, async ({ page }) => {
       const state = await openThread(page)
       await openJobThread(page, /Release notes 2\.4/)

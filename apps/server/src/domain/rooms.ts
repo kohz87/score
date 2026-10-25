@@ -530,12 +530,8 @@ export function updateMessage(
  * Soft delete (PLAN 5.20): the row stays for runs and audit, every read leaves it out. Idempotent; a message that is
  * still streaming is refused so its run never writes into a hidden message.
  */
-export function deleteMessage(
-  sqlite: DatabaseSync,
-  roomId: string,
-  messageId: string,
-  now: string,
-): DomainEventDraft[] {
+/** A delete's checks: false when the message is already deleted; 404/409 when it can't be deleted now. */
+function assertDeletable(sqlite: DatabaseSync, roomId: string, messageId: string): boolean {
   const row = z
     .object({ streaming: z.union([z.literal(0), z.literal(1)]), deleted_at: z.string().nullable() })
     .nullish()
@@ -545,7 +541,7 @@ export function deleteMessage(
         .get(messageId, roomId),
     )
   if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that message.')
-  if (row.deleted_at !== null) return []
+  if (row.deleted_at !== null) return false
   if (row.streaming === 1)
     throw new HttpError(409, 'conflict', 'This message is still being written.')
   // Same rule as an edit: a reply that is being written blocks the delete, replies still queued are cancelled.
@@ -557,7 +553,26 @@ export function deleteMessage(
     .get(messageId, messageId)
   if (answering)
     throw new HttpError(409, 'conflict', 'An agent is still answering this message. Stop it first.')
+  return true
+}
+export function deleteMessage(
+  sqlite: DatabaseSync,
+  roomId: string,
+  messageId: string,
+  now: string,
+): DomainEventDraft[] {
+  if (!assertDeletable(sqlite, roomId, messageId)) return []
   const before = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
+  const job = hideMessage(sqlite, messageId, now)
+  return [
+    { type: 'message.deleted', data: { roomId, messageId } },
+    ...markStaleSummaries(sqlite, roomId, now),
+    ...roomChanged(sqlite, roomId, now, before),
+    ...(job ? jobEvent(sqlite, job) : []),
+  ]
+}
+/** The writes of a delete, after its checks: queued replies cancelled, the message hidden, its media released. */
+function hideMessage(sqlite: DatabaseSync, messageId: string, now: string): string | null {
   sqlite
     .prepare(
       "UPDATE message_runs SET state = 'failed' WHERE state = 'pending' AND (parent_message_id = ? OR chain_id = ?)",
@@ -569,17 +584,55 @@ export function deleteMessage(
     )
     .run(now, now, messageId)
   releaseMessageMedia(sqlite, [messageId])
-  const job = (
+  return (
     sqlite.prepare('SELECT job_id FROM messages WHERE id = ?').get(messageId) as {
       job_id: string | null
     }
   ).job_id
-  return [
-    { type: 'message.deleted', data: { roomId, messageId } },
+}
+
+/**
+ * Clears a one-to-one's main conversation (2.0.11): every live message of a direct room's default thread is deleted
+ * the same way as one at a time (Score-only; the agent's Hermes session may still remember). Other chats in the room
+ * (its jobs) are untouched. One transaction: a message still being written stops the whole clear.
+ */
+export function clearDirectThread(
+  sqlite: DatabaseSync,
+  roomId: string,
+  now: string,
+): { cleared: number; events: DomainEventDraft[] } {
+  if (roomRow(sqlite, roomId).role !== 'direct')
+    throw new HttpError(409, 'conflict', 'Only a one-to-one’s main chat can be cleared.')
+  const ids = z
+    .array(z.object({ id: z.string() }))
+    .parse(
+      sqlite
+        .prepare(
+          `SELECT m.id FROM messages m LEFT JOIN jobs j ON j.id = m.job_id
+           WHERE m.room_id = ? AND m.deleted_at IS NULL AND (m.job_id IS NULL OR j.is_default = 1)
+           ORDER BY m.created_at DESC, m.id DESC`,
+        )
+        .all(roomId),
+    )
+    .map((row) => row.id)
+  if (ids.length === 0) return { cleared: 0, events: [] }
+  // Each message gets a delete's checks and writes and its own `message.deleted`; the room, summary and job updates
+  // go out once for the whole clear instead of once per message.
+  const before = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
+  const jobs = new Set<string>()
+  const events: DomainEventDraft[] = []
+  for (const id of ids) {
+    assertDeletable(sqlite, roomId, id)
+    const job = hideMessage(sqlite, id, now)
+    if (job) jobs.add(job)
+    events.push({ type: 'message.deleted', data: { roomId, messageId: id } })
+  }
+  events.push(
     ...markStaleSummaries(sqlite, roomId, now),
     ...roomChanged(sqlite, roomId, now, before),
-    ...(job ? jobEvent(sqlite, job) : []),
-  ]
+    ...[...jobs].flatMap((job) => jobEvent(sqlite, job)),
+  )
+  return { cleared: ids.length, events }
 }
 
 const MAX_COMPLETION_PARTS_CHARS = 256 * 1024

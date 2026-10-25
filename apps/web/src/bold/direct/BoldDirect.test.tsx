@@ -317,3 +317,85 @@ test('earlier chats search by title and summary, and New chat starts one', async
     expect(posts.some((post) => post.url === '/api/agents/builder/chats')).toBe(true),
   )
 })
+
+async function openChatMenu(chatId: string | null) {
+  renderInRoom(<DirectHeaderActions agent={builder} chatId={chatId} />, ['/b?with=builder'])
+  const menu = await screen.findByRole('button', { name: 'Chat menu' })
+  fireEvent.click(menu)
+}
+
+const mainChat = makeJob({
+  id: 'main-chat',
+  roomId: directRoom.id,
+  title: 'builder',
+  isDefault: true,
+  messageCount: 3,
+  lastMessageAt: '2026-10-25T09:00:00.000Z',
+})
+
+test('Delete chat is offered for a real chat in the URL, never for the new-chat state', async () => {
+  stub()
+  await openChatMenu('chat-new')
+  expect(screen.getByRole('menuitem', { name: 'Delete chat' })).toBeDefined()
+  expect(screen.queryByRole('menuitem', { name: 'Clear chat' })).toBeNull()
+})
+
+test('the new-chat state (no chat in the URL) offers neither Delete chat nor Clear chat', async () => {
+  stub()
+  await openChatMenu(null)
+  expect(screen.getByRole('menuitemcheckbox', { name: 'Show deleted messages' })).toBeDefined()
+  expect(screen.queryByRole('menuitem', { name: 'Delete chat' })).toBeNull()
+  expect(screen.queryByRole('menuitem', { name: 'Clear chat' })).toBeNull()
+})
+
+test('the main chat (the default thread) is never deleted: it offers Clear chat instead', async () => {
+  stub([newer, mainChat])
+  await openChatMenu('main-chat')
+  expect(screen.queryByRole('menuitem', { name: 'Delete chat' })).toBeNull()
+  expect(screen.getByRole('menuitem', { name: 'Clear chat' })).toBeDefined()
+})
+
+test('Clear chat confirms, posts to the room, and reports how many messages went', async () => {
+  stub([newer, mainChat])
+  const base = globalThis.fetch
+  const calls: string[] = []
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === '/api/rooms/direct-builder/clear') {
+      calls.push(`${init?.method} ${String(input)}`)
+      return Promise.resolve(jsonResponse({ cleared: 3 }))
+    }
+    return base(input, init)
+  })
+  await openChatMenu('main-chat')
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Clear chat' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Clear this chat with builder?' })
+  expect(dialog.getAttribute('data-protected')).toBe('any')
+  expect(dialog.textContent).toContain(
+    'Removes every message of this chat from Score. builder may still remember them. Other chats with builder stay.',
+  )
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Clear chat' }))
+  expect((await within(dialog).findByRole('status')).textContent).toBe('Cleared 3 messages.')
+  expect(calls).toEqual(['POST /api/rooms/direct-builder/clear'])
+})
+
+test('Clear chat shows the server’s 409 message verbatim', async () => {
+  stub([newer, mainChat])
+  const base = globalThis.fetch
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input) === '/api/rooms/direct-builder/clear'
+      ? Promise.resolve(
+          jsonResponse(
+            { error: { code: 'conflict', message: 'A message is still being written.' } },
+            409,
+          ),
+        )
+      : base(input, init),
+  )
+  await openChatMenu('main-chat')
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Clear chat' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Clear this chat with builder?' })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Clear chat' }))
+  expect((await within(dialog).findByRole('alert')).textContent).toBe(
+    'A message is still being written.',
+  )
+})

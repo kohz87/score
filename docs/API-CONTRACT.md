@@ -685,6 +685,11 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409
   conflict` while the message is still streaming; `404` for an unknown room or message; idempotent (deleting a deleted
   message is `204`). Emits `message.deleted`.
+- **H** `POST /api/rooms/:roomId/clear` → `{ cleared: number }` (2.0.11): clears a one-to-one's main chat — every live
+  message of a direct room's default thread is deleted exactly as `DELETE …/messages/:id` would (Score-only; the agent's
+  Hermes session may still remember it), in one transaction. The room's other chats (jobs) are untouched. `409
+  conflict` for a room that isn't a one-to-one, or while a message is still being written or answered. Emits
+  `message.deleted` per message.
 - **H** `POST /api/rooms/:roomId/messages/:messageId/retry` → `202 { messageId }` (the new streaming placeholder
   reply). `messageId` is a finished agent reply that answered a person's message: the same agent gets the same input
   again through the normal dispatch path (pause, approvals, attachments and the one-turn-per-agent queue apply). The

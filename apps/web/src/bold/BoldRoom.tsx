@@ -253,6 +253,18 @@ export function BoldRoom() {
     }
   }
 
+  // Edit in the thread loads the message into the team-room composer, which is inert behind the phone sheet: close the
+  // sheet and put the cursor in the composer once the room is live again.
+  const editFromSheet = () => {
+    setSheetOpen(false)
+    setMenuOpen(false)
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLTextAreaElement>('.bold-room-composer textarea')?.focus(),
+      ),
+    )
+  }
+
   // The sheet's Escape closes it the same way its own close button does (a one-to-one drops `?with=`).
   useEffect(() => {
     closeSheetRef.current = closeSheet
@@ -484,7 +496,11 @@ export function BoldRoom() {
               )}
             </div>
           ) : mode === 'thread' ? (
-            <BoldThread jobId={threadJob} onSelectJob={(jobId) => setThreadJob(jobId)} />
+            <BoldThread
+              jobId={threadJob}
+              onSelectJob={(jobId) => setThreadJob(jobId)}
+              onEdit={phone ? editFromSheet : undefined}
+            />
           ) : mode === 'elsewhere' && elsewhere ? (
             <BoldElsewhere
               key={`${elsewhere.agentId}:${elsewhere.id}`}

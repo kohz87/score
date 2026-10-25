@@ -320,3 +320,57 @@ test('the classic room badge counts the default job only; another job’s unread
     .chats.find((job: Job) => job.id === chat.id)
   expect(listed.unread).toBe(1)
 })
+
+test('Clear chat (2.0.11) empties a one-to-one’s main chat only, Score-side, and refuses other rooms', async () => {
+  const chat = JobSchema.parse(
+    (await post('/api/agents/builder/chats', { title: 'Keep this one' })).json(),
+  )
+  const { room } = (await get('/api/agents/builder/direct')).json()
+  await post(`/api/rooms/${room.id}/messages`, { text: 'Main chat hello' })
+  await post(`/api/rooms/${room.id}/messages`, { text: 'Side chat hello', jobId: chat.id })
+  await advance(60_000)
+  const main = (await get(`/api/rooms/${room.id}/messages`)).json().items
+  expect(main.length).toBeGreaterThan(0)
+  const cleared = await post(`/api/rooms/${room.id}/clear`, {})
+  expect(cleared.statusCode).toBe(200)
+  expect(cleared.json()).toEqual({ cleared: main.length })
+  expect((await get(`/api/rooms/${room.id}/messages`)).json().items).toEqual([])
+  // The other chat with the agent stays.
+  expect(
+    (await get(`/api/rooms/${room.id}/messages?jobId=${chat.id}`)).json().items.length,
+  ).toBeGreaterThan(0)
+  // Idempotent: nothing left to clear.
+  expect((await post(`/api/rooms/${room.id}/clear`, {})).json()).toEqual({ cleared: 0 })
+  // Not for the team room or other rooms; not without a session.
+  const team = await teamRoom()
+  expect((await post(`/api/rooms/${team.room.id}/clear`, {})).statusCode).toBe(409)
+  expect(
+    (await app.inject({ method: 'POST', url: `/api/rooms/${room.id}/clear`, payload: {} }))
+      .statusCode,
+  ).toBeGreaterThanOrEqual(401)
+})
+
+test('Clear chat is all or nothing, and sends one room update for the whole clear (2.0.11)', async () => {
+  await post('/api/agents/builder/chats', { title: 'Side' })
+  const { room } = (await get('/api/agents/builder/direct')).json()
+  for (const text of ['one', 'two', 'three']) await post(`/api/rooms/${room.id}/messages`, { text })
+  await advance(60_000)
+  const main = (await get(`/api/rooms/${room.id}/messages`)).json().items as { id: string }[]
+  expect(main.length).toBeGreaterThanOrEqual(3)
+  // A message still being written stops the whole clear: nothing is hidden.
+  db.sqlite.prepare('UPDATE messages SET streaming = 1 WHERE id = ?').run(main[0]!.id)
+  expect((await post(`/api/rooms/${room.id}/clear`, {})).statusCode).toBe(409)
+  expect((await get(`/api/rooms/${room.id}/messages`)).json().items).toHaveLength(main.length)
+  db.sqlite.prepare('UPDATE messages SET streaming = 0 WHERE id = ?').run(main[0]!.id)
+  const seqBefore = Number(
+    (db.sqlite.prepare('SELECT COALESCE(MAX(seq), 0) AS n FROM events').get() as { n: number }).n,
+  )
+  const cleared = await post(`/api/rooms/${room.id}/clear`, {})
+  expect(cleared.json()).toEqual({ cleared: main.length })
+  const types = (
+    db.sqlite.prepare('SELECT type FROM events WHERE seq > ?').all(seqBefore) as { type: string }[]
+  ).map((row) => row.type)
+  expect(types.filter((type) => type === 'message.deleted')).toHaveLength(main.length)
+  // The room's update goes out once at most (none when its summary didn't change), never once per message.
+  expect(types.filter((type) => type === 'room.upserted').length).toBeLessThanOrEqual(1)
+})
