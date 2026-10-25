@@ -1,5 +1,5 @@
 import type { AgentSummary, NodeView, WorkflowRunDetail } from '@score/contract'
-import { Link } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import { stepVisual } from '../orchestrations/orch-model.ts'
 import { AgentChip } from '../orchestrations/RunDecisions.tsx'
 import { AttemptLine, StateMark } from '../orchestrations/RunPanel.tsx'

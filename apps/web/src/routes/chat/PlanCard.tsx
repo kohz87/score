@@ -1,6 +1,6 @@
 import { PlanStartResponseSchema, type AgentSummary, type MessagePart } from '@score/contract'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { useStreamQuery } from '../../data/query-client.ts'

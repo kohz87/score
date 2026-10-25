@@ -10,7 +10,8 @@ import {
   useState,
   type KeyboardEvent,
 } from 'react'
-import { Link, useBlocker, useNavigate, useParams } from 'react-router'
+import { useBlocker, useParams } from 'react-router'
+import { Link, useNavigate } from '../../shell/framed-paths.tsx'
 import {
   themeAssetUrl,
   type ThemeColorToken,

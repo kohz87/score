@@ -458,7 +458,7 @@
   min-width: 0;
   font-size: 15px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--panel-ink);
 }
 .watch-approval__text code {
   font-weight: 500;
@@ -482,15 +482,15 @@
 .watch-approval__go {
   padding: 0 var(--space-5);
   border: 0;
-  background: var(--ink);
-  color: var(--card);
+  background: var(--panel-ink);
+  color: var(--panel-card);
   font-weight: 700;
 }
 .watch-approval__no {
   padding: 0 18px;
-  border: 1.5px solid var(--ink);
+  border: 1.5px solid var(--panel-ink);
   background: transparent;
-  color: var(--ink);
+  color: var(--panel-ink);
   font-weight: 600;
 }
 .watch-approval button:disabled {
@@ -499,8 +499,8 @@
 }
 .watch-approval__link {
   padding: 0 18px;
-  border: 1.5px solid var(--ink);
-  color: var(--ink);
+  border: 1.5px solid var(--panel-ink);
+  color: var(--panel-ink);
   font-weight: 600;
   text-decoration: none;
 }

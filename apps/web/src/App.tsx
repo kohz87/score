@@ -1,7 +1,9 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Outlet, redirect, RouterProvider, useLocation } from 'react-router'
 import type { DataRouter, RouteObject } from 'react-router'
-import { applyUiParam } from './bold/bold-ui.ts'
+import { applyUiParam, readUi } from './bold/bold-ui.ts'
+import { boldRedirectFor } from './shell/framed-paths.tsx'
+import { BoldClassicPage } from './bold/BoldClassicPage.tsx'
 import { BoldHome } from './bold/BoldHome.tsx'
 import { BoldShell } from './bold/BoldShell.tsx'
 import { BoldAgentPage } from './bold/BoldAgent.tsx'
@@ -54,6 +56,47 @@ function keepSearch(request: Request, path: string) {
   return `${path}${new URL(request.url).search}`
 }
 
+/**
+ * A loader's request never carries the #hash. On the first load the browser's address is the one being opened, so its
+ * hash is the one to keep; on a later navigation the address is still the old page's, whose hash must not be borrowed.
+ */
+export function hashOf(
+  url: URL,
+  here: Pick<Location, 'pathname' | 'search' | 'hash'> = window.location,
+) {
+  if (url.hash) return url.hash
+  return here.pathname === url.pathname && here.search === url.search ? here.hash : ''
+}
+
+/** The new shell's address for an old classic one (decision 123); the classic shell keeps serving its own paths. */
+function toBoldLoader({ request }: { request: Request }) {
+  if (readUi() !== 'bold') return null
+  const url = new URL(request.url)
+  const target = boldRedirectFor(url.pathname, url.search, hashOf(url))
+  return target ? redirect(target) : null
+}
+
+const WorkflowsFramed = () => (
+  <BoldClassicPage>
+    <WorkflowsPage />
+  </BoldClassicPage>
+)
+const WorkflowEditorFramed = () => (
+  <BoldClassicPage>
+    <WorkflowEditorRoute />
+  </BoldClassicPage>
+)
+const RunFramed = () => (
+  <BoldClassicPage>
+    <RunPage />
+  </BoldClassicPage>
+)
+const WatchFramed = () => (
+  <BoldClassicPage>
+    <WatchPage />
+  </BoldClassicPage>
+)
+
 /** Applies `?ui=bold` / `?ui=classic` from any address to this device's choice; the index loader also applies it first. */
 function UiParamBoundary() {
   const location = useLocation()
@@ -72,6 +115,7 @@ export const appRoutes: RouteObject[] = [
       ...['/settings/look/customize', '/settings/look/customize/:themeId'].map(
         (path): RouteObject => ({
           path,
+          loader: toBoldLoader,
           lazy: async () => ({
             Component: (await import('./routes/customizer/Customizer.tsx')).Customizer,
           }),
@@ -87,6 +131,25 @@ export const appRoutes: RouteObject[] = [
           { path: 'team', Component: BoldTeam },
           { path: 'team/:agentId', Component: BoldAgentPage },
           { path: 'screen/:agentId', Component: BoldScreenPage },
+          { path: 'workflows', Component: WorkflowsFramed },
+          { path: 'workflows/:workflowId', Component: WorkflowEditorFramed },
+          { path: 'runs/:briefId', Component: RunFramed },
+          { path: 'watch/:agentId', Component: WatchFramed },
+          ...['settings/look/customize', 'settings/look/customize/:themeId'].map(
+            (path): RouteObject => ({
+              path,
+              lazy: async () => {
+                const { Customizer } = await import('./routes/customizer/Customizer.tsx')
+                return {
+                  Component: () => (
+                    <BoldClassicPage variant="customizer">
+                      <Customizer />
+                    </BoldClassicPage>
+                  ),
+                }
+              },
+            }),
+          ),
           { path: 'settings', Component: BoldSettings },
           { path: 'settings/:section', Component: BoldSettings },
           { path: '*', loader: () => redirect('/b') },
@@ -149,13 +212,14 @@ export const appRoutes: RouteObject[] = [
           // Kept classic pages that used to live under /now. The old paths redirect below.
           {
             path: '/workflows',
+            loader: toBoldLoader,
             children: [
               { index: true, Component: WorkflowsPage },
               { path: ':workflowId', Component: WorkflowEditorRoute },
             ],
           },
-          { path: '/watch/:agentId', Component: WatchPage },
-          { path: '/runs/:briefId', Component: RunPage },
+          { path: '/watch/:agentId', loader: toBoldLoader, Component: WatchPage },
+          { path: '/runs/:briefId', loader: toBoldLoader, Component: RunPage },
           // Stored links and notifications from before 11.11 still open the page they meant.
           {
             path: '/now/watch/:agentId',

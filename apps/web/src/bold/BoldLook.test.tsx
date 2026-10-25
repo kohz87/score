@@ -152,5 +152,5 @@ test('the New look switch turns this device back to classic Score', async () => 
 test('Open the Customizer goes to the theme the device uses', async () => {
   mount()
   const link = await screen.findByRole('link', { name: 'Open the Customizer' })
-  expect(link.getAttribute('href')).toBe('/settings/look/customize/score')
+  expect(link.getAttribute('href')).toBe('/b/settings/look/customize/score')
 })

@@ -1,6 +1,6 @@
 import type { WorkflowSummary } from '@score/contract'
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate } from '../../shell/framed-paths.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { ApiError } from '../../data/api.ts'
 import { useStreamQuery } from '../../data/query-client.ts'

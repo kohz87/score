@@ -305,7 +305,10 @@ export function BoldLook() {
             Change them with a live preview. A built-in style is copied first, so it stays as it is.
           </span>
         </div>
-        <Link className="btn sm" to={`/settings/look/customize/${look.deviceId ?? look.sharedId}`}>
+        <Link
+          className="btn sm"
+          to={`/b/settings/look/customize/${look.deviceId ?? look.sharedId}`}
+        >
           Open the Customizer
         </Link>
       </section>

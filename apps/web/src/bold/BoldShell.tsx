@@ -10,11 +10,12 @@ import {
 } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
+import { BoldFrameContext } from '../shell/framed-paths.tsx'
 import { BoldRecipes } from './BoldRecipes.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useTextScale } from '../data/text-scale.ts'
 import { useMediaQuery } from '../data/use-media.ts'
-import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
+import { agentsQuery, approvalsQuery, roomsQuery } from '../routes/chat/queries.ts'
 import { useFence } from '../routes/orchestrations/orchestration-queries.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import { useRoomNeedsYouState } from './room/use-needs-you.ts'
@@ -128,6 +129,8 @@ export function BoldShell() {
   const light =
     manualLight ?? previewLight ?? (look.mode === 'system' ? systemLight : look.mode === 'light')
   const resolvedLook = light ? 'light' : 'dark'
+  const rooms = useStreamQuery(roomsQuery).data?.rooms
+  const frame = useMemo(() => ({ look: resolvedLook, rooms }) as const, [resolvedLook, rooms])
   const [commandOpen, setCommandOpen] = useState(false)
   // Start a job is open while the address says `?start=job` (bold-links.ts) or the room's button opened it.
   const [startOpened, setStartOpened] = useState(false)
@@ -286,7 +289,9 @@ export function BoldShell() {
 
           <main className="main">
             <ShellFenceNotice pathname={location.pathname} />
-            <Outlet context={{ sheetOpen, setSheetOpen } satisfies BoldSheetState} />
+            <BoldFrameContext value={frame}>
+              <Outlet context={{ sheetOpen, setSheetOpen } satisfies BoldSheetState} />
+            </BoldFrameContext>
           </main>
 
           {phone && (

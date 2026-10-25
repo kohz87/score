@@ -109,9 +109,13 @@ test('the release recipe loads as seven numbered steps, is checked live, and und
   mount()
   const steps = await screen.findByRole('list', { name: 'Steps' })
   const dialog = screen.getByRole('dialog', { name: 'Recipe editor' })
-  expect(
-    within(dialog).getByRole('link', { name: 'Workflow runs and versions' }).getAttribute('href'),
-  ).toBe('/workflows')
+  // The classic list is no longer linked; what only it showed, a recipe's run status, sits in the editor.
+  expect(within(dialog).queryByRole('link', { name: 'Workflow runs and versions' })).toBeNull()
+  const status = await within(dialog).findByLabelText('Runs of this recipe')
+  expect(status.textContent).toContain('1 run going')
+  expect(within(status).getByRole('link', { name: 'Running' }).getAttribute('href')).toMatch(
+    /^\/b\/runs\/brief-/,
+  )
   await waitFor(() => expect(within(steps).getAllByRole('listitem')).toHaveLength(7))
   await waitFor(() => expect(saveButton().disabled).toBe(false))
   expect(requests.some((request) => request.url === '/api/workflows/validate')).toBe(true)

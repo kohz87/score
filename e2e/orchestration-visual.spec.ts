@@ -9,6 +9,8 @@ import { visualFixtures, visualHello } from './visual-fixtures.ts'
 test.use({ timezoneId: 'UTC', locale: 'en-GB' })
 
 test.beforeEach(async ({ page }) => {
+  // The classic view: the bold shell frames these pages since 2.0.2 (e2e/bold-classic-pages.spec.ts).
+  await page.addInitScript(() => window.localStorage.setItem('score.ui', 'classic'))
   await page.clock.setFixedTime(new Date(fixtureNow))
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url())
