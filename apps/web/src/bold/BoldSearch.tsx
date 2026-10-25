@@ -17,6 +17,7 @@ import { SETTINGS_SECTIONS } from './BoldSettings.tsx'
 import { BookIcon, SearchIcon } from './BoldIcons.tsx'
 import {
   boldAddAgentLink,
+  boldAgentRoutinesLink,
   boldChatLink,
   boldCommandLink,
   boldFirstRunLink,
@@ -41,6 +42,7 @@ import {
   useBoldMessageSearch,
   useBoldNotes,
   useBoldPaused,
+  useBoldRoutines,
   useBoldTeamRoom,
 } from './bold-search-queries.ts'
 import './bold-search.css'
@@ -101,6 +103,7 @@ export function BoldSearch({
 
   const team = useBoldTeamRoom({ fresh: true })
   const directs = useBoldDirectChats(agents)
+  const routines = useBoldRoutines(agents)
   const notes = useBoldNotes(query)
   const messages = useBoldMessageSearch(query, 4)
   const commands = useBoldCommands()
@@ -117,6 +120,7 @@ export function BoldSearch({
         roomName: team.data?.room.name ?? 'Team room',
         directChats: directs.data ?? [],
         notes: notes.data ?? [],
+        routines,
         messages: messages.data ?? [],
         commands: commands.data ?? [],
         paused,
@@ -129,6 +133,7 @@ export function BoldSearch({
       team.data,
       directs.data,
       notes.data,
+      routines,
       messages.data,
       commands.data,
       paused,
@@ -187,6 +192,9 @@ export function BoldSearch({
         break
       case 'note':
         finish(boldNoteLink(result.path))
+        break
+      case 'routine':
+        finish(boldAgentRoutinesLink(result.agentId))
         break
       case 'message':
         finish(
@@ -396,9 +404,11 @@ function ResultGroup({
         const agentId =
           result.kind === 'chat'
             ? result.agentId
-            : result.kind === 'message'
+            : result.kind === 'routine'
               ? result.agentId
-              : null
+              : result.kind === 'message'
+                ? result.agentId
+                : null
         const agent = agentId ? agents.get(agentId) : undefined
         const icon =
           result.kind === 'job' ? (

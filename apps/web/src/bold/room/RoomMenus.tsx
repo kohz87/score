@@ -1,4 +1,10 @@
-import type { AgentSummary, Job, OutsideSession, Room } from '@score/contract'
+import {
+  JobSchema,
+  type AgentSummary,
+  type Job,
+  type OutsideSession,
+  type Room,
+} from '@score/contract'
 import {
   useEffect,
   useId,
@@ -9,6 +15,8 @@ import {
   type RefObject,
 } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { apiFetch, ApiError } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
 import { useOutsideSessions } from '../../data/outside-sessions.ts'
 import { ChevronIcon, PlusIcon, TrashIcon } from '../BoldIcons.tsx'
 import { useStartJob } from '../BoldStartJob.tsx'
@@ -272,6 +280,206 @@ function OutsideGlyph({ agent }: { agent: AgentSummary | undefined }) {
   )
 }
 
+export function jobLifecycleError(
+  error: unknown,
+  action: 'close' | 'reopen' | 'delete' | 'rename',
+) {
+  if (error instanceof ApiError && error.status === 409)
+    return error.message.includes('still working')
+      ? {
+          text: `This job is still working. Stop it first, then ${action} it.`,
+          stillWorking: true,
+        }
+      : { text: error.message, stillWorking: false }
+  if (error instanceof ApiError && (error.status === 401 || error.status === 403))
+    return { text: 'Pair this browser first.', stillWorking: false }
+  return { text: `Couldn’t ${action} this job. Try again.`, stillWorking: false }
+}
+
+export function RenameJobDialog({
+  job,
+  onClose,
+  onRenamed,
+}: {
+  job: Job
+  onClose: () => void
+  onRenamed: (job: Job) => void
+}) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const [title, setTitle] = useState(job.title)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const key = useRef(newId())
+  useEffect(() => {
+    dialog.current?.showModal?.()
+  }, [])
+  const valid = title.trim().length >= 1 && title.trim().length <= 200
+  async function rename() {
+    if (!valid || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const renamed = JobSchema.parse(
+        await apiFetch(`jobs/${encodeURIComponent(job.id)}`, {
+          method: 'PATCH',
+          headers: { 'Idempotency-Key': key.current },
+          body: JSON.stringify({ title: title.trim() }),
+        }),
+      )
+      onRenamed(renamed)
+    } catch (failure) {
+      key.current = newId()
+      setError(jobLifecycleError(failure, 'rename').text)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <dialog
+      ref={dialog}
+      open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
+      className="chat-rewind-dialog bold-job-rename-dialog"
+      data-protected="any"
+      aria-labelledby="rename-job-title"
+      onCancel={(event) => {
+        event.preventDefault()
+        if (!busy) onClose()
+      }}
+    >
+      <h2 id="rename-job-title">Rename job</h2>
+      <label className="chat-delete-confirm">
+        <span>Name</span>
+        <input
+          value={title}
+          autoFocus
+          autoComplete="off"
+          maxLength={200}
+          disabled={busy}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void rename()
+            }
+          }}
+        />
+      </label>
+      {error && (
+        <p className="chat-rewind-warning" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="chat-rewind-actions">
+        <button type="button" onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="chat-rewind-primary"
+          disabled={!valid || busy}
+          onClick={() => void rename()}
+        >
+          {busy ? 'Renaming…' : 'Rename'}
+        </button>
+      </div>
+    </dialog>
+  )
+}
+
+export function DeleteJobDialog({
+  job,
+  onClose,
+  onDeleted,
+}: {
+  job: Job
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const key = useRef(newId())
+  useEffect(() => {
+    dialog.current?.showModal?.()
+  }, [])
+  const matches = typed === job.title
+  async function remove() {
+    if (!matches || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await apiFetch(`jobs/${encodeURIComponent(job.id)}`, {
+        method: 'DELETE',
+        headers: { 'Idempotency-Key': key.current },
+      })
+      onDeleted()
+    } catch (failure) {
+      key.current = newId()
+      const problem = jobLifecycleError(failure, 'delete')
+      setError(problem.text)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <dialog
+      ref={dialog}
+      open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
+      className="chat-rewind-dialog bold-job-delete-dialog"
+      data-protected="any"
+      aria-labelledby="delete-job-title"
+      onCancel={(event) => {
+        event.preventDefault()
+        if (!busy) onClose()
+      }}
+    >
+      <h2 id="delete-job-title">Delete “{job.title}”?</h2>
+      <ul className="chat-rewind-list">
+        <li>Its messages and thread are removed from Score. Results saved to the Library stay.</li>
+        <li>You can undo this for about 10 seconds.</li>
+      </ul>
+      <label className="chat-delete-confirm">
+        <span>
+          Type <strong>{job.title}</strong> to confirm
+        </span>
+        <input
+          value={typed}
+          autoFocus
+          autoComplete="off"
+          spellCheck={false}
+          disabled={busy}
+          onChange={(event) => setTyped(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void remove()
+            }
+          }}
+        />
+      </label>
+      {error && (
+        <p className="chat-rewind-warning" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="chat-rewind-actions">
+        <button type="button" onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="chat-rewind-primary"
+          disabled={!matches || busy}
+          onClick={() => void remove()}
+        >
+          {busy ? 'Deleting…' : 'Delete job'}
+        </button>
+      </div>
+    </dialog>
+  )
+}
+
 export function RoomMenu({
   room,
   onShare,
@@ -366,10 +574,18 @@ export function JobMenu({
   room,
   job,
   onShare,
+  onRename,
+  onCloseJob,
+  onReopen,
+  onDelete,
 }: {
   room: Room
   job: Job | undefined
   onShare: (job: Job) => void
+  onRename: (job: Job) => void
+  onCloseJob: (job: Job) => void
+  onReopen: (job: Job) => void
+  onDelete: (job: Job) => void
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLSpanElement>(null)
@@ -400,6 +616,33 @@ export function JobMenu({
           data-protected="flex"
           onKeyDown={moveInMenu}
         >
+          {!job.isDefault && (
+            <button
+              type="button"
+              className="mi"
+              role="menuitem"
+              onClick={() => {
+                close(false)
+                onRename(job)
+              }}
+            >
+              Rename…
+            </button>
+          )}
+          {!job.isDefault && (
+            <button
+              type="button"
+              className="mi"
+              role="menuitem"
+              onClick={() => {
+                close(false)
+                if (job.state === 'closed') onReopen(job)
+                else onCloseJob(job)
+              }}
+            >
+              {job.state === 'closed' ? 'Reopen' : 'Close'}
+            </button>
+          )}
           <button
             type="button"
             className="mi"
@@ -423,6 +666,20 @@ export function JobMenu({
           >
             Export the whole room as Markdown
           </a>
+          {!job.isDefault && (
+            <button
+              type="button"
+              className="mi bad"
+              role="menuitem"
+              onClick={() => {
+                close(false)
+                onDelete(job)
+              }}
+            >
+              <TrashIcon />
+              Delete job
+            </button>
+          )}
         </div>
       )}
     </span>

@@ -26,10 +26,14 @@ export const boldTeamRoomQuery = defineStreamQuery<TeamRoom>({
     )
     return { asOfSeq, data: { room, jobs } }
   },
-  types: ['job.upserted', 'room.upserted'],
+  types: ['job.upserted', 'job.deleted', 'room.upserted'],
   reduce(data, event) {
     if (event.type === 'room.upserted' && event.data.id === data.room.id)
       return { ...data, room: event.data }
+    if (event.type === 'job.deleted') {
+      if (event.data.roomId !== data.room.id) return data
+      return { ...data, jobs: data.jobs.filter((job) => job.id !== event.data.id) }
+    }
     if (event.type !== 'job.upserted' || event.data.roomId !== data.room.id) return data
     const rest = data.jobs.filter((job) => job.id !== event.data.id)
     return { ...data, jobs: [...rest, event.data] }

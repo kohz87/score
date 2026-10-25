@@ -33,6 +33,7 @@ import {
 } from './room-model.ts'
 import { PinCard, PinsProvider, usePinRegistry } from './PinCards.tsx'
 import { roomExchangesQuery } from './room-queries.ts'
+import { RoomTaskRequests } from './RoomTasks.tsx'
 import { RunSafetyRequests, type CountCards } from './RunSafetyRequests.tsx'
 
 type PendingOption = ExchangeOption | null
@@ -545,12 +546,14 @@ export function RoomRequests({
   agents,
   messages,
   selectedJob,
+  teamRoom = false,
 }: {
   roomId: string
   jobs: Job[]
   agents: AgentSummary[]
   messages?: Message[]
   selectedJob: string
+  teamRoom?: boolean
 }) {
   const approvals = useStreamQuery(approvalsQuery).data ?? []
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -630,6 +633,7 @@ export function RoomRequests({
         />
         <RoomExchanges jobs={cooking} agents={agents} report={report} />
         <RunSafetyRequests jobs={recipeJobs} agents={agents} report={report} />
+        <RoomTaskRequests roomId={roomId} agents={agents} report={report} teamRoom={teamRoom} />
       </div>
       {moreLabel && (
         <button

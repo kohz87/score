@@ -1,5 +1,5 @@
 import { expect, type Page, type Route } from '@playwright/test'
-import { mockBoldRoom, type RoomRequest } from './bold-room-fixtures.ts'
+import { mockBoldRoom, type BoldRoomReply, type RoomRequest } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 
 type Json = Record<string, unknown>
@@ -149,7 +149,15 @@ function response(route: Route, body: unknown, status = 200) {
 }
 
 /** The 11.4d room data on top of the stable bold-room fixture: an older room, Elsewhere and the menu endpoints. */
-export async function mockRoomMenus(page: Page, options: { failShare?: number } = {}) {
+export async function mockRoomMenus(
+  page: Page,
+  options: {
+    failShare?: number
+    handle?: (
+      request: RoomRequest,
+    ) => BoldRoomReply | undefined | Promise<BoldRoomReply | undefined>
+  } = {},
+) {
   const requests: RoomRequest[] = []
   const receipts = new Map<string, { status: number; body: unknown }>()
   let createdJob: Json | null = null
@@ -171,6 +179,15 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
       }
     }
     requests.push({ method, path, search: url.searchParams, body, headers: request.headers() })
+
+    const handled = await options.handle?.({
+      method,
+      path,
+      search: url.searchParams,
+      body,
+      headers: request.headers(),
+    })
+    if (handled) return response(route, handled.body, handled.status)
 
     const idempotencyKey = request.headers()['idempotency-key']
     if (method === 'POST' && idempotencyKey) {
@@ -326,7 +343,15 @@ export async function mockRoomMenus(page: Page, options: { failShare?: number } 
   return { requests }
 }
 
-export async function openMenuRoom(page: Page, options: { failShare?: number } = {}) {
+export async function openMenuRoom(
+  page: Page,
+  options: {
+    failShare?: number
+    handle?: (
+      request: RoomRequest,
+    ) => BoldRoomReply | undefined | Promise<BoldRoomReply | undefined>
+  } = {},
+) {
   await pair(page)
   const base = await mockBoldRoom(page)
   const menu = await mockRoomMenus(page, options)

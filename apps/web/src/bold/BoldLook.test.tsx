@@ -79,6 +79,7 @@ function mount() {
     [
       { path: '/b/settings/look', element: <BoldLook /> },
       { path: '/settings/look', element: <p>Classic Look</p> },
+      { path: '/settings/look/customize/:themeId', element: <p>Customizer</p> },
     ],
     { initialEntries: ['/b/settings/look'] },
   )
@@ -146,4 +147,10 @@ test('the New look switch turns this device back to classic Score', async () => 
   await waitFor(() => expect(router.state.location.pathname).toBe('/settings/look'))
   expect(window.localStorage.getItem('score.ui')).toBe('classic')
   expect(await screen.findByText('Classic Look')).toBeDefined()
+})
+
+test('Open the Customizer goes to the theme the device uses', async () => {
+  mount()
+  const link = await screen.findByRole('link', { name: 'Open the Customizer' })
+  expect(link.getAttribute('href')).toBe('/settings/look/customize/score')
 })

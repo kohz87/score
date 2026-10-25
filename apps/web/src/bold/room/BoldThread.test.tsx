@@ -1,4 +1,4 @@
-import type { Approval, Exchange, Job, Message } from '@score/contract'
+import type { Approval, Exchange, Job, Message, TaskSummary } from '@score/contract'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { BoldThread } from './BoldThread.tsx'
@@ -9,6 +9,7 @@ import {
   makeExchange,
   makeJob,
   makeMessage,
+  makeTask,
   mockFetch,
   room,
   renderInRoom,
@@ -24,9 +25,10 @@ type Setup = {
   exchanges?: Exchange[]
   messages?: Message[]
   approvals?: Approval[]
+  tasks?: TaskSummary[]
 }
 
-function stub({ jobs, exchanges = [], messages = [], approvals = [] }: Setup) {
+function stub({ jobs, exchanges = [], messages = [], approvals = [], tasks = [] }: Setup) {
   const calls: { url: string; init: RequestInit }[] = []
   const fetchMock = mockFetch((url, init) => {
     calls.push({ url, init })
@@ -39,6 +41,32 @@ function stub({ jobs, exchanges = [], messages = [], approvals = [] }: Setup) {
       return jsonResponse({ asOfSeq: 1, items: exchanges })
     if (url === '/api/approvals?status=all')
       return jsonResponse({ asOfSeq: 1, items: approvals, nextCursor: null })
+    if (url.startsWith('/api/tasks?'))
+      return jsonResponse({
+        asOfSeq: 1,
+        columns: {
+          planned: [],
+          working: [],
+          in_review: [],
+          needs_you: tasks,
+          done: [],
+        },
+      })
+    if (url.startsWith('/api/tasks/'))
+      return jsonResponse({
+        ...tasks[0],
+        body: 'The login timeout needs a decision.',
+        createdBy: 'you',
+        steps: [
+          { id: 'step-1', text: 'Reproduce the timeout', done: true },
+          { id: 'step-2', text: 'Pick the new limit', done: false },
+        ],
+        activity: [],
+        pendingApproval: null,
+        dependsOn: [],
+        blocks: [],
+        runIds: [],
+      })
     if (init.method === 'POST') return jsonResponse({ ok: true })
     return jsonResponse({ asOfSeq: 0, items: [] })
   })
@@ -201,4 +229,20 @@ test('the step-in box is disabled on a closed job', async () => {
   renderInRoom(<BoldThread jobId="job-1" onSelectJob={() => undefined} />, ['/b'])
   const box = (await screen.findByLabelText('Step in')) as HTMLInputElement
   expect(box.disabled).toBe(true)
+})
+
+test('the thread lists the room’s Hermes tasks with their state and steps', async () => {
+  stub({
+    jobs: [job],
+    tasks: [makeTask({ column: 'working', badge: null, hermesStatus: 'running' })],
+  })
+  renderInRoom(<BoldThread jobId="job-1" onSelectJob={() => undefined} />, ['/b'])
+
+  const section = await screen.findByRole('region', { name: 'Hermes tasks' })
+  expect(section.textContent).toContain('Fix the login timeout')
+  expect(section.textContent).toContain('Working')
+  expect(section.textContent).toContain('TASK-1')
+  expect(await screen.findByText('Reproduce the timeout')).toBeDefined()
+  expect(screen.getByText('Pick the new limit')).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Comment' })).toBeDefined()
 })

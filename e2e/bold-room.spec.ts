@@ -74,12 +74,10 @@ for (const viewport of sizes) {
         const activity = page.getByRole('button', { name: /^Activity feed\..*2 unread/ })
         const notes = page.getByRole('button', { name: /^Release notes 2\.4\..*3 unread/ })
         const queue = page.getByRole('button', { name: /^Queue research\./ })
-        const closed = page.getByRole('button', { name: /^Old import\..*1 unread/ })
         await expect(activity).toBeVisible()
         await expect(notes).toBeVisible()
         await expect(queue).toBeVisible()
         await expect(queue.locator('.bold-unread')).toHaveCount(0)
-        await expect(closed).toBeVisible()
 
         await activity.click()
         expect(new URL(page.url()).searchParams.get('job')).toBe('job-activity')
@@ -100,12 +98,10 @@ for (const viewport of sizes) {
       const activity = page.getByRole('tab', { name: /Activity feed/ })
       const notes = page.getByRole('tab', { name: /Release notes 2\.4/ })
       const queue = page.getByRole('tab', { name: /Queue research/ })
-      const closed = page.getByRole('tab', { name: /Old import/ })
-      await expect(all).toContainText('6')
+      await expect(all).toContainText('5')
       await expect(activity).toContainText('2')
       await expect(notes).toContainText('3')
       await expect(queue.locator('.bold-unread')).toHaveCount(0)
-      await expect(closed).toContainText('1')
 
       await activity.click()
       expect(new URL(page.url()).searchParams.get('job')).toBe('job-activity')
@@ -133,7 +129,7 @@ for (const viewport of sizes) {
 
       await page.getByRole('button', { name: 'Done', exact: true }).click()
       await expect(queue).toBeVisible()
-      await expect(closed).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Closed jobs', exact: true })).toBeVisible()
       await expect(notes).toHaveCount(0)
       await expect(activity).toHaveCount(0)
 
@@ -142,7 +138,6 @@ for (const viewport of sizes) {
       await expect(activity).toBeVisible()
       await expect(notes).toBeVisible()
       await expect(queue).toBeVisible()
-      await expect(closed).toBeVisible()
     })
 
     test(`approvals and a paused review are protected request cards at ${at}`, async ({ page }) => {

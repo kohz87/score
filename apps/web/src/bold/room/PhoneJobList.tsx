@@ -38,21 +38,38 @@ export function PhoneJobList({
   jobs,
   agents,
   onOpen,
+  closedOnly = false,
+  onShowClosed,
 }: {
   jobs: (Job & { unread?: number })[]
   agents: AgentSummary[]
   onOpen: (jobId: string) => void
+  /** The phone's Closed jobs view: only closed jobs, with a way back to the live list. */
+  closedOnly?: boolean
+  onShowClosed?: () => void
 }) {
   const defaultJob = jobs.find((job) => job.isDefault)
-  const named = jobs.filter((job) => !job.isDefault)
-  const rows = defaultJob ? [defaultJob, ...named] : named
+  const closed = jobs.filter((job) => !job.isDefault && job.state === 'closed')
+  const named = closedOnly ? closed : jobs.filter((job) => !job.isDefault && job.state !== 'closed')
+  const rows = !closedOnly && defaultJob ? [defaultJob, ...named] : named
 
   return (
     <section className="bold-phone-jobs" aria-label="Jobs">
       <div className="bold-phone-jobs-head">
-        <h2>Jobs</h2>
+        <h2>{closedOnly ? 'Closed jobs' : 'Jobs'}</h2>
+        {closedOnly && onShowClosed && (
+          <button type="button" className="link" onClick={onShowClosed}>
+            Back to jobs
+          </button>
+        )}
       </div>
+      {!closedOnly && closed.length > 0 && onShowClosed && (
+        <button type="button" className="link bold-phone-closed-jobs" onClick={onShowClosed}>
+          Closed jobs ({closed.length})
+        </button>
+      )}
       <div className="bold-phone-job-list">
+        {rows.length === 0 && <p className="small muted">No closed jobs.</p>}
         {rows.map((job) => {
           const holder = job.holderAgentId
             ? agents.find((agent) => agent.id === job.holderAgentId)

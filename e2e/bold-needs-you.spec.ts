@@ -243,6 +243,135 @@ for (const viewport of sizes) {
       await expect(page.locator('.bold-pins')).not.toContainText('May I install a package')
     })
 
+    test(`a blocked Hermes task is a protected card, and unblock leaves it at ${label}`, async ({
+      page,
+    }) => {
+      let task = {
+        id: 'task-blocked',
+        key: 'OPS-7',
+        title: 'Fix the login timeout',
+        column: 'needs_you',
+        hermesStatus: 'blocked',
+        assignee: 'builder',
+        reviewer: null,
+        roomId: 'team-room',
+        badge: { kind: 'blocked', label: 'Waiting for a decision on the timeout' },
+        progress: null,
+        elapsedSec: null,
+        note: null,
+        updatedAt: at(6),
+      }
+      const state = await openBoldRoom(page, {
+        jobs: roomJobs(),
+        approvals: [],
+        exchanges: [],
+        handle: (request) => {
+          if (request.method === 'GET' && request.path === '/api/tasks')
+            return {
+              body: {
+                asOfSeq: 12,
+                columns: {
+                  planned: [],
+                  working: [],
+                  in_review: [],
+                  needs_you: [task],
+                  done: [],
+                },
+              },
+            }
+          if (request.method === 'GET' && request.path === '/api/tasks/task-blocked')
+            return {
+              body: {
+                ...task,
+                body: 'The timeout needs a decision.',
+                createdBy: 'you',
+                steps: [],
+                activity: [],
+                pendingApproval: null,
+                dependsOn: [],
+                blocks: [],
+                runIds: [],
+              },
+            }
+          if (request.method === 'POST' && request.path === '/api/tasks/task-blocked/actions') {
+            task = { ...task, column: 'working', hermesStatus: 'running', badge: null }
+            return { body: { taskId: task.id, action: 'unblock', ok: true } }
+          }
+          return undefined
+        },
+      })
+      const card = page.getByRole('article', { name: /Blocked task: Fix the login timeout/ })
+      await expect(card).toHaveAttribute('data-protected', 'flex')
+      await expect(card).toContainText('OPS-7')
+      await expect(card).toContainText('Waiting for a decision on the timeout')
+      await card.getByRole('button', { name: 'Unblock' }).click()
+      await card.getByLabel('Note (optional)').fill('Use a 30 second timeout.')
+      await card.getByRole('button', { name: 'Unblock' }).click()
+      await expect
+        .poll(() =>
+          state.requests.some(
+            (request) =>
+              request.method === 'POST' && request.path === '/api/tasks/task-blocked/actions',
+          ),
+        )
+        .toBe(true)
+      expect(
+        state.requests.find(
+          (request) =>
+            request.method === 'POST' && request.path === '/api/tasks/task-blocked/actions',
+        )?.body,
+      ).toEqual({ action: 'unblock', text: 'Use a 30 second timeout.' })
+      // The mutation refreshed the read; a task no longer blocked is not a needs-you card.
+      await page.reload()
+      await expect(
+        page.getByRole('article', { name: /Blocked task: Fix the login timeout/ }),
+      ).toHaveCount(0)
+    })
+
+    test(`a blocked task with no room belongs to the team room only at ${label}`, async ({
+      page,
+    }) => {
+      await openBoldRoom(page, {
+        jobs: roomJobs(),
+        approvals: [],
+        exchanges: [],
+        handle: (request) =>
+          request.method === 'GET' && request.path === '/api/tasks'
+            ? {
+                body: {
+                  asOfSeq: 12,
+                  columns: {
+                    planned: [],
+                    working: [],
+                    in_review: [],
+                    needs_you: [
+                      {
+                        id: 'task-unassigned',
+                        key: 'OPS-8',
+                        title: 'Pick the timeout',
+                        column: 'needs_you',
+                        hermesStatus: 'blocked',
+                        assignee: null,
+                        reviewer: null,
+                        roomId: null,
+                        badge: { kind: 'blocked', label: 'No room yet' },
+                        progress: null,
+                        elapsedSec: null,
+                        note: null,
+                        updatedAt: at(6),
+                      },
+                    ],
+                    done: [],
+                  },
+                },
+              }
+            : undefined,
+      })
+      await expect(
+        page.getByRole('article', { name: /Blocked task: Pick the timeout/ }),
+      ).toBeVisible()
+    })
+
     test(`an approval leaves when the server resolves it at ${label}`, async ({ page }) => {
       const served: Json = approval('approval-package', 'May I install a package?')
       const decided = {

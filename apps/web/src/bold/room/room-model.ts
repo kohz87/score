@@ -1,19 +1,22 @@
 import type { AgentSummary, Approval, Exchange, ExchangeOption, Job } from '@score/contract'
 
-export type JobFilter = 'all' | 'needs' | 'working' | 'done'
+export type JobFilter = 'all' | 'needs' | 'working' | 'done' | 'closed'
 
 export const JOB_FILTERS: { id: JobFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'needs', label: 'Needs you' },
   { id: 'working', label: 'Working' },
   { id: 'done', label: 'Done' },
+  { id: 'closed', label: 'Closed jobs' },
 ]
 
 export function jobMatchesFilter(job: Job, filter: JobFilter): boolean {
-  if (filter === 'all') return true
+  // A closed job leaves the room's tabs until the person asks for the Closed jobs list.
+  if (filter === 'all') return job.state !== 'closed'
   if (filter === 'needs') return job.state === 'waiting_on_you'
   if (filter === 'working') return job.state === 'open' || job.state === 'working'
-  return job.state === 'done' || job.state === 'closed'
+  if (filter === 'done') return job.state === 'done'
+  return job.state === 'closed'
 }
 
 export function jobStateLabel(job: Job): string {

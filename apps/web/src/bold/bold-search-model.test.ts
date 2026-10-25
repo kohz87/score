@@ -67,6 +67,7 @@ const input = (overrides: Partial<BoldSearchInput> = {}): BoldSearchInput => ({
   notes: [
     { path: 'Projects/Roadmap.md', title: 'Event cursors', lastAuthor: { agentId: 'reviewer' } },
   ],
+  routines: [],
   messages: [message()],
   commands: [
     { name: 'assign', usage: '/assign @agent <title>', description: 'Create a task.' },
@@ -112,6 +113,32 @@ test('a query adds messages in the Messages group and keeps them with their job'
     hint: 'builder · Cursor activity feed',
     jobId: 'j1',
     messageId: 'm1',
+  })
+})
+
+test('a repeating job is a Routine result that opens its agent’s Team page under More', () => {
+  const groups = buildBoldSearchGroups(
+    input({
+      query: 'standup',
+      routines: [
+        {
+          id: 'builder:daily',
+          agentId: 'builder',
+          title: 'Daily standup notes',
+          schedule: 'every weekday at 09:00',
+          description: 'Collect yesterday and today.',
+          lastRunAt: null,
+          enabled: true,
+        },
+      ],
+    }),
+  )
+  expect(groups.find((group) => group.key === 'routines')?.items[0]).toMatchObject({
+    kind: 'routine',
+    title: 'Daily standup notes',
+    hint: 'builder · every weekday at 09:00',
+    agentId: 'builder',
+    routineId: 'builder:daily',
   })
 })
 

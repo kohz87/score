@@ -1,7 +1,16 @@
-import type { AgentSummary, Job, OutsideSession, Room } from '@score/contract'
+import {
+  JobSchema,
+  type AgentSummary,
+  type Job,
+  type OutsideSession,
+  type Room,
+} from '@score/contract'
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
-import { useStreamQuery } from '../../data/query-client.ts'
+import { apiFetch } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
+import { useStream, useStreamQuery } from '../../data/query-client.ts'
 import { DeleteRoomDialog } from '../../routes/chat/DeleteRoomDialog.tsx'
 import { ShareDialog } from '../../routes/chat/ShareDialog.tsx'
 import { useShowDeleted, setShowDeleted } from '../../routes/chat/deleted-toggle.ts'
@@ -14,10 +23,18 @@ import { RoomEmpty } from './RoomEmpty.tsx'
 import { RoomMessageStream } from './RoomMessageStream.tsx'
 import { RoomRequests } from './RoomRequests.tsx'
 import { RoomTabs } from './RoomTabs.tsx'
-import { JobMenu, RoomMenu, RoomTitle } from './RoomMenus.tsx'
+import { ReportBackLine } from './ReportBack.tsx'
+import {
+  DeleteJobDialog,
+  JobMenu,
+  RenameJobDialog,
+  RoomMenu,
+  RoomTitle,
+  jobLifecycleError,
+} from './RoomMenus.tsx'
 import { PhoneJobList } from './PhoneJobList.tsx'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
-import { roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
+import { changeCachedJob, roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
 import './bold-room.css'
 
 function RoomWaiting() {
@@ -77,6 +94,7 @@ function StartedBy({ job }: { job: Job }) {
           Missing from the call: {source.missing.join(', ')}
         </span>
       )}
+      <ReportBackLine job={job} />
       <span className="bold-source-note">
         The ticket’s text reaches agents quoted as outside content, never as instructions.
       </span>
@@ -116,8 +134,21 @@ function LoadedTeamRoom({
   const [filter, setFilter] = useState<JobFilter>('all')
   const [composerKey, setComposerKey] = useState(0)
   const [openedJobs, setOpenedJobs] = useState<string[]>([])
+  const [phoneClosedList, setPhoneClosedList] = useState(false)
   const [sharingJob, setSharingJob] = useState<Job | null>(null)
+  const [renamingJob, setRenamingJob] = useState<Job | null>(null)
+  const [deletingJob, setDeletingJob] = useState<Job | null>(null)
+  const [undoJob, setUndoJob] = useState<Job | null>(null)
+  const [lifecycleBusy, setLifecycleBusy] = useState<string | null>(null)
+  const [lifecycleNotice, setLifecycleNotice] = useState<{
+    job: Job
+    text: string
+    stillWorking: boolean
+  } | null>(null)
+  const queryClient = useQueryClient()
   const composerFocusFrame = useRef<number | null>(null)
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const allJobsRef = useRef(allJobs)
   const showDeleted = useShowDeleted(room.id)
   const requestedJob = params.get('job') ?? 'all'
   // A tab that no longer exists, or that the D10 filter hides, falls back to All during render: an effect that called
@@ -135,6 +166,7 @@ function LoadedTeamRoom({
           : 'all'
   const seek = params.get('message')
   const command = params.get('command')
+  const stream = useStream()
 
   // The message page the composer writes into: the selected job, or the room's default job from All. Its query key
   // does not depend on the room's job list, so a new job never refetches it or drops an optimistic message.
@@ -187,6 +219,172 @@ function LoadedTeamRoom({
     },
     [requested, selectJob],
   )
+
+  useEffect(
+    () => () => {
+      if (undoTimer.current !== null) clearTimeout(undoTimer.current)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    allJobsRef.current = allJobs
+  }, [allJobs])
+
+  // A delete from another tab (or another device) takes the open job with it; this tab returns to All and says why.
+  useEffect(
+    () =>
+      stream.subscribe((event) => {
+        if (event.type !== 'job.deleted') return
+        const open = params.get('job')
+        if (open !== event.data.id) return
+        const next = new URLSearchParams(params)
+        next.delete('job')
+        next.delete('message')
+        setParams(next, { replace: true, state: location.state })
+        setLifecycleNotice({
+          job: allJobsRef.current.find((job) => job.id === event.data.id) ?? {
+            id: event.data.id,
+            roomId: event.data.roomId,
+            title: 'Deleted job',
+            state: 'open',
+            holderAgentId: null,
+            isDefault: false,
+            exchangeBudget: 8,
+            jobTurnLimit: 40,
+            unread: 0,
+            activeAgents: [],
+            lastMessageAt: null,
+            messageCount: 0,
+            summary: null,
+            source: null,
+            reportBack: null,
+            spendCapUsd: null,
+            recipe: null,
+            createdAt: new Date(0).toISOString(),
+            updatedAt: new Date(0).toISOString(),
+          },
+          text: 'That job was deleted.',
+          stillWorking: false,
+        })
+      }),
+    [location.state, params, setParams, stream],
+  )
+
+  async function changeJobState(job: Job, action: 'close' | 'reopen') {
+    setLifecycleBusy(job.id)
+    setLifecycleNotice(null)
+    try {
+      const changed = JobSchema.parse(
+        await apiFetch(`jobs/${encodeURIComponent(job.id)}/${action}`, {
+          method: 'POST',
+          headers: { 'Idempotency-Key': newId() },
+          body: '{}',
+        }),
+      )
+      changeCachedJob(queryClient, changed, 'upsert')
+      if (action === 'close') {
+        setFilter('all')
+        if (selectedJob === job.id) selectJob('all')
+        setLifecycleNotice({
+          job: changed,
+          text: `Closed “${changed.title}”. Find it under Closed jobs to reopen it.`,
+          stillWorking: false,
+        })
+      } else {
+        setFilter('all')
+        setPhoneClosedList(false)
+        selectJob(changed.id)
+        setLifecycleNotice({
+          job: changed,
+          text: `Reopened “${changed.title}”.`,
+          stillWorking: false,
+        })
+      }
+    } catch (failure) {
+      const problem = jobLifecycleError(failure, action)
+      setLifecycleNotice({ job, text: problem.text, stillWorking: problem.stillWorking })
+    } finally {
+      setLifecycleBusy(null)
+    }
+  }
+
+  async function stopForLifecycle(job: Job) {
+    setLifecycleBusy(job.id)
+    try {
+      await apiFetch(`jobs/${encodeURIComponent(job.id)}/stop`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': newId() },
+        body: '{}',
+      })
+      setLifecycleNotice({
+        job,
+        text: 'Stop sent. Close or delete the job again once it has stopped.',
+        stillWorking: false,
+      })
+    } catch (failure) {
+      const problem = jobLifecycleError(failure, 'close')
+      setLifecycleNotice({ job, text: problem.text, stillWorking: true })
+    } finally {
+      setLifecycleBusy(null)
+    }
+  }
+
+  async function reopenForComposer(jobId: string) {
+    const reopened = JobSchema.parse(
+      await apiFetch(`jobs/${encodeURIComponent(jobId)}/reopen`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': newId() },
+        body: '{}',
+      }),
+    )
+    changeCachedJob(queryClient, reopened, 'upsert')
+    // The composer retries the message after this resolves. Leave the Closed jobs view and keep this job selected so
+    // the retry still goes into it instead of falling back to the room's default thread.
+    setFilter('all')
+    setPhoneClosedList(false)
+    if (selectedJob !== jobId) selectJob(jobId)
+  }
+
+  function jobDeleted(job: Job) {
+    setDeletingJob(null)
+    changeCachedJob(queryClient, job, 'delete')
+    setFilter('all')
+    if (selectedJob === job.id) selectJob('all')
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current)
+    setUndoJob(job)
+    undoTimer.current = setTimeout(() => {
+      undoTimer.current = null
+      setUndoJob(null)
+    }, 10_000)
+  }
+
+  async function undoJobDelete(job: Job) {
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current)
+    undoTimer.current = null
+    try {
+      const restored = JobSchema.parse(
+        await apiFetch(`jobs/${encodeURIComponent(job.id)}/restore`, {
+          method: 'POST',
+          headers: { 'Idempotency-Key': newId() },
+          body: '{}',
+        }),
+      )
+      changeCachedJob(queryClient, restored, 'upsert')
+      setUndoJob(null)
+      setLifecycleNotice({
+        job: restored,
+        text: `Restored “${restored.title}”.`,
+        stillWorking: false,
+      })
+    } catch {
+      setLifecycleNotice({
+        job,
+        text: 'Couldn’t restore this job. Try again from its room.',
+        stillWorking: false,
+      })
+    }
+  }
 
   // Opening a job is what reads it: the job on show counts as opened, and leaving it keeps it in the list (recorded in
   // selectJob), so All keeps showing its pages after a move and no other job's first page is read on mount (that would
@@ -272,7 +470,15 @@ function LoadedTeamRoom({
           >
             Thread
           </button>
-          <JobMenu room={room} job={phoneJob} onShare={setSharingJob} />
+          <JobMenu
+            room={room}
+            job={phoneJob}
+            onShare={setSharingJob}
+            onRename={setRenamingJob}
+            onCloseJob={(job) => void changeJobState(job, 'close')}
+            onReopen={(job) => void changeJobState(job, 'reopen')}
+            onDelete={setDeletingJob}
+          />
           {room.role !== 'team' && (
             <RoomMenu room={room} onShare={onShareRoom} onDelete={onDeleteRoom} />
           )}
@@ -294,7 +500,17 @@ function LoadedTeamRoom({
           filter={filter}
           onSelectJob={selectJob}
           onSelectFilter={selectFilter}
-          trailing={<JobMenu room={room} job={job} onShare={setSharingJob} />}
+          trailing={
+            <JobMenu
+              room={room}
+              job={job}
+              onShare={setSharingJob}
+              onRename={setRenamingJob}
+              onCloseJob={(target) => void changeJobState(target, 'close')}
+              onReopen={(target) => void changeJobState(target, 'reopen')}
+              onDelete={setDeletingJob}
+            />
+          }
           onOpenThread={onOpenThread}
         />
       )}
@@ -310,21 +526,61 @@ function LoadedTeamRoom({
           </button>
         </div>
       )}
+      {lifecycleNotice && (
+        <div
+          className="bold-job-lifecycle-notice"
+          data-protected="block"
+          role={lifecycleNotice.stillWorking ? 'alert' : 'status'}
+        >
+          <span>{lifecycleNotice.text}</span>
+          {lifecycleNotice.stillWorking && (
+            <button
+              type="button"
+              className="btn sm"
+              disabled={lifecycleBusy === lifecycleNotice.job.id}
+              onClick={() => void stopForLifecycle(lifecycleNotice.job)}
+            >
+              {lifecycleBusy === lifecycleNotice.job.id ? 'Stopping…' : 'Stop'}
+            </button>
+          )}
+          <button
+            type="button"
+            className="link"
+            aria-label="Dismiss job notice"
+            onClick={() => setLifecycleNotice(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {!empty && (
         <RoomRequests
           roomId={room.id}
           jobs={allJobs}
           agents={agents}
           selectedJob={selectedJob}
+          teamRoom={room.role === 'team'}
           messages={baseMessages.data?.items ?? []}
         />
       )}
       {phone && room.role === 'team' && phoneJobMissing ? (
-        <PhoneJobList jobs={allJobs} agents={agents} onOpen={selectJob} />
+        <PhoneJobList
+          jobs={allJobs}
+          agents={agents}
+          onOpen={selectJob}
+          closedOnly={phoneClosedList}
+          onShowClosed={() => setPhoneClosedList((shown) => !shown)}
+        />
       ) : empty ? (
         <RoomEmpty agents={agents} onStart={startWith} />
       ) : phone && room.role === 'team' && !phoneJob ? (
-        <PhoneJobList jobs={allJobs} agents={agents} onOpen={selectJob} />
+        <PhoneJobList
+          jobs={allJobs}
+          agents={agents}
+          onOpen={selectJob}
+          closedOnly={phoneClosedList}
+          onShowClosed={() => setPhoneClosedList((shown) => !shown)}
+        />
       ) : phone && room.role !== 'team' && !phoneJob && jobsStatus !== 'success' ? (
         <p className="bold-stream-note" role="status">
           Opening the room…
@@ -379,6 +635,7 @@ function LoadedTeamRoom({
           }
           messagesKey={baseMessagesDefinition.key}
           initialText={command ? `/${command} ` : undefined}
+          onClosedJob={reopenForComposer}
           onSent={() => {
             if (!params.has('message')) return
             const next = new URLSearchParams(params)
@@ -388,6 +645,45 @@ function LoadedTeamRoom({
         />
       </div>
       {sharingJob && <ShareDialog room={room} job={sharingJob} close={() => setSharingJob(null)} />}
+      {renamingJob && (
+        <RenameJobDialog
+          job={renamingJob}
+          onClose={() => setRenamingJob(null)}
+          onRenamed={(renamed) => {
+            changeCachedJob(queryClient, renamed, 'upsert')
+            setLifecycleNotice({
+              job: renamed,
+              text: `Renamed “${renamed.title}”.`,
+              stillWorking: false,
+            })
+            setRenamingJob(null)
+          }}
+        />
+      )}
+      {deletingJob && (
+        <DeleteJobDialog
+          job={deletingJob}
+          onClose={() => setDeletingJob(null)}
+          onDeleted={() => jobDeleted(deletingJob)}
+        />
+      )}
+      {undoJob && (
+        <div className="chat-toasts bold-job-toasts" role="status" aria-live="polite">
+          <div className="chat-toast bold-job-undo" data-protected="flex">
+            <span>
+              Job deleted ·{' '}
+              <button
+                type="button"
+                className="chat-toast-undo"
+                onClick={() => void undoJobDelete(undoJob)}
+              >
+                Undo
+              </button>
+            </span>
+            <small>Removes it from Score. Agents may still remember it.</small>
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -417,7 +713,8 @@ export function BoldTeamRoom({
   const teamDefinition = useMemo(() => teamRoomQuery(null), [])
   const { data: teamRead } = useStreamQuery(teamDefinition)
   const teamRoom = teamRead?.room ?? null
-  const teamJobCount = teamRead?.jobs.filter((job) => !job.isDefault).length ?? null
+  const teamJobCount =
+    teamRead?.jobs.filter((job) => !job.isDefault && job.state !== 'closed').length ?? null
   const rooms = useStreamQuery(roomsQuery).data?.rooms ?? []
   const current =
     room ?? (override === null ? teamRoom : (rooms.find((item) => item.id === override) ?? null))

@@ -1,6 +1,6 @@
 import type { AgentSummary, Reports } from '@score/contract'
 import { useId, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
@@ -347,6 +347,7 @@ export function BoldUsage() {
   // Reports gives waiting-on-you as per-agent shares, not a total duration. Its approvals block exposes only the
   // median wait for a decision by you, so the headline names that figure rather than inventing a total.
   const waiting = formatDuration(report?.approvals.medianWaitSec ?? null)
+  const answered = report ? report.approvals.approved + report.approvals.denied : 0
 
   return (
     <div className="usage">
@@ -408,7 +409,7 @@ export function BoldUsage() {
               stat="waiting-on-you"
               label="Waiting on you"
               value={waiting}
-              detail="median wait for your approval"
+              detail={`${answered} ${answered === 1 ? 'approval' : 'approvals'} answered · median wait`}
             />
             <Headline
               stat="spend"
@@ -417,6 +418,13 @@ export function BoldUsage() {
               detail="where providers report it"
             />
           </section>
+
+          <p className="usage-note small muted">
+            Approvals you answered: {answered} in this range.{' '}
+            <Link className="link" to="/b/settings/rules#rules">
+              Review rules
+            </Link>
+          </p>
 
           <div className="grid2 usage-charts">
             <TaskFigure report={report} agents={agents} />
