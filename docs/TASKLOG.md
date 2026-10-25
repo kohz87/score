@@ -1252,3 +1252,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   2.0.3: "remove agent opened v1 agent screen which scroll all the way down and do nothing" — the 2.0.3 "Remove agent…"
   only jumped to the classic Danger zone in More. 2.0.5 (Sonnet coder): a new-design remove panel in place on the agent
   page (preview, blockers, typed name, progress; coding agents too), protected.
+- **v2.0.5 (Sonnet coder, lead review/merge, 2026-10-25).** BoldRemoveAgent.tsx in place on the agent page (preview,
+  blockers, typed name, ProfileOperation progress; coding agents; protected), shared `use-agent-delete.ts` with the
+  classic Danger zone. Review 1: 0 P1; P2s fixed (re-preview after a refused delete, no Cancel/Escape while pending,
+  mounted-guarded navigation, Close after a non-completed operation, lists refreshed on acceptance). The coder's side note
+  confirmed by the lead: the phone agent page overflowed 62 px (`.bold-more-toggle`, also on main) — fixed, e2e checks
+  scrollWidth again. Review 2: 0 P1/P2. pnpm check green (web 2888); full e2e 934 passed, 0 failed, 19 skipped.

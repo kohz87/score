@@ -3,6 +3,16 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.5] — 2026-10-25
+
+### Changed
+- **Remove agent…** opens a removal panel right on the agent page, in the new design: what's still going, any reason
+  Hermes can't remove it yet, where the private copy goes, then the agent's name to confirm and the removal's progress.
+  Coding agents get the same panel. (2.0.3 only jumped to the old Danger zone.)
+
+### Fixed
+- The agent page no longer runs off the right edge of a phone screen.
+
 ## [2.0.4] — 2026-10-25
 
 ### Fixed
