@@ -71,6 +71,7 @@ import { routeMessage, modelCommand } from '../domain/routing.ts'
 import { resolveAlias } from '../domain/model-aliases.ts'
 import { RoutingDispatcher } from '../domain/routing-dispatch.ts'
 import { HttpError } from '../errors.ts'
+import { assertJobOpen } from '../domain/exchanges/job-life.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
@@ -740,6 +741,8 @@ export function registerRoomRoutes(
         'An edit stays in the job of the message it corrects.',
       )
     const jobId = body.jobId ?? original?.jobId
+    // A closed or deleted job takes no new messages from the person (decision 121): reopen or undo first.
+    if (jobId) db.read((sqlite) => assertJobOpen(sqlite, jobId))
     const to = [...new Set(body.to ?? original?.to ?? [])]
     const known = (await agents()).map((agent) => agent.id)
     if (to.some((id) => !known.includes(id)))

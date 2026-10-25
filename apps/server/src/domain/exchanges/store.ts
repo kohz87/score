@@ -74,7 +74,7 @@ const ExchangeRowSchema = z.object({
 export type ExchangeRow = z.infer<typeof ExchangeRowSchema>
 
 /** What lists show about a job besides its row (PLAN 11.2): unread, who is busy, last activity, a one-line summary. */
-function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
+export function jobFromRow(sqlite: DatabaseSync, row: JobRow): Job {
   const counts = sqlite
     .prepare(
       `SELECT count(*) AS n, MAX(m.created_at) AS last,
@@ -240,7 +240,7 @@ export function listJobs(sqlite: DatabaseSync, roomId: string): Job[] {
     .parse(
       sqlite
         .prepare(
-          "SELECT * FROM jobs WHERE room_id = ? AND state != 'closed' ORDER BY is_default DESC, created_at, id",
+          "SELECT * FROM jobs WHERE room_id = ? AND state != 'closed' AND deleted_at IS NULL ORDER BY is_default DESC, created_at, id",
         )
         .all(roomId),
     )
