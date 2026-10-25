@@ -216,3 +216,16 @@ test('a successor that is refused again gets the notice but no second automatic 
   ])
   expect(texts().filter((text) => text.includes('was deleted in Hermes'))).toHaveLength(2)
 })
+
+test('a deleted session while the team is paused keeps the successor and the notice, without the retry', async () => {
+  // The team pauses while Hermes refuses the start: the retry can't be queued.
+  const start = vi.spyOn(port, 'startRun').mockImplementationOnce(async () => {
+    db.sqlite.prepare("UPDATE team_state SET paused_at = '2026-10-26T00:00:00.000Z'").run()
+    throw new HttpError(409, 'session_deleted', 'Hermes deleted this conversation.')
+  })
+  await send('@builder hello')
+  await advance(4000)
+  expect(start).toHaveBeenCalledTimes(1)
+  expect(texts().join(' ')).toContain('was deleted in Hermes')
+  expect(db.sqlite.prepare('SELECT count(*) AS n FROM session_successors').get()).toEqual({ n: 1 })
+})

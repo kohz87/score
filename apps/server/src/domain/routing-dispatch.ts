@@ -253,14 +253,20 @@ export class RoutingDispatcher {
                 'My earlier conversation for this room was deleted in Hermes, so I’m starting a fresh one here. I won’t remember what was said before it.',
               )
               const retry = first ? sessionRetryable(sqlite, job.turn_id) : null
+              // Best effort: a retry the room can't take now (paused, already answering) leaves the notice and the
+              // person's own Retry; it must not undo the successor or the notice.
               if (retry)
-                retryReply(
-                  sqlite,
-                  retry.roomId,
-                  retry.messageId,
-                  `session-deleted:${job.turn_id}`,
-                  now,
-                )
+                try {
+                  retryReply(
+                    sqlite,
+                    retry.roomId,
+                    retry.messageId,
+                    `session-deleted:${job.turn_id}`,
+                    now,
+                  )
+                } catch (error) {
+                  if (!(error instanceof HttpError)) throw error
+                }
               return drafts
             },
           })
