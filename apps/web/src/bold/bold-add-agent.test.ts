@@ -1,6 +1,6 @@
 import { AgentSummarySchema, type AgentSummary } from '@score/contract'
 import { afterEach, expect, test, vi } from 'vitest'
-import { availableStyle, colourChoices, saveRunsOn } from './bold-add-agent.ts'
+import { addBlockReasons, availableStyle, colourChoices, saveRunsOn } from './bold-add-agent.ts'
 
 const addAgentPalette = ['#6b8cff', '#2bb3c0', '#ff8a3d', '#8bd450'] as const
 
@@ -71,4 +71,26 @@ test('saveRunsOn returns the answer so the joined screen can state what separate
   )
 
   await expect(saveRunsOn('builder', { backend: 'docker' })).resolves.toEqual(answer)
+})
+
+const local = { backend: 'local', sshHost: '', sshUser: '' }
+test('keeps the server blockers and explains the bridge URL one', () => {
+  const reasons = addBlockReasons(
+    ['A pinned bridge installation URL has not been configured.'],
+    {},
+    false,
+    local,
+  )
+  expect(reasons).toHaveLength(1)
+  expect(reasons[0]).toContain('SCORE_BRIDGE_INSTALL_URL')
+  expect(reasons[0]).toContain('SCORE_BRIDGE_INSTALL_REF')
+})
+test('names an unconfirmed clone and a missing SSH host and user', () => {
+  expect(addBlockReasons([], { cloneFrom: 'builder' }, false, local)).toEqual([
+    'Tick “I’ve checked what this agent inherits.”',
+  ])
+  expect(
+    addBlockReasons([], {}, false, { backend: 'ssh', sshHost: ' ', sshUser: '' }),
+  ).toHaveLength(2)
+  expect(addBlockReasons([], { cloneFrom: 'builder' }, true, local)).toEqual([])
 })

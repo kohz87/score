@@ -337,3 +337,25 @@ for (const viewport of sizes) {
     }
   })
 }
+
+for (const viewport of sizes) {
+  test(`a blocked preview says why Add is off at ${viewport.width}×${viewport.height}`, async ({
+    page,
+  }) => {
+    const blocker = 'A pinned bridge installation URL has not been configured.'
+    await page.route('**/api/agents/preview', async (route) => {
+      const real = await route.fetch()
+      const body = (await real.json()) as Record<string, unknown>
+      await route.fulfill({ response: real, json: { ...body, blockers: [blocker] } })
+    })
+    const dialog = await openAdd(page, viewport.width)
+    await dialog.getByLabel('Name').fill(`blocked-${suffix()}`)
+    await dialog.getByLabel('What does it do?').fill('Checks the blocker is shown.')
+    await dialog.getByLabel('Model', { exact: true }).fill('fake-model')
+    await dialog.getByRole('button', { name: 'Preview changes' }).click()
+    const why = dialog.getByRole('alert').filter({ hasText: blocker })
+    await expect(why).toBeVisible()
+    await expect(why).toContainText('SCORE_BRIDGE_INSTALL_URL')
+    await expect(dialog.getByRole('button', { name: /^Add blocked-/ })).toBeDisabled()
+  })
+}

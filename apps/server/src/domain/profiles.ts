@@ -22,7 +22,8 @@ import { readAgent, reconcileAgents, storeAgent, writeAgentStyle } from './agent
 import { applyLifecycle, lifecycleOf } from './agent-lifecycle.ts'
 import type { ProfileImportStore } from './profile-imports.ts'
 import { readBaseline } from './team-rules.ts'
-import { roomChanged, RoomRowSchema } from './rooms.ts'
+import { syncTeamRoomMembers } from './team-room.ts'
+import { retireAgentFromRooms } from './rooms.ts'
 
 const OperationRow = z.object({
   operation: z.string(),
@@ -480,7 +481,7 @@ export class ProfileOperations {
     await this.ingest.submit({
       source: 'profile-operations',
       identity: randomUUID(),
-      apply: ({ sqlite }) => {
+      apply: ({ sqlite, now }) => {
         sqlite
           .prepare(
             'UPDATE profile_operations SET operation = ?, state = ?, target_identity = COALESCE(?, target_identity) WHERE id = ?',
@@ -502,8 +503,13 @@ export class ProfileOperations {
           if (previous) {
             const agent = applyLifecycle(sqlite, previous)
             storeAgent(sqlite, agent)
-            return [{ type: 'agent.updated', data: AgentSummarySchema.parse(agent) }]
+            // An agent joins the team room once it is ready (and leaves when removed).
+            return [
+              { type: 'agent.updated', data: AgentSummarySchema.parse(agent) },
+              ...syncTeamRoomMembers(sqlite, now),
+            ]
           }
+          return syncTeamRoomMembers(sqlite, now)
         }
         return []
       },
@@ -667,30 +673,7 @@ export class ProfileOperations {
       source: 'profile-operations',
       identity: `retire:${operation.id}`,
       apply: ({ sqlite, now }) => {
-        const rooms = z.array(RoomRowSchema).parse(sqlite.prepare('SELECT * FROM rooms').all())
-        const events = []
-        for (const room of rooms) {
-          const members = z
-            .array(z.string())
-            .parse(JSON.parse(room.members))
-            .filter((id) => id !== operation.targetName)
-          if (
-            room.lead_agent_id !== operation.targetName &&
-            members.length === JSON.parse(room.members).length
-          )
-            continue
-          sqlite
-            .prepare(
-              'UPDATE rooms SET members = ?, lead_agent_id = CASE WHEN lead_agent_id = ? THEN NULL ELSE lead_agent_id END, updated_at = ? WHERE id = ?',
-            )
-            .run(JSON.stringify(members), operation.targetName, now, room.id)
-          events.push(...roomChanged(sqlite, room.id, now))
-        }
-        sqlite
-          .prepare(
-            "UPDATE message_runs SET state = 'failed' WHERE agent_id = ? AND state = 'pending'",
-          )
-          .run(operation.targetName)
+        const events = retireAgentFromRooms(sqlite, operation.targetName, now)
         sqlite
           .prepare('DELETE FROM agent_rule_overrides WHERE agent_id = ?')
           .run(operation.targetName)
