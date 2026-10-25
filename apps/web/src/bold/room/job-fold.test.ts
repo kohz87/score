@@ -1,4 +1,3 @@
-import type { Exchange } from '@score/contract'
 import { expect, test } from 'vitest'
 import { foldedJobIds, isFinishedJob } from './job-fold.ts'
 import { makeJob, makeMessage } from './room-test-utils.tsx'
@@ -7,7 +6,14 @@ const done = makeJob({ id: 'a', state: 'done' })
 const closed = makeJob({ id: 'b', state: 'closed' })
 const working = makeJob({ id: 'c', state: 'working' })
 const none = new Set<string>()
-const base = { expanded: none, isPinned: () => false, approvalPointerIds: none, seek: null }
+const base = {
+  expanded: none,
+  isPinned: () => false,
+  approvalPointerIds: none,
+  seek: null,
+  waitingJobIds: none,
+  ready: true,
+}
 
 test('done and closed jobs fold; working jobs and the room thread do not', () => {
   expect(isFinishedJob(makeJob({ isDefault: true, state: 'done' }))).toBe(false)
@@ -38,13 +44,9 @@ test('a pinned message or a waiting approval keeps a job expanded', () => {
 })
 
 test('a waiting exchange or a reply the model did not process keeps a job expanded', () => {
-  const exchange = {
-    id: 'ex',
-    jobId: 'a',
-    state: 'waiting_on_you',
-    pause: { reason: 'budget' },
-  } as unknown as Exchange
-  expect(foldedJobIds({ ...base, jobs: [done], messages: [], exchanges: [exchange] }).size).toBe(0)
+  expect(
+    foldedJobIds({ ...base, jobs: [done], messages: [], waitingJobIds: new Set(['a']) }).size,
+  ).toBe(0)
   const failed = makeMessage({
     id: 'm3',
     jobId: 'b',
@@ -52,4 +54,8 @@ test('a waiting exchange or a reply the model did not process keeps a job expand
     parts: [{ kind: 'text', text: 'Your request was not processed' }],
   })
   expect(foldedJobIds({ ...base, jobs: [closed], messages: [failed] }).size).toBe(0)
+})
+
+test('nothing folds until the needs-you data has loaded without error', () => {
+  expect(foldedJobIds({ ...base, jobs: [done, closed], messages: [], ready: false }).size).toBe(0)
 })

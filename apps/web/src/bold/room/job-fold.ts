@@ -1,6 +1,6 @@
-import type { Exchange, Job, Message } from '@score/contract'
+import type { Job, Message } from '@score/contract'
 import { isNotProcessedNotice } from '../../routes/chat/stall.ts'
-import { needsYou, reportBackWaiting } from './room-model.ts'
+import { reportBackWaiting } from './room-model.ts'
 
 const KEY = 'score.room.expandedJobs'
 
@@ -40,7 +40,8 @@ export function foldedJobIds({
   isPinned,
   approvalPointerIds,
   seek,
-  exchanges = [],
+  waitingJobIds,
+  ready,
 }: {
   jobs: readonly Job[]
   messages: readonly Message[]
@@ -48,15 +49,19 @@ export function foldedJobIds({
   isPinned: (messageId: string) => boolean
   approvalPointerIds: ReadonlySet<string>
   seek: string | null
-  exchanges?: readonly Exchange[]
+  /** Jobs the room's needs-you data says wait on the person. */
+  waitingJobIds: ReadonlySet<string>
+  /** The needs-you data has loaded without error; until then nothing folds, so nothing needing the person hides. */
+  ready: boolean
 }): Set<string> {
+  if (!ready) return new Set()
   const waiting = new Set(reportBackWaiting([...jobs]).map((job) => job.id))
   const folded = new Set(
     jobs
       .filter((job) => isFinishedJob(job) && !expanded.has(job.id) && !waiting.has(job.id))
       .map((job) => job.id),
   )
-  for (const exchange of exchanges) if (needsYou(exchange)) folded.delete(exchange.jobId)
+  for (const id of waitingJobIds) folded.delete(id)
   for (const message of messages) {
     if (!message.jobId || !folded.has(message.jobId)) continue
     const needsYou = message.parts.some(

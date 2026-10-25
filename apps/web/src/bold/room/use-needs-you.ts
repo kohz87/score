@@ -82,6 +82,8 @@ export function useRoomNeedsYouState({
   }, 0)
 
   return {
+    /** Jobs with an exchange waiting on the person (the fold keeps these open). */
+    waitingJobIds: new Set(exchanges.filter(needsYou).map((exchange) => exchange.jobId)),
     total:
       approvalCount +
       exchangeCount +
