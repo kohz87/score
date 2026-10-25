@@ -56,11 +56,23 @@ function keepSearch(request: Request, path: string) {
   return `${path}${new URL(request.url).search}`
 }
 
+/**
+ * A loader's request never carries the #hash. On the first load the browser's address is the one being opened, so its
+ * hash is the one to keep; on a later navigation the address is still the old page's, whose hash must not be borrowed.
+ */
+export function hashOf(
+  url: URL,
+  here: Pick<Location, 'pathname' | 'search' | 'hash'> = window.location,
+) {
+  if (url.hash) return url.hash
+  return here.pathname === url.pathname && here.search === url.search ? here.hash : ''
+}
+
 /** The new shell's address for an old classic one (decision 123); the classic shell keeps serving its own paths. */
 function toBoldLoader({ request }: { request: Request }) {
   if (readUi() !== 'bold') return null
   const url = new URL(request.url)
-  const target = boldRedirectFor(url.pathname, url.search, url.hash)
+  const target = boldRedirectFor(url.pathname, url.search, hashOf(url))
   return target ? redirect(target) : null
 }
 

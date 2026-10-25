@@ -3,7 +3,7 @@ import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createBrowserRouter, createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { App, appRoutes } from './App.tsx'
+import { App, appRoutes, hashOf } from './App.tsx'
 import { destinations } from './shell/destinations.ts'
 import { useNeedsYou } from './shell/use-needs-you.ts'
 import { createQueryClient, StreamContext } from './data/query-client.ts'
@@ -315,6 +315,13 @@ test('/watch/:agentId renders inside the classic shell on the classic view', asy
   )
   expect(screen.getByRole('banner')).toBeDefined()
   expect(screen.getByRole('navigation', { name: 'Main' })).toBeDefined()
+})
+
+test('the redirect keeps the #hash only when the browser address is the page being opened', () => {
+  const here = { pathname: '/runs/b1', search: '?x=1', hash: '#step' }
+  expect(hashOf(new URL('http://h/runs/b1?x=1'), here)).toBe('#step')
+  expect(hashOf(new URL('http://h/runs/b2?x=1'), here)).toBe('')
+  expect(hashOf(new URL('http://h/runs/b1?x=1#own'), here)).toBe('#own')
 })
 
 test('on the new shell the old classic paths redirect to their /b homes and keep the query', async () => {

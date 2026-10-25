@@ -744,7 +744,7 @@ test('the Model tab changes the model (a typed name has no provider) and shows t
   expect(new Headers(put.init?.headers).get('Idempotency-Key')).toBeTruthy()
 })
 
-test('a rejected model change explains itself and keeps the form', async () => {
+test('a rejected model change shows the server’s reason and keeps the form', async () => {
   renderTeam('/team/builder')
   tabsApi((call) =>
     call.method === 'PUT'
@@ -758,6 +758,32 @@ test('a rejected model change explains itself and keeps the form', async () => {
   expect((await screen.findByRole('alert')).textContent).toMatch(/Hermes rejected the change/)
   expect((within(form).getByLabelText('Model') as HTMLInputElement).value).toBe('bad')
   expect(within(screen.getByRole('alert')).getByRole('button', { name: 'Retry' })).toBeDefined()
+})
+
+test('a local provider that isn’t set up for the agent says so', async () => {
+  renderTeam('/team/builder')
+  tabsApi((call) =>
+    call.method === 'PUT'
+      ? json(
+          {
+            error: {
+              code: 'conflict',
+              message:
+                'That local provider isn’t set up for this agent. Add it to the agent’s Hermes profile first.',
+            },
+          },
+          409,
+        )
+      : undefined,
+  )
+  fireEvent.click(await screen.findByRole('tab', { name: 'Model' }))
+  const form = screen.getByRole('form', { name: 'Change model' })
+  fireEvent.change(within(form).getByLabelText('Model'), { target: { value: 'bad' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Change model' }))
+  expect((await screen.findByRole('alert')).textContent).toMatch(
+    /That local provider isn’t set up for this agent\. Add it to the agent’s Hermes profile first\./,
+  )
+  expect(screen.getByRole('alert').textContent).not.toMatch(/nothing was changed/)
 })
 
 test('the Skills tab toggles a skill and searches and installs from the hub', async () => {
@@ -833,7 +859,8 @@ test('an empty hub search and a failed install both say so', async () => {
       return json({
         items: [{ name: 'a', identifier: 'x/a', source: '', trust: '', description: 'd' }],
       })
-    if (call.method === 'POST') return json({ error: { code: 'conflict', message: 'no' } }, 409)
+    if (call.method === 'POST')
+      return json({ error: { code: 'conflict', message: 'Hermes rejected the install' } }, 409)
     return undefined
   })
   fireEvent.click(await screen.findByRole('tab', { name: 'Skills' }))
@@ -844,7 +871,7 @@ test('an empty hub search and a failed install both say so', async () => {
   fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'a' } })
   fireEvent.click(screen.getByRole('button', { name: 'Search' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Install a' }))
-  expect((await screen.findByRole('alert')).textContent).toMatch(/Hermes rejected/)
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Hermes rejected the install/)
 })
 
 test('the Memory tab searches, pages, adds once per submission and deletes after confirming', async () => {

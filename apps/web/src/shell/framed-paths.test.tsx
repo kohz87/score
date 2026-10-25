@@ -1,7 +1,13 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
-import { BoldFrameContext, boldRedirectFor, Link, toBoldPath } from './framed-paths.tsx'
+import {
+  BoldFrameContext,
+  type FrameRoom,
+  boldRedirectFor,
+  Link,
+  toBoldPath,
+} from './framed-paths.tsx'
 
 describe('toBoldPath', () => {
   it('moves the kept classic pages under /b and keeps query and hash', () => {
@@ -15,8 +21,20 @@ describe('toBoldPath', () => {
   it('sends team pages and chat rooms to their new homes', () => {
     expect(toBoldPath('/team/lead')).toBe('/b/team/lead')
     expect(toBoldPath('/team/lead/workspace?path=a')).toBe('/b/team/lead')
-    expect(toBoldPath('/chat/room-1')).toBe('/b')
     expect(toBoldPath('/chat')).toBe('/b')
+    // Without the room list a room opens by id; the room page falls back to the team room for an unknown one.
+    expect(toBoldPath('/chat/room-1')).toBe('/b?room=room-1')
+  })
+  it('keeps the room a chat link meant', () => {
+    const rooms: FrameRoom[] = [
+      { id: 'team', kind: 'room', role: 'team', leadAgentId: null, members: [] },
+      { id: 'dm-1', kind: 'direct', role: 'direct', leadAgentId: 'builder', members: ['builder'] },
+      { id: 'old 1', kind: 'room', role: 'room', leadAgentId: 'lead', members: ['lead'] },
+    ]
+    expect(toBoldPath('/chat/team', rooms)).toBe('/b')
+    expect(toBoldPath('/chat/dm-1', rooms)).toBe('/b?with=builder')
+    expect(toBoldPath('/chat/old%201', rooms)).toBe('/b?room=old%201')
+    expect(toBoldPath('/chat/gone', rooms)).toBe('/b?room=gone')
   })
   it('leaves /b paths and pages without a /b home alone', () => {
     expect(toBoldPath('/b/workflows')).toBe('/b/workflows')
