@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.12] — 2026-10-26
+
+### Changed
+- **Editing a message no longer asks first**: press Edit, change the text and send. Score rewinds the agents and posts
+  the correction by itself. A dialog appears only when it can't: an agent is still working, an agent's session can't
+  be rewound, or the room has a live share link (which still shows the old message and can be revoked there).
+- **Long lists on an agent's More fold**: memories, skills, tools, plugins, channels and rules show the first few with
+  "Show all N"; inputs and decision buttons always stay visible.
+
 ## [2.0.11] — 2026-10-25
 
 ### Added

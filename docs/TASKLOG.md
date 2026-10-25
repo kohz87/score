@@ -1304,3 +1304,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   Gates: full e2e 961 passed, 0 failed, 19 skipped; pnpm check green (server 4761, web 2949, contract 1496). The
   session was restarted mid-round; the coder was resumed with its context.
 - **v2.0.11 deployed live** (~12:04 UTC): no migration or plugin change; backup score-pre-2.0.11-20261026.db, restart, 0 errors.
+- **v2.0.12 (lead + Sonnet coder, 2026-10-26).** Owner: "instead of warning, can we make it automatic? … when editing
+  message"; "under team > agent > more; if a block is too long, can we fold it". Lead: Composer's edit rewinds on Send
+  when the plan is clean and the room has no live share (else the dialog); two review rounds fixed Cancel during the
+  rewind, lost answers repeated with the same key (live-share re-check), definite 4xx → dialog, Cancel forgets an
+  unconfirmed rewind. Coder: `useFoldedList` in More cards (aria-controls ids on every list; an unused `Fold` removed).
+  Gates: full e2e 958 passed, 2 failed (bold-start-job phone, workflows editor — both passed alone with the edit specs,
+  53/53 on a fresh build after the last fix); pnpm check green (server 4761, web 2957, contract 1496).
+- **Swipes (10.15) design v6** reviewed by Codex max: not approved (3 P1, 4 P2:
+  docs/reviews/2026-10-26-10.15-swipe-design-v6-codex.md on task/2.0.12-swipe-design). Lead's call: Hermes upgrade
+  first, then v7 against v0.22.5. Owner asked to proceed with the upgrade prep (2026-10-26).
