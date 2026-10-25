@@ -3,6 +3,19 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.10] — 2026-10-25
+
+### Added
+- **API keys for local models**: the "Add a local model" form takes an optional key, and each local model's row has
+  Add key / Change key. The key goes to Hermes for every agent; Score never keeps, logs or shows it. A local model
+  shows "Key set" when it has one. An agent that picks a keyed local model without the key is told so.
+
+### Fixed
+- The room dropdown's Elsewhere list no longer overlaps when a preview is long: rows grow and the preview stays on one
+  line (the full title shows on hover).
+- The Library on desktop: the notes list sits beside the note; Backlinks, Links, Properties and History form a column
+  beside a wide panel, or a two-column grid under the note on a narrower one; the editor toolbar wraps.
+
 ## [2.0.8] — 2026-10-25
 
 ### Added

@@ -1276,3 +1276,17 @@ One entry per completed task: what landed, review results, and any **rejected re
   projection. Pauses cleared at retire and on reuse. Gates on the merged branch: full e2e 939 passed, 0 failed, 19
   skipped; pnpm check green (server 4751, web 2921, contract 1496).
 - **v2.0.8 deployed live** (~10:17 UTC): no migration or plugin change; backup score-pre-2.0.8-20261025.db, restart, 0 errors.
+- **v2.0.10 = 2.0.9 + 2.0.10 (2026-10-25).** Owner on live: Elsewhere words overflow; Library "single column … desktop looks
+  crammed" (screenshots in the owner's Library note); "when setting up local model, it doesn't have api field". 2.0.9
+  (Sonnet coder): Elsewhere rows `flex: none` + one-line preview; Library notes nav beside the note (a `.sidebody`
+  specificity bug had wrapped it above), rail ≥1180px panel / 2-col grid 860–1180 (lead asked after a 1440 screenshot
+  showed a 410px editor), toolbar wraps. Review P1 found by Sonnet, fixed by the lead: the CSS container trapped the
+  editor's fixed dialogs/upload toast and the coder had deleted bold rules — ResizeObserver `data-width`, rules
+  restored. 2.0.10 (lead server, Sonnet web): `apiKey` on local add + Add/Change key for local rows, written as
+  `providers.<id>.api_key` to every profile (argv, sensitive, secretBody receipts); `keySet`; copies refuse `409
+  needs_key` (Hermes masks keys, so they can't be copied). Three review rounds: local decided by the provider list, a
+  failed providers read stops a key save (unset = none), key_env/key_cmd count as keyed, HTTP no-leak test.
+  Accepted: `config get` exit 1 = unset (Hermes source; relied on elsewhere); a provider only in a non-settings profile
+  can't take a key from Settings (it isn't listed there). Gates: full e2e 947 passed / 4 failed (bold-stuck-operation:
+  its mocks' "Response disposed" race — fixed in the spec, 16/16 repeated); after the final merge 124/124 on the
+  affected specs; pnpm check green (server 4759, web 2925, contract 1496).
