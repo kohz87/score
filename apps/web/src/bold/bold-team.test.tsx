@@ -649,7 +649,7 @@ test('continuing past a failed Works on write says the agent runs on this machin
   )
 })
 
-test('the agent page puts the four cards first and makes every classic tab reachable under More', async () => {
+test('the agent page puts the four cards first and the compact More cards under the toggle', async () => {
   open('/b/team/builder')
   expect(await screen.findByRole('heading', { name: 'builder', level: 1 })).toBeDefined()
   expect(screen.getByText('How builder works')).toBeDefined()
@@ -678,32 +678,30 @@ test('the agent page puts the four cards first and makes every classic tab reach
   expect(screen.queryByRole('button', { name: 'Open builder in its own window' })).toBeNull()
 
   fireEvent.click(screen.getByRole('button', { name: /^More: memory/ }))
-  const nav = await screen.findByRole('navigation', { name: 'Agent settings sections' })
-  for (const tab of [
-    'Overview',
-    'Personality',
-    'Model',
+  expect(screen.queryByRole('navigation', { name: 'Agent settings sections' })).toBeNull()
+  const more = await screen.findByRole('button', { name: 'Less' })
+  expect(more.getAttribute('aria-expanded')).toBe('true')
+  for (const title of [
+    'Remembers',
     'Skills',
-    'Memory',
-    'Tools',
-    'Plugins',
+    'Can use',
     'Workspace',
-    'Routines',
+    'Repeating jobs',
+    'Delete builder',
+    'Plugins',
     'Channels',
-    'Permissions',
-    'History',
-    'Appearance',
+    'Never rules',
+    'Looks',
+    'Name and role',
+    'Recent runs',
     'Todo',
-    'Details',
-  ]) {
-    const link = within(nav).getByRole('link', { name: tab })
-    const target = link.getAttribute('href')!
-    await waitFor(() => expect(document.querySelector(target)).not.toBeNull())
-  }
-  expect(screen.getByRole('heading', { name: 'Memory', level: 2 })).toBeDefined()
-  expect(screen.getByText('Nothing on its todo list.')).toBeDefined()
-  expect(screen.getByRole('heading', { name: 'Agent details', level: 2 })).toBeDefined()
-  expect(screen.getByRole('heading', { name: 'Danger zone', level: 2 })).toBeDefined()
+  ])
+    expect(
+      await screen.findByRole('heading', { name: new RegExp(`^${title}`), level: 3 }),
+    ).toBeDefined()
+  // None of the classic Team tab sections are used any more.
+  expect(document.querySelector('#agent-more .team-card')).toBeNull()
+  expect(await screen.findByText('Nothing on its todo list.')).toBeDefined()
 })
 
 test('Asks you first checkboxes update the permission through the classic mutation', async () => {
@@ -786,12 +784,19 @@ test('a coding agent gets access, quota, password and the protected Codex note o
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
   fireEvent.click(screen.getByRole('button', { name: /^More: tools, workspace, delete/ }))
-  const nav = await screen.findByRole('navigation', { name: 'Agent settings sections' })
-  for (const tab of ['Overview', 'Workspace', 'History', 'Appearance']) {
-    const link = within(nav).getByRole('link', { name: tab })
-    await waitFor(() => expect(document.querySelector(link.getAttribute('href')!)).not.toBeNull())
-  }
-  expect(within(nav).queryByRole('link', { name: 'Memory' })).toBeNull()
+  expect(screen.queryByRole('navigation', { name: 'Agent settings sections' })).toBeNull()
+  for (const title of [
+    'Can use',
+    'Workspace',
+    'Recent runs',
+    'Looks',
+    'Name and role',
+    'Delete coder',
+  ])
+    expect(
+      await screen.findByRole('heading', { name: new RegExp(`^${title}`), level: 3 }),
+    ).toBeDefined()
+  expect(screen.queryByRole('heading', { name: /^Remembers/ })).toBeNull()
 })
 
 test('Where it works says exactly what Docker separates and changes through the API', async () => {
