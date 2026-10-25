@@ -89,6 +89,7 @@ const errorCodes = z.enum([
   'approval_not_active',
   // Hermes 0.22.5 (session authority): the answer was for an older execution generation of the run.
   'stale_generation',
+  'invalid_params',
   'gateway_auth_failed',
   'run_not_found',
   'invalid_request',
@@ -394,7 +395,9 @@ export class GatewayClient {
       // Hermes 0.22.5 under its session authority answers only `{request_id, execution_generation, choice}` for the
       // run's current generation (api_server_authority_runs.py respond_run); its run projection says which. Older
       // builds and the non-authority path take `{choice, request_id}` and have no generation.
-      // A projection that can't be read falls back to the older body; Hermes then refuses or applies it as usual.
+      // Only a run Hermes doesn't project (404) or a projection Score can't read falls back to the older body; a
+      // transient failure (timeout, 5xx, 429) is thrown as it is, so the answer stays retryable instead of being sent
+      // in a shape the authority refuses for good.
       const projection = await this.json(
         profile,
         `/v1/runs/${encodeURIComponent(parsed.runId)}`,
@@ -402,7 +405,11 @@ export class GatewayClient {
         undefined,
         undefined,
         generation,
-      ).catch(() => null)
+      ).catch((error: unknown) => {
+        if (error instanceof z.ZodError) return null
+        if (error instanceof HermesHttpError && error.status === 404) return null
+        throw error
+      })
       const body =
         projection?.execution_generation === undefined
           ? { choice: parsed.choice, request_id: parsed.requestId }

@@ -335,3 +335,41 @@ test('gate #7 gateway JSON validates identifiers before content redaction', asyn
     code: 'invalid_response',
   })
 })
+
+test('a projection that fails transiently is thrown (retryable); a missing one falls back to the older body', async () => {
+  const failing = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify({ resolved: 1 }), { status: 200 })
+      : new Response('{}', { status: 503 }),
+  )
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch: failing })
+  await expect(
+    client.submitApproval('builder', { runId: 'run-c', requestId: 'r', choice: 'once' }, 1),
+  ).rejects.toMatchObject({ status: 503 })
+  expect(failing.mock.calls.some(([input]) => String(input).endsWith('/approval'))).toBe(false)
+  const missing = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify({ resolved: 1 }), { status: 200 })
+      : new Response(JSON.stringify({ error: { code: 'run_not_found' } }), { status: 404 }),
+  )
+  const older = new GatewayClient({ scoreHome: env.home, db: env.db, fetch: missing })
+  expect(
+    await older.submitApproval('builder', { runId: 'run-d', requestId: 'r', choice: 'once' }, 1),
+  ).toBe('applied')
+  expect(JSON.parse(String(missing.mock.calls[1]?.[1]?.body))).toEqual({
+    choice: 'once',
+    request_id: 'r',
+  })
+})
+
+test('an authority approval_not_pending refusal is not_pending', async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify({ error: { code: 'approval_not_pending' } }), { status: 409 })
+      : new Response(JSON.stringify({ execution_generation: 4 }), { status: 200 }),
+  )
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
+  expect(
+    await client.submitApproval('builder', { runId: 'run-e', requestId: 'p', choice: 'deny' }, 1),
+  ).toBe('not_pending')
+})

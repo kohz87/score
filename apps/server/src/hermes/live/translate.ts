@@ -265,6 +265,7 @@ export function translateRunEvent(
             {
               profile: row.profile,
               runId: row.id,
+              // The schema's refine guarantees one of the two (each non-empty).
               requestId: (approval.request_id ?? approval.prompt_id)!,
               command: approval.command,
               description: approval.description,
