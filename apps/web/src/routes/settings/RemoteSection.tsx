@@ -113,6 +113,13 @@ function SetPassword({ change, onDone }: { change: boolean; onDone: () => void }
   )
 }
 
+/** Why "Pair another device" is off, or null when it is ready. */
+export function pairHint(passwordSet: boolean, passwordLength: number): string | null {
+  if (!passwordSet) return 'Set a security password first.'
+  if (passwordLength < 8) return 'Type your security password above to get a link.'
+  return null
+}
+
 export function RemoteSection({
   available,
   heading = 'Remote access',
@@ -141,6 +148,8 @@ export function RemoteSection({
   })
   const [copied, setCopied] = useState<'idle' | 'copied' | 'manual'>('idle')
   const link = useRef<HTMLElement>(null)
+  const passwordField = useRef<HTMLInputElement>(null)
+  const setPasswordBox = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const remote = available ?? remoteTransport() !== undefined
   // The password lives only in this component while the page is open.
@@ -222,6 +231,13 @@ export function RemoteSection({
   if (!remote) return null
   const passwordSet = security.data?.passwordSet === true
   const ready = passwordSet && password.length >= 8
+  const hint = pairHint(passwordSet, password.length)
+  const focusPassword = () => {
+    const field = passwordSet
+      ? passwordField.current
+      : setPasswordBox.current?.querySelector<HTMLInputElement>('input')
+    field?.focus()
+  }
   const actionError =
     (revoke.error && failure(revoke.error, 'end the pairing')) ||
     (revokeOthers.error && failure(revokeOthers.error, 'end the pairings')) ||
@@ -260,19 +276,22 @@ export function RemoteSection({
         Score machine with <code>scripts/score password</code>.
       </p>
       {security.isSuccess && !passwordSet && (
-        <SetPassword
-          change={false}
-          onDone={() => {
-            setNotice('Security password set.')
-            void security.refetch()
-          }}
-        />
+        <div ref={setPasswordBox}>
+          <SetPassword
+            change={false}
+            onDone={() => {
+              setNotice('Security password set.')
+              void security.refetch()
+            }}
+          />
+        </div>
       )}
       {passwordSet && (
         <>
           <label className="settings-password">
             Security password
             <input
+              ref={passwordField}
               type="password"
               autoComplete="current-password"
               value={password}
@@ -315,7 +334,9 @@ export function RemoteSection({
       <h3>Pair another device</h3>
       <p>
         Get a one-time link and open it on the new phone or computer. It works once and expires in
-        15 minutes. (Typing <code>pair</code> in the server terminal still works too.)
+        15 minutes. No password needed on the Score machine itself: run{' '}
+        <code>scripts/score pair</code> there (typing <code>pair</code> in the server terminal works
+        too).
       </p>
       <button
         className="settings-pill settings-start"
@@ -325,6 +346,14 @@ export function RemoteSection({
       >
         {invite.data ? 'Get a new link' : 'Pair another device'}
       </button>
+      {hint && !busy && (
+        <p className="small muted" role="status" data-testid="pair-hint">
+          {hint}{' '}
+          <button type="button" className="settings-link" onClick={focusPassword}>
+            {passwordSet ? 'Go to the password field' : 'Go to set it'}
+          </button>
+        </p>
+      )}
       {origins.length > 1 && (
         <fieldset className="settings-origins">
           <legend>Show the link for:</legend>

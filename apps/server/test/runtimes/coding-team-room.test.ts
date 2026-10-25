@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
+import { reconcileAgents } from '../../src/domain/agents.ts'
 import { ensureTeamRoom, teamRoomId } from '../../src/domain/team-room.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
@@ -65,6 +66,8 @@ beforeEach(async () => {
     'x-score-client': 'web',
     cookie: paired.headers['set-cookie']!.toString().split(';')[0]!,
   }
+  // Live, the directory has projected the Hermes profiles by the time anyone adds an agent.
+  await reconcileAgents(ingest, await port.listAgentDetails())
   // The startup step: the room is made from the composite port's agents.
   const agents = await (
     await import('../../src/runtimes/coding/port.ts')
@@ -134,4 +137,34 @@ test('a coding agent can be the team room lead, be addressed, and gets unaddress
   const plain = await request('POST', `/api/rooms/${id}/messages`, { text: 'no name here' })
   expect(plain.statusCode, plain.body).toBe(200)
   expect(count()).toBeGreaterThan(before)
+})
+
+test('removing the coding agent that leads clears the lead and the member', async () => {
+  expect((await add()).statusCode).toBe(201)
+  const id = teamRoomId(db.sqlite)!
+  expect((await request('PATCH', `/api/rooms/${id}`, { leadAgentId: 'coder' })).statusCode).toBe(
+    200,
+  )
+  expect((await request('DELETE', '/api/coding-agents/coder')).statusCode).toBe(204)
+  expect(db.sqlite.prepare('SELECT lead_agent_id AS lead FROM rooms WHERE id = ?').get(id)).toEqual(
+    { lead: null },
+  )
+  const after = await members()
+  expect(after).not.toContain('coder')
+  expect(after).toContain('lead')
+})
+
+test('an agent still being set up joins the team room only once it is ready', async () => {
+  const [template] = await port.listAgentDetails()
+  const detail = { ...template!, id: 'newbie', name: 'Newbie' }
+  db.sqlite
+    .prepare(
+      "INSERT INTO agent_lifecycle (agent_id, state, incarnation_id, operation_id, display_name) VALUES ('newbie', 'setting_up', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', NULL)",
+    )
+    .run()
+  await reconcileAgents(ingest, [detail])
+  expect(await members()).not.toContain('newbie')
+  db.sqlite.prepare("UPDATE agent_lifecycle SET state = 'ready' WHERE agent_id = 'newbie'").run()
+  await reconcileAgents(ingest, [{ ...detail, role: 'changed' }])
+  expect(await members()).toContain('newbie')
 })

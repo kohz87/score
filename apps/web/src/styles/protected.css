@@ -293,7 +293,7 @@
      measured contrast otherwise depends on what happens to be behind it. This is deliberately a normal declaration in
      the protected layer, not `!important`: Score's own unlayered backgrounds (request and approval cards, dialogs,
      menus, fields, the dock ring and the Needs-you marker) win automatically, while a surface with no fill of its own
-     (a shared message, a Started-by line, report-back text, coding-add-context, bold-add-error) gets this panel. The
+     (a shared message, a Started-by line, report-back text, coding-add-context, bold-add-error, bold-add-blockers) gets this panel. The
      privacy promise below is the one exception, with its own deeper ground. Graphics are left alone: a panel rectangle
      behind a glyph or the room stage is not a text ground. Inline kinds (links, pills, `any` buttons and spans) are
      left alone too: a square patch behind a word isn't a ground, and they sit inside a block that gets one. */

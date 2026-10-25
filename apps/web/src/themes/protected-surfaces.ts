@@ -75,6 +75,7 @@ export const protectedClasses = [
   'coding-add-commit',
   'bold-add-confirm',
   'bold-add-error',
+  'bold-add-blockers',
   'bold-add-joined-runs',
   'terminal-auth',
   'security-password',

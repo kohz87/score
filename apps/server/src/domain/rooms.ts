@@ -294,6 +294,34 @@ export function insertRoom(
     )
 }
 
+/**
+ * An agent that is gone: out of every room's members, no longer any room's lead, and its pending turns failed. The
+ * Hermes retire path and the team room's membership sync share this.
+ */
+export function retireAgentFromRooms(
+  sqlite: DatabaseSync,
+  agentId: string,
+  now: string,
+): DomainEventDraft[] {
+  const events: DomainEventDraft[] = []
+  const rooms = z.array(RoomRowSchema).parse(sqlite.prepare('SELECT * FROM rooms').all())
+  for (const room of rooms) {
+    const all = z.array(z.string()).parse(JSON.parse(room.members))
+    const members = all.filter((id) => id !== agentId)
+    if (room.lead_agent_id !== agentId && members.length === all.length) continue
+    sqlite
+      .prepare(
+        'UPDATE rooms SET members = ?, lead_agent_id = CASE WHEN lead_agent_id = ? THEN NULL ELSE lead_agent_id END, updated_at = ?, version = version + 1 WHERE id = ?',
+      )
+      .run(JSON.stringify(members), agentId, now, room.id)
+    events.push(...roomChanged(sqlite, room.id, now))
+  }
+  sqlite
+    .prepare("UPDATE message_runs SET state = 'failed' WHERE agent_id = ? AND state = 'pending'")
+    .run(agentId)
+  return events
+}
+
 export function roomChanged(
   sqlite: DatabaseSync,
   id: string,

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { PairPage, pairBrowser } from './PairPage.tsx'
-import { RemoteSection } from '../settings/RemoteSection.tsx'
+import { pairHint, RemoteSection } from '../settings/RemoteSection.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { AppShell } from '../../shell/AppShell.tsx'
 
@@ -343,4 +343,9 @@ test('choosing another address clears the pairing link and QR minted for the pre
   expect(screen.queryByRole('img', { name: 'QR code for the pairing link' })).toBeNull()
   expect(screen.queryByRole('group', { name: 'Pairing link' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Pair another device' })).toBeDefined()
+})
+test('pair hint states', () => {
+  expect(pairHint(false, 0)).toBe('Set a security password first.')
+  expect(pairHint(true, 3)).toBe('Type your security password above to get a link.')
+  expect(pairHint(true, 8)).toBeNull()
 })
