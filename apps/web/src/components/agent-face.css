@@ -21,6 +21,12 @@ svg.agent-glyph--face,
   transform-origin: 50% 50%;
 }
 
+.agent-face__arc-edge {
+  fill: none;
+  stroke: var(--glyph-outline, transparent);
+  stroke-linecap: round;
+}
+
 .agent-face__arc {
   fill: none;
   /* White like the sockets (the owner's mock-up). */

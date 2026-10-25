@@ -48,6 +48,15 @@ export function AgentFace({
     >
       {mood === 'done' ? (
         <g className="agent-face__arcs">
+          {/* A hair of the agent's darker shade under each white arc, as the sockets have, for pale agents. */}
+          {geometry.arcs.map((d, index) => (
+            <path
+              key={`edge${index}`}
+              d={d}
+              className="agent-face__arc-edge"
+              strokeWidth={ARC_STROKE + 0.6}
+            />
+          ))}
           {geometry.arcs.map((d, index) => (
             <path key={index} d={d} className="agent-face__arc" strokeWidth={ARC_STROKE} />
           ))}
