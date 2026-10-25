@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../data/api.ts'
 import { ApiKeyPanel } from '../routes/settings/ApiKeyPanel.tsx'
 import { MessagingSetup } from '../routes/settings/MessagingSetup.tsx'
-import { providerAction } from '../routes/settings/ProvidersSection.tsx'
+import { isLocalProvider, providerAction } from '../routes/settings/ProvidersSection.tsx'
 import { SignInPanel } from '../routes/settings/SignInPanel.tsx'
 import { focusSoon, RemoveConfirm } from './RemoveConfirm.tsx'
 import { failure, TerminalCommand } from '../routes/settings/TerminalCommand.tsx'
@@ -17,6 +17,7 @@ import {
   useRecheckSettings,
   useRemoveConnection,
   useSecurityStatus,
+  useAddLocal,
   useSettingsActions,
   useSystemStatus,
 } from '../routes/settings/settings-queries.ts'
@@ -82,10 +83,11 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
   >(null)
   const [command, setCommand] = useState<{ id: string; text: string } | null>(null)
   const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState({ label: '', baseUrl: '', model: '' })
+  const [draft, setDraft] = useState({ label: '', baseUrl: '', model: '', apiKey: '' })
   const [notice, setNotice] = useState('')
   const [removing, setRemoving] = useState<string | null>(null)
-  const { connectProvider, addLocal } = useSettingsActions()
+  const { connectProvider } = useSettingsActions()
+  const addLocal = useAddLocal()
   const { removeProvider } = useRemoveConnection()
   const providers = useProviders(command !== null)
   const recheck = useRecheckSettings()
@@ -95,7 +97,7 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
     setNotice('')
     setCommand(null)
     setPanel(null)
-    if (item.signIn === 'api_key') {
+    if (item.signIn === 'api_key' || isLocalProvider(item)) {
       setPanel({ id: item.id, kind: 'key' })
       return
     }
@@ -125,22 +127,25 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
     })
   }
 
-  function addLocalModel(event: FormEvent) {
+  async function addLocalModel(event: FormEvent) {
     event.preventDefault()
-    addLocal.mutate(
-      {
-        label: draft.label.trim(),
-        baseUrl: draft.baseUrl.trim(),
-        model: draft.model.trim(),
-      },
-      {
-        onSuccess: (item) => {
-          setDraft({ label: '', baseUrl: '', model: '' })
-          setAdding(false)
-          setNotice(`Added ${item.label}.`)
-        },
-      },
-    )
+    const apiKey = draft.apiKey.trim()
+    const item = await addLocal.add({
+      label: draft.label.trim(),
+      baseUrl: draft.baseUrl.trim(),
+      model: draft.model.trim(),
+      ...(apiKey ? { apiKey } : {}),
+    })
+    // The key leaves state whether or not the server took it.
+    setDraft((now) => ({
+      ...now,
+      apiKey: '',
+      ...(item ? { label: '', baseUrl: '', model: '' } : {}),
+    }))
+    if (item) {
+      setAdding(false)
+      setNotice(`Added ${item.label}.`)
+    }
   }
 
   const all = [...(providers.data ?? [])].sort(
@@ -185,6 +190,11 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
                 ? item.detail || providerStatus.connected
                 : item.detail || providerStatus[item.status]}
             </span>
+            {item.keySet && (
+              <span className="small muted" data-key-set="true">
+                Key set
+              </span>
+            )}
             {providerAction(item) && (
               <button
                 type="button"
@@ -241,9 +251,14 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
                 <ApiKeyPanel
                   providerId={item.id}
                   label={item.label}
+                  local={isLocalProvider(item)}
                   onSaved={() => {
                     setPanel(null)
-                    setNotice(`${item.label} is connected.`)
+                    setNotice(
+                      isLocalProvider(item)
+                        ? 'Key saved for every agent.'
+                        : `${item.label} is connected.`,
+                    )
                     recheck()
                   }}
                   onClose={() => setPanel(null)}
@@ -296,7 +311,7 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
           {adding && (
             <form
               className="settings-form bold-local-model"
-              onSubmit={addLocalModel}
+              onSubmit={(event) => void addLocalModel(event)}
               aria-label="Add a local model"
             >
               <label>
@@ -330,10 +345,32 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
                   onChange={(event) => setDraft({ ...draft, model: event.target.value })}
                 />
               </label>
+              <label>
+                API key (optional)
+                <input
+                  className="field"
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  maxLength={512}
+                  pattern="[\x21-\x7e]{1,512}"
+                  title="Up to 512 characters, no spaces"
+                  value={draft.apiKey}
+                  onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })}
+                />
+              </label>
+              <span className="small muted">
+                Only if the server asks for one (LM Studio with authentication on, a proxy, most
+                hosted OpenAI-compatible servers). It goes to Hermes for every agent; Score
+                doesn&rsquo;t keep it.
+              </span>
               <span className="small muted">Every agent can use it.</span>
-              {addLocal.isError && <p role="alert">{failure(addLocal.error, 'add this model')}</p>}
+              {addLocal.error != null && (
+                <p role="alert">{failure(addLocal.error, 'add this model')}</p>
+              )}
               <div className="row wrap">
-                <button type="submit" className="btn sm primary" disabled={addLocal.isPending}>
+                <button type="submit" className="btn sm primary" disabled={addLocal.pending}>
                   Add model
                 </button>
                 <button type="button" className="link" onClick={() => setAdding(false)}>

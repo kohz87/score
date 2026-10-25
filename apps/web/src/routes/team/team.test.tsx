@@ -786,6 +786,30 @@ test('a local provider that isn’t set up for the agent says so', async () => {
   expect(screen.getByRole('alert').textContent).not.toMatch(/nothing was changed/)
 })
 
+test('a local model that needs a key points to Settings', async () => {
+  renderTeam('/team/builder')
+  tabsApi((call) =>
+    call.method === 'PUT'
+      ? json(
+          {
+            error: {
+              code: 'needs_key',
+              message: 'Add the key again in Settings › Connections: it is given to every agent.',
+            },
+          },
+          409,
+        )
+      : undefined,
+  )
+  fireEvent.click(await screen.findByRole('tab', { name: 'Model' }))
+  const form = screen.getByRole('form', { name: 'Change model' })
+  fireEvent.change(within(form).getByLabelText('Model'), { target: { value: 'local/x' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Change model' }))
+  const alert = await screen.findByRole('alert')
+  expect(alert.textContent).toMatch(/Add the key again in Settings › Connections/)
+  expect(within(alert).getByRole('link', { name: 'Open Connections' })).toBeDefined()
+})
+
 test('the Skills tab toggles a skill and searches and installs from the hub', async () => {
   renderTeam('/team/builder')
   let skills = [{ name: 'Git', enabled: true }]

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link, useLocation } from 'react-router'
 import type { AgentDetail } from '@score/contract'
 import { ModelPicker, type ModelChoice } from '../../components/ModelPicker.tsx'
 import { AliasEditor } from '../../components/model-settings/AliasEditor.tsx'
@@ -6,6 +7,7 @@ import { FallbackChain } from '../../components/model-settings/FallbackChain.tsx
 import { SpeechModels } from '../../components/model-settings/SpeechModels.tsx'
 import { useModelSettings } from './model-settings-queries.ts'
 import { useModelAction } from './agent-tab-queries.ts'
+import { ApiError } from '../../data/api.ts'
 import { tabFailure } from './tab-errors.ts'
 
 const HERMES_DEFAULT_VIA = 'Hermes configuration'
@@ -13,6 +15,7 @@ const HERMES_DEFAULT_VIA = 'Hermes configuration'
 export function ModelTab({ agent }: { agent: AgentDetail }) {
   const change = useModelAction(agent.id)
   const settings = useModelSettings(agent.id)
+  const inBold = useLocation().pathname.startsWith('/b/')
   // The picker starts on what the agent uses now; once the person edits it, their draft wins until a save lands.
   const current: ModelChoice = {
     model: agent.model?.id ?? '',
@@ -69,6 +72,9 @@ export function ModelTab({ agent }: { agent: AgentDetail }) {
         {change.isError && (
           <p role="alert">
             {tabFailure(change.error, 'change the model')}{' '}
+            {change.error instanceof ApiError && change.error.code === 'needs_key' && (
+              <Link to={inBold ? '/b/settings/connections' : '/settings'}>Open Connections</Link>
+            )}{' '}
             <button type="button" className="team-pill-button" onClick={() => save(choice)}>
               Retry
             </button>

@@ -381,3 +381,33 @@ test('removing connections (2.0.3): human only, in-use providers refused by name
   const connections = (await app.inject('/api/settings/connections')).json()
   expect(connections.toolServers.map((server: { id: string }) => server.id)).not.toContain('files')
 })
+
+test('a local model’s key (2.0.10) never comes back in the response or the receipt, and Add key works for it', async () => {
+  const secret = 'sk-local-very-secret-key'
+  const add = await app.inject({
+    method: 'POST',
+    url: '/api/settings/providers/local',
+    headers: { ...headers, 'idempotency-key': 'local-k1' },
+    payload: { label: 'Keyed lab', baseUrl: 'http://10.0.0.9:8080/v1', model: 'm', apiKey: secret },
+  })
+  expect(add.statusCode).toBe(200)
+  expect(add.body).not.toContain(secret)
+  expect(add.json()).toMatchObject({ id: 'keyed-lab', keySet: true })
+  const plain = await post('/api/settings/providers/local', {
+    label: 'Plain lab',
+    baseUrl: 'http://10.0.0.10:8080/v1',
+    model: 'm',
+  })
+  expect(plain.json()).toMatchObject({ id: 'plain-lab', keySet: false })
+  const key = await app.inject({
+    method: 'POST',
+    url: '/api/settings/providers/plain-lab/key',
+    headers: { ...headers, 'idempotency-key': 'local-k2' },
+    payload: { apiKey: secret },
+  })
+  expect(key.statusCode).toBe(200)
+  expect(key.body).not.toContain(secret)
+  expect(key.json()).toMatchObject({ id: 'plain-lab', keySet: true })
+  const receipts = env.db.sqlite.prepare('SELECT * FROM request_receipts').all()
+  expect(JSON.stringify(receipts)).not.toContain(secret)
+})

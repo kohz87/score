@@ -255,10 +255,18 @@ export function RoomSwitcher({
                     })()}{' '}
                     · {session.sourceLabel}
                   </b>
-                  <span className="small muted">
-                    {session.title || 'Untitled session'} · {session.messageCount}{' '}
-                    {session.messageCount === 1 ? 'message' : 'messages'}
-                    {session.busy ? ' · active now' : ''}
+                  <span className="small muted bold-menu-preview">
+                    <span
+                      className="bold-menu-preview-title"
+                      title={session.title || 'Untitled session'}
+                    >
+                      {session.title || 'Untitled session'}
+                    </span>
+                    <span className="bold-menu-preview-count">
+                      {' · '}
+                      {session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}
+                      {session.busy ? ' · active now' : ''}
+                    </span>
                   </span>
                 </span>
               </button>

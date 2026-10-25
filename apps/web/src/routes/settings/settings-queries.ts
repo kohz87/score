@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   AboutSchema,
   ConfigApplyResponseSchema,
@@ -84,15 +85,9 @@ export function useRecheckSettings() {
   }
 }
 export function useSettingsActions() {
-  const queryClient = useQueryClient()
   const connectProvider = useMutation({
     mutationFn: async (id: string) =>
       ConnectResultSchema.parse(await post(`settings/providers/${encodeURIComponent(id)}/connect`)),
-  })
-  const addLocal = useMutation({
-    mutationFn: async (req: LocalProviderRequest) =>
-      ProviderItemSchema.parse(await post('settings/providers/local', req)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: providersKey }),
   })
   const addToolServer = useMutation({
     mutationFn: async (req: ToolServerRequest) =>
@@ -104,7 +99,7 @@ export function useSettingsActions() {
         await post(`settings/messaging/${encodeURIComponent(platform)}/connect`),
       ),
   })
-  return { connectProvider, addLocal, addToolServer, connectMessaging }
+  return { connectProvider, addToolServer, connectMessaging }
 }
 
 /** Remove a connection (contract §10, 2.0.3). The server answers 409 with its own words when agents still use it. */
@@ -189,6 +184,31 @@ export async function sendProviderKey(id: string, req: ProviderKeyRequest): Prom
   return ProviderItemSchema.parse(
     await post(`settings/providers/${encodeURIComponent(id)}/key`, req),
   )
+}
+
+/**
+ * Adds a local model, with an optional key. Like sendProviderKey this is not a mutation, so the key is never held in a
+ * cache: it lives in this call and the form's own state, which clears it afterwards.
+ */
+export function useAddLocal() {
+  const queryClient = useQueryClient()
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  async function add(req: LocalProviderRequest): Promise<ProviderItem | null> {
+    setPending(true)
+    setError(null)
+    try {
+      const item = ProviderItemSchema.parse(await post('settings/providers/local', req))
+      void queryClient.invalidateQueries({ queryKey: providersKey })
+      return item
+    } catch (failure) {
+      setError(failure)
+      return null
+    } finally {
+      setPending(false)
+    }
+  }
+  return { add, pending, error }
 }
 
 /** Form fields for a platform's browser setup. */

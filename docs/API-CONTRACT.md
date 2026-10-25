@@ -1387,8 +1387,9 @@ code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` pro
 'cancelled'; url: string | null; code: string | null; expiresAt: string; message: string | null }` · **H**
   `DELETE /api/settings/sign-ins/:signInId` → `SignIn` (cancelled). In-memory; unknown ids → 404.
 - **H** `POST /api/settings/providers/:id/key` `{ apiKey: string; label?: string }` → the
-  provider item, after `hermes auth list` shows the new credential (`409 not_verified` otherwise). A provider that
-  doesn't take a key → `409 not_supported`;
+  provider item, after `hermes auth list` shows the new credential (`409 not_verified` otherwise). For a **local**
+  provider (2.0.10) the key is written as `providers.<id>.api_key` into every profile that defines it (no `label`), and
+  the item comes back with `keySet: true`. A provider that doesn't take a key → `409 not_supported`;
   a key already being added for that provider → `409 conflict`. The key never appears in any response, log or receipt
   (the receipt's body hash is an HMAC under a per-process secret, so a retry after a restart is `409`, not a replay).
 - `GET /api/models?q=&agentId=&all=` → `{ items: ModelOption[]; hiddenCount?: number }`, `ModelOption = { provider: string /* "" only for an alias row whose provider is unconfirmed */; providerLabel: string; model: string;
@@ -1399,9 +1400,14 @@ available: boolean; reason: string | null /* "Not on your plan" */; free: boolea
   that is part of one of that agent's alias names, the alias's model comes first with `alias` set.
 - `GET|PUT /api/settings/model-visibility` (5.31) `{ items: { provider; model }[] }`: the models the pickers show by default
   (Score's own table; empty = every model). PUT replaces the list (human only).
-- `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item. Written to the default profile, then
-  copied (name, address, default model) into every other agent's profile, so any agent can use it (2.0.3). Choosing a
-  local provider's model for an agent whose profile lacks it (`PUT /api/agents/:agentId/model`) copies it there first.
+- **H** `POST /api/settings/providers/local` `{ label; baseUrl; model; apiKey? }` → provider item. Written to the default
+  profile, then copied (name, address, default model) into every other agent's profile, so any agent can use it (2.0.3).
+  An `apiKey` (2.0.10) is written as `providers.<id>.api_key` into every one of those profiles (`hermes -p <profile>
+  config set …`, the key an argv element only); the route uses the HMAC receipt (`secretBody`) and the key is never
+  logged, stored, echoed or put in a receipt. Local provider items carry `keySet` (whether a key is set; Hermes masks it
+  on read, so Score can't copy it). Choosing a local provider's model for an agent whose profile lacks it (`PUT
+  /api/agents/:agentId/model`) copies it there first; when the provider has a key that profile doesn't, the copy is made
+  and the change is refused `409 needs_key` ("add the key again in Settings: it is given to every agent").
 - **H** `DELETE /api/settings/providers/:id` → `204` (2.0.3). A local provider is removed from every profile that defines
   it (`hermes -p <profile> config unset providers.<id>`); a hosted provider has each stored credential removed in the
   settings profile (`hermes auth remove <id> <credential id>`), then `auth list` must no longer show it (`409

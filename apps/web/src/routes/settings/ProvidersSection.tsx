@@ -4,13 +4,23 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { ApiKeyPanel } from './ApiKeyPanel.tsx'
 import { SignInPanel } from './SignInPanel.tsx'
 import { failure, TerminalCommand } from './TerminalCommand.tsx'
-import { useProviders, useRecheckSettings, useSettingsActions } from './settings-queries.ts'
+import {
+  useAddLocal,
+  useProviders,
+  useRecheckSettings,
+  useSettingsActions,
+} from './settings-queries.ts'
 
 const statusText = {
   connected: 'Connected',
   needs_signin: 'Sign in again',
   missing: 'Not connected',
 } as const
+
+/** Local providers carry `keySet` and no `signIn` (contract §10, 2.0.10). */
+export function isLocalProvider(item: ProviderItem): boolean {
+  return item.keySet !== undefined && item.signIn === undefined
+}
 
 /**
  * What the button on a provider row does. A connected provider has a working edit flow only when it takes a
@@ -19,6 +29,7 @@ const statusText = {
  * is offered; local endpoints live in the Hermes configuration (Advanced).
  */
 export function providerAction(item: ProviderItem): string | null {
+  if (isLocalProvider(item)) return item.keySet ? 'Change key' : 'Add key'
   if (item.status === 'missing') return 'Connect'
   if (item.status === 'needs_signin') return 'Reconnect'
   return item.signIn === 'api_key' ? 'Add key' : null
@@ -43,7 +54,8 @@ function UsedBy({ ids, agents }: { ids: string[]; agents: AgentSummary[] }) {
 
 export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
   const [showAll, setShowAll] = useState(false)
-  const { connectProvider, addLocal } = useSettingsActions()
+  const { connectProvider } = useSettingsActions()
+  const addLocal = useAddLocal()
   const [command, setCommand] = useState<{ id: string; text: string } | null>(null)
   // Which provider shows a browser sign-in panel: a device-code sign-in or a key form (ARCHITECTURE D2.7).
   const [panel, setPanel] = useState<
@@ -52,14 +64,14 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
   const providers = useProviders(command !== null)
   const recheck = useRecheckSettings()
   const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState({ label: '', baseUrl: '', model: '' })
+  const [draft, setDraft] = useState({ label: '', baseUrl: '', model: '', apiKey: '' })
   const [notice, setNotice] = useState('')
 
   function connect(item: ProviderItem) {
     setNotice('')
     setCommand(null)
     setPanel(null)
-    if (item.signIn === 'api_key') {
+    if (item.signIn === 'api_key' || isLocalProvider(item)) {
       setPanel({ id: item.id, kind: 'key' })
       return
     }
@@ -89,22 +101,25 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
     })
   }
   const signedIn = useCallback(() => recheck(), [recheck])
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    addLocal.mutate(
-      {
-        label: draft.label.trim(),
-        baseUrl: draft.baseUrl.trim(),
-        model: draft.model.trim(),
-      },
-      {
-        onSuccess: (item) => {
-          setDraft({ label: '', baseUrl: '', model: '' })
-          setAdding(false)
-          setNotice(`Added ${item.label}.`)
-        },
-      },
-    )
+    const apiKey = draft.apiKey.trim()
+    const item = await addLocal.add({
+      label: draft.label.trim(),
+      baseUrl: draft.baseUrl.trim(),
+      model: draft.model.trim(),
+      ...(apiKey ? { apiKey } : {}),
+    })
+    // The key leaves state whether or not the server took it.
+    setDraft((now) => ({
+      ...now,
+      apiKey: '',
+      ...(item ? { label: '', baseUrl: '', model: '' } : {}),
+    }))
+    if (item) {
+      setAdding(false)
+      setNotice(`Added ${item.label}.`)
+    }
   }
 
   // Hermes supports dozens of providers: the ones in use come first, the rest behind "Show all".
@@ -141,6 +156,7 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
             <span className="settings-status" data-status={item.status}>
               {statusText[item.status]}
             </span>
+            {item.keySet && <span className="settings-detail">Key set</span>}
             {providerAction(item) && (
               <button
                 type="button"
@@ -156,9 +172,14 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
               <ApiKeyPanel
                 providerId={item.id}
                 label={item.label}
+                local={isLocalProvider(item)}
                 onSaved={() => {
                   setPanel(null)
-                  setNotice(`${item.label} is connected.`)
+                  setNotice(
+                    isLocalProvider(item)
+                      ? 'Key saved for every agent.'
+                      : `${item.label} is connected.`,
+                  )
                   recheck()
                 }}
                 onClose={() => setPanel(null)}
@@ -207,7 +228,11 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
         </button>
       )}
       {adding && (
-        <form className="settings-form" onSubmit={submit} aria-label="Add a local model">
+        <form
+          className="settings-form"
+          onSubmit={(event) => void submit(event)}
+          aria-label="Add a local model"
+        >
           <label>
             Name
             <input
@@ -236,9 +261,30 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
               onChange={(event) => setDraft({ ...draft, model: event.target.value })}
             />
           </label>
-          {addLocal.isError && <p role="alert">{failure(addLocal.error, 'add this model')}</p>}
+          <label>
+            API key (optional)
+            <input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              autoCapitalize="off"
+              maxLength={512}
+              pattern="[\x21-\x7e]{1,512}"
+              title="Up to 512 characters, no spaces"
+              value={draft.apiKey}
+              onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })}
+            />
+          </label>
+          <span className="settings-muted-strong">
+            Only if the server asks for one (LM Studio with authentication on, a proxy, most hosted
+            OpenAI-compatible servers). It goes to Hermes for every agent; Score doesn&rsquo;t keep
+            it.
+          </span>
+          {addLocal.error != null && (
+            <p role="alert">{failure(addLocal.error, 'add this model')}</p>
+          )}
           <div className="settings-command-actions">
-            <button type="submit" className="settings-primary" disabled={addLocal.isPending}>
+            <button type="submit" className="settings-primary" disabled={addLocal.pending}>
               Add model
             </button>
             <button type="button" className="settings-link" onClick={() => setAdding(false)}>

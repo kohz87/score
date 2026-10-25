@@ -313,6 +313,28 @@ export class LiveSettings {
     }
     return items
   }
+  /** The ids of this profile's local providers, read now; null when Hermes can't be read (callers that write stop). */
+  async localProviderIds(): Promise<Set<string> | null> {
+    const result = await this.runner(
+      [...this.profileArgs(), 'config', 'get', '--json', 'providers'],
+      { timeoutMs: READ_TIMEOUT_MS, hermesHome: this.home, captureSettings: true, fresh: true },
+    ).catch(() => ({ exitCode: -1 }))
+    // Exit 1 = no `providers` section at all: no local providers, not a failed read.
+    if (result.exitCode === 1) return new Set()
+    if (result.exitCode !== 0 || !('stdout' in result) || result.stdout === undefined) return null
+    try {
+      const parsed = LocalProvidersSchema.safeParse(JSON.parse(result.stdout))
+      if (!parsed.success) return null
+      // The same rule as the provider list: an entry with an address (a bare override of a hosted one isn't local).
+      return new Set(
+        Object.entries(parsed.data)
+          .filter(([id, entry]) => ProviderIdSchema.safeParse(id).success && entry.base_url)
+          .map(([id]) => id),
+      )
+    } catch {
+      return null
+    }
+  }
   private async localProviders(): Promise<ProviderBase[]> {
     const parsed = LocalProvidersSchema.safeParse(
       await this.readJson(['config', 'get', '--json', 'providers']),
@@ -321,11 +343,18 @@ export class LiveSettings {
     const items: ProviderBase[] = []
     for (const [id, entry] of Object.entries(parsed.data)) {
       if (!ProviderIdSchema.safeParse(id).success || !entry.base_url) continue
+      // Hermes masks the key on read: only whether one is set is used, never its value. Any of Hermes's key sources
+      // counts (inline, an env name, a command).
+      const fields = entry as Record<string, unknown>
+      const keyed = ['api_key', 'key_env', 'api_key_env', 'key_cmd'].some(
+        (name) => typeof fields[name] === 'string' && (fields[name] as string).length > 0,
+      )
       items.push({
         id,
         label: redactBounded(entry.name?.trim() || title(id), 80),
         status: 'connected',
         detail: redactBounded(hostOf(entry.base_url), 120),
+        keySet: keyed,
       })
     }
     return items
@@ -487,6 +516,21 @@ export class LiveSettings {
         if (result.exitCode !== 0)
           throw new HttpError(502, 'hermes_write_failed', 'Hermes didn’t accept the provider.')
       }
+      if (req.apiKey !== undefined) {
+        // The key is an argv element only: never captured, logged or returned (2.0.10).
+        const argv = [...this.profileArgs(), 'config', 'set', `${base}.api_key`, req.apiKey]
+        const result = await this.runner(argv, {
+          timeoutMs: READ_TIMEOUT_MS,
+          hermesHome: this.home,
+          sensitiveArgIndices: [argv.length - 1],
+        }).catch(() => ({ exitCode: -1 }))
+        if (result.exitCode !== 0)
+          throw new HttpError(
+            502,
+            'hermes_write_failed',
+            'The model was added, but Hermes didn’t accept its key. Use Add key on its row.',
+          )
+      }
       const kept = (await this.localProviders()).some((item) => item.id === slug)
       if (!kept) throw new HttpError(502, 'hermes_write_failed', 'Hermes didn’t keep the provider.')
     })
@@ -495,6 +539,7 @@ export class LiveSettings {
       label: redactBounded(req.label, 80),
       status: 'connected',
       detail: redactBounded(hostOf(req.baseUrl), 120),
+      keySet: req.apiKey !== undefined,
     }
   }
 

@@ -193,7 +193,6 @@ test('a messaging platform is cleared key by key; nothing removed is a 409', asy
 })
 
 test('a local provider is copied into another profile: name, address and default model only', async () => {
-  providers.default!['lab-gpu']!.api_key = '***'
   await tabs().copyLocalProvider('builder', 'lab-gpu')
   expect(argvs().filter((args) => args[3] === 'set')).toEqual([
     ['-p', 'builder', 'config', 'set', 'providers.lab-gpu.base_url', 'http://10.0.0.5:8080/v1'],
@@ -295,4 +294,98 @@ describe('removing a provider across profiles', () => {
     expect(d.removeLocal).toHaveBeenCalledTimes(1)
     expect(d.removeHosted).toHaveBeenCalledTimes(1)
   })
+})
+
+describe('local provider keys (2.0.10)', () => {
+  test('a key is written as an argv element marked sensitive, never captured', async () => {
+    await tabs().setLocalProviderKey('builder', 'lab-gpu', 'sk-local-secret-1')
+    const call = runner.mock.calls.find(([args]) => args.includes('providers.lab-gpu.api_key'))!
+    expect(call[0]).toEqual([
+      '-p',
+      'builder',
+      'config',
+      'set',
+      'providers.lab-gpu.api_key',
+      'sk-local-secret-1',
+    ])
+    expect(call[1].sensitiveArgIndices).toEqual([5])
+    expect(call[1].captureRead || call[1].captureSettings).toBeFalsy()
+  })
+  test('copying a keyed provider is refused with needs_key unless the key follows', async () => {
+    providers.default!['lab-gpu']!.api_key = '***'
+    await expect(tabs().copyLocalProvider('builder', 'lab-gpu')).rejects.toMatchObject({
+      status: 409,
+      code: 'needs_key',
+    })
+    // The address is there; the key isn't (Hermes masks it on read).
+    expect(providers.builder).toHaveProperty('lab-gpu')
+    expect(argvs().some((args) => args.includes('providers.lab-gpu.api_key'))).toBe(false)
+    delete providers.builder!['lab-gpu']
+    await tabs().copyLocalProvider('builder', 'lab-gpu', 'default', true)
+    expect(providers.builder).toHaveProperty('lab-gpu')
+  })
+  test('an env placeholder key is copied as it is', async () => {
+    providers.default!['lab-gpu']!.api_key = '${LAB_KEY}'
+    await tabs().copyLocalProvider('builder', 'lab-gpu')
+    expect(argvs()).toContainEqual([
+      '-p',
+      'builder',
+      'config',
+      'set',
+      'providers.lab-gpu.api_key',
+      '${LAB_KEY}',
+    ])
+  })
+  test('choosing a keyed provider whose earlier copy lacks the key says so', async () => {
+    providers.default!['lab-gpu']!.api_key = '***'
+    providers.builder = { 'lab-gpu': { name: 'Lab GPU', base_url: 'http://10.0.0.5:8080/v1' } }
+    const base = runner.getMockImplementation()!
+    runner.mockImplementation(async (args, options) =>
+      args.slice(2).join(' ') === 'config get --json model'
+        ? { exitCode: 0, stdout: JSON.stringify({ default: 'old', provider: 'openrouter' }) }
+        : base(args, options),
+    )
+    await expect(
+      tabs().setModel('builder', { model: 'llama-3', provider: 'lab-gpu' }),
+    ).rejects.toMatchObject({ status: 409, code: 'needs_key' })
+    expect(argvs().some((args) => args.includes('model.default'))).toBe(false)
+  })
+  test('the local list says whether a key is set, never what it is', async () => {
+    const local: Record<string, Record<string, string>> = {
+      'lab-gpu': { name: 'Lab GPU', base_url: 'http://10.0.0.5:8080/v1', api_key: '***' },
+      bare: { name: 'Bare', base_url: 'http://10.0.0.6:8080/v1' },
+    }
+    runner.mockImplementation(async (args) =>
+      args.join(' ') === 'config get --json providers'
+        ? { exitCode: 0, stdout: JSON.stringify(local) }
+        : args.join(' ') === 'auth list'
+          ? { exitCode: 0, stdout: '' }
+          : { exitCode: 0 },
+    )
+    const items = await new LiveSettings(home, runner).listProviders()
+    expect(items.find((item) => item.id === 'lab-gpu')).toMatchObject({ keySet: true })
+    expect(items.find((item) => item.id === 'bare')).toMatchObject({ keySet: false })
+    expect(JSON.stringify(items)).not.toContain('***')
+  })
+  test('adding a local provider with a key writes it last, marked sensitive', async () => {
+    await new LiveSettings(home, runner).addLocalProvider({
+      label: 'Keyed',
+      baseUrl: 'http://10.0.0.7:8080/v1',
+      model: 'm',
+      apiKey: 'sk-keyed-123',
+    })
+    const call = runner.mock.calls.find(([args]) => args.includes('providers.keyed.api_key'))!
+    expect(call[0].at(-1)).toBe('sk-keyed-123')
+    expect(call[1].sensitiveArgIndices).toEqual([call[0].length - 1])
+  })
+})
+
+test('local provider ids: unset is none, a failed read is unknown (2.0.10)', async () => {
+  const settings = new LiveSettings(home, runner)
+  providers.default!.openrouter = { default_model: 'x' }
+  expect(await settings.localProviderIds()).toEqual(new Set(['lab-gpu']))
+  runner.mockImplementation(async () => ({ exitCode: 1 }))
+  expect(await settings.localProviderIds()).toEqual(new Set())
+  runner.mockImplementation(async () => ({ exitCode: -1 }))
+  expect(await settings.localProviderIds()).toBeNull()
 })
