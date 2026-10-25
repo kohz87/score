@@ -327,13 +327,27 @@ for (const viewport of sizes) {
       const reply = page.locator('.bold-thread-message[data-message-id="t-2"]')
       await reply.hover()
       await expect(reply.getByRole('button', { name: 'Retry reply from builder' })).toBeVisible()
+      // t-3 follows another agent's message, not the person's: nothing to retry.
+      const handoff = page.locator('.bold-thread-message[data-message-id="t-4"]')
+      await handoff.hover()
+      await expect(handoff.getByRole('button', { name: /^Retry reply/ })).toHaveCount(0)
 
       // An agent's message goes at once (undo window), then the DELETE is sent.
+      await reply.hover()
       await reply.getByRole('button', { name: 'Delete message from builder' }).click()
       await expect(page.getByText('First cut is ready for review.')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible()
       await expect
         .poll(() => deletes, { timeout: 15_000 })
         .toEqual(['/api/rooms/team-room/messages/t-2'])
+      // On a phone Edit closes the sheet so the team-room composer, which holds the message now, can be used.
+      await own.hover()
+      await own.getByRole('button', { name: 'Edit message from You' }).click()
+      if (viewport.width <= 860) {
+        await expect(page.locator('.bold-sidecol')).toBeHidden()
+        await expect(page.locator('.bold-room-composer textarea')).toBeFocused()
+      }
+      await expect(page.getByText('Editing your message')).toBeVisible()
     })
 
     test(`a paused exchange is answered from the thread at ${size}`, async ({ page }) => {

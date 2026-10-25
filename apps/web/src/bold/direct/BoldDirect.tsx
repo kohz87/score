@@ -26,9 +26,14 @@ import {
   postChatHandOff,
   shareMessageToJob,
 } from './direct-queries.ts'
-import { BoldMessage, buildMessageNodes, type BranchSelection } from '../room/BoldMessage.tsx'
+import {
+  answersPerson,
+  BoldMessage,
+  buildMessageNodes,
+  type BranchSelection,
+} from '../room/BoldMessage.tsx'
 import { beginJobUndo } from '../room/job-undo.ts'
-import { ChatMenu, DeleteChatDialog } from '../room/RoomMenus.tsx'
+import { ChatMenu, ClearChatDialog, DeleteChatDialog } from '../room/RoomMenus.tsx'
 import { changeCachedJob, roomMessagesQuery } from '../room/room-queries.ts'
 import { useMessageTools } from '../room/use-message-tools.ts'
 import './bold-direct.css'
@@ -209,12 +214,19 @@ export function DirectHeaderActions({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Job | null>(null)
+  const [clearing, setClearing] = useState(false)
   const roomId = state.data?.room?.id ?? ''
   const showDeleted = useShowDeleted(roomId)
   const allChats = state.data?.chats ?? []
   const chats = listedChats(allChats).filter((chat) => matchesChat(chat, query))
   // The chat on show: the one in the URL, or the latest when the home is open.
   const shown = chatId ? allChats.find((item) => item.id === chatId) : listedChats(allChats)[0]
+  // Delete and Clear act only on a real chat named in the URL, never on the new-chat state (no chat yet).
+  const target = chatId ? allChats.find((item) => item.id === chatId) : undefined
+  const messagesDefinition = useMemo(
+    () => (roomId && target ? roomMessagesQuery(roomId, target.id) : null),
+    [roomId, target],
+  )
 
   function pick(id: string) {
     setOpen(false)
@@ -258,8 +270,20 @@ export function DirectHeaderActions({
         <ChatMenu
           showDeleted={showDeleted}
           onToggleDeleted={() => setShowDeleted(roomId, !showDeleted)}
-          // A room's own thread follows the room: the server refuses to delete it.
-          onDelete={shown.isDefault ? undefined : () => setDeleting(shown)}
+          // A room's own thread follows the room: the server refuses to delete it, so it is cleared instead.
+          onDelete={target && !target.isDefault ? () => setDeleting(target) : undefined}
+          onClear={target?.isDefault ? () => setClearing(true) : undefined}
+        />
+      )}
+      {clearing && roomId && (
+        <ClearChatDialog
+          roomId={roomId}
+          agentName={agentDisplayName(agent)}
+          onClose={() => setClearing(false)}
+          onCleared={() => {
+            if (messagesDefinition)
+              void queryClient.invalidateQueries({ queryKey: messagesDefinition.key })
+          }}
         />
       )}
       {deleting && (
@@ -899,7 +923,7 @@ function DirectConversation({
               onlyJobId: chat.id,
               onBranchSelect: (messageId, version) =>
                 setView(version ? { messageId, version, chatId: chat.id } : null),
-              renderMessage: (message) => (
+              renderMessage: (message, previous) => (
                 <BoldMessage
                   key={message.id}
                   message={message}
@@ -910,6 +934,7 @@ function DirectConversation({
                   pinBusy={tools.pinBusy === message.id}
                   onTogglePin={() => void tools.togglePin(message.id)}
                   className="bold-dm-message"
+                  canRetry={answersPerson(message, previous)}
                 >
                   {message.id === lastAgent?.id && (
                     <div className="bold-dm-msg-actions">

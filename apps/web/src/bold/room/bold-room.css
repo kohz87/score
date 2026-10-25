@@ -420,6 +420,22 @@
   }
 }
 
+/* A message delete's undo sits above the job undo when both are open. */
+[data-ui='bold'] .bold-delete-toasts {
+  bottom: 86px;
+}
+
+[data-ui='bold'] .bold-delete-toasts .chat-toast {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-delete-toasts {
+    bottom: calc(132px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 [data-ui='bold'] .bold-job-undo {
   background: var(--hi-bg);
   color: var(--hi-ink);

@@ -30,7 +30,10 @@ function EditingProbe() {
   return <output data-testid="editing">{editing?.messageId ?? ''}</output>
 }
 
-function renderMessage(message: Message, extra: { pinned?: boolean } = {}) {
+function renderMessage(
+  message: Message,
+  extra: { pinned?: boolean; canRetry?: boolean; onEdit?: () => void } = {},
+) {
   const fetchMock = mockFetch((_url, init) =>
     init.method === 'POST' ? jsonResponse({}) : new Response(null, { status: 204 }),
   )
@@ -47,6 +50,8 @@ function renderMessage(message: Message, extra: { pinned?: boolean } = {}) {
         pinBusy={false}
         onTogglePin={onTogglePin}
         className="bold-dm-message"
+        canRetry={extra.canRetry ?? false}
+        {...(extra.onEdit ? { onEdit: extra.onEdit } : {})}
       />
       <EditingProbe />
     </>,
@@ -85,8 +90,8 @@ test('your own finished message has Edit, Copy, Pin and Delete, and no Retry', (
   ])
 })
 
-test('an agent reply has Retry and Delete and no Edit', () => {
-  renderMessage(reply)
+test('an agent reply to the person has Retry and Delete and no Edit', () => {
+  renderMessage(reply, { canRetry: true })
   const labels = names()
   expect(labels).toContain('Retry reply from builder')
   expect(labels).toContain('Delete message from builder')
@@ -123,7 +128,7 @@ test('Pin calls the place’s toggle and shows the pressed state', () => {
 })
 
 test('Retry posts to the message’s retry endpoint', async () => {
-  const { fetchMock } = renderMessage(reply)
+  const { fetchMock } = renderMessage(reply, { canRetry: true })
   fireEvent.click(act('Retry reply from builder'))
   await waitFor(() =>
     expect(
@@ -139,4 +144,41 @@ test('Delete on your message asks for the rewind', () => {
   renderMessage(mine)
   fireEvent.click(act('Delete message from You'))
   expect(screen.getByRole('dialog', { name: 'Delete this message?' })).toBeDefined()
+})
+
+test('an agent message that does not answer the person has no Retry', () => {
+  renderMessage(reply)
+  expect(names()).not.toContain('Retry reply from builder')
+  expect(names()).toContain('Delete message from builder')
+})
+
+test('a 409 on Retry is worded neutrally', async () => {
+  const fetchMock = mockFetch(() =>
+    jsonResponse({ code: 'conflict', message: 'Resume the work first.' }, 409),
+  )
+  vi.stubGlobal('fetch', fetchMock)
+  renderInRoom(
+    <BoldMessage
+      message={reply}
+      agents={agents}
+      versions={[]}
+      onView={() => undefined}
+      pinned={false}
+      pinBusy={false}
+      onTogglePin={() => undefined}
+      canRetry
+    />,
+  )
+  fireEvent.click(act('Retry reply from builder'))
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    'This reply can’t be retried right now.',
+  )
+})
+
+test('Edit runs the place’s onEdit hook after loading the composer', () => {
+  const onEdit = vi.fn()
+  renderMessage(mine, { onEdit })
+  fireEvent.click(act('Edit message from You'))
+  expect(onEdit).toHaveBeenCalledOnce()
+  expect(screen.getByTestId('editing').textContent).toBe('mine-1')
 })

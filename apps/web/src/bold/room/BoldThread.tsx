@@ -5,7 +5,15 @@ import {
   type Job,
   type Message,
 } from '@score/contract'
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { Link, useLocation } from 'react-router'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
@@ -30,7 +38,7 @@ import {
   threadRounds,
   threadTurns,
 } from './thread-model.ts'
-import { BoldMessage } from './BoldMessage.tsx'
+import { answersPerson, BoldMessage } from './BoldMessage.tsx'
 import { decisionError, ExchangeRequestCard } from './RoomRequests.tsx'
 import { useMessageTools } from './use-message-tools.ts'
 import { ReportBackLine } from './ReportBack.tsx'
@@ -103,6 +111,9 @@ function JobPicker({ jobs, onPick }: { jobs: Job[]; onPick: (jobId: string) => v
     </div>
   )
 }
+
+/** The phone sheet hides the room composer an Edit loads into: the room passes a way to close it and focus the composer. */
+const ThreadEditContext = createContext<(() => void) | undefined>(undefined)
 
 function RecipeRunCard({ recipe, agents }: { recipe: JobRecipe; agents: AgentSummary[] }) {
   const orchestrations = useStreamQuery(orchestrationsQuery).data ?? []
@@ -260,6 +271,7 @@ function JobThread({
   )
   const messagesState = useStreamQuery(messagesDefinition)
   const tools = useMessageTools(roomId)
+  const onEdit = useContext(ThreadEditContext)
   const hidden = usePendingDeletes().hidden
   const [olderPages, setOlderPages] = useState<MessagePageData[]>([])
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -476,6 +488,8 @@ function JobThread({
                   message={message}
                   agents={agents}
                   versions={[]}
+                  canRetry={answersPerson(message, allMessages[allMessages.indexOf(message) - 1])}
+                  {...(onEdit ? { onEdit } : {})}
                   onView={() => undefined}
                   pinned={tools.isPinned(message.id)}
                   pinBusy={tools.pinBusy === message.id}
@@ -531,9 +545,12 @@ function ThreadRoom({
 export function BoldThread({
   jobId,
   onSelectJob,
+  onEdit,
 }: {
   jobId: string | null
   onSelectJob: (jobId: string) => void
+  /** Runs when Edit is chosen on a message in the thread (the phone closes its sheet). */
+  onEdit?: (() => void) | undefined
 }) {
   const location = useLocation()
   const override = new URLSearchParams(location.search).get('room')
@@ -544,12 +561,14 @@ export function BoldThread({
   if (roomState.status === 'error' || !roomState.data)
     return <ThreadUnavailable failed={roomState.status === 'error'} />
   return (
-    <ThreadJobs
-      roomId={roomState.data.room.id}
-      jobId={jobId}
-      agents={agents}
-      onSelectJob={onSelectJob}
-    />
+    <ThreadEditContext value={onEdit}>
+      <ThreadJobs
+        roomId={roomState.data.room.id}
+        jobId={jobId}
+        agents={agents}
+        onSelectJob={onSelectJob}
+      />
+    </ThreadEditContext>
   )
 }
 

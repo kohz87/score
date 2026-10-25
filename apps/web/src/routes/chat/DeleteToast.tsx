@@ -1,11 +1,15 @@
 import { dismissDeleteFailure, undoDelete, usePendingDeletes } from './message-deletion.ts'
 
 /** "Message deleted · Undo" while the undo window is open, and a note if the delete could not be sent. */
-export function DeleteToast() {
+export function DeleteToast({ className = '' }: { className?: string }) {
   const { ids, failed } = usePendingDeletes()
   if (ids.size === 0 && !failed) return null
   return (
-    <div className="chat-toasts" role="status" aria-live="polite">
+    <div
+      className={`chat-toasts${className ? ` ${className}` : ''}`}
+      role="status"
+      aria-live="polite"
+    >
       {[...ids].map((id) => (
         <div key={id} className="chat-toast">
           <span>

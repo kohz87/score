@@ -320,3 +320,32 @@ test('the classic room badge counts the default job only; another job’s unread
     .chats.find((job: Job) => job.id === chat.id)
   expect(listed.unread).toBe(1)
 })
+
+test('Clear chat (2.0.11) empties a one-to-one’s main chat only, Score-side, and refuses other rooms', async () => {
+  const chat = JobSchema.parse(
+    (await post('/api/agents/builder/chats', { title: 'Keep this one' })).json(),
+  )
+  const { room } = (await get('/api/agents/builder/direct')).json()
+  await post(`/api/rooms/${room.id}/messages`, { text: 'Main chat hello' })
+  await post(`/api/rooms/${room.id}/messages`, { text: 'Side chat hello', jobId: chat.id })
+  await advance(60_000)
+  const main = (await get(`/api/rooms/${room.id}/messages`)).json().items
+  expect(main.length).toBeGreaterThan(0)
+  const cleared = await post(`/api/rooms/${room.id}/clear`, {})
+  expect(cleared.statusCode).toBe(200)
+  expect(cleared.json()).toEqual({ cleared: main.length })
+  expect((await get(`/api/rooms/${room.id}/messages`)).json().items).toEqual([])
+  // The other chat with the agent stays.
+  expect(
+    (await get(`/api/rooms/${room.id}/messages?jobId=${chat.id}`)).json().items.length,
+  ).toBeGreaterThan(0)
+  // Idempotent: nothing left to clear.
+  expect((await post(`/api/rooms/${room.id}/clear`, {})).json()).toEqual({ cleared: 0 })
+  // Not for the team room or other rooms; not without a session.
+  const team = await teamRoom()
+  expect((await post(`/api/rooms/${team.room.id}/clear`, {})).statusCode).toBe(409)
+  expect(
+    (await app.inject({ method: 'POST', url: `/api/rooms/${room.id}/clear`, payload: {} }))
+      .statusCode,
+  ).toBeGreaterThanOrEqual(401)
+})

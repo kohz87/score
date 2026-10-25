@@ -8,7 +8,13 @@ import { usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { type VersionView } from '../../routes/chat/versions.tsx'
 import { boldJobLink, boldMessageLink } from '../bold-links.ts'
 import { agentDisplayName } from '../bold-agents.ts'
-import { authorName, BoldMessage, buildMessageNodes, messageText } from './BoldMessage.tsx'
+import {
+  answersPerson,
+  authorName,
+  BoldMessage,
+  buildMessageNodes,
+  messageText,
+} from './BoldMessage.tsx'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomMessagesQuery, roomSeekQuery } from './room-queries.ts'
 import { useMessageTools } from './use-message-tools.ts'
@@ -295,13 +301,14 @@ export function RoomMessageStream({
       onlyJobId: selectedJob === 'all' ? undefined : selectedJob,
       onBranchSelect: (messageId, version) =>
         setView(version ? { messageId, version, filter, selectedJob } : null),
-      renderMessage: (message) => (
+      renderMessage: (message, previous) => (
         <BoldMessage
           key={message.id}
           message={message}
           agents={agents}
           versions={versions}
           approvalPointerIds={approvalPointerIds}
+          canRetry={answersPerson(message, previous)}
           onView={(version) => setView({ messageId: message.id, version, filter, selectedJob })}
           pinned={isPinned(message.id)}
           pinBusy={pinBusy === message.id}

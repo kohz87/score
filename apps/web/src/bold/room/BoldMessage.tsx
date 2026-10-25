@@ -41,6 +41,14 @@ export function atOrAfter(message: Message, anchor: Message) {
   )
 }
 
+/**
+ * Retry is offered on an agent reply that answers the person: the turn before it is the person's own message. (The server
+ * retries the run that answered the person's message, and refuses an agent-to-agent hand-off or a step of a recipe.)
+ */
+export function answersPerson(message: Message, previous: Message | undefined) {
+  return message.author.kind === 'agent' && previous?.author.kind === 'you'
+}
+
 export type BranchSelection = NonNullable<VersionView>
 
 /**
@@ -64,7 +72,7 @@ export function buildMessageNodes({
   branch: BranchSelection | null
   onBranchSelect: (messageId: string, version: BranchSelection['version'] | null) => void
   onlyJobId?: string | undefined
-  renderMessage: (message: Message) => ReactNode
+  renderMessage: (message: Message, previous: Message | undefined) => ReactNode
 }): { nodes: ReactNode[]; branched: boolean } {
   const anchor = branch ? items.find((message) => message.id === branch.messageId) : undefined
   const effective = anchor ? branch : null
@@ -105,7 +113,7 @@ export function buildMessageNodes({
       break
     }
     flush(message.createdAt)
-    nodes.push(renderMessage(message))
+    nodes.push(renderMessage(message, items[items.indexOf(message) - 1]))
   }
   flush(null)
   return { nodes, branched: effective !== null }
@@ -122,6 +130,8 @@ export function BoldMessage({
   approvalPointerIds,
   className,
   bold = true,
+  canRetry = false,
+  onEdit,
   children,
 }: {
   message: Message
@@ -136,6 +146,10 @@ export function BoldMessage({
   className?: string
   /** False where the classic card styling is kept (the job thread). */
   bold?: boolean
+  /** Whether the message answers the person's own message (see `answersPerson`): only then is Retry offered. */
+  canRetry?: boolean
+  /** Runs after Edit hands the message to the composer (the phone sheet closes so the composer can be used). */
+  onEdit?: () => void
   /** Extra rows that belong to the message (the one-to-one's share row). */
   children?: ReactNode
 }) {
@@ -208,7 +222,7 @@ export function BoldMessage({
       setRetry('idle')
       setRetryError(
         failure instanceof ApiError && failure.status === 409
-          ? 'Can’t retry right now: it is already being answered, or work is paused.'
+          ? 'This reply can’t be retried right now.'
           : 'Couldn’t retry. Try again.',
       )
     }
@@ -238,7 +252,10 @@ export function BoldMessage({
               type="button"
               className="bold-act"
               aria-label={`Edit message from ${author}`}
-              onClick={() => startEdit(message)}
+              onClick={() => {
+                startEdit(message)
+                onEdit?.()
+              }}
             >
               Edit
             </button>
@@ -263,7 +280,7 @@ export function BoldMessage({
               Save to Library
             </button>
           )}
-          {!mine && !imported && (
+          {!mine && !imported && canRetry && (
             <button
               type="button"
               className="bold-act"

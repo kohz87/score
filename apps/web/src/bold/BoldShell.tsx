@@ -27,6 +27,7 @@ import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
 import type { BoldSheetState } from './bold-ui.ts'
 import { BoldStartJob, StartJobContext } from './BoldStartJob.tsx'
+import { DeleteToast } from '../routes/chat/DeleteToast.tsx'
 import { JobUndoToast } from './room/JobUndoToast.tsx'
 import './tokens.css'
 import './bold.css'
@@ -360,6 +361,8 @@ export function BoldShell() {
         )}
         {startOpen && <BoldStartJob onClose={closeStartJob} />}
         <JobUndoToast />
+        {/* A message delete is undoable for a few seconds in every bold surface (room, one-to-one, thread). */}
+        <DeleteToast className="bold-job-toasts bold-delete-toasts" />
       </div>
     </StartJobContext>
   )

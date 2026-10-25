@@ -582,6 +582,34 @@ export function deleteMessage(
   ]
 }
 
+/**
+ * Clears a one-to-one's main conversation (2.0.11): every live message of a direct room's default thread is deleted
+ * the same way as one at a time (Score-only; the agent's Hermes session may still remember). Other chats in the room
+ * (its jobs) are untouched. One transaction: a message still being written stops the whole clear.
+ */
+export function clearDirectThread(
+  sqlite: DatabaseSync,
+  roomId: string,
+  now: string,
+): { cleared: number; events: DomainEventDraft[] } {
+  if (roomRow(sqlite, roomId).role !== 'direct')
+    throw new HttpError(409, 'conflict', 'Only a one-to-one’s main chat can be cleared.')
+  const ids = z
+    .array(z.object({ id: z.string() }))
+    .parse(
+      sqlite
+        .prepare(
+          `SELECT m.id FROM messages m LEFT JOIN jobs j ON j.id = m.job_id
+           WHERE m.room_id = ? AND m.deleted_at IS NULL AND (m.job_id IS NULL OR j.is_default = 1)
+           ORDER BY m.created_at DESC, m.id DESC`,
+        )
+        .all(roomId),
+    )
+    .map((row) => row.id)
+  const events = ids.flatMap((id) => deleteMessage(sqlite, roomId, id, now))
+  return { cleared: ids.length, events }
+}
+
 const MAX_COMPLETION_PARTS_CHARS = 256 * 1024
 
 const CursorSchema = z

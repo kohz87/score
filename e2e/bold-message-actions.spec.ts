@@ -151,5 +151,36 @@ for (const { name, viewport, agent } of sizes) {
         })
         .toBe(false)
     })
+
+    test('Clear chat empties the main chat and keeps other chats', async ({ page }) => {
+      const tag = `clear-${Date.now().toString(36)}`
+      const other = await makeChat(page, agent, `Other ${tag}`)
+      const direct = (await (await page.request.get(`/api/agents/${agent}/direct`)).json()) as {
+        chats: { id: string; isDefault: boolean }[]
+      }
+      const main = direct.chats.find((item) => item.isDefault)
+      expect(main, 'the direct room has a main chat').toBeDefined()
+      const sent = await page.request.post(`/api/rooms/${other.roomId}/messages`, {
+        headers: { ...web, 'Idempotency-Key': `mk-${Date.now()}-${Math.random()}` },
+        data: { text: `Main ${tag}`, jobId: main!.id },
+      })
+      expect(sent.ok()).toBeTruthy()
+      await openChat(page, agent, main!.id)
+      await settled(page, other.roomId, main!.id)
+      await expect(side(page).getByText(`Main ${tag}`)).toBeVisible()
+      await side(page).getByRole('button', { name: 'Chat menu' }).click()
+      await expect(page.getByRole('menuitem', { name: 'Delete chat' })).toHaveCount(0)
+      await page.getByRole('menuitem', { name: 'Clear chat' }).click()
+      const dialog = page.getByRole('dialog', { name: /^Clear this chat with/ })
+      await expect(dialog).toHaveAttribute('data-protected', 'any')
+      await dialog.getByRole('button', { name: 'Clear chat' }).click()
+      await expect(dialog.getByRole('status')).toHaveText(/^Cleared \d+ messages?\.$/)
+      await dialog.getByRole('button', { name: 'Done' }).click()
+      await expect(side(page).getByText(`Main ${tag}`)).toHaveCount(0)
+      const after = (await (await page.request.get(`/api/agents/${agent}/direct`)).json()) as {
+        chats: { id: string }[]
+      }
+      expect(after.chats.some((item) => item.id === other.id)).toBe(true)
+    })
   })
 }
