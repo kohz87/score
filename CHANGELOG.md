@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.4] — 2026-10-25
+
+### Fixed
+- Settings › Tools no longer offers to remove `score`, Score's own tool server: agents reach Score through it. Revoke
+  one agent's access on its page instead.
+
 ## [2.0.3] — 2026-10-25
 
 ### Added

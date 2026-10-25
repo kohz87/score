@@ -1243,3 +1243,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   combinations, the server's 409 reason on agent tabs. Its reviews: Rules card under a failing theme (lead fixed twice:
   the white panel made muted text fail; then `--ground` follows the page theme, not the bold look → `--bg`), e2e checks
   every text in the card. Merge gate on the combination: build; full e2e 931 passed, 1 failed (chat-follow, a known load flake: 6/6 alone; also flaked in 2.0.2's run), 19 skipped; pnpm check green (server 4748, web 2879, contract 1496). Earlier 2.0.3-only run found a real e2e bug (a `Connect Discord` locator also matched the new `Disconnect Discord`; now exact) and the pre-existing phone Team screenshot order flake (P3 on the list).
+- **v2.0.3 deployed, then v2.0.4 (lead, 2026-10-25 ~08:50–09:10 UTC).** 2.0.3 deploy: no plugin or migration change, backup
+  score-pre-2.0.3-20261025.db, restart, 0 errors; live providers list shows the local provider without `signIn`. The
+  live check found the only tool server is `score` (Score's own MCP entry) with a Remove button: 2.0.4 refuses
+  `DELETE /api/settings/tool-servers/score` (409, names the agent page's Revoke) and hides its Remove. Sonnet review 0
+  P1/P2 (wording nit fixed). pnpm check green (server 4748, web 2880, contract 1496); e2e remove/look/tools 12/12.
