@@ -1341,3 +1341,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   reply shapes, stale_generation → not_pending. Research (Sonnet, read-only): the rest of the feature list needs no
   change except a deleted-session refusal and clarify prompts (2.1.x). Reviews: 0 P1; P2s fixed. pnpm check (one
   failure from a check started mid-edit; the server suite re-run: 4767 passed).
+- **v2.1.1 deployed live** (~13:49 UTC): backup score-pre-2.1.1-20261026.db, restart, 0 errors. Live approval round trip (drill L3) on scoretesta (approvals.mode manual for the test, back to smart after; scoretestb too): an `rm -rf /tmp/score-l3b` approval reached Score; **deny** → Hermes refused, folder kept; **approve once** → ran, folder gone. The earlier stuck test run on scoretestb (its prompt raised before the fix) stays parked in Hermes until its own timeout.
