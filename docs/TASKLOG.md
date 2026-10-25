@@ -1290,3 +1290,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   can't take a key from Settings (it isn't listed there). Gates: full e2e 947 passed / 4 failed (bold-stuck-operation:
   its mocks' "Response disposed" race — fixed in the spec, 16/16 repeated); after the final merge 124/124 on the
   affected specs; pnpm check green (server 4759, web 2925, contract 1496).
+- **v2.0.10 deployed live** (~10:47 UTC): no migration or plugin change; backup score-pre-2.0.10-20261025.db, restart, 0 errors.
