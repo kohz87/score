@@ -359,3 +359,40 @@ for (const viewport of sizes) {
     await expect(dialog.getByRole('button', { name: /^Add blocked-/ })).toBeDisabled()
   })
 }
+
+for (const viewport of sizes) {
+  test(`reusing a removed agent’s name needs its own tick at ${viewport.width}×${viewport.height}`, async ({
+    page,
+  }) => {
+    const sent: Record<string, unknown>[] = []
+    await page.route('**/api/agents/preview', async (route) => {
+      const real = await route.fetch()
+      const body = (await real.json()) as Record<string, unknown>
+      await route.fulfill({ response: real, json: { ...body, reusesName: true } })
+    })
+    await page.route('**/api/agents', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      sent.push(route.request().postDataJSON() as Record<string, unknown>)
+      await route.fulfill({
+        status: 409,
+        json: { error: { code: 'conflict', message: 'Stopped by the test.' } },
+      })
+    })
+    const dialog = await openAdd(page, viewport.width)
+    const id = `again-${suffix()}`
+    await dialog.getByLabel('Name').fill(id)
+    await dialog.getByLabel('What does it do?').fill('Checks the reuse tick.')
+    await dialog.getByLabel('Model', { exact: true }).fill('fake-model')
+    await dialog.getByRole('button', { name: 'Preview changes' }).click()
+    const tick = dialog.getByRole('checkbox', { name: /Use the name .* again/ })
+    await expect(tick).toBeVisible()
+    await expect(dialog.getByRole('alert').filter({ hasText: 'again.”' })).toBeVisible()
+    const add = dialog.getByRole('button', { name: /^Add again-/ })
+    await expect(add).toBeDisabled()
+    await tick.check()
+    await expect(add).toBeEnabled()
+    await add.click()
+    await expect.poll(() => sent.length).toBe(1)
+    expect(sent[0]).toMatchObject({ confirmReuse: true })
+  })
+}

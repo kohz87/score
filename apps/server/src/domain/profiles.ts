@@ -139,8 +139,6 @@ export class ProfileOperations {
         blockers.push(
           'A profile with this name already exists; Score never adopts it automatically.',
         )
-      if (lifecycle?.state === 'removed')
-        blockers.push('This name is retired and cannot be reused.')
     } else {
       if (!inventory.exists || lifecycle?.state === 'removed') blockers.push('Agent not found.')
       if (
@@ -155,6 +153,8 @@ export class ProfileOperations {
     }
     if (lifecycle && !['ready', 'removed'].includes(lifecycle.state))
       blockers.push('An operation already holds this agent.')
+    // A removed agent's name may be used again on purpose (2.0.8): its history keeps the name, so the person confirms.
+    const reusesName = request.kind === 'create' && lifecycle?.state === 'removed'
     let providerLabel = request.kind === 'create' ? (request.provider ?? '') : ''
     if (request.kind === 'create' && request.provider) {
       const match = (await this.port.listModels(request.model).catch(() => [])).find(
@@ -180,6 +180,11 @@ export class ProfileOperations {
                 ? `Set the model to ${request.model} via ${providerLabel}.`
                 : `Set the model to ${request.model}.`,
               'Preserve a fresh private Score key; set the chosen model and team rules; install and enable the bridge; verify authenticated gateway access and a new bridge handshake.',
+              ...(reusesName
+                ? [
+                    `${name} was used by an agent that was removed. Its messages, runs and reports keep the name ${name} and will show next to the new agent; nothing else carries over.`,
+                  ]
+                : []),
             ]
           : [
               'Freeze new admissions, export privately, delete and purge profile identity, then retire routing references.',
@@ -188,6 +193,7 @@ export class ProfileOperations {
       blockers,
       pendingWork,
       exportPath,
+      ...(reusesName ? { reusesName: true } : {}),
     }
     return AgentPreviewSchema.parse({
       ...data,
@@ -205,11 +211,22 @@ export class ProfileOperations {
     expectedHash: string,
     confirm = false,
     imported?: { uploadId: string },
+    confirmReuse = false,
   ) {
     const preview = await this.preview(request)
     if (preview.hash !== expectedHash)
       throw new HttpError(409, 'conflict', 'The preview changed. Preview again before confirming.')
     if (preview.blockers.length) throw new HttpError(409, 'conflict', preview.blockers.join(' '))
+    const reuse = preview.reusesName === true
+    // An archive brings its own identity: importing over a retired name stays refused.
+    if (reuse && imported)
+      throw new HttpError(
+        409,
+        'conflict',
+        'This name was used by a removed agent. Import under another name.',
+      )
+    if (reuse && !confirmReuse)
+      throw new HttpError(400, 'bad_request', 'Confirm reusing the name first.')
     if (request.kind === 'create' && request.cloneFrom && !confirm)
       throw new HttpError(400, 'bad_request', 'Confirm what the new agent inherits first.')
     const id = randomUUID()
@@ -230,8 +247,10 @@ export class ProfileOperations {
       id,
       kind: imported ? 'import' : request.kind,
       targetName: preview.targetName,
-      incarnationId:
-        lifecycleOf(this.db.sqlite, preview.targetName)?.incarnation_id ?? randomUUID(),
+      // A reused name is a new agent: a new incarnation, never the removed one's.
+      incarnationId: reuse
+        ? randomUUID()
+        : (lifecycleOf(this.db.sqlite, preview.targetName)?.incarnation_id ?? randomUUID()),
       requestHash: expectedHash,
       state: 'running',
       steps: (imported ? importSteps : request.kind === 'create' ? createSteps : deleteSteps).map(
@@ -294,7 +313,7 @@ export class ProfileOperations {
           )
         sqlite
           .prepare(
-            'INSERT INTO agent_lifecycle (agent_id, incarnation_id, state, operation_id, display_name) VALUES (?, ?, ?, ?, ?) ON CONFLICT(agent_id) DO UPDATE SET state = excluded.state, operation_id = excluded.operation_id',
+            'INSERT INTO agent_lifecycle (agent_id, incarnation_id, state, operation_id, display_name) VALUES (?, ?, ?, ?, ?) ON CONFLICT(agent_id) DO UPDATE SET state = excluded.state, operation_id = excluded.operation_id, incarnation_id = excluded.incarnation_id, display_name = COALESCE(excluded.display_name, agent_lifecycle.display_name)',
           )
           .run(
             preview.targetName,
@@ -303,6 +322,9 @@ export class ProfileOperations {
             id,
             input?.name ?? null,
           )
+        // Whatever Score still held for the removed agent of this name (a pause from before 2.0.8) isn't the new one's.
+        if (reuse)
+          sqlite.prepare('DELETE FROM agent_pauses WHERE agent_id = ?').run(preview.targetName)
         const previous = readAgent(sqlite, preview.targetName)
         const agent =
           previous ??
@@ -681,6 +703,8 @@ export class ProfileOperations {
         sqlite.prepare('DELETE FROM credentials WHERE profile = ?').run(operation.targetName)
         // MCP access (7.4d): token and both switches go with the agent, so a profile of the same name starts from off.
         sqlite.prepare('DELETE FROM mcp_access WHERE agent_id = ?').run(operation.targetName)
+        // A pause goes with the agent too, so a later agent of the same name doesn't start held (2.0.8).
+        sqlite.prepare('DELETE FROM agent_pauses WHERE agent_id = ?').run(operation.targetName)
         sqlite
           .prepare('UPDATE producers SET token_expires_at = 0 WHERE profile = ?')
           .run(operation.targetName)

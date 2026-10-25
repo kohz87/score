@@ -260,9 +260,13 @@ test('delete requires typed name and a current preview, exports first, retires m
   expect((await app.inject('/api/agents/helper/watch')).statusCode).toBe(200)
   const retainedRoom = (await app.inject(`/api/rooms/${room.json().id}`)).json().room
   expect(retainedRoom).toMatchObject({ members: ['builder'], leadAgentId: null })
-  expect(
-    (await mutate('/api/agents/preview', { kind: 'create', ...input })).json().blockers.join(' '),
-  ).toMatch(/retired/)
+  // A retired name is reused only on purpose (2.0.8): no blocker, but the preview says so and create needs the confirm.
+  const reuse = AgentPreviewSchema.parse(
+    (await mutate('/api/agents/preview', { kind: 'create', ...input })).json(),
+  )
+  expect(reuse.blockers).toEqual([])
+  expect(reuse.reusesName).toBe(true)
+  expect(reuse.effects.join(' ')).toMatch(/keep the name helper/)
   expect(
     (await mutate('/api/agents/preview', { kind: 'delete', agentId: 'default' }))
       .json()
@@ -697,4 +701,77 @@ test('Score refuses to continue an interrupted create when the profile doesn’t
   )
   expect(response.statusCode).toBe(409)
   expect(response.json().error.message).toContain('doesn’t exist')
+})
+
+test('a removed agent’s name can be reused with a confirm: new incarnation, no inherited pause (2.0.8)', async () => {
+  const first = await create()
+  await finished(first.id)
+  const oldIncarnation = (await app.inject('/api/agents/helper')).json().lifecycle.incarnationId
+  // A pause recorded before the removal (the owner paused a half-made agent on live).
+  expect((await mutate('/api/agents/helper/pause', {})).statusCode).toBe(200)
+  const del = AgentPreviewSchema.parse(
+    (await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })).json(),
+  )
+  const gone = await mutate(
+    '/api/agents/helper',
+    { typedName: 'helper', previewHash: del.hash },
+    'DELETE',
+  )
+  expect((await finished(gone.json().id)).state).toBe('completed')
+  expect(
+    env.db.sqlite
+      .prepare('SELECT COUNT(*) AS n FROM agent_pauses WHERE agent_id = ?')
+      .get('helper'),
+  ).toEqual({ n: 0 })
+
+  const body = { ...input, name: 'Helper two' }
+  const preview = AgentPreviewSchema.parse(
+    (await mutate('/api/agents/preview', { kind: 'create', ...body })).json(),
+  )
+  expect(preview.reusesName).toBe(true)
+  const refused = await mutate('/api/agents', { ...body, previewHash: preview.hash })
+  expect(refused.statusCode).toBe(400)
+  expect(refused.json().error.message).toMatch(/Confirm reusing the name/)
+  const again = await mutate('/api/agents', {
+    ...body,
+    previewHash: preview.hash,
+    confirmReuse: true,
+  })
+  expect(again.statusCode).toBe(202)
+  const op = AgentOperationSchema.parse(again.json())
+  expect(op.incarnationId).not.toBe(oldIncarnation)
+  expect((await finished(op.id)).state).toBe('completed')
+  const agent = (await app.inject('/api/agents/helper')).json()
+  expect(agent).toMatchObject({
+    name: 'Helper two',
+    lifecycle: { state: 'ready', incarnationId: op.incarnationId },
+  })
+  expect(agent.status).not.toBe('paused')
+})
+
+test('a pause left from before 2.0.8 is cleared when the name is reused', async () => {
+  const first = await create()
+  await finished(first.id)
+  const del = AgentPreviewSchema.parse(
+    (await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })).json(),
+  )
+  const gone = await mutate(
+    '/api/agents/helper',
+    { typedName: 'helper', previewHash: del.hash },
+    'DELETE',
+  )
+  await finished(gone.json().id)
+  env.db.sqlite
+    .prepare('INSERT INTO agent_pauses (agent_id, paused_at) VALUES (?, ?)')
+    .run('helper', new Date().toISOString())
+  const preview = AgentPreviewSchema.parse(
+    (await mutate('/api/agents/preview', { kind: 'create', ...input })).json(),
+  )
+  const again = await mutate('/api/agents', {
+    ...input,
+    previewHash: preview.hash,
+    confirmReuse: true,
+  })
+  await finished(again.json().id)
+  expect((await app.inject('/api/agents/helper')).json().status).not.toBe('paused')
 })

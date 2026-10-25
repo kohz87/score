@@ -80,6 +80,7 @@ export const protectedClasses = [
   'bold-add-confirm',
   'bold-add-error',
   'bold-add-blockers',
+  'bold-add-reuse',
   'bold-add-joined-runs',
   'terminal-auth',
   'security-password',
