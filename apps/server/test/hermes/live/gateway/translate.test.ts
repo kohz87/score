@@ -908,3 +908,61 @@ test('a streaming reply’s progress clock moves with tools, reasoning and text,
     vi.useRealTimers()
   }
 })
+
+test('Hermes 0.22.5 authority approvals: prompt_id is the request id, timeout_s the expiry, approval.settled is known', async () => {
+  const context = await admitted()
+  const metrics = { unknownEvents: 0 }
+  const base = { run_id: context.runId, timestamp: 1791290587 }
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      {
+        ...base,
+        seq: 0,
+        event: 'approval.request',
+        kind: 'approval',
+        prompt_id: 'prompt-authority-1',
+        execution_generation: 2,
+        command: 'rm -rf /tmp/x',
+        description: 'recursive delete',
+        choices: ['once', 'session', 'always', 'deny'],
+        timeout_s: 300,
+      },
+      metrics,
+    ),
+  )
+  const approval = env.db.sqlite
+    .prepare('SELECT request_id, expires_at FROM approvals WHERE run_id = ?')
+    .get(context.runId) as { request_id: string; expires_at: string }
+  expect(approval.request_id).toBe('prompt-authority-1')
+  expect(approval.expires_at).toBe(new Date((1791290587 + 300) * 1000).toISOString())
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      {
+        ...base,
+        seq: 1,
+        event: 'approval.settled',
+        prompt_id: 'prompt-authority-1',
+        execution_generation: 2,
+      },
+      metrics,
+    ),
+  )
+  expect(metrics.unknownEvents).toBe(0)
+  // Neither id: still refused, as before.
+  expect(() =>
+    translateRunEvent(
+      context,
+      {
+        ...base,
+        seq: 2,
+        event: 'approval.request',
+        command: 'x',
+        description: 'y',
+        choices: ['deny'],
+      },
+      metrics,
+    ),
+  ).toThrow()
+})
