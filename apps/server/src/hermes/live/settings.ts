@@ -499,7 +499,11 @@ export class LiveSettings {
           sensitiveArgIndices: [argv.length - 1],
         }).catch(() => ({ exitCode: -1 }))
         if (result.exitCode !== 0)
-          throw new HttpError(502, 'hermes_write_failed', 'Hermes didn’t accept the key.')
+          throw new HttpError(
+            502,
+            'hermes_write_failed',
+            'The model was added, but Hermes didn’t accept its key. Use Add key on its row.',
+          )
       }
       const kept = (await this.localProviders()).some((item) => item.id === slug)
       if (!kept) throw new HttpError(502, 'hermes_write_failed', 'Hermes didn’t keep the provider.')

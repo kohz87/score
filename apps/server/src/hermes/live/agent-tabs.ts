@@ -140,8 +140,11 @@ export class LiveAgentTabs {
     if (read.state !== 'ok' || !read.value || typeof read.value !== 'object') return null
     const entry = (read.value as Record<string, unknown>)[providerId]
     if (!entry || typeof entry !== 'object') return null
-    const key = (entry as { api_key?: unknown }).api_key
-    return typeof key === 'string' && key.length > 0
+    // Any of Hermes's key sources counts (inline, an env name, a command), not just the inline key Score writes.
+    const fields = entry as Record<string, unknown>
+    return ['api_key', 'key_env', 'api_key_env', 'key_cmd'].some(
+      (name) => typeof fields[name] === 'string' && (fields[name] as string).length > 0,
+    )
   }
   /** Whether the profile's config defines this local provider; null when it can't be read. */
   async definesLocalProvider(profile: string, providerId: string): Promise<boolean | null> {

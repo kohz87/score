@@ -531,13 +531,23 @@ export class LivePort implements HermesPort {
     return this.settings.cancelSignIn(id)
   }
   async addProviderKey(id: string, req: Parameters<HermesPort['addProviderKey']>[1]) {
-    // A local provider's key goes into every profile that defines it (2.0.10); a hosted one through `auth add`.
+    // A local provider's key goes into every profile that defines it (2.0.10); a hosted one through `auth add`. Local
+    // is what the provider list says (an item with `keySet`), not merely a `providers.<id>` entry somewhere, which can
+    // be an override of a hosted provider.
+    const listed = (await this.settings.listProviders()).find((item) => item.id === id)
+    if (listed?.keySet === undefined) return this.settings.addProviderKey(id, req)
     const profiles = this.profiles.names(this.current.hermes.servedProfiles)
     const answers = await Promise.all(
       profiles.map((profile) => this.tabs.definesLocalProvider(profile, id).catch(() => null)),
     )
+    // An unreadable profile might hold a copy that would miss the key: stop rather than guess.
+    if (answers.some((answer) => answer === null))
+      throw new HttpError(
+        502,
+        'hermes_unavailable',
+        'Couldn’t read every agent’s providers, so the key wasn’t saved. Try again.',
+      )
     const local = profiles.filter((_, at) => answers[at] === true)
-    if (local.length === 0) return this.settings.addProviderKey(id, req)
     for (const profile of local) await this.tabs.setLocalProviderKey(profile, id, req.apiKey)
     this.profiles.invalidate(this.options.settingsProfile ?? 'default')
     const item = (await this.settings.listProviders()).find((provider) => provider.id === id)
