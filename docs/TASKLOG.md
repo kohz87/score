@@ -1135,3 +1135,20 @@ One entry per completed task: what landed, review results, and any **rejected re
   Differences from the boards reported: Team room row, four tabs, tab bar in chat, 48px targets, pins 52% capped at
   22rem. Full check green (contract 1505, web 2947, server 4757); room/phone/needs-you/menu/thread/one-to-ones/shell/
   search/themes e2e green. Not deployed.
+- **11.11b The new shell is the default; old pages go (DeepSeek on ordeepseek ×2 → Sonnet coder → lead, 2026-10-25).**
+  `/` → `/b` for everyone ("Use the classic view" → `/chat`); removed the Now page (Score timeline, Flow graph,
+  routines view), the Tasks board and its REST routes, `/u` and the admin switch, the room stage, pop-out windows
+  (~20.8k lines); kept classic pages moved off `/now` (`/workflows`, `/watch/:agentId`, `/runs/:briefId`,
+  `/now/routines` → `/b/team`) with redirects that keep the query string; team pause and taskAgentsQuery moved to
+  `data/`; old themes with `layout.now` or `/now` menu paths still load. The first DeepSeek session ended at the model's
+  context limit after most of the work (3.2M tokens); a fresh one finished it. Reviews: build — 1 P1 (the global
+  fence review was only mounted on the deleted Now page) + 2 P2 (run links dead for plain plans; no way into
+  Workflows); round 1 — 3 P2 (fence card uncounted in the strip, link didn't land on the review, nothing outside a room)
+  fixed by the lead (counted card, focus on #global-fence, a shell-wide protected notice); full e2e by a Sonnet coder
+  (DeepSeek can't run Playwright): 175 failures → 828 passed / 0 failed twice — 2 product fixes (the Needs-you dot on
+  the launcher menu button; Team strip overflow at 390px), tests moved off removed pages, order-dependence fixes, 127
+  baselines after the nav change (diffs checked). Last review: P1 the classic top bar had no Needs-you marker below
+  1024px in non-launcher layouts (pre-existing) → the marker rides on the menu button wherever the links are hidden;
+  rejected: the chat-rooms fence check made conditional (the guard is unit-tested; deterministic e2e would need a held
+  fake run), the dot-on-current-page check (never covered before). Full check green (contract 1487, web 2794, server
+  4689). Not deployed.

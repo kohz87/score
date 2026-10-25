@@ -672,7 +672,7 @@ Knowledge e2e pass against the Library panel.
 **11.10f Search** ✅ · **DeepSeek** · board 14: jobs, one-to-ones, Library, messages, actions, settings sections, "Reset
 look", `/` commands. Done when: e2e for each result kind and keyboard use.
 
-**11.11 Retire old destinations** · **Lead**, only with the owner's OK · switch the default to the new shell; move
+**11.11 Retire old destinations** ✅ · **Lead**, only with the owner's OK · switch the default to the new shell; move
 older rooms to `routing = exchanges`; remove Now/Flow/Score timeline, Tasks board, `/u` and admin view, room stage, pet
 packs and stored packs, Cut-out/Ring/eyes, Lively, pop-outs (D8, D9, D11); keep data the new screens read. Done when:
 removed code has no route or import left; a copy of the live DB migrates and every parity row still works; the owner
