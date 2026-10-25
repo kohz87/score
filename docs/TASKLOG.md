@@ -1352,3 +1352,16 @@ One entry per completed task: what landed, review results, and any **rejected re
   screenshots (the one-line composer; baselines updated, then 207/207 on the affected specs incl. themes-bold-visual);
   pnpm check green (server 4767, web 2969→2975 after the merge, contract 1496).
 - **v2.1.3 deployed live** (~14:21 UTC): backup score-pre-2.1.3-20261026.db, restart, 0 errors.
+- **v2.2.0 agents with eyes (lead: contract + migration 0088 ball/flower, decision 127, brief; Sonnet coder; lead
+  review, 2026-10-26).** From the owner's mock-up (https://claude.ai/artifact/PUcZpvMxYni38uJgtPXUfZ, iterated: blank
+  sockets, per-shape, straight, thinking = flat lines, needs = shocked round). AgentFacesContext set by BoldShell; 22
+  per-shape layouts proven inside the silhouette (rasterised) in every mood and gaze extreme; CSS-only motion, one
+  shared pointer listener for lively heroes. Lead review: rendered a 22×5 sheet; eyes on 11 shapes enlarged to the
+  mock-up's proportion where the geometry test allows; arcs white (were the contrast plate) with the sockets' darker
+  edge (Sonnet round-2 P2). **Rejected:** (1) "a hostile theme can scale the eyes over the silhouette since guard.ts
+  skips .agent-face" — theme rules are confined outside [data-protected] subtrees by the sanitiser (confineSelector),
+  so no theme rule reaches a glyph's eyes; adding agent-face to protectedClasses was tried and needs data-protected on
+  inner nodes, not worth it. (2) "the containment test samples points, not the drawn path" — socketPoints evaluates the
+  same cubic Béziers socketPath draws, from the same parameters. Gates: full e2e 982 passed, 2 phone failures
+  (bold-start-job known flake; bold-thread job-limit pause) passed on rerun with 166 more (faces, visual, classic
+  pages, settings looks) = 168/168; pnpm check green (server 4768, web 3105, contract 1496).

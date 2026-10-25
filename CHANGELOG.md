@@ -3,6 +3,16 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.2.0] — 2026-10-26
+
+### Added
+- **Agents with eyes** (new shell): every agent glyph has big blank white eyes shaped for its silhouette, and they show
+  what the agent is doing: looking around and blinking when idle, flat line eyes when thinking, half-lidded while
+  working, big round shocked eyes (and a shake) when it needs you, happy ^ ^ when done, sleepy when paused or offline.
+  The big glyph on an agent's page, Add agent and first run follows your pointer and says hi when tapped. Nothing
+  moves with reduced motion; the classic shell keeps its eyeless glyphs.
+- **Two new shapes**, ball and flower.
+
 ## [2.1.3] — 2026-10-26
 
 ### Added
