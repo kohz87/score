@@ -2,6 +2,8 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
+import { markStaleSummaries } from '../summary-stale.ts'
+import { readRoom, roomChanged, roomRow } from '../rooms.ts'
 import { jobEvent, jobRow, type JobRow } from './store.ts'
 
 // A job's own lifecycle from the job menu (decision 121, D6): rename, close and reopen, delete and undo.
@@ -28,14 +30,18 @@ function namedJob(sqlite: DatabaseSync, jobId: string): JobRow {
   return job
 }
 
-/** Work still running or queued in the job: closing or deleting waits for it (the person stops the job first). */
+/**
+ * Work still running or queued in the job, or an exchange not finished (a paused one holds its turn with no run row):
+ * closing or deleting waits for it — the person stops the job first, which stops its exchanges.
+ */
 function busy(sqlite: DatabaseSync, jobId: string): boolean {
   return Boolean(
     sqlite
       .prepare(
-        `SELECT 1 FROM message_runs WHERE job_id = ? AND purpose IS NULL AND state IN ('pending', 'active') LIMIT 1`,
+        `SELECT 1 FROM message_runs WHERE job_id = ? AND purpose IS NULL AND state IN ('pending', 'active')
+         UNION ALL SELECT 1 FROM exchanges WHERE job_id = ? AND state NOT IN ('done', 'stopped') LIMIT 1`,
       )
-      .get(jobId),
+      .get(jobId, jobId),
   )
 }
 
@@ -92,11 +98,18 @@ export function deleteJob(sqlite: DatabaseSync, jobId: string, now: string): Dom
   if (life(sqlite, jobId).deleted_at) return []
   namedJob(sqlite, jobId)
   refuseWhileBusy(sqlite, jobId, 'delete')
+  const before = readRoom(sqlite, job.room_id, roomRow(sqlite, job.room_id).updated_at)
   touch(sqlite, jobId, 'deleted_at = ?', [now], now)
   sqlite
     .prepare('UPDATE messages SET deleted_at = ? WHERE job_id = ? AND deleted_at IS NULL')
     .run(now, jobId)
-  return [{ type: 'job.deleted', data: { id: jobId, roomId: job.room_id } }]
+  // As a message delete does: summaries that quoted the job's messages go stale, the room's list entry is redone.
+  // Attachments are kept (undo can bring the messages back); a room delete releases them.
+  return [
+    { type: 'job.deleted', data: { id: jobId, roomId: job.room_id } },
+    ...markStaleSummaries(sqlite, job.room_id, now),
+    ...roomChanged(sqlite, job.room_id, now, before),
+  ]
 }
 
 export function restoreJob(sqlite: DatabaseSync, jobId: string, now: string): DomainEventDraft[] {
@@ -104,11 +117,19 @@ export function restoreJob(sqlite: DatabaseSync, jobId: string, now: string): Do
   if (!job) throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
   const { deleted_at: deletedAt } = life(sqlite, jobId)
   if (!deletedAt) return jobEvent(sqlite, jobId)
+  const before = readRoom(sqlite, job.room_id, roomRow(sqlite, job.room_id).updated_at)
   sqlite
     .prepare('UPDATE messages SET deleted_at = NULL WHERE job_id = ? AND deleted_at = ?')
     .run(jobId, deletedAt)
   touch(sqlite, jobId, 'deleted_at = NULL', [], now)
-  return jobEvent(sqlite, jobId)
+  return [...jobEvent(sqlite, jobId), ...roomChanged(sqlite, job.room_id, now, before)]
+}
+
+/** Whether the job is deleted (reads of its results, workbench and exchanges answer 404 then). */
+export function jobDeleted(sqlite: DatabaseSync, jobId: string): boolean {
+  const row = sqlite.prepare('SELECT deleted_at FROM jobs WHERE id = ?').get(jobId) as
+    { deleted_at: string | null } | undefined
+  return Boolean(row?.deleted_at)
 }
 
 /** A person's message into a closed or deleted job is refused; the job menu reopens or undoes first. */

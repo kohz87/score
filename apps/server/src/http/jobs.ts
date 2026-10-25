@@ -31,6 +31,7 @@ import {
 import {
   closeJob,
   deleteJob,
+  jobDeleted,
   renameJob,
   reopenJob,
   restoreJob,
@@ -161,6 +162,8 @@ export function registerJobRoutes(
 
   app.get('/api/jobs/:jobId/results', async (request) => {
     const { jobId } = JobParams.parse(request.params)
+    if (db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
     const result = snapshot(db, (sqlite) => jobResults(sqlite, jobId))
     return JobResultsSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
   })
@@ -168,12 +171,16 @@ export function registerJobRoutes(
   // Read-only (PLAN 11.6a): no Workbench route types, clicks or takes over anything.
   app.get('/api/jobs/:jobId/workbench', async (request) => {
     const { jobId } = JobParams.parse(request.params)
+    if (db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
     const result = snapshot(db, (sqlite) => jobWorkbench(sqlite, jobId))
     return WorkbenchSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
   })
 
   app.get('/api/jobs/:jobId/exchanges', async (request) => {
     const { jobId } = JobParams.parse(request.params)
+    if (db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
     const result = snapshot(db, (sqlite) => {
       if (!jobRow(sqlite, jobId)) throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
       return listExchanges(sqlite, jobId)

@@ -212,9 +212,9 @@ export function stageAction(
         turn.turn_id,
         commandId,
         action.action,
-        // Redacted before storing (D6): a note, question or text may carry a token the agent saw. Ids and action names
-        // don't match the redaction patterns, so applying the staged action later reads the same routing.
-        JSON.stringify(redactValue(action)),
+        // Kept as sent while the turn runs: the staged action is applied from here when the turn settles, and redaction
+        // would rewrite prose the next agent and the person read. `redactSettledActions` redacts it then (D6).
+        JSON.stringify(action),
         req.channel,
         state,
         JSON.stringify(receipt),
@@ -262,4 +262,17 @@ export function stageAction(
       message: plainReceipt(sqlite, turn, action),
     }),
   )
+}
+
+/** Once a turn's actions are applied or dropped, their stored text is redacted (D6): only the receipt needs it after. */
+export function redactSettledActions(sqlite: DatabaseSync, turnId: string): void {
+  const rows = z
+    .array(z.object({ rowid: z.int(), args: z.string() }))
+    .parse(
+      sqlite
+        .prepare("SELECT rowid, args FROM exchange_actions WHERE turn_id = ? AND state != 'staged'")
+        .all(turnId),
+    )
+  const update = sqlite.prepare('UPDATE exchange_actions SET args = ? WHERE rowid = ?')
+  for (const row of rows) update.run(JSON.stringify(redactValue(JSON.parse(row.args))), row.rowid)
 }

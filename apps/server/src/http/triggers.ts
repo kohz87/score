@@ -26,6 +26,7 @@ import { startReportBack } from '../domain/triggers/report-back.ts'
 import { jobEvent } from '../domain/exchanges/store.ts'
 import { HOOK_PATH } from '../auth/remote.ts'
 import { HttpError } from '../errors.ts'
+import { assertJobOpen } from '../domain/exchanges/job-life.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { RateLimiter } from '../shares/rate-limit.ts'
 
@@ -153,6 +154,8 @@ export function registerTriggerRoutes(
       source: 'triggers',
       identity: randomUUID(),
       apply: ({ sqlite }) => {
+        // Report-back starts a lead turn in the job: not in a closed or deleted one (decision 121).
+        assertJobOpen(sqlite, jobId)
         startReportBack(sqlite, jobId, new Date(clock()).toISOString())
         return jobEvent(sqlite, jobId)
       },

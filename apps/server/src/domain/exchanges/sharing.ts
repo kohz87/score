@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { MessagePartSchema, PINS_LIMIT, type MessagePart, type RoomPin } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
+import { assertJobOpen } from './job-life.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import { agentText } from '../message-text.ts'
@@ -88,6 +89,8 @@ export function shareMessage(
   const source = messageFromRow(value)
   if (source.streaming) throw new HttpError(409, 'conflict', 'This message is still being written.')
   const target = jobRow(sqlite, targetJobId)
+  // A closed or deleted job takes no new copies (decision 121).
+  if (target) assertJobOpen(sqlite, targetJobId)
   const team = target
     ? sqlite.prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team'").get(target.room_id)
     : undefined
