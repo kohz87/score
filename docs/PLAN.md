@@ -705,6 +705,14 @@ already has it (`tools/bot_desktop/`, `hermes computer-use screen`): an RFB-over
 `/api/display/ws`, behind a single-use ticket from `display.observe` and an input lease. Score would show it read-only
 (never take the lease). A new boundary: design and adversarial review first (ARCHITECTURE D2.1), then the build.
 
+**P1 2.0.2: kept classic pages inside the new shell** (decision 123). The workflow list and editor, run pages
+(`/runs/:id`), Watch (`/watch/:agent`) and the Customizer open under `/b` with the new shell's chrome; old paths
+redirect; Back returns to the room. Their insides stay v1 until the rebuild below.
+
+**P2 Rebuild the remaining v1 pages in the new design** (decision 123): runs as a Runs view in the side panel and a run
+as a job thread with its steps; the workflow list in Recipes; Watch folded into the agent's screen page; the Customizer
+restyled. Design pass first (prototype additions), then build.
+
 **P3 Deferred phase-gate review items** (decision 121; each was judged safe to ship and is logged in TASKLOG):
 `hold()` refusing or merging when an exchange already holds a turn; report-back `tool` limited to reporting tools (or a
 warning for others); listing and deleting triggers that were never called (orphans of a retried create); the
