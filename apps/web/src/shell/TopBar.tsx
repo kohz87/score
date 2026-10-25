@@ -2,6 +2,7 @@ import type { Ref } from 'react'
 import { NAV_DRAWER_ID } from './NavDrawer.tsx'
 import { MainNav, NeedsYouDot } from './MainNav.tsx'
 import { useLayout } from '../themes/layout.ts'
+import { useMediaQuery } from '../data/use-media.ts'
 import { TerminalButton } from './TerminalButton.tsx'
 import { AvatarMenu } from './AvatarMenu.tsx'
 
@@ -24,8 +25,10 @@ export function TopBar({
   menuOpen,
   terminalOffered,
 }: TopBarProps) {
-  // The launcher layout hides the links, so the Needs-you marker rides on the menu button.
+  // Wherever the links are hidden (the launcher layout, or any layout below 1024px where shell.css hides .main-nav), the
+  // Needs-you marker rides on the menu button.
   const launcher = useLayout().nav === 'launcher'
+  const narrow = useMediaQuery('(width < 1024px)')
   return (
     <header className="top-bar">
       <span className="menu-slot">
@@ -48,7 +51,7 @@ export function TopBar({
             />
           </svg>
         </button>
-        {launcher && !menuOpen && (
+        {(launcher || narrow) && !menuOpen && (
           <span className="menu-slot-badge">
             <NeedsYouDot />
           </span>
