@@ -39,19 +39,24 @@ const posts = () =>
   fetchMock.mock.calls.filter(
     ([input, init]) => init?.method === 'POST' && String(input).endsWith('/messages'),
   )
-// Since 5.33 a correction first confirms the rewind; the send under test happens after that.
+// Since 2.0.12 a correction rewinds on Send by itself when every agent can be rewound (the dialog only when not).
 async function sendCorrection() {
   fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
-  const confirm = await screen.findByRole('button', { name: 'Rewind and edit' })
-  // Enabled once the rewind plan has loaded.
-  await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false))
-  fireEvent.click(confirm)
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) => String(input).endsWith('/rewind') && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  )
 }
+let plan: { hiddenCount: number; blocked: string | null; agents: unknown[] }
 
 beforeEach(() => {
   localStorage.clear()
   stopEdit()
   finishPost = null
+  plan = { hiddenCount: 1, blocked: null, agents: [{ agentId: 'lead', turns: 1, cannot: null }] }
   queryClient = createQueryClient()
   queryClient.setQueryData(messagesQuery('general').key, {
     asOfSeq: 1,
@@ -59,12 +64,7 @@ beforeEach(() => {
   })
   fetchMock = vi.fn(async (input, init) => {
     if (String(input) === '/api/commands') return json({ items: [] })
-    if (String(input).endsWith('/rewind-plan'))
-      return json({
-        hiddenCount: 1,
-        blocked: null,
-        agents: [{ agentId: 'lead', turns: 1, cannot: null }],
-      })
+    if (String(input).endsWith('/rewind-plan')) return json(plan)
     if (String(input).endsWith('/rewind'))
       return json({
         version: {
@@ -166,4 +166,38 @@ test('a resumed edit whose rewind already happened posts the correction without 
   expect(screen.queryByRole('button', { name: 'Rewind and edit' })).toBeNull()
   expect(JSON.parse(String(posts()[0]![1]!.body))).toMatchObject({ edits: 'a' })
   await act(async () => finishPost?.())
+})
+
+test('a correction rewinds and sends without a dialog when every agent can be rewound (2.0.12)', async () => {
+  act(() => startEdit(mine('a', 'text A')))
+  await sendCorrection()
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  expect(screen.queryByRole('button', { name: 'Rewind and edit' })).toBeNull()
+  const rewinds = fetchMock.mock.calls.filter(
+    ([input, init]) => String(input).endsWith('/rewind') && init?.method === 'POST',
+  )
+  expect(rewinds).toHaveLength(1)
+  // The rewind comes before the correction.
+  const order = fetchMock.mock.calls.map(([input]) => String(input))
+  expect(order.findIndex((url) => url.endsWith('/rewind'))).toBeLessThan(
+    order.findIndex((url) => url.endsWith('/messages')),
+  )
+  await act(async () => finishPost?.())
+})
+
+test('the dialog explains when an agent can’t be rewound or work is still running, and nothing is sent', async () => {
+  plan = {
+    hiddenCount: 1,
+    blocked: null,
+    agents: [{ agentId: 'lead', turns: 1, cannot: 'compressed' }],
+  }
+  act(() => startEdit(mine('a', 'text A')))
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  expect(await screen.findByRole('button', { name: 'Hide in Score only' })).toBeTruthy()
+  expect(posts()).toHaveLength(0)
+  expect(
+    fetchMock.mock.calls.some(
+      ([input, init]) => String(input).endsWith('/rewind') && init?.method === 'POST',
+    ),
+  ).toBe(false)
 })

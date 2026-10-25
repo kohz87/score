@@ -43,9 +43,7 @@ test('Edit (replaces), Copy and Retry work from the action row under a message',
   const fixed = `Please check the room context, corrected ${stamp}`
   await composer.fill(fixed)
   await composer.press('Enter')
-  // PLAN 5.33: the edit rewinds the room and the agents; the person confirms first.
-  const dialog = page.getByRole('dialog', { name: 'Edit and send again?' })
-  await dialog.getByRole('button', { name: 'Rewind and edit' }).click({ timeout: 15_000 })
+  // PLAN 5.33: the edit rewinds the room and the agents; since 2.0.12 Send does it without asking when it can.
   const corrected = history.getByRole('article').filter({ hasText: fixed })
   await expect(corrected).toBeVisible()
   // The original and its replies become the previous version.

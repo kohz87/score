@@ -3,7 +3,7 @@ import type { AgentDetail } from '@score/contract'
 import { useHubSearch, useSkillActions, useSkills } from '../../routes/team/agent-tab-queries.ts'
 import { tabFailure } from '../../routes/team/tab-errors.ts'
 import { CloseIcon, PlusIcon } from '../BoldIcons.tsx'
-import { Fail, Loading, MoreCard } from './MoreCard.tsx'
+import { Fail, Loading, MoreCard, useFoldedList } from './MoreCard.tsx'
 
 /** Skills are switched off rather than deleted (Hermes keeps them installed), so ✕ turns one off and + turns it on. */
 export function SkillsCard({ agent }: { agent: AgentDetail }) {
@@ -13,6 +13,7 @@ export function SkillsCard({ agent }: { agent: AgentDetail }) {
   const [query, setQuery] = useState('')
   const hub = useHubSearch(query)
   const items = skills.data ?? []
+  const list = useFoldedList(`skills:${agent.id}`, items, 12)
 
   function search(event: FormEvent) {
     event.preventDefault()
@@ -31,8 +32,8 @@ export function SkillsCard({ agent }: { agent: AgentDetail }) {
       )}
       {skills.isSuccess && !items.length && <p className="small muted">No skills installed.</p>}
       {toggle.isError && <Fail>{tabFailure(toggle.error, 'change the skill')}</Fail>}
-      <div className="row wrap">
-        {items.map((skill) => (
+      <div id={list.id} className="row wrap">
+        {list.shown.map((skill) => (
           <span className={`chip${skill.enabled ? '' : ' bold-mc-off'}`} key={skill.name}>
             {skill.name}
             <button
@@ -47,6 +48,7 @@ export function SkillsCard({ agent }: { agent: AgentDetail }) {
           </span>
         ))}
       </div>
+      {list.toggle}
       <form className="row" onSubmit={search} role="search" aria-label="Search the skills hub">
         <label htmlFor={`newskill-${agent.id}`} className="sr">
           Find a skill

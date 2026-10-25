@@ -41,6 +41,7 @@ import { useVoiceInput } from './voice.ts'
 import { newId } from '../../data/ids.ts'
 import { stopEdit, useEditing } from './message-edit.ts'
 import { RewindDialog } from './RewindDialog.tsx'
+import { fetchRewindPlan, postRewind } from './rewind.ts'
 import {
   ACCEPT,
   attachmentKey,
@@ -239,6 +240,8 @@ export function Composer({
   useEffect(() => () => stopEdit(), [])
   // The message whose rewind already happened: a failed send is retried without asking again.
   const rewoundEdit = useRef<string | null>(null)
+  // One rewind request per edited message, so a retried Send can't rewind twice.
+  const rewindKey = useRef<{ messageId: string; key: string } | null>(null)
   const [confirmEdit, setConfirmEdit] = useState(false)
 
   const commands = useQuery({
@@ -522,10 +525,32 @@ export function Composer({
     }
     const local = editing ? null : parseLocalCommand(body)
     if (local) return runLocalCommand(local)
-    // Editing rewinds the room and the agents first (PLAN 5.33); the person confirms what that does.
+    // Editing rewinds the room and the agents first (PLAN 5.33). When every agent can be rewound and nothing is still
+    // running, Score does it on Send without asking (owner, 2.0.12); otherwise the dialog explains and offers the way
+    // out (stop the work first, or hide in Score only).
     if (editing && !editing.rewound && rewoundEdit.current !== editing.messageId) {
-      setConfirmEdit(true)
-      return
+      setPending(true)
+      setNotice(null)
+      let clean: boolean
+      try {
+        const plan = await fetchRewindPlan(roomId, editing.messageId)
+        clean = !plan.blocked && plan.agents.every((agent) => !agent.cannot)
+        if (clean) {
+          rewindKey.current ??= { messageId: editing.messageId, key: newId() }
+          if (rewindKey.current.messageId !== editing.messageId)
+            rewindKey.current = { messageId: editing.messageId, key: newId() }
+          await postRewind(roomId, editing.messageId, 'edit', false, rewindKey.current.key)
+          rewoundEdit.current = editing.messageId
+        }
+      } catch {
+        // A refusal or an incomplete rewind: the dialog reads the plan again and says what happened.
+        clean = false
+      }
+      setPending(false)
+      if (!clean) {
+        setConfirmEdit(true)
+        return
+      }
     }
     const sent = attachments
     let sentJobId = editing?.jobId ?? jobId
@@ -863,7 +888,7 @@ export function Composer({
           <span>Editing your message</span>
           <span className="chat-edit-note">
             {roomMode
-              ? 'Sending replaces it and rewinds the agents to before it.'
+              ? 'Sending replaces it and rewinds the agents to before it (long-term memory stays).'
               : 'Sending hides it and everything after it as the previous version.'}
           </span>
           <button type="button" className="chat-editing-cancel" onClick={leaveEdit}>

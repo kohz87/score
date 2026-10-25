@@ -146,3 +146,52 @@
   overflow-x: auto;
   scroll-margin-top: 16px;
 }
+
+/* PLAN 2.0.12: long cards fold. */
+[data-ui='bold'] .bold-fold-list {
+  display: contents;
+}
+
+[data-ui='bold'] .bold-fold-btn {
+  align-self: flex-start;
+  border: 0;
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-fold-btn:hover {
+  background: var(--line);
+}
+
+[data-ui='bold'] .bold-fold-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-fold-clipped {
+  position: relative;
+  max-height: 320px;
+  overflow: hidden;
+}
+
+[data-ui='bold'] .bold-fold-clipped::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 64px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--panel));
+}
+
+@media (max-width: 640px) {
+  [data-ui='bold'] .bold-fold-clipped {
+    max-height: 260px;
+  }
+}

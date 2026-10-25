@@ -1,11 +1,12 @@
 import type { AgentDetail } from '@score/contract'
 import { ApiError } from '../../data/api.ts'
 import { usePluginToggle, usePlugins } from '../../routes/settings/settings-queries.ts'
-import { Fail, Loading, MoreCard } from './MoreCard.tsx'
+import { Fail, Loading, MoreCard, useFoldedList } from './MoreCard.tsx'
 
 export function PluginsCard({ agent }: { agent: AgentDetail }) {
   const plugins = usePlugins(agent.id)
   const toggle = usePluginToggle(agent.id)
+  const list = useFoldedList(`plugins:${agent.id}`, plugins.data ?? [], 8)
   return (
     <MoreCard id="agent-plugins" title="Plugins">
       {plugins.isPending && <Loading what="plugins" />}
@@ -16,7 +17,7 @@ export function PluginsCard({ agent }: { agent: AgentDetail }) {
         </Fail>
       )}
       {plugins.data && !plugins.data.length && <p className="small muted">No plugins installed.</p>}
-      {plugins.data?.map((plugin) => (
+      {list.shown.map((plugin) => (
         <label className="check" key={plugin.id}>
           <input
             type="checkbox"
@@ -32,6 +33,7 @@ export function PluginsCard({ agent }: { agent: AgentDetail }) {
           </span>
         </label>
       ))}
+      {list.toggle}
       {plugins.data && plugins.data.length > 0 && (
         <span className="small muted">
           A change takes effect on its next session or after a gateway restart.

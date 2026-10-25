@@ -4,7 +4,7 @@ import { newId } from '../../data/ids.ts'
 import { useMemory, useMemoryActions } from '../../routes/team/agent-tab-queries.ts'
 import { tabFailure } from '../../routes/team/tab-errors.ts'
 import { CloseIcon } from '../BoldIcons.tsx'
-import { Fail, Loading, MoreCard } from './MoreCard.tsx'
+import { Fail, Loading, MoreCard, useFoldedList } from './MoreCard.tsx'
 
 export function RemembersCard({ agent }: { agent: AgentDetail }) {
   const memory = useMemory(agent.id, '')
@@ -13,6 +13,7 @@ export function RemembersCard({ agent }: { agent: AgentDetail }) {
   // One key per distinct text, so a retry after a lost response cannot add a second entry.
   const attempt = useRef<{ text: string; key: string } | null>(null)
   const items = memory.data?.pages.flatMap((page) => page.items) ?? []
+  const list = useFoldedList(`memory:${agent.id}`, items)
   const writable = memory.data?.pages[0]?.writable !== false
 
   function submit(event: FormEvent) {
@@ -47,22 +48,25 @@ export function RemembersCard({ agent }: { agent: AgentDetail }) {
       )}
       {memory.isSuccess && !items.length && <p className="small muted">Nothing remembered yet.</p>}
       {remove.isError && <Fail>{tabFailure(remove.error, 'forget that')}</Fail>}
-      {items.map((entry) => (
-        <div className="listrow" key={entry.id}>
-          <span className="grow small">{entry.text}</span>
-          {writable && (
-            <button
-              type="button"
-              className="act"
-              aria-label={`Forget: ${entry.text.slice(0, 40)}`}
-              disabled={remove.isPending}
-              onClick={() => remove.mutate(entry.id)}
-            >
-              <CloseIcon />
-            </button>
-          )}
-        </div>
-      ))}
+      <div id={list.id} className="bold-fold-list">
+        {list.shown.map((entry) => (
+          <div className="listrow" key={entry.id}>
+            <span className="grow small">{entry.text}</span>
+            {writable && (
+              <button
+                type="button"
+                className="act"
+                aria-label={`Forget: ${entry.text.slice(0, 40)}`}
+                disabled={remove.isPending}
+                onClick={() => remove.mutate(entry.id)}
+              >
+                <CloseIcon />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {list.toggle}
       {memory.hasNextPage && (
         <button
           type="button"

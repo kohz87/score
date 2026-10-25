@@ -360,9 +360,8 @@ for (const viewport of sizes) {
       await composer.fill('Please add pagination, newest first.')
       await page.getByRole('button', { name: 'Send correction', exact: true }).click()
 
-      const dialog = page.getByRole('dialog', { name: 'Edit and send again?' })
-      await expect(dialog.getByText(/Agents rewound: builder −1 exchange/)).toBeVisible()
-      await dialog.getByRole('button', { name: 'Rewind and edit' }).click()
+      // 2.0.12: Send rewinds and posts by itself when every agent can be rewound.
+      await expect(page.getByRole('dialog', { name: 'Edit and send again?' })).toHaveCount(0)
 
       await expect
         .poll(() =>

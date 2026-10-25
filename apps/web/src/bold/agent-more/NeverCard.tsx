@@ -6,7 +6,7 @@ import { usePermissionAction, useUseTeamRule } from '../../routes/settings/rules
 import { tabFailure } from '../../routes/team/tab-errors.ts'
 import { boldSettingsSectionLink } from '../bold-links.ts'
 import { CloseIcon } from '../BoldIcons.tsx'
-import { Fail, MoreCard } from './MoreCard.tsx'
+import { Fail, MoreCard, useFoldedList } from './MoreCard.tsx'
 
 function failure(error: unknown, action: string): string {
   if (error instanceof ApiError && error.code === 'not_stricter')
@@ -22,6 +22,7 @@ export function NeverCard({ agent }: { agent: AgentDetail }) {
   const back = useUseTeamRule(agent.id)
   const [glob, setGlob] = useState('')
   const never = agent.permissions.filter((row) => row.level === 'never')
+  const list = useFoldedList(`never:${agent.id}`, never)
   const busy = change.isPending || back.isPending
 
   function add(event: FormEvent) {
@@ -41,7 +42,7 @@ export function NeverCard({ agent }: { agent: AgentDetail }) {
       {change.isError && <Fail>{failure(change.error, 'change the permission')}</Fail>}
       {back.isError && <Fail>{failure(back.error, 'use the team rule')}</Fail>}
       {!never.length && <p className="small muted">No Never rules yet.</p>}
-      {never.map((row) => (
+      {list.shown.map((row) => (
         <div className="listrow" key={row.id}>
           <code className="grow small">{row.label}</code>
           <span className="small muted">{row.inherited ? 'Team' : 'Only this agent'}</span>
@@ -58,6 +59,7 @@ export function NeverCard({ agent }: { agent: AgentDetail }) {
           )}
         </div>
       ))}
+      {list.toggle}
       <form className="row" onSubmit={add} aria-label="Add a Never rule">
         <label htmlFor={`never-${agent.id}`} className="sr">
           Never allow commands that match
