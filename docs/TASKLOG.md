@@ -1314,3 +1314,4 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **Swipes (10.15) design v6** reviewed by Codex max: not approved (3 P1, 4 P2:
   docs/reviews/2026-10-26-10.15-swipe-design-v6-codex.md on task/2.0.12-swipe-design). Lead's call: Hermes upgrade
   first, then v7 against v0.22.5. Owner asked to proceed with the upgrade prep (2026-10-26).
+- **v2.0.12 deployed live** (~12:41 UTC): backup score-pre-2.0.12-20261026.db, restart, 0 errors.
