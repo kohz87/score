@@ -80,5 +80,9 @@ export function useRoomNeedsYouState({
       orchestrationsState.status === 'success' &&
       workflowsState.status === 'success' &&
       (roomId !== null || canonical.status === 'success'),
+    // A source that failed counts as nothing above, so the total may be short: say so rather than a confident number.
+    incomplete: [approvalsState, exchangesState, orchestrationsState, workflowsState].some(
+      (read) => read.status === 'error',
+    ),
   }
 }

@@ -495,3 +495,28 @@ test('the person’s own messages are never announced', async () => {
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(status.textContent).toBe('')
 })
+
+test('a message that only becomes visible (older than what was seen) is not announced as new', async () => {
+  const live = stubLiveStream({ pages: { 'job-1': pages['job-1'] ?? [], 'job-2': [] } })
+  renderStream('job-1', false, null, () => undefined, live.stream as unknown as StreamClient)
+  await screen.findByText('Read layer is ready.')
+  const status = screen.getByRole('status')
+  // An earlier page, a tab switch or an undone delete brings back an old agent message: it isn't news.
+  act(() =>
+    live.emit({
+      type: 'message.created',
+      data: makeMessage({
+        id: 'message-old',
+        jobId: 'job-1',
+        author: { kind: 'agent', agentId: 'builder' },
+        parts: [{ kind: 'text', text: 'From this morning.' }],
+        createdAt: '2026-10-01T08:00:00.000Z',
+      }),
+      seq: 2,
+      ts: '2026-10-24T09:32:00.000Z',
+    }),
+  )
+  expect(await screen.findByText('From this morning.')).toBeDefined()
+  await new Promise((resolve) => setTimeout(resolve, 2200))
+  expect(status.textContent).toBe('')
+})

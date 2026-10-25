@@ -349,7 +349,9 @@ export function RoomMessageStream({
   const [pageStates, setPageStates] = useState<Record<string, PageState>>({})
   const seeked = useRef<string | null>(null)
   const [messageNotice, setMessageNotice] = useState('')
-  const seenMessages = useRef<Set<string> | null>(null)
+  // The newest message time seen so far: only agent messages after it are news. Ids alone would call a tab switch, an
+  // earlier page or an undone delete "new" (those messages merely became visible).
+  const newestSeen = useRef<string | null>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastNoticeAt = useRef(0)
 
@@ -481,16 +483,20 @@ export function RoomMessageStream({
 
   useEffect(() => {
     if (status !== 'success') return
-    const ids = new Set(items.map((message) => message.id))
-    if (seenMessages.current === null) {
-      // The first page is history, not news: remember it without speaking.
-      seenMessages.current = ids
+    const latest = items.reduce<string>(
+      (newest, message) => (message.createdAt > newest ? message.createdAt : newest),
+      '',
+    )
+    if (newestSeen.current === null) {
+      // The first page is history, not news: remember how far it goes without speaking.
+      newestSeen.current = latest
       return
     }
+    const since = newestSeen.current
     const fresh = items.filter(
-      (message) => !seenMessages.current!.has(message.id) && message.author.kind === 'agent',
+      (message) => message.createdAt > since && message.author.kind === 'agent',
     )
-    seenMessages.current = ids
+    if (latest > since) newestSeen.current = latest
     if (fresh.length === 0) return
     const newest = fresh.at(-1)!
     if (newest.author.kind !== 'agent') return

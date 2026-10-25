@@ -95,7 +95,15 @@ export function BoldShell() {
   // room's jobs are unknown, and counting All would briefly inflate the badge and then change it.
   const roomJob = new URLSearchParams(location.search).get('job') ?? 'all'
   const roomNeeds = useRoomNeedsYouState({ roomId: null, jobs: [], selectedJob: roomJob })
-  const roomNeedsYou = roomNeeds.ready ? roomNeeds.total : 0
+  // What has loaded counts at once; a failed read shows the count as "at least" (N+, or ! when nothing loaded).
+  const roomNeedsYou = roomNeeds.total
+  const roomNeedsShort = roomNeeds.incomplete
+  const roomBadge =
+    roomNeedsYou > 0
+      ? `${roomNeedsYou > 99 ? '99' : roomNeedsYou}${roomNeedsShort || roomNeedsYou > 99 ? '+' : ''}`
+      : roomNeedsShort
+        ? '!'
+        : null
   const systemLight = useMediaQuery('(prefers-color-scheme: light)')
   const look = useLook()
   const preview = usePreview()
@@ -286,14 +294,20 @@ export function BoldShell() {
                 type="button"
                 className={view === 'room' ? 'on' : undefined}
                 aria-current={view === 'room' ? 'page' : undefined}
-                aria-label={roomNeedsYou > 0 ? `Room, ${roomNeedsYou} need you` : 'Room'}
+                aria-label={
+                  roomNeedsYou > 0
+                    ? `Room, ${roomNeedsShort ? 'at least ' : ''}${roomNeedsYou} need you`
+                    : roomNeedsShort
+                      ? 'Room, couldn’t check everything that needs you'
+                      : 'Room'
+                }
                 onClick={go('/b')}
               >
                 <RoomIcon />
                 <span>Room</span>
-                {roomNeedsYou > 0 && (
+                {roomBadge && (
                   <span className="bold-tab-count" data-protected="inline-flex">
-                    {roomNeedsYou > 99 ? '99+' : roomNeedsYou}
+                    {roomBadge}
                   </span>
                 )}
               </button>
