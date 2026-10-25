@@ -379,3 +379,12 @@ describe('local provider keys (2.0.10)', () => {
     expect(call[1].sensitiveArgIndices).toEqual([call[0].length - 1])
   })
 })
+
+test('local provider ids: unset is none, a failed read is unknown (2.0.10)', async () => {
+  const settings = new LiveSettings(home, runner)
+  expect(await settings.localProviderIds()).toEqual(new Set(['lab-gpu']))
+  runner.mockImplementation(async () => ({ exitCode: 1 }))
+  expect(await settings.localProviderIds()).toEqual(new Set())
+  runner.mockImplementation(async () => ({ exitCode: -1 }))
+  expect(await settings.localProviderIds()).toBeNull()
+})
