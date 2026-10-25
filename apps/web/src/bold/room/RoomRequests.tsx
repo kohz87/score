@@ -161,8 +161,11 @@ function RoomReportBacks({
 }) {
   const jobsDefinition = useMemo(() => roomJobsQuery(roomId), [roomId])
   const refetch = useStreamQueryRefetch(jobsDefinition)
+  // A closed job asks nothing (reopen it to send its result back); the reads now include closed jobs.
   const waiting = jobs.filter(
-    (job) => job.reportBack?.state === 'needs_ok' || job.reportBack?.state === 'not_confirmed',
+    (job) =>
+      job.state !== 'closed' &&
+      (job.reportBack?.state === 'needs_ok' || job.reportBack?.state === 'not_confirmed'),
   )
   useReportedCount('report-back', waiting.length, report)
   return (
@@ -634,7 +637,9 @@ export function RoomRequests({
       setCounts((current) => (current[id] === count ? current : { ...current, [id]: count })),
     [],
   )
-  const selectedJobs = jobs.filter((job) => selectedJob === 'all' || job.id === selectedJob)
+  const selectedJobs = jobs.filter(
+    (job) => job.state !== 'closed' && (selectedJob === 'all' || job.id === selectedJob),
+  )
   const cooking = selectedJobs.filter(
     (job) => job.state === 'waiting_on_you' || job.state === 'working',
   )

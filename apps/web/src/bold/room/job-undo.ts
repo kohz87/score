@@ -68,12 +68,15 @@ export async function undoJobDelete(): Promise<void> {
       }),
     )
     changeCachedJob(client, restored, 'upsert')
+    // A second delete while this restore was in flight owns the toast now: leave its Undo alone.
+    if (state.job?.id !== job.id) return
     publish({ job: null, restoring: false, notice: `Restored “${restored.title}”.`, error: null })
     timer = setTimeout(() => {
       timer = null
       publish({ ...state, notice: null })
     }, NOTICE_MS)
   } catch (failure) {
+    if (state.job?.id !== job.id) return
     clearTimer()
     publish({ job: null, restoring: false, notice: null, error: restoreError(failure) })
   }

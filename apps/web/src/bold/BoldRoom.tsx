@@ -147,10 +147,11 @@ export function BoldRoom() {
         setThreadJob(null)
         setMode('work')
         if (phone) setSheetOpen(false)
-        setParams(next, { replace: true })
+        // Same history state as the team room's own handler, so whichever runs last leaves the same entry.
+        setParams(next, { replace: true, state: location.state })
         setDeletedNotice('That job was deleted.')
       }),
-    [params, phone, setParams, setSheetOpen, stream],
+    [location.state, params, phone, setParams, setSheetOpen, stream],
   )
 
   useEffect(() => {
