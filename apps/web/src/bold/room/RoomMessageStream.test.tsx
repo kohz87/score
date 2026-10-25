@@ -16,6 +16,7 @@ import { RoomMessageStream } from './RoomMessageStream.tsx'
 afterEach(() => {
   disposeRoomTest()
   vi.unstubAllGlobals()
+  sessionStorage.clear()
 })
 
 const jobs = [
@@ -223,6 +224,45 @@ test('your own message offers edit and delete; the delete asks for a rewind', as
   expect(await screen.findByRole('dialog', { name: 'Delete this message?' })).toBeDefined()
 })
 
+test('a folded job shows its state, workers, outcome and message count', async () => {
+  const done = makeJob({
+    id: 'job-done',
+    title: 'Queue research',
+    state: 'done',
+    messageCount: 3,
+  })
+  stubStream({
+    pages: {
+      'job-done': [
+        makeMessage({
+          id: 'message-done',
+          jobId: 'job-done',
+          author: { kind: 'agent', agentId: 'lead' },
+          parts: [{ kind: 'text', text: 'Three queues compared.' }],
+        }),
+      ],
+    },
+  })
+  renderInRoom(
+    <RoomMessageStream
+      roomId="room-1"
+      jobs={[done]}
+      agents={agents}
+      selectedJob="all"
+      filter="all"
+      showDeleted={false}
+      seek={null}
+      openedJobs={[]}
+      onRevealSeek={() => undefined}
+      onSeeked={() => undefined}
+    />,
+  )
+  const row = (await screen.findByRole('button', { name: 'Show Queue research' })).parentElement!
+  expect(row.textContent).toContain('Done')
+  expect(row.textContent).toContain('3 messages')
+  expect(row.textContent).toContain('Three queues compared.')
+})
+
 test('a done job gets a result card linked to its latest agent message', async () => {
   const done = makeJob({
     id: 'job-done',
@@ -257,7 +297,12 @@ test('a done job gets a result card linked to its latest agent message', async (
       onSeeked={() => undefined}
     />,
   )
+  // A finished job starts folded; Show opens it in place, Hide folds it again.
+  expect(await screen.findByRole('button', { name: 'Show Queue research' })).toBeTruthy()
+  expect(screen.queryByText('Three queues compared.', { selector: 'p, div' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Show Queue research' }))
   const result = await screen.findByRole('link', { name: 'Open result: Queue research' })
+  expect(screen.getByRole('button', { name: 'Hide' })).toBeTruthy()
   expect(result.getAttribute('href')).toBe('/b?job=job-done&message=message-done')
   expect(result.textContent).toContain('Queue research')
   expect(result.textContent).toContain('Done · lead')

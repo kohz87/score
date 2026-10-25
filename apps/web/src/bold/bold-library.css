@@ -432,3 +432,29 @@
     flex-basis: 320px;
   }
 }
+
+[data-ui='bold'] .bold-library-folder-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-library-folder.is-picked {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-library-chevron {
+  width: 10px;
+  font-size: 10px;
+}
+
+[data-ui='bold'] .bold-library-empty {
+  font-weight: 400;
+}

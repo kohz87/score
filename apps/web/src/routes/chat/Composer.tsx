@@ -1360,6 +1360,11 @@ export function Composer({
           </p>
         )}
       </form>
+      {roomMode && (
+        <p className="chat-composer-hint" aria-hidden="true">
+          @name for one agent, / for commands
+        </p>
+      )}
     </div>
   )
 }

@@ -82,6 +82,7 @@ const json = (body: unknown, status = 200) =>
 
 let treeError = false
 let entries: KnowledgeNoteSummary[] = notes
+let folders = ['Decisions']
 let searchItems: Array<Record<string, unknown>> = []
 
 function respond(input: string, init: RequestInit = {}): Response {
@@ -102,7 +103,7 @@ function respond(input: string, init: RequestInit = {}): Response {
   if (path === '/api/knowledge/tree') {
     if (treeError) return json({ error: { code: 'failed', message: 'no' } }, 500)
     return json({
-      folders: ['Decisions'],
+      folders,
       notes: entries,
       documents: [],
     })
@@ -145,6 +146,8 @@ beforeEach(() => {
   treeError = false
   entries = notes
   searchItems = []
+  folders = ['Decisions']
+  sessionStorage.clear()
   vi.stubGlobal(
     'fetch',
     vi.fn((input: string | URL | Request, init?: RequestInit) =>
@@ -278,4 +281,37 @@ test('upload uses the open note folder, and a folder accepts dropped files with 
     })
     HeldUpload.last.onload?.()
   })
+})
+
+test('folders collapse, empty and nested folders show, and New note starts in the picked folder', async () => {
+  folders = ['Decisions', 'Decisions/Archive', 'Empty']
+  mount()
+  const nav = await screen.findByRole('navigation', { name: 'Library notes' })
+  const decisions = await within(nav).findByRole('button', { name: 'Decisions' })
+  expect(within(nav).getByRole('button', { name: /Empty/ })).toBeDefined()
+  expect(within(nav).getByRole('button', { name: /Archive/ })).toBeDefined()
+  expect(within(nav).getAllByRole('button', { name: /Last edited by/ })).toHaveLength(2)
+  fireEvent.click(decisions)
+  expect(within(nav).queryAllByRole('button', { name: /Last edited by/ })).toHaveLength(0)
+  expect(decisions.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(within(nav).getByRole('button', { name: /Empty/ }))
+  fireEvent.click(within(nav).getByRole('button', { name: /New note/ }))
+  expect(((await screen.findByLabelText('Path in Knowledge')) as HTMLInputElement).value).toBe(
+    'Empty/',
+  )
+})
+
+test('New folder in the notes list creates the folder and stays on the notes', async () => {
+  mount()
+  const nav = await screen.findByRole('navigation', { name: 'Library notes' })
+  fireEvent.click(await within(nav).findByRole('button', { name: /New folder/ }))
+  const input = (await screen.findByLabelText('Folder path')) as HTMLInputElement
+  fireEvent.change(input, { target: { value: 'Plans' } })
+  fireEvent.submit(input.closest('form')!)
+  await waitFor(() =>
+    expect(
+      vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/knowledge/folders')),
+    ).toBe(true),
+  )
+  expect(screen.queryByRole('button', { name: 'Files', pressed: true })).toBeNull()
 })

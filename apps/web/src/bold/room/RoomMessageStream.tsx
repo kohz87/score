@@ -15,6 +15,7 @@ import {
   retryableIds,
   messageText,
 } from './BoldMessage.tsx'
+import { foldedJobIds, isFinishedJob, readExpandedJobs, writeExpandedJobs } from './job-fold.ts'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomMessagesQuery, roomSeekQuery } from './room-queries.ts'
 import { useMessageTools } from './use-message-tools.ts'
@@ -80,6 +81,50 @@ function MessageSeekCollector({
     onPage(pageKey(jobId, seekMarker(seek)), { data, status, error })
   }, [data, error, jobId, onPage, seek, status])
   return null
+}
+
+/** One finished job as a compact row: who worked on it, how it ended and how much was said. */
+function FoldedJob({
+  job,
+  agents,
+  messages,
+  onShow,
+}: {
+  job: Job
+  agents: AgentSummary[]
+  messages: Message[]
+  onShow: () => void
+}) {
+  const names = [
+    ...new Set(
+      messages.flatMap((message) =>
+        message.author.kind === 'agent' ? [authorName(message, agents)] : [],
+      ),
+    ),
+  ]
+  const last = messages
+    .filter(
+      (message) => message.author.kind === 'agent' && !message.streaming && messageText(message),
+    )
+    .at(-1)
+  const outcome = (last ? messageText(last) : (job.summary ?? '')).replace(/\s+/g, ' ').trim()
+  const count = Math.max(job.messageCount, messages.length)
+  return (
+    <div className="bold-job-fold" data-job-id={job.id}>
+      <span className="bold-job-fold-copy">
+        <b>{job.title}</b>
+        <span>
+          {job.state === 'closed' ? 'Closed' : 'Done'}
+          {names.length > 0 && ` · ${names.join(', ')}`} · {count}{' '}
+          {count === 1 ? 'message' : 'messages'}
+        </span>
+        {outcome && <span className="bold-job-fold-last">{outcome}</span>}
+      </span>
+      <button type="button" aria-label={`Show ${job.title}`} onClick={onShow}>
+        Show
+      </button>
+    </div>
+  )
 }
 
 /** The live stream for All or one job, with the classic message cards and the prototype's hover row. */
@@ -290,39 +335,116 @@ export function RoomMessageStream({
     })
   }, [allItems, defaultJob, items, onRevealSeek, onSeeked, seek])
 
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(readExpandedJobs)
+  function setJobOpen(jobId: string, open: boolean) {
+    setExpandedJobs((current) => {
+      const next = new Set(current)
+      if (open) next.add(jobId)
+      else next.delete(jobId)
+      writeExpandedJobs(next)
+      return next
+    })
+  }
   const branch = view?.filter === filter && view.selectedJob === selectedJob ? view : null
   let nodes: ReactNode[] = []
   if (status === 'success') {
-    const built = buildMessageNodes({
-      items,
-      versions,
-      agents,
-      showDeleted,
-      branch,
-      onlyJobId: selectedJob === 'all' ? undefined : selectedJob,
-      onBranchSelect: (messageId, version) =>
-        setView(version ? { messageId, version, filter, selectedJob } : null),
-      renderMessage: (message) => (
-        <BoldMessage
-          key={message.id}
-          message={message}
-          agents={agents}
-          versions={versions}
-          approvalPointerIds={approvalPointerIds}
-          canRetry={retryable.has(message.id)}
-          onView={(version) => setView({ messageId: message.id, version, filter, selectedJob })}
-          pinned={isPinned(message.id)}
-          pinBusy={pinBusy === message.id}
-          onTogglePin={() => void togglePin(message.id)}
-        />
-      ),
-    })
+    // Finished jobs fold into one row in All; a branch view or the deleted-message markers need the whole stream.
+    const folded =
+      selectedJob === 'all' && !branch && !showDeleted
+        ? foldedJobIds({
+            jobs,
+            messages: items,
+            expanded: expandedJobs,
+            isPinned,
+            approvalPointerIds,
+            seek,
+          })
+        : new Set<string>()
+    const build = (list: Message[]) =>
+      buildMessageNodes({
+        items: list,
+        versions,
+        agents,
+        showDeleted,
+        branch,
+        onlyJobId: selectedJob === 'all' ? undefined : selectedJob,
+        onBranchSelect: (messageId, version) =>
+          setView(version ? { messageId, version, filter, selectedJob } : null),
+        renderMessage: (message) => (
+          <BoldMessage
+            key={message.id}
+            message={message}
+            agents={agents}
+            versions={versions}
+            approvalPointerIds={approvalPointerIds}
+            canRetry={retryable.has(message.id)}
+            onView={(version) => setView({ messageId: message.id, version, filter, selectedJob })}
+            pinned={isPinned(message.id)}
+            pinBusy={pinBusy === message.id}
+            onTogglePin={() => void togglePin(message.id)}
+          />
+        ),
+      })
+    let built: { nodes: ReactNode[]; branched: boolean }
+    const hideable = new Set(
+      selectedJob === 'all' && !branch && !showDeleted
+        ? jobs
+            .filter((item) => isFinishedJob(item) && expandedJobs.has(item.id))
+            .map((item) => item.id)
+        : [],
+    )
+    if (folded.size === 0 && hideable.size === 0) built = build(items)
+    else {
+      built = { nodes: [], branched: false }
+      let run: Message[] = []
+      const shown = new Set<string>()
+      for (const message of items) {
+        const own = message.jobId && (folded.has(message.jobId) || hideable.has(message.jobId))
+        if (!own) {
+          run.push(message)
+          continue
+        }
+        const job = jobs.find((item) => item.id === message.jobId)!
+        if (!folded.has(job.id)) {
+          if (!shown.has(job.id)) {
+            shown.add(job.id)
+            built.nodes.push(...build(run).nodes)
+            run = []
+            built.nodes.push(
+              <p key={`hide-${job.id}`} className="bold-job-hide">
+                {job.title}
+                <button type="button" onClick={() => setJobOpen(job.id, false)}>
+                  Hide
+                </button>
+              </p>,
+            )
+          }
+          run.push(message)
+          continue
+        }
+        if (shown.has(job.id)) continue
+        shown.add(job.id)
+        built.nodes.push(...build(run).nodes)
+        run = []
+        built.nodes.push(
+          <FoldedJob
+            key={`fold-${job.id}`}
+            job={job}
+            agents={agents}
+            messages={allItems.filter((item) => item.jobId === job.id)}
+            onShow={() => setJobOpen(job.id, true)}
+          />,
+        )
+      }
+      built.nodes.push(...build(run).nodes)
+    }
     nodes = built.nodes
     const effectiveView = built.branched
     if (!effectiveView)
       for (const job of jobs.filter(
         (item) =>
           item.state === 'done' &&
+          !folded.has(item.id) &&
           jobMatchesFilter(item, filter) &&
           (selectedJob === 'all' || selectedJob === item.id),
       )) {

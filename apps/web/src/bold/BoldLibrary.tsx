@@ -45,7 +45,7 @@ type Dialog =
   | { kind: 'new'; initial: string }
   | { kind: 'move'; path: string }
   | { kind: 'delete'; path: string }
-  | { kind: 'folder'; parent: string }
+  | { kind: 'folder'; parent: string; fromNav?: boolean }
   | null
 
 type ExportRequest = { request: KnowledgeExportRequest; heading: string }
@@ -82,6 +82,19 @@ function SelectedByline({ path, agents }: { path: string; agents: AgentSummary[]
   const note = useNote(isNotePath(path) ? path : null)
   if (!note.data) return null
   return <Byline author={note.data.lastAuthor} mtime={note.data.mtime} agents={agents} detail />
+}
+
+const COLLAPSED_KEY = 'score.library.collapsed'
+
+function readCollapsed(): Set<string> {
+  try {
+    const parsed: unknown = JSON.parse(sessionStorage.getItem(COLLAPSED_KEY) ?? '[]')
+    return new Set(
+      Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [],
+    )
+  } catch {
+    return new Set()
+  }
 }
 
 function noteGroups(tree: { folders: string[]; notes: KnowledgeNoteSummary[] }) {
@@ -143,6 +156,22 @@ export function BoldLibrary({
   const focusNote = useRef(false)
   const lastOpenedPath = useRef<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
+  // The folder New note and New folder start in; set by clicking a folder heading. Collapsed folders last the session.
+  const [pickedFolder, setPickedFolder] = useState('')
+  const [collapsed, setCollapsed] = useState<Set<string>>(readCollapsed)
+  function toggleFolder(folder: string) {
+    setPickedFolder(folder)
+    setCollapsed((current) => {
+      const next = new Set(current)
+      if (!next.delete(folder)) next.add(folder)
+      try {
+        sessionStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]))
+      } catch {
+        // Storage can be blocked; the choice then only lasts while the panel is open.
+      }
+      return next
+    })
+  }
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [exportRequest, setExportRequest] = useState<ExportRequest | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -384,23 +413,45 @@ export function BoldLibrary({
                     upload([...event.dataTransfer.files], folder)
                   }}
                 >
-                  <h2 className="bold-library-folder">{folder || 'Notes'}</h2>
-                  {items.map((note) => (
-                    <button
-                      key={note.path}
-                      type="button"
-                      className={`bold-library-item${active === note.path && section === 'notes' ? ' is-selected' : ''}`}
-                      aria-current={
-                        active === note.path && section === 'notes' ? 'page' : undefined
-                      }
-                      onClick={() => open(note.path)}
+                  {folder === '' ? (
+                    <h2 className="bold-library-folder">Notes</h2>
+                  ) : (
+                    <h2
+                      className={`bold-library-folder${pickedFolder === folder ? ' is-picked' : ''}`}
+                      style={{ paddingLeft: 10 + (folder.split('/').length - 1) * 14 }}
                     >
-                      <span className="bold-library-item-title">
-                        {note.title || baseName(note.path)}
-                      </span>
-                      <Byline author={note.lastAuthor} agents={agents} />
-                    </button>
-                  ))}
+                      <button
+                        type="button"
+                        className="bold-library-folder-toggle"
+                        aria-expanded={!collapsed.has(folder)}
+                        title={folder}
+                        onClick={() => toggleFolder(folder)}
+                      >
+                        <span className="bold-library-chevron" aria-hidden="true">
+                          {collapsed.has(folder) ? '▸' : '▾'}
+                        </span>
+                        {baseName(folder)}
+                        {items.length === 0 && <span className="bold-library-empty"> (empty)</span>}
+                      </button>
+                    </h2>
+                  )}
+                  {!collapsed.has(folder) &&
+                    items.map((note) => (
+                      <button
+                        key={note.path}
+                        type="button"
+                        className={`bold-library-item${active === note.path && section === 'notes' ? ' is-selected' : ''}`}
+                        aria-current={
+                          active === note.path && section === 'notes' ? 'page' : undefined
+                        }
+                        onClick={() => open(note.path)}
+                      >
+                        <span className="bold-library-item-title">
+                          {note.title || baseName(note.path)}
+                        </span>
+                        <Byline author={note.lastAuthor} agents={agents} />
+                      </button>
+                    ))}
                 </section>
               ))}
             {tree.data && tree.data.notes.length === 0 && (
@@ -415,9 +466,17 @@ export function BoldLibrary({
           <button
             type="button"
             className="bold-library-new"
-            onClick={() => openDialog({ kind: 'new', initial: '' })}
+            onClick={() =>
+              openDialog({ kind: 'new', initial: pickedFolder ? `${pickedFolder}/` : '' })
+            }
           >
             <PlusIcon size={14} /> New note
+          </button>
+          <button
+            type="button"
+            onClick={() => openDialog({ kind: 'folder', parent: pickedFolder, fromNav: true })}
+          >
+            <PlusIcon size={14} /> New folder
           </button>
           <input
             ref={uploadInput}
@@ -612,6 +671,15 @@ export function BoldLibrary({
             actions.createFolder.mutate(folder, {
               onSuccess: () => {
                 setDialog(null)
+                if (dialog.fromNav) {
+                  setPickedFolder(folder)
+                  setCollapsed((current) => {
+                    const next = new Set(current)
+                    next.delete(folder)
+                    return next
+                  })
+                  return
+                }
                 setFilesFolder(folder)
                 setSection('files')
               },

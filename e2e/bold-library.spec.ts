@@ -210,7 +210,7 @@ for (const size of sizes) {
       const notesName = `notes-${suffix}.md`
       const word = `heliotrope${unique()}`
       await showFiles(page)
-      await page.getByRole('button', { name: 'New folder' }).click()
+      await page.locator('.bold-library-main').getByRole('button', { name: 'New folder' }).click()
       const folderDialog = page.getByRole('dialog', { name: 'New folder' })
       await folderDialog.getByLabel('Folder path').fill(folder)
       await folderDialog.getByRole('button', { name: 'Create folder' }).click()
@@ -311,7 +311,7 @@ for (const size of sizes) {
       const noteName = `notes-${suffix}.md`
       const dataName = `data-${suffix}.csv`
       await showFiles(page)
-      await page.getByRole('button', { name: 'New folder' }).click()
+      await page.locator('.bold-library-main').getByRole('button', { name: 'New folder' }).click()
       const folderDialog = page.getByRole('dialog', { name: 'New folder' })
       await folderDialog.getByLabel('Folder path').fill(folder)
       await folderDialog.getByRole('button', { name: 'Create folder' }).click()
