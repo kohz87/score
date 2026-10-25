@@ -31,12 +31,13 @@ import {
 import {
   closeJob,
   deleteJob,
+  jobDeleted,
   renameJob,
   reopenJob,
   restoreJob,
 } from '../domain/exchanges/job-life.ts'
 import type { HermesPort } from '../hermes/index.ts'
-import { insertRoom, readRoom, roomChanged, roomRow } from '../domain/rooms.ts'
+import { freeRoomName, insertRoom, readRoom, roomChanged, roomRow } from '../domain/rooms.ts'
 import { listPins, pinMessage, shareMessage, unpinMessage } from '../domain/exchanges/sharing.ts'
 import { teamRoomId } from '../domain/team-room.ts'
 import { HttpError } from '../errors.ts'
@@ -161,6 +162,8 @@ export function registerJobRoutes(
 
   app.get('/api/jobs/:jobId/results', async (request) => {
     const { jobId } = JobParams.parse(request.params)
+    if (db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
     const result = snapshot(db, (sqlite) => jobResults(sqlite, jobId))
     return JobResultsSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
   })
@@ -168,12 +171,16 @@ export function registerJobRoutes(
   // Read-only (PLAN 11.6a): no Workbench route types, clicks or takes over anything.
   app.get('/api/jobs/:jobId/workbench', async (request) => {
     const { jobId } = JobParams.parse(request.params)
+    if (db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
     const result = snapshot(db, (sqlite) => jobWorkbench(sqlite, jobId))
     return WorkbenchSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
   })
 
   app.get('/api/jobs/:jobId/exchanges', async (request) => {
     const { jobId } = JobParams.parse(request.params)
+    if (db.read((sqlite) => jobDeleted(sqlite, jobId)))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
     const result = snapshot(db, (sqlite) => {
       if (!jobRow(sqlite, jobId)) throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
       return listExchanges(sqlite, jobId)
@@ -238,7 +245,7 @@ export function registerJobRoutes(
             sqlite,
             {
               id: roomId,
-              name: agent.name,
+              name: freeRoomName(sqlite, agent.name),
               kind: 'direct',
               leadAgentId: agentId,
               members: [agentId],

@@ -7,6 +7,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
+import { openExchange } from '../../src/domain/exchanges/store.ts'
+import { insertRoom } from '../../src/domain/rooms.ts'
 import { ensureTeamRoom, teamRoomId } from '../../src/domain/team-room.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
@@ -149,4 +151,67 @@ test('the room’s own thread can’t be closed or deleted', async () => {
   const fallback = (await jobs()).find((item) => item.isDefault)!
   expect((await send('POST', `/api/jobs/${fallback.id}/close`)).statusCode).toBe(409)
   expect((await send('DELETE', `/api/jobs/${fallback.id}`)).statusCode).toBe(409)
+})
+
+test('a room already named after the agent doesn’t block the agent’s first one-to-one', async () => {
+  const agentName = (await port.listAgents()).find((agent) => agent.id === 'builder')!.name
+  // An older room already has the agent's name (room names are unique), and builder has no direct room yet.
+  db.tx((sqlite) =>
+    insertRoom(
+      sqlite,
+      { id: 'room-named', name: agentName, kind: 'room', leadAgentId: 'lead', members: ['lead'] },
+      new Date(scheduler.now()).toISOString(),
+    ),
+  )
+  const chat = await send('POST', '/api/agents/builder/chats', { title: 'First chat' })
+  expect(chat.statusCode).toBe(201)
+  const direct = db.sqlite
+    .prepare("SELECT name FROM rooms WHERE kind = 'direct' AND lead_agent_id = 'builder'")
+    .get() as { name: string }
+  expect(direct.name).toBe(`${agentName} (one to one)`)
+})
+
+test('a paused exchange keeps the job open: close waits for Stop, and a closed job takes no decision', async () => {
+  const job = await makeJob('Review the feed')
+  const exchangeId = db.tx((sqlite) => {
+    const id = openExchange(
+      sqlite,
+      {
+        jobId: job.id,
+        kind: 'review',
+        parentId: null,
+        from: 'builder',
+        to: 'lead',
+        turnId: 'turn-x',
+      },
+      new Date(scheduler.now()).toISOString(),
+    )
+    sqlite.prepare("UPDATE exchanges SET state = 'paused_budget' WHERE id = ?").run(id)
+    return id
+  })
+  // No run row, but the paused exchange holds a turn: the job is still working.
+  expect((await send('POST', `/api/jobs/${job.id}/close`)).statusCode).toBe(409)
+  expect((await send('DELETE', `/api/jobs/${job.id}`)).statusCode).toBe(409)
+  expect((await send('POST', `/api/jobs/${job.id}/stop`)).statusCode).toBe(200)
+  expect(JobSchema.parse((await send('POST', `/api/jobs/${job.id}/close`)).json()).state).toBe(
+    'closed',
+  )
+  // Stop again, or a decision on the stopped exchange, can't reopen it behind the person's back.
+  await send('POST', `/api/jobs/${job.id}/stop`)
+  const row = db.sqlite.prepare('SELECT state FROM jobs WHERE id = ?').get(job.id) as {
+    state: string
+  }
+  expect(row.state).toBe('closed')
+  const decided = await send('POST', `/api/exchanges/${exchangeId}/decision`, {
+    option: 'more_turns',
+    turns: 4,
+  })
+  expect([404, 409]).toContain(decided.statusCode)
+})
+
+test('a deleted job’s results, workbench and exchanges answer 404', async () => {
+  const job = await makeJob('Gone soon')
+  expect((await send('DELETE', `/api/jobs/${job.id}`)).statusCode).toBe(204)
+  for (const part of ['results', 'workbench', 'exchanges'])
+    expect((await app.inject({ url: `/api/jobs/${job.id}/${part}` })).statusCode, part).toBe(404)
 })

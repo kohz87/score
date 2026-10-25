@@ -1,3 +1,4 @@
+import { TRIGGER_LIMITS } from '@score/contract'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -466,4 +467,33 @@ test('report-back is refused while sending, and a failed turn is never confirmed
   // Try again is allowed once it wasn't confirmed.
   now += 1000
   expect((await send()).statusCode).toBe(200)
+})
+
+test('a trigger’s jobs start with a spend cap, and a trigger can hold only so many open jobs', async () => {
+  const { trigger, secret } = await create()
+  const body = JSON.stringify(ticket)
+  for (let i = 0; i < TRIGGER_LIMITS.openJobs; i++)
+    expect((await call(trigger.id, secret, body, { webhookId: `open_${i}` })).statusCode).toBe(200)
+  const caps = db.sqlite
+    .prepare('SELECT DISTINCT spend_cap_usd AS cap FROM jobs WHERE source IS NOT NULL')
+    .all() as { cap: number }[]
+  expect(caps).toEqual([{ cap: TRIGGER_LIMITS.jobSpendCapUsd }])
+  const busy = await call(trigger.id, secret, body, { webhookId: 'one_too_many' })
+  expect(busy.statusCode).toBe(429)
+  expect(busy.json().error.code).toBe('trigger_busy')
+  expect(jobs()).toHaveLength(TRIGGER_LIMITS.openJobs)
+  // Finishing one makes room again.
+  db.sqlite.prepare("UPDATE jobs SET state = 'done' WHERE id = ?").run(jobs()[0]!.id)
+  expect((await call(trigger.id, secret, body, { webhookId: 'after_done' })).statusCode).toBe(200)
+})
+
+test('spraying random trigger ids from one address shares one failure budget', async () => {
+  const random = () => 'trg_' + Math.random().toString(16).slice(2).padEnd(24, '0').slice(0, 24)
+  const answers: number[] = []
+  for (let i = 0; i < TRIGGER_LIMITS.callsPerMinute + 5; i++)
+    answers.push((await call(random(), 'whsec_' + 'B'.repeat(43) + '=', '{}')).statusCode)
+  expect(answers.slice(0, TRIGGER_LIMITS.callsPerMinute).every((status) => status === 404)).toBe(
+    true,
+  )
+  expect(answers.slice(TRIGGER_LIMITS.callsPerMinute)).toEqual(Array(5).fill(429))
 })

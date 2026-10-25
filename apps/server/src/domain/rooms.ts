@@ -252,6 +252,18 @@ export function roomIds(sqlite: DatabaseSync): string[] {
   )
 }
 
+/** A room name not yet taken: `base`, else `base (one to one)`, then numbered. Room names are unique (409 otherwise). */
+export function freeRoomName(sqlite: DatabaseSync, base: string): string {
+  const taken = (name: string) =>
+    Boolean(sqlite.prepare('SELECT 1 FROM rooms WHERE name = ?').get(name))
+  if (!taken(base)) return base
+  for (let n = 1; n < 100; n++) {
+    const name = n === 1 ? `${base} (one to one)` : `${base} (one to one ${n})`
+    if (!taken(name)) return name
+  }
+  return `${base} (${Date.now().toString(36)})`
+}
+
 export function insertRoom(
   sqlite: DatabaseSync,
   room: Pick<Room, 'id' | 'name' | 'kind' | 'leadAgentId' | 'members'> & {

@@ -25,6 +25,7 @@ import type { ScoreDb } from '../db/index.ts'
 import {
   decodeMessageCursor,
   deleteMessage,
+  freeRoomName,
   insertRoom,
   markRoomRead,
   messageFromRow,
@@ -230,7 +231,13 @@ export function registerRoomRoutes(
           const id = randomUUID()
           insertRoom(
             sqlite,
-            { id, name: agent.name, kind: 'direct', leadAgentId: agent.id, members: [agent.id] },
+            {
+              id,
+              name: freeRoomName(sqlite, agent.name),
+              kind: 'direct',
+              leadAgentId: agent.id,
+              members: [agent.id],
+            },
             now,
           )
           events.push(...roomChanged(sqlite, id, now))

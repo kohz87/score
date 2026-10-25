@@ -31,7 +31,7 @@ export function recordComments(
       turnId,
       agentId,
       action.action,
-      comment.path,
+      redact(comment.path),
       comment.line,
       // As Watch hides a credential file's diff, a note on one keeps only that it exists.
       isCredentialPath(comment.path)

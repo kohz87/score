@@ -13,6 +13,12 @@ export const TRIGGER_LIMITS = {
   /** How long a `webhook-id` is remembered (idempotency). */
   idempotencyHours: 24,
   templateChars: 4000,
+  /** A trigger's job starts with this spend cap (the person can raise it on the job), so a caller can't spend freely. */
+  jobSpendCapUsd: 5,
+  /** Open jobs (not done, closed or deleted) one trigger may have; past it calls answer 429 until some finish. */
+  openJobs: 10,
+  /** Jobs one trigger may start in 24 hours; past it calls answer 429. */
+  jobsPerDay: 100,
 } as const
 
 /** A JSON path into the payload: dot-separated keys and array indexes (`ticket.title`, `items.0.id`). */

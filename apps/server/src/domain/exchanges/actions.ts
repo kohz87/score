@@ -7,6 +7,7 @@ import {
   type ExchangeReceipt,
 } from '@score/contract'
 import { z } from 'zod'
+import { redactValue } from '../../redact.ts'
 import { agentAdmits } from '../agent-lifecycle.ts'
 import { exchangeRow, jobRow, type ExchangeRow } from './store.ts'
 import { hasCapabilityText, hashXtc } from './capability.ts'
@@ -211,6 +212,8 @@ export function stageAction(
         turn.turn_id,
         commandId,
         action.action,
+        // Kept as sent while the turn runs: the staged action is applied from here when the turn settles, and redaction
+        // would rewrite prose the next agent and the person read. `redactSettledActions` redacts it then (D6).
         JSON.stringify(action),
         req.channel,
         state,
@@ -259,4 +262,17 @@ export function stageAction(
       message: plainReceipt(sqlite, turn, action),
     }),
   )
+}
+
+/** Once a turn's actions are applied or dropped, their stored text is redacted (D6): only the receipt needs it after. */
+export function redactSettledActions(sqlite: DatabaseSync, turnId: string): void {
+  const rows = z
+    .array(z.object({ rowid: z.int(), args: z.string() }))
+    .parse(
+      sqlite
+        .prepare("SELECT rowid, args FROM exchange_actions WHERE turn_id = ? AND state != 'staged'")
+        .all(turnId),
+    )
+  const update = sqlite.prepare('UPDATE exchange_actions SET args = ? WHERE rowid = ?')
+  for (const row of rows) update.run(JSON.stringify(redactValue(JSON.parse(row.args))), row.rowid)
 }
