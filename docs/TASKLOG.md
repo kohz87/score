@@ -1275,3 +1275,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   (incarnation-aware, as the contract had deferred); review P2 fixed: the new agent started from the removed one's
   projection. Pauses cleared at retire and on reuse. Gates on the merged branch: full e2e 939 passed, 0 failed, 19
   skipped; pnpm check green (server 4751, web 2921, contract 1496).
+- **v2.0.8 deployed live** (~10:17 UTC): no migration or plugin change; backup score-pre-2.0.8-20261025.db, restart, 0 errors.
