@@ -27,9 +27,9 @@ import {
   shareMessageToJob,
 } from './direct-queries.ts'
 import {
-  answersPerson,
   BoldMessage,
   buildMessageNodes,
+  retryableIds,
   type BranchSelection,
 } from '../room/BoldMessage.tsx'
 import { beginJobUndo } from '../room/job-undo.ts'
@@ -782,15 +782,20 @@ function DirectConversation({
   const hidden = usePendingDeletes().hidden
   const [view, setView] = useState<(BranchSelection & { chatId: string }) | null>(null)
   // The page arrives newest first; the thread reads oldest to newest.
-  const items = useMemo(() => {
+  const everyMessage = useMemo(() => {
     const byId = new Map<string, Message>()
     for (const message of page.data?.items ?? []) byId.set(message.id, message)
     for (const entry of Object.values(ownOlder.pages))
       for (const message of entry.items) if (!byId.has(message.id)) byId.set(message.id, message)
-    return [...byId.values()]
-      .filter((message) => !hidden.has(message.id))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-  }, [hidden, ownOlder.pages, page.data?.items])
+    return [...byId.values()].sort(
+      (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    )
+  }, [ownOlder.pages, page.data?.items])
+  const retryable = useMemo(() => retryableIds(everyMessage), [everyMessage])
+  const items = useMemo(
+    () => everyMessage.filter((message) => !hidden.has(message.id)),
+    [everyMessage, hidden],
+  )
   const lastCursor = ownOlder.cursors.at(-1)
   const nextCursor =
     lastCursor === undefined
@@ -923,7 +928,7 @@ function DirectConversation({
               onlyJobId: chat.id,
               onBranchSelect: (messageId, version) =>
                 setView(version ? { messageId, version, chatId: chat.id } : null),
-              renderMessage: (message, previous) => (
+              renderMessage: (message) => (
                 <BoldMessage
                   key={message.id}
                   message={message}
@@ -934,7 +939,7 @@ function DirectConversation({
                   pinBusy={tools.pinBusy === message.id}
                   onTogglePin={() => void tools.togglePin(message.id)}
                   className="bold-dm-message"
-                  canRetry={answersPerson(message, previous)}
+                  canRetry={retryable.has(message.id)}
                 >
                   {message.id === lastAgent?.id && (
                     <div className="bold-dm-msg-actions">

@@ -327,10 +327,10 @@ for (const viewport of sizes) {
       const reply = page.locator('.bold-thread-message[data-message-id="t-2"]')
       await reply.hover()
       await expect(reply.getByRole('button', { name: 'Retry reply from builder' })).toBeVisible()
-      // t-3 follows another agent's message, not the person's: nothing to retry.
-      const handoff = page.locator('.bold-thread-message[data-message-id="t-4"]')
-      await handoff.hover()
-      await expect(handoff.getByRole('button', { name: /^Retry reply/ })).toHaveCount(0)
+      // A later agent message in the same run of replies answers the person too.
+      const later = page.locator('.bold-thread-message[data-message-id="t-4"]')
+      await later.hover()
+      await expect(later.getByRole('button', { name: /^Retry reply/ })).toHaveCount(1)
 
       // An agent's message goes at once (undo window), then the DELETE is sent.
       await reply.hover()

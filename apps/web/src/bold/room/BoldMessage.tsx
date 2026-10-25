@@ -42,11 +42,20 @@ export function atOrAfter(message: Message, anchor: Message) {
 }
 
 /**
- * Retry is offered on an agent reply that answers the person: the turn before it is the person's own message. (The server
- * retries the run that answered the person's message, and refuses an agent-to-agent hand-off or a step of a recipe.)
+ * Retry is offered on an agent reply that answers the person: walking back over the job's agent-authored messages, the
+ * first other message is the person's own. (The server refuses an agent-to-agent hand-off or a step of a recipe.) Pass
+ * the job's whole, oldest-first list, not a filtered one, so a filter or a pending delete never changes the answer.
  */
-export function answersPerson(message: Message, previous: Message | undefined) {
-  return message.author.kind === 'agent' && previous?.author.kind === 'you'
+export function retryableIds(messages: Message[]): Set<string> {
+  const ids = new Set<string>()
+  const lastOther = new Map<string, Message['author']['kind']>()
+  for (const message of messages) {
+    const job = message.jobId ?? ''
+    if (message.author.kind === 'agent') {
+      if (lastOther.get(job) === 'you') ids.add(message.id)
+    } else lastOther.set(job, message.author.kind)
+  }
+  return ids
 }
 
 export type BranchSelection = NonNullable<VersionView>
@@ -72,7 +81,7 @@ export function buildMessageNodes({
   branch: BranchSelection | null
   onBranchSelect: (messageId: string, version: BranchSelection['version'] | null) => void
   onlyJobId?: string | undefined
-  renderMessage: (message: Message, previous: Message | undefined) => ReactNode
+  renderMessage: (message: Message) => ReactNode
 }): { nodes: ReactNode[]; branched: boolean } {
   const anchor = branch ? items.find((message) => message.id === branch.messageId) : undefined
   const effective = anchor ? branch : null
@@ -113,7 +122,7 @@ export function buildMessageNodes({
       break
     }
     flush(message.createdAt)
-    nodes.push(renderMessage(message, items[items.indexOf(message) - 1]))
+    nodes.push(renderMessage(message))
   }
   flush(null)
   return { nodes, branched: effective !== null }
@@ -146,7 +155,7 @@ export function BoldMessage({
   className?: string
   /** False where the classic card styling is kept (the job thread). */
   bold?: boolean
-  /** Whether the message answers the person's own message (see `answersPerson`): only then is Retry offered. */
+  /** Whether the message answers the person's own message (see `retryableIds`): only then is Retry offered. */
   canRetry?: boolean
   /** Runs after Edit hands the message to the composer (the phone sheet closes so the composer can be used). */
   onEdit?: () => void

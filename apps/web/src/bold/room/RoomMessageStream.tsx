@@ -9,10 +9,10 @@ import { type VersionView } from '../../routes/chat/versions.tsx'
 import { boldJobLink, boldMessageLink } from '../bold-links.ts'
 import { agentDisplayName } from '../bold-agents.ts'
 import {
-  answersPerson,
   authorName,
   BoldMessage,
   buildMessageNodes,
+  retryableIds,
   messageText,
 } from './BoldMessage.tsx'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
@@ -182,6 +182,7 @@ export function RoomMessageStream({
     )
   }, [allRefs, pageStates])
 
+  const retryable = useMemo(() => retryableIds(allItems), [allItems])
   const { versions, isPinned, pinBusy, pinError, togglePin } = useMessageTools(roomId)
   const approvalsData = useStreamQuery(approvalsQuery).data
   const approvalPointerIds = useMemo(
@@ -301,14 +302,14 @@ export function RoomMessageStream({
       onlyJobId: selectedJob === 'all' ? undefined : selectedJob,
       onBranchSelect: (messageId, version) =>
         setView(version ? { messageId, version, filter, selectedJob } : null),
-      renderMessage: (message, previous) => (
+      renderMessage: (message) => (
         <BoldMessage
           key={message.id}
           message={message}
           agents={agents}
           versions={versions}
           approvalPointerIds={approvalPointerIds}
-          canRetry={answersPerson(message, previous)}
+          canRetry={retryable.has(message.id)}
           onView={(version) => setView({ messageId: message.id, version, filter, selectedJob })}
           pinned={isPinned(message.id)}
           pinBusy={pinBusy === message.id}

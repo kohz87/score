@@ -38,7 +38,7 @@ import {
   threadRounds,
   threadTurns,
 } from './thread-model.ts'
-import { answersPerson, BoldMessage } from './BoldMessage.tsx'
+import { BoldMessage, retryableIds } from './BoldMessage.tsx'
 import { decisionError, ExchangeRequestCard } from './RoomRequests.tsx'
 import { useMessageTools } from './use-message-tools.ts'
 import { ReportBackLine } from './ReportBack.tsx'
@@ -293,14 +293,19 @@ function JobThread({
   const current = currentExchange(exchanges)
   const paused = current && current.pause && needsYou(current) ? current : undefined
   const holder = agents.find((agent) => agent.id === job.holderAgentId)
-  const allMessages = useMemo(() => {
+  const everyMessage = useMemo(() => {
     const byId = new Map<string, Message>()
     for (const page of olderPages) for (const message of page.items) byId.set(message.id, message)
     for (const message of messagesState.data?.items ?? []) byId.set(message.id, message)
-    return [...byId.values()]
-      .filter((message) => !hidden.has(message.id))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-  }, [hidden, messagesState.data, olderPages])
+    return [...byId.values()].sort(
+      (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    )
+  }, [messagesState.data, olderPages])
+  const retryable = useMemo(() => retryableIds(everyMessage), [everyMessage])
+  const allMessages = useMemo(
+    () => everyMessage.filter((message) => !hidden.has(message.id)),
+    [everyMessage, hidden],
+  )
   const olderCursor = olderPages.at(-1)?.nextCursor ?? messagesState.data?.nextCursor ?? null
   const reviewExchanges = exchanges.filter((item) => item.kind === 'review').length
   const rounds = useMemo(
@@ -488,7 +493,7 @@ function JobThread({
                   message={message}
                   agents={agents}
                   versions={[]}
-                  canRetry={answersPerson(message, allMessages[allMessages.indexOf(message) - 1])}
+                  canRetry={retryable.has(message.id)}
                   {...(onEdit ? { onEdit } : {})}
                   onView={() => undefined}
                   pinned={tools.isPinned(message.id)}

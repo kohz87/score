@@ -429,7 +429,7 @@ test('a ?message= target that is not in the history says it could not be found',
   ).toBeDefined()
 })
 
-test('Retry is offered only on an agent reply that answers the person, and posts to the contract endpoint', async () => {
+test('Retry is offered on agent replies that answer the person, and posts to the contract endpoint', async () => {
   const fetchMock = stubStream({
     pages: {
       'job-1': [
@@ -457,8 +457,8 @@ test('Retry is offered only on an agent reply that answers the person, and posts
   })
   renderStream('job-1')
   await screen.findByText('Read layer is ready.')
-  // The reviewer's message follows the builder's, not the person's: no Retry there.
-  expect(() => boldButton('Retry reply from reviewer')).toThrow()
+  // The reviewer also answers the person's message (it follows the builder's reply): Retry there too.
+  expect(boldButton('Retry reply from reviewer')).toBeDefined()
   fireEvent.click(boldButton('Retry reply from builder'))
   await waitFor(() =>
     expect(

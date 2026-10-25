@@ -1,8 +1,8 @@
 import type { Message } from '@score/contract'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { useEditing, stopEdit } from '../../routes/chat/message-edit.ts'
-import { BoldMessage } from './BoldMessage.tsx'
+import { BoldMessage, retryableIds } from './BoldMessage.tsx'
 import {
   agents,
   disposeRoomTest,
@@ -181,4 +181,33 @@ test('Edit runs the place’s onEdit hook after loading the composer', () => {
   fireEvent.click(act('Edit message from You'))
   expect(onEdit).toHaveBeenCalledOnce()
   expect(screen.getByTestId('editing').textContent).toBe('mine-1')
+})
+
+describe('retryableIds', () => {
+  const you = (id: string, jobId = 'j1') => makeMessage({ id, jobId, author: { kind: 'you' } })
+  const by = (id: string, agentId: string, jobId = 'j1') =>
+    makeMessage({ id, jobId, author: { kind: 'agent', agentId } })
+
+  test('two agents answering one message both get Retry', () => {
+    expect([...retryableIds([you('q'), by('a', 'builder'), by('b', 'reviewer')])]).toEqual([
+      'a',
+      'b',
+    ])
+  })
+
+  test('an agent message between (a hand-off or tool step) does not hide Retry', () => {
+    const ids = retryableIds([you('q'), by('a', 'builder'), by('t', 'tool'), by('b', 'reviewer')])
+    expect(ids.has('b')).toBe(true)
+  })
+
+  test('an agent message before any person message, or in another job, has none', () => {
+    const ids = retryableIds([by('x', 'builder'), you('q', 'j2'), by('y', 'builder', 'j1')])
+    expect(ids.size).toBe(0)
+  })
+
+  test('the answer comes from the whole list, so a filter or pending delete cannot change it', () => {
+    const all = [you('q'), by('a', 'builder'), by('b', 'reviewer')]
+    // Retry on b is decided from the full list even though the render list drops q and a.
+    expect(retryableIds(all).has('b')).toBe(true)
+  })
 })
