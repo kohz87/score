@@ -136,9 +136,11 @@ export function registerJobRoutes(
 
   app.get('/api/rooms/:roomId/jobs', async (request) => {
     const { roomId } = RoomParams.parse(request.params)
+    // `?closed=include` adds the closed jobs (the job menu's "Closed jobs", decision 121).
+    const { closed } = z.object({ closed: z.literal('include').optional() }).parse(request.query)
     const result = snapshot(db, (sqlite) => {
       roomRow(sqlite, roomId)
-      return listJobs(sqlite, roomId)
+      return listJobs(sqlite, roomId, { closed: closed === 'include' })
     })
     return JobsResponseSchema.parse({ asOfSeq: result.asOfSeq, items: result.data })
   })

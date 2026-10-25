@@ -12,6 +12,8 @@ import {
   RefSchema,
   RoomSchema,
   RoutineSummarySchema,
+  TaskColumnSchema,
+  TaskSummarySchema,
 } from './types.ts'
 
 /** The event-log position a snapshot was read at; 0 on a fresh server with no events yet. */
@@ -55,6 +57,12 @@ export const ApprovalsPageSchema = z.object({
   asOfSeq: AsOfSeqSchema,
   items: z.array(ApprovalSchema),
   nextCursor: z.string().nullable(),
+})
+
+// §7 Hermes tasks (kept after the board, decision 121): `GET /api/tasks`
+export const TasksSnapshotSchema = z.object({
+  asOfSeq: AsOfSeqSchema,
+  columns: z.record(TaskColumnSchema, z.array(TaskSummarySchema)),
 })
 
 // §8 Team
