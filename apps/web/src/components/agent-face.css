@@ -23,7 +23,8 @@ svg.agent-glyph--face,
 
 .agent-face__arc {
   fill: none;
-  stroke: var(--glyph-plate, #fff);
+  /* White like the sockets (the owner's mock-up). */
+  stroke: #fff;
   stroke-linecap: round;
 }
 

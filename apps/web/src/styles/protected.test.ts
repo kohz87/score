@@ -276,7 +276,7 @@ test('a glyph\u2019s eyes cannot be hidden or painted in the body colour (decisi
   expect(css).toMatch(
     /\.agent-face__socket \{[^}]*display: inline !important;[^}]*fill: #fff !important/,
   )
-  expect(css).toMatch(/\.agent-face__arc \{[^}]*stroke: var\(--glyph-plate\) !important/)
+  expect(css).toMatch(/\.agent-face__arc \{[^}]*stroke: #fff !important/)
 })
 
 test('trusted typography on protected surfaces: spacing, orientation and shadows are re-asserted (re-gate finding 3)', () => {

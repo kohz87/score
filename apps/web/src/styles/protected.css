@@ -112,7 +112,7 @@
     rotate: none !important;
     scale: none !important;
   }
-  /* Eyes (decision 127): the sockets of a glyph's face are blank white and the happy arcs take the plate colour, so a
+  /* Eyes (decision 127): the sockets of a glyph's face are blank white and so are the happy arcs, so a
      theme cannot paint them in the body colour or remove them. (Motion, which is transform and animation, stays Score's
      own and is judged by neither the guard nor a theme.) */
   html[data-look='custom'] [data-protected] .agent-face__socket,
@@ -124,7 +124,7 @@
   html[data-look='custom'] svg[data-protected] .agent-face__arc {
     display: inline !important;
     fill: none !important;
-    stroke: var(--glyph-plate) !important;
+    stroke: #fff !important;
   }
   /* Glyph shapes have no clip or mask of their own (11.11): a theme may not add one either. The guard also compares
      the computed clip and mask of every shape. */
