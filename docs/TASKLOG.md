@@ -1365,3 +1365,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   same cubic Béziers socketPath draws, from the same parameters. Gates: full e2e 982 passed, 2 phone failures
   (bold-start-job known flake; bold-thread job-limit pause) passed on rerun with 166 more (faces, visual, classic
   pages, settings looks) = 168/168; pnpm check green (server 4768, web 3105, contract 1496).
+- **v2.2.0 deployed live** (~15:22 UTC): backup score-pre-2.2.0-20261026.db, restart, migration 0088 applied (3 styles kept), 1 known error (the parked scoretestb run's status poll).
