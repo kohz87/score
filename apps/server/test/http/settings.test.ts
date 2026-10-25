@@ -370,6 +370,10 @@ test('removing connections (2.0.3): human only, in-use providers refused by name
 
   expect((await del('/api/settings/tool-servers/files')).statusCode).toBe(204)
   expect((await del('/api/settings/tool-servers/files')).statusCode).toBe(404)
+  // Score's own entry is never removed from here (2.0.4).
+  const own = await del('/api/settings/tool-servers/score')
+  expect(own.statusCode).toBe(409)
+  expect(own.json().error.message).toMatch(/Score’s own tool server/)
   const disconnected = await del('/api/settings/messaging/telegram')
   expect(disconnected.statusCode).toBe(200)
   expect(disconnected.json()).toMatchObject({ platform: 'telegram', status: 'disconnected' })

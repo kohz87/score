@@ -30,6 +30,7 @@ function mount() {
           toolServers: [
             { id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' },
             { id: 'notes', label: 'notes', status: 'needs_signin', usedBy: ['builder'] },
+            { id: 'score', label: 'score', status: 'ok', usedBy: ['builder'] },
           ],
           messaging: [],
         }),
@@ -140,4 +141,11 @@ test('Cancel puts focus back on the tool server’s Remove button', async () => 
   fireEvent.click(trigger)
   fireEvent.click(within(row).getByRole('button', { name: 'Cancel' }))
   await waitFor(() => expect(document.activeElement).toBe(trigger))
+})
+
+test('Score’s own tool server has no Remove (2.0.4)', async () => {
+  mount()
+  const row = (await screen.findByText('score')).closest('[data-tool-server]') as HTMLElement
+  expect(within(row).queryByRole('button', { name: /Remove/ })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Remove notes' })).toBeTruthy()
 })
