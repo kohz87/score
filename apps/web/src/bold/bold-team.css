@@ -826,3 +826,63 @@
   border-radius: 999px;
   min-height: 44px;
 }
+
+/* 2.0.6: the status card of an agent that is setting up, stopped partway or being removed; the classic operation
+   card inside it (steps, Retry, Confirm) takes the bold look from here. */
+[data-ui='bold'] .bold-agent-status,
+[data-ui='bold'] .bold-remove-agent > .team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 16px 20px;
+  border-radius: 24px;
+  background: var(--deep);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-agent-status-line {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 18px;
+}
+
+[data-ui='bold'] .bold-agent-status .team-card,
+[data-ui='bold'] .bold-remove-agent > .team-card {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-ui='bold'] .bold-agent-status .team-card h2,
+[data-ui='bold'] .bold-remove-agent > .team-card h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-agent-status .team-operation-steps,
+[data-ui='bold'] .bold-remove-agent .team-operation-steps {
+  margin: 8px 0;
+  padding-left: 22px;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-agent-status .team-card p,
+[data-ui='bold'] .bold-remove-agent > .team-card p {
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-agent-status .team-primary,
+[data-ui='bold'] .bold-remove-agent > .team-card .team-primary {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 700;
+}

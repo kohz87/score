@@ -32,6 +32,7 @@ import { pairingProblem } from './bold-errors.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import '../routes/team/team.css'
 import '../components/todo.css'
+import { BoldAgentStatus } from './BoldAgentOperation.tsx'
 import { BoldRemoveAgent } from './BoldRemoveAgent.tsx'
 import { RunsOnCard } from './BoldRunsOn.tsx'
 import './bold-team.css'
@@ -305,6 +306,10 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const needsYou = approvals.some(
     (approval) => approval.agentId === agent.id && approvalNeedsYou(approval),
   )
+  const inFlight =
+    agent.lifecycle?.state === 'setting_up' ||
+    agent.lifecycle?.state === 'needs_attention' ||
+    agent.lifecycle?.state === 'deleting'
   const waiting = needsYou || agent.status === 'waiting'
 
   function reveal(id: string) {
@@ -356,17 +361,20 @@ function AgentProfile({ agentId }: { agentId: string }) {
               {agentDisplayName(agent)}
             </button>
           )}
-          {agent.lifecycle?.state !== 'removed' && agent.id !== 'default' && (
-            <button
-              type="button"
-              className="link bold-agent-remove"
-              id="agent-remove-open"
-              aria-expanded={removing}
-              onClick={() => setRemoving(true)}
-            >
-              Remove agent…
-            </button>
-          )}
+          {agent.lifecycle?.state !== 'removed' &&
+            agent.lifecycle?.state !== 'setting_up' &&
+            agent.lifecycle?.state !== 'deleting' &&
+            agent.id !== 'default' && (
+              <button
+                type="button"
+                className="link bold-agent-remove"
+                id="agent-remove-open"
+                aria-expanded={removing}
+                onClick={() => setRemoving(true)}
+              >
+                Remove agent…
+              </button>
+            )}
           {agent.served && (
             <>
               <Link className="link bold-agent-watch" to={boldAgentScreenLink(agent.id)}>
@@ -376,8 +384,12 @@ function AgentProfile({ agentId }: { agentId: string }) {
           )}
         </span>
       </div>
+      {inFlight && agent.lifecycle && (
+        <BoldAgentStatus name={agentDisplayName(agent)} lifecycle={agent.lifecycle} />
+      )}
       {removing && agent.id !== 'default' && (
         <BoldRemoveAgent
+          lifecycle={agent.lifecycle}
           agentId={agent.id}
           name={agentDisplayName(agent)}
           coding={coding}
