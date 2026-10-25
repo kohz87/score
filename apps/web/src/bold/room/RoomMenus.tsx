@@ -838,3 +838,151 @@ export function RoomTitle({
     </div>
   )
 }
+
+/** The one-to-one head's menu: deleted messages and delete this chat (a room's default thread can't be deleted). */
+export function ChatMenu({
+  showDeleted,
+  onToggleDeleted,
+  onDelete,
+}: {
+  showDeleted: boolean
+  onToggleDeleted: () => void
+  onDelete: (() => void) | undefined
+}) {
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLSpanElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const menuId = useId()
+  const close = useMenu(open, setOpen, root, trigger)
+  return (
+    <span className="bold-job-menu-wrap" ref={root}>
+      <button
+        ref={trigger}
+        type="button"
+        className="icon-btn sm"
+        aria-label="Chat menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <DotsIcon />
+      </button>
+      {open && (
+        <div
+          className="menu bold-job-menu"
+          id={menuId}
+          role="menu"
+          aria-label="Chat actions"
+          data-protected="flex"
+          onKeyDown={moveInMenu}
+        >
+          <button
+            type="button"
+            className="mi"
+            role="menuitemcheckbox"
+            aria-checked={showDeleted}
+            onClick={() => {
+              close()
+              onToggleDeleted()
+            }}
+          >
+            {showDeleted ? 'Hide deleted messages' : 'Show deleted messages'}
+          </button>
+          {onDelete && (
+            <button
+              type="button"
+              className="mi bad"
+              role="menuitem"
+              onClick={() => {
+                close(false)
+                onDelete()
+              }}
+            >
+              <TrashIcon />
+              Delete chat
+            </button>
+          )}
+        </div>
+      )}
+    </span>
+  )
+}
+
+/** Deleting a one-to-one chat: a plain confirm (no typing), undoable for about 10 seconds like any job. */
+export function DeleteChatDialog({
+  chat,
+  agentName,
+  onClose,
+  onDeleted,
+}: {
+  chat: Job
+  agentName: string
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const key = useRef(newId())
+  useEffect(() => {
+    dialog.current?.showModal?.()
+  }, [])
+  async function remove() {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await apiFetch(`jobs/${encodeURIComponent(chat.id)}`, {
+        method: 'DELETE',
+        headers: { 'Idempotency-Key': key.current },
+      })
+      onDeleted()
+    } catch (failure) {
+      key.current = newId()
+      setError(jobLifecycleError(failure, 'delete').text.replace('this job', 'this chat'))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <dialog
+      ref={dialog}
+      open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
+      className="chat-rewind-dialog bold-job-delete-dialog"
+      data-protected="any"
+      aria-labelledby="delete-chat-title"
+      onCancel={(event) => {
+        event.preventDefault()
+        if (!busy) onClose()
+      }}
+    >
+      <h2 id="delete-chat-title">Delete this chat with {agentName}?</h2>
+      <ul className="chat-rewind-list">
+        <li>
+          Its messages are removed from Score. {agentName}’s own sessions in Hermes are not touched,
+          so it may still remember the conversation.
+        </li>
+        <li>You can undo this for about 10 seconds.</li>
+      </ul>
+      {error && (
+        <p className="chat-rewind-warning" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="chat-rewind-actions">
+        <button type="button" onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="chat-rewind-primary"
+          disabled={busy}
+          onClick={() => void remove()}
+        >
+          {busy ? 'Deleting…' : 'Delete chat'}
+        </button>
+      </div>
+    </dialog>
+  )
+}

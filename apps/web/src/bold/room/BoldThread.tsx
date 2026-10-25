@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
-import { MessageItem } from '../../routes/chat/MessageItem.tsx'
+import { usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { ContextMeter } from '../../routes/chat/ContextMeter.tsx'
 import { orchestrationsQuery } from '../../routes/orchestrations/orchestration-queries.ts'
 import { RoomRunPanel } from '../../routes/orchestrations/RoomRunPanel.tsx'
@@ -30,7 +30,9 @@ import {
   threadRounds,
   threadTurns,
 } from './thread-model.ts'
+import { BoldMessage } from './BoldMessage.tsx'
 import { decisionError, ExchangeRequestCard } from './RoomRequests.tsx'
+import { useMessageTools } from './use-message-tools.ts'
 import { ReportBackLine } from './ReportBack.tsx'
 import { ThreadTasks } from './RoomTasks.tsx'
 import {
@@ -98,16 +100,6 @@ function JobPicker({ jobs, onPick }: { jobs: Job[]; onPick: (jobId: string) => v
         ))}
         {named.length === 0 && <p className="bold-thread-note">There are no jobs to open yet.</p>}
       </div>
-    </div>
-  )
-}
-
-// The thread shows an approval's real card, not the room stream's pointer: the strip may be filtered to another job or
-// covered by the phone sheet. A second answer from the strip gets the server's 409, explained there.
-function ThreadMessage({ message, agents }: { message: Message; agents: AgentSummary[] }) {
-  return (
-    <div className="bold-message bold-thread-message" data-message-id={message.id}>
-      <MessageItem message={message} agents={agents} />
     </div>
   )
 }
@@ -267,6 +259,8 @@ function JobThread({
     [defaultJobId, job.id, roomId],
   )
   const messagesState = useStreamQuery(messagesDefinition)
+  const tools = useMessageTools(roomId)
+  const hidden = usePendingDeletes().hidden
   const [olderPages, setOlderPages] = useState<MessagePageData[]>([])
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -291,10 +285,10 @@ function JobThread({
     const byId = new Map<string, Message>()
     for (const page of olderPages) for (const message of page.items) byId.set(message.id, message)
     for (const message of messagesState.data?.items ?? []) byId.set(message.id, message)
-    return [...byId.values()].sort(
-      (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
-    )
-  }, [messagesState.data, olderPages])
+    return [...byId.values()]
+      .filter((message) => !hidden.has(message.id))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+  }, [hidden, messagesState.data, olderPages])
   const olderCursor = olderPages.at(-1)?.nextCursor ?? messagesState.data?.nextCursor ?? null
   const reviewExchanges = exchanges.filter((item) => item.kind === 'review').length
   const rounds = useMemo(
@@ -456,6 +450,11 @@ function JobThread({
               {loadingOlder ? 'Loading…' : 'Load earlier messages'}
             </button>
           )}
+          {tools.pinError && (
+            <p className="bold-thread-error" role="alert">
+              {tools.pinError}
+            </p>
+          )}
           {historyError && (
             <p className="bold-thread-error" role="alert">
               {historyError}
@@ -469,7 +468,21 @@ function JobThread({
             >
               <h3 className="bold-thread-round-label">{round.label}</h3>
               {round.messages.map((message) => (
-                <ThreadMessage key={message.id} message={message} agents={agents} />
+                // The thread shows an approval's real card, not the room stream's pointer: the strip may be filtered to
+                // another job or covered by the phone sheet. Edit hands the message to the room's composer (its
+                // `jobId` keeps the correction in this job); there is no version branch view in this narrow panel.
+                <BoldMessage
+                  key={message.id}
+                  message={message}
+                  agents={agents}
+                  versions={[]}
+                  onView={() => undefined}
+                  pinned={tools.isPinned(message.id)}
+                  pinBusy={tools.pinBusy === message.id}
+                  onTogglePin={() => void tools.togglePin(message.id)}
+                  className="bold-thread-message"
+                  bold={false}
+                />
               ))}
             </section>
           ))}

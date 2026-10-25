@@ -307,6 +307,35 @@ for (const viewport of sizes) {
       )
     })
 
+    test(`a thread message has the action row and delete works at ${size}`, async ({ page }) => {
+      const deletes: string[] = []
+      await openThread(page, {
+        handle: (path, method) => {
+          if (method === 'DELETE' && path.startsWith('/api/rooms/team-room/messages/')) {
+            deletes.push(path)
+            return { body: null, status: 204 }
+          }
+          return undefined
+        },
+      })
+      await openJobThread(page, /Activity feed/)
+      const own = page.locator('.bold-thread-message[data-message-id="t-1"]')
+      await own.hover()
+      await expect(own.getByRole('button', { name: 'Edit message from You' })).toBeVisible()
+      await expect(own.getByRole('button', { name: 'Copy message from You' })).toBeVisible()
+      await expect(own.getByRole('button', { name: 'Pin message from You' })).toBeVisible()
+      const reply = page.locator('.bold-thread-message[data-message-id="t-2"]')
+      await reply.hover()
+      await expect(reply.getByRole('button', { name: 'Retry reply from builder' })).toBeVisible()
+
+      // An agent's message goes at once (undo window), then the DELETE is sent.
+      await reply.getByRole('button', { name: 'Delete message from builder' }).click()
+      await expect(page.getByText('First cut is ready for review.')).toHaveCount(0)
+      await expect
+        .poll(() => deletes, { timeout: 15_000 })
+        .toEqual(['/api/rooms/team-room/messages/t-2'])
+    })
+
     test(`a paused exchange is answered from the thread at ${size}`, async ({ page }) => {
       const state = await openThread(page)
       await openJobThread(page, /Release notes 2\.4/)
