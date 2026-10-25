@@ -74,23 +74,26 @@ export function BoldRemoveAgent({
   }, [ended])
   // 2.0.6: an operation that stopped partway holds the agent. Its Retry / Confirm is shown here, and the preview
   // runs again once it finishes, so Remove is never a dead button with the way out buried elsewhere.
-  const heldBlocker = (text: string) => /operation already holds/i.test(text)
-  const holds =
+  const needsAttention =
     !coding &&
     !del.operation &&
-    Boolean(lifecycle?.operationId) &&
-    (lifecycle?.state === 'needs_attention' || Boolean(preview?.blockers.some(heldBlocker)))
-  const held = useProfileOperation(holds ? (lifecycle?.operationId ?? null) : null)
+    lifecycle?.state === 'needs_attention' &&
+    Boolean(lifecycle.operationId)
+  const held = useProfileOperation(needsAttention ? (lifecycle?.operationId ?? null) : null)
   const heldDone = held.data?.state === 'completed'
-  const stuck = holds && !heldDone && held.data ? held.data : null
+  const stuck = needsAttention && !heldDone && held.data ? held.data : null
   useOperationDone(heldDone, heldDone && held.data?.kind === 'delete')
   useEffect(() => {
     if (heldDone && held.data?.kind !== 'delete') review.mutate()
     // Once per completion of the held operation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heldDone])
-  const blockers = (preview?.blockers ?? []).filter((text) => !(stuck && heldBlocker(text)))
-  const blocked = Boolean(preview?.blockers.length) || Boolean(stuck)
+  // The server's "an operation holds this agent" blocker is replaced by the step's own card, only while that card
+  // shows; every other blocker stays. If the operation can't be read, all blockers stay and Remove stays off.
+  const blockers = (preview?.blockers ?? []).filter(
+    (text) => !(stuck && /operation already holds/i.test(text)),
+  )
+  const blocked = Boolean(preview?.blockers.length) || (needsAttention && !heldDone)
   const problem = coding
     ? removeCoding.error
     : (del.remove.error ?? (review.error && !preview ? review.error : null))

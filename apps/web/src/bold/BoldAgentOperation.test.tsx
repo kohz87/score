@@ -108,10 +108,9 @@ test('a stopped setup says where it stopped and Retry posts to the operation', a
   const card = await screen.findByLabelText('g3 status')
   expect(card.getAttribute('data-protected')).toBe('block')
   await waitFor(() =>
-    expect(screen.getByRole('status').textContent).toContain(
-      'Setting up g3 stopped at Set model: Model refused',
-    ),
+    expect(screen.getByRole('status').textContent).toContain('Setting up g3 stopped at Set model.'),
   )
+  expect(screen.getByRole('alert').textContent).toBe('Model refused')
   fireEvent.click(screen.getByRole('button', { name: 'Retry: Set model' }))
   await waitFor(() =>
     expect(calls).toContainEqual({
@@ -158,4 +157,47 @@ test('Remove is not a dead button: the stopped step is retried inline and the pr
   expect(await screen.findByLabelText(/Type g3 to confirm/u)).toBeTruthy()
   expect(calls.filter((call) => call.path === '/api/agents/preview')).toHaveLength(2)
   expect((screen.getByRole('button', { name: 'Remove' }) as HTMLButtonElement).disabled).toBe(true)
+})
+
+test('other blockers stay next to the stuck step, whatever the server words the hold as', async () => {
+  blockers = ['Something else keeps g3 busy.', 'Not the same wording at all.']
+  wrap(
+    <BoldRemoveAgent
+      agentId="g3"
+      name="g3"
+      coding={false}
+      lifecycle={lifecycle('needs_attention')}
+      onClose={() => {}}
+    />,
+  )
+  expect(await screen.findByText('Finish or retry the stopped step first:')).toBeTruthy()
+  expect(screen.getByText('Something else keeps g3 busy.')).toBeTruthy()
+  expect(screen.getByText('Not the same wording at all.')).toBeTruthy()
+  expect(screen.getByText(/0 active runs/u)).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
+})
+
+test('if the stopped step cannot be read, the server blockers show and Remove stays off', async () => {
+  const real = globalThis.fetch
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/operations/')
+        ? Promise.resolve(Response.json({}, { status: 500 }))
+        : real(input, init),
+    ),
+  )
+  wrap(
+    <BoldRemoveAgent
+      agentId="g3"
+      name="g3"
+      coding={false}
+      lifecycle={lifecycle('needs_attention')}
+      onClose={() => {}}
+    />,
+  )
+  expect(await screen.findByText('An operation already holds this agent.')).toBeTruthy()
+  const remove = screen.getByRole('button', { name: 'Remove' }) as HTMLButtonElement
+  expect(remove.disabled).toBe(true)
+  expect(screen.queryByText('Finish or retry the stopped step first:')).toBeNull()
 })

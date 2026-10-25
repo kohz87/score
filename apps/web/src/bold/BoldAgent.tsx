@@ -1,6 +1,6 @@
 import type { AgentDetail, AgentSummary } from '@score/contract'
-import { useState } from 'react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../components/runtime-label.ts'
@@ -273,6 +273,13 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const client = useQueryClient()
   const pause = useAgentPause(agentId)
   const [removing, setRemoving] = useState(false)
+  const navigate = useNavigate()
+  // A removal can show as `removed` in the list before the operation card reads `completed`: leave either way.
+  const lifeState = (agents.data?.find((agent) => agent.id === agentId) ?? detail.data)?.lifecycle
+    ?.state
+  useEffect(() => {
+    if (lifeState === 'removed') void navigate('/b/team')
+  }, [lifeState, navigate])
 
   if (!detail.data && detail.isPending) return <p role="status">Loading agent…</p>
   if (!detail.data && detail.isError)
@@ -346,7 +353,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
           <Link className="btn primary" to={`/b?with=${encodeURIComponent(agent.id)}`}>
             Message
           </Link>
-          {agent.lifecycle?.state !== 'removed' && (
+          {!inFlight && agent.lifecycle?.state !== 'removed' && (
             <button
               type="button"
               className="btn ghost"

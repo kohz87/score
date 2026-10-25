@@ -37,9 +37,7 @@ export function BoldAgentStatus({ name, lifecycle }: { name: string; lifecycle: 
   const stopped = lifecycle.state === 'needs_attention' || operation?.state === 'needs_attention'
   const step = stepLabels[operation?.nextStep ?? ''] ?? null
   const line = stopped
-    ? `${removing ? 'Removing' : 'Setting up'} ${name} stopped${step ? ` at ${step}` : ''}${
-        operation?.error ? `: ${operation.error}` : '.'
-      }`
+    ? `${removing ? 'Removing' : 'Setting up'} ${name} stopped${step ? ` at ${step}` : ''}.`
     : `${removing ? 'Removing' : 'Setting up'} ${name}…`
   return (
     <section
