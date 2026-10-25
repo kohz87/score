@@ -197,7 +197,7 @@ test('real HTTP transport enforces bearer and idempotency and streams a fixture'
 test.each([0, 1, 2])('approval resolved=%i requires exactly one target', async (resolved) => {
   const fetch = vi
     .fn<typeof globalThis.fetch>()
-    .mockResolvedValue(new Response(JSON.stringify({ resolved }), { status: 200 }))
+    .mockImplementation(async () => new Response(JSON.stringify({ resolved }), { status: 200 }))
   const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
   const request = { runId: 'run-exact', requestId: 'request-exact', choice: 'once' as const }
   if (resolved === 1) expect(await client.submitApproval('builder', request, 1)).toBe('applied')
@@ -207,13 +207,53 @@ test.each([0, 1, 2])('approval resolved=%i requires exactly one target', async (
       code: 'invalid_response',
       maybeApplied: true,
     })
-  expect(fetch.mock.calls[0]?.[0]).toBe(
+  // The run's projection is read first (0.22.5 needs its execution generation); this one has none.
+  expect(fetch.mock.calls[0]?.[0]).toBe('http://127.0.0.1:8642/p/builder/v1/runs/run-exact')
+  expect(fetch.mock.calls[1]?.[0]).toBe(
     'http://127.0.0.1:8642/p/builder/v1/runs/run-exact/approval',
   )
-  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+  expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toEqual({
     choice: 'once',
     request_id: 'request-exact',
   })
+})
+
+test('Hermes 0.22.5 under its session authority gets exactly {request_id, execution_generation, choice}', async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify({ status: 'resolved', prompt_id: 'prompt-7' }), { status: 200 })
+      : new Response(JSON.stringify({ status: 'started', execution_generation: 3 }), {
+          status: 200,
+        }),
+  )
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
+  expect(
+    await client.submitApproval(
+      'builder',
+      { runId: 'run-a', requestId: 'prompt-7', choice: 'deny' },
+      1,
+    ),
+  ).toBe('applied')
+  expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toEqual({
+    request_id: 'prompt-7',
+    execution_generation: 3,
+    choice: 'deny',
+  })
+})
+
+test.each([
+  ['already_resolved', 200, { status: 'already_resolved', prompt_id: 'p' }],
+  ['stale_generation', 409, { error: { code: 'stale_generation' } }],
+])('a 0.22.5 %s answer is not_pending', async (_name, status, payload) => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify(payload), { status })
+      : new Response(JSON.stringify({ execution_generation: 1 }), { status: 200 }),
+  )
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
+  expect(
+    await client.submitApproval('builder', { runId: 'run-b', requestId: 'p', choice: 'once' }, 1),
+  ).toBe('not_pending')
 })
 test.each(['approval_not_pending', 'approval_not_active'])(
   'approval %s is not_pending',
@@ -294,4 +334,42 @@ test('gate #7 gateway JSON validates identifiers before content redaction', asyn
   await expect(invalid.getRun('builder', 'run_id')).rejects.toMatchObject({
     code: 'invalid_response',
   })
+})
+
+test('a projection that fails transiently is thrown (retryable); a missing one falls back to the older body', async () => {
+  const failing = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify({ resolved: 1 }), { status: 200 })
+      : new Response('{}', { status: 503 }),
+  )
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch: failing })
+  await expect(
+    client.submitApproval('builder', { runId: 'run-c', requestId: 'r', choice: 'once' }, 1),
+  ).rejects.toMatchObject({ status: 503 })
+  expect(failing.mock.calls.some(([input]) => String(input).endsWith('/approval'))).toBe(false)
+  const missing = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify({ resolved: 1 }), { status: 200 })
+      : new Response(JSON.stringify({ error: { code: 'run_not_found' } }), { status: 404 }),
+  )
+  const older = new GatewayClient({ scoreHome: env.home, db: env.db, fetch: missing })
+  expect(
+    await older.submitApproval('builder', { runId: 'run-d', requestId: 'r', choice: 'once' }, 1),
+  ).toBe('applied')
+  expect(JSON.parse(String(missing.mock.calls[1]?.[1]?.body))).toEqual({
+    choice: 'once',
+    request_id: 'r',
+  })
+})
+
+test('an authority approval_not_pending refusal is not_pending', async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async (input) =>
+    String(input).endsWith('/approval')
+      ? new Response(JSON.stringify({ error: { code: 'approval_not_pending' } }), { status: 409 })
+      : new Response(JSON.stringify({ execution_generation: 4 }), { status: 200 }),
+  )
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
+  expect(
+    await client.submitApproval('builder', { runId: 'run-e', requestId: 'p', choice: 'deny' }, 1),
+  ).toBe('not_pending')
 })

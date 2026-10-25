@@ -132,11 +132,15 @@ const TerminalSchema = z.object({
   error: z.string().nullish(),
   usage: UsageSchema.nullish(),
 })
+// Hermes 0.22.5 under its session authority (gateway/session_pending_controls.py) names the prompt `prompt_id` and
+// adds `execution_generation`, `kind` and `timeout_s`; older builds and the non-authority path send `request_id`.
 const ApprovalSchema = z
   .object({
     command: z.string(),
     description: z.string(),
-    request_id: z.string().min(1),
+    request_id: z.string().min(1).optional(),
+    prompt_id: z.string().min(1).optional(),
+    timeout_s: z.number().finite().positive().max(86400).optional(),
     choices: z.array(ApprovalChoiceSchema),
     pattern_keys: z.array(z.string()).optional(),
     pattern_key: z.string().optional(),
@@ -153,6 +157,9 @@ const ApprovalSchema = z
       .optional(),
   })
   .passthrough()
+  .refine((value) => Boolean(value.request_id ?? value.prompt_id), {
+    message: 'An approval request needs request_id or prompt_id',
+  })
 // Other API clients may answer without a request_id (resolve-first or resolve-all); that is evidence we can't bind.
 const ResponseSchema = z.object({
   request_id: z.string().min(1).optional(),
@@ -210,6 +217,9 @@ export function translateRunEvent(
   const completed = event === 'tool.completed' ? ToolCompletedSchema.parse(safe) : undefined
   const approval = event === 'approval.request' ? ApprovalSchema.parse(safe) : undefined
   const responded = event === 'approval.responded' ? ResponseSchema.safeParse(safe).data : undefined
+  // 0.22.5 announces a prompt that left the queue (answered anywhere, withdrawn, or of an older generation) without
+  // the choice: known, and the approval closes with the run or Score's own answer.
+  const settled = event === 'approval.settled'
   const terminal =
     event.startsWith('run.') && runLifecycle.isTerminal(event.slice(4) as RunSummary['status'])
       ? TerminalSchema.parse(safe)
@@ -228,6 +238,7 @@ export function translateRunEvent(
     delta ||
     interim ||
     event === 'approval.responded' ||
+    settled ||
     ignored,
   )
   return {
@@ -254,13 +265,20 @@ export function translateRunEvent(
             {
               profile: row.profile,
               runId: row.id,
-              requestId: approval.request_id,
+              // The schema's refine guarantees one of the two (each non-empty).
+              requestId: (approval.request_id ?? approval.prompt_id)!,
               command: approval.command,
               description: approval.description,
               choices: approval.choices,
               patternKeys:
                 approval.pattern_keys ?? (approval.pattern_key ? [approval.pattern_key] : []),
-              ...(approval.expires_at ? { expiresAt: approval.expires_at } : {}),
+              ...(approval.expires_at
+                ? { expiresAt: approval.expires_at }
+                : approval.timeout_s
+                  ? {
+                      expiresAt: new Date(Date.parse(at) + approval.timeout_s * 1000).toISOString(),
+                    }
+                  : {}),
             },
             at,
             { disabled: context.getDisabled?.() ?? [] },
@@ -429,13 +447,17 @@ export function statusApprovalObservation(
         {
           profile: row.profile,
           runId: row.id,
-          requestId: approval.request_id,
+          requestId: (approval.request_id ?? approval.prompt_id)!,
           command: approval.command,
           description: approval.description,
           choices: approval.choices,
           patternKeys:
             approval.pattern_keys ?? (approval.pattern_key ? [approval.pattern_key] : []),
-          ...(approval.expires_at ? { expiresAt: approval.expires_at } : {}),
+          ...(approval.expires_at
+            ? { expiresAt: approval.expires_at }
+            : approval.timeout_s
+              ? { expiresAt: new Date(Date.parse(at) + approval.timeout_s * 1000).toISOString() }
+              : {}),
         },
         at,
         { disabled: context.getDisabled?.() ?? [] },
