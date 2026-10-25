@@ -497,16 +497,6 @@
   font-size: 11px;
 }
 
-[data-ui='bold'] .bold-sr-only,
-[data-ui='bold'] .sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
 [data-ui='bold'] .bold-dm-phone-id,
 [data-ui='bold'] .bold-dm-back,
 [data-ui='bold'] .bold-dm-watermark {

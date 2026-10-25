@@ -82,8 +82,3 @@ export function useRoomNeedsYouState({
       (roomId !== null || canonical.status === 'success'),
   }
 }
-
-/** The one Needs-you total for a room: approvals, paused exchanges, run-safety cards and the global fence. */
-export function useRoomNeedsYou(options: Parameters<typeof useRoomNeedsYouState>[0]) {
-  return useRoomNeedsYouState(options).total
-}

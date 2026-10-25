@@ -158,10 +158,16 @@ export function BoldLibrary({
     setSection('notes')
     setQuery('')
   }
+  // Search's `?note=` is removed once consumed: forget it with the parameter, so the same note can be requested again.
+  if (!openPath && openedPath !== null) setOpenedPath(null)
   const uploadFolder = section === 'files' ? filesFolder : folderOf(active ?? '')
 
   useEffect(() => {
-    if (openedPath === null || lastOpenedPath.current === openedPath) return
+    if (openedPath === null) {
+      lastOpenedPath.current = null
+      return
+    }
+    if (lastOpenedPath.current === openedPath) return
     lastOpenedPath.current = openedPath
     focusNote.current = phone
   }, [openedPath, phone])

@@ -48,7 +48,8 @@ export function BoldRoom() {
     setSeenTabJob(tabJob)
     setThreadJob(tabJob && tabJob !== 'all' ? tabJob : null)
   }
-  // Search's Library result (`?note=`) and System's "Open Library" (`?library=1`) open the Library where it lives.
+  // Search's Library result (`?note=`) and System's "Open Library" (`?library=1`) are one-shot requests: open the
+  // Library, then remove the parameter so a later visit cannot reopen it and the same note can be requested again.
   const notePath = params.get('note')
   const libraryOpen = params.get('library') === '1'
   const libraryRequest = notePath ?? (libraryOpen ? 'library' : null)
@@ -147,6 +148,14 @@ export function BoldRoom() {
   useEffect(() => {
     if (phone && libraryRequest) setSheetOpen(true)
   }, [libraryRequest, phone, setSheetOpen])
+
+  useEffect(() => {
+    if (!libraryRequest) return
+    const next = new URLSearchParams(params)
+    next.delete('note')
+    next.delete('library')
+    setParams(next, { replace: true })
+  }, [libraryRequest, params, setParams])
 
   const withoutDirect = (next: URLSearchParams) => {
     next.delete('with')

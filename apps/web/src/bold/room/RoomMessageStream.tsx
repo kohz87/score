@@ -348,6 +348,17 @@ export function RoomMessageStream({
   const [older, setOlder] = useState<Record<string, string[]>>({})
   const [pageStates, setPageStates] = useState<Record<string, PageState>>({})
   const seeked = useRef<string | null>(null)
+  const [messageNotice, setMessageNotice] = useState('')
+  const seenMessages = useRef<Set<string> | null>(null)
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastNoticeAt = useRef(0)
+
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    },
+    [],
+  )
 
   const reportPage = useCallback((key: string, state: PageState) => {
     setPageStates((current) => {
@@ -467,6 +478,31 @@ export function RoomMessageStream({
       return message.jobId === selectedJob || (message.jobId == null && selectedJob === defaultJob)
     })
   }, [allItems, defaultJob, filter, hidden, jobs, selectedJob])
+
+  useEffect(() => {
+    if (status !== 'success') return
+    const ids = new Set(items.map((message) => message.id))
+    if (seenMessages.current === null) {
+      // The first page is history, not news: remember it without speaking.
+      seenMessages.current = ids
+      return
+    }
+    const fresh = items.filter(
+      (message) => !seenMessages.current!.has(message.id) && message.author.kind === 'agent',
+    )
+    seenMessages.current = ids
+    if (fresh.length === 0) return
+    const newest = fresh.at(-1)!
+    if (newest.author.kind !== 'agent') return
+    const delay = Math.max(0, 2_000 - (Date.now() - lastNoticeAt.current))
+    if (noticeTimer.current) return
+    const announce = () => {
+      noticeTimer.current = null
+      lastNoticeAt.current = Date.now()
+      setMessageNotice(`New message from ${authorName(newest, agents)}`)
+    }
+    noticeTimer.current = setTimeout(announce, delay)
+  }, [agents, items, status])
 
   const addOlder = useCallback((jobId: string | null, cursor: string) => {
     setOlder((current) => {
@@ -626,6 +662,9 @@ export function RoomMessageStream({
 
   return (
     <div className="bold-stream" aria-label="Team room messages">
+      <span className="bold-sr-only" role="status" aria-live="polite">
+        {messageNotice}
+      </span>
       {pageRefs.map((ref) => (
         <MessagePageCollector
           key={pageKey(ref.jobId, ref.before)}

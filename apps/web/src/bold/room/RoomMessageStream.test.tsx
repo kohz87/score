@@ -1,5 +1,5 @@
-import type { Message, RoomVersion } from '@score/contract'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import type { Message, RoomVersion, StreamEvent } from '@score/contract'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import {
   agents,
@@ -10,6 +10,7 @@ import {
   mockFetch,
   renderInRoom,
 } from './room-test-utils.tsx'
+import type { StreamClient } from '../../data/stream.ts'
 import { RoomMessageStream } from './RoomMessageStream.tsx'
 
 afterEach(() => {
@@ -83,11 +84,48 @@ function stubStream(options: { pages?: Record<string, Message[]>; versions?: Roo
   return fetchMock
 }
 
+function stubLiveStream(options: { pages?: Record<string, Message[]> } = {}) {
+  const byJob = options.pages ?? pages
+  const listeners = new Set<(event: StreamEvent) => void>()
+  const fetchMock = mockFetch((url) => {
+    const parsed = new URL(url, 'http://x')
+    if (parsed.pathname === '/api/rooms/room-1/messages') {
+      const jobId = parsed.searchParams.get('jobId') ?? ''
+      return jsonResponse({
+        asOfSeq: 1,
+        items: byJob[jobId] ?? [],
+        nextCursor: null,
+        jobId,
+      })
+    }
+    if (parsed.pathname === '/api/rooms/room-1/pins')
+      return jsonResponse({ items: [], revision: 0 })
+    if (parsed.pathname === '/api/rooms/room-1/versions')
+      return jsonResponse({ asOfSeq: 1, items: [] })
+    return jsonResponse({ asOfSeq: 1, items: [] })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return {
+    // The fixture's message type carries optional fields the contract's inferred type spells differently.
+    emit(event: unknown) {
+      for (const listener of listeners) listener(event as StreamEvent)
+    },
+    stream: {
+      subscribe(listener: (event: StreamEvent) => void) {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      onControl: () => () => undefined,
+    },
+  }
+}
+
 function renderStream(
   selectedJob = 'all',
   showDeleted = false,
   seek: string | null = null,
   onSeeked: () => void = () => undefined,
+  stream?: StreamClient,
 ) {
   return renderInRoom(
     <RoomMessageStream
@@ -102,6 +140,8 @@ function renderStream(
       onRevealSeek={() => undefined}
       onSeeked={onSeeked}
     />,
+    ['/b?room=room-1'],
+    stream,
   )
 }
 
@@ -403,4 +443,55 @@ test('Retry reply posts to the contract endpoint for an agent reply', async () =
     ).toBe(true),
   )
   expect(boldButton('Retry reply from builder').textContent).toContain('Retrying')
+})
+
+test('a newly completed agent message is announced once, after history loads', async () => {
+  const live = stubLiveStream({ pages: { 'job-1': pages['job-1'] ?? [], 'job-2': [] } })
+  renderStream('job-1', false, null, () => undefined, live.stream as unknown as StreamClient)
+  await screen.findByText('Read layer is ready.')
+  const status = screen.getByRole('status')
+  expect(status.textContent).toBe('')
+
+  const fresh = makeMessage({
+    id: 'message-fresh',
+    jobId: 'job-1',
+    author: { kind: 'agent', agentId: 'builder' },
+    parts: [{ kind: 'text', text: 'The API is green.' }],
+    createdAt: '2026-10-24T09:30:00.000Z',
+  })
+  act(() =>
+    live.emit({
+      type: 'message.created',
+      data: fresh,
+      seq: 2,
+      ts: '2026-10-24T09:30:00.000Z',
+    }),
+  )
+  expect(await screen.findByText('The API is green.')).toBeDefined()
+  await waitFor(() => expect(status.textContent).toBe('New message from builder'), {
+    timeout: 2500,
+  })
+})
+
+test('the person’s own messages are never announced', async () => {
+  const live = stubLiveStream({ pages: { 'job-1': pages['job-1'] ?? [], 'job-2': [] } })
+  renderStream('job-1', false, null, () => undefined, live.stream as unknown as StreamClient)
+  await screen.findByText('Read layer is ready.')
+  const status = screen.getByRole('status')
+  act(() =>
+    live.emit({
+      type: 'message.created',
+      data: makeMessage({
+        id: 'message-mine',
+        jobId: 'job-1',
+        parts: [{ kind: 'text', text: 'My own note.' }],
+        createdAt: '2026-10-24T09:31:00.000Z',
+      }),
+      seq: 2,
+      ts: '2026-10-24T09:31:00.000Z',
+    }),
+  )
+  expect(await screen.findByText('My own note.')).toBeDefined()
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(status.textContent).toBe('')
 })

@@ -555,7 +555,7 @@ export function RoomRequests({
   const needs = useRoomNeedsYouState({ roomId, jobs, messages, selectedJob })
   const total = needs.total
   const moreLabel = pinsMoreLabel(total, expanded)
-  const lastTotal = useRef(total)
+  const lastTotal = useRef<number | null>(null)
   const settled = useRef(false)
   const [announcement, setAnnouncement] = useState('')
 
@@ -566,7 +566,10 @@ export function RoomRequests({
       lastTotal.current = total
       return
     }
-    if (total > lastTotal.current) setAnnouncement(`${total} need you`)
+    // A status region only announces text that changes. Clear it when the count falls, so the same text can announce
+    // again on the next rise (2 → 1 → 2).
+    if (total < (lastTotal.current ?? 0)) setAnnouncement('')
+    else if (total > (lastTotal.current ?? 0)) setAnnouncement(`${total} need you`)
     lastTotal.current = total
   }, [needs.ready, total])
 
@@ -598,41 +601,42 @@ export function RoomRequests({
     lastVisible.current = visible
   }, [expanded, pins.cards])
 
-  if (total === 0) return null
-
   return (
     <PinsProvider value={pins.value}>
-      <div
-        id="bold-pins"
-        className="bold-pins"
-        data-expanded={expanded ? 'true' : 'false'}
-        role="region"
-        aria-label="Needs you"
-        onFocusCapture={(event) => {
-          focusedKey.current =
-            (event.target as Element).closest('[data-pin-key]')?.getAttribute('data-pin-key') ??
-            focusedKey.current
-        }}
-      >
-        <h2 ref={heading} className="bold-pins-title" tabIndex={-1}>
-          Needs you
-        </h2>
-        <span className="bold-sr-only" role="status">
-          {announcement}
-        </span>
-        <RoomFence />
-        <RoomApprovals
-          roomId={roomId}
-          approvals={needsApproval}
-          messages={messages ?? []}
-          jobs={jobs}
-          selectedJob={selectedJob}
-          agents={agents}
-        />
-        <RoomExchanges jobs={cooking} agents={agents} />
-        <RunSafetyRequests jobs={recipeJobs} agents={agents} />
-      </div>
-      {moreLabel && (
+      {/* The status node stays mounted at zero so its first 0 → 1 change is announced. */}
+      <span className="bold-sr-only" role="status">
+        {announcement}
+      </span>
+      {total > 0 && (
+        <div
+          id="bold-pins"
+          className="bold-pins"
+          data-expanded={expanded ? 'true' : 'false'}
+          role="region"
+          aria-label="Needs you"
+          onFocusCapture={(event) => {
+            focusedKey.current =
+              (event.target as Element).closest('[data-pin-key]')?.getAttribute('data-pin-key') ??
+              focusedKey.current
+          }}
+        >
+          <h2 ref={heading} className="bold-pins-title" tabIndex={-1}>
+            Needs you
+          </h2>
+          <RoomFence />
+          <RoomApprovals
+            roomId={roomId}
+            approvals={needsApproval}
+            messages={messages ?? []}
+            jobs={jobs}
+            selectedJob={selectedJob}
+            agents={agents}
+          />
+          <RoomExchanges jobs={cooking} agents={agents} />
+          <RunSafetyRequests jobs={recipeJobs} agents={agents} />
+        </div>
+      )}
+      {total > 0 && moreLabel && (
         <button
           type="button"
           className="bold-pins-more"

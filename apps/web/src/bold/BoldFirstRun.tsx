@@ -139,15 +139,18 @@ export function BoldFirstRun() {
     })
   }
 
-  const finish = () => {
+  const finish = async () => {
     finishFirstRun()
     void queryClient.invalidateQueries({ queryKey: ['workflows'] })
+    // The shared team-room read learns the saved lead only now: refetching it earlier would leave first run (and cut
+    // the recipe saves short) before the person's chosen starters exist.
+    await roomQuery.refetch()
     void navigate('/b', { replace: true })
   }
 
   const saveRecipes = async (ids: readonly string[]) => {
     if (ids.length === 0) {
-      finish()
+      await finish()
       return
     }
     let savedNames: Set<string>
@@ -178,7 +181,7 @@ export function BoldFirstRun() {
       }
     }
     setFailedRecipes(failed)
-    if (failed.length === 0) finish()
+    if (failed.length === 0) await finish()
   }
 
   const open = async (event: FormEvent<HTMLFormElement>) => {
@@ -196,7 +199,6 @@ export function BoldFirstRun() {
           }),
         )
         if (updated.id !== room.id) throw new Error('The server answered for another room.')
-        await roomQuery.refetch()
         setLeadSaved(true)
       }
       await saveRecipes([...selected])

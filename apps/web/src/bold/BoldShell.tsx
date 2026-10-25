@@ -17,7 +17,7 @@ import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
 import { useFence } from '../routes/orchestrations/orchestration-queries.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
-import { useRoomNeedsYou } from './room/use-needs-you.ts'
+import { useRoomNeedsYouState } from './room/use-needs-you.ts'
 import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
 import { agentDisplayName, agentStateLabel, dockProgress } from './bold-agents.ts'
@@ -91,7 +91,11 @@ export function BoldShell() {
   const recipesOpen = new URLSearchParams(location.search).get('recipes') === '1'
   const view = viewOf(location.pathname)
   const phone = useMediaQuery(PHONE)
-  const roomNeedsYou = useRoomNeedsYou({ roomId: null, jobs: [] })
+  // The phone badge counts the same job the strip does. It waits for the canonical team-room read: before that the
+  // room's jobs are unknown, and counting All would briefly inflate the badge and then change it.
+  const roomJob = new URLSearchParams(location.search).get('job') ?? 'all'
+  const roomNeeds = useRoomNeedsYouState({ roomId: null, jobs: [], selectedJob: roomJob })
+  const roomNeedsYou = roomNeeds.ready ? roomNeeds.total : 0
   const systemLight = useMediaQuery('(prefers-color-scheme: light)')
   const look = useLook()
   const preview = usePreview()

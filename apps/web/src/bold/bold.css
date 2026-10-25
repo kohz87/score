@@ -68,6 +68,17 @@
   font-size: 0.87em;
 }
 
+/* Visually hidden text still reaches assistive technology (live announcements and labelled controls). */
+[data-ui='bold'] .bold-sr-only,
+[data-ui='bold'] .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 [data-ui='bold'] .row {
   display: flex;
   align-items: center;
