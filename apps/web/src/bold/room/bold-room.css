@@ -1901,3 +1901,45 @@
   color: var(--muted);
   font-size: 12px;
 }
+
+/* 2.3.0 (decision 128): an agent's question. The card is the needs-you object (light on the dark ground); the
+   question reads as plain text with its line breaks, the options as pills, a free answer in the form box. */
+[data-ui='bold'] .bold-question-text {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 18px;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+[data-ui='bold'] .bold-question-options {
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-question-pill[aria-pressed='true'] {
+  outline: 2px solid currentcolor;
+  outline-offset: 1px;
+}
+
+[data-ui='bold'] .bold-question-form textarea {
+  min-height: 52px;
+  max-height: 240px;
+  resize: none;
+  overflow-y: auto;
+}
+
+[data-ui='bold'] .bold-question-deadline {
+  align-self: flex-start;
+}
+
+/* The ended question stays in the stream as one quiet line where it was asked. */
+[data-ui='bold'] .bold-question-note {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

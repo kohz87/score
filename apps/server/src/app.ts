@@ -57,6 +57,7 @@ import { registerNowRoutes } from './http/now.ts'
 import { registerAgentPauseRoutes } from './http/agent-pause.ts'
 import { registerWatchRoutes } from './http/watch.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
+import { registerQuestionRoutes } from './http/questions.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { allowedOriginsFor, registerCsrfGuard } from './auth/csrf.ts'
 import { registerRemoteGuard } from './auth/remote.ts'
@@ -247,6 +248,14 @@ export function buildApp({
     registerBridgeRoutes(app, {
       ...bridge,
       ...(approvalsOutbox ? { outbox: approvalsOutbox } : {}),
+    })
+  if (db && ingest)
+    registerQuestionRoutes(app, {
+      db,
+      ingest,
+      port,
+      onError: (error) => app.log.error({ err: error }, 'Answering a question failed'),
+      ...(clock ? { clock } : {}),
     })
   if (db && ingest && approvalsOutbox) {
     registerApprovalRoutes(app, {

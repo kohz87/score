@@ -111,7 +111,10 @@ test('the whole fake scenario passes real ingest validation and covers every scr
         // Pinning a decision is a person's action (11.2).
         type !== 'room.pins.changed' &&
         // Deleting a job from its menu is a person's action (decision 121).
-        type !== 'job.deleted',
+        type !== 'job.deleted' &&
+        // Agent questions (decision 128) follow a person's "ask me" message, never the scripted scenario.
+        type !== 'question.requested' &&
+        type !== 'question.updated',
     )
   expect([...new Set(stored.map((event) => event.type))].sort()).toEqual(expectedTypes.sort())
   expect(stored).toHaveLength(createScenario(schedulerStart).length + 4 + SCENARIO_JOB_EVENTS)

@@ -18,7 +18,9 @@ import {
 import { foldedJobIds, isFinishedJob, readExpandedJobs, writeExpandedJobs } from './job-fold.ts'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomMessagesQuery, roomSeekQuery } from './room-queries.ts'
+import { QuestionNote } from './QuestionCard.tsx'
 import { useRoomNeedsYouState } from './use-needs-you.ts'
+import { questionNeedsYou, questionsQuery } from '../../data/question-queries.ts'
 import { useMessageTools } from './use-message-tools.ts'
 
 type PageState = {
@@ -231,6 +233,7 @@ export function RoomMessageStream({
   const retryable = useMemo(() => retryableIds(allItems), [allItems])
   const { versions, isPinned, pinBusy, pinError, togglePin } = useMessageTools(roomId)
   const approvalsData = useStreamQuery(approvalsQuery).data
+  const questionsData = useStreamQuery(questionsQuery).data
   const approvalPointerIds = useMemo(
     () => approvalPointerSet(approvalsData ?? [], roomId),
     [approvalsData, roomId],
@@ -365,8 +368,24 @@ export function RoomMessageStream({
             ready: needs.ready && !needs.incomplete,
           })
         : new Set<string>()
-    const build = (list: Message[]) =>
+    // Ended agent questions stay in the stream as muted lines where they were asked; each shows once per render.
+    const noteItems = (questionsData ?? [])
+      .filter(
+        (question) =>
+          !questionNeedsYou(question) &&
+          question.roomId === roomId &&
+          (selectedJob === 'all' || question.jobId === null || question.jobId === selectedJob),
+      )
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((question) => ({
+        id: question.id,
+        at: question.createdAt,
+        node: <QuestionNote question={question} agents={agents} />,
+      }))
+    const usedNotes = new Set<string>()
+    const build = (list: Message[], tail = true) =>
       buildMessageNodes({
+        notes: { items: noteItems, used: usedNotes, tail },
         items: list,
         versions,
         agents,
@@ -413,7 +432,7 @@ export function RoomMessageStream({
         if (!folded.has(job.id)) {
           if (!shown.has(job.id)) {
             shown.add(job.id)
-            built.nodes.push(...build(run).nodes)
+            built.nodes.push(...build(run, false).nodes)
             run = []
             built.nodes.push(
               <p key={`hide-${job.id}`} className="bold-job-hide">
@@ -429,7 +448,7 @@ export function RoomMessageStream({
         }
         if (shown.has(job.id)) continue
         shown.add(job.id)
-        built.nodes.push(...build(run).nodes)
+        built.nodes.push(...build(run, false).nodes)
         run = []
         built.nodes.push(
           <FoldedJob

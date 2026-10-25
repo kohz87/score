@@ -48,6 +48,8 @@ export const protectedClasses = [
   'orch-pill',
   'orch-node__flag',
   'bold-request',
+  // 2.3.0 (decision 128): an agent's question to the person, a decision like an approval
+  'bold-question',
   // PLAN 11.4b: the count that expands the rest of the needs-you strip (a theme may not hide the way to the cards)
   'bold-pins-more',
   // PLAN 11.11b: the shell-wide notice that starting work is blocked until the person reviews the fence

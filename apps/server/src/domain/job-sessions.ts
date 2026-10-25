@@ -35,10 +35,84 @@ function roomSchemeSession(sqlite: DatabaseSync, roomId: string, agentId: string
 }
 
 /**
+ * The id Score uses now for a derived session id: Hermes 0.22.5 refuses a deleted session id for good, so a refused
+ * one is replaced by its recorded successor (decision 128), followed to the newest.
+ */
+export function currentSession(sqlite: DatabaseSync, agentId: string, sessionId: string): string {
+  let current = sessionId
+  for (let hops = 0; hops < 50; hops++) {
+    const next = sqlite
+      .prepare(
+        'SELECT successor_session_id AS id FROM session_successors WHERE agent_id = ? AND retired_session_id = ?',
+      )
+      .get(agentId, current) as { id: string } | undefined
+    if (!next) return current
+    current = next.id
+  }
+  return current
+}
+
+/** Hermes refused `sessionId` as deleted: records its successor (`<first id>~N`) and returns it. Idempotent. */
+export function retireSession(
+  sqlite: DatabaseSync,
+  agentId: string,
+  sessionId: string,
+  now: string,
+): string {
+  const current = currentSession(sqlite, agentId, sessionId)
+  if (current !== sessionId) return current
+  const root = originalSession(sqlite, agentId, sessionId)
+  const used = sqlite
+    .prepare(
+      'SELECT count(*) AS n FROM session_successors WHERE agent_id = ? AND successor_session_id LIKE ?',
+    )
+    .get(agentId, `${root}~%`) as { n: number }
+  const successor = `${root}~${used.n + 2}`
+  sqlite
+    .prepare(
+      `INSERT OR IGNORE INTO session_successors (agent_id, retired_session_id, successor_session_id, created_at)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .run(agentId, sessionId, successor, now)
+  return currentSession(sqlite, agentId, sessionId)
+}
+
+/** True when `sessionId` is a successor Score made for a deleted session. */
+export function isSuccessorSession(
+  sqlite: DatabaseSync,
+  agentId: string,
+  sessionId: string,
+): boolean {
+  return originalSession(sqlite, agentId, sessionId) !== sessionId
+}
+
+/** The derived id a successor stands in for (itself when it is not a successor). */
+function originalSession(sqlite: DatabaseSync, agentId: string, sessionId: string): string {
+  let current = sessionId
+  for (let hops = 0; hops < 50; hops++) {
+    const previous = sqlite
+      .prepare(
+        'SELECT retired_session_id AS id FROM session_successors WHERE agent_id = ? AND successor_session_id = ?',
+      )
+      .get(agentId, current) as { id: string } | undefined
+    if (!previous) return current
+    current = previous.id
+  }
+  return current
+}
+
+/**
  * The session for `agentId`'s turns in a job. A turn row without a job (rows written before 0080 that the migration
  * could not place) falls back to its room's session, which is what it used before.
  */
 export function sessionFor(
+  sqlite: DatabaseSync,
+  turn: { roomId: string; jobId: string | null; agentId: string },
+): string {
+  return currentSession(sqlite, turn.agentId, derivedSession(sqlite, turn))
+}
+
+function derivedSession(
   sqlite: DatabaseSync,
   turn: { roomId: string; jobId: string | null; agentId: string },
 ): string {
@@ -87,6 +161,9 @@ export function sessionOwner(
   agentId: string,
   sessionId: string,
 ): { roomId: string; jobId: string | null; continued: boolean } | null {
+  // A successor of a deleted session belongs where the session it replaced did.
+  const original = originalSession(sqlite, agentId, sessionId)
+  if (original !== sessionId) return sessionOwner(sqlite, agentId, original)
   const recorded = sqlite
     .prepare(
       'SELECT j.id AS job_id, j.room_id FROM job_sessions s JOIN jobs j ON j.id = s.job_id WHERE s.agent_id = ? AND s.session_id = ?',

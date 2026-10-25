@@ -1,6 +1,6 @@
 import type { AgentSummary, JobResults, Message, RoomVersion } from '@score/contract'
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { copyText } from '../../data/clipboard.ts'
@@ -73,6 +73,7 @@ export function buildMessageNodes({
   onBranchSelect,
   onlyJobId,
   renderMessage,
+  notes,
 }: {
   items: Message[]
   versions: RoomVersion[]
@@ -82,6 +83,11 @@ export function buildMessageNodes({
   onBranchSelect: (messageId: string, version: BranchSelection['version'] | null) => void
   onlyJobId?: string | undefined
   renderMessage: (message: Message) => ReactNode
+  /**
+   * Muted lines placed where they happened (an ended agent question). `used` is shared by the runs of one stream so a
+   * line shows once; `tail` says whether the lines after the last message go here (the stream's final run).
+   */
+  notes?: { items: { id: string; at: string; node: ReactNode }[]; used: Set<string>; tail: boolean }
 }): { nodes: ReactNode[]; branched: boolean } {
   const anchor = branch ? items.find((message) => message.id === branch.messageId) : undefined
   const effective = anchor ? branch : null
@@ -92,7 +98,17 @@ export function buildMessageNodes({
         .sort((a, b) => a.anchorCreatedAt.localeCompare(b.anchorCreatedAt))
     : []
   let marker = 0
+  const flushNotes = (until: string | null) => {
+    if (!notes) return
+    for (const note of notes.items) {
+      if (notes.used.has(note.id)) continue
+      if (until === null ? !notes.tail : note.at > until) continue
+      notes.used.add(note.id)
+      nodes.push(<Fragment key={`note-${note.id}`}>{note.node}</Fragment>)
+    }
+  }
   const flush = (until: string | null) => {
+    flushNotes(until)
     while (markers[marker] && (until === null || markers[marker]!.anchorCreatedAt <= until)) {
       const version = markers[marker++]!
       nodes.push(

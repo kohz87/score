@@ -1,4 +1,5 @@
 import type {
+  AgentQuestion,
   AgentSummary,
   Approval,
   ApprovalChoice,
@@ -12,6 +13,7 @@ import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
+import { questionsQuery, roomQuestions } from '../../data/question-queries.ts'
 import {
   approvalOutcome,
   useApprovalDecision,
@@ -34,6 +36,7 @@ import {
   reportBackWaiting,
 } from './room-model.ts'
 import { PinCard, PinsProvider, usePinRegistry } from './PinCards.tsx'
+import { QuestionCard, useQuestionAnnouncement } from './QuestionCard.tsx'
 import { reportBackText } from './ReportBack.tsx'
 import { useReportBack } from './report-back-store.ts'
 import { roomExchangesQuery, roomJobsQuery } from './room-queries.ts'
@@ -583,6 +586,29 @@ function RoomApprovals({
   )
 }
 
+function RoomQuestions({
+  questions,
+  jobs,
+  agents,
+}: {
+  questions: AgentQuestion[]
+  jobs: Job[]
+  agents: AgentSummary[]
+}) {
+  return (
+    <>
+      {questions.map((question) => (
+        <QuestionCard
+          key={question.id}
+          question={question}
+          agent={agents.find((item) => item.id === question.agentId)}
+          jobTitle={jobs.find((item) => item.id === question.jobId)?.title}
+        />
+      ))}
+    </>
+  )
+}
+
 /** The "Needs you" pins: approvals, paused exchanges and run-safety cards above the stream. */
 export function RoomRequests({
   roomId,
@@ -615,7 +641,16 @@ export function RoomRequests({
   const recipeJobs = selectedJobs.filter((job) => job.recipe !== null)
   const needsApproval = approvals.filter(approvalNeedsYou)
   const needs = useRoomNeedsYouState({ roomId, jobs, messages, selectedJob, teamRoom })
+  const questionsRead = useStreamQuery(questionsQuery)
+  const questions = roomQuestions(questionsRead.data ?? [], roomId, teamRoom, selectedJob)
   const total = needs.total
+  // Questions announce in their own sentence; the count sentence covers the rest.
+  const countedTotal = total - needs.questionCount
+  const questionAnnouncement = useQuestionAnnouncement(
+    questions,
+    questionsRead.status === 'success',
+    agents,
+  )
   const moreLabel = pinsMoreLabel(total, expanded)
   const lastTotal = useRef<number | null>(null)
   const settled = useRef(false)
@@ -625,15 +660,15 @@ export function RoomRequests({
     if (!needs.ready) return
     if (!settled.current) {
       settled.current = true
-      lastTotal.current = total
+      lastTotal.current = countedTotal
       return
     }
     // A status region only announces text that changes. Clear it when the count falls, so the same text can announce
     // again on the next rise (2 → 1 → 2).
-    if (total < (lastTotal.current ?? 0)) setAnnouncement('')
-    else if (total > (lastTotal.current ?? 0)) setAnnouncement(`${total} need you`)
-    lastTotal.current = total
-  }, [needs.ready, total])
+    if (countedTotal < (lastTotal.current ?? 0)) setAnnouncement('')
+    else if (countedTotal > (lastTotal.current ?? 0)) setAnnouncement(`${total} need you`)
+    lastTotal.current = countedTotal
+  }, [needs.ready, countedTotal, total])
 
   // With one card or none left the strip folds, so the next burst of cards doesn't arrive already expanded.
   if (expanded && total <= 1) setExpanded(false)
@@ -669,6 +704,10 @@ export function RoomRequests({
       <span className="bold-sr-only" role="status">
         {announcement}
       </span>
+      {/* Its own region, so a question never hides the strip's "N need you" (or the other way round). */}
+      <span className="bold-sr-only" role="status">
+        {questionAnnouncement}
+      </span>
       {total > 0 && (
         <div
           id="bold-pins"
@@ -694,6 +733,7 @@ export function RoomRequests({
             selectedJob={selectedJob}
             agents={agents}
           />
+          <RoomQuestions questions={questions} jobs={jobs} agents={agents} />
           <RoomExchanges jobs={cooking} agents={agents} />
           <RoomReportBacks roomId={roomId} jobs={jobs} />
           <RunSafetyRequests jobs={recipeJobs} agents={agents} />

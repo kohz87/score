@@ -52,7 +52,7 @@ import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
 import { readJourneyFacts } from './journey-facts.ts'
 import { readProfileSessionCosts, readReportFacts } from './report-facts.ts'
-import { listOutsideSessions, readOutsideSession } from './outside-sessions.ts'
+import { listOutsideSessions, readOutsideSession, sessionRetired } from './outside-sessions.ts'
 import { createTask, patchTask } from './task-writes.ts'
 import { LiveRoutines } from './routines.ts'
 import { LiveAgentTabs } from './agent-tabs.ts'
@@ -836,6 +836,17 @@ export class LivePort implements HermesPort {
         },
       )
       .catch((error: unknown) => {
+        // The session was deleted in Hermes (decision 128): routing moves the agent to a successor session.
+        // Hermes answers a run into a retired id with a plain 409 (`not_found` from its admission lookup), so the
+        // retirement itself is checked in its state database.
+        if (
+          error instanceof HermesHttpError &&
+          error.status === 409 &&
+          req.sessionId &&
+          (error.code === 'session_deleted' ||
+            sessionRetired(req.agentId, req.sessionId, this.options.hermesHome))
+        )
+          throw new HttpError(409, 'session_deleted', 'Hermes deleted this conversation.')
         // A definite refusal (4xx other than timeout/conflict/rate limit) is permanent: surface it as an
         // HttpError so the caller fails the turn instead of retrying it forever.
         if (
@@ -970,6 +981,18 @@ export class LivePort implements HermesPort {
     } catch {
       throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read the tasks from Hermes.')
     }
+  }
+  async answerQuestion(req: Parameters<HermesPort['answerQuestion']>[0]) {
+    assertThawed(this.options.frozen)
+    const { db, gateway } = this.requireStarted()
+    const row = readRun(db.sqlite, req.runId)
+    if (row.profile !== req.agentId || row.origin !== 'score')
+      throw new HttpError(409, 'conflict', 'This question isn’t on a run Score started.')
+    return gateway.submitClarify(
+      req.agentId,
+      { runId: req.runId, promptId: req.promptId, generation: req.generation, answer: req.answer },
+      row.credential_generation ?? undefined,
+    )
   }
   async deliverDecision(
     req: Parameters<HermesPort['deliverDecision']>[0],

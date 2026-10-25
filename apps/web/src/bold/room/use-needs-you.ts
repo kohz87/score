@@ -1,5 +1,6 @@
 import type { Job, Message } from '@score/contract'
 import { useStreamQuery } from '../../data/query-client.ts'
+import { questionsQuery, roomQuestions } from '../../data/question-queries.ts'
 import { approvalsQuery } from '../../routes/chat/queries.ts'
 import { orchestrationsQuery, useFence } from '../../routes/orchestrations/orchestration-queries.ts'
 import { workflowRunsQuery } from '../../routes/workflows/workflow-queries.ts'
@@ -30,6 +31,7 @@ export function useRoomNeedsYouState({
   const effectiveJobs = roomId === null && jobs.length === 0 ? (canonical.data?.jobs ?? []) : jobs
   const approvalsState = useStreamQuery(approvalsQuery)
   const approvals = approvalsState.data ?? []
+  const questionsState = useStreamQuery(questionsQuery)
   const fence = useFence().data
   const selectedJobs = effectiveJobs.filter(
     (job) => job.state !== 'closed' && (selectedJob === 'all' || job.id === selectedJob),
@@ -68,6 +70,12 @@ export function useRoomNeedsYouState({
     return !known || known.id === selectedJob
   }).length
 
+  const questionCount = roomQuestions(
+    questionsState.data ?? [],
+    effectiveRoomId,
+    teamRoom ?? canonical.data?.room.id === effectiveRoomId,
+    selectedJob,
+  ).length
   const exchangeCount = exchanges.filter(needsYou).length
   const runCount = selectedJobs.reduce((count, job) => {
     if (job.recipe?.kind === 'orchestration') {
@@ -84,8 +92,11 @@ export function useRoomNeedsYouState({
   return {
     /** Jobs with an exchange waiting on the person (the fold keeps these open). */
     waitingJobIds: new Set(exchanges.filter(needsYou).map((exchange) => exchange.jobId)),
+    /** Agent questions in the total (the strip announces them in their own sentence). */
+    questionCount,
     total:
       approvalCount +
+      questionCount +
       exchangeCount +
       runCount +
       reportBackCount +
@@ -95,6 +106,7 @@ export function useRoomNeedsYouState({
     // stable baseline, so announcements wait until every source has produced a snapshot.
     ready:
       approvalsState.status === 'success' &&
+      questionsState.status === 'success' &&
       exchangesState.status === 'success' &&
       orchestrationsState.status === 'success' &&
       workflowsState.status === 'success' &&
@@ -103,6 +115,7 @@ export function useRoomNeedsYouState({
     // A source that failed counts as nothing above, so the total may be short: say so rather than a confident number.
     incomplete: [
       approvalsState,
+      questionsState,
       exchangesState,
       orchestrationsState,
       workflowsState,

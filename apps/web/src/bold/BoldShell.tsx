@@ -17,6 +17,7 @@ import { useTextScale } from '../data/text-scale.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery, approvalsQuery, roomsQuery } from '../routes/chat/queries.ts'
 import { useFence } from '../routes/orchestrations/orchestration-queries.ts'
+import { questionNeedsYou, questionsQuery } from '../data/question-queries.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import { useRoomNeedsYouState } from './room/use-needs-you.ts'
 import { usePreview } from '../themes/preview-context.ts'
@@ -107,7 +108,12 @@ function BoldShellFrame() {
   // An agent needs you while a decision of yours is open for it (as the classic Needs-you dot), not only while a run
   // says it waits.
   const approvals = useStreamQuery(approvalsQuery).data ?? []
-  const waitingOn = new Set(approvals.filter(approvalNeedsYou).map((item) => item.agentId))
+  // A question an agent asked is a decision of yours too (decision 128).
+  const questions = useStreamQuery(questionsQuery).data ?? []
+  const waitingOn = new Set([
+    ...approvals.filter(approvalNeedsYou).map((item) => item.agentId),
+    ...questions.filter(questionNeedsYou).map((item) => item.agentId),
+  ])
   const navigate = useNavigate()
   const location = useLocation()
   const recipesOpen = new URLSearchParams(location.search).get('recipes') === '1'
