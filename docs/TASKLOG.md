@@ -1315,3 +1315,18 @@ One entry per completed task: what landed, review results, and any **rejected re
   docs/reviews/2026-10-26-10.15-swipe-design-v6-codex.md on task/2.0.12-swipe-design). Lead's call: Hermes upgrade
   first, then v7 against v0.22.5. Owner asked to proceed with the upgrade prep (2026-10-26).
 - **v2.0.12 deployed live** (~12:41 UTC): backup score-pre-2.0.12-20261026.db, restart, 0 errors.
+- **Hermes upgrade + v2.1.0 (lead, 2026-10-26).** Owner: "proceed the upgrade prep and backup command" → backup approved
+  and run: gateway stopped 32 s, `~/hermes-backup-pre-upgrade-20261026.tar.zst` (1.0 GB, 88,838 files, 0600), gateway
+  back, every producer reconnected. `hermes update --check`: the git install follows main (9,414 commits; v0.22.5 +
+  ~1,100); owner chose "latest main via hermes update". `hermes update --yes` → v0.22.5+1099 (d778246c): config v49→52
+  in every profile (`browser.extension_control` removed), 14 bundled skills updated, cua-driver installed as a default
+  tool, gateway restarted by the updater. Score's check: not compatible (state schema 31→32) → gateway approvals held.
+  Verified: every column Score's read-only readers name exists in the live state.db files (read-only PRAGMA); bridge
+  hooks/approval functions/kanban schema unchanged; `run_unknown_resolution` added. Live smoke (test profiles, free
+  models): the first runs looped on Hermes's new Tool Search (Score's plugin/MCP tools behind tool_search/tool_call);
+  owner chose "turn it off for Score's agents" → `hermes -p <p> config set tools.tool_search.enabled off` on default,
+  gem38, scoretesta, scoretestb (read back "off"), gateway restarted; then scoretestb (nous ornith free) answered PONG
+  with tool parts and streamed text. scoretesta/scoretestb now use free models. 2.1.0: tested-fingerprints entry for
+  d778246c, three new pattern keys (not hardline in 0.22.5), config-index regenerated (28 added, 18 removed, none
+  used by Score; no persona names), new agents get Tool Search off in `enable_bridge` (best effort). Sonnet review:
+  0 P1; the stale config index (P2) fixed. Shipped with 2.0.13 (the + menu anchored left; review clean).

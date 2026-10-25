@@ -684,7 +684,7 @@ session, every parity row checked off against the brief's §11, full e2e, then t
 ## Post-release list (after the Phase 11 release; owner, 2026-10-25)
 Not started before the new Score is live. Each item gets a plan task with a brief when it's picked up.
 
-**P1 Upgrade Hermes Agent v0.21.5 → v0.22.5** (installed: git install in `~/.hermes/hermes-agent`, commit `e97923c3`,
+**P1 Upgrade Hermes Agent v0.21.5 → v0.22.5** ✅ (2026-10-26: latest main d778246c, Score 2.1.0; decision 126; the feature list below is next as 2.1.x) (installed: git install in `~/.hermes/hermes-agent`, commit `e97923c3`,
 2026-09-24; latest release v0.22.5, 2026-10-22; ~8.3k commits). Not before the Score release, so the release doesn't
 test two big changes at once. Steps:
 1. Back up `~/.hermes` (system step: the lead gives the exact command, the owner OKs it). The state schema goes 31 → 32

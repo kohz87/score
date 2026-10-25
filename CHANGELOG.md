@@ -3,6 +3,21 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.1.0] — 2026-10-26
+
+### Changed
+- **Hermes Agent v0.22.5** (the owner's install, main `d778246c`) is a tested build: Score's compatibility check
+  passes again, so approvals relay through Score as before. Score's session readers were checked against Hermes's new
+  session database layout; Advanced config lists the settings of the new version; three new dangerous-command
+  categories are known to Rules (they ask first).
+- **Score's agents keep every tool visible**: Hermes 0.22.5's Tool Search (which hides plugin and tool-server tools,
+  including Score's own, behind `tool_search`/`tool_call`) is turned off for Score's agents; new agents get the same
+  setting when they're set up.
+
+### Fixed
+- The composer's **+** menu opened off the left edge of the window in the new shell; it now opens beside the +, fully
+  visible (team room, one-to-ones, job threads).
+
 ## [2.0.12] — 2026-10-26
 
 ### Changed
