@@ -5,7 +5,7 @@ import { resolveHermesHome } from './paths.ts'
 import { ConfigService, type ConfigBackend, type ConfigIndexEntry } from '../config-service.ts'
 import index from './config-index.json' with { type: 'json' }
 
-// The index is generated from the tested Hermes version's defaults (scripts/gen-config-index.py); current
+// The index is generated from the tested Hermes version's defaults (scripts/gen-config-index.py; 0.22.5 since 2.1.0); current
 // values come from `hermes config get --json <section>`, which masks credential-shaped fields.
 const IndexSchema = z.object({
   generatedFrom: z.string(),
