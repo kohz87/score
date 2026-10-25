@@ -36,6 +36,8 @@ export const protectedClasses = [
   // PLAN 11.9a: bold credential panels, the Add tool server form, and trigger secrets / rotate-delete decisions
   'bold-connect-panel',
   'bold-tool-add',
+  // 2.0.3: the inline confirm before removing a provider, tool server or messaging connection
+  'bold-remove-confirm',
   'bold-trigger-card',
   'bold-trigger-secret',
   'bold-trigger-confirm',

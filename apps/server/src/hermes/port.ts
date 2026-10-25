@@ -297,13 +297,22 @@ export interface HermesPort extends ProfileManagementPort {
   /** Relays a pasted key to Hermes (stdin); only for `signIn: 'api_key'` providers. Never stored or logged. */
   addProviderKey(id: string, req: ProviderKeyRequest): Promise<ProviderBase>
   addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase>
+  /**
+   * Removes a provider (2.0.3): a local one from every profile that defines it, a hosted one's stored credentials in the
+   * settings profile. 404 unknown, 409 `not_supported` when nothing is stored, 409 `not_verified`. Never reads keys.
+   */
+  removeProvider(id: string): Promise<void>
   listConnections(): Promise<ConnectionsResponse>
   addToolServer(req: ToolServerRequest): Promise<ConnectResult>
+  /** `hermes mcp remove` in the settings profile, then verified gone (2.0.3). 404 unknown, 409 `not_verified`. */
+  removeToolServer(id: string): Promise<void>
   connectMessaging(platform: string): Promise<ConnectResult>
   /** Form fields for a platform's browser setup (`browserSetup: false` = terminal only). */
   messagingFields(platform: string): Promise<MessagingFieldsResponse>
   /** Writes the platform's values through `hermes config set` in the agent's profile; never stores or echoes them. */
   saveMessaging(platform: string, req: MessagingSetupRequest): Promise<MessagingPlatform>
+  /** Unsets the platform's field keys in the agent's profile (the settings profile when absent) (2.0.3). */
+  removeMessaging(platform: string, agentId?: string): Promise<MessagingPlatform>
   /** Compares the running Hermes build with the tested and accepted ones. Read-only. */
   checkHermes(): Promise<HermesCheck>
   /** Records the checked build as accepted and re-enables the gate. 409 `conflict` when the hash is stale, 409 `not_compatible`. */

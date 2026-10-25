@@ -1,6 +1,6 @@
 import type { AgentSummary } from '@score/contract'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { BoldTools } from './BoldTools.tsx'
@@ -38,6 +38,8 @@ function mount() {
       return Promise.resolve(
         Response.json({ next: 'run_in_terminal', command: 'hermes mcp add tickets' }),
       )
+    if (init?.method === 'DELETE' && url.pathname === '/api/settings/tool-servers/notes')
+      return Promise.resolve(new Response(null, { status: 204 }))
     if (url.pathname === '/api/triggers') return Promise.resolve(Response.json({ items: [] }))
     return Promise.resolve(
       Response.json({ error: { code: 'not_found', message: 'No' } }, { status: 404 }),
@@ -81,14 +83,11 @@ test('tool servers show health and who uses them, and the add form returns the H
   expect(screen.getByText(/Don’t paste tokens or passwords into the command/)).toBeDefined()
 })
 
-test('tool testing and removal point to Hermes while the contract lacks their endpoints', async () => {
+test('tool testing points to Hermes while the contract lacks its endpoint', async () => {
   mount()
   await screen.findByText('files')
-  expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull()
   expect(screen.queryByRole('button', { name: /Send a test call/ })).toBeNull()
-  expect(
-    screen.getByText(/Testing and removing a tool server are done in Hermes for now/),
-  ).toBeDefined()
+  expect(screen.getByText(/Testing a tool server is done in Hermes for now/)).toBeDefined()
   expect(screen.getByRole('button', { name: 'New trigger' })).toBeDefined()
 })
 
@@ -109,4 +108,25 @@ test('a command with an unclosed quote is refused before it is sent', async () =
         init?.method === 'POST',
     ),
   ).toBe(false)
+})
+
+test('a tool server is removed only after the protected confirm', async () => {
+  const fetch = mount()
+  const row = (await screen.findByText('notes')).closest('[data-tool-server]') as HTMLElement
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove notes' }))
+  const confirm = within(row).getByRole('group', { name: 'Remove notes' })
+  expect(confirm.getAttribute('data-protected')).toBe('block')
+  expect(confirm.textContent).toContain(
+    'Removes notes from Hermes. Agents drop it when the gateway restarts.',
+  )
+  expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove' }))
+  await waitFor(() =>
+    expect(
+      fetch.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith('/api/settings/tool-servers/notes') && init?.method === 'DELETE',
+      ),
+    ).toBe(true),
+  )
 })

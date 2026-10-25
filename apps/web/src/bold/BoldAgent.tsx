@@ -312,6 +312,23 @@ function AgentProfile({ agentId }: { agentId: string }) {
     }, 0)
   }
 
+  // The delete flow lives in More › Details (a Hermes agent) or the coding card's danger zone; this only takes the
+  // person there. The More cell mounts after the state change, so look for the button for a moment.
+  function jumpToDelete() {
+    if (!coding) setMore(true)
+    let tries = 0
+    const find = () => {
+      const button = document.getElementById('agent-delete')
+      if (button) {
+        button.scrollIntoView?.({ block: 'center' })
+        button.focus({ preventScroll: true })
+        // The cards above it finish loading after the jump and push it down: settle once more.
+        window.setTimeout(() => button.scrollIntoView?.({ block: 'center' }), 400)
+      } else if (tries++ < 20) window.setTimeout(find, 50)
+    }
+    window.setTimeout(find, 0)
+  }
+
   function togglePause() {
     pause.mutate(failed ?? (paused ? 'resume' : 'pause'), {
       onSettled: () => {
@@ -352,6 +369,11 @@ function AgentProfile({ agentId }: { agentId: string }) {
                   ? 'Resume'
                   : 'Pause'}{' '}
               {agentDisplayName(agent)}
+            </button>
+          )}
+          {agent.lifecycle?.state !== 'removed' && (
+            <button type="button" className="link bold-agent-remove" onClick={jumpToDelete}>
+              Remove agent…
             </button>
           )}
           {agent.served && (

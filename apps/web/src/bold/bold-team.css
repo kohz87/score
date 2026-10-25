@@ -413,7 +413,8 @@
   color: inherit;
 }
 
-[data-ui='bold'] .bold-agent-actions .bold-agent-watch {
+[data-ui='bold'] .bold-agent-actions .bold-agent-watch,
+[data-ui='bold'] .bold-agent-actions .bold-agent-remove {
   align-self: center;
 }
 

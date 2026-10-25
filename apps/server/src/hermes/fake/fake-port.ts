@@ -1433,14 +1433,38 @@ export class FakePort implements HermesPort {
     this.fakeProviders.push(provider)
     return structuredClone(provider)
   }
+  async removeProvider(id: string): Promise<void> {
+    const at = this.fakeProviders.findIndex((provider) => provider.id === id)
+    if (at < 0) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
+    if (this.fakeProviders[at]!.status === 'missing')
+      throw new HttpError(409, 'not_supported', 'Nothing is stored for this provider.')
+    this.fakeProviders.splice(at, 1)
+  }
   private readonly fakeMessaging = new Set<string>()
+  private readonly fakeMessagingRemoved = new Set<string>()
+  private readonly fakeToolServersRemoved = new Set<string>()
+  async removeToolServer(id: string): Promise<void> {
+    const known = (await this.listConnections()).toolServers.some((server) => server.id === id)
+    if (!known) throw new HttpError(404, 'not_found', 'Couldn’t find that tool server.')
+    this.fakeToolServersRemoved.add(id)
+  }
+  async removeMessaging(platform: string): Promise<MessagingPlatform> {
+    if (!messagingFields(platform).browserSetup)
+      throw new HttpError(409, 'not_supported', 'Remove this one with `hermes gateway setup`.')
+    this.fakeMessaging.delete(platform)
+    this.fakeMessagingRemoved.add(platform)
+    const row = (await this.listConnections()).messaging.find((item) => item.platform === platform)
+    return row ?? { platform, label: platform, status: 'disconnected', detail: null }
+  }
   async listConnections(): Promise<ConnectionsResponse> {
     return {
       toolServers: [
         { id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' },
         { id: 'web-search', label: 'web-search', status: 'needs_signin', usedBy: 'everyone' },
         { id: 'issue-tracker', label: 'issue-tracker', status: 'error', usedBy: 'everyone' },
-      ],
+      ].filter(
+        (server) => !this.fakeToolServersRemoved.has(server.id),
+      ) as ConnectionsResponse['toolServers'],
       messaging: (
         [
           { platform: 'telegram', label: 'Telegram', status: 'connected', detail: null },
@@ -1450,7 +1474,9 @@ export class FakePort implements HermesPort {
       ).map((row) =>
         this.fakeMessaging.has(row.platform)
           ? { ...row, status: 'connected' as const, detail: null }
-          : row,
+          : this.fakeMessagingRemoved.has(row.platform)
+            ? { ...row, status: 'disconnected' as const, detail: null }
+            : row,
       ),
     }
   }
@@ -1472,6 +1498,7 @@ export class FakePort implements HermesPort {
   async saveMessaging(platform: string, req: MessagingSetupRequest): Promise<MessagingPlatform> {
     messagingWrites(platform, req.values)
     this.fakeMessaging.add(platform)
+    this.fakeMessagingRemoved.delete(platform)
     const row = (await this.listConnections()).messaging.find((item) => item.platform === platform)
     return row ?? { platform, label: platform, status: 'connected', detail: null }
   }

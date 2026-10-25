@@ -19,6 +19,11 @@ export interface CliOptions {
   captureSettings?: boolean
   /** These values reach execFile only; the runner never returns stdout or exception argv for them. */
   sensitiveArgIndices?: number[]
+  /**
+   * Closes stdin at once, so a confirmation prompt takes its default instead of waiting for the timeout. Only for a
+   * command whose prompt the person already answered in Score (`mcp remove`).
+   */
+  closeStdin?: boolean
   execute?: (
     file: string,
     args: string[],
@@ -28,7 +33,7 @@ export interface CliOptions {
       stdout?: string | Buffer,
       stderr?: string | Buffer,
     ) => void,
-  ) => void
+  ) => { stdin?: { end(): void; on(event: 'error', listener: () => void): unknown } | null } | void
 }
 export type HermesRunner = (
   args: string[],
@@ -254,7 +259,7 @@ export const runHermes: HermesRunner = async (args, options) => {
   return new Promise((resolve) => {
     // Only the allowlisted model read and task creation may return stdout; errors and stderr stay private.
     try {
-      ;(options.execute ?? execFile)(
+      const child = (options.execute ?? execFile)(
         'hermes',
         pinScope(argv, options.hermesHome),
         { timeout, env, maxBuffer: captureLimit },
@@ -269,6 +274,11 @@ export const runHermes: HermesRunner = async (args, options) => {
           })
         },
       )
+      if (options.closeStdin && child?.stdin) {
+        // The child may exit before the end is written (EPIPE): never an unhandled error.
+        child.stdin.on('error', () => undefined)
+        child.stdin.end()
+      }
     } catch {
       resolve({ exitCode: -1 })
     }

@@ -59,6 +59,9 @@ import {
 const HUB_LIMIT = 20
 
 /** Model, skills, memory and tool edits for one Hermes profile, all through the `hermes` CLI. */
+// A local provider's key under `providers.`: no dots, since Hermes reads a dot as a nested key.
+const LocalProviderIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
+
 export class LiveAgentTabs {
   constructor(
     private readonly hermesHome: string,
@@ -90,6 +93,80 @@ export class LiveAgentTabs {
         result.exitCode < 0 ? 'hermes_unavailable' : 'conflict',
         'Hermes didn’t accept the change.',
       )
+  }
+
+  /**
+   * Copies a local provider the default profile defines into another profile: its name, address and default model,
+   * nothing else (a key, if any, stays where it is). Under that profile's config lock.
+   */
+  async copyLocalProvider(profile: string, providerId: string, source = 'default'): Promise<void> {
+    const parsed = ProfileNameSchema.parse(profile)
+    if (parsed === source) return
+    await this.serial(parsed, async () => {
+      const own = await readLocalProviderIds(this.runner, this.hermesHome, parsed)
+      if (own === null)
+        throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read the agent’s providers.')
+      if (!own.has(providerId)) await this.copyProviderUnlocked(parsed, providerId, source)
+    })
+  }
+  /** Whether the profile's config defines this local provider; null when it can't be read. */
+  async definesLocalProvider(profile: string, providerId: string): Promise<boolean | null> {
+    const own = await readLocalProviderIds(
+      this.runner,
+      this.hermesHome,
+      ProfileNameSchema.parse(profile),
+    )
+    return own === null ? null : own.has(providerId)
+  }
+  /**
+   * `config unset providers.<id>` in one profile (2.0.3): always the full key, never `providers` itself (that would drop
+   * every local provider). A dotted id would address a nested key, so it is refused.
+   */
+  async removeLocalProvider(profile: string, providerId: string): Promise<void> {
+    const parsed = ProfileNameSchema.parse(profile)
+    const id = LocalProviderIdSchema.parse(providerId)
+    await this.serial(parsed, () => this.mutate(parsed, ['config', 'unset', `providers.${id}`]))
+    if ((await this.definesLocalProvider(parsed, id)) !== false)
+      throw new HttpError(409, 'not_verified', 'Hermes still lists that provider.')
+  }
+  private async copyProviderUnlocked(
+    profile: string,
+    providerId: string,
+    from = 'default',
+  ): Promise<void> {
+    const id = LocalProviderIdSchema.parse(providerId)
+    // The whole section: only `providers` is an allowlisted read (cli.ts); just three fields of one entry are used.
+    const read = await configJson(this.runner, this.hermesHome, from, 'providers')
+    const entry =
+      read.state === 'ok' && read.value && typeof read.value === 'object'
+        ? (read.value as Record<string, unknown>)[id]
+        : undefined
+    if (entry === undefined)
+      throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read that local provider.')
+    const source = z
+      .object({
+        name: z.string().min(1).max(200).optional(),
+        base_url: z.string().min(1).max(2000),
+        default_model: z.string().min(1).max(256).optional(),
+      })
+      .safeParse(entry)
+    if (!source.success)
+      throw new HttpError(
+        409,
+        'conflict',
+        'That local provider can’t be copied: its settings are incomplete.',
+      )
+    // The address first: Hermes (and Score's list) ignore an entry without one, so a copy cut short is either usable
+    // or invisible, never a half entry that `own.has` would mistake for a finished copy.
+    const fields: [string, string][] = [
+      ['base_url', source.data.base_url],
+      ['name', source.data.name ?? id],
+      ...(source.data.default_model
+        ? [['default_model', source.data.default_model] as [string, string]]
+        : []),
+    ]
+    for (const [key, value] of fields)
+      await this.mutate(profile, ['config', 'set', `providers.${id}.${key}`, value])
   }
 
   /** The agent's terminal folder and backend (Workspace tab); 502 when Hermes can't answer. */
@@ -214,12 +291,9 @@ export class LiveAgentTabs {
         const shared = await readLocalProviderIds(this.runner, this.hermesHome, 'default')
         if (shared?.has(req.provider)) {
           const own = await readLocalProviderIds(this.runner, this.hermesHome, profile)
-          if (own && !own.has(req.provider))
-            throw new HttpError(
-              409,
-              'conflict',
-              'That local provider isn’t set up for this agent. Add it to the agent’s Hermes profile first.',
-            )
+          // A local provider Score added lives in the default profile: copy it into this agent's profile first, so the
+          // person's choice in Score is enough (2.0.3).
+          if (own && !own.has(req.provider)) await this.copyProviderUnlocked(profile, req.provider)
         }
       }
       const prior = await readModelPair(this.runner, this.hermesHome, profile)

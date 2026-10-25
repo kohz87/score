@@ -988,6 +988,7 @@
 }
 
 .bold-settings-page .bold-connect-panel,
+.bold-settings-page .bold-remove-confirm,
 .bold-settings-page .bold-local-model {
   flex: 1 0 100%;
 }
@@ -1839,4 +1840,19 @@
   .bold-settings-page .advanced-tray .settings-link {
     min-height: 44px;
   }
+}
+
+.bold-settings-page .bold-remove-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: var(--deep);
+  border: 1px solid var(--line);
+}
+
+.bold-settings-page .bold-remove-confirm p {
+  margin: 0;
+  color: var(--ink2);
 }

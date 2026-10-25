@@ -402,7 +402,7 @@ test('a failed provider write restores the previous model and provider', async (
   ])
 })
 
-test('a local provider only the default profile defines is refused for another agent', async () => {
+test('a local provider only the default profile defines is copied into the agent first (2.0.3)', async () => {
   const base = runner.getMockImplementation()!
   const providers: Record<string, unknown> = {
     default: { lab: { base_url: 'http://127.0.0.1:1/v1' } },
@@ -413,13 +413,18 @@ test('a local provider only the default profile defines is refused for another a
       ? { exitCode: 0, stdout: JSON.stringify(providers[args[1]!]) }
       : base(args, options),
   )
-  await expect(tabs.setModel('builder', { model: 'm', provider: 'lab' })).rejects.toMatchObject({
-    status: 409,
-  })
-  expect(writes()).toEqual([])
-  providers.builder = { lab: { base_url: 'http://127.0.0.1:1/v1' } }
   await tabs.setModel('builder', { model: 'm', provider: 'lab' })
-  expect(writes()).toHaveLength(2)
+  // The copy (address and a name, since the entry has none), then the model and provider.
+  expect(writes().slice(0, 2)).toEqual([
+    ['-p', 'builder', 'config', 'set', 'providers.lab.base_url', 'http://127.0.0.1:1/v1'],
+    ['-p', 'builder', 'config', 'set', 'providers.lab.name', 'lab'],
+  ])
+  expect(writes()).toHaveLength(4)
+  runner.mockClear()
+  providers.builder = { lab: { base_url: 'http://127.0.0.1:1/v1' } }
+  await tabs.setModel('builder', { model: 'm2', provider: 'lab' })
+  // Already there: no copy, and only the changed model is written.
+  expect(writes().some((args) => args.join(' ').includes('providers.lab'))).toBe(false)
   // built-in providers are not local entries and stay selectable
   runner.mockClear()
   await tabs.setModel('builder', { model: 'm', provider: 'openai' })

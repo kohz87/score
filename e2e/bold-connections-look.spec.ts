@@ -95,13 +95,10 @@ async function addToolServer(page: Page) {
   await command.getByRole('button', { name: 'Done' }).click()
   await expect(command).toBeHidden()
 
-  // The contract has only list and add for tool servers; testing and removing happen in Hermes for now.
-  await expect(
-    page.getByText(/Testing and removing a tool server are done in Hermes/),
-  ).toBeVisible()
+  // Removing a tool server is covered in bold-connections-remove.spec.ts; testing one still happens in Hermes.
+  await expect(page.getByText(/Testing a tool server is done in Hermes/)).toBeVisible()
   await expect(page.getByText(/Don’t paste tokens or passwords into the command/)).toBeVisible()
   await expect(page.getByRole('button', { name: /Send a test call/ })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /Remove/ })).toHaveCount(0)
 }
 
 function signWebhook(secret: string, id: string, timestamp: number, body: string): string {

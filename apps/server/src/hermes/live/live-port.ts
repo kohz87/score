@@ -61,7 +61,8 @@ import { MemoryIdSchema } from '../agent-tabs.ts'
 import { ProfileLocks } from './profile-locks.ts'
 import { createLiveConfigService } from './config.ts'
 import { LiveSettings } from './settings.ts'
-import { saveMessagingValues } from './messaging.ts'
+import { removeMessagingValues, saveMessagingValues } from './messaging.ts'
+import { removeProviderAcross } from './remove-provider.ts'
 import { messagingFields, messagingWrites } from '../messaging-fields.ts'
 import { readApprovalConfig, updateProfileApprovals } from './approvals.ts'
 import type { ApprovalConfig } from '../approvals.ts'
@@ -533,7 +534,65 @@ export class LivePort implements HermesPort {
     return this.settings.addProviderKey(id, req)
   }
   async addLocalProvider(req: Parameters<HermesPort['addLocalProvider']>[0]) {
-    return this.settings.addLocalProvider(req)
+    const provider = await this.settings.addLocalProvider(req)
+    // Every agent can use it (2.0.3). A copy that fails here is made again when an agent picks the provider's model.
+    const source = this.options.settingsProfile ?? 'default'
+    await Promise.all(
+      this.profiles
+        .names(this.current.hermes.servedProfiles)
+        .filter((profile) => profile !== source)
+        .map((profile) =>
+          this.tabs.copyLocalProvider(profile, provider.id, source).catch(() => undefined),
+        ),
+    )
+    return provider
+  }
+  // A race with a model change that picks this provider between the route's in-use check and here is accepted: one
+  // person drives Score, and the agent's next turn would say its provider is gone.
+  async removeProvider(id: string) {
+    const settingsProfile = this.options.settingsProfile ?? 'default'
+    try {
+      await removeProviderAcross(id, {
+        profiles: this.profiles.names(this.current.hermes.servedProfiles),
+        defines: (profile, provider) => this.tabs.definesLocalProvider(profile, provider),
+        removeLocal: (profile, provider) => this.tabs.removeLocalProvider(profile, provider),
+        removeHosted: (provider) => this.settings.removeHostedProvider(provider),
+      })
+    } finally {
+      this.profiles.invalidate(settingsProfile)
+    }
+  }
+  async removeToolServer(id: string) {
+    try {
+      await this.settings.removeToolServer(id)
+    } finally {
+      this.profiles.invalidate(this.options.settingsProfile ?? 'default')
+    }
+  }
+  async removeMessaging(platform: string, agentId?: string) {
+    const { fields, browserSetup } = messagingFields(platform)
+    if (!browserSetup)
+      throw new HttpError(
+        409,
+        'not_supported',
+        'Remove this one in the terminal: hermes gateway setup.',
+      )
+    let profile = this.options.settingsProfile
+    if (agentId !== undefined) {
+      const parsed = ProfileNameSchema.safeParse(agentId)
+      if (!parsed.success || !this.profiles.profileHome(parsed.data))
+        throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
+      profile = parsed.data
+    }
+    return removeMessagingValues({
+      hermesHome: resolveHermesHome(this.options.hermesHome),
+      profile,
+      platform,
+      keys: fields.map((field) => field.key),
+      runner: this.options.runner,
+      locks: this.locks,
+      invalidate: () => profile && this.profiles.invalidate(profile),
+    })
   }
   async listConnections() {
     return this.settings.listConnections()

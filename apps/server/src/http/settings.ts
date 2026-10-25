@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { HttpError } from '../errors.ts'
 import {
   ConfigApplyRequestSchema,
   ConfigPreviewRequestSchema,
@@ -151,10 +152,39 @@ export function registerSettingsRoutes(
       return (await withUsage([await port.addProviderKey(id, req)]))[0]
     },
   )
+  // An agent whose model runs on the provider would fail its next turn: pick another model for it first.
+  app.delete('/api/settings/providers/:id', mutation, async (request, reply) => {
+    const { id } = ProviderParamsSchema.parse(request.params)
+    const item = (await withUsage(port.listProviders())).find((candidate) => candidate.id === id)
+    if (!item) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
+    if (item.usedBy.length)
+      throw new HttpError(
+        409,
+        'provider_in_use',
+        `${item.usedBy.join(', ')} ${item.usedBy.length === 1 ? 'uses' : 'use'} ${item.label}. Pick another model there first.`,
+      )
+    await port.removeProvider(id)
+    return reply.code(204).send()
+  })
   app.get('/api/settings/connections', async () => port.listConnections())
   app.post('/api/settings/tool-servers', mutation, async (request) =>
     port.addToolServer(ToolServerRequestSchema.parse(request.body)),
   )
+  app.delete('/api/settings/tool-servers/:id', mutation, async (request, reply) => {
+    const { id } = z
+      .object({ id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/) })
+      .parse(request.params)
+    await port.removeToolServer(id)
+    return reply.code(204).send()
+  })
+  app.delete('/api/settings/messaging/:platform', mutation, async (request) => {
+    const { platform } = z.object({ platform: PlatformParamSchema }).parse(request.params)
+    const { agentId } = z
+      .object({ agentId: z.string().min(1).max(64).optional() })
+      .strict()
+      .parse(request.query)
+    return port.removeMessaging(platform, agentId)
+  })
   app.post('/api/settings/messaging/:platform/connect', mutation, async (request) => {
     const { platform } = z.object({ platform: PlatformParamSchema }).parse(request.params)
     return port.connectMessaging(platform)
