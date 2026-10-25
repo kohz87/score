@@ -225,7 +225,14 @@ export function Composer({
     editSession.current += 1
     if (editId) textarea.current?.focus()
   }, [editId])
+  const rewoundEdit = useRef<string | null>(null)
+  // One rewind request per edited message, so a retried Send can't rewind twice.
+  const rewindKey = useRef<{ messageId: string; key: string } | null>(null)
+  const [rewinding, setRewinding] = useState(false)
   function leaveEdit() {
+    // A rewind that never confirmed is planned again by the next edit; one that happened stays done.
+    if (rewindKey.current && rewoundEdit.current !== rewindKey.current.messageId)
+      rewindKey.current = null
     stopEdit()
     setLoadedEdit(null)
     if (!stash) return
@@ -240,10 +247,6 @@ export function Composer({
   })
   useEffect(() => () => stopEdit(), [])
   // The message whose rewind already happened: a failed send is retried without asking again.
-  const rewoundEdit = useRef<string | null>(null)
-  // One rewind request per edited message, so a retried Send can't rewind twice.
-  const rewindKey = useRef<{ messageId: string; key: string } | null>(null)
-  const [rewinding, setRewinding] = useState(false)
   const [confirmEdit, setConfirmEdit] = useState(false)
 
   const commands = useQuery({
@@ -539,7 +542,8 @@ export function Composer({
         // A rewind already sent for this message (its answer lost) is repeated with the same key, not re-planned: the
         // server returns the stored result, and a plan for an already-hidden message would fail.
         const retrying = rewindKey.current?.messageId === editing.messageId
-        if (retrying) clean = true
+        // A share link made since the lost answer still needs the dialog's revoke offer.
+        if (retrying) clean = !(await roomHasLiveShare(queryClient, roomId))
         else {
           const plan = await fetchRewindPlan(roomId, editing.messageId)
           // A live share link keeps showing the old message: the dialog says so and offers to revoke it.
@@ -556,7 +560,14 @@ export function Composer({
       } catch (caught) {
         // A refusal or an incomplete rewind: the dialog reads the plan again and says what happened. Anything else (a
         // dropped connection) keeps the edit as it is; Send again repeats the same rewind request.
-        if (!(caught instanceof ApiError && caught.status === 409)) {
+        // Only a lost answer is worth repeating as it is (no answer, a server error, a timeout or rate limit); any other
+        // refusal is final and the dialog says what changed.
+        const transient =
+          !(caught instanceof ApiError) ||
+          caught.status >= 500 ||
+          caught.status === 408 ||
+          caught.status === 429
+        if (transient) {
           setPending(false)
           setRewinding(false)
           setNotice({ kind: 'error', text: 'Couldn’t send the correction. Try again.' })
