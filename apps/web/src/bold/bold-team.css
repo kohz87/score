@@ -448,6 +448,10 @@
 
 [data-ui='bold'] .bold-more-toggle {
   align-self: flex-start;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  border-radius: 24px;
 }
 
 [data-ui='bold'] .bold-more {
@@ -784,4 +788,41 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+[data-ui='bold'] .bold-remove-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 16px 20px;
+  border-radius: 24px;
+  background: var(--deep);
+  border: 1px solid var(--line);
+}
+
+[data-ui='bold'] .bold-remove-agent form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-remove-agent p {
+  margin: 0;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-remove-agent code {
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-remove-agent-type {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-remove-agent-type input {
+  border-radius: 999px;
+  min-height: 44px;
 }

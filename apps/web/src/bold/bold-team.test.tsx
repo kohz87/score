@@ -812,24 +812,326 @@ test('Where it works says exactly what Docker separates and changes through the 
   expect(within(card).getByText('Commands run as root inside the container.')).toBeDefined()
 })
 
-test('Remove agent… opens More and focuses the existing Delete agent button', async () => {
-  open('/b/team/builder')
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
-  const button = await screen.findByRole('button', { name: 'Delete agent' })
-  await waitFor(() => expect(document.activeElement).toBe(button))
-  expect(button.id).toBe('agent-delete')
+const deleteOp = (state: 'running' | 'completed') => ({
+  id: '33333333-3333-4333-8333-333333333333',
+  kind: 'delete',
+  targetName: 'builder',
+  incarnationId: '22222222-2222-4222-8222-222222222222',
+  requestHash: 'a'.repeat(64),
+  state,
+  steps: [{ name: 'delete_profile', state: state === 'completed' ? 'completed' : 'running' }],
+  createdAt: '2026-10-24T10:00:00.000Z',
+  updatedAt: '2026-10-24T10:00:01.000Z',
+  nextStep: null,
+  error: null,
+  exportPath: null,
 })
 
-test('Remove agent… on a coding agent focuses its existing remove button without opening More', async () => {
-  open('/b/team/coder')
+function deletePreview(blockers: string[] = []) {
+  return {
+    kind: 'delete',
+    targetName: 'builder',
+    hash: 'b'.repeat(64),
+    inherited: {
+      memories: [],
+      skills: [],
+      plugins: [],
+      approvalSettings: [],
+      credentialsPresent: [],
+    },
+    effects: [],
+    blockers,
+    pendingWork: {
+      activeRuns: 1,
+      queuedTurns: 2,
+      pendingApprovals: 3,
+      assignments: 4,
+      disposition: 'Its unfinished work goes back to the lead.',
+    },
+    exportPath: '/home/user/.score/exports/builder.tar',
+  }
+}
+
+type Call = { url: string; method: string; body: unknown; headers: Record<string, string> }
+/** Wraps the stubbed fetch so the delete endpoints answer with `reply`, and records those calls. */
+function stubDelete(reply: (call: Call) => Response | null) {
+  const inner = globalThis.fetch
+  const calls: Call[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://x')
+      const method = init?.method ?? 'GET'
+      const call: Call = {
+        url: url.pathname,
+        method,
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+        headers: Object.fromEntries(new Headers(init?.headers).entries()),
+      }
+      const isDelete =
+        (method === 'DELETE' &&
+          (url.pathname === '/api/agents/builder' ||
+            url.pathname === '/api/coding-agents/coder')) ||
+        url.pathname.startsWith('/api/agents/operations/') ||
+        url.pathname === '/api/agents/preview'
+      if (isDelete) {
+        calls.push(call)
+        const response = reply(call)
+        if (response) return Promise.resolve(response)
+      }
+      return inner(input, init)
+    }),
+  )
+  return calls
+}
+
+test('Remove agent… shows the preview in place; blockers and the typed name gate Remove', async () => {
+  const calls = stubDelete((call) =>
+    call.url === '/api/agents/preview'
+      ? Response.json(deletePreview(['builder is mid-run on a shared file']))
+      : null,
+  )
+  const { router } = open('/b/team/builder')
   fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
-  await waitFor(() => expect(document.activeElement?.id).toBe('agent-delete'))
-  expect(document.activeElement?.textContent).toBe('Remove agent')
+  const panel = await screen.findByRole('group', { name: 'Remove builder' })
+  expect(panel.getAttribute('data-protected')).toBe('block')
+  expect(await within(panel).findByText(/1 active runs · 2 queued messages/)).toBeDefined()
+  expect(within(panel).getByText(/4 unfinished assignments/)).toBeDefined()
+  expect(within(panel).getByText('Its unfinished work goes back to the lead.')).toBeDefined()
+  expect(within(panel).getByText(/A private copy is kept first:/)).toBeDefined()
+  expect(within(panel).getByText('/home/user/.score/exports/builder.tar')).toBeDefined()
+  expect(within(panel).getByText(/isn’t a full undo/)).toBeDefined()
+  expect(within(panel).getByRole('alert').textContent).toBe('builder is mid-run on a shared file')
+  const input = within(panel).getByLabelText('Type builder to confirm')
+  fireEvent.change(input, { target: { value: 'builder' } })
+  expect(
+    (within(panel).getByRole('button', { name: 'Remove' }) as HTMLButtonElement).disabled,
+  ).toBe(true)
+  expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
+  expect(router.state.location.pathname).toBe('/b/team/builder')
+})
+
+test('typing the name enables Remove; DELETE carries the name, the preview hash and an Idempotency-Key, then it goes to Team', async () => {
+  let polls = 0
+  const calls = stubDelete((call) => {
+    if (call.url === '/api/agents/preview') return Response.json(deletePreview())
+    if (call.method === 'DELETE') return Response.json(deleteOp('running'), { status: 202 })
+    polls += 1
+    return Response.json(deleteOp(polls > 1 ? 'completed' : 'running'))
+  })
+  const { router } = open('/b/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove builder' })
+  const input = await within(panel).findByLabelText('Type builder to confirm')
+  const remove = within(panel).getByRole('button', { name: 'Remove' }) as HTMLButtonElement
+  expect(remove.disabled).toBe(true)
+  fireEvent.change(input, { target: { value: 'builde' } })
+  expect(remove.disabled).toBe(true)
+  fireEvent.change(input, { target: { value: 'builder' } })
+  expect(remove.disabled).toBe(false)
+  fireEvent.click(remove)
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
+  const del = calls.find((call) => call.method === 'DELETE')!
+  expect(del.body).toEqual({ typedName: 'builder', previewHash: 'b'.repeat(64) })
+  expect(Object.keys(del.headers).map((key) => key.toLowerCase())).toContain('idempotency-key')
+})
+
+test('a Hermes agent the server refuses to remove shows the server message and stays', async () => {
+  stubDelete((call) => {
+    if (call.url === '/api/agents/preview') return Response.json(deletePreview())
+    if (call.method === 'DELETE')
+      return Response.json(
+        { error: { code: 'agent_busy', message: 'builder started a run a moment ago.' } },
+        { status: 409 },
+      )
+    return null
+  })
+  const { router } = open('/b/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove builder' })
+  fireEvent.change(await within(panel).findByLabelText('Type builder to confirm'), {
+    target: { value: 'builder' },
+  })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+  expect((await within(panel).findByRole('alert')).textContent).toContain(
+    'builder started a run a moment ago.',
+  )
+  expect(router.state.location.pathname).toBe('/b/team/builder')
+})
+
+test('Cancel and Escape close the panel and put focus back on Remove agent…', async () => {
+  stubDelete((call) => (call.url === '/api/agents/preview' ? Response.json(deletePreview()) : null))
+  open('/b/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  let panel = await screen.findByRole('group', { name: 'Remove builder' })
+  const cancel = within(panel).getByRole('button', { name: 'Cancel' })
+  await waitFor(() => expect(document.activeElement).toBe(cancel))
+  fireEvent.click(cancel)
+  expect(screen.queryByRole('group', { name: 'Remove builder' })).toBeNull()
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove agent…' })),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Remove agent…' }))
+  panel = await screen.findByRole('group', { name: 'Remove builder' })
+  fireEvent.keyDown(within(panel).getByRole('button', { name: 'Cancel' }), { key: 'Escape' })
+  expect(screen.queryByRole('group', { name: 'Remove builder' })).toBeNull()
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove agent…' })),
+  )
+})
+
+test('Remove agent… on a coding agent asks in plain words, with no preview, and removes it', async () => {
+  const calls = stubDelete((call) =>
+    call.method === 'DELETE' ? new Response(null, { status: 204 }) : null,
+  )
+  const { router } = open('/b/team/coder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove coder' })
+  expect(panel.getAttribute('data-protected')).toBe('block')
+  expect(
+    within(panel).getByText('Removes coder from the team. Past work stays in rooms.'),
+  ).toBeDefined()
+  expect(calls.some((call) => call.url === '/api/agents/preview')).toBe(false)
   expect(document.getElementById('agent-more')).toBeNull()
+  fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
+  expect(calls.find((call) => call.method === 'DELETE')!.url).toBe('/api/coding-agents/coder')
+})
+
+test('a busy coding agent shows the server message and stays', async () => {
+  stubDelete((call) =>
+    call.method === 'DELETE'
+      ? Response.json(
+          { error: { code: 'agent_busy', message: 'coder is working on a job.' } },
+          { status: 409 },
+        )
+      : null,
+  )
+  const { router } = open('/b/team/coder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove coder' })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+  expect((await within(panel).findByRole('alert')).textContent).toContain(
+    'coder is working on a job.',
+  )
+  expect(router.state.location.pathname).toBe('/b/team/coder')
 })
 
 test('the default agent has no Remove agent… action', async () => {
   open('/b/team/default')
   expect(await screen.findByRole('heading', { level: 1 })).toBeDefined()
   expect(screen.queryByRole('button', { name: 'Remove agent…' })).toBeNull()
+})
+
+test('after a refused DELETE the preview reloads, the message stays, and a second attempt succeeds', async () => {
+  let deletes = 0
+  let previews = 0
+  const calls = stubDelete((call) => {
+    if (call.url === '/api/agents/preview') {
+      previews += 1
+      return Response.json(deletePreview())
+    }
+    if (call.method === 'DELETE') {
+      deletes += 1
+      return deletes === 1
+        ? Response.json(
+            { error: { code: 'preview_stale', message: 'builder changed. Review again.' } },
+            { status: 409 },
+          )
+        : Response.json(deleteOp('completed'), { status: 202 })
+    }
+    return Response.json(deleteOp('completed'))
+  })
+  const { router } = open('/b/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove builder' })
+  fireEvent.change(await within(panel).findByLabelText('Type builder to confirm'), {
+    target: { value: 'builder' },
+  })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+  await waitFor(() => expect(previews).toBe(2))
+  const input = await within(panel).findByLabelText('Type builder to confirm')
+  expect((input as HTMLInputElement).value).toBe('')
+  expect(within(panel).getByRole('alert').textContent).toContain('builder changed. Review again.')
+  fireEvent.change(input, { target: { value: 'builder' } })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
+  expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(2)
+})
+
+test('while a DELETE is pending Cancel is disabled and Escape does nothing', async () => {
+  let release: () => void = () => {}
+  const held = new Promise<void>((resolve) => (release = resolve))
+  const inner = globalThis.fetch
+  stubDelete((call) => (call.url === '/api/agents/preview' ? Response.json(deletePreview()) : null))
+  const wrapped = globalThis.fetch
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'DELETE'
+        ? held.then(() => new Response(null, { status: 204 }))
+        : wrapped(input, init),
+    ),
+  )
+  void inner
+  open('/b/team/coder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove coder' })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+  await waitFor(() =>
+    expect(
+      (within(panel).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled,
+    ).toBe(true),
+  )
+  fireEvent.keyDown(within(panel).getByRole('button', { name: 'Cancel' }), { key: 'Escape' })
+  expect(screen.getByRole('group', { name: 'Remove coder' })).toBeDefined()
+  release()
+})
+
+test('a coding agent removal that finishes after the panel is gone does not navigate', async () => {
+  let release: () => void = () => {}
+  const held = new Promise<void>((resolve) => (release = resolve))
+  const wrapped = globalThis.fetch
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'DELETE'
+        ? held.then(() => new Response(null, { status: 204 }))
+        : wrapped(input, init),
+    ),
+  )
+  const { router } = open('/b/team/coder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove coder' })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+  await router.navigate('/b/team/builder')
+  await waitFor(() => expect(screen.queryByRole('group', { name: 'Remove coder' })).toBeNull())
+  release()
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(router.state.location.pathname).toBe('/b/team/builder')
+})
+
+test('an operation that needs attention keeps the page, shows Close, and Escape closes it', async () => {
+  stubDelete((call) => {
+    if (call.url === '/api/agents/preview') return Response.json(deletePreview())
+    if (call.method === 'DELETE') return Response.json(deleteOp('running'), { status: 202 })
+    return Response.json({
+      ...deleteOp('running'),
+      state: 'needs_attention',
+      error: 'Hermes did not answer.',
+    })
+  })
+  const { router } = open('/b/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove builder' })
+  fireEvent.change(await within(panel).findByLabelText('Type builder to confirm'), {
+    target: { value: 'builder' },
+  })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Remove' }))
+  const close = await within(panel).findByRole('button', { name: 'Close' })
+  await waitFor(() => expect(document.activeElement).toBe(close))
+  expect(within(panel).getByText('Hermes did not answer.')).toBeDefined()
+  expect(router.state.location.pathname).toBe('/b/team/builder')
+  fireEvent.keyDown(close, { key: 'Escape' })
+  expect(screen.queryByRole('group', { name: 'Remove builder' })).toBeNull()
 })
