@@ -1202,3 +1202,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   fix all before release) → 11.12a (lead), 11.12b, 11.12c, each reviewed after every round. Deferred to the post-release
   list (PLAN): Bot Screen (needs a design), Hermes v0.22.5 upgrade, P3 review items. Release v2.0.0 next; the owner
   tests on live (no preview).
+- **Release v2.0.0 deployed live (lead, 2026-10-25 ~05:00 UTC).** Idle check (no runs, nothing streaming) → `pnpm build` →
+  backup `~/.score/backups/score-pre-2.0.0-20261025.db` (schema 79, 17 rooms, 108 messages) → `~/.score/packs` moved to
+  `~/.score/backups/packs-pre-2.0.0` (decision 120) → plugin (decision 122): old files backed up to the job directory,
+  `hermes-plugin/score_bridge/*.py` copied to `~/.hermes/profiles/scoretesta/plugins/score-bridge` then
+  `~/.hermes/plugins/score-bridge` (scoretestb has none), both compile → `scripts/score restart` (migrations 0080–0087:
+  schema 87; 9 direct + 5 rooms on exchanges, 3 orchestration rooms on mentions, 17 jobs, 108 messages, none without
+  a job — same as the rehearsal) → `hermes-gateway.service` restarted with agents idle → producers default and
+  scoretesta re-registered (plugin 0.1.0, Hermes 0.21.5); `gateway.run._gateway_runner_ref` false on default as since
+  2026-10-20. Team room created (members default, scoretesta, scoretestb; no lead yet — first run asks). `/` and `/b`
+  answer 200; no errors in the log since the restart. The owner reviews on live.
