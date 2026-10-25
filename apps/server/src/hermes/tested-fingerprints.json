@@ -31,9 +31,47 @@
         "state": "e3cd78f0629c60e1532ee5a5da3ccc5fea7b5ddbfabfa83962d0bef7012ce90d"
       },
       "bridge": null,
-      "cli": "Hermes Agent v0.21.5+7904.ge97923c (2026.9.24) \u00b7 upstream e97923c3"
+      "cli": "Hermes Agent v0.21.5+7904.ge97923c (2026.9.24) · upstream e97923c3"
     },
     "testedAt": "2026-10-07T00:00:00.000Z",
-    "notes": "Owner's install (Hermes v0.21.5, upstream e97923c3). Verified by spike L1\u2013L5 and the 1.11a live run on scoretesta."
+    "notes": "Owner's install (Hermes v0.21.5, upstream e97923c3). Verified by spike L1–L5 and the 1.11a live run on scoretesta."
+  },
+  {
+    "id": "9c9bb2bf9cb9167e",
+    "parts": {
+      "codeVersion": "0.22.5",
+      "codeSha": "d778246c84480cbf7f62f615fc0766f9ce6448b0",
+      "capabilities": [
+        "approval_events",
+        "chat_completions",
+        "chat_completions_streaming",
+        "model_options",
+        "reasoning_streaming",
+        "responses_api",
+        "responses_streaming",
+        "run_approval_response",
+        "run_events_sse",
+        "run_status",
+        "run_steer",
+        "run_stop",
+        "run_submission",
+        "run_unknown_resolution",
+        "session_chat",
+        "session_chat_streaming",
+        "session_fork",
+        "session_model_lock",
+        "session_resources",
+        "skills_api",
+        "tool_progress_events"
+      ],
+      "schemas": {
+        "kanban": "8a2ee15544fa0dbb2f890f490b04a23839fee5b1f3331f15a5c472004bfcca92",
+        "state": "de5860e7e430c920f17c941c7825be0d90ad43741045bf5a91bfb711d4c28bc6"
+      },
+      "bridge": null,
+      "cli": "Hermes Agent v0.22.5+1099.gd778246 (2026.9.24) · stable · local d778246c8448"
+    },
+    "testedAt": "2026-10-26T00:00:00.000Z",
+    "notes": "Owner's install after `hermes update` to main (v0.22.5+1099, d778246c). State schema 31→32: every column Score's read-only readers name is present (sessions, messages; checked on the live state.db files read-only). Bridge hooks (14), approval functions and the kanban schema unchanged; capability run_unknown_resolution added; three new dangerous-command patterns. Live smoke run on scoretestb (one-to-one, nous free model): run start, SSE events, tool parts, streamed text, completion. Tool Search turned off for Score's agents (owner, 2026-10-26)."
   }
 ]
