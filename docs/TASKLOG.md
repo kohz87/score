@@ -1258,3 +1258,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   mounted-guarded navigation, Close after a non-completed operation, lists refreshed on acceptance). The coder's side note
   confirmed by the lead: the phone agent page overflowed 62 px (`.bold-more-toggle`, also on main) — fixed, e2e checks
   scrollWidth again. Review 2: 0 P1/P2. pnpm check green (web 2888); full e2e 934 passed, 0 failed, 19 skipped.
+- **v2.0.5 deployed live** (~09:18 UTC): backup score-pre-2.0.5-20261025.db, restart, 0 errors.
