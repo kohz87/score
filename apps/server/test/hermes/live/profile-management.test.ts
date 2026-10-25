@@ -260,6 +260,15 @@ test('every create/provision command has exact argv, private key precedes config
     '--no-enable',
   ])
   expect(calls).toContainEqual(['-p', 'helper', 'plugins', 'enable', 'score-bridge'])
+  // 2.1.0: Score's agents keep every tool visible (Hermes 0.22.5's Tool Search off).
+  expect(calls).toContainEqual([
+    '-p',
+    'helper',
+    'config',
+    'set',
+    'tools.tool_search.enabled',
+    'off',
+  ])
   // Ready without a handshake: the bridge connects on the profile's first run.
   await expect(step('verify_ready')).resolves.not.toThrow()
   env.db.sqlite

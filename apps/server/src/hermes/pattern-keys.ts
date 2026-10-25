@@ -1,4 +1,4 @@
-// Dangerous-command categories ("pattern keys") of the tested Hermes version (0.21.5,
+// Dangerous-command categories ("pattern keys") of the tested Hermes versions (0.21.5, plus three added in 0.22.5;
 // tools/approval_detection.py DANGEROUS_PATTERNS). `command_allowlist` entries and approval prompts use these
 // strings verbatim. Pinned with the compatibility fingerprint (D2.2): re-generate when a new Hermes version
 // is added to tested-fingerprints.json. Keys outside this list are shown read-only and never rewritten.
@@ -105,6 +105,10 @@ export const KNOWN_PATTERN_KEYS: readonly string[] = [
   'sudo with privilege flag (stdin/askpass/shell/list)',
   'sudo with combined-flag privilege escalation',
   'package manager uninstall',
+  // Added in Hermes 0.22.5.
+  'invisible or bidirectional Unicode control character (possible obfuscation)',
+  'pipe a credential file into a curl/wget upload (possible exfiltration)',
+  'upload a secret or credential file via curl/wget (possible exfiltration)',
 ]
 
 // Also in Hermes's HARDLINE_PATTERNS: always blocked, even when allowlisted (tools/approval_detection.py), so Score

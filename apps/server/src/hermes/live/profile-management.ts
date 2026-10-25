@@ -458,6 +458,13 @@ export class LiveProfileManagement implements ProfileManagementPort {
         throw failure('The installed plugin isn’t the version Score expects.')
     } else if (step === 'enable_bridge') {
       await this.cli(['-p', name, 'plugins', 'enable', 'score-bridge'])
+      // Hermes 0.22.5's Tool Search hides plugin and MCP tools (Score's own) behind tool_search/tool_call; weaker models
+      // loop on it, so Score's agents keep every tool visible (owner, 2026-10-26). Best effort: an older Hermes has no
+      // such setting, and a refusal there must not stop the setup.
+      await (this.options.runner ?? runHermes)(
+        ['-p', name, 'config', 'set', 'tools.tool_search.enabled', 'off'],
+        { timeoutMs: 15000, hermesHome: this.options.hermesHome },
+      ).catch(() => undefined)
       const result = await (this.options.runner ?? runHermes)(
         ['-p', name, 'config', 'get', '--json', 'plugins.enabled'],
         { timeoutMs: 5000, hermesHome: this.options.hermesHome, captureRead: true },

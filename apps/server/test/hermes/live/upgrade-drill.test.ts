@@ -85,16 +85,20 @@ test('the kanban and state schemas are the same in both versions, so the schema 
   expect(fixture['0240fa4a84'].hardlinePatternKeys).toEqual(fixture.e97923c38a.hardlinePatternKeys)
 })
 
-test('the pinned pattern keys are exactly the 0.21.5 list; newer Hermes only adds keys, shown read-only', () => {
+const ADDED_IN_0_22_5 = [
+  'invisible or bidirectional Unicode control character (possible obfuscation)',
+  'pipe a credential file into a curl/wget upload (possible exfiltration)',
+  'upload a secret or credential file via curl/wget (possible exfiltration)',
+]
+test('the pinned pattern keys are the 0.21.5 list plus the three 0.22.5 added (2.1.0)', () => {
   const pinned = new Set(KNOWN_PATTERN_KEYS)
-  expect([...pinned].sort()).toEqual(fixture.e97923c38a.dangerousPatternKeys)
+  expect([...pinned].sort()).toEqual(
+    [...fixture.e97923c38a.dangerousPatternKeys, ...ADDED_IN_0_22_5].sort(),
+  )
+  // The newer source only adds keys: nothing Score pins was removed upstream.
   const newer = fixture['0240fa4a84'].dangerousPatternKeys
   expect(newer).toEqual(expect.arrayContaining([...pinned]))
-  expect(newer.filter((key) => !pinned.has(key))).toEqual([
-    'invisible or bidirectional Unicode control character (possible obfuscation)',
-    'pipe a credential file into a curl/wget upload (possible exfiltration)',
-    'upload a secret or credential file via curl/wget (possible exfiltration)',
-  ])
+  expect(newer.filter((key) => !pinned.has(key))).toEqual([])
 })
 
 function build(
