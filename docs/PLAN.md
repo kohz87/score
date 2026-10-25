@@ -680,3 +680,32 @@ approved the removal list.
 
 **11.12 Phase gate** · **Lead** (Codex `gpt-6.1-sol` max if it has quota) · code review against `main` in a fresh
 session, every parity row checked off against the brief's §11, full e2e, then the owner's own review (no Gemini review, decision 119); release.
+
+## Post-release list (after the Phase 11 release; owner, 2026-10-25)
+Not started before the new Score is live. Each item gets a plan task with a brief when it's picked up.
+
+**P1 Upgrade Hermes Agent v0.21.5 → v0.22.5** (installed: git install in `~/.hermes/hermes-agent`, commit `e97923c3`,
+2026-09-24; latest release v0.22.5, 2026-10-22; ~8.3k commits). Not before the Score release, so the release doesn't
+test two big changes at once. Steps:
+1. Back up `~/.hermes` (system step: the lead gives the exact command, the owner OKs it). The state schema goes 31 → 32
+   and may be one-way.
+2. Upgrade (owner's OK), then test on the test profiles (`scoretesta`, `scoretestb`) before any live profile: the
+   plugin loads and `score_bridge/hermes_private.py`'s self-check passes; Score's read-only session/usage SQLite readers
+   against schema 32; approvals list/resolve; a `/v1/runs` + `/v1/events` stream; kanban CLI verbs (incl.
+   `request-review`, `request-changes`, `reviewer`) and the new task statuses (`timed_out`, `interrupted`) in Score's
+   mapping; rewind and compaction (`context_compressor` changed ~700 lines, `plugins.py` ~390); profile export, import,
+   describe and `purge-identity`.
+3. Fix what breaks at the adapter boundary (lead: `apps/server/src/hermes/`, `hermes-plugin/score_bridge/`), with
+   recorded fixtures for the new version.
+Opportunities after the upgrade: the `post_compaction` and `on_session_delete` hooks, MCP event webhooks, the
+`kanban-stream` community plugin.
+
+**P2 Bot Screen in the agent's screen page** (parity row "Watch › live Bot Screen", PLAN 11.6b "when present"). Hermes
+already has it (`tools/bot_desktop/`, `hermes computer-use screen`): an RFB-over-WebSocket viewer at the dashboard's
+`/api/display/ws`, behind a single-use ticket from `display.observe` and an input lease. Score would show it read-only
+(never take the lease). A new boundary: design and adversarial review first (ARCHITECTURE D2.1), then the build.
+
+**P3 Deferred phase-gate review items** (decision 121; each was judged safe to ship and is logged in TASKLOG):
+`hold()` refusing or merging when an exchange already holds a turn; report-back `tool` limited to reporting tools (or a
+warning for others); listing and deleting triggers that were never called (orphans of a retried create); the
+"Imported from" rooms created by Elsewhere previews; the chat-rooms fence e2e made deterministic.
