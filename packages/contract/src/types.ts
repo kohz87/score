@@ -26,6 +26,9 @@ export const ShapeSchema = z.enum([
   'octagon',
   'bubble',
   'gem',
+  // 2.2.0 (owner 2026-10-26, the "agents with eyes" mock-up): its two shapes Score lacked.
+  'ball',
+  'flower',
 ])
 export type Shape = z.infer<typeof ShapeSchema>
 

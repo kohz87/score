@@ -75,11 +75,12 @@ test('0078 accepts all 20 shapes and refuses an unknown shape or look', () => {
   const insert = db.sqlite.prepare(
     'INSERT INTO agent_styles (agent_id, color, shape, look, updated_at) VALUES (?, ?, ?, ?, ?)',
   )
-  for (const shape of ShapeSchema.options) insert.run(`a-${shape}`, '#112233', shape, 'ring', at)
-  expect(db.sqlite.prepare('SELECT count(*) AS n FROM agent_styles').get()).toEqual({
-    n: ShapeSchema.options.length,
-  })
-  expect(ShapeSchema.options).toHaveLength(20)
+  // 0078's twenty; ball and flower arrive in 0088 (ball-flower-migration.test.ts).
+  const shapes = ShapeSchema.options.filter((shape) => shape !== 'ball' && shape !== 'flower')
+  for (const shape of shapes) insert.run(`a-${shape}`, '#112233', shape, 'ring', at)
+  expect(db.sqlite.prepare('SELECT count(*) AS n FROM agent_styles').get()).toEqual({ n: 20 })
+  expect(shapes).toHaveLength(20)
+  expect(() => insert.run('b', '#112233', 'ball', 'cut', at)).toThrow()
   expect(() => insert.run('x', '#112233', 'dodecagon', 'cut', at)).toThrow()
   expect(() => insert.run('y', '#112233', 'cloud', 'robot', at)).toThrow()
   // The looks of the unreleased first design are gone.

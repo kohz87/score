@@ -318,8 +318,10 @@ function parts(surface: HTMLElement): HTMLElement[] {
 // whether their wrapper is shown: geometry (`d`, size), paint and everything that can hide or move a path.
 const SHAPES = 'image, path, circle, rect, ellipse, polygon, polyline, line'
 function shapes(surface: HTMLElement): SVGGraphicsElement[] {
+  // The eyes animate (blink, look, hop), so their transform differs between any two instants: protected.css pins their
+  // paint instead (decision 127).
   return Array.from(surface.querySelectorAll<SVGGraphicsElement>(SHAPES)).filter(
-    (el) => !el.closest('[hidden]'),
+    (el) => !el.closest('[hidden]') && !el.closest('.agent-face'),
   )
 }
 

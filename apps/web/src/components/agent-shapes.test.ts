@@ -20,8 +20,8 @@ function distinct(all: Record<string, boolean[]>, first: string, second: string)
   return differing / occupied
 }
 
-test('there are twenty shapes, each with plain geometry', () => {
-  expect(ShapeSchema.options).toHaveLength(20)
+test('there are 22 shapes, each with plain geometry', () => {
+  expect(ShapeSchema.options).toHaveLength(22)
   for (const shape of ShapeSchema.options) {
     expect(agentShapes[shape].length, shape).toBeGreaterThan(0)
   }

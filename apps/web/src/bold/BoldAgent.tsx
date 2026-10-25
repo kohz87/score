@@ -14,7 +14,7 @@ import { ModelTab } from '../routes/team/ModelTab.tsx'
 import { boldAgentScreenLink } from './bold-links.ts'
 import type { AgentFileName } from '../routes/team/file-queries.ts'
 import { useAgentPause } from '../routes/watch/watch-queries.ts'
-import { agentDisplayName, agentStateLabel } from './bold-agents.ts'
+import { agentDisplayName, agentMood, agentStateLabel } from './bold-agents.ts'
 import { pairingProblem } from './bold-errors.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import '../routes/team/team.css'
@@ -234,7 +234,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
         <span className="muted" aria-hidden>
           /
         </span>
-        <AgentGlyph agent={agent} size="md" decorative />
+        <AgentGlyph agent={agent} size="md" decorative lively mood={agentMood(agent)} />
         <h1 className="big" id="agent-title">
           {agentDisplayName(agent)}
         </h1>

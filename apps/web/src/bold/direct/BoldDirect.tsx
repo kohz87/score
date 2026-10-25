@@ -987,7 +987,13 @@ function DirectConversation({
           )}
           {Object.entries(page.data?.typing ?? {}).map(([agentId, text]) => (
             <p className="bold-dm-typing" key={agentId} role="status">
-              <AgentGlyph agent={agent} size="xs" bare decorative />
+              <AgentGlyph
+                agent={agent}
+                size="xs"
+                bare
+                decorative
+                mood={text ? 'working' : 'thinking'}
+              />
               <b style={{ color: agentNameColor(agent) }}>{agentId}</b> {text}
             </p>
           ))}

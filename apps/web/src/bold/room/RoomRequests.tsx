@@ -250,7 +250,7 @@ export function ExchangeRequestCard({
       label={exchangePauseTitle(exchange)}
     >
       <div className="bold-request-head">
-        {from && <AgentGlyph agent={from} size="xs" decorative />}
+        {from && <AgentGlyph agent={from} size="xs" decorative mood="needs" />}
         <b style={from ? { color: agentNameColor(from) } : undefined}>
           {from ? agentDisplayName(from) : exchange.from}
         </b>
@@ -463,7 +463,7 @@ function ApprovalRequestCard({
       variant="approval"
     >
       <div className="bold-request-head">
-        {agent && <AgentGlyph agent={agent} size="xs" decorative />}
+        {agent && <AgentGlyph agent={agent} size="xs" decorative mood="needs" />}
         <b style={agent ? { color: agentNameColor(agent) } : undefined}>
           {agent ? agentDisplayName(agent) : current.agentId}
         </b>

@@ -294,14 +294,14 @@ test('the glyph popover closes with Escape and reports a failed save', async () 
   expect(document.activeElement).toBe(trigger)
 })
 
-test('the appearance popover offers twenty shapes as radio groups, with the agent’s own selected', async () => {
+test('the appearance popover offers 22 shapes as radio groups, with the agent’s own selected', async () => {
   renderTeam('/team/builder')
   fireEvent.click(await screen.findByRole('button', { name: 'Change Builder’s colour and shape' }))
   const dialog = screen.getByRole('dialog', { name: 'Agent appearance' })
   const shapes = within(within(dialog).getByRole('radiogroup', { name: 'Shape' })).getAllByRole(
     'radio',
   )
-  expect(shapes).toHaveLength(20)
+  expect(shapes).toHaveLength(22)
   // One native group: Tab enters it once and the arrow keys move through it.
   expect(new Set(shapes.map((radio) => (radio as HTMLInputElement).name)).size).toBe(1)
   expect(

@@ -1,3 +1,4 @@
+import { AgentFacesContext } from '../../components/agent-faces-context.ts'
 import { AgentIdSchema } from '@score/contract'
 import { useLoaderData } from 'react-router'
 import { useState, type CSSProperties, type ReactNode } from 'react'
@@ -146,7 +147,9 @@ function BoldPairFrame({ children }: { children: ReactNode }) {
       data-look={resolvedLook}
       style={{ '--scale': scale } as CSSProperties}
     >
-      <main className="bold-pair-content">{children}</main>
+      <main className="bold-pair-content">
+        <AgentFacesContext value>{children}</AgentFacesContext>
+      </main>
     </div>
   )
 }

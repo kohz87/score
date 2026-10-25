@@ -62,7 +62,7 @@ for (const viewport of sizes) {
     let created = false
     try {
       const shapeGroup = dialog.getByRole('radiogroup', { name: 'Shape' })
-      await expect(shapeGroup.getByRole('radio')).toHaveCount(20)
+      await expect(shapeGroup.getByRole('radio')).toHaveCount(22)
       const colourGroup = dialog.getByRole('radiogroup', { name: 'Colour' })
       const taken = colourGroup.locator('input[type=radio]:disabled')
       await expect(taken.first()).toBeVisible()

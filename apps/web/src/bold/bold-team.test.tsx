@@ -422,12 +422,12 @@ test('Team says so when there are no agents and when the list cannot load', asyn
   expect(within(alert).getByRole('button', { name: 'Try again' })).toBeDefined()
 })
 
-test('?add=agent opens the Add an agent dialog with all 20 shapes and taken colours disabled', async () => {
+test('?add=agent opens the Add an agent dialog with all 22 shapes and taken colours disabled', async () => {
   open('/b/team?add=agent')
   const dialog = await screen.findByRole('dialog', { name: 'Add an agent' })
 
   const shapes = within(dialog).getByRole('radiogroup', { name: 'Shape' })
-  expect(within(shapes).getAllByRole('radio')).toHaveLength(20)
+  expect(within(shapes).getAllByRole('radio')).toHaveLength(22)
   fireEvent.click(within(shapes).getByRole('radio', { name: 'circle dot' }))
   expect(within(dialog).getByRole('img', { name: 'New agent, circle-dot' })).toBeDefined()
 

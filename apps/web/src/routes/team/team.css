@@ -1348,7 +1348,7 @@ a.team-pill-button {
   text-decoration: none;
 }
 
-/* Look, colour and shape (PLAN 10.2): two looks and twenty shapes as native radio groups. */
+/* Look, colour and shape (PLAN 10.2): two looks and 22 shapes as native radio groups. */
 .team-appearance {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

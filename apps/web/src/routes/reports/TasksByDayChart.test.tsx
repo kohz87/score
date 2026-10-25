@@ -141,7 +141,7 @@ test.each([1, 2, 45, 366])(
   },
 )
 
-test('all twenty shapes have their own pattern overlay and every pattern draws something', () => {
+test('all 22 shapes have their own pattern overlay and every pattern draws something', () => {
   const kinds = Object.values(patternByShape)
   expect(kinds).toHaveLength(ShapeSchema.options.length)
   expect(new Set(kinds).size).toBe(ShapeSchema.options.length)
@@ -154,6 +154,6 @@ test('all twenty shapes have their own pattern overlay and every pattern draws s
   const everyone = ShapeSchema.options.map((shape) => agent(`a-${shape}`, '#6B4EFF', shape))
   const { container } = render(<TasksByDayChart byDay={day} agents={everyone} />)
   const patterns = [...container.querySelectorAll('pattern')]
-  expect(patterns).toHaveLength(20)
+  expect(patterns).toHaveLength(22)
   for (const pattern of patterns) expect(pattern.children.length, pattern.id).toBeGreaterThan(0)
 })
