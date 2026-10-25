@@ -1,6 +1,6 @@
 import type { AgentSummary, WatchOverviewItem } from '@score/contract'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { clockSeconds, groupActivity, markerLabels, type ActivityItem } from './watch-model.ts'
 

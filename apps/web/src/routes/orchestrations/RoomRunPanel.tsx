@@ -1,6 +1,6 @@
 import type { AgentSummary, OrchestrationSummary } from '@score/contract'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import { orchCoding, statusLabel } from './orch-model.ts'
 import { useRun, useRunActions } from './orchestration-queries.ts'
 import { RunNeeds } from './RunDecisions.tsx'

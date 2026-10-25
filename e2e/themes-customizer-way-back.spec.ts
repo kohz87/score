@@ -18,6 +18,8 @@ test.describe('X7: the full-screen Customizer keeps its way back', () => {
     page,
   }) => {
     test.setTimeout(90_000)
+    // The classic view: the bold shell frames the Customizer since 2.0.2.
+    await page.addInitScript(() => window.localStorage.setItem('score.ui', 'classic'))
     await wear(page)
     await page.goto('/settings/look/customize')
     await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()

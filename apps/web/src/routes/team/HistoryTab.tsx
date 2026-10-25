@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import type { HistoryOutcome } from '@score/contract'
 import { useStreamQuery } from '../../data/query-client.ts'
 import {

@@ -266,7 +266,7 @@ function BoldRecipeShell({
             onSelect={onSelect}
             onNew={onNew}
           />
-          <Link className="btn sm ghost" to="/workflows">
+          <Link className="btn sm ghost" to="/b/workflows">
             Workflow runs and versions
           </Link>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
@@ -629,7 +629,7 @@ function BoldRecipeEditor({
             onSelect={onSelect}
             onNew={onNew}
           />
-          <Link className="btn sm ghost" to="/workflows">
+          <Link className="btn sm ghost" to="/b/workflows">
             Workflow runs and versions
           </Link>
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>
@@ -779,7 +779,7 @@ function BoldRecipeEditor({
               so it is read-only here.
             </p>
             {saved.workflowId && (
-              <Link className="btn sm" to={`/workflows/${encodeURIComponent(saved.workflowId)}`}>
+              <Link className="btn sm" to={`/b/workflows/${encodeURIComponent(saved.workflowId)}`}>
                 Edit this one in the graph editor
               </Link>
             )}
@@ -865,7 +865,7 @@ function BoldRecipeEditor({
                 {saved.workflowId && (
                   <Link
                     className="btn sm"
-                    to={`/workflows/${encodeURIComponent(saved.workflowId)}`}
+                    to={`/b/workflows/${encodeURIComponent(saved.workflowId)}`}
                   >
                     Open the graph editor
                   </Link>

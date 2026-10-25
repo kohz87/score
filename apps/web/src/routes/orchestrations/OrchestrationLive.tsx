@@ -1,6 +1,6 @@
 import type { OrchEvent, OrchestrationDetail } from '@score/contract'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { taskAgentsQuery } from '../../data/task-queries.ts'

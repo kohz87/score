@@ -1,6 +1,7 @@
 import type { Approval, WatchMarker } from '@score/contract'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { ApiError } from '../../data/api.ts'
 import { copyText } from '../../data/clipboard.ts'
