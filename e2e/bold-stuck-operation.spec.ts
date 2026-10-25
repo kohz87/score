@@ -44,7 +44,17 @@ async function mockStuck(page: Page): Promise<Mock> {
     exportPath: null,
     retryable: mock.stopped,
   })
-  await page.route('**/api/agents', async (route) => {
+  // The page may move on (navigate, close) while a handler is still fetching: Playwright then disposes the response.
+  // That's the test's own race, not the app's, so a handler that loses it just stops.
+  const settle = async (work: () => Promise<void>) => {
+    try {
+      await work()
+    } catch (error) {
+      if (!/disposed|closed|Target page|Test ended/i.test(String(error))) throw error
+    }
+  }
+  await page.route('**/api/agents', (route) => settle(() => listAgents(route)))
+  async function listAgents(route: import('@playwright/test').Route) {
     if (route.request().method() !== 'GET') return route.fallback()
     const response = await route.fetch()
     const body = (await response.json()) as { items: Record<string, unknown>[] }
@@ -58,8 +68,9 @@ async function mockStuck(page: Page): Promise<Mock> {
       lifecycle: lifecycle(),
     })
     await route.fulfill({ response, json: body })
-  })
-  await page.route(`**/api/agents/${id}`, async (route) => {
+  }
+  await page.route(`**/api/agents/${id}`, (route) => settle(() => oneAgent(route)))
+  async function oneAgent(route: import('@playwright/test').Route) {
     if (route.request().method() !== 'GET') return route.fallback()
     const first = (await (await page.request.get('/api/agents')).json()) as {
       items: { id: string }[]
@@ -73,7 +84,7 @@ async function mockStuck(page: Page): Promise<Mock> {
       response,
       json: { ...body, id, name: id, role: 'Stopped partway', lifecycle: lifecycle() },
     })
-  })
+  }
   await page.route('**/api/agents/operations/**', async (route) => {
     const url = route.request().url()
     if (url.endsWith('/retry')) {
