@@ -371,5 +371,6 @@ test('Clear chat is all or nothing, and sends one room update for the whole clea
     db.sqlite.prepare('SELECT type FROM events WHERE seq > ?').all(seqBefore) as { type: string }[]
   ).map((row) => row.type)
   expect(types.filter((type) => type === 'message.deleted')).toHaveLength(main.length)
+  // The room's update goes out once at most (none when its summary didn't change), never once per message.
   expect(types.filter((type) => type === 'room.upserted').length).toBeLessThanOrEqual(1)
 })
