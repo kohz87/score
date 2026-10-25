@@ -1,3 +1,4 @@
+import type { Exchange } from '@score/contract'
 import { expect, test } from 'vitest'
 import { foldedJobIds, isFinishedJob } from './job-fold.ts'
 import { makeJob, makeMessage } from './room-test-utils.tsx'
@@ -34,4 +35,21 @@ test('a pinned message or a waiting approval keeps a job expanded', () => {
     approvalPointerIds: new Set(['ap-1']),
   })
   expect(folded.size).toBe(0)
+})
+
+test('a waiting exchange or a reply the model did not process keeps a job expanded', () => {
+  const exchange = {
+    id: 'ex',
+    jobId: 'a',
+    state: 'waiting_on_you',
+    pause: { reason: 'budget' },
+  } as unknown as Exchange
+  expect(foldedJobIds({ ...base, jobs: [done], messages: [], exchanges: [exchange] }).size).toBe(0)
+  const failed = makeMessage({
+    id: 'm3',
+    jobId: 'b',
+    author: { kind: 'agent', agentId: 'lead' },
+    parts: [{ kind: 'text', text: 'Your request was not processed' }],
+  })
+  expect(foldedJobIds({ ...base, jobs: [closed], messages: [failed] }).size).toBe(0)
 })

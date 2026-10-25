@@ -1274,32 +1274,39 @@
   padding: 10px 0;
 }
 
-/* Floats above the composer so showing it on focus never moves the controls under a click. */
-[data-ui='bold'] .chat-composer:has(> .chat-composer-hint) {
+/* Read by screen readers always (aria-describedby); shown on the composer's own top edge while it has focus, so it
+   never reaches the stream or a needs-you card above. */
+[data-ui='bold'] .chat-composer-box--room {
   position: relative;
 }
 
 [data-ui='bold'] .chat-composer-hint {
-  display: none;
   position: absolute;
-  left: 18px;
-  bottom: calc(100% + 4px);
-  margin: 0;
-  border-radius: 999px;
-  background: var(--panel);
-  padding: 3px 10px;
-  color: var(--muted);
-  font-size: 12px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
   pointer-events: none;
 }
 
-[data-ui='bold'] .chat-composer-box--room:focus-within + .chat-composer-hint {
-  display: block;
+[data-ui='bold'] .chat-composer-box--room:focus-within .chat-composer-hint {
+  width: auto;
+  height: auto;
+  clip-path: none;
+  right: 60px;
+  top: -9px;
+  border-radius: 999px;
+  background: var(--field);
+  padding: 1px 10px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 [data-ui='bold'] .chat-composer-box--room > textarea {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: calc(8 * 1.5em + 20px);
 }
 
 [data-ui='bold'] .chat-composer-box--room > textarea::placeholder {

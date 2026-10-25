@@ -17,7 +17,7 @@ import {
 } from './BoldMessage.tsx'
 import { foldedJobIds, isFinishedJob, readExpandedJobs, writeExpandedJobs } from './job-fold.ts'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
-import { roomMessagesQuery, roomSeekQuery } from './room-queries.ts'
+import { roomExchangesQuery, roomMessagesQuery, roomSeekQuery } from './room-queries.ts'
 import { useMessageTools } from './use-message-tools.ts'
 
 type PageState = {
@@ -335,6 +335,10 @@ export function RoomMessageStream({
     })
   }, [allItems, defaultJob, items, onRevealSeek, onSeeked, seek])
 
+  // A finished job with an exchange waiting on the person stays open, so its exchanges are read.
+  const finishedIds = useMemo(() => jobs.filter(isFinishedJob).map((job) => job.id), [jobs])
+  const exchangesDefinition = useMemo(() => roomExchangesQuery(finishedIds), [finishedIds])
+  const finishedExchanges = useStreamQuery(exchangesDefinition).data
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(readExpandedJobs)
   function setJobOpen(jobId: string, open: boolean) {
     setExpandedJobs((current) => {
@@ -358,6 +362,7 @@ export function RoomMessageStream({
             isPinned,
             approvalPointerIds,
             seek,
+            exchanges: finishedExchanges ?? [],
           })
         : new Set<string>()
     const build = (list: Message[]) =>

@@ -812,7 +812,14 @@ export function Composer({
   const pickerAgents = agents.filter((agent) =>
     to.length ? to.includes(agent.id) : agent.id === (leadAgentId ?? agents[0]?.id),
   )
-  const lines = Math.min(Math.max(text.split('\n').length, 1), 8)
+  const lines = roomMode ? 1 : Math.min(Math.max(text.split('\n').length, 1), 8)
+  // The room composer grows with what wraps, not only with newlines; CSS caps it at 8 lines and then scrolls.
+  useLayoutEffect(() => {
+    const box = textarea.current
+    if (!roomMode || !box) return
+    box.style.height = 'auto'
+    if (box.scrollHeight > 0) box.style.height = `${box.scrollHeight}px`
+  }, [roomMode, text])
   const roomToLabel = to.length
     ? `To: ${to.map((id) => `@${id}`).join(', ')}`
     : (toLabel ?? 'To: new job')
@@ -975,6 +982,7 @@ export function Composer({
           ref={textarea}
           rows={lines}
           value={text}
+          aria-describedby={roomMode ? `${ids}-hint` : undefined}
           placeholder={placeholder ?? (roomMode ? 'Message the team…' : 'Write a message…')}
           role="combobox"
           aria-expanded={menu !== null && count > 0}
@@ -1359,12 +1367,12 @@ export function Composer({
             {voice.error}
           </p>
         )}
+        {roomMode && (
+          <span id={`${ids}-hint`} className="chat-composer-hint">
+            @name for one agent, / for commands
+          </span>
+        )}
       </form>
-      {roomMode && (
-        <p className="chat-composer-hint" aria-hidden="true">
-          @name for one agent, / for commands
-        </p>
-      )}
     </div>
   )
 }

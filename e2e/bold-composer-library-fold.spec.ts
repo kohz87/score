@@ -22,6 +22,25 @@ for (const size of sizes) {
       expect(fits).toBe(true)
       await box.focus()
       await expect(page.locator('.chat-composer-hint')).toBeVisible()
+      await expect(box).toHaveAccessibleDescription(/@name for one agent/)
+    })
+
+    test('long text is fully visible or scrollable in the composer', async ({ page }) => {
+      await openBoldRoom(page)
+      const box = page.getByRole('combobox', { name: /^Message Team room/ })
+      await box.fill('word '.repeat(80))
+      const one = await box.evaluate((el) => ({
+        grew: el.clientHeight > 40,
+        reachable: el.scrollHeight <= el.clientHeight || getComputedStyle(el).overflowY === 'auto',
+      }))
+      expect(one.grew).toBe(true)
+      expect(one.reachable).toBe(true)
+      await box.fill(Array.from({ length: 12 }, (_, i) => `line ${i}`).join('\n'))
+      const twelve = await box.evaluate((el) => ({
+        scrolls: el.scrollHeight > el.clientHeight,
+        auto: getComputedStyle(el).overflowY === 'auto',
+      }))
+      expect(twelve).toEqual({ scrolls: true, auto: true })
     })
 
     test('a finished job is folded; Show opens it and Hide folds it again', async ({ page }) => {
@@ -65,7 +84,8 @@ for (const size of sizes) {
     const dialog = page.getByRole('dialog', { name: 'New folder' })
     await dialog.getByLabel('Folder path').fill(folder)
     await dialog.getByRole('button', { name: /^Create/ }).click()
-    const heading = nav.getByRole('button', { name: new RegExp(folder) })
+    const heading = nav.getByRole('button', { name: new RegExp(`^${folder}`) })
+    const chevron = nav.getByRole('button', { name: `Collapse ${folder}` })
     await expect(heading).toBeVisible()
     await nav.getByRole('button', { name: 'New note' }).click()
     const note = page.getByRole('dialog', { name: 'New note' })
@@ -73,7 +93,10 @@ for (const size of sizes) {
     await note.getByLabel('Path in Knowledge').fill(`${folder}/first`)
     await note.getByRole('button', { name: 'Create note' }).click()
     await expect(page.getByLabel(`Contents of ${folder}/first.md`)).toBeVisible({ timeout: 15_000 })
-    await heading.click()
-    await expect(heading).toHaveAttribute('aria-expanded', 'false')
+    await chevron.click()
+    await expect(nav.getByRole('button', { name: `Expand ${folder}` })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
   })
 }

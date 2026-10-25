@@ -1,5 +1,6 @@
-import type { Job, Message } from '@score/contract'
-import { reportBackWaiting } from './room-model.ts'
+import type { Exchange, Job, Message } from '@score/contract'
+import { isNotProcessedNotice } from '../../routes/chat/stall.ts'
+import { needsYou, reportBackWaiting } from './room-model.ts'
 
 const KEY = 'score.room.expandedJobs'
 
@@ -30,7 +31,7 @@ export function isFinishedJob(job: Job): boolean {
 /**
  * Jobs the stream folds into one row: finished, not opened this session, and holding nothing the person must see.
  * A pinned message, an approval waiting in Needs you, a result waiting to be sent back or the message being sought
- * keeps the whole job expanded.
+ * or retry, an exchange waiting on the person, or the message being sought keeps the whole job expanded.
  */
 export function foldedJobIds({
   jobs,
@@ -39,6 +40,7 @@ export function foldedJobIds({
   isPinned,
   approvalPointerIds,
   seek,
+  exchanges = [],
 }: {
   jobs: readonly Job[]
   messages: readonly Message[]
@@ -46,6 +48,7 @@ export function foldedJobIds({
   isPinned: (messageId: string) => boolean
   approvalPointerIds: ReadonlySet<string>
   seek: string | null
+  exchanges?: readonly Exchange[]
 }): Set<string> {
   const waiting = new Set(reportBackWaiting([...jobs]).map((job) => job.id))
   const folded = new Set(
@@ -53,12 +56,17 @@ export function foldedJobIds({
       .filter((job) => isFinishedJob(job) && !expanded.has(job.id) && !waiting.has(job.id))
       .map((job) => job.id),
   )
+  for (const exchange of exchanges) if (needsYou(exchange)) folded.delete(exchange.jobId)
   for (const message of messages) {
     if (!message.jobId || !folded.has(message.jobId)) continue
     const needsYou = message.parts.some(
       (part) => part.kind === 'approval' && approvalPointerIds.has(part.approvalId),
     )
-    if (needsYou || isPinned(message.id) || message.id === seek) folded.delete(message.jobId)
+    const failed =
+      message.author.kind === 'agent' &&
+      message.parts.some((part) => part.kind === 'text' && isNotProcessedNotice(part.text))
+    if (needsYou || failed || isPinned(message.id) || message.id === seek)
+      folded.delete(message.jobId)
   }
   return folded
 }
