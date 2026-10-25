@@ -724,7 +724,12 @@ test('a removed agent’s name can be reused with a confirm: new incarnation, no
       .get('helper'),
   ).toEqual({ n: 0 })
 
-  const body = { ...input, name: 'Helper two' }
+  const body = {
+    ...input,
+    name: 'Helper two',
+    role: 'Reviews docs',
+    style: { color: '#6B4EFF', shape: 'star' as const },
+  }
   const preview = AgentPreviewSchema.parse(
     (await mutate('/api/agents/preview', { kind: 'create', ...body })).json(),
   )
@@ -744,6 +749,8 @@ test('a removed agent’s name can be reused with a confirm: new incarnation, no
   const agent = (await app.inject('/api/agents/helper')).json()
   expect(agent).toMatchObject({
     name: 'Helper two',
+    role: 'Reviews docs',
+    style: { color: '#6B4EFF', shape: 'star' },
     lifecycle: { state: 'ready', incarnationId: op.incarnationId },
   })
   expect(agent.status).not.toBe('paused')
@@ -774,4 +781,27 @@ test('a pause left from before 2.0.8 is cleared when the name is reused', async 
   })
   await finished(again.json().id)
   expect((await app.inject('/api/agents/helper')).json().status).not.toBe('paused')
+})
+
+test('a reuse confirm can’t ride on a stale preview (2.0.8)', async () => {
+  const first = await create()
+  await finished(first.id)
+  const before = AgentPreviewSchema.parse(
+    (await mutate('/api/agents/preview', { kind: 'create', ...input })).json(),
+  )
+  const del = AgentPreviewSchema.parse(
+    (await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })).json(),
+  )
+  const gone = await mutate(
+    '/api/agents/helper',
+    { typedName: 'helper', previewHash: del.hash },
+    'DELETE',
+  )
+  await finished(gone.json().id)
+  const stale = await mutate('/api/agents', {
+    ...input,
+    previewHash: before.hash,
+    confirmReuse: true,
+  })
+  expect(stale.statusCode).toBe(409)
 })

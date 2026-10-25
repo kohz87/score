@@ -325,7 +325,8 @@ export class ProfileOperations {
         // Whatever Score still held for the removed agent of this name (a pause from before 2.0.8) isn't the new one's.
         if (reuse)
           sqlite.prepare('DELETE FROM agent_pauses WHERE agent_id = ?').run(preview.targetName)
-        const previous = readAgent(sqlite, preview.targetName)
+        // A reused name starts fresh: the removed agent's projection (role, skills, memory…) isn't the new one's.
+        const previous = reuse ? null : readAgent(sqlite, preview.targetName)
         const agent =
           previous ??
           AgentDetailSchema.parse({
