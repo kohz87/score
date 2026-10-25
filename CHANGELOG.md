@@ -3,6 +3,17 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.1] — 2026-10-25
+
+### Fixed
+- **Add an agent** says why it can't add one (the server's blockers and any missing field), instead of a greyed-out
+  button. Live servers need `SCORE_BRIDGE_INSTALL_URL` and `SCORE_BRIDGE_INSTALL_REF` (docs/SETUP.md) to create agents.
+- **Coding agents are in the team room** and can be its lead; the room's members follow the team as agents are added,
+  become ready or are removed (a removed lead is unseated and its queued turns end).
+- **Recipes** no longer shows the first-run page through its backdrop while the team room has no lead.
+- **Pair another device** explains why it's off (type the security password, or set one first; `scripts/score pair`
+  needs neither).
+
 ## [2.0.0] — 2026-10-25
 
 The new Score: one team room instead of separate destinations. Built in Phase 11 (docs/PLAN.md); the old pages that the
