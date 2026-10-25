@@ -1212,3 +1212,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   scoretesta re-registered (plugin 0.1.0, Hermes 0.21.5); `gateway.run._gateway_runner_ref` false on default as since
   2026-10-20. Team room created (members default, scoretesta, scoretestb; no lead yet — first run asks). `/` and `/b`
   answer 200; no errors in the log since the restart. The owner reviews on live.
+- **v2.0.1 deployed live (lead + Sonnet coder, 2026-10-25 ~08:45 UTC).** Owner's live findings on 2.0.0: Add an agent
+  never said why it was off (the server's blocker: no SCORE_BRIDGE_INSTALL_URL/REF on the live service — set in
+  `~/.config/score/score.env`, pinned to v2.0.0's plugin; the form now lists blockers); coding agents weren't team-room
+  members or offered as lead (startup read the raw Hermes port; members now follow the ready team, a removed agent is
+  unseated via the shared `retireAgentFromRooms`, a briefly not-ready lead stays a member); the first-run page showed
+  through Recipes' backdrop; "Pair another device" didn't say why it was off. Reviews: 0 P1; P2s fixed (removed lead
+  kept, members never shrank, not-ready agents added, lead outside members, hint while loading). The 2.0.1 coder stopped
+  mid-round; the lead ran the checks and finished. e2e 81/81 on the affected specs; server/web tests green. Deploy: no
+  plugin change (no gateway restart), backup score-pre-2.0.1-20261025.db, restart; team room members default, luna,
+  scoretesta, scoretestb, sol; the live preview has no blockers.
