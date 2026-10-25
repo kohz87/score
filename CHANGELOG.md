@@ -3,6 +3,23 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.8] — 2026-10-25
+
+### Added
+- **Reuse a removed agent's name**: Add agent says the name belonged to a removed agent and asks you to tick "Use the
+  name … again" (its old messages, runs and reports keep the name). The new agent starts fresh.
+- **A stopped setup or removal shows on the agent page** with Retry or Confirm right there, and the Remove panel shows
+  the stopped step instead of a greyed-out button.
+
+### Changed
+- **More on the agent page** is a grid of compact cards in the new design (Remembers, Skills, Can use, Workspace,
+  Repeating jobs, Delete, then Goes ahead without asking, Never rules, Plugins, Channels, Looks, Name and role, Recent
+  runs, Score access, Todo) instead of the old tabs.
+- Pause/Resume is hidden while an agent is being set up or removed.
+
+### Fixed
+- Removing an agent clears its pause, so an agent of the same name doesn't start paused.
+
 ## [2.0.5] — 2026-10-25
 
 ### Changed

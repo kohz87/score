@@ -92,6 +92,11 @@ export function addBlockReasons(
   input: { cloneFrom?: string | undefined },
   confirmed: boolean,
   runs: { backend: string; sshHost: string; sshUser: string },
+  reuse: { id: string; needed: boolean; confirmed: boolean } = {
+    id: '',
+    needed: false,
+    confirmed: true,
+  },
 ): string[] {
   const reasons = blockers.map((blocker) =>
     /bridge installation URL/i.test(blocker)
@@ -99,6 +104,7 @@ export function addBlockReasons(
       : blocker,
   )
   if (input.cloneFrom && !confirmed) reasons.push('Tick “I’ve checked what this agent inherits.”')
+  if (reuse.needed && !reuse.confirmed) reasons.push(`Tick “Use the name ${reuse.id} again.”`)
   if (runs.backend === 'ssh') {
     if (!runs.sshHost.trim()) reasons.push('Enter the SSH host this agent runs on.')
     if (!runs.sshUser.trim()) reasons.push('Enter the SSH user this agent runs as.')

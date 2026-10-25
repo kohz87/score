@@ -150,12 +150,19 @@ export function registerProfileRoutes(
     )
   })
   app.post('/api/agents', mutation, async (request, reply) => {
-    const { previewHash, confirmInheritance, ...input } = AgentCreateRequestSchema.parse(
-      request.body,
-    )
+    const { previewHash, confirmInheritance, confirmReuse, ...input } =
+      AgentCreateRequestSchema.parse(request.body)
     return reply
       .code(202)
-      .send(await operations.begin({ kind: 'create', ...input }, previewHash, confirmInheritance))
+      .send(
+        await operations.begin(
+          { kind: 'create', ...input },
+          previewHash,
+          confirmInheritance,
+          undefined,
+          confirmReuse,
+        ),
+      )
   })
   app.delete('/api/agents/:agentId', mutation, async (request, reply) => {
     const { agentId } = Params.parse(request.params)

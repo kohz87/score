@@ -33,6 +33,8 @@ export function useAgentCreateDraft(initialInput?: AgentCreateInput) {
   const [input, setInput] = useState<AgentCreateInput>(initial)
   const [preview, setPreview] = useState<AgentPreview | null>(null)
   const [confirmed, setConfirmed] = useState(false)
+  // Reusing a removed agent's name needs its own tick (2.0.8).
+  const [reuseConfirmed, setReuseConfirmed] = useState(false)
   const [accepted, setAccepted] = useState<AgentOperation | null>(null)
   const status = useProfileOperation(accepted?.id ?? null)
   const operation = status.data ?? accepted
@@ -57,6 +59,7 @@ export function useAgentCreateDraft(initialInput?: AgentCreateInput) {
             ...input,
             previewHash: preview!.hash,
             confirmInheritance: confirmed,
+            ...(preview?.reusesName ? { confirmReuse: reuseConfirmed } : {}),
           }),
         }),
       ),
@@ -64,12 +67,14 @@ export function useAgentCreateDraft(initialInput?: AgentCreateInput) {
     onError: () => {
       setPreview(null)
       setConfirmed(false)
+      setReuseConfirmed(false)
     },
   })
   const another = () => {
     setInput(initial)
     setPreview(null)
     setConfirmed(false)
+    setReuseConfirmed(false)
     setAccepted(null)
     review.reset()
     create.reset()
@@ -82,6 +87,7 @@ export function useAgentCreateDraft(initialInput?: AgentCreateInput) {
     })
     setPreview(null)
     setConfirmed(false)
+    setReuseConfirmed(false)
     review.reset()
     create.reset()
   }
@@ -98,6 +104,8 @@ export function useAgentCreateDraft(initialInput?: AgentCreateInput) {
     change,
     another,
     setConfirmed,
+    reuseConfirmed,
+    setReuseConfirmed,
   }
 }
 

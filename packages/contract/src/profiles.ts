@@ -30,6 +30,8 @@ export const AgentPreviewRequestSchema = z.discriminatedUnion('kind', [
 export const AgentCreateRequestSchema = AgentCreateInputSchema.extend({
   previewHash: z.string().regex(/^[a-f0-9]{64}$/),
   confirmInheritance: z.boolean().optional(),
+  /** Reusing a retired name (2.0.8): required when the preview says `reusesName`. */
+  confirmReuse: z.boolean().optional(),
 }).strict()
 export const OperationConfirmRequestSchema = z.object({ step: z.string().min(1).max(64) }).strict()
 export const AgentPatchRequestSchema = z
@@ -135,6 +137,8 @@ export const AgentPreviewSchema = z.object({
     disposition: z.string(),
   }),
   exportPath: z.string().nullable(),
+  /** The name belonged to a removed agent; creating needs `confirmReuse` (2.0.8). */
+  reusesName: z.boolean().optional(),
 })
 export type AgentCreateInput = z.infer<typeof AgentCreateInputSchema>
 export type AgentPreviewRequest = z.infer<typeof AgentPreviewRequestSchema>

@@ -977,7 +977,7 @@ pauses, orchestrations, reports and MCP tools. The attempt page at `/attempts/:a
 
 - **S** `GET /api/agents` → `{ asOfSeq; items: AgentSummary[] }`
 - **H** `POST /api/agents/preview` → `AgentPreview` (§8 lifecycle below).
-- **H** `POST /api/agents` `{ id; name; role; style; model; provider?; cloneFrom?; previewHash; confirmInheritance? }` → `202 AgentOperation`.
+- **H** `POST /api/agents` `{ id; name; role; style; model; provider?; cloneFrom?; previewHash; confirmInheritance?; confirmReuse? }` → `202 AgentOperation`.
   `provider` (a provider id from `GET /api/models`) is set with the model; preview takes the same fields.
 - **H** `PATCH /api/agents/:agentId` `{ name?; role? }` → `AgentDetail`. Name is a Score display name; profile id never changes. Role is nonempty description text.
 - **H** `DELETE /api/agents/:agentId` `{ typedName; previewHash }` → `202 AgentOperation`.
@@ -1013,10 +1013,12 @@ pauses, orchestrations, reports and MCP tools. The attempt page at `/attempts/:a
 
 Lifecycle schemas live in `packages/contract/src/profiles.ts`. Preview accepts `{ kind: 'create', id, name, role,
 style, model, cloneFrom? }` or `{ kind: 'delete', agentId }`. Canonical names are lowercase ASCII letters/digits,
-underscore or hyphen, 1–64 characters with an alphanumeric first character; `default` and retired names are reserved.
+underscore or hyphen, 1–64 characters with an alphanumeric first character; `default` is reserved; a retired name can be
+reused only with `confirmReuse` (below).
 Preview returns `{ kind; targetName; hash; inherited: { memories: string[]; skills: string[]; plugins: string[];
 approvalSettings: string[]; credentialsPresent: string[] }; effects: string[]; blockers: string[];
-pendingWork: { activeRuns; queuedTurns; pendingApprovals; assignments; disposition }; exportPath: string|null }`.
+pendingWork: { activeRuns; queuedTurns; pendingApprovals; assignments; disposition }; exportPath: string|null;
+reusesName?: boolean }`.
 Inheritance lists contain names only, never credential values or memory contents. Unknown inventory blocks cloning.
 Create/delete recompute the preview; a stale hash is `409 conflict`. Cloning requires `confirmInheritance: true`.
 All mutations accept Idempotency-Key receipts. Operations are durable and lock their target through completion or
@@ -1029,8 +1031,12 @@ incarnationId; operationId: string|null }`. Only ready agents admit work. Remove
 historical attribution, but have no routing, room membership or lead selection. Lifecycle changes emit only
 `agent.updated`. Deletion freezes admissions, refuses active runs, queued turns, pending approvals or unfinished
 assignments, verifies a private export first, and retires the name. Exports omit credentials and are not a full undo;
-their local path is displayed but their bytes are never served. Retired-name reuse is currently refused until an
-incarnation-aware reuse confirmation contract is agreed.
+their local path is displayed but their bytes are never served. **Reusing a retired name** (2.0.8, decision 125): a
+create preview for a name whose lifecycle is `removed` has `reusesName: true` and an effect saying that the old agent's
+messages, runs and reports keep the name and show next to the new agent, and nothing else carries over. `POST
+/api/agents` then needs `confirmReuse: true` (`400` otherwise). The new agent gets a new `incarnationId` and its own
+display name; anything Score still held for the old one under that name (a pause) is cleared when the create begins.
+Deletion clears the agent's pause. Import still refuses a retired name.
 
 - `PATCH /api/agents/:agentId/style` `AgentStylePatch` `{ color?; shape? }` → `AgentSummary` (Hermes profiles and
   coding agents alike; ids are unique across both). Shapes: `circle-dot`, `triangle`, `diamond`, `square`, `hexagon`,
