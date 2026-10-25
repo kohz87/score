@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import { Outlet, redirect, RouterProvider, useLocation } from 'react-router'
 import type { DataRouter, RouteObject } from 'react-router'
 import { applyUiParam, readUi } from './bold/bold-ui.ts'
+import { BoldTerminalPage } from './bold/BoldTerminal.tsx'
 import { boldRedirectFor } from './shell/framed-paths.tsx'
 import { BoldClassicPage } from './bold/BoldClassicPage.tsx'
 import { BoldHome } from './bold/BoldHome.tsx'
@@ -135,6 +136,7 @@ export const appRoutes: RouteObject[] = [
           { path: 'workflows/:workflowId', Component: WorkflowEditorFramed },
           { path: 'runs/:briefId', Component: RunFramed },
           { path: 'watch/:agentId', Component: WatchFramed },
+          { path: 'terminal', Component: BoldTerminalPage },
           ...['settings/look/customize', 'settings/look/customize/:themeId'].map(
             (path): RouteObject => ({
               path,
@@ -247,7 +249,7 @@ export const appRoutes: RouteObject[] = [
           { path: '/now/*', loader: ({ request }) => redirect(keepSearch(request, '/b')) },
           { path: '/tasks/*', loader: () => redirect('/b') },
           { path: '/u/*', loader: () => redirect('/b') },
-          { path: '/terminal', Component: TerminalRoute },
+          { path: '/terminal', loader: toBoldLoader, Component: TerminalRoute },
           { path: '/attempts/:attemptId', Component: AttemptPage },
           { path: '/pair', loader: pairBrowser, Component: PairPage },
           { path: '*', element: <StubPage title="Page not found" /> },

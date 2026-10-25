@@ -255,3 +255,22 @@ export function LockIcon({ size = 14 }: IconProps) {
     </svg>
   )
 }
+
+export function TerminalIcon({ size = 18 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="3.5" />
+      <path d="M7.5 10l3 2.5-3 2.5M13 15h3.5" />
+    </svg>
+  )
+}
