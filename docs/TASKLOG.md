@@ -1152,3 +1152,20 @@ One entry per completed task: what landed, review results, and any **rejected re
   rejected: the chat-rooms fence check made conditional (the guard is unit-tested; deterministic e2e would need a held
   fake run), the dot-on-current-page check (never covered before). Full check green (contract 1487, web 2794, server
   4689). Not deployed.
+- **11.12a Phase-gate hardening and job lifecycle (lead, 2026-10-25).** Decision 121. Job menu server side: PATCH
+  rename, close/reopen, soft delete with undo (`job.deleted`; the job's messages are soft-deleted with the job's
+  timestamp, restore brings back exactly those; summaries go stale, the room entry is redone; attachments kept for
+  undo); a person's message, a decision, a share or a report-back into a closed job 409, a deleted one 404; a job with
+  running, queued or unfinished exchanges can't be closed or deleted (Stop first); a closed job stays closed; reads of
+  a deleted job 404. Hermes task reads and actions kept after the board (GET /api/tasks, /api/tasks/:id, POST
+  …/actions comment/unblock; create/patch stay removed). Triggers: jobs start with a $5 spend cap, 429 trigger_busy at
+  10 open jobs or 100 a day per trigger, failures on unknown trigger ids share one budget per address. Spend cap
+  reserves queued turns. Exchange action text redacted when the turn settles (and by a history reset), not before
+  it's applied. runs-on: paths normalized; system trees, the home, its parents and hidden folders, --privileged=<any>,
+  --volumes-from count as handing over the machine; app data under /var and projects under the home stay 'partly'.
+  One-to-one rooms take a free name when the agent's is taken. Reviews: phase-gate server review (P2s above); 11.12a
+  review — 1 P1 (paused exchanges didn't keep a job busy → work could resume in a closed/deleted job), P2s (delete side
+  effects, readers of deleted jobs, redaction rewrote delivered text, runs-on false positives and ../ bypasses) — fixed;
+  fix-round review — 1 P2 (history reset left staged actions unredacted) fixed. Accepted P3s: same-millisecond restore,
+  relative binds over-warn, Windows paths, a trigger with 10 jobs waiting on the person stays busy until some close
+  (by design). Server suite 4725 green. Not deployed.
