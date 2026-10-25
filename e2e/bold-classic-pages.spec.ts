@@ -326,8 +326,20 @@ for (const mode of ['light', 'dark'] as const) {
     const card = page.locator('.bold-settings-page .rules-card[data-protected]')
     await expect(card).toBeVisible()
     await expectGuardKeptTheme(page)
-    await expectAA(card.getByRole('heading').first())
-    await expectAA(card.locator('label, li').first())
+    // Every visible element that draws text of its own, not just the heading.
+    const texts = card.locator('h2, h3, p, li, label, legend, span, button, a, small')
+    const count = await texts.count()
+    let checked = 0
+    for (let at = 0; at < count; at++) {
+      const part = texts.nth(at)
+      const own = await part.evaluate((element) =>
+        [...element.childNodes].some((node) => node.nodeType === 3 && node.textContent!.trim()),
+      )
+      if (!own || !(await part.isVisible())) continue
+      await expectAA(part)
+      checked++
+    }
+    expect(checked).toBeGreaterThan(5)
   })
 }
 
