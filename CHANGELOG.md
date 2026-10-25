@@ -3,6 +3,48 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.0] — 2026-10-25
+
+The new Score: one team room instead of separate destinations. Built in Phase 11 (docs/PLAN.md); the old pages that the
+new shell replaces are gone.
+
+### Added
+- **The team room** (`/b`, now the default): every agent in one room, work split into **jobs** with their own tabs,
+  threads and sessions. Agents hand work on with **exchanges** (ask, review, hand off, approve, send back) instead of
+  @mentions, within turn budgets, job turn limits and spend caps; when one is reached the job pauses and asks you.
+- **Needs you**: one protected strip in the room for everything waiting on you — approvals, paused exchanges, a lead's
+  question, run safety (quota, spend, unconfirmed ends), report-back, blocked Hermes tasks and the "starting work is
+  blocked" review — with a count on the phone's Room tab and announcements for screen readers.
+- **A job's thread**, **Results** (what each job made) and the **Workbench** (files with who wrote each line, review
+  notes, an agent's screen as an event replay).
+- **One-to-ones** with each agent (private by default; share a message to a job, add someone, take a thread aside).
+- **Start a job** with a recipe, limits and checks; **recipe editor**; **Library**; **Search** (jobs, messages, notes,
+  commands, settings, routines).
+- **Team** and **agent pages** (how it works, where it runs — this machine, Docker or SSH — with an honest "separated"
+  label), **Add an agent**, **Settings** (connections, look, notifications, system, usage, team rules, security).
+- **Webhook triggers** that start jobs from other apps (signed calls; each trigger's jobs start with a $5 spend cap,
+  at most 10 open and 100 a day) and **report-back** of a job's result to where it came from.
+- **Job menu**: rename, close and reopen, delete with undo, share a read-only link, export.
+- **Phone layout**: a job list, full-screen job chats, sheets, a tab bar.
+- **Themes** on the new shell, with the protected layer and the contrast fallback covering every decision.
+
+### Changed
+- `/` opens the new shell. The classic Chat, Team, Library, Reports, Settings, Watch, workflows and orchestration runs
+  stay reachable ("Use the classic view"); orchestration runs moved to `/runs/:id`, workflows to `/workflows`, Watch to
+  `/watch/:agent` (old links redirect).
+- Older rooms and one-to-ones route with exchanges (migration 0086).
+- Agents are colour + shape everywhere; motion is Calm or Still.
+
+### Removed
+- The Now page (Score timeline, Flow graph), the Tasks board, the chat-first `/u` view and its admin switch, the room
+  stage, pop-out windows, pet packs and portrait looks (Cut-out, Ring, eyes, moods) and Lively motion. Blocked Hermes
+  tasks are answered from Needs you; the tasks themselves stay in Hermes.
+
+### Upgrade notes
+- Database migrations 0080–0087 run on the first start (rehearsed on a copy of a live database). Back up first.
+- The Hermes plugin `score_bridge` gains the exchange tools: update it on each profile and restart the gateway.
+- Stored pet packs (`~/.score/packs`) are no longer used.
+
 ## [1.14.0] — 2026-10-20
 
 ### Added
