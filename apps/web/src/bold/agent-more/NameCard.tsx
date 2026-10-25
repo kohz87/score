@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { AgentDetail } from '@score/contract'
-import { Fail, MoreCard } from './MoreCard.tsx'
+import { Fail, MoreCard, problem } from './MoreCard.tsx'
 import { useSaveAgentDetails } from './agent-more-queries.ts'
 
 export function NameCard({ agent }: { agent: AgentDetail }) {
@@ -57,7 +57,9 @@ export function NameCard({ agent }: { agent: AgentDetail }) {
             </span>
           )}
         </span>
-        {save.isError && <Fail>Couldn’t save the details. Try again.</Fail>}
+        {save.isError && (
+          <Fail>{problem(save.error, 'Couldn’t save the details. Try again.')}</Fail>
+        )}
       </form>
     </MoreCard>
   )

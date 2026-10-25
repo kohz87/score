@@ -1,4 +1,15 @@
 import type { ReactNode } from 'react'
+import { ApiError } from '../../data/api.ts'
+
+/** The server's own sentence when it sent one (pairing aside), else the card's fallback. */
+export function problem(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'not_paired')
+      return 'Pair this browser using the link in the server terminal first.'
+    if (error.message.trim()) return error.message
+  }
+  return fallback
+}
 
 /** One compact More card: the prototype's `.card` with a 20px `h3`. */
 export function MoreCard({

@@ -3,7 +3,7 @@ import type { AgentDetail } from '@score/contract'
 import { copyText } from '../../data/clipboard.ts'
 import { useChangeMcpAccess, useMcpAccess } from '../../routes/team/mcp-access-queries.ts'
 import { tabFailure } from '../../routes/team/tab-errors.ts'
-import { Fail, MoreCard } from './MoreCard.tsx'
+import { Fail, MoreCard, problem } from './MoreCard.tsx'
 
 /** Lets the agent use Score's rooms, tasks and notes as MCP tools. A consent, so the card is protected. */
 export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
@@ -11,7 +11,23 @@ export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
   const change = useChangeMcpAccess(agent.id)
   const [token, setToken] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
-  if (access.isError || !access.data) return null
+  if (access.isError || !access.data)
+    return (
+      <MoreCard id="agent-score-access" title="Score access" protectedKind="flex">
+        {access.isError ? (
+          <Fail>
+            {problem(access.error, 'Couldn’t load Score access.')}{' '}
+            <button type="button" className="link" onClick={() => void access.refetch()}>
+              Try again
+            </button>
+          </Fail>
+        ) : (
+          <p role="status" className="small muted">
+            Loading Score access…
+          </p>
+        )}
+      </MoreCard>
+    )
   const data = access.data
   const failed = change.patch.error ?? change.issue.error ?? change.revoke.error
   const busy = change.patch.isPending || change.issue.isPending || change.revoke.isPending
@@ -22,7 +38,7 @@ export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
       <span className="small muted">
         Lets {agent.name} use Score’s rooms, tasks and notes as tools. Off by default.
       </span>
-      {failed && <Fail>{tabFailure(failed, 'change Score access')}</Fail>}
+      {failed && <Fail>{problem(failed, tabFailure(failed, 'change Score access'))}</Fail>}
       {!data.available && (
         <p className="small muted" role="status">
           Not available here: it is served on a separate local listener that only runs in remote

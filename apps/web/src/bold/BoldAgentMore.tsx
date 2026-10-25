@@ -4,6 +4,7 @@ import { WorkspaceTab } from '../routes/team/WorkspaceTab.tsx'
 import { CanUseCard } from './agent-more/CanUseCard.tsx'
 import { ChannelsCard } from './agent-more/ChannelsCard.tsx'
 import { DeleteCard } from './agent-more/DeleteCard.tsx'
+import { GoAheadCard } from './agent-more/GoAheadCard.tsx'
 import { LooksCard } from './agent-more/LooksCard.tsx'
 import { NameCard } from './agent-more/NameCard.tsx'
 import { NeverCard } from './agent-more/NeverCard.tsx'
@@ -73,6 +74,7 @@ export function BoldAgentMore({
             {deletion}
             <PluginsCard agent={agent} />
             <ChannelsCard agent={agent} />
+            <GoAheadCard agent={agent} />
             <NeverCard agent={agent} />
             <LooksCard agent={agent} />
             {editable && <NameCard agent={agent} />}

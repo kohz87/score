@@ -10,6 +10,7 @@ import { createStreamClient } from '../../data/stream.ts'
 import { CanUseCard } from './CanUseCard.tsx'
 import { ChannelsCard } from './ChannelsCard.tsx'
 import { DeleteCard } from './DeleteCard.tsx'
+import { GoAheadCard } from './GoAheadCard.tsx'
 import { LooksCard } from './LooksCard.tsx'
 import { NameCard } from './NameCard.tsx'
 import { NeverCard } from './NeverCard.tsx'
@@ -55,6 +56,7 @@ const agent: AgentDetail = AgentDetailSchema.parse({
 const at = '2026-10-24T10:00:00.000Z'
 type Call = { method: string; path: string; body: unknown }
 let calls: Call[] = []
+let override: ((path: string, method: string, body: unknown) => Response | null) | null = null
 let memory: { id: string; text: string; source: string; at: string }[] = []
 const disposers: (() => void)[] = []
 
@@ -63,6 +65,8 @@ class Source extends EventTarget {
 }
 
 function reply(path: string, method: string, body: unknown): Response {
+  const forced = override?.(path, method, body)
+  if (forced) return forced
   if (method !== 'GET') {
     if (path.endsWith('/memory') && method === 'POST') {
       memory = [...memory, { id: 'm2', text: (body as { text: string }).text, source: 'you', at }]
@@ -219,6 +223,7 @@ const mcp = {
 
 beforeEach(() => {
   calls = []
+  override = null
   memory = [{ id: 'm1', text: 'Prefers small commits', source: 'you', at }]
   vi.stubGlobal(
     'fetch',
@@ -389,7 +394,7 @@ test('Score access switches read access and creates no key by itself', async () 
   mount(<ScoreAccessCard agent={agent} />)
   const card = await screen.findByRole('region', { name: 'Score access' })
   expect(card.getAttribute('data-protected')).toBe('flex')
-  fireEvent.click(within(card).getByRole('checkbox', { name: /Read rooms/ }))
+  fireEvent.click(await within(card).findByRole('checkbox', { name: /Read rooms/ }))
   await waitFor(() => expect(sent('PUT', '/mcp')?.body).toEqual({ enabled: true }))
   expect(calls.some((call) => call.path.endsWith('/mcp/token'))).toBe(false)
 })
@@ -398,4 +403,106 @@ test('Todo lists the items with their state in words', async () => {
   mount(<TodoCard agent={agent} />)
   expect(await screen.findByText('Write tests')).toBeDefined()
   expect(screen.getByText('To do')).toBeDefined()
+})
+
+const token = `scm_${'a'.repeat(43)}`
+
+test('Score access: a key is shown once, replaced, revoked, and Write too toggles', async () => {
+  override = (path, method, body) => {
+    if (path.endsWith('/mcp/token') && method === 'POST')
+      return Response.json({
+        token,
+        access: { ...mcp, enabled: true, hasToken: true, tokenCreatedAt: at },
+      })
+    if (path.endsWith('/mcp/token') && method === 'DELETE')
+      return Response.json({ ...mcp, enabled: true, hasToken: false })
+    if (path.endsWith('/mcp') && method === 'PUT')
+      return Response.json({ ...mcp, enabled: true, hasToken: true, ...(body as object) })
+    if (path.endsWith('/mcp') && method === 'GET')
+      return Response.json({ ...mcp, enabled: true, hasToken: false })
+    return null
+  }
+  mount(<ScoreAccessCard agent={agent} />)
+  const card = await screen.findByRole('region', { name: 'Score access' })
+  fireEvent.click(await within(card).findByRole('button', { name: 'Create key' }))
+  expect(await within(card).findByText(token)).toBeDefined()
+  expect(sent('POST', '/mcp/token')).toBeDefined()
+  fireEvent.click(within(card).getByRole('checkbox', { name: /Write too/ }))
+  await waitFor(() => expect(sent('PUT', '/mcp')?.body).toEqual({ writesEnabled: true }))
+  fireEvent.click(await within(card).findByRole('button', { name: 'Revoke' }))
+  await waitFor(() => expect(sent('DELETE', '/mcp/token')).toBeDefined())
+  await waitFor(() => expect(within(card).queryByText(token)).toBeNull())
+})
+
+test('Score access keeps the card with a retry when it cannot load', async () => {
+  let fail = true
+  override = (path, method) =>
+    path.endsWith('/mcp') && method === 'GET' && fail
+      ? Response.json({ error: { code: 'unavailable', message: 'MCP is down.' } }, { status: 500 })
+      : null
+  mount(<ScoreAccessCard agent={agent} />)
+  const card = await screen.findByRole('region', { name: 'Score access' })
+  expect(await within(card).findByText(/MCP is down\./)).toBeDefined()
+  expect(card.getAttribute('data-protected')).toBe('flex')
+  fail = false
+  fireEvent.click(within(card).getByRole('button', { name: 'Try again' }))
+  expect(await within(card).findByRole('checkbox', { name: /Read rooms/ })).toBeDefined()
+})
+
+test('Goes ahead without asking can take a standing grant back, and a team rule is used again', async () => {
+  const granted: AgentDetail = {
+    ...agent,
+    permissions: [
+      { id: 'push code', label: 'Pushing code', level: 'allowed', inherited: false },
+      { id: 'install packages', label: 'Installing packages', level: 'asks', inherited: false },
+    ],
+  }
+  override = (path, method) =>
+    path.endsWith('/settings/rules') && method === 'GET'
+      ? Response.json({
+          mode: 'smart',
+          goAhead: [
+            {
+              id: 'install packages',
+              label: 'Installing packages',
+              pattern: null,
+              readOnly: false,
+            },
+          ],
+          askMe: [],
+          never: [],
+          drift: [],
+        })
+      : null
+  mount(<GoAheadCard agent={granted} />)
+  const card = screen.getByRole('region', { name: /Goes ahead without asking/ })
+  expect(card.getAttribute('data-protected')).toBe('block')
+  fireEvent.click(within(card).getByRole('button', { name: 'Ask first before: Pushing code' }))
+  await waitFor(() =>
+    expect(sent('PATCH', '/permissions/push%20code')?.body).toEqual({ level: 'asks' }),
+  )
+  fireEvent.click(
+    await within(card).findByRole('button', { name: 'Use team rule: Installing packages' }),
+  )
+  await waitFor(() => expect(sent('DELETE', '/permissions/install%20packages')).toBeDefined())
+})
+
+test('Never: an own rule goes back to the team rule', async () => {
+  mount(<NeverCard agent={agent} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Use team rule instead of: rm -rf *' }))
+  await waitFor(() => expect(sent('DELETE', '/permissions/never%3Arm%20-rf%20*')).toBeDefined())
+  expect(screen.queryByRole('button', { name: /instead of: sudo/ })).toBeNull()
+})
+
+test('failures show the server’s own message', async () => {
+  override = (path, method) =>
+    method === 'PATCH' && path === '/api/agents/builder'
+      ? Response.json(
+          { error: { code: 'conflict', message: 'That name is taken.' } },
+          { status: 409 },
+        )
+      : null
+  mount(<NameCard agent={agent} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Save details' }))
+  expect(await screen.findByText('That name is taken.')).toBeDefined()
 })

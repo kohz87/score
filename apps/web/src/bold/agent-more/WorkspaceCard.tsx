@@ -9,7 +9,7 @@ import {
   workspaceFailure,
   WorkspaceRootContext,
 } from '../../routes/team/workspace-queries.ts'
-import { Fail, Loading, MoreCard } from './MoreCard.tsx'
+import { Fail, Loading, MoreCard, problem } from './MoreCard.tsx'
 
 function RecentFiles({
   agentId,
@@ -121,7 +121,12 @@ export function WorkspaceCard({
             onChange={(event) => setFolder(event.target.value)}
           />
           {actions.setRoot.isError && (
-            <Fail>{workspaceFailure(actions.setRoot.error, 'set the folder')}</Fail>
+            <Fail>
+              {problem(
+                actions.setRoot.error,
+                workspaceFailure(actions.setRoot.error, 'set the folder'),
+              )}
+            </Fail>
           )}
           <span className="row">
             <button

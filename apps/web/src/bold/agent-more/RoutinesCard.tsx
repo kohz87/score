@@ -1,16 +1,9 @@
 import { useState } from 'react'
 import type { AgentDetail } from '@score/contract'
 import { Link } from 'react-router'
-import { ApiError } from '../../data/api.ts'
 import { useRoutineActions, useRoutines } from '../../routes/team/routine-queries.ts'
 import { boldStartJobLink } from '../bold-links.ts'
-import { Fail, Loading, MoreCard } from './MoreCard.tsx'
-
-function failure(error: unknown): string {
-  return error instanceof ApiError && error.code === 'not_paired'
-    ? 'Pair this browser using the link in the server terminal to change a repeating job.'
-    : 'Couldn’t change the repeating job. Try again.'
-}
+import { Fail, Loading, MoreCard, problem } from './MoreCard.tsx'
 
 export function RoutinesCard({ agent }: { agent: AgentDetail }) {
   const routines = useRoutines(agent.id)
@@ -30,7 +23,11 @@ export function RoutinesCard({ agent }: { agent: AgentDetail }) {
         </Fail>
       )}
       {routines.isSuccess && !items.length && <p className="small muted">None yet.</p>}
-      {(toggle.isError || run.isError) && <Fail>{failure(toggle.error ?? run.error)}</Fail>}
+      {(toggle.isError || run.isError) && (
+        <Fail>
+          {problem(toggle.error ?? run.error, 'Couldn’t change the repeating job. Try again.')}
+        </Fail>
+      )}
       {items.map((routine) => (
         <div className="listrow wrap" key={routine.id}>
           <span className="grow small">
