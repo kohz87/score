@@ -38,6 +38,8 @@ export const protectedClasses = [
   'bold-tool-add',
   // 2.0.3: the inline confirm before removing a provider, tool server or messaging connection
   'bold-remove-confirm',
+  // 2.0.5: Remove agent… on the agent page (preview, typed name, progress)
+  'bold-remove-agent',
   'bold-trigger-card',
   'bold-trigger-secret',
   'bold-trigger-confirm',

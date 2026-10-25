@@ -1,26 +1,17 @@
-import {
-  AgentDetailSchema,
-  AgentOperationSchema,
-  AgentPreviewSchema,
-  type AgentDetail,
-  type AgentOperation,
-  type AgentPreview,
-} from '@score/contract'
+import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { apiFetch } from '../../data/api.ts'
-import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
+import { ProfileOperation } from './ProfileOperation.tsx'
+import { useAgentDelete } from './use-agent-delete.ts'
 import { newId } from '../../data/ids.ts'
 
 export function ProfileSettings({ agent }: { agent: AgentDetail }) {
   const client = useQueryClient()
   const [name, setName] = useState(agent.name)
   const [role, setRole] = useState(agent.role)
-  const [typedName, setTypedName] = useState('')
-  const [preview, setPreview] = useState<AgentPreview | null>(null)
-  const [accepted, setAccepted] = useState<AgentOperation | null>(null)
-  const status = useProfileOperation(accepted?.id ?? agent.lifecycle?.operationId ?? null)
-  const operation = status.data ?? accepted
+  const { typedName, setTypedName, preview, review, remove, status, operation, cancel } =
+    useAgentDelete(agent.id, agent.lifecycle?.operationId ?? null)
   const save = useMutation({
     mutationFn: async () =>
       AgentDetailSchema.parse(
@@ -32,34 +23,6 @@ export function ProfileSettings({ agent }: { agent: AgentDetail }) {
       ),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['team', 'detail', agent.id] })
-    },
-  })
-  const review = useMutation({
-    mutationFn: async () =>
-      AgentPreviewSchema.parse(
-        await apiFetch('agents/preview', {
-          method: 'POST',
-          body: JSON.stringify({ kind: 'delete', agentId: agent.id }),
-        }),
-      ),
-    onSuccess: (value) => {
-      setPreview(value)
-      setTypedName('')
-    },
-  })
-  const remove = useMutation({
-    mutationFn: async () =>
-      AgentOperationSchema.parse(
-        await apiFetch(`agents/${encodeURIComponent(agent.id)}`, {
-          method: 'DELETE',
-          headers: { 'Idempotency-Key': newId() },
-          body: JSON.stringify({ typedName, previewHash: preview!.hash }),
-        }),
-      ),
-    onSuccess: setAccepted,
-    onError: () => {
-      setPreview(null)
-      setTypedName('')
     },
   })
   if (agent.lifecycle && agent.lifecycle.state !== 'ready')
@@ -178,13 +141,7 @@ export function ProfileSettings({ agent }: { agent: AgentDetail }) {
                 >
                   Confirm deletion
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreview(null)
-                    setTypedName('')
-                  }}
-                >
+                <button type="button" onClick={cancel}>
                   Cancel
                 </button>
               </div>
