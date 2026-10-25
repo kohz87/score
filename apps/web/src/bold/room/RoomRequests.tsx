@@ -702,7 +702,11 @@ export function RoomRequests({
     <PinsProvider value={pins.value}>
       {/* The status node stays mounted at zero so its first 0 → 1 change is announced. */}
       <span className="bold-sr-only" role="status">
-        {questionAnnouncement || announcement}
+        {announcement}
+      </span>
+      {/* Its own region, so a question never hides the strip's "N need you" (or the other way round). */}
+      <span className="bold-sr-only" role="status">
+        {questionAnnouncement}
       </span>
       {total > 0 && (
         <div

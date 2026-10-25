@@ -29,11 +29,13 @@ export const questionsQuery = defineStreamQuery<AgentQuestion[]>({
   },
 })
 
-/** The question in place, or at the front when it is new (newest first). */
+/** The question in place, or where it belongs when it is new (newest first, at most 200 like the server's list). */
 export function withQuestion(list: AgentQuestion[], question: AgentQuestion): AgentQuestion[] {
   if (list.some((item) => item.id === question.id))
     return list.map((item) => (item.id === question.id ? question : item))
-  return [question, ...list]
+  return [...list, question]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+    .slice(0, 200)
 }
 
 /** The one rule for a question that waits on the person; the dock, the strip, the badge and the card share it. */
@@ -93,10 +95,24 @@ export function questionOutcome(question: AgentQuestion): string {
  */
 export function useCacheQuestion() {
   const queryClient = useQueryClient()
-  return (question: AgentQuestion) =>
-    queryClient.setQueryData<StreamSnapshot<AgentQuestion[]>>(questionsQuery.key, (snapshot) =>
-      snapshot ? { ...snapshot, data: withQuestion(snapshot.data, question) } : snapshot,
-    )
+  return {
+    /** The cached version now (an event may replace it while a request is in flight). */
+    current: (id: string) =>
+      queryClient
+        .getQueryData<StreamSnapshot<AgentQuestion[]>>(questionsQuery.key)
+        ?.data.find((item) => item.id === id),
+    /**
+     * Writes `question` unless the stream already changed the cached version since `expected` was read: a late POST
+     * response must never undo the newer `question.updated` (the card would stick on "Delivering…").
+     */
+    write: (question: AgentQuestion, expected: AgentQuestion | undefined) =>
+      queryClient.setQueryData<StreamSnapshot<AgentQuestion[]>>(questionsQuery.key, (snapshot) => {
+        if (!snapshot) return snapshot
+        const now = snapshot.data.find((item) => item.id === question.id)
+        if (now !== expected) return snapshot
+        return { ...snapshot, data: withQuestion(snapshot.data, question) }
+      }),
+  }
 }
 
 /** The answer mutation of one question. The outcome (applied or failed) arrives as `question.updated`. */
@@ -109,6 +125,7 @@ export function useAnswerQuestion(questionId: string) {
   async function answer(value: AgentQuestionAnswer): Promise<AgentQuestion | null> {
     setBusy(true)
     setError(null)
+    const before = cache.current(questionId)
     try {
       const result = AgentQuestionSchema.parse(
         await apiFetch(`questions/${encodeURIComponent(questionId)}/answer`, {
@@ -118,7 +135,7 @@ export function useAnswerQuestion(questionId: string) {
         }),
       )
       setPosted(result)
-      cache(result)
+      cache.write(result, before)
       return result
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
@@ -126,7 +143,7 @@ export function useAnswerQuestion(questionId: string) {
         const current = AgentQuestionSchema.safeParse(caught.details)
         if (current.success) {
           setPosted(current.data)
-          cache(current.data)
+          cache.write(current.data, before)
         }
         setError('This question was already settled.')
       } else {

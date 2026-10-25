@@ -205,6 +205,8 @@ export function useQuestionAnnouncement(
       seen.current = new Set(pending.map((item) => item.id))
       return
     }
+    // Nothing left to answer: the sentence goes, so the strip's own "N need you" is announced again.
+    if (pending.length === 0) queueMicrotask(() => setText(''))
     const fresh = pending.filter((item) => !seen.current!.has(item.id))
     for (const item of fresh) seen.current.add(item.id)
     const first = fresh[0]

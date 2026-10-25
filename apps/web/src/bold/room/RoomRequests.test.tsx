@@ -581,7 +581,8 @@ test('the strip announces the first need and repeats the same count after it dro
   const { queryClient } = renderInRoom(
     <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
   )
-  const status = screen.getByRole('status')
+  // The first status region is the strip's count; questions have their own.
+  const status = screen.getAllByRole('status')[0]!
   expect(status.textContent).toBe('')
   await waitFor(() => expect(queryClient.getQueryState(approvalsQuery.key)?.status).toBe('success'))
 
