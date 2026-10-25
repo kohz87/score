@@ -24,6 +24,7 @@ import {
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort, ProviderBase } from '../hermes/index.ts'
+import { MCP_SERVER_NAME } from '../hermes/index.ts'
 import { readChosenModels, replaceChosenModels } from '../domain/model-visibility.ts'
 import { CUSTOM_ALIAS_REASON } from '../domain/model-aliases.ts'
 import { requestIdempotency } from './idempotency.ts'
@@ -174,6 +175,13 @@ export function registerSettingsRoutes(
     const { id } = z
       .object({ id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/) })
       .parse(request.params)
+    // Score's own entry is how agents reach Score's tools; it is revoked per agent (agent page › MCP), never removed here.
+    if (id === MCP_SERVER_NAME)
+      throw new HttpError(
+        409,
+        'not_supported',
+        'That’s Score’s own tool server: agents use it to reach Score. Revoke an agent’s access on that agent’s page instead.',
+      )
     await port.removeToolServer(id)
     return reply.code(204).send()
   })

@@ -12,6 +12,9 @@ import { focusSoon, RemoveConfirm } from './RemoveConfirm.tsx'
 import { BoldTriggers } from './BoldTriggers.tsx'
 import { parseToolCommand } from './tool-command.ts'
 
+// Score's own entry (the server's MCP_SERVER_NAME): agents reach Score through it, so it is never removed here (2.0.4).
+const SCORE_TOOL_SERVER = 'score'
+
 const statusLabel = {
   ok: 'Working',
   needs_signin: 'Sign in again',
@@ -100,19 +103,21 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
               <span className="small muted" data-tool-status={server.status}>
                 {statusLabel[server.status]}
               </span>
-              <button
-                type="button"
-                className="btn sm ghost"
-                id={`remove-tool-${server.id}`}
-                aria-label={`Remove ${server.label}`}
-                aria-expanded={removing === server.id}
-                onClick={() => {
-                  removeToolServer.reset()
-                  setRemoving(removing === server.id ? null : server.id)
-                }}
-              >
-                Remove
-              </button>
+              {server.id !== SCORE_TOOL_SERVER && (
+                <button
+                  type="button"
+                  className="btn sm ghost"
+                  id={`remove-tool-${server.id}`}
+                  aria-label={`Remove ${server.label}`}
+                  aria-expanded={removing === server.id}
+                  onClick={() => {
+                    removeToolServer.reset()
+                    setRemoving(removing === server.id ? null : server.id)
+                  }}
+                >
+                  Remove
+                </button>
+              )}
               {removing === server.id && (
                 <RemoveConfirm
                   what={server.label}
