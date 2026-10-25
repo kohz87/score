@@ -26,7 +26,9 @@ Conventions
 ```ts
 type AgentId = string // = Hermes profile name
 type Shape =
-  'circle-dot' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'star' | 'pill' | 'cross'
+  | 'circle-dot' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'star' | 'pill' | 'cross'
+  | 'cloud' | 'cylinder' | 'heart' | 'drop' | 'bolt' | 'moon' | 'leaf' | 'blob' | 'shield' | 'octagon' | 'bubble'
+  | 'gem' | 'ball' | 'flower' // ball and flower: 2.2.0
 type AgentStyle = { color: string /* #RRGGBB */; shape: Shape }
 type AgentStatus =
   'idle' | 'working' | 'waiting' /* on a human */ | 'paused' | 'offline' | 'up-next'
@@ -1046,7 +1048,7 @@ Deletion clears the agent's pause. Import still refuses a retired name.
 - `PATCH /api/agents/:agentId/style` `AgentStylePatch` `{ color?; shape? }` → `AgentSummary` (Hermes profiles and
   coding agents alike; ids are unique across both). Shapes: `circle-dot`, `triangle`, `diamond`, `square`, `hexagon`,
   `star`, `pill`, `cross`, `cloud`, `cylinder`, `heart`, `drop`, `bolt`, `moon`, `leaf`, `blob`, `shield`, `octagon`,
-  `bubble`, `gem`. `AgentStyle` is `{ color; shape }`: an agent is its colour and shape, nothing else (PLAN 11.11,
+  `bubble`, `gem`, `ball`, `flower` (2.2.0). `AgentStyle` is `{ color; shape }`: an agent is its colour and shape, nothing else (PLAN 11.11,
   decision 118). The cut-out and ring looks and pet packs of PLAN 10.2 are gone, with `PUT|DELETE
   /api/agents/:agentId/pack` and `GET /api/agents/:agentId/pack/:activity`. A body or stored style that still carries
   `look` or `pack` is read without them (unknown keys are dropped), and the style route ignores both keys, so an
