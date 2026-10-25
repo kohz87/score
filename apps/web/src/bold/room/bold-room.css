@@ -1274,6 +1274,41 @@
   padding: 10px 0;
 }
 
+/* Read by screen readers always (aria-describedby); shown on the composer's own top edge while it has focus, so it
+   never reaches the stream or a needs-you card above. */
+[data-ui='bold'] .chat-composer-box--room {
+  position: relative;
+}
+
+[data-ui='bold'] .chat-composer-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+[data-ui='bold'] .chat-composer-box--room:focus-within .chat-composer-hint {
+  width: auto;
+  height: auto;
+  clip-path: none;
+  right: 60px;
+  top: -9px;
+  border-radius: 999px;
+  background: var(--field);
+  padding: 1px 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+[data-ui='bold'] .chat-composer-box--room > textarea {
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: calc(8 * 1.5em + 20px);
+}
+
 [data-ui='bold'] .chat-composer-box--room > textarea::placeholder {
   color: var(--muted);
 }
@@ -1809,4 +1844,60 @@
    above the side panel and the phone tab bar like the Library's dialogs. */
 [data-ui='bold'] > .kn-backdrop {
   z-index: 70;
+}
+
+[data-ui='bold'] .bold-job-fold {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 18px;
+  background: var(--panel);
+  padding: 10px 14px;
+}
+
+[data-ui='bold'] .bold-job-fold-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.35;
+}
+
+[data-ui='bold'] .bold-job-fold-copy b {
+  font-family: var(--font-d);
+  font-size: 15px;
+}
+
+[data-ui='bold'] .bold-job-fold-copy span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-job-fold-last {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-job-fold > button,
+[data-ui='bold'] .bold-job-hide > button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-job-hide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }

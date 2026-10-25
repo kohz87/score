@@ -224,7 +224,7 @@ function ThreadComposer({
           id="bold-thread-stepin"
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder={`Step in: write to everyone in ${job.title}`}
+          placeholder="Reply in this job"
           autoComplete="off"
           disabled={closed}
         />

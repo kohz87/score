@@ -55,7 +55,7 @@ function chatRoomPath(path: string, rooms: readonly FrameRoom[]): string {
  * (the classic shell keeps serving everything else).
  */
 export function boldRedirectFor(pathname: string, search: string, hash = ''): string | null {
-  const keep = ['/workflows', '/runs', '/watch', '/settings/look/customize']
+  const keep = ['/workflows', '/runs', '/watch', '/terminal', '/settings/look/customize']
   if (!keep.some((root) => under(pathname, root))) return null
   return `/b${pathname}${search}${hash}`
 }

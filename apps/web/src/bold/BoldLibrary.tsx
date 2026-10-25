@@ -45,7 +45,7 @@ type Dialog =
   | { kind: 'new'; initial: string }
   | { kind: 'move'; path: string }
   | { kind: 'delete'; path: string }
-  | { kind: 'folder'; parent: string }
+  | { kind: 'folder'; parent: string; fromNav?: boolean }
   | null
 
 type ExportRequest = { request: KnowledgeExportRequest; heading: string }
@@ -84,15 +84,34 @@ function SelectedByline({ path, agents }: { path: string; agents: AgentSummary[]
   return <Byline author={note.data.lastAuthor} mtime={note.data.mtime} agents={agents} detail />
 }
 
+const COLLAPSED_KEY = 'score.library.collapsed'
+
+function readCollapsed(): Set<string> {
+  try {
+    const parsed: unknown = JSON.parse(sessionStorage.getItem(COLLAPSED_KEY) ?? '[]')
+    return new Set(
+      Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [],
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+/** `a/b/c` is inside `a/b/c`, `a/b` and `a`. */
+export function folderChain(folder: string): string[] {
+  const parts = folder.split('/').filter(Boolean)
+  return parts.map((_, index) => parts.slice(0, index + 1).join('/'))
+}
+
 function noteGroups(tree: { folders: string[]; notes: KnowledgeNoteSummary[] }) {
-  const groups = new Map<string, KnowledgeNoteSummary[]>()
+  const groups = new Map<string, KnowledgeNoteSummary[]>([['', []]])
   for (const folder of tree.folders) groups.set(folder, [])
   for (const note of tree.notes) {
     const folder = folderOf(note.path)
     groups.set(folder, [...(groups.get(folder) ?? []), note])
   }
   return [...groups.entries()]
-    .filter(([folder, notes]) => folder !== '' || notes.length > 0)
+    .filter(([folder, notes]) => folder !== '' || notes.length > 0 || tree.folders.length > 0)
     .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)))
 }
 
@@ -143,6 +162,32 @@ export function BoldLibrary({
   const focusNote = useRef(false)
   const lastOpenedPath = useRef<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
+  // The folder New note and New folder start in; set by clicking a folder heading. Collapsed folders last the session.
+  const [pickedFolder, setPickedFolder] = useState('')
+  const [collapsed, setCollapsed] = useState<Set<string>>(readCollapsed)
+  function changeCollapsed(change: (next: Set<string>) => void) {
+    setCollapsed((current) => {
+      const next = new Set(current)
+      change(next)
+      try {
+        sessionStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]))
+      } catch {
+        // Storage can be blocked; the choice then only lasts while the panel is open.
+      }
+      return next
+    })
+  }
+  function toggleFolder(folder: string) {
+    changeCollapsed((next) => {
+      if (!next.delete(folder)) next.add(folder)
+    })
+  }
+  // A note opened from Search or a link must not sit inside a folded folder.
+  function revealPath(path: string) {
+    const chain = folderChain(folderOf(path))
+    if (chain.some((folder) => collapsed.has(folder)))
+      changeCollapsed((next) => chain.forEach((folder) => next.delete(folder)))
+  }
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [exportRequest, setExportRequest] = useState<ExportRequest | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -156,6 +201,8 @@ export function BoldLibrary({
     const text = summaryText(summary)
     if (text) setNotice(text)
   })
+  // A picked folder that was deleted or moved is no longer there: fall back to the top level.
+  const picked = tree.data && !tree.data.folders.includes(pickedFolder) ? '' : pickedFolder
   const notes = useMemo(() => tree.data?.notes ?? [], [tree.data])
   const groups = useMemo(() => (tree.data ? noteGroups(tree.data) : []), [tree.data])
   const searching = query.trim() !== ''
@@ -168,6 +215,7 @@ export function BoldLibrary({
 
   if (openPath && openPath !== openedPath) {
     setOpenedPath(openPath)
+    revealPath(openPath)
     setSelected(openPath)
     setSection('notes')
     setQuery('')
@@ -198,6 +246,7 @@ export function BoldLibrary({
   })
 
   function open(next: string) {
+    revealPath(next)
     setSelected(next)
     setSection('notes')
     setQuery('')
@@ -361,48 +410,94 @@ export function BoldLibrary({
             {tree.isPending && <p role="status">Loading notes…</p>}
             {tree.isError && <p role="alert">Couldn’t load the notes.</p>}
             {tree.data &&
-              groups.map(([folder, items]) => (
-                <section
-                  key={folder || 'root'}
-                  aria-label={folder || 'Notes'}
-                  className={`bold-library-group${dropTarget === folder ? ' is-drop' : ''}`}
-                  onDragOver={(event) => {
-                    if (!filesInDrag(event)) return
-                    event.preventDefault()
-                    event.stopPropagation()
-                    setDragging(true)
-                    setDropTarget(folder)
-                  }}
-                  onDragLeave={(event) => {
-                    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-                    setDropTarget((current) => (current === folder ? null : current))
-                  }}
-                  onDrop={(event) => {
-                    if (!filesInDrag(event)) return
-                    event.preventDefault()
-                    event.stopPropagation()
-                    upload([...event.dataTransfer.files], folder)
-                  }}
-                >
-                  <h2 className="bold-library-folder">{folder || 'Notes'}</h2>
-                  {items.map((note) => (
-                    <button
-                      key={note.path}
-                      type="button"
-                      className={`bold-library-item${active === note.path && section === 'notes' ? ' is-selected' : ''}`}
-                      aria-current={
-                        active === note.path && section === 'notes' ? 'page' : undefined
-                      }
-                      onClick={() => open(note.path)}
-                    >
-                      <span className="bold-library-item-title">
-                        {note.title || baseName(note.path)}
-                      </span>
-                      <Byline author={note.lastAuthor} agents={agents} />
-                    </button>
-                  ))}
-                </section>
-              ))}
+              groups
+                .filter(
+                  ([folder]) =>
+                    !folderChain(folder)
+                      .slice(0, -1)
+                      .some((up) => collapsed.has(up)),
+                )
+                .map(([folder, items]) => (
+                  <section
+                    key={folder || 'root'}
+                    aria-label={folder || 'Notes'}
+                    className={`bold-library-group${dropTarget === folder ? ' is-drop' : ''}`}
+                    onDragOver={(event) => {
+                      if (!filesInDrag(event)) return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setDragging(true)
+                      setDropTarget(folder)
+                    }}
+                    onDragLeave={(event) => {
+                      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+                      setDropTarget((current) => (current === folder ? null : current))
+                    }}
+                    onDrop={(event) => {
+                      if (!filesInDrag(event)) return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      upload([...event.dataTransfer.files], folder)
+                    }}
+                  >
+                    {folder === '' ? (
+                      <h2 className={`bold-library-folder${picked === '' ? ' is-picked' : ''}`}>
+                        <button
+                          type="button"
+                          className="bold-library-folder-toggle"
+                          aria-pressed={picked === ''}
+                          onClick={() => setPickedFolder('')}
+                        >
+                          Notes
+                        </button>
+                      </h2>
+                    ) : (
+                      <h2
+                        className={`bold-library-folder${picked === folder ? ' is-picked' : ''}`}
+                        style={{ paddingLeft: 10 + (folder.split('/').length - 1) * 14 }}
+                      >
+                        <button
+                          type="button"
+                          className="bold-library-folder-toggle bold-library-chevron"
+                          aria-expanded={!collapsed.has(folder)}
+                          aria-label={`${collapsed.has(folder) ? 'Expand' : 'Collapse'} ${folder}`}
+                          onClick={() => toggleFolder(folder)}
+                        >
+                          {collapsed.has(folder) ? '▸' : '▾'}
+                        </button>
+                        <button
+                          type="button"
+                          className="bold-library-folder-toggle"
+                          aria-pressed={picked === folder}
+                          title={folder}
+                          onClick={() => setPickedFolder(folder)}
+                        >
+                          {baseName(folder)}
+                          {items.length === 0 && (
+                            <span className="bold-library-empty"> (empty)</span>
+                          )}
+                        </button>
+                      </h2>
+                    )}
+                    {!collapsed.has(folder) &&
+                      items.map((note) => (
+                        <button
+                          key={note.path}
+                          type="button"
+                          className={`bold-library-item${active === note.path && section === 'notes' ? ' is-selected' : ''}`}
+                          aria-current={
+                            active === note.path && section === 'notes' ? 'page' : undefined
+                          }
+                          onClick={() => open(note.path)}
+                        >
+                          <span className="bold-library-item-title">
+                            {note.title || baseName(note.path)}
+                          </span>
+                          <Byline author={note.lastAuthor} agents={agents} />
+                        </button>
+                      ))}
+                  </section>
+                ))}
             {tree.data && tree.data.notes.length === 0 && (
               <p className="bold-library-empty-list">
                 No notes yet. Start one below or upload a file.
@@ -415,9 +510,15 @@ export function BoldLibrary({
           <button
             type="button"
             className="bold-library-new"
-            onClick={() => openDialog({ kind: 'new', initial: '' })}
+            onClick={() => openDialog({ kind: 'new', initial: picked ? `${picked}/` : '' })}
           >
             <PlusIcon size={14} /> New note
+          </button>
+          <button
+            type="button"
+            onClick={() => openDialog({ kind: 'folder', parent: picked, fromNav: true })}
+          >
+            <PlusIcon size={14} /> New folder
           </button>
           <input
             ref={uploadInput}
@@ -612,6 +713,15 @@ export function BoldLibrary({
             actions.createFolder.mutate(folder, {
               onSuccess: () => {
                 setDialog(null)
+                if (dialog.fromNav) {
+                  setPickedFolder(folder)
+                  setCollapsed((current) => {
+                    const next = new Set(current)
+                    next.delete(folder)
+                    return next
+                  })
+                  return
+                }
                 setFilesFolder(folder)
                 setSection('files')
               },

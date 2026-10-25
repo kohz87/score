@@ -82,6 +82,7 @@ const json = (body: unknown, status = 200) =>
 
 let treeError = false
 let entries: KnowledgeNoteSummary[] = notes
+let folders = ['Decisions']
 let searchItems: Array<Record<string, unknown>> = []
 
 function respond(input: string, init: RequestInit = {}): Response {
@@ -102,7 +103,7 @@ function respond(input: string, init: RequestInit = {}): Response {
   if (path === '/api/knowledge/tree') {
     if (treeError) return json({ error: { code: 'failed', message: 'no' } }, 500)
     return json({
-      folders: ['Decisions'],
+      folders,
       notes: entries,
       documents: [],
     })
@@ -121,9 +122,11 @@ function respond(input: string, init: RequestInit = {}): Response {
 }
 
 let router: ReturnType<typeof createMemoryRouter>
+let client: ReturnType<typeof createQueryClient>
 
 function mount(openPath: string | null = null) {
   const queryClient = createQueryClient()
+  client = queryClient
   queryClient.setDefaultOptions({ queries: { retry: false } })
   const stream = {
     subscribe: () => () => undefined,
@@ -145,6 +148,8 @@ beforeEach(() => {
   treeError = false
   entries = notes
   searchItems = []
+  folders = ['Decisions']
+  sessionStorage.clear()
   vi.stubGlobal(
     'fetch',
     vi.fn((input: string | URL | Request, init?: RequestInit) =>
@@ -278,4 +283,72 @@ test('upload uses the open note folder, and a folder accepts dropped files with 
     })
     HeldUpload.last.onload?.()
   })
+})
+
+test('folders collapse, empty and nested folders show, and New note starts in the picked folder', async () => {
+  folders = ['Decisions', 'Decisions/Archive', 'Empty']
+  mount()
+  const nav = await screen.findByRole('navigation', { name: 'Library notes' })
+  expect(await within(nav).findByRole('button', { name: /^Empty/ })).toBeDefined()
+  expect(within(nav).getByRole('button', { name: /^Archive/ })).toBeDefined()
+  expect(within(nav).getAllByRole('button', { name: /Last edited by/ })).toHaveLength(2)
+  // Collapsing hides the folder's notes and its nested folders, and does not pick it.
+  fireEvent.click(within(nav).getByRole('button', { name: 'Collapse Decisions' }))
+  expect(within(nav).queryAllByRole('button', { name: /Last edited by/ })).toHaveLength(0)
+  expect(within(nav).queryByRole('button', { name: /^Archive/ })).toBeNull()
+  expect(within(nav).getByRole('button', { name: 'Decisions' }).getAttribute('aria-pressed')).toBe(
+    'false',
+  )
+  fireEvent.click(within(nav).getByRole('button', { name: /^Empty/ }))
+  fireEvent.click(within(nav).getByRole('button', { name: /New note/ }))
+  expect(((await screen.findByLabelText('Path in Knowledge')) as HTMLInputElement).value).toBe(
+    'Empty/',
+  )
+})
+
+test('the Notes heading goes back to the top level, and a folder that disappears is unpicked', async () => {
+  folders = ['Decisions', 'Empty']
+  mount()
+  const nav = await screen.findByRole('navigation', { name: 'Library notes' })
+  fireEvent.click(await within(nav).findByRole('button', { name: /^Empty/ }))
+  fireEvent.click(within(nav).getByRole('button', { name: 'Notes' }))
+  fireEvent.click(within(nav).getByRole('button', { name: /New note/ }))
+  expect(((await screen.findByLabelText('Path in Knowledge')) as HTMLInputElement).value).toBe('')
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  fireEvent.click(within(nav).getByRole('button', { name: /^Empty/ }))
+  folders = ['Decisions']
+  await act(async () => {
+    await client.invalidateQueries()
+  })
+  await waitFor(() => expect(within(nav).queryByRole('button', { name: /^Empty/ })).toBeNull())
+  fireEvent.click(within(nav).getByRole('button', { name: /New note/ }))
+  expect(((await screen.findByLabelText('Path in Knowledge')) as HTMLInputElement).value).toBe('')
+})
+
+test('a note opened from Search expands its folded folder chain', async () => {
+  folders = ['Decisions']
+  sessionStorage.setItem('score.library.collapsed', JSON.stringify(['Decisions']))
+  mount('Decisions/Source.md')
+  const nav = await screen.findByRole('navigation', { name: 'Library notes' })
+  await waitFor(() =>
+    expect(within(nav).getAllByRole('button', { name: /Last edited by/ })).toHaveLength(2),
+  )
+  expect(
+    within(nav).getByRole('button', { name: 'Collapse Decisions' }).getAttribute('aria-expanded'),
+  ).toBe('true')
+})
+
+test('New folder in the notes list creates the folder and stays on the notes', async () => {
+  mount()
+  const nav = await screen.findByRole('navigation', { name: 'Library notes' })
+  fireEvent.click(await within(nav).findByRole('button', { name: /New folder/ }))
+  const input = (await screen.findByLabelText('Folder path')) as HTMLInputElement
+  fireEvent.change(input, { target: { value: 'Plans' } })
+  fireEvent.submit(input.closest('form')!)
+  await waitFor(() =>
+    expect(
+      vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/knowledge/folders')),
+    ).toBe(true),
+  )
+  expect(screen.queryByRole('button', { name: 'Files', pressed: true })).toBeNull()
 })

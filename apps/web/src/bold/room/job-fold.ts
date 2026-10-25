@@ -1,0 +1,77 @@
+import type { Job, Message } from '@score/contract'
+import { isNotProcessedNotice } from '../../routes/chat/stall.ts'
+import { reportBackWaiting } from './room-model.ts'
+
+const KEY = 'score.room.expandedJobs'
+
+/** Finished jobs the person has opened in this session; a finished job is collapsed until then. */
+export function readExpandedJobs(): Set<string> {
+  try {
+    const parsed: unknown = JSON.parse(sessionStorage.getItem(KEY) ?? '[]')
+    return new Set(
+      Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [],
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+export function writeExpandedJobs(ids: ReadonlySet<string>) {
+  try {
+    sessionStorage.setItem(KEY, JSON.stringify([...ids]))
+  } catch {
+    // Storage can be blocked; the choice then only lasts while the room is open.
+  }
+}
+
+export function isFinishedJob(job: Job): boolean {
+  return !job.isDefault && (job.state === 'done' || job.state === 'closed')
+}
+
+/**
+ * Jobs the stream folds into one row: finished, not opened this session, and holding nothing the person must see.
+ * A pinned message, an approval waiting in Needs you, a result waiting to be sent back or the message being sought
+ * or retry, an exchange waiting on the person, or the message being sought keeps the whole job expanded.
+ */
+export function foldedJobIds({
+  jobs,
+  messages,
+  expanded,
+  isPinned,
+  approvalPointerIds,
+  seek,
+  waitingJobIds,
+  ready,
+}: {
+  jobs: readonly Job[]
+  messages: readonly Message[]
+  expanded: ReadonlySet<string>
+  isPinned: (messageId: string) => boolean
+  approvalPointerIds: ReadonlySet<string>
+  seek: string | null
+  /** Jobs the room's needs-you data says wait on the person. */
+  waitingJobIds: ReadonlySet<string>
+  /** The needs-you data has loaded without error; until then nothing folds, so nothing needing the person hides. */
+  ready: boolean
+}): Set<string> {
+  if (!ready) return new Set()
+  const waiting = new Set(reportBackWaiting([...jobs]).map((job) => job.id))
+  const folded = new Set(
+    jobs
+      .filter((job) => isFinishedJob(job) && !expanded.has(job.id) && !waiting.has(job.id))
+      .map((job) => job.id),
+  )
+  for (const id of waitingJobIds) folded.delete(id)
+  for (const message of messages) {
+    if (!message.jobId || !folded.has(message.jobId)) continue
+    const needsYou = message.parts.some(
+      (part) => part.kind === 'approval' && approvalPointerIds.has(part.approvalId),
+    )
+    const failed =
+      message.author.kind === 'agent' &&
+      message.parts.some((part) => part.kind === 'text' && isNotProcessedNotice(part.text))
+    if (needsYou || failed || isPinned(message.id) || message.id === seek)
+      folded.delete(message.jobId)
+  }
+  return folded
+}

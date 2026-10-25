@@ -39,3 +39,19 @@
     min-height: calc(100dvh - 180px);
   }
 }
+
+/* 2.1.3: the terminal page's Back, in the classic paper's own tokens. */
+[data-ui='bold'] .bold-classic-page .bold-terminal-back {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0 12px 0 0;
+  cursor: pointer;
+  border-radius: 999px;
+}
+[data-ui='bold'] .bold-classic-page .bold-terminal-back:hover {
+  text-decoration: underline;
+}

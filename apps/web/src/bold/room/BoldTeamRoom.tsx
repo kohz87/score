@@ -598,8 +598,8 @@ function LoadedTeamRoom({
                   ? 'Message the team'
                   : 'Start a job or message the team'
                 : olderRoom
-                  ? 'Message this room. @name for one agent, / for commands'
-                  : 'Message the team. @name for one agent, / for commands'
+                  ? 'Message this room'
+                  : 'Message the team'
           }
           messagesKey={baseMessagesDefinition.key}
           initialText={command ? `/${command} ` : undefined}

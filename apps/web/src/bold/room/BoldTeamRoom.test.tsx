@@ -295,6 +295,10 @@ test('a phone opens a job full screen and Back returns to the job list', async (
   expect(
     screen.getByRole('combobox', { name: /^Message Team room/ }).getAttribute('placeholder'),
   ).toBe('Message the team')
+  const described = screen
+    .getByRole('combobox', { name: /^Message Team room/ })
+    .getAttribute('aria-describedby')!
+  expect(document.getElementById(described)?.textContent).toContain('@name for one agent')
   expect(screen.getByRole('button', { name: /Open thread for Activity feed/ })).toBeDefined()
 
   fireEvent.click(screen.getByRole('button', { name: 'Back to jobs' }))

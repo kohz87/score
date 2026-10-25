@@ -449,6 +449,8 @@ for (const viewport of sizes) {
         await expect(page.getByRole('button', { name: 'Back to jobs' })).toBeVisible()
         await page.goto(href)
       } else {
+        // A finished job starts folded in All; Show opens it in place.
+        await page.getByRole('button', { name: 'Show Queue research' }).click()
         await expect(result).toHaveAttribute('href', href)
         await expect(result).toContainText('Done · lead')
         await result.click()

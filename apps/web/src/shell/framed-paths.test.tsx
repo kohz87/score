@@ -52,6 +52,7 @@ describe('boldRedirectFor', () => {
     expect(boldRedirectFor('/runs/b1', '?x=y', '#z')).toBe('/b/runs/b1?x=y#z')
     expect(boldRedirectFor('/watch/lead', '?from=3')).toBe('/b/watch/lead?from=3')
     expect(boldRedirectFor('/settings/look/customize/t', '')).toBe('/b/settings/look/customize/t')
+    expect(boldRedirectFor('/terminal', '')).toBe('/b/terminal')
     expect(boldRedirectFor('/settings/look', '')).toBeNull()
     expect(boldRedirectFor('/team', '')).toBeNull()
   })

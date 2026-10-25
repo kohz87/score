@@ -16,6 +16,7 @@ import { RoomMessageStream } from './RoomMessageStream.tsx'
 afterEach(() => {
   disposeRoomTest()
   vi.unstubAllGlobals()
+  sessionStorage.clear()
 })
 
 const jobs = [
@@ -42,7 +43,13 @@ const pages: Record<string, Message[]> = {
   ],
 }
 
-function stubStream(options: { pages?: Record<string, Message[]>; versions?: RoomVersion[] } = {}) {
+function stubStream(
+  options: {
+    pages?: Record<string, Message[]>
+    versions?: RoomVersion[]
+    failApprovals?: boolean
+  } = {},
+) {
   const byJob = options.pages ?? pages
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://x')
@@ -55,6 +62,25 @@ function stubStream(options: { pages?: Record<string, Message[]>; versions?: Roo
         jobId,
       })
     }
+    if (parsed.pathname === '/api/approvals' && options.failApprovals)
+      return jsonResponse({ error: { code: 'failed', message: 'no' } }, 500)
+    if (parsed.pathname === '/api/approvals')
+      return jsonResponse({ asOfSeq: 1, items: [], nextCursor: null })
+    if (parsed.pathname === '/api/tasks')
+      return jsonResponse({
+        asOfSeq: 1,
+        columns: { planned: [], working: [], in_review: [], needs_you: [], done: [] },
+      })
+    if (parsed.pathname === '/api/orchestrations/fence')
+      return jsonResponse({
+        fenced: false,
+        reason: null,
+        untrustedHistory: false,
+        revision: 1,
+        since: null,
+        items: [],
+        journal: { ok: true, entries: 0, bytes: 0, sizeAlarm: false },
+      })
     if (parsed.pathname === '/api/rooms/room-1/pins')
       return jsonResponse({
         items: [
@@ -223,6 +249,45 @@ test('your own message offers edit and delete; the delete asks for a rewind', as
   expect(await screen.findByRole('dialog', { name: 'Delete this message?' })).toBeDefined()
 })
 
+test('a folded job shows its state, workers, outcome and message count', async () => {
+  const done = makeJob({
+    id: 'job-done',
+    title: 'Queue research',
+    state: 'done',
+    messageCount: 3,
+  })
+  stubStream({
+    pages: {
+      'job-done': [
+        makeMessage({
+          id: 'message-done',
+          jobId: 'job-done',
+          author: { kind: 'agent', agentId: 'lead' },
+          parts: [{ kind: 'text', text: 'Three queues compared.' }],
+        }),
+      ],
+    },
+  })
+  renderInRoom(
+    <RoomMessageStream
+      roomId="room-1"
+      jobs={[done]}
+      agents={agents}
+      selectedJob="all"
+      filter="all"
+      showDeleted={false}
+      seek={null}
+      openedJobs={[]}
+      onRevealSeek={() => undefined}
+      onSeeked={() => undefined}
+    />,
+  )
+  const row = (await screen.findByRole('button', { name: 'Show Queue research' })).parentElement!
+  expect(row.textContent).toContain('Done')
+  expect(row.textContent).toContain('3 messages')
+  expect(row.textContent).toContain('Three queues compared.')
+})
+
 test('a done job gets a result card linked to its latest agent message', async () => {
   const done = makeJob({
     id: 'job-done',
@@ -257,7 +322,12 @@ test('a done job gets a result card linked to its latest agent message', async (
       onSeeked={() => undefined}
     />,
   )
+  // A finished job starts folded; Show opens it in place, Hide folds it again.
+  expect(await screen.findByRole('button', { name: 'Show Queue research' })).toBeTruthy()
+  expect(screen.queryByText('Three queues compared.', { selector: 'p, div' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Show Queue research' }))
   const result = await screen.findByRole('link', { name: 'Open result: Queue research' })
+  expect(screen.getByRole('button', { name: 'Hide' })).toBeTruthy()
   expect(result.getAttribute('href')).toBe('/b?job=job-done&message=message-done')
   expect(result.textContent).toContain('Queue research')
   expect(result.textContent).toContain('Done · lead')
@@ -545,4 +615,47 @@ test('a message that only becomes visible (older than what was seen) is not anno
   expect(await screen.findByText('From this morning.')).toBeDefined()
   await new Promise((resolve) => setTimeout(resolve, 2200))
   expect(status.textContent).toBe('')
+})
+
+const finishedPages = {
+  'job-done': [
+    makeMessage({
+      id: 'message-done',
+      jobId: 'job-done',
+      author: { kind: 'agent', agentId: 'lead' },
+      parts: [{ kind: 'text', text: 'Three queues compared.' }],
+    }),
+  ],
+}
+
+function renderFinished() {
+  return renderInRoom(
+    <RoomMessageStream
+      roomId="room-1"
+      jobs={[makeJob({ id: 'job-done', title: 'Queue research', state: 'done' })]}
+      agents={agents}
+      selectedJob="all"
+      filter="all"
+      showDeleted={false}
+      seek={null}
+      openedJobs={[]}
+      onRevealSeek={() => undefined}
+      onSeeked={() => undefined}
+    />,
+  )
+}
+
+test('a finished job folds without any request of its own for its exchanges', async () => {
+  const fetchMock = stubStream({ pages: finishedPages })
+  renderFinished()
+  expect(await screen.findByRole('button', { name: 'Show Queue research' })).toBeTruthy()
+  const urls = fetchMock.mock.calls.map(([url]) => String(url))
+  expect(urls.some((url) => url.includes('/jobs/job-done/exchanges'))).toBe(false)
+})
+
+test('nothing folds while the needs-you data failed to load', async () => {
+  stubStream({ pages: finishedPages, failApprovals: true })
+  renderFinished()
+  expect(await screen.findByText('Three queues compared.')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Show Queue research' })).toBeNull()
 })

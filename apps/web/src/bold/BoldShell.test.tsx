@@ -80,12 +80,14 @@ class PendingUpload {
 
 let phone = false
 let approvalFixture = false
+let terminalFixture: { terminal: boolean; terminalUnavailable: string | null } | null = null
 let teamRoomFixture: unknown = null
 const disposers: (() => void)[] = []
 
 beforeEach(() => {
   phone = false
   approvalFixture = false
+  terminalFixture = null
   teamRoomFixture = null
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
@@ -104,6 +106,10 @@ beforeEach(() => {
     vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input), 'http://x')
       url.searchParams.delete('tz')
+      if (url.pathname === '/api/session/security' && terminalFixture)
+        return Promise.resolve(
+          Response.json({ passwordSet: true, origins: [], ...terminalFixture }),
+        )
       if (url.pathname === '/api/agents')
         return Promise.resolve(Response.json({ asOfSeq: 1, items: agents }))
       if (url.pathname === '/api/team-room' && teamRoomFixture)
@@ -589,4 +595,40 @@ test('the index opens the bold shell even after choosing classic', async () => {
   const classic = open('/?ui=classic')
   await waitFor(() => expect(classic.state.location.pathname).toBe('/b'))
   expect(window.localStorage.getItem('score.ui')).toBe('classic')
+})
+
+test('the Terminal button shows only when the server offers a terminal, and Back returns', async () => {
+  terminalFixture = { terminal: true, terminalUnavailable: null }
+  const router = open('/b/team')
+  fireEvent.click(await screen.findByRole('button', { name: 'Terminal' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/terminal'))
+  fireEvent.click(await screen.findByRole('button', { name: '← Back' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
+})
+
+test('no Terminal button when the terminal is off or unavailable', async () => {
+  terminalFixture = { terminal: true, terminalUnavailable: 'The terminal needs HTTPS.' }
+  open('/b')
+  await screen.findByRole('button', { name: 'Settings' })
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  expect(screen.queryByRole('button', { name: 'Terminal' })).toBeNull()
+  cleanup()
+  terminalFixture = { terminal: false, terminalUnavailable: null }
+  open('/b')
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  expect(screen.queryByRole('button', { name: 'Terminal' })).toBeNull()
+})
+
+test('Ctrl+` opens the terminal and returns, but not while typing', async () => {
+  terminalFixture = { terminal: true, terminalUnavailable: null }
+  const router = open('/b/team')
+  await screen.findByRole('button', { name: 'Terminal' })
+  const field = document.body.appendChild(document.createElement('input'))
+  fireEvent.keyDown(field, { key: '`', ctrlKey: true })
+  expect(router.state.location.pathname).toBe('/b/team')
+  field.remove()
+  fireEvent.keyDown(document.body, { key: '`', ctrlKey: true })
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/terminal'))
+  fireEvent.keyDown(document.body, { key: '`', metaKey: true })
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
 })

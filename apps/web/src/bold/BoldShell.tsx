@@ -24,7 +24,10 @@ import { useLook } from '../themes/use-look.ts'
 import { agentDisplayName, agentStateLabel, dockProgress } from './bold-agents.ts'
 import { boldCloseRecipesLink, boldOneToOneLink } from './bold-links.ts'
 import { BoldSearch } from './BoldSearch.tsx'
-import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
+import { GearIcon, RoomIcon, SearchIcon, TeamIcon, TerminalIcon } from './BoldIcons.tsx'
+import { useTerminalAvailable } from '../shell/TerminalButton.tsx'
+import { isTerminalShortcut } from './terminal-shortcut.ts'
+import { terminalBackTarget } from './BoldTerminal.tsx'
 import type { BoldSheetState } from './bold-ui.ts'
 import { BoldStartJob, StartJobContext } from './BoldStartJob.tsx'
 import { DeleteToast } from '../routes/chat/DeleteToast.tsx'
@@ -194,6 +197,27 @@ export function BoldShell() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [openCommand, preview])
 
+  // The terminal button exists only when the server offers a terminal (never when it reports it unavailable).
+  const terminalOffered = useTerminalAvailable(preview)
+  const onTerminal = location.pathname === '/b/terminal'
+  const toggleTerminal = useCallback(() => {
+    if (onTerminal) void navigate(terminalBackTarget(location.state))
+    else
+      void navigate('/b/terminal', {
+        state: { terminalFrom: `${location.pathname}${location.search}` },
+      })
+  }, [onTerminal, navigate, location.state, location.pathname, location.search])
+  useEffect(() => {
+    if (preview || !terminalOffered) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (!isTerminalShortcut(event)) return
+      event.preventDefault()
+      toggleTerminal()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [preview, terminalOffered, toggleTerminal])
+
   const go = (to: string) => () => void navigate(to)
   const navButton = (target: View, label: string, to: string) => (
     <button
@@ -281,6 +305,18 @@ export function BoldShell() {
                 onClick={go('/b/settings')}
               >
                 <GearIcon />
+              </button>
+            )}
+            {terminalOffered && (
+              <button
+                type="button"
+                className={`icon-btn bold-terminal-btn ${phone ? 'sm' : ''} ${onTerminal ? 'on' : ''}`}
+                aria-label="Terminal"
+                title="Terminal (Ctrl+`)"
+                aria-keyshortcuts="Control+` Meta+`"
+                onClick={toggleTerminal}
+              >
+                <TerminalIcon />
               </button>
             )}
             <span className="bold-avatar" aria-label="You">
