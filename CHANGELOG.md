@@ -3,6 +3,20 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.1.3] — 2026-10-26
+
+### Added
+- **Terminal icon** beside Settings (when the server's terminal is on): opens the terminal inside the new shell, Back
+  returns; Ctrl+` (Cmd+` on a Mac) toggles it, also from inside the shell.
+- **Folders in the Library's notes list**: New folder next to New note; folders collapse (with their subfolders), empty
+  folders show, a picked folder is where new notes go, "Notes" takes you back to the top level.
+
+### Changed
+- **One-line composer placeholders** ("Message the team"); the @/command hint shows while you type and is read by
+  screen readers. Long messages grow the box, then scroll.
+- **Finished jobs fold** to one row in the team room (Show/Hide); a job stays open while anything in it needs you, is
+  pinned, or waits to be sent back.
+
 ## [2.1.1] — 2026-10-26
 
 ### Fixed

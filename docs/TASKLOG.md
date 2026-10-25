@@ -1342,3 +1342,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   change except a deleted-session refusal and clarify prompts (2.1.x). Reviews: 0 P1; P2s fixed. pnpm check (one
   failure from a check started mid-edit; the server suite re-run: 4767 passed).
 - **v2.1.1 deployed live** (~13:49 UTC): backup score-pre-2.1.1-20261026.db, restart, 0 errors. Live approval round trip (drill L3) on scoretesta (approvals.mode manual for the test, back to smart after; scoretestb too): an `rm -rf /tmp/score-l3b` approval reached Score; **deny** → Hermes refused, folder kept; **approve once** → ran, folder gone. The earlier stuck test run on scoretestb (its prompt raised before the fix) stays parked in Hermes until its own timeout.
+- **v2.1.3 = 2.1.2 + 2.1.3 (Sonnet coders, lead review, 2026-10-26).** Owner: composer placeholder scrolls; Library
+  missing folders; collapse finished threads; a terminal icon beside Settings. Reviews: 2.1.2 P1 (long text clipped by
+  overflow:hidden) fixed by sizing from scrollHeight; hint a11y; nested folder collapse, active-note expansion, way back
+  to root; fold reuses needs-you data and waits for it. **Rejected (P1 claim):** "exchanges of done jobs are never
+  fetched" — a paused exchange sets its job to waiting_on_you (decisions.ts:165, budget.ts:124) and live code never marks
+  a job done while work is open (only the fake seed does), so a done job can't hold an exchange waiting on the person.
+  2.1.3 review: key repeat/IME guard, Ctrl+` backs out from inside xterm. Gates: full e2e 968 passed / 7 phone Room
+  screenshots (the one-line composer; baselines updated, then 207/207 on the affected specs incl. themes-bold-visual);
+  pnpm check green (server 4767, web 2969→2975 after the merge, contract 1496).
