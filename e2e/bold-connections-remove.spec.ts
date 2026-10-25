@@ -170,9 +170,11 @@ for (const viewport of sizes) {
       await page.goto(`/b/team/${id}`)
       await expect(page.getByRole('heading', { name: id, level: 1 })).toBeVisible()
       const open = page.getByRole('button', { name: 'Remove agent…' })
-      const before = await page.evaluate(
-        () => document.documentElement.scrollWidth - window.innerWidth,
-      )
+      const fits = () =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        )
+      expect(await fits()).toBe(true)
       await open.click()
       const panel = page.getByRole('group', { name: `Remove ${id}` })
       await expect(panel).toBeVisible()
@@ -181,9 +183,7 @@ for (const viewport of sizes) {
       await expect(panel.getByText(/A private copy is kept first:/)).toBeVisible()
       await expect(panel.getByText(/isn’t a full undo/)).toBeVisible()
       await expect(panel.getByRole('button', { name: 'Cancel' })).toBeFocused()
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
-      ).toBeLessThanOrEqual(Math.max(before, 0))
+      expect(await fits()).toBe(true)
 
       await page.keyboard.press('Escape')
       await expect(panel).toBeHidden()

@@ -448,6 +448,10 @@
 
 [data-ui='bold'] .bold-more-toggle {
   align-self: flex-start;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  border-radius: 24px;
 }
 
 [data-ui='bold'] .bold-more {

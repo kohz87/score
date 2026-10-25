@@ -25,15 +25,23 @@ export function BoldRemoveAgent({
   const navigate = useNavigate()
   const client = useQueryClient()
   const cancelButton = useRef<HTMLButtonElement>(null)
-  const del = useAgentDelete(agentId)
+  const del = useAgentDelete(agentId, null, true)
   const { review } = del
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
   const removeCoding = useMutation({
     mutationFn: () =>
       apiFetch(`coding-agents/${encodeURIComponent(agentId)}`, { method: 'DELETE' }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['team'] })
       void client.invalidateQueries({ queryKey: ['chat', 'agents'] })
-      void navigate('/b/team')
+      // The list refreshes even when the person has left; only the navigation needs the panel still open.
+      if (mounted.current) void navigate('/b/team')
     },
   })
 
@@ -52,7 +60,14 @@ export function BoldRemoveAgent({
   }, [done, client, navigate])
 
   const preview = del.preview
-  const working = Boolean(del.operation)
+  const working = del.operation?.state === 'running'
+  // Failed, needs attention or otherwise not completed: the progress stays, and the person can close the panel.
+  const ended = Boolean(del.operation) && !working && !done
+  const pending = del.remove.isPending || removeCoding.isPending
+  const closeButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (ended) closeButton.current?.focus()
+  }, [ended])
   const blocked = Boolean(preview?.blockers.length)
   const problem = coding
     ? removeCoding.error
@@ -68,7 +83,7 @@ export function BoldRemoveAgent({
       role="group"
       aria-label={`Remove ${name}`}
       onKeyDown={(event) => {
-        if (event.key === 'Escape' && !working) {
+        if (event.key === 'Escape' && !working && !pending && !done) {
           event.stopPropagation()
           onClose()
         }
@@ -105,7 +120,7 @@ export function BoldRemoveAgent({
                     {blocker}
                   </p>
                 ))}
-                {!working && (
+                {!del.operation && (
                   <label className="bold-remove-agent-type">
                     Type {agentId} to confirm
                     <input
@@ -120,13 +135,26 @@ export function BoldRemoveAgent({
           </>
         )}
         {problem != null && <p role="alert">{removeProblem(problem, name)}</p>}
-        {!working && (
+        {ended && (
           <div className="row wrap">
-            <button ref={cancelButton} type="button" className="btn sm" onClick={onClose}>
+            <button ref={closeButton} type="button" className="btn sm" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        )}
+        {!del.operation && (
+          <div className="row wrap">
+            <button
+              ref={cancelButton}
+              type="button"
+              className="btn sm"
+              disabled={pending}
+              onClick={onClose}
+            >
               Cancel
             </button>
             <button type="submit" className="btn sm primary" disabled={!canRemove}>
-              {del.remove.isPending || removeCoding.isPending ? 'Removing…' : 'Remove'}
+              {pending ? 'Removing…' : 'Remove'}
             </button>
           </div>
         )}
