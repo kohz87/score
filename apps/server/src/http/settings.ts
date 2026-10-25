@@ -180,7 +180,7 @@ export function registerSettingsRoutes(
       throw new HttpError(
         409,
         'not_supported',
-        'That’s Score’s own tool server: agents use it to reach Score. Turn it off per agent on the agent’s page instead.',
+        'That’s Score’s own tool server: agents use it to reach Score. Revoke an agent’s access on that agent’s page instead.',
       )
     await port.removeToolServer(id)
     return reply.code(204).send()
