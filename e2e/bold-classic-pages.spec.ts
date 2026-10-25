@@ -317,6 +317,20 @@ for (const mode of ['light', 'dark'] as const) {
   })
 }
 
+for (const mode of ['light', 'dark'] as const) {
+  test(`a failing theme keeps bold Settings › Rules readable (${mode})`, async ({ page }) => {
+    await page.addInitScript((value) => localStorage.setItem('score.theme', value), mode)
+    await mockThemes(page, [failing], { active: 'failing', mode })
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/b/settings/rules')
+    const card = page.locator('.bold-settings-page .rules-card[data-protected]')
+    await expect(card).toBeVisible()
+    await expectGuardKeptTheme(page)
+    await expectAA(card.getByRole('heading').first())
+    await expectAA(card.locator('label, li').first())
+  })
+}
+
 // The Customizer's way back inside the bold frame, against the real fake adapter (its title says Customizer, so the
 // fixture mocks above stay out of it).
 test.describe('the Customizer way back inside /b', () => {
