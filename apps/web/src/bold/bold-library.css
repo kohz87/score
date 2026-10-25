@@ -2,8 +2,6 @@
    The classic Knowledge editor keeps its behaviour; these rules only give it the bold panel's surface. */
 /* `.sidebody` (bold.css) says column; the extra class makes the prototype's row-wrap win. */
 [data-ui='bold'] .sidebody.bold-library {
-  /* The panel's own width decides the note layout (rail beside the editor), not the window's. */
-  container: bold-library / inline-size;
   flex-direction: row;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -347,37 +345,82 @@
   overflow-x: visible;
 }
 
-/* Medium panel: nav + editor, and the four panels under the editor in two columns. */
-@container bold-library (min-width: 860px) {
-  [data-ui='bold'] .bold-library-nav {
-    flex: 0 0 200px;
-  }
+/* Restored (2.0.9 review): the files view, tables, version diff and dialog layering keep the bold surface. */
+[data-ui='bold'] .bold-library .kn-toolbar {
+  top: 0;
+  border-color: var(--line);
+  background: var(--panel);
+}
 
-  [data-ui='bold'] .bold-library .kn-side {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-    gap: 10px;
-  }
+[data-ui='bold'] .bold-library .kn-files,
+[data-ui='bold'] .bold-library .kn-doc {
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-library .kn-files h2,
+[data-ui='bold'] .bold-library .kn-doc h2 {
+  font-family: var(--font-d);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-library .kn-table-wrap {
+  border-color: var(--line);
+}
+
+[data-ui='bold'] .bold-library .kn-table th {
+  border-bottom-color: var(--line);
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library .kn-table td {
+  border-bottom-color: var(--line);
+}
+
+[data-ui='bold'] .bold-library .kn-doc-props,
+[data-ui='bold'] .bold-library .kn-version-body,
+[data-ui='bold'] .bold-library .kn-diff {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-library .kn-backdrop {
+  z-index: 70;
+}
+
+[data-ui='bold'] .bold-library .kn-upload-progress {
+  z-index: 70;
+}
+
+/* The panel's own width (data-width, measured in BoldLibrary.tsx) decides the layout, not the window's: a CSS
+   container would make the panel the containing block of the editor's fixed dialogs and upload toast. */
+/* Medium panel: nav + editor, and the four panels under the editor in two columns. */
+[data-ui='bold'] .bold-library:is([data-width='mid'], [data-width='wide']) .bold-library-nav {
+  flex: 0 0 200px;
+}
+[data-ui='bold'] .bold-library:is([data-width='mid'], [data-width='wide']) .kn-side {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 10px;
 }
 
 /* Wide panel (the owner's is about 1500px): the four panels form a right-hand rail beside the editor; the editor
    takes the rest of the width and its text keeps a readable line length. */
-@container bold-library (min-width: 1180px) {
-  [data-ui='bold'] .bold-library .kn-note {
-    grid-template-columns: minmax(0, 1fr) 280px;
-    gap: 16px;
-    align-items: start;
-  }
-
-  [data-ui='bold'] .bold-library .kn-side {
-    display: flex;
-    flex-direction: column;
-  }
-
-  [data-ui='bold'] .bold-library .kn-editor-host .cm-editor:not(.cm-source) .cm-content {
-    max-width: 80ch;
-  }
+[data-ui='bold'] .bold-library[data-width='wide'] .kn-note {
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+[data-ui='bold'] .bold-library[data-width='wide'] .kn-side {
+  display: flex;
+  flex-direction: column;
+}
+[data-ui='bold']
+  .bold-library[data-width='wide']
+  .kn-editor-host
+  .cm-editor:not(.cm-source)
+  .cm-content {
+  max-width: 80ch;
 }
 
 @media (max-width: 860px) {
