@@ -1,6 +1,9 @@
 /* The Library side panel, rebuilt from docs/design/bold/prototype.html `vLibrary()` and its side-panel rules.
    The classic Knowledge editor keeps its behaviour; these rules only give it the bold panel's surface. */
-[data-ui='bold'] .bold-library {
+/* `.sidebody` (bold.css) says column; the extra class makes the prototype's row-wrap win. */
+[data-ui='bold'] .sidebody.bold-library {
+  /* The panel's own width decides the note layout (rail beside the editor), not the window's. */
+  container: bold-library / inline-size;
   flex-direction: row;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -320,60 +323,61 @@
 }
 
 [data-ui='bold'] .bold-library .kn-panel {
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--panel);
+  font-size: 13px;
 }
 
 [data-ui='bold'] .bold-library .kn-panel h3 {
+  margin: 0 0 6px;
   font-family: var(--font-d);
-  font-size: 16px;
+  font-size: 15px;
 }
 
-[data-ui='bold'] .bold-library .kn-toolbar {
-  top: 0;
-  border-color: var(--line);
-  background: var(--panel);
+[data-ui='bold'] .bold-library .kn-panel p {
+  margin: 0;
+  color: var(--muted);
 }
 
-[data-ui='bold'] .bold-library .kn-files,
-[data-ui='bold'] .bold-library .kn-doc {
-  gap: 12px;
+/* The note toolbar wraps onto more rows instead of scrolling off at any width. */
+[data-ui='bold'] .bold-library .kn-tb-strip {
+  flex-wrap: wrap;
+  overflow-x: visible;
 }
 
-[data-ui='bold'] .bold-library .kn-files h2,
-[data-ui='bold'] .bold-library .kn-doc h2 {
-  font-family: var(--font-d);
-  font-size: 28px;
-  font-weight: 700;
+/* Medium panel: nav + editor, and the four panels under the editor in two columns. */
+@container bold-library (min-width: 860px) {
+  [data-ui='bold'] .bold-library-nav {
+    flex: 0 0 200px;
+  }
+
+  [data-ui='bold'] .bold-library .kn-side {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 10px;
+  }
 }
 
-[data-ui='bold'] .bold-library .kn-table-wrap {
-  border-color: var(--line);
-}
+/* Wide panel (the owner's is about 1500px): the four panels form a right-hand rail beside the editor; the editor
+   takes the rest of the width and its text keeps a readable line length. */
+@container bold-library (min-width: 1180px) {
+  [data-ui='bold'] .bold-library .kn-note {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 16px;
+    align-items: start;
+  }
 
-[data-ui='bold'] .bold-library .kn-table th {
-  border-bottom-color: var(--line);
-  background: var(--field);
-}
+  [data-ui='bold'] .bold-library .kn-side {
+    display: flex;
+    flex-direction: column;
+  }
 
-[data-ui='bold'] .bold-library .kn-table td {
-  border-bottom-color: var(--line);
-}
-
-[data-ui='bold'] .bold-library .kn-doc-props,
-[data-ui='bold'] .bold-library .kn-version-body,
-[data-ui='bold'] .bold-library .kn-diff {
-  background: var(--field);
-}
-
-[data-ui='bold'] .bold-library .kn-backdrop {
-  z-index: 70;
-}
-
-[data-ui='bold'] .bold-library .kn-upload-progress {
-  z-index: 70;
+  [data-ui='bold'] .bold-library .kn-editor-host .cm-editor:not(.cm-source) .cm-content {
+    max-width: 80ch;
+  }
 }
 
 @media (max-width: 860px) {

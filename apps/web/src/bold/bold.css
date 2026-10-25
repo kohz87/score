@@ -556,6 +556,9 @@
   border-radius: 14px;
   color: var(--ink);
   width: 100%;
+  /* rows grow with their content: a scrolling flex menu must not squeeze them */
+  flex: none;
+  box-sizing: border-box;
 }
 
 [data-ui='bold'] .menu .mi:hover,
@@ -583,6 +586,28 @@
 [data-ui='bold'] .menu-copy {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+[data-ui='bold'] .menu-copy > b {
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-menu-preview {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-menu-preview-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-ui='bold'] .bold-menu-preview-count {
+  flex: none;
 }
 
 /* The room fills the window: the page never scrolls, the room and side panel scroll inside. */
