@@ -45,6 +45,8 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
     change,
     another: resetDraft,
     setConfirmed,
+    reuseConfirmed,
+    setReuseConfirmed,
   } = useAgentCreateDraft()
   useEffect(() => {
     dialog.current?.showModal?.()
@@ -230,6 +232,17 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
                       </label>
                     </>
                   )}
+                  {preview.reusesName && (
+                    <label className="team-profile-confirm" data-protected="block">
+                      <input
+                        type="checkbox"
+                        checked={reuseConfirmed}
+                        onChange={(event) => setReuseConfirmed(event.target.checked)}
+                      />
+                      Use the name {input.id} again. The removed agent’s messages, runs and reports
+                      keep it.
+                    </label>
+                  )}
                   {preview.blockers.map((blocker) => (
                     <p role="alert" key={blocker}>
                       {blocker}
@@ -246,7 +259,12 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
                   disabled={
                     review.isPending ||
                     create.isPending ||
-                    Boolean(preview && (preview.blockers.length || (input.cloneFrom && !confirmed)))
+                    Boolean(
+                      preview &&
+                      (preview.blockers.length ||
+                        (input.cloneFrom && !confirmed) ||
+                        (preview.reusesName && !reuseConfirmed)),
+                    )
                   }
                 >
                   {review.isPending

@@ -94,3 +94,13 @@ test('names an unconfirmed clone and a missing SSH host and user', () => {
   ).toHaveLength(2)
   expect(addBlockReasons([], { cloneFrom: 'builder' }, true, local)).toEqual([])
 })
+
+test('reusing a removed agent’s name needs its own tick (2.0.8)', () => {
+  const local = { backend: 'local', sshHost: '', sshUser: '' }
+  expect(
+    addBlockReasons([], {}, false, local, { id: 'g3', needed: true, confirmed: false }),
+  ).toEqual(['Tick “Use the name g3 again.”'])
+  expect(
+    addBlockReasons([], {}, false, local, { id: 'g3', needed: true, confirmed: true }),
+  ).toEqual([])
+})

@@ -1,29 +1,16 @@
 import type { AgentDetail, AgentSummary } from '@score/contract'
-import { useState } from 'react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../components/runtime-label.ts'
-import { TodoItems, todoProgress, useAgentTodos } from '../components/TodoList.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
 import { usePermissionAction } from '../routes/settings/rules-queries.ts'
 import { useAgentDetail } from '../routes/team/team-queries.ts'
 import { AgentFiles } from '../routes/team/AgentFiles.tsx'
-import { AgentStylePicker } from '../routes/team/AgentStylePicker.tsx'
-import { ChannelsTab } from '../routes/team/ChannelsTab.tsx'
 import { CodingOverview } from '../routes/team/CodingAgent.tsx'
-import { HistoryTab } from '../routes/team/HistoryTab.tsx'
-import { McpAccessSection } from '../routes/team/McpAccessSection.tsx'
-import { MemoryTab } from '../routes/team/MemoryTab.tsx'
 import { ModelTab } from '../routes/team/ModelTab.tsx'
-import { PermissionsTab } from '../routes/team/PermissionsTab.tsx'
-import { PluginsTab } from '../routes/team/PluginsTab.tsx'
-import { ProfileSettings } from '../routes/team/ProfileSettings.tsx'
-import { RoutinesTab } from '../routes/team/RoutinesTab.tsx'
-import { SkillsTab } from '../routes/team/SkillsTab.tsx'
-import { ToolsTab } from '../routes/team/ToolsTab.tsx'
-import { WorkspaceTab } from '../routes/team/WorkspaceTab.tsx'
 import { boldAgentScreenLink } from './bold-links.ts'
 import type { AgentFileName } from '../routes/team/file-queries.ts'
 import { useAgentPause } from '../routes/watch/watch-queries.ts'
@@ -32,47 +19,14 @@ import { pairingProblem } from './bold-errors.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import '../routes/team/team.css'
 import '../components/todo.css'
+import { BoldAgentStatus } from './BoldAgentOperation.tsx'
+import { BoldAgentMore } from './BoldAgentMore.tsx'
 import { BoldRemoveAgent } from './BoldRemoveAgent.tsx'
 import { RunsOnCard } from './BoldRunsOn.tsx'
 import './bold-team.css'
 
-const hermesTabs = [
-  'Overview',
-  'Personality',
-  'Model',
-  'Skills',
-  'Memory',
-  'Tools',
-  'Plugins',
-  'Workspace',
-  'Routines',
-  'Channels',
-  'Permissions',
-  'History',
-  'Appearance',
-  'Todo',
-  'Details',
-] as const
-
-const codingTabs = ['Overview', 'Workspace', 'History', 'Appearance'] as const
-
-const sectionIds: Record<(typeof hermesTabs)[number], string> = {
-  Overview: 'agent-overview',
-  Personality: 'agent-personality',
-  Model: 'agent-model',
-  Skills: 'agent-skills',
-  Memory: 'agent-memory',
-  Tools: 'agent-tools',
-  Plugins: 'agent-plugins',
-  Workspace: 'agent-workspace',
-  Routines: 'agent-routines',
-  Channels: 'agent-channels',
-  Permissions: 'agent-permissions',
-  History: 'agent-history',
-  Appearance: 'agent-appearance',
-  Todo: 'agent-todo',
-  Details: 'agent-details',
-}
+/** "Change permissions" on the Asks card goes to the Never rules card under More. */
+const permissionsSection = 'agent-permissions'
 
 /** The four cards the prototype puts first: how it works, what runs it, where, and what it asks first. */
 function HermesUpFront({
@@ -145,11 +99,7 @@ function HermesUpFront({
         {change.isError && <p role="alert">Couldn’t change the permission. Try again.</p>}
         <p className="small muted">
           Stricter than the team rules is fine; looser isn’t.{' '}
-          <button
-            type="button"
-            className="link"
-            onClick={() => openSection(sectionIds.Permissions)}
-          >
+          <button type="button" className="link" onClick={() => openSection(permissionsSection)}>
             Change permissions
           </button>
         </p>
@@ -181,80 +131,6 @@ function OverviewFacts({ agent, agents }: { agent: AgentDetail; agents: AgentSum
   )
 }
 
-function AppearanceCard({ agent }: { agent: AgentDetail }) {
-  return (
-    <section className="team-card" aria-labelledby="agent-appearance-heading">
-      <h2 id="agent-appearance-heading">Appearance</h2>
-      <p className="team-muted">Change {agent.name}’s colour and shape.</p>
-      <AgentStylePicker key={agent.id} agent={agent} />
-    </section>
-  )
-}
-
-function TodosCard({ agent }: { agent: AgentDetail }) {
-  const todos = useAgentTodos(agent.id, agent.status === 'working')
-  return (
-    <section className="team-card" id="agent-todo" aria-labelledby="agent-todo-heading">
-      <div className="team-card-heading">
-        <h2 id="agent-todo-heading">Todo</h2>
-        {todos.data?.todos.length ? (
-          <span className="small muted">{todoProgress(todos.data.todos)}</span>
-        ) : null}
-      </div>
-      {todos.isPending && <p role="status">Loading todo…</p>}
-      {todos.isError && <p role="alert">Couldn’t load the todo list.</p>}
-      {todos.isSuccess && (!todos.data || todos.data.todos.length === 0) && (
-        <p className="team-muted-strong">Nothing on its todo list.</p>
-      )}
-      {todos.data?.todos.length ? <TodoItems todos={todos.data.todos} /> : null}
-    </section>
-  )
-}
-
-function MoreSections({ agent }: { agent: AgentDetail }) {
-  return (
-    <div className="grid3 bold-more-grid">
-      <div className="bold-more-cell" id="agent-appearance">
-        <AppearanceCard agent={agent} />
-      </div>
-      <div className="bold-more-cell" id="agent-memory">
-        <MemoryTab agentId={agent.id} agentName={agent.name} />
-      </div>
-      <div className="bold-more-cell" id="agent-skills">
-        <SkillsTab agentId={agent.id} agentName={agent.name} />
-      </div>
-      <div className="bold-more-cell" id="agent-tools">
-        <ToolsTab agent={agent} />
-        <McpAccessSection agent={agent} />
-      </div>
-      <div className="bold-more-cell" id="agent-plugins">
-        <PluginsTab agent={agent} />
-      </div>
-      <div className="bold-more-cell" id="agent-routines">
-        <RoutinesTab agentId={agent.id} agentName={agent.name} startCreating={false} />
-      </div>
-      <div className="bold-more-cell" id="agent-channels">
-        <ChannelsTab agentId={agent.id} agentName={agent.name} />
-      </div>
-      <div className="bold-more-cell">
-        <TodosCard agent={agent} />
-      </div>
-      <div className="bold-more-cell span2" id="agent-workspace">
-        <WorkspaceTab agentId={agent.id} agentName={agent.name} initialPath={null} />
-      </div>
-      <div className="bold-more-cell span2" id="agent-permissions">
-        <PermissionsTab agent={agent} />
-      </div>
-      <div className="bold-more-cell span2" id="agent-history">
-        <HistoryTab agentId={agent.id} agentName={agent.name} />
-      </div>
-      <div className="bold-more-cell span2" id="agent-details">
-        <ProfileSettings key={`${agent.id}:${agent.name}:${agent.role}`} agent={agent} />
-      </div>
-    </div>
-  )
-}
-
 /** PLAN 11.8b: one agent on the bold shell. The four cards come first; every classic tab lives under More. */
 export function BoldAgentPage() {
   const { agentId = '' } = useParams()
@@ -272,6 +148,21 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const client = useQueryClient()
   const pause = useAgentPause(agentId)
   const [removing, setRemoving] = useState(false)
+  const navigate = useNavigate()
+  // A removal can show as `removed` in the list before the operation card reads `completed`: leave either way.
+  const lifeState = (agents.data?.find((agent) => agent.id === agentId) ?? detail.data)?.lifecycle
+    ?.state
+  // Only a removal this page watched happens leaves: a removed agent's page stays reachable (history, links).
+  const previousLife = useRef(lifeState)
+  useEffect(() => {
+    const before = previousLife.current
+    previousLife.current = lifeState
+    if (
+      lifeState === 'removed' &&
+      (before === 'deleting' || before === 'needs_attention' || removing)
+    )
+      void navigate('/b/team')
+  }, [lifeState, navigate, removing])
 
   if (!detail.data && detail.isPending) return <p role="status">Loading agent…</p>
   if (!detail.data && detail.isError)
@@ -297,7 +188,6 @@ function AgentProfile({ agentId }: { agentId: string }) {
         : detail.data.model,
   }
   const coding = Boolean(agent.runtime && agent.runtime !== 'hermes')
-  const tabs = coding ? codingTabs : hermesTabs
   const paused = agent.status === 'paused'
   // The server can commit a pause and still answer with an error. While that error shows, the button repeats the
   // action that failed, whatever the status says now (the classic header's rule).
@@ -305,6 +195,10 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const needsYou = approvals.some(
     (approval) => approval.agentId === agent.id && approvalNeedsYou(approval),
   )
+  const inFlight =
+    agent.lifecycle?.state === 'setting_up' ||
+    agent.lifecycle?.state === 'needs_attention' ||
+    agent.lifecycle?.state === 'deleting'
   const waiting = needsYou || agent.status === 'waiting'
 
   function reveal(id: string) {
@@ -312,6 +206,14 @@ function AgentProfile({ agentId }: { agentId: string }) {
     window.setTimeout(() => {
       document.getElementById(id)?.scrollIntoView({ block: 'start' })
     }, 0)
+  }
+
+  function openRemove() {
+    setRemoving(true)
+    window.setTimeout(
+      () => document.querySelector('.bold-remove-agent')?.scrollIntoView({ block: 'center' }),
+      0,
+    )
   }
 
   function togglePause() {
@@ -341,7 +243,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
           <Link className="btn primary" to={`/b?with=${encodeURIComponent(agent.id)}`}>
             Message
           </Link>
-          {agent.lifecycle?.state !== 'removed' && (
+          {!inFlight && agent.lifecycle?.state !== 'removed' && (
             <button
               type="button"
               className="btn ghost"
@@ -356,17 +258,20 @@ function AgentProfile({ agentId }: { agentId: string }) {
               {agentDisplayName(agent)}
             </button>
           )}
-          {agent.lifecycle?.state !== 'removed' && agent.id !== 'default' && (
-            <button
-              type="button"
-              className="link bold-agent-remove"
-              id="agent-remove-open"
-              aria-expanded={removing}
-              onClick={() => setRemoving(true)}
-            >
-              Remove agent…
-            </button>
-          )}
+          {agent.lifecycle?.state !== 'removed' &&
+            agent.lifecycle?.state !== 'setting_up' &&
+            agent.lifecycle?.state !== 'deleting' &&
+            agent.id !== 'default' && (
+              <button
+                type="button"
+                className="link bold-agent-remove"
+                id="agent-remove-open"
+                aria-expanded={removing}
+                onClick={() => setRemoving(true)}
+              >
+                Remove agent…
+              </button>
+            )}
           {agent.served && (
             <>
               <Link className="link bold-agent-watch" to={boldAgentScreenLink(agent.id)}>
@@ -376,8 +281,12 @@ function AgentProfile({ agentId }: { agentId: string }) {
           )}
         </span>
       </div>
+      {inFlight && agent.lifecycle && (
+        <BoldAgentStatus name={agentDisplayName(agent)} lifecycle={agent.lifecycle} />
+      )}
       {removing && agent.id !== 'default' && (
         <BoldRemoveAgent
+          lifecycle={agent.lifecycle}
           agentId={agent.id}
           name={agentDisplayName(agent)}
           coding={coding}
@@ -445,32 +354,12 @@ function AgentProfile({ agentId }: { agentId: string }) {
 
       {more && (
         <div className="bold-more" id="agent-more">
-          <nav className="bold-more-nav" aria-label="Agent settings sections">
-            {tabs.map((tab) => (
-              <a key={tab} href={`#${sectionIds[tab]}`}>
-                {tab}
-              </a>
-            ))}
-          </nav>
-          {coding ? (
-            <div className="grid2 bold-more-grid">
-              <div className="bold-more-cell span2" id="agent-appearance">
-                <AppearanceCard agent={agent} />
-              </div>
-              <div className="bold-more-cell" id="agent-workspace">
-                <WorkspaceTab
-                  agentId={agent.id}
-                  agentName={agent.name}
-                  initialPath={search.get('path')}
-                />
-              </div>
-              <div className="bold-more-cell" id="agent-history">
-                <HistoryTab agentId={agent.id} agentName={agent.name} />
-              </div>
-            </div>
-          ) : (
-            <MoreSections agent={agent} />
-          )}
+          <BoldAgentMore
+            agent={agent}
+            coding={coding}
+            initialPath={search.get('path')}
+            onDelete={openRemove}
+          />
         </div>
       )}
     </section>

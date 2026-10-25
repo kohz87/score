@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 
-const stepLabels: Record<string, string> = {
+export const stepLabels: Record<string, string> = {
   create_profile: 'Create profile',
   import_profile: 'Import profile',
   describe_profile: 'Set description',

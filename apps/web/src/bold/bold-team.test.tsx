@@ -649,7 +649,7 @@ test('continuing past a failed Works on write says the agent runs on this machin
   )
 })
 
-test('the agent page puts the four cards first and makes every classic tab reachable under More', async () => {
+test('the agent page puts the four cards first and the compact More cards under the toggle', async () => {
   open('/b/team/builder')
   expect(await screen.findByRole('heading', { name: 'builder', level: 1 })).toBeDefined()
   expect(screen.getByText('How builder works')).toBeDefined()
@@ -678,32 +678,30 @@ test('the agent page puts the four cards first and makes every classic tab reach
   expect(screen.queryByRole('button', { name: 'Open builder in its own window' })).toBeNull()
 
   fireEvent.click(screen.getByRole('button', { name: /^More: memory/ }))
-  const nav = await screen.findByRole('navigation', { name: 'Agent settings sections' })
-  for (const tab of [
-    'Overview',
-    'Personality',
-    'Model',
+  expect(screen.queryByRole('navigation', { name: 'Agent settings sections' })).toBeNull()
+  const more = await screen.findByRole('button', { name: 'Less' })
+  expect(more.getAttribute('aria-expanded')).toBe('true')
+  for (const title of [
+    'Remembers',
     'Skills',
-    'Memory',
-    'Tools',
-    'Plugins',
+    'Can use',
     'Workspace',
-    'Routines',
+    'Repeating jobs',
+    'Delete builder',
+    'Plugins',
     'Channels',
-    'Permissions',
-    'History',
-    'Appearance',
+    'Never rules',
+    'Looks',
+    'Name and role',
+    'Recent runs',
     'Todo',
-    'Details',
-  ]) {
-    const link = within(nav).getByRole('link', { name: tab })
-    const target = link.getAttribute('href')!
-    await waitFor(() => expect(document.querySelector(target)).not.toBeNull())
-  }
-  expect(screen.getByRole('heading', { name: 'Memory', level: 2 })).toBeDefined()
-  expect(screen.getByText('Nothing on its todo list.')).toBeDefined()
-  expect(screen.getByRole('heading', { name: 'Agent details', level: 2 })).toBeDefined()
-  expect(screen.getByRole('heading', { name: 'Danger zone', level: 2 })).toBeDefined()
+  ])
+    expect(
+      await screen.findByRole('heading', { name: new RegExp(`^${title}`), level: 3 }),
+    ).toBeDefined()
+  // None of the classic Team tab sections are used any more.
+  expect(document.querySelector('#agent-more .team-card')).toBeNull()
+  expect(await screen.findByText('Nothing on its todo list.')).toBeDefined()
 })
 
 test('Asks you first checkboxes update the permission through the classic mutation', async () => {
@@ -762,6 +760,76 @@ test('a pause that fails still offers the same action again', async () => {
   })
 })
 
+type LifeState = 'setting_up' | 'ready' | 'deleting' | 'needs_attention' | 'removed'
+function withLifecycle(state: LifeState, status?: 'paused') {
+  const lifecycle = {
+    state,
+    incarnationId: '22222222-2222-4222-8222-222222222222',
+    operationId: '11111111-1111-4111-8111-111111111111',
+  }
+  const agent = { ...builder, lifecycle, ...(status ? { status } : {}) }
+  agentsReply = () => Response.json({ asOfSeq: 1, items: [agent] })
+  detailReply = () => agentResponse(agent as AgentDetail)
+  createReply = () =>
+    Response.json({
+      ...JSON.parse(JSON.stringify({ id: lifecycle.operationId })),
+      kind: state === 'deleting' ? 'delete' : 'create',
+      targetName: 'builder',
+      incarnationId: lifecycle.incarnationId,
+      requestHash: 'a'.repeat(64),
+      state: state === 'needs_attention' ? 'needs_attention' : 'running',
+      steps: [{ name: 'model', state: 'pending' }],
+      createdAt: '2026-10-24T10:00:00.000Z',
+      updatedAt: '2026-10-24T10:00:01.000Z',
+      nextStep: 'model',
+      error: state === 'needs_attention' ? 'The model could not be set.' : null,
+      exportPath: null,
+      retryable: state === 'needs_attention',
+    })
+}
+
+test.each([
+  ['setting_up', false, false],
+  ['deleting', false, false],
+  ['needs_attention', true, false],
+  ['ready', true, true],
+] as const)('a %s agent: Remove agent… shown %s, Pause shown %s', async (state, remove, pause) => {
+  withLifecycle(state)
+  open('/b/team/builder')
+  await screen.findByRole('heading', { name: 'builder', level: 1 })
+  if (state !== 'ready') await screen.findByLabelText('builder status')
+  expect(screen.queryByRole('button', { name: 'Remove agent…' }) !== null).toBe(remove)
+  expect(screen.queryByRole('button', { name: /^(Pause|Resume) builder/u }) !== null).toBe(pause)
+})
+
+test('a ready agent with a pause recorded offers Resume', async () => {
+  withLifecycle('ready', 'paused')
+  open('/b/team/builder')
+  expect(await screen.findByRole('button', { name: 'Resume builder' })).toBeDefined()
+})
+
+test('opening a removed agent’s page directly stays on it, with its history and no Pause or Remove', async () => {
+  withLifecycle('removed')
+  const { router } = open('/b/team/builder')
+  await screen.findByRole('heading', { name: 'builder', level: 1 })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(router.state.location.pathname).toBe('/b/team/builder')
+  expect(screen.queryByRole('button', { name: 'Remove agent…' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^(Pause|Resume) builder/u })).toBeNull()
+})
+
+test('a page that saw the agent go from deleting to removed leaves for Team', async () => {
+  // The fenced list only changes on stream events; this page reads the detail when the list lacks the agent.
+  withLifecycle('deleting')
+  agentsReply = () => Response.json({ asOfSeq: 1, items: [] })
+  const { router, queryClient } = open('/b/team/builder')
+  await screen.findByLabelText('builder status')
+  withLifecycle('removed')
+  agentsReply = () => Response.json({ asOfSeq: 1, items: [] })
+  void queryClient.invalidateQueries({ queryKey: ['team', 'detail', 'builder'] })
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
+})
+
 test('an agent that cannot load says so and offers a retry', async () => {
   detailReply = () =>
     Response.json({ error: { code: 'not_found', message: 'gone' } }, { status: 404 })
@@ -786,12 +854,19 @@ test('a coding agent gets access, quota, password and the protected Codex note o
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
   fireEvent.click(screen.getByRole('button', { name: /^More: tools, workspace, delete/ }))
-  const nav = await screen.findByRole('navigation', { name: 'Agent settings sections' })
-  for (const tab of ['Overview', 'Workspace', 'History', 'Appearance']) {
-    const link = within(nav).getByRole('link', { name: tab })
-    await waitFor(() => expect(document.querySelector(link.getAttribute('href')!)).not.toBeNull())
-  }
-  expect(within(nav).queryByRole('link', { name: 'Memory' })).toBeNull()
+  expect(screen.queryByRole('navigation', { name: 'Agent settings sections' })).toBeNull()
+  for (const title of [
+    'Can use',
+    'Workspace',
+    'Recent runs',
+    'Looks',
+    'Name and role',
+    'Delete coder',
+  ])
+    expect(
+      await screen.findByRole('heading', { name: new RegExp(`^${title}`), level: 3 }),
+    ).toBeDefined()
+  expect(screen.queryByRole('heading', { name: /^Remembers/ })).toBeNull()
 })
 
 test('Where it works says exactly what Docker separates and changes through the API', async () => {

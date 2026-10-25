@@ -555,6 +555,7 @@ function NewAgentPanel({
 }) {
   const [initial] = useState(() => availableStyle(agents))
   const draft = useAgentCreateDraft(emptyAgentInput(initial))
+  const { reuseConfirmed, setReuseConfirmed } = draft
   const { input, preview, confirmed, operation, status, review, create, change, setConfirmed } =
     draft
   const [runs, setRuns] = useState<Runs>({
@@ -625,9 +626,16 @@ function NewAgentPanel({
     preview &&
     preview.blockers.length === 0 &&
     (!input.cloneFrom || confirmed) &&
+    (!preview.reusesName || reuseConfirmed) &&
     (runs.backend !== 'ssh' || (runs.sshHost.trim() && runs.sshUser.trim())),
   )
-  const reasons = preview ? addBlockReasons(preview.blockers, input, confirmed, runs) : []
+  const reasons = preview
+    ? addBlockReasons(preview.blockers, input, confirmed, runs, {
+        id: input.id,
+        needed: preview.reusesName === true,
+        confirmed: reuseConfirmed,
+      })
+    : []
   return (
     <form
       className="bold-add-form"
@@ -716,6 +724,8 @@ function NewAgentPanel({
               input={input}
               confirmed={confirmed}
               setConfirmed={setConfirmed}
+              reuseConfirmed={reuseConfirmed}
+              setReuseConfirmed={setReuseConfirmed}
             />
           )}
           {(review.error || create.error) && (
@@ -763,11 +773,15 @@ function ReviewChanges({
   input,
   confirmed,
   setConfirmed,
+  reuseConfirmed,
+  setReuseConfirmed,
 }: {
   preview: NonNullable<ReturnType<typeof useAgentCreateDraft>['preview']>
   input: ReturnType<typeof useAgentCreateDraft>['input']
   confirmed: boolean
   setConfirmed: (checked: boolean) => void
+  reuseConfirmed: boolean
+  setReuseConfirmed: (checked: boolean) => void
 }) {
   return (
     <section className="bold-add-review" aria-labelledby="bold-add-review-title">
@@ -806,6 +820,16 @@ function ReviewChanges({
             I’ve checked what this agent inherits.
           </label>
         </>
+      )}
+      {preview.reusesName && (
+        <label className="check team-profile-confirm bold-add-reuse" data-protected="block">
+          <input
+            type="checkbox"
+            checked={reuseConfirmed}
+            onChange={(event) => setReuseConfirmed(event.target.checked)}
+          />
+          Use the name {input.id} again. The removed agent’s messages, runs and reports keep it.
+        </label>
       )}
     </section>
   )
