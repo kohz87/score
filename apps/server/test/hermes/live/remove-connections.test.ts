@@ -382,6 +382,7 @@ describe('local provider keys (2.0.10)', () => {
 
 test('local provider ids: unset is none, a failed read is unknown (2.0.10)', async () => {
   const settings = new LiveSettings(home, runner)
+  providers.default!.openrouter = { default_model: 'x' }
   expect(await settings.localProviderIds()).toEqual(new Set(['lab-gpu']))
   runner.mockImplementation(async () => ({ exitCode: 1 }))
   expect(await settings.localProviderIds()).toEqual(new Set())

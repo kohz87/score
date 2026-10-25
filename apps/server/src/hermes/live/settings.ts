@@ -324,7 +324,13 @@ export class LiveSettings {
     if (result.exitCode !== 0 || !('stdout' in result) || result.stdout === undefined) return null
     try {
       const parsed = LocalProvidersSchema.safeParse(JSON.parse(result.stdout))
-      return parsed.success ? new Set(Object.keys(parsed.data)) : null
+      if (!parsed.success) return null
+      // The same rule as the provider list: an entry with an address (a bare override of a hosted one isn't local).
+      return new Set(
+        Object.entries(parsed.data)
+          .filter(([id, entry]) => ProviderIdSchema.safeParse(id).success && entry.base_url)
+          .map(([id]) => id),
+      )
     } catch {
       return null
     }
