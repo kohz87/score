@@ -1380,3 +1380,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   question announcement masking the strip's count → separate status regions). Gates: full e2e 990 passed, 2 failures
   (terminal, themes-safety sanitiser) passed on rerun with the affected specs, 123/123; pnpm check green (server 4780,
   web 3116, contract 1510).
+- **v2.3.0 deployed live** (~23:58 UTC): backup score-pre-2.3.0-20261026.db, restart, migration 0089 applied, no new errors (only the parked scoretestb run's known poll timeout).
