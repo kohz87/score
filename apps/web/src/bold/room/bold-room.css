@@ -1358,6 +1358,10 @@
   background: var(--panel);
   box-shadow: var(--menu-shadow);
   min-width: 210px;
+  max-width: calc(100vw - 24px);
+  /* The + sits at the composer's left edge: open rightwards from it (the classic menu hangs off a right-hand button). */
+  right: auto;
+  left: 0;
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-attach-list button {
