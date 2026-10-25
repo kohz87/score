@@ -1,5 +1,5 @@
 import type { AgentDetail, AgentSummary } from '@score/contract'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
@@ -277,9 +277,17 @@ function AgentProfile({ agentId }: { agentId: string }) {
   // A removal can show as `removed` in the list before the operation card reads `completed`: leave either way.
   const lifeState = (agents.data?.find((agent) => agent.id === agentId) ?? detail.data)?.lifecycle
     ?.state
+  // Only a removal this page watched happens leaves: a removed agent's page stays reachable (history, links).
+  const previousLife = useRef(lifeState)
   useEffect(() => {
-    if (lifeState === 'removed') void navigate('/b/team')
-  }, [lifeState, navigate])
+    const before = previousLife.current
+    previousLife.current = lifeState
+    if (
+      lifeState === 'removed' &&
+      (before === 'deleting' || before === 'needs_attention' || removing)
+    )
+      void navigate('/b/team')
+  }, [lifeState, navigate, removing])
 
   if (!detail.data && detail.isPending) return <p role="status">Loading agent…</p>
   if (!detail.data && detail.isError)

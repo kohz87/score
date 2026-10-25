@@ -810,9 +810,25 @@ test('a ready agent with a pause recorded offers Resume', async () => {
   expect(await screen.findByRole('button', { name: 'Resume builder' })).toBeDefined()
 })
 
-test('an agent that shows as removed in the list leaves for Team', async () => {
+test('opening a removed agent’s page directly stays on it, with its history and no Pause or Remove', async () => {
   withLifecycle('removed')
   const { router } = open('/b/team/builder')
+  await screen.findByRole('heading', { name: 'builder', level: 1 })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(router.state.location.pathname).toBe('/b/team/builder')
+  expect(screen.queryByRole('button', { name: 'Remove agent…' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^(Pause|Resume) builder/u })).toBeNull()
+})
+
+test('a page that saw the agent go from deleting to removed leaves for Team', async () => {
+  // The fenced list only changes on stream events; this page reads the detail when the list lacks the agent.
+  withLifecycle('deleting')
+  agentsReply = () => Response.json({ asOfSeq: 1, items: [] })
+  const { router, queryClient } = open('/b/team/builder')
+  await screen.findByLabelText('builder status')
+  withLifecycle('removed')
+  agentsReply = () => Response.json({ asOfSeq: 1, items: [] })
+  void queryClient.invalidateQueries({ queryKey: ['team', 'detail', 'builder'] })
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
 })
 
