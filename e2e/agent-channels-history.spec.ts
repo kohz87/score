@@ -10,7 +10,7 @@ test('Channels shows the connect command and History lists runs with a Watch rep
   const panel = page.getByRole('tabpanel')
   await expect(panel.getByRole('heading', { name: 'Channels', level: 2 })).toBeVisible()
   await expect(panel.getByText('Connected', { exact: true })).toBeVisible()
-  await panel.getByRole('button', { name: 'Connect Discord' }).click()
+  await panel.getByRole('button', { name: 'Connect Discord', exact: true }).click()
   // Token-based platforms are set up in the browser (fake mode writes nothing).
   const form = panel.getByRole('form', { name: 'Connect Discord' })
   await form.getByLabel('Bot token', { exact: true }).fill('fake-discord-token')

@@ -66,7 +66,7 @@ async function connectProvider(page: Page, provider: 'openrouter' | 'local') {
 async function connectChannel(page: Page, platform: 'discord' | 'slack') {
   const row = page.locator(`[data-channel="${platform}"]`)
   const label = platform === 'discord' ? 'Discord' : 'Slack'
-  const connect = row.getByRole('button', { name: `Connect ${label}` })
+  const connect = row.getByRole('button', { name: `Connect ${label}`, exact: true })
   if (await connect.isVisible().catch(() => false)) {
     await connect.click()
     if (platform === 'discord') {

@@ -120,7 +120,7 @@ for (const viewport of sizes) {
       )
       await confirm.getByRole('button', { name: 'Remove', exact: true }).click()
       await expect(row).toContainText('Not connected')
-      await expect(row.getByRole('button', { name: 'Connect Telegram' })).toBeVisible()
+      await expect(row.getByRole('button', { name: 'Connect Telegram', exact: true })).toBeVisible()
     })
 
   test(`Remove agent… lands on the delete button at ${where}`, async ({ page }) => {
