@@ -67,9 +67,20 @@ const liveExchange = {
 
 const sessionId = 'score-team-room-job-activity-builder'
 
-async function openThread(page: Page, options: { exchange?: Record<string, unknown> } = {}) {
+async function openThread(
+  page: Page,
+  options: {
+    exchange?: Record<string, unknown>
+    tasks?: Record<string, unknown>[]
+    reportBack?: Record<string, unknown> | null
+    handle?: (path: string, method: string) => { body: unknown; status?: number } | undefined
+  } = {},
+) {
   await pair(page)
-  const state = await mockBoldRoom(page, options.exchange ? { exchange: options.exchange } : {})
+  const state = await mockBoldRoom(page, {
+    ...(options.exchange ? { exchange: options.exchange } : {}),
+    ...(options.reportBack !== undefined ? { reportBack: options.reportBack } : {}),
+  })
   const posts: { path: string; body: unknown }[] = []
   // Registered after the shared fixture, so these answers win for the job under test.
   await page.route('**/api/**', async (route) => {
@@ -101,6 +112,32 @@ async function openThread(page: Page, options: { exchange?: Record<string, unkno
         autoCompactAt: null,
         compactions: 0,
       })
+    if (request.method() === 'GET' && path === '/api/tasks')
+      return json({
+        asOfSeq: 12,
+        columns: {
+          planned: [],
+          working: options.tasks ?? [],
+          in_review: [],
+          needs_you: [],
+          done: [],
+        },
+      })
+    if (request.method() === 'GET' && path.startsWith('/api/tasks/'))
+      return json({
+        ...options.tasks?.[0],
+        body: 'The login timeout needs a decision.',
+        createdBy: 'you',
+        steps: [
+          { id: 'step-1', text: 'Reproduce the timeout', done: true },
+          { id: 'step-2', text: 'Pick the new limit', done: false },
+        ],
+        activity: [],
+        pendingApproval: null,
+        dependsOn: [],
+        blocks: [],
+        runIds: [],
+      })
     if (request.method() === 'POST') {
       let body: unknown
       try {
@@ -116,7 +153,17 @@ async function openThread(page: Page, options: { exchange?: Record<string, unkno
         posts.push({ path, body })
         return json({ ok: true })
       }
+      if (path === '/api/tasks/task-thread/actions') {
+        posts.push({ path, body })
+        return json({ taskId: 'task-thread', action: 'comment', ok: true })
+      }
+      if (path === '/api/jobs/job-activity/report-back') {
+        posts.push({ path, body })
+        return json({ ok: true })
+      }
     }
+    const handled = options.handle?.(path, request.method())
+    if (handled) return json(handled.body, handled.status)
     return route.fallback()
   })
   await page.goto('/b')
@@ -370,6 +417,58 @@ for (const viewport of sizes) {
         'href',
         /\/runs\/brief-activity$/,
       )
+    })
+
+    test(`the thread shows report-back, sends it, and lists Hermes tasks at ${size}`, async ({
+      page,
+    }) => {
+      const state = await openThread(page, {
+        reportBack: { state: 'needs_ok', tool: 'add_comment', at: null },
+        tasks: [
+          {
+            id: 'task-thread',
+            key: 'OPS-9',
+            title: 'Fix the login timeout',
+            column: 'working',
+            hermesStatus: 'running',
+            assignee: 'builder',
+            reviewer: null,
+            roomId: 'team-room',
+            badge: null,
+            progress: null,
+            elapsedSec: null,
+            note: null,
+            updatedAt: at(6),
+          },
+        ],
+      })
+      await openJobThread(page, /Activity feed/)
+      const thread = page.locator('.bold-thread')
+      const report = thread
+        .getByRole('status')
+        .filter({ hasText: 'Send the result back to TCK-142' })
+      await expect(report).toHaveAttribute('data-protected', 'block')
+      await report.getByRole('button', { name: 'Send' }).click()
+      await expect
+        .poll(() => state.posts.some((item) => item.path === '/api/jobs/job-activity/report-back'))
+        .toBe(true)
+
+      const tasks = thread.getByRole('region', { name: 'Room tasks' })
+      await expect(tasks).toContainText('Fix the login timeout')
+      await expect(tasks).toContainText('OPS-9')
+      await expect(tasks).toContainText('not tied to a job yet')
+      await tasks.getByRole('button', { name: 'Show steps' }).click()
+      await expect(tasks).toContainText('Reproduce the timeout')
+      await expect(tasks).toContainText('Pick the new limit')
+      await tasks.getByRole('button', { name: 'Comment' }).click()
+      await tasks.getByLabel('Comment on Fix the login timeout').fill('Check the staging logs.')
+      await tasks.getByRole('button', { name: 'Comment' }).click()
+      await expect
+        .poll(() => state.posts.some((item) => item.path === '/api/tasks/task-thread/actions'))
+        .toBe(true)
+      expect(
+        state.posts.find((item) => item.path === '/api/tasks/task-thread/actions')?.body,
+      ).toEqual({ action: 'comment', text: 'Check the staging logs.' })
     })
 
     test(`the default job's thread uses the room session at ${size}`, async ({ page }) => {

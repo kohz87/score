@@ -31,6 +31,8 @@ import {
   threadTurns,
 } from './thread-model.ts'
 import { decisionError, ExchangeRequestCard } from './RoomRequests.tsx'
+import { ReportBackLine } from './ReportBack.tsx'
+import { ThreadTasks } from './RoomTasks.tsx'
 import {
   jobExchangesQuery,
   roomJobsQuery,
@@ -379,6 +381,10 @@ function JobThread({
             </button>
           </div>
         </div>
+
+        <ReportBackLine job={job} inThread />
+
+        <ThreadTasks roomId={roomId} agents={agents} />
 
         {confirmingStop && (
           <div

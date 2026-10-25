@@ -54,7 +54,17 @@ test('waits for the team room and counts the selected job', async () => {
             role: 'team',
             routing: 'exchanges',
           },
-          jobs: [
+          jobs: [],
+        })
+      if (path === '/api/tasks')
+        return Response.json({
+          asOfSeq: 1,
+          columns: { planned: [], working: [], in_review: [], needs_you: [], done: [] },
+        })
+      if (path === '/api/rooms/team-room/jobs')
+        return Response.json({
+          asOfSeq: 1,
+          items: [
             {
               id: 'job-notes',
               roomId: 'team-room',

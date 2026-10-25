@@ -119,6 +119,7 @@ function installFetch() {
           room: room(savedLead),
           jobs: [],
         } satisfies TeamRoomResponse)
+      if (url.pathname === '/api/rooms/team-room/jobs') return response({ asOfSeq: 1, items: [] })
       if (url.pathname === '/api/system') return response(currentSystem)
       if (url.pathname === '/api/about')
         return response({
@@ -226,7 +227,7 @@ test('first run lists the team without pretending members are editable, and neve
     screen.getByText('Version 0.15.2, gateway running. Bridge waiting for a producer.'),
   ).toBeDefined()
 
-  const members = screen.getByRole('list', { name: 'Team members' })
+  const members = await screen.findByRole('list', { name: 'Team members' })
   expect(within(members).getAllByRole('listitem')).toHaveLength(4)
   expect(within(members).getByText('builder')).toBeDefined()
   expect(within(members).queryByRole('checkbox')).toBeNull()
@@ -271,7 +272,9 @@ test('missing or degraded Hermes says what is wrong and links to the classic set
 
 test('Open saves the lead first, then the chosen recipes, sets the device flag and opens the room', async () => {
   const router = open()
-  fireEvent.change(await screen.findByRole('combobox', { name: /Who leads/ }), {
+  const lead = (await screen.findByRole('combobox', { name: /Who leads/ })) as HTMLSelectElement
+  await waitFor(() => expect(lead.disabled).toBe(false))
+  fireEvent.change(lead, {
     target: { value: 'reviewer' },
   })
   fireEvent.click(screen.getByRole('checkbox', { name: /Build, then review/ }))
@@ -303,7 +306,9 @@ test('an existing recipe is shown as already saved and is never posted twice', a
   expect(existing.disabled).toBe(true)
   expect(screen.getByText('Already saved')).toBeDefined()
   fireEvent.click(screen.getByRole('checkbox', { name: /Build, then review/ }))
-  fireEvent.change(screen.getByRole('combobox', { name: /Who leads/ }), {
+  const lead = screen.getByRole('combobox', { name: /Who leads/ }) as HTMLSelectElement
+  await waitFor(() => expect(lead.disabled).toBe(false))
+  fireEvent.change(lead, {
     target: { value: 'builder' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Open the team room' }))
@@ -327,7 +332,9 @@ test('?first=run pre-selects the lead the team room already has', async () => {
 
 test('a workflows-list failure still saves the lead and Retry only retries the chosen recipes', async () => {
   const router = open()
-  fireEvent.change(await screen.findByRole('combobox', { name: /Who leads/ }), {
+  const lead = (await screen.findByRole('combobox', { name: /Who leads/ })) as HTMLSelectElement
+  await waitFor(() => expect(lead.disabled).toBe(false))
+  fireEvent.change(lead, {
     target: { value: 'reviewer' },
   })
   fireEvent.click(screen.getByRole('checkbox', { name: /Build, then review/ }))
@@ -353,7 +360,9 @@ test('a workflows-list failure still saves the lead and Retry only retries the c
 
 test('one recipe failure does not block the others, and the message names only the failed recipe', async () => {
   open()
-  fireEvent.change(await screen.findByRole('combobox', { name: /Who leads/ }), {
+  const lead = (await screen.findByRole('combobox', { name: /Who leads/ })) as HTMLSelectElement
+  await waitFor(() => expect(lead.disabled).toBe(false))
+  fireEvent.change(lead, {
     target: { value: 'reviewer' },
   })
   fireEvent.click(screen.getByRole('checkbox', { name: /Build, then review/ }))
@@ -374,7 +383,9 @@ test('one recipe failure does not block the others, and the message names only t
 
 test('a lead failure saves nothing else and does not set the device flag', async () => {
   open()
-  fireEvent.change(await screen.findByRole('combobox', { name: /Who leads/ }), {
+  const lead = (await screen.findByRole('combobox', { name: /Who leads/ })) as HTMLSelectElement
+  await waitFor(() => expect(lead.disabled).toBe(false))
+  fireEvent.change(lead, {
     target: { value: 'reviewer' },
   })
   fireEvent.click(screen.getByRole('checkbox', { name: /Build, then review/ }))
@@ -402,6 +413,8 @@ test('unmatched recipe roles stay empty and name the step the person must fill',
   savedLead = 'captain'
   open()
 
+  const lead = (await screen.findByRole('combobox', { name: /Who leads/ })) as HTMLSelectElement
+  await waitFor(() => expect(lead.disabled).toBe(false))
   expect(
     await screen.findAllByText('You pick the agent for build it in the recipe editor'),
   ).toHaveLength(1)

@@ -31,9 +31,13 @@ import {
   pinsMoreLabel,
   approvalInRoom,
   approvalNeedsYou,
+  reportBackWaiting,
 } from './room-model.ts'
 import { PinCard, PinsProvider, usePinRegistry } from './PinCards.tsx'
-import { roomExchangesQuery } from './room-queries.ts'
+import { reportBackText } from './ReportBack.tsx'
+import { useReportBack } from './report-back-store.ts'
+import { roomExchangesQuery, roomJobsQuery } from './room-queries.ts'
+import { RoomTaskRequests } from './RoomTasks.tsx'
 import { RunSafetyRequests } from './RunSafetyRequests.tsx'
 import { useRoomNeedsYouState } from './use-needs-you.ts'
 
@@ -97,6 +101,60 @@ function RoomFence() {
         </Link>
       </div>
     </PinCard>
+  )
+}
+
+function ReportBackRequestCard({ job, refetch }: { job: Job; refetch: () => void }) {
+  const reportBack = job.reportBack
+  const state = reportBack?.state
+  const text = reportBack ? reportBackText(reportBack, job.source) : null
+  const report = useReportBack(job.id, state ?? null, refetch)
+  if (!reportBack || !text || (state !== 'needs_ok' && state !== 'not_confirmed')) return null
+  return (
+    <PinCard
+      pinKey={`report-back:${job.id}`}
+      since={job.updatedAt}
+      label={`Report back: ${job.title}`}
+    >
+      <div className="bold-request-head">
+        <b>{job.title}</b>
+        <span className="bold-request-job">{job.source?.ref ?? 'Trigger'}</span>
+      </div>
+      <b className="bold-request-title">{text}</b>
+      <span>Score can send the result back when you allow it.</span>
+      <span className="row wrap">
+        <button
+          type="button"
+          className="btn sm"
+          disabled={report.sending}
+          onClick={() => void report.send()}
+        >
+          {report.sending ? 'Sending…' : state === 'needs_ok' ? 'Send' : 'Try again'}
+        </button>
+      </span>
+      {report.stillSending && (
+        <span className="bold-report-back-note">Still sending — check the source</span>
+      )}
+      {report.error && (
+        <span className="bold-request-error" role="alert">
+          {report.error}
+        </span>
+      )}
+    </PinCard>
+  )
+}
+
+function RoomReportBacks({ roomId, jobs }: { roomId: string; jobs: Job[] }) {
+  const jobsDefinition = useMemo(() => roomJobsQuery(roomId), [roomId])
+  const refetch = useStreamQueryRefetch(jobsDefinition)
+  // A closed job asks nothing (reopen it to send its result back); the reads include closed jobs.
+  const waiting = reportBackWaiting(jobs)
+  return (
+    <>
+      {waiting.map((job) => (
+        <ReportBackRequestCard key={job.id} job={job} refetch={refetch} />
+      ))}
+    </>
   )
 }
 
@@ -532,12 +590,14 @@ export function RoomRequests({
   agents,
   messages,
   selectedJob,
+  teamRoom = false,
 }: {
   roomId: string
   jobs: Job[]
   agents: AgentSummary[]
   messages?: Message[]
   selectedJob: string
+  teamRoom?: boolean
 }) {
   const approvals = useStreamQuery(approvalsQuery).data ?? []
   const [expanded, setExpanded] = useState(false)
@@ -546,13 +606,15 @@ export function RoomRequests({
   const focusedKey = useRef<string | null>(null)
   const lastCards = useRef<typeof pins.cards>([])
   const lastVisible = useRef<string[]>([])
-  const selectedJobs = jobs.filter((job) => selectedJob === 'all' || job.id === selectedJob)
+  const selectedJobs = jobs.filter(
+    (job) => job.state !== 'closed' && (selectedJob === 'all' || job.id === selectedJob),
+  )
   const cooking = selectedJobs.filter(
     (job) => job.state === 'waiting_on_you' || job.state === 'working',
   )
   const recipeJobs = selectedJobs.filter((job) => job.recipe !== null)
   const needsApproval = approvals.filter(approvalNeedsYou)
-  const needs = useRoomNeedsYouState({ roomId, jobs, messages, selectedJob })
+  const needs = useRoomNeedsYouState({ roomId, jobs, messages, selectedJob, teamRoom })
   const total = needs.total
   const moreLabel = pinsMoreLabel(total, expanded)
   const lastTotal = useRef<number | null>(null)
@@ -633,7 +695,9 @@ export function RoomRequests({
             agents={agents}
           />
           <RoomExchanges jobs={cooking} agents={agents} />
+          <RoomReportBacks roomId={roomId} jobs={jobs} />
           <RunSafetyRequests jobs={recipeJobs} agents={agents} />
+          <RoomTaskRequests roomId={roomId} agents={agents} teamRoom={teamRoom} />
         </div>
       )}
       {total > 0 && moreLabel && (

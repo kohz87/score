@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+import { visualHello } from './visual-fixtures.ts'
 
 // PLAN 11.6b: the Workbench and the agent's screen (boards 02 and 12) on the seeded fake team room. The demo moves on
 // over time, so the assertions use the seeded job's stable content and ask the API for the note's line numbers.
@@ -233,6 +234,29 @@ for (const size of sizes) {
       await chip.click()
       await expect(bar).toBeVisible()
       await expect(chip).toHaveCount(0)
+    })
+
+    test('deleting the open Workbench job returns to the room with a note', async ({ page }) => {
+      await pair(page)
+      const job = await activityFeedJob(page)
+      const hello = `event: stream.hello\ndata: ${JSON.stringify(visualHello)}\n\n`
+      const deleted = {
+        seq: 48,
+        ts: '2026-10-24T10:00:00.000Z',
+        type: 'job.deleted',
+        data: { id: job.id, roomId: 'team-room' },
+      }
+      await page.route('**/api/stream**', (route) =>
+        route.fulfill({
+          contentType: 'text/event-stream',
+          body: `${hello}event: job.deleted\nid: 48\ndata: ${JSON.stringify(deleted)}\n\n`,
+        }),
+      )
+      await openPanel(page, size, `/b?job=${encodeURIComponent(job.id)}&work=workbench`)
+      await expect(page).toHaveURL(/\/b$/)
+      await expect(
+        page.getByRole('status').filter({ hasText: 'That job was deleted.' }),
+      ).toBeVisible()
     })
   })
 }

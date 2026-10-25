@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { forgetStoredTheme, readStoredTheme, saveTheme, type ThemeChoice } from '../data/theme.ts'
 import { saveLiveliness, useChosenLiveliness } from '../data/liveliness.ts'
 import { isTouchDevice, readSendKey, saveSendKey, type SendKey } from '../data/send-key.ts'
@@ -297,6 +297,18 @@ export function BoldLook() {
           </label>
         </section>
       </div>
+
+      <section className="card bold-look-customize" aria-labelledby="bold-look-customize-title">
+        <div>
+          <h3 id="bold-look-customize-title">Colours, fonts and layout</h3>
+          <span className="small muted">
+            Change them with a live preview. A built-in style is copied first, so it stays as it is.
+          </span>
+        </div>
+        <Link className="btn sm" to={`/settings/look/customize/${look.deviceId ?? look.sharedId}`}>
+          Open the Customizer
+        </Link>
+      </section>
 
       <CurrencyCard />
     </div>

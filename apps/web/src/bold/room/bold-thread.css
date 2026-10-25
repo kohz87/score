@@ -395,6 +395,54 @@
   color: var(--bad);
 }
 
+[data-ui='bold'] .bold-thread-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 16px 12px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--panel);
+}
+
+[data-ui='bold'] .bold-thread-tasks h3 {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-d);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-task {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--field);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-thread-task-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-thread-task-state {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-thread-task-key {
+  margin-left: auto;
+  color: var(--faint);
+  font-family: var(--font-m);
+  font-size: 11px;
+}
+
 @media (max-width: 860px) {
   [data-ui='bold'] .bold-thread-actions {
     margin-left: 0;

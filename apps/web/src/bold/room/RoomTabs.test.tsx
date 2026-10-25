@@ -4,6 +4,7 @@ import type { Job } from '@score/contract'
 import type { JobRead } from './room-queries.ts'
 import { makeJob } from './room-test-utils.tsx'
 import { RoomTabs } from './RoomTabs.tsx'
+import type { JobFilter } from './room-model.ts'
 
 afterEach(cleanup)
 
@@ -21,7 +22,7 @@ const jobs: JobRead[] = [
   makeJob({ id: 'old', title: 'Closed job', state: 'closed', unread: 4 }),
 ]
 
-function show(selectedJob = 'all', filter: 'all' | 'needs' | 'working' | 'done' = 'all') {
+function show(selectedJob = 'all', filter: JobFilter = 'all') {
   const onSelectJob = vi.fn()
   const onSelectFilter = vi.fn()
   render(
@@ -40,12 +41,12 @@ test('All counts the named jobs’ unread messages, not the default job’s room
   show()
   const all = screen.getByRole('tab', { name: /^All/ })
   expect(all.getAttribute('aria-selected')).toBe('true')
-  expect(all.querySelector('[aria-label="9 unread"]')?.textContent).toBe('9')
-  // 2 + 3 + 4; the default job's 9 would make it 18.
+  expect(all.querySelector('[aria-label="5 unread"]')?.textContent).toBe('5')
+  // 2 + 3; the default job's 9 and the closed job's 4 are not in All.
   expect(all.textContent).not.toContain('18')
   expect(screen.getByRole('tab', { name: /Activity feed/ }).textContent).toContain('2')
   expect(screen.getByRole('tab', { name: /Release notes/ }).textContent).toContain('3')
-  expect(screen.getByRole('tab', { name: /Closed job/ }).textContent).toContain('4')
+  expect(screen.queryByRole('tab', { name: /Closed job/ })).toBeNull()
   expect(screen.getByRole('tab', { name: /Queue research/ }).textContent).not.toContain('0')
   expect(screen.queryByRole('tab', { name: /Team room/ })).toBeNull()
 })
@@ -73,6 +74,15 @@ test('a filter shows only the jobs in that state and marks itself pressed', () =
     'true',
   )
   expect(screen.getByRole('button', { name: 'Working' }).getAttribute('aria-pressed')).toBe('false')
+})
+
+test('Closed jobs is its own list, and only there does a closed job appear', () => {
+  show('all', 'closed')
+  expect(screen.getByRole('tab', { name: /Closed job/ }).textContent).toContain('4')
+  expect(screen.queryByRole('tab', { name: /Activity feed/ })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Closed jobs' }).getAttribute('aria-pressed')).toBe(
+    'true',
+  )
 })
 
 test('the selected tab carries the on state and its title names the state', () => {

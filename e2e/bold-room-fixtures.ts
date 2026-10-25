@@ -27,6 +27,8 @@ export interface BoldRoomOptions {
   shared?: boolean
   /** Give the Activity feed job a trigger source, for the Started-by card. */
   source?: boolean
+  /** Give the Activity feed job a trigger source and this report-back state. */
+  reportBack?: Json | null
   /** Replace the approval list (an empty list isolates a run-safety card). */
   approvals?: Json[]
   /** Replace the room's exchanges, across the named jobs. */
@@ -101,13 +103,6 @@ const jobs = [
     state: 'done',
     holderAgentId: 'lead',
     lastMessageAt: at(10),
-    messageCount: 1,
-  }),
-  job('job-closed', 'Old import', {
-    state: 'closed',
-    holderAgentId: 'designer',
-    unread: 1,
-    lastMessageAt: at(11),
     messageCount: 1,
   }),
 ]
@@ -211,15 +206,6 @@ const messages: Record<string, Json[]> = {
       { kind: 'agent', agentId: 'lead' },
       'Queue libraries compared. One clear pick, with sources and licence notes.',
       10,
-    ),
-  ],
-  'job-closed': [
-    text(
-      'message-closed',
-      'job-closed',
-      { kind: 'agent', agentId: 'designer' },
-      'Old import finished.',
-      11,
     ),
   ],
 }
@@ -364,7 +350,9 @@ export async function mockBoldRoom(page: Page, options: BoldRoomOptions = {}) {
   const baseJobs = options.jobs ?? jobs
   const visibleJobs = (options.empty ? baseJobs.filter((item) => item.isDefault) : baseJobs).map(
     (item) =>
-      options.source && item.id === 'job-activity' ? { ...item, source: triggerSource } : item,
+      (options.source || options.reportBack) && item.id === 'job-activity'
+        ? { ...item, source: triggerSource, reportBack: options.reportBack ?? item.reportBack }
+        : item,
   )
   const roomMessages: Record<string, Json[]> = { ...messages }
   if (options.shared)

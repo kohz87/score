@@ -1,4 +1,12 @@
-import type { AgentSummary, Exchange, Job, Message, Room } from '@score/contract'
+import type {
+  AgentSummary,
+  Exchange,
+  Job,
+  Message,
+  Room,
+  StreamEvent,
+  TaskSummary,
+} from '@score/contract'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
@@ -120,6 +128,25 @@ export function makeExchange(overrides: Partial<Exchange> = {}): Exchange {
   }
 }
 
+export function makeTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
+  return {
+    id: 'task-1',
+    key: 'TASK-1',
+    title: 'Fix the login timeout',
+    column: 'needs_you',
+    hermesStatus: 'blocked',
+    assignee: 'builder',
+    reviewer: null,
+    roomId: room.id,
+    badge: { kind: 'blocked', label: 'Needs a decision on the timeout' },
+    progress: null,
+    elapsedSec: null,
+    note: null,
+    updatedAt: '2026-10-24T09:06:00.000Z',
+    ...overrides,
+  }
+}
+
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -134,10 +161,14 @@ export function renderInRoom(
 ) {
   const queryClient = createQueryClient()
   queryClient.setDefaultOptions({ queries: { retry: false } })
+  const listeners = new Set<(event: StreamEvent) => void>()
   const stream =
     client ??
     ({
-      subscribe: () => () => undefined,
+      subscribe: (listener: (event: StreamEvent) => void) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
       onControl: () => () => undefined,
     } as unknown as StreamClient)
   const queries = createStreamQueryRegistry(queryClient, stream, immediateFrameScheduler)
@@ -148,7 +179,14 @@ export function renderInRoom(
       </StreamContext>
     </QueryClientProvider>,
   )
-  return { ...result, queryClient, queries }
+  return {
+    ...result,
+    queryClient,
+    queries,
+    emit(event: StreamEvent) {
+      for (const listener of listeners) listener(event)
+    },
+  }
 }
 
 export function mockFetch(

@@ -234,13 +234,15 @@ export function exchangeRow(sqlite: DatabaseSync, id: string): ExchangeRow | nul
   return row === undefined ? null : ExchangeRowSchema.parse(row)
 }
 
-export function listJobs(sqlite: DatabaseSync, roomId: string): Job[] {
+/** The room's jobs, the default first; closed ones only when asked (`closed`: the job menu's "Closed jobs"). */
+export function listJobs(sqlite: DatabaseSync, roomId: string, { closed = false } = {}): Job[] {
   return z
     .array(JobRowSchema)
     .parse(
       sqlite
         .prepare(
-          "SELECT * FROM jobs WHERE room_id = ? AND state != 'closed' AND deleted_at IS NULL ORDER BY is_default DESC, created_at, id",
+          `SELECT * FROM jobs WHERE room_id = ? AND deleted_at IS NULL ${closed ? '' : "AND state != 'closed'"}
+           ORDER BY is_default DESC, created_at, id`,
         )
         .all(roomId),
     )

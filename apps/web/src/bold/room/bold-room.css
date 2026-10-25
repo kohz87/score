@@ -365,6 +365,121 @@
   font-size: 12px;
 }
 
+[data-ui='bold'] .bold-report-back {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-report-back[data-state='confirmed'] {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-report-back[data-state='not_confirmed'],
+[data-ui='bold'] .bold-report-back-error {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-report-back--thread {
+  margin: 0 16px 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-job-lifecycle-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--ink2);
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-job-toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 40;
+  width: min(560px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding: 0;
+}
+
+/* On the phone the tab bar sits at the bottom: the toast must not cover it. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-job-toasts {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+[data-ui='bold'] .bold-job-undo {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-task-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-task-action-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+[data-ui='bold'] .bold-task-action-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-task-action-form textarea {
+  width: 100%;
+  min-height: 58px;
+  resize: vertical;
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+}
+
+[data-ui='bold'] .bold-task-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink2);
+  font-size: 12px;
+}
+
+[data-ui='bold'] .bold-task-steps li {
+  display: flex;
+  gap: 7px;
+}
+
+[data-ui='bold'] .bold-task-steps li[data-done='true'] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 [data-ui='bold'] .bold-request-sent {
   color: var(--ok);
 }

@@ -1,20 +1,23 @@
 import type { AgentSummary, Approval, Exchange, ExchangeOption, Job } from '@score/contract'
 import { agentDisplayName } from '../bold-agents.ts'
 
-export type JobFilter = 'all' | 'needs' | 'working' | 'done'
+export type JobFilter = 'all' | 'needs' | 'working' | 'done' | 'closed'
 
 export const JOB_FILTERS: { id: JobFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'needs', label: 'Needs you' },
   { id: 'working', label: 'Working' },
   { id: 'done', label: 'Done' },
+  { id: 'closed', label: 'Closed jobs' },
 ]
 
 export function jobMatchesFilter(job: Job, filter: JobFilter): boolean {
-  if (filter === 'all') return true
+  // A closed job leaves the room's tabs until the person asks for the Closed jobs list.
+  if (filter === 'all') return job.state !== 'closed'
   if (filter === 'needs') return job.state === 'waiting_on_you'
   if (filter === 'working') return job.state === 'open' || job.state === 'working'
-  return job.state === 'done' || job.state === 'closed'
+  if (filter === 'done') return job.state === 'done'
+  return job.state === 'closed'
 }
 
 export function jobStateLabel(job: Job): string {
@@ -168,4 +171,13 @@ export function pinsMoreLabel(count: number, expanded: boolean): string | null {
   if (count <= 1) return null
   if (expanded) return 'Show fewer'
   return `${count - 1} more need${count === 2 ? 's' : ''} you`
+}
+
+/** Jobs whose finished result waits on the person to send it back. A closed job asks nothing until it is reopened. */
+export function reportBackWaiting(jobs: readonly Job[]): Job[] {
+  return jobs.filter(
+    (job) =>
+      job.state !== 'closed' &&
+      (job.reportBack?.state === 'needs_ok' || job.reportBack?.state === 'not_confirmed'),
+  )
 }

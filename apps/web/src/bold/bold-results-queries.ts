@@ -26,12 +26,13 @@ export async function fetchJobResults(jobId: string, signal?: AbortSignal): Prom
 const REFRESH_MS = 1000
 const RESULT_EVENTS = new Set<StreamEvent['type']>([
   'job.upserted',
+  'job.deleted',
   'exchange.upserted',
   'watch.frame',
 ])
 
 function eventJobId(event: StreamEvent): string | undefined {
-  if (event.type === 'job.upserted') return event.data.id
+  if (event.type === 'job.upserted' || event.type === 'job.deleted') return event.data.id
   if (event.type === 'exchange.upserted') return event.data.jobId
   return undefined
 }

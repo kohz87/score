@@ -104,6 +104,11 @@ function installFetch(overrides: Record<string, unknown | Promise<Response>> = {
           room: teamRoom,
           jobs: [job('job_alpha', 'Release alpha'), job('job_beta', 'Release beta')],
         })
+      if (url.pathname === '/api/rooms/team-room/jobs')
+        return respond({
+          asOfSeq: 1,
+          items: [job('job_alpha', 'Release alpha'), job('job_beta', 'Release beta')],
+        })
       if (url.pathname.startsWith('/api/agents/') && url.pathname.endsWith('/direct'))
         return respond({ asOfSeq: 1, room: null, chats: [] })
       if (url.pathname === '/api/knowledge/tree')

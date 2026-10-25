@@ -65,6 +65,8 @@ function stub(chats = [newer, older]) {
       return jsonResponse({ asOfSeq: 1, room: chats.length ? directRoom : null, chats })
     if (url === '/api/team-room')
       return jsonResponse({ asOfSeq: 1, room: teamRoom, jobs: [teamJob] })
+    if (url.startsWith(`/api/rooms/${teamRoom.id}/jobs`))
+      return jsonResponse({ asOfSeq: 1, items: [teamJob] })
     if (url.startsWith('/api/rooms/direct-builder/messages'))
       return jsonResponse({
         asOfSeq: 1,

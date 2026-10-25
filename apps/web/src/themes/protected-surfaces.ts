@@ -50,6 +50,12 @@ export const protectedClasses = [
   'bold-room-menu',
   'bold-job-menu',
   'bold-room-delete-dialog',
+  // PLAN 11.12b: a job's lifecycle (rename, delete confirmation, undo, still-working notice) and report-back
+  'bold-job-rename-dialog',
+  'bold-job-delete-dialog',
+  'bold-job-undo',
+  'bold-job-lifecycle-notice',
+  'bold-report-back',
   // PLAN 11.7: the privacy label, the share chooser, Add someone, and a shared one-to-one copy in the team room
   'bold-dm-privacy',
   'bold-dm-share-menu',

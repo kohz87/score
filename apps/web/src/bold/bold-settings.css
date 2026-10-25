@@ -502,6 +502,50 @@
   margin-top: 4px;
 }
 
+.bold-settings-page .bold-agent-where-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bold-settings-page .bold-agent-where {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--field);
+}
+
+.bold-settings-page .bold-agent-where-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bold-settings-page .bold-agent-where .badge {
+  margin-left: auto;
+}
+
+.bold-settings-page .bold-look-customize {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.bold-settings-page .bold-look-customize > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+}
+
 .bold-settings-page .settings-password {
   display: flex;
   flex-direction: column;

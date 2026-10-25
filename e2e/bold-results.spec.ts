@@ -111,6 +111,9 @@ for (const size of sizes) {
       await page.route('**/api/team-room', (route) =>
         route.fulfill({ json: { asOfSeq: 1, room: team.room, jobs: [] } }),
       )
+      await page.route('**/api/rooms/*/jobs**', (route) =>
+        route.fulfill({ json: { asOfSeq: 1, items: [] } }),
+      )
       const panel = await openResults(page, size)
       await expect(panel.getByRole('heading', { name: 'Nothing being made yet' })).toBeVisible()
     })
@@ -208,16 +211,11 @@ for (const size of sizes) {
       ).toBeVisible()
     })
 
-    test('Workbench keeps the selected job and note, and has a visible focus target', async ({
-      page,
-    }) => {
+    test('Workbench keeps the selected job, and has a visible focus target', async ({ page }) => {
       await pair(page)
       const job = await activityFeedJob(page)
-      const panel = await openResults(
-        page,
-        size,
-        `/b?job=${encodeURIComponent(job.id)}&note=Projects%2FRoadmap.md`,
-      )
+      // `?note=` is a one-shot request to open the Library (11.12c), so it is not part of this carried state.
+      const panel = await openResults(page, size, `/b?job=${encodeURIComponent(job.id)}`)
       const work = panel.getByRole('navigation', { name: 'How to see the work' })
       const link = work.getByRole('link', { name: 'Workbench' })
       // The Work nav is Results then Workbench (11.6b): Tab reaches Results first, then Workbench.
@@ -238,14 +236,9 @@ for (const size of sizes) {
       await expect
         .poll(() => {
           const url = new URL(page.url())
-          return [
-            url.pathname,
-            url.searchParams.get('job'),
-            url.searchParams.get('note'),
-            url.searchParams.get('work'),
-          ]
+          return [url.pathname, url.searchParams.get('job'), url.searchParams.get('work')]
         })
-        .toEqual(['/b', job.id, 'Projects/Roadmap.md', 'workbench'])
+        .toEqual(['/b', job.id, 'workbench'])
       await expect(
         panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' }),
       ).toBeVisible()

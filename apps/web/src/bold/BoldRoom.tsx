@@ -2,7 +2,7 @@ import type { AgentSummary, OutsideSession } from '@score/contract'
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
-import { useStreamQuery } from '../data/query-client.ts'
+import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { agentDisplayName, agentNameColor, agentStateLabel } from './bold-agents.ts'
@@ -41,6 +41,7 @@ export function BoldRoom() {
   const [mode, setMode] = useState<SideMode>('work')
   const [elsewhere, setElsewhere] = useState<OutsideSession | null>(null)
   const [threadJob, setThreadJob] = useState<string | null>(null)
+  const [deletedNotice, setDeletedNotice] = useState<string | null>(null)
   // The thread follows the room's job tab: another tab opens that job's thread, All goes back to the picker.
   const tabJob = new URLSearchParams(location.search).get('job')
   const [seenTabJob, setSeenTabJob] = useState(tabJob)
@@ -65,6 +66,7 @@ export function BoldRoom() {
   const phoneCloseRef = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const closeSheetRef = useRef<() => void>(() => undefined)
+  const stream = useStream()
 
   const directId = params.get('with')
   const directAgent = directId ? agents.find((item) => item.id === directId) : undefined
@@ -138,6 +140,32 @@ export function BoldRoom() {
   }, [phone, setSheetOpen])
 
   useEffect(() => () => forgetBroughtOutsideSessions(), [])
+
+  useEffect(
+    () =>
+      stream.subscribe((event) => {
+        if (event.type !== 'job.deleted') return
+        if (params.get('job') !== event.data.id) return
+        const next = new URLSearchParams(params)
+        next.delete('job')
+        next.delete('message')
+        next.delete('work')
+        next.delete('file')
+        setThreadJob(null)
+        setMode('work')
+        if (phone) setSheetOpen(false)
+        // Same history state as the team room's own handler, so whichever runs last leaves the same entry.
+        setParams(next, { replace: true, state: location.state })
+        setDeletedNotice('That job was deleted.')
+      }),
+    [location.state, params, phone, setParams, setSheetOpen, stream],
+  )
+
+  useEffect(() => {
+    if (!deletedNotice) return
+    const timer = setTimeout(() => setDeletedNotice(null), 5_000)
+    return () => clearTimeout(timer)
+  }, [deletedNotice])
 
   // A direct link (dock, Search, the Team page's Message button) opens the phone sheet itself.
   useEffect(() => {
@@ -277,6 +305,11 @@ export function BoldRoom() {
 
   return (
     <div className="roomgrid">
+      {deletedNotice && (
+        <p className="bold-job-lifecycle-notice" data-protected="block" role="status">
+          {deletedNotice}
+        </p>
+      )}
       <section className="roomcol" aria-label="Team room" inert={phone && sheetOpen}>
         <BoldTeamRoom
           agents={agents}
@@ -284,6 +317,7 @@ export function BoldRoom() {
           phoneAction={phoneAction}
           onOpenElsewhere={openElsewhere}
           onOpenThread={openThread}
+          externalDeletedNotice
         />
       </section>
 

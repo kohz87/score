@@ -30,13 +30,17 @@ export function directChatsQuery(agentId: string) {
         data: { room: response.room, chats: [...response.chats].sort(byActivity) },
       }
     },
-    types: ['room.upserted', 'room.deleted', 'job.upserted'],
+    types: ['room.upserted', 'room.deleted', 'job.upserted', 'job.deleted'],
     reduce(data, event) {
       if (event.type === 'room.deleted')
         return data.room?.id === event.data.id ? { room: null, chats: [] } : data
       if (event.type === 'room.upserted') {
         if (event.data.kind !== 'direct' || event.data.leadAgentId !== agentId) return data
         return { ...data, room: event.data }
+      }
+      if (event.type === 'job.deleted') {
+        if (data.room && event.data.roomId !== data.room.id) return data
+        return { ...data, chats: data.chats.filter((chat) => chat.id !== event.data.id) }
       }
       if (event.type !== 'job.upserted') return data
       if (data.room && event.data.roomId !== data.room.id) return data
