@@ -133,11 +133,13 @@ function Part({
   nested,
   bold,
   workspaceLinkFor,
+  workspacePrepare,
   approvalPointerIds,
 }: {
   part: MessagePart
   nested: ToolPart[]
   workspaceLinkFor?: ((target: WorkspaceTarget) => string) | undefined
+  workspacePrepare?: ((target: WorkspaceTarget) => Promise<void>) | undefined
   approvalPointerIds?: ReadonlySet<string> | undefined
   agents: AgentSummary[]
   message: Message
@@ -168,6 +170,7 @@ function Part({
               agentId: message.author.kind === 'agent' ? message.author.agentId : null,
               agentIds: agents.map((agent) => agent.id),
               ...(workspaceLinkFor ? { linkFor: workspaceLinkFor } : {}),
+              ...(workspacePrepare ? { prepare: workspacePrepare } : {}),
             }}
           />
         </>
@@ -527,12 +530,15 @@ export function MessageItem({
   importedLabel,
   versionControl,
   workspaceLinkFor,
+  workspacePrepare,
   approvalPointerIds,
 }: {
   message: Message
   agents: AgentSummary[]
   /** Where `workspace://` links open (the bold room: the job's Workbench); classic keeps the Team › Workspace link. */
   workspaceLinkFor?: (target: WorkspaceTarget) => string
+  /** Refresh a stale Results read before the bold room opens a workspace link. */
+  workspacePrepare?: (target: WorkspaceTarget) => Promise<void>
   /** A message of a previous version (PLAN 5.33): greyed, no actions. */
   readOnly?: boolean
   /** The bold shell's presentation (PLAN 11.7): a shared part is labelled with the agent it came from. */
@@ -630,6 +636,7 @@ export function MessageItem({
               <Part
                 key={partKey(message.parts, index)}
                 workspaceLinkFor={workspaceLinkFor}
+                workspacePrepare={workspacePrepare}
                 approvalPointerIds={approvalPointerIds}
                 nested={
                   part.kind === 'tool' && part.callId

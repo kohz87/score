@@ -12,6 +12,7 @@ import {
 } from '../data/text-scale.ts'
 import { CurrencyCard } from '../routes/settings/LookSection.tsx'
 import { useLook } from '../themes/use-look.ts'
+import { pairingProblem } from './bold-errors.ts'
 import { saveUi } from './bold-ui.ts'
 
 const modeLabels: Record<ThemeChoice, string> = {
@@ -72,8 +73,10 @@ export function BoldLook() {
       await look.saveShared({ activeTheme: shownSharedTheme, mode: shownSharedMode })
       setSharedTheme(null)
       setSharedMode(null)
-    } catch {
-      setSharedProblem('Couldn’t save the look for every device. Is this browser paired?')
+    } catch (error) {
+      setSharedProblem(
+        pairingProblem(error) ?? 'Couldn’t save the look for every device. Try again.',
+      )
     } finally {
       setSavingShared(false)
     }

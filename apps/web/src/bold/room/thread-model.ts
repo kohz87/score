@@ -118,7 +118,3 @@ export function recipeSummaryLine(match: RecipeRunMatch): string {
   const nodes = match.summary.nodes
   return `${nodes.succeeded} of ${nodes.total} steps done`
 }
-
-export function needsRecipeRun(match: RecipeRunMatch): boolean {
-  return match.summary.needsYou.length > 0
-}

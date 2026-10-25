@@ -161,21 +161,23 @@ function open(path: string) {
   const queryClient = createQueryClient()
   // The shell reads the team room before deciding between first run and the room. These frame tests start with that
   // read already cached, as it is on a normal navigation inside the app; the first-run spec covers the cold read.
-  queryClient.setQueryData(['bold-search', 'team-room'], {
+  queryClient.setQueryData(['bold', 'team-room', null], {
     asOfSeq: 1,
-    room: {
-      id: 'team-room',
-      name: 'Team room',
-      kind: 'room',
-      leadAgentId: 'lead',
-      members: agents.map((agent) => agent.id),
-      unread: 0,
-      activeAgents: [],
-      channels: [],
-      role: 'team',
-      routing: 'exchanges',
+    data: {
+      room: {
+        id: 'team-room',
+        name: 'Team room',
+        kind: 'room',
+        leadAgentId: 'lead',
+        members: agents.map((agent) => agent.id),
+        unread: 0,
+        activeAgents: [],
+        channels: [],
+        role: 'team',
+        routing: 'exchanges',
+      },
+      jobs: [],
     },
-    jobs: [],
   })
   const client = createStreamClient({ EventSourceImpl: Source as never })
   const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)

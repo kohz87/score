@@ -25,26 +25,16 @@ import {
   type ActivityItem,
   type Surface,
 } from '../routes/watch/watch-model.ts'
+import { agentDisplayName, agentStateLabel } from './bold-agents.ts'
+import { approvalNeedsYou } from './room/room-model.ts'
 import './bold-screen.css'
 
 const surfaces: Surface[] = ['terminal', 'editor', 'browser']
 const PLAY_MS = 1000
 
 function pendingApproval(approvals: Approval[], agentId: string): Approval | null {
-  const open = approvals.filter(
-    (item) =>
-      item.agentId === agentId && item.status === 'pending' && item.phase !== 'guardian_evaluating',
-  )
+  const open = approvals.filter((item) => item.agentId === agentId && approvalNeedsYou(item))
   return open.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
-}
-
-function stateLine(agent: AgentSummary): string {
-  if (agent.status === 'working') return agent.activity ? `Working · ${agent.activity}` : 'Working'
-  if (agent.status === 'waiting')
-    return agent.activity ? `Needs you · ${agent.activity}` : 'Needs you'
-  if (agent.status === 'idle') return 'Free'
-  if (agent.status === 'up-next') return 'Up next'
-  return agent.status[0]!.toUpperCase() + agent.status.slice(1)
 }
 
 function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSummary }) {
@@ -58,7 +48,7 @@ function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSumm
       data-protected="flex"
     >
       <span className="watch-approval__text">
-        {agent.name} stopped
+        {agentDisplayName(agent)} stopped
         {approval.command ? (
           <>
             {' '}
@@ -97,8 +87,8 @@ function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSumm
         </button>
       )}
       {!approval.actionable && (
-        <Link className="watch-approval__link" to="/chat">
-          Answer in Chat
+        <Link className="watch-approval__link" to="/b">
+          Answer in the team room
         </Link>
       )}
     </div>
@@ -208,8 +198,8 @@ export function BoldScreenView({
         <span className="muted">/</span>
         <AgentGlyph agent={agent} size="lg" decorative />
         <div className="bold-screen-title">
-          <h1 id="bold-screen-title">{agent.name}’s screen</h1>
-          <span className="muted">{stateLine(agent)}</span>
+          <h1 id="bold-screen-title">{agentDisplayName(agent)}’s screen</h1>
+          <span className="muted">{agentStateLabel(agent)}</span>
         </div>
         <Link className="btn ghost bold-screen-terminal" to="/terminal">
           Open in terminal
@@ -217,8 +207,8 @@ export function BoldScreenView({
       </div>
 
       <div className="bold-screen-layout">
-        <section className="bold-screen-log" aria-label={`What ${agent.name} did`}>
-          <h2 className="bold-screen-log-title">What {agent.name} did</h2>
+        <section className="bold-screen-log" aria-label={`What ${agentDisplayName(agent)} did`}>
+          <h2 className="bold-screen-log-title">What {agentDisplayName(agent)} did</h2>
           {chronological.length === 0 && (
             <p className="bold-screen-empty">Nothing yet. Steps show up here as they happen.</p>
           )}
@@ -258,7 +248,7 @@ export function BoldScreenView({
               {live ? 'Live' : `Replaying ${clock(marker!.at)}`}
             </span>
             <div className="bold-screen-stage-head">
-              <span className="bold-screen-who">{agent.name}’s screen</span>
+              <span className="bold-screen-who">{agentDisplayName(agent)}’s screen</span>
               <div role="group" aria-label="Screens" className="bold-screen-surfaces">
                 {surfaces.map((name) => (
                   <button
@@ -279,7 +269,7 @@ export function BoldScreenView({
               {!frame && (
                 <p className="bold-screen-empty">
                   {live
-                    ? `${agent.name} hasn’t opened anything yet.`
+                    ? `${agentDisplayName(agent)} hasn’t opened anything yet.`
                     : 'Nothing was on screen at that moment.'}
                 </p>
               )}
@@ -290,6 +280,19 @@ export function BoldScreenView({
               {frame?.browser && <BrowserPane browser={frame.browser} />}
             </div>
             {live && waiting && <ApprovalBar key={waiting.id} approval={waiting} agent={agent} />}
+            {!live && waiting && (
+              <button
+                type="button"
+                className="bold-screen-needs-live"
+                data-protected="inline-flex"
+                onClick={() => {
+                  setPlaying(false)
+                  setSelected(null)
+                }}
+              >
+                Needs you — go live
+              </button>
+            )}
           </div>
 
           <ScrubTimeline
@@ -313,7 +316,7 @@ export function BoldScreenView({
             }}
           />
           <p className="bold-screen-note">
-            You’re watching. {agent.name} keeps working and can’t see you here.
+            You’re watching. {agentDisplayName(agent)} keeps working and can’t see you here.
           </p>
         </div>
       </div>

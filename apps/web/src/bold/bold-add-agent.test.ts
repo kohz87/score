@@ -1,6 +1,8 @@
 import { AgentSummarySchema, type AgentSummary } from '@score/contract'
 import { afterEach, expect, test, vi } from 'vitest'
-import { addAgentPalette, availableStyle, colourChoices, saveRunsOn } from './bold-add-agent.ts'
+import { availableStyle, colourChoices, saveRunsOn } from './bold-add-agent.ts'
+
+const addAgentPalette = ['#6b8cff', '#2bb3c0', '#ff8a3d', '#8bd450'] as const
 
 function agent(id: string, color: string, removed = false): AgentSummary {
   return AgentSummarySchema.parse({

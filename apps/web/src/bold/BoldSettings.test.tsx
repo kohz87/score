@@ -489,6 +489,9 @@ test('System shows service, updates, backups, logs, Library access, Shares, Term
   expect(screen.getByRole('link', { name: 'Open the terminal' }).getAttribute('href')).toBe(
     '/terminal',
   )
+  expect(screen.getByRole('link', { name: 'Open Library' }).getAttribute('href')).toBe(
+    '/b?library=1',
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Pause everyone' }))
   expect(await screen.findByRole('button', { name: 'Resume everyone' })).toBeDefined()
 })

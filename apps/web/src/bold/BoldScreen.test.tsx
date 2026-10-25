@@ -129,6 +129,16 @@ test('a step takes the replay back, and an approval is never answered from the p
   expect(screen.getByText('Read-only')).toBeDefined()
 })
 
+test('a replay hands an open approval back to live through a protected chip', () => {
+  renderScreen()
+  fireEvent.click(screen.getByRole('button', { name: /Opened the activity feed/ }))
+  const chip = screen.getByRole('button', { name: 'Needs you — go live' })
+  expect(chip.getAttribute('data-protected')).toBe('inline-flex')
+  fireEvent.click(chip)
+  expect(screen.getByRole('group', { name: 'Approval needed' })).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Needs you — go live' })).toBeNull()
+})
+
 test('the approval bar sends the same decision as the classic Watch card', async () => {
   const answered: Approval = {
     ...approval,

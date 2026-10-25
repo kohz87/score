@@ -13,6 +13,7 @@ import {
   useKnowledgeInfo,
 } from '../routes/knowledge/knowledge-queries.ts'
 import { useNow, useTeamPause } from '../data/team-pause.ts'
+import { pairingProblem } from './bold-errors.ts'
 
 /** The classic Knowledge settings, with the vault summary and both agent switches. */
 function LibraryAccess() {
@@ -90,7 +91,7 @@ function LibraryAccess() {
       {actions.setMemoryNotes.isError && (
         <p role="alert">{knowledgeFailure(actions.setMemoryNotes.error, 'change this setting')}</p>
       )}
-      <Link className="link" to="/knowledge">
+      <Link className="link" to="/b?library=1">
         Open Library
       </Link>
     </section>
@@ -124,7 +125,8 @@ function PauseEveryone() {
       </button>
       {pause.isError && (
         <p role="alert" className="small">
-          Couldn’t {paused ? 'resume' : 'pause'} the team. Try again.
+          {pairingProblem(pause.error) ??
+            `Couldn’t ${paused ? 'resume' : 'pause'} the team. Try again.`}
         </p>
       )}
     </section>

@@ -1,7 +1,8 @@
 import { expect, test } from 'vitest'
-import type { Exchange, ExchangeOption, Job } from '@score/contract'
+import type { Approval, Exchange, ExchangeOption, Job } from '@score/contract'
 import {
   approvalInRoom,
+  approvalNeedsYou,
   exchangePauseAsk,
   exchangePauseTitle,
   exchangeStatus,
@@ -61,6 +62,9 @@ test('a job’s phone state line names who holds working and waiting jobs, or th
     },
   ]
   expect(jobStateLine(makeJob({ holderAgentId: 'builder' }), agents)).toBe('builder is working')
+  expect(
+    jobStateLine(makeJob({ holderAgentId: 'builder' }), [{ ...agents[0]!, name: '' }, agents[1]!]),
+  ).toBe('builder is working')
   expect(jobStateLine(makeJob({ activeAgents: ['builder', 'reviewer'] }), agents)).toBe(
     'builder and reviewer working',
   )
@@ -149,4 +153,43 @@ test('an approval belongs to every room its run touched, and to every room when 
   expect(approvalInRoom({ refs: [room('a'), room('b')] }, 'b')).toBe(true)
   expect(approvalInRoom({ refs: [room('b')] }, 'a')).toBe(false)
   expect(approvalInRoom({ refs: [] }, 'a')).toBe(true)
+})
+
+test('one approval rule: human-pending, still waiting, and not already decided', () => {
+  const approval: Approval = {
+    id: 'approval-rule',
+    origin: 'score-run',
+    phase: 'human_pending',
+    status: 'pending',
+    actionable: true,
+    linkedTo: null,
+    agentId: 'builder',
+    title: 'May I?',
+    command: 'npm test',
+    cwd: '~/app',
+    description: '',
+    choices: ['once', 'deny'],
+    createdAt: '2026-10-24T09:00:00.000Z',
+    expiresAt: null,
+    decision: null,
+    delivery: 'none',
+    blocking: null,
+    refs: [],
+  }
+  expect(approvalNeedsYou(approval)).toBe(true)
+  // An approval answered elsewhere still needs the person; the strip says where, and the badge counts it.
+  expect(approvalNeedsYou({ ...approval, actionable: false })).toBe(true)
+  expect(approvalNeedsYou({ ...approval, phase: 'guardian_evaluating' })).toBe(false)
+  expect(approvalNeedsYou({ ...approval, delivery: 'intent' })).toBe(true)
+  expect(approvalNeedsYou({ ...approval, delivery: 'delivering' })).toBe(true)
+  expect(approvalNeedsYou({ ...approval, delivery: 'failed' })).toBe(true)
+  expect(approvalNeedsYou({ ...approval, delivery: 'not_pending' })).toBe(false)
+  expect(approvalNeedsYou({ ...approval, delivery: 'unknown' })).toBe(false)
+  expect(
+    approvalNeedsYou({
+      ...approval,
+      decision: { choice: 'once', by: 'you', at: '2026-10-24T09:01:00.000Z' },
+    }),
+  ).toBe(false)
+  expect(approvalNeedsYou({ ...approval, status: 'approved' })).toBe(false)
 })

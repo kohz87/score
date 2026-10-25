@@ -1,4 +1,5 @@
 import type { AgentSummary, Approval, Exchange, ExchangeOption, Job } from '@score/contract'
+import { agentDisplayName } from '../bold-agents.ts'
 
 export type JobFilter = 'all' | 'needs' | 'working' | 'done'
 
@@ -24,8 +25,21 @@ export function jobStateLabel(job: Job): string {
   return 'Closed'
 }
 
+/** The one rule for an approval that still waits on the person, shared by the dock, strip and screen. */
+export function approvalNeedsYou(approval: Approval): boolean {
+  if (approval.phase !== 'human_pending') return false
+  if (approval.delivery === 'not_pending' || approval.delivery === 'unknown') return false
+  if (approval.delivery === 'intent' || approval.delivery === 'delivering') return true
+  if (approval.delivery === 'failed') return true
+  if (approval.decision) return false
+  return approval.status === 'pending'
+}
+
 function agentNames(ids: string[], agents: AgentSummary[]): string {
-  const names = ids.map((id) => agents.find((agent) => agent.id === id)?.name ?? id)
+  const names = ids.map((id) => {
+    const agent = agents.find((item) => item.id === id)
+    return agent ? agentDisplayName(agent) : id
+  })
   if (names.length <= 1) return names[0] ?? ''
   return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
 }
@@ -33,7 +47,10 @@ function agentNames(ids: string[], agents: AgentSummary[]): string {
 /** One line for the phone's job list and chat head, using the agents and state the contract already ships. */
 export function jobStateLine(job: Job, agents: AgentSummary[]): string {
   const holder = job.holderAgentId
-    ? (agents.find((agent) => agent.id === job.holderAgentId)?.name ?? job.holderAgentId)
+    ? (() => {
+        const agent = agents.find((item) => item.id === job.holderAgentId)
+        return agent ? agentDisplayName(agent) : job.holderAgentId
+      })()
     : null
   if (job.state === 'waiting_on_you') return holder ? `${holder} needs you` : 'Needs you'
   if (job.state === 'working' || job.state === 'open') {
@@ -127,16 +144,6 @@ export function exchangeStatus(exchange: Exchange): string {
 
 export function exchangeTurns(exchange: Exchange): string {
   return `${exchange.turnsUsed} of ${exchange.budget} turns`
-}
-
-/** True while the approval is one the pinned strip shows (open, being delivered, failed or answerable elsewhere). */
-export function approvalNeedsYou(approval: Approval): boolean {
-  if (approval.phase !== 'human_pending') return false
-  if (approval.delivery === 'not_pending' || approval.delivery === 'unknown') return false
-  if (approval.delivery === 'intent' || approval.delivery === 'delivering') return true
-  if (approval.delivery === 'failed') return true
-  if (approval.decision) return false
-  return approval.status === 'pending'
 }
 
 /** Approvals that belong in this room's Needs-you strip: open and either unaddressed or addressed to this room. */

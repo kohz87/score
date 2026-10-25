@@ -244,9 +244,9 @@ test('a waiting change is a labelled badge, not a control, and fileless changes 
   }
   mountView(results({ feed: waiting }))
   const card = screen.getByText('What changed').closest('article') as HTMLElement
-  const badge = within(card).getByText('Waiting on you')
+  const badge = within(card).getByText('Needs you')
   expect(badge.tagName).toBe('SPAN')
-  expect(within(card).queryByRole('button', { name: 'Waiting on you' })).toBeNull()
+  expect(within(card).queryByRole('button', { name: 'Needs you' })).toBeNull()
   expect(within(card).queryByRole('link', { name: /See the code/ })).toBeNull()
 })
 

@@ -1,5 +1,5 @@
 import type { Approval, Exchange } from '@score/contract'
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { approvalsQuery } from '../../routes/chat/queries.ts'
 import {
@@ -545,4 +545,40 @@ test('the more-turns button never shows an empty count', async () => {
   fireEvent.change(screen.getByLabelText('More turns (1–20)'), { target: { value: '' } })
   expect(screen.getByRole('button', { name: 'Give more turns' })).toBeDefined()
   expect(screen.queryByRole('button', { name: /Give {2}more turns/ })).toBeNull()
+})
+
+test('the strip is a labelled region that announces when the count grows, not on every render', async () => {
+  stubRoom(null, approval)
+  const { queryClient } = renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
+  const strip = await screen.findByRole('region', { name: 'Needs you' })
+  const status = within(strip).getByRole('status')
+  expect(status.textContent).toBe('')
+
+  act(() =>
+    queryClient.setQueryData(approvalsQuery.key, {
+      asOfSeq: 2,
+      data: [approval, { ...approval, id: 'approval-2' }],
+    }),
+  )
+  await waitFor(() => expect(status.textContent).toBe('2 need you'))
+
+  act(() =>
+    queryClient.setQueryData(approvalsQuery.key, {
+      asOfSeq: 3,
+      data: [approval, { ...approval, id: 'approval-2' }],
+    }),
+  )
+  await waitFor(() => expect(status.textContent).toBe('2 need you'))
+})
+
+test('a room with nothing waiting renders no Needs-you region', async () => {
+  stubRoom(null, approval)
+  const { queryClient } = renderInRoom(
+    <RoomRequests roomId="room-1" jobs={[job]} agents={[]} selectedJob="all" messages={[]} />,
+  )
+  await screen.findByRole('article', { name: /May I install a package/ })
+  act(() => queryClient.setQueryData(approvalsQuery.key, { asOfSeq: 2, data: [] }))
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull())
 })

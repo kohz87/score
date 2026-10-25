@@ -8,7 +8,8 @@ import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { useNow, useTeamPause } from '../data/team-pause.ts'
 import { useWatchOverview } from '../routes/watch/watch-queries.ts'
-import { agentNameColor, agentStateLabel } from './bold-agents.ts'
+import { agentDisplayName, agentNameColor, agentStateLabel } from './bold-agents.ts'
+import { pairingProblem } from './bold-errors.ts'
 import { BoldAddAgent } from './BoldAddAgent.tsx'
 import './bold-team.css'
 
@@ -44,7 +45,7 @@ function ScreenGlimpse({
       className="thumb bold-glimpse"
       data-surface={item.surface}
       role="img"
-      aria-label={`${agent.id}’s screen: ${item.surface}`}
+      aria-label={`${agentDisplayName(agent)}’s screen: ${item.surface}`}
     >
       {item.thumbnail ? (
         <img src={item.thumbnail} alt="" />
@@ -80,7 +81,7 @@ function AgentCard({
         <ScreenGlimpse agent={agent} item={watch} />
       </div>
       <div className="bold-agentcard-name">
-        <Link to={`/b/team/${encodeURIComponent(agent.id)}`}>{agent.id}</Link>
+        <Link to={`/b/team/${encodeURIComponent(agent.id)}`}>{agentDisplayName(agent)}</Link>
         <span className="small muted">{agent.role || 'No role set'}</span>
       </div>
       <span className="bold-agentcard-state" style={{ color: stateColor(agent) }}>
@@ -174,7 +175,8 @@ export function BoldTeam() {
         </button>
         {pause.error && (
           <p className="bold-team-error" role="alert">
-            Couldn’t {paused ? 'resume' : 'pause'} the team. Try again.
+            {pairingProblem(pause.error) ??
+              `Couldn’t ${paused ? 'resume' : 'pause'} the team. Try again.`}
           </p>
         )}
       </div>

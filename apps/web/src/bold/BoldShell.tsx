@@ -16,10 +16,12 @@ import { useTextScale } from '../data/text-scale.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery, approvalsQuery } from '../routes/chat/queries.ts'
 import { useFence } from '../routes/orchestrations/orchestration-queries.ts'
+import { approvalNeedsYou } from './room/room-model.ts'
+import { useRoomNeedsYou } from './room/use-needs-you.ts'
 import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
-import { agentStateLabel, dockProgress } from './bold-agents.ts'
-import { boldOneToOneLink } from './bold-links.ts'
+import { agentDisplayName, agentStateLabel, dockProgress } from './bold-agents.ts'
+import { boldCloseRecipesLink, boldOneToOneLink } from './bold-links.ts'
 import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon } from './BoldIcons.tsx'
 import type { BoldSheetState } from './bold-ui.ts'
@@ -49,14 +51,15 @@ function DockRing({
 }) {
   const progress = dockProgress()
   const state = needsYou ? 'needs you' : agentStateLabel(agent)
+  const name = agentDisplayName(agent)
   return (
     <button
       type="button"
       className={`ring ${needsYou ? 'needs bold-needs' : ''}`}
       // A ring that says "needs you" is a decision marker no theme may hide (PLAN 11.3, AGENTS.md design rules).
       data-protected={needsYou ? 'grid' : undefined}
-      aria-label={`One to one with ${agent.id}, ${state}`}
-      title={`${agent.id} · ${state}`}
+      aria-label={`One to one with ${name}, ${state}`}
+      title={`${name} · ${state}`}
       onClick={onOpen}
       data-progress={progress ?? undefined}
       style={{
@@ -82,16 +85,13 @@ export function BoldShell() {
   // An agent needs you while a decision of yours is open for it (as the classic Needs-you dot), not only while a run
   // says it waits.
   const approvals = useStreamQuery(approvalsQuery).data ?? []
-  const waitingOn = new Set(
-    approvals
-      .filter((item) => item.actionable && item.phase === 'human_pending')
-      .map((item) => item.agentId),
-  )
+  const waitingOn = new Set(approvals.filter(approvalNeedsYou).map((item) => item.agentId))
   const navigate = useNavigate()
   const location = useLocation()
   const recipesOpen = new URLSearchParams(location.search).get('recipes') === '1'
   const view = viewOf(location.pathname)
   const phone = useMediaQuery(PHONE)
+  const roomNeedsYou = useRoomNeedsYou({ roomId: null, jobs: [] })
   const systemLight = useMediaQuery('(prefers-color-scheme: light)')
   const look = useLook()
   const preview = usePreview()
@@ -228,7 +228,7 @@ export function BoldShell() {
                     key={agent.id}
                     agent={agent}
                     needsYou={agent.status === 'waiting' || waitingOn.has(agent.id)}
-                    onOpen={() => void navigate(boldOneToOneLink(agent.id))}
+                    onOpen={() => void navigate(boldOneToOneLink(agent.id, location.search))}
                   />
                 ))}
                 {dockHasProgress && (
@@ -282,10 +282,16 @@ export function BoldShell() {
                 type="button"
                 className={view === 'room' ? 'on' : undefined}
                 aria-current={view === 'room' ? 'page' : undefined}
+                aria-label={roomNeedsYou > 0 ? `Room, ${roomNeedsYou} need you` : 'Room'}
                 onClick={go('/b')}
               >
                 <RoomIcon />
-                Room
+                <span>Room</span>
+                {roomNeedsYou > 0 && (
+                  <span className="bold-tab-count" data-protected="inline-flex">
+                    {roomNeedsYou > 99 ? '99+' : roomNeedsYou}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -312,7 +318,13 @@ export function BoldShell() {
             </nav>
           )}
         </div>
-        {recipesOpen && <BoldRecipes onClose={() => void navigate('/b')} />}
+        {recipesOpen && (
+          <BoldRecipes
+            onClose={() => {
+              void navigate(boldCloseRecipesLink(location.search))
+            }}
+          />
+        )}
         {commandOpen && (
           <BoldSearch
             agents={agents}

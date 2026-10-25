@@ -282,6 +282,19 @@
   font-weight: 700;
 }
 
+[data-ui='bold'] .bold-screen-needs-live {
+  align-self: flex-start;
+  border: 1px solid #f0a39d;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  background: #2a2026;
+  color: #ffd8d5;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 /* The reused classic timeline, with the prototype's dark card and pill buttons. */
 [data-ui='bold'] .bold-screen .watch-replay {
   background: var(--panel);

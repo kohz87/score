@@ -1,4 +1,4 @@
-import { RoomSchema, TeamRoomResponseSchema, WorkflowListSchema } from '@score/contract'
+import { RoomSchema, WorkflowListSchema } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
@@ -10,12 +10,11 @@ import { agentsQuery } from '../routes/chat/queries.ts'
 import { aboutQuery, useSystemStatus } from '../routes/settings/settings-queries.ts'
 import { useSaveWorkflow, useWorkflows } from '../routes/workflows/workflow-queries.ts'
 import { finishFirstRun, hermesStatusCopy, starterPlan, starterRecipes } from './bold-first-run.ts'
+import { pairingProblem } from './bold-errors.ts'
 import { useBoldTeamRoom } from './bold-search-queries.ts'
 import './bold-first-run.css'
 
 const SERVICE_COMMAND = 'scripts/score service install'
-const TEAM_ROOM_KEY = ['bold-search', 'team-room'] as const
-type TeamRoomResponse = ReturnType<typeof TeamRoomResponseSchema.parse>
 
 function useServiceStatus() {
   return useQuery(aboutQuery)
@@ -87,9 +86,9 @@ function CopyCommand() {
 }
 
 function leadFailure(error: unknown): string {
+  const pairing = pairingProblem(error)
+  if (pairing) return pairing
   if (error instanceof ApiError) {
-    if (error.code === 'not_paired')
-      return 'Pair this browser with the link in the server terminal, then try again.'
     return `Couldn’t save the lead: ${error.message}`
   }
   return 'Couldn’t save the lead. Try again.'
@@ -196,9 +195,8 @@ export function BoldFirstRun() {
             body: JSON.stringify({ leadAgentId: selectedLead }),
           }),
         )
-        queryClient.setQueryData<TeamRoomResponse>(TEAM_ROOM_KEY, (current) =>
-          current ? { ...current, room: updated } : current,
-        )
+        if (updated.id !== room.id) throw new Error('The server answered for another room.')
+        await roomQuery.refetch()
         setLeadSaved(true)
       }
       await saveRecipes([...selected])
@@ -253,7 +251,7 @@ export function BoldFirstRun() {
                 {hermes.trouble && <span className="small muted">{hermes.trouble}</span>}
                 {!hermes.ok && !system.isPending && (
                   <span className="bold-first-run-help small">
-                    <Link to="/settings/connections">Open the setup help</Link>
+                    <Link to="/b/settings/connections">Open the setup help</Link>
                     {system.isError && (
                       <button type="button" className="link" onClick={() => void system.refetch()}>
                         Check again

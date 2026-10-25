@@ -101,18 +101,3 @@ export async function postChatHandOff(
     }),
   )
 }
-
-/**
- * A direct room holds one agent, so the contract has no route to add a member. Adding someone turns the conversation
- * into a team-room job with the chat referenced, not copied: create the job, then post one addressed message carrying
- * `refs: [{ jobId: chat.id }]` (PLAN 11.0 §6.1).
- */
-export async function moveChatToTeamRoom(
-  teamRoomId: string,
-  chat: Job,
-  to: readonly string[],
-): Promise<Job> {
-  const job = await createTeamJob(teamRoomId, chat)
-  await postChatHandOff(teamRoomId, job.id, chat, to)
-  return job
-}

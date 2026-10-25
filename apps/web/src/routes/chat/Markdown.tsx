@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
-import { Link, useInRouterContext } from 'react-router'
+import { Link, useInRouterContext, useNavigate } from 'react-router'
 import remarkGfm from 'remark-gfm'
 import { copyText } from '../../data/clipboard.ts'
 import { normalizeBullets } from './bullets.ts'
@@ -87,6 +87,8 @@ export type WorkspaceLinkContext = {
   agentIds: readonly string[]
   /** The bold room can send a job's files to its Workbench; the classic screens keep the Workspace tab. */
   linkFor?: (target: WorkspaceTarget) => string
+  /** The bold room refreshes a stale Results read before the link opens its Workbench. */
+  prepare?: (target: WorkspaceTarget) => Promise<void>
 }
 
 const baseComponents: Components = {
@@ -101,6 +103,35 @@ const baseComponents: Components = {
       <table>{children}</table>
     </div>
   ),
+}
+
+function WorkspaceLink({
+  to,
+  resolve,
+  target,
+  prepare,
+  children,
+}: {
+  to: string
+  resolve: () => string
+  target: WorkspaceTarget
+  prepare?: (target: WorkspaceTarget) => Promise<void>
+  children: ReactNode
+}) {
+  const navigate = useNavigate()
+  return (
+    <Link
+      className="chat-workspace-link"
+      to={to}
+      onClick={(event) => {
+        if (!prepare) return
+        event.preventDefault()
+        void prepare(target).finally(() => navigate(resolve()))
+      }}
+    >
+      {children}
+    </Link>
+  )
 }
 
 /**
@@ -121,6 +152,7 @@ export function Markdown({
   const agentId = workspace?.agentId ?? null
   const agentIds = workspace?.agentIds
   const linkFor = workspace?.linkFor
+  const prepare = workspace?.prepare
   const components = useMemo<Components>(
     () => ({
       ...baseComponents,
@@ -137,9 +169,14 @@ export function Markdown({
               </span>
             )
           return (
-            <Link className="chat-workspace-link" to={linkFor?.(target) ?? target.to}>
+            <WorkspaceLink
+              to={linkFor?.(target) ?? target.to}
+              resolve={() => linkFor?.(target) ?? target.to}
+              target={target}
+              prepare={prepare}
+            >
               {children}
-            </Link>
+            </WorkspaceLink>
           )
         }
         return (
@@ -149,7 +186,7 @@ export function Markdown({
         )
       },
     }),
-    [agentId, agentIds, inRouter, linkFor],
+    [agentId, agentIds, inRouter, linkFor, prepare],
   )
   return (
     <div className="chat-text chat-md">

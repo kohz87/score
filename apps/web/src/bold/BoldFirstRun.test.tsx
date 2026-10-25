@@ -265,7 +265,7 @@ test('missing or degraded Hermes says what is wrong and links to the classic set
   expect(screen.getByText(/The bridge is out of date\./)).toBeDefined()
   expect(screen.queryByRole('heading', { name: 'Hermes found' })).toBeNull()
   expect(screen.getByRole('link', { name: 'Open the setup help' }).getAttribute('href')).toBe(
-    '/settings/connections',
+    '/b/settings/connections',
   )
 })
 

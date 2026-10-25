@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
-import { agentNameColor } from '../bold-agents.ts'
+import { agentDisplayName, agentNameColor } from '../bold-agents.ts'
 import { boldAsideLink } from '../bold-links.ts'
 import { exchangeStatus, exchangeTurns, type JobFilter, jobMatchesFilter } from './room-model.ts'
 import { jobExchangesQuery } from './room-queries.ts'
@@ -33,9 +33,13 @@ function Capsule({
           {from && <AgentGlyph agent={from} size="xs" decorative />}
           {to && <AgentGlyph agent={to} size="xs" decorative />}
         </span>
-        <b style={from ? { color: agentNameColor(from) } : undefined}>{exchange.from}</b>
+        <b style={from ? { color: agentNameColor(from) } : undefined}>
+          {from ? agentDisplayName(from) : exchange.from}
+        </b>
         <span className="muted">and</span>
-        <b style={to ? { color: agentNameColor(to) } : undefined}>{exchange.to}</b>
+        <b style={to ? { color: agentNameColor(to) } : undefined}>
+          {to ? agentDisplayName(to) : exchange.to}
+        </b>
         <span className="bold-capsule-status">{exchangeStatus(exchange)}</span>
       </span>
       <span className="small muted">
@@ -44,7 +48,11 @@ function Capsule({
       </span>
       {exchange.queuedBehind && (
         <span className="small muted">
-          Waiting for {exchange.queuedBehind.agentId} in another job
+          Waiting for{' '}
+          {agents.find((agent) => agent.id === exchange.queuedBehind?.agentId)
+            ? agentDisplayName(agents.find((agent) => agent.id === exchange.queuedBehind?.agentId)!)
+            : exchange.queuedBehind.agentId}{' '}
+          in another job
         </span>
       )}
       <span className="bold-capsule-actions">
@@ -93,7 +101,7 @@ function JobCapsule({
             style={{ color: agentNameColor(asideAgent) }}
             onClick={takeAside}
           >
-            {`Take it aside with ${asideAgent.id}`}
+            {`Take it aside with ${agentDisplayName(asideAgent)}`}
           </button>
         </span>
       )}

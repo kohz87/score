@@ -100,9 +100,12 @@ function noteGroups(tree: { folders: string[]; notes: KnowledgeNoteSummary[] }) 
 export function BoldLibrary({
   agents,
   hidden = false,
+  openPath = null,
 }: {
   agents: AgentSummary[]
   hidden?: boolean
+  /** A note named by `?note=` (Search); a new path wins even after someone picked another note by hand. */
+  openPath?: string | null
 }) {
   const phone = useMediaQuery(PHONE)
   const info = useKnowledgeInfo()
@@ -117,12 +120,14 @@ export function BoldLibrary({
   const [section, setSection] = useState<'notes' | 'files'>('notes')
   // `undefined` means "no explicit choice yet"; null keeps the blank state after the open note is deleted.
   const [selected, setSelected] = useState<string | null | undefined>(undefined)
+  const [openedPath, setOpenedPath] = useState<string | null>(null)
   const [filesFolder, setFilesFolder] = useState('')
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const [dragging, setDragging] = useState(false)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const focusNote = useRef(false)
+  const lastOpenedPath = useRef<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [exportRequest, setExportRequest] = useState<ExportRequest | null>(null)
@@ -146,7 +151,20 @@ export function BoldLibrary({
     if (selected !== undefined) return selected
     return section === 'notes' ? (tree.data?.notes[0]?.path ?? null) : null
   }, [section, selected, tree.data])
+
+  if (openPath && openPath !== openedPath) {
+    setOpenedPath(openPath)
+    setSelected(openPath)
+    setSection('notes')
+    setQuery('')
+  }
   const uploadFolder = section === 'files' ? filesFolder : folderOf(active ?? '')
+
+  useEffect(() => {
+    if (openedPath === null || lastOpenedPath.current === openedPath) return
+    lastOpenedPath.current = openedPath
+    focusNote.current = phone
+  }, [openedPath, phone])
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query.trim()), 250)

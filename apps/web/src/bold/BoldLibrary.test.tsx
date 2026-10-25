@@ -122,14 +122,16 @@ function respond(input: string, init: RequestInit = {}): Response {
 
 let router: ReturnType<typeof createMemoryRouter>
 
-function mount() {
+function mount(openPath: string | null = null) {
   const queryClient = createQueryClient()
   queryClient.setDefaultOptions({ queries: { retry: false } })
   const stream = {
     subscribe: () => () => undefined,
     onControl: () => () => undefined,
   }
-  router = createMemoryRouter([{ path: '/', element: <BoldLibrary agents={[reviewer]} /> }])
+  router = createMemoryRouter([
+    { path: '/', element: <BoldLibrary agents={[reviewer]} openPath={openPath} /> },
+  ])
   render(
     <QueryClientProvider client={queryClient}>
       <StreamContext value={{ client: stream as unknown as StreamClient, queries: {} as never }}>
@@ -203,6 +205,12 @@ test('search opens a hit without leaving the panel', async () => {
   fireEvent.click(hit)
   expect(await screen.findByLabelText('Contents of Decisions/Source.md')).toBeDefined()
   expect(screen.getByPlaceholderText('Search')).toHaveProperty('value', '')
+})
+
+test('a note named by Search opens instead of the first note', async () => {
+  mount('Decisions/Source.md')
+  expect(await screen.findByLabelText('Contents of Decisions/Source.md')).toBeDefined()
+  expect(screen.queryByLabelText('Contents of Decisions/Event cursors.md')).toBeNull()
 })
 
 test('an empty Library says so instead of inventing a note', async () => {

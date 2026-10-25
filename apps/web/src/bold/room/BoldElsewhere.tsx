@@ -3,6 +3,7 @@ import { useId, useMemo, useSyncExternalStore } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
+import { agentDisplayName } from '../bold-agents.ts'
 import {
   newBringOutsideSessionAttempt,
   useBringOutsideSessionIntoJob,
@@ -82,7 +83,8 @@ export function BoldElsewhere({
   const nameOf = ({ author }: Message) => {
     if (author.kind === 'you') return 'You'
     const { agentId } = author
-    return agents.find((item) => item.id === agentId)?.name ?? agentId
+    const found = agents.find((item) => item.id === agentId)
+    return found ? agentDisplayName(found) : agentId
   }
   const previewed = preview.data
   const key = sessionKey(session)
@@ -95,7 +97,7 @@ export function BoldElsewhere({
       </span>
       <div className="bold-elsewhere-title">
         <span className="small muted">
-          <b>{agent?.name ?? session.agentId}</b> · {source}
+          <b>{agent ? agentDisplayName(agent) : session.agentId}</b> · {source}
         </span>
         <h2 id={titleId} tabIndex={-1}>
           {title}
@@ -108,7 +110,8 @@ export function BoldElsewhere({
       </div>
       <div className="card bold-elsewhere-card">
         <b>
-          This conversation stays with {agent?.name ?? session.agentId} in {source}.
+          This conversation stays with {agent ? agentDisplayName(agent) : session.agentId} in{' '}
+          {source}.
         </b>
         <span>
           Score can copy its text into a team job, but it can’t reply in {source} or change the

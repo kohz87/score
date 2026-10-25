@@ -76,9 +76,7 @@ export interface RecipeProblem {
 }
 
 /** A stable topological order: Kahn's algorithm, choosing the earliest stored node among the ready ones. */
-export function orderNodes(
-  definition: Pick<WorkflowDefinition, 'nodes' | 'edges'>,
-): WorkflowNode[] {
+function orderNodes(definition: Pick<WorkflowDefinition, 'nodes' | 'edges'>): WorkflowNode[] {
   const byId = new Map(definition.nodes.map((node) => [node.id, node]))
   const stored = new Map(definition.nodes.map((node, index) => [node.id, index]))
   const indegree = new Map(definition.nodes.map((node) => [node.id, 0]))
@@ -481,11 +479,6 @@ export function planRecipeMove(draft: Draft, nodeId: string, direction: -1 | 1):
       reason: 'This move would break how the steps connect. Use the graph editor for this one.',
     }
   return { draft: candidate, order: after.order, changed: true, reason: null }
-}
-
-/** Move one step, or return the draft unchanged when the move is not safe or would not be visible. */
-export function moveRecipeStep(draft: Draft, nodeId: string, direction: -1 | 1): Draft {
-  return planRecipeMove(draft, nodeId, direction).draft
 }
 
 /** The disabled-arrow reason for a move, or null when the arrow can work. */

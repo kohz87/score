@@ -212,6 +212,28 @@ for (const size of sizes) {
       await expect(opener).toBeFocused()
     })
 
+    test('one Escape closes the side-panel menu, the next closes the sheet', async ({ page }) => {
+      await openBoldRoom(page)
+      const opener = page.getByRole('button', { name: 'Open side panel' }).first()
+      await opener.click()
+      const panel = page.getByRole('complementary', { name: 'Side panel' })
+      await expect(panel).toBeVisible()
+
+      const toggle = panel.getByRole('button', { name: /^Work/ })
+      await toggle.click()
+      const menu = panel.locator('.side-menu')
+      await expect(menu).toBeVisible()
+
+      await page.keyboard.press('Escape')
+      await expect(menu).toHaveCount(0)
+      await expect(panel).toBeVisible()
+      await expect(toggle).toBeFocused()
+
+      await page.keyboard.press('Escape')
+      await expect(panel).toBeHidden()
+      await expect(opener).toBeFocused()
+    })
+
     test('Room, Team and Settings each keep the tab bar and content above it', async ({
       page,
     }, testInfo) => {
@@ -245,6 +267,25 @@ for (const size of sizes) {
       await expect(page).toHaveURL('/b')
       await expectTabBar(page, 'Room')
       await expect(page.getByRole('region', { name: 'Jobs' })).toBeVisible()
+    })
+
+    test('the Room tab keeps the Needs-you count while Team is open', async ({ page }) => {
+      await openBoldRoom(page)
+      const nav = tabs(page)
+      const room = nav.getByRole('button', { name: /^Room, \d+ need you$/ })
+      await expect(room).toHaveAccessibleName('Room, 2 need you')
+      const badge = room.locator('.bold-tab-count')
+      await expect(badge).toHaveText('2')
+      await expect(badge).toHaveAttribute('data-protected', 'inline-flex')
+      expect(await badge.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
+        'rgba(0, 0, 0, 0)',
+      )
+
+      await nav.getByRole('button', { name: 'Team' }).click()
+      await expect(page).toHaveURL('/b/team')
+      await expectTabBar(page, 'Team')
+      await expect(room).toHaveAccessibleName('Room, 2 need you')
+      await expect(badge).toHaveText('2')
     })
 
     test('older and imported rooms use the phone chat without overflow', async ({

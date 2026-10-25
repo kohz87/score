@@ -4,6 +4,7 @@ import type { ReportBack, Trigger, TriggerMapping } from '@score/contract'
 import { ApiError } from '../data/api.ts'
 import { copyText } from '../data/clipboard.ts'
 import { failure } from '../routes/settings/TerminalCommand.tsx'
+import { pairingProblem } from './bold-errors.ts'
 import {
   MAPPING_SLOTS,
   cleanMapping,
@@ -119,11 +120,11 @@ function reportBackOf(wizard: Wizard): ReportBack {
 }
 
 function plainProblem(error: unknown, action: string): string {
+  const pairing = pairingProblem(error)
+  if (pairing) return pairing
   if (error instanceof ApiError) {
     if (error.code === 'bad_template')
       return 'The report-back arguments must be JSON, and every {{…}} must be inside a quoted string.'
-    if (error.code === 'not_paired')
-      return `Pair this browser using the link in the server terminal to ${action}.`
     if (error.code === 'not_found') return 'That trigger no longer exists.'
     if (error.code === 'gone') return 'That trigger was deleted.'
   }

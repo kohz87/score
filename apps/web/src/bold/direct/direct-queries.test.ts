@@ -1,12 +1,7 @@
 import type { Job, Room } from '@score/contract'
 import { afterEach, expect, test, vi } from 'vitest'
-import { jsonResponse, makeJob, makeMessage, mockFetch } from '../room/room-test-utils.tsx'
-import {
-  createDirectChat,
-  directChatsQuery,
-  moveChatToTeamRoom,
-  shareMessageToJob,
-} from './direct-queries.ts'
+import { jsonResponse, makeJob, mockFetch } from '../room/room-test-utils.tsx'
+import { createDirectChat, directChatsQuery, shareMessageToJob } from './direct-queries.ts'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -73,38 +68,4 @@ test('Share sends the chosen team-room job and starts no turn of its own', async
   vi.stubGlobal('fetch', fetchMock)
   await shareMessageToJob('message-1', 'job-activity')
   expect(fetchMock).toHaveBeenCalledTimes(1)
-})
-
-test('Add someone creates a team-room job, then posts one addressed reference to this chat', async () => {
-  const fetchMock = mockFetch((url, init) => {
-    if (url === '/api/rooms/team-room/jobs') {
-      expect(JSON.parse(String(init.body))).toEqual({ title: 'The cursor bug' })
-      return jsonResponse(chat('team-chat', 'The cursor bug', null), 201)
-    }
-    expect(url).toBe('/api/rooms/team-room/messages')
-    expect(JSON.parse(String(init.body))).toEqual({
-      text: '@lead Let’s continue this chat with the team.',
-      to: ['builder', 'lead'],
-      jobId: 'team-chat',
-      refs: [{ jobId: 'chat-cursor' }],
-    })
-    return jsonResponse({
-      message: makeMessage({
-        id: 'message-1',
-        roomId: 'team-room',
-        jobId: 'team-chat',
-        to: ['lead'],
-        parts: [{ kind: 'text', text: 'Let’s continue this chat.' }],
-      }),
-      routedTo: ['lead'],
-      command: null,
-    })
-  })
-  vi.stubGlobal('fetch', fetchMock)
-  const made = await moveChatToTeamRoom('team-room', chat('chat-cursor', 'The cursor bug', null), [
-    'builder',
-    'lead',
-  ])
-  expect(made.id).toBe('team-chat')
-  expect(fetchMock).toHaveBeenCalledTimes(2)
 })

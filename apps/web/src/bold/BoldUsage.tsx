@@ -406,7 +406,7 @@ export function BoldUsage() {
             />
             <Headline
               stat="waiting-on-you"
-              label="Waiting on you"
+              label="Needs you"
               value={waiting}
               detail="median wait for your approval"
             />

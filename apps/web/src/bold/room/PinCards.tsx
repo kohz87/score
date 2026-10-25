@@ -17,7 +17,7 @@ export type PinCardMeta = {
   notice: boolean
 }
 
-export function sortPinCards(cards: PinCardMeta[]): PinCardMeta[] {
+function sortPinCards(cards: PinCardMeta[]): PinCardMeta[] {
   return [...cards].sort(
     (a, b) => Number(a.notice) - Number(b.notice) || a.since.localeCompare(b.since),
   )

@@ -6,7 +6,7 @@ import type {
   WorkflowNeedsYou,
   WorkflowRunDetail,
 } from '@score/contract'
-import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
+import { useCallback, useMemo, type ReactNode } from 'react'
 import { Arrival } from '../../motion/Arrival.tsx'
 import { needsYouText, orchCoding } from '../../routes/orchestrations/orch-model.ts'
 import {
@@ -50,15 +50,6 @@ import {
   type WorkflowRunActions,
 } from '../../routes/workflows/workflow-queries.ts'
 import { PinCard } from './PinCards.tsx'
-
-export type CountCards = (id: string, count: number) => void
-
-function useReportedCount(id: string, count: number, report: CountCards) {
-  useEffect(() => {
-    report(id, count)
-  }, [count, id, report])
-  useEffect(() => () => report(id, 0), [id, report])
-}
 
 export type OrchestrationNeedEntry = {
   key: string
@@ -217,21 +208,12 @@ function RunPin({
   )
 }
 
-function OrchestrationRunRequests({
-  job,
-  agents,
-  report,
-}: {
-  job: Job
-  agents: AgentSummary[]
-  report: CountCards
-}) {
+function OrchestrationRunRequests({ job, agents }: { job: Job; agents: AgentSummary[] }) {
   const runId = job.recipe?.ref ?? ''
   const run = useRun(runId)
   const actions = useRunActions(runId)
   const detail = run.data?.snapshot.orchestration
   const entries = detail ? orchestrationNeedEntries(detail) : []
-  useReportedCount(`run-${runId}`, entries.length, report)
   const leadAgentId = detail?.leadAgentId ?? ''
   const preflightWorker = useCallback<PreflightWorker>(
     async (agentId) =>
@@ -357,21 +339,12 @@ function orchestrationCard(
   }
 }
 
-function WorkflowRunRequests({
-  job,
-  agents,
-  report,
-}: {
-  job: Job
-  agents: AgentSummary[]
-  report: CountCards
-}) {
+function WorkflowRunRequests({ job, agents }: { job: Job; agents: AgentSummary[] }) {
   const runId = job.recipe?.ref ?? ''
   const data = useWorkflowRun(runId)
   const actions = useWorkflowRunActions(runId)
   const detail = data.data?.snapshot.run
   const entries = detail ? workflowNeedEntries(detail) : []
-  useReportedCount(`workflow-${runId}`, entries.length, report)
   const gateRun = useMemo(
     () =>
       detail
@@ -497,22 +470,14 @@ const nodeLabel = (run: Pick<WorkflowRunDetail, 'definition'>, nodeId: string): 
   run.definition.nodes.find((node) => node.id === nodeId)?.label ?? nodeId
 
 /** The recipes among the room's jobs, each routed to the run that owns it. */
-export function RunSafetyRequests({
-  jobs,
-  agents,
-  report,
-}: {
-  jobs: Job[]
-  agents: AgentSummary[]
-  report: CountCards
-}) {
+export function RunSafetyRequests({ jobs, agents }: { jobs: Job[]; agents: AgentSummary[] }) {
   return (
     <>
       {jobs.map((job) =>
         job.recipe?.kind === 'orchestration' ? (
-          <OrchestrationRunRequests key={job.id} job={job} agents={agents} report={report} />
+          <OrchestrationRunRequests key={job.id} job={job} agents={agents} />
         ) : job.recipe?.kind === 'workflow' ? (
-          <WorkflowRunRequests key={job.id} job={job} agents={agents} report={report} />
+          <WorkflowRunRequests key={job.id} job={job} agents={agents} />
         ) : null,
       )}
     </>

@@ -7,7 +7,12 @@ const nameTokens: Record<string, string> = {
   '#FF6B8A': 'var(--agent-coral-name)',
 }
 
-/** The word the dock and the one-to-one list use for an agent's state (the prototype's "free", "needs you", …). */
+/** The one display rule for an agent: its Score name, else its immutable profile id. */
+export function agentDisplayName(agent: Pick<AgentSummary, 'id' | 'name'>): string {
+  return agent.name || agent.id
+}
+
+/** The word the dock, agent page and one-to-one list use for an agent's state (the prototype's "free", "needs you", …). */
 export function agentStateLabel(agent: AgentSummary): string {
   if (agent.status === 'waiting') return 'needs you'
   if (agent.status === 'idle') return 'free'

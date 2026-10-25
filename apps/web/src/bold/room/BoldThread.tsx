@@ -19,6 +19,7 @@ import { workflowRunsQuery } from '../../routes/workflows/workflow-queries.ts'
 import { WorkflowRoomPanel } from '../../routes/workflows/WorkflowRoomPanel.tsx'
 import { agentsQuery } from '../../routes/chat/queries.ts'
 import { ChevronIcon } from '../BoldIcons.tsx'
+import { agentDisplayName } from '../bold-agents.ts'
 import { exchangeStatus, jobStateLabel, needsYou } from './room-model.ts'
 import {
   currentExchange,
@@ -245,12 +246,23 @@ function ThreadComposer({
   )
 }
 
-function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: AgentSummary[] }) {
+function JobThread({
+  roomId,
+  job,
+  jobs,
+  agents,
+}: {
+  roomId: string
+  job: Job
+  jobs: Job[]
+  agents: AgentSummary[]
+}) {
   const exchangesDefinition = useMemo(() => jobExchangesQuery(job.id), [job.id])
   const exchanges = useStreamQuery(exchangesDefinition).data ?? []
+  const defaultJobId = jobs.find((item) => item.isDefault)?.id ?? null
   const messagesDefinition = useMemo(
-    () => roomMessagesQuery(roomId, job.id, null, null),
-    [job.id, roomId],
+    () => roomMessagesQuery(roomId, job.id, null, defaultJobId),
+    [defaultJobId, job.id, roomId],
   )
   const messagesState = useStreamQuery(messagesDefinition)
   const [olderPages, setOlderPages] = useState<MessagePageData[]>([])
@@ -351,7 +363,7 @@ function JobThread({ roomId, job, agents }: { roomId: string; job: Job; agents: 
               <ContextMeter
                 roomId={roomId}
                 agentId={holder.id}
-                name={holder.name}
+                name={agentDisplayName(holder)}
                 sessionId={jobSessionId(roomId, job, holder.id)}
                 finishedReplies={finishedReplies}
               />
@@ -493,7 +505,7 @@ function ThreadRoom({
         <p className="bold-thread-note">This job no longer exists.</p>
       </div>
     )
-  return <JobThread key={job.id} roomId={roomId} job={job} agents={agents} />
+  return <JobThread key={job.id} roomId={roomId} job={job} jobs={jobs} agents={agents} />
 }
 
 /** A job's thread in the side panel: rounds, the live messages, the pause card and the step-in composer. */

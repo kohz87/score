@@ -13,6 +13,7 @@ import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../components/runtime-label.ts'
 import { ApiError } from '../data/api.ts'
 import { useStreamQuery } from '../data/query-client.ts'
+import { pairingProblem } from './bold-errors.ts'
 import { taskAgentsQuery } from '../data/task-queries.ts'
 import { EditorCanvas, type Selection } from '../routes/workflows/EditorCanvas.tsx'
 import { ExportDialog } from '../routes/workflows/ExportDialog.tsx'
@@ -108,6 +109,8 @@ function dedupeProblems(problems: RecipeProblem[]): RecipeProblem[] {
 }
 
 function describeError(error: unknown): string {
+  const pairing = pairingProblem(error)
+  if (pairing) return pairing
   if (!(error instanceof ApiError)) return 'Couldn’t do that. Try again.'
   if (error.code === 'workflow_used')
     return 'This recipe has runs, so it can’t be deleted. Delete is only for recipes nothing has run.'

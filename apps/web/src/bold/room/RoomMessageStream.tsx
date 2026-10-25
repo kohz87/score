@@ -22,7 +22,8 @@ import {
 } from '../../routes/chat/versions.tsx'
 import { saveCandidates, SaveToKnowledge } from '../../routes/knowledge/SaveToKnowledge.tsx'
 import { boldJobLink, boldMessageLink, boldWorkspaceLink } from '../bold-links.ts'
-import { jobResultsKey } from '../bold-results-queries.ts'
+import { fetchJobResults, jobResultsKey } from '../bold-results-queries.ts'
+import { agentDisplayName } from '../bold-agents.ts'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { roomMessagesQuery, roomPinsQuery, roomSeekQuery, setRoomPin } from './room-queries.ts'
 
@@ -33,7 +34,8 @@ function messageText(message: Message) {
 function authorName(message: Message, agents: AgentSummary[]) {
   if (message.author.kind === 'you') return 'You'
   const id = message.author.agentId
-  return agents.find((agent) => agent.id === id)?.name ?? id
+  const agent = agents.find((item) => item.id === id)
+  return agent ? agentDisplayName(agent) : id
 }
 
 function atOrAfter(message: Message, anchor: Message) {
@@ -158,6 +160,20 @@ function MessageWithActions({
     return boldWorkspaceLink(target.agentId, target.path, jobId ? { id: jobId, files } : undefined)
   }
 
+  async function prepareWorkspaceLink() {
+    const jobId = message.jobId ?? null
+    if (!jobId) return
+    const key = jobResultsKey(jobId)
+    const query = queryClient.getQueryCache().find({ queryKey: key, exact: true })
+    if (!query || (!query.isStale() && query.state.fetchStatus !== 'fetching')) return
+    await queryClient.fetchQuery({
+      queryKey: key,
+      queryFn: ({ signal }) => fetchJobResults(jobId, signal),
+      staleTime: 0,
+      retry: false,
+    })
+  }
+
   async function copy() {
     if (!(await copyText(text))) return
     setCopied(true)
@@ -193,6 +209,7 @@ function MessageWithActions({
         agents={agents}
         bold
         workspaceLinkFor={workspaceLinkFor}
+        workspacePrepare={prepareWorkspaceLink}
         approvalPointerIds={approvalPointerIds}
         versionControl={
           <MessageVersionControl messageId={message.id} versions={versions} onSelect={onView} />
@@ -595,7 +612,7 @@ export function RoomMessageStream({
             </span>
             <span className="bold-result-copy">
               <b>{job.title}</b>
-              <span>{holder ? `Done · ${holder.name}` : 'Done'}</span>
+              <span>{holder ? `Done · ${agentDisplayName(holder)}` : 'Done'}</span>
             </span>
           </Link>,
         )
@@ -664,7 +681,7 @@ export function RoomMessageStream({
         if (!agent) return null
         return (
           <p className="bold-typing" key={agentId} role="status">
-            <b>{agent.name}</b> {text}
+            <b>{agentDisplayName(agent)}</b> {text}
           </p>
         )
       })}

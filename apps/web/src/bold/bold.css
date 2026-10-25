@@ -684,6 +684,24 @@ body.fit [data-ui='bold'] .stream {
     min-height: 48px;
     font-size: 12px;
     font-weight: 600;
+    position: relative;
+  }
+
+  [data-ui='bold'] .bold-tab-count {
+    position: absolute;
+    top: -2px;
+    right: max(8px, calc(50% - 30px));
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: inline-grid;
+    place-items: center;
+    background: var(--bad);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
   }
 
   /* PLAN 11.10a: a finger needs 44px, whichever page the control sits on. */

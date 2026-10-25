@@ -5,26 +5,33 @@ import {
   KnowledgeTreeSchema,
   MessageSearchResponseSchema,
   NowSnapshotSchema,
-  TeamRoomResponseSchema,
   type AgentSummary,
 } from '@score/contract'
 import { useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo } from 'react'
 import { apiFetch } from '../data/api.ts'
+import { useStreamQuery, useStreamQueryRefetch } from '../data/query-client.ts'
 import { useDebounced } from '../data/message-search.ts'
 import { nowKey } from '../data/team-pause.ts'
 import type { BoldSearchCommand, BoldSearchNote } from './bold-search-model.ts'
+import { teamRoomQuery } from './room/room-queries.ts'
 
 /** The team room and its jobs. `fresh`: read again whenever the caller mounts (Search opens), so a job made moments
  * ago is found even though the first-run routing (BoldHome) read the same key when /b opened. */
 export function useBoldTeamRoom({ fresh = false }: { fresh?: boolean } = {}) {
-  return useQuery({
-    queryKey: ['bold-search', 'team-room'],
-    queryFn: async ({ signal }) =>
-      TeamRoomResponseSchema.parse(await apiFetch('team-room', { signal })),
-    staleTime: 5_000,
-    ...(fresh ? { refetchOnMount: 'always' as const } : {}),
-    retry: false,
-  })
+  const definition = useMemo(() => teamRoomQuery(null), [])
+  const state = useStreamQuery(definition)
+  const refetch = useStreamQueryRefetch(definition)
+  useEffect(() => {
+    if (fresh) void refetch()
+  }, [fresh, refetch])
+  return {
+    data: state.data,
+    // A refetch behind a usable snapshot is not a cold read: `/b` keeps showing the room while it refreshes.
+    isPending: state.data === undefined && state.status === 'pending',
+    isError: state.status === 'error',
+    refetch,
+  }
 }
 
 /** Every agent's one-to-one chats; one failing agent must not blank the other agents' results. */

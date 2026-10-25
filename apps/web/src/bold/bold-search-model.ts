@@ -1,4 +1,5 @@
 import type { AgentSummary, Job, KnowledgeAuthor, MessageSearchHit } from '@score/contract'
+import { agentDisplayName } from './bold-agents.ts'
 
 export type BoldSearchCommand = { name: string; usage: string; description: string }
 
@@ -143,7 +144,7 @@ export function buildBoldSearchGroups(input: BoldSearchInput): BoldSearchGroup[]
       .map<BoldSearchResult>((agent) => ({
         kind: 'action',
         id: `action:message:${agent.id}`,
-        title: `Message ${agent.id}`,
+        title: `Message ${agentDisplayName(agent)}`,
         hint: agent.role || null,
         action: { type: 'message-agent', agentId: agent.id },
       }))
@@ -262,7 +263,7 @@ export function buildBoldSearchGroups(input: BoldSearchInput): BoldSearchGroup[]
     ...input.agents.map<BoldSearchResult>((agent) => ({
       kind: 'action',
       id: `action:message:${agent.id}`,
-      title: `Message ${agent.id}`,
+      title: `Message ${agentDisplayName(agent)}`,
       hint: null,
       action: { type: 'message-agent', agentId: agent.id },
     })),

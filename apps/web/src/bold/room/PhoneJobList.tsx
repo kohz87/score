@@ -1,6 +1,6 @@
 import type { AgentSummary, Job } from '@score/contract'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { agentStateLabel } from '../bold-agents.ts'
+import { agentDisplayName, agentStateLabel } from '../bold-agents.ts'
 import { jobStateLabel, jobStateLine } from './room-model.ts'
 
 function stateColor(job: Job): string {
@@ -13,7 +13,9 @@ function stateColor(job: Job): string {
 /** The board's compact roster: every agent keeps their colour and shape, and one who needs you gets a light ring. */
 export function PhonePresence({ agents }: { agents: AgentSummary[] }) {
   if (agents.length === 0) return null
-  const label = agents.map((agent) => `${agent.id} ${agentStateLabel(agent)}`).join(', ')
+  const label = agents
+    .map((agent) => `${agentDisplayName(agent)} ${agentStateLabel(agent)}`)
+    .join(', ')
   return (
     <span className="bold-phone-presence" role="group" aria-label={label}>
       {agents.map((agent) => (
@@ -21,7 +23,7 @@ export function PhonePresence({ agents }: { agents: AgentSummary[] }) {
           key={agent.id}
           className={`bold-phone-presence-agent${agent.status === 'waiting' ? ' needs' : ''}`}
           data-protected={agent.status === 'waiting' ? 'inline-flex' : undefined}
-          title={`${agent.id} · ${agentStateLabel(agent)}`}
+          title={`${agentDisplayName(agent)} · ${agentStateLabel(agent)}`}
         >
           <AgentGlyph agent={agent} size="xs" bare decorative />
         </span>

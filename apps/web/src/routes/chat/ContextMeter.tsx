@@ -203,16 +203,19 @@ function MeterView({
     }
     // Escape also works after the focused button went away (Compact now unmounts).
     const escape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false)
-        setConfirming(false)
-      }
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      // The meter's menu can sit inside the phone's side sheet: it is the top layer and owns the first Escape.
+      event.preventDefault()
+      event.stopPropagation()
+      setOpen(false)
+      setConfirming(false)
+      button.current?.focus()
     }
     document.addEventListener('pointerdown', outside)
-    document.addEventListener('keydown', escape)
+    document.addEventListener('keydown', escape, true)
     return () => {
       document.removeEventListener('pointerdown', outside)
-      document.removeEventListener('keydown', escape)
+      document.removeEventListener('keydown', escape, true)
     }
   }, [open])
   const lastSignal = useRef(confirmSignal)

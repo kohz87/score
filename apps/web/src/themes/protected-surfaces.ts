@@ -23,6 +23,10 @@ export const protectedClasses = [
   'needs-you-dot',
   // PLAN 11.3: the bold shell's dock ring of an agent that needs you
   'bold-needs',
+  // PLAN 11.12c: the phone tab bar's count of everything waiting in the room
+  'bold-tab-count',
+  // PLAN 11.12c: a replay cannot answer an approval, so it hands the person back to the live screen
+  'bold-screen-needs-live',
   // PLAN 11.10b: first run asks for the lead, the service choice and the starter recipes
   'bold-first-run-decision',
   // PLAN 11.10c: Start a job's checks and acknowledgement, and the trigger secret shown once

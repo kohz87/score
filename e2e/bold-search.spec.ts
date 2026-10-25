@@ -103,7 +103,7 @@ for (const size of sizes) {
       expect(url.searchParams.get('chat')).toBe(chat.id)
     })
 
-    test('a Library note opens with its path', async ({ page }) => {
+    test('a Library note opens in the Library with its path', async ({ page }) => {
       await pair(page)
       await openBold(page)
       await openSearch(page)
@@ -115,6 +115,9 @@ for (const size of sizes) {
       const url = new URL(page.url())
       expect(url.pathname).toBe('/b')
       expect(url.searchParams.get('note')).toBe('Projects/Roadmap.md')
+      const library = page.getByTestId('bold-library')
+      await expect(library).toBeVisible()
+      await expect(library.locator('.kn-note-head h2')).toHaveText('Roadmap')
     })
 
     test('a team-room message opens its job and message', async ({ page }) => {

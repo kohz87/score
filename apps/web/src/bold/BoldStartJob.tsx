@@ -29,7 +29,8 @@ import { apiFetch, ApiError } from '../data/api.ts'
 import { copyText } from '../data/clipboard.ts'
 import { newId } from '../data/ids.ts'
 import { useStreamQuery } from '../data/query-client.ts'
-import { boldTeamRoomQuery } from './bold-results-queries.ts'
+import { teamRoomQuery } from './room/room-queries.ts'
+import { pairingProblem } from './bold-errors.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { describeCreateError } from '../routes/orchestrations/NewOrchestrationDialog.tsx'
 import { usePreflight } from '../routes/orchestrations/orchestration-queries.ts'
@@ -204,8 +205,8 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const agents = useStreamQuery(agentsQuery).data ?? NO_AGENTS
   const workflows = useWorkflows()
-  // The same stream-kept read of the team room as Results (one cache entry per key, one shape).
-  const teamRoomState = useStreamQuery(boldTeamRoomQuery)
+  // The same stream-kept read of the team room as the room and Results (one cache entry, one reducer).
+  const teamRoomState = useStreamQuery(teamRoomQuery(null))
   const teamRoom = {
     data: teamRoomState.data,
     isPending: teamRoomState.status === 'pending',
@@ -1499,6 +1500,8 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 function startError(error: unknown): string {
+  const pairing = pairingProblem(error)
+  if (pairing) return pairing
   if (error instanceof ApiError) {
     if (error.code === 'conflict') return error.message
     if (error.code === 'paused') return 'Work is paused. Resume the team or the agent first.'

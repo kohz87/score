@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { boldWorkspaceLink } from '../../bold/bold-links.ts'
 import { tokenize } from './highlight.ts'
 import { Markdown } from './Markdown.tsx'
@@ -113,6 +113,42 @@ test('a bold room can resolve a workspace link through a job before rendering it
   )
   expect(screen.getByRole('link', { name: 'feed' }).getAttribute('href')).toBe(
     '/b?job=job-feed&work=code&file=api%2Fevents.py',
+  )
+})
+
+test('a workspace link waits for the caller to refresh a stale Results read', async () => {
+  let release!: () => void
+  const prepare = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve
+      }),
+  )
+  function Location() {
+    return <output aria-label="location">{useLocation().search}</output>
+  }
+  render(
+    <MemoryRouter initialEntries={['/b']}>
+      <Location />
+      <Markdown
+        text="[feed](workspace://api/events.py)"
+        workspace={{
+          agentId: 'builder',
+          agentIds: ['builder'],
+          linkFor: () => '/b?job=job-feed&work=code&file=api%2Fevents.py',
+          prepare,
+        }}
+      />
+    </MemoryRouter>,
+  )
+  fireEvent.click(screen.getByRole('link', { name: 'feed' }))
+  expect(prepare).toHaveBeenCalledOnce()
+  expect(screen.getByLabelText('location').textContent).toBe('')
+  release()
+  await waitFor(() =>
+    expect(screen.getByLabelText('location').textContent).toBe(
+      '?job=job-feed&work=code&file=api%2Fevents.py',
+    ),
   )
 })
 

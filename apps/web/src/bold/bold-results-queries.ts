@@ -1,9 +1,7 @@
 import {
   JobResultsSchema,
-  TeamRoomResponseSchema,
   type Job,
   type JobResults,
-  type Room,
   type StreamEvent,
   type WatchOverviewItem,
 } from '@score/contract'
@@ -11,34 +9,12 @@ import { useQueries, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { apiFetch } from '../data/api.ts'
 import { useStream, useStreamQuery } from '../data/query-client.ts'
-import { defineStreamQuery } from '../data/resync.ts'
 import { useWatchOverview } from '../routes/watch/watch-queries.ts'
-
-export type TeamRoom = { room: Room; jobs: Job[] }
-
-// The room column owns job selection (11.4a). Results only needs the job list, so it keeps its own read of the same
-// contract endpoint and follows `job.upserted` until that screen exists.
-export const boldTeamRoomQuery = defineStreamQuery<TeamRoom>({
-  key: ['bold', 'team-room'],
-  async fetch(signal) {
-    const { asOfSeq, room, jobs } = TeamRoomResponseSchema.parse(
-      await apiFetch('team-room', { signal }),
-    )
-    return { asOfSeq, data: { room, jobs } }
-  },
-  types: ['job.upserted', 'room.upserted'],
-  reduce(data, event) {
-    if (event.type === 'room.upserted' && event.data.id === data.room.id)
-      return { ...data, room: event.data }
-    if (event.type !== 'job.upserted' || event.data.roomId !== data.room.id) return data
-    const rest = data.jobs.filter((job) => job.id !== event.data.id)
-    return { ...data, jobs: [...rest, event.data] }
-  },
-})
+import { teamRoomQuery } from './room/room-queries.ts'
 
 export const jobResultsKey = (jobId: string) => ['bold', 'job-results', jobId] as const
 
-async function fetchJobResults(jobId: string, signal?: AbortSignal): Promise<JobResults> {
+export async function fetchJobResults(jobId: string, signal?: AbortSignal): Promise<JobResults> {
   return JobResultsSchema.parse(
     await apiFetch(`jobs/${encodeURIComponent(jobId)}/results`, { signal }),
   )
@@ -74,7 +50,7 @@ export function useBoldResults(
   failed: boolean
   retry: () => void
 } {
-  const room = useStreamQuery(boldTeamRoomQuery)
+  const room = useStreamQuery(teamRoomQuery(null))
   const jobs = (room.data?.jobs ?? []).filter(
     (job) => job.state !== 'closed' && (!selectedJobId || job.id === selectedJobId),
   )
