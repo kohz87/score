@@ -1222,3 +1222,24 @@ One entry per completed task: what landed, review results, and any **rejected re
   mid-round; the lead ran the checks and finished. e2e 81/81 on the affected specs; server/web tests green. Deploy: no
   plugin change (no gateway restart), backup score-pre-2.0.1-20261025.db, restart; team room members default, luna,
   scoretesta, scoretestb, sol; the live preview has no blockers.
+- **v2.0.3 = 2.0.3 + 2.0.2 (lead + Sonnet coders, 2026-10-25).** Owner on live: "Hermes rejected the change" when picking a
+  local model for another agent; "if i have a local lmstudio or ollama, going through score is not sufficient?"; "no way
+  to remove normal agent or invalid connection?"; "2.0.3 is more important". Lead (Hermes boundary): `DELETE
+  /api/settings/providers/:id` (local: `config unset providers.<id>` in every profile that defines it, never the bare
+  `providers`; hosted: `auth remove <id> <credential id>` per credential, `auth logout` if one survives, fresh `auth
+  list` decides), `DELETE /api/settings/tool-servers/:id` (`mcp remove`, stdin closed so its [Y/n] takes the default
+  after the person confirmed in Score; a fresh `mcp_servers` read decides, exit 1 = unset), `DELETE
+  /api/settings/messaging/:platform` (`config unset KEY` per field-table key; Hermes has no disconnect verb); local
+  providers copied into every profile on add and on model choice (only `providers` is an allowlisted read, so the whole
+  section is read and three fields copied, address first). Removal verbs from the Hermes source at the installed commit
+  (Sonnet research, read-only). Sonnet coder: the remove confirms (protected), "Every agent can use it.", "Remove
+  agent…". Reviews: server half 0 P1, P2s fixed (an unreadable profile stops a removal; local+hosted under one id both
+  removed; stdin EPIPE handler; copy writes the address first; last tool server not assumed gone on a failed read;
+  profile caches invalidated); P2 accepted and commented: a model change racing a removal (one person drives Score).
+  Web half 0 P1; P2s fixed (live local providers carry no `signIn`, so the local wording shows; focus returns; channel
+  fields read only for live rows; Remove agent… hidden for `default`, no timers). 2.0.2 fix round (Sonnet coder; full
+  e2e 916/0): framed protected surfaces under a failing theme (found and fixed the Watch bar ink), `/chat` links to the
+  right room with `#hash`, Recipes run status instead of the runs list, Settings readable in all four look × device
+  combinations, the server's 409 reason on agent tabs. Its reviews: Rules card under a failing theme (lead fixed twice:
+  the white panel made muted text fail; then `--ground` follows the page theme, not the bold look → `--bg`), e2e checks
+  every text in the card. Merge gate on the combination: build; full e2e 931 passed, 1 failed (chat-follow, a known load flake: 6/6 alone; also flaked in 2.0.2's run), 19 skipped; pnpm check green (server 4748, web 2879, contract 1496). Earlier 2.0.3-only run found a real e2e bug (a `Connect Discord` locator also matched the new `Disconnect Discord`; now exact) and the pre-existing phone Team screenshot order flake (P3 on the list).

@@ -705,7 +705,14 @@ already has it (`tools/bot_desktop/`, `hermes computer-use screen`): an RFB-over
 `/api/display/ws`, behind a single-use ticket from `display.observe` and an input lease. Score would show it read-only
 (never take the lease). A new boundary: design and adversarial review first (ARCHITECTURE D2.1), then the build.
 
-**P1 2.0.2: kept classic pages inside the new shell** (decision 123). The workflow list and editor, run pages
+**P1 2.0.3: remove connections, local providers for every agent** ✅ (owner on live, 2026-10-25: "no way to remove
+normal agent or invalid connection?", "if i have a local lmstudio or ollama, going through score is not sufficient?").
+Remove a provider (local: from every profile; hosted: its stored credentials), a tool server or a messaging channel
+from bold Settings, through Hermes's own commands and verified after; a local provider added in Score is copied into
+every agent's profile, and choosing one for an agent copies it first; "Remove agent…" on the agent page. Shipped
+together with 2.0.2 as v2.0.3.
+
+**P1 2.0.2: kept classic pages inside the new shell** ✅ (decision 123; shipped in v2.0.3). The workflow list and editor, run pages
 (`/runs/:id`), Watch (`/watch/:agent`) and the Customizer open under `/b` with the new shell's chrome; old paths
 redirect; Back returns to the room. Their insides stay v1 until the rebuild below.
 
@@ -716,4 +723,6 @@ restyled. Design pass first (prototype additions), then build.
 **P3 Deferred phase-gate review items** (decision 121; each was judged safe to ship and is logged in TASKLOG):
 `hold()` refusing or merging when an exchange already holds a turn; report-back `tool` limited to reporting tools (or a
 warning for others); listing and deleting triggers that were never called (orphans of a retried create); the
-"Imported from" rooms created by Elsewhere previews; the chat-rooms fence e2e made deterministic.
+"Imported from" rooms created by Elsewhere previews; the chat-rooms fence e2e made deterministic. The bold Team
+screenshot test (`themes-bold-visual` phone Team) depends on the fake's agent order after other specs ran: make the
+order fixed in that test. Removing messaging channels clears only Score's field table keys (no Hermes verb exists).

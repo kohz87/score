@@ -3,6 +3,27 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.3] — 2026-10-25
+
+### Added
+- **Remove a connection** in Settings › Connections and Tools: a model provider (a local one leaves every agent's
+  Hermes profile; a hosted one loses its stored sign-in or key), a tool server, or a messaging channel. Each asks first,
+  runs through Hermes's own commands, and checks Hermes afterwards. A provider an agent still uses is refused, naming the
+  agents. Channels and tool servers drop out of a running gateway when it restarts.
+- **Remove agent…** on the agent page takes you to its delete step.
+- **The v1 pages inside the new shell**: workflows, run pages, Watch and the Customizer open under `/b` with the new
+  shell around them; old links (including `/chat/<room>`, with any `#anchor`) redirect. Recipes shows each recipe's last
+  run instead of linking to the old runs list.
+
+### Changed
+- **A local model provider (LM Studio, Ollama, …) added in Score reaches every agent**: it is copied into each agent's
+  Hermes profile, and picking its model for an agent copies it there first, instead of refusing.
+- Agent pages show Hermes's own reason when a change is refused.
+
+### Fixed
+- Settings › Rules was dark on dark in the dark look; the Watch approval bar was unreadable in dark and under a theme
+  that fails contrast.
+
 ## [2.0.1] — 2026-10-25
 
 ### Fixed
