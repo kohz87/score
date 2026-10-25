@@ -82,9 +82,16 @@ beforeEach(() => {
           status: 'connected',
           detail: '127.0.0.1',
           usedBy: [],
+          keySet: Boolean(body.apiKey),
         }
         providers = [...providers, provider]
         return Response.json(provider)
+      }
+      if (url.pathname === '/api/settings/providers/local-box/key' && method === 'POST') {
+        providers = providers.map((provider) =>
+          provider.id === 'local-box' ? { ...provider, keySet: true } : provider,
+        )
+        return Response.json(providers.find((provider) => provider.id === 'local-box'))
       }
       if (url.pathname === '/api/settings/connections')
         return Response.json({
@@ -243,6 +250,73 @@ test('a local OpenAI-compatible endpoint can be added', async () => {
   fireEvent.click(within(local).getByRole('button', { name: 'Add model' }))
   expect(await screen.findByText('Added Local box.')).toBeDefined()
   await waitFor(() => expect(screen.getByText('Local box')).toBeDefined())
+})
+
+async function addLocalBox(key?: string) {
+  mount()
+  const local = await waitFor(() => {
+    const found = document.querySelector('[data-provider-id="local"]')
+    expect(found).not.toBeNull()
+    return found as HTMLElement
+  })
+  fireEvent.click(within(local).getByRole('button', { name: 'Add' }))
+  fireEvent.change(within(local).getByLabelText('Name'), { target: { value: 'Local box' } })
+  fireEvent.change(within(local).getByLabelText('Address'), {
+    target: { value: 'http://127.0.0.1:8080/v1' },
+  })
+  fireEvent.change(within(local).getByLabelText('Model'), { target: { value: 'local-model' } })
+  const field = within(local).getByLabelText('API key (optional)') as HTMLInputElement
+  expect(field.type).toBe('password')
+  expect(field.autocomplete).toBe('off')
+  if (key) fireEvent.change(field, { target: { value: key } })
+  fireEvent.click(within(local).getByRole('button', { name: 'Add model' }))
+  expect(await screen.findByText('Added Local box.')).toBeDefined()
+  return local
+}
+
+test('a local model added with a key sends it once, shows Key set and never renders it back', async () => {
+  await addLocalBox('sk-local-secret')
+  const post = calls.find(({ url }) => url === '/api/settings/providers/local')
+  expect(post?.body).toEqual({
+    label: 'Local box',
+    baseUrl: 'http://127.0.0.1:8080/v1',
+    model: 'local-model',
+    apiKey: 'sk-local-secret',
+  })
+  const row = await waitFor(() => {
+    const found = document.querySelector('[data-provider-id="local-box"]')
+    expect(found).not.toBeNull()
+    return found as HTMLElement
+  })
+  expect(within(row).getByText('Key set')).toBeDefined()
+  expect(within(row).getByRole('button', { name: 'Change key Local box' })).toBeDefined()
+  expect(document.body.textContent).not.toContain('sk-local-secret')
+  // Reopening the form finds the key field empty.
+  const local = document.querySelector('[data-provider-id="local"]') as HTMLElement
+  fireEvent.click(within(local).getByRole('button', { name: 'Add' }))
+  expect((within(local).getByLabelText('API key (optional)') as HTMLInputElement).value).toBe('')
+})
+
+test('a local model added without a key sends no apiKey, then Add key saves one', async () => {
+  await addLocalBox()
+  const post = calls.find(({ url }) => url === '/api/settings/providers/local')
+  expect(post?.body).not.toHaveProperty('apiKey')
+  const row = await waitFor(() => {
+    const found = document.querySelector('[data-provider-id="local-box"]')
+    expect(found).not.toBeNull()
+    return found as HTMLElement
+  })
+  expect(within(row).queryByText('Key set')).toBeNull()
+  fireEvent.click(within(row).getByRole('button', { name: 'Add key Local box' }))
+  expect(row.querySelector('.bold-connect-panel')?.getAttribute('data-protected')).toBe('block')
+  expect(within(row).queryByText('Use a terminal instead')).toBeNull()
+  fireEvent.change(await within(row).findByLabelText('API key'), { target: { value: 'k' } })
+  fireEvent.click(within(row).getByRole('button', { name: 'Save key' }))
+  expect(await screen.findByText('Key saved for every agent.')).toBeDefined()
+  await waitFor(() => expect(within(row).getByText('Key set')).toBeDefined())
+  expect(calls.find(({ url }) => url === '/api/settings/providers/local-box/key')?.body).toEqual({
+    apiKey: 'k',
+  })
 })
 
 test('the phone card points at the real pairing flow instead of promising a QR it does not draw', async () => {

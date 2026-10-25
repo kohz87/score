@@ -99,15 +99,49 @@ export class LiveAgentTabs {
    * Copies a local provider the default profile defines into another profile: its name, address and default model,
    * nothing else (a key, if any, stays where it is). Under that profile's config lock.
    */
-  async copyLocalProvider(profile: string, providerId: string, source = 'default'): Promise<void> {
+  async copyLocalProvider(
+    profile: string,
+    providerId: string,
+    source = 'default',
+    keyFollows = false,
+  ): Promise<void> {
     const parsed = ProfileNameSchema.parse(profile)
     if (parsed === source) return
     await this.serial(parsed, async () => {
       const own = await readLocalProviderIds(this.runner, this.hermesHome, parsed)
       if (own === null)
         throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read the agent’s providers.')
-      if (!own.has(providerId)) await this.copyProviderUnlocked(parsed, providerId, source)
+      if (!own.has(providerId))
+        await this.copyProviderUnlocked(parsed, providerId, source, keyFollows)
     })
+  }
+  /**
+   * Writes a local provider's API key into one profile that defines it (2.0.10). The key is an argv element only: never
+   * captured, logged or returned.
+   */
+  async setLocalProviderKey(profile: string, providerId: string, apiKey: string): Promise<void> {
+    const parsed = ProfileNameSchema.parse(profile)
+    const id = LocalProviderIdSchema.parse(providerId)
+    await this.serial(parsed, async () => {
+      const argv = ['-p', parsed, 'config', 'set', `providers.${id}.api_key`, apiKey]
+      const result = await this.runner(argv, {
+        timeoutMs: 15000,
+        hermesHome: this.hermesHome,
+        sensitiveArgIndices: [argv.length - 1],
+      }).catch(() => ({ exitCode: -1 }))
+      this.invalidate(parsed)
+      if (result.exitCode !== 0)
+        throw new HttpError(502, 'hermes_write_failed', 'Hermes didn’t accept the key.')
+    })
+  }
+  /** Whether the profile's entry for this local provider has a key (masked on read); null when unknown. */
+  async localProviderKeyed(profile: string, providerId: string): Promise<boolean | null> {
+    const read = await configJson(this.runner, this.hermesHome, profile, 'providers')
+    if (read.state !== 'ok' || !read.value || typeof read.value !== 'object') return null
+    const entry = (read.value as Record<string, unknown>)[providerId]
+    if (!entry || typeof entry !== 'object') return null
+    const key = (entry as { api_key?: unknown }).api_key
+    return typeof key === 'string' && key.length > 0
   }
   /** Whether the profile's config defines this local provider; null when it can't be read. */
   async definesLocalProvider(profile: string, providerId: string): Promise<boolean | null> {
@@ -133,6 +167,8 @@ export class LiveAgentTabs {
     profile: string,
     providerId: string,
     from = 'default',
+    // The caller writes the key right after (adding a provider with its key): don't refuse for a missing one.
+    keyFollows = false,
   ): Promise<void> {
     const id = LocalProviderIdSchema.parse(providerId)
     // The whole section: only `providers` is an allowlisted read (cli.ts); just three fields of one entry are used.
@@ -148,6 +184,7 @@ export class LiveAgentTabs {
         name: z.string().min(1).max(200).optional(),
         base_url: z.string().min(1).max(2000),
         default_model: z.string().min(1).max(256).optional(),
+        api_key: z.string().optional(),
       })
       .safeParse(entry)
     if (!source.success)
@@ -167,6 +204,16 @@ export class LiveAgentTabs {
     ]
     for (const [key, value] of fields)
       await this.mutate(profile, ['config', 'set', `providers.${id}.${key}`, value])
+    // Hermes masks a key on read, so it can't be copied; an env placeholder (${VAR}) is not a key and copies as is.
+    const key = source.data.api_key ?? ''
+    if (/^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(key))
+      await this.mutate(profile, ['config', 'set', `providers.${id}.api_key`, key])
+    else if (key && !keyFollows)
+      throw new HttpError(
+        409,
+        'needs_key',
+        `${source.data.name ?? id} needs its API key for this agent. Add the key again in Settings › Connections: it is given to every agent.`,
+      )
   }
 
   /** The agent's terminal folder and backend (Workspace tab); 502 when Hermes can't answer. */
@@ -294,6 +341,16 @@ export class LiveAgentTabs {
           // A local provider Score added lives in the default profile: copy it into this agent's profile first, so the
           // person's choice in Score is enough (2.0.3).
           if (own && !own.has(req.provider)) await this.copyProviderUnlocked(profile, req.provider)
+          // An earlier copy (before 2.0.10) has the address but not the key: say so instead of a model that 401s.
+          else if (
+            (await this.localProviderKeyed('default', req.provider)) === true &&
+            (await this.localProviderKeyed(profile, req.provider)) === false
+          )
+            throw new HttpError(
+              409,
+              'needs_key',
+              'That local provider needs its API key for this agent. Add the key again in Settings › Connections: it is given to every agent.',
+            )
         }
       }
       const prior = await readModelPair(this.runner, this.hermesHome, profile)

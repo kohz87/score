@@ -1401,6 +1401,11 @@ export class FakePort implements HermesPort {
   async addProviderKey(id: string): Promise<ProviderBase> {
     const provider = this.fakeProviders.find((candidate) => candidate.id === id)
     if (!provider) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
+    // A local provider takes a key too (2.0.10); like the live adapter, the fake keeps no key.
+    if (provider.keySet !== undefined) {
+      provider.keySet = true
+      return structuredClone(provider)
+    }
     if (provider.signIn !== 'api_key')
       throw new HttpError(
         409,
@@ -1429,6 +1434,7 @@ export class FakePort implements HermesPort {
       label: req.label,
       status: 'connected',
       detail: new URL(req.baseUrl).host,
+      keySet: req.apiKey !== undefined,
     }
     this.fakeProviders.push(provider)
     return structuredClone(provider)

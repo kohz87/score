@@ -14,6 +14,8 @@ export const ProviderItemSchema = z.object({
   usedBy: z.array(AgentIdSchema),
   /** How Connect works from the browser (ARCHITECTURE D2.7); absent = run in a terminal. */
   signIn: z.enum(['device_code', 'api_key', 'terminal']).optional(),
+  /** Local providers only (2.0.10): whether an API key is set for it (never the key). */
+  keySet: z.boolean().optional(),
 })
 export type ProviderItem = z.infer<typeof ProviderItemSchema>
 export const ProvidersResponseSchema = z.object({ items: z.array(ProviderItemSchema) })
@@ -86,6 +88,11 @@ export const LocalProviderRequestSchema = z
     label: NoDash.min(1).max(80),
     baseUrl: z.url({ protocol: /^https?$/ }).max(500),
     model: NoDash.min(1).max(200),
+    /** Optional (2.0.10): written to every agent's Hermes profile, never stored, logged or echoed by Score. */
+    apiKey: z
+      .string()
+      .regex(/^[\x21-\x7e]{1,512}$/)
+      .optional(),
   })
   .strict()
 export type LocalProviderRequest = z.infer<typeof LocalProviderRequestSchema>

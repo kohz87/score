@@ -192,6 +192,7 @@ test('local provider writes through `hermes config set` with exact argv', async 
     label: 'Lab GPU',
     status: 'connected',
     detail: '10.0.0.5:8080',
+    keySet: false,
   })
   const writes = runner.mock.calls.filter(([args]) => args[1] === 'set')
   expect(writes.map(([args]) => args)).toEqual([

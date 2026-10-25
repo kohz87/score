@@ -531,19 +531,42 @@ export class LivePort implements HermesPort {
     return this.settings.cancelSignIn(id)
   }
   async addProviderKey(id: string, req: Parameters<HermesPort['addProviderKey']>[1]) {
-    return this.settings.addProviderKey(id, req)
+    // A local provider's key goes into every profile that defines it (2.0.10); a hosted one through `auth add`.
+    const profiles = this.profiles.names(this.current.hermes.servedProfiles)
+    const answers = await Promise.all(
+      profiles.map((profile) => this.tabs.definesLocalProvider(profile, id).catch(() => null)),
+    )
+    const local = profiles.filter((_, at) => answers[at] === true)
+    if (local.length === 0) return this.settings.addProviderKey(id, req)
+    for (const profile of local) await this.tabs.setLocalProviderKey(profile, id, req.apiKey)
+    this.profiles.invalidate(this.options.settingsProfile ?? 'default')
+    const item = (await this.settings.listProviders()).find((provider) => provider.id === id)
+    if (!item) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
+    return item
   }
   async addLocalProvider(req: Parameters<HermesPort['addLocalProvider']>[0]) {
     const provider = await this.settings.addLocalProvider(req)
-    // Every agent can use it (2.0.3). A copy that fails here is made again when an agent picks the provider's model.
+    // Every agent can use it (2.0.3). A copy that fails here is made again when an agent picks the provider's model;
+    // the key (2.0.10) is written to each copy right away, since Hermes masks it and it can't be copied later.
     const source = this.options.settingsProfile ?? 'default'
     await Promise.all(
       this.profiles
         .names(this.current.hermes.servedProfiles)
         .filter((profile) => profile !== source)
-        .map((profile) =>
-          this.tabs.copyLocalProvider(profile, provider.id, source).catch(() => undefined),
-        ),
+        .map(async (profile) => {
+          try {
+            await this.tabs.copyLocalProvider(
+              profile,
+              provider.id,
+              source,
+              req.apiKey !== undefined,
+            )
+            if (req.apiKey !== undefined)
+              await this.tabs.setLocalProviderKey(profile, provider.id, req.apiKey)
+          } catch {
+            /* made again when an agent picks the model; a missing key then says so */
+          }
+        }),
     )
     return provider
   }

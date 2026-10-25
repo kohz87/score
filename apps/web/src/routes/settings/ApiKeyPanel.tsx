@@ -19,12 +19,15 @@ export function ApiKeyPanel({
   onSaved,
   onClose,
   onTerminal,
+  local = false,
 }: {
   providerId: string
   label: string
   onSaved: () => void
   onClose: () => void
-  onTerminal: () => void
+  onTerminal?: () => void
+  /** A local model's key: any printable key from 1 character, no label, no terminal route. */
+  local?: boolean
 }) {
   const [apiKey, setApiKey] = useState('')
   const [keyLabel, setKeyLabel] = useState('')
@@ -40,7 +43,7 @@ export function ApiKeyPanel({
     try {
       await sendProviderKey(providerId, {
         apiKey,
-        ...(keyLabel.trim() ? { label: keyLabel.trim() } : {}),
+        ...(!local && keyLabel.trim() ? { label: keyLabel.trim() } : {}),
       })
       setApiKey('')
       setBusy(false)
@@ -66,25 +69,27 @@ export function ApiKeyPanel({
           autoComplete="off"
           spellCheck={false}
           autoCapitalize="off"
-          minLength={8}
+          minLength={local ? 1 : 8}
           maxLength={512}
-          pattern="[\x21-\x7e]{8,512}"
-          title="8–512 characters, no spaces"
+          pattern={local ? '[\\x21-\\x7e]{1,512}' : '[\\x21-\\x7e]{8,512}'}
+          title={local ? 'Up to 512 characters, no spaces' : '8–512 characters, no spaces'}
           value={apiKey}
           onChange={(event) => setApiKey(event.target.value)}
         />
       </label>
-      <label>
-        Label (optional)
-        <input
-          maxLength={64}
-          autoComplete="off"
-          pattern="[A-Za-z0-9][A-Za-z0-9 ._\-]{0,63}"
-          title="Letters, numbers, spaces, dots, dashes"
-          value={keyLabel}
-          onChange={(event) => setKeyLabel(event.target.value)}
-        />
-      </label>
+      {!local && (
+        <label>
+          Label (optional)
+          <input
+            maxLength={64}
+            autoComplete="off"
+            pattern="[A-Za-z0-9][A-Za-z0-9 ._\-]{0,63}"
+            title="Letters, numbers, spaces, dots, dashes"
+            value={keyLabel}
+            onChange={(event) => setKeyLabel(event.target.value)}
+          />
+        </label>
+      )}
       {error && <p role="alert">{error}</p>}
       <div className="settings-command-actions">
         <button type="submit" className="settings-primary" disabled={busy || apiKey.length === 0}>
@@ -93,9 +98,11 @@ export function ApiKeyPanel({
         <button type="button" className="settings-link" onClick={onClose}>
           Cancel
         </button>
-        <button type="button" className="settings-link" onClick={onTerminal}>
-          Use a terminal instead
-        </button>
+        {onTerminal && !local && (
+          <button type="button" className="settings-link" onClick={onTerminal}>
+            Use a terminal instead
+          </button>
+        )}
       </div>
     </form>
   )

@@ -126,10 +126,18 @@ export function registerSettingsRoutes(
     if (db) replaceChosenModels(db, items)
     return ModelVisibilitySchema.parse({ items: db ? readChosenModels(db) : [] })
   })
-  app.post('/api/settings/providers/local', mutation, async (request) => {
-    const req = LocalProviderRequestSchema.parse(request.body)
-    return (await withUsage([await port.addLocalProvider(req)]))[0]
-  })
+  // An optional key goes to `hermes config set` as argv only: never logged, stored, echoed or put in a receipt.
+  app.post(
+    '/api/settings/providers/local',
+    {
+      preHandler: [humanGuard(app.pairing), keyReceipts.preHandler],
+      onSend: keyReceipts.onSend,
+    },
+    async (request) => {
+      const req = LocalProviderRequestSchema.parse(request.body)
+      return (await withUsage([await port.addLocalProvider(req)]))[0]
+    },
+  )
   app.post('/api/settings/providers/:id/connect', mutation, async (request) => {
     const { id } = ProviderParamsSchema.parse(request.params)
     return port.connectProvider(id)
