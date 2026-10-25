@@ -1330,3 +1330,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   d778246c, three new pattern keys (not hardline in 0.22.5), config-index regenerated (28 added, 18 removed, none
   used by Score; no persona names), new agents get Tool Search off in `enable_bridge` (best effort). Sonnet review:
   0 P1; the stale config index (P2) fixed. Shipped with 2.0.13 (the + menu anchored left; review clean).
+- **v2.1.0 deployed live** (~13:17 UTC): backup score-pre-2.1.0-20261026.db, restart, 0 errors.
