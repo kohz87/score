@@ -271,6 +271,14 @@ test('glyph shapes are re-asserted too, and the bare glyph svg is not a flex con
   expect(css).toContain("[data-protected='inline-flex']:not(svg)")
 })
 
+test('a glyph\u2019s eyes cannot be hidden or painted in the body colour (decision 127)', () => {
+  const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
+  expect(css).toMatch(
+    /\.agent-face__socket \{[^}]*display: inline !important;[^}]*fill: #fff !important/,
+  )
+  expect(css).toMatch(/\.agent-face__arc \{[^}]*stroke: var\(--glyph-plate\) !important/)
+})
+
 test('trusted typography on protected surfaces: spacing, orientation and shadows are re-asserted (re-gate finding 3)', () => {
   const css = readFileSync(join(root, 'styles/protected.css'), 'utf8')
   for (const declaration of [

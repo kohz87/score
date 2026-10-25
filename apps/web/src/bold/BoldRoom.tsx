@@ -5,7 +5,7 @@ import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
-import { agentDisplayName, agentNameColor, agentStateLabel } from './bold-agents.ts'
+import { agentDisplayName, agentMood, agentNameColor, agentStateLabel } from './bold-agents.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
 import { BoldResults } from './BoldResults.tsx'
 import { BookIcon, ChevronIcon, CloseIcon, GridIcon, ThreadIcon } from './BoldIcons.tsx'
@@ -24,7 +24,7 @@ type SideMode = 'work' | 'library' | 'thread' | 'elsewhere' | `agent:${string}`
 function SideGlyph({ agent }: { agent: AgentSummary }) {
   return (
     <span className="side-glyph">
-      <AgentGlyph agent={agent} size="sm" bare decorative />
+      <AgentGlyph agent={agent} size="sm" bare decorative mood={agentMood(agent)} />
     </span>
   )
 }
@@ -378,7 +378,13 @@ export function BoldRoom() {
                     </svg>
                   </button>
                   <span className="bold-dm-phone-id">
-                    <AgentGlyph agent={directAgent} size="sm" bare decorative />
+                    <AgentGlyph
+                      agent={directAgent}
+                      size="sm"
+                      bare
+                      decorative
+                      mood={agentMood(directAgent)}
+                    />
                     <span>
                       <b style={{ color: agentNameColor(directAgent) }}>
                         {agentDisplayName(directAgent)}

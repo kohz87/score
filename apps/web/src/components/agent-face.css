@@ -1,0 +1,191 @@
+/* 2.2.0 (decision 127): agents with eyes. Blank white sockets, no pupils; the motion is CSS keyframes whose timing
+   comes from per-agent variables (--face-*), so a team does not blink in unison and no glyph runs a timer. Nothing
+   here uses opacity, filter, clip or mask (protected.css resets those on glyphs), and a theme cannot recolour the
+   sockets (protected.css pins them). */
+svg.agent-glyph--face,
+.agent-glyph--face svg {
+  overflow: visible;
+}
+
+.agent-glyph__body {
+  transform-box: fill-box;
+  transform-origin: 50% 92%;
+}
+
+.agent-face__socket {
+  fill: #fff;
+  /* A hair of the agent's own darker shade keeps a white socket readable on a pale agent colour. */
+  stroke: var(--glyph-outline, none);
+  stroke-width: 0.3;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+.agent-face__arc {
+  fill: none;
+  stroke: var(--glyph-plate, #fff);
+  stroke-linecap: round;
+}
+
+.agent-face__gaze {
+  transform: translate(0, 0);
+}
+
+/* Following the pointer (hero glyphs): the shared listener sets --gx / --gy as fractions of the allowed look. */
+.agent-face[data-following] .agent-face__gaze {
+  animation: none;
+  transform: translate(calc(var(--gx, 0) * 1px), calc(var(--gy, 0) * 1px));
+  transition: transform 0.12s ease-out;
+}
+
+/* idle: looks around now and then, blinks (the socket squashes along its own axis) */
+.agent-face--animated.agent-face--idle .agent-face__gaze {
+  animation: agent-face-look var(--face-look, 10s) ease-in-out var(--face-delay, 0s) infinite;
+}
+
+.agent-face--animated.agent-face--idle .agent-face__socket,
+.agent-face--animated.agent-face--working .agent-face__socket {
+  animation: agent-face-blink var(--face-blink, 4.6s) ease-in-out var(--face-delay2, 0s) infinite;
+}
+
+/* resting (paused / offline): half-lidded, eyes a touch down, a slow blink and no looking about */
+.agent-face--resting .agent-face__gaze {
+  transform: translate(0, calc(var(--ly, 0.5) * 0.5px));
+}
+
+.agent-face--animated.agent-face--resting .agent-face__socket {
+  animation: agent-face-blink calc(var(--face-blink, 4.6s) * 1.8) ease-in-out var(--face-delay2, 0s)
+    infinite;
+}
+
+/* thinking: flat line eyes drifting slowly side to side, level, no blink */
+.agent-face--thinking .agent-face__gaze {
+  transform: translate(0, -0.2px);
+}
+
+.agent-face--animated.agent-face--thinking .agent-face__gaze {
+  animation: agent-face-drift 5.5s ease-in-out var(--face-delay, 0s) infinite;
+}
+
+/* working: half-lidded, glancing down, a small drift */
+.agent-face--working .agent-face__gaze {
+  transform: translate(0, calc(var(--ly, 0.5) * 1px));
+}
+
+.agent-face--animated.agent-face--working .agent-face__gaze {
+  animation: agent-face-scan 4.2s ease-in-out var(--face-delay, 0s) infinite;
+}
+
+/* needs you: big round shocked eyes, and the whole body shakes a little (the body is the glyph's silhouette group) */
+.agent-glyph--face-animated[data-face='needs'] .agent-glyph__body {
+  animation: agent-face-shake 0.55s ease-in-out infinite;
+}
+
+/* done / greeting: one hop (two while greeting) */
+.agent-glyph--face-animated[data-face='done'] .agent-glyph__body {
+  animation: agent-face-hop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) 1;
+}
+
+.agent-glyph--face-animated[data-greeting] .agent-glyph__body {
+  animation: agent-face-hop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) 2;
+}
+
+@keyframes agent-face-look {
+  0%,
+  14% {
+    transform: translate(0, 0);
+  }
+  20%,
+  34% {
+    transform: translate(calc(var(--lx, 1) * 0.9px), calc(var(--ly, 1) * -0.4px));
+  }
+  40%,
+  50% {
+    transform: translate(calc(var(--lx, 1) * -0.9px), calc(var(--ly, 1) * 0.3px));
+  }
+  56%,
+  66% {
+    transform: translate(calc(var(--lx, 1) * 0.3px), calc(var(--ly, 1) * 0.9px));
+  }
+  72%,
+  86% {
+    transform: translate(calc(var(--lx, 1) * -0.5px), calc(var(--ly, 1) * -0.8px));
+  }
+  92%,
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes agent-face-blink {
+  0%,
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+  94% {
+    transform: scaleY(0.12);
+  }
+}
+
+@keyframes agent-face-drift {
+  0%,
+  100% {
+    transform: translate(calc(var(--lx, 1) * -0.4px), -0.2px);
+  }
+  50% {
+    transform: translate(calc(var(--lx, 1) * 0.4px), -0.2px);
+  }
+}
+
+@keyframes agent-face-scan {
+  0%,
+  100% {
+    transform: translate(calc(var(--lx, 1) * -0.6px), calc(var(--ly, 1) * 1px));
+  }
+  50% {
+    transform: translate(calc(var(--lx, 1) * 0.6px), calc(var(--ly, 1) * 1px));
+  }
+}
+
+@keyframes agent-face-shake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-4deg);
+  }
+  75% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes agent-face-hop {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-2.3px) scale(1.05, 0.97);
+  }
+  75% {
+    transform: translateY(0) scale(0.97, 1.04);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Reduced motion: static eyes. No blink, look, drift, shake, hop or pointer follow. */
+@media (prefers-reduced-motion: reduce) {
+  .agent-face .agent-face__gaze,
+  .agent-face .agent-face__socket,
+  .agent-glyph__body {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .agent-face[data-following] .agent-face__gaze {
+    transform: translate(0, 0);
+  }
+}

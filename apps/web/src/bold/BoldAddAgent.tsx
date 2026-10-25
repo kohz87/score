@@ -244,7 +244,11 @@ function AddedView({
 }) {
   return (
     <section className="bold-add-added" role="status">
-      <AgentGlyph agent={{ id: added.id, name: added.name, style: added.style }} size="lg" />
+      <AgentGlyph
+        agent={{ id: added.id, name: added.name, style: added.style }}
+        size="lg"
+        mood="done"
+      />
       <h2>{added.name} joined the team</h2>
       <p className="muted">{added.detail}</p>
       {added.runs && <JoinedRuns id={added.id} runs={added.runs} close={close} />}
@@ -314,7 +318,7 @@ function WhereItWorksLink({ id, close }: { id: string; close: () => void }) {
   )
 }
 
-/** Shape, colour and the live mark: the same 20 contract shapes, with colours already on the team faded. */
+/** Shape, colour and the live mark: the same 22 contract shapes, with colours already on the team faded. */
 function Appearance({
   agents,
   name,
@@ -341,6 +345,7 @@ function Appearance({
         <AgentGlyph
           agent={{ id: 'new-agent', name: name || 'New agent', style: value }}
           size="lg"
+          lively
           describeShape
         />
       </div>
@@ -391,7 +396,7 @@ function Appearance({
           )
         })}
       </div>
-      <span className="bold-add-hint">20 shapes · Faded colours are taken</span>
+      <span className="bold-add-hint">22 shapes · Faded colours are taken</span>
     </div>
   )
 }

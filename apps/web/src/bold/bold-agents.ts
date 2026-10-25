@@ -1,4 +1,5 @@
 import type { AgentSummary } from '@score/contract'
+import type { FaceMood } from '../components/agent-face.ts'
 
 const nameTokens: Record<string, string> = {
   '#6B4EFF': 'var(--agent-violet-name)',
@@ -31,4 +32,23 @@ export function agentNameColor(agent: AgentSummary): string {
  */
 export function dockProgress(): number | null {
   return null
+}
+
+/**
+ * The eyes' mood for an agent's status (decision 127): working -> working, waiting -> needs you, paused / offline ->
+ * resting (half-lidded, slow blink, no looking about), the rest idle. Thinking and done are momentary and are passed
+ * where a call site knows them.
+ */
+export function agentMood(agent: Pick<AgentSummary, 'status'>): FaceMood {
+  switch (agent.status) {
+    case 'working':
+      return 'working'
+    case 'waiting':
+      return 'needs'
+    case 'paused':
+    case 'offline':
+      return 'resting'
+    default:
+      return 'idle'
+  }
 }

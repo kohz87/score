@@ -16,7 +16,7 @@ import { BrowserPane, EditorPane, TerminalPane } from '../routes/watch/WatchStag
 import { clock } from '../routes/watch/watch-model.ts'
 import '../routes/watch/watch.css'
 import { boldAgentScreenLink, boldAgentWorkspaceLink, type WorkbenchTab } from './bold-links.ts'
-import { agentDisplayName } from './bold-agents.ts'
+import { agentDisplayName, agentMood } from './bold-agents.ts'
 import { teamRoomQuery } from './room/room-queries.ts'
 import { useBoldWorkbench } from './bold-workbench-queries.ts'
 import './bold-workbench.css'
@@ -338,7 +338,7 @@ function ScreenView({
     <section className="bold-bench-screen" aria-label={`${name}’s screen`}>
       <header className="bold-bench-screen-head">
         <span className="bold-bench-screen-who">
-          {agent ? <AgentGlyph agent={agent} size="sm" decorative /> : null}
+          {agent ? <AgentGlyph agent={agent} size="sm" decorative mood={agentMood(agent)} /> : null}
           <b>{name}’s screen</b>
           {screen.live && (
             <span className="bold-bench-live">

@@ -25,7 +25,7 @@ import {
   type ActivityItem,
   type Surface,
 } from '../routes/watch/watch-model.ts'
-import { agentDisplayName, agentStateLabel } from './bold-agents.ts'
+import { agentDisplayName, agentMood, agentStateLabel } from './bold-agents.ts'
 import { boldJobLink } from './bold-links.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import { roomMessagesQuery, teamRoomQuery } from './room/room-queries.ts'
@@ -230,7 +230,7 @@ export function BoldScreenView({
           Team room
         </Link>
         <span className="muted">/</span>
-        <AgentGlyph agent={agent} size="lg" decorative />
+        <AgentGlyph agent={agent} size="lg" decorative mood={agentMood(agent)} />
         <div className="bold-screen-title">
           <h1 id="bold-screen-title">{agentDisplayName(agent)}’s screen</h1>
           <span className="muted">{agentStateLabel(agent)}</span>

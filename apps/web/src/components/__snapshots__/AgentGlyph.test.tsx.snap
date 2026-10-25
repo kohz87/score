@@ -1,5 +1,29 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`ball matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <circle
+      class="agent-glyph__solid"
+      cx="10"
+      cy="10"
+      r="8"
+    />
+  </svg>
+</span>
+`;
+
 exports[`blob matches the shape snapshot 1`] = `
 <span
   aria-label="lead"
@@ -202,6 +226,28 @@ exports[`drop matches the shape snapshot 1`] = `
     <path
       class="agent-glyph__solid"
       d="M10 2.6 C13.2 6.8 15.3 9.4 15.3 12.2 A5.3 5.3 0 0 1 4.7 12.2 C4.7 9.4 6.8 6.8 10 2.6 Z"
+    />
+  </svg>
+</span>
+`;
+
+exports[`flower matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  data-protected="inline-flex"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <path
+      class="agent-glyph__solid"
+      d="M 10.00 2.94 C 11.73 1.79 14.61 2.94 14.61 5.54 C 16.91 5.82 18.06 8.70 16.34 10.43 C 17.78 12.45 16.34 15.33 13.74 15.04 C 13.17 17.34 10.00 18.21 8.85 16.19 C 6.54 17.34 3.95 15.62 4.53 13.31 C 2.22 12.45 2.22 9.28 4.24 8.42 C 3.38 5.82 5.97 3.81 7.98 4.96 C 8.27 3.81 9.14 3.23 10.00 2.94 Z"
     />
   </svg>
 </span>

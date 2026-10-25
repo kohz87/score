@@ -8,7 +8,7 @@ import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { useNow, useTeamPause } from '../data/team-pause.ts'
 import { useWatchOverview } from '../routes/watch/watch-queries.ts'
-import { agentDisplayName, agentNameColor, agentStateLabel } from './bold-agents.ts'
+import { agentDisplayName, agentMood, agentNameColor, agentStateLabel } from './bold-agents.ts'
 import { pairingProblem } from './bold-errors.ts'
 import { BoldAddAgent } from './BoldAddAgent.tsx'
 import './bold-team.css'
@@ -73,10 +73,10 @@ function AgentCard({
       <div className="bold-agentcard-top">
         {working ? (
           <span className="glow bold-agentcard-glow">
-            <AgentGlyph agent={agent} size="lg" decorative />
+            <AgentGlyph agent={agent} size="lg" decorative mood={agentMood(agent)} />
           </span>
         ) : (
-          <AgentGlyph agent={agent} size="lg" decorative />
+          <AgentGlyph agent={agent} size="lg" decorative mood={agentMood(agent)} />
         )}
         <ScreenGlimpse agent={agent} item={watch} />
       </div>

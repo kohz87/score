@@ -41,6 +41,8 @@ export type PatternKind =
   | 'dot-pairs'
   | 'wide-vertical'
   | 'wide-horizontal'
+  | 'scales'
+  | 'petals'
 
 export const patternByShape: Record<Shape, PatternKind> = {
   'circle-dot': 'rings',
@@ -64,6 +66,8 @@ export const patternByShape: Record<Shape, PatternKind> = {
   octagon: 'plus',
   bubble: 'wide-horizontal',
   gem: 'diamonds',
+  ball: 'scales',
+  flower: 'petals',
 }
 const unknownPattern: PatternKind = 'horizontal'
 
@@ -123,6 +127,12 @@ function PatternBody({ kind }: { kind: PatternKind }) {
       return <rect width="3" height="8" className="tasks-by-day__pattern-ink" opacity="0.25" />
     case 'wide-horizontal':
       return <rect width="8" height="3" className="tasks-by-day__pattern-ink" opacity="0.25" />
+    case 'scales':
+      return <path d="M1 7 A3 3 0 0 1 7 7" {...line} strokeWidth={1.5} fill="none" />
+    case 'petals':
+      return (
+        <path d="M4 1 Q7 4 4 7 Q1 4 4 1 Z" className="tasks-by-day__pattern-ink" opacity="0.3" />
+      )
     case 'checks':
       return (
         <>

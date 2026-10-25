@@ -21,7 +21,7 @@ import { approvalNeedsYou } from './room/room-model.ts'
 import { useRoomNeedsYouState } from './room/use-needs-you.ts'
 import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
-import { agentDisplayName, agentStateLabel, dockProgress } from './bold-agents.ts'
+import { agentDisplayName, agentMood, agentStateLabel, dockProgress } from './bold-agents.ts'
 import { boldCloseRecipesLink, boldOneToOneLink } from './bold-links.ts'
 import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon, TerminalIcon } from './BoldIcons.tsx'
@@ -32,6 +32,7 @@ import type { BoldSheetState } from './bold-ui.ts'
 import { BoldStartJob, StartJobContext } from './BoldStartJob.tsx'
 import { DeleteToast } from '../routes/chat/DeleteToast.tsx'
 import { JobUndoToast } from './room/JobUndoToast.tsx'
+import { AgentFacesContext } from '../components/agent-faces-context.ts'
 import './tokens.css'
 import './bold.css'
 import './bold-theme.css'
@@ -76,7 +77,13 @@ function DockRing({
       }}
     >
       <span className="dock-ring-inner">
-        <AgentGlyph agent={agent} size="sm" bare decorative />
+        <AgentGlyph
+          agent={agent}
+          size="sm"
+          bare
+          decorative
+          mood={needsYou ? 'needs' : agentMood(agent)}
+        />
       </span>
     </button>
   )
@@ -87,6 +94,15 @@ function DockRing({
  * the index child; Settings' Look choices apply to this whole shell, not only its own page.
  */
 export function BoldShell() {
+  // Decision 127: glyphs draw their eyes inside the new shell only.
+  return (
+    <AgentFacesContext value>
+      <BoldShellFrame />
+    </AgentFacesContext>
+  )
+}
+
+function BoldShellFrame() {
   const agents = useStreamQuery(agentsQuery).data ?? []
   // An agent needs you while a decision of yours is open for it (as the classic Needs-you dot), not only while a run
   // says it waits.

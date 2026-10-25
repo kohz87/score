@@ -76,4 +76,13 @@ export const agentShapes = {
     },
   ],
   gem: [{ tag: 'path', d: 'M6 3.4 H14 L17.6 8 L10 17.2 L2.4 8 Z' }],
+  // 2.2.0 (decision 127): the "agents with eyes" mock-up's two shapes. A filled disc is distinct from the circle-dot ring;
+  // the flower is the mock-up's petal outline scaled from its 120 box to this 20 box.
+  ball: [{ tag: 'circle', cx: 10, cy: 10, r: 8 }],
+  flower: [
+    {
+      tag: 'path',
+      d: 'M 10.00 2.94 C 11.73 1.79 14.61 2.94 14.61 5.54 C 16.91 5.82 18.06 8.70 16.34 10.43 C 17.78 12.45 16.34 15.33 13.74 15.04 C 13.17 17.34 10.00 18.21 8.85 16.19 C 6.54 17.34 3.95 15.62 4.53 13.31 C 2.22 12.45 2.22 9.28 4.24 8.42 C 3.38 5.82 5.97 3.81 7.98 4.96 C 8.27 3.81 9.14 3.23 10.00 2.94 Z',
+    },
+  ],
 } as const satisfies Record<Shape, readonly AgentShapeElement[]>

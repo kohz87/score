@@ -11,7 +11,7 @@ export function shapeLabel(shape: Shape) {
 }
 
 /**
- * Colour and shape for one agent: a colour input and a radio group of the twenty shapes. Native radios, so Tab enters a group and the arrow keys move through it. Each choice shows what it
+ * Colour and shape for one agent: a colour input and a radio group of the 22 shapes. Native radios, so Tab enters a group and the arrow keys move through it. Each choice shows what it
  * looks like in the colour chosen so far.
  */
 export function AgentAppearanceFields({

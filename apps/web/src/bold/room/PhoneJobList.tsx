@@ -1,6 +1,6 @@
 import type { AgentSummary, Job } from '@score/contract'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { agentDisplayName, agentStateLabel } from '../bold-agents.ts'
+import { agentDisplayName, agentMood, agentStateLabel } from '../bold-agents.ts'
 import { jobStateLabel, jobStateLine } from './room-model.ts'
 
 function stateColor(job: Job): string {
@@ -25,7 +25,7 @@ export function PhonePresence({ agents }: { agents: AgentSummary[] }) {
           data-protected={agent.status === 'waiting' ? 'inline-flex' : undefined}
           title={`${agentDisplayName(agent)} · ${agentStateLabel(agent)}`}
         >
-          <AgentGlyph agent={agent} size="xs" bare decorative />
+          <AgentGlyph agent={agent} size="xs" bare decorative mood={agentMood(agent)} />
         </span>
       ))}
     </span>
@@ -88,7 +88,7 @@ export function PhoneJobList({
               onClick={() => onOpen(job.id)}
             >
               {holder ? (
-                <AgentGlyph agent={holder} size="lg" decorative />
+                <AgentGlyph agent={holder} size="lg" decorative mood={agentMood(holder)} />
               ) : (
                 <span className="bold-phone-job-blank" aria-hidden="true" />
               )}

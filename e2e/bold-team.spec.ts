@@ -35,7 +35,7 @@ for (const viewport of sizes) {
     await expect(addDialog.getByText('New agent', { exact: true })).toBeVisible()
     await expect(
       addDialog.getByRole('radiogroup', { name: 'Shape' }).getByRole('radio'),
-    ).toHaveCount(20)
+    ).toHaveCount(22)
     await addDialog.getByRole('button', { name: 'Close' }).click()
     await expect(addDialog).toHaveCount(0)
     await expect(page.locator('.bold-agentcard')).toHaveCount(4)
