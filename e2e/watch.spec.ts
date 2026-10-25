@@ -24,6 +24,8 @@ const fixtures: Record<string, unknown> = {
 const posts: string[] = []
 
 test.beforeEach(async ({ page }) => {
+  // The classic view: the bold shell frames Watch since 2.0.2 (e2e/bold-classic-pages.spec.ts).
+  await page.addInitScript(() => window.localStorage.setItem('score.ui', 'classic'))
   posts.length = 0
   await page.clock.setFixedTime(new Date(fixtureNow))
   await page.route('**/api/**', async (route) => {

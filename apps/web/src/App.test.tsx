@@ -3,7 +3,7 @@ import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createBrowserRouter, createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { App, appRoutes } from './App.tsx'
+import { App, appRoutes, hashOf } from './App.tsx'
 import { destinations } from './shell/destinations.ts'
 import { useNeedsYou } from './shell/use-needs-you.ts'
 import { createQueryClient, StreamContext } from './data/query-client.ts'
@@ -54,6 +54,7 @@ function commandButton() {
 }
 
 beforeEach(() => {
+  window.localStorage.removeItem('score.ui')
   vi.mocked(useNeedsYou).mockReturnValue(false)
   window.history.replaceState(null, '', '/')
   vi.stubGlobal(
@@ -305,12 +306,47 @@ test('nav links navigate between all destinations', async () => {
   }
 })
 
-test('/watch/:agentId renders inside the shell', async () => {
+test('/watch/:agentId renders inside the classic shell on the classic view', async () => {
+  window.localStorage.setItem('score.ui', 'classic')
   renderRoute('/watch/builder')
-  const main = screen.getByRole('main')
-  expect(within(main).getByText('Loading the screen…')).toBeDefined()
+  // The route's loader (the redirect check) runs first, so the page appears a moment later.
+  await waitFor(() =>
+    expect(within(screen.getByRole('main')).getByText(/the screen/)).toBeDefined(),
+  )
   expect(screen.getByRole('banner')).toBeDefined()
   expect(screen.getByRole('navigation', { name: 'Main' })).toBeDefined()
+})
+
+test('the redirect keeps the #hash only when the browser address is the page being opened', () => {
+  const here = { pathname: '/runs/b1', search: '?x=1', hash: '#step' }
+  expect(hashOf(new URL('http://h/runs/b1?x=1'), here)).toBe('#step')
+  expect(hashOf(new URL('http://h/runs/b2?x=1'), here)).toBe('')
+  expect(hashOf(new URL('http://h/runs/b1?x=1#own'), here)).toBe('#own')
+})
+
+test('on the new shell the old classic paths redirect to their /b homes and keep the query', async () => {
+  for (const [from, to] of [
+    ['/watch/builder?from=3', '/b/watch/builder'],
+    ['/workflows', '/b/workflows'],
+    ['/workflows/wf-1', '/b/workflows/wf-1'],
+    ['/runs/brief-1?x=y', '/b/runs/brief-1'],
+    ['/settings/look/customize/score', '/b/settings/look/customize/score'],
+  ] as const) {
+    const router = renderRoute(from)
+    await waitFor(() => expect(router.state.location.pathname).toBe(to))
+    expect(router.state.location.search).toBe(from.includes('?') ? `?${from.split('?')[1]}` : '')
+    cleanup()
+  }
+})
+
+test('on the classic view the classic paths stay where they are', async () => {
+  window.localStorage.setItem('score.ui', 'classic')
+  for (const path of ['/workflows', '/runs/brief-1', '/settings/look/customize/score']) {
+    const router = renderRoute(path)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(router.state.location.pathname).toBe(path)
+    cleanup()
+  }
 })
 
 test.each([
@@ -321,10 +357,10 @@ test.each([
   ['/tasks/demo', '/b'],
   ['/u', '/b'],
   ['/u/rooms/one', '/b'],
-  ['/now/watch/builder', '/watch/builder'],
-  ['/now/flow/workflows', '/workflows'],
-  ['/now/flow/workflows/wf-1', '/workflows/wf-1'],
-  ['/now/flow/brief-1', '/runs/brief-1'],
+  ['/now/watch/builder', '/b/watch/builder'],
+  ['/now/flow/workflows', '/b/workflows'],
+  ['/now/flow/workflows/wf-1', '/b/workflows/wf-1'],
+  ['/now/flow/brief-1', '/b/runs/brief-1'],
 ])('%s redirects to %s', async (path, target) => {
   const router = renderRoute(path)
   await waitFor(() => expect(router.state.location.pathname).toBe(target))
@@ -332,7 +368,7 @@ test.each([
 
 test('old /now links keep their query string when they redirect', async () => {
   const router = renderRoute('/now/watch/builder?from=12')
-  await waitFor(() => expect(router.state.location.pathname).toBe('/watch/builder'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/watch/builder'))
   expect(router.state.location.search).toBe('?from=12')
 })
 

@@ -1437,7 +1437,7 @@ function PartialCard({
       <p className="muted">
         The {what} is real and will not be started again. Create the job again to link it.
       </p>
-      <Link to={`/runs/${encodeURIComponent(partial.briefId)}`} onClick={onClose}>
+      <Link to={`/b/runs/${encodeURIComponent(partial.briefId)}`} onClick={onClose}>
         Open the {what}
       </Link>
       {error && (

@@ -12,6 +12,8 @@ async function open(page: Page, variant: Variant) {
   const mode = variant === 'dark' ? 'dark' : 'light'
   await page.setViewportSize({ width: widths[variant], height: variant === 'phone' ? 900 : 1000 })
   await page.addInitScript((m) => localStorage.setItem('score.theme', m), mode)
+  // The full-screen classic Customizer: the bold shell frames it since 2.0.2.
+  await page.addInitScript(() => localStorage.setItem('score.ui', 'classic'))
   await openWithTheme(page, [], { active: 'score', mode })
   await page.goto('/settings/look/customize')
   await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()

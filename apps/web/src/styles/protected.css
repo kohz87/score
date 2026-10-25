@@ -212,6 +212,11 @@
     --ink: #12131a !important;
     --card: #ffffff !important;
   }
+  /* Bold Settings draws the Rules card transparent, with the shell's ink, on a ground a failing theme controls: under
+     the fallback the card puts the bold look's own ground (--bg, keyed like its ink) behind it (2.0.2 review). */
+  html[data-contrast-fallback] .bold-settings-page .rules-card[data-protected] {
+    background: var(--bg) !important;
+  }
   html[data-contrast-fallback][data-theme='dark'] [data-protected] {
     --ground: #0f1116 !important;
     --ink-muted: #a9adb8 !important;

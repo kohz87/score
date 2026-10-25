@@ -1,5 +1,6 @@
 import type { AgentSummary, Approval, WatchFrame } from '@score/contract'
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { Link } from '../../shell/framed-paths.tsx'
 import { useApprovalDecision } from '../chat/ApprovalCard.tsx'
 import { clock, hostOf, parseDiff, surfaceLabels, type Surface } from './watch-model.ts'
 
@@ -181,9 +182,9 @@ function ApprovalBar({ approval, agent }: { approval: Approval; agent: AgentSumm
         </button>
       )}
       {!approval.actionable && (
-        <a className="watch-approval__link" href="/chat">
+        <Link className="watch-approval__link" to="/chat">
           Answer in Chat
-        </a>
+        </Link>
       )}
     </div>
   )

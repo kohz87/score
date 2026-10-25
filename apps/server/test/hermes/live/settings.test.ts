@@ -88,6 +88,8 @@ test('providers come from `hermes auth list` with statuses, details and no key m
   expect(byId['openai-codex']).toMatchObject({ status: 'connected', detail: 'Your ChatGPT plan' })
   expect(byId.nous).toMatchObject({ status: 'connected', detail: 'Free tier' })
   expect(byId['my-proxy']).toMatchObject({ label: 'My proxy', detail: '127.0.0.1:4000' })
+  // A local endpoint carries no sign-in kind: the web words its removal as "from every agent" (2.0.3).
+  expect(byId['my-proxy']).not.toHaveProperty('signIn')
   expect(JSON.stringify(items)).not.toContain(SECRET)
   expect(runner).toHaveBeenCalledWith(['auth', 'list'], {
     timeoutMs: 20_000,

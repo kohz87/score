@@ -1,4 +1,5 @@
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { OrchestrationLive } from '../orchestrations/OrchestrationLive.tsx'
 import { statusLabel } from '../orchestrations/orch-model.ts'

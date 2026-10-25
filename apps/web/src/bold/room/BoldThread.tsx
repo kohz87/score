@@ -119,7 +119,7 @@ function RecipeRunCard({ recipe, agents }: { recipe: JobRecipe; agents: AgentSum
   const match = recipeRun(recipe, orchestrations, workflows)
   const runHref =
     match && briefHasRun(match.summary.briefId, orchestrations, workflows)
-      ? `/runs/${encodeURIComponent(match.summary.briefId)}`
+      ? `/b/runs/${encodeURIComponent(match.summary.briefId)}`
       : null
   const title =
     match?.summary.title ?? (recipe.kind === 'workflow' ? 'Workflow run' : 'Orchestration')

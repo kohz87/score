@@ -1393,10 +1393,20 @@ available: boolean; reason: string | null /* "Not on your plan" */; free: boolea
   that is part of one of that agent's alias names, the alias's model comes first with `alias` set.
 - `GET|PUT /api/settings/model-visibility` (5.31) `{ items: { provider; model }[] }`: the models the pickers show by default
   (Score's own table; empty = every model). PUT replaces the list (human only).
-- `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item
+- `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item. Written to the default profile, then
+  copied (name, address, default model) into every other agent's profile, so any agent can use it (2.0.3). Choosing a
+  local provider's model for an agent whose profile lacks it (`PUT /api/agents/:agentId/model`) copies it there first.
+- **H** `DELETE /api/settings/providers/:id` → `204` (2.0.3). A local provider is removed from every profile that defines
+  it (`hermes -p <profile> config unset providers.<id>`); a hosted provider has each stored credential removed in the
+  settings profile (`hermes auth remove <id> <credential id>`), then `auth list` must no longer show it (`409
+  not_verified` otherwise). `409 provider_in_use` while any agent's model uses it (the message names them); `409
+  not_supported` when nothing is stored (a built-in free tier); unknown → `404`. Keys are never read or returned.
 - `GET /api/settings/connections` → `{ toolServers: { id; label; status: 'ok'|'needs_signin'|'error'; usedBy: AgentId[] | 'everyone' }[]
 messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`
 - `POST /api/settings/tool-servers` `{ name; command?: string[]; url?: string }`
+- **H** `DELETE /api/settings/tool-servers/:id` → `204` (2.0.3): `hermes mcp remove <id>` in the settings profile (Score
+  answers its confirmation; the person confirmed in the UI), then `mcp_servers` must no longer list it (`409
+  not_verified`); unknown → `404`. Running agents drop it when their gateway restarts.
 - `POST /api/settings/messaging/:platform/connect` → `ConnectResult`: `next: 'form'` for platforms that can be set up in
   the browser (token based), else `run_in_terminal` with the command (WhatsApp QR and other interactive pairings).
 - `GET /api/settings/messaging/:platform/fields` → `{ fields: { key; label; help: string | null; url: string | null;
@@ -1410,6 +1420,10 @@ messaging: { platform; label; status: 'connected'|'disconnected'; detail: string
   (`secretBody`): values are never logged, stored, echoed or put in a receipt, and error messages are redacted. The gateway
   reads its tokens at start, so the row stays as it was until the gateway restarts (Score has no gateway restart action;
   the UI says so).
+- **H** `DELETE /api/settings/messaging/:platform?agentId=` → the connection row (2.0.3): `hermes [-p <profile>] config unset
+  KEY` for each key in the platform's field list (a key that isn't set is skipped; `409 not_verified` when no key could be
+  removed). Platforms without browser setup → `409 not_supported`. Like PUT, the row and the gateway change when it
+  restarts.
 - `GET /api/settings/rules` → `{ mode: 'manual' | 'smart' | 'off'; goAhead: Rule[]; askMe: Rule[]; never: Rule[];
 drift: { agentId; differs: boolean }[] }` with `type Rule = { id; label; pattern: string | null; readOnly: boolean }`.
   Hermes mapping (docs/reviews/2026-10-08-2.18-design-lead.md): Go ahead = pattern keys in `command_allowlist`, Ask me

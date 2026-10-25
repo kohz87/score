@@ -5,8 +5,10 @@ import { failure, TerminalCommand } from '../routes/settings/TerminalCommand.tsx
 import {
   useConnections,
   useRecheckSettings,
+  useRemoveConnection,
   useSettingsActions,
 } from '../routes/settings/settings-queries.ts'
+import { focusSoon, RemoveConfirm } from './RemoveConfirm.tsx'
 import { BoldTriggers } from './BoldTriggers.tsx'
 import { parseToolCommand } from './tool-command.ts'
 
@@ -24,6 +26,8 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
   const connections = useConnections(command !== null)
   const recheck = useRecheckSettings()
   const { addToolServer } = useSettingsActions()
+  const { removeToolServer } = useRemoveConnection()
+  const [removing, setRemoving] = useState<string | null>(null)
   const names = new Map(agents.map((agent) => [agent.id, agent.name]))
   const appSuggestions = connections.data?.toolServers.map((server) => server.label) ?? []
 
@@ -53,7 +57,9 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
 
       <section className="card bold-tool-servers" aria-labelledby="bold-tool-servers-title">
         <div className="row wrap">
-          <h3 id="bold-tool-servers-title">Tool servers</h3>
+          <h3 id="bold-tool-servers-title" tabIndex={-1}>
+            Tool servers
+          </h3>
           <span className="small muted">Apps that expose actions to your agents (MCP)</span>
         </div>
         {connections.isPending && <p role="status">Loading tool servers…</p>}
@@ -94,6 +100,39 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
               <span className="small muted" data-tool-status={server.status}>
                 {statusLabel[server.status]}
               </span>
+              <button
+                type="button"
+                className="btn sm ghost"
+                id={`remove-tool-${server.id}`}
+                aria-label={`Remove ${server.label}`}
+                aria-expanded={removing === server.id}
+                onClick={() => {
+                  removeToolServer.reset()
+                  setRemoving(removing === server.id ? null : server.id)
+                }}
+              >
+                Remove
+              </button>
+              {removing === server.id && (
+                <RemoveConfirm
+                  what={server.label}
+                  text={`Removes ${server.label} from Hermes. Agents drop it when the gateway restarts.`}
+                  pending={removeToolServer.isPending}
+                  error={removeToolServer.error}
+                  onCancel={() => {
+                    setRemoving(null)
+                    focusSoon(`remove-tool-${server.id}`)
+                  }}
+                  onRemove={() =>
+                    removeToolServer.mutate(server.id, {
+                      onSuccess: () => {
+                        setRemoving(null)
+                        focusSoon('bold-tool-servers-title')
+                      },
+                    })
+                  }
+                />
+              )}
             </div>
           ))}
         </div>
@@ -153,9 +192,8 @@ export function BoldTools({ agents }: { agents: AgentSummary[] }) {
           />
         )}
         <span className="small muted">
-          Adding gives you a command to run in Hermes. Testing and removing a tool server are done
-          in Hermes for now. Sign-in tokens are kept by Hermes in each agent’s own settings, never
-          by Score.
+          Adding gives you a command to run in Hermes. Testing a tool server is done in Hermes for
+          now. Sign-in tokens are kept by Hermes in each agent’s own settings, never by Score.
         </span>
       </section>
 

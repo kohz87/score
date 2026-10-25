@@ -91,6 +91,28 @@ beforeEach(() => {
           toolServers: [{ id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' }],
           messaging,
         })
+      if (method === 'DELETE' && url.pathname === '/api/settings/providers/openrouter')
+        return Response.json(
+          {
+            error: {
+              code: 'provider_in_use',
+              message: 'builder uses OpenRouter. Pick another model there first.',
+            },
+          },
+          { status: 409 },
+        )
+      if (method === 'DELETE' && url.pathname === '/api/settings/providers/demo') {
+        providers = providers.filter((provider) => provider.id !== 'demo')
+        return new Response(null, { status: 204 })
+      }
+      if (method === 'DELETE' && url.pathname === '/api/settings/messaging/telegram') {
+        messaging = messaging.map((row) =>
+          row.platform === 'telegram' ? { ...row, status: 'disconnected' } : row,
+        )
+        return Response.json(messaging.find((row) => row.platform === 'telegram'))
+      }
+      if (url.pathname === '/api/settings/messaging/telegram/fields')
+        return Response.json({ fields: [], browserSetup: true })
       if (url.pathname === '/api/settings/messaging/discord/fields')
         return Response.json({
           fields: [
@@ -230,4 +252,97 @@ test('the phone card points at the real pairing flow instead of promising a QR i
   const link = screen.getByRole('link', { name: 'Pair another device or manage devices' })
   expect(link.getAttribute('href')).toBe('/b/settings/security')
   expect(await screen.findByText(/2 devices paired/)).toBeDefined()
+})
+
+test('removing a provider asks first, in plain words, from a protected confirm', async () => {
+  mount()
+  const row = await waitFor(() => {
+    const found = document.querySelector('[data-provider-id="demo"]')
+    expect(found).not.toBeNull()
+    return found as HTMLElement
+  })
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove Demo' }))
+  const confirm = within(row).getByRole('group', { name: 'Remove Demo' })
+  expect(confirm.getAttribute('data-protected')).toBe('block')
+  expect(confirm.textContent).toContain(
+    'Removes Demo and its stored sign-in or key from Hermes. Agents can’t use it until you connect it again.',
+  )
+  expect(calls.some(({ method }) => method === 'DELETE')).toBe(false)
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+  expect(within(row).queryByRole('group', { name: 'Remove Demo' })).toBeNull()
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove Demo' }))
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove' }))
+  await waitFor(() => expect(document.querySelector('[data-provider-id="demo"]')).toBeNull())
+  expect(
+    calls.some(({ url, method }) => method === 'DELETE' && url.endsWith('/providers/demo')),
+  ).toBe(true)
+})
+
+test('a refusal from the server is shown verbatim and nothing is removed', async () => {
+  providers[0] = { ...providers[0]!, status: 'connected', detail: 'API key (1)' }
+  mount()
+  const row = await waitFor(() => {
+    const found = document.querySelector('[data-provider-id="openrouter"]')
+    expect(found).not.toBeNull()
+    return found as HTMLElement
+  })
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove OpenRouter' }))
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove' }))
+  expect((await within(row).findByRole('alert')).textContent).toBe(
+    'builder uses OpenRouter. Pick another model there first.',
+  )
+  expect(document.querySelector('[data-provider-id="openrouter"]')).not.toBeNull()
+})
+
+test('a connected browser-setup channel can be disconnected', async () => {
+  mount()
+  const row = await waitFor(() => {
+    const found = document.querySelector('[data-channel="telegram"]')
+    expect(found).not.toBeNull()
+    return found as HTMLElement
+  })
+  fireEvent.click(await within(row).findByRole('button', { name: 'Disconnect Telegram' }))
+  expect(within(row).getByRole('group', { name: 'Remove Telegram' }).textContent).toContain(
+    'Clears Telegram’s settings. It disconnects when the gateway restarts.',
+  )
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove' }))
+  await waitFor(() => expect(row.textContent).toContain('Not connected'))
+})
+
+test('the local model form says every agent can use it', async () => {
+  mount()
+  const local = await waitFor(() => {
+    const found = document.querySelector('[data-provider-id="local"]')
+    expect(found).not.toBeNull()
+    return found as HTMLElement
+  })
+  fireEvent.click(within(local).getByRole('button', { name: 'Add' }))
+  expect(within(local).getByText('Every agent can use it.')).toBeDefined()
+})
+
+test('focus returns to the row’s Remove button after Cancel, and to the notice after a removal', async () => {
+  mount()
+  const row = await waitFor(() => {
+    const found = document.querySelector('[data-provider-id="demo"]')
+    expect(found).not.toBeNull()
+    return found as HTMLElement
+  })
+  const trigger = within(row).getByRole('button', { name: 'Remove Demo' })
+  fireEvent.click(trigger)
+  fireEvent.click(within(row).getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
+  fireEvent.click(trigger)
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove' }))
+  const notice = await screen.findByText('Removed Demo.')
+  await waitFor(() => expect(document.activeElement).toBe(notice))
+})
+
+test('idle channels do not read their setup fields', async () => {
+  mount()
+  await waitFor(() => expect(document.querySelector('[data-channel="discord"]')).not.toBeNull())
+  await within(document.querySelector('[data-channel="telegram"]') as HTMLElement).findByRole(
+    'button',
+    { name: 'Disconnect Telegram' },
+  )
+  expect(calls.some(({ url }) => url === '/api/settings/messaging/discord/fields')).toBe(false)
 })

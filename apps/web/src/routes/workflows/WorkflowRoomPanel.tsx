@@ -1,6 +1,6 @@
 import type { AgentSummary, WorkflowRunSummary } from '@score/contract'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import { statusLabel } from '../orchestrations/orch-model.ts'
 import { AgentChip } from '../orchestrations/RunDecisions.tsx'
 import { BudgetBlock, RunControls, StateMark } from '../orchestrations/RunPanel.tsx'

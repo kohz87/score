@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
-import type { AgentSummary, ConnectResult, ProviderItem } from '@score/contract'
+import type { AgentSummary, ConnectResult, MessagingPlatform, ProviderItem } from '@score/contract'
 import { PairedBrowsersSchema } from '@score/contract'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../data/api.ts'
@@ -8,11 +8,14 @@ import { ApiKeyPanel } from '../routes/settings/ApiKeyPanel.tsx'
 import { MessagingSetup } from '../routes/settings/MessagingSetup.tsx'
 import { providerAction } from '../routes/settings/ProvidersSection.tsx'
 import { SignInPanel } from '../routes/settings/SignInPanel.tsx'
+import { focusSoon, RemoveConfirm } from './RemoveConfirm.tsx'
 import { failure, TerminalCommand } from '../routes/settings/TerminalCommand.tsx'
 import {
   useConnections,
   useProviders,
+  useMessagingFields,
   useRecheckSettings,
+  useRemoveConnection,
   useSecurityStatus,
   useSettingsActions,
   useSystemStatus,
@@ -81,7 +84,9 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ label: '', baseUrl: '', model: '' })
   const [notice, setNotice] = useState('')
+  const [removing, setRemoving] = useState<string | null>(null)
   const { connectProvider, addLocal } = useSettingsActions()
+  const { removeProvider } = useRemoveConnection()
   const providers = useProviders(command !== null)
   const recheck = useRecheckSettings()
   const names = new Map(agents.map((agent) => [agent.id, agent.name]))
@@ -191,6 +196,46 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
                 {providerAction(item)}
               </button>
             )}
+            {item.status !== 'missing' && (
+              <button
+                type="button"
+                className="btn sm ghost"
+                id={`remove-provider-${item.id}`}
+                aria-label={`Remove ${item.label}`}
+                aria-expanded={removing === item.id}
+                onClick={() => {
+                  removeProvider.reset()
+                  setRemoving(removing === item.id ? null : item.id)
+                }}
+              >
+                Remove
+              </button>
+            )}
+            {removing === item.id && (
+              <RemoveConfirm
+                what={item.label}
+                text={
+                  item.signIn === undefined
+                    ? `Removes ${item.label} from every agent’s Hermes profile.`
+                    : `Removes ${item.label} and its stored sign-in or key from Hermes. Agents can’t use it until you connect it again.`
+                }
+                pending={removeProvider.isPending}
+                error={removeProvider.error}
+                onCancel={() => {
+                  setRemoving(null)
+                  focusSoon(`remove-provider-${item.id}`)
+                }}
+                onRemove={() =>
+                  removeProvider.mutate(item.id, {
+                    onSuccess: () => {
+                      setRemoving(null)
+                      setNotice(`Removed ${item.label}.`)
+                      focusSoon('bold-providers-notice')
+                    },
+                  })
+                }
+              />
+            )}
             {panel?.id === item.id && panel.kind === 'key' && (
               <div className="bold-connect-panel" data-protected="block">
                 <ApiKeyPanel
@@ -285,6 +330,7 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
                   onChange={(event) => setDraft({ ...draft, model: event.target.value })}
                 />
               </label>
+              <span className="small muted">Every agent can use it.</span>
               {addLocal.isError && <p role="alert">{failure(addLocal.error, 'add this model')}</p>}
               <div className="row wrap">
                 <button type="submit" className="btn sm primary" disabled={addLocal.isPending}>
@@ -306,8 +352,57 @@ function ModelProvidersCard({ agents }: { agents: AgentSummary[] }) {
       {connectProvider.isError && (
         <p role="alert">{failure(connectProvider.error, 'start the sign-in')}</p>
       )}
-      {notice && <p role="status">{notice}</p>}
+      {notice && (
+        <p role="status" id="bold-providers-notice" tabIndex={-1}>
+          {notice}
+        </p>
+      )}
     </section>
+  )
+}
+
+/** Disconnect for a platform that is set up in the browser; others are cleared from the terminal. */
+function ChannelRemove({ row }: { row: MessagingPlatform }) {
+  const [open, setOpen] = useState(false)
+  const fields = useMessagingFields(row.platform, row.status === 'connected' || Boolean(row.detail))
+  const { removeMessaging } = useRemoveConnection()
+  if (fields.data?.browserSetup !== true) return null
+  return (
+    <>
+      <button
+        type="button"
+        className="btn sm ghost"
+        id={`remove-channel-${row.platform}`}
+        aria-label={`${row.status === 'connected' ? 'Disconnect' : 'Remove'} ${row.label}`}
+        aria-expanded={open}
+        onClick={() => {
+          removeMessaging.reset()
+          setOpen((now) => !now)
+        }}
+      >
+        {row.status === 'connected' ? 'Disconnect' : 'Remove'}
+      </button>
+      {open && (
+        <RemoveConfirm
+          what={row.label}
+          text={`Clears ${row.label}’s settings. It disconnects when the gateway restarts.`}
+          pending={removeMessaging.isPending}
+          error={removeMessaging.error}
+          onCancel={() => {
+            setOpen(false)
+            focusSoon(`remove-channel-${row.platform}`)
+          }}
+          onRemove={() =>
+            removeMessaging.mutate(row.platform, {
+              onSuccess: () => {
+                setOpen(false)
+                focusSoon('bold-channels-title')
+              },
+            })
+          }
+        />
+      )}
+    </>
   )
 }
 
@@ -317,7 +412,9 @@ function ChannelsCard() {
   const recheck = useRecheckSettings()
   return (
     <section className="card" aria-labelledby="bold-channels-title">
-      <h3 id="bold-channels-title">Channels</h3>
+      <h3 id="bold-channels-title" tabIndex={-1}>
+        Channels
+      </h3>
       <span className="small muted">
         Talk to the team room from other apps; replies land in the room.
       </span>
@@ -348,6 +445,7 @@ function ChannelsCard() {
                 Connect
               </button>
             )}
+            <ChannelRemove row={row} />
             {setup === row.platform && (
               <div className="bold-connect-panel" data-protected="block">
                 <MessagingSetup

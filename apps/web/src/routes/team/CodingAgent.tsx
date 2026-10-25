@@ -780,6 +780,7 @@ function CodingDanger({ coding, onRemoved }: { coding: CodingAgent; onRemoved: (
       {remove.error && <p role="alert">{remove.error.message}</p>}
       <div className="team-file-actions">
         <button
+          id="agent-delete"
           type="button"
           disabled={remove.isPending}
           onClick={() => {

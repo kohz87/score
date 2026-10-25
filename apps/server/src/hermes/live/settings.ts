@@ -179,6 +179,25 @@ export function messagingRows(platforms: GatewayPlatforms): ConnectionsResponse[
   return [...rows.values()]
 }
 
+/** The credential ids `auth list` shows under one provider's header (`#1 <label> api_key id=<id> priority=…`). */
+export function credentialIds(text: string, provider: string): string[] {
+  const ids: string[] = []
+  let inside = false
+  for (const line of text.split(/\r?\n/)) {
+    const header = HEADER.exec(line)
+    if (header) {
+      inside = header[1] === provider
+      continue
+    }
+    if (!line.startsWith(' ')) inside = false
+    const row = inside
+      ? /^\s+#\d+\s+.+?\s+(?:oauth|api_key)\s+id=(\S+)\s+priority=/.exec(line)
+      : null
+    if (row && /^[A-Za-z0-9._:-]{1,128}$/.test(row[1]!)) ids.push(row[1]!)
+  }
+  return ids
+}
+
 export class LiveSettings {
   private readonly home: string
   constructor(
@@ -225,16 +244,17 @@ export class LiveSettings {
     for (const child of this.keyChildren) child.kill()
   }
 
-  private async read(args: string[]): Promise<string | null> {
+  private async read(args: string[], fresh = false): Promise<string | null> {
     const result = await this.runner([...this.profileArgs(), ...args], {
       timeoutMs: READ_TIMEOUT_MS,
       hermesHome: this.home,
       captureSettings: true,
+      ...(fresh ? { fresh: true } : {}),
     })
     return result.exitCode === 0 && result.stdout !== undefined ? result.stdout : null
   }
-  private async readJson(args: string[]): Promise<unknown> {
-    const text = await this.read(args)
+  private async readJson(args: string[], fresh = false): Promise<unknown> {
+    const text = await this.read(args, fresh)
     if (text === null) return null
     try {
       return JSON.parse(text)
@@ -332,15 +352,15 @@ export class LiveSettings {
       kinds.set(id, signInKind(id, authType))
     }
     for (const item of pooled) items.set(item.id, item)
-    // Local endpoints have no sign-in of their own.
+    // Local endpoints have no sign-in of their own, and no `signIn` either: that is how the web tells them apart (2.0.3).
+    const localIds = new Set(local.map((item) => item.id))
     for (const item of local) {
       items.set(item.id, item)
       kinds.delete(item.id)
     }
-    return [...items.values()].map((item) => ({
-      ...item,
-      signIn: kinds.get(item.id) ?? 'terminal',
-    }))
+    return [...items.values()].map((item) =>
+      localIds.has(item.id) ? item : { ...item, signIn: kinds.get(item.id) ?? 'terminal' },
+    )
   }
   /** The sign-in kind of one provider, from the gateway catalog (or the built-in list). */
   private async kindOf(id: string): Promise<SignInKind | null> {
@@ -476,6 +496,86 @@ export class LiveSettings {
       status: 'connected',
       detail: redactBounded(hostOf(req.baseUrl), 120),
     }
+  }
+
+  /**
+   * Removes a hosted provider's stored credentials (2.0.3): `auth remove <id> <credential id>` for each one `auth list`
+   * shows, then `auth logout <id>` if a sign-in is still listed, then a fresh `auth list` must not show the provider.
+   * Hermes may clear the provider's key from the profile's env as part of this; Score never reads it.
+   */
+  async removeHostedProvider(id: string): Promise<void> {
+    const provider = ProviderIdSchema.parse(id)
+    await this.locks.run(this.profile ?? 'default', async () => {
+      const text = await this.read(['auth', 'list'], true)
+      if (text === null)
+        throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read the stored sign-ins.')
+      const credentials = credentialIds(text, provider)
+      if (credentials.length === 0)
+        throw new HttpError(409, 'not_supported', 'Nothing is stored for this provider.')
+      for (const credential of credentials)
+        await this.runner([...this.profileArgs(), 'auth', 'remove', provider, credential], {
+          timeoutMs: READ_TIMEOUT_MS,
+          hermesHome: this.home,
+        }).catch(() => ({ exitCode: -1 }))
+      let left = await this.read(['auth', 'list'], true)
+      if (left !== null && credentialIds(left, provider).length > 0) {
+        await this.runner([...this.profileArgs(), 'auth', 'logout', provider], {
+          timeoutMs: READ_TIMEOUT_MS,
+          hermesHome: this.home,
+        }).catch(() => ({ exitCode: -1 }))
+        left = await this.read(['auth', 'list'], true)
+      }
+      if (left === null || credentialIds(left, provider).length > 0)
+        throw new HttpError(409, 'not_verified', 'Hermes still lists a sign-in for this provider.')
+      this.lastAuthList = left
+    })
+  }
+  /**
+   * `mcp remove <id>` (2.0.3). Hermes asks "Remove server?" and has no flag to skip it: stdin is closed so it takes its
+   * default (yes); the person already confirmed in Score. Its exit code doesn't say whether the server existed, so a
+   * fresh read of `mcp_servers` decides.
+   */
+  async removeToolServer(id: string): Promise<void> {
+    const name = z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/)
+      .parse(id)
+    await this.locks.run(this.profile ?? 'default', async () => {
+      const before = ServersSchema.safeParse(
+        await this.readJson(['config', 'get', '--json', 'mcp_servers'], true),
+      )
+      if (!before.success)
+        throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read the tool servers.')
+      if (!Object.hasOwn(before.data, name))
+        throw new HttpError(404, 'not_found', 'Couldn’t find that tool server.')
+      await this.runner([...this.profileArgs(), 'mcp', 'remove', name], {
+        timeoutMs: READ_TIMEOUT_MS,
+        hermesHome: this.home,
+        closeStdin: true,
+      }).catch(() => ({ exitCode: -1 }))
+      // Exit 1 = the key is unset now (the last server went); any other failure says nothing, so it is not a success.
+      const after = await this.runner(
+        [...this.profileArgs(), 'config', 'get', '--json', 'mcp_servers'],
+        { timeoutMs: READ_TIMEOUT_MS, hermesHome: this.home, captureSettings: true, fresh: true },
+      )
+      let left: Record<string, unknown> | null = null
+      if (after.exitCode === 0 && after.stdout !== undefined) {
+        try {
+          const parsed = ServersSchema.safeParse(JSON.parse(after.stdout))
+          if (parsed.success) left = parsed.data
+        } catch {
+          /* unreadable: left stays null */
+        }
+      } else if (after.exitCode === 1) left = {}
+      if (left === null)
+        throw new HttpError(
+          502,
+          'hermes_unavailable',
+          'Couldn’t check that the tool server is gone.',
+        )
+      if (Object.hasOwn(left, name))
+        throw new HttpError(409, 'not_verified', 'Hermes still lists that tool server.')
+    })
   }
 
   async listConnections(): Promise<ConnectionsResponse> {

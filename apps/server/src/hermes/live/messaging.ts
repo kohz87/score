@@ -54,3 +54,52 @@ export async function saveMessagingValues(options: {
     }
   )
 }
+
+/**
+ * Clears a platform's env values with `hermes [-p profile] config unset KEY`, one per key of its field table (2.0.3).
+ * Hermes exits non-zero for a key that isn't set, so a failure only counts when no key could be removed. Like a save,
+ * the gateway keeps the platform until it restarts.
+ */
+export async function removeMessagingValues(options: {
+  hermesHome: string
+  profile: string | undefined
+  platform: string
+  keys: string[]
+  runner?: HermesRunner
+  locks: ProfileLocks
+  invalidate?: () => void
+}): Promise<MessagingPlatform> {
+  const runner = options.runner ?? runHermes
+  const prefix = options.profile ? ['-p', options.profile] : []
+  await options.locks.run(options.profile ?? 'default', async () => {
+    let removed = 0
+    try {
+      for (const key of options.keys) {
+        const result = await runner([...prefix, 'config', 'unset', key], {
+          timeoutMs: WRITE_TIMEOUT_MS,
+          hermesHome: options.hermesHome,
+        }).catch(() => ({ exitCode: -1 }))
+        if (result.exitCode === 0) removed++
+      }
+    } finally {
+      options.invalidate?.()
+    }
+    if (removed === 0)
+      throw new HttpError(
+        409,
+        'not_verified',
+        'None of its settings were set, so nothing was removed.',
+      )
+  })
+  const row = messagingRows(
+    readProfilePlatforms(options.hermesHome, options.profile ?? 'default'),
+  ).find((candidate) => candidate.platform === options.platform)
+  return (
+    row ?? {
+      platform: options.platform,
+      label: options.platform,
+      status: 'disconnected',
+      detail: null,
+    }
+  )
+}

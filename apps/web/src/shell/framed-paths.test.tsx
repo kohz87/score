@@ -1,0 +1,85 @@
+import { cleanup, render, screen } from '@testing-library/react'
+import { createMemoryRouter, RouterProvider } from 'react-router'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  BoldFrameContext,
+  type FrameRoom,
+  boldRedirectFor,
+  Link,
+  toBoldPath,
+} from './framed-paths.tsx'
+
+describe('toBoldPath', () => {
+  it('moves the kept classic pages under /b and keeps query and hash', () => {
+    expect(toBoldPath('/workflows')).toBe('/b/workflows')
+    expect(toBoldPath('/workflows/wf-1?x=1#a')).toBe('/b/workflows/wf-1?x=1#a')
+    expect(toBoldPath('/runs/brief-1')).toBe('/b/runs/brief-1')
+    expect(toBoldPath('/watch/lead?from=4')).toBe('/b/watch/lead?from=4')
+    expect(toBoldPath('/settings/look')).toBe('/b/settings/look')
+    expect(toBoldPath('/settings/look/customize/t1')).toBe('/b/settings/look/customize/t1')
+  })
+  it('sends team pages and chat rooms to their new homes', () => {
+    expect(toBoldPath('/team/lead')).toBe('/b/team/lead')
+    expect(toBoldPath('/team/lead/workspace?path=a')).toBe('/b/team/lead')
+    expect(toBoldPath('/chat')).toBe('/b')
+    // Without the room list a room opens by id; the room page falls back to the team room for an unknown one.
+    expect(toBoldPath('/chat/room-1')).toBe('/b?room=room-1')
+  })
+  it('keeps the room a chat link meant', () => {
+    const rooms: FrameRoom[] = [
+      { id: 'team', kind: 'room', role: 'team', leadAgentId: null, members: [] },
+      { id: 'dm-1', kind: 'direct', role: 'direct', leadAgentId: 'builder', members: ['builder'] },
+      { id: 'old 1', kind: 'room', role: 'room', leadAgentId: 'lead', members: ['lead'] },
+    ]
+    expect(toBoldPath('/chat/team', rooms)).toBe('/b')
+    expect(toBoldPath('/chat/dm-1', rooms)).toBe('/b?with=builder')
+    expect(toBoldPath('/chat/old%201', rooms)).toBe('/b?room=old%201')
+    expect(toBoldPath('/chat/gone', rooms)).toBe('/b?room=gone')
+  })
+  it('leaves /b paths and pages without a /b home alone', () => {
+    expect(toBoldPath('/b/workflows')).toBe('/b/workflows')
+    expect(toBoldPath('/b?recipes=1')).toBe('/b?recipes=1')
+    expect(toBoldPath('/terminal')).toBe('/terminal')
+    expect(toBoldPath('/knowledge/a')).toBe('/knowledge/a')
+    expect(toBoldPath('/workflowsx')).toBe('/workflowsx')
+  })
+})
+
+describe('boldRedirectFor', () => {
+  it('redirects only the kept classic pages, keeping the query', () => {
+    expect(boldRedirectFor('/workflows', '?a=1')).toBe('/b/workflows?a=1')
+    expect(boldRedirectFor('/workflows/new', '')).toBe('/b/workflows/new')
+    expect(boldRedirectFor('/runs/b1', '?x=y', '#z')).toBe('/b/runs/b1?x=y#z')
+    expect(boldRedirectFor('/watch/lead', '?from=3')).toBe('/b/watch/lead?from=3')
+    expect(boldRedirectFor('/settings/look/customize/t', '')).toBe('/b/settings/look/customize/t')
+    expect(boldRedirectFor('/settings/look', '')).toBeNull()
+    expect(boldRedirectFor('/team', '')).toBeNull()
+  })
+})
+
+function linkHref(framed: boolean): string {
+  const router = createMemoryRouter([
+    {
+      path: '/',
+      element: framed ? (
+        <BoldFrameContext value={{ look: 'dark' }}>
+          <Link to="/runs/b1">run</Link>
+        </BoldFrameContext>
+      ) : (
+        <Link to="/runs/b1">run</Link>
+      ),
+    },
+  ])
+  render(<RouterProvider router={router} />)
+  return screen.getByRole('link', { name: 'run' }).getAttribute('href') ?? ''
+}
+
+describe('Link', () => {
+  afterEach(cleanup)
+  it('maps inside the bold frame and not outside it', () => {
+    expect(linkHref(true)).toBe('/b/runs/b1')
+  })
+  it('keeps the classic path in the classic shell', () => {
+    expect(linkHref(false)).toBe('/runs/b1')
+  })
+})

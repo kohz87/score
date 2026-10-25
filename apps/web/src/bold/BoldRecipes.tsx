@@ -9,6 +9,8 @@ import {
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
+import { statusLabel } from '../routes/orchestrations/orch-model.ts'
+import { graphOutcomeLabel } from '../routes/workflows/workflow-run-model.ts'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../components/runtime-label.ts'
 import { ApiError } from '../data/api.ts'
@@ -37,6 +39,7 @@ import {
   useValidation,
   useWorkflow,
   useWorkflows,
+  workflowRunsQuery,
 } from '../routes/workflows/workflow-queries.ts'
 import { combine, indexIssues, shapeIssues } from '../routes/workflows/workflow-validation.ts'
 import {
@@ -266,9 +269,6 @@ function BoldRecipeShell({
             onSelect={onSelect}
             onNew={onNew}
           />
-          <Link className="btn sm ghost" to="/workflows">
-            Workflow runs and versions
-          </Link>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
             ×
           </button>
@@ -276,6 +276,33 @@ function BoldRecipeShell({
         {children}
       </div>
     </div>
+  )
+}
+
+/** What only the classic workflow list showed: the runs going and the last run, linking to that run's page. */
+function RecipeRunStatus({ recipe }: { recipe: WorkflowSummary | undefined }) {
+  const runs = useStreamQuery(workflowRunsQuery).data
+  if (!recipe) return null
+  // Newest first, as the classic list reads it.
+  const last = runs?.find((run) => run.workflowId === recipe.id)
+  return (
+    <span className="small muted bold-recipe-runs" aria-label="Runs of this recipe">
+      {recipe.activeRuns > 0 && (
+        <b className="bold-recipe-going">
+          {recipe.activeRuns} {recipe.activeRuns === 1 ? 'run' : 'runs'} going
+        </b>
+      )}
+      {last ? (
+        <>
+          {' '}
+          Last run:{' '}
+          <Link to={`/b/runs/${encodeURIComponent(last.briefId)}`}>{statusLabel[last.status]}</Link>
+          {last.graphOutcome ? `, ${graphOutcomeLabel[last.graphOutcome].toLowerCase()}` : ''}
+        </>
+      ) : (
+        ' No runs yet'
+      )}
+    </span>
   )
 }
 
@@ -629,9 +656,6 @@ function BoldRecipeEditor({
             onSelect={onSelect}
             onNew={onNew}
           />
-          <Link className="btn sm ghost" to="/workflows">
-            Workflow runs and versions
-          </Link>
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>
             ×
           </button>
@@ -659,6 +683,9 @@ function BoldRecipeEditor({
             {dirty || saved.workflowId === null ? ' · unsaved changes' : ''} · inputs:{' '}
             {draft.inputs.length > 0 ? draft.inputs.map((input) => input.name).join(', ') : 'none'}
           </span>
+          {saved.workflowId !== null && (
+            <RecipeRunStatus recipe={recipes.find((recipe) => recipe.id === saved.workflowId)} />
+          )}
           <span className="row bold-recipes-actions" style={{ marginLeft: 'auto' }}>
             <button type="button" className="btn sm" onClick={() => setGraph((value) => !value)}>
               {graph ? 'Show as list' : 'Show as graph'}
@@ -779,7 +806,7 @@ function BoldRecipeEditor({
               so it is read-only here.
             </p>
             {saved.workflowId && (
-              <Link className="btn sm" to={`/workflows/${encodeURIComponent(saved.workflowId)}`}>
+              <Link className="btn sm" to={`/b/workflows/${encodeURIComponent(saved.workflowId)}`}>
                 Edit this one in the graph editor
               </Link>
             )}
@@ -865,7 +892,7 @@ function BoldRecipeEditor({
                 {saved.workflowId && (
                   <Link
                     className="btn sm"
-                    to={`/workflows/${encodeURIComponent(saved.workflowId)}`}
+                    to={`/b/workflows/${encodeURIComponent(saved.workflowId)}`}
                   >
                     Open the graph editor
                   </Link>

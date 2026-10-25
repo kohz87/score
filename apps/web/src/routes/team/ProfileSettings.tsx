@@ -130,6 +130,7 @@ export function ProfileSettings({ agent }: { agent: AgentDetail }) {
         {!preview ? (
           <div className="team-file-actions">
             <button
+              id="agent-delete"
               disabled={agent.id === 'default' || review.isPending}
               onClick={() => review.mutate()}
             >

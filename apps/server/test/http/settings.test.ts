@@ -350,3 +350,30 @@ test('messaging save: whitelist, required fields, receipt, no value in the respo
   })
   expect(anon.statusCode).toBeGreaterThanOrEqual(400)
 })
+
+test('removing connections (2.0.3): human only, in-use providers refused by name, removals verified', async () => {
+  const del = (url: string, withSession = true) =>
+    app.inject({ method: 'DELETE', url, ...(withSession ? { headers } : {}) })
+  expect(
+    (await del('/api/settings/providers/openrouter', false)).statusCode,
+  ).toBeGreaterThanOrEqual(401)
+  const inUse = await del('/api/settings/providers/demo')
+  expect(inUse.statusCode).toBe(409)
+  expect(inUse.json().error).toMatchObject({ code: 'provider_in_use' })
+  expect(inUse.json().error.message).toMatch(/Pick another model there first/)
+  // Nothing stored for a provider that was never connected.
+  expect((await del('/api/settings/providers/openrouter')).statusCode).toBe(409)
+  expect((await del('/api/settings/providers/anthropic')).statusCode).toBe(204)
+  const listed = ProvidersResponseSchema.parse((await app.inject('/api/settings/providers')).json())
+  expect(listed.items.map((item) => item.id)).not.toContain('anthropic')
+  expect((await del('/api/settings/providers/nope')).statusCode).toBe(404)
+
+  expect((await del('/api/settings/tool-servers/files')).statusCode).toBe(204)
+  expect((await del('/api/settings/tool-servers/files')).statusCode).toBe(404)
+  const disconnected = await del('/api/settings/messaging/telegram')
+  expect(disconnected.statusCode).toBe(200)
+  expect(disconnected.json()).toMatchObject({ platform: 'telegram', status: 'disconnected' })
+  expect((await del('/api/settings/messaging/whatsapp')).statusCode).toBe(409)
+  const connections = (await app.inject('/api/settings/connections')).json()
+  expect(connections.toolServers.map((server: { id: string }) => server.id)).not.toContain('files')
+})

@@ -189,6 +189,9 @@ for (const [width, dark] of [
     for (const where of routes) {
       if (dark && !['chat-room', 'agent'].includes(where.name)) continue
       test(`${where.name}`, async ({ page }) => {
+        // Kept classic pages sit in the bold frame on the new shell; their baselines are the classic ones.
+        if (['orchestration', 'watch'].includes(where.name))
+          await page.addInitScript(() => window.localStorage.setItem('score.ui', 'classic'))
         if (dark) await page.addInitScript(() => window.localStorage.setItem('score.theme', 'dark'))
         await open(page, where, width, width < 600 ? 844 : 1024)
         await expect(page).toHaveScreenshot(`${where.name}-${width}${dark ? '-dark' : ''}.png`, {

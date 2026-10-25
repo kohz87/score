@@ -811,3 +811,25 @@ test('Where it works says exactly what Docker separates and changes through the 
   expect(within(card).getByText(/MCP servers/)).toBeDefined()
   expect(within(card).getByText('Commands run as root inside the container.')).toBeDefined()
 })
+
+test('Remove agent… opens More and focuses the existing Delete agent button', async () => {
+  open('/b/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const button = await screen.findByRole('button', { name: 'Delete agent' })
+  await waitFor(() => expect(document.activeElement).toBe(button))
+  expect(button.id).toBe('agent-delete')
+})
+
+test('Remove agent… on a coding agent focuses its existing remove button without opening More', async () => {
+  open('/b/team/coder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  await waitFor(() => expect(document.activeElement?.id).toBe('agent-delete'))
+  expect(document.activeElement?.textContent).toBe('Remove agent')
+  expect(document.getElementById('agent-more')).toBeNull()
+})
+
+test('the default agent has no Remove agent… action', async () => {
+  open('/b/team/default')
+  expect(await screen.findByRole('heading', { level: 1 })).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Remove agent…' })).toBeNull()
+})

@@ -1,6 +1,6 @@
 import type { WorkflowEvent } from '@score/contract'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../shell/framed-paths.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { LiveDiagram } from '../orchestrations/LiveDiagram.tsx'
 import { LiveLog } from '../orchestrations/LiveLog.tsx'

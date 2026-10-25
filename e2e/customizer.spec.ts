@@ -481,6 +481,8 @@ test('Settings › Look shows an added theme in its own colours', async ({ page 
 // Roles, names and focus order: every control has a name, the sections are a tab list with one panel, dialogs trap focus.
 test('roles, names and focus order', async ({ page }) => {
   await pair(page)
+  // The classic view: the bold shell frames the Customizer since 2.0.2.
+  await page.addInitScript(() => window.localStorage.setItem('score.ui', 'classic'))
   await openCustomizer(page)
   // Focus order: back link, then the actions, then the preview's controls, then the editor.
   await page.locator('body').click({ position: { x: 1, y: 1 } })

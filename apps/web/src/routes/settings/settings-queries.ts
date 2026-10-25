@@ -107,6 +107,35 @@ export function useSettingsActions() {
   return { connectProvider, addLocal, addToolServer, connectMessaging }
 }
 
+/** Remove a connection (contract §10, 2.0.3). The server answers 409 with its own words when agents still use it. */
+export function useRemoveConnection() {
+  const queryClient = useQueryClient()
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: providersKey }),
+      queryClient.invalidateQueries({ queryKey: connectionsKey }),
+      queryClient.invalidateQueries({ queryKey: ['models'] }),
+    ])
+  const del = (path: string) =>
+    apiFetch(path, { method: 'DELETE', headers: { 'Idempotency-Key': newId() } })
+  const removeProvider = useMutation({
+    mutationFn: (id: string) => del(`settings/providers/${encodeURIComponent(id)}`),
+    onSuccess: refresh,
+  })
+  const removeToolServer = useMutation({
+    mutationFn: (id: string) => del(`settings/tool-servers/${encodeURIComponent(id)}`),
+    onSuccess: refresh,
+  })
+  const removeMessaging = useMutation({
+    mutationFn: async (platform: string) =>
+      MessagingPlatformSchema.parse(
+        await del(`settings/messaging/${encodeURIComponent(platform)}`),
+      ),
+    onSuccess: refresh,
+  })
+  return { removeProvider, removeToolServer, removeMessaging }
+}
+
 // Advanced config. Search results come from the server, which leaves out every credential-shaped key.
 export function useConfigSearch(q: string) {
   return useQuery({
@@ -163,8 +192,9 @@ export async function sendProviderKey(id: string, req: ProviderKeyRequest): Prom
 }
 
 /** Form fields for a platform's browser setup. */
-export function useMessagingFields(platform: string) {
+export function useMessagingFields(platform: string, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['settings', 'messaging-fields', platform] as const,
     queryFn: async ({ signal }) =>
       MessagingFieldsResponseSchema.parse(
