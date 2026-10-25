@@ -33,6 +33,7 @@ import {
   jobLifecycleError,
 } from './RoomMenus.tsx'
 import { PhoneJobList } from './PhoneJobList.tsx'
+import { beginJobUndo } from './job-undo.ts'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { changeCachedJob, roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
 import './bold-room.css'
@@ -114,6 +115,7 @@ function LoadedTeamRoom({
   onShareRoom,
   onDeleteRoom,
   onOpenThread,
+  externalDeletedNotice,
 }: {
   room: Room
   agents: AgentSummary[]
@@ -127,6 +129,8 @@ function LoadedTeamRoom({
   onShareRoom: (room: Room) => void
   onDeleteRoom: (room: Room) => void
   onOpenThread: (jobId: string) => void
+  /** The shell already owns the deletion notice when the room is mounted inside it. */
+  externalDeletedNotice: boolean
 }) {
   const location = useLocation()
   const [params, setParams] = useSearchParams()
@@ -138,7 +142,6 @@ function LoadedTeamRoom({
   const [sharingJob, setSharingJob] = useState<Job | null>(null)
   const [renamingJob, setRenamingJob] = useState<Job | null>(null)
   const [deletingJob, setDeletingJob] = useState<Job | null>(null)
-  const [undoJob, setUndoJob] = useState<Job | null>(null)
   const [lifecycleBusy, setLifecycleBusy] = useState<string | null>(null)
   const [lifecycleNotice, setLifecycleNotice] = useState<{
     job: Job
@@ -147,7 +150,6 @@ function LoadedTeamRoom({
   } | null>(null)
   const queryClient = useQueryClient()
   const composerFocusFrame = useRef<number | null>(null)
-  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const allJobsRef = useRef(allJobs)
   const showDeleted = useShowDeleted(room.id)
   const requestedJob = params.get('job') ?? 'all'
@@ -220,13 +222,6 @@ function LoadedTeamRoom({
     [requested, selectJob],
   )
 
-  useEffect(
-    () => () => {
-      if (undoTimer.current !== null) clearTimeout(undoTimer.current)
-    },
-    [],
-  )
-
   useEffect(() => {
     allJobsRef.current = allJobs
   }, [allJobs])
@@ -241,34 +236,38 @@ function LoadedTeamRoom({
         const next = new URLSearchParams(params)
         next.delete('job')
         next.delete('message')
+        // The Workbench and Results views of that job go with it.
+        next.delete('work')
+        next.delete('file')
         setParams(next, { replace: true, state: location.state })
-        setLifecycleNotice({
-          job: allJobsRef.current.find((job) => job.id === event.data.id) ?? {
-            id: event.data.id,
-            roomId: event.data.roomId,
-            title: 'Deleted job',
-            state: 'open',
-            holderAgentId: null,
-            isDefault: false,
-            exchangeBudget: 8,
-            jobTurnLimit: 40,
-            unread: 0,
-            activeAgents: [],
-            lastMessageAt: null,
-            messageCount: 0,
-            summary: null,
-            source: null,
-            reportBack: null,
-            spendCapUsd: null,
-            recipe: null,
-            createdAt: new Date(0).toISOString(),
-            updatedAt: new Date(0).toISOString(),
-          },
-          text: 'That job was deleted.',
-          stillWorking: false,
-        })
+        if (!externalDeletedNotice)
+          setLifecycleNotice({
+            job: allJobsRef.current.find((job) => job.id === event.data.id) ?? {
+              id: event.data.id,
+              roomId: event.data.roomId,
+              title: 'Deleted job',
+              state: 'open',
+              holderAgentId: null,
+              isDefault: false,
+              exchangeBudget: 8,
+              jobTurnLimit: 40,
+              unread: 0,
+              activeAgents: [],
+              lastMessageAt: null,
+              messageCount: 0,
+              summary: null,
+              source: null,
+              reportBack: null,
+              spendCapUsd: null,
+              recipe: null,
+              createdAt: new Date(0).toISOString(),
+              updatedAt: new Date(0).toISOString(),
+            },
+            text: 'That job was deleted.',
+            stillWorking: false,
+          })
       }),
-    [location.state, params, setParams, stream],
+    [externalDeletedNotice, location.state, params, setParams, stream],
   )
 
   async function changeJobState(job: Job, action: 'close' | 'reopen') {
@@ -351,39 +350,7 @@ function LoadedTeamRoom({
     changeCachedJob(queryClient, job, 'delete')
     setFilter('all')
     if (selectedJob === job.id) selectJob('all')
-    if (undoTimer.current !== null) clearTimeout(undoTimer.current)
-    setUndoJob(job)
-    undoTimer.current = setTimeout(() => {
-      undoTimer.current = null
-      setUndoJob(null)
-    }, 10_000)
-  }
-
-  async function undoJobDelete(job: Job) {
-    if (undoTimer.current !== null) clearTimeout(undoTimer.current)
-    undoTimer.current = null
-    try {
-      const restored = JobSchema.parse(
-        await apiFetch(`jobs/${encodeURIComponent(job.id)}/restore`, {
-          method: 'POST',
-          headers: { 'Idempotency-Key': newId() },
-          body: '{}',
-        }),
-      )
-      changeCachedJob(queryClient, restored, 'upsert')
-      setUndoJob(null)
-      setLifecycleNotice({
-        job: restored,
-        text: `Restored “${restored.title}”.`,
-        stillWorking: false,
-      })
-    } catch {
-      setLifecycleNotice({
-        job,
-        text: 'Couldn’t restore this job. Try again from its room.',
-        stillWorking: false,
-      })
-    }
+    beginJobUndo(queryClient, job)
   }
 
   // Opening a job is what reads it: the job on show counts as opened, and leaving it keeps it in the list (recorded in
@@ -665,24 +632,11 @@ function LoadedTeamRoom({
           job={deletingJob}
           onClose={() => setDeletingJob(null)}
           onDeleted={() => jobDeleted(deletingJob)}
+          onStop={(job) => {
+            setDeletingJob(null)
+            void stopForLifecycle(job)
+          }}
         />
-      )}
-      {undoJob && (
-        <div className="chat-toasts bold-job-toasts" role="status" aria-live="polite">
-          <div className="chat-toast bold-job-undo" data-protected="flex">
-            <span>
-              Job deleted ·{' '}
-              <button
-                type="button"
-                className="chat-toast-undo"
-                onClick={() => void undoJobDelete(undoJob)}
-              >
-                Undo
-              </button>
-            </span>
-            <small>Removes it from Score. Agents may still remember it.</small>
-          </div>
-        </div>
       )}
     </>
   )
@@ -695,6 +649,7 @@ export function BoldTeamRoom({
   phoneAction,
   onOpenElsewhere,
   onOpenThread = () => undefined,
+  externalDeletedNotice = false,
 }: {
   agents: AgentSummary[]
   /** The bold shell's phone breakpoint: board 18's job list and board 03's full-screen chat. */
@@ -702,6 +657,8 @@ export function BoldTeamRoom({
   phoneAction?: ReactNode
   onOpenElsewhere?: (session: OutsideSession) => void
   onOpenThread?: (jobId: string) => void
+  /** The shell already owns the deletion notice when the room is mounted inside it. */
+  externalDeletedNotice?: boolean
 }) {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
@@ -855,6 +812,7 @@ export function BoldTeamRoom({
           onShareRoom={(target) => setSharing({ room: target })}
           onDeleteRoom={setDeleting}
           onOpenThread={onOpenThread}
+          externalDeletedNotice={externalDeletedNotice}
         />
       )}
       {sharing && (

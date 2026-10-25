@@ -111,6 +111,9 @@ for (const size of sizes) {
       await page.route('**/api/team-room', (route) =>
         route.fulfill({ json: { asOfSeq: 1, room: team.room, jobs: [] } }),
       )
+      await page.route('**/api/rooms/*/jobs**', (route) =>
+        route.fulfill({ json: { asOfSeq: 1, items: [] } }),
+      )
       const panel = await openResults(page, size)
       await expect(panel.getByRole('heading', { name: 'Nothing being made yet' })).toBeVisible()
     })

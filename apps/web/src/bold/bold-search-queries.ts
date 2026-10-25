@@ -5,7 +5,6 @@ import {
   KnowledgeTreeSchema,
   MessageSearchResponseSchema,
   NowSnapshotSchema,
-  TeamRoomResponseSchema,
   type AgentSummary,
   type Job,
   type Room,
@@ -17,6 +16,7 @@ import { useDebounced } from '../data/message-search.ts'
 import { useOptionalStream } from '../data/query-client.ts'
 import { nowKey } from '../data/team-pause.ts'
 import { fetchRoutines, routinesKey } from '../routes/team/routine-queries.ts'
+import { fetchCompleteTeamRoom } from './bold-job-reads.ts'
 import type { BoldSearchCommand, BoldSearchNote, BoldSearchRoutine } from './bold-search-model.ts'
 
 const BOLD_SEARCH_TEAM_KEY = ['bold-search', 'team-room'] as const
@@ -62,8 +62,7 @@ export function useBoldTeamRoom({ fresh = false }: { fresh?: boolean } = {}) {
   useBoldSearchJobDeletions()
   return useQuery({
     queryKey: BOLD_SEARCH_TEAM_KEY,
-    queryFn: async ({ signal }) =>
-      TeamRoomResponseSchema.parse(await apiFetch('team-room', { signal })),
+    queryFn: ({ signal }) => fetchCompleteTeamRoom(signal),
     staleTime: 5_000,
     ...(fresh ? { refetchOnMount: 'always' as const } : {}),
     retry: false,

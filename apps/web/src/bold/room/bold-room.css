@@ -413,6 +413,13 @@
   padding: 0;
 }
 
+/* On the phone the tab bar sits at the bottom: the toast must not cover it. */
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-job-toasts {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 [data-ui='bold'] .bold-job-undo {
   background: var(--hi-bg);
   color: var(--hi-ink);

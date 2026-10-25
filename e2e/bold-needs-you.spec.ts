@@ -294,7 +294,7 @@ for (const viewport of sizes) {
               },
             }
           if (request.method === 'POST' && request.path === '/api/tasks/task-blocked/actions') {
-            task = { ...task, column: 'working', hermesStatus: 'running', badge: null }
+            // Hermes has not moved the task yet: only the server state may remove the card.
             return { body: { taskId: task.id, action: 'unblock', ok: true } }
           }
           return undefined
@@ -321,11 +321,53 @@ for (const viewport of sizes) {
             request.method === 'POST' && request.path === '/api/tasks/task-blocked/actions',
         )?.body,
       ).toEqual({ action: 'unblock', text: 'Use a 30 second timeout.' })
-      // The mutation refreshed the read; a task no longer blocked is not a needs-you card.
+      await expect(card.getByText('Sent — waiting for Hermes')).toBeVisible()
+      await expect(card.getByRole('button', { name: 'Sent' })).toBeDisabled()
+      // Hermes moves the task on; a task no longer blocked is not a needs-you card.
+      task = { ...task, column: 'working', hermesStatus: 'running', badge: null }
       await page.reload()
       await expect(
         page.getByRole('article', { name: /Blocked task: Fix the login timeout/ }),
       ).toHaveCount(0)
+    })
+
+    test(`report-back needs your OK as a counted, protected card at ${label}`, async ({ page }) => {
+      const state = await openBoldRoom(page, {
+        jobs: [
+          job('job-default', 'Team room', { isDefault: true, holderAgentId: 'lead' }),
+          job('job-activity', 'Activity feed', {
+            source: {
+              app: 'Tickets app',
+              ref: 'TCK-142',
+              title: 'Login times out',
+              link: null,
+              triggerId: 'trigger-1',
+              missing: [],
+            },
+            reportBack: { state: 'needs_ok', tool: 'add_comment', at: null },
+          }),
+        ],
+        approvals: [],
+        exchanges: [],
+        handle: (request) => {
+          if (request.method === 'POST' && request.path === '/api/jobs/job-activity/report-back')
+            return { body: { ok: true } }
+          return undefined
+        },
+      })
+      const card = page.getByRole('article', { name: /Report back: Activity feed/ })
+      await expect(card).toHaveAttribute('data-protected', 'flex')
+      await expect(card).toContainText('Send the result back to TCK-142?')
+      await card.getByRole('button', { name: 'Send' }).dblclick()
+      await expect
+        .poll(
+          () =>
+            state.requests.filter(
+              (request) =>
+                request.method === 'POST' && request.path === '/api/jobs/job-activity/report-back',
+            ).length,
+        )
+        .toBe(1)
     })
 
     test(`a blocked task with no room belongs to the team room only at ${label}`, async ({

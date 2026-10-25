@@ -390,15 +390,18 @@ export function DeleteJobDialog({
   job,
   onClose,
   onDeleted,
+  onStop,
 }: {
   job: Job
   onClose: () => void
   onDeleted: () => void
+  onStop: (job: Job) => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [stillWorking, setStillWorking] = useState(false)
   const key = useRef(newId())
   useEffect(() => {
     dialog.current?.showModal?.()
@@ -408,6 +411,7 @@ export function DeleteJobDialog({
     if (!matches || busy) return
     setBusy(true)
     setError(null)
+    setStillWorking(false)
     try {
       await apiFetch(`jobs/${encodeURIComponent(job.id)}`, {
         method: 'DELETE',
@@ -418,6 +422,7 @@ export function DeleteJobDialog({
       key.current = newId()
       const problem = jobLifecycleError(failure, 'delete')
       setError(problem.text)
+      setStillWorking(problem.stillWorking)
     } finally {
       setBusy(false)
     }
@@ -462,6 +467,11 @@ export function DeleteJobDialog({
         <p className="chat-rewind-warning" role="alert">
           {error}
         </p>
+      )}
+      {stillWorking && (
+        <button type="button" className="btn sm" disabled={busy} onClick={() => onStop(job)}>
+          Stop
+        </button>
       )}
       <div className="chat-rewind-actions">
         <button type="button" onClick={onClose} disabled={busy}>

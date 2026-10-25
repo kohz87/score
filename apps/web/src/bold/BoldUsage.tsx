@@ -421,7 +421,7 @@ export function BoldUsage() {
 
           <p className="usage-note small muted">
             Approvals you answered: {answered} in this range.{' '}
-            <Link className="link" to="/b/settings/rules#rules">
+            <Link className="link" to="/b/settings/rules">
               Review rules
             </Link>
           </p>

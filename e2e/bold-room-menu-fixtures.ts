@@ -89,6 +89,7 @@ const notesJob = job('job-notes', team.id, 'Release notes 2.4', {
   holderAgentId: 'lead',
   unread: 3,
 })
+const closedJob = job('job-closed', team.id, 'Old import', { state: 'closed' })
 const oldJob = job('job-old', older.id, older.name, { isDefault: true, holderAgentId: null })
 
 const oldMessage = {
@@ -285,7 +286,13 @@ export async function mockRoomMenus(
       return response(route, {
         // A newer snapshot once the job exists, as the real server's sequence would be.
         asOfSeq: createdJob ? 13 : 12,
-        items: [defaultTeamJob, activityJob, notesJob, ...(createdJob ? [createdJob] : [])],
+        items: [
+          defaultTeamJob,
+          activityJob,
+          notesJob,
+          ...(url.searchParams.get('closed') === 'include' ? [closedJob] : []),
+          ...(createdJob ? [createdJob] : []),
+        ],
       })
     if (method === 'POST' && path === `/api/rooms/${team.id}/jobs`) {
       const payload = (typeof body === 'object' && body !== null ? body : {}) as Json

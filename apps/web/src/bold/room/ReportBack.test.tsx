@@ -2,6 +2,7 @@ import type { Job, JobReportBack } from '@score/contract'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { ReportBackLine, reportBackText } from './ReportBack.tsx'
+import { resetReportBackStore } from './report-back-store.ts'
 import {
   disposeRoomTest,
   jsonResponse,
@@ -13,6 +14,7 @@ import {
 afterEach(() => {
   disposeRoomTest()
   vi.unstubAllGlobals()
+  resetReportBackStore()
 })
 
 const source = {
@@ -30,7 +32,7 @@ function reportJob(reportBack: JobReportBack): Job {
 
 function stubJobs(job: Job) {
   const fetchMock = mockFetch((url, init) => {
-    if (url === '/api/rooms/room-1/jobs') return jsonResponse({ asOfSeq: 1, items: [job] })
+    if (url.startsWith('/api/rooms/room-1/jobs')) return jsonResponse({ asOfSeq: 1, items: [job] })
     if (url === '/api/jobs/job-1/report-back' && init.method === 'POST')
       return jsonResponse({ ok: true })
     return jsonResponse({ asOfSeq: 0, items: [] })
@@ -118,4 +120,51 @@ test('Try again posts the same report-back request', async () => {
       ),
     ).toHaveLength(1),
   )
+})
+
+test('two mounted lines share one send and one idempotency key', async () => {
+  const job = reportJob({ state: 'needs_ok', tool: 'add_comment', at: null })
+  const fetchMock = stubJobs(job)
+  renderInRoom(
+    <>
+      <ReportBackLine job={job} />
+      <ReportBackLine job={job} inThread />
+    </>,
+  )
+  const sends = await screen.findAllByRole('button', { name: 'Send' })
+  fireEvent.click(sends[0]!)
+  fireEvent.click(sends[1]!)
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, init]) => String(url) === '/api/jobs/job-1/report-back' && init?.method === 'POST',
+      ),
+    ).toHaveLength(1),
+  )
+})
+
+test('a network failure keeps the same key for the retry', async () => {
+  const job = reportJob({ state: 'needs_ok', tool: 'add_comment', at: null })
+  let attempts = 0
+  const fetchMock = mockFetch((url, init) => {
+    if (url.startsWith('/api/rooms/room-1/jobs')) return jsonResponse({ asOfSeq: 1, items: [job] })
+    if (url === '/api/jobs/job-1/report-back' && init.method === 'POST') {
+      attempts += 1
+      if (attempts === 1) return Promise.reject(new Error('connection dropped'))
+      return jsonResponse({ ok: true })
+    }
+    return jsonResponse({ asOfSeq: 0, items: [] })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  renderInRoom(<ReportBackLine job={job} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Send' }))
+  expect(await screen.findByText(/Couldn’t send the result back/)).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(attempts).toBe(2))
+  const keys = fetchMock.mock.calls
+    .filter(
+      ([url, init]) => String(url) === '/api/jobs/job-1/report-back' && init?.method === 'POST',
+    )
+    .map(([, init]) => new Headers(init?.headers).get('Idempotency-Key'))
+  expect(keys[0]).toBe(keys[1])
 })

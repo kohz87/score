@@ -453,9 +453,11 @@ for (const viewport of sizes) {
         .poll(() => state.posts.some((item) => item.path === '/api/jobs/job-activity/report-back'))
         .toBe(true)
 
-      const tasks = thread.getByRole('region', { name: 'Hermes tasks' })
+      const tasks = thread.getByRole('region', { name: 'Room tasks' })
       await expect(tasks).toContainText('Fix the login timeout')
       await expect(tasks).toContainText('OPS-9')
+      await expect(tasks).toContainText('not tied to a job yet')
+      await tasks.getByRole('button', { name: 'Show steps' }).click()
       await expect(tasks).toContainText('Reproduce the timeout')
       await expect(tasks).toContainText('Pick the new limit')
       await tasks.getByRole('button', { name: 'Comment' }).click()

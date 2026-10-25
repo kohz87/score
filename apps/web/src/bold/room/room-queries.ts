@@ -2,11 +2,9 @@ import {
   ExchangeSchema,
   ExchangesResponseSchema,
   JobSchema,
-  JobsResponseSchema,
   MessagePageSchema,
   RoomDetailSnapshotSchema,
   RoomPinsResponseSchema,
-  TeamRoomResponseSchema,
   type Exchange,
   type Job,
   type Message,
@@ -17,14 +15,11 @@ import type { QueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 import { defineStreamQuery, type StreamSnapshot } from '../../data/resync.ts'
 import { reduceMessages, type MessagePageData } from '../../routes/chat/queries.ts'
+import { fetchCompleteJobs, fetchCompleteTeamRoom } from '../bold-job-reads.ts'
 import { dropCachedJobFromSearch } from '../bold-search-queries.ts'
 
 /** The job read model as it now ships: `job.upserted` carries every field the tabs need. */
 export type JobRead = Job
-
-export function readJobs(raw: unknown): JobRead[] {
-  return JobsResponseSchema.parse(raw).items
-}
 
 /** The team-room read also carries the jobs that make the room switcher's "N jobs" honest. */
 export interface TeamRoomRead {
@@ -122,7 +117,7 @@ export function teamRoomQuery(roomIdOverride: string | null) {
         )
         return { asOfSeq: snapshot.asOfSeq, data: { room: snapshot.room, jobs: [] } }
       }
-      const snapshot = TeamRoomResponseSchema.parse(await apiFetch('team-room', { signal }))
+      const snapshot = await fetchCompleteTeamRoom(signal)
       return { asOfSeq: snapshot.asOfSeq, data: { room: snapshot.room, jobs: snapshot.jobs } }
     },
     types: ['room.upserted', 'room.deleted', 'job.upserted', 'job.deleted'],
@@ -292,9 +287,8 @@ export function roomJobsQuery(roomId: string | null) {
     async fetch(signal) {
       // The room is still resolving: the jobs read starts as soon as its id is known.
       if (roomId === null) return { asOfSeq: 0, data: [] }
-      const raw: unknown = await apiFetch(`rooms/${encodeURIComponent(roomId)}/jobs`, { signal })
-      const response = JobsResponseSchema.parse(raw)
-      return { asOfSeq: response.asOfSeq, data: readJobs(raw) }
+      const response = await fetchCompleteJobs(roomId, signal)
+      return { asOfSeq: response.asOfSeq, data: response.items }
     },
     types: ['job.upserted', 'job.deleted'],
     reduce(data, event) {

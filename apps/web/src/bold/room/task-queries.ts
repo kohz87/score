@@ -1,6 +1,6 @@
 import {
-  TaskColumnSchema,
   TaskDetailSchema,
+  TasksSnapshotSchema,
   TaskSummarySchema,
   type TaskColumn,
   type TaskDetail,
@@ -11,34 +11,10 @@ import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
 
-// The contract documents GET /api/tasks but has no exported envelope schema; this is the shape the server returns.
-function parseTaskList(value: unknown): {
-  asOfSeq: number
-  columns: Record<TaskColumn, TaskSummary[]>
-} {
-  if (typeof value !== 'object' || value === null)
-    throw new Error('The task list is not an object.')
-  const asOfSeq = (value as { asOfSeq?: unknown }).asOfSeq
-  const columns = (value as { columns?: unknown }).columns
-  if (typeof asOfSeq !== 'number' || !Number.isInteger(asOfSeq) || asOfSeq < 0)
-    throw new Error('The task list has no sequence.')
-  if (typeof columns !== 'object' || columns === null)
-    throw new Error('The task list has no columns.')
-  return {
-    asOfSeq,
-    columns: Object.fromEntries(
-      TaskColumnSchema.options.map((column) => [
-        column,
-        TaskSummarySchema.array().parse((columns as Record<string, unknown>)[column] ?? []),
-      ]),
-    ) as Record<TaskColumn, TaskSummary[]>,
-  }
-}
-
 export type RoomTasks = { asOfSeq: number; tasks: TaskSummary[] }
 
 function flatten(columns: Record<TaskColumn, TaskSummary[]>): TaskSummary[] {
-  return TaskColumnSchema.options.flatMap((column) => columns[column] ?? [])
+  return Object.values(columns).flat()
 }
 
 /**
@@ -50,7 +26,7 @@ export function roomTasksQuery(roomId: string, includeUnassigned: boolean, needs
     key: ['bold', 'tasks', roomId, includeUnassigned, needsYou],
     async fetch(signal) {
       const query = new URLSearchParams(needsYou ? { needsYou: 'true' } : { room: roomId })
-      const response = parseTaskList(await apiFetch(`tasks?${query}`, { signal }))
+      const response = TasksSnapshotSchema.parse(await apiFetch(`tasks?${query}`, { signal }))
       return {
         asOfSeq: response.asOfSeq,
         data: {

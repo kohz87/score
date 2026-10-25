@@ -34,7 +34,7 @@ function stub({ jobs, exchanges = [], messages = [], approvals = [], tasks = [] 
     calls.push({ url, init })
     if (url === '/api/team-room') return jsonResponse({ asOfSeq: 1, room, jobs })
     if (url === '/api/agents') return jsonResponse({ asOfSeq: 1, items: agents })
-    if (url === '/api/rooms/room-1/jobs') return jsonResponse({ asOfSeq: 1, items: jobs })
+    if (url.startsWith('/api/rooms/room-1/jobs')) return jsonResponse({ asOfSeq: 1, items: jobs })
     if (url.startsWith('/api/rooms/room-1/messages') && init.method !== 'POST')
       return jsonResponse({ asOfSeq: 1, items: messages, nextCursor: null, jobId: 'job-1' })
     if (/^\/api\/jobs\/[^/]+\/exchanges$/.test(url))
@@ -210,7 +210,7 @@ test('a 403 on the step-in box asks to pair this browser, and a done job has the
   const fetchMock = mockFetch((url, init) => {
     if (url === '/api/team-room') return jsonResponse({ asOfSeq: 1, room, jobs: [job] })
     if (url === '/api/agents') return jsonResponse({ asOfSeq: 1, items: agents })
-    if (url === '/api/rooms/room-1/jobs') return jsonResponse({ asOfSeq: 1, items: [job] })
+    if (url.startsWith('/api/rooms/room-1/jobs')) return jsonResponse({ asOfSeq: 1, items: [job] })
     if (init.method === 'POST')
       return jsonResponse({ error: { code: 'forbidden', message: 'no' } }, 403)
     if (url.startsWith('/api/rooms/room-1/messages'))
@@ -231,17 +231,20 @@ test('the step-in box is disabled on a closed job', async () => {
   expect(box.disabled).toBe(true)
 })
 
-test('the thread lists the room’s Hermes tasks with their state and steps', async () => {
-  stub({
+test('the thread lists the room’s tasks and reads steps only when expanded', async () => {
+  const calls = stub({
     jobs: [job],
     tasks: [makeTask({ column: 'working', badge: null, hermesStatus: 'running' })],
   })
   renderInRoom(<BoldThread jobId="job-1" onSelectJob={() => undefined} />, ['/b'])
 
-  const section = await screen.findByRole('region', { name: 'Hermes tasks' })
+  const section = await screen.findByRole('region', { name: 'Room tasks' })
   expect(section.textContent).toContain('Fix the login timeout')
   expect(section.textContent).toContain('Working')
   expect(section.textContent).toContain('TASK-1')
+  expect(section.textContent).toContain('not tied to a job yet')
+  expect(calls.some(({ url }) => url.startsWith('/api/tasks/task-1'))).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Show steps' }))
   expect(await screen.findByText('Reproduce the timeout')).toBeDefined()
   expect(screen.getByText('Pick the new limit')).toBeDefined()
   expect(screen.getByRole('button', { name: 'Comment' })).toBeDefined()

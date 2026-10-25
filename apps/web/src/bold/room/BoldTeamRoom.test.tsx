@@ -13,9 +13,12 @@ import {
   room,
 } from './room-test-utils.tsx'
 import { BoldTeamRoom } from './BoldTeamRoom.tsx'
+import { JobUndoToast } from './JobUndoToast.tsx'
+import { resetJobUndo } from './job-undo.ts'
 
 beforeEach(() => {
   window.localStorage.clear()
+  resetJobUndo()
 })
 
 afterEach(() => {
@@ -690,7 +693,13 @@ test('delete asks for the typed title, then offers a 10-second undo that restore
       return jsonResponse(makeJob({ id: 'job-activity', title: 'Activity feed' }))
     return fallback(input, init)
   })
-  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} />
+      <JobUndoToast />
+    </>,
+    ['/b?job=job-activity'],
+  )
   fireEvent.click(await screen.findByRole('button', { name: 'Job menu' }))
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete job' }))
   const confirm = screen.getByRole('button', { name: 'Delete job' })
@@ -708,6 +717,35 @@ test('delete asks for the typed title, then offers a 10-second undo that restore
   )
   expect(await screen.findByText('Restored “Activity feed”.')).toBeDefined()
   expect(await screen.findByRole('tab', { name: /Activity feed/ })).toBeDefined()
+})
+
+test('a restore failure clears the undo toast and names the reason', async () => {
+  const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    const url = String(input)
+    if (url === '/api/jobs/job-activity' && init?.method === 'DELETE')
+      return new Response(null, { status: 204 })
+    if (url === '/api/jobs/job-activity/restore' && init?.method === 'POST')
+      return jsonResponse({ error: { code: 'not_found', message: 'The job is gone.' } }, 404)
+    return fallback(input, init)
+  })
+  renderInRoom(
+    <>
+      <BoldTeamRoom agents={agents} />
+      <JobUndoToast />
+    </>,
+    ['/b?job=job-activity'],
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Job menu' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete job' }))
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Activity feed' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Delete job' }))
+  expect(await screen.findByText(/Job deleted/)).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+
+  expect(await screen.findByText('That job can’t be restored any more')).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
 })
 
 test('the default job offers neither rename nor delete', async () => {
@@ -821,6 +859,59 @@ test('a closed job is listed under Closed jobs and its menu reopens it', async (
       ([url, init]) => String(url) === '/api/jobs/job-closed/reopen' && init?.method === 'POST',
     ),
   ).toBe(true)
+})
+
+test('a closed job from the server snapshot is under Closed jobs after a reload', async () => {
+  const closed = makeJob({ id: 'job-closed', title: 'Old import', state: 'closed' })
+  const fetchMock = stubRoom([closed, makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input) === '/api/jobs/job-closed/reopen' && init?.method === 'POST')
+      return jsonResponse({ ...closed, state: 'open' })
+    return fallback(input, init)
+  })
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+
+  expect(await screen.findByRole('button', { name: 'Closed jobs' })).toBeDefined()
+  expect(screen.queryByRole('tab', { name: /Old import/ })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Closed jobs' }))
+  fireEvent.click(await screen.findByRole('tab', { name: /Old import/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Job menu' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Reopen' }))
+  expect(await screen.findByText('Reopened “Old import”.')).toBeDefined()
+})
+
+test('delete explains a still-working 409 and offers Stop', async () => {
+  const fetchMock = stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  const fallback = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) => {
+    const url = String(input)
+    if (url === '/api/jobs/job-activity' && init?.method === 'DELETE')
+      return jsonResponse(
+        {
+          error: {
+            code: 'conflict',
+            message: 'The job is still working. Stop it first, then delete it.',
+          },
+        },
+        409,
+      )
+    if (url === '/api/jobs/job-activity/stop' && init?.method === 'POST')
+      return jsonResponse({ ok: true })
+    return fallback(input, init)
+  })
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
+  fireEvent.click(await screen.findByRole('button', { name: 'Job menu' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete job' }))
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Activity feed' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Delete job' }))
+  expect(await screen.findByText(/still working\. Stop it first, then delete it/)).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url) === '/api/jobs/job-activity/stop'),
+    ).toBe(true),
+  )
 })
 
 test('a job.deleted event returns the open job to All with a note', async () => {

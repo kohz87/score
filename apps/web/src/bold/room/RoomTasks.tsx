@@ -33,16 +33,15 @@ type Action = 'unblock' | 'comment'
 function TaskActionForm({
   task,
   action,
-  onDone,
   onCancel,
 }: {
   task: TaskSummary
   action: Action
-  onDone: () => void
   onCancel: () => void
 }) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const key = useRef(newId())
   const refresh = useTaskRefresh()
@@ -53,14 +52,17 @@ function TaskActionForm({
     setError(null)
     try {
       await taskAction(task.id, action, text, key.current)
+      setSent(true)
       refresh()
-      onDone()
     } catch (failure) {
-      key.current = newId()
+      if (failure instanceof ApiError && failure.status >= 400 && failure.status < 500)
+        key.current = newId()
       setError(
-        failure instanceof ApiError && failure.status === 409
-          ? failure.message
-          : `Couldn’t ${action} this task. Try again.`,
+        failure instanceof ApiError && (failure.status === 401 || failure.status === 403)
+          ? 'Pair this browser first.'
+          : failure instanceof ApiError && failure.status === 409
+            ? failure.message
+            : `Couldn’t ${action} this task. Try again.`,
       )
     } finally {
       setBusy(false)
@@ -83,16 +85,21 @@ function TaskActionForm({
           {error}
         </span>
       )}
+      {sent && (
+        <span className="bold-task-sent" role="status">
+          Sent — waiting for Hermes
+        </span>
+      )}
       <span className="row wrap">
         <button
           type="button"
           className="btn sm"
-          disabled={busy || needsText}
+          disabled={busy || needsText || sent}
           onClick={() => void submit()}
         >
-          {busy ? 'Sending…' : action === 'unblock' ? 'Unblock' : 'Comment'}
+          {sent ? 'Sent' : busy ? 'Sending…' : action === 'unblock' ? 'Unblock' : 'Comment'}
         </button>
-        <button type="button" className="btn sm ghost" disabled={busy} onClick={onCancel}>
+        <button type="button" className="btn sm ghost" disabled={busy || sent} onClick={onCancel}>
           Cancel
         </button>
       </span>
@@ -112,12 +119,7 @@ function BlockedTaskCard({ task, agents }: { task: TaskSummary; agents: AgentSum
       <b className="bold-request-title">{task.title}</b>
       <span>{taskBlockedReason(task)}</span>
       {action ? (
-        <TaskActionForm
-          task={task}
-          action={action}
-          onDone={() => setAction(null)}
-          onCancel={() => setAction(null)}
-        />
+        <TaskActionForm task={task} action={action} onCancel={() => setAction(null)} />
       ) : (
         <span className="row wrap">
           <button type="button" className="btn sm" onClick={() => setAction('unblock')}>
@@ -179,6 +181,7 @@ function TaskSteps({ taskId }: { taskId: string }) {
 
 function ThreadTask({ task, agents }: { task: TaskSummary; agents: AgentSummary[] }) {
   const [commenting, setCommenting] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   return (
     <article className="bold-thread-task" data-task-id={task.id}>
       <div className="bold-thread-task-head">
@@ -187,14 +190,17 @@ function ThreadTask({ task, agents }: { task: TaskSummary; agents: AgentSummary[
         <span className="bold-thread-task-key">{task.key}</span>
       </div>
       <b>{task.title}</b>
-      <TaskSteps taskId={task.id} />
+      <button
+        type="button"
+        className="link"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((open) => !open)}
+      >
+        {expanded ? 'Hide steps' : 'Show steps'}
+      </button>
+      {expanded && <TaskSteps taskId={task.id} />}
       {commenting ? (
-        <TaskActionForm
-          task={task}
-          action="comment"
-          onDone={() => setCommenting(false)}
-          onCancel={() => setCommenting(false)}
-        />
+        <TaskActionForm task={task} action="comment" onCancel={() => setCommenting(false)} />
       ) : (
         <button type="button" className="link" onClick={() => setCommenting(true)}>
           Comment
@@ -204,14 +210,15 @@ function ThreadTask({ task, agents }: { task: TaskSummary; agents: AgentSummary[
   )
 }
 
-/** The job's Hermes tasks in the thread. The prototype has no such section; this is the decision-121 addition. */
+/** The room's Hermes tasks in the thread. Tasks are not tied to a job yet (TaskSummary has no jobId). */
 export function ThreadTasks({ roomId, agents }: { roomId: string; agents: AgentSummary[] }) {
   const definition = useMemo(() => roomTasksQuery(roomId, false), [roomId])
   const tasks = useStreamQuery(definition).data?.tasks ?? []
   if (tasks.length === 0) return null
   return (
     <section className="bold-thread-tasks" aria-labelledby="bold-thread-tasks-title">
-      <h3 id="bold-thread-tasks-title">Hermes tasks</h3>
+      <h3 id="bold-thread-tasks-title">Room tasks</h3>
+      <p className="small muted">Tasks are not tied to a job yet; these are for the whole room.</p>
       {tasks.map((task) => (
         <ThreadTask key={task.id} task={task} agents={agents} />
       ))}

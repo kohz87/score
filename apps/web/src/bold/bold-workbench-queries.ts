@@ -17,6 +17,7 @@ async function fetchWorkbench(jobId: string, signal?: AbortSignal): Promise<Work
 const REFRESH_MS = 3000
 const WORKBENCH_EVENTS = new Set([
   'job.upserted',
+  'job.deleted',
   'exchange.upserted',
   'watch.frame',
   'approval.requested',
