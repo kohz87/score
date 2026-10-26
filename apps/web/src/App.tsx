@@ -81,11 +81,6 @@ const RunFramed = () => (
     <RunPage />
   </BoldClassicPage>
 )
-const WatchFramed = () => (
-  <BoldClassicPage>
-    <WatchPage />
-  </BoldClassicPage>
-)
 
 /** Applies `?ui=bold` / `?ui=classic` from any address to this device's choice; the index loader also applies it first. */
 function UiParamBoundary() {
@@ -133,7 +128,12 @@ export const appRoutes: RouteObject[] = [
               redirect(keepSearch(request, `/b/recipes/${params.workflowId ?? ''}`)),
           },
           { path: 'runs/:briefId', Component: RunFramed },
-          { path: 'watch/:agentId', Component: WatchFramed },
+          // 2.6.0: Watch is the replay on the agent's screen page.
+          {
+            path: 'watch/:agentId',
+            loader: ({ request, params }) =>
+              redirect(keepSearch(request, `/b/screen/${params.agentId ?? ''}`)),
+          },
           { path: 'terminal', Component: BoldTerminalPage },
           ...['settings/look/customize', 'settings/look/customize/:themeId'].map(
             (path): RouteObject => ({

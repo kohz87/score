@@ -44,22 +44,217 @@
   letter-spacing: -0.03em;
 }
 
-[data-ui='bold'] .bold-screen-terminal {
+[data-ui='bold'] .bold-screen-actions {
   margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-screen-terminal {
   min-height: 40px;
   text-decoration: none;
 }
 
-[data-ui='bold'] .bold-screen-layout {
+[data-ui='bold'] .bold-screen-frames {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-screen-smalls {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-screen-small {
+  flex: 1;
+  min-height: 150px;
+  min-width: 0;
+  border: 0;
+  border-radius: 22px;
+  background: #0f1116;
+  color: #c9ccd4;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  font: inherit;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-screen-small:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+[data-ui='bold'] .bold-screen-small:not(:disabled):hover {
+  background: #171922;
+}
+
+[data-ui='bold'] .bold-screen-small:focus-visible {
+  outline: 2px solid #ececf1;
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-screen-small-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #a9adb8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-ui='bold'] .bold-screen-small-where {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-ui='bold'] .bold-screen-small-body {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-screen-small-cmd {
+  color: #7db8ff;
+}
+
+[data-ui='bold'] .bold-screen-small-empty {
+  font-size: 12px;
+  color: #9a9ea7;
+}
+
+[data-ui='bold'] .bold-screen-small-page {
+  flex: 1;
+  border-radius: 12px;
+  background: #fff;
+  color: #12131a;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-screen-card {
+  border-radius: 20px;
+  background: var(--panel);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-screen-card p {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-screen-command {
+  display: block;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-screen-others {
+  display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-screen-others-title {
+  margin-right: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-screen-others-note {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-screen-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px 0 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+[data-ui='bold'] .bold-screen-chip:hover {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-screen-chip:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+[data-ui='bold'] .bold-screen-chip-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-screen-chip-live {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--live);
+}
+
+[data-ui='bold'] .bold-screen-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'ask main'
+    'steps main';
+  align-items: start;
+  column-gap: 20px;
+}
+
+[data-ui='bold'] .bold-screen-ask {
+  grid-area: ask;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-screen-ask:not(:empty) {
+  margin-bottom: 12px;
 }
 
 [data-ui='bold'] .bold-screen-log {
-  flex: 1 1 280px;
-  max-width: 360px;
+  grid-area: steps;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -80,6 +275,48 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* One bounded scroll area, so a long history never pushes the replay controls away. */
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+[data-ui='bold'] .bold-screen-steps--nested {
+  max-height: none;
+  overflow: visible;
+  margin: 4px 0 0 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+
+[data-ui='bold'] .bold-screen-group {
+  padding: 4px 0;
+}
+
+[data-ui='bold'] .bold-screen-dot {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  margin-top: 7px;
+  border-radius: 999px;
+}
+
+[data-ui='bold'] .bold-screen-more {
+  align-self: flex-start;
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-screen-more:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 [data-ui='bold'] .bold-screen-step {
@@ -134,7 +371,7 @@
 }
 
 [data-ui='bold'] .bold-screen-main {
-  flex: 999 1 520px;
+  grid-area: main;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -178,40 +415,6 @@
   color: #e8eaf0;
   font-size: 13px;
   font-weight: 700;
-}
-
-[data-ui='bold'] .bold-screen-surfaces {
-  display: inline-flex;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
-  padding: 3px;
-}
-
-[data-ui='bold'] .bold-screen-surfaces button {
-  border: 0;
-  border-radius: 999px;
-  min-height: 28px;
-  padding: 0 10px;
-  background: transparent;
-  color: #a9adb8;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-[data-ui='bold'] .bold-screen-surfaces button.on {
-  background: #ececf1;
-  color: #12131a;
-}
-
-[data-ui='bold'] .bold-screen-surfaces button:disabled {
-  opacity: 0.45;
-}
-
-[data-ui='bold'] .bold-screen-surfaces button:focus-visible {
-  outline: 2px solid #ececf1;
-  outline-offset: 2px;
 }
 
 [data-ui='bold'] .bold-screen-readonly {
@@ -269,12 +472,44 @@
 /* The approval bar is a decision for you: the shell's light "for you" object, whose pair the contrast fallback pins to
    Score's own (the classic bar's white fill under the shell's dark ink would be light on light). */
 [data-ui='bold'] .bold-screen-approval {
-  bottom: 16px;
+  position: static;
+  width: auto;
+  margin: 0;
+  border-radius: 22px;
+  padding: 14px 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  box-shadow: none;
   background: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-screen-asked {
+  font-size: 13px;
+  color: var(--hi-ink);
+  opacity: 0.8;
+}
+
+[data-ui='bold'] .bold-screen-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-screen-approval .watch-approval__go {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'] .bold-screen-approval .watch-approval__no,
+[data-ui='bold'] .bold-screen-approval .watch-approval__link {
+  border-color: var(--hi-ink);
+  color: var(--hi-ink);
 }
 
 [data-ui='bold'] .bold-screen-approval .watch-approval__text {
   color: var(--hi-ink);
+  font-weight: 500;
 }
 
 [data-ui='bold'] .bold-screen-answer {
@@ -389,22 +624,40 @@
     align-items: flex-start;
   }
 
-  [data-ui='bold'] .bold-screen-terminal {
+  [data-ui='bold'] .bold-screen-actions {
     width: 100%;
-    justify-content: center;
     margin-left: 0;
   }
 
-  [data-ui='bold'] .bold-screen-layout {
-    flex-direction: column;
-    gap: 16px;
+  [data-ui='bold'] .bold-screen-actions .btn {
+    flex: 1;
+    justify-content: center;
   }
 
-  [data-ui='bold'] .bold-screen-log,
-  [data-ui='bold'] .bold-screen-main {
-    width: 100%;
-    max-width: none;
-    flex: none;
+  [data-ui='bold'] .bold-screen-frames {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-ui='bold'] .bold-screen-window {
+    min-height: 320px;
+  }
+
+  [data-ui='bold'] .bold-screen-smalls {
+    flex-direction: row;
+  }
+
+  [data-ui='bold'] .bold-screen-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'ask'
+      'main'
+      'steps';
+    row-gap: 16px;
+  }
+
+  [data-ui='bold'] .bold-screen-ask:not(:empty) {
+    margin-bottom: 0;
   }
 
   [data-ui='bold'] .bold-screen-stage {
