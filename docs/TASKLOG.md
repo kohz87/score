@@ -1450,3 +1450,6 @@ One entry per completed task: what landed, review results, and any **rejected re
   no visible effect on the new shell (2.7.0). Both to be raised with the owner after 3.0.0.
 - **3.0.0 follow-up (from the group-3 port):** the new agent page has no memory search and no delete-a-memory confirm
   (the classic agent tabs had them); the Recent runs card has no Outcome filter or cost. Raise with the owner after 3.0.0.
+- **3.0.0 follow-ups (from the group-2 port):** check whether the new shell can rename, pin, archive, tag (projects)
+  rooms and export a room as JSON (classic could; the port marked them dropped); a room whose messages were all deleted
+  shows the starter board with no "Show deleted messages" toggle.
