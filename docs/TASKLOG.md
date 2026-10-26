@@ -1448,3 +1448,5 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **3.0.0 follow-ups found while porting (not in 3.0.0):** Settings › Usage lacks the old Reports custom date range and
   per-agent table (I told the owner Usage "has the rest" — it doesn't fully); the Customizer's Shape/glass options have
   no visible effect on the new shell (2.7.0). Both to be raised with the owner after 3.0.0.
+- **3.0.0 follow-up (from the group-3 port):** the new agent page has no memory search and no delete-a-memory confirm
+  (the classic agent tabs had them); the Recent runs card has no Outcome filter or cost. Raise with the owner after 3.0.0.
