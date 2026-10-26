@@ -3,9 +3,10 @@ import { pair } from './pair.ts'
 
 /** The step list shows the five newest; older steps sit behind "Full history" (the shared server may hold more). */
 async function fullHistory(page: Page) {
-  const more = page.getByRole('region', { name: 'What builder did' }).getByRole('button', {
-    name: 'Full history',
-  })
+  const steps = page.getByRole('region', { name: 'What builder did' })
+  // Wait for the list itself, then open the history only when there is more than the newest few.
+  await steps.getByRole('listitem').first().waitFor()
+  const more = steps.getByRole('button', { name: 'Full history' })
   if (await more.count()) await more.click()
 }
 

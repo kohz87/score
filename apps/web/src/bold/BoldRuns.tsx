@@ -374,7 +374,7 @@ function RunFrame(props: RunFrameProps) {
         {props.outcome && props.outcome.length > 0 && (
           <p className="bold-run-sub">
             {props.outcome.map((line, index) => (
-              <span key={line}>
+              <span key={index}>
                 {index > 0 ? ' · ' : ''}
                 <span>{line}</span>
               </span>
