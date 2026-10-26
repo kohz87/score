@@ -1,6 +1,7 @@
 import {
   AgentDetailSchema,
   AgentSummarySchema,
+  BotScreenStatusSchema,
   WatchOverviewSchema,
   type WatchOverviewItem,
   WatchResponseSchema,
@@ -91,6 +92,33 @@ export function registerWatchRoutes(
       }
     })
     return WatchResponseSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
+  })
+
+  // 3.3.0 Bot Screen (decision 135): read-only; the adapter never sends input or takes the lease.
+  function botScreenAgent(params: unknown) {
+    const { agentId } = ParamsSchema.parse(params)
+    // Polled about once a second: Score's projection answers, not a Hermes roster read (the watch route's agentIds()).
+    const agent = readAgent(db.sqlite, agentId)
+    if (!agent || (agent.lifecycle && agent.lifecycle.state !== 'ready'))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
+    return agentId
+  }
+  app.get('/api/agents/:agentId/bot-screen', async (request, reply) => {
+    const agentId = botScreenAgent(request.params)
+    reply.header('cache-control', 'no-store')
+    return BotScreenStatusSchema.parse(await port.botScreenStatus(agentId))
+  })
+  app.get('/api/agents/:agentId/bot-screen/frame', async (request, reply) => {
+    const agentId = botScreenAgent(request.params)
+    const frame = await port.botScreenFrame(agentId)
+    if (!('png' in frame))
+      throw new HttpError(409, 'conflict', 'The screen isn’t showing right now.', {
+        state: BotScreenStatusSchema.parse(frame).state,
+      })
+    const etag = `"${frame.seq}"`
+    reply.header('cache-control', 'no-store').header('etag', etag)
+    if (request.headers['if-none-match'] === etag) return reply.code(304).send()
+    return reply.type('image/png').send(frame.png)
   })
 
   app.get('/api/watch/overview', async () => {

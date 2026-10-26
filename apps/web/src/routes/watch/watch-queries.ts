@@ -6,6 +6,7 @@ import {
   WatchResponseSchema,
   type WatchOverviewItem,
   type WatchResponse,
+  BotScreenStatusSchema,
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
@@ -192,4 +193,20 @@ export function useWatchLiveRefresh(agentId: string, from: number | null, paused
         void refetch()
     })
   }, [stream, refetch, agentId, paused])
+}
+
+/** The agent's Bot Desktop (3.3.0), read-only. Polled by the caller; the frame URL changes only with `frameSeq`. */
+export function botScreenQuery(agentId: string) {
+  return {
+    queryKey: ['bot-screen', agentId],
+    queryFn: async ({ signal }: { signal: AbortSignal }) =>
+      BotScreenStatusSchema.parse(
+        await apiFetch(`agents/${encodeURIComponent(agentId)}/bot-screen`, { signal }),
+      ),
+    retry: false,
+  }
+}
+
+export function botScreenFrameUrl(agentId: string, frameSeq: number | undefined): string {
+  return `/api/agents/${encodeURIComponent(agentId)}/bot-screen/frame?seq=${frameSeq ?? 0}`
 }
