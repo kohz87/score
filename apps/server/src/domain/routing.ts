@@ -40,7 +40,7 @@ export function routeMessage(
     throw new HttpError(
       409,
       'no_lead',
-      'The team has no lead yet. Pick one in Settings, or address an agent with @name.',
+      'This team has no lead yet. Pick one in the room’s ⋯ menu › Team lead…, or address an agent with @name.',
     )
   if (!routedTo.length)
     throw new HttpError(400, 'no_recipient', 'This room has no agent to receive messages.')

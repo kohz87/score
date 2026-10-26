@@ -37,3 +37,18 @@ export const WatchOverviewItemSchema = z.object({
 export type WatchOverviewItem = z.infer<typeof WatchOverviewItemSchema>
 export const WatchOverviewSchema = z.object({ items: z.array(WatchOverviewItemSchema) })
 export type WatchOverview = z.infer<typeof WatchOverviewSchema>
+
+/**
+ * 3.3.0 Bot Screen (decision 135): a read-only view of the agent's Hermes Bot Desktop. `human`: someone has taken over
+ * the screen, and Score shows nothing while they work; `sandboxed`: the screen runs inside the terminal sandbox, where
+ * Score can't reach it.
+ */
+export const BotScreenStatusSchema = z.object({
+  state: z.enum(['running', 'off', 'sandboxed', 'human', 'unavailable']),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  /** Bumped with each screen update; the frame's ETag. */
+  frameSeq: z.number().int().nonnegative().optional(),
+  reason: z.string().optional(),
+})
+export type BotScreenStatus = z.infer<typeof BotScreenStatusSchema>

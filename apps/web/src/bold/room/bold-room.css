@@ -63,7 +63,8 @@
   height: 20px;
   padding: 0 calc(5px * var(--bold-d, 1));
   background: var(--bad);
-  color: #fff;
+  /* The ground colour: white on the dark look's pale coral is 2:1. */
+  color: var(--bg);
   font-size: 11px;
   line-height: 1;
 }
@@ -2017,4 +2018,18 @@
     width: 32px;
     height: 32px;
   }
+}
+
+/* 3.4.0: the New team / Members checklists (chips as in Start a job). */
+[data-ui='bold'] .bold-team-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+[data-ui='bold'] .bold-new-team-dialog select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  font: inherit;
 }

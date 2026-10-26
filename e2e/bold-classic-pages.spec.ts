@@ -16,6 +16,8 @@ const fixtures: Record<string, unknown> = {
   ...workflowFixtures,
   '/api/agents/builder/watch?limit=500': watchFixture,
   '/api/agents/builder/watch?limit=1': watchFixture,
+  // 3.3.0: the Live screen card above the replay; the screen is off in this fixture.
+  '/api/agents/builder/bot-screen': { state: 'off' },
   '/api/approvals?status=pending&agent=builder': {
     asOfSeq: 1,
     items: [watchApprovalFixture],
@@ -133,6 +135,9 @@ for (const size of sizes) {
       // The approval is a decision surface: still visible and protected inside the frame.
       const approval = page.getByRole('group', { name: 'Approval needed' })
       await expect(approval).toContainText('npm install ws@8')
+      await expect(page.getByRole('region', { name: 'Live screen' })).toContainText(
+        'The screen is off.',
+      )
       await noSideScroll(page)
       await expect(page).toHaveScreenshot(`bold-screen-${size.name}.png`, {
         animations: 'disabled',

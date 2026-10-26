@@ -625,6 +625,13 @@ attempts on) lists the step's attempts of the board lineage Score follows, by`or
       stored before C1: those are grouped by the "Sub-agent · " caption prefix (the fallback), or stay flat. */ }
   ```
 - `GET /api/media/:mediaId` → image bytes (screenshots).
+- **S** `GET /api/agents/:agentId/bot-screen` → `BotScreenStatus { state: 'running' | 'off' | 'sandboxed' | 'human' |
+'unavailable'; width?; height?; frameSeq?; reason? }` (3.3.0, decision 135, docs/briefs/3.3.0-bot-screen.md). The agent's
+  Hermes Bot Desktop, read-only: Score never sends input and never takes the lease. `human`: someone has taken over the screen;
+  nothing is shown while they work. Asking keeps the screen's connection open for 15 s.
+- **S** `GET /api/agents/:agentId/bot-screen/frame` → `image/png` (`Cache-Control: no-store`, `ETag: "<frameSeq>"`,
+  `If-None-Match` → 304). 409 `conflict` with `details: { state }` when the screen isn't `running` (off, sandboxed, human,
+  unavailable). Frames are never stored by Score.
 - **S** `GET /api/watch/overview` → `{ items: { agent: AgentSummary; thumbnail: string | null; status: string; live: boolean
 surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature */ }[] }`
 - Frames are upserted by `seq` (per agent); a terminal frame is re-emitted with the same `seq` when it finishes. Schemas live in
@@ -708,6 +715,13 @@ job's exchange budget, note}` and `stop_exchange {note}` (tools `score_extend`, 
     and the classic search passes `jobs=default`. Summary routes take the job too: `POST …/summary { jobId? }`, `PATCH|DELETE
 …/summary?jobId=`.
   - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.
+  - 3.4.0 (decision 136, docs/briefs/3.4.0-second-team.md): more than one team room. `GET /api/team-room` is always the
+    **everyone** room (`Room.everyone: true`: every ready agent, kept in sync; can't be renamed, archived, deleted or given
+    other members). **S** `GET /api/team-rooms` → `{ asOfSeq; items: Room[] }` (the everyone room first, then by name; archived
+    included). **H** `POST /api/team-rooms { name /* plain, 1–80 */, members: AgentId[] /* ≥ 1, ready */, leadAgentId /* ∈
+    members */ }` → `201 Room` (`role: 'team'`, `everyone: false`, exchanges routing, its own default job). A chosen team is
+    renamed (plain name), archived, deleted and re-membered with the ordinary room routes; `PATCH` keeps ≥ 1 member and the
+    lead (when set) among them (`400`). An agent that leaves Score leaves every team.
   - **S** `GET /api/agents/:agentId/direct` → `{ asOfSeq; room: Room | null; chats: Job[] }` (newest activity first);
     **H** `POST /api/agents/:agentId/chats { title? }` → `201 Job` (a new one-to-one; makes the direct room on first
     use). Direct rooms route with exchanges (11.11) and may hold several jobs. A direct room's summaries run on

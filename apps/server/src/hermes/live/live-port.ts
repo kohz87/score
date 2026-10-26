@@ -70,6 +70,7 @@ import { cachingRunner } from './config-cache.ts'
 import { runHermes, type HermesRunner, type HermesSpawner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 import { LiveProfileManagement } from './profile-management.ts'
+import { BotScreens } from './bot-screen.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
 
@@ -230,7 +231,24 @@ export class LivePort implements HermesPort {
   executionHold(): string | null {
     return this.options.frozen?.() ?? null
   }
+  // One shared read-only RFB session per profile, opened while someone looks (decision 135).
+  private readonly botScreens = new BotScreens({
+    profileHome: (agentId) => {
+      try {
+        return this.profiles.profileHome(agentId)
+      } catch {
+        return null
+      }
+    },
+  })
+  botScreenStatus(agentId: string) {
+    return this.botScreens.status(agentId)
+  }
+  botScreenFrame(agentId: string) {
+    return this.botScreens.frame(agentId)
+  }
   async stop(): Promise<void> {
+    this.botScreens.close()
     this.settings.close()
     clearInterval(this.timer)
     clearInterval(this.taskTimer)

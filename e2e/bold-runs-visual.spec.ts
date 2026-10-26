@@ -78,3 +78,20 @@ for (const run of runs) {
     })
   }
 }
+
+// The kept classic cards' buttons must be the shell's pills, not square classic buttons.
+test('the run page buttons (Pause, Stop, Approve, Reject) are pills', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/b?run=brief-orch-1')
+  await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
+  const buttons = page.locator(
+    '.bold-run-classic .orch-controls button, .bold-run-classic .orch-actions button',
+  )
+  await expect(buttons.first()).toBeVisible()
+  const count = await buttons.count()
+  expect(count).toBeGreaterThanOrEqual(3)
+  for (let i = 0; i < count; i++) {
+    const radius = await buttons.nth(i).evaluate((el) => getComputedStyle(el).borderTopLeftRadius)
+    expect(radius).toBe('999px')
+  }
+})

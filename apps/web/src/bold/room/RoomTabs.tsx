@@ -4,7 +4,7 @@ import { ThreadIcon } from '../BoldIcons.tsx'
 import { JOB_FILTERS, jobMatchesFilter, jobStateLabel, type JobFilter } from './room-model.ts'
 import type { JobRead } from './room-queries.ts'
 
-function jobDot(state: Job['state']) {
+export function jobDot(state: Job['state']) {
   if (state === 'working') return 'var(--ok)'
   if (state === 'waiting_on_you') return 'var(--bad)'
   if (state === 'done') return 'var(--ok)'
