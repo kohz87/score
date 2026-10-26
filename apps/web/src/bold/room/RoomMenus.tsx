@@ -1,5 +1,6 @@
 import {
   JobSchema,
+  RoomSchema,
   type AgentSummary,
   type Job,
   type OutsideSession,
@@ -21,6 +22,8 @@ import { useOutsideSessions } from '../../data/outside-sessions.ts'
 import { ChevronIcon, PlusIcon, TrashIcon } from '../BoldIcons.tsx'
 import { useStartJob } from '../BoldStartJob.tsx'
 import { agentDisplayName } from '../bold-agents.ts'
+import { useStreamQuery } from '../../data/query-client.ts'
+import { agentsQuery } from '../../routes/chat/queries.ts'
 import { PhonePresence } from './PhoneJobList.tsx'
 import { jobStateLine } from './room-model.ts'
 
@@ -504,6 +507,108 @@ export function DeleteJobDialog({
   )
 }
 
+const NO_AGENTS: AgentSummary[] = []
+
+/**
+ * 3.1.0: who leads the team room — unaddressed messages and "lead decides" jobs go to the lead. Only Hermes agents that
+ * can take work are offered (as in Start a job).
+ */
+export function TeamLeadDialog({ room, onClose }: { room: Room; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const all = useStreamQuery(agentsQuery).data ?? NO_AGENTS
+  const options = all.filter(
+    (agent) =>
+      (!agent.runtime || agent.runtime === 'hermes') &&
+      (!agent.lifecycle || agent.lifecycle.state === 'ready'),
+  )
+  const [chosen, setChosen] = useState(room.leadAgentId ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const groupName = useId()
+  useEffect(() => {
+    dialog.current?.showModal?.()
+  }, [])
+  const changed = chosen !== '' && chosen !== room.leadAgentId
+  async function save() {
+    if (!changed || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = RoomSchema.parse(
+        await apiFetch(`rooms/${encodeURIComponent(room.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ leadAgentId: chosen }),
+        }),
+      )
+      if (updated.leadAgentId !== chosen) throw new Error('The lead did not change.')
+      onClose()
+    } catch (failure) {
+      setError(
+        failure instanceof ApiError && (failure.status === 401 || failure.status === 403)
+          ? 'Pair this browser first.'
+          : failure instanceof ApiError && failure.status < 500
+            ? failure.message
+            : 'Couldn’t change the lead. Try again.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <dialog
+      ref={dialog}
+      open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
+      className="chat-rewind-dialog bold-team-lead-dialog"
+      data-protected="any"
+      aria-labelledby="team-lead-title"
+      onCancel={(event) => {
+        event.preventDefault()
+        if (!busy) onClose()
+      }}
+    >
+      <h2 id="team-lead-title">Team lead</h2>
+      <p className="small muted">
+        Messages you don’t address to anyone, and jobs where the lead decides, go to the lead.
+      </p>
+      <div role="radiogroup" aria-labelledby="team-lead-title" className="bold-team-lead-options">
+        {options.map((agent) => (
+          <label key={agent.id} className="chip start-agent-chip">
+            <input
+              type="radio"
+              name={groupName}
+              value={agent.id}
+              checked={chosen === agent.id}
+              disabled={busy}
+              onChange={() => setChosen(agent.id)}
+            />
+            <AgentGlyph agent={agent} size="sm" bare decorative />
+            <span>{agentDisplayName(agent)}</span>
+          </label>
+        ))}
+        {options.length === 0 && <p className="small muted">No agent can lead right now.</p>}
+      </div>
+      {error && (
+        <p className="chat-rewind-warning" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="chat-rewind-actions">
+        <button type="button" onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="chat-rewind-primary"
+          disabled={!changed || busy}
+          onClick={() => void save()}
+        >
+          {busy ? 'Saving…' : 'Make lead'}
+        </button>
+      </div>
+    </dialog>
+  )
+}
+
 export function RoomMenu({
   room,
   onShare,
@@ -513,6 +618,7 @@ export function RoomMenu({
   onShare: (room: Room) => void
   onDelete: (room: Room) => void
 }) {
+  const [leadOpen, setLeadOpen] = useState(false)
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLSpanElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -570,6 +676,19 @@ export function RoomMenu({
               Shares the selected job’s thread; under All, the team room’s default thread.
             </div>
           )}
+          {team && (
+            <button
+              type="button"
+              className="mi"
+              role="menuitem"
+              onClick={() => {
+                close(false)
+                setLeadOpen(true)
+              }}
+            >
+              Team lead…
+            </button>
+          )}
           {team ? (
             <div className="small muted bold-menu-note">
               The team room is always on, so it can’t be deleted. Delete jobs inside it instead.
@@ -590,6 +709,7 @@ export function RoomMenu({
           )}
         </div>
       )}
+      {leadOpen && <TeamLeadDialog room={room} onClose={() => setLeadOpen(false)} />}
     </span>
   )
 }
