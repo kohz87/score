@@ -27,15 +27,36 @@ const StoredSchema = z.object({
   at: z.string(),
 })
 
-const REPORTING = /comment|report|reply|post|note|message|notify|status|respond|send/i
-const CHANGING =
-  /delete|remove|close|create|merge|assign|transition|drop|destroy|archive|write|exec|run|pay|money|transfer|charge|refund|buy|order|deploy|publish|release|update|edit|set|move|rename|approve|reject|invite|grant|revoke|kick|ban/i
+// Whole words of the tool name (snake_case, kebab-case, dotted or camelCase), so `dataset_info` holds no "set".
+const REPORTING = new Set(
+  'comment comments report reply post note notes message messages notify notification status respond send'.split(
+    ' ',
+  ),
+)
+// Words that change things whatever else the name says.
+const CHANGING = new Set(
+  'delete remove close merge assign transition drop destroy archive write exec execute run pay payment money transfer charge refund buy order deploy publish release edit move rename approve reject invite grant revoke kick ban'.split(
+    ' ',
+  ),
+)
+// Verbs that only make or change the reporting thing itself when the name also names one (`create_comment`,
+// `update_status`); with anything else they may change things.
+const SOFT = new Set('create add update set'.split(' '))
+
+function words(tool: string): string[] {
+  return tool
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+}
 
 /** A warning when a report-back tool's name doesn't look like a reporting tool (any name is still accepted). */
 export function reportBackWarning(tool: string): string | undefined {
-  return REPORTING.test(tool) && !CHANGING.test(tool)
-    ? undefined
-    : 'This tool may change things, not just report.'
+  const parts = words(tool)
+  const reports = parts.some((word) => REPORTING.has(word))
+  const changes = parts.some((word) => CHANGING.has(word) || (SOFT.has(word) && !reports))
+  return reports && !changes ? undefined : 'This tool may change things, not just report.'
 }
 
 /** JSON with sorted keys and no spaces: the form the plugin digests a tool call's arguments in. */

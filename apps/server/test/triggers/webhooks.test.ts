@@ -542,6 +542,19 @@ test('a reporting word does not hide a changing one in the report-back tool name
   const { reportBackWarning } = await import('../../src/domain/triggers/report-back.ts')
   for (const tool of ['send_money', 'post_deploy', 'message_and_transfer', 'reply_then_publish'])
     expect(reportBackWarning(tool), tool).toMatch(/may change things/)
-  for (const tool of ['add_comment', 'post_status', 'notify_channel', 'send_reply'])
+  for (const tool of [
+    'add_comment',
+    'post_status',
+    'notify_channel',
+    'send_reply',
+    'create_comment',
+    'update_status',
+    'createIssueComment',
+    'github.create_issue_comment',
+  ])
     expect(reportBackWarning(tool), tool).toBeUndefined()
+  for (const tool of ['dataset_status', 'payload_report'])
+    expect(reportBackWarning(tool), tool).toBeUndefined()
+  for (const tool of ['create_issue', 'update_ticket', 'set_owner'])
+    expect(reportBackWarning(tool), tool).toMatch(/may change things/)
 })
