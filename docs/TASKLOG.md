@@ -1477,3 +1477,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   workspace 1px not reproduced). Full e2e 818 passed / 2 + 1 unit failing = tests out of date with 3.1.0's own changes
   (Forget confirm, By agent table, the glyph exemption) → fixed, targeted green, web unit 2943. Codex not used (owner:
   on another project).
+- **v3.1.0 deployed live** (~10:28 UTC): backup score-pre-3.1.0-20261026.db, restart, no new errors.
