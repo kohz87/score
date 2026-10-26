@@ -1453,3 +1453,16 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **3.0.0 follow-ups (from the group-2 port):** check whether the new shell can rename, pin, archive, tag (projects)
   rooms and export a room as JSON (classic could; the port marked them dropped); a room whose messages were all deleted
   shows the starter board with no "Show deleted messages" toggle.
+- **v3.0.0 classic shell removed (decision 132; Sonnet coders, lead review).** Removal commit (~300 files, 28.5k
+  lines; main JS 2.52 → 2.12 MB) deleted 72 e2e specs (reported 17) → held; 4 parallel groups ported them (every old
+  test ported / covered by a named spec / dropped by decision 131/132) and found 11 product bugs (Settings gear
+  unprotected, unchecked-build notice only in Settings, no models-in-pickers UI, routine delete, coding spend marker,
+  refusal wording, settings scroll, /compress in a one-to-one, the team room not following its end). Reviews:
+  weakened safety assertions restored to strict; follow-end races (scroll-up snap, shrink, hover rows); the update
+  banner moved into the flow. Full run 1: 27 failures → fixes incl. the built-in Harbour theme tripping the guard
+  (gear aria-current), shared-message source line opaque, Start a job offering non-ready agents (lead fix after the
+  coder's fix was lost in concurrent edits). Full run 2: 797 passed / 6 failed, all 86 tests of those 6 specs pass
+  alone → **test-stability debt (P3):** bold-room unread badge, themes-protection #5, attempts, workflows build,
+  agent-channels-history, themes-builtin studio light 390 fail only under full-suite load on the shared fake server.
+  pnpm check green (server 4784, web 2931, contract 1512). Follow-ups for the owner: Usage custom range + per-agent
+  table, Customizer shape/glass no effect, agent memory search, runs outcome filter, room rename/pin/archive/tags/JSON.

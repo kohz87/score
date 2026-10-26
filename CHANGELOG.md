@@ -3,6 +3,33 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.0.0] — 2026-10-26
+
+### Removed
+- **The classic view.** Score is the new shell only: the classic pages (Chat, Team, Knowledge, Reports, classic
+  Settings, classic Watch, the classic terminal page), the "Use the classic view" switch and their styles are gone
+  (decision 132). Every old link still opens the right place in the new shell, with its query and anchor.
+
+### Added
+- **The Journey chart** (tasks, notes, skills and memory over time) in Settings › Usage.
+- **Browser notifications and the "update available" banner** in the new shell (they only ever worked in the classic
+  view).
+- **Open terminals** are listed and can be closed in Settings › Remote access and security again.
+- **Models in pickers** (which models appear in the pickers) in Settings › Connections, and **deleting a routine**.
+
+### Changed
+- A task attempt opens inside the new shell (`/b/attempts/…`), with Back.
+- The team room opens at its newest message and follows new ones; scrolling up to read stops it, and hover buttons
+  no longer make it jump.
+- An unchecked Hermes build (approvals paused) is announced across the app, not only in Settings.
+
+### Fixed
+- The built-in Harbour theme was switched off on Settings › Look; a shared message's source line could sit unreadable
+  on a theme picture; the Settings gear and phone tab were not protected from themes.
+- Start a job offered agents being set up, deleted or removed; `/compress` did nothing in a one-to-one; workspace links
+  didn't open their file; Usage dropped the "estimated" marker on coding-agent spend; Settings sections didn't open at
+  the top; two refusals showed raw wording.
+
 ## [2.8.0] — 2026-10-26
 
 ### Changed
