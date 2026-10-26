@@ -521,7 +521,18 @@ for (const size of [
     await expect(page.getByRole('heading', { name: 'Customizer' })).toBeVisible()
     // Settings frames it, with Look selected, and the way back is the Look crumb.
     const nav = page.getByRole('navigation', { name: 'Settings' })
-    await expect(nav.getByRole('button', { name: /^Look/ })).toHaveAttribute('aria-current', 'page')
+    if (size.name === 'desktop')
+      await expect(nav.getByRole('button', { name: /^Look/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+      )
+    else {
+      // Phone: the editor comes first; the list is one tap away.
+      await expect(nav).toBeHidden()
+      await page.getByRole('button', { name: /All settings/ }).click()
+      await expect(page).toHaveURL(/\/b\/settings$/)
+      await page.goBack()
+    }
     await expect(page.locator('.cz-back')).toHaveText('Look')
     // The classic Layout and Chat tabs are gone; Spacing takes their place.
     await expect(page.getByRole('tab', { name: /^(Layout|Chat)$/ })).toHaveCount(0)

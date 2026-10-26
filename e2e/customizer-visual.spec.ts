@@ -36,6 +36,13 @@ async function open(page: Page, variant: Variant) {
       'No contrast problems',
     )
   }
+  // Weights are fetched when first drawn: ask for the ones the page uses, so no label is captured in a fallback.
+  await page.evaluate(async () => {
+    for (const weight of [400, 500, 600, 700, 800])
+      await document.fonts.load(`${weight} 14px "Hanken Grotesk"`)
+    await document.fonts.load('700 24px "Bricolage Grotesque"')
+    await document.fonts.ready
+  })
   await page.waitForTimeout(600)
 }
 

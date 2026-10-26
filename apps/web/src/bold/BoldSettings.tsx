@@ -129,7 +129,7 @@ export function BoldSettings() {
     return <Navigate to="/b/settings/usage" replace />
   return (
     <div className="page bold-settings-page">
-      <div className="setgrid">
+      <div className="setgrid" data-section-page={customizing || undefined}>
         <nav className="setnav" aria-label="Settings">
           <h1>Settings</h1>
           {SETTINGS_SECTIONS.map((item) => (
@@ -156,6 +156,15 @@ export function BoldSettings() {
           </button>
         </nav>
         <div className="setmain">
+          {customizing && (
+            <button
+              type="button"
+              className="bold-settings-all"
+              onClick={() => void navigate('/b/settings')}
+            >
+              ‹ All settings
+            </button>
+          )}
           <HermesVersionBanner />
           {customizing ? (
             <Suspense fallback={<p role="status">Opening the Customizer…</p>}>

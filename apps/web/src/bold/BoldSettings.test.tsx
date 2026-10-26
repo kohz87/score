@@ -556,3 +556,11 @@ test('System shows the fence review in Backups, and lifting it removes the revie
   expect(screen.getByText(/Nothing is blocked/)).toBeDefined()
   expect(fenced).toBe(false)
 })
+
+test('the Customizer page marks the Settings frame as a section page (phone: the list steps aside)', async () => {
+  open('/b/settings/look/customize')
+  expect(await screen.findByRole('button', { name: /All settings/ })).toBeDefined()
+  expect(document.querySelector('.setgrid[data-section-page]')).toBeTruthy()
+  open('/b/settings/look')
+  expect(await screen.findByRole('heading', { name: 'Look' })).toBeDefined()
+})
