@@ -114,7 +114,7 @@ test('the release recipe loads as seven numbered steps, is checked live, and und
   const status = await within(dialog).findByLabelText('Runs of this recipe')
   expect(status.textContent).toContain('1 run going')
   expect(within(status).getByRole('link', { name: 'Running' }).getAttribute('href')).toMatch(
-    /^\/b\/runs\/brief-/,
+    /^\/b\?run=brief-/,
   )
   await waitFor(() => expect(within(steps).getAllByRole('listitem')).toHaveLength(7))
   await waitFor(() => expect(saveButton().disabled).toBe(false))

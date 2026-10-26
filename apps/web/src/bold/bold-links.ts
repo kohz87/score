@@ -53,6 +53,11 @@ export function boldNoteLink(path: string): string {
   return boldQuery({ note: path })
 }
 
+/** 2.5.0 Runs: open a run (by its brief id) in the side panel's Runs view. */
+export function boldRunLink(briefId: string): string {
+  return boldQuery({ run: briefId })
+}
+
 /** 11.10c Start a job: open its dialog. */
 export function boldStartJobLink(): string {
   return boldQuery({ start: 'job' })

@@ -39,7 +39,10 @@ import './workflows.css'
 export function WorkflowRunLive({
   runId,
   onStarted,
+  pane,
 }: {
+  /** Inside the new shell's run view the header, decisions and tiles are its own: only the graph or only the log shows. */
+  pane?: 'graph' | 'log'
   runId: string
   /** The brief of a run started from here (Run again), to open its page. */
   onStarted: (run: { id: string; briefId: string }) => void
@@ -124,68 +127,79 @@ export function WorkflowRunLive({
   const selectedLabel = detail.definition.nodes.find((node) => node.id === selected)?.label
 
   return (
-    <div className="orch-live wf-run">
-      <section className="orch-head" aria-label="Workflow run">
-        <div>
-          <h3 className="orch-title">{detail.title}</h3>
-          <p className="orch-muted">
-            Workflow{' '}
-            <Link to={`/workflows/${encodeURIComponent(detail.workflowId)}`}>
-              {detail.workflowName}
-            </Link>
-            , version {detail.version}.{' '}
-            {detail.gatePolicy === 'every-step'
-              ? 'Asks you before every agent step and at gates.'
-              : 'Asks you only at gates.'}
-            {detail.rerunOf ? ' A re-run of an earlier run.' : ''}
-          </p>
-          <div className="orch-status">
-            <span className={`orch-badge orch-badge--${detail.status}`}>
-              {statusLabel[detail.status]}
-            </span>
-            {graphLine && (
-              <span className={`orch-badge wf-graph-badge wf-graph-badge--${detail.graphOutcome}`}>
-                {graphLine}
-              </span>
-            )}
-            {detail.status === 'paused' && detail.pauseReason && (
-              <span>Paused: {detail.pauseReason.replaceAll('_', ' ')}</span>
-            )}
-            <span className="orch-muted">
-              <LiveCount value={detail.nodes.succeeded} /> of {detail.nodes.total} steps done
-              {detail.nodes.skipped > 0 ? `, ${detail.nodes.skipped} skipped` : ''}
-            </span>
-            <RunSpend budget={detail.budget} />
-          </div>
-          <EndSummary
-            run={detail}
-            steps={detail.nodes.succeeded}
-            approvals={
-              [...detail.nodeGates, ...detail.assignmentGates].filter(
-                (gate) => gate.decidedAt !== null,
-              ).length
-            }
-          />
-          {note && <p className="wf-outcome-note">{note}</p>}
-          {detail.endReason && <p className="orch-muted">{detail.endReason}</p>}
-        </div>
+    <div className="orch-live wf-run" data-pane={pane}>
+      {pane && over && events.length > 0 && (
         <div className="orch-head-actions">
-          <RunControls run={detail} actions={actions} />
-          <Link to={`/chat/${encodeURIComponent(detail.roomId)}`}>Open the room in Chat</Link>
-          {over && events.length > 0 && (
-            <button type="button" aria-pressed={replaying} onClick={playback.toggleReplay}>
-              {replaying ? 'Back to the final state' : 'Replay this run'}
-            </button>
-          )}
-          {over && (
-            <button type="button" className="orch-primary" onClick={() => setAgain(true)}>
-              Run again…
-            </button>
-          )}
+          <button type="button" aria-pressed={replaying} onClick={playback.toggleReplay}>
+            {replaying ? 'Back to the final state' : 'Replay this run'}
+          </button>
         </div>
-      </section>
+      )}
+      {!pane && (
+        <section className="orch-head" aria-label="Workflow run">
+          <div>
+            <h3 className="orch-title">{detail.title}</h3>
+            <p className="orch-muted">
+              Workflow{' '}
+              <Link to={`/workflows/${encodeURIComponent(detail.workflowId)}`}>
+                {detail.workflowName}
+              </Link>
+              , version {detail.version}.{' '}
+              {detail.gatePolicy === 'every-step'
+                ? 'Asks you before every agent step and at gates.'
+                : 'Asks you only at gates.'}
+              {detail.rerunOf ? ' A re-run of an earlier run.' : ''}
+            </p>
+            <div className="orch-status">
+              <span className={`orch-badge orch-badge--${detail.status}`}>
+                {statusLabel[detail.status]}
+              </span>
+              {graphLine && (
+                <span
+                  className={`orch-badge wf-graph-badge wf-graph-badge--${detail.graphOutcome}`}
+                >
+                  {graphLine}
+                </span>
+              )}
+              {detail.status === 'paused' && detail.pauseReason && (
+                <span>Paused: {detail.pauseReason.replaceAll('_', ' ')}</span>
+              )}
+              <span className="orch-muted">
+                <LiveCount value={detail.nodes.succeeded} /> of {detail.nodes.total} steps done
+                {detail.nodes.skipped > 0 ? `, ${detail.nodes.skipped} skipped` : ''}
+              </span>
+              <RunSpend budget={detail.budget} />
+            </div>
+            <EndSummary
+              run={detail}
+              steps={detail.nodes.succeeded}
+              approvals={
+                [...detail.nodeGates, ...detail.assignmentGates].filter(
+                  (gate) => gate.decidedAt !== null,
+                ).length
+              }
+            />
+            {note && <p className="wf-outcome-note">{note}</p>}
+            {detail.endReason && <p className="orch-muted">{detail.endReason}</p>}
+          </div>
+          <div className="orch-head-actions">
+            <RunControls run={detail} actions={actions} />
+            <Link to={`/chat/${encodeURIComponent(detail.roomId)}`}>Open the room in Chat</Link>
+            {over && events.length > 0 && (
+              <button type="button" aria-pressed={replaying} onClick={playback.toggleReplay}>
+                {replaying ? 'Back to the final state' : 'Replay this run'}
+              </button>
+            )}
+            {over && (
+              <button type="button" className="orch-primary" onClick={() => setAgain(true)}>
+                Run again…
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
-      {!replaying && <WorkflowNeeds run={detail} agents={agents} actions={actions} />}
+      {!pane && !replaying && <WorkflowNeeds run={detail} agents={agents} actions={actions} />}
 
       {replaying && (
         <ReplayBar
@@ -207,90 +221,98 @@ export function WorkflowRunLive({
       )}
 
       <div className="orch-main">
-        <div className="orch-diagram">
-          <LiveDiagram
-            nodes={replaying ? replayGraph.nodes : graph.nodes}
-            edges={graph.edges}
-            visuals={visuals}
-            lead="idle"
-            agents={agents}
-            selected={selected}
-            onSelect={setSelected}
-            active={player.active}
-            reducedMotion={quiet}
-            edgeStates={edgeStates}
-            positions={positions}
-            noun="Step"
-            ariaLabel="Diagram of the workflow run. The log next to it says the same in words."
-            columnGap={84}
+        {pane !== 'log' && (
+          <div className="orch-diagram">
+            <LiveDiagram
+              nodes={replaying ? replayGraph.nodes : graph.nodes}
+              edges={graph.edges}
+              visuals={visuals}
+              lead="idle"
+              agents={agents}
+              selected={selected}
+              onSelect={setSelected}
+              active={player.active}
+              reducedMotion={quiet}
+              edgeStates={edgeStates}
+              positions={positions}
+              noun="Step"
+              ariaLabel="Diagram of the workflow run. The log next to it says the same in words."
+              columnGap={84}
+            />
+            <p className="orch-legend orch-muted">
+              Diamond: a gate that waits for you. Hexagon: a branch. Solid line: a path taken.
+              Dotted, faded: a path that was passed over. Dashed coral: a failure or rejection
+              route. Dashed outline: not reached yet.
+            </p>
+          </div>
+        )}
+        {pane !== 'graph' && (
+          <LiveLog
+            events={logEvents}
+            node={selected === null ? null : (selectedLabel ?? selected)}
+            onClearNode={() => setSelected(null)}
+            label={replaying ? 'Replay log' : 'Live log'}
           />
-          <p className="orch-legend orch-muted">
-            Diamond: a gate that waits for you. Hexagon: a branch. Solid line: a path taken. Dotted,
-            faded: a path that was passed over. Dashed coral: a failure or rejection route. Dashed
-            outline: not reached yet.
-          </p>
-        </div>
-        <LiveLog
-          events={logEvents}
-          node={selected === null ? null : (selectedLabel ?? selected)}
-          onClearNode={() => setSelected(null)}
-          label={replaying ? 'Replay log' : 'Live log'}
-        />
+        )}
       </div>
 
-      {selected && <WorkflowNodePanel run={detail} nodeId={selected} agents={agents} />}
+      {selected && pane !== 'log' && (
+        <WorkflowNodePanel run={detail} nodeId={selected} agents={agents} />
+      )}
 
-      <div className="orch-lower">
-        <section aria-label="This run">
-          <h3>This run</h3>
-          <dl className="orch-facts">
-            <dt>Inputs</dt>
-            <dd>
-              {Object.keys(detail.inputs).length === 0 ? (
-                'None'
-              ) : (
-                <ul className="wf-inputs">
-                  {detail.definition.inputs.map((input) => (
-                    <li key={input.name}>
-                      <strong>{input.label}:</strong>{' '}
-                      <span className="wf-input-value">{ownText(detail.inputs, input.name)}</span>
+      {!pane && (
+        <div className="orch-lower">
+          <section aria-label="This run">
+            <h3>This run</h3>
+            <dl className="orch-facts">
+              <dt>Inputs</dt>
+              <dd>
+                {Object.keys(detail.inputs).length === 0 ? (
+                  'None'
+                ) : (
+                  <ul className="wf-inputs">
+                    {detail.definition.inputs.map((input) => (
+                      <li key={input.name}>
+                        <strong>{input.label}:</strong>{' '}
+                        <span className="wf-input-value">{ownText(detail.inputs, input.name)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </dd>
+              <dt>Agents</dt>
+              <dd>
+                <ul className="wf-agents">
+                  {detail.agentMap.map((entry) => (
+                    <li key={entry.agentId}>
+                      <AgentChip agentId={entry.agentId} agents={agents} />{' '}
+                      <span
+                        className="wf-incarnation"
+                        role="img"
+                        tabIndex={0}
+                        title={`The exact agent this run uses (${entry.incarnation})`}
+                        aria-label={`Agent version ${entry.incarnation}`}
+                      >
+                        ⓘ
+                      </span>{' '}
+                      {entry.status !== 'current' && (
+                        <strong className="orch-error">
+                          {entry.status === 'changed' ? 'replaced since' : 'removed'}
+                        </strong>
+                      )}
                     </li>
                   ))}
                 </ul>
-              )}
-            </dd>
-            <dt>Agents</dt>
-            <dd>
-              <ul className="wf-agents">
-                {detail.agentMap.map((entry) => (
-                  <li key={entry.agentId}>
-                    <AgentChip agentId={entry.agentId} agents={agents} />{' '}
-                    <span
-                      className="wf-incarnation"
-                      role="img"
-                      tabIndex={0}
-                      title={`The exact agent this run uses (${entry.incarnation})`}
-                      aria-label={`Agent version ${entry.incarnation}`}
-                    >
-                      ⓘ
-                    </span>{' '}
-                    {entry.status !== 'current' && (
-                      <strong className="orch-error">
-                        {entry.status === 'changed' ? 'replaced since' : 'removed'}
-                      </strong>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </dd>
-          </dl>
-        </section>
-        <section aria-label="Budget and limits">
-          <h3>Budget and limits</h3>
-          <BudgetBlock run={detail} coding={detail.coding} />
-          <p className="orch-muted">{detail.spend.note}</p>
-        </section>
-      </div>
+              </dd>
+            </dl>
+          </section>
+          <section aria-label="Budget and limits">
+            <h3>Budget and limits</h3>
+            <BudgetBlock run={detail} coding={detail.coding} />
+            <p className="orch-muted">{detail.spend.note}</p>
+          </section>
+        </div>
+      )}
 
       {again && (
         <StartWorkflowDialog

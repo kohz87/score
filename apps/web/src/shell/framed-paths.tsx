@@ -14,7 +14,7 @@ export const BoldFrameContext = createContext<BoldFrame | null>(null)
 const SPLIT = /^([^?#]*)(.*)$/
 
 /** Paths that move under `/b` as they are: the kept classic pages. */
-const PREFIXED = ['/workflows', '/runs', '/watch', '/settings', '/team']
+const PREFIXED = ['/workflows', '/watch', '/settings', '/team']
 
 function under(path: string, root: string): boolean {
   return path === root || path.startsWith(`${root}/`)
@@ -32,6 +32,13 @@ export function toBoldPath(to: string, rooms: readonly FrameRoom[] = []): string
   // The Workspace deep link has no /b page of its own: the agent's page is the nearest.
   const workspace = /^\/team\/([^/]+)\/workspace$/.exec(path)
   if (workspace) return `/b/team/${workspace[1]}`
+  // A run opens in the room's Runs side panel (2.5.0).
+  const run = /^\/runs\/([^/]+)$/.exec(path)
+  if (run) {
+    const params = new URLSearchParams(rest.startsWith('?') ? rest.split('#')[0] : '')
+    params.set('run', decodeURIComponent(run[1] ?? ''))
+    return `/b?${params.toString()}`
+  }
   if (PREFIXED.some((root) => under(path, root))) return `/b${path}${rest}`
   return to
 }
@@ -55,7 +62,7 @@ function chatRoomPath(path: string, rooms: readonly FrameRoom[]): string {
  * (the classic shell keeps serving everything else).
  */
 export function boldRedirectFor(pathname: string, search: string, hash = ''): string | null {
-  const keep = ['/workflows', '/runs', '/watch', '/terminal', '/settings/look/customize']
+  const keep = ['/workflows', '/watch', '/terminal', '/settings/look/customize']
   if (!keep.some((root) => under(pathname, root))) return null
   return `/b${pathname}${search}${hash}`
 }

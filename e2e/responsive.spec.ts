@@ -20,12 +20,6 @@ const fixtures: Record<string, unknown> = {
 
 type Where = { name: string; path: string; ready: string; orchestration?: boolean }
 const routes: Where[] = [
-  {
-    name: 'orchestration',
-    path: '/runs/brief-orch-1',
-    ready: '[data-node="s2"]',
-    orchestration: true,
-  },
   { name: 'chat-list', path: '/chat', ready: '.chat-conversations nav' },
   { name: 'chat-room', path: '/chat/room-activity-feed', ready: '.chat-scroll' },
   { name: 'team', path: '/team', ready: '.team-agent-card' },
@@ -190,7 +184,7 @@ for (const [width, dark] of [
       if (dark && !['chat-room', 'agent'].includes(where.name)) continue
       test(`${where.name}`, async ({ page }) => {
         // Kept classic pages sit in the bold frame on the new shell; their baselines are the classic ones.
-        if (['orchestration', 'watch'].includes(where.name))
+        if (['watch'].includes(where.name))
           await page.addInitScript(() => window.localStorage.setItem('score.ui', 'classic'))
         if (dark) await page.addInitScript(() => window.localStorage.setItem('score.theme', 'dark'))
         await open(page, where, width, width < 600 ? 844 : 1024)

@@ -8,7 +8,8 @@ import { agentsQuery } from '../routes/chat/queries.ts'
 import { agentDisplayName, agentMood, agentNameColor, agentStateLabel } from './bold-agents.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
 import { BoldResults } from './BoldResults.tsx'
-import { BookIcon, ChevronIcon, CloseIcon, GridIcon, ThreadIcon } from './BoldIcons.tsx'
+import { BoldRuns } from './BoldRuns.tsx'
+import { BookIcon, ChevronIcon, CloseIcon, GridIcon, RunsIcon, ThreadIcon } from './BoldIcons.tsx'
 import { BoldWorkbench } from './BoldWorkbench.tsx'
 import { boldOneToOneLink, boldResultsLink, boldWorkbenchLink } from './bold-links.ts'
 import type { BoldSheetState } from './bold-ui.ts'
@@ -19,7 +20,7 @@ import { BoldTeamRoom } from './room/BoldTeamRoom.tsx'
 
 const PHONE = '(max-width: 860px)'
 
-type SideMode = 'work' | 'library' | 'thread' | 'elsewhere' | `agent:${string}`
+type SideMode = 'work' | 'library' | 'runs' | 'thread' | 'elsewhere' | `agent:${string}`
 
 function SideGlyph({ agent }: { agent: AgentSummary }) {
   return (
@@ -59,6 +60,13 @@ export function BoldRoom() {
     setSeenLibraryRequest(libraryRequest)
     if (libraryRequest) setMode('library')
   }
+  // `?run=<brief id>` (a job's link, Search, a notification) opens the Runs view on that run, and stays while it is open.
+  const runId = params.get('run')
+  const [seenRunId, setSeenRunId] = useState<string | null>(null)
+  if (runId !== seenRunId) {
+    setSeenRunId(runId)
+    if (runId) setMode('runs')
+  }
   const [menuOpen, setMenuOpen] = useState(false)
   const sideRef = useRef<HTMLElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -86,9 +94,11 @@ export function BoldRoom() {
       ? 'Work'
       : mode === 'library'
         ? 'Library'
-        : mode === 'elsewhere'
-          ? `${elsewhere?.agentId ?? 'Elsewhere'} · ${elsewhere?.sourceLabel ?? ''}`.trim()
-          : 'Thread'
+        : mode === 'runs'
+          ? 'Runs'
+          : mode === 'elsewhere'
+            ? `${elsewhere?.agentId ?? 'Elsewhere'} · ${elsewhere?.sourceLabel ?? ''}`.trim()
+            : 'Thread'
   const elsewhereAgent = elsewhere
     ? agents.find((item) => item.id === elsewhere.agentId)
     : undefined
@@ -178,6 +188,10 @@ export function BoldRoom() {
   }, [libraryRequest, phone, setSheetOpen])
 
   useEffect(() => {
+    if (phone && runId) setSheetOpen(true)
+  }, [phone, runId, setSheetOpen])
+
+  useEffect(() => {
     if (!libraryRequest) return
     const next = new URLSearchParams(params)
     next.delete('note')
@@ -189,6 +203,7 @@ export function BoldRoom() {
     next.delete('with')
     next.delete('chat')
     next.delete('ref')
+    next.delete('run')
     return next
   }
 
@@ -426,6 +441,8 @@ export function BoldRoom() {
                     <GridIcon />
                   ) : mode === 'library' ? (
                     <BookIcon />
+                  ) : mode === 'runs' ? (
+                    <RunsIcon />
                   ) : mode === 'elsewhere' && elsewhereAgent ? (
                     <SideGlyph agent={elsewhereAgent} />
                   ) : (
@@ -470,6 +487,7 @@ export function BoldRoom() {
               <div className="menu side-menu" id={menuId}>
                 {option('work', <GridIcon />, 'Work', 'What the team is making')}
                 {option('library', <BookIcon />, 'Library', 'Notes and files')}
+                {option('runs', <RunsIcon />, 'Runs', 'Recipe and lead-decides runs')}
                 {option('thread', <ThreadIcon />, 'Thread', "A job's back-and-forth")}
                 {agents.length > 0 && <div className="sec">One to one</div>}
                 {agents.map(agentOption)}
@@ -501,6 +519,20 @@ export function BoldRoom() {
                 </p>
               )}
             </div>
+          ) : mode === 'runs' ? (
+            <BoldRuns
+              briefId={runId}
+              onOpen={(briefId) => {
+                const next = new URLSearchParams(params)
+                next.set('run', briefId)
+                setParams(next)
+              }}
+              onBack={() => {
+                const next = new URLSearchParams(params)
+                next.delete('run')
+                setParams(next)
+              }}
+            />
           ) : mode === 'thread' ? (
             <BoldThread
               jobId={threadJob}

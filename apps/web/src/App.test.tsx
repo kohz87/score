@@ -329,7 +329,6 @@ test('on the new shell the old classic paths redirect to their /b homes and keep
     ['/watch/builder?from=3', '/b/watch/builder'],
     ['/workflows', '/b/workflows'],
     ['/workflows/wf-1', '/b/workflows/wf-1'],
-    ['/runs/brief-1?x=y', '/b/runs/brief-1'],
     ['/settings/look/customize/score', '/b/settings/look/customize/score'],
   ] as const) {
     const router = renderRoute(from)
@@ -339,9 +338,19 @@ test('on the new shell the old classic paths redirect to their /b homes and keep
   }
 })
 
+test('a run’s old addresses open it in the Runs panel and keep the query', async () => {
+  for (const from of ['/runs/brief-1?x=y', '/b/runs/brief-1?x=y', '/now/flow/brief-1?x=y']) {
+    const router = renderRoute(from)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/b'))
+    expect(new URLSearchParams(router.state.location.search).get('run')).toBe('brief-1')
+    expect(new URLSearchParams(router.state.location.search).get('x')).toBe('y')
+    cleanup()
+  }
+})
+
 test('on the classic view the classic paths stay where they are', async () => {
   window.localStorage.setItem('score.ui', 'classic')
-  for (const path of ['/workflows', '/runs/brief-1', '/settings/look/customize/score']) {
+  for (const path of ['/workflows', '/settings/look/customize/score']) {
     const router = renderRoute(path)
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(router.state.location.pathname).toBe(path)
@@ -360,7 +369,6 @@ test.each([
   ['/now/watch/builder', '/b/watch/builder'],
   ['/now/flow/workflows', '/b/workflows'],
   ['/now/flow/workflows/wf-1', '/b/workflows/wf-1'],
-  ['/now/flow/brief-1', '/b/runs/brief-1'],
 ])('%s redirects to %s', async (path, target) => {
   const router = renderRoute(path)
   await waitFor(() => expect(router.state.location.pathname).toBe(target))
