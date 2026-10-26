@@ -209,6 +209,9 @@ test.describe('theme CSS stays out of protected subtrees', () => {
     await page.goto('/b?look=safe')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     await expect(page.locator('.agent-glyph').first()).toBeVisible()
+    // The same wait as for the worn page: the room's lists fill in after the first glyph shows, and a page measured
+    // before they have arrived has fewer glyphs than one measured after.
+    await settle(page)
     const plain = await glyphPaint(page)
     // (The room may have gained a message between the two loads: compare what the glyphs look like, not how many.)
     expect([...new Set(worn)].sort()).toEqual([...new Set(plain)].sort())

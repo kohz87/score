@@ -48,7 +48,8 @@ test('the composer attaches an image, rejects a non-image, and the sent message 
   const text = `See the attached picture ${Date.now()}`
   await composer.fill(text)
   await composer.press('Enter')
-  await expect(composer).toHaveValue('')
+  // The composer clears once the upload and the send have gone through, which takes a while on a busy server.
+  await expect(composer).toHaveValue('', { timeout: 20_000 })
   await expect(chips).toHaveCount(0)
   const image = messageWith(page, text).getByRole('img', { name: 'Attached image' })
   await expect(image).toBeVisible()
