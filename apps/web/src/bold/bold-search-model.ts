@@ -5,7 +5,7 @@ import type {
   MessageSearchHit,
   RoutineSummary,
 } from '@score/contract'
-import { agentDisplayName } from './bold-agents.ts'
+import { agentDisplayName, canTalkTo } from './bold-agents.ts'
 
 export type BoldSearchCommand = { name: string; usage: string; description: string }
 
@@ -158,7 +158,7 @@ export function buildBoldSearchGroups(input: BoldSearchInput): BoldSearchGroup[]
 
   if (at) {
     const items = input.agents
-      .filter((agent) => matches(term, agent.id, agent.name, agent.role))
+      .filter((agent) => canTalkTo(agent) && matches(term, agent.id, agent.name, agent.role))
       .map<BoldSearchResult>((agent) => ({
         kind: 'action',
         id: `action:message:${agent.id}`,
@@ -293,7 +293,7 @@ export function buildBoldSearchGroups(input: BoldSearchInput): BoldSearchGroup[]
       hint: null,
       action: { type: 'reset-look' },
     },
-    ...input.agents.map<BoldSearchResult>((agent) => ({
+    ...input.agents.filter(canTalkTo).map<BoldSearchResult>((agent) => ({
       kind: 'action',
       id: `action:message:${agent.id}`,
       title: `Message ${agentDisplayName(agent)}`,

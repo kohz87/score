@@ -12,7 +12,13 @@ import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
-import { agentDisplayName, agentMood, agentNameColor, agentStateLabel } from './bold-agents.ts'
+import {
+  agentDisplayName,
+  agentMood,
+  agentNameColor,
+  agentStateLabel,
+  canTalkTo,
+} from './bold-agents.ts'
 import { BoldLibrary } from './BoldLibrary.tsx'
 import { BoldResults } from './BoldResults.tsx'
 import { BoldRuns } from './BoldRuns.tsx'
@@ -41,6 +47,8 @@ function SideGlyph({ agent }: { agent: AgentSummary }) {
 export function BoldRoom() {
   const agentsState = useStreamQuery(agentsQuery)
   const agents = agentsState.data ?? []
+  // A removed or not-ready agent has no one-to-one to start (an open link to one still shows its history).
+  const talkable = agents.filter(canTalkTo)
   const phone = useMediaQuery(PHONE)
   const { sheetOpen, setSheetOpen } = useOutletContext<BoldSheetState>()
   const location = useLocation()
@@ -505,8 +513,8 @@ export function BoldRoom() {
                 {option('library', <BookIcon />, 'Library', 'Notes and files')}
                 {option('runs', <RunsIcon />, 'Runs', 'Recipe and lead-decides runs')}
                 {option('thread', <ThreadIcon />, 'Thread', "A job's back-and-forth")}
-                {agents.length > 0 && <div className="sec">One to one</div>}
-                {agents.map(agentOption)}
+                {talkable.length > 0 && <div className="sec">One to one</div>}
+                {talkable.map(agentOption)}
               </div>
             )}
           </div>

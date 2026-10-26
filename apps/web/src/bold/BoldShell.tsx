@@ -24,7 +24,13 @@ import { NotificationBridge } from '../notifications/NotificationBridge.tsx'
 import { UpdateBanner } from '../pwa/UpdateBanner.tsx'
 import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
-import { agentDisplayName, agentMood, agentStateLabel, dockProgress } from './bold-agents.ts'
+import {
+  agentDisplayName,
+  agentMood,
+  agentStateLabel,
+  dockProgress,
+  onTeam,
+} from './bold-agents.ts'
 import { boldOneToOneLink } from './bold-links.ts'
 import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon, TerminalIcon } from './BoldIcons.tsx'
@@ -288,7 +294,7 @@ function BoldShellFrame() {
                 role="group"
                 aria-label="Your team. Click someone to talk one to one."
               >
-                {agents.map((agent) => (
+                {agents.filter(onTeam).map((agent) => (
                   <DockRing
                     key={agent.id}
                     agent={agent}
