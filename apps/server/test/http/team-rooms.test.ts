@@ -187,3 +187,34 @@ test('migration 0091 allows one everyone room only', () => {
       .run(),
   ).toThrow(/UNIQUE/)
 })
+
+test('a member that is briefly not ready stays while the person changes the others (review)', async () => {
+  const team = RoomSchema.parse(
+    (
+      await createTeam({ name: 'Mixed', members: ['builder', 'reviewer'], leadAgentId: 'reviewer' })
+    ).json(),
+  )
+  db.sqlite
+    .prepare(
+      "INSERT INTO agent_lifecycle (agent_id, incarnation_id, state, operation_id, display_name) VALUES ('builder', '00000000-0000-4000-8000-000000000001', 'needs_attention', NULL, NULL)",
+    )
+    .run()
+  const kept = await call('PATCH', `/api/rooms/${team.id}`, {
+    members: ['builder', 'reviewer', 'designer'],
+  })
+  expect(kept.statusCode, kept.body).toBe(200)
+  // A not-ready agent still can't join.
+  db.sqlite.prepare("UPDATE agent_lifecycle SET agent_id = 'lead' WHERE agent_id = 'builder'").run()
+  expect(
+    (await call('PATCH', `/api/rooms/${team.id}`, { members: ['builder', 'reviewer', 'lead'] }))
+      .statusCode,
+  ).toBe(400)
+})
+
+test('an ordinary room keeps its #name rule; a team keeps plain names', async () => {
+  const room = await call('POST', '/api/rooms', { name: 'ops' })
+  expect(room.statusCode).toBe(200)
+  expect(
+    (await call('PATCH', `/api/rooms/${room.json().id}`, { name: 'Not A Slug' })).statusCode,
+  ).toBe(400)
+})

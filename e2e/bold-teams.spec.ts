@@ -78,6 +78,9 @@ test('make a team, start a job in it, rename and delete it; the first team room 
   await rename.getByRole('button', { name: 'Rename' }).click()
   await expect(rename).toBeHidden()
   await expect(page.locator('.roomtitle')).toContainText(renamed)
+  // Its link survives a reload (the room is read by id, not found in a list first).
+  await page.reload()
+  await expect(page.locator('.roomtitle')).toContainText(renamed)
 
   // Delete it; the first team room is what is left.
   await page.getByRole('button', { name: 'Room menu' }).click()

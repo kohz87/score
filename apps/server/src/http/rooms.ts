@@ -358,7 +358,18 @@ export function registerRoomRoutes(
         'conflict',
         'The team room can’t be renamed, archived or given other members.',
       )
-    await validateAgents([...(body.members ?? []), ...(body.leadAgentId ? [body.leadAgentId] : [])])
+    // Only agents joining now must be ready: a member that is briefly not ready (setting up again, needs attention)
+    // can stay while the person changes the others (3.4.0 review).
+    const current = db.read((sqlite) => {
+      const row = sqlite.prepare('SELECT members FROM rooms WHERE id = ?').get(roomId) as
+        { members: string } | undefined
+      return new Set(row ? z.array(z.string()).parse(JSON.parse(row.members)) : [])
+    })
+    await validateAgents(
+      [...(body.members ?? []), ...(body.leadAgentId ? [body.leadAgentId] : [])].filter(
+        (id) => !current.has(id),
+      ),
+    )
     let room: Room | undefined
     await ingest.submit({
       source: 'rooms',

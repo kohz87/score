@@ -1682,7 +1682,7 @@ function startError(error: unknown): string {
     if (error.code === 'policy_changed' || error.code === 'reach_not_acknowledged')
       return describeCreateError(error)
     if (error.code === 'paused') return 'Work is paused. Resume the team or the agent first.'
-    if (error.code === 'no_lead') return 'The team room has no lead yet.'
+    if (error.code === 'no_lead') return 'This team has no lead yet.'
   }
   if (error instanceof Error && error.message) return error.message
   return describeCreateError(error)
