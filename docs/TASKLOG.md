@@ -1519,5 +1519,5 @@ One entry per completed task: what landed, review results, and any **rejected re
   rebuilds), no harm; the before-fix measurement already showed the 10px offset. Gate: e2e 828 passed, 1 failed
   (bold-workspace:129, known); contract samples for the two new schemas; pnpm check green (server 4807, web 2971,
   contract 1518).
-- **v3.4.0 deployed live** (~12:55 UTC): idle (parked scoretestb run only), backup score-pre-3.4.0-20261026.db, restart,
+- **v3.4.0 deployed live** (~12:30 UTC): idle (parked scoretestb run only), backup score-pre-3.4.0-20261026.db, restart,
   health ok, no new errors; migration 0091 marked the existing Team room `team_everyone = 1` (6 members, lead kept).
