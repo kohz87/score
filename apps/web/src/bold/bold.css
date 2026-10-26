@@ -879,9 +879,12 @@ body.fit [data-ui='bold'] .stream {
 
 [data-ui='bold'] .bold-room-archived {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  flex: none;
+  /* On a narrow phone header it wraps under the title instead of squeezing it. */
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 [data-ui='bold'] .bold-room-kind-badge {
