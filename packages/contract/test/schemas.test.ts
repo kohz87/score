@@ -732,6 +732,16 @@ const cases = [
   ['TaskActivitySchema', f.activity, { ...f.activity, agentId: '' }],
   ['TaskDetailSchema', f.detail, { ...f.detail, dependsOn: [''] }],
   ['RoomSchema', f.room, { ...f.room, members: [''] }],
+  [
+    'TeamRoomCreateRequestSchema',
+    { name: 'Docs team', members: ['builder', 'reviewer'], leadAgentId: 'reviewer' },
+    { name: 'Docs team', members: [], leadAgentId: 'reviewer' },
+  ],
+  [
+    'TeamRoomsResponseSchema',
+    { asOfSeq: 2, items: [{ ...f.room, role: 'team', everyone: true }] },
+    { items: [f.room] },
+  ],
   ['LaneBlockSchema', f.lane, { ...f.lane, end: 'later' }],
   ['MessagePartSchema', f.parts[0], { kind: 'approval', approvalId: '' }],
   ['MessageSchema', f.message, { ...f.message, author: { kind: 'agent' } }],
