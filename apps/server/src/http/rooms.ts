@@ -10,6 +10,7 @@ import {
   MessagePartSchema,
   MessageAttachmentSchema,
   RewindRequestSchema,
+  RetryReplyRequestSchema,
   RoomDeleteRequestSchema,
   RoomTagSchema,
   type CommandResult,
@@ -711,13 +712,17 @@ export function registerRoomRoutes(
       .object({ roomId: ParamsSchema.shape.roomId, messageId: z.string().min(1).max(200) })
       .parse(request.params)
     db.read((sqlite) => assertRoomFree(sqlite, roomId, 'message.retry'))
+    // An empty body is a plain Retry; `another` asks for a different answer (2.4.0).
+    const parsed = RetryReplyRequestSchema.safeParse(request.body ?? {})
+    if (!parsed.success) throw new HttpError(400, 'bad_request', 'That isn’t a valid retry.')
+    const body = parsed.data
     const nonce = randomUUID()
     let replyId = ''
     await ingest.submit({
       source: 'rooms',
       identity: randomUUID(),
       apply: ({ sqlite, now }) => {
-        replyId = retryReply(sqlite, roomId, messageId, nonce, now)
+        replyId = retryReply(sqlite, roomId, messageId, nonce, now, body)
         return []
       },
     })

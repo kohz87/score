@@ -654,6 +654,7 @@ const cases = [
   ['RefSchema', f.refs[0], { kind: 'room', roomId: '' }],
   ['ApprovalChoiceSchema', 'once', 'forever'],
   ['ApprovalSchema', f.approval, { ...f.approval, createdAt: 'yesterday' }],
+  ['RetryReplyRequestSchema', { another: true }, { another: 'yes' }],
   ['AgentQuestionAnswerSchema', 'main', ''],
   [
     'AgentQuestionSchema',

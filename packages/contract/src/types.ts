@@ -431,8 +431,17 @@ export const MessageSchema = z.object({
    * means the room's default job.
    */
   jobId: z.string().min(1).nullish(),
+  /**
+   * 2.4.0: on a reply written again for the same message (Retry, Try another): the id of the first reply of the group.
+   * The room shows the group as one message with its versions.
+   */
+  alternativeOf: z.string().min(1).nullish(),
 })
 export type Message = z.infer<typeof MessageSchema>
+
+/** 2.4.0: `another` asks the agent for a different answer (Try another); without it Retry repeats the turn. */
+export const RetryReplyRequestSchema = z.object({ another: z.boolean().optional() }).strict()
+export type RetryReplyRequest = z.infer<typeof RetryReplyRequestSchema>
 
 export const RunSummarySchema = z.object({
   id: z.string().min(1),
