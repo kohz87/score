@@ -69,7 +69,7 @@ for (const id of packagedThemeIds) {
       for (const [name, value] of Object.entries(attributes[id]))
         await expect(html, name).toHaveAttribute(name, value)
       await expect(page.locator('.look-banner')).toHaveCount(0)
-      await expect(html).not.toHaveAttribute('data-contrast-fallback', '')
+      await expect(html).not.toHaveAttribute('data-contrast-fallback')
       // It survives a reload (the boot cache paints it before the app starts).
       await page.reload()
       await expect(html).toHaveAttribute('data-look', 'custom')
@@ -129,7 +129,7 @@ for (const id of packagedThemeIds) {
         const { card, allow, deny } = await startApproval(page, null)
         await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
         await expect(page.locator('.look-banner')).toHaveCount(0)
-        await expect(page.locator('html')).not.toHaveAttribute('data-contrast-fallback', '')
+        await expect(page.locator('html')).not.toHaveAttribute('data-contrast-fallback')
         for (const part of [card, allow, deny]) {
           await expect(part).toBeVisible()
           expect(await part.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
@@ -233,7 +233,7 @@ for (const id of ['paper', 'night', 'dense', ...packagedThemeIds] as const) {
           await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
         await page.waitForTimeout(2500)
         await expect(page.locator('.look-banner'), path).toHaveCount(0)
-        await expect(page.locator('html'), path).not.toHaveAttribute('data-contrast-fallback', '')
+        await expect(page.locator('html'), path).not.toHaveAttribute('data-contrast-fallback')
       }
     })
   }

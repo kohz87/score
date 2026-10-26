@@ -20,6 +20,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -210,7 +211,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
-  const agents = useStreamQuery(agentsQuery).data ?? NO_AGENTS
+  const allAgents = useStreamQuery(agentsQuery).data ?? NO_AGENTS
+  // Only agents that can take work: one still being set up, being deleted or removed is never offered (as in Add agent).
+  const agents = useMemo(
+    () => allAgents.filter((agent) => !agent.lifecycle || agent.lifecycle.state === 'ready'),
+    [allAgents],
+  )
   const workflows = useWorkflows()
   // The same stream-kept read of the team room as the room and Results (one cache entry, one reducer).
   const teamRoomState = useStreamQuery(teamRoomQuery(null))
