@@ -776,7 +776,9 @@ conflict` for a room that isn't a one-to-one, or while a message is still being 
   2.4.0: the body may be `{ another: true }` (**Try another**): the agent is asked for a different answer to the same
   message (it keeps its Hermes session, so it knows its earlier answer, and gets the room as it is now); an empty body
   is the plain Retry. Every reply written again for the same message carries `alternativeOf` (the first reply's id) on
-  its `Message`, so the room shows the versions as one message with a pager.
+  its `Message`, so the room shows the versions as one message with a pager. 3.5.0: an agent `Message` carries `retryable`
+  (`true`: it answers the person's own message, so Retry and Try another apply; `false`: a hand-off, summary or
+  orchestration reply, refused here with `409`); absent when Score doesn't know (the web then guesses, the server decides).
 - **H** `POST /api/rooms/:roomId/messages/:messageId/stop` → `{ ok: true }` (PLAN 5.25): stops the Score-started run that is
   writing that streaming agent reply; the reply ends with "This run was stopped." `404` unknown; `409 conflict` when the
   message is not a reply being written by a running run (finished, or still queued).

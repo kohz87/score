@@ -44,8 +44,8 @@ export function atOrAfter(message: Message, anchor: Message) {
 }
 
 /**
- * Retry is offered on an agent reply that answers the person: walking back over the job's agent-authored messages, the
- * first other message is the person's own. (The server refuses an agent-to-agent hand-off or a step of a recipe.) Pass
+ * Retry is offered on an agent reply that answers the person: the server's `retryable` when it sends one (3.5.0), else
+ * walking back over the job's agent-authored messages, the first other message is the person's own. (The server refuses an agent-to-agent hand-off or a step of a recipe.) Pass
  * the job's whole, oldest-first list, not a filtered one, so a filter or a pending delete never changes the answer.
  */
 export function retryableIds(messages: Message[]): Set<string> {
@@ -54,7 +54,8 @@ export function retryableIds(messages: Message[]): Set<string> {
   for (const message of messages) {
     const job = message.jobId ?? ''
     if (message.author.kind === 'agent') {
-      if (lastOther.get(job) === 'you') ids.add(message.id)
+      // The server says (3.5.0); older messages fall back to the walk.
+      if (message.retryable ?? lastOther.get(job) === 'you') ids.add(message.id)
     } else lastOther.set(job, message.author.kind)
   }
   return ids
