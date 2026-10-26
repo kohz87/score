@@ -9,6 +9,8 @@ HOOKS = (
     "on_session_start", "on_session_end", "on_interim_message", "subagent_start", "subagent_stop",
     "on_human_input_request", "on_human_input_resolved", "on_kanban_worker_spawned",
     "on_kanban_worker_exited", "on_kanban_task_updated",
+    # Hermes 0.22.5 (decision 129): a deleted session moves Score's room to a successor; a compaction is logged.
+    "on_session_delete", "post_compaction",
 )
 _sender = None
 _pid = None
