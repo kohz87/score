@@ -1467,3 +1467,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   pnpm check green (server 4784, web 2931, contract 1512). Follow-ups for the owner: Usage custom range + per-agent
   table, Customizer shape/glass no effect, agent memory search, runs outcome filter, room rename/pin/archive/tags/JSON.
 - **v3.0.0 deployed live** (~08:38 UTC): backup score-pre-3.0.0-20261026.db, restart, no new errors.
+- **v3.1.0 (decision 133 + team lead; Sonnet coders, lead review).** Usage range/table (review: reviewer n/a, Unknown
+  agent row, cell labels, form re-seed, loading); memory search (review: highlight offsets); team lead (lead-built;
+  review: focus return, no false error); shape/glass/density (review 1: glass exemptions let a panel around an
+  approval turn translucent → no exemptions + approval opaque + glass e2e; harbour check restored to the theme's own
+  colour; density added; coder stalled after the round → lead verified 141 specs and committed; review 2: no-exemption
+  made glass inert (every agent card holds a protected glyph) → lead: exempt only the glyph); e2e stability (6 full-run
+  flakes fixed at causes, product fix: phone roster strip wraps; +2 more: roster lock, a stale Workbench assertion;
+  workspace 1px not reproduced). Full e2e 818 passed / 2 + 1 unit failing = tests out of date with 3.1.0's own changes
+  (Forget confirm, By agent table, the glyph exemption) → fixed, targeted green, web unit 2943. Codex not used (owner:
+  on another project).

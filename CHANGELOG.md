@@ -3,6 +3,23 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.1.0] — 2026-10-26
+
+### Added
+- **Team lead** in the team room's ⋯ menu: choose which agent leads (gets unaddressed messages and lead-decides jobs).
+- **Usage**: a custom date range and a per-agent table (jobs done, runs, median time, first-time pass, cache hits,
+  spend, an "Unknown agent" row); the CSV and the Journey chart follow the range.
+- **Agent memory search** on the agent page, with a confirm before forgetting a note.
+
+### Changed
+- **The Customizer's Shape options work in the new shell**: corner roundness, borders, shadows, glass (frosted panels)
+  and spacing (compact / airy). Decisions and anything holding one always keep a solid fill; built-in themes that set
+  these (Harbour: glass; Ledger: sharp corners and strong borders) now look as designed.
+
+### Fixed
+- On a phone, the row of agents in the room wraps instead of running off screen (with a large team it made the theme
+  safety check switch the theme off).
+
 ## [3.0.0] — 2026-10-26
 
 ### Removed
