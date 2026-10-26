@@ -568,6 +568,9 @@ test('a reporting word does not hide a changing one in the report-back tool name
     'post_tweet',
     'post_webhook',
     'reply_all',
+    'post_pull_request',
+    'post_job',
+    'send_request',
   ])
     expect(reportBackWarning(tool), tool).toMatch(/may change things/)
   for (const tool of ['send_slack_message', 'post_to_channel', 'reply_in_thread'])

@@ -44,6 +44,12 @@ const MADE_TO_REPORT = list(
   'comment comments note notes message messages reply replies report reports review reviews feedback reaction reactions',
 )
 const PHRASE_END = list('and then with on in for')
+// Sending verbs: what they send has to be a report, a status, or go to a conversation (`post_status`, `send_message`,
+// `post_to_channel`), not `post_pull_request`, `post_job` or `send_request`.
+const SENDING = list('post send')
+const CONVERSATIONS = list(
+  'channel channels thread threads chat room conversation discussion slack discord telegram teams',
+)
 // Every other word must be one of these places a report goes (3.5.0 review): an allowlist, since no list of risky
 // words is ever complete (`send_funds`, `post_tweet`, `reply_all` warn).
 const PLACES = list(
@@ -76,8 +82,15 @@ export function reportBackWarning(tool: string): string | undefined {
   }
   const changes = parts.some((word, i) => {
     if (CHANGING.has(word)) return true
-    if (!SOFT.has(word)) return false
     const last = phraseEnd(i)
+    if (SENDING.has(word))
+      return (
+        last !== undefined &&
+        !MADE_TO_REPORT.has(last) &&
+        last !== 'status' &&
+        !CONVERSATIONS.has(last)
+      )
+    if (!SOFT.has(word)) return false
     return last === undefined || !MADE_TO_REPORT.has(last)
   })
   return reports && !changes ? undefined : 'This tool may change things, not just report.'
