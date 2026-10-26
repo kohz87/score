@@ -1,6 +1,23 @@
 import type { Message } from '@score/contract'
-import { useRef, useState, type KeyboardEvent, type ReactNode, type TouchEvent } from 'react'
-import { groupKey, readPickedVersion, swipeStep, writePickedVersion } from './reply-versions.ts'
+import {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+  type TouchEvent,
+} from 'react'
+import {
+  clearPickedVersion,
+  groupKey,
+  onReplyVersionPicked,
+  readPickedVersion,
+  swipeBlockedBy,
+  swipeStep,
+  writePickedVersion,
+} from './reply-versions.ts'
 
 /** What a message of a group needs to draw: the pager and the memory note, and whether a new version is coming. */
 export type ReplyGroupParts = {
@@ -90,6 +107,20 @@ export function ReplyGroup({
     setSeenNewest(newest)
     setPicked(null)
   }
+  // A newer version replaces any explicit pick, so a reload shows the newest.
+  const lastNewest = useRef(newest)
+  useEffect(() => {
+    if (lastNewest.current === newest) return
+    lastNewest.current = newest
+    clearPickedVersion(key)
+  }, [key, newest])
+  useEffect(
+    () =>
+      onReplyVersionPicked((pickedKey, id) => {
+        if (pickedKey === key) setPicked(id)
+      }),
+    [key],
+  )
   const index = Math.max(
     0,
     group.findIndex((member) => member.id === (picked ?? newest)),
@@ -105,7 +136,9 @@ export function ReplyGroup({
   function onTouchStart(event: TouchEvent<HTMLDivElement>) {
     const touch = event.touches[0]
     start.current =
-      event.touches.length === 1 && touch ? { x: touch.clientX, y: touch.clientY } : null
+      event.touches.length === 1 && touch && !swipeBlockedBy(event.target, event.currentTarget)
+        ? { x: touch.clientX, y: touch.clientY }
+        : null
   }
   function onTouchEnd(event: TouchEvent<HTMLDivElement>) {
     const from = start.current
@@ -114,7 +147,13 @@ export function ReplyGroup({
     if (!from || !touch) return
     // A text selection is the person's own gesture, not a version swipe.
     const selection = window.getSelection?.()
-    if (selection && !selection.isCollapsed) return
+    if (
+      selection &&
+      !selection.isCollapsed &&
+      (event.currentTarget.contains(selection.anchorNode) ||
+        event.currentTarget.contains(selection.focusNode))
+    )
+      return
     const step = swipeStep(touch.clientX - from.x, touch.clientY - from.y)
     if (step !== 0) go(step)
   }
@@ -130,7 +169,12 @@ export function ReplyGroup({
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {render(shown, parts)}
+      {keepMounted(render(shown, parts))}
     </div>
   )
+}
+
+/** The shown version changes but the message stays mounted, so the pager keeps focus and announces the new position. */
+function keepMounted(node: ReactNode): ReactNode {
+  return isValidElement(node) ? cloneElement(node, { key: 'shown' }) : node
 }

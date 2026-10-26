@@ -54,6 +54,19 @@ test('isFailedReply recognises the server’s failure notices only', () => {
   const text = (value: string) => by('f', { parts: [{ kind: 'text', text: value }] })
   expect(isFailedReply(text('This run failed: x'))).toBe(true)
   expect(isFailedReply(text('This run was stopped.'))).toBe(true)
+  expect(isFailedReply(text('Couldn’t start this agent (x).'))).toBe(true)
+  expect(isFailedReply(text('I ran out of steps for this turn (9 tool calls).'))).toBe(false)
+  expect(
+    isFailedReply(
+      by('m', {
+        parts: [
+          { kind: 'text', text: 'Working on it' },
+          { kind: 'tools', summary: 'ran 2 tools', runId: 'r1' },
+          { kind: 'text', text: 'This run failed: boom' },
+        ],
+      }),
+    ),
+  ).toBe(true)
   expect(isFailedReply(text('All good.'))).toBe(false)
   expect(isFailedReply(by('s', { streaming: true }))).toBe(false)
 })
@@ -166,13 +179,96 @@ describe('ReplyGroup', () => {
     expect(shownId()).toBe('b')
     swipe(80, 60)
     expect(shownId()).toBe('b')
-    const selection = vi.spyOn(window, 'getSelection').mockReturnValue({
+    // A selection elsewhere in the page does not block; one inside the bubble does.
+    const outside = vi.spyOn(window, 'getSelection').mockReturnValue({
       isCollapsed: false,
-    } as Selection)
+      anchorNode: document.body,
+      focusNode: document.body,
+    } as unknown as Selection)
+    const inside = vi.spyOn(window, 'getSelection').mockReturnValue({
+      isCollapsed: false,
+      anchorNode: area,
+      focusNode: area,
+    } as unknown as Selection)
     swipe(80, 0)
     expect(shownId()).toBe('b')
-    selection.mockRestore()
+    inside.mockRestore()
+    outside.mockRestore()
     swipe(-80, 0)
     expect(shownId()).toBe('c')
+  })
+})
+
+describe('ReplyGroup, review round', () => {
+  test('the pager keeps focus across two Next presses', () => {
+    const six = [by('a'), by('b', { alternativeOf: 'a' }), by('c', { alternativeOf: 'a' })]
+    window.localStorage.setItem('score.replyVersion.a', 'a')
+    const view = render(
+      <ReplyGroup
+        group={six}
+        agentName="builder"
+        render={(shown, parts) => (
+          <div key={shown.id} data-testid="shown">
+            {shown.id}
+            {parts.pager}
+          </div>
+        )}
+      />,
+    )
+    expect(view.container.textContent).toContain('1 / 3')
+    const next = screen.getByRole('button', { name: 'Next version' })
+    next.focus()
+    fireEvent.click(next)
+    expect(screen.getByText('2 / 3')).toBeDefined()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Next version' }))
+    fireEvent.click(document.activeElement!)
+    expect(screen.getByText('3 / 3')).toBeDefined()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Next version' }))
+  })
+
+  test('a newer version clears the stored pick', () => {
+    window.localStorage.setItem('score.replyVersion.a', 'a')
+    const draw = (shown: Message) => <div data-testid="shown">{shown.id}</div>
+    const view = render(<ReplyGroup group={three} agentName="builder" render={draw} />)
+    expect(shownId()).toBe('a')
+    view.rerender(
+      <ReplyGroup
+        group={[...three, by('d', { alternativeOf: 'a' })]}
+        agentName="builder"
+        render={draw}
+      />,
+    )
+    expect(shownId()).toBe('d')
+    expect(window.localStorage.getItem('score.replyVersion.a')).toBeNull()
+  })
+
+  test('touches that start in code, tables, links or controls are not swipes', () => {
+    render(
+      <ReplyGroup
+        group={three}
+        agentName="builder"
+        render={(shown, parts) => (
+          <div data-testid="shown">
+            {shown.id}
+            <pre id="code">x</pre>
+            <a id="link" href="#x">
+              l
+            </a>
+            <p id="plain">text</p>
+            {parts.pager}
+          </div>
+        )}
+      />,
+    )
+    const swipeOn = (target: Element) => {
+      fireEvent.touchStart(target, { touches: [{ clientX: 200, clientY: 100 }] })
+      fireEvent.touchEnd(target, { changedTouches: [{ clientX: 300, clientY: 100 }] })
+    }
+    swipeOn(document.getElementById('code')!)
+    swipeOn(document.getElementById('link')!)
+    swipeOn(screen.getByRole('button', { name: 'Previous version' }))
+    expect(shownId()).toBe('c')
+    swipeOn(document.getElementById('plain')!)
+    expect(shownId()).toBe('b')
   })
 })

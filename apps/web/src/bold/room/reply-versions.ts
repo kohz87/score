@@ -35,12 +35,17 @@ export function groupReplies(messages: Message[]): ReplyGroups {
   return { byHead, folded }
 }
 
-/** A reply that ended without an answer (the server writes these notices): it keeps Retry, not Try another. */
+/**
+ * A reply that ended without an answer: the server appends its notice as the last text part (after any text or tool
+ * parts the run produced). It keeps Retry, not Try another. "I ran out of steps…" is a finished answer.
+ */
 export function isFailedReply(message: Message): boolean {
   if (message.author.kind !== 'agent' || message.streaming) return false
-  const texts = message.parts.flatMap((part) => (part.kind === 'text' ? [part.text] : []))
-  if (texts.length !== 1 || message.parts.some((part) => part.kind !== 'text')) return false
-  return /^This run (failed|was interrupted|was stopped)/.test(texts[0]!)
+  const last = message.parts.findLast((part) => part.kind === 'text')
+  if (!last || last.kind !== 'text') return false
+  return /^(This run (failed|was interrupted|was stopped)|Couldn['’]t start this agent)/.test(
+    last.text.trim(),
+  )
 }
 
 export const SWIPE_MIN = 48
@@ -68,4 +73,45 @@ export function writePickedVersion(key: string, messageId: string): void {
   } catch {
     // The choice just isn't remembered.
   }
+}
+
+export function clearPickedVersion(key: string): void {
+  try {
+    window.localStorage.removeItem(STORE + key)
+  } catch {
+    // Nothing stored, nothing to clear.
+  }
+}
+
+const PICK_EVENT = 'score:reply-version'
+
+/** Selects a version of a group from outside it (a seek to a hidden version) and remembers the choice. */
+export function pickReplyVersion(key: string, messageId: string): void {
+  writePickedVersion(key, messageId)
+  window.dispatchEvent(new CustomEvent(PICK_EVENT, { detail: { key, id: messageId } }))
+}
+
+export function onReplyVersionPicked(listener: (key: string, id: string) => void): () => void {
+  const handler = (event: Event) => {
+    const detail = (event as CustomEvent<{ key: string; id: string }>).detail
+    listener(detail.key, detail.id)
+  }
+  window.addEventListener(PICK_EVENT, handler)
+  return () => window.removeEventListener(PICK_EVENT, handler)
+}
+
+/** Touches that begin on something that scrolls or acts on its own are never a version swipe. */
+export function swipeBlockedBy(target: EventTarget | null, boundary: Element): boolean {
+  let node = target instanceof Element ? target : null
+  while (node) {
+    if (node.matches('pre, code, table, button, a, input, textarea, select, [role="button"]'))
+      return true
+    if (node.scrollWidth > node.clientWidth + 1) {
+      const overflow = window.getComputedStyle(node).overflowX
+      if (overflow === 'auto' || overflow === 'scroll') return true
+    }
+    if (node === boundary) break
+    node = node.parentElement
+  }
+  return false
 }

@@ -344,6 +344,31 @@ test('a seek target gets the hit marker after its message has loaded', async () 
   )
 })
 
+test('a seek to a version hidden in a reply group selects it there, then highlights it', async () => {
+  const first = makeMessage({
+    id: 'g-1',
+    jobId: 'job-1',
+    createdAt: '2026-10-24T09:01:00.000Z',
+    author: { kind: 'agent', agentId: 'builder' },
+    parts: [{ kind: 'text', text: 'First answer.' }],
+  })
+  const second = makeMessage({
+    id: 'g-2',
+    jobId: 'job-1',
+    createdAt: '2026-10-24T09:02:00.000Z',
+    alternativeOf: 'g-1',
+    author: { kind: 'agent', agentId: 'builder' },
+    parts: [{ kind: 'text', text: 'Second answer.' }],
+  })
+  stubStream({ pages: { 'job-1': [first, second], 'job-2': [] } })
+  const onSeeked = vi.fn()
+  window.localStorage.clear()
+  renderStream('job-1', false, 'g-1', onSeeked)
+  await waitFor(() => expect(onSeeked).toHaveBeenCalled())
+  expect(document.getElementById('message-g-1')?.classList.contains('bold-message-hit')).toBe(true)
+  expect(screen.getByText('1 / 2')).toBeDefined()
+})
+
 test('show deleted reads the version and hides another job’s messages from a selected job', async () => {
   const version: RoomVersion = {
     id: 'version-1',

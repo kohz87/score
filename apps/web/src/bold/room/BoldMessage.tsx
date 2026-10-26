@@ -21,7 +21,7 @@ import { boldWorkspaceLink } from '../bold-links.ts'
 import { fetchJobResults, jobResultsKey } from '../bold-results-queries.ts'
 import { agentDisplayName } from '../bold-agents.ts'
 import { ReplyGroup, type ReplyGroupParts } from './ReplyGroup.tsx'
-import { groupReplies, isFailedReply } from './reply-versions.ts'
+import { clearPickedVersion, groupKey, groupReplies, isFailedReply } from './reply-versions.ts'
 
 // One message with the prototype's action row (Edit, Copy, Save, Retry, Pin, Delete) and its versions. The team room,
 // the one-to-one chat and the job thread all draw their messages with it, so a message does the same everywhere.
@@ -266,6 +266,8 @@ export function BoldMessage({
           body: JSON.stringify(another ? { another: true } : {}),
         },
       )
+      // The new version should be what the person sees next, not an older pick.
+      clearPickedVersion(groupKey(message))
       setRetry('queued')
       clearTimeout(retryTimer.current)
       retryTimer.current = setTimeout(() => setRetry('idle'), 2000)
