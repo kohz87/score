@@ -1958,8 +1958,7 @@ mapping: { ref; title?; link?; details? } (dot paths); template; reportBack }` �
   the report-back `tool` doesn't look like a reporting tool, by the whole words of its name (snake, kebab, dotted or
   camelCase): no reporting word (comment, report, reply, post, note, message, notify, status, respond, send), or a word
   that changes things (delete, merge, run, pay, transfer, deploy, publish, approve, … — `CHANGING` in
-  `domain/triggers/report-back.ts`), or create/add/update/set without a reporting word (`create_comment` is fine,
-  `create_issue` is not): "This tool may change things, not just report." It is a name check only: no warning doesn't
+  `domain/triggers/report-back.ts`), or create/add/update/set whose own phrase doesn't end in a comment, note, message, reply, report, review, feedback or reaction (`create_comment` and `add_review` are fine; `create_issue`, `update_status` and `create_issue_with_comment` are not): "This tool may change things, not just report." It is a name check only: no warning doesn't
   prove a tool is harmless. Any tool name is still accepted; the settings show the warning.
 - **Report-back.** `ReportBack`: `{ mode: 'off' }` · `{ mode: 'fixed' | 'lead_decides'; tool; args }` where `tool` is a
   tool of the lead's Hermes profile and `args` a JSON template with `{{source.ref}}`, `{{source.title}}`,

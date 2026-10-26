@@ -548,9 +548,13 @@ test('a reporting word does not hide a changing one in the report-back tool name
     'notify_channel',
     'send_reply',
     'create_comment',
-    'update_status',
     'createIssueComment',
     'github.create_issue_comment',
+    'create_pull_request_review',
+    'submit_review',
+    'add_review',
+    'leave_feedback',
+    'add_reaction',
   ])
     expect(reportBackWarning(tool), tool).toBeUndefined()
   for (const tool of ['dataset_status', 'payload_report'])
@@ -562,6 +566,10 @@ test('a reporting word does not hide a changing one in the report-back tool name
     'post_message_and_create_issue',
     'notify_and_set_priority',
     'reply_and_create_ticket',
+    'update_status',
+    'update_issue_status',
+    'create_issue_with_comment',
+    'update_issue_with_comment',
   ])
     expect(reportBackWarning(tool), tool).toMatch(/may change things/)
 })

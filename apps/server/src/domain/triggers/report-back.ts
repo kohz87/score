@@ -28,20 +28,22 @@ const StoredSchema = z.object({
 })
 
 // Whole words of the tool name (snake_case, kebab-case, dotted or camelCase), so `dataset_info` holds no "set".
-const REPORTING = new Set(
-  'comment comments report reply post note notes message messages notify notification status respond send'.split(
-    ' ',
-  ),
+const list = (words: string) => new Set(words.split(' '))
+const REPORTING = list(
+  'comment comments report reply post note notes message messages notify notification status respond send review feedback reaction',
 )
 // Words that change things whatever else the name says.
-const CHANGING = new Set(
-  'delete remove close merge assign transition drop destroy archive write exec execute run pay payment money transfer charge refund buy order deploy publish release edit move rename approve reject invite grant revoke kick ban'.split(
-    ' ',
-  ),
+const CHANGING = list(
+  'delete remove close merge assign transition drop destroy archive write exec execute run pay payment money transfer charge refund buy order deploy publish release edit move rename approve reject invite grant revoke kick ban',
 )
-// Verbs that only make or change the reporting thing itself when their phrase names one (`create_comment`,
-// `update_status`); with anything else they may change things.
-const SOFT = new Set('create add update set'.split(' '))
+// Verbs that only make the reporting thing itself when their phrase ends in one (`create_comment`, `add_review`); with
+// anything else (`create_issue`, `update_issue_status`, `create_issue_with_comment`) they may change things. A status is
+// not one of those things: updating it changes state.
+const SOFT = list('create add update set')
+const MADE_TO_REPORT = list(
+  'comment comments note notes message messages reply report review feedback reaction',
+)
+const PHRASE_END = list('and then with on in for')
 
 function words(tool: string): string[] {
   return tool
@@ -51,20 +53,25 @@ function words(tool: string): string[] {
     .filter(Boolean)
 }
 
-/** A warning when a report-back tool's name doesn't look like a reporting tool (any name is still accepted). */
+/**
+ * A warning when a report-back tool's name doesn't look like a reporting tool (any name is still accepted). A name check
+ * only: no warning doesn't prove a tool is harmless.
+ */
 export function reportBackWarning(tool: string): string | undefined {
   const parts = words(tool)
   const reports = parts.some((word) => REPORTING.has(word))
-  // A soft verb is excused only when its own phrase (the words after it, up to "and"/"then" or the end) names a
-  // reporting thing: `create_issue_comment` yes, `post_message_and_create_issue` no.
-  const phrase = (from: number) => {
-    const end = parts.findIndex((word, i) => i > from && (word === 'and' || word === 'then'))
-    return parts.slice(from + 1, end === -1 ? undefined : end)
+  // A soft verb is excused only when its own phrase (the words after it, up to and/then/with/on/in/for or the end)
+  // ends in a reporting thing: `create_issue_comment` yes, `post_message_and_create_issue` no.
+  const phraseEnd = (from: number) => {
+    const end = parts.findIndex((word, i) => i > from && PHRASE_END.has(word))
+    return parts.slice(from + 1, end === -1 ? undefined : end).at(-1)
   }
-  const changes = parts.some(
-    (word, i) =>
-      CHANGING.has(word) || (SOFT.has(word) && !phrase(i).some((next) => REPORTING.has(next))),
-  )
+  const changes = parts.some((word, i) => {
+    if (CHANGING.has(word)) return true
+    if (!SOFT.has(word)) return false
+    const last = phraseEnd(i)
+    return last === undefined || !MADE_TO_REPORT.has(last)
+  })
   return reports && !changes ? undefined : 'This tool may change things, not just report.'
 }
 
