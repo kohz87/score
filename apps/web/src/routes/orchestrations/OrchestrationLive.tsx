@@ -58,7 +58,14 @@ const liveLead = (run: OrchestrationDetail): 'idle' | 'working' | 'ended' =>
       : 'idle'
 
 /** The run as a live diagram with a log beside it; a finished run can be replayed from its event history. */
-export function OrchestrationLive({ orchestrationId }: { orchestrationId: string }) {
+export function OrchestrationLive({
+  orchestrationId,
+  pane,
+}: {
+  orchestrationId: string
+  /** Inside the new shell's run view the header, decisions and tiles are its own: only the graph or only the log shows. */
+  pane?: 'graph' | 'log'
+}) {
   const run = useRun(orchestrationId)
   const agents = useStreamQuery(taskAgentsQuery).data ?? []
   const actions = useRunActions(orchestrationId)
@@ -145,30 +152,39 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
   const over = isRunOver(detail.status)
 
   return (
-    <div className="orch-live">
-      <section className="orch-head" aria-label="Orchestration">
-        <div>
-          <h3 className="orch-title">{detail.title}</h3>
-          <p className="orch-goal">{detail.goal}</p>
-          <RunStatus run={detail} />
-          <EndSummary
-            run={detail}
-            steps={detail.steps.succeeded}
-            approvals={detail.gates.filter((gate) => gate.decidedAt !== null).length}
-          />
-        </div>
+    <div className="orch-live" data-pane={pane}>
+      {pane && over && events.length > 0 && (
         <div className="orch-head-actions">
-          <RunControls run={detail} actions={actions} />
-          <Link to={`/chat/${encodeURIComponent(detail.roomId)}`}>Open the room in Chat</Link>
-          {over && events.length > 0 && (
-            <button type="button" aria-pressed={replaying} onClick={toggleReplay}>
-              {replaying ? 'Back to the final state' : 'Replay this run'}
-            </button>
-          )}
+          <button type="button" aria-pressed={replaying} onClick={toggleReplay}>
+            {replaying ? 'Back to the final state' : 'Replay this run'}
+          </button>
         </div>
-      </section>
+      )}
+      {!pane && (
+        <section className="orch-head" aria-label="Orchestration">
+          <div>
+            <h3 className="orch-title">{detail.title}</h3>
+            <p className="orch-goal">{detail.goal}</p>
+            <RunStatus run={detail} />
+            <EndSummary
+              run={detail}
+              steps={detail.steps.succeeded}
+              approvals={detail.gates.filter((gate) => gate.decidedAt !== null).length}
+            />
+          </div>
+          <div className="orch-head-actions">
+            <RunControls run={detail} actions={actions} />
+            <Link to={`/chat/${encodeURIComponent(detail.roomId)}`}>Open the room in Chat</Link>
+            {over && events.length > 0 && (
+              <button type="button" aria-pressed={replaying} onClick={toggleReplay}>
+                {replaying ? 'Back to the final state' : 'Replay this run'}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
-      {!replaying && <RunNeeds run={detail} agents={agents} actions={actions} />}
+      {!pane && !replaying && <RunNeeds run={detail} agents={agents} actions={actions} />}
 
       {replaying && (
         <ReplayBar
@@ -190,34 +206,38 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
       )}
 
       <div className="orch-main">
-        <div className="orch-diagram">
-          <LiveDiagram
-            nodes={graph.nodes}
-            edges={graph.edges}
-            visuals={visuals}
-            lead={replaying ? replay.lead : liveLead(detail)}
-            agents={agents}
-            selected={selected}
-            onSelect={setSelected}
-            active={player.active}
-            reducedMotion={quiet}
-            {...(hidden ? { hidden } : {})}
+        {pane !== 'log' && (
+          <div className="orch-diagram">
+            <LiveDiagram
+              nodes={graph.nodes}
+              edges={graph.edges}
+              visuals={visuals}
+              lead={replaying ? replay.lead : liveLead(detail)}
+              agents={agents}
+              selected={selected}
+              onSelect={setSelected}
+              active={player.active}
+              reducedMotion={quiet}
+              {...(hidden ? { hidden } : {})}
+            />
+            <p className="orch-legend orch-muted">
+              Dashed outline: queued. Amber with a diamond: needs you. Soft glow in the agent
+              colour: running. Tick: succeeded. Cross: failed or blocked. Question mark: not
+              confirmed as ended. Dashed line: a replacement.
+            </p>
+          </div>
+        )}
+        {pane !== 'graph' && (
+          <LiveLog
+            events={logEvents}
+            node={selected}
+            onClearNode={() => setSelected(null)}
+            label={replaying ? 'Replay log' : 'Live log'}
           />
-          <p className="orch-legend orch-muted">
-            Dashed outline: queued. Amber with a diamond: needs you. Soft glow in the agent colour:
-            running. Tick: succeeded. Cross: failed or blocked. Question mark: not confirmed as
-            ended. Dashed line: a replacement.
-          </p>
-        </div>
-        <LiveLog
-          events={logEvents}
-          node={selected}
-          onClearNode={() => setSelected(null)}
-          label={replaying ? 'Replay log' : 'Live log'}
-        />
+        )}
       </div>
 
-      {selected && (
+      {selected && pane !== 'log' && (
         <section className="orch-selected" aria-label="Selected step">
           {selected === LEAD_NODE ? (
             <>
@@ -234,17 +254,24 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
         </section>
       )}
 
-      <div className="orch-lower">
-        <section aria-label="Plan">
-          <h3>Plan</h3>
-          <PlanList run={detail} />
-        </section>
-        <section aria-label="Budget and limits">
-          <h3>Budget and limits</h3>
-          <BudgetBlock run={detail} coding={orchCoding(detail.coding, detail.quotaFloorPercent)} />
-        </section>
-      </div>
-      <FinishBlock run={detail} />
+      {!pane && (
+        <>
+          <div className="orch-lower">
+            <section aria-label="Plan">
+              <h3>Plan</h3>
+              <PlanList run={detail} />
+            </section>
+            <section aria-label="Budget and limits">
+              <h3>Budget and limits</h3>
+              <BudgetBlock
+                run={detail}
+                coding={orchCoding(detail.coding, detail.quotaFloorPercent)}
+              />
+            </section>
+          </div>
+          <FinishBlock run={detail} />
+        </>
+      )}
     </div>
   )
 }

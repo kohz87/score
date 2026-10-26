@@ -1415,3 +1415,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   (bold-screen, bold-workbench, chat-follow, themes-bold-visual paper Team) 81/81 on the final build; pnpm check green
   (server 4784, web 3148, contract 1512).
 - **v2.5.0 deployed live** (~02:00 UTC): backup score-pre-2.5.0-20261026.db, restart, no new errors.
+- **v2.6.0 Runs in the side panel (Sonnet coder, lead review; decision 131 boards A/B/F; branch task/2.5.0-runs).**
+  Review 1 (Sonnet, 4 P2): goal/plan missing, agent-change warnings + definition link missing, /runs links dropped
+  the hash and could throw, a closed run didn't reopen — all fixed; lead: Graph/Log/decision cards restyled in the new
+  look. Round-2 review (P2): the location.key reopen also fired on in-place replaces → lead fix (a replace keeps the
+  run's key). Full e2e after the fixes: 11 failures → the run specs now read the Graph/Log tabs; Watch's specs open
+  Full history first (they broke in full runs since 2.5.0's 5-newest list); a real bug found: BoldHome unmounted the
+  room while retrying a failed read (half-typed fields lost) → fixed. Round-3 review: fullHistory waits for the list,
+  outcome keys by position (lead). Final full e2e 998 passed; 3 run screenshots re-baselined (tab the run opens on),
+  bold-terminal phone 3/3 alone (flake), bold-start-job phone known flake; pnpm check green (server 4784, web 3158).
+  Owner rule reinforced (2026-10-26): no pre-fix gates — stopped a gate run started before the last fix.
+- **v2.6.0 deployed live** (~02:48 UTC): backup score-pre-2.6.0-20261026.db, restart, no new errors.

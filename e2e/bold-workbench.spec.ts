@@ -1,5 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+
+/** The step list shows the five newest; older steps sit behind "Full history" (the shared server may hold more). */
+async function fullHistory(page: Page) {
+  const steps = page.getByRole('region', { name: 'What builder did' })
+  // Wait for the list itself, then open the history only when there is more than the newest few.
+  await steps.getByRole('listitem').first().waitFor()
+  const more = steps.getByRole('button', { name: 'Full history' })
+  if (await more.count()) await more.click()
+}
 import { visualHello } from './visual-fixtures.ts'
 
 // PLAN 11.6b: the Workbench and the agent's screen (boards 02 and 12) on the seeded fake team room. The demo moves on
@@ -188,6 +197,7 @@ for (const size of sizes) {
       await expect(page.getByRole('heading', { name: 'builder’s screen' })).toBeVisible()
 
       const log = page.getByRole('region', { name: 'What builder did' })
+      await fullHistory(page)
       await expect(log.getByRole('button', { name: /Ran pnpm test api\/events/ })).toBeVisible()
       await expect(log.getByRole('button', { name: /Opened the activity feed/ })).toBeVisible()
       await expect(
@@ -221,6 +231,7 @@ for (const size of sizes) {
 
       const bar = page.getByRole('group', { name: 'Approval needed' })
       await expect(bar).toBeVisible()
+      await fullHistory(page)
       await page
         .getByRole('region', { name: 'What builder did' })
         .getByRole('button', { name: /Opened the activity feed/ })

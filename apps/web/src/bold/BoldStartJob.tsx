@@ -1,3 +1,4 @@
+import { boldRunLink } from './bold-links.ts'
 import {
   JobSchema,
   ORCH_ACKNOWLEDGEMENT_TEXT,
@@ -1437,7 +1438,7 @@ function PartialCard({
       <p className="muted">
         The {what} is real and will not be started again. Create the job again to link it.
       </p>
-      <Link to={`/b/runs/${encodeURIComponent(partial.briefId)}`} onClick={onClose}>
+      <Link to={boldRunLink(partial.briefId)} onClick={onClose}>
         Open the {what}
       </Link>
       {error && (

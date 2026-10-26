@@ -1,3 +1,4 @@
+import { boldRunLink } from '../bold-links.ts'
 import {
   MessagePageSchema,
   type AgentSummary,
@@ -124,7 +125,7 @@ function RecipeRunCard({ recipe, agents }: { recipe: JobRecipe; agents: AgentSum
   const match = recipeRun(recipe, orchestrations, workflows)
   const runHref =
     match && briefHasRun(match.summary.briefId, orchestrations, workflows)
-      ? `/b/runs/${encodeURIComponent(match.summary.briefId)}`
+      ? boldRunLink(match.summary.briefId)
       : null
   const title =
     match?.summary.title ?? (recipe.kind === 'workflow' ? 'Workflow run' : 'Orchestration')

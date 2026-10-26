@@ -1,3 +1,4 @@
+import { boldRunLink } from './bold-links.ts'
 import {
   type AgentSummary,
   type BranchCondition,
@@ -295,8 +296,7 @@ function RecipeRunStatus({ recipe }: { recipe: WorkflowSummary | undefined }) {
       {last ? (
         <>
           {' '}
-          Last run:{' '}
-          <Link to={`/b/runs/${encodeURIComponent(last.briefId)}`}>{statusLabel[last.status]}</Link>
+          Last run: <Link to={boldRunLink(last.briefId)}>{statusLabel[last.status]}</Link>
           {last.graphOutcome ? `, ${graphOutcomeLabel[last.graphOutcome].toLowerCase()}` : ''}
         </>
       ) : (

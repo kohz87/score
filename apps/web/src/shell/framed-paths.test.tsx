@@ -13,10 +13,17 @@ describe('toBoldPath', () => {
   it('moves the kept classic pages under /b and keeps query and hash', () => {
     expect(toBoldPath('/workflows')).toBe('/b/workflows')
     expect(toBoldPath('/workflows/wf-1?x=1#a')).toBe('/b/workflows/wf-1?x=1#a')
-    expect(toBoldPath('/runs/brief-1')).toBe('/b/runs/brief-1')
     expect(toBoldPath('/watch/lead?from=4')).toBe('/b/screen/lead?from=4')
     expect(toBoldPath('/settings/look')).toBe('/b/settings/look')
     expect(toBoldPath('/settings/look/customize/t1')).toBe('/b/settings/look/customize/t1')
+  })
+  it('opens a run in the room’s Runs panel, keeping its query', () => {
+    expect(toBoldPath('/runs/brief-1')).toBe('/b?run=brief-1')
+    expect(toBoldPath('/runs/brief%201?x=1#a')).toBe('/b?x=1&run=brief+1#a')
+  })
+  it('keeps the #hash of a run link and survives a malformed escape', () => {
+    expect(toBoldPath('/runs/brief-1?x=1#step')).toBe('/b?x=1&run=brief-1#step')
+    expect(toBoldPath('/runs/%E0%A4%A')).toBe('/runs/%E0%A4%A')
   })
   it('sends team pages and chat rooms to their new homes', () => {
     expect(toBoldPath('/team/lead')).toBe('/b/team/lead')
@@ -49,7 +56,7 @@ describe('boldRedirectFor', () => {
   it('redirects only the kept classic pages, keeping the query', () => {
     expect(boldRedirectFor('/workflows', '?a=1')).toBe('/b/workflows?a=1')
     expect(boldRedirectFor('/workflows/new', '')).toBe('/b/workflows/new')
-    expect(boldRedirectFor('/runs/b1', '?x=y', '#z')).toBe('/b/runs/b1?x=y#z')
+    expect(boldRedirectFor('/runs/b1', '?x=y', '#z')).toBeNull()
     expect(boldRedirectFor('/watch/lead', '?from=3')).toBe('/b/screen/lead?from=3')
     expect(boldRedirectFor('/settings/look/customize/t', '')).toBe('/b/settings/look/customize/t')
     expect(boldRedirectFor('/terminal', '')).toBe('/b/terminal')
@@ -78,7 +85,7 @@ function linkHref(framed: boolean): string {
 describe('Link', () => {
   afterEach(cleanup)
   it('maps inside the bold frame and not outside it', () => {
-    expect(linkHref(true)).toBe('/b/runs/b1')
+    expect(linkHref(true)).toBe('/b?run=b1')
   })
   it('keeps the classic path in the classic shell', () => {
     expect(linkHref(false)).toBe('/runs/b1')
