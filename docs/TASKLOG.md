@@ -1443,3 +1443,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   registered); option ranges checked. Review 3 clean (P3: only the first invalid option is shown). Not built: the
   mock-up's "Import a recipe file" (no server route). Merge with 2.6.0/2.7.0 resolved by the coder (9 files). Full e2e
   992 passed, 2 known phone flakes (bold-terminal back, bold-start-job); pnpm check green (server 4784, web 3176).
+- **v2.8.0 deployed live** (~03:29 UTC): backup score-pre-2.8.0-20261026.db, restart, no new errors.
