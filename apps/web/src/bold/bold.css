@@ -810,6 +810,40 @@ body.fit [data-ui='bold'] .stream {
   }
 }
 
+/* A landscape tablet keeps the desktop layout, but a finger still needs 44px (the phone rules above, for touch only). */
+/* A finger needs 44px on a message's actions too, at any width (a landscape tablet has no hover, so they always show). */
+@media (pointer: coarse) {
+  body [data-ui='bold'] .bold-act,
+  body [data-ui='bold'] .bold-dm-msg-actions .btn {
+    min-height: 44px;
+  }
+}
+
+@media (pointer: coarse) and (min-width: 861px) {
+  body [data-ui='bold'] .btn.sm,
+  body [data-ui='bold'] .chip,
+  body [data-ui='bold'] .seg button,
+  body [data-ui='bold'] .link {
+    min-height: 44px;
+  }
+
+  body [data-ui='bold'] .icon-btn.sm,
+  body [data-ui='bold'] .chat-ctx-ring {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* 3.7.0: a portrait tablet (601-860) gets the phone shell, but its room column fills the width instead of stopping at
+   the desktop's 600px cap. */
+@media (min-width: 601px) and (max-width: 860px) {
+  [data-ui='bold'] .roomgrid > .roomcol {
+    flex: 1 1 100%;
+    max-width: none;
+    width: 100%;
+  }
+}
+
 @media (min-width: 861px) {
   [data-ui='bold'] .sideclose {
     display: none;
