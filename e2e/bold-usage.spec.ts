@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
@@ -78,6 +79,22 @@ test('switching the range refetches and updates the CSV link', async ({ page }) 
     'href',
     /range=30d/,
   )
+})
+
+// Ported from reports.spec.ts (the Reports page was folded into Usage, decision 132): the CSV is a real download.
+test('Download CSV delivers the rows of the chosen range', async ({ page }) => {
+  await openUsage(page)
+  await page.getByRole('button', { name: '30 days' }).click()
+  await expect(page).toHaveURL(/range=30d/)
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('link', { name: 'Download CSV' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^score-report-30d-\d{4}-\d{2}-\d{2}\.csv$/)
+  const csv = (await readFile((await download.path())!, 'utf8')).trimEnd().split('\r\n')
+  expect(csv[0]).toBe('Agent,Finished,Runs,Median time (min),First-time pass (%),Spend (USD)')
+  expect(csv.length).toBeGreaterThan(1)
+  const names = csv.slice(1).map((line) => line.split(',')[0])
+  expect(names).toContain('builder')
 })
 
 test('Show as table reveals the same task rows', async ({ page }) => {
