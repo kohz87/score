@@ -3,14 +3,16 @@ import type { AgentDetail } from '@score/contract'
 import { Link } from 'react-router'
 import { useRoutineActions, useRoutines } from '../../routes/team/routine-queries.ts'
 import { boldStartJobLink } from '../bold-links.ts'
+import { RemoveConfirm } from '../RemoveConfirm.tsx'
 import { Fail, Loading, MoreCard, problem } from './MoreCard.tsx'
 
 export function RoutinesCard({ agent }: { agent: AgentDetail }) {
   const routines = useRoutines(agent.id)
-  const { toggle, run } = useRoutineActions(agent.id)
+  const { toggle, run, remove } = useRoutineActions(agent.id)
   const [notice, setNotice] = useState('')
+  const [confirming, setConfirming] = useState<string | null>(null)
   const items = routines.data ?? []
-  const busy = toggle.isPending || run.isPending
+  const busy = toggle.isPending || run.isPending || remove.isPending
   return (
     <MoreCard id="agent-routines" title="Repeating jobs">
       {routines.isPending && <Loading what="repeating jobs" />}
@@ -59,6 +61,36 @@ export function RoutinesCard({ agent }: { agent: AgentDetail }) {
           >
             Run now
           </button>
+          <button
+            type="button"
+            className="act"
+            disabled={busy}
+            aria-label={`Delete ${routine.title}`}
+            aria-expanded={confirming === routine.id}
+            onClick={() => {
+              remove.reset()
+              setConfirming(confirming === routine.id ? null : routine.id)
+            }}
+          >
+            Delete
+          </button>
+          {confirming === routine.id && (
+            <RemoveConfirm
+              what={routine.title}
+              text={`Deletes the repeating job “${routine.title}”. Work it already started is not stopped.`}
+              pending={remove.isPending}
+              error={remove.error}
+              onCancel={() => setConfirming(null)}
+              onRemove={() =>
+                remove.mutate(routine.id, {
+                  onSuccess: () => {
+                    setConfirming(null)
+                    setNotice(`Deleted “${routine.title}”.`)
+                  },
+                })
+              }
+            />
+          )}
         </div>
       ))}
       <p className="small muted" role="status">

@@ -86,6 +86,8 @@ beforeEach(() => {
   FakeNotification.shown = []
   FakeNotification.requestPermission.mockClear()
   vi.stubGlobal('Notification', FakeNotification)
+  // jsdom has no scrolling; a section change scrolls to the top.
+  vi.stubGlobal('scrollTo', vi.fn())
   Object.assign(window, { Notification: FakeNotification })
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,

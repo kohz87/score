@@ -231,6 +231,29 @@ test('spend by agent sorts highest first and keeps each agent glyph', async () =
   expect(rows[2]!.textContent).toContain('$9.30')
 })
 
+test('a coding agent’s estimated or unknown spend is marked beside the figure', async () => {
+  reportForRange = (range) => {
+    const fixture = reportFixture(range)
+    const [builder, reviewer] = fixture.byAgent
+    return reportFixture(range, {
+      byAgent: [
+        { ...builder!, spendBasis: 'estimated' },
+        { ...reviewer!, spendUsd: null, spendBasis: 'unknown' },
+      ],
+    })
+  }
+  open('/b/settings/usage')
+  const card = await screen.findByRole('region', { name: 'Spend by agent' })
+  expect(
+    [...card.querySelectorAll('.usage-spend-value')].map((value) => value.textContent),
+  ).toEqual(['$22.40 estimated', 'unknown'])
+  const rows = within(within(card).getByRole('table', { name: 'Spend by agent' })).getAllByRole(
+    'row',
+  )
+  expect(rows[1]!.textContent).toContain('$22.40 estimated')
+  expect(rows[2]!.textContent).toContain('unknown')
+})
+
 test('range switching refetches and the CSV link carries the same range', async () => {
   const router = open('/b/settings/usage')
   await screen.findByRole('region', { name: 'Usage in numbers' })

@@ -228,6 +228,13 @@ function SpendFigure({
   const uid = useId().replace(/:/g, '')
   const tableId = `usage-spend-table-${uid}`
   const max = Math.max(0, ...report.byAgent.map((row) => row.spendUsd ?? 0))
+  // A coding agent's figure can be an estimate (subscription work at API prices) or unknown: say so beside the number.
+  const spendText = (row: { spendUsd: number | null; spendBasis?: string }) =>
+    row.spendBasis === 'unknown'
+      ? 'unknown'
+      : row.spendBasis === 'estimated'
+        ? `${money(row.spendUsd)} estimated`
+        : money(row.spendUsd)
   const rows = report.byAgent
     .map((row) => ({
       ...row,
@@ -262,7 +269,7 @@ function SpendFigure({
           className="usage-spend"
           role="img"
           aria-label={`Spend by agent: ${rows
-            .map((row) => `${row.agent.name} ${money(row.spendUsd)}`)
+            .map((row) => `${row.agent.name} ${spendText(row)}`)
             .join(', ')}.`}
         >
           {rows.map((row) => {
@@ -282,10 +289,10 @@ function SpendFigure({
                 <span className="usage-spend-bar-wrap">
                   <span
                     className="usage-spend-bar"
-                    title={`${row.agent.name}: ${money(row.spendUsd)}`}
+                    title={`${row.agent.name}: ${spendText(row)}`}
                     style={{ width: `${width}%`, background: color }}
                   />
-                  <span className="usage-spend-value">{money(row.spendUsd)}</span>
+                  <span className="usage-spend-value">{spendText(row)}</span>
                 </span>
               </div>
             )
@@ -316,7 +323,7 @@ function SpendFigure({
           {rows.map((row) => (
             <tr key={row.agentId}>
               <th scope="row">{row.agent.name}</th>
-              <td>{money(row.spendUsd)}</td>
+              <td>{spendText(row)}</td>
             </tr>
           ))}
         </tbody>
