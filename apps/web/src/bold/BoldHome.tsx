@@ -9,9 +9,21 @@ export function BoldHome() {
   const location = useLocation()
   const forced = new URLSearchParams(location.search).get('first') === 'run'
   // `/b?recipes=1` was the recipe dialog; Recipes is a page now (2.8.0), and old links still land on it.
-  const oldRecipesLink = new URLSearchParams(location.search).get('recipes') === '1'
+  const params = new URLSearchParams(location.search)
+  const oldRecipesLink = params.get('recipes') === '1'
+  params.delete('recipes')
   const team = useBoldTeamRoom()
-  if (oldRecipesLink) return <Navigate to="/b/recipes" replace />
+  if (oldRecipesLink)
+    return (
+      <Navigate
+        to={{
+          pathname: '/b/recipes',
+          search: params.size ? `?${params}` : '',
+          hash: location.hash,
+        }}
+        replace
+      />
+    )
   const view = firstRunView(forced, firstRunDone(), team.data?.room, team.isPending)
   if (view === 'first-run') return <BoldFirstRun />
   if (view === 'loading')

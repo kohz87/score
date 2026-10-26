@@ -2,6 +2,7 @@ import {
   JobSchema,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_DEFAULTS,
+  ORCH_LIMITS,
   OrchestrationCreatedSchema,
   RoutineSummarySchema,
   TriggerCreatedSchema,
@@ -230,7 +231,13 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const [unknownSpend, setUnknownSpend] = useState<'pause' | 'continue'>('pause')
   const [unknownCost, setUnknownCost] = useState<CostSource[]>([])
   const [ack, setAck] = useState(false)
-  const [reachAccepted, setReachAccepted] = useState(false)
+  // The policy ids the person accepted the reach of, as one key: a changed id is not covered and is asked again.
+  const [reachAcceptedKey, setReachAcceptedKey] = useState<string | null>(null)
+  // Recipe options under "More options"; blank/null = the preflight's own defaults (the classic start dialog's).
+  const [codingSteps, setCodingSteps] = useState<number | null>(null)
+  const [quotaFloor, setQuotaFloor] = useState('')
+  const [concurrent, setConcurrent] = useState<number | null>(null)
+  const [estimate, setEstimate] = useState<number | null>(null)
   const [saveRecipe, setSaveRecipe] = useState(false)
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [allowed, setAllowed] = useState<string[] | null>(null)
@@ -308,7 +315,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const reachAtStake = workersAtStake.flatMap((worker) =>
     worker.reachBeyondWorkspace && worker.policyId ? [worker.policyId] : [],
   )
+  const reachKey = [...reachAtStake].sort().join('|')
+  const reachAccepted = reachKey !== '' && reachAcceptedKey === reachKey
   const reachCovered = reachAtStake.length === 0 || reachAccepted
+  const quotaFloorValid =
+    quotaFloor.trim() === '' ||
+    (Number.isInteger(Number(quotaFloor)) && Number(quotaFloor) >= 0 && Number(quotaFloor) <= 50)
 
   const nowOnce = when === 'once'
   const isLead = nowOnce && recipe.kind === 'lead'
@@ -439,6 +451,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     ack &&
     checksPass &&
     reachCovered &&
+    quotaFloorValid &&
     missingInputs.length === 0 &&
     (!needsLead || leadId !== '')
 
@@ -536,7 +549,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
 
   function chooseRecipe(next: RecipeChoice) {
     setRecipe(next)
-    setReachAccepted(false)
+    setReachAcceptedKey(null)
+    setCodingSteps(null)
+    setQuotaFloor('')
+    setConcurrent(null)
+    setEstimate(null)
     setError(null)
     setResult(null)
     setPartial(null)
@@ -626,13 +643,16 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       ...(cap > 0 ? { budgetUsd: cap } : {}),
       ...(deadlineAt ? { deadlineAt } : {}),
       unknownSpend,
-      maxConcurrentSteps: data.defaults.maxConcurrentSteps,
-      stepEstimateUsd: data.defaults.stepEstimateUsd,
+      maxConcurrentSteps: concurrent ?? data.defaults.maxConcurrentSteps,
+      stepEstimateUsd: estimate ?? data.defaults.stepEstimateUsd,
       acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
       ...(workflowWorkers.length > 0
         ? {
             codingPolicies,
-            codingSteps: data.defaults.codingSteps ?? 1,
+            codingSteps: codingSteps ?? data.defaults.codingSteps ?? 1,
+            ...(quotaFloor.trim() !== '' && quotaFloorValid
+              ? { quotaFloorPercent: Number(quotaFloor) }
+              : {}),
             ...(workflowReach.length > 0
               ? { acknowledgeCodingReach: { policyIds: workflowReach } }
               : {}),
@@ -756,6 +776,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       }
       await saveRecipeAfterStart()
     } catch (failure) {
+      // A coding agent changed meanwhile: look again, and ask again where the reach changed.
+      if (failure instanceof ApiError && ['policy_changed', 'conflict'].includes(failure.code)) {
+        attemptKey.current = null
+        void workflowPreflight.refetch()
+        void orchestrationPreflight.refetch()
+      }
       setError(startError(failure))
     } finally {
       starting.current = false
@@ -1101,6 +1127,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                     }}
                     style={{ accentColor: 'var(--ink)' }}
                   />
+                  {isSavedRecipe && cap > 0 && (
+                    <span className="small muted">
+                      With a spend cap, a step whose cost Hermes doesn’t report pauses the run so
+                      you can decide.
+                    </span>
+                  )}
                   {showDeadline && (
                     <div className="start-deadline-block">
                       <div className="row small">
@@ -1144,6 +1176,76 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                 </div>
               )}
             </div>
+
+            {isSavedRecipe && (
+              <details className="inner start-more">
+                <summary>More options</summary>
+                <div className="start-clear">
+                  <label className="start-field">
+                    <span>Steps at the same time (1 to 3)</span>
+                    <input
+                      className="field"
+                      type="number"
+                      min={1}
+                      max={3}
+                      value={concurrent ?? workflowPreflight.data?.defaults.maxConcurrentSteps ?? 2}
+                      onChange={(event) => {
+                        setConcurrent(Number(event.target.value))
+                        touch()
+                      }}
+                    />
+                  </label>
+                  <label className="start-field">
+                    <span>Estimate per step (USD)</span>
+                    <input
+                      className="field"
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      value={estimate ?? workflowPreflight.data?.defaults.stepEstimateUsd ?? 0.5}
+                      onChange={(event) => {
+                        setEstimate(Number(event.target.value))
+                        touch()
+                      }}
+                    />
+                  </label>
+                  {workflowWorkers.length > 0 && (
+                    <>
+                      <label className="start-field">
+                        <span>Most coding steps</span>
+                        <input
+                          className="field"
+                          type="number"
+                          min={1}
+                          max={ORCH_LIMITS.maxCodingSteps}
+                          value={codingSteps ?? workflowPreflight.data?.defaults.codingSteps ?? 1}
+                          onChange={(event) => {
+                            setCodingSteps(Number(event.target.value))
+                            touch()
+                          }}
+                        />
+                      </label>
+                      <label className="start-field">
+                        <span>Quota floor (%): leave blank to use each coding agent’s own</span>
+                        <input
+                          className="field"
+                          type="number"
+                          min={0}
+                          max={50}
+                          inputMode="numeric"
+                          value={quotaFloor}
+                          aria-invalid={!quotaFloorValid}
+                          onChange={(event) => {
+                            setQuotaFloor(event.target.value)
+                            touch()
+                          }}
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+              </details>
+            )}
 
             {showUnknownCost && (
               <fieldset className="inner start-unknown" data-protected="block">
@@ -1240,7 +1342,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                         type="checkbox"
                         checked={reachAccepted}
                         onChange={(event) => {
-                          setReachAccepted(event.target.checked)
+                          setReachAcceptedKey(event.target.checked ? reachKey : null)
                           touch()
                         }}
                       />

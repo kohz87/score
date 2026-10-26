@@ -21,7 +21,8 @@ async function createWorkflow(page: Page, definition: unknown): Promise<string> 
 
 /** Run… on the recipe's page opens Start a job (2.8.0); the run opens on its own page. */
 async function startFromList(page: Page, name: string, inputs: Record<string, string> = {}) {
-  await startRecipeByName(page, name, inputs)
+  // No budget, as the classic dialog had: a lost attempt's unknown spend would pause the retry under Start a job's $5 cap.
+  await startRecipeByName(page, name, inputs, { noBudget: true })
 }
 
 test('build a workflow with a gate and a branch in the editor, save it, run it, approve the gate and replay it', async ({

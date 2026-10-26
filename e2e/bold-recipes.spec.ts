@@ -585,6 +585,8 @@ test('leaving a dirty recipe asks first, and the old addresses land on the page'
     ['/b?recipes=1', /\/b\/recipes$/],
     ['/b/workflows?x=1', /\/b\/recipes\?x=1$/],
     ['/workflows', /\/b\/recipes$/],
+    ['/workflows#step', /\/b\/recipes#step$/],
+    ['/b?recipes=1&job=j1#step', /\/b\/recipes\?job=j1#step$/],
   ] as const) {
     await page.goto(from)
     await expect(page).toHaveURL(to)

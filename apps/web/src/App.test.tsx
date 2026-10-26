@@ -341,9 +341,20 @@ test('on the new shell the old classic paths redirect to their /b homes and keep
   }
 })
 
-test('the old recipe dialog address opens the Recipes page', async () => {
-  const router = renderRoute('/b?recipes=1')
+test('the old recipe dialog address opens the Recipes page and keeps the other parameters', async () => {
+  const router = renderRoute('/b?recipes=1&job=j1#x')
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+  expect(router.state.location.search).toBe('?job=j1')
+  expect(router.state.location.hash).toBe('#x')
+})
+
+test('the old workflow addresses keep the query', async () => {
+  for (const from of ['/workflows/wf-1?a=1', '/b/workflows/wf-1?a=1']) {
+    const router = renderRoute(from)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes/wf-1'))
+    expect(router.state.location.search).toBe('?a=1')
+    cleanup()
+  }
 })
 
 test('on the classic view the classic paths stay where they are', async () => {

@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { fixtureNow } from './now-fixture.ts'
 import { pair } from './pair.ts'
+import { openCodingRecipeStart, startPolicyA, startPolicyB } from './recipe-run.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 import {
   codingPolicyB,
@@ -120,6 +121,48 @@ test('the editor offers coding agents for a step, refuses Antigravity with the r
     timeout: 20_000,
   })
   await expect(problems).not.toContainText('Coding agents can take workflow steps')
+})
+
+test('Start a job shows the reach of a coding recipe, asks once, sends policies and options, and asks again when a policy changed', async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  await pair(page)
+  await page.setViewportSize({ width: 1280, height: 1300 })
+  const { dialog, bodies, policy } = await openCodingRecipeStart(
+    page,
+    `Coding start ${Date.now().toString(36)}`,
+  )
+  const reach = dialog.locator('.start-reach')
+  await expect(reach).toBeVisible()
+  await expect(reach).toHaveAttribute('data-protected', 'block')
+  await expect(reach).toContainText('Reads any file you can read')
+  await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
+  const start = dialog.getByRole('button', { name: 'Start the job' })
+  await expect(start).toBeDisabled()
+  const accept = reach.getByRole('checkbox', {
+    name: /I understand what these coding agents can read/,
+  })
+  await accept.check()
+  await expect(start).toBeEnabled()
+
+  await dialog.getByText('More options').click()
+  await expect(dialog.getByLabel('Most coding steps')).toHaveValue('4')
+  await dialog.getByLabel('Most coding steps').fill('5')
+  await dialog.getByLabel(/^Quota floor/).fill('15')
+  // The agent changes while the person decides: the next read says so, and the 409 is the server's own answer.
+  policy.id = startPolicyB
+  await start.click()
+  await expect.poll(() => bodies.length).toBe(1)
+  expect(bodies[0]).toMatchObject({
+    codingPolicies: { builder: startPolicyA },
+    acknowledgeCodingReach: { policyIds: [startPolicyA] },
+    codingSteps: 5,
+    quotaFloorPercent: 15,
+  })
+  // The reach is read again, and what changed has to be accepted again.
+  await expect(accept).not.toBeChecked({ timeout: 20_000 })
+  await expect(start).toBeDisabled()
 })
 
 test.describe('a coding step in the live workflow view', () => {

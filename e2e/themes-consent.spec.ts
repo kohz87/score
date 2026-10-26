@@ -9,6 +9,7 @@ import {
   wear,
 } from './themes-consent-helpers.ts'
 import { pair } from './pair.ts'
+import { openCodingRecipeStart } from './recipe-run.ts'
 import { mockThemes } from './themes-fixtures.ts'
 
 // Cross-audit of v1.8.0 (K1, X1): every consent a person gives in Score is a decision, and a theme that the sanitiser
@@ -245,95 +246,54 @@ test.describe('L1: a cached theme is vetted while the list or the theme is still
 // ---------------------------------------------------------------------------------------------------------------------
 // Starting a workflow
 
-// 2.8.0: the list's Run button and its start dialog are gone; Start a job is the one start dialog (its protection is
-// covered by bold-protection.spec). The classic dialog is left only behind "Run again" on a finished run page, which
-// the Runs rebuild retires, so these three wait for that instead of an address that no longer shows it.
-test.describe.skip('X1: starting a workflow is one decision', () => {
-  async function workflowDialog(page: Page) {
-    const name = `Consent ${Date.now().toString(36)}`
-    const sent: string[] = []
-    const created = await page.request.post('/api/workflows', {
-      headers: { 'x-score-client': 'web' },
-      data: {
-        definition: {
-          name,
-          inputs: [{ name: 'topic', label: 'Topic', required: false, maxChars: 200 }],
-          nodes: [
-            {
-              id: 'one',
-              kind: 'agent',
-              label: 'First',
-              agentId: 'builder',
-              instruction: 'Say hello',
-              retries: 0,
-              onFailure: 'fail_run',
-            },
-            { id: 'done', kind: 'end', label: 'Done' },
-          ],
-          edges: [{ id: 'e1', from: 'one', port: 'ok', to: 'done' }],
-        },
-      },
-    })
-    expect(created.ok()).toBe(true)
-    await page.route('**/api/workflow-runs', async (route) => {
-      if (route.request().method() !== 'POST') return route.fallback()
-      sent.push(route.request().url())
-      await route.fulfill({
-        status: 409,
-        json: { error: { code: 'conflict', message: 'changed' } },
-      })
-    })
-    await page.goto('/workflows')
-    await page.getByRole('listitem', { name }).getByRole('button', { name: /^Run/ }).click()
-    const dialog = page.getByRole('dialog', { name: new RegExp(`Start ${name}`) })
-    await expect(dialog.getByRole('list', { name: 'Agent mapping' })).toContainText('builder')
+// 2.8.0: starting a saved recipe is Start a job. The decision (the "Before it starts" checklist, the coding reach, the
+// button) is one protected surface there; hostile accepted theme CSS can't hide any part of it.
+test.describe('X1: starting a recipe from Start a job is one decision', () => {
+  const startCss = [
+    '.start-checks, .start-checks * { opacity: 0; color: transparent; }',
+    '.start-reach, .start-reach * { opacity: 0; color: transparent; }',
+    '.start-ack { opacity: 0; }',
+    '.start-actions { opacity: 0; }',
+  ].join('\n')
+
+  async function startDialog(page: Page) {
+    const opened = await openCodingRecipeStart(page, `Consent ${Date.now().toString(36)}`)
     await custom(page)
-    return { dialog, sent, name }
+    return opened
   }
 
-  test('accepted theme CSS cannot hide the approval policy, the spend choice, the limits or the button', async ({
+  test('accepted theme CSS cannot hide the checklist, the reach or the button', async ({
     page,
   }) => {
     test.setTimeout(90_000)
-    await wear(
-      page,
-      `${ACCEPTED_TOKEN}\n.orch-policy { opacity: 0; color: transparent; }\n.orch-field { opacity: 0; }\n.orch-actions { opacity: 0; }`,
-    )
-    const { dialog } = await workflowDialog(page)
-    const policy = dialog.locator('label.orch-policy', { hasText: 'Ask me only at gates' })
-    await drawn(policy)
-    await drawn(dialog.getByRole('button', { name: 'Start the run' }))
-    await drawn(dialog.getByLabel(/^Budget in USD/))
+    await wear(page, `${ACCEPTED_TOKEN}\n${startCss}`)
+    const { dialog } = await startDialog(page)
+    await drawn(dialog.getByRole('region', { name: 'Before it starts' }))
+    const reach = dialog.locator('.start-reach')
+    await expect(reach).toHaveAttribute('data-protected', 'block')
+    await drawn(reach.getByText(/Reads any file you can read/))
+    await drawn(dialog.getByRole('button', { name: 'Start the job' }))
     await custom(page)
   })
 
-  test('hidden policy text refuses the click on Start the run and nothing is sent', async ({
-    page,
-  }) => {
+  test('hidden reach text refuses the click on Start and nothing is sent', async ({ page }) => {
     test.setTimeout(90_000)
     await wear(page)
-    const { dialog, sent } = await workflowDialog(page)
+    const { dialog, bodies } = await startDialog(page)
     await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
-    await expect(dialog.getByRole('button', { name: 'Start the run' })).toBeEnabled({
-      timeout: 20_000,
-    })
+    await dialog
+      .locator('.start-reach')
+      .getByRole('checkbox', { name: /I understand what these coding agents can read/ })
+      .check()
+    const start = dialog.getByRole('button', { name: 'Start the job' })
+    await expect(start).toBeEnabled({ timeout: 20_000 })
     await page.evaluate(() => {
       document.adoptedStyleSheets
         .at(-1)!
-        .insertRule('.orch-policy, .orch-policy * { color: transparent !important; }')
-      document.querySelector<HTMLButtonElement>('.orch-dialog .orch-primary')!.click()
+        .insertRule('.start-reach, .start-reach * { color: transparent !important; }')
     })
-    await expectRefused(page, sent)
-  })
-
-  test('a field hidden by accepted CSS refuses the first click inside the form', async ({
-    page,
-  }) => {
-    test.setTimeout(90_000)
-    await wear(page, `${ACCEPTED_TOKEN}\n.wf-fieldset .orch-field { color: transparent; }`)
-    const { dialog, sent } = await workflowDialog(page)
-    await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).click()
-    await expectRefused(page, sent)
+    await start.click()
+    await expectRefused(page, bodies)
   })
 })
 
