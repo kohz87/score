@@ -1390,3 +1390,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   — **rejected**: a lineage delete lists every id incl. the root, and the 2.3.0 refused-turn path covers the rest.
   Gates: full e2e 992 passed; pnpm check green (server 4782, web 3116, contract 1510); plugin pytest 366.
 - **v2.3.1 plugin live** (~00:20 UTC, owner OK): score_bridge/__init__.py (2 new hooks) on default + scoretesta (old copies in $JOB/tmp/plugin-pre-2.3.1/), hermes-gateway restarted idle, producers re-registered (107 → 110).
+- **v2.4.0 Try another reply (lead: server, contract, migration 0090; Sonnet coder: UI; 2026-10-26, decision 130).**
+  Owner chose simple swipes over a v7 rewind design. Retry `{another: true}` adds a one-time note to the person's text
+  and re-freezes the room context; every version names the first reply (`alternativeOf`); the stream groups them with a
+  pager and a phone swipe. Server review (Sonnet): P2 the group's versions filled the context window → excluded; P2 the
+  2.3.0 deleted-session auto-retry got grouped (its notice hidden) → `group: false`; dangling head after a delete →
+  handled by the client grouping on the id (no change). Web review: 5 P2 fixed in a round (focus/announcement across
+  switches, stored pick vs newest, seek to a folded version, swipe inside code/tables/controls, failed-reply detection
+  on the last text part); **rejected** "a new version lands out of view" (it streams in at the bubble just pressed).
+  Fix-round review: one component across versions carried labels/errors over → reset on a version switch (the "deletes
+  the wrong version" scenario can't occur: agent replies delete without a confirm). Gates: full e2e 993 passed, 2
+  failures (bold-results Workbench focus, bold-start-job phone — known flake) passed on rerun with the affected specs
+  164/164; pnpm check green (server 4784, contract 1512); web 3134 after the last fix; lint/format clean.

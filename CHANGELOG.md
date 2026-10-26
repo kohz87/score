@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.0] — 2026-10-26
+
+### Added
+- **Try another reply.** On an agent's finished reply, **Try another** asks it for a different answer to the same
+  message. The versions stay together as one message with a pager (‹ 2 / 3 ›); on a phone, swipe it sideways. The
+  newest is shown; your pick is remembered on this device. The agent remembers its earlier answers (it says so under the
+  message) — nothing is rewound in Hermes. A failed reply keeps **Retry**, and its retry joins the same versions.
+
 ## [2.3.1] — 2026-10-26
 
 ### Changed
