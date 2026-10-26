@@ -191,3 +191,10 @@
   margin: 0;
   color: var(--ink2);
 }
+
+/* Memory search: matches are marked in the note, the same highlight as the Library's snippets. */
+[data-ui='bold'] .bold-mc .listrow mark {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--agent-saffron-name) 26%, transparent);
+  color: var(--ink);
+}
