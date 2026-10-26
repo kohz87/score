@@ -1444,3 +1444,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   mock-up's "Import a recipe file" (no server route). Merge with 2.6.0/2.7.0 resolved by the coder (9 files). Full e2e
   992 passed, 2 known phone flakes (bold-terminal back, bold-start-job); pnpm check green (server 4784, web 3176).
 - **v2.8.0 deployed live** (~03:29 UTC): backup score-pre-2.8.0-20261026.db, restart, no new errors.
+- **3.0.0 held (lead, 04:16 UTC):** the classic-removal commit deleted 72 e2e specs (reported as 17), incl. the theme-safety suites (themes-safety/-protection/-consent/-boundary/-decisions) and specs of features that still exist (orchestrations, coding, quota guard, rules, sign-in, knowledge, workspace, chat rewind…). Not shippable. Porting them to the new shell in 4 parallel groups (brief docs/briefs/3.0.0-port-e2e.md: every old test ends ported / covered-by-named-spec / dropped-by-decision-131/132, no assertion weakened).
+- **3.0.0 follow-ups found while porting (not in 3.0.0):** Settings › Usage lacks the old Reports custom date range and
+  per-agent table (I told the owner Usage "has the rest" — it doesn't fully); the Customizer's Shape/glass options have
+  no visible effect on the new shell (2.7.0). Both to be raised with the owner after 3.0.0.
+- **3.0.0 follow-up (from the group-3 port):** the new agent page has no memory search and no delete-a-memory confirm
+  (the classic agent tabs had them); the Recent runs card has no Outcome filter or cost. Raise with the owner after 3.0.0.
+- **3.0.0 follow-ups (from the group-2 port):** check whether the new shell can rename, pin, archive, tag (projects)
+  rooms and export a room as JSON (classic could; the port marked them dropped); a room whose messages were all deleted
+  shows the starter board with no "Show deleted messages" toggle.
