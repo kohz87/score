@@ -59,6 +59,15 @@
 [data-ui='bold'] .bold-results-card {
   background: #fff;
   color: #12131a;
+  /* The card is white in both looks: agent names take the light look's readable colours, not the dark look's pale ones. */
+  --agent-violet-name: #4a2fd9;
+  --agent-jade-name: #00694f;
+  --agent-saffron-name: #8a5a00;
+  --agent-coral-name: #b01e43;
+  --agent-violet-text: #4a2fd9;
+  --agent-jade-text: #00694f;
+  --agent-saffron-text: #8a5a00;
+  --agent-coral-text: #b01e43;
   border-radius: calc(24px * var(--bold-r, 1));
   padding: calc(18px * var(--bold-d, 1));
   display: flex;

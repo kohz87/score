@@ -1216,3 +1216,11 @@ test('an operation that needs attention keeps the page, shows Close, and Escape 
   fireEvent.keyDown(close, { key: 'Escape' })
   expect(screen.queryByRole('group', { name: 'Remove builder' })).toBeNull()
 })
+
+test('the agent page keeps "needs you" and the overview facts on one row', async () => {
+  open('/b/team/builder')
+  await screen.findByText('Reports to')
+  const row = document.querySelector('.bold-agent-now')
+  expect(row?.querySelector('.bold-agent-state')).not.toBeNull()
+  expect(row?.querySelector('.bold-agent-facts')).not.toBeNull()
+})

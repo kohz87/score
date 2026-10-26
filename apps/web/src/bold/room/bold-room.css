@@ -63,7 +63,8 @@
   height: 20px;
   padding: 0 calc(5px * var(--bold-d, 1));
   background: var(--bad);
-  color: #fff;
+  /* The ground colour: white on the dark look's pale coral is 2:1. */
+  color: var(--bg);
   font-size: 11px;
   line-height: 1;
 }

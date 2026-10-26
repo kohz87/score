@@ -297,3 +297,13 @@ test('a query with no hits shows the prototype empty line', async () => {
   expect(await screen.findByText('Nothing matches.')).toBeDefined()
   expect(screen.queryAllByRole('option')).toHaveLength(0)
 })
+
+test('a job result shows its holder agent glyph, never an empty box', async () => {
+  open()
+  const input = screen.getByRole('combobox', { name: 'Search or run a command' })
+  fireEvent.change(input, { target: { value: 'release' } })
+  const options = await screen.findAllByRole('option')
+  const glyph = options[0]?.querySelector('.bold-search-glyph')
+  expect(glyph?.childElementCount).toBeGreaterThan(0)
+  expect(glyph?.querySelector('.bold-search-job-tile')).toBeNull()
+})

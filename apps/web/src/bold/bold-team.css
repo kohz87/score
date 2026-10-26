@@ -394,6 +394,10 @@
   font-size: 0.87em;
 }
 
+[data-ui='bold'] .bold-agent-now .bold-agent-facts {
+  margin: 0;
+}
+
 [data-ui='bold'] .bold-agent-facts > div {
   display: flex;
   align-items: baseline;
