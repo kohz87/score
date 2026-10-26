@@ -26,7 +26,7 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   agents no longer shows them (the server refused them anyway).
 - **An exchange paused for you never loses its held turn**: when another turn can't go on while you decide, the pause
   card names the agents whose turns were dropped, so you can ask them again afterwards.
-- **Previewing a session from Elsewhere** no longer creates a room; only "Bring into Score" does.
+- **Previewing a session from Elsewhere** no longer creates a room; only "Bring into a job" does.
 - **Triggers**: creating a trigger twice by retrying (same settings, within 10 minutes, never called) returns the
   first one instead of leaving an unused twin. A report-back tool whose name suggests it changes things gets a
   warning in the trigger's settings.

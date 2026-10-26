@@ -135,7 +135,16 @@ test.describe('the seeded fake team', () => {
     await page.setViewportSize(desktop)
     await openBold(page, '/b/screen/builder')
     await expect(page.getByRole('heading', { name: 'builder’s screen' })).toBeVisible()
+    // The fake builder has a running Bot Desktop: wait for its picture so the Live screen card is not empty.
+    const live = page.getByAltText('builder’s screen, live')
+    await expect(live).toBeVisible({ timeout: 30_000 })
+    await expect
+      .poll(() => live.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true)
     await shot(page, 'screen')
+    await page
+      .getByRole('region', { name: 'Live screen' })
+      .screenshot({ path: `${out}live-screen.png`, animations: 'disabled' })
   })
 
   test('library', async ({ page }) => {
@@ -187,29 +196,6 @@ test.describe('the seeded fake team', () => {
     await shot(page, 'customizer')
   })
 
-  test('approval card', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1300 })
-    const room = await page.request.get('/api/team-room')
-    const roomId = ((await room.json()) as { room: { id: string } }).room.id
-    const sent = await page.request.post(`/api/rooms/${roomId}/messages`, {
-      headers: { ...web, 'Idempotency-Key': `shot-${Date.now()}` },
-      data: { text: '@designer Please ask for approval before installing the websocket library' },
-    })
-    expect(sent.ok()).toBe(true)
-    await openBold(page)
-    const card = page
-      .getByRole('region', { name: 'Needs you' })
-      .getByRole('article', { name: /^Needs you: Install the websocket library/ })
-    await expect(async () => {
-      const more = page.getByRole('button', { name: /more needs? you/ })
-      if (!(await card.isVisible()) && (await more.isVisible())) await more.click()
-      await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeVisible({
-        timeout: 1_000,
-      })
-    }).toPass({ timeout: 30_000 })
-    await shot(page, 'needs-you')
-  })
-
   test('try another reply', async ({ page }) => {
     await page.setViewportSize(desktop)
     const chat = await makeChat(page, 'designer', 'Suggest a name for the 2.4 release.')
@@ -235,6 +221,90 @@ test.describe('the seeded fake team', () => {
       timeout: 30_000,
     })
     await shot(page, 'question')
+  })
+  test('approval card', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1300 })
+    const room = await page.request.get('/api/team-room')
+    const roomId = ((await room.json()) as { room: { id: string } }).room.id
+    const sent = await page.request.post(`/api/rooms/${roomId}/messages`, {
+      headers: { ...web, 'Idempotency-Key': `shot-${Date.now()}` },
+      data: { text: '@designer Please ask for approval before installing the websocket library' },
+    })
+    expect(sent.ok()).toBe(true)
+    await openBold(page)
+    const card = page
+      .getByRole('region', { name: 'Needs you' })
+      .getByRole('article', { name: /^Needs you: Install the websocket library/ })
+    await expect(async () => {
+      const more = page.getByRole('button', { name: /more needs? you/ })
+      if (!(await card.isVisible()) && (await more.isVisible())) await more.click()
+      await expect(card.getByRole('button', { name: 'Allow', exact: true })).toBeVisible({
+        timeout: 1_000,
+      })
+    }).toPass({ timeout: 30_000 })
+    await shot(page, 'needs-you')
+    // Answer it, so designer's paused reply doesn't stay "Writing the reply…" in the shots that follow.
+    await card.getByRole('button', { name: 'Allow', exact: true }).click()
+    await expect(card).toHaveCount(0, { timeout: 30_000 })
+    await expect(page.getByText('Writing the reply…')).toHaveCount(0, { timeout: 30_000 })
+  })
+})
+
+// A second team room changes what the app offers (the switcher, "Starts jobs in", "Share to a team"), so these run after
+// every picture of the one-team app.
+test.describe('with a second team', () => {
+  test.beforeEach(async ({ page }) => {
+    await pair(page)
+  })
+
+  async function makeTeam(page: Page) {
+    const made = await page.request.post('/api/team-rooms', {
+      headers: { ...web, 'Idempotency-Key': `shot-team-${Date.now()}` },
+      data: { name: 'Docs crew', members: ['builder', 'reviewer'], leadAgentId: 'reviewer' },
+    })
+    expect(made.status()).toBe(201)
+    return (await made.json()) as { id: string }
+  }
+
+  test('team switcher', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    const team = await makeTeam(page)
+    const job = await page.request.post(`/api/rooms/${team.id}/jobs`, {
+      headers: { ...web, 'Idempotency-Key': `shot-job-${Date.now()}` },
+      data: { title: 'Tidy the user guide' },
+    })
+    expect(job.ok()).toBe(true)
+    await openBold(page, `/b?room=${team.id}`)
+    await expect(page.locator('.roomtitle')).toContainText('Docs crew')
+    await page.locator('.roomtitle').click()
+    await expect(page.getByRole('option', { name: /New team…/ })).toBeVisible()
+    await shot(page, 'team-switcher')
+  })
+
+  test('new team dialog', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await openBold(page)
+    await page.locator('.roomtitle').click()
+    await page.getByRole('option', { name: /New team…/ }).click()
+    const dialog = page.getByRole('dialog', { name: 'New team' })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('textbox', { name: 'Name' }).fill('Design crew')
+    await dialog.getByRole('checkbox', { name: 'designer' }).check()
+    await dialog.getByRole('checkbox', { name: 'reviewer' }).check()
+    await dialog.getByRole('combobox', { name: 'Lead' }).selectOption({ label: 'designer' })
+    await shot(page, 'new-team')
+  })
+
+  test('a trigger that starts jobs in a team', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await openBold(page, '/b/settings/tools')
+    await page.getByRole('button', { name: 'New trigger' }).click()
+    const dialog = page.getByRole('dialog', { name: 'New trigger' })
+    await expect(dialog.getByLabel('Starts jobs in')).toBeVisible()
+    await dialog.getByLabel('Starts jobs in').selectOption({ label: 'Docs crew' })
+    await dialog.getByLabel('Name').fill('New support ticket')
+    await dialog.getByLabel('App it comes from').fill('Tickets app')
+    await shot(page, 'trigger')
   })
 })
 

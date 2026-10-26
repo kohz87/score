@@ -1,496 +1,389 @@
 # Score user guide
 
-This guide walks through the destinations along the top of Score: **Now, Chat, Tasks, Team, Knowledge, Reports, Settings**
-(plus the optional **Terminal**), then the chat-first view, themes and the Customizer. A theme can move the navigation
-to the side or into one menu button; the names in this guide stay the same.
-For installing and starting Score, see the [README](../README.md). The examples use the demo team (`lead`,
-`builder`, `reviewer`, `designer`); your own agents will show up under their own names.
+This guide follows the way you move through Score: getting around, the team room, more than one team, private
+one-to-ones, runs and recipes, an agent's page and screen, the Library, Settings and coding agents. It describes what you
+see and do; it is not a reference. To install and start Score, see the [README](../README.md) and
+[docs/SETUP.md](SETUP.md). The examples use the demo team (`lead`, `builder`, `reviewer`, `designer`); your own agents
+show up under their own names.
 
-## Ideas that appear everywhere
+## Getting around
 
-- **Agents.** Each agent is a Hermes profile. Score shows every agent with a colour and a shape, never colour alone, so
-  you can tell them apart in a black-and-white screenshot. You choose them on the agent's page (Team). The colour and
-  shape make the agent's **mark**, and an agent can also wear an animated avatar from a **pet pack** (see "Agent looks"
-  under Team).
-- **Needs you.** Anything an agent cannot do alone, such as a command that needs approval, is marked "Needs you" or
-  "Waiting on you" and shown in a dark card. The top-level Needs you filter in Tasks and the Now page both surface it.
-- **Pairing.** Looking is free; changing needs a paired browser (README, "Pairing"). If a button answers "Pair this
-  browser using the link in the server terminal", that is why.
-- **What Score never does.** It never reads `~/.hermes/.env`, `auth.json` or any other credential file; it never
-  asks you for an API key (it shows the command to run in your own terminal instead); it never writes Hermes
-  databases (it reads them read-only and changes things only through the `hermes` command and the gateway API);
-  and the only Hermes files it edits are an agent's `SOUL.md` and `AGENTS.md`, with a preview and a conflict check.
-  Text that comes from agents' tools is scrubbed of secrets before Score stores it.
-- **Search or run a command** (top right, or Ctrl+K / Cmd+K) jumps to any destination by name.
+![The team room with its top bar, the dock of agents, the job tabs and the side panel](screenshots/team-room.png)
 
-## Now
+**The top bar.** **Room**, **Team** and **Recipes** are the three places. The Score word on the left always takes you
+back to the team room. In the middle is the **dock**: one ring per agent. Each agent is shown by colour **and** shape,
+never colour alone, and the glyph's eyes show what it is doing (looking around when idle, flat eyes while thinking,
+shocked when it needs you, sleepy when paused). A ring fills as the agent's work progresses, and a ring that says "needs
+you" means a decision of yours is open for that agent. Click an agent to talk to it privately (see
+[One-to-ones](#one-to-ones)). On the right are **Search**, the **Settings** gear and, when the server's terminal is on, a
+**Terminal** button.
 
-The home page. The big headline sums up the moment ("Two agents are working. One thing needs you."). Three views
-sit next to **Pause everyone**.
+**Search** (`⌘K` or `Ctrl+K`) finds jobs, routines, one-to-one chats, Library notes and messages, and runs commands such as
+Start a job, Add an agent, Pause everyone, Edit recipes, switching between dark and light, and Reset look on this device.
+Type `@` to talk to someone and `/` for a command.
 
-### Score (the timeline)
+![Search and commands: results for "release" grouped into jobs, one-to-one chats, library notes and messages](screenshots/search.png)
 
-One row per agent, time running left to right, with a "Now" marker. Each block is a piece of work:
+**The side panel** is the right half of the room. Its menu at the top switches between:
 
-- a solid filled block is **working now**; a pale one is **done**;
-- a dashed block to the right of the marker is **planned** (by the lead);
-- a dark block says **Waiting on you**: that agent is blocked on your decision;
-- thin connecting lines are **hand-offs** (work passed to another agent), including review and "sent back".
+- **Work**: **Results** (what the team is making: previews, drafts, what changed, the screens agents have open) and
+  **Workbench** (the files a job changed, line by line, with review notes; read-only);
+- **Library**: your notes and files;
+- **Runs**: recipe runs and lead-decides runs;
+- **Thread**: a job's back-and-forth, where you can step in;
+- **One to one**: a private chat with an agent.
 
-Below the timeline are three cards:
+**On a phone** the room is one column. A bottom bar has **Room**, **Team**, **Search** and **Settings** (Room shows how
+many things need you), and **Recipes** sits in the top bar. The side panel opens from **Open side panel** as a sheet, and
+dialogs open as sheets too.
 
-- **Thread** shows the latest messages in the room that is active. **Open in Chat** continues there.
-- **"<agent> is asking"** is the approval waiting for you, with the command shown. **Approve** allows it once,
-  **Deny** refuses it, and **Always allow this for <agent>** creates a standing rule for that agent. When nothing
-  is waiting, this card says so.
-- **Made today** lists what the team finished (files changed, checks passed).
+![The team room on a phone: the needs-you card first, then the jobs, with the bottom navigation](screenshots/team-room-phone.png)
 
-The message box at the bottom sends a message to the room: **To** picks who gets it (default: the room's lead),
-**Add someone** adds more agents, **Plan first** asks for a plan before work starts, and the paperclip attaches
-files. Attached images are sent to the agents you address (up to about 6 MB per message).
+**Pairing.** Looking is free; changing anything needs a paired browser (README, "Pairing"). If a button says "Pair this
+browser first", that is why.
 
-**Pause everyone** stops every running agent at once; the button becomes **Resume everyone**.
+**What Score never does.** It never reads Hermes credential files, never asks you for an API key (it shows the command
+to run in your own terminal), never writes Hermes databases, and edits only an agent's `SOUL.md` and `AGENTS.md`, with
+a preview and a conflict check.
 
-### Flow
+## The team room
 
-A graph of one run: a run is one of your messages plus everything it caused (steps, hand-offs, reviews). Pick the
-run from the drop-down (Active and Recent). Click a step to see it on the right: who is doing it, what state it is
-in, its checklist, the model and tools used and how long it has been running. If the step is waiting for approval,
-the approval buttons are right there. **Stop this step** cancels it; **Open in Chat** goes to the room; **Pause
-run** / **Resume run** controls the whole run. Below the graph are a live log of what agents are doing and a few
-numbers (steps, hand-offs, time, spend when known). If no run exists yet: "No runs yet. Send a message to a room and
-the work it causes shows up here."
+The room is where the team works. **Team room ▾** at the top left names the room you are in (more on that under
+[More teams](#more-teams)). Each **job** is a tab with its own conversation; **All** shows everything. Under the tabs,
+filters narrow the jobs to **Needs you**, **Working**, **Done** or **Closed jobs**. A job with something unread carries a
+count. A finished job folds to one row (Show / Hide) unless it still needs you, is pinned, or has a result waiting to be
+sent back.
 
-### Orchestrations
+You write to the team in the box at the bottom. **To:** says who gets the message; with nobody chosen it goes to the
+team lead. `@name` hands it to an agent. The **+** menu attaches files (upload or from a workspace), dictates by voice
+and lists commands. Long messages grow the box, then scroll. **Settings › Look** chooses whether Enter or Ctrl+Enter
+sends.
 
-An orchestration is a run where a **lead agent** plans a goal and hands the steps to other agents. Start one with
-**New orchestration** (in Chat or in Flow): write the **Goal**, choose the lead, tick the **agents the lead may hand
-work to**, and pick when you want to be asked: **Ask me before each step**, **Ask only when the lead asks** or **Never
-ask**. An optional budget and deadline sit there too, and **Limits and estimates** holds the finer settings. The list
-under **Before it starts** shows the checks Score runs first; tick the acknowledgement (Score controls the work it
-starts and can stop it, but agents may still use other tools and start background work Score cannot see) and start.
+### Start a job
 
-The run page shows the live diagram, a log of every request the lead made, the plan, and the budget and limits. A
-step that needs you appears as a card with its approval buttons; **Pause** and **Stop** control the whole run. A
-stopped step whose end Score could not confirm is flagged "Not confirmed ended" and waits for your decision.
+![The Start a job dialog: what to do, recipe, agents allowed, when, ask-me-before and limits, and the checks before it starts](screenshots/start-job.png)
 
-### Workflows
+**Job** (or Search › Start a job) opens **Start a job**:
 
-A workflow is a **fixed graph** you draw yourself, instead of a lead agent planning on the fly. Open **Flow ›
-Workflows** (the **Runs | Workflows** switch at the top of Flow) to see your saved workflows; **a new one** starts an
-empty drawing.
+- **What should the team do?** Say it in plain words.
+- **Recipe.** **lead decides** means the lead plans the steps and hands them out. A saved recipe runs its own steps and
+  may ask for inputs. **Edit recipes** opens the Recipes page. **Agents allowed** lists who may take a step.
+- **When.** **Now, once**, **On a schedule**, or **When another app calls** (that makes a trigger and shows its address
+  and a signing secret once).
+- **Ask me before.** **The plan starts**, **Every hand-off** or **Only risky actions**.
+- **Limits.** **Turns per back-and-forth**, a **Spend cap** (with a cap, a step whose cost Hermes doesn't report pauses
+  the run) and an optional **Deadline**. **More options** adds steps at the same time, an estimate per step, a limit on
+  coding steps and a quota floor. **Save as a recipe** keeps what you set up.
+- **Before it starts** lists the checks Score ran; each says Passed, Checking or Blocks starting. You tick that Score
+  controls the work it starts and can stop it, but agents may still use other tools and start background work Score can't
+  see. If coding agents are involved you also accept what they can read.
 
-- **Editor.** Click an item in the left panel to add it after the selected step (or drag it onto the canvas); dropping
-  on a step connects the new one after it. Items are your **agents** (an agent step does work from an instruction) and
-  the flow controls below. Select a step to edit it on the right: title, reference name, agent, instruction, retries and what
-  happens on failure. An instruction can read earlier results with `{{nodes.<id>.output}}`, `{{nodes.<id>.verdict}}` or a run
-  input with `{{inputs.<name>}}` (`<id>` is the step’s reference name). Steps are arranged for you until you move one; the outline under the canvas lists the same graph as
-  text. **Undo** and **Redo** work as you expect.
-- **Live checking.** A badge above the canvas says "Looks good" or "n problems to fix", the **Problems** list explains
-  each one in plain words and clicking it selects the step, and a step with a problem is marked on the canvas. Only
-  errors block saving or running.
-- **Gates.** A **Gate** stops the run until you approve or reject. Approving follows its approved path; rejecting
-  follows a rejection path if you drew one, otherwise stops the run.
-- **Branches.** A **Branch** sends the run down one path by a rule on an earlier agent step: its verdict (*passed* or
-  *changes requested*), its outcome (*succeeded* or *failed*) or whether its output contains some text. Every branch
-  needs a default path. A verdict only exists when the agent's reply ends with a `score-verdict` block; without one the
-  default path is taken. A **Join** waits for all of its inputs, and an **End** closes a path.
-- **Retries.** Each agent step can retry 0 to 2 times, and can either route a failure to a repair path or fail the run.
-- **Saving.** **Save as new version** never overwrites: saved versions are fixed, and a run keeps the version it
-  started with. If someone else saved first you are told, and you can start from an older version. **Export** gives a
-  scrubbed copy of a saved version (agents travel as name and role); it shows what the scrubber changed and lets you
-  leave fields out. There is no import yet.
-- **Running.** **Run…** (in the editor, or **Run a workflow** in Flow) asks for the run's inputs, the approvals
-  (**Ask me only at gates** or **Ask me before every agent step, too**), an optional budget and deadline, what to do
-  when Hermes does not say what a step cost (**Pause the run and ask me** or **Keep going**) and which agents the run
-  will use. It also shows the checks that run first and the same acknowledgement as an orchestration, which you tick to
-  start. Running needs a saved version.
-- **The run.** The run page is the live diagram (diamond: a gate that waits for you; hexagon: a branch), a log in plain
-  words and, below, the budget and limits. Click a step to filter the log and see its details. When it needs you there
-  is a card at the top: a **gate** (with the exact text and the Approve and Reject buttons); **Retry** for a step you
-  stopped waiting for, which runs it again while tries are left; **Try again** when Hermes has refused a step 20 times, which
-  asks Hermes once more (or stop the run); and **Remap** when an agent the run used has been replaced, which keeps
-  its steps blocked until you choose to continue with the new agent (the card lists the steps it will affect). A run
-  can also be paused or stopped, and finished runs replay on the same diagram.
-- **Honest spend.** Hermes usually reports tokens but not dollars, so Score does not claim a settled cost: the budget
-  block says "spend not settled" and keeps the reserved amount until the run ends. Unknown cost never counts as zero.
+**Start the job** opens the job as a new tab.
 
-### Routines
+### How agents hand work to each other
 
-A read-only list of every agent's scheduled routines and when each last ran. Create and edit them on the agent's
-page (Team, Routines tab) or with `/routine` in Chat.
+An agent's reply that `@mentions` another agent hands the work over, and the two go back and forth. Score calls that an
+**exchange**. It has a turn limit, shown as "8 of 8 turns", and each exchange appears as a small capsule in the room.
+Exchanges stop by themselves when the agents agree. When one can't go on without you, it pauses and a card asks you.
 
-### Watch
+### Needs-you cards
 
-Watch replays what one agent did: its terminal (commands and the end of their output), the files it changed (as diffs)
-and the pages it looked at (with screenshots when the agent captured one). It is a replay of recorded events, not a remote
-view of a screen.
+![The needs-you cards: an exchange that used its turns and two approval requests](screenshots/needs-you.png)
 
-- **Live**: the stage follows the agent as it works; a banner says you're watching and the agent is in control.
-- **Timeline**: markers for commands, file edits, browser pages and approvals. Click or drag back to replay any moment,
-  use the arrow keys to step, and **Live** to return. The agent keeps working while you look at the past.
-- **Approval bar**: when the agent is waiting for you, approve or deny right there.
-- **What they're doing** lists the latest steps; **Other screens** shows what the other agents last had in front.
-- **Pause <agent>** stops new work after the current step (blocked tasks are released on Resume). **Open in terminal**
-  copies `hermes -p <agent> --resume <session>` so you can continue the same session yourself. Score never takes
-  control of an agent's session.
-- Secrets are redacted twice before anything is stored, and nothing from password-vault tools is ever recorded.
+Anything that needs your decision sits pinned above the conversation, with "N more need you" to open the rest. No theme
+can hide, cover or relabel these cards. The kinds:
 
-## Chat
+- **An approval** (an agent wants to run a risky command or install something): **Allow**, **Don't allow**, or **More**
+  for **Approve for this session** and **Always allow for <agent>**. If the answer can't be delivered, the card says so
+  and offers **Retry**.
+- **An exchange that paused.** The title says why, and the buttons follow from it:
+  - *The exchange used its turns without agreeing*: **Give 4 more turns**, **Let lead decide**, **Step in** (you write the
+    next step) or **Stop**.
+  - *This job used its turn limit*: it holds more work than its limit allows.
+  - *This job reached its spend cap*: **Allow more spend**, **Step in** or **Stop**.
+  - *A run's cost is unknown*: **Continue** once the cost settles, **Step in** or **Stop**.
+  - *A turn failed* or *An agent could not be reached*: **Try again**, **Reassign** to another agent, or **Stop**.
+  - *The agent that asked has gone*: **Try again**, **Answer to lead** or **Stop**.
+  - *The review ended without a verdict*: **Ask again**, **Send back** with a note for the author, or **Close**.
+  - *The author stalled*: **Ask again** or **Close**.
+  - *The question it waited on was stopped*: **Continue** without the answer, or **Stop**.
 
-Rooms with your team. The list on the left has **Rooms** (several agents together) and **Direct rooms**
-(one-to-one with an agent); a badge counts unread messages.
+  If other turns were dropped while the exchange waited, the card names those agents so you can ask them again.
+- **A run's gate or limit.** A step waiting for your approval, a question from the lead, a budget or deadline reached, a
+  paused run, an agent that was replaced or whose settings changed, a coding step limit, a low coding-agent quota, or a
+  step that needs another try. These also show in the [Runs](#runs) panel.
+- **Report back.** A job that a trigger started can send its result back to the app. The card says "Send the result back
+  to …?" and waits for **Send** (with **Try again** if sending failed). A job started this way says "Started by" the app.
+- **Runs stopped.** If Score's database and its separate record of what it started disagree, starting work is blocked
+  until you review the runs (Settings › System). Every page of the shell says so.
 
-- **Writing.** Type in the box at the bottom. Mention an agent with `@name` to hand work to them; the "To" row
-  shows who will receive the message ("Unaddressed messages go to <lead>" tells you the default). Add or remove
-  recipients with **Add someone** and the small x on each chip. **Plan first** asks the team to lay out a plan (shown as a plan card)
-  before doing the work. Attach files with the paperclip.
-- **Slash commands.** Typing `/` opens a menu: `/assign @agent <title> [-- body]` creates a task,
-  `/routine @agent <schedule> <prompt>` a scheduled routine, and `/model <model> <message>` uses a different
-  model for one message. Memory and skills are managed on the agent's Team page.
-- **Approvals in the thread.** When an agent needs permission, an approval card appears in the conversation with
-  **Approve** and **Deny**. **More** offers **Approve for this session** and **Always approve** where Hermes allows
-  them. If delivery to Hermes fails, the card says so and you can try again. Some approvals can only be answered
-  inside Hermes; the card says that too.
-- **File links.** A reply can link to a file in an agent's workspace with `[main](workspace://src/main.ts)` (the file
-  belongs to the agent who wrote it) or `[main](workspace://builder/src/main.ts)` (a named agent). Clicking it opens
-  the file in that agent's Team › Workspace tab. Tell an agent to write file references this way. A path that is not
-  allowed shows the same error as in the Workspace.
-- **Message versions.** **Edit** on one of your messages puts its text in the box; sending the correction rewinds the
-  agents' sessions in this room to before that message and hides the old message and everything after it as a previous
-  version. The corrected message then carries a small **‹ 2 / 3 ›** control: the arrows switch between its versions,
-  showing an older one in place, read-only, together with what followed it. Score tells you when an agent's session
-  could not be rewound; long-term memory and Knowledge notes are not rewound.
-- **Deleted messages.** Deleted messages and previous versions stay out of the way. The room's actions menu has **Show
-  deleted messages** (and **Hide deleted messages**) to bring them back for this tab, read-only.
-- **Save to Knowledge.** Under a message, **Save to Knowledge** saves its attachments or an agent's reply (as a note)
-  into a Knowledge folder you choose.
-- **Plans.** A plan card shows who will do what on a small timeline, with **Open in Score**.
-- **Room details** (the "Show room details" panel): **Files in play** (files agents touched here), **Learned here**
-  (facts saved to an agent's memory from this room, with **Open memory**) and **Also reachable on** (messaging
-  channels the room is mirrored to; **Manage channels** goes to Settings).
+### Questions from agents
 
-## The chat-first view
+![An agent's question: "Which branch should I use?" with two options](screenshots/question.png)
 
-A second way to use Score for people who want a conversation and not a dashboard. Open it from the avatar menu
-(top right, **Switch to user view**), or go to `/u`. **Switch to admin view** in the same menu brings the full Score
-back; Reports, Team and Settings only exist there.
+An agent can stop to ask you something. The question shows under Needs you, in the room, in your one-to-one with that
+agent and on the dock. Answer in writing, pick an option, or pick several. Answered or ended questions leave a short
+line in the conversation.
 
-- **The screen.** A sidebar lists your **Rooms** and **Agents** (a direct room with each). The main area shows one
-  conversation at a time with a large message box. With no room open it asks "What would you like to work on?", lets
-  you pick who to ask (**Ask**) and offers a few suggestions.
-- **Start an orchestration from the chat.** Use the plus button, or type `/orchestrate <goal>`. The run follows as
-  short status lines between the messages, and everything it needs from you appears in the conversation: step
-  approvals, the lead's questions and limits (see "Quota guard"), each with its buttons. **Pause** and **Stop** sit at
-  the top. A workflow run shows a header with the workflow's title, the steps done, **Pause**, **Stop** and **See full
-  details**, and answers a workflow's questions in the chat too.
-- **Approvals are never hidden.** An approval or a question that needs you always shows, whatever the theme looks like.
-- **Password check for the admin view.** In Settings › Look, **Ask for the security password to open the admin view**
-  makes this browser ask before it opens the admin view. It is a convenience for a shared screen, not access control:
-  anyone who can reach Score can still open it from another browser.
-- **A theme can change this view separately.** The Customizer's preview has a "Chat-first view" page, and a theme can
-  give `/u` its own colours, fonts and layout.
+### Messages
 
-## Tasks
+Hover a message for its actions: **Edit** (your own messages; the agents rewind to before it and the correction is
+posted), **Copy**, **Save to Library**, **Retry**, **Pin** and **Delete**. Edited messages keep their versions
+(‹ 2 / 3 ›). **Retry** and **Try another** appear only on a reply to your own message.
 
-A board of the team's tasks in five columns: **Planned, Working, In review, Needs you, Done**.
+![Try another reply: the designer's reply with a 2 / 2 pager and its action row](screenshots/try-another.png)
 
-- **Filters.** The Room drop-down limits the board to one room; **Needs you** shows only tasks waiting on you;
-  an agent button shows only that agent's tasks (press it again to clear). The filters live in the address, so
-  you can bookmark or share a filtered view.
-- **Cards.** Click a card (or move with the arrow keys and press Enter) to open the drawer.
-- **Drawer.** It shows who is assigned, the reviewer, who created it and the room, a checklist of **Steps**, and
-  an **Activity** log. For a task waiting on an approval you see the agent's request and **Approve once**. **See it
-  in Flow** jumps to the run. A blocked task offers **Unblock**, and you can leave a **Comment** for the agent.
-  Escape closes the drawer.
-- **New task** is greyed out ("coming soon"). Create tasks with `/assign` in Chat for now.
+**Try another** asks the agent for a different answer to the same message. The versions stay together as one message with
+a pager (on a phone, swipe sideways); your pick is remembered on this device, and the agent remembers its earlier
+answers. A failed reply shows **Retry**, and its retry joins the same versions. A deleted message can be undone for a few
+seconds, and **Show deleted messages** (under the job filters, or in a chat's ⋯ menu) brings back what was deleted.
 
-## Team
+### Room tools
 
-Your agents at a glance, with a card for each. **Add agent** creates a new Hermes profile: choose a name, whether
-to start blank or copy an existing agent, and an appearance; Score shows a preview of every change and then runs
-it. This needs the bridge install settings described in the README ("Create and manage agents").
+The **⋯** menu next to the room name depends on the room:
 
-Click an agent to open its page. It has an appearance picker (look, colour, shape and pet pack, see "Agent looks" below) and these tabs (the Workspace tab also has its own address, `/team/<agent>/workspace?path=<file>`):
+- **The first team room** (always on, can't be deleted): **Team lead…** (which agent gets unaddressed messages and plans
+  lead-decides jobs), **Share a read-only link** and **Export as JSON**.
+- **A team you made**: **Rename…**, **Pin** or **Unpin** (pinned rooms list first), **Archive** or **Unarchive** (archived
+  rooms hide behind "Show archived"; an open archived room shows a badge with Unarchive), **Team lead…**, **Members…**,
+  **Share a read-only link**, **Export as JSON** and a delete.
+- **Older rooms**: the same, with **Project…** (choose, create with a colour, or clear; the room list groups by project)
+  in place of the two team items.
+- **A job's own menu** (on its tab): **Rename…**, **Close** or **Reopen**, **Share a read-only link**, **Export the whole
+  room as Markdown** and **Delete job** (undo for about 10 seconds; results saved to the Library stay).
 
-- **Overview**: a short summary of personality, who it reports to, where it works, its operating rules, the model
-  and skills it uses and its routines, plus **Agent details** (display name, description) and a **Danger zone**
-  with **Delete agent** (you type its name to confirm, and a private export is kept first).
-- **Todo** card (Overview, and on Now while the agent works): the agent's own Hermes todo list with each item's state,
-  read-only. It appears once the agent has used its todo tool.
-- **Personality**: edits the agent's `SOUL.md` (who it is) and `AGENTS.md` (standing rules). **Preview changes**
-  shows the exact difference before anything is written. If the file changed meanwhile, you see the other version
-  and choose **Reload theirs** or **Overwrite with mine**.
-- **Model**: the model the agent uses, the provider behind it and the fallback; **Change model** switches it.
-- **Skills**: skills the agent has, and a search of the skills hub to add more.
-- **Memory**: facts the agent remembers; **New memory** adds one, and each entry can be deleted.
-- **Tools**: the tools it can use and how many helper agents it may spawn.
-- **Workspace**: the agent's working folder. Files open in a code editor with colours for Markdown, JavaScript,
-  TypeScript, JSON, CSS and HTML (other files are plain text); Markdown files have a **Preview** switch. When the
-  folder is inside a git repository the header shows the branch and how many files changed (Score only reads git,
-  it never commits). Drag the bar between the file list and the editor, or focus it and use the arrow keys, to
-  change the width; Score remembers it in this browser.
-- **Routines**: scheduled work. **New routine** takes a schedule and a prompt; each routine has **Run now** and a
-  confirmed delete.
-- **Permissions**: this agent's rules on top of the team rules (see Settings). An agent can be made stricter than
-  the team, never looser. **Ask first** makes a kind of command always ask; **Add Never rule** blocks commands
-  that match some text.
-- **Channels** and **History** say "coming soon".
+A shared link shows a read-only copy and can be revoked in Settings › System under Shares. Editing a message in a room
+with a live share link asks first, because the link still shows the old text.
 
-### Agent looks
+## More teams
 
-Every agent has a **mark**: its shape in its colour with a calm face. Click the agent's picture at the top of its
-page (or choose while adding or importing an agent) to open **Agent appearance**:
+Everyone starts in one team room that holds all agents. You can make others.
 
-- **Look**: **Cut-out** (a solid mark with the eyes cut through it, so the page shows through) or **Ring** (the shape
-  as one thick outline with two solid eyes).
-- **Colour** and **Shape**: twenty shapes (circle, triangle, diamond, square, hexagon, star, pill, cross, cloud,
-  cylinder, heart, drop, bolt, moon, leaf, blob, shield, octagon, bubble and gem). Move through them with the arrow
-  keys.
+![The Team room ▾ menu with a second team, the older room and the agents' own chats outside Score](screenshots/team-switcher.png)
 
-The mark moves with what the agent is doing, where Score knows it: resting, it breathes and blinks; working, the eyes
-narrow and the mark pulses gently; thinking, the eyes look up while a small dot orbits; waiting for you, a ring ripples
-out. The eyes follow your pointer, and a click nudges the mark. In lists it is the plain shape.
+- **New team…** (Team room ▾ › New team…) asks for a name, the members (an agent can be in several teams) and a lead from
+  among them.
 
-**Pet packs.** An agent can also wear an animated avatar, shown on its card on the Team page and at the top of its
-page, with its mark as a small badge. Under **Pet pack** choose **Upload a pet pack…** and pick a ZIP, or the animation
-files themselves (not both); **Use this pack** sends it. Score lists any files it left out, or the reasons it refused
-the pack. **Replace pet pack…** and **Remove pack** do what they say. **How to make a pack** on that panel has the
-table of names and the rules:
+  ![The New team dialog](screenshots/new-team.png)
 
-| File | Played when | What the character does |
-| --- | --- | --- |
-| `idle` (required) | Resting | Stands, breathes, blinks, a small sway |
-| `work` | The agent is working | Types at a desk or laptop |
-| `think` | Thinking or planning | Hand on chin, looks up |
-| `needs` | Waiting for your approval or answer | Waves at you, a small hop |
-| `sleep` | Idle for a while | Naps |
-| `walk` | Optional: resting | Walks in place, side view facing right |
-| `stretch`, `coffee`, `read` | Optional: breaks | Arms up and a yawn; a sip of coffee; reading |
-| `greet`, `happy` | Optional: you point at it; you click it | A wave hello; a happy bounce |
+- A team works like the team room: jobs, hand-offs, needs-you cards, recipes and lead-decides runs started there.
+- **Members…** and **Team lead…** (from its ⋯ menu) change who is in it and who leads; the lead stays a member until you
+  change the lead. A room with a question still waiting for your answer counts as busy and can't be deleted.
+- **Switch teams** from the Team room ▾ menu, which also lists older rooms and imported chats.
+- **Choosing a team.** Once you have more than one, anything that starts work asks which team: a trigger's **Starts jobs
+  in**, **Share to a team** from a one-to-one, **Add someone**, and Elsewhere's **Bring into a job**. A trigger whose
+  team was archived or deleted starts its jobs in the first team room. With a single team none of this shows.
 
-- Files are animated WebP (best), APNG (`.png`) or GIF with a transparent background; a still PNG works too. Up to
-  32 MB per file and 256 MB per pack, 64–2048 px per side. Keep the same character height and feet line in every file.
-- An optional `pet.json` beside the files gives a `name`, `credits` and a `floor` (0 to 0.3) that lifts the character
-  if its feet sit too low in the files.
-- An activity with no file falls back to `idle` with Score's own overlays (thought dots, a "!" with a hop, sleeping
-  z's), so a pack with only `idle` already works. Pointing at the avatar plays `greet` (or says "hi!"); clicking plays
-  `happy` (or raises a heart).
-- Score never runs anything from a pack: it only reads the images and `pet.json`.
+  ![A trigger's setup: its name, the app it comes from and the team it starts jobs in](screenshots/trigger.png)
 
-**Agents: Lively / Calm / Still** (Settings › Look, per device). **Lively** adds breaks (a stroll, a stretch, a coffee,
-a book, whichever the pack has) and a nap after about 25 seconds without anyone looking. **Calm** keeps to the mood,
-the greeting and the bounce. **Still** shows each avatar as one still picture and stops the marks. A device that asks
-for reduced motion always gets Still, and phones start on Calm.
+- **Elsewhere** (at the bottom of the menu) lists the agents' own chats outside Score, for example in Discord or the CLI.
+  Open one and choose **Preview this chat** to read it (nothing is added to Score and Hermes isn't changed). **Bring into a
+  job** then starts a job in the team you choose with those messages attached, and adds an "Imported from …" room. Score
+  can't reply in the original chat.
 
-### Coding agents
+## One-to-ones
 
-**Add agent** also offers **Coding agent**: Claude Code, Codex or Antigravity (`agy`) joins the team next to your Hermes agents, using
-your own CLI login and plan quota. Choose the CLI (the form shows whether it is installed and whether its version is
-one Score has tested; an untested version needs your confirmation before it runs), a name, a workspace folder (default
-`~/score-workspaces/<name>`) and a permission level:
+![A one-to-one with lead: tool cards, the answer, and buttons to share it with the team room](screenshots/one-to-one.png)
 
-- **Read only**: looks at files, changes nothing;
-- **Workspace write**: edits files in its workspace (the default);
-- **Full access**: no sandbox, anything it is told runs as your user. Choosing it needs the security password, and
-  so does raising an agent to it later (lowering never does).
+Click an agent in the dock (or **Message** on its page, or type `@` in Search) to open a private chat in the side panel.
+Only you and that agent see it, and the panel says so. A ring beside the box shows how much of the agent's context is
+used; `/compress` compacts it and `/usage` shows tokens and cost.
 
-Antigravity notes: below full access its sandbox keeps reads and writes inside the workspace, and it can't run shell
-commands at all at read only or workspace write (no tests or builds); when it refuses an action the reply says
-"Antigravity refused: …". Its 5-hour and weekly limits per model group show on the agent card. `agy` updates itself, so
-after an update Score asks you to confirm the new version before the next turn.
+- **Earlier chats** lists your earlier chats with that agent (search them; **New chat with …** starts another). The chat's
+  ⋯ menu has **Show deleted messages**, **Clear chat** (the main chat) and **Delete chat** (undo for about 10 seconds).
+  Both are Score-side only: the agent's Hermes session may still remember.
+- **Share to the team room** puts an agent's answer into a job as a frozen copy. With several teams it is **Share to a
+  team**: pick the team, then its job. **Bring into a new chat** continues the conversation elsewhere.
+- **Add someone** brings in a second agent. A one-to-one has no room for a third, so Score starts a new job in the team
+  you pick with this chat referenced, not copied; everyone there sees a frozen summary, and the dialog shows what leaves
+  the chat before you confirm. This chat stays as it is.
+- The message actions from the room (Edit, Copy, Save to Library, Try another, Pin, Delete) work here too.
 
-The level limits what the agent can **change**, not what it can **read**. For Codex the form says so and you must tick
-"I understand this Codex agent can read every file my user can, including secrets outside its workspace" before it
-is created; Claude Code runs with deny rules for `~/.hermes`, `~/.score`, `~/.ssh` and `.env` files. A coding agent
-works in rooms only (@mention it like any other); it cannot take Tasks, and its Hermes-only tabs (skills, memory,
-routines and so on) do not apply. One turn runs at a time (others show as queued), a turn is stopped after 30
-minutes, and **Stop** works as for other agents.
+## Runs and recipes
 
-**Quota guard.** A coding agent runs on your own CLI plan, so Score watches its limits and stops handing it new work
-before it runs dry. Each coding agent has a **floor**: on its page, **Stop using this agent in runs when a limit is
-below** (a whole percentage from 0 to 50, 10 by default; 0 turns the guard off). An orchestration or workflow can set a
-different floor for one run. While any of the agent's 5-hour or weekly limits has less than the floor left, runs don't
-give it new steps. The red mark on the agent's limit bars shows where the floor is. Steps that are already running are
-never interrupted, and a reading that is missing or out of date never blocks anything.
+### Runs
 
-- In an **orchestration**, the lead is told why and picks another agent. If it can't, the step waits and a card
-  ("<agent>’s limit is low") asks you: **Use it anyway**, **Wait until it resets** or **Stop the run**. The same card
-  appears in the chat-first view.
-- A **workflow** step waits with the same card.
+![A run in the Runs panel: spend and limits, an approval gate and the steps so far](screenshots/run-steps.png)
 
-**Personality.** The **Personality** card on a coding agent's page holds its role (one line, for example "reviews build
-scripts") and its instructions, written in Markdown. **Edit personality** opens the editor, with **Save** and **Cancel**. If the
-instructions were saved somewhere else meanwhile you see that, and choose **Reload theirs** or **Overwrite with mine**. Score gives the text to the CLI each session: Claude Code gets it as an added system
-prompt; Codex and Antigravity get it at the start of a session, and again only after you change it. Nothing is written
-into the agent's workspace.
+A running job shows under **Runs** in the side panel. The list filters by **Needs you**, **Running** and **Done**. A run
+opens as its **Steps**, with what each agent did, its status and reply, and the decisions waiting for you on top. Spend
+against its cap, the limits and the agents allowed sit above the steps. A gate (here "Approve s3?") shows exactly what
+will start and offers **Approve** or **Reject**, with an optional note for the lead. **Pause** and **Stop** are at the top
+of every run. A step has **Its screen** (the agent's [screen page](#the-agents-screen)) and **Details of this step**.
 
-**Sub-agents.** At workspace write and full access, Claude Code can hand part of a job to its own sub-agent. The sub-agent
-works in the same folder, under the same sandbox, blocked folders and plan quota as the agent, and you only get the
-agent’s final answer. In Chat and in Flow's live log, the sub-agent’s tool calls appear inside the Agent card (closed until you
-open it, summary like “Sub-agent · List files in folder · 1 tool call · done”), and Watch captions its steps with
-“Sub-agent ·” (a run of them is grouped as “Sub-agent · N steps”). A sub-agent that fails is marked failed on its card; the step still follows the agent’s own final result.
-Read only can’t start sub-agents. Antigravity sub-agents aren’t shown yet.
+![The same run as a graph: finished steps, the running step and the step that needs you](screenshots/run-graph.png)
 
-## Knowledge
+**Graph** draws the same run: queued steps are dashed, running steps glow in the agent's colour, a step that needs you is
+amber with a diamond, and finished steps carry a tick. **Log** lists every request the lead made. A lead-decides run also
+shows its goal and plan. A recipe run warns when one of its agents was replaced or removed since. A step whose end Score
+couldn't confirm is flagged "Not confirmed as ended" and waits for your decision. **Run again…** starts a copy.
 
-A shared folder (the Knowledge folder, default `~/score-vault`) of Markdown notes and files that you and your agents use. Notes
-link to each other (`[[Note]]`), show backlinks, properties and history, and an agent's edits carry its name.
+### Recipes
 
-- **Upload.** **Upload** (or **Upload files** in the **Files** view) takes files of up to 256 MB, or drag them onto
-  the page or a folder in the tree. Markdown files and `.txt` become notes; PDF, Word (`.docx`), CSV, JSON, HTML and
-  images are stored as files. Text is pulled out of PDFs and Word files so search and agents can read it; if that fails
-  the file is kept without text. A name that already exists asks whether to keep both or replace it. **New folder**
-  creates folders.
-- **Zip files.** A zip asks what to do: **Unzip into a folder** (with a preview of the files that will be added or
-  skipped) or **Keep as a zip** (stored and downloadable, not searched). Only the allowed file types are unzipped.
-- **Save to Knowledge** from Chat (see Chat) puts a message's attachments or an agent's reply into a folder.
-- Agents can search and read notes and file text through Score; they cannot upload or delete files. Settings ›
-  Knowledge controls agent access, and each agent has a Knowledge tools switch under Team › Tools.
+![The Recipes editor: a saved recipe drawn as a graph of steps, with its toolbar and the list of steps to add](screenshots/recipes.png)
 
-## Reports
+**Recipes** in the top bar lists your recipes and the built-in **lead decides**. A recipe is a saved set of steps: an agent
+step, a **Gate** that waits for your OK, a **Branch** on a result, a **Join** that waits for all paths, and an **End**. Edit
+it as a **Graph** (add, connect, drag, delete, undo and redo) or **As text** (a step list). Select a step to change its
+title, agent, retries and what happens if it fails or is rejected. **Preview, nothing runs** plays it through without
+running anything, and Score marks problems as you edit. **Save as version N** stores a new version (a saved version never
+changes), **Run…** opens Start a job with the recipe, **Export** downloads it, and **More** holds **Duplicate**, older
+versions and **Delete recipe** (only for a recipe nothing has run). While a copy runs, the graph shows it live.
 
-How the team is doing over **Today**, **7 days** or **30 days**. A one-line summary sits on top, then:
+## An agent's page and screen
 
-- the numbers: tasks finished, agent runs, share that passed review the first time, median time per task, model
-  spend;
-- **Tasks finished, by day**, a stacked bar chart per agent (each agent has its own color and pattern);
-- **Where each agent's time goes**: working, waiting on you, waiting on another agent;
-- **By agent**: finished, runs, median time, first-time pass;
-- **Your approvals**: how many were asked and how long you took, with **Review rules** to change what asks.
+**Team** lists the agents with their state and role; **Pause everyone** (and Resume everyone) sits at the top. **Add an
+agent** offers **New agent**, **Bring in a Hermes profile** (from an archive) and **A coding tool**. Each previews its
+changes first and asks where the agent runs (this machine as you, Docker, or another machine over SSH). Reusing a removed
+agent's name asks you to tick that.
 
-**Export CSV** downloads the table for the chosen range. Reports are computed from Score's own records and Hermes
-usage data (read-only), so spend appears only when Hermes records a cost.
+![An agent's page: personality, runs on, model and fallback models](screenshots/agent.png)
+
+An agent's page has **Message**, **Pause** or **Resume**, **Remove agent…** and **Look at its screen** at the top, and shows
+**Reports to** and **Works in**. Then:
+
+- **How it works**: **Personality** (`SOUL.md`) and **Operating rules** (`AGENTS.md`), edited with **Preview changes** and
+  **Save** (a conflict check stops you overwriting someone else's edit);
+- **Runs on**: the engine, the **Model** and **Fallback models** tried in order;
+- **Asks you first before**: things the agent must ask about. You can only make it stricter than the team rules;
+- under **More**, compact cards: **Remembers** (search its memory; forgetting a note asks first), **Skills**, **Can use**
+  (tools), **Workspace**, **Repeating jobs**, **Goes ahead without asking**, **Never rules**, **Plugins**, **Channels**,
+  **Looks** (colour and shape), **Name and role**, **Recent runs** (filter by outcome, with each run's cost), **Score
+  access**, **Todo** and **Delete**. Long lists show the first few with "Show all N".
+
+**Removing an agent** opens a panel on the page: what is still going, why Hermes can't remove it yet, where a private copy
+goes, then you type the agent's name. It also works for an agent whose setup stopped with an error: the stopped setup is
+abandoned first, and if Hermes never made the profile only Score's records are retired. A setup whose last step Score lost
+track of asks you to confirm what happened first. A removed agent disappears from the dock, one-to-ones, Search and the
+move-chat picker; an old link to its chat still shows the history.
+
+### The agent's screen
+
+![The agent's screen: the steps builder took, the live view of its Bot Desktop, and the replay below](screenshots/screen.png)
+
+**Look at its screen** (or a step's **Its screen**) replays what the agent did: its steps newest first (**Full history**
+for all), the editor large with the terminal and browser as small cards beside it (tap one to swap it in), other screens as
+chips, and a replay bar you can scrub, jump along, or set back to **Live**. While the agent works, the large screen follows
+what it is using. Whatever it asked you stays pinned above its steps, and a pending approval is answered right there. It is
+a replay of recorded steps, not a remote desktop, and it is read-only. **Open in terminal** and **Copy the command to
+continue in a terminal** let you carry on the agent's session yourself.
+
+![The Live screen card on the agent's screen page](screenshots/live-screen.png)
+
+**Live screen.** When the agent has a Hermes Bot Desktop (computer use) running, its screen shows live above the replay
+about once a second, marked Read-only. Score only ever asks for pictures: never keys, clicks or the clipboard, and it never
+takes control. While someone has taken over the screen in Hermes, nothing is shown, and a screen inside the agent's sandbox
+is reported rather than shown. **Hide** and **Show** are remembered per device.
+
+## Library
+
+![The Library: a list of notes, an editor with a toolbar, backlinks and links in the note](screenshots/library.png)
+
+The Library is your notes and files, in the side panel. Notes are Markdown files in a git repository Score keeps
+(`~/score-vault` by default), so every save is a commit and **History** shows earlier versions. The list has **New note**,
+**New folder** (folders collapse; the folder you pick is where new notes go), **Upload**, **Files** and **Export**, and a
+search box. A note opens in a rich editor or as **Source**, with **Download**, **Rename or move** and **Delete**, plus
+**Backlinks**, **Links in this note**, **Properties** and **History**. **Save to Library** on a message puts a result here,
+and agents can search, read and write notes when Library access is on (Settings › System). Don't keep secrets in notes:
+Score can't recognise every one.
 
 ## Settings
 
-A list of sections on the left, and **one section per page**: choosing one opens `/settings/<section>` (for example
-`/settings/logs`) with only that section's cards, so Models, Connections and Logs no longer stack into one long column.
-The page opens on its heading, and the browser's back and forward buttons move between sections. On a phone the
-**Section** picker names the current section and switches it. **Ctrl+K** (or the search button) lists every section
-too ("Settings: Logs"). **Remote access** shows in the list when Score is served over HTTPS and **Terminal** when the
-web terminal is on. Old bookmarks of the form `/settings#look` still work and open the matching section. Settings for a
-single agent are on its Team page.
+The gear opens Settings. Its sections, as listed on the left:
 
-- **Models and keys.** Providers with their status (connected or not) and which agents use them. **Connect** (or
-  **Edit**) shows a command for you to run in a terminal; Score never asks for or stores a key or runs a sign-in
-  for you. **Add** under Local model registers any OpenAI-compatible endpoint.
-- **Connections.** **Tool servers** your agents can use (**Add a tool server** takes an address or command; sign-in
-  and fix-up steps are shown as commands to run) and **Messaging** channels.
-- **Rules and approvals.** What agents may do alone, what they ask you first, and what they never do. Pick **How
-  "Ask me" works**: *Guardian first* (a guardian model reviews risky commands and asks you when unsure), *Always
-  ask me*, or *Never ask* (use with care). Then maintain three lists: **Go ahead** (kinds of commands allowed
-  without asking), **Ask me**, and **Never** (commands that match some text are always refused). **Review
-  changes** shows the difference and **Save for the whole team** applies it. Never rules are guardrails, not a
-  security boundary: they match command text and can be bypassed by clever wording, so keep real secrets out of
-  reach in other ways.
-- **Look.** Colours (Light, Dark or System), the style of Score on this device and for every device, the Customizer
-  and the way back from a theme (see "Look, themes and the Customizer" below), plus how messages are sent, the
-  password check for the admin view and the display currency. Hermes plugins are per agent: turn them on or off in
-  Team › the agent › **Plugins** (the Score bridge stays on; a change applies on the agent's next session).
-- **Advanced.** Search every Hermes setting. **Stage change** collects edits in a tray (**Pending changes**); you
-  preview the difference, apply, and Score says whether the gateway needs a restart for the change to take effect.
-  Changes go through the `hermes` command only.
-- **Remote access** (only visible in remote mode): how to set up TLS, the list of **Paired browsers** with a
-  revoke button for each, and **Log out this browser**. See the README for pairing and remote mode.
+- **Connections**: **Hermes** (whether it is reachable), **Model providers** (sign in, add a key, or add a local model with
+  an optional key that goes to Hermes and is never kept in Score), messaging channels, **Your phone** and **Other apps**.
+  Each connection can be removed after a confirm.
+- **Tools and triggers**: the tool servers agents use (Score's own can't be removed here), and **Triggers**, which let
+  another app start a job by calling an address. **New trigger** walks through **Set up**, **Test call**, **Map fields** and
+  **Report back**. Score shows a signing secret once (calls must be signed and arrive within five minutes), shows the
+  redacted test call, and lets you map its fields into the job's text. **Report back** has Score ask the lead to call a
+  tool when the job is done. With several teams a trigger has **Starts jobs in**.
+- **Rules**: what agents may do alone. **How "Ask me" works** is **Guardian first**, **Always ask me** or **Never ask**,
+  with **Go ahead** and **Never** lists next to **Ask me**. When nobody is watching (routines, one-off runs), a command
+  that would ask you is blocked instead.
+- **Notifications**: browser notifications on this device, for an approval waiting, a routine finished, an agent error or
+  an agent reply while Score is in the background.
+- **Look**: see below.
+- **Usage**: what got done and what it cost.
 
-## Look, themes and the Customizer
+  ![Settings, Usage: jobs done, first-time pass rate, wait time and spend, with a per-agent table](screenshots/usage.png)
 
-A **theme** changes how Score looks and how its pages are arranged: colours, fonts, corners, spacing, where the
-navigation sits, what Now shows and in which order, how chat messages look and a picture behind the page. A theme is
-only data (a settings file, some CSS and a few fonts or pictures): **no theme code runs**, it can't read your agents',
-rooms' or tasks' data, and it can't press anything for you. This section is for using themes; the people who write them
-have `docs/THEMES.md`.
+  Pick Today, 7 days, 30 days or a custom range. The overview shows jobs done, approved first time, how long answers took
+  you and spend, with jobs per day, spend by agent and a **By agent** table (jobs done, runs, median time, first-time pass,
+  cache hits, spend). Spend is marked estimated where Hermes doesn't report it. **Journey** charts tasks, notes, skills and
+  memory over time, and **Download CSV** follows the range.
+- **Remote access and security**: **Where agents run**, pairing another device, the security password, TLS setup, paired
+  browsers and open terminals (listed and closable). The **Terminal** is off unless Score started with `SCORE_TERMINAL=1`.
+  It works only over HTTPS in remote mode, asks for the security password set on the host (`scripts/score password`), runs
+  as your user, closes after 15 minutes idle, and at most two are open.
+- **Advanced**: every Hermes setting, with pending changes listed before they apply.
+- **System**: Score's version and updates, **Backups** and restore, **Library access**, **Shares** (read-only links, which
+  you can revoke), terminal access, **Logs** and **Pause everyone**.
 
-### Settings › Look
+### Look
 
-- **Theme** is the colour mode: **Light**, **Dark** or **System** (follows your device). It is also in the avatar menu.
-- **Style on this device** shows every theme as a card in its own colours. Click one to use it **on this device only**;
-  it is remembered in this browser and applied before the page appears. **Use the shared theme** (shown under the
-  cards when this device has its own) puts the device back in step with everyone else.
-- **Theme for every device** and **Colours for every device** set the shared look; **Save for every device** applies it
-  to every browser that hasn't chosen its own. Devices that have their own choice keep it.
-- **Agents** chooses **Lively**, **Calm** or **Still** for this device: how much marks and pet avatars move (see "Agent
-  looks" under Team).
-- **Customize…** opens the Customizer.
-- **If a theme gets in the way** has the button that resets the look (see "Ways back from a broken theme").
+![Settings, Look: dark, light or match the device, motion, text size and the themes](screenshots/look.png)
 
-Score ships seven themes: **Score** (the default), **Paper** (warm off-white, serif headings), **Night shift** (deep
-blue-black, navigation on the left), **Dense** (neutral greys, Inter, tight spacing), **Harbour** (frosted glass over a
-dusk harbour, left navigation, chat bubbles), **Ledger** (flat, sharp, compact, monospace headlines, one menu button)
-and **Studio** (airy, serif, right navigation, Needs you first). All of them have light and dark variants and pass the
-contrast checks. Built-in themes can't be changed or deleted; the Customizer copies one first. A theme you install from
-a file or make yourself appears next to them.
+The app is dark by default. **Colours on this device** is **Dark**, **Light** or **Match this device**. **Motion** is
+**Calm** (glows and typing dots) or **Still**, and your device's reduce-motion setting always wins. **Text size** scales
+messages, cards and settings together. **Send messages with** chooses Enter or Ctrl+Enter. **Themes** picks one on this
+device: **Score** (the default), **Paper**, **Night shift**, **Dense**, **Harbour**, **Ledger** and **Studio**. **Every
+device** sets the look that devices without their own choice follow (**Save for every device**).
 
-Some things never change with a theme, so you can always see and answer an approval and always get back: approvals and
-other decisions, password and permission screens, the Needs you marker, agent shapes and the way back to the default
-look. Phones keep a simple top bar whatever the theme says.
+A theme is only data (a settings file, some CSS, fonts or pictures): no theme code runs, and it can't read your data or
+press anything for you. Some things never change with a theme: approvals and other decisions, password and permission
+screens, the Needs you marker and agent shapes.
 
-### The Customizer
+![The Customizer: a live preview of the room next to colour, background, font, shape and spacing controls](screenshots/customizer.png)
 
-**Settings › Look › Customize…** is a workshop: the controls are on one side and a live preview of the real app on the
-other. Nothing is saved until you save, and nothing you do in the preview sends anything to your agents.
-
-- **Preview.** Pick the page to preview (Now, Chat, Tasks, Team, Knowledge, Reports, Settings or the chat-first view),
-  **Light** or **Dark**, and **Desktop**, **Tablet** or **Phone** width. On a phone the Customizer shows **Edit** and
-  **Preview** one at a time.
-- **Sections.** **Theme** (name, author, version, description and **Start from**, which copies another theme into this
-  one; the built-in themes are copied exactly, with every colour), **Colours** (every public colour in plain words,
-  for light and dark), **Fonts** (including fonts you add), **Shape** (corner radius, spacing, borders, shadows, glass
-  or solid cards), **Layout** (where the navigation is, content width and a menu editor for the order, names and
-  visibility of the pages; Settings always stays), **Now** (the cards on Now, their order and width; Needs you is
-  always there), **Chat** (bubbles or plain messages, where the room list sits), **Background** (a picture, fitted or
-  tiled, with a veil to calm it down) and **Custom CSS**.
-- **Custom CSS** is for finishing touches of appearance only. Score checks it and lists what it dropped and why:
-  anything that would move, hide or resize things, scripts, links to other sites, `!important`.
-- **Pictures and fonts.** Add them in the Background and Fonts sections (pictures: png, jpg, webp or avif; fonts:
-  woff2). They travel with the theme when you save, and a picture you replace under the same name counts as a change.
-- **Checks while you work.** Score names every pairing that is hard to read, including text over a picture and over
-  glass, and shows what is wrong beside the control. Protected parts such as approvals stay readable whatever you pick.
-- **Undo, Redo and Discard** work as you expect; **Discard** goes back to the saved theme and Undo brings your
-  changes back. Reordering works with the mouse or the keyboard.
-- **Save** stores the theme on this Score. If the theme is in use, the button says **Save and apply** and the note
-  beside it says who will see the change (this device, or every device). If someone else changed the theme after you
-  opened it, Score tells you and doesn't overwrite it: reload it, or **Save as new…** to keep your version. **Save as
-  new…** keeps the original as it is.
-- **Use on this device** and **Use for every device** save (when needed) and switch to the theme.
-- **Export** downloads a `.zip` of the theme, with the licence text of any font or picture it ships. **Import…** reads a
-  `.zip` and shows an install preview first (what it contains and what the checks removed); Cancel stores nothing. A
-  package that can't be used is explained in plain words.
-- Leaving with unsaved changes asks first.
+**Open the Customizer** edits a theme against a live preview. Pick the page to preview (Team room, Team, an agent page, an
+agent's screen or Settings), **Light** or **Dark**, and **Desktop**, **Tablet** or **Phone** width. The tabs are **Theme**
+(name, author, version, and **Start from** to copy another theme), **Colours**, **Background** (a picture, filled or
+tiled), **Fonts**, **Shape** (corner roundness, borders, shadows, glass, solid cards), **Spacing** (compact or airy) and
+**Custom CSS** (finishing touches only; Score lists what it dropped and why). Score flags colour pairings that are hard to
+read, and decisions always keep a solid fill. **Undo**, **Redo** and **Discard** work as you'd expect; **Save** stores the
+theme, **Save as new…** keeps the original, and **Use on this device** and **Use for every device** apply it. **Export**
+downloads a `.zip` and **Import…** shows an install preview first. A built-in theme is copied before you change it.
+Writing a theme by hand is covered in [docs/THEMES.md](THEMES.md).
 
 ### Ways back from a broken theme
 
-A theme can't hide the way back, but a bad colour choice can still make a page hard to use. Any of these takes this
-device back to Score's own look, and none needs the page to be readable:
+Any of these takes this device back to Score's own look, and none needs the page to be readable:
 
-1. **Press Ctrl+Shift+0** on any page.
-2. **Search for "Reset look"** with Ctrl+K (Cmd+K) and run **Reset look on this device**.
-3. **Open Score with `?look=safe`** at the end of the address, for example `http://127.0.0.1:8740/?look=safe`. Theme and
-   device choice are off for that visit only; reload without it to go back.
-4. **Settings › Look › Reset look on this device.**
-5. **On the machine Score runs on**, `scripts/score look reset` sets the shared look to Score with the system colour
-   mode, even with Score stopped. Every browser also drops its own theme the next time it reads the theme list (focus
-   the tab or reload).
+1. Press **Ctrl+Shift+0** on any page.
+2. Search (⌘K) for "Reset look" and run **Reset look on this device**.
+3. Open Score with `?look=safe` at the end of the address, for example `http://127.0.0.1:8740/b?look=safe`. Theme and
+   device choice are off for that visit only.
+4. **Settings › Look › Reset the look on this device.**
+5. On the machine Score runs on, `scripts/score look reset` sets the shared look to Score with the system colour mode,
+   even with Score stopped.
 
-If a theme fails to load, fails while it is applied or damages one of the protected parts (an approval, say), Score skips
-that theme, shows a banner saying so and uses its own look.
+If a theme fails to load or damages a protected part such as an approval, Score skips it and says so.
 
-## Terminal
+## Coding agents
 
-An optional shell on the machine Score runs on, in your browser (**Terminal** in the top bar, or in the menu on
-small screens). It is off unless Score was started with `SCORE_TERMINAL=1`, and it works only over **HTTPS** in
-remote mode, where the page tells you if it is unavailable and why. Opening one asks for the **security password**,
-which must be set on the Score machine with `scripts/score password` (a password set in the browser does not unlock
-it); a passkey works too where the browser allows it. The terminal runs as your user, so anyone who can use it can do
-anything that account can. It closes after 15 minutes without activity (use tmux for long jobs), at most two are
-open at once, and the open ones are listed and can be closed under Settings.
+Claude Code, Codex and Antigravity (`agy`) can join the team next to your Hermes agents: **Team › Add an agent › A coding
+tool**. They use your own CLI login and plan quota, so install and sign in to the CLI first. Choose the tool (the form shows
+whether it is installed and whether Score has tested its version), a name, a workspace folder and a permission level:
 
-## On a phone or tablet
+- **Read only**: looks at files, changes nothing;
+- **Workspace write**: edits files in its workspace (the default);
+- **Full access**: no sandbox, anything it is told runs as your user. It needs the security password, and so does raising
+  an agent to it later.
 
-Below 1024 px wide the top bar turns into a **Menu** button that opens a side drawer with Now (and its Score, Flow and
-Routines views), Chat, Tasks, Team, Knowledge, Reports and Settings, plus Terminal when it is on. Pages reflow to one
-column and each page opens on its content: in Chat an open room fills the screen and **Rooms** opens the room
-list as a drawer (with no room open, the list shows first); Settings has a **Section** picker; Knowledge's note tree is
-behind **All notes**; Tasks shows one board column at a time with column tabs above; the Now timeline scrolls sideways
-with the agent names pinned. Dialogs open as full-screen sheets on a phone.
+**What they can read.** The level limits what an agent can **change**, not what it can **read**. Claude Code runs with deny
+rules for `~/.hermes`, `~/.score`, `~/.ssh` and `.env` files. Codex can read every file your user can, including secrets
+outside its workspace; Score can't block that, and you tick an acknowledgement before the agent is created. Antigravity's
+sandbox keeps it inside its workspace below full access (and below that level it can't run shell commands). Start a job
+asks you to accept what the coding agents in it can read.
+
+**Sessions per job.** A Claude Code or Codex agent keeps one session for each job and agent, resumed on every turn, so it
+remembers the job. A step of a recipe or a "lead decides" run starts fresh each time. One turn runs at a time (others queue), a turn stops after 30
+minutes, and **Stop** works as for other agents.
+
+An agent's page also has **Personality** (a role line and Markdown instructions, given to the CLI at the start of each
+session; **Edit personality**, then **Save**), **Limits left** (its 5-hour and weekly quota bars) and the **quota guard**:
+**Stop using this agent in runs when a limit is below** a floor of 0 to 50 percent (10 by default, 0 turns it off). Runs
+don't hand it new steps below the floor, and steps already running are never interrupted. A card then asks you to **Use it
+anyway**, **Wait until it resets** or **Stop the run**.
