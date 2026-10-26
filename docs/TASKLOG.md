@@ -1554,3 +1554,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   `teamRoomId`; pnpm check green (server 4817, web 2993, contract 1522).
 - **v3.6.0 deployed live** (~14:13 UTC): idle, backup score-pre-3.6.0-20261026.db, migration 0093, restart, health ok,
   no new errors.
+- **3.6.1** (2026-10-26; owner: "user guide, … rework the entire readme for the new version"). Sonnet coder rewrote
+  docs/USER-GUIDE.md for the new shell and README.md for 3.6 with 22 fake-mode screenshots (new: team switcher, New
+  team, trigger "Starts jobs in", Live screen). Review: the guide's session wording missed "lead decides" steps (fixed by
+  the lead); the approval shot left designer's reply "Writing…" in later team-room shots — it now runs last and answers
+  its card (lead). Docs only: no deploy restart needed.
