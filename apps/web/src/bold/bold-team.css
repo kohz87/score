@@ -21,6 +21,13 @@
   margin: 0;
 }
 
+/* A text link keeps its 32px touch height; its text sits on the row's bottom line like the "/" next to it (an anchor
+   would otherwise draw its text at the top of that box, higher than its neighbours). */
+[data-ui='bold'] .pagehead > .link {
+  display: inline-flex;
+  align-items: flex-end;
+}
+
 [data-ui='bold'] .big {
   font-family: var(--font-d);
   font-size: clamp(34px, 5vw, 52px);
@@ -420,6 +427,9 @@
 [data-ui='bold'] .bold-agent-actions .bold-agent-watch,
 [data-ui='bold'] .bold-agent-actions .bold-agent-remove {
   align-self: center;
+  /* The link (an anchor) and the button centre their text the same way, level with the pills' labels. */
+  display: inline-flex;
+  align-items: center;
 }
 
 [data-ui='bold'] .bold-up-card {
