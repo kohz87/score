@@ -326,11 +326,13 @@ for (const viewport of sizes) {
       await expect(own.getByRole('button', { name: 'Pin message from You' })).toBeVisible()
       const reply = page.locator('.bold-thread-message[data-message-id="t-2"]')
       await reply.hover()
-      await expect(reply.getByRole('button', { name: 'Retry reply from builder' })).toBeVisible()
+      await expect(
+        reply.getByRole('button', { name: 'Try another reply from builder' }),
+      ).toBeVisible()
       // A later agent message in the same run of replies answers the person too.
       const later = page.locator('.bold-thread-message[data-message-id="t-4"]')
       await later.hover()
-      await expect(later.getByRole('button', { name: /^Retry reply/ })).toHaveCount(1)
+      await expect(later.getByRole('button', { name: /^Try another reply/ })).toHaveCount(1)
 
       // An agent's message goes at once (undo window), then the DELETE is sent.
       await reply.hover()

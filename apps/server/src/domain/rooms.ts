@@ -54,6 +54,7 @@ export const MessageRowSchema = z.object({
   deleted_at: z.string().nullish(),
   progress_at: z.string().nullish(),
   job_id: z.string().nullish(),
+  alternative_of: z.string().nullish(),
 })
 const CountSchema = z.object({ count: z.int().nonnegative() })
 
@@ -435,6 +436,7 @@ export function messageFromRow(value: unknown): Message {
     ...(row.edited_by ? { editedBy: row.edited_by } : {}),
     ...(row.edits ? { edits: row.edits } : {}),
     ...(row.job_id ? { jobId: row.job_id } : {}),
+    ...(row.alternative_of ? { alternativeOf: row.alternative_of } : {}),
   })
 }
 
@@ -455,8 +457,8 @@ export function storeMessage(
   const result = sqlite
     .prepare(
       `INSERT INTO messages
-    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, edits, progress_at, job_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, edits, progress_at, job_id, alternative_of)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
     )
     .run(
       message.id,
@@ -472,6 +474,7 @@ export function storeMessage(
       message.edits ?? null,
       message.streaming ? (message.progressAt ?? now) : null,
       message.jobId ?? null,
+      message.alternativeOf ?? null,
     )
   if (!result.changes) return []
   // Without a job the insert trigger placed it in the room's default job: the event says which.

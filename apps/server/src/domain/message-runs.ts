@@ -19,6 +19,7 @@ import { sanitizeSummaryText, summaryContext } from './room-summaries.ts'
 import { markStaleSummaries, visibleSummaries } from './summary-stale.ts'
 
 export const MessageRunSchema = z.object({
+  alternative_of: z.string().nullable().default(null),
   message_id: z.string(),
   run_id: z.string().nullable(),
   room_id: z.string(),
@@ -72,6 +73,8 @@ export function reserveMessageRun(
     purpose?: 'summary'
     /** The exchange the turn works in (PLAN 11.1b). */
     exchangeId?: string | null
+    /** 2.4.0: the first reply of the group this reply is another version of. */
+    alternativeOf?: string
   },
   now: string,
 ): string {
@@ -80,8 +83,8 @@ export function reserveMessageRun(
   sqlite
     .prepare(
       `INSERT INTO message_runs
-    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, provider, agents, created_at, plan_first, admission_input, purpose, exchange_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, provider, agents, created_at, plan_first, admission_input, purpose, exchange_id, alternative_of)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
     )
     .run(
       `reply:${turnId}`,
@@ -102,12 +105,17 @@ export function reserveMessageRun(
       req.admissionInput ?? null,
       req.purpose ?? null,
       req.exchangeId ?? null,
+      req.alternativeOf ?? null,
     )
   const job = sqlite.prepare('SELECT job_id FROM message_runs WHERE turn_id = ?').get(turnId) as
     { job_id: string | null } | undefined
   if (job?.job_id) ensureJobSession(sqlite, job.job_id, req.agentId, now)
   return `reply:${turnId}`
 }
+
+/** What Try another adds to the person's message (once, however often it is asked). */
+const ANOTHER_NOTE =
+  '\n\n(You already answered this message. The person asked for another answer: give a different reply from your earlier one.)'
 
 /**
  * Retry (PLAN 5.24): the same agent answers the same person's message again. The new turn is queued like any other,
@@ -119,6 +127,8 @@ export function retryReply(
   messageId: string,
   nonce: string,
   now: string,
+  /** `another`: Try another; `group: false`: a fresh attempt that is not shown as another version (2.3.0 recovery). */
+  options: { another?: boolean; group?: boolean } = {},
 ): string {
   const found = sqlite
     .prepare('SELECT streaming FROM messages WHERE id = ? AND room_id = ? AND deleted_at IS NULL')
@@ -159,6 +169,11 @@ export function retryReply(
     )
     .get(parsed.agent_id, parsed.chain_id)
   if (paused) throw new HttpError(409, 'conflict', 'Resume the work before retrying.')
+  // Every version of a reply names the first one, so the room shows them together (2.4.0).
+  const first = sqlite
+    .prepare('SELECT alternative_of FROM messages WHERE id = ?')
+    .get(messageId) as { alternative_of: string | null } | undefined
+  const alternativeOf = first?.alternative_of ?? messageId
   return reserveMessageRun(
     sqlite,
     {
@@ -167,13 +182,20 @@ export function retryReply(
       agentId: parsed.agent_id,
       chainId: parsed.chain_id,
       hop: 0,
-      input: parsed.input,
+      // Try another (2.4.0): the agent keeps its session (it remembers its earlier answer), is told the person wants a
+      // different one, and gets the room as it is now rather than the first attempt's frozen context.
+      input: options.another
+        ? `${parsed.input.replace(ANOTHER_NOTE, '')}${ANOTHER_NOTE}`
+        : parsed.input,
       agents: parsed.agents,
       ...(parsed.model ? { model: parsed.model } : {}),
       ...(parsed.provider ? { provider: parsed.provider } : {}),
       ...(parsed.plan_first ? { planFirst: true } : {}),
       retryNonce: nonce,
-      ...(parsed.admission_input !== null ? { admissionInput: parsed.admission_input } : {}),
+      ...(parsed.admission_input !== null && !options.another
+        ? { admissionInput: parsed.admission_input }
+        : {}),
+      ...(options.group === false ? {} : { alternativeOf }),
     },
     now,
   )
@@ -226,6 +248,7 @@ export function attachRunMessage(
         streaming: true,
         createdAt: now,
         ...(mapping.job_id ? { jobId: mapping.job_id } : {}),
+        ...(mapping.alternative_of ? { alternativeOf: mapping.alternative_of } : {}),
       },
       now,
     ),
@@ -847,6 +870,8 @@ export function roomRunInput(
   input: string,
   parentMessageId: string,
   jobId?: string | null,
+  /** 2.4.0: a version of an earlier reply; the group's other versions stay out of the window (the agent has them). */
+  alternativeOf?: string | null,
 ): string {
   // Only the turn's own job is context (PLAN 11.1b): a room's other threads are not this conversation.
   const job = jobId ?? defaultJobId(sqlite, roomId) ?? ''
@@ -860,9 +885,17 @@ export function roomRunInput(
     .prepare(
       `SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND id != ? AND deleted_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM json_each(messages.parts) WHERE json_extract(value, '$.kind') = 'summary')
+         AND (? IS NULL OR (id != ? AND COALESCE(alternative_of, '') != ?))
        ORDER BY created_at DESC, id DESC LIMIT 10`,
     )
-    .all(roomId, job, parentMessageId)
+    .all(
+      roomId,
+      job,
+      parentMessageId,
+      alternativeOf ?? null,
+      alternativeOf ?? '',
+      alternativeOf ?? '',
+    )
     .map(messageFromRow)
     .reverse()
   const context = redactBounded(
@@ -915,6 +948,7 @@ export function failMessageRun(
       streaming: false,
       refs: [],
       ...(mapping.job_id ? { jobId: mapping.job_id } : {}),
+      ...(mapping.alternative_of ? { alternativeOf: mapping.alternative_of } : {}),
     },
     now,
   )

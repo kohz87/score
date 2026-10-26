@@ -17,6 +17,7 @@ import {
 } from './BoldMessage.tsx'
 import { foldedJobIds, isFinishedJob, readExpandedJobs, writeExpandedJobs } from './job-fold.ts'
 import { approvalPointerSet, jobMatchesFilter, type JobFilter } from './room-model.ts'
+import { groupKey, groupReplies, pickReplyVersion } from './reply-versions.ts'
 import { roomMessagesQuery, roomSeekQuery } from './room-queries.ts'
 import { QuestionNote } from './QuestionCard.tsx'
 import { useRoomNeedsYouState } from './use-needs-you.ts'
@@ -328,15 +329,32 @@ export function RoomMessageStream({
       onRevealSeek(target.jobId ?? defaultJob)
       return
     }
-    const found = document.getElementById(`message-${seek}`)
-    if (!found) return
-    seeked.current = seek
-    requestAnimationFrame(() => {
+    const reveal = (found: HTMLElement) => {
       found.scrollIntoView?.({ block: 'center' })
       found.classList.add('bold-message-hit')
       found.focus({ preventScroll: true })
       onSeeked()
-    })
+    }
+    const found = document.getElementById(`message-${seek}`)
+    if (!found) {
+      // A version hidden inside its reply group: select it there first, then the usual scroll and highlight.
+      const group = [...groupReplies(items).byHead.values()].find((list) =>
+        list.some((message) => message.id === seek),
+      )
+      if (!group) return
+      seeked.current = seek
+      pickReplyVersion(groupKey(group[0]!), seek)
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const shown = document.getElementById(`message-${seek}`)
+          if (shown) reveal(shown)
+          else onSeeked()
+        }),
+      )
+      return
+    }
+    seeked.current = seek
+    requestAnimationFrame(() => reveal(found))
   }, [allItems, defaultJob, items, onRevealSeek, onSeeked, seek])
 
   // The room's own needs-you data (shared reads, no per-job requests) says which finished jobs must stay open.
@@ -394,7 +412,7 @@ export function RoomMessageStream({
         onlyJobId: selectedJob === 'all' ? undefined : selectedJob,
         onBranchSelect: (messageId, version) =>
           setView(version ? { messageId, version, filter, selectedJob } : null),
-        renderMessage: (message) => (
+        renderMessage: (message, replyGroup) => (
           <BoldMessage
             key={message.id}
             message={message}
@@ -402,6 +420,7 @@ export function RoomMessageStream({
             versions={versions}
             approvalPointerIds={approvalPointerIds}
             canRetry={retryable.has(message.id)}
+            replyGroup={replyGroup}
             onView={(version) => setView({ messageId: message.id, version, filter, selectedJob })}
             pinned={isPinned(message.id)}
             pinBusy={pinBusy === message.id}
