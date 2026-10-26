@@ -506,8 +506,14 @@ for (const viewport of sizes) {
       await side.getByRole('button', { name: 'Preview this chat' }).click()
       await expect(side.getByText('Outline the launch checklist.')).toBeVisible()
       await expect(side.getByText('Freeze the release branch, test, then announce.')).toBeVisible()
-      await expect(side.getByText(/Read-only preview · imported from Telegram/)).toBeVisible()
-      await expect(side).toContainText('It also keeps the “Imported from Telegram” room')
+      await expect(side.getByText(/Read-only preview · from Telegram/)).toBeVisible()
+      await expect(side).toContainText('It also adds an “Imported from Telegram” room')
+      // 3.5.0: previewing imports nothing; only Bring does.
+      expect(
+        state.requests.filter(
+          (request) => request.method === 'POST' && request.path === '/api/outside-sessions/import',
+        ),
+      ).toHaveLength(0)
       await expect(
         side.locator('.bold-elsewhere').locator('textarea, input:not([type="hidden"])'),
       ).toHaveCount(0)

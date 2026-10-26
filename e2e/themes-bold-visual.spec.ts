@@ -52,15 +52,18 @@ async function exampleTeam(page: Page) {
       .filter((item) => item.id in example)
       // The server lists agents by recent activity, which other specs change: the baseline needs a fixed order.
       .sort((a, b) => Object.keys(example).indexOf(a.id) - Object.keys(example).indexOf(b.id))
+      // Built from fixed values only: other specs leave lifecycles, models, runtimes and looks behind on the shared fake.
       .map((item) => {
         const { role, color, shape } = example[item.id]!
         return {
-          ...item,
+          id: item.id,
           name: item.id,
           role,
           style: { color, shape },
           status: 'idle',
           activity: null,
+          model: { id: 'fake-model', label: 'Demo model' },
+          served: true,
         }
       })
     await route.fulfill({ response, json: { ...body, items } })

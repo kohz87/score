@@ -17,7 +17,7 @@ import { createJob } from '../exchanges/store.ts'
 import { reserveMessageRun } from '../message-runs.ts'
 import { storeMessage } from '../rooms.ts'
 import { teamRoomId } from '../team-room.ts'
-import { parseArgsTemplate } from './report-back.ts'
+import { parseArgsTemplate, reportBackWarning } from './report-back.ts'
 import { newWebhookSecret, verifyWebhook } from './signature.ts'
 
 // Webhook triggers (PLAN 11.1d, docs/briefs/11.0-bold.md §7). A trigger's signing secret is Score's own, sealed at
@@ -40,6 +40,9 @@ const RowSchema = z.object({
 })
 type Row = z.infer<typeof RowSchema>
 
+/** How long a repeated, identical create is taken for a retry of the first. */
+const RETRY_MINUTES = 10
+
 const context = (id: string) => `trigger:${id}`
 
 function row(sqlite: DatabaseSync, id: string): Row | null {
@@ -48,17 +51,20 @@ function row(sqlite: DatabaseSync, id: string): Row | null {
 }
 
 function toTrigger(item: Row, origin: string | null): Trigger {
+  const reportBack = ReportBackSchema.parse(JSON.parse(item.report_back))
+  const warning = reportBack.mode === 'off' ? undefined : reportBackWarning(reportBack.tool)
   return {
     id: item.id,
     name: item.name,
     app: item.app,
     mapping: TriggerMappingSchema.parse(JSON.parse(item.mapping)),
     template: item.template,
-    reportBack: ReportBackSchema.parse(JSON.parse(item.report_back)),
+    reportBack,
     url: origin ? `${origin}/hooks/${item.id}` : null,
     sample: item.sample === null ? null : (JSON.parse(item.sample) as unknown),
     lastCalledAt: item.last_called_at,
     createdAt: item.created_at,
+    ...(warning ? { warning } : {}),
   }
 }
 
@@ -81,6 +87,28 @@ export function createTrigger(
   now: string,
 ): { trigger: Trigger; secret: string } {
   if (req.reportBack.mode !== 'off') parseArgsTemplate(req.reportBack.args)
+  // A create that is retried (the first answer was lost) must not leave a second trigger nobody knows: the same request
+  // within a few minutes, on a trigger nobody has called yet, answers with that trigger and its secret again.
+  const since = new Date(Date.parse(now) - RETRY_MINUTES * 60_000).toISOString()
+  const same = z.array(RowSchema).parse(
+    sqlite
+      .prepare(
+        `SELECT * FROM triggers WHERE deleted_at IS NULL AND last_called_at IS NULL AND created_at >= ?
+             AND name = ? AND app = ? AND mapping = ? AND template = ? AND report_back = ?`,
+      )
+      .all(
+        since,
+        req.name,
+        req.app,
+        JSON.stringify(req.mapping),
+        req.template,
+        JSON.stringify(req.reportBack),
+      ),
+  )[0]
+  if (same) {
+    const again = seal.unseal(same.secret_sealed, context(same.id))
+    if (again) return { trigger: toTrigger(same, origin), secret: again }
+  }
   const id = `trg_${randomBytes(12).toString('hex')}`
   const secret = newWebhookSecret()
   sqlite

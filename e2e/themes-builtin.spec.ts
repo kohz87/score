@@ -234,7 +234,12 @@ for (const id of ['paper', 'night', 'dense', ...packagedThemeIds] as const) {
         if ((packagedThemeIds as readonly string[]).includes(id))
           await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
         await page.waitForTimeout(2500)
-        await expect(page.locator('.look-banner'), path).toHaveCount(0)
+        // The banner's text goes in the failure message so a trip says what it was about.
+        const banner = page.locator('.look-banner')
+        await expect(
+          banner,
+          `${path}: ${(await banner.allTextContents()).join(' | ')}`,
+        ).toHaveCount(0)
         await expect(page.locator('html'), path).not.toHaveAttribute('data-contrast-fallback')
       }
     })

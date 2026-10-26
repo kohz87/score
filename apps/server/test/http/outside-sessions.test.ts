@@ -290,3 +290,29 @@ test('the imported room name is made from the redacted session title', async () 
   expect(name).not.toContain('fakefake')
   expect(name).toContain('deploy-with')
 })
+
+test('previewing a session returns its text and creates no room; unknown sessions are 404', async () => {
+  const roomsBefore = (await app.inject({ url: '/api/rooms' })).json().rooms.length
+  const response = await app.inject({
+    url: '/api/outside-sessions/preview?agentId=lead&sessionId=ext-telegram-1',
+  })
+  expect(response.statusCode).toBe(200)
+  const { messages } = response.json()
+  expect(messages.length).toBeGreaterThan(0)
+  expect(messages[0]).toEqual({
+    role: expect.stringMatching(/^(user|assistant)$/),
+    text: expect.any(String),
+    at: expect.any(String),
+  })
+  expect((await app.inject({ url: '/api/rooms' })).json().rooms).toHaveLength(roomsBefore)
+  const listed = (await app.inject({ url: '/api/outside-sessions' })).json().items
+  expect(listed.find((item: { id: string }) => item.id === 'ext-telegram-1').roomId).toBeNull()
+  expect(
+    (await app.inject({ url: '/api/outside-sessions/preview?agentId=lead&sessionId=nope' }))
+      .statusCode,
+  ).toBe(404)
+  expect(
+    (await app.inject({ url: '/api/outside-sessions/preview?agentId=ghost&sessionId=ext-cli-1' }))
+      .statusCode,
+  ).toBe(404)
+})

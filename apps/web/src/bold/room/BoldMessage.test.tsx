@@ -213,6 +213,12 @@ describe('retryableIds', () => {
     // Retry on b is decided from the full list even though the render list drops q and a.
     expect(retryableIds(all).has('b')).toBe(true)
   })
+
+  test('the server’s retryable wins: a hand-off reply after the person’s message is not retried (3.5.0)', () => {
+    const handoff = { ...by('b', 'reviewer'), retryable: false }
+    const answer = { ...by('a', 'builder'), retryable: true }
+    expect([...retryableIds([you('q'), answer, handoff])]).toEqual(['a'])
+  })
 })
 
 test('a failed reply keeps Retry (empty body), a finished one gets Try another', async () => {

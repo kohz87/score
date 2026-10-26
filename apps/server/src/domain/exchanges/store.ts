@@ -215,12 +215,24 @@ const exchangeFromRow = (sqlite: DatabaseSync, row: ExchangeRow): Exchange =>
     endedReason: row.ended_reason,
     pause:
       row.pause_reason && ['paused_budget', 'waiting_on_you'].includes(row.state)
-        ? { reason: row.pause_reason, options: pauseOptions(sqlite, row) }
+        ? {
+            reason: row.pause_reason,
+            options: pauseOptions(sqlite, row),
+            ...droppedTurns(row.held),
+          }
         : null,
     queuedBehind: queuedBehind(sqlite, row),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
+
+/** The agents whose turns were dropped behind the held turn (budget.ts `hold`), when there are any. */
+function droppedTurns(held: string | null): { droppedAgents?: string[] } {
+  if (!held) return {}
+  const parsed = z.object({ dropped: z.array(z.string()).optional() }).safeParse(JSON.parse(held))
+  const dropped = parsed.success ? (parsed.data.dropped ?? []) : []
+  return dropped.length ? { droppedAgents: dropped } : {}
+}
 
 const EXCHANGE_SELECT = 'SELECT x.*, j.room_id FROM exchanges x JOIN jobs j ON j.id = x.job_id'
 

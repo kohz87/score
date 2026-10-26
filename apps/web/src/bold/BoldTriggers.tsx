@@ -199,6 +199,7 @@ function TriggerCard({
         <span className="small muted">
           {trigger.app} · reference <code>{trigger.mapping.ref}</code> · last call{' '}
           {when(trigger.lastCalledAt)}
+          {trigger.lastCalledAt ? '' : ` · created ${when(trigger.createdAt)}`}
         </span>
         <button type="button" className="link bold-trigger-push" onClick={onEdit} disabled={busy}>
           Edit
@@ -243,6 +244,11 @@ function TriggerCard({
             : `Reports back with ${trigger.reportBack.tool}.`}
         </span>
       </div>
+      {trigger.warning && (
+        <span className="small" role="note" data-protected="flex">
+          {trigger.warning}
+        </span>
+      )}
       <span className="small muted">
         Calls must be signed with the secret (Standard Webhooks headers) and arrive within five
         minutes.

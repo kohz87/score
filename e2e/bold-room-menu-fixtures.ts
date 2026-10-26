@@ -313,6 +313,15 @@ export async function mockRoomMenus(
       })
     if (method === 'POST' && path === '/api/outside-sessions/import')
       return response(route, { roomId: 'room-imported', imported: 2 })
+    // 3.5.0: Elsewhere previews read the session without importing it.
+    if (method === 'GET' && path === '/api/outside-sessions/preview')
+      return response(route, {
+        messages: importedMessages.map((message) => ({
+          role: 'assistant',
+          text: message.parts[0]!.text,
+          at: message.createdAt,
+        })),
+      })
     if (method === 'GET' && path === '/api/rooms/room-imported/pins')
       return response(route, { items: [] })
     if (method === 'GET' && path === '/api/rooms/room-imported/versions')

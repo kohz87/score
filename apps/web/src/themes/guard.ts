@@ -196,6 +196,75 @@ function paintedBy(element: Element, hit: Element | null): boolean {
   return isScoreOverlay(hit)
 }
 
+/**
+ * Can scrolling bring the box into view? A box past the document's end is still reachable when it sits inside a pane
+ * that scrolls itself (a long list in a room, a theme's own scrolling column): the theme-off baseline may lay the same
+ * content out in the document's flow and a theme in a pane, and the length of the list decides which one trips.
+ *
+ * Only a pane that carries the box when it scrolls counts (3.5.0 review): a fixed box (or one inside a fixed container)
+ * isn't moved by any pane above that container, and an absolute box only by panes at or below its containing block.
+ * A pane too small to show the box doesn't count either. When unsure this answers "not reachable": a false alarm
+ * switches the theme off, a false pass would let a theme hide a decision.
+ */
+function reachable(element: Element, box: DOMRect): boolean {
+  const root = document.documentElement
+  type Box = { left: number; top: number; right: number; bottom: number }
+  const inDocument = (b: Box) =>
+    b.right + window.scrollX > 0 &&
+    b.bottom + window.scrollY > 0 &&
+    b.left + window.scrollX < root.scrollWidth &&
+    b.top + window.scrollY < root.scrollHeight
+  const inViewport = (b: Box) =>
+    b.right > 0 && b.bottom > 0 && b.left < window.innerWidth && b.top < window.innerHeight
+  const ownPosition = getComputedStyle(element).position
+  // A fixed box stays where it is on screen whatever scrolls: reachable exactly when it is in the viewport.
+  if (ownPosition === 'fixed') return inViewport(box)
+  if (inDocument(box)) return true
+  const scrolls = (value: string) => value === 'auto' || value === 'scroll'
+  // An absolute box skips static ancestors until its containing block (the first positioned one).
+  let awaitingBlock = ownPosition === 'absolute'
+  let outer: Element | null = null
+  let pinned = false
+  // What the next pane up must be able to scroll into view: the card first, then each pane that carries it (a pane
+  // nested in another has to be reachable inside that one too).
+  let target: Box = box
+  for (let node = element.parentElement; node && node !== root; node = node.parentElement) {
+    const style = getComputedStyle(node)
+    const positioned = style.position !== 'static'
+    const carries = !awaitingBlock || positioned
+    if (carries && (scrolls(style.overflowX) || scrolls(style.overflowY))) {
+      const pane = node.getBoundingClientRect()
+      if (pane.width < Math.min(box.width, 120) || pane.height < Math.min(box.height, 80))
+        return false
+      const extent = {
+        left: target.left - pane.left + node.scrollLeft,
+        top: target.top - pane.top + node.scrollTop,
+        right: target.right - pane.left + node.scrollLeft,
+        bottom: target.bottom - pane.top + node.scrollTop,
+      }
+      if (
+        extent.right <= 0 ||
+        extent.bottom <= 0 ||
+        extent.left >= node.scrollWidth ||
+        extent.top >= node.scrollHeight
+      )
+        return false
+      outer = node
+      target = pane
+    }
+    if (positioned) awaitingBlock = style.position === 'absolute'
+    // Nothing above a fixed container moves what is inside it.
+    if (style.position === 'fixed') {
+      pinned = true
+      break
+    }
+  }
+  if (outer === null) return false
+  // The outermost pane has to be on the page itself (or, inside a fixed container, on screen) to be reached.
+  const pane = outer.getBoundingClientRect()
+  return pinned ? inViewport(pane) : inDocument(pane)
+}
+
 function snapshot(element: HTMLElement): Snapshot {
   const graphic = graphicContrast(element)
   const rects = element.getClientRects()
@@ -215,11 +284,7 @@ function snapshot(element: HTMLElement): Snapshot {
   const box = element.getBoundingClientRect()
   // "Pushed off screen" means out of the page, where scrolling can't bring it back. Below the fold doesn't count: a
   // theme's own type and spacing move content up and down the page.
-  const inPage =
-    box.right + window.scrollX > 0 &&
-    box.bottom + window.scrollY > 0 &&
-    box.left + window.scrollX < document.documentElement.scrollWidth &&
-    box.top + window.scrollY < document.documentElement.scrollHeight
+  const inPage = reachable(element, box)
   const { view: seen, fraction } = rendered ? visibleBox(element) : { view: null, fraction: 1 }
   // Something else on top of the visible part of a surface (a modal is not "something else": it has its own top layer,
   // so the surface is covered in both measurements and does not count). Only the element, what is inside it or its

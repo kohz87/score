@@ -201,7 +201,7 @@ for (const { name, viewport } of sizes) {
 
       const text = tag('About the review')
       await side(page).getByPlaceholder('Message builder privately').fill(text)
-      await side(page).getByRole('button', { name: 'Send' }).click()
+      await side(page).locator('button.chat-send').click()
       await expect(page).toHaveURL(/\/b\?with=builder&chat=job_[^&]+$/)
       await expect(side(page).locator('.bold-dm-message').filter({ hasText: text })).toBeVisible()
       // The message carries a frozen reference to the team-room job, and the chip is spent.
@@ -229,7 +229,7 @@ for (const { name, viewport } of sizes) {
       const posts = recordPosts(page)
       const text = tag('No refs')
       await side(page).getByPlaceholder('Message builder privately').fill(text)
-      await side(page).getByRole('button', { name: 'Send' }).click()
+      await side(page).locator('button.chat-send').click()
       await expect(side(page).locator('.bold-dm-message').filter({ hasText: text })).toBeVisible()
       const sent = posts.find((post) => /\/api\/rooms\/[^/]+\/messages$/.test(post.url))
       expect(sent?.body).toMatchObject({ text, jobId: second })

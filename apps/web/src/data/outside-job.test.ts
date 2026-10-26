@@ -75,21 +75,18 @@ function record(calls: Call[], input: RequestInfo | URL, init?: RequestInit) {
 
 afterEach(() => vi.unstubAllGlobals())
 
-test('previews a session as the imported room’s text messages', async () => {
+test('previews a session as its text messages without importing it', async () => {
   const calls: Call[] = []
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       record(calls, input, init)
-      const url = String(input)
-      if (url === '/api/outside-sessions/import')
-        return Response.json({ roomId: 'room-imported', imported: 3 })
-      if (url.startsWith('/api/rooms/room-imported/messages?'))
+      if (String(input).startsWith('/api/outside-sessions/preview?'))
         return Response.json({
-          asOfSeq: 1,
-          items: [message('message-1', '', 1), message('message-2', 'Ready.', 2)],
-          nextCursor: null,
-          jobId: 'job-imported',
+          messages: [
+            { role: 'user', text: '  ', at: '2026-10-23T08:00:00.000Z' },
+            { role: 'assistant', text: 'Ready.', at: '2026-10-23T08:01:00.000Z' },
+          ],
         })
       return Response.json({ error: { code: 'not_found', message: 'no' } }, { status: 404 })
     }),
@@ -98,12 +95,10 @@ test('previews a session as the imported room’s text messages', async () => {
   const preview = await previewOutsideSession(session)
 
   expect(preview).toEqual({
-    roomId: 'room-imported',
-    messages: [message('message-2', 'Ready.', 2)],
+    messages: [{ role: 'assistant', text: 'Ready.', at: '2026-10-23T08:01:00.000Z' }],
   })
   expect(calls.map((call) => call.url)).toEqual([
-    '/api/outside-sessions/import',
-    '/api/rooms/room-imported/messages?limit=100',
+    '/api/outside-sessions/preview?agentId=lead&sessionId=ext-telegram-1',
   ])
 })
 

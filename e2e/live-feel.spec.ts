@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { releaseDefinition } from './workflow-fixtures.ts'
 import { pair } from './pair.ts'
-import { startRecipe } from './recipe-run.ts'
+import { startRecipe, uniqueRecipeName } from './recipe-run.ts'
 
 // PLAN 5.39 against the fake adapter: no model is called. Status lines, check chips, run summaries, the halo and the
 // workflow editor's preview and live overlay.
@@ -9,10 +9,19 @@ import { startRecipe } from './recipe-run.ts'
 test.describe.configure({ mode: 'serial' })
 const web = { 'x-score-client': 'web' }
 
-async function createWorkflow(page: Page, name: string): Promise<string> {
+async function createWorkflow(page: Page, name: string, gate?: string): Promise<string> {
   const response = await page.request.post('/api/workflows', {
     headers: web,
-    data: { definition: { ...releaseDefinition, name } },
+    data: {
+      definition: {
+        ...releaseDefinition,
+        name,
+        // A gate title of its own: other specs leave "Approve the draft" gates pending on the shared server.
+        nodes: releaseDefinition.nodes.map((node) =>
+          gate && node.id === 'approve' ? { ...node, label: gate } : node,
+        ),
+      },
+    },
   })
   expect(response.ok()).toBe(true)
   return ((await response.json()) as { workflowId: string }).workflowId
@@ -23,7 +32,7 @@ test('the workflow editor previews a gate and a branch without calling the serve
 }) => {
   test.setTimeout(120_000)
   await pair(page)
-  const id = await createWorkflow(page, `Preview ${Date.now().toString(36)}`)
+  const id = await createWorkflow(page, uniqueRecipeName('Preview'))
   const posts: string[] = []
   page.on('request', (request) => {
     if (request.method() === 'POST' && !request.url().endsWith('/api/workflows/validate'))
@@ -67,10 +76,11 @@ test('the editor draws a run of the version on screen over the canvas and links 
 }) => {
   test.setTimeout(150_000)
   await pair(page)
-  const name = `Overlay ${Date.now().toString(36)}`
-  const id = await createWorkflow(page, name)
+  const name = uniqueRecipeName('Overlay')
+  const gateTitle = `Sign off ${name.slice(-6)}`
+  const id = await createWorkflow(page, name, gateTitle)
   await startRecipe(page, id, { Topic: 'the live overlay' })
-  const approve = page.getByRole('region', { name: 'Decide on Approve the draft' })
+  const approve = page.getByRole('region', { name: `Decide on ${gateTitle}` })
   await expect(approve).toBeVisible({ timeout: 60_000 })
 
   // Back in the editor, the run is drawn over the version that is open.
@@ -82,11 +92,11 @@ test('the editor draws a run of the version on screen over the canvas and links 
   // The draft is untouched.
   await expect(page.getByText(/unsaved changes/)).toHaveCount(0)
   await page.getByRole('link', { name: /Open the run/ }).click()
-  await expect(page.getByRole('region', { name: 'Decide on Approve the draft' })).toBeVisible({
+  await expect(page.getByRole('region', { name: `Decide on ${gateTitle}` })).toBeVisible({
     timeout: 30_000,
   })
   // Finish the run: approve the gate (rejecting would stop it).
-  const gate = page.getByRole('region', { name: 'Decide on Approve the draft' })
+  const gate = page.getByRole('region', { name: `Decide on ${gateTitle}` })
   await expect(async () => {
     if (await gate.isVisible()) await gate.getByRole('button', { name: 'Approve' }).click()
     await expect(gate).toBeHidden({ timeout: 4000 })

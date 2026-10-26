@@ -255,7 +255,12 @@ export const ExchangeSchema = z.object({
   endedReason: z.string().nullable(),
   /** Why it waits on the person and what they can do (11.1c, brief §4.5–§4.6); null while it runs or is done. */
   pause: z
-    .object({ reason: ExchangePauseReasonSchema, options: z.array(ExchangeOptionSchema) })
+    .object({
+      reason: ExchangePauseReasonSchema,
+      options: z.array(ExchangeOptionSchema),
+      /** 3.5.0: agents whose turns were dropped while this pause waited on the person; ask them again after it. */
+      droppedAgents: z.array(AgentIdSchema).optional(),
+    })
     .nullable(),
   /** Its next turn waits on that agent's turn in another job of the room (§4.6): shown, nothing to decide. */
   queuedBehind: z.object({ agentId: AgentIdSchema, since: z.iso.datetime() }).nullable(),

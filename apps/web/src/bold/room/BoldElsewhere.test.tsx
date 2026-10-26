@@ -35,6 +35,16 @@ test('previews the imported chat read-only, then brings it into a new team job w
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://x')
     if (parsed.pathname === '/api/team-room') return jsonResponse({ asOfSeq: 1, room, jobs: [] })
+    if (parsed.pathname === '/api/outside-sessions/preview')
+      return jsonResponse({
+        messages: [
+          {
+            role: 'assistant',
+            text: 'Outline the launch checklist.',
+            at: '2026-10-23T08:00:00.000Z',
+          },
+        ],
+      })
     if (parsed.pathname === '/api/outside-sessions/import')
       return jsonResponse({ roomId: 'room-imported', imported: 1 })
     if (parsed.pathname === '/api/rooms/room-imported/messages')
@@ -75,7 +85,11 @@ test('previews the imported chat read-only, then brings it into a new team job w
 
   fireEvent.click(screen.getByRole('button', { name: 'Preview this chat' }))
   expect(await screen.findByText('Outline the launch checklist.')).toBeDefined()
-  expect(screen.getByText(/Read-only preview · imported from Telegram/)).toBeDefined()
+  expect(screen.getByText(/Read-only preview · from Telegram/)).toBeDefined()
+  // Previewing creates no room: the import happens only when the person brings the chat in.
+  expect(
+    fetchMock.mock.calls.filter(([url]) => String(url) === '/api/outside-sessions/import'),
+  ).toHaveLength(0)
   expect(screen.queryByRole('textbox')).toBeNull()
   expect(screen.queryByRole('combobox')).toBeNull()
 
@@ -109,6 +123,17 @@ test('closing the panel mid-way keeps the attempt: a retry makes no second job a
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://x')
     if (parsed.pathname === '/api/team-room') return jsonResponse({ asOfSeq: 1, room, jobs: [] })
+    if (parsed.pathname === '/api/outside-sessions/preview')
+      return jsonResponse({
+        messages: [
+          {
+            role: 'assistant',
+            text: 'Outline the launch checklist.',
+            at: '2026-10-23T08:00:00.000Z',
+          },
+          { role: 'assistant', text: 'Freeze the release branch.', at: '2026-10-23T08:01:00.000Z' },
+        ],
+      })
     if (parsed.pathname === '/api/outside-sessions/import')
       return jsonResponse({ roomId: 'room-imported', imported: 2 })
     if (parsed.pathname === '/api/rooms/room-imported/messages')

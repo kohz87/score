@@ -7,10 +7,12 @@ import { test } from '@playwright/test'
 //  - 'model-lists': the chosen-models list (Settings, 5.31) is server-wide. While model-settings.spec.ts has it
 //    narrowed, every picker lists only "Local server", so model-picker.spec.ts timed out waiting for its options.
 //  - 'roster': the team. model-picker.spec.ts adds an agent for a moment; reports.spec.ts and team.spec.ts count agents.
+//  - 'builder-questions': builder's pending questions show in every one of its chats, so two question tests at once
+//    see each other's cards (bold-agent-questions.spec.ts).
 // A directory is the lock (mkdir is atomic across processes); one left by a crashed worker is taken over after a
 // minute. Always take 'roster' before 'model-lists'.
 const STALE_MS = 60_000
-export type LockName = 'model-lists' | 'roster'
+export type LockName = 'model-lists' | 'roster' | 'builder-questions'
 
 /** Waits for the lock and returns the function that releases it. */
 export async function acquireLock(name: LockName): Promise<() => void> {

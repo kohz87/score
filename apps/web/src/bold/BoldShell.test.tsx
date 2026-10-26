@@ -88,6 +88,8 @@ class PendingUpload {
 let phone = false
 let approvalFixture = false
 let terminalFixture: { terminal: boolean; terminalUnavailable: string | null } | null = null
+/** Agents the roster read adds after the four (a removed one, one setting up). */
+let extraAgents: AgentSummary[] = []
 let teamRoomFixture: unknown = null
 const disposers: (() => void)[] = []
 
@@ -95,6 +97,7 @@ beforeEach(() => {
   phone = false
   approvalFixture = false
   terminalFixture = null
+  extraAgents = []
   teamRoomFixture = null
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
@@ -118,7 +121,7 @@ beforeEach(() => {
           Response.json({ passwordSet: true, origins: [], ...terminalFixture }),
         )
       if (url.pathname === '/api/agents')
-        return Promise.resolve(Response.json({ asOfSeq: 1, items: agents }))
+        return Promise.resolve(Response.json({ asOfSeq: 1, items: [...agents, ...extraAgents] }))
       if (url.pathname === '/api/team-room' && teamRoomFixture)
         return Promise.resolve(Response.json({ asOfSeq: 1, ...(teamRoomFixture as object) }))
       if (url.pathname === '/api/approvals' && approvalFixture)
@@ -651,4 +654,39 @@ test('the shell mounts the notification bridge and the update banner', async () 
   open('/b')
   expect(await screen.findByTestId('notification-bridge')).toBeDefined()
   expect(screen.getByTestId('update-banner')).toBeDefined()
+})
+
+test('a removed agent leaves the dock and the side panel’s one-to-ones; one setting up stays in the dock only', async () => {
+  const base = agents[1]!
+  extraAgents = [
+    {
+      ...base,
+      id: 'gone',
+      name: 'gone',
+      lifecycle: {
+        state: 'removed',
+        incarnationId: '00000000-0000-4000-8000-000000000001',
+        operationId: null,
+      },
+    },
+    {
+      ...base,
+      id: 'fresh',
+      name: 'fresh',
+      lifecycle: {
+        state: 'setting_up',
+        incarnationId: '00000000-0000-4000-8000-000000000002',
+        operationId: '00000000-0000-4000-8000-000000000003',
+      },
+    },
+  ]
+  open('/b')
+  const dock = screen.getByRole('group', { name: /Your team/ })
+  await within(dock).findByRole('button', { name: /^One to one with fresh, / })
+  expect(within(dock).queryByRole('button', { name: /^One to one with gone, / })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Work' }))
+  const menu = document.querySelector('.side-menu') as HTMLElement
+  expect(within(menu).getByText('builder')).toBeDefined()
+  expect(within(menu).queryByText('gone')).toBeNull()
+  expect(within(menu).queryByText('fresh')).toBeNull()
 })

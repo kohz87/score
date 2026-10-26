@@ -56,6 +56,7 @@ export const MessageRowSchema = z.object({
   progress_at: z.string().nullish(),
   job_id: z.string().nullish(),
   alternative_of: z.string().nullish(),
+  reply_kind: z.enum(['person', 'handoff']).nullish(),
 })
 const CountSchema = z.object({ count: z.int().nonnegative() })
 
@@ -442,7 +443,35 @@ export function messageFromRow(value: unknown): Message {
     ...(row.edits ? { edits: row.edits } : {}),
     ...(row.job_id ? { jobId: row.job_id } : {}),
     ...(row.alternative_of ? { alternativeOf: row.alternative_of } : {}),
+    ...(row.reply_kind ? { retryable: row.reply_kind === 'person' } : {}),
   })
+}
+
+/**
+ * 3.5.0: whether an agent's reply answers the person's own message (Retry and Try another apply) or came from a
+ * hand-off, a summary or an orchestration turn (they don't) — the same rule `retryReply` enforces. Null when no run is
+ * recorded for it yet.
+ */
+function replyKind(sqlite: DatabaseSync, messageId: string): 'person' | 'handoff' | null {
+  const run = sqlite
+    .prepare(
+      'SELECT hop, from_agent_id, purpose, orchestration_attempt_id FROM message_runs WHERE message_id = ?',
+    )
+    .get(messageId) as
+    | {
+        hop: number
+        from_agent_id: string | null
+        purpose: string | null
+        orchestration_attempt_id: string | null
+      }
+    | undefined
+  if (!run) return null
+  return run.hop === 0 &&
+    run.from_agent_id === null &&
+    !run.purpose &&
+    !run.orchestration_attempt_id
+    ? 'person'
+    : 'handoff'
 }
 
 export function storeMessage(
@@ -462,8 +491,8 @@ export function storeMessage(
   const result = sqlite
     .prepare(
       `INSERT INTO messages
-    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, edits, progress_at, job_id, alternative_of)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, edits, progress_at, job_id, alternative_of, reply_kind)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
     )
     .run(
       message.id,
@@ -480,6 +509,7 @@ export function storeMessage(
       message.streaming ? (message.progressAt ?? now) : null,
       message.jobId ?? null,
       message.alternativeOf ?? null,
+      message.author.kind === 'agent' ? replyKind(sqlite, message.id) : null,
     )
   if (!result.changes) return []
   // Without a job the insert trigger placed it in the room's default job: the event says which.

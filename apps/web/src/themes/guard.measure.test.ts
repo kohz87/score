@@ -16,11 +16,14 @@ import {
 type Rect = [number, number, number, number]
 
 let rects: Record<string, Rect> = {}
+/** Where an element sits while the theme is on, when that differs from `rects` (the theme's own layout). */
+let rectsOn: Record<string, Rect> = {}
 let themeOn = () => true
 let hit: (x: number, y: number) => Element | null = () => null
 
 function rectOf(element: Element): DOMRect {
-  const [left, top, width, height] = rects[element.id] ?? [0, 0, 0, 0]
+  const [left, top, width, height] = (themeOn() ? rectsOn[element.id] : undefined) ??
+    rects[element.id] ?? [0, 0, 0, 0]
   return {
     left,
     top,
@@ -55,6 +58,7 @@ function stage(overrides: Record<string, Record<string, string>>) {
 
 beforeEach(() => {
   rects = {}
+  rectsOn = {}
   themeOn = () => !appliedThemeElements().every((el) => el.disabled)
   hit = () => null
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
@@ -284,4 +288,149 @@ describe('the shape signature and protected override', () => {
     expect(css).toMatch(/clip-path: none !important;/)
     expect(css).toMatch(/mask: none !important;/)
   })
+})
+
+describe('pushed off screen', () => {
+  // A long list: the theme-off baseline lays it out in the document's flow, the theme in a column that scrolls itself.
+  // The card is far below the document's end in the second layout, and scrolling that column brings it back.
+  function longList(overflowY: string, cardTop: number) {
+    document.body.innerHTML =
+      '<div id="pane"><div id="card" data-protected><span id="words">May I install it?</span></div></div>'
+    rects = { pane: [0, 0, 400, 600], card: [0, 100, 400, 80], words: [10, 110, 200, 20] }
+    rectsOn = {
+      pane: [0, 0, 400, 600],
+      card: [0, cardTop, 400, 80],
+      words: [10, cardTop + 10, 200, 20],
+    }
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      value: 800,
+      configurable: true,
+    })
+    Object.defineProperty(document.documentElement, 'scrollWidth', {
+      value: 800,
+      configurable: true,
+    })
+    Object.defineProperty(document.getElementById('pane')!, 'scrollHeight', {
+      value: 4000,
+      configurable: true,
+    })
+    Object.defineProperty(document.getElementById('pane')!, 'scrollWidth', {
+      value: 400,
+      configurable: true,
+    })
+    stage({ pane: { overflowY, overflowX: 'visible' } })
+  }
+
+  test('a card the theme puts far down a pane that scrolls itself is still reachable', () => {
+    longList('auto', 1500)
+    expect(findProtectedViolation()).toBeNull()
+  })
+
+  test('the same card below the document with nothing to scroll is pushed off screen', () => {
+    longList('visible', 1500)
+    expect(findProtectedViolation()).toMatch(/pushed off screen/)
+  })
+
+  test('and a card beyond the end of the pane’s own scroll is too', () => {
+    longList('auto', 5000)
+    expect(findProtectedViolation()).toMatch(/pushed off screen/)
+  })
+})
+
+// 3.5.0 review: a pane counts only when its scrolling carries the card.
+describe('pushed off screen, hostile layouts', () => {
+  function staged(html: string, overrides: Record<string, Record<string, string>>, cardTop = 1500) {
+    document.body.innerHTML = html
+    rects = {
+      outer: [0, 0, 400, 700],
+      pane: [0, 0, 400, 600],
+      card: [0, 100, 400, 80],
+      words: [10, 110, 200, 20],
+    }
+    rectsOn = { ...rects, card: [0, cardTop, 400, 80], words: [10, cardTop + 10, 200, 20] }
+    for (const [key, value] of [
+      ['scrollHeight', 800],
+      ['scrollWidth', 800],
+    ] as const)
+      Object.defineProperty(document.documentElement, key, { value, configurable: true })
+    const pane = document.getElementById('pane')!
+    Object.defineProperty(pane, 'scrollHeight', { value: 4000, configurable: true })
+    Object.defineProperty(pane, 'scrollWidth', { value: 400, configurable: true })
+    stage(overrides)
+  }
+  const card = '<div id="card" data-protected><span id="words">May I install it?</span></div>'
+
+  test('a fixed card far below, inside a pane that scrolls, is pushed off screen', () => {
+    staged(`<div id="pane">${card}</div>`, {
+      pane: { overflowY: 'auto', overflowX: 'visible' },
+      card: { position: 'fixed' },
+    })
+    expect(findProtectedViolation()).toMatch(/pushed off screen/)
+  })
+
+  test('an absolute card whose containing block is above the pane is pushed off screen', () => {
+    staged(`<div id="outer"><div id="pane">${card}</div></div>`, {
+      outer: { position: 'relative' },
+      pane: { overflowY: 'auto', overflowX: 'visible' },
+      card: { position: 'absolute' },
+    })
+    expect(findProtectedViolation()).toMatch(/pushed off screen/)
+  })
+
+  test('an absolute card in a positioned pane that scrolls is reachable', () => {
+    staged(`<div id="pane">${card}</div>`, {
+      pane: { overflowY: 'auto', overflowX: 'visible', position: 'relative' },
+      card: { position: 'absolute' },
+    })
+    expect(findProtectedViolation()).toBeNull()
+  })
+
+  test('a pane too small to show the card does not count', () => {
+    staged(`<div id="pane">${card}</div>`, { pane: { overflowY: 'auto', overflowX: 'visible' } })
+    rectsOn = { ...rectsOn, pane: [0, 0, 400, 6] }
+    expect(findProtectedViolation()).toMatch(/pushed off screen/)
+  })
+
+  test('a card down a fixed side pane that scrolls itself is reachable while the pane is on screen', () => {
+    staged(`<div id="pane">${card}</div>`, {
+      pane: { overflowY: 'auto', overflowX: 'visible', position: 'fixed' },
+    })
+    expect(findProtectedViolation()).toBeNull()
+  })
+})
+
+test('a card in an inner pane the outer pane can never scroll to is pushed off screen (3.5.0 review)', () => {
+  document.body.innerHTML =
+    '<div id="outer"><div id="pane"><div id="card" data-protected><span id="words">May I install it?</span></div></div></div>'
+  rects = {
+    outer: [0, 0, 400, 600],
+    pane: [0, 0, 400, 300],
+    card: [0, 100, 400, 80],
+    words: [10, 110, 200, 20],
+  }
+  // The inner pane sits 5000px above the outer pane's content; the card lands back inside the outer extent.
+  rectsOn = {
+    ...rects,
+    pane: [0, -5000, 400, 300],
+    card: [0, 4000, 400, 80],
+    words: [10, 4010, 200, 20],
+  }
+  for (const [key, value] of [
+    ['scrollHeight', 800],
+    ['scrollWidth', 800],
+  ] as const)
+    Object.defineProperty(document.documentElement, key, { value, configurable: true })
+  for (const [id, height] of [
+    ['outer', 10000],
+    ['pane', 10000],
+  ] as const) {
+    const node = document.getElementById(id)!
+    Object.defineProperty(node, 'scrollHeight', { value: height, configurable: true })
+    Object.defineProperty(node, 'scrollWidth', { value: 400, configurable: true })
+  }
+  stage({
+    outer: { overflowY: 'auto', overflowX: 'visible' },
+    pane: { overflowY: 'auto', overflowX: 'visible' },
+  })
+  expect(findProtectedViolation()).toMatch(/pushed off screen/)
 })

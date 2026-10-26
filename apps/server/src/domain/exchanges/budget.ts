@@ -22,6 +22,8 @@ export const HeldTurnSchema = z.object({
   exchangeId: z.string().nullable(),
   /** The state the holding exchange goes back to when the turn is released. */
   resume: z.enum(['live', 'waiting_on_agent', 'done']),
+  /** Agents whose turns were dropped while this one was held (3.5.0): shown on the pause card. */
+  dropped: z.array(z.string()).max(8).optional(),
 })
 export type HeldTurn = z.infer<typeof HeldTurnSchema>
 
@@ -102,10 +104,24 @@ export function hold(
   held: Omit<HeldTurn, 'resume'> | null,
   now: string,
   endedReason: string | null = null,
+  /** `release` re-holds the very turn it holds (checked again, or reassigned): that one may be replaced. */
+  replacesHeld = false,
 ): DomainEventDraft[] {
   const exchange = exchangeRow(sqlite, exchangeId)
   if (!exchange) return []
   const earlier = heldTurn(sqlite, exchangeId)
+  // The person hasn't answered the first hold yet: that turn and its reason stand (a held turn is never lost). A newer
+  // turn that can't go on either is dropped, and the held turn records whose, so the pause card can say so (3.5.0).
+  if (earlier && !replacesHeld) {
+    if (!held) return []
+    const dropped = [...new Set([...(earlier.dropped ?? []), held.agentId])].slice(-8)
+    return updateExchange(
+      sqlite,
+      exchangeId,
+      { held: JSON.stringify({ ...earlier, dropped }) },
+      now,
+    )
+  }
   const resume: HeldTurn['resume'] =
     earlier?.resume ??
     (exchange.state === 'waiting_on_agent' || exchange.state === 'done' ? exchange.state : 'live')
@@ -155,13 +171,14 @@ export function release(
       { ...again, agentId },
       now,
       `${agentId} can't take work right now`,
+      true,
     )
   if (change.check) {
     // Checked as if the exchange were going again, against the exchange the turn belongs to (or the job).
     const limit = turnExchange
       ? limitFor(sqlite, turnExchange)
       : jobLimitFor(sqlite, exchange.job_id)
-    if (limit) return hold(sqlite, exchangeId, limit, { ...again, agentId }, now)
+    if (limit) return hold(sqlite, exchangeId, limit, { ...again, agentId }, now, null, true)
   }
   const drafts = updateExchange(
     sqlite,

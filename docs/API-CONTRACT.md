@@ -683,7 +683,7 @@ exchangeBudget (8); jobTurnLimit (40); spendCapUsd: number | null; recipe: { kin
 updatedAt }`; `Exchange { id; jobId; roomId; kind:
 'handoff'|'ask'|'review'; parentId; from; to; state: 'live'|'waiting_on_agent'|'waiting_on_you'|'paused_budget'|
 'done'|'stopped'; round; turnsUsed; budget; outcome: 'approved'|'answered'|'handed_off'|'no_decision'|null;
-endedReason; pause: { reason; options } | null; queuedBehind: { agentId; since } | null; createdAt; updatedAt }`.
+endedReason; pause: { reason; options; droppedAgents? /* 3.5.0: turns dropped while it waited on you */ } | null; queuedBehind: { agentId; since } | null; createdAt; updatedAt }`.
   - **Budgets and pauses** (PLAN 11.1c, docs/briefs/11.1c-budgets.md). Before an exchange gets its next turn: its turns
     started + queued < `budget` (8), the job's agent-started turns (any turn an agent's action or answer queued, in an
     exchange or not) < `jobTurnLimit` (40), and with a spend cap
@@ -776,7 +776,9 @@ conflict` for a room that isn't a one-to-one, or while a message is still being 
   2.4.0: the body may be `{ another: true }` (**Try another**): the agent is asked for a different answer to the same
   message (it keeps its Hermes session, so it knows its earlier answer, and gets the room as it is now); an empty body
   is the plain Retry. Every reply written again for the same message carries `alternativeOf` (the first reply's id) on
-  its `Message`, so the room shows the versions as one message with a pager.
+  its `Message`, so the room shows the versions as one message with a pager. 3.5.0: an agent `Message` carries `retryable`
+  (`true`: it answers the person's own message, so Retry and Try another apply; `false`: a hand-off, summary or
+  orchestration reply, refused here with `409`); absent when Score doesn't know (the web then guesses, the server decides).
 - **H** `POST /api/rooms/:roomId/messages/:messageId/stop` → `{ ok: true }` (PLAN 5.25): stops the Score-started run that is
   writing that streaming agent reply; the reply ends with "This run was stopped." `404` unknown; `409 conflict` when the
   message is not a reply being written by a running run (finished, or still queued).
@@ -1010,6 +1012,9 @@ title; startedAt; messageCount; busy; roomId }`, newest first, at most 200 per a
   the first user message (redacted, cut to 120 characters). `busy` = not ended and active within the last 5 minutes.
   `roomId` = the Score room made from it, if imported. `unavailable` = profiles whose database is missing or has a changed
   schema.
+- `GET /api/outside-sessions/preview?agentId=&sessionId=` (3.5.0) → `{ messages: { role: 'user' | 'assistant'; text; at }[] }`:
+  the session's text as an import would copy it (redacted, original times, at most 1000), read-only. It creates **no
+  room**; only the explicit import below does ("Bring into a job", "Continue"). `404` for an unknown agent or session.
 - **H** `POST /api/outside-sessions/import` `{ agentId; sessionId }` → `{ roomId; imported }`: a new room (name
   `#<source>-<title> #imported #<source>`, lead and only member the agent, `importedFrom` set) holding read-only copies of
   the session's user and assistant text (redacted, original times, at most the first 1000 messages, ids start with
@@ -1949,7 +1954,15 @@ mapping: { ref; title?; link?; details? } (dot paths); template; reportBack }` �
   in full, this once) · **H** `PATCH|DELETE /api/triggers/:id` · **H** `GET /api/triggers/:id/secret` → `{ secret }`
   (paired browser only) · **H** `POST /api/triggers/:id/rotate` → `{ secret }` (the old one stops working). The secret is
   Score's own (`whsec_` + 32 random bytes), sealed at rest (AES-256-GCM, key `~/.score/sealing.key`, bound to the
-  trigger id). `Trigger.url` is `<public origin>/hooks/<id>`.
+  trigger id). `Trigger.url` is `<public origin>/hooks/<id>`. `Trigger.warning?: string` (3.5.0) is set, on every read, when
+  the report-back `tool` doesn't look like a reporting tool, by the whole words of its name (snake, kebab, dotted or
+  camelCase): every word must be reporting vocabulary or a place a report goes (an allowlist in
+  `domain/triggers/report-back.ts`: comment, reply, review, status, send, post, …; issue, pull request, ticket, thread,
+  channel, slack, github, …), with at least one reporting word, no word that changes things (delete, merge, approve, …)
+  and no soft verb (create/add/update/set/submit/leave) whose own phrase doesn't end in a comment, note, message, reply,
+  report, review, feedback or reaction (`create_comment`, `add_review` pass; `create_issue`, `update_status`,
+  `send_funds`, `post_tweet` warn): "This tool may change things, not just report." It is a name check only: no warning doesn't
+  prove a tool is harmless. Any tool name is still accepted; the settings show the warning.
 - **Report-back.** `ReportBack`: `{ mode: 'off' }` · `{ mode: 'fixed' | 'lead_decides'; tool; args }` where `tool` is a
   tool of the lead's Hermes profile and `args` a JSON template with `{{source.ref}}`, `{{source.title}}`,
   `{{source.link}}`, `{{job.title}}`, `{{job.summary}}` (the job's latest agent reply). **H** `POST

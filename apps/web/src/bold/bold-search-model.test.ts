@@ -254,3 +254,29 @@ test('arrow selection wraps in both directions', () => {
   expect(nextBoldSearchIndex(0, -1, 3)).toBe(2)
   expect(nextBoldSearchIndex(0, 1, 0)).toBe(-1)
 })
+
+test('a removed or not-ready agent is never offered as Message <agent> (3.5.1)', () => {
+  const gone: AgentSummary = {
+    ...agent('gone'),
+    lifecycle: {
+      state: 'removed',
+      incarnationId: '00000000-0000-4000-8000-000000000001',
+      operationId: null,
+    },
+  }
+  const fresh: AgentSummary = {
+    ...agent('fresh'),
+    lifecycle: {
+      state: 'needs_attention',
+      incarnationId: '00000000-0000-4000-8000-000000000002',
+      operationId: null,
+    },
+  }
+  const titles = (query: string) =>
+    flattenBoldSearch(
+      buildBoldSearchGroups(input({ agents: [agent('builder'), gone, fresh], query })),
+    ).map((item) => item.title)
+  expect(titles('')).toContain('Message builder')
+  expect(titles('').join(' ')).not.toMatch(/Message (gone|fresh)/)
+  expect(titles('@').join(' ')).not.toMatch(/Message (gone|fresh)/)
+})

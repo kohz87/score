@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { holdLockPerTest } from './locks.ts'
 import { pair } from './pair.ts'
 
 // 2.3.0 (decision 128): an agent's question is a needs-you card of its own. The fake adapter asks when a message says
@@ -36,6 +37,8 @@ async function ask(page: Page, text: string) {
   await composer.fill(text)
   await composer.press('Enter')
 }
+
+holdLockPerTest('builder-questions')
 
 for (const { name, viewport } of sizes) {
   test.describe(`agent questions at ${name}`, () => {

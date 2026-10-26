@@ -3,6 +3,27 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.5.0] — 2026-10-26
+
+### Fixed
+- **Removed agents** no longer show in the dock, the side panel's one-to-ones, Search's "Message …" actions or the
+  move-chat picker, and their pages no longer offer Message. Agents that are still setting up stay in the dock but
+  can't be messaged yet. An open link to a removed agent's chat still shows its history.
+- **Retry and Try another** appear only on replies to your own message. A reply that came from a hand-off between
+  agents no longer shows them (the server refused them anyway).
+- **An exchange paused for you never loses its held turn**: when another turn can't go on while you decide, the pause
+  card names the agents whose turns were dropped, so you can ask them again afterwards.
+- **Previewing a session from Elsewhere** no longer creates a room; only "Bring into Score" does.
+- **Triggers**: creating a trigger twice by retrying (same settings, within 10 minutes, never called) returns the
+  first one instead of leaving an unused twin. A report-back tool whose name suggests it changes things gets a
+  warning in the trigger's settings.
+- **Themes**: the safety guard no longer switches a theme off when a decision card sits far down a pane that scrolls
+  itself (it treated that card as pushed off screen). Hostile layouts stay caught.
+
+### Changed
+- Test reliability: recipe names, gate titles, the workspace phone screenshot and file uploads no longer collide or
+  race in the full test run.
+
 ## [3.4.0] — 2026-10-26
 
 ### Added

@@ -733,6 +733,16 @@ const cases = [
   ['TaskDetailSchema', f.detail, { ...f.detail, dependsOn: [''] }],
   ['RoomSchema', f.room, { ...f.room, members: [''] }],
   [
+    'OutsideSessionPreviewQuerySchema',
+    { agentId: 'builder', sessionId: 'sess-1' },
+    { agentId: 'builder', sessionId: 'sess-1', importIt: true },
+  ],
+  [
+    'OutsideSessionPreviewSchema',
+    { messages: [{ role: 'user', text: 'hi', at: '2026-10-26T10:00:00.000Z' }] },
+    { messages: [{ role: 'system', text: 'hi', at: '2026-10-26T10:00:00.000Z' }] },
+  ],
+  [
     'TeamRoomCreateRequestSchema',
     { name: 'Docs team', members: ['builder', 'reviewer'], leadAgentId: 'reviewer' },
     { name: 'Docs team', members: [], leadAgentId: 'reviewer' },

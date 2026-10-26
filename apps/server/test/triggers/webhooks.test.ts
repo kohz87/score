@@ -497,3 +497,95 @@ test('spraying random trigger ids from one address shares one failure budget', a
   )
   expect(answers.slice(TRIGGER_LIMITS.callsPerMinute)).toEqual(Array(5).fill(429))
 })
+
+test('a retried create answers with the same trigger and secret; a different one, or a later one, is new', async () => {
+  const first = await create()
+  const retry = await create()
+  expect(retry.trigger.id).toBe(first.trigger.id)
+  expect(retry.secret).toBe(first.secret)
+  const other = await app.inject({
+    method: 'POST',
+    url: '/api/triggers',
+    headers,
+    payload: { ...TRIGGER, name: 'Another' },
+  })
+  expect(other.json().trigger.id).not.toBe(first.trigger.id)
+  now += 11 * 60_000
+  expect((await create()).trigger.id).not.toBe(first.trigger.id)
+  const list = await app.inject({ method: 'GET', url: '/api/triggers', headers })
+  expect(list.json().items).toHaveLength(3)
+})
+
+test('a report-back tool that does not look like reporting carries a warning; reporting tools do not', async () => {
+  const warned = async (tool: string) => {
+    const made = await app.inject({
+      method: 'POST',
+      url: '/api/triggers',
+      headers,
+      payload: {
+        ...TRIGGER,
+        name: tool,
+        reportBack: { mode: 'fixed', tool, args: '{"id":"{{source.ref}}"}' },
+      },
+    })
+    expect(made.statusCode).toBe(201)
+    return made.json().trigger.warning as string | undefined
+  }
+  expect(await warned('tickets_add_comment')).toBeUndefined()
+  expect(await warned('tickets_delete_ticket')).toContain('may change things')
+  expect(await warned('tickets_frobnicate')).toContain('may change things')
+  const list = await app.inject({ method: 'GET', url: '/api/triggers', headers })
+  expect(list.json().items.filter((t: { warning?: string }) => t.warning)).toHaveLength(2)
+})
+
+test('a reporting word does not hide a changing one in the report-back tool name (3.5.0 review)', async () => {
+  const { reportBackWarning } = await import('../../src/domain/triggers/report-back.ts')
+  for (const tool of ['send_money', 'post_deploy', 'message_and_transfer', 'reply_then_publish'])
+    expect(reportBackWarning(tool), tool).toMatch(/may change things/)
+  for (const tool of [
+    'add_comment',
+    'post_status',
+    'notify_channel',
+    'send_reply',
+    'create_comment',
+    'createIssueComment',
+    'github.create_issue_comment',
+    'create_pull_request_review',
+    'submit_review',
+    'add_review',
+    'leave_feedback',
+    'add_reaction',
+  ])
+    expect(reportBackWarning(tool), tool).toBeUndefined()
+  // Words outside the reporting vocabulary warn, whatever else the name says (an allowlist).
+  for (const tool of [
+    'dataset_status',
+    'payload_report',
+    'send_funds',
+    'send_crypto',
+    'send_command',
+    'send_email',
+    'post_tweet',
+    'post_webhook',
+    'reply_all',
+    'post_pull_request',
+    'post_job',
+    'send_request',
+  ])
+    expect(reportBackWarning(tool), tool).toMatch(/may change things/)
+  for (const tool of ['send_slack_message', 'post_to_channel', 'reply_in_thread'])
+    expect(reportBackWarning(tool), tool).toBeUndefined()
+  for (const tool of [
+    'create_issue',
+    'update_ticket',
+    'set_owner',
+    'post_message_and_create_issue',
+    'notify_and_set_priority',
+    'reply_and_create_ticket',
+    'update_status',
+    'update_issue_status',
+    'create_issue_with_comment',
+    'update_issue_with_comment',
+  ])
+    expect(reportBackWarning(tool), tool).toMatch(/may change things/)
+})
