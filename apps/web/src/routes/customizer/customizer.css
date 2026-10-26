@@ -1,17 +1,36 @@
-/* Settings › Look › Customize (PLAN 9.4). A full-screen editor: preview left, controls right. */
+/* Settings › Look › Customizer (decision 131 E): the theme editor inside the bold Settings frame. Values come from the
+   bold prototype (docs/design/bold/prototype.html): dark ground, panels, pills, 26px cards. The classic names this file
+   was written with are aliased to the shell's tokens on .cz, so nothing here reads the theme being edited. */
+[data-ui='bold'] .cz {
+  --card: var(--panel);
+  --ground: var(--bg);
+  --hairline: var(--line);
+  --line-strong: var(--faint);
+  --ink-muted: var(--muted);
+  --subtle: var(--field);
+  --subtle-2: var(--line);
+  --font-heading: var(--font-d);
+  --font-body: var(--font-b);
+  --font-code: var(--font-m);
+  --radius-pill: 999px;
+  --radius-card: 26px;
+  --radius-14: 18px;
+  --radius-12: 14px;
+  --radius-10: 12px;
+  --agent-coral-text: var(--bad);
+  --agent-saffron-text: var(--warn);
+  --agent-coral-tint: color-mix(in srgb, var(--bad) 16%, transparent);
+  --shadow-rgb: 0 0 0;
+}
 .cz {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
-  padding: var(--space-4) var(--space-5) var(--space-4);
-  gap: var(--space-2);
-  background: var(--ground);
+  gap: var(--space-4);
+  min-width: 0;
   color: var(--ink);
-  overflow: hidden;
 }
 .cz-empty {
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
   gap: var(--space-4);
 }
 .cz-visually-hidden {
@@ -25,37 +44,13 @@
   white-space: nowrap;
   border: 0;
 }
-
-/* The bar */
-.cz-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3) var(--space-4);
-}
-.cz-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 40px;
-  padding: 0 var(--space-4) 0 var(--space-3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-pill);
-  background: var(--card);
-  color: var(--ink);
-  font-weight: 600;
-  font-size: 14px;
-  text-decoration: none;
-}
 .cz-back:focus-visible,
-.cz-btn:focus-visible,
-.cz-tab:focus-visible,
-.cz-seg-option:focus-visible,
-.cz-link:focus-visible,
-.cz-icon-btn:focus-visible,
-.cz-grip:focus-visible,
-.cz-input:focus-visible,
-.cz-select:focus-visible,
+.cz .cz-btn:focus-visible,
+.cz .cz-tab:focus-visible,
+.cz .cz-seg-option:focus-visible,
+.cz .cz-link:focus-visible,
+.cz .cz-input:focus-visible,
+.cz .cz-select:focus-visible,
 .cz-color-picker:focus-visible,
 .cz-file:focus-within,
 .cz-slider input:focus-visible,
@@ -63,39 +58,68 @@
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
+
+/* The head: Look / Customizer, the theme being edited, then the actions */
+.cz-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.cz .cz-crumb {
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+.cz .cz-crumb:hover {
+  text-decoration: underline;
+}
+.cz-slash {
+  color: var(--faint);
+}
 .cz-title {
-  min-width: 0;
-}
-.cz-title h1 {
   margin: 0;
-  font-family: var(--font-heading);
-  font-size: 26px;
+  font-family: var(--font-d);
+  font-size: 40px;
+  font-weight: 700;
   line-height: 1.1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
-.cz-theme-name {
-  margin: 2px 0 0;
+.cz-editing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 14px;
+  font-weight: 700;
+  max-width: 100%;
+}
+.cz-editing small {
   font-size: 13px;
-  color: var(--ink-muted);
+  font-weight: 400;
+  color: var(--muted);
+}
+.cz-editing span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .cz-unsaved {
-  color: var(--ink);
+  color: var(--warn);
+  font-size: 13px;
   font-weight: 600;
 }
 .cz-actions-wrap {
-  margin-left: auto;
   display: grid;
-  justify-items: end;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 .cz-inuse {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--agent-saffron-text);
+  color: var(--muted);
 }
 .cz-actions {
   display: flex;
@@ -105,39 +129,40 @@
 }
 .cz-sep {
   width: 1px;
-  height: 22px;
-  background: var(--hairline);
+  height: 24px;
+  margin: 0 4px;
+  background: var(--line);
 }
-.cz-btn {
-  height: 38px;
-  padding: 0 var(--space-4);
-  border: 1.5px solid var(--ink);
+.cz .cz-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
   border-radius: var(--radius-pill);
-  background: var(--card);
+  background: var(--field);
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   white-space: nowrap;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
-.cz-btn--primary {
-  background: var(--ink);
-  color: var(--card);
+.cz .cz-btn--primary {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
 }
-.cz-btn--quiet {
-  border-color: var(--hairline);
-  height: 34px;
-  font-weight: 500;
+.cz .cz-btn--quiet {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
 }
-.cz-btn:disabled {
-  opacity: 0.45;
+.cz .cz-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
-.cz-link {
+.cz .cz-link {
   padding: 0;
   border: 0;
   background: none;
@@ -149,7 +174,7 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.cz-link:disabled {
+.cz .cz-link:disabled {
   opacity: 0.4;
   cursor: default;
   text-decoration: none;
@@ -166,38 +191,43 @@
   display: none;
 }
 .cz-status {
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 .cz-problem {
-  color: var(--ink);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-14);
   background: var(--agent-coral-tint);
-  color: var(--agent-coral-text);
+  color: var(--bad);
   font-weight: 500;
 }
 .cz-switch {
   display: none;
 }
 
-/* Body: two panes */
+/* Body: the editor beside the preview */
 .cz-body {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(380px, 440px);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-4);
+  align-items: flex-start;
 }
-.cz-preview,
 .cz-controls {
-  min-height: 0;
+  flex: 1 1 420px;
+  max-width: 500px;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
+  padding: 18px 20px;
   border-radius: var(--radius-card);
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  overflow: hidden;
+  background: var(--panel);
+}
+.cz-preview {
+  flex: 999 1 380px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 /* Preview */
@@ -206,25 +236,24 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--hairline);
 }
 .cz-stage {
   position: relative;
-  flex: 1;
-  min-height: 0;
+  height: clamp(420px, 62vh, 640px);
   overflow: hidden;
-  background: repeating-conic-gradient(var(--subtle) 0 25%, var(--subtle-2) 0 50%) 0 0 / 20px 20px;
+  border-radius: 24px;
+  box-shadow: 0 0 0 1px var(--line);
+  background: repeating-conic-gradient(var(--field) 0 25%, var(--panel) 0 50%) 0 0 / 20px 20px;
 }
 .cz-frame-box {
   position: relative;
   margin: 0 auto;
   overflow: hidden;
-  background: var(--card);
+  background: var(--panel);
 }
 .cz-stage[data-device='phone'] .cz-frame-box,
 .cz-stage[data-device='tablet'] .cz-frame-box {
-  box-shadow: 0 0 0 1px var(--hairline);
+  box-shadow: 0 0 0 1px var(--line);
 }
 .cz-frame {
   display: block;
@@ -238,24 +267,24 @@
   display: grid;
   place-items: center;
   margin: 0;
-  color: var(--ink-muted);
+  color: var(--muted);
   font-size: 14px;
 }
 .cz-checks {
-  max-height: 28%;
-  overflow: auto;
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--hairline);
-  font-size: 13px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: var(--panel);
+  font-size: 14px;
 }
 .cz-checks h2 {
-  margin: 0 0 4px;
-  font-size: 14px;
-  font-weight: 600;
+  margin: 0 0 6px;
+  font-family: var(--font-d);
+  font-size: 18px;
+  font-weight: 700;
 }
 .cz-checks p {
   margin: 0;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 .cz-checks ul {
   margin: 0;
@@ -269,41 +298,50 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--hairline);
 }
-.cz-tab {
-  height: 34px;
-  padding: 0 var(--space-3);
-  border: 1px solid transparent;
+.cz .cz-tab {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
   border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--ink-muted);
+  background: var(--field);
+  color: var(--ink2);
   font: inherit;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
 }
-.cz-tab[aria-selected='true'] {
-  background: var(--ink);
-  color: var(--card);
+.cz .cz-tab[aria-selected='true'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
 }
 .cz-panel {
-  flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: var(--space-4);
 }
 .cz-use {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--hairline);
+  border-radius: 22px;
+  background: var(--deep);
+  box-shadow: 0 0 0 1px var(--line);
 }
 .cz-use-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+.cz-lost {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cz-lost kbd {
+  font-family: var(--font-m);
+  background: var(--field);
+  border-radius: 8px;
+  padding: 2px 8px;
+  color: var(--ink2);
 }
 
 .cz-section {
@@ -333,12 +371,15 @@
   border-top: 1px solid var(--hairline);
 }
 .cz-group legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 0 var(--space-2) 0 0;
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  color: var(--ink);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .cz-subhead {
   margin: 0;
@@ -363,15 +404,14 @@
 .cz-seg {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 2px;
-  padding: 3px;
+  gap: 4px;
+  padding: 4px;
   border-radius: var(--radius-pill);
-  background: var(--subtle);
-  border: 1px solid var(--hairline);
+  background: var(--field);
   align-self: flex-start;
 }
-.cz-seg-option {
-  height: 30px;
+.cz .cz-seg-option {
+  min-height: 32px;
   padding: 0 var(--space-3);
   border: 0;
   border-radius: var(--radius-pill);
@@ -382,9 +422,9 @@
   font-weight: 600;
   cursor: pointer;
 }
-.cz-seg-option[aria-checked='true'] {
-  background: var(--ink);
-  color: var(--card);
+.cz .cz-seg-option[aria-checked='true'] {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
 }
 
 .cz-slider {
@@ -404,8 +444,8 @@
 }
 
 /* Inputs */
-.cz-input,
-.cz-select {
+.cz .cz-input,
+.cz .cz-select {
   min-height: 38px;
   padding: 0 var(--space-3);
   border: 1px solid var(--hairline);
@@ -416,12 +456,12 @@
   font-size: 14px;
   min-width: 0;
 }
-.cz-select {
+.cz .cz-select {
   border-radius: var(--radius-pill);
   padding-right: var(--space-8);
   max-width: 100%;
 }
-.cz-textarea {
+.cz .cz-textarea {
   padding: var(--space-2) var(--space-3);
   resize: vertical;
 }
@@ -496,7 +536,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cz-color-input {
+.cz .cz-color-input {
   min-height: 34px;
   padding: 0 var(--space-2);
   border: 1px solid var(--hairline);
@@ -507,7 +547,7 @@
   font-size: 13px;
   min-width: 0;
 }
-.cz-color-input[aria-invalid='true'] {
+.cz .cz-color-input[aria-invalid='true'] {
   border-color: var(--agent-coral-text);
 }
 .cz-color-problem,
@@ -589,83 +629,6 @@
 }
 
 /* Sortable lists (menu, Now cards) */
-.cz-sortable {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-.cz-sortable-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px var(--space-2);
-  padding: 6px var(--space-2);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-14);
-  background: var(--card);
-}
-.cz-sortable-row[data-dragging] {
-  box-shadow: 0 6px 18px rgb(var(--shadow-rgb) / 18%);
-  border-color: var(--ink);
-}
-.cz-grip {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 34px;
-  border: 0;
-  border-radius: var(--radius-10);
-  background: transparent;
-  color: var(--ink-muted);
-  cursor: grab;
-  touch-action: none;
-}
-.cz-menu-name {
-  flex: 1 1 110px;
-  min-width: 90px;
-}
-.cz-menu-name .cz-input {
-  width: 100%;
-}
-.cz-card-name {
-  flex: 1 1 90px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.cz-span .cz-select {
-  min-height: 34px;
-  font-size: 13px;
-}
-.cz-move {
-  display: inline-flex;
-  gap: 2px;
-}
-.cz-icon-btn {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-pill);
-  background: var(--card);
-  color: var(--ink);
-  cursor: pointer;
-}
-.cz-icon-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-.cz-always {
-  font-size: 12px;
-  color: var(--ink-muted);
-}
-.cz-add-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
 
 /* Custom CSS */
 .cz-code {
@@ -826,30 +789,11 @@
 
 /* Narrow windows: one pane at a time */
 @media (width < 900px) {
-  .cz {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
-    padding: var(--space-3) var(--space-3) var(--space-5);
-  }
-  .cz-title h1 {
-    font-size: 22px;
-  }
-  .cz-actions-wrap {
-    margin-left: 0;
-    width: 100%;
-    justify-items: start;
-  }
-  .cz-actions {
-    margin-left: 0;
-    width: 100%;
+  .cz-title {
+    font-size: 30px;
   }
   .cz-sep {
     display: none;
-  }
-  .cz-btn {
-    height: 36px;
-    padding: 0 var(--space-3);
   }
   .cz-switch {
     display: block;
@@ -857,9 +801,8 @@
   .cz-body {
     display: block;
   }
-  .cz-preview,
   .cz-controls {
-    min-height: 0;
+    max-width: none;
   }
   .cz[data-pane='edit'] .cz-preview,
   .cz[data-pane='preview'] .cz-controls {
@@ -867,13 +810,6 @@
   }
   .cz-stage {
     height: 62dvh;
-    flex: none;
-  }
-  .cz-checks {
-    max-height: none;
-  }
-  .cz-panel {
-    overflow: visible;
   }
   .cz-color {
     grid-template-columns: 40px minmax(0, 1fr) auto;

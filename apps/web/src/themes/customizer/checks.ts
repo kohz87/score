@@ -39,31 +39,22 @@ const pairs: Pair[] = [
   },
   { text: 'muted', background: 'ground', minimum: 4.5, what: 'Quiet text on the page background' },
   { text: 'card', background: 'ink', minimum: 4.5, what: 'Text on the main buttons' },
-  { text: 'panel-ink', background: 'panel-card', minimum: 4.5, what: 'Text on approval panels' },
-  { text: 'chat-text', background: 'chat-soft', minimum: 4.5, what: 'Text on message cards' },
   {
-    text: 'bubble-own-ink',
-    background: 'bubble-own',
+    text: 'panel-ink',
+    background: 'panel-card',
     minimum: 4.5,
-    what: 'Text in your message bubble',
+    what: 'Text on requests, your messages and results',
   },
-  { text: 'tasks-note', background: 'tasks-done', minimum: 4.5, what: 'Text on done tasks' },
-  { text: 'ink', background: 'tasks-ground', minimum: 4.5, what: 'Text on the Tasks board' },
-  { text: 'link-hover', background: 'card', minimum: 4.5, what: 'Links when pointed at' },
   {
     text: 'watch-text',
-    background: 'watch-window',
+    background: 'watch-stage',
     minimum: 4.5,
-    what: 'Text in the Watch window',
+    what: 'Text in the terminal and code',
   },
   { text: 'line-strong', background: 'card', minimum: 3, what: 'Strong lines on cards' },
-  { text: 'flow-edge', background: 'flow-canvas', minimum: 3, what: 'Lines between steps in Flow' },
 ]
 
-const FALLBACK: Partial<Record<ThemeColorToken, ThemeColorToken>> = {
-  'bubble-own': 'ink',
-  'bubble-own-ink': 'card',
-}
+const FALLBACK: Partial<Record<ThemeColorToken, ThemeColorToken>> = {}
 
 export const modeName = (mode: Mode) => (mode === 'light' ? 'Light' : 'Dark')
 export const ratioText = (ratio: number) => `${(Math.floor(ratio * 10) / 10).toFixed(1)}:1`

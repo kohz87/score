@@ -21,8 +21,8 @@ const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: t
 
 async function openCustomizer(page: Page, path = '/settings/look/customize') {
   await page.goto(path)
-  await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()
-  await expect(frame(page).locator('.page-content')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('heading', { name: 'Customizer' })).toBeVisible()
+  await expect(frame(page).locator('[data-ui="bold"]')).toBeVisible({ timeout: 30_000 })
 }
 
 const busyPicture = () =>
@@ -34,10 +34,10 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
   test.setTimeout(180_000)
   await pair(page)
   try {
-    await page.goto('/settings/look')
-    await page.getByRole('link', { name: 'Customize…' }).click()
-    await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()
-    await expect(page).toHaveURL(/\/settings\/look\/customize\/score$/)
+    await page.goto('/b/settings/look')
+    await page.getByRole('link', { name: 'Open the Customizer' }).click()
+    await expect(page.getByRole('heading', { name: 'Customizer' })).toBeVisible()
+    await expect(page).toHaveURL(/\/b\/settings\/look\/customize\/[^/]+$/)
     // A built-in style is copied, not edited: the draft starts as a new theme.
     await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Score copy')
     const cacheBefore = await page.evaluate(() => window.localStorage.getItem('score.look.cache'))
@@ -46,31 +46,22 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
     await page.getByLabel('Author').fill('Test Author')
 
     await tab(page, 'Colours').click()
-    await page.getByRole('textbox', { name: 'Page background, colour value' }).fill('#dfe9ef')
+    await page.getByRole('textbox', { name: 'Ground, colour value', exact: true }).fill('#dfe9ef')
 
     await tab(page, 'Shape').click()
-    await page
-      .getByRole('radiogroup', { name: 'Corners' })
-      .getByRole('radio', { name: 'Round' })
-      .click()
     await page
       .getByRole('radiogroup', { name: 'Card surface' })
       .getByRole('radio', { name: 'Glass' })
       .click()
 
-    await tab(page, 'Layout').click()
+    await tab(page, 'Spacing').click()
     await page
-      .getByRole('radiogroup', { name: 'Navigation' })
-      .getByRole('radio', { name: 'Left rail' })
+      .getByRole('radiogroup', { name: 'Corners' })
+      .getByRole('radio', { name: 'Round' })
       .click()
-    await page.getByLabel('Name of Chat in the menu').fill('Talk')
-    await page.getByLabel('Name of Chat in the menu').press('Enter')
-    await page.getByRole('button', { name: 'Hide Reports from the menu' }).click()
-
-    await tab(page, 'Chat').click()
     await page
-      .getByRole('radiogroup', { name: 'Messages' })
-      .getByRole('radio', { name: 'Bubbles' })
+      .getByRole('radiogroup', { name: 'Spacing' })
+      .getByRole('radio', { name: 'Airy' })
       .click()
 
     await tab(page, 'Background').click()
@@ -94,14 +85,11 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
     // The draft is painted in the preview frame only.
     const inner = frame(page).locator('html')
     await expect(inner).toHaveAttribute('data-look', 'custom')
-    await expect(inner).toHaveAttribute('data-nav', 'left')
-    await expect(inner).toHaveAttribute('data-chat', 'bubbles')
+    await expect(inner).toHaveAttribute('data-density', 'airy')
     await expect(inner).toHaveAttribute('data-surface', 'glass')
-    await expect(frame(page).locator('.main-nav-link').first()).toHaveText('Talk')
-    await expect(frame(page).locator('.main-nav-link', { hasText: 'Reports' })).toHaveCount(0)
     const outside = await page.evaluate(() => ({
       look: document.documentElement.getAttribute('data-look'),
-      nav: document.documentElement.getAttribute('data-nav'),
+      density: document.documentElement.getAttribute('data-density'),
       cache: window.localStorage.getItem('score.look.cache'),
       device: window.localStorage.getItem('score.look.device'),
       adopted: document.adoptedStyleSheets.length,
@@ -110,7 +98,7 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
     }))
     expect(outside).toEqual({
       look: null,
-      nav: null,
+      density: 'comfortable',
       cache: cacheBefore,
       device: null,
       adopted: 0,
@@ -141,15 +129,10 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
       id: 'e2e-harbour',
       name: 'E2E Harbour',
       author: 'Test Author',
-      shape: { radius: 'round', surface: 'glass' },
-      layout: { nav: 'left', chat: { messages: 'bubbles' } },
+      shape: { radius: 'round', surface: 'glass', density: 'airy' },
       background: { image: 'asset:img/background.png' },
     })
-    expect(saved.manifest.layout.menu.slice(0, 2)).toEqual([
-      { to: '/chat', label: 'Talk' },
-      { to: '/team' },
-    ])
-    expect(saved.manifest.layout.menu.some((m: { to: string }) => m.to === '/reports')).toBe(false)
+    expect(saved.manifest.layout).toBeUndefined()
     expect(saved.assets).toEqual(['img/background.png'])
     // Saving didn't switch anything on.
     await expect(page.locator('html')).not.toHaveAttribute('data-look', /.+/)
@@ -182,7 +165,7 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
     await expect(dialog).toBeVisible()
     await expect(dialog.getByText('Test Author')).toBeVisible()
     await expect(dialog.getByRole('region', { name: 'What it changes' })).toContainText(
-      'navigation as a rail on the left',
+      'airy spacing',
     )
     // The CSS was cleaned when it was saved, so the file carries nothing the checks would remove.
     await expect(dialog.getByRole('region', { name: 'What the checks removed' })).toContainText(
@@ -202,8 +185,8 @@ test('builds a theme from scratch, saves, exports, re-imports and uses it; the d
 
     // Use it on this device: now the page wears it.
     await page.getByRole('button', { name: 'Use on this device' }).click()
-    await expect(page.locator('html')).toHaveAttribute('data-nav', 'left', { timeout: 20_000 })
-    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    await expect(page.locator('html')).toHaveAttribute('data-look', 'custom', { timeout: 20_000 })
+    await expect(page.locator('html')).toHaveAttribute('data-density', 'airy')
     expect(await page.evaluate(() => window.localStorage.getItem('score.look.device'))).toBe(
       'e2e-harbour',
     )
@@ -229,47 +212,26 @@ test('keyboard only: sections, choices, moving rows, undo and redo', async ({ pa
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('ArrowRight')
-  await expect(tab(page, 'Layout')).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await expect(tab(page, 'Spacing')).toBeFocused()
 
   // A choice moves with the arrow keys.
-  const nav = page.getByRole('radiogroup', { name: 'Navigation' })
-  await nav.getByRole('radio', { name: 'Score’s' }).focus()
+  const spacing = page.getByRole('radiogroup', { name: 'Spacing' })
+  await spacing.getByRole('radio', { name: 'Score’s' }).focus()
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('ArrowRight')
-  await expect(nav.getByRole('radio', { name: 'Left rail' })).toBeChecked()
-  await expect(frame(page).locator('html')).toHaveAttribute('data-nav', 'left')
-
-  // Menu rows: the buttons, and the arrow keys on the handle.
-  const moveDown = page.getByRole('button', { name: 'Move Chat down' })
-  await moveDown.focus()
-  await page.keyboard.press('Enter')
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Chat moved to position 2 of 5' }),
-  ).toBeVisible()
-  await expect(frame(page).locator('.main-nav-link').first()).toHaveText('Team')
-  const grip = page.getByRole('button', { name: /^Reorder Chat:/ })
-  await grip.focus()
-  await page.keyboard.press('ArrowUp')
-  await expect(frame(page).locator('.main-nav-link').first()).toHaveText('Chat')
-  // Hidden pages can be brought back, and Settings can't be hidden.
-  await page.getByRole('button', { name: 'Hide Knowledge from the menu' }).focus()
-  await page.keyboard.press('Enter')
-  await expect(page.getByRole('list', { name: 'Hidden from the menu' })).toContainText('Knowledge')
-  await expect(page.getByRole('button', { name: 'Hide Settings from the menu' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Show Knowledge in the menu' }).focus()
-  await page.keyboard.press('Enter')
-  await expect(page.getByRole('list', { name: 'Hidden from the menu' })).toHaveCount(0)
+  await expect(spacing.getByRole('radio', { name: 'Comfortable' })).toBeChecked()
+  await expect(frame(page).locator('html')).toHaveAttribute('data-density', 'comfortable')
+  await page.keyboard.press('ArrowRight')
+  await expect(frame(page).locator('html')).toHaveAttribute('data-density', 'airy')
 
   // Undo and redo by keyboard, outside a text field.
-  await page
-    .getByRole('radiogroup', { name: 'Page width' })
-    .getByRole('radio', { name: 'Narrow' })
-    .click()
-  await expect(frame(page).locator('html')).toHaveAttribute('data-width', 'narrow')
+  await page.getByRole('radio', { name: 'Compact' }).click()
+  await expect(frame(page).locator('html')).toHaveAttribute('data-density', 'compact')
   await page.keyboard.press('Control+z')
-  await expect(frame(page).locator('html')).not.toHaveAttribute('data-width', 'narrow')
+  await expect(frame(page).locator('html')).not.toHaveAttribute('data-density', 'compact')
   await page.keyboard.press('Control+Shift+z')
-  await expect(frame(page).locator('html')).toHaveAttribute('data-width', 'narrow')
+  await expect(frame(page).locator('html')).toHaveAttribute('data-density', 'compact')
 })
 
 test('Discard goes back to the saved theme and Undo brings the changes back', async ({ page }) => {
@@ -296,13 +258,13 @@ test('contrast: a faint colour is named, and small text over a picture is measur
   await pair(page)
   await openCustomizer(page)
   await tab(page, 'Colours').click()
-  await page.getByRole('textbox', { name: 'Main text, colour value' }).fill('#c9ccd2')
+  await page.getByRole('textbox', { name: 'Text, colour value', exact: true }).fill('#c9ccd2')
   const checks = page.getByRole('region', { name: 'Contrast checks' })
   await expect(checks).toContainText('Main text on cards is hard to read')
-  await expect(page.getByText('Hard to read on “Card background”')).toBeVisible()
-  await page.getByRole('textbox', { name: 'Main text, colour value' }).fill('not a colour')
+  await expect(page.getByText('Hard to read on “Panels”')).toBeVisible()
+  await page.getByRole('textbox', { name: 'Text, colour value', exact: true }).fill('not a colour')
   await expect(page.getByRole('alert').filter({ hasText: 'Use a hex colour' })).toBeVisible()
-  await page.getByRole('button', { name: 'Use Score’s main text' }).click()
+  await page.getByRole('button', { name: 'Use Score’s text', exact: true }).click()
   await expect(checks).toContainText('No contrast problems found')
 
   // A busy picture behind glass cards: the text that is really drawn is measured against it.
@@ -369,14 +331,14 @@ test('leaving with unsaved changes asks first', async ({ page }) => {
     .getByRole('radiogroup', { name: 'Shadows' })
     .getByRole('radio', { name: 'Flat' })
     .click()
-  await page.getByRole('link', { name: 'Settings' }).click()
+  await page.locator('.cz-back').click()
   const dialog = page.getByRole('dialog', { name: 'Leave without saving?' })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('button', { name: 'Keep editing' }).click()
   await expect(page).toHaveURL(/customize/)
-  await page.getByRole('link', { name: 'Settings' }).click()
+  await page.locator('.cz-back').click()
   await page.getByRole('button', { name: 'Leave and lose changes' }).click()
-  await expect(page).toHaveURL(/\/settings/)
+  await expect(page).toHaveURL(/\/b\/settings\/look$/)
 })
 
 test('the install preview lists what the checks removed, and Cancel stores nothing', async ({
@@ -481,13 +443,11 @@ test('Settings › Look shows an added theme in its own colours', async ({ page 
 // Roles, names and focus order: every control has a name, the sections are a tab list with one panel, dialogs trap focus.
 test('roles, names and focus order', async ({ page }) => {
   await pair(page)
-  // The classic view: the bold shell frames the Customizer since 2.0.2.
-  await page.addInitScript(() => window.localStorage.setItem('score.ui', 'classic'))
   await openCustomizer(page)
-  // Focus order: back link, then the actions, then the preview's controls, then the editor.
-  await page.locator('body').click({ position: { x: 1, y: 1 } })
+  // Focus order inside the page: the way back to Look, then the actions, then the preview's controls, then the editor.
+  await page.locator('.cz-back').focus()
   const order: string[] = []
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < 4; i++) {
     await page.keyboard.press('Tab')
     order.push(
       await page.evaluate(() => {
@@ -497,7 +457,7 @@ test('roles, names and focus order', async ({ page }) => {
     )
   }
   // Nothing is changed yet, so Undo, Redo and Discard are off and skipped; a new theme can be saved as it is.
-  expect(order.slice(0, 4)).toEqual(['Settings', 'Save', 'Save as new…', 'Export'])
+  expect(order.slice(0, 3)).toEqual(['Save', 'Save as new…', 'Export'])
   const unnamed = async () => {
     const snapshot = await page.locator('.cz').ariaSnapshot()
     return snapshot
@@ -510,11 +470,10 @@ test('roles, names and focus order', async ({ page }) => {
   for (const name of [
     'Theme',
     'Colours',
+    'Background',
     'Fonts',
     'Shape',
-    'Layout',
-    'Chat',
-    'Background',
+    'Spacing',
     'Custom CSS',
   ]) {
     await tab(page, name).click()
@@ -546,22 +505,66 @@ test('roles, names and focus order', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Save as new…' })).toBeFocused()
 })
 
+// Decision 131 E: the Customizer is a part of Settings › Look in the new style, on both desktop and phone.
+for (const size of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'phone', width: 390, height: 844 },
+]) {
+  test(`the Customizer sits inside Settings › Look and offers the new shell's areas (${size.name})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: size.width, height: size.height })
+    await pair(page)
+    // The old addresses lead there and keep the query.
+    await page.goto('/settings/look/customize/score?x=1')
+    await expect(page).toHaveURL(/\/b\/settings\/look\/customize\/score\?x=1$/)
+    await expect(page.getByRole('heading', { name: 'Customizer' })).toBeVisible()
+    // Settings frames it, with Look selected, and the way back is the Look crumb.
+    const nav = page.getByRole('navigation', { name: 'Settings' })
+    await expect(nav.getByRole('button', { name: /^Look/ })).toHaveAttribute('aria-current', 'page')
+    await expect(page.locator('.cz-back')).toHaveText('Look')
+    // The classic Layout and Chat tabs are gone; Spacing takes their place.
+    await expect(page.getByRole('tab', { name: /^(Layout|Chat)$/ })).toHaveCount(0)
+    await expect(tab(page, 'Spacing')).toBeVisible()
+    await tab(page, 'Colours').click()
+    const legends = await page.locator('.cz-group legend').allTextContents()
+    expect(legends.map((text) => text.trim())).toEqual([
+      'Ground and panels',
+      'Text',
+      'For you and results',
+      'Lines',
+      'Agent screen and code',
+    ])
+    // The page never grows wider than the screen.
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+    ).toBeLessThanOrEqual(1)
+    // The preview offers pages of the new shell.
+    if (size.name === 'phone') await page.getByRole('radio', { name: 'Preview' }).click()
+    const pages = await page.getByLabel('Page to preview').locator('option').allTextContents()
+    expect(pages).toEqual(['Team room', 'Team', 'Agent page', 'Agent screen', 'Settings'])
+    // The surface that asks you to decide keeps the protected marker.
+    await expect(page.locator('.cz-back')).toHaveAttribute('data-protected', 'raised')
+  })
+}
+
 test('phone: one pane at a time, nothing wider than the screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await pair(page)
   await page.goto('/settings/look/customize')
-  await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()
+  await expect(page).toHaveURL(/\/b\/settings\/look\/customize$/)
+  await expect(page.getByRole('heading', { name: 'Customizer' })).toBeVisible()
   await expect(page.getByRole('tablist', { name: 'Sections' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Preview' })).toBeHidden()
   const over = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(await over()).toBeLessThanOrEqual(1)
-  for (const name of ['Colours', 'Layout']) {
+  for (const name of ['Colours', 'Spacing']) {
     await tab(page, name).click()
     expect(await over(), name).toBeLessThanOrEqual(1)
   }
   await page.getByRole('radio', { name: 'Preview' }).click()
   await expect(page.getByRole('region', { name: 'Preview' })).toBeVisible()
-  await expect(frame(page).locator('.page-content')).toBeVisible({ timeout: 30_000 })
+  await expect(frame(page).locator('[data-ui="bold"]')).toBeVisible({ timeout: 30_000 })
   expect(await over()).toBeLessThanOrEqual(1)
 })
 
@@ -962,15 +965,15 @@ test('small text on a translucent glass layer is measured against what is behind
     .getByRole('radio', { name: 'Dark' })
     .click()
   await tab(page, 'Colours').click()
-  await page.getByRole('textbox', { name: 'Page background, colour value' }).fill('#000000')
+  await page.getByRole('textbox', { name: 'Ground, colour value', exact: true }).fill('#000000')
   const checks = page.getByRole('region', { name: 'Contrast checks' })
   // 70% white glass over black, with #b0b0b0 text on it: a computed color(srgb …) background.
   await tab(page, 'Custom CSS').click()
   await page.locator('.cm-content').click()
   await page.keyboard.type(
-    '.top-bar { background: color-mix(in srgb, white 70%, transparent) } .brand-subtitle { color: #b0b0b0 }',
+    '.top { background: color-mix(in srgb, white 70%, transparent) } .word { color: #b0b0b0 }',
   )
-  await expect(checks).toContainText('“for Hermes”', { timeout: 20_000 })
+  await expect(checks).toContainText('“score”', { timeout: 20_000 })
   await expect(checks).toContainText('hard to read over its background')
 })
 

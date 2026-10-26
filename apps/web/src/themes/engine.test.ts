@@ -91,6 +91,18 @@ describe('theme engine', () => {
     expect(THEME_COLOR_TOKENS).toHaveLength(38)
   })
 
+  test('the code ground and text of the new shell follow a theme that sets them, and only then', () => {
+    const set = tokenCss(
+      { colors: { dark: { 'watch-stage': '#0b1a26', 'watch-text': '#d0e0f0' } } },
+      'harbour',
+    )
+    expect(set).toContain('--watch-stage:#0b1a26;--t-code-bg:#0b1a26;')
+    expect(set).toContain('--watch-text:#d0e0f0;--t-code-ink:#d0e0f0;')
+    expect(tokenCss({ colors: { dark: { ground: '#000000' } } }, 'harbour')).not.toContain(
+      '--t-code',
+    )
+  })
+
   test('a colour that is not a plain colour is ignored (no url(), no var())', () => {
     const css = tokenCss(
       {

@@ -77,18 +77,17 @@ import {
   type PreviewDevice,
   type PreviewPage,
 } from './preview-pages.ts'
-import { WayBackPalette } from './WayBackPalette.tsx'
 import { SectionBackground } from './SectionBackground.tsx'
 import { SectionColours } from './SectionColours.tsx'
 import { SectionCss } from './SectionCss.tsx'
 import { SectionFonts } from './SectionFonts.tsx'
-import { SectionLayout } from './SectionLayout.tsx'
-import { SectionChat, SectionShape } from './SectionShape.tsx'
+import { SectionShape } from './SectionShape.tsx'
+import { SectionSpacing } from './SectionSpacing.tsx'
 import { SectionTheme } from './SectionTheme.tsx'
 import type { SectionContext } from './section-context.ts'
 import './customizer.css'
 
-// Settings › Look › Customize (PLAN 9.4, design §8): a full-screen editor for a theme. The draft lives only in this
+// Settings › Look › Customizer (PLAN 9.4, design §8; moved into Settings by decision 131 E): an editor for a theme. The draft lives only in this
 // component (a History of values); it is painted into the preview frame and nowhere else until it is saved and used.
 
 type Source = 'new' | 'builtin' | 'imported' | 'custom'
@@ -156,11 +155,10 @@ async function loadWithSnapshot(id: string): Promise<{ detail: ThemeDetail; snap
 const tabs = [
   { id: 'theme', label: 'Theme' },
   { id: 'colours', label: 'Colours' },
+  { id: 'background', label: 'Background' },
   { id: 'fonts', label: 'Fonts' },
   { id: 'shape', label: 'Shape' },
-  { id: 'layout', label: 'Layout' },
-  { id: 'chat', label: 'Chat' },
-  { id: 'background', label: 'Background' },
+  { id: 'spacing', label: 'Spacing' },
   { id: 'css', label: 'Custom CSS' },
 ] as const
 type TabId = (typeof tabs)[number]['id']
@@ -202,7 +200,7 @@ export function Customizer() {
     const choice = look.mode
     return choice === 'system' ? systemMode() : choice
   })
-  const [pageId, setPageId] = useState('chat')
+  const [pageId, setPageId] = useState('b-room')
   const [deviceId, setDeviceId] = useState<PreviewDevice['id']>('desktop')
   const [pane, setPane] = useState<'edit' | 'preview'>('edit')
   const [status, setStatus] = useState('')
@@ -221,7 +219,7 @@ export function Customizer() {
     queryKey: ['customizer', 'preview-agents'],
     queryFn: async ({ signal }) =>
       AgentsSnapshotSchema.parse(await apiFetch('agents', { signal })).items,
-    enabled: pageId === 'b-agent',
+    enabled: pageId === 'b-agent' || pageId === 'b-screen',
     staleTime: 60_000,
   })
   const page: PreviewPage = previewAgentId(
@@ -669,14 +667,12 @@ export function Customizer() {
         <Link className="cz-btn cz-error-back" to="/settings/look" data-protected="raised">
           Back to Settings
         </Link>
-        <WayBackPalette />
       </div>
     )
   if (!history || !draft || !target || !previewDraft)
     return (
       <div className="cz cz-empty">
         <p role="status">Opening the Customizer…</p>
-        <WayBackPalette />
       </div>
     )
 
@@ -705,109 +701,99 @@ export function Customizer() {
   return (
     <div className="cz" data-pane={pane}>
       <header className="cz-bar">
-        <Link className="cz-back" to="/settings/look" data-protected="raised">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M10 3 5 8l5 5" />
-          </svg>
-          Settings
+        <Link className="cz-crumb cz-back" to="/settings/look" data-protected="raised">
+          Look
         </Link>
-        <div className="cz-title">
-          <h1>Customize</h1>
-          <p className="cz-theme-name">
-            {draft.manifest.name}
-            {dirty && <span className="cz-unsaved"> · Unsaved changes</span>}
-            {!dirty && !target.exists && <span className="cz-unsaved"> · Not saved yet</span>}
-          </p>
-        </div>
-        <div className="cz-actions-wrap">
-          {inUseNote && (
-            <p className="cz-inuse" id="cz-inuse">
-              {inUseNote}
-            </p>
-          )}
-          <div className="cz-actions" role="toolbar" aria-label="Theme actions">
-            <button
-              type="button"
-              className="cz-btn"
-              disabled={!canUndo(history)}
-              onClick={() => setHistory(undo(history))}
-            >
-              Undo
-            </button>
-            <button
-              type="button"
-              className="cz-btn"
-              disabled={!canRedo(history)}
-              onClick={() => setHistory(redo(history))}
-            >
-              Redo
-            </button>
-            <button
-              type="button"
-              className="cz-btn"
-              disabled={!dirty}
-              onClick={() => {
-                setHistory(discard(history))
-                setStatus('Went back to the saved theme. Undo brings your changes back.')
-              }}
-            >
-              Discard
-            </button>
-            <span className="cz-sep" aria-hidden="true" />
-            <button
-              type="button"
-              className="cz-btn cz-btn--primary"
-              disabled={!(dirty || !target.exists) || !!busy}
-              aria-describedby={inUseNote ? 'cz-inuse' : undefined}
-              onClick={save}
-            >
-              {busy === 'save' ? 'Saving…' : inUseNote ? 'Save and apply' : 'Save'}
-            </button>
-            <button
-              type="button"
-              className="cz-btn"
-              disabled={!!busy}
-              onClick={() => setSaveAs(`${draft.manifest.name} copy`.slice(0, 60))}
-            >
-              Save as new…
-            </button>
-            <span className="cz-sep" aria-hidden="true" />
-            <button type="button" className="cz-btn" disabled={!!busy} onClick={exportZip}>
-              Export
-            </button>
-            <button
-              type="button"
-              className="cz-btn"
-              disabled={!!busy}
-              onClick={() => fileInput.current?.click()}
-            >
-              Import…
-            </button>
-            <input
-              ref={fileInput}
-              type="file"
-              accept=".zip,application/zip"
-              hidden
-              aria-label="Theme file to import"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                void pickFile(file)
-              }}
-            />
-          </div>
-        </div>
+        <span className="cz-slash" aria-hidden="true">
+          /
+        </span>
+        <h2 className="cz-title">Customizer</h2>
+        <p className="cz-editing">
+          <small>Editing</small>
+          <span>{draft.manifest.name}</span>
+        </p>
+        {dirty && <span className="cz-unsaved">Unsaved changes</span>}
+        {!dirty && !target.exists && <span className="cz-unsaved">Not saved yet</span>}
       </header>
+
+      <div className="cz-actions-wrap">
+        <div className="cz-actions" role="toolbar" aria-label="Theme actions">
+          <button
+            type="button"
+            className="cz-btn"
+            disabled={!canUndo(history)}
+            onClick={() => setHistory(undo(history))}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="cz-btn"
+            disabled={!canRedo(history)}
+            onClick={() => setHistory(redo(history))}
+          >
+            Redo
+          </button>
+          <button
+            type="button"
+            className="cz-btn"
+            disabled={!dirty}
+            onClick={() => {
+              setHistory(discard(history))
+              setStatus('Went back to the saved theme. Undo brings your changes back.')
+            }}
+          >
+            Discard
+          </button>
+          <span className="cz-sep" aria-hidden="true" />
+          <button
+            type="button"
+            className="cz-btn cz-btn--primary"
+            disabled={!(dirty || !target.exists) || !!busy}
+            aria-describedby={inUseNote ? 'cz-inuse' : undefined}
+            onClick={save}
+          >
+            {busy === 'save' ? 'Saving…' : inUseNote ? 'Save and apply' : 'Save'}
+          </button>
+          <button
+            type="button"
+            className="cz-btn"
+            disabled={!!busy}
+            onClick={() => setSaveAs(`${draft.manifest.name} copy`.slice(0, 60))}
+          >
+            Save as new…
+          </button>
+          <span className="cz-sep" aria-hidden="true" />
+          <button type="button" className="cz-btn" disabled={!!busy} onClick={exportZip}>
+            Export
+          </button>
+          <button
+            type="button"
+            className="cz-btn"
+            disabled={!!busy}
+            onClick={() => fileInput.current?.click()}
+          >
+            Import…
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".zip,application/zip"
+            hidden
+            aria-label="Theme file to import"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              void pickFile(file)
+            }}
+          />
+        </div>
+        {inUseNote && (
+          <p className="cz-inuse" id="cz-inuse">
+            {inUseNote}
+          </p>
+        )}
+      </div>
 
       <div className="cz-messages">
         {sent ? (
@@ -909,35 +895,6 @@ export function Customizer() {
               </ul>
             )}
           </section>
-        </section>
-
-        <section className="cz-controls" aria-label="Edit the theme">
-          <Tabs value={tab} onChange={setTab} />
-          <div
-            className="cz-panel"
-            role="tabpanel"
-            id={`cz-panel-${tab}`}
-            aria-labelledby={`cz-tab-${tab}`}
-            tabIndex={-1}
-          >
-            {tab === 'theme' && (
-              <SectionTheme
-                {...context}
-                themes={themes}
-                exists={target.exists}
-                source={target.source}
-                idFor={(name) => freshId(name, takenIds)}
-                startFrom={(id) => (dirty ? setAskStart(id) : void startFrom(id))}
-              />
-            )}
-            {tab === 'colours' && <SectionColours {...context} />}
-            {tab === 'fonts' && <SectionFonts {...context} />}
-            {tab === 'shape' && <SectionShape {...context} />}
-            {tab === 'layout' && <SectionLayout {...context} />}
-            {tab === 'chat' && <SectionChat {...context} />}
-            {tab === 'background' && <SectionBackground {...context} />}
-            {tab === 'css' && <SectionCss {...context} />}
-          </div>
           <footer className="cz-use">
             <p className="cz-note">
               {dirty || !target.exists
@@ -965,6 +922,38 @@ export function Customizer() {
               </button>
             </div>
           </footer>
+          <p className="cz-lost">
+            Lost? <kbd>Ctrl+Shift+0</kbd> resets the look on this device, and <kbd>⌘K</kbd> always
+            finds Settings.
+          </p>
+        </section>
+
+        <section className="cz-controls" aria-label="Edit the theme">
+          <Tabs value={tab} onChange={setTab} />
+          <div
+            className="cz-panel"
+            role="tabpanel"
+            id={`cz-panel-${tab}`}
+            aria-labelledby={`cz-tab-${tab}`}
+            tabIndex={-1}
+          >
+            {tab === 'theme' && (
+              <SectionTheme
+                {...context}
+                themes={themes}
+                exists={target.exists}
+                source={target.source}
+                idFor={(name) => freshId(name, takenIds)}
+                startFrom={(id) => (dirty ? setAskStart(id) : void startFrom(id))}
+              />
+            )}
+            {tab === 'colours' && <SectionColours {...context} />}
+            {tab === 'background' && <SectionBackground {...context} />}
+            {tab === 'fonts' && <SectionFonts {...context} />}
+            {tab === 'shape' && <SectionShape {...context} />}
+            {tab === 'spacing' && <SectionSpacing {...context} />}
+            {tab === 'css' && <SectionCss {...context} />}
+          </div>
         </section>
       </div>
 
@@ -1035,8 +1024,6 @@ export function Customizer() {
           }}
         />
       )}
-
-      <WayBackPalette />
 
       {blocker.state === 'blocked' && (
         <Modal title="Leave without saving?" onClose={() => blocker.reset()}>

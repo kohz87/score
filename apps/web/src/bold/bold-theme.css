@@ -39,6 +39,9 @@
   --hi-ink: var(--t-panel-ink);
   --hi-line: var(--t-panel-ink);
   --hi-sub: color-mix(in srgb, var(--t-panel-ink) 85%, var(--t-panel-card));
+  /* Code and the terminal: the theme's own ground and text when it sets them (engine.ts writes the --t-code-* twins). */
+  --code-bg: var(--t-code-bg, #0f1116);
+  --code-ink: var(--t-code-ink, #c9ccd4);
 }
 
 /* Light: the object for you is the ink-coloured one, as the theme's own primary buttons are. */
@@ -48,6 +51,8 @@
   --hi-ink: var(--t-card);
   --hi-line: var(--t-card);
   --hi-sub: color-mix(in srgb, var(--t-card) 85%, var(--t-ink));
+  --code-bg: var(--t-code-bg, #1e2029);
+  --code-ink: var(--t-code-ink, #d6d8de);
 }
 
 /* The escape-hatch banner (themes/look.css) sits above the phone tab bar instead of covering Settings. */
@@ -55,4 +60,11 @@
   body:has([data-ui='bold']) .look-banner {
     bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
+}
+
+/* A theme with a background picture (Customizer › Background, decision 131 E): the engine paints it on <body> and sets
+   data-backdrop on the root; the shell's own ground steps aside so it shows. Panels keep their colours, so text stays
+   on a panel. Nothing here runs without a picture. */
+:root[data-backdrop] [data-ui='bold'].bold-shell {
+  background: transparent;
 }

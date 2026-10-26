@@ -339,9 +339,18 @@ test('on the new shell the old classic paths redirect to their /b homes and keep
   }
 })
 
+test('the Customizer’s old address leads to Settings › Look on the classic view too', async () => {
+  window.localStorage.setItem('score.ui', 'classic')
+  const router = renderRoute('/settings/look/customize/score?x=1')
+  await waitFor(() =>
+    expect(router.state.location.pathname).toBe('/b/settings/look/customize/score'),
+  )
+  expect(router.state.location.search).toBe('?x=1')
+})
+
 test('on the classic view the classic paths stay where they are', async () => {
   window.localStorage.setItem('score.ui', 'classic')
-  for (const path of ['/workflows', '/runs/brief-1', '/settings/look/customize/score']) {
+  for (const path of ['/workflows', '/runs/brief-1']) {
     const router = renderRoute(path)
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(router.state.location.pathname).toBe(path)

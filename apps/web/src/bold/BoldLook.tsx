@@ -300,7 +300,7 @@ export function BoldLook() {
 
       <section className="card bold-look-customize" aria-labelledby="bold-look-customize-title">
         <div>
-          <h3 id="bold-look-customize-title">Colours, fonts and layout</h3>
+          <h3 id="bold-look-customize-title">Colours, fonts and spacing</h3>
           <span className="small muted">
             Change them with a live preview. A built-in style is copied first, so it stays as it is.
           </span>
