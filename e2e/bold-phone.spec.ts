@@ -354,7 +354,7 @@ for (const size of sizes) {
     await expectAtLeast44(panel.getByRole('button', { name: 'Earlier chats' }))
     const composer = panel.getByPlaceholder('Message builder privately')
     await expectAtLeast44(composer)
-    await expectAtLeast44(panel.getByRole('button', { name: 'Send', exact: true }))
+    await expectAtLeast44(panel.locator('button.chat-send'))
     await page.screenshot({ path: testInfo.outputPath(`bold-phone-one-to-one-${size.width}.png`) })
 
     await page.getByRole('button', { name: 'Back', exact: true }).click()
