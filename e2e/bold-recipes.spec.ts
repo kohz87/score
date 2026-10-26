@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
-import { startRecipe } from './recipe-run.ts'
+import { startRecipe, uniqueRecipeName } from './recipe-run.ts'
 
 // PLAN 11.10d, as the Recipes page since 2.8.0, against the fake adapter. A recipe is the 7.1 workflow definition, so every edit here goes through the
 // same API and engine; no model is called. Instruction markers script the fake agents: [fake:verdict:passed] replies
@@ -113,7 +113,9 @@ test('build a gate and branch as a step list, save, run and approve it', async (
   await openRecipes(page, 'new')
   await showText(page)
 
-  const name = `Release notes ${Date.now().toString(36)}`
+  const name = uniqueRecipeName('Release notes')
+  // Other specs leave their gates pending on the shared server: a title of its own keeps this run's card unambiguous.
+  const gateTitle = `Sign off ${name.slice(-6)}`
   await nameRecipe(page, name)
   await openDetails(page)
   const inputs = page.getByRole('region', { name: 'Start inputs' })
@@ -134,7 +136,7 @@ test('build a gate and branch as a step list, save, run and approve it', async (
   await instruction.pressSequentially(' [fake:verdict:passed]')
 
   await page.getByRole('button', { name: 'Gate', exact: true }).click()
-  await inspector(page).getByLabel('Title').fill('Approve the draft')
+  await inspector(page).getByLabel('Title').fill(gateTitle)
   await inspector(page).getByRole('combobox', { name: 'Question' }).fill('Publish it?')
   await page.getByRole('button', { name: 'Branch', exact: true }).click()
   await inspector(page).getByLabel('Title').fill('Passed review?')
@@ -172,7 +174,7 @@ test('build a gate and branch as a step list, save, run and approve it', async (
 
   const created = (await workflows(page)).find((workflow) => workflow.name === name)!
   await startRecipe(page, created.id, { Topic: 'the 2.4 release' })
-  const gate = page.getByRole('region', { name: 'Decide on Approve the draft' })
+  const gate = page.getByRole('region', { name: `Decide on ${gateTitle}` })
   await expect(gate).toBeVisible({ timeout: 60_000 })
   await expect(gate).toContainText('Publish it?')
   await expect(async () => {
@@ -188,7 +190,7 @@ test('retries and a failure path, and a join that waits for both paths', async (
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
 
-  const failureName = `Failure path ${Date.now().toString(36)}`
+  const failureName = uniqueRecipeName('Failure path')
   const failureId = await createViaApi(page, {
     name: failureName,
     inputs: [],
@@ -232,7 +234,7 @@ test('retries and a failure path, and a join that waits for both paths', async (
   await startRecipe(page, failureId)
   await expect(page.getByText('Workflow reached its end').first()).toBeVisible({ timeout: 60_000 })
 
-  const joinName = `Wait for both ${Date.now().toString(36)}`
+  const joinName = uniqueRecipeName('Wait for both')
   await createViaApi(page, {
     name: joinName,
     inputs: [],
@@ -297,7 +299,7 @@ test('moving and removing steps re-links the saved graph', async ({ page }) => {
   await pair(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  const name = `Order ${Date.now().toString(36)}`
+  const name = uniqueRecipeName('Order')
   const id = await createViaApi(page, {
     name,
     inputs: [],

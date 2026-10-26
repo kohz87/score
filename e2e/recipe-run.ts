@@ -152,3 +152,11 @@ export async function openCodingRecipeStart(page: Page, label: string) {
   await expect(dialog.getByRole('radio', { name })).toBeChecked({ timeout: 30_000 })
   return { dialog, bodies, policy, id }
 }
+
+/**
+ * A recipe name no other spec can share: the fake server is shared by every worker, a millisecond stamp alone can repeat,
+ * and the prefix of one name can sit inside another's (the Start a job picker matches names as substrings).
+ */
+export function uniqueRecipeName(prefix: string): string {
+  return `${prefix} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+}

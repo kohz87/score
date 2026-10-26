@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
-import { finishStartJob, openRunOf, recipeIdByName, startRecipeByName } from './recipe-run.ts'
+import {
+  finishStartJob,
+  openRunOf,
+  recipeIdByName,
+  startRecipeByName,
+  uniqueRecipeName,
+} from './recipe-run.ts'
 
 // PLAN 7.1b against the fake adapter: no model is called. Instruction markers script the agents: [fake:verdict:passed]
 // replies with a score-verdict block, [fake:fail] ends the step's run failed.
@@ -34,12 +40,16 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
 }) => {
   test.setTimeout(180_000)
   await pair(page)
-  const unique = `Release notes ${Date.now().toString(36)}`
+  const unique = uniqueRecipeName('Release notes')
+  // Other specs leave their gates pending on the shared server: a gate title of its own (not containing another's, names match as substrings) keeps this run's card unambiguous.
+  const gateTitle = `Sign off ${unique.slice(-6)}`
   await page.goto('/b/recipes')
   await expect(page.getByRole('heading', { name: 'Recipes', level: 1 })).toBeVisible()
   await page.getByRole('button', { name: 'New recipe' }).click()
-  // The editor of the recipe that was open is swapped for the new one: type only into the new one.
+  // The editor of the recipe that was open is swapped for the new one a render after the address changes: type only into
+  // the new one. Only the new recipe offers "version 1" (the old one is at 1 or later and offers the next).
   await expect(page).toHaveURL(/\/b\/recipes\/new$/)
+  await expect(page.getByRole('button', { name: /^Save as version 1$/ })).toBeVisible()
 
   // The editor starts with one step and an end, already connected.
   await expect(page.getByRole('heading', { name: 'Nothing selected' })).toBeVisible()
@@ -79,7 +89,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
 
   // Add a gate after it (connected from "when done"), then a branch after the gate.
   await page.getByRole('button', { name: 'Add a gate' }).click()
-  await inspector.getByLabel('Title').fill('Approve the draft')
+  await inspector.getByLabel('Title').fill(gateTitle)
   await inspector
     .getByRole('combobox', { name: 'Question' })
     .fill('Is the draft good enough to publish?')
@@ -102,13 +112,14 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await page.getByText('Outline: the graph as text').click()
   const outline = page.getByRole('region', { name: 'Outline' })
   await expect(outline).toContainText('Draft')
-  await expect(outline).toContainText('when done goes to Approve the draft')
+  await expect(outline).toContainText(`when done goes to ${gateTitle}`)
   await expect(outline).toContainText('otherwise goes to Repair')
 
   // Valid: save as version 1.
   await expect(page.getByRole('status').filter({ hasText: 'Looks good' })).toBeVisible({
     timeout: 20_000,
   })
+  await expect(page.getByRole('textbox', { name: 'Recipe name' })).toHaveValue(unique)
   await page.getByRole('button', { name: /^Save as version 1$/ }).click()
   await expect(page.getByText('Saved as version 1.').first()).toBeVisible()
 
@@ -122,7 +133,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await tab(page, 'Graph')
 
   // The run view: the gate waits for the person with the draft the question is about.
-  const gate = page.getByRole('region', { name: 'Decide on Approve the draft' })
+  const gate = page.getByRole('region', { name: `Decide on ${gateTitle}` })
   await expect(gate).toBeVisible({ timeout: 60_000 })
   await expect(gate).toContainText('Is the draft good enough to publish?')
   await expect(gate).toContainText('Draft')
@@ -172,7 +183,7 @@ test('a failing step is routed to a repair step, and the run still reaches its e
 }) => {
   test.setTimeout(120_000)
   await pair(page)
-  const name = `Repair route ${Date.now().toString(36)}`
+  const name = uniqueRecipeName('Repair route')
   await createWorkflow(page, {
     name,
     inputs: [],
@@ -220,7 +231,7 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
 }) => {
   test.setTimeout(150_000)
   await pair(page)
-  const name = `Flaky step ${Date.now().toString(36)}`
+  const name = uniqueRecipeName('Flaky step')
   await createWorkflow(page, {
     name,
     inputs: [],
@@ -278,7 +289,7 @@ test('drag a node, save, reload: it is where it was left, and the run view draws
 }) => {
   test.setTimeout(180_000)
   await pair(page)
-  const name = `Free layout ${Date.now().toString(36)}`
+  const name = uniqueRecipeName('Free layout')
   const id = await createWorkflow(page, {
     name,
     inputs: [],
