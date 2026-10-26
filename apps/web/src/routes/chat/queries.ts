@@ -58,7 +58,11 @@ export const agentsQuery = defineStreamQuery({
   types: ['agent.updated'],
   reduce(data, event) {
     if (event.type !== 'agent.updated') return data
-    return [...data.filter((agent) => agent.id !== event.data.id), event.data]
+    // In place: an agent that starts or finishes work keeps its spot in the dock and on Team (3.5.0); a new one joins
+    // at the end.
+    return data.some((agent) => agent.id === event.data.id)
+      ? data.map((agent) => (agent.id === event.data.id ? event.data : agent))
+      : [...data, event.data]
   },
 })
 export function roomQuery(roomId: string) {
