@@ -1517,14 +1517,28 @@
     margin-left: 0;
   }
 
+  /* A big team wraps onto more rows instead of running off the right edge of the phone (the glyphs there were cut
+     by the viewport, and a theme's different widths then looked like a theme clipping them). */
   [data-ui='bold'] .bold-phone-presence {
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 3px;
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
     border-radius: 999px;
     background: var(--panel);
     padding: 5px 8px;
+  }
+
+  /* Beside the job's name it takes at most under half the row, so the name keeps its room. */
+  [data-ui='bold'] .bold-phone-chat-head .bold-phone-presence {
+    max-width: 45%;
+  }
+
+  [data-ui='bold'] .bold-phone-list-title {
+    flex-wrap: wrap;
   }
 
   [data-ui='bold'] .bold-phone-presence-agent {

@@ -208,7 +208,9 @@ for (const id of packagedThemeIds) {
       await page.keyboard.press('Control+Shift+Digit0')
       await expect(html).not.toHaveAttribute('data-look', 'custom')
       await page.reload()
-      await expect(html).not.toHaveAttribute('data-look', 'custom')
+      // The boot cache paints the last look until the app has asked the server for the shared one, which takes longer
+      // than the default five seconds on a loaded machine.
+      await expect(html).not.toHaveAttribute('data-look', 'custom', { timeout: 20_000 })
     })
   })
 }
