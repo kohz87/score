@@ -1402,3 +1402,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   the wrong version" scenario can't occur: agent replies delete without a confirm). Gates: full e2e 993 passed, 2
   failures (bold-results Workbench focus, bold-start-job phone — known flake) passed on rerun with the affected specs
   164/164; pnpm check green (server 4784, contract 1512); web 3134 after the last fix; lint/format clean.
+- **v2.4.0 deployed live** (~00:53 UTC): backup score-pre-2.4.0-20261026.db, restart, migration 0090 applied, no new errors.
