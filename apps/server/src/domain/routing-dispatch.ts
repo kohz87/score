@@ -143,7 +143,14 @@ export class RoutingDispatcher {
             let input =
               exchangesRoom(sqlite, job.room_id) && !job.plan_first
                 ? jobRunInput(sqlite, job, { coding: codingAgent(sqlite, job.agent_id) })
-                : roomRunInput(sqlite, job.room_id, job.input, job.parent_message_id, job.job_id)
+                : roomRunInput(
+                    sqlite,
+                    job.room_id,
+                    job.input,
+                    job.parent_message_id,
+                    job.job_id,
+                    job.alternative_of,
+                  )
             // An imported room whose Hermes session could not be continued: the first turn carries a recap (PLAN 5.26).
             // Only the job that runs in the room's own session continues it.
             const continuation = continuationFor(sqlite, job.room_id, job.agent_id)
@@ -263,6 +270,8 @@ export class RoutingDispatcher {
                     retry.messageId,
                     `session-deleted:${job.turn_id}`,
                     now,
+                    // The notice that the agent starts afresh must stay in view, not behind a newer version.
+                    { group: false },
                   )
                 } catch (error) {
                   if (!(error instanceof HttpError)) throw error

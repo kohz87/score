@@ -127,7 +127,8 @@ export function retryReply(
   messageId: string,
   nonce: string,
   now: string,
-  options: { another?: boolean } = {},
+  /** `another`: Try another; `group: false`: a fresh attempt that is not shown as another version (2.3.0 recovery). */
+  options: { another?: boolean; group?: boolean } = {},
 ): string {
   const found = sqlite
     .prepare('SELECT streaming FROM messages WHERE id = ? AND room_id = ? AND deleted_at IS NULL')
@@ -194,7 +195,7 @@ export function retryReply(
       ...(parsed.admission_input !== null && !options.another
         ? { admissionInput: parsed.admission_input }
         : {}),
-      alternativeOf,
+      ...(options.group === false ? {} : { alternativeOf }),
     },
     now,
   )
@@ -869,6 +870,8 @@ export function roomRunInput(
   input: string,
   parentMessageId: string,
   jobId?: string | null,
+  /** 2.4.0: a version of an earlier reply; the group's other versions stay out of the window (the agent has them). */
+  alternativeOf?: string | null,
 ): string {
   // Only the turn's own job is context (PLAN 11.1b): a room's other threads are not this conversation.
   const job = jobId ?? defaultJobId(sqlite, roomId) ?? ''
@@ -882,9 +885,17 @@ export function roomRunInput(
     .prepare(
       `SELECT * FROM messages WHERE room_id = ? AND job_id = ? AND id != ? AND deleted_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM json_each(messages.parts) WHERE json_extract(value, '$.kind') = 'summary')
+         AND (? IS NULL OR (id != ? AND COALESCE(alternative_of, '') != ?))
        ORDER BY created_at DESC, id DESC LIMIT 10`,
     )
-    .all(roomId, job, parentMessageId)
+    .all(
+      roomId,
+      job,
+      parentMessageId,
+      alternativeOf ?? null,
+      alternativeOf ?? '',
+      alternativeOf ?? '',
+    )
     .map(messageFromRow)
     .reverse()
   const context = redactBounded(

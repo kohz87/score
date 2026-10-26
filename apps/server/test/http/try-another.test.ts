@@ -114,3 +114,14 @@ test('Try another asks the agent for a different answer and links every version 
     (await post(`/api/rooms/${roomId}/messages/${first.id}/retry`, { another: 'yes' })).statusCode,
   ).toBe(400)
 })
+
+test('other versions of the group stay out of the room context a new version gets', async () => {
+  const run = vi.spyOn(port, 'startRun')
+  await post(`/api/rooms/${roomId}/messages`, { text: '@builder name the release' })
+  await advance(4000)
+  const first = messages().find((message) => message.author.kind === 'agent')!
+  await post(`/api/rooms/${roomId}/messages/${first.id}/retry`, { another: true })
+  await advance(4000)
+  const context = run.mock.calls.at(-1)![0].input.split('Room context:')[1] ?? ''
+  expect(context).not.toContain('builder:')
+})
