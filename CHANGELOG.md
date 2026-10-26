@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.6.1] — 2026-10-26
+
+### Changed
+- **User guide** (docs/USER-GUIDE.md) rewritten for the new shell: getting around, the team room, more teams, one-to-ones,
+  runs and recipes, an agent's page and live screen, the Library, Settings and coding agents.
+- **README** reworked for Score 3.6, with 22 new screenshots of the demo team.
+
 ## [3.6.0] — 2026-10-26
 
 ### Added
@@ -26,7 +33,7 @@ based on [Keep a Changelog](https://keepachangelog.com/).
   agents no longer shows them (the server refused them anyway).
 - **An exchange paused for you never loses its held turn**: when another turn can't go on while you decide, the pause
   card names the agents whose turns were dropped, so you can ask them again afterwards.
-- **Previewing a session from Elsewhere** no longer creates a room; only "Bring into Score" does.
+- **Previewing a session from Elsewhere** no longer creates a room; only "Bring into a job" does.
 - **Triggers**: creating a trigger twice by retrying (same settings, within 10 minutes, never called) returns the
   first one instead of leaving an unused twin. A report-back tool whose name suggests it changes things gets a
   warning in the trigger's settings.
