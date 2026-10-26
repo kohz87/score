@@ -327,7 +327,7 @@ interface RunFrameProps {
   budget: ReactNode
   /** Extra buttons next to the controls (Run again…). */
   extra?: ReactNode
-  outcome?: string | null
+  outcome?: string[]
   /** The lead's goal (orchestration). */
   goal?: string
   /** Shown before the thread, after the decisions (workflow agents that changed). */
@@ -371,7 +371,16 @@ function RunFrame(props: RunFrameProps) {
           {props.subtitle ? ` · ${props.subtitle}` : ''}
         </p>
         {props.goal && <p className="bold-run-goal">{props.goal}</p>}
-        {props.outcome && <p className="bold-run-sub">{props.outcome}</p>}
+        {props.outcome && props.outcome.length > 0 && (
+          <p className="bold-run-sub">
+            {props.outcome.map((line, index) => (
+              <span key={line}>
+                {index > 0 ? ' · ' : ''}
+                <span>{line}</span>
+              </span>
+            ))}
+          </p>
+        )}
       </div>
       <div className="bold-run-tiles">{props.tiles}</div>
       {props.needs}
@@ -516,7 +525,7 @@ function WorkflowRun({
         roomId={detail.roomId}
         agents={agents}
         steps={workflowThread(detail)}
-        outcome={[graph, note, detail.endReason].filter(Boolean).join(' · ') || null}
+        outcome={[graph, note, detail.endReason].filter((line): line is string => Boolean(line))}
         tiles={
           <>
             <SpendTile budget={detail.budget} />

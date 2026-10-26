@@ -1,5 +1,13 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+
+/** The step list shows the five newest; older steps sit behind "Full history" (the shared server may hold more). */
+async function fullHistory(page: Page) {
+  const more = page.getByRole('region', { name: 'What builder did' }).getByRole('button', {
+    name: 'Full history',
+  })
+  if (await more.count()) await more.click()
+}
 
 // 2.6.0: Watch is the replay on the agent's screen page (board D) on the seeded fake team.
 
@@ -38,6 +46,7 @@ for (const size of sizes) {
       await expect(page.getByRole('group', { name: 'Other windows' })).toBeVisible()
       await expect(page.locator('.bold-screen-badge', { hasText: 'Live' })).toBeVisible()
 
+      await fullHistory(page)
       await page
         .getByRole('region', { name: 'What builder did' })
         .getByRole('button', { name: /Opened the activity feed/ })

@@ -6,6 +6,8 @@ import { pair } from './pair.ts'
 
 test.describe.configure({ mode: 'serial' })
 
+const tab = (page: Page, name: string) => page.getByRole('tab', { name }).click()
+
 async function start(page: Page, goal: string, policy?: string) {
   await page.goto('/chat')
   await page.getByRole('button', { name: /New orchestration/ }).click()
@@ -82,6 +84,9 @@ async function openLive(page: Page) {
     await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 2000 })
   }).toPass({ timeout: 20_000 })
   await page.getByRole('link', { name: 'Open the live diagram' }).first().click()
+  // The run opens in the Runs panel (2.5.0): the diagram is its Graph tab and the log its Log tab. Selection and replay
+  // carry over between them; the decisions are above every tab.
+  await tab(page, 'Graph')
   await expect(page.locator('[data-node="lead"]')).toBeVisible()
 }
 
@@ -118,16 +123,20 @@ test('start with every-step gates, approve each step, watch the diagram reach su
   })
 
   // The log carries the lead's calls with Score's verdicts, the gates and the results.
+  await tab(page, 'Log')
   const log = page.getByRole('log', { name: 'Events' })
   await expect(log).toContainText('Assigned s1 to builder')
   await expect(log).toContainText('You approved s1')
   await expect(log).toContainText('s1 succeeded')
   // Clicking a node filters the log to it and opens its output.
+  await tab(page, 'Graph')
   await page.locator('[data-node="s2"]').click()
+  await expect(page.getByRole('region', { name: 'Selected step' })).toContainText('Result')
+  await tab(page, 'Log')
   await expect(page.getByText('Showing s2')).toBeVisible()
   await expect(log).not.toContainText('Assigned s1')
-  await expect(page.getByRole('region', { name: 'Selected step' })).toContainText('Result')
   await page.getByRole('button', { name: 'Show everything' }).click()
+  await tab(page, 'Graph')
 
   // Replay: the scrubber starts at the beginning and the diagram and log follow it.
   await page.getByRole('button', { name: 'Replay this run' }).click()
@@ -147,8 +156,10 @@ test('start with every-step gates, approve each step, watch the diagram reach su
   for (let i = 0; i < 12 && (await page.locator('[data-node="s1"]').count()) === 0; i++)
     await page.getByRole('button', { name: 'Step forward' }).click()
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'queued')
+  await tab(page, 'Log')
   await expect(log).toContainText('Assigned s1')
   await expect(log).not.toContainText('s1 succeeded')
+  await tab(page, 'Graph')
   await page.getByRole('button', { name: 'Step forward' }).click()
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'gate')
 })
@@ -224,13 +235,16 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'running', {
     timeout: 60_000,
   })
-  await page.getByRole('button', { name: 'Stop', exact: true }).click()
-  await page.getByRole('button', { name: 'Stop the run' }).click()
+  // The room's own strip also has a Stop for this run; this is the run view's.
+  const panel = page.getByRole('complementary', { name: 'Side panel' })
+  await panel.getByRole('button', { name: 'Stop', exact: true }).click()
+  await panel.getByRole('button', { name: 'Stop the run' }).click()
   // The fake Hermes answers a Stop with a cancelled run, which is not termination evidence: "not confirmed ended".
   await expect(page.getByText('Stopping', { exact: true }).first()).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'unknown', {
     timeout: 30_000,
   })
+  await tab(page, 'Steps')
   await expect(page.getByRole('region', { name: 'Finish' })).toContainText('Not confirmed as ended')
   // Abandoning is a separate, acknowledged human decision.
   const card = page.getByRole('region', { name: 'Not confirmed as ended' })
