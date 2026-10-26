@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router'
 import { useStreamQuery } from '../data/query-client.ts'
 import { AdvancedSection } from '../routes/settings/AdvancedSection.tsx'
@@ -123,6 +123,13 @@ export function BoldSettings() {
     : isSettingsSection(params.section)
       ? params.section
       : 'usage'
+  // A section is a page of its own: moving to another one starts at its top (a #hash link keeps its anchor).
+  const shown = useRef(section)
+  useEffect(() => {
+    if (shown.current === section) return
+    shown.current = section
+    if (!location.hash) window.scrollTo(0, 0)
+  }, [section, location.hash])
   // An unknown section is not silently Usage under its own name.
   if (params.section !== undefined && !isSettingsSection(params.section))
     return <Navigate to="/b/settings/usage" replace />

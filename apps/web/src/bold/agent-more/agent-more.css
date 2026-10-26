@@ -174,3 +174,20 @@
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
+
+/* The delete confirm of a repeating job: the same inline decision card Settings uses for connections. */
+[data-ui='bold'] .bold-mc .bold-remove-confirm {
+  flex: 1 0 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: var(--deep);
+  border: 1px solid var(--line);
+}
+
+[data-ui='bold'] .bold-mc .bold-remove-confirm p {
+  margin: 0;
+  color: var(--ink2);
+}

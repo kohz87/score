@@ -109,9 +109,13 @@ function checksFromPreflight(
   pending: boolean,
   failed: boolean,
   checks: { id: string; status: 'ok' | 'fail' | 'unknown'; message: string }[] | undefined,
+  error?: unknown,
 ): StartCheck[] {
   if (pending)
     return [{ key: 'preflight', status: 'pending', text: 'Checking Hermes and the team' }]
+  // A coding agent on a computer that can't run it as a service: say so in plain words, not "could not be read".
+  if (failed && error instanceof ApiError && error.code === 'coding_workers_need_units')
+    return [{ key: 'preflight', status: 'fail', text: describeCreateError(error) }]
   if (failed || !checks)
     return [{ key: 'preflight', status: 'fail', text: 'The checks could not be read' }]
   return checks.map((check) => ({
@@ -404,6 +408,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
         orchestrationPreflight.isPending,
         orchestrationPreflight.isError,
         preflight?.checks,
+        orchestrationPreflight.error,
       ),
       ...(allowedFor.length === 0
         ? [
@@ -1659,6 +1664,9 @@ function startError(error: unknown): string {
   if (pairing) return pairing
   if (error instanceof ApiError) {
     if (error.code === 'conflict') return error.message
+    // A coding agent changed, or its reach wasn't accepted: the plain words say what to look at and do.
+    if (error.code === 'policy_changed' || error.code === 'reach_not_acknowledged')
+      return describeCreateError(error)
     if (error.code === 'paused') return 'Work is paused. Resume the team or the agent first.'
     if (error.code === 'no_lead') return 'The team room has no lead yet.'
   }
