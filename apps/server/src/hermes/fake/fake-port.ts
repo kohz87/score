@@ -96,6 +96,7 @@ import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import type { ProfileInventory, ProfileStepContext } from '../profile-management.ts'
 import type { ProfileStepName } from '@score/contract'
 import { ProfileNameSchema } from '../live/paths.ts'
+import { fakeBotScreenFrame, fakeBotScreenStatus } from './fake-bot-screen.ts'
 import { createFakeConfigService } from './fake-config.ts'
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import {
@@ -2118,6 +2119,12 @@ export class FakePort implements HermesPort {
     return Promise.resolve(this.fakeMcpTools)
   }
 
+  async botScreenStatus(agentId: string) {
+    return fakeBotScreenStatus(agentId, this.scheduler.now())
+  }
+  async botScreenFrame(agentId: string) {
+    return fakeBotScreenFrame(agentId, this.scheduler.now())
+  }
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {
     assertNotKanbanAttempt(req.runId)
     // A run waiting for an answer is released (it does not continue).

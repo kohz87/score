@@ -34,6 +34,8 @@ export function measureText(doc: Document, sampler: Sampler | null, limit = 8): 
   const groundBase: Rgba = fallbackBase && fallbackBase[3] === 1 ? fallbackBase : [1, 1, 1, 1]
   for (const element of doc.body.querySelectorAll('*')) {
     if (SKIP.has(element.tagName.toUpperCase()) || element.closest('[data-protected]')) continue
+    // A disabled control is exempt from contrast rules (WCAG 1.4.3) and is drawn dimmed on purpose.
+    if (element.closest(':disabled, [aria-disabled="true"]')) continue
     const text = ownText(element)
     if (!text || !/[\p{L}\p{N}]/u.test(text)) continue
     const rect = element.getBoundingClientRect()

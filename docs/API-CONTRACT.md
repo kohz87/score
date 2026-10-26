@@ -26,9 +26,28 @@ Conventions
 ```ts
 type AgentId = string // = Hermes profile name
 type Shape =
-  | 'circle-dot' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'star' | 'pill' | 'cross'
-  | 'cloud' | 'cylinder' | 'heart' | 'drop' | 'bolt' | 'moon' | 'leaf' | 'blob' | 'shield' | 'octagon' | 'bubble'
-  | 'gem' | 'ball' | 'flower' // ball and flower: 2.2.0
+  | 'circle-dot'
+  | 'triangle'
+  | 'diamond'
+  | 'square'
+  | 'hexagon'
+  | 'star'
+  | 'pill'
+  | 'cross'
+  | 'cloud'
+  | 'cylinder'
+  | 'heart'
+  | 'drop'
+  | 'bolt'
+  | 'moon'
+  | 'leaf'
+  | 'blob'
+  | 'shield'
+  | 'octagon'
+  | 'bubble'
+  | 'gem'
+  | 'ball'
+  | 'flower' // ball and flower: 2.2.0
 type AgentStyle = { color: string /* #RRGGBB */; shape: Shape }
 type AgentStatus =
   'idle' | 'working' | 'waiting' /* on a human */ | 'paused' | 'offline' | 'up-next'
@@ -45,7 +64,8 @@ type AgentSummary = {
   runtime?: Runtime /* PLAN 7.2; absent = 'hermes' */
   runtimeNote?: string /* coding agents: "Claude Code · Uses your Claude plan quota …" for the card */
 }
-type Runtime = 'hermes' | 'claude-code' | 'codex' | 'antigravity' /* OpenCode dropped, decision 111 */
+type Runtime =
+  'hermes' | 'claude-code' | 'codex' | 'antigravity' /* OpenCode dropped, decision 111 */
 type CostKind = 'reported' | 'estimated' | 'unknown'
 
 type Ref =
@@ -121,7 +141,8 @@ type TaskDetail = TaskSummary & {
   blocks: string[]
   runIds: string[]
   completedAt?: string | null /* kanban completed_at; "Made today" uses it, not updatedAt */
-  briefId?: string | null /* newest brief Score linked this task to; run links open /runs/:briefId */
+  briefId?:
+    string | null /* newest brief Score linked this task to; run links open /runs/:briefId */
 }
 
 type Room = {
@@ -138,21 +159,44 @@ type Room = {
   channels: { platform: string; label: string }[]
 }
 
-type SubagentSummary = { status: 'running' | 'done' | 'failed'; description: string | null; subagentType: string | null; toolCalls: number | null; durationMs: number | null; totalTokens: number | null }
+type SubagentSummary = {
+  status: 'running' | 'done' | 'failed'
+  description: string | null
+  subagentType: string | null
+  toolCalls: number | null
+  durationMs: number | null
+  totalTokens: number | null
+}
 /* PLAN 8.7, coding agents' sub-agents: a coding agent's own tool calls carry `callId` (the CLI's call id). A call a sub-agent
    made carries `parentCallId` = the `callId` of the Agent call that started it, and the Agent call carries `subagent` (its status
    is the sub-agent's own, never the turn's). All three are optional: Hermes agents and older rows omit them and render flat.
    `parentCallId` is trusted only when a part with that `callId` exists in the same reply; otherwise the part renders flat.
    `LogLine` (Flow's step log, §briefs) gains the same three optional fields on `kind: 'tool'` lines. */
 type MessagePart =
-  | { kind: 'text'; text: string; via?: 'mcp' }   // via: posted by an agent through Score's MCP server (§13); the UI tags it "via MCP"
+  | { kind: 'text'; text: string; via?: 'mcp' } // via: posted by an agent through Score's MCP server (§13); the UI tags it "via MCP"
   | { kind: 'plan'; lanes: { agentId: AgentId; blocks: LaneBlock[] }[]; briefId: string }
   | { kind: 'tools'; summary: string /* "Ran 6 commands and edited 2 files" */; runId: string }
-  | { kind: 'tool'; tool: string; args: string; result: string | null; status: 'running' | 'ok' | 'error'; callId?: string; parentCallId?: string; subagent?: SubagentSummary } // one tool call (5.25); 8.7: see below
+  | {
+      kind: 'tool'
+      tool: string
+      args: string
+      result: string | null
+      status: 'running' | 'ok' | 'error'
+      callId?: string
+      parentCallId?: string
+      subagent?: SubagentSummary
+    } // one tool call (5.25); 8.7: see below
   | { kind: 'thinking'; text: string } // reasoning text, collapsed in the UI (5.25)
   | { kind: 'file'; path: string; added: number; removed: number }
   | { kind: 'image'; mediaId: string } // an uploaded image, served by GET /api/media/:mediaId
-  | { kind: 'document'; mediaId: string; name: string; contentType: string; size: number; saved?: { agentId: AgentId; path: string }[] } // an uploaded PDF/DOCX/XLSX/text file (5.30; `file` is taken by changed files)
+  | {
+      kind: 'document'
+      mediaId: string
+      name: string
+      contentType: string
+      size: number
+      saved?: { agentId: AgentId; path: string }[]
+    } // an uploaded PDF/DOCX/XLSX/text file (5.30; `file` is taken by changed files)
   | { kind: 'workspace'; agentId: AgentId; path: string } // a reference to a workspace file, not a copy (5.30)
   | { kind: 'approval'; approvalId: string }
   | { kind: 'review'; verdict: 'approved' | 'changes_requested'; taskId: string | null }
@@ -165,7 +209,9 @@ type Message = {
   parts: MessagePart[]
   createdAt: string
   streaming: boolean
-  progressAt?: string | null /* streaming agent replies: last sign of life from the run (text, tool, reasoning, approval); absent = createdAt. The web shows "Waiting for the model" after 60 s without it. */
+  progressAt?:
+    | string
+    | null /* streaming agent replies: last sign of life from the run (text, tool, reasoning, approval); absent = createdAt. The web shows "Waiting for the model" after 60 s without it. */
   refs: Ref[]
 }
 
@@ -185,7 +231,8 @@ type LaneBlock = {
   count?: number /* chat bands: replies covered */
   /* Kanban attempt blocks only (5.17a-1, SCORE_KANBAN_ATTEMPTS=1): `id` is `attempt:<kr id>`, `runId` is null. */
   attemptId?: string
-  observationEndedAt?: string | null /* observation stopped here; the block ends here, nothing after counts */
+  observationEndedAt?:
+    string | null /* observation stopped here; the block ends here, nothing after counts */
   provenance?: 'proven' | 'partial' /* partial = the claim could not be proven */
   order?: [startedAt: string, upstreamAttemptId: number] /* clients sort by this, never by `id` */
 }
@@ -234,11 +281,19 @@ type AttemptSummary = {
   kind: 'kanban'
   agentId: AgentId | null /* the frozen claim profile */
   role: 'implementer' | 'reviewer' | null /* from the claim event, never the current assignee */
-  status: 'running' | 'completed' | 'failed' | 'blocked' | 'review_handoff' | 'changes_requested' | 'ended_unknown'
+  status:
+    | 'running'
+    | 'completed'
+    | 'failed'
+    | 'blocked'
+    | 'review_handoff'
+    | 'changes_requested'
+    | 'ended_unknown'
   closureReason: string | null
   startedAt: string
   endedAt: string | null
-  observationEndedAt: string | null /* observation stopped before the attempt ended: a boundary, never an end time */
+  observationEndedAt:
+    string | null /* observation stopped before the attempt ended: a boundary, never an end time */
   evidence: 'proven' | 'partial'
   taskId: string /* = task.taskId */
   task: TaskRef
@@ -249,7 +304,11 @@ type AttemptSummary = {
   model: null
 }
 type AttemptDetail = AttemptSummary & {
-  taskSnapshot: { title: string /* <= 300 */; status: string; assignee: string | null } | null /* as last observed */
+  taskSnapshot: {
+    title: string /* <= 300 */
+    status: string
+    assignee: string | null
+  } | null /* as last observed */
 }
 type WorkItem = { kind: 'run'; run: RunSummary } | { kind: 'attempt'; attempt: AttemptSummary }
 ```
@@ -275,45 +334,45 @@ type WorkItem = { kind: 'run'; run: RunSummary } | { kind: 'attempt'; attempt: A
 
 Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 
-| type                 | data                                                                                          | Consumers                                                |
-| -------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `stream.hello`       | `{ epoch: string, headSeq: number, mode: 'live'\|'fake', system: SystemStatus }` (no id)      | all                                                      |
-| `stream.reset`       | `{ reason: 'pruned'\|'epoch'\|'future_cursor' }` (no id)                                      | all → resync                                             |
-| `system.status`      | `SystemStatus`                                                                                | header banner, Settings                                  |
-| `agent.updated`      | `AgentSummary`                                                                                | everywhere agents render                                 |
-| `room.upserted`      | `Room`                                                                                        | Chat rooms list                                          |
-| `job.upserted`       | `Job` (PLAN 11.1b)                                                                            | The new shell's job tabs                                 |
-| `job.deleted`        | `{ id; roomId }` (decision 121: a named job was deleted, undoable)                             | The new shell's job tabs and streams                     |
-| `exchange.upserted`  | `Exchange` (PLAN 11.1b)                                                                       | Job capsules and threads                                 |
-| `room.pins.changed`  | `{ roomId }` (PLAN 11.2)                                                                      | Pinned decisions                                         |
-| `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
-| `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
-| `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
-| `message.deleted`    | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                  | Chat, Now thread                                         |
-| `message.updated`    | `{ roomId, messageId, editedBy?: MessageId \| null, parts?: MessagePart[] }` (`editedBy`: the original of an edit; `parts`: a summary edited or marked stale, or (PLAN 5.39) the tool and reasoning cards of a reply that is still streaming, replace the cached parts; the cards come before the text, as they stay at completion) | Chat                                                     |
-| `message.progressed` | `{ roomId, messageId, at }` (a streaming reply's run made a non-text move: tool call, reasoning, approval; set its `progressAt`. Text moves it via `message.delta`) | Chat |
-| `room.deleted`       | `{ id: RoomId }` (PLAN 5.36: the room and everything Score kept for it is gone; drop it from the cached lists and leave its page) | Chat, Tasks, Now |
-| `session.compacted`  | `SessionCompacted` (PLAN 5.36: the answer to a `…/compact` request; one per `commandId`) | Chat context meter |
-| `room.version.created` | `RoomVersion` (a rewind hid the anchor and everything after it; the `message.deleted` events for those messages precede it) | Chat |
-| `workflow.run.upserted` | `WorkflowRunSummary` (§15; after every change of a workflow run, which is not announced as `orchestration.upserted`) | Flow › Workflows run view, Now "Needs you" |
-| `knowledge.changed`  | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }` | Knowledge                                                |
-| `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
-| `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
-| `approval.updated`   | `Approval` (phase / decision / delivery changes)                                              | same                                                     |
-| `question.requested` | `AgentQuestion` (§6a, 2.3.0)                                                                  | same                                                     |
-| `question.updated`   | `AgentQuestion` (status / answer / delivery changes)                                          | same                                                     |
-| `task.upserted`      | `TaskSummary`                                                                                 | Tasks, Now, Flow                                         |
-| `task.activity`      | `{ taskId, item: TaskActivity }`                                                              | task drawer, Flow inspector                              |
-| `lane.upserted`      | `{ briefId \| null, agentId, block: LaneBlock }`                                              | Now › Score, Chat plan card                              |
-| `handoff.created`    | `{ briefId \| null, handoff: Handoff }`                                                       | Score connectors, Flow edges, live log                   |
-| `brief.upserted`     | `BriefSummary`                                                                                | Flow brief picker and header; refetch that brief's graph |
-| `run.updated`        | `RunSummary`                                                                                  | Flow inspector, Watch header                             |
-| `attempt.updated`    | `AttemptSummary` (5.17a-1, only with attempts on; created, closed, bounded or resumed)         | Now, Flow, Reports, Team history; notifications open the task (current) or the attempt, never a Watch URL |
-| `gap.recorded`       | `{ source: string; runId: string \| null; from: string; to: string \| null; reason: string }` | Watch, Flow log                                          |
-| `log.line`           | `LogLine`                                                                                     | Flow live log, Watch "What she's doing"                  |
-| `watch.frame`        | `WatchFrame`                                                                                  | Watch                                                    |
-| `memory.saved`       | `{ agentIds: AgentId[], text, source: Ref \| null }`                                          | Chat "Learned here", Team memory                         |
-| `look.changed`       | `{ activeTheme, mode, resetGeneration }` (§16)                                               | Every open device: switch to the shared look             |
+| type                    | data                                                                                                                                                                                                                                                                                                                                | Consumers                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `stream.hello`          | `{ epoch: string, headSeq: number, mode: 'live'\|'fake', system: SystemStatus }` (no id)                                                                                                                                                                                                                                            | all                                                                                                       |
+| `stream.reset`          | `{ reason: 'pruned'\|'epoch'\|'future_cursor' }` (no id)                                                                                                                                                                                                                                                                            | all → resync                                                                                              |
+| `system.status`         | `SystemStatus`                                                                                                                                                                                                                                                                                                                      | header banner, Settings                                                                                   |
+| `agent.updated`         | `AgentSummary`                                                                                                                                                                                                                                                                                                                      | everywhere agents render                                                                                  |
+| `room.upserted`         | `Room`                                                                                                                                                                                                                                                                                                                              | Chat rooms list                                                                                           |
+| `job.upserted`          | `Job` (PLAN 11.1b)                                                                                                                                                                                                                                                                                                                  | The new shell's job tabs                                                                                  |
+| `job.deleted`           | `{ id; roomId }` (decision 121: a named job was deleted, undoable)                                                                                                                                                                                                                                                                  | The new shell's job tabs and streams                                                                      |
+| `exchange.upserted`     | `Exchange` (PLAN 11.1b)                                                                                                                                                                                                                                                                                                             | Job capsules and threads                                                                                  |
+| `room.pins.changed`     | `{ roomId }` (PLAN 11.2)                                                                                                                                                                                                                                                                                                            | Pinned decisions                                                                                          |
+| `message.created`       | `Message`                                                                                                                                                                                                                                                                                                                           | Chat, Now thread                                                                                          |
+| `message.delta`         | `{ messageId, roomId, append: string }`                                                                                                                                                                                                                                                                                             | Chat (streaming text)                                                                                     |
+| `message.completed`     | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)                                                                                                                                                                                                                                           | Chat                                                                                                      |
+| `message.deleted`       | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                                                                                                                                                                                                                                                       | Chat, Now thread                                                                                          |
+| `message.updated`       | `{ roomId, messageId, editedBy?: MessageId \| null, parts?: MessagePart[] }` (`editedBy`: the original of an edit; `parts`: a summary edited or marked stale, or (PLAN 5.39) the tool and reasoning cards of a reply that is still streaming, replace the cached parts; the cards come before the text, as they stay at completion) | Chat                                                                                                      |
+| `message.progressed`    | `{ roomId, messageId, at }` (a streaming reply's run made a non-text move: tool call, reasoning, approval; set its `progressAt`. Text moves it via `message.delta`)                                                                                                                                                                 | Chat                                                                                                      |
+| `room.deleted`          | `{ id: RoomId }` (PLAN 5.36: the room and everything Score kept for it is gone; drop it from the cached lists and leave its page)                                                                                                                                                                                                   | Chat, Tasks, Now                                                                                          |
+| `session.compacted`     | `SessionCompacted` (PLAN 5.36: the answer to a `…/compact` request; one per `commandId`)                                                                                                                                                                                                                                            | Chat context meter                                                                                        |
+| `room.version.created`  | `RoomVersion` (a rewind hid the anchor and everything after it; the `message.deleted` events for those messages precede it)                                                                                                                                                                                                         | Chat                                                                                                      |
+| `workflow.run.upserted` | `WorkflowRunSummary` (§15; after every change of a workflow run, which is not announced as `orchestration.upserted`)                                                                                                                                                                                                                | Flow › Workflows run view, Now "Needs you"                                                                |
+| `knowledge.changed`     | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }`                                                                                                                                                                                                                                    | Knowledge                                                                                                 |
+| `typing`                | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                                                                                                                                                                                                                                                            | Chat, Now thread                                                                                          |
+| `approval.requested`    | `Approval`                                                                                                                                                                                                                                                                                                                          | Now card, Chat, Flow, Watch, Tasks, header dot                                                            |
+| `approval.updated`      | `Approval` (phase / decision / delivery changes)                                                                                                                                                                                                                                                                                    | same                                                                                                      |
+| `question.requested`    | `AgentQuestion` (§6a, 2.3.0)                                                                                                                                                                                                                                                                                                        | same                                                                                                      |
+| `question.updated`      | `AgentQuestion` (status / answer / delivery changes)                                                                                                                                                                                                                                                                                | same                                                                                                      |
+| `task.upserted`         | `TaskSummary`                                                                                                                                                                                                                                                                                                                       | Tasks, Now, Flow                                                                                          |
+| `task.activity`         | `{ taskId, item: TaskActivity }`                                                                                                                                                                                                                                                                                                    | task drawer, Flow inspector                                                                               |
+| `lane.upserted`         | `{ briefId \| null, agentId, block: LaneBlock }`                                                                                                                                                                                                                                                                                    | Now › Score, Chat plan card                                                                               |
+| `handoff.created`       | `{ briefId \| null, handoff: Handoff }`                                                                                                                                                                                                                                                                                             | Score connectors, Flow edges, live log                                                                    |
+| `brief.upserted`        | `BriefSummary`                                                                                                                                                                                                                                                                                                                      | Flow brief picker and header; refetch that brief's graph                                                  |
+| `run.updated`           | `RunSummary`                                                                                                                                                                                                                                                                                                                        | Flow inspector, Watch header                                                                              |
+| `attempt.updated`       | `AttemptSummary` (5.17a-1, only with attempts on; created, closed, bounded or resumed)                                                                                                                                                                                                                                              | Now, Flow, Reports, Team history; notifications open the task (current) or the attempt, never a Watch URL |
+| `gap.recorded`          | `{ source: string; runId: string \| null; from: string; to: string \| null; reason: string }`                                                                                                                                                                                                                                       | Watch, Flow log                                                                                           |
+| `log.line`              | `LogLine`                                                                                                                                                                                                                                                                                                                           | Flow live log, Watch "What she's doing"                                                                   |
+| `watch.frame`           | `WatchFrame`                                                                                                                                                                                                                                                                                                                        | Watch                                                                                                     |
+| `memory.saved`          | `{ agentIds: AgentId[], text, source: Ref \| null }`                                                                                                                                                                                                                                                                                | Chat "Learned here", Team memory                                                                          |
+| `look.changed`          | `{ activeTheme, mode, resetGeneration }` (§16)                                                                                                                                                                                                                                                                                      | Every open device: switch to the shared look                                                              |
 
 ## 3. System and search
 
@@ -353,7 +412,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   session's open `/api/stream` connections. Bridge routes (`/bridge/v1/*`) are served only on a separate loopback listener.
   - **HTTPS only (5.18).** Remote mode serves the app only over TLS. The browser port accepts TLS and plain HTTP together
     (the first byte of a connection decides: `0x16` is a TLS handshake). Over plain HTTP, and for every request while no
-    certificate is configured (*guide-only mode*: no database, pairing, API, stream or web app is started), the server
+    certificate is configured (_guide-only mode_: no database, pairing, API, stream or web app is started), the server
     answers `GET`/`HEAD /setup/https` and `GET /setup/https/score-ca.crt` and nothing else: any path under `/api` gets
     `426 { error: { code: 'https_required', message } }` and every other path `308` to `/setup/https`.
     `SCORE_REMOTE_INSECURE_HTTP` no longer exists: it is ignored and the server logs that it was removed.
@@ -397,7 +456,7 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
     registration challenge is bound to the paired session that asked (an authentication challenge to the caller's address);
     every verification failure is `401 passkey_failed`.
     - `GET /api/session/passkeys` (paired) → `{ available: boolean; rpId: string | null; items: { id; label; createdAt: iso;
-      lastUsedAt: iso | null; flagged: boolean }[] }` (`PasskeysSchema`; `available` is false on an IP address).
+lastUsedAt: iso | null; flagged: boolean }[] }` (`PasskeysSchema`; `available` is false on an IP address).
     - `POST /api/session/passkeys/registration-options` `{ password; label? }` (paired + security password) → WebAuthn
       creation options (JSON). `POST /api/session/passkeys` `{ response }` (paired) → `201` the new item.
     - `POST /api/session/passkeys/:id/remove` `{ password }` → `204`. Removing every passkey leaves pairing links working;
@@ -409,7 +468,7 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
   - Paired browsers' cookies are re-sent at most hourly with Max-Age = the session's remaining lifetime.
 - **Log viewer (5.29).** `GET /api/system/logs?level=info|warn|error&q=&limit=` (paired browsers only, in every mode; `limit`
   1 to 2000, default 500) → `{ available: boolean; items: { time: iso | null; level: 'info' | 'warn' | 'error'; message: string;
-  method: string | null; url: string | null; status: number | null; durationMs: number | null }[] }` (`LogsResponseSchema`).
+method: string | null; url: string | null; status: number | null; durationMs: number | null }[] }` (`LogsResponseSchema`).
   Reads Score's own log file (`SCORE_LOG_FILE`, set by `scripts/score`; the rotated `<file>.1` follows the live file), newest
   first, from the last 4 MB of each. Lines are pino JSON (time, level, msg, req, res, responseTime) or plain launcher output
   (time null). `level` is a minimum (`warn` = warn and error); `q` is a case-insensitive substring of message, method or URL.
@@ -532,10 +591,10 @@ and `POST /api/team/pause` / `POST /api/team/resume` remain the team controls.
   }
   ```
 - ~~**S** `GET /api/flow/nodes/:nodeId`~~ (removed in 11.11b)
-run: RunSummary | null; model: string | null; tools: string[] | null; attempts?: AttemptSummary[]; watch: { agentId; thumbnail: string | null; front: string } | null }`
-  `tools: null` = not observed (a step that only Kanban attempts worked on); `[]` = observed, none used. `attempts` (5.17a-1,
-  attempts on) lists the step's attempts of the board lineage Score follows, by `order`. With any attempt in the brief
-  `stats.spendUsd` is `null`: an attempt's cost is unknown, so the total would be partial.
+  run: RunSummary | null; model: string | null; tools: string[] | null; attempts?: AttemptSummary[]; watch: { agentId; thumbnail: string | null; front: string } | null }`
+`tools: null`= not observed (a step that only Kanban attempts worked on);`[]`= observed, none used.`attempts`(5.17a-1,
+attempts on) lists the step's attempts of the board lineage Score follows, by`order`. With any attempt in the brief
+`stats.spendUsd`is`null`: an attempt's cost is unknown, so the total would be partial.
 - ~~**S** `GET /api/briefs/:briefId/log?agent=&kind=tool|all&cursor=`~~ (removed in 11.11b)
   `type LogLine = { id; at; agentId; kind: 'tool' | 'message' | 'handoff' | 'approval' | 'system'; text; callId?; parentCallId?; subagent? }` (the last three: PLAN 8.7, on `kind: 'tool'` lines of coding agents that used sub-agents; same meaning as on the tool message part)
 - ~~**H** `POST /api/briefs/:briefId/pause` / `/resume`~~ (removed in 11.11b; use the run controls)
@@ -566,6 +625,13 @@ run: RunSummary | null; model: string | null; tools: string[] | null; attempts?:
       stored before C1: those are grouped by the "Sub-agent · " caption prefix (the fallback), or stay flat. */ }
   ```
 - `GET /api/media/:mediaId` → image bytes (screenshots).
+- **S** `GET /api/agents/:agentId/bot-screen` → `BotScreenStatus { state: 'running' | 'off' | 'sandboxed' | 'human' |
+'unavailable'; width?; height?; frameSeq?; reason? }` (3.3.0, decision 135, docs/briefs/3.3.0-bot-screen.md). The agent's
+  Hermes Bot Desktop, read-only: Score never sends input and never takes the lease. `human`: someone has taken over the screen;
+  nothing is shown while they work. Asking keeps the screen's connection open for 15 s.
+- **S** `GET /api/agents/:agentId/bot-screen/frame` → `image/png` (`Cache-Control: no-store`, `ETag: "<frameSeq>"`,
+  `If-None-Match` → 304). 409 `conflict` with `details: { state }` when the screen isn't `running` (off, sandboxed, human,
+  unavailable). Frames are never stored by Score.
 - **S** `GET /api/watch/overview` → `{ items: { agent: AgentSummary; thumbnail: string | null; status: string; live: boolean
 surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature */ }[] }`
 - Frames are upserted by `seq` (per agent); a terminal frame is re-emitted with the same `seq` when it finishes. Schemas live in
@@ -592,19 +658,19 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   `exchanges` room a person's message goes to the addressed agents, else the lead (`409 no_lead` in the team room
   without one); unaddressed into a job with a live exchange it is a step in and starts nothing. The addressed agent
   becomes the job's holder. `MessagePart` gains `{ kind: 'notice'; code: 'mention_not_handoff' | 'action_ignored' |
-  'action_not_sent' | 'no_lead'; text }` (a line from Score, never agent text).
+'action_not_sent' | 'no_lead'; text }` (a line from Score, never agent text).
   - **H** `PATCH /api/jobs/:jobId { title (1–200) }` → `Job`; **H** `POST /api/jobs/:jobId/close` → `Job` (`state:
-    closed`, it leaves the room's job lists); **H** `POST /api/jobs/:jobId/reopen` → `Job` (`state: open`); **H** `DELETE
-    /api/jobs/:jobId` → `204` (soft: the job and its messages leave every read — room reads, unread counts, search,
+closed`, it leaves the room's job lists); **H** `POST /api/jobs/:jobId/reopen` → `Job` (`state: open`); **H** `DELETE
+/api/jobs/:jobId` → `204` (soft: the job and its messages leave every read — room reads, unread counts, search,
     exports, agents' context — and the job lists; emits `job.deleted { id; roomId }`); **H** `POST
-    /api/jobs/:jobId/restore` → `Job` (undo: brings back the job and exactly the messages its delete hid). Decision 121
+/api/jobs/:jobId/restore` → `Job` (undo: brings back the job and exactly the messages its delete hid). Decision 121
     (D6). `409 conflict` for the room's own thread (it follows the room: rename or delete the room) and, for close and
     delete, while the job still has work running or queued (stop it first). A person's message into a closed job is
     `409`, into a deleted one `404`. Idempotent: closing a closed job or deleting a deleted one changes nothing.
   - **S** `GET /api/rooms/:roomId/jobs` → `{ asOfSeq; items: Job[] }` (open jobs, the default first; `?closed=include`
     adds the closed ones, for the job menu's "Closed jobs", decision 121).
   - **H** `POST /api/rooms/:roomId/jobs` `{ title (1–200); exchangeBudget? (1–100, default 8); jobTurnLimit? (1–1000,
-    default 40); spendCapUsd? (> 0, ≤ 10000; default none); recipe?: { kind: 'orchestration'|'workflow'; ref } }` →
+default 40); spendCapUsd? (> 0, ≤ 10000; default none); recipe?: { kind: 'orchestration'|'workflow'; ref } }` →
     `201 Job` (the limits and `recipe` from Start a job, PLAN 11.10c: `recipe` names the orchestration or workflow run
     the job belongs to; Score stores the link and doesn't start anything from it); its agents get sessions of their own
     (`score-<room>-<job>-<agent>`). Emits `job.upserted`. `409 conflict` for a room on `mentions` (since 11.11 only an
@@ -613,11 +679,11 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     agents at every start, and its lead is set with `PATCH /api/rooms/:roomId { leadAgentId }`.
   - **S** `GET /api/jobs/:jobId/exchanges` → `{ asOfSeq; items: Exchange[] }` (oldest first).
   - `Job { id; roomId; title; state: 'open'|'working'|'waiting_on_you'|'done'|'closed'; holderAgentId; isDefault;
-    exchangeBudget (8); jobTurnLimit (40); spendCapUsd: number | null; recipe: { kind; ref } | null; createdAt;
-    updatedAt }`; `Exchange { id; jobId; roomId; kind:
-    'handoff'|'ask'|'review'; parentId; from; to; state: 'live'|'waiting_on_agent'|'waiting_on_you'|'paused_budget'|
-    'done'|'stopped'; round; turnsUsed; budget; outcome: 'approved'|'answered'|'handed_off'|'no_decision'|null;
-    endedReason; pause: { reason; options } | null; queuedBehind: { agentId; since } | null; createdAt; updatedAt }`.
+exchangeBudget (8); jobTurnLimit (40); spendCapUsd: number | null; recipe: { kind; ref } | null; createdAt;
+updatedAt }`; `Exchange { id; jobId; roomId; kind:
+'handoff'|'ask'|'review'; parentId; from; to; state: 'live'|'waiting_on_agent'|'waiting_on_you'|'paused_budget'|
+'done'|'stopped'; round; turnsUsed; budget; outcome: 'approved'|'answered'|'handed_off'|'no_decision'|null;
+endedReason; pause: { reason; options } | null; queuedBehind: { agentId; since } | null; createdAt; updatedAt }`.
   - **Budgets and pauses** (PLAN 11.1c, docs/briefs/11.1c-budgets.md). Before an exchange gets its next turn: its turns
     started + queued < `budget` (8), the job's agent-started turns (any turn an agent's action or answer queued, in an
     exchange or not) < `jobTurnLimit` (40), and with a spend cap
@@ -634,10 +700,10 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     never count; Pause everyone and agent pauses hold queued turns before they start, so nothing is spent.
   - **H** `POST /api/exchanges/:exchangeId/decision` `ExchangeDecisionRequest` (`{ option: 'more_turns'; turns 1–20 }`
     · `{ option: 'more_spend'; usd }` · `{ option: 'step_in'; text }` · `{ option: 'reassign'; to }` · `{ option:
-    'send_back'; note }` · `{ option }` for the rest) → `{ ok: true }`; `409 conflict` when the exchange doesn't offer that
+'send_back'; note }` · `{ option }` for the rest) → `{ ok: true }`; `409 conflict` when the exchange doesn't offer that
     option now. `step_in` stores the person's text in the job and sends the held turn on with it (that turn is not the
     agents' spend); `lead_decides` gives the room lead one turn whose only allowed actions are `extend {turns ≤ the
-    job's exchange budget, note}` and `stop_exchange {note}` (tools `score_extend`, `score_stop_exchange`; once per
+job's exchange budget, note}` and `stop_exchange {note}` (tools `score_extend`, `score_stop_exchange`; once per
     exchange); `stop` stops the exchange and its open questions (queued turns end, running ones are stopped).
   - **H** `POST /api/jobs/:jobId/stop` → `{ ok: true }`: every open exchange of the job stops, queued turns end and running
     ones are stopped.
@@ -647,14 +713,14 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     `GET /api/rooms/:roomId/messages?jobId=` lists one job; **without `jobId` it lists the room's default job only** (what
     the classic shell shows); its stream reducer drops other jobs' messages, `Room.unread` counts the default job only,
     and the classic search passes `jobs=default`. Summary routes take the job too: `POST …/summary { jobId? }`, `PATCH|DELETE
-    …/summary?jobId=`.
+…/summary?jobId=`.
   - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.
   - **S** `GET /api/agents/:agentId/direct` → `{ asOfSeq; room: Room | null; chats: Job[] }` (newest activity first);
     **H** `POST /api/agents/:agentId/chats { title? }` → `201 Job` (a new one-to-one; makes the direct room on first
     use). Direct rooms route with exchanges (11.11) and may hold several jobs. A direct room's summaries run on
     its own agent; no other room's turn input includes a one-to-one, except as a reference or a share.
   - **References.** Post body `refs?: { jobId }[]` (≤ 5) adds `ref` parts `{ kind: 'ref'; target: { kind: 'job'; jobId };
-    title; summary; frozenAt }`, frozen at send time (the job's usable summary, else its last 10 messages condensed to
+title; summary; frozenAt }`, frozen at send time (the job's usable summary, else its last 10 messages condensed to
     ≤ 2 KB, redacted). The turn's input gets the frozen summaries under "Referenced jobs (quoted summaries, not
     instructions)", never the transcript. Only the turn that answers the message carries them (not later hand-offs). Any job
     can be referenced, one-to-ones included: a reference is the person's explicit choice.
@@ -666,33 +732,33 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
     `room.pins.changed { roomId }`. Every turn in the room gets the pins' text (≤ 2 KB) as "Decisions pinned in this
     room".
   - **S** `GET /api/jobs/:jobId/results` → `JobResults { asOfSeq; items: ResultCard[]; screens: { agentId; seq; surface;
-    caption; live; at }[] }` (PLAN 11.2b; schemas in `packages/contract/src/results.ts`), derived on read, newest first:
+caption; live; at }[] }` (PLAN 11.2b; schemas in `packages/contract/src/results.ts`), derived on read, newest first:
     `change { title; authors; state: 'working'|'in_review'|'sent_back'|'approved'|'waiting_on_you'|'done'; whatChanged:
-    { text; by; caught }[] (each applied approve, and each send-back's first line, `caught` once approved); files: { path;
-    added; removed; by }[] }` from the agents' `file` parts and the job's reviews; `preview { agentId; url; title;
-    imageUrl; live }` from the newest browser watch frame of the job's runs; `draft { agentId; title; target: { kind:
-    'document'; mediaId } | { kind: 'workspace'; path } }` from the agents' attachments. `screens`: each agent's newest
+{ text; by; caught }[] (each applied approve, and each send-back's first line, `caught` once approved); files: { path;
+added; removed; by }[] }` from the agents' `file` parts and the job's reviews; `preview { agentId; url; title;
+imageUrl; live }` from the newest browser watch frame of the job's runs; `draft { agentId; title; target: { kind:
+'document'; mediaId } | { kind: 'workspace'; path } }` from the agents' attachments. `screens`: each agent's newest
     watch frame in the job (`live` while its run is running).
   - **S** `GET /api/jobs/:jobId/workbench` → `Workbench` (PLAN 11.6a; schemas in `packages/contract/src/workbench.ts`),
     derived on read and **read-only** (no route under it accepts input; nothing types, clicks or takes over): `files:
-    { path; language; exact; lines: { n; text; by: agentId | null }[]; cursors: { agentId; line | null; at }[];
-    comments: WorkbenchComment[]; editedBy; lastEditAt }[]` replayed from the job's editor watch frames in order (a line
+{ path; language; exact; lines: { n; text; by: agentId | null }[]; cursors: { agentId; line | null; at }[];
+comments: WorkbenchComment[]; editedBy; lastEditAt }[]` replayed from the job's editor watch frames in order (a line
     belongs to the agent whose edit last wrote it; `by: null` = seen only as context; only lines Score saw are listed;
     `exact: false` when an edit had no file position or a diff was cut short); `WorkbenchComment { id; by; line | null;
-    originalLine; text; outdated; exchangeId; kind: 'review'|'approve'|'send_back'; at }` — a note moves with later
+originalLine; text; outdated; exchangeId; kind: 'review'|'approve'|'send_back'; at }` — a note moves with later
     insertions and deletions above it and is `outdated` (line `null`) once its line was changed or removed;
     `looseComments` (notes on paths the job never edited, with `path`); `drafts` (the Results draft cards); `screens:
-    { frame: WatchFrame; live }[]` (each agent's newest frame in the job, as Watch shows it). Credential files' frames
+{ frame: WatchFrame; live }[]` (each agent's newest frame in the job, as Watch shows it). Credential files' frames
     carry no diff, so they add no lines. `404` for an unknown job.
 - **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
   `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409
-  conflict` while the message is still streaming; `404` for an unknown room or message; idempotent (deleting a deleted
+conflict` while the message is still streaming; `404` for an unknown room or message; idempotent (deleting a deleted
   message is `204`). Emits `message.deleted`.
 - **H** `POST /api/rooms/:roomId/clear` → `{ cleared: number }` (2.0.11): clears a one-to-one's main chat — every live
   message of a direct room's default thread is deleted exactly as `DELETE …/messages/:id` would (Score-only; the agent's
   Hermes session may still remember it), in one transaction. The room's other chats (jobs) are untouched. `409
-  conflict` for a room that isn't a one-to-one, or while a message is still being written or answered. Emits
+conflict` for a room that isn't a one-to-one, or while a message is still being written or answered. Emits
   `message.deleted` per message.
 - **H** `POST /api/rooms/:roomId/messages/:messageId/retry` → `202 { messageId }` (the new streaming placeholder
   reply). `messageId` is a finished agent reply that answered a person's message: the same agent gets the same input
@@ -708,7 +774,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   writing that streaming agent reply; the reply ends with "This run was stopped." `404` unknown; `409 conflict` when the
   message is not a reply being written by a running run (finished, or still queued).
 - **S** `GET /api/rooms/:roomId/messages/:messageId/rewind-plan` → `RewindPlan` `{ hiddenCount; agents: { agentId; turns;
-  cannot: RewindSkipReason | null }[]; blocked: string | null }` (PLAN 5.33): what a rewind of the person's own message
+cannot: RewindSkipReason | null }[]; blocked: string | null }` (PLAN 5.33): what a rewind of the person's own message
   would do, for the confirmation. Nothing changes. `turns` is the number of Hermes user turns of that agent's room session
   (`score-<room>-<agent>`) that started at or after the message and are still in Hermes; `blocked` says why a rewind can't
   start now (an agent is answering or has queued work, or the room's work is paused with pending holds). `404`/`400` as for
@@ -716,13 +782,13 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **H** `POST /api/rooms/:roomId/messages/:messageId/rewind` `{ mode: 'edit' | 'delete'; scoreOnly?: boolean }` →
   `{ version: RoomVersion; rewound: { agentId; turnsUndone }[]; skipped: { agentId; reason: RewindSkipReason }[] }`
   (PLAN 5.33). The message is the person's own, finished, in this room. The message and **every message after it in the
-  room** become a *previous version* (`messages.deleted_at` plus `version_id`: left out of normal reads exactly like a
+  room** become a _previous version_ (`messages.deleted_at` plus `version_id`: left out of normal reads exactly like a
   deleted message; `message.deleted` for each, then `room.version.created`). Unless `scoreOnly`, every agent whose Hermes
   session for this room has user turns at or after the message is **rewound** to just before it, through the bridge
   (`rewind` command, §11). Score counts the turns from its own records (`message_runs`, not already rewound) and checks
   them against Hermes's own history read-only; the lineage of compressed sessions is followed and a rewind across a
   compression boundary is not attempted. Nothing is hidden unless every needed rewind succeeded; otherwise `409
-  rewind_incomplete` with `details: { skipped: { agentId; reason }[]; rewound: … }` and the person may repeat the request
+rewind_incomplete` with `details: { skipped: { agentId; reason }[]; rewound: … }` and the person may repeat the request
   with `scoreOnly: true` (hide in Score only; `skipped` then lists every agent with `score_only`). `409 conflict` while an
   agent is answering, has queued work, or the room is paused with pending holds. Long-term memory (MEMORY.md, skills,
   Knowledge notes) is **not** rewound. Idempotent per message: repeating it returns the stored result and never rewinds
@@ -730,21 +796,21 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   it (`RoomVersion.replacedBy`, original `editedBy`) instead of hiding again. Deleting an agent reply stays the Score-only
   `DELETE`.
 - **S** `GET /api/rooms/:roomId/versions` → `{ asOfSeq; items: RoomVersion[] }` (newest first); **S** `GET
-  /api/rooms/:roomId/versions/:anchorId` → `{ version: RoomVersion; items: Message[] }` (the hidden messages, anchor
+/api/rooms/:roomId/versions/:anchorId` → `{ version: RoomVersion; items: Message[] }` (the hidden messages, anchor
   first, oldest to newest; shown read-only). `RoomVersion` `{ id; roomId; anchorId; anchorCreatedAt; mode; replacedBy |
-  null; number; count; hiddenCount; rewound; skipped; createdAt }`: `number` of `count` is the position in a chain of
+null; number; count; hiddenCount; rewound; skipped; createdAt }`: `number` of `count` is the position in a chain of
   edits (the correction itself was edited again). `404` unknown room or anchor.
 - **S** `GET /api/agents/:agentId/context` → `AgentContext` `{ model: string | null; tokens: { input; output } | null;
-  costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of the agent's latest finished or running run
+costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of the agent's latest finished or running run
   with usage and the model's context window when Hermes's model options carry one (else `null`). `404` unknown agent.
 - **S** `GET /api/agents/:agentId/sessions/:sessionId/context` → `SessionContext` + `asOfSeq` (a stream-query snapshot) `{ window: number | null; used: number | null;
-  measuredAt: string | null; model: string | null; source: ReadingSource | null; parts: { kind; label; tokens }[] | null;
-  autoCompactAt: number | null; compactions: number }` (PLAN 5.36): what the context meter and its popover show for one room
+measuredAt: string | null; model: string | null; source: ReadingSource | null; parts: { kind; label; tokens }[] | null;
+autoCompactAt: number | null; compactions: number }` (PLAN 5.36): what the context meter and its popover show for one room
   session. With the plugin's `context_breakdown` answer, `parts` lists what uses the window (Hermes's categories: system prompt,
   tool definitions, rules, skills, MCP tools, subagent definitions, memory, conversation messages; compressed summaries and
   files are inside the conversation and are not separated) and `used` is Hermes's own figure. When the plugin can't answer
   (old plugin, no running gateway, coding agent, empty session) the response falls back to the totals of `GET
-  /api/agents/:agentId/context` with `parts: null`. Cached up to 30 s per session; the cache is dropped when a run of that agent
+/api/agents/:agentId/context` with `parts: null`. Cached up to 30 s per session; the cache is dropped when a run of that agent
   in that room finishes and after a compaction. `404` as for compact.
 - **H** `POST /api/agents/:agentId/sessions/:sessionId/compact` `{ keepRecent?: int 1-20 }` → `202 { commandId }` (PLAN 5.36;
   schemas in `packages/contract/src/compaction.ts`). Asks Hermes to compact (summarise the older turns of) one of the agent's
@@ -752,13 +818,13 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   the tip of its compression lineage is compacted). The API server ignores `/compress`, so Score asks the agent's gateway through the bridge (`compact` command,
   §11). The request returns at once; the answer is the stream event `session.compacted`
   `{ commandId; agentId; sessionId; roomId: string | null; status: 'compacted' | 'nothing' | 'failed'; reason: CompactFailureReason
-  | null; keepRecent: number | null; before: { messages; tokens } | null; after: { messages; tokens } | null; memoryNote: string | null }`
+| null; keepRecent: number | null; before: { messages; tokens } | null; after: { messages; tokens } | null; memoryNote: string | null }`
   (`reason`: `bridge_unavailable`, `no_answer`, `session_busy`, `lock_held`, `no_session`, `compact_failed`; `tokens` are Hermes's
   rough request estimates; `nothing` = too short to compact; `memoryNote` (PLAN 8.2, decision 83) = the Knowledge path the summary was
   saved as, see §12 "Memory notes"; null when none was written). Refusals, synchronous: `404` unknown agent or a session that
   is not one of this agent's room sessions; `409 unsupported` for a coding agent; `409 session_busy` while a message run of
   that agent in that room is `pending` or `active` (Stop first) or the room is being rewound; `409
-  orchestration_owned` for a session in a room an orchestration or workflow run owns (owned or draining);
+orchestration_owned` for a session in a room an orchestration or workflow run owns (owned or draining);
   `409 conflict` when a compaction of that session is already in flight. Compacting changes the agent's Hermes session (a
   compression continuation); the context meter reads the next run's usage. Idempotent per `Idempotency-Key`.
 - `POST /api/rooms/:roomId/messages`
@@ -788,12 +854,12 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 
   Text starting with a slash command is parsed server-side:
 
-  | Command     | Syntax                                                 | Effect                             | `CommandResult`                               |
-  | ----------- | ------------------------------------------------------ | ---------------------------------- | --------------------------------------------- |
-  | `/assign`   | `/assign @agent <title> [-- body]`                     | creates a Kanban task              | `{ kind: 'assign', taskId, taskKey }`         |
-  | `/routine`  | `/routine @agent <schedule> <prompt>`                  | creates a cron job                 | `{ kind: 'routine', routineId }`              |
-  | `/remember` | `/remember [@agent…] <fact>`                           | writes agent memory                | `{ kind: 'remember', agentIds }`              |
-  | `/skill`    | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill          | `{ kind: 'skill', name, installed: boolean }` |
+  | Command     | Syntax                                                 | Effect                                                                                                                     | `CommandResult`                               |
+  | ----------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+  | `/assign`   | `/assign @agent <title> [-- body]`                     | creates a Kanban task                                                                                                      | `{ kind: 'assign', taskId, taskKey }`         |
+  | `/routine`  | `/routine @agent <schedule> <prompt>`                  | creates a cron job                                                                                                         | `{ kind: 'routine', routineId }`              |
+  | `/remember` | `/remember [@agent…] <fact>`                           | writes agent memory                                                                                                        | `{ kind: 'remember', agentIds }`              |
+  | `/skill`    | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill                                                                                                  | `{ kind: 'skill', name, installed: boolean }` |
   | `/model`    | `/model <model> <message…>`                            | runs this message on another model (a name that is one of the agent's aliases also carries the alias's provider to Hermes) | `{ kind: 'model', model }`                    |
 
   `/remember` and `/skill` are parsed but not implemented yet: they answer `501 not_implemented` and are left out of
@@ -851,14 +917,14 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
   first); `409 orchestration_owned` while an orchestration or workflow run owns it (owned or draining). A room whose run is
   finished and released may be deleted: the run's records are pruned in the same transaction with the executor's
   prune path (the journal keeps its tombstones; the single `pruned` history row stays), then the room. Emits `room.deleted
-  { id }` after the transaction (the briefs simply disappear from the next read). The
+{ id }` after the transaction (the briefs simply disappear from the next read). The
   web asks for the typed name, offers the room export first, and then returns to Chat home.
   `GET /api/rooms/:roomId/delete-plan` (**S**) → `RoomDeletePlan` `{ name; messages; files; runs; briefs; blocked: 'room_busy' |
-  'orchestration_owned' | 'direct' | null }`, the counts the dialog lists (`files` = distinct attachments, `runs` = message runs
+'orchestration_owned' | 'direct' | null }`, the counts the dialog lists (`files` = distinct attachments, `runs` = message runs
   plus an orchestration run's records).
 - `GET /api/search/messages?q=&roomId?&jobId?&jobs=default?&limit=` (`jobs=default`: only rooms' default jobs, what the
   classic shell opens) (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
-  jobId /* 11.1b */; author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
+jobId /* 11.1b */; author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
   indexed once it completes); the query is tokenised into quoted terms (no FTS syntax from the user, the last word is a
   prefix); `[[`/`]]` in `snippet` mark matches (redacted). Used by the ⌘K palette ("Messages") and the Chat search box;
   the web opens a hit at `/chat/:roomId?message=:messageId` and scrolls to it.
@@ -910,7 +976,7 @@ create dialog says so). Nothing live is exposed.
   data. The room's later edits and deletions do not change it. At most the latest 2000 messages.
 - Token: 32 random bytes (base64url, 43 chars). Only its SHA-256 is stored (`room_shares.token_hash`); the token is shown once.
 - `GET /api/shares` → `{ items: ShareSummary[] }` (`{ id; roomId; roomName; createdAt; expiresAt; views; includeImages;
-  status: 'active' | 'expired'; roomChanged }`, newest first; `roomChanged` = a message of the room was deleted or rewound after the
+status: 'active' | 'expired'; roomChanged }`, newest first; `roomChanged` = a message of the room was deleted or rewound after the
   snapshot (the link still shows the old text); revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
   ones of that room (Chat › room menu › Share…, Settings › Shares lists all).
 - **H** `DELETE /api/shares/:id` → `204` (no password needed; idempotent; `404` unknown id). Revoking withdraws the link at once
@@ -933,7 +999,7 @@ Hermes sessions that Score did not start (Telegram, CLI, Discord, …), read thr
 Score's own runs (`score-<room>-<agent>`), compression children and empty sessions are left out.
 
 - `GET /api/outside-sessions` → `{ items: OutsideSession[]; unavailable: AgentId[] }` (`{ id; agentId; source; sourceLabel;
-  title; startedAt; messageCount; busy; roomId }`, newest first, at most 200 per agent). `title` = the session title, else
+title; startedAt; messageCount; busy; roomId }`, newest first, at most 200 per agent). `title` = the session title, else
   the first user message (redacted, cut to 120 characters). `busy` = not ended and active within the last 5 minutes.
   `roomId` = the Score room made from it, if imported. `unavailable` = profiles whose database is missing or has a changed
   schema.
@@ -974,7 +1040,7 @@ string|null; answeredAt: string|null }`.
 - **S** `GET /api/questions?status=pending|all&room=` → `{ asOfSeq; items: AgentQuestion[] }` (newest first, at most 200).
 - **S** `GET /api/questions/:questionId` → `AgentQuestion` (`404 not_found`).
 - **H** `POST /api/questions/:questionId/answer` `{ answer: string | string[] }` → `202 AgentQuestion` with `delivery:
-  'delivering'`; the outcome arrives as `question.updated` (`answered`/`applied`, or `failed` with the question still
+'delivering'`; the outcome arrives as `question.updated` (`answered`/`applied`, or `failed` with the question still
   pending so the person can answer again). A free-text question takes a string (≤ 16 384 characters); one with options
   takes one of them (string), or with `multiSelect` an array of distinct options. `400 bad_request` for an answer that
   doesn't fit; `409 conflict` (current `AgentQuestion` in `details`) when it is no longer pending.
@@ -1024,20 +1090,20 @@ pauses, orchestrations, reports and MCP tools. The attempt page at `/attempts/:a
   must be gone) and never confirms a recorded failure. `step` must be the interrupted step; otherwise `409`.
 
 - **H** `POST /api/agents/imports` (body: the archive, `Content-Type: application/octet-stream`, ≤ 200 MiB) → `201
-  ImportInspection`. Score stores the upload privately (`$SCORE_HOME/profile-imports/<uploadId>.tar.gz`, directory 0700,
+ImportInspection`. Score stores the upload privately (`$SCORE_HOME/profile-imports/<uploadId>.tar.gz`, directory 0700,
   file 0600) and inspects it by streaming, never extracting it: one top-level directory; only regular files and
   directories (links, devices and special files are refused, as Hermes does); no absolute, drive-letter or `..`
   paths; at most 50,000 entries, 2 GiB unpacked and a 200x expansion ratio. A refused archive is `400 bad_request` with the
   reason and is not kept. `ImportInspection` = `{ uploadId; sizeBytes; archiveRoot; suggestedId: string|null; description;
-  model; configVersion; skills: string[]; plugins: string[]; memoryBytes; fileCount; totalBytes; credentialFiles: string[];
-  hasBridge; warnings: string[] }`: names and counts only, never file contents (credential files are listed by path and
+model; configVersion; skills: string[]; plugins: string[]; memoryBytes; fileCount; totalBytes; credentialFiles: string[];
+hasBridge; warnings: string[] }`: names and counts only, never file contents (credential files are listed by path and
   never read). Uploads nobody imports are dropped after 24 hours.
 - **H** `DELETE /api/agents/imports/:uploadId` → `204`: discards the upload (the preview was cancelled).
 - **H** `POST /api/agents/import` `{ uploadId; id; name; role; style; confirmCredentials? }` → `202 AgentOperation`
   (`kind: 'import'`). The archive is inspected again; credential files need `confirmCredentials: true` (else `400`).
   Hermes never overwrites a profile, so an existing id (or `default`, or a retired name) is `409`: there is no replace;
   delete the agent first (which keeps a private export). Steps: `import_profile` (`hermes profile import <archive> --name
-  <id>`, argv only; Hermes extracts to its own staging directory, refuses unsafe members and drops the exporting
+<id>`, argv only; Hermes extracts to its own staging directory, refuses unsafe members and drops the exporting
   profile's runtime directories and role), `describe_profile` (the role), `preserve_key`, `configure_key`, `permissions`,
   `install_bridge` (pinned, `--force` over a bridge that came in the archive), `enable_bridge`, `verify_ready`. The model
   is the archive's own and is not changed. `import_profile` is neither retried nor adopted; if it fails nothing is
@@ -1076,7 +1142,7 @@ Deletion clears the agent's pause. Import still refuses a retired name.
   `star`, `pill`, `cross`, `cloud`, `cylinder`, `heart`, `drop`, `bolt`, `moon`, `leaf`, `blob`, `shield`, `octagon`,
   `bubble`, `gem`, `ball`, `flower` (2.2.0). `AgentStyle` is `{ color; shape }`: an agent is its colour and shape, nothing else (PLAN 11.11,
   decision 118). The cut-out and ring looks and pet packs of PLAN 10.2 are gone, with `PUT|DELETE
-  /api/agents/:agentId/pack` and `GET /api/agents/:agentId/pack/:activity`. A body or stored style that still carries
+/api/agents/:agentId/pack` and `GET /api/agents/:agentId/pack/:activity`. A body or stored style that still carries
   `look` or `pack` is read without them (unknown keys are dropped), and the style route ignores both keys, so an
   old browser tab or an old profile export keeps working; a patch with nothing else in it is `400`.
 - **S** `GET /api/agents/:agentId` → `AgentDetail`
@@ -1124,11 +1190,11 @@ Deletion clears the agent's pause. Import still refuses a retired name.
 - `AgentDetail.model.fallback` is the agent's `fallback_providers` chain as text (`"model-a, then model-b"`), `null` when none.
 - **H** `GET|PUT /api/agents/:agentId/model-settings` (5.31, `packages/contract/src/model-settings.ts`) →
   `ModelSettings` `{ fallbacks: { provider; model }[] /* ordered chain, Hermes `fallback_providers`, any length */;
-  fallbacksEditable: boolean /* false: an entry has a custom endpoint or key; shown, never rewritten (409) */;
-  aliases: { name; model; provider: string | null; editable }[] /* Hermes `model_aliases`, per profile */;
-  speech: { stt: { provider; model }; tts: { provider; model; voice } } }`. The PUT body is `ModelSettingsUpdate`
+fallbacksEditable: boolean /* false: an entry has a custom endpoint or key; shown, never rewritten (409) */;
+aliases: { name; model; provider: string | null; editable }[] /* Hermes `model_aliases`, per profile */;
+speech: { stt: { provider; model }; tts: { provider; model; voice } } }`. The PUT body is `ModelSettingsUpdate`
   `{ fallbacks?; aliases? /* the full list of editable aliases wanted */; speech?: { stt?: { provider?; model? };
-  tts?: { provider?; model?; voice? } } }`, strict. Only keys whose value differs from what Hermes holds are written
+tts?: { provider?; model?; voice? } } }`, strict. Only keys whose value differs from what Hermes holds are written
   (`hermes -p <profile> config set …`, `config unset model_aliases.<name>` for a removed alias), and the answer is built from
   what was written, with no re-read. Speech provider ids and which of model/voice each has are `STT_PROVIDERS` /
   `TTS_PROVIDERS` in the contract package. `409 conflict` for a non-editable chain/alias, a model or voice the chosen
@@ -1179,10 +1245,10 @@ unsupported`. Hermes-profile endpoints for an agent id that is a coding agent (`
 room's CLI session (`skipped: no_session`).
 
 - `GET /api/coding-agents/runtimes` → `{ items: CodingRuntimeInfo[] }`: `{ runtime: 'claude-code'|'codex'|'antigravity'; label; state:
-  'ready'|'not_installed'|'not_supported'|'untested_version'; version: string|null; testedVersions: string[]; quota: string; message:
-  string|null; unverifiedPermissions: ('read-only'|'workspace-write'|'full')[]; warning: string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
+'ready'|'not_installed'|'not_supported'|'untested_version'; version: string|null; testedVersions: string[]; quota: string; message:
+string|null; unverifiedPermissions: ('read-only'|'workspace-write'|'full')[]; warning: string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
 - `GET /api/coding-agents` → `{ items: CodingAgent[] }`: `{ id; name; role; instructions: string; instructionsEtag: string; runtime; workspace; permission: 'read-only'|'workspace-write'|'full';
-  model: string|null; style; quota; quotaFloorPercent: number; cli: { state; version; testedVersions; confirmed: boolean }; heldGroups: { runId; pgid: number; canRelease: boolean }[]; createdAt }`. `quotaFloorPercent` (0–50, default **10**, 0 = off; PLAN 8.6, decision 91) is the agent's quota floor: runs stop giving it new steps while a limit window of its quota reading has less than that left (see "Quota guard" in §14). `heldGroups` lists process groups of this agent that Score could not prove ended (the agent takes no new turn while there are any); `canRelease` is true when the cause is that Score cannot tell whether the processes are its own.
+model: string|null; style; quota; quotaFloorPercent: number; cli: { state; version; testedVersions; confirmed: boolean }; heldGroups: { runId; pgid: number; canRelease: boolean }[]; createdAt }`. `quotaFloorPercent` (0–50, default **10**, 0 = off; PLAN 8.6, decision 91) is the agent's quota floor: runs stop giving it new steps while a limit window of its quota reading has less than that left (see "Quota guard" in §14). `heldGroups` lists process groups of this agent that Score could not prove ended (the agent takes no new turn while there are any); `canRelease` is true when the cause is that Score cannot tell whether the processes are its own.
 - `GET /api/coding-agents/backend` → `CodingBackend` `{ kind: 'unit'|'process-group'; note: string; checks: { name; ok; detail }[]; checkedAt }` (7.7a): how coding runs launch now. `unit` = each run is a supervised systemd user service whose end Score proves from the service's cgroup; `process-group` = the fallback (the CLI dies with Score, tools it started may keep running until Score restarts and stops them). `checks` is the capability check behind the choice (manager reachable, cgroup v2, linger, socket path, unit properties accepted, Python, notify socket). **H** `POST /api/coding-agents/backend/check` `{}` → the same shape after rerunning the check ("Check again"); new runs follow it, a run already started keeps its backend. In `heldGroups`, a held supervised run has `pgid: 0` and `unit` set; `canRelease` is true once Score cannot read the service at all (releasing records a waiver, signals nothing).
 - A Chat reply from a coding agent is **eligible** only when the pinned driver's rule holds (7.7a §6): Claude Code an explicit `success` result with text; Codex a validated final `agent_message` before `turn.completed`, nothing dropped; Antigravity `SUCCESS` with a response; plus a clean exit, a complete record and (supervised) proof the service ended. Otherwise the run is `failed` with a sentence; @mention hand-offs and plan checklists read only the eligible reply. `422 coding_paused` = coding runs are paused: an unreadable journal, a service Score can't account for, a restore or journal fence awaiting review, or (decision 69) the host check failing on an installation that already passed it once — Score pauses instead of falling back to the process-group engine; the coding agent's card says why and offers Check again.
 - `423 execution_frozen` (decisions 71–72): while Score holds all agent work (a copied or unresolved home, a lost or unreadable execution journal), every action that would send a run or a Chat reply to an agent, deliver a Stop (a message's, a Flow's or a person's) or deliver an approval answers `423` with the sentence that says why, and sends nothing. Chat replies stay queued. The only way out is `scripts/score installation reset-history`.
@@ -1209,7 +1275,7 @@ room's CLI session (`skipped: no_session`).
   A group is held (and `canRelease`) when members of it survive that match no identity Score recorded while it supervised the run (a replacement group may have reused the number), when `/proc`
   cannot be read, or when another boot's table cannot be told apart. Absence is proven only by the kernel (`kill(-pgid, 0)` fails with `ESRCH`) or by another boot, never by a `/proc` listing.
 - `GET /api/coding-agents/runtimes/:runtime/usage` → `CodingUsage` `{ runtime; fetchedAt; groups: { name; fiveHourRemainingPercent: number|null;
-  fiveHourResets: string|null; weeklyRemainingPercent: number|null; weeklyResets: string|null }[]; text }`: Antigravity's quota (`agy -p /usage`, no model
+fiveHourResets: string|null; weeklyRemainingPercent: number|null; weeklyResets: string|null }[]; text }`: Antigravity's quota (`agy -p /usage`, no model
   turn), cached for 60 s; `text` is the redacted table as printed, the fallback when a group could not be read. Other runtimes: `409 unsupported`;
   CLI missing or untested: `422 cli_not_installed` / `422 untested_cli_version`; the CLI failing or printing nothing readable: `502 usage_unavailable`.
 - `GET /api/coding-agents/:id/quota` and `GET /api/coding-agents/runtimes/:runtime/quota` → `CodingQuotaResponse` `{ quota: CodingQuota | null }` (PLAN 8.1, decision 82),
@@ -1243,16 +1309,18 @@ room's CLI session (`skipped: no_session`).
   The sandbox limits what an agent can change, **not what it can read** (Codex has no read rules): the Add agent form says so.
 
 ### Workspace (Team › agent › Workspace)
+
 The agent's Hermes working folder (`terminal.cwd`), browsed and edited from Score. **Every** workspace endpoint is **H**
 (paired browser), reads included, because the files can hold secrets. `path` is POSIX and relative to the root; the root
 itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
+
 - **H** `GET /api/agents/:agentId/workspace` → `WorkspaceInfo` `{ root: string | null; available: boolean; reason: string | null }`.
   Unavailable (with the reason) when the terminal backend is not `local`, `terminal.cwd` is unset, `.` or relative, or the
   folder fails the root checks: `/`, the home folder or a parent of it, `~/.hermes`, `~/.score`, `~/.ssh` (or Score's/Hermes's
   configured homes, and the default `~/.hermes` even when another Hermes home is configured) or inside them, inside `.git` or
   a protected-name folder, missing, not a directory, or owned by another user.
 - **Root identity.** Every file route below (`tree`, `file` GET/PUT, `entries`, `move`, `upload`, `git`) accepts `?root=<the
-  WorkspaceInfo.root the browser is showing>`; when present and not the agent's current root the request is refused
+WorkspaceInfo.root the browser is showing>`; when present and not the agent's current root the request is refused
   `409 workspace_changed` (`details.root` = the current root) and nothing is touched. The web always sends it and includes
   it in its query keys. `PUT …/file` re-checks the file right before replacing it (`412 precondition_failed` if an outside
   writer changed it meanwhile).
@@ -1267,7 +1335,7 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   - pdf (same checks): as the download case below (`application/octet-stream`, `attachment`, CSP), never inline;
   - anything else: `200 application/json` `{ binary: true; size; reason: 'binary' | 'too_large' }`;
   - `download=1`: any file ≤ 25 MiB as `application/octet-stream`, `Content-Disposition: attachment`, nosniff.
-  Symlinks are followed for reading only when they resolve inside the root and the resolved path is allowed.
+    Symlinks are followed for reading only when they resolve inside the root and the resolved path is allowed.
 - **H** `PUT …/workspace/file?path=` `{ content; etag: string | null }` → `{ etag }`. Atomic (temp file in the same directory,
   fsync, rename). `etag: null` creates and refuses an existing file (`409 exists`); a stale etag → `412 precondition_failed`
   with `details: { etag }` (current etag, or null when the file was removed). Content ≤ 1 MiB, no NUL.
@@ -1367,7 +1435,7 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   is `spendUsd: null`, `spendBasis: 'unknown'`, and it is listed in `totals.spendExcluded` and left out of the total (not counted as 0).
   An agent with no run in the range has no `spendBasis`. The 30-day `trend` spend covers Hermes sessions only.
 - **Cache hit rate and trend (5.29).** `cacheHitRate` = cache-read tokens / (uncached input + cache-read + cache-write) of the
-  Hermes sessions that *started* in the range (a session's counters are cumulative), read-only from each profile's
+  Hermes sessions that _started_ in the range (a session's counters are cumulative), read-only from each profile's
   `state.db` through the report-facts adapter. `null` ("—") when no such session exists, a counter is missing, or Hermes
   never recorded a cache token (a provider without caching is not a 0% hit rate). The total is over the agents that report;
   null when none does. `trend` is always the last 30 local days (oldest first) whatever `range` is: `runs` = runs started
@@ -1375,7 +1443,7 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   range spend), `null` when any agent's reading is missing for the day (e.g. before Score started sampling), never zero.
   The Reports page draws it with an accessible table fallback.
 - **Display currency (5.29).** Reports and the API stay in USD. `GET /api/settings/currency` → `{ code: string /* ISO-4217
-  shape, ^[A-Z]{3}$ */; rate: number /* units of `code` per 1 USD, typed by the person; no network fetch */ }` (default
+shape, ^[A-Z]{3}$ */; rate: number /* units of `code` per 1 USD, typed by the person; no network fetch */ }` (default
   `{ code: 'USD', rate: 1 }`); **H** `PUT /api/settings/currency` `{ code; rate }` → the stored value (`400` for a bad code or a
   rate that is not > 0; USD is always stored with rate 1). Stored in Score's `meta` table (key `display_currency`). The page
   multiplies and rounds once to the displayed cent; Reports offers a USD / `code` toggle (remembered per browser).
@@ -1392,10 +1460,20 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   days in `tz`, `from <= to`, at most 366 days, `to` not after today; otherwise `400 bad_request`) →
   ```ts
   {
-    from: string; to: string /* the days asked for */
+    from: string
+    to: string /* the days asked for */
     truncated: boolean /* a bound dropped older events */
-    agents: { id: AgentId; events: { at: string /* ISO */; kind: 'task_done' | 'note_written' | 'skill_changed' | 'memory_changed';
-                                    label: string; ref: string | null }[] }[]
+    agents: {
+      id: AgentId
+      events: {
+        at: string /* ISO */
+        kind: 'task_done' | 'note_written' | 'skill_changed' | 'memory_changed'
+        label: string
+        ref: string | null
+      }
+      ;[]
+    }
+    ;[]
   }
   ```
   One entry per agent in Score's agent projection (even with no events), events newest first. Sources: tasks completed (Hermes
@@ -1436,37 +1514,37 @@ available: boolean; reason: string | null /* "Not on your plan" */; free: boolea
 - **H** `POST /api/settings/providers/local` `{ label; baseUrl; model; apiKey? }` → provider item. Written to the default
   profile, then copied (name, address, default model) into every other agent's profile, so any agent can use it (2.0.3).
   An `apiKey` (2.0.10) is written as `providers.<id>.api_key` into every one of those profiles (`hermes -p <profile>
-  config set …`, the key an argv element only); the route uses the HMAC receipt (`secretBody`) and the key is never
+config set …`, the key an argv element only); the route uses the HMAC receipt (`secretBody`) and the key is never
   logged, stored, echoed or put in a receipt. Local provider items carry `keySet` (whether a key is set; Hermes masks it
   on read, so Score can't copy it). Choosing a local provider's model for an agent whose profile lacks it (`PUT
-  /api/agents/:agentId/model`) copies it there first; when the provider has a key that profile doesn't, the copy is made
+/api/agents/:agentId/model`) copies it there first; when the provider has a key that profile doesn't, the copy is made
   and the change is refused `409 needs_key` ("add the key again in Settings: it is given to every agent").
 - **H** `DELETE /api/settings/providers/:id` → `204` (2.0.3). A local provider is removed from every profile that defines
   it (`hermes -p <profile> config unset providers.<id>`); a hosted provider has each stored credential removed in the
   settings profile (`hermes auth remove <id> <credential id>`), then `auth list` must no longer show it (`409
-  not_verified` otherwise). `409 provider_in_use` while any agent's model uses it (the message names them); `409
-  not_supported` when nothing is stored (a built-in free tier); unknown → `404`. Keys are never read or returned.
+not_verified` otherwise). `409 provider_in_use` while any agent's model uses it (the message names them); `409
+not_supported` when nothing is stored (a built-in free tier); unknown → `404`. Keys are never read or returned.
 - `GET /api/settings/connections` → `{ toolServers: { id; label; status: 'ok'|'needs_signin'|'error'; usedBy: AgentId[] | 'everyone' }[]
 messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`
 - `POST /api/settings/tool-servers` `{ name; command?: string[]; url?: string }`
 - **H** `DELETE /api/settings/tool-servers/:id` → `204` (2.0.3): `hermes mcp remove <id>` in the settings profile (Score
   answers its confirmation; the person confirmed in the UI), then `mcp_servers` must no longer list it (`409
-  not_verified`); unknown → `404`. Running agents drop it when their gateway restarts.
+not_verified`); unknown → `404`. Running agents drop it when their gateway restarts.
 - `POST /api/settings/messaging/:platform/connect` → `ConnectResult`: `next: 'form'` for platforms that can be set up in
   the browser (token based), else `run_in_terminal` with the command (WhatsApp QR and other interactive pairings).
 - `GET /api/settings/messaging/:platform/fields` → `{ fields: { key; label; help: string | null; url: string | null;
-  secret: boolean; required: boolean }[]; browserSetup: boolean }`. Field metadata is an adapter-side table (Hermes has no
+secret: boolean; required: boolean }[]; browserSetup: boolean }`. Field metadata is an adapter-side table (Hermes has no
   read-only CLI that lists env-var metadata) mirroring `hermes_cli/config_defaults.py`. `browserSetup: false` = no fields,
   use the terminal command from `connect`.
 - **H** `PUT /api/settings/messaging/:platform` `{ values: Record<ENV_KEY, string>; agentId?: AgentId }` → the connection row
   `{ platform; label; status; detail }`. Keys must be in the platform's field list (`400` otherwise), every `required`
   field must be present and non-empty, empty optional values are skipped. Each value is written with `hermes [-p <profile>]
-  config set KEY value` (argv array, profile of `agentId`, default profile when absent). The route uses the HMAC receipt
+config set KEY value` (argv array, profile of `agentId`, default profile when absent). The route uses the HMAC receipt
   (`secretBody`): values are never logged, stored, echoed or put in a receipt, and error messages are redacted. The gateway
   reads its tokens at start, so the row stays as it was until the gateway restarts (Score has no gateway restart action;
   the UI says so).
 - **H** `DELETE /api/settings/messaging/:platform?agentId=` → the connection row (2.0.3): `hermes [-p <profile>] config unset
-  KEY` for each key in the platform's field list (a key that isn't set is skipped; `409 not_verified` when no key could be
+KEY` for each key in the platform's field list (a key that isn't set is skipped; `409 not_verified` when no key could be
   removed). Platforms without browser setup → `409 not_supported`. Like PUT, the row and the gateway change when it
   restarts.
 - `GET /api/settings/rules` → `{ mode: 'manual' | 'smart' | 'off'; goAhead: Rule[]; askMe: Rule[]; never: Rule[];
@@ -1505,9 +1583,11 @@ compatible: boolean }`. Read-only: compares the running build (version, code sha
 - Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
 
 ### Where an agent runs ("Runs on", PLAN 11.8a, D15)
+
 Which Hermes terminal backend a profile uses, and what that actually separates from the person's machine. Read and set
 through the `hermes` CLI (`config get --json` / `config set` on `terminal.*`), never a file write. Schemas: `RunsOn*` in
 `packages/contract/src/runs-on.ts`. Both routes are **H**: the answer describes the agent's isolation and the PUT changes it.
+
 - **H** `GET /api/agents/:agentId/runs-on` → `RunsOn`:
   ```ts
   {
@@ -1535,11 +1615,11 @@ through the `hermes` CLI (`config get --json` / `config set` on `terminal.*`), n
   backends Score doesn't know are `'unknown'` with no tool lists.
   `502 hermes_unavailable` when Hermes can't answer.
 - **H** `PUT /api/agents/:agentId/runs-on` `{ backend: 'local' } | { backend: 'docker'; image?: string; network?: boolean }
-  | { backend: 'ssh'; host: string; user: string; port?: number; keyPath?: string }` → `RunsOn`. Settings are written
+| { backend: 'ssh'; host: string; user: string; port?: number; keyPath?: string }` → `RunsOn`. Settings are written
   before `terminal.backend`, and a failure part-way puts back every value already written, so the agent keeps running
   exactly where it did. Omitted Docker fields stay as they are; an omitted SSH `port` or `keyPath` goes back to Hermes's
   default (22, none), so a new host never inherits the last host's key. `docker` is refused `409
-  backend_unavailable` when Docker doesn't answer on this machine. Score stores the SSH key's **path** only and never
+backend_unavailable` when Docker doesn't answer on this machine. Score stores the SSH key's **path** only and never
   reads the key. `image` is a Docker reference (`[a-z0-9._/:@-]`, ≤ 255); `host` a hostname, IPv4 or bare IPv6 address (no brackets); `user` a POSIX user name;
   `keyPath` absolute. Takes effect for terminals the agent starts afterwards. The agent's Workspace tab is unavailable on
   any backend but `local` (§ Workspace).
@@ -1547,13 +1627,13 @@ through the `hermes` CLI (`config get --json` / `config set` on `terminal.*`), n
 ### About and updates (decision 79; schemas in `packages/contract/src/about.ts`)
 
 - `GET /api/about` → `About` `{ version: string /* Score's package.json */; commit: string | null /* short git commit of the
-  running checkout, read once; null when the folder isn't a git checkout */; schema: number /* newest applied database
-  migration, 0 without a database */; contract: number; hermes: { version: string } | null; node: string;
-  mode: 'live' | 'fake'; repository: string /* https URL */; checkout: string /* the folder the server runs from */;
-  service: boolean /* runs as the systemd user service (PLAN 10.14): `scripts/score run` under systemd sets
-  SCORE_RUN_AS=service */ }`.
+running checkout, read once; null when the folder isn't a git checkout */; schema: number /* newest applied database
+migration, 0 without a database */; contract: number; hermes: { version: string } | null; node: string;
+mode: 'live' | 'fake'; repository: string /* https URL */; checkout: string /* the folder the server runs from */;
+service: boolean /* runs as the systemd user service (PLAN 10.14): `scripts/score run` under systemd sets
+SCORE_RUN_AS=service */ }`.
 - **H** `POST /api/about/update-check` (no body) → `UpdateCheck` `{ checkedAt; current: string; status: 'up_to_date' |
-  'update_available' | 'ahead' | 'unavailable'; latest: { version; tag; url; changelogUrl } | null; message: string }`.
+'update_available' | 'ahead' | 'unavailable'; latest: { version; tag; url; changelogUrl } | null; message: string }`.
   Runs only when asked: Score never checks at start, on page load or in the background. It reads the public tag list of
   `SCORE_UPDATE_REPO` (default `kohz87/score`) from GitHub with no credentials and nothing about the person, takes the
   highest `vX.Y.Z` tag (pre-releases ignored) and compares it with `current`. A failure, a timeout (10 s) or an answer
@@ -1562,14 +1642,16 @@ through the `hermes` CLI (`config get --json` / `config set` on `terminal.*`), n
   In fake mode the answer is fixed (`up_to_date`).
 
 ## 12. Knowledge (central vault; design docs/briefs/6.0-workspace-knowledge.md § 6.2)
+
 Score's own Markdown vault (default `~/score-vault`, `$SCORE_VAULT`), git-versioned; the files are the source of truth and
 Score's DB only indexes them. Paths are POSIX, relative to the vault; notes end in `.md`, attachments live under
 `attachments/`. Schemas in `packages/contract/src/knowledge.ts`. Writes from browsers are **H**; agents use the bridge
 tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
+
 - `GET /api/knowledge` → `KnowledgeInfo` `{ vault; notes; gitAvailable; agentAccess; moveIssue }`. `moveIssue` is null, or `{ state: 'pending' | 'conflicted'; from; to; message }` for an interrupted move: `pending` is retried automatically (backoff), `conflicted` means recovery could not prove the destination is the moved file and waits for the owner. While one exists, `POST /api/knowledge/move` answers `409 move_pending`. **H** `POST /api/knowledge/move-issue/dismiss` → `KnowledgeInfo` abandons the plan (files untouched).
 - `GET /api/knowledge/tree` → `{ folders: string[]; notes: KnowledgeNoteSummary[] }` (`{ path; title; mtime; lastAuthor }`)
 - `GET /api/knowledge/notes/*path` → `KnowledgeNote` `{ path; title; frontmatter; body; etag; mtime; links: { target;
-  path | null }[]; backlinks: { path; title }[]; lastAuthor; versioned; history }`. `versioned` is `false` when the note's path is Git-ignored and untracked (a `.gitignore` or global ignore rule excludes it): Score saves it but never force-adds it, so it has no history (owner decision 80); it is also `false` when Git is unavailable (the same truth as a save's `git_unavailable`). Tracked notes keep history even if a rule later matches them. `history` (same values as a save's) says where the current content stands: `git_unavailable`, `not_versioned`, `failed` when the file differs from Git's last commit (a save's commit did not land, or the file was edited outside Score and not yet recorded), else `unchanged`. The editor shows "Save to history again" for `failed`, also after a reload. Title: frontmatter `title`, else the first `# H1`, else
+path | null }[]; backlinks: { path; title }[]; lastAuthor; versioned; history }`. `versioned` is `false` when the note's path is Git-ignored and untracked (a `.gitignore` or global ignore rule excludes it): Score saves it but never force-adds it, so it has no history (owner decision 80); it is also `false` when Git is unavailable (the same truth as a save's `git_unavailable`). Tracked notes keep history even if a rule later matches them. `history` (same values as a save's) says where the current content stands: `git_unavailable`, `not_versioned`, `failed` when the file differs from Git's last commit (a save's commit did not land, or the file was edited outside Score and not yet recorded), else `unchanged`. The editor shows "Save to history again" for `failed`, also after a reload. Title: frontmatter `title`, else the first `# H1`, else
   the file name. Wikilinks `[[Target]]`, `[[Target|alias]]`, `[[Target#heading]]` resolve Obsidian-style (exact path,
   then a unique basename, case-insensitive); unresolved links have `path: null`.
 - **H** `PUT /api/knowledge/notes/*path` `{ body; frontmatter?; etag | null }` → `{ etag; path; history; versioned; historyUpdated }`. `history` is the one status of the save: `committed` (a new history
@@ -1580,12 +1662,12 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
   `unchanged` = it was already there), so the same request again is a "save to history again". `versioned` and `historyUpdated`
   stay for compatibility: `versioned` is false for `not_versioned` and `git_unavailable`; `historyUpdated` is true for
   `committed`, `unchanged` and `not_versioned`; ``412
-  precondition_failed` with `details.etag` on a stale etag; `etag: null` creates and refuses an existing note (`409
+  precondition_failed`with`details.etag`on a stale etag;`etag: null` creates and refuses an existing note (`409
   exists`); missing folders are created. Atomic write, then a git commit (author `You`); rapid edits of one note by one
-  author within 60 s amend Score's own last commit when it is still `HEAD`. Before any save, move, delete or restore Score
-  commits outside edits as "Outside changes"; if that snapshot fails the operation is refused `503 git_unavailable` (nothing
-  is overwritten), and a save whose note changed on disk meanwhile gets `412` with the new etag. Agent `write`/`append`
-  from an observe-only producer (`isolation: 'unknown'`) → `403 observe_only`.
+author within 60 s amend Score's own last commit when it is still `HEAD`. Before any save, move, delete or restore Score
+commits outside edits as "Outside changes"; if that snapshot fails the operation is refused `503 git_unavailable`(nothing
+is overwritten), and a save whose note changed on disk meanwhile gets`412`with the new etag. Agent`write`/`append`
+from an observe-only producer (`isolation: 'unknown'`) → `403 observe_only`.
 - **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes; skipped: { path; reason }[] }` (`skipped` lists notes whose links were left as they are because they changed or were removed meanwhile; two commits: the pure rename, then the link edits, so
   git follows the file; `409 exists` (decided by one atomic no-replace rename, so a destination created meanwhile survives untouched); `500 rename_unsupported` where the system can't do that (Linux with python3 needed); `413` and nothing moved when a link rewrite would push a note over 8 MiB; links added
   outside Score since the last scan are included).
@@ -1611,16 +1693,16 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
 - `GET /api/knowledge/agent-usage` → `{ items: { agentId; writesToday }[] }`: agent writes since local midnight
   (Settings › Knowledge).
 - Stream `knowledge.changed` after every change (Score's, an agent's, or an outside edit the watcher saw).
-**Documents and zips (PLAN 6.6).** Files that are not Markdown notes live in the same vault and tree: `.pdf`, `.docx`,
-`.csv`, `.json`, `.html`/`.htm`, images (png, jpeg, gif, webp) and `.zip`. `.md`/`.markdown` (any case) uploads and `.txt`
-(all stored as `<name>.md`) become notes, with the same checks as an ordinary save. A file never replaces one that appeared meanwhile: with `ask` or `keep` a name that was taken after the check is a `409`
-(a zip entry is skipped); `replace` publishes only over the version it saw (`412` otherwise). Limits: 256 MB per file (PLAN 10.6); text is read, indexed and previewed only for files up to 25 MB (bigger ones are
-stored and downloadable, `textStatus: 'too_large'`; a zip over 25 MB still previews, keeps and unzips); documents up to 10 MB are committed to the vault's git unless their path is Git-ignored and untracked (size decides eligibility, the same ignore rule as notes decides the rest; both are stored, `versioned: false`, and never force-added); extracted text is redacted (D6), cut at 2 MiB
-(`textStatus: 'truncated'`) and indexed in its own FTS table. Text of PDF (`unpdf`) and DOCX (`mammoth`) is extracted in a
-worker thread (20 s, 512 MB heap); a failure keeps the file with `textStatus: 'unavailable'`. Types are decided from
-the bytes (magic numbers), never the extension or declared type alone. Names: no `..`, absolute, dot-segments or `.git`.
+  **Documents and zips (PLAN 6.6).** Files that are not Markdown notes live in the same vault and tree: `.pdf`, `.docx`,
+  `.csv`, `.json`, `.html`/`.htm`, images (png, jpeg, gif, webp) and `.zip`. `.md`/`.markdown` (any case) uploads and `.txt`
+  (all stored as `<name>.md`) become notes, with the same checks as an ordinary save. A file never replaces one that appeared meanwhile: with `ask` or `keep` a name that was taken after the check is a `409`
+  (a zip entry is skipped); `replace` publishes only over the version it saw (`412` otherwise). Limits: 256 MB per file (PLAN 10.6); text is read, indexed and previewed only for files up to 25 MB (bigger ones are
+  stored and downloadable, `textStatus: 'too_large'`; a zip over 25 MB still previews, keeps and unzips); documents up to 10 MB are committed to the vault's git unless their path is Git-ignored and untracked (size decides eligibility, the same ignore rule as notes decides the rest; both are stored, `versioned: false`, and never force-added); extracted text is redacted (D6), cut at 2 MiB
+  (`textStatus: 'truncated'`) and indexed in its own FTS table. Text of PDF (`unpdf`) and DOCX (`mammoth`) is extracted in a
+  worker thread (20 s, 512 MB heap); a failure keeps the file with `textStatus: 'unavailable'`. Types are decided from
+  the bytes (magic numbers), never the extension or declared type alone. Names: no `..`, absolute, dot-segments or `.git`.
 - `GET /api/knowledge/tree` now also returns `documents: KnowledgeDocumentSummary[]` `{ path; type; size; mtime;
-  lastAuthor; versioned; textStatus }`; `GET /api/knowledge` also `documents` and `documentBytes`.
+lastAuthor; versioned; textStatus }`; `GET /api/knowledge` also `documents` and `documentBytes`.
 - **H** `PUT /api/knowledge/files/*path?onConflict=ask|keep|replace&mode=keep|unzip|preview&folder=` with the raw file as
   the body (`application/octet-stream`, at most 256 MB) -> `{ path; kind: 'note'|'document'; replaced; history }` (201; `history` as for a note save, for a document it is `not_versioned` when it is over 10 MB or Git-ignored and untracked). A name that
   exists answers `409 exists` with `details.existing[]` (`ask`, the default); `keep` adds ` (2)`, ` (3)` to the name;
@@ -1628,8 +1710,8 @@ the bytes (magic numbers), never the extension or declared type alone. Names: no
   mismatching content -> `415 unsupported_type`; over 256 MB -> `413`.
 - Zip files (`mode`, default `keep`): `keep` stores the zip as a document (its file list shows on its page; not
   indexed); `preview` stores nothing and returns `KnowledgeZipPreview` `{ entries: { path; size; action; reason }[];
-  more; extractCount }`; `unzip` extracts into `folder` (default: the zip's name) -> `KnowledgeUnzipResult` `{ folder;
-  written[]; skipped[]; history }` in one commit "Unzipped <name>.zip". The zip is read in a worker thread: at most 1,000
+more; extractCount }`; `unzip` extracts into `folder` (default: the zip's name) -> `KnowledgeUnzipResult` `{ folder;
+written[]; skipped[]; history }` in one commit "Unzipped <name>.zip". The zip is read in a worker thread: at most 1,000
   entries, 1 GB uncompressed in total, each extracted file up to 256 MB, 100:1 compression ratio per entry (entries under 64 KiB exempt), sizes
   checked while inflating; entry paths are normalised and confined to the folder (no `..`, absolute paths, drive
   letters, dot-files, `.git`); symlinks and directories are ignored; nested zips are kept as files; only the allowed
@@ -1657,13 +1739,13 @@ the bytes (magic numbers), never the extension or declared type alone. Names: no
   document path returns its extracted text as `body` (`kind: 'document'`, `notice` when the text is missing or cut at
   256 KiB); `knowledge_list` adds `documents`. Agents cannot upload or delete documents; their write tools stay
   notes-only (`400 not_a_note`).
-**Export (PLAN 6.7).** Notes and documents can be taken out of the vault.
+  **Export (PLAN 6.7).** Notes and documents can be taken out of the vault.
 - `GET /api/knowledge/notes/*path?download=1` -> the note's `.md` bytes exactly as stored (frontmatter included),
   `Content-Type: text/markdown; charset=utf-8`, `Content-Disposition: attachment` (UTF-8 `filename*`), `nosniff`.
 - **H** `POST /api/knowledge/export/summary` `{ paths? | folder? | all? }` (exactly one) -> `KnowledgeExportSummary`
   `{ files; bytes; label }`: what the export would contain (shown before "Export the whole vault").
 - **H** `POST /api/knowledge/export` same body -> `application/zip`, streamed, `Content-Disposition: attachment;
-  filename="knowledge-<folder|selection|vault>-<YYYY-MM-DD>.zip"`. `paths` is a list of note/document paths (at most
+filename="knowledge-<folder|selection|vault>-<YYYY-MM-DD>.zip"`. `paths` is a list of note/document paths (at most
   10,000; unknown paths answer `404 not_found`, a folder path is not accepted: use `folder`); `folder` exports everything
   under it, `all: true` the whole vault. Entries keep their path relative to the chosen root (`folder`) or to the vault
   (`paths`, `all`), notes and documents as stored (original bytes), plus a root `README.txt` saying what the archive is and
@@ -1672,8 +1754,8 @@ the bytes (magic numbers), never the extension or declared type alone. Names: no
   anything is sent (`413 export_too_large`, `details: { files; bytes }`); an empty selection -> `400 bad_request`. Files are
   streamed from disk (bounded memory) and a file that changes while it is read is still sent as read; the export aborts
   after 10 minutes. Agents get no export tool.
-**Editor and embedded images (PLAN 6.8).** A note opens in one live editor (formatted everywhere, raw Markdown only on the
-active line; a Source toggle shows plain Markdown). No new endpoints; the note rules change:
+  **Editor and embedded images (PLAN 6.8).** A note opens in one live editor (formatted everywhere, raw Markdown only on the
+  active line; a Source toggle shows plain Markdown). No new endpoints; the note rules change:
 - A note may be **8 MiB** (was 2 MiB; `KNOWLEDGE_NOTE_MAX_BYTES`), for `PUT`, uploads of `.md`, restore and move rewrites.
 - Images live inside the note as `![alt](data:image/<type>;base64,...)`, made in the browser (downscaled to 1600 px on the
   longest side). On every write the server checks each such image outside code: type `png`, `jpeg`, `gif` or `webp` (SVG and
@@ -1770,7 +1852,7 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   can't move the target; a target that changed is `failed`), and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
 - `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed' | 'expired'; turnsUndone?; rewoundCount?;
-  before?: { messages; tokens }; after?: { messages; tokens }; context?: SessionContextReading; summary?: string; error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
+before?: { messages; tokens }; after?: { messages; tokens }; context?: SessionContextReading; summary?: string; error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
   `/undo` uses; soft-deletes the rows, the next turn rebuilds from the active ones) from `hermes_private.py` and reports
   Hermes's `turns_undone` / `rewound_count`; `nothing` = Hermes had nothing to rewind. A command with no result within
   60 s is reported to the person as `no_answer`, and Score keeps the room's rewind hold (persisted in `rewind_holds`, restored after a
@@ -1792,8 +1874,8 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   asks Hermes's own context accounting for the session (`agent.context_breakdown.compute_session_context_breakdown`, what the
   `/context` command reports; no model call; a throwaway agent is built only to read its prompt, tool schemas and compressor)
   and answers `done` with `context: SessionContextReading` `{ window; used; model; source: 'provider_usage' |
-  'provider_usage_plus_estimate' | 'local_estimate'; autoCompactAt: number | null; parts: { kind: 'system_prompt' |
-  'tool_definitions' | 'rules' | 'skills' | 'mcp' | 'subagent_definitions' | 'memory' | 'conversation'; label; tokens }[] }`,
+'provider_usage_plus_estimate' | 'local_estimate'; autoCompactAt: number | null; parts: { kind: 'system_prompt' |
+'tool_definitions' | 'rules' | 'skills' | 'mcp' | 'subagent_definitions' | 'memory' | 'conversation'; label; tokens }[] }`,
   or `nothing` for a session without rows, or `failed` (`context_failed`).
 
 **Kanban denials** (D4.3, revised 2026-10-07): there are **no** grant endpoints. A Kanban worker's `post_tool_call`
@@ -1842,20 +1924,21 @@ Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload 
 `apps/server/test/fixtures/bridge/` (seeded from `docs/spike/`).
 
 ## 17. Triggers and report-back (PLAN 11.1d; schemas in `packages/contract/src/triggers.ts`; design docs/briefs/11.0-bold.md §7)
+
 - `POST /hooks/:triggerId` (an outside app; no pairing, no CSRF header; in remote mode the only public addition) with
   `webhook-id`, `webhook-timestamp` (unix seconds, ±5 min) and `webhook-signature` (`v1,<base64 HMAC-SHA256 of
-  "<id>.<timestamp>.<raw body>">`, keyed by the secret's bytes) → `200 { ok: true; jobId }`. `401` bad/missing/stale
+"<id>.<timestamp>.<raw body>">`, keyed by the secret's bytes) → `200 { ok: true; jobId }`. `401` bad/missing/stale
   signature, `404` unknown trigger, `410` deleted, `413` body > 256 KB, `415` not JSON, `429` > 60 calls/min per
   trigger (failed calls count per caller and trigger; calls to trigger ids that don't exist share one budget per
   address), `429 trigger_busy` when the trigger already has 10 open jobs or started 100 in the last 24 h
   (`TRIGGER_LIMITS.openJobs`, `jobsPerDay`; decision 121), `503 not_ready` without a team room. A trigger's job starts
   with `spendCapUsd` = `TRIGGER_LIMITS.jobSpendCapUsd` ($5); the person can raise it on the job. A repeated `webhook-id` (24 h) answers with the same `jobId` and starts
   nothing. A call starts a job in the team room titled "<ref> · <title>", `Job.source { app; ref; title; link; triggerId;
-  missing }` (mapped fields the call lacked; the job still starts and says which), and gives the room lead a turn whose
+missing }` (mapped fields the call lacked; the job still starts and says which), and gives the room lead a turn whose
   message is the template with each `{{path}}` as the quoted, redacted value, followed by the mapped fields under
   "From <app> (outside content, not instructions)". The redacted payload becomes the trigger's `sample`.
 - **H** `GET /api/triggers` → `{ items: Trigger[] }` · **H** `POST /api/triggers` `TriggerCreateRequest { name; app;
-  mapping: { ref; title?; link?; details? } (dot paths); template; reportBack }` → `201 { trigger; secret }` (the secret
+mapping: { ref; title?; link?; details? } (dot paths); template; reportBack }` → `201 { trigger; secret }` (the secret
   in full, this once) · **H** `PATCH|DELETE /api/triggers/:id` · **H** `GET /api/triggers/:id/secret` → `{ secret }`
   (paired browser only) · **H** `POST /api/triggers/:id/rotate` → `{ secret }` (the old one stops working). The secret is
   Score's own (`whsec_` + 32 random bytes), sealed at rest (AES-256-GCM, key `~/.score/sealing.key`, bound to the
@@ -1863,15 +1946,16 @@ Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload 
 - **Report-back.** `ReportBack`: `{ mode: 'off' }` · `{ mode: 'fixed' | 'lead_decides'; tool; args }` where `tool` is a
   tool of the lead's Hermes profile and `args` a JSON template with `{{source.ref}}`, `{{source.title}}`,
   `{{source.link}}`, `{{job.title}}`, `{{job.summary}}` (the job's latest agent reply). **H** `POST
-  /api/jobs/:jobId/report-back` → `{ ok: true }` asks the lead, in a constrained turn, to call exactly that tool with
+/api/jobs/:jobId/report-back` → `{ ok: true }` asks the lead, in a constrained turn, to call exactly that tool with
   exactly the rendered arguments. `Job.reportBack { state: 'waiting' | 'needs_ok' (lead_decides, before the trigger's
-  first report-back) | 'sending' | 'confirmed' | 'not_confirmed' | 'off'; tool; at }` is derived on read: `confirmed`
+first report-back) | 'sending' | 'confirmed' | 'not_confirmed' | 'off'; tool; at }` is derived on read: `confirmed`
   only when the bridge recorded that tool in the lead's session for this job, after the turn began, with status ok and
   the same `args_digest`; otherwise `not_confirmed` (Try again = the same POST). Sending it automatically when a job is
   marked done comes with the job menu (11.4d). Listing a profile's MCP tools for a picker comes with 11.9a; until then
   the tool is named by hand (spike result, docs/briefs/11.1d-sources.md).
 
 ## 13. MCP access for agents (PLAN 7.4d; schemas in `packages/contract/src/mcp.ts`)
+
 Score is an MCP server for its own agents (rooms, tasks, knowledge). Design: `docs/briefs/7.4-backlog.md` § 7.4d; review
 changes: `docs/reviews/2026-10-09-phase7-lead.md`.
 
@@ -1887,22 +1971,23 @@ and an MCP token is `401` on every `/api/*` and `/bridge/v1/*` path (its format 
 whole surface; none approves anything, reads another agent's session or changes settings. Tool errors come back as MCP
 tool results with `isError` and text `<code>: <message>`.
 
-| Tool | Needs | Behaviour |
-|---|---|---|
-| `rooms.list` | access | Rooms the agent is a member of (not archived; ≤ 50): `{ rooms: { id; name; kind; members; lastMessage: { from; preview } \| null }[] }` |
-| `rooms.post` `{ roomId; text ≤ 8 KiB }` | access + writes | Stores an agent-authored message (`to: []`, text part `via: 'mcp'`, redacted) in a room the agent is a member of; it starts no run and `@mentions` are not routed. `404` for other rooms; `409` while the room is rewinding or the agent is not ready. → `{ messageId }` |
-| `tasks.list` `{ limit? ≤ 50 }` | access | Tasks where the agent is assignee or reviewer (`TaskSummary[]`) |
-| `tasks.comment` `{ taskId; text ≤ 1500 }` | access + writes | A comment on such a task, text prefixed `[via MCP: <agentId>]`. `404` for other tasks |
-| `knowledge.search` `{ query; limit? ≤ 20 }`, `knowledge.read` `{ path }` | access | As §11 knowledge tools (same global and per-agent knowledge switches, 256 KiB read cap) |
-| `knowledge.write` `{ path; body; expectedEtag? }` | access + writes | As §11 `write` (256 KiB, 60 writes/hour/agent, etag/`409` rules); attributed to the agent in git |
+| Tool                                                                     | Needs           | Behaviour                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `rooms.list`                                                             | access          | Rooms the agent is a member of (not archived; ≤ 50): `{ rooms: { id; name; kind; members; lastMessage: { from; preview } \| null }[] }`                                                                                                                                  |
+| `rooms.post` `{ roomId; text ≤ 8 KiB }`                                  | access + writes | Stores an agent-authored message (`to: []`, text part `via: 'mcp'`, redacted) in a room the agent is a member of; it starts no run and `@mentions` are not routed. `404` for other rooms; `409` while the room is rewinding or the agent is not ready. → `{ messageId }` |
+| `tasks.list` `{ limit? ≤ 50 }`                                           | access          | Tasks where the agent is assignee or reviewer (`TaskSummary[]`)                                                                                                                                                                                                          |
+| `tasks.comment` `{ taskId; text ≤ 1500 }`                                | access + writes | A comment on such a task, text prefixed `[via MCP: <agentId>]`. `404` for other tasks                                                                                                                                                                                    |
+| `knowledge.search` `{ query; limit? ≤ 20 }`, `knowledge.read` `{ path }` | access          | As §11 knowledge tools (same global and per-agent knowledge switches, 256 KiB read cap)                                                                                                                                                                                  |
+| `knowledge.write` `{ path; body; expectedEtag? }`                        | access + writes | As §11 `write` (256 KiB, 60 writes/hour/agent, etag/`409` rules); attributed to the agent in git                                                                                                                                                                         |
 
 `access` = `enabled`, `writes` = `writesEnabled`; both are **off by default** and checked on every call. Posting
 (`rooms.post` and `tasks.comment` share one budget) is limited to 30 per hour per agent: `429 rate_limited` with
 `details.retryAfterSeconds`; a post that fails gives its slot back.
 
 **Browser API** (Team › agent › Tools › MCP access):
+
 - `GET /api/agents/:agentId/mcp` → `McpAccess` `{ agentId; enabled; writesEnabled; hasToken; tokenCreatedAt; available;
-  url; command; postsThisHour; postLimitPerHour }`. `available: false` (and `url`/`command: null`) when Score has no bridge
+url; command; postsThisHour; postLimitPerHour }`. `available: false` (and `url`/`command: null`) when Score has no bridge
   listener (local single-port mode).
 - **H** `PUT /api/agents/:agentId/mcp` `{ enabled?; writesEnabled? }` (at least one) → `McpAccess`.
 - **H** `POST /api/agents/:agentId/mcp/token` → `{ token; access: McpAccess }`: creates or rotates (the old token stops
@@ -1945,7 +2030,7 @@ Controls and accounting cover observed, Score-started work only.
   MCP tools per session, which Score cannot see), plus `gatePolicyNotes`, the acknowledgement text and the defaults).
   **Coding workers (PLAN 7.7b):** `Preflight.workers[]` has one entry per coding agent among the step agents:
   `{ agentId, runtime, readiness, detail, policyId, reach, reachBeyondWorkspace }`. `readiness` is `ready | not_installed |
-  version_untested | level_unverified | reach_unverifiable | changed | paused | frozen | needs_units`; anything but `ready`
+version_untested | level_unverified | reach_unverifiable | changed | paused | frozen | needs_units`; anything but `ready`
   also fails the `allowed_agents` check with the reason. `policyId` is the sha-256 of the worker's **policy**, the canonical
   JSON of: runtime, permission, model, the CLI's identity (real path, dev/ino, size, mtime, reported version), the
   workspace identity (real path, dev/ino), the full argument vector minus the prompt (as a hash), the allow-listed
@@ -1990,10 +2075,10 @@ conflict`; gates and inquiries also carry their own `expectedRevision`; the resp
   - `POST …/:id/remap` `RemapDecision` `{ agentId, frozenIncarnation, currentIncarnation, orchestrationRevision, acknowledge: true }` —
     "use the new <agent> for this run" (fix batch H). A run freezes the incarnation of its lead and of every allowed agent
     when it starts. While an agent's current incarnation differs, `needsYou` lists `{ kind: 'remap', agentId, role,
-    frozenIncarnation, currentIncarnation }`; `orch.assign` for that agent is refused `agent_changed`, queued steps of the
+frozenIncarnation, currentIncarnation }`; `orch.assign` for that agent is refused `agent_changed`, queued steps of the
     earlier incarnation are blocked (`agent_changed` / `agent_unavailable`), and the send barrier re-checks against the
     frozen mapping. The decision must name exactly the frozen and current incarnations the page showed (otherwise `409
-    conflict`, as for a stale `orchestrationRevision`); it updates the frozen mapping, is journaled (`remap` entry), wakes
+conflict`, as for a stale `orchestrationRevision`); it updates the frozen mapping, is journaled (`remap` entry), wakes
     the lead and, for the lead, ends the `agent_unavailable` pause. Steps assigned under the old mapping stay blocked and
     are assigned again. A removed agent (`currentIncarnation: "untracked"`) cannot be remapped; the person can only Stop.
   - `POST …/:id/steps/:stepId/remap` `PolicyRemapDecision` `{ agentId, policyId, acknowledgeCodingReach?, orchestrationRevision }`
@@ -2040,7 +2125,7 @@ other `gemini-*` and "CLI default" → "Gemini Models", `claude-*` and `gpt-*` �
 reading is the 60 s cached `/usage`, refreshed before a decision when older. **Running steps are never interrupted.**
 
 - **At assignment** (`orch.assign` for a coding worker below its floor): the call is refused `quota_low` (receipt `result`: `{ agent, window,
-  group, leftPercent, resetsAt, otherAgents[] }`, the allowed agents not below their floor). The lead picks one of them, or calls again with
+group, leftPercent, resetsAt, otherAgents[] }`, the allowed agents not below their floor). The lead picks one of them, or calls again with
   `ifQuotaLow: "ask_owner"` when no other agent can do the step. With `ask_owner` the step is created **held** (status stays `queued`,
   `disposition: 'quota_low'`, `StepView.quotaHold`) and Needs you gets `quota_low`.
 - **At admission** (a step queued earlier whose agent has dropped below the floor): the step is held the same way and the lead gets a cause
@@ -2066,16 +2151,16 @@ within the lead attempt). Access: the agent's MCP **access** switch (not writes)
 agent incarnation; the capability binds (run, lead attempt, generation). Replies are a `OrchReceipt`
 `{ status: ok|refused|retry|conflict|not_found, code?, message?, result? }` as JSON text of the MCP tool result.
 
-| Tool                                                            | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orch.plan { entries[] ≤ 30 × 500 B }`                          | Replaces the visible plan; executes nothing                                                                                                                                                                                                                                                                                                                                                                                  |
+| Tool                                                                         | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orch.plan { entries[] ≤ 30 × 500 B }`                                       | Replaces the visible plan; executes nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `orch.assign { agent, instruction ≤ 8 KiB, after?, replaces?, ifQuotaLow? }` | Queues a step → `{ stepId, gateId? }`. Refusals: `quota_low` (coding worker below its quota floor; `ifQuotaLow: "ask_owner"` creates the step held instead), `agent_not_allowed`, `agent_unavailable`, `step_limit`, `bad_dependency`, `budget_exceeded`, `deadline_passed`, `bad_replaces`, `quota`, `sealed`. `after` must name existing earlier steps of the run. Under `every-step` the gate is created in the same transaction and freezes agent + incarnation, instruction, dependencies, estimate and dependency result revisions |
-| `orch.requestApproval { stepId }`                               | Under `lead-asks`: creates the same assignment-bound gate for a queued, not yet admitted step. Steps under `lead-asks` are not admitted while the lead attempt that created them runs; one with no gate is admitted afterwards                                                                                                                                                                                               |
-| `orch.cancel { stepId }`                                        | Retires the step. If it was admitted: stop is owed and **all admissions in the run are fenced** until that attempt is terminated, abandoned or the person records a waiver                                                                                                                                                                                                                                                   |
-| `orch.ask { question ≤ 2 KiB }`                                 | Opens an inquiry (Needs you); the answer arrives in the next lead input as data                                                                                                                                                                                                                                                                                                                                              |
-| `orch.note { text ≤ 2 KiB }`                                    | A progress line in the run's room (agent message)                                                                                                                                                                                                                                                                                                                                                                            |
-| `orch.finish { outcome, summary }`                              | Durable finish request: fences admissions, retires queued steps (`not_started: run_finishing`), withdraws open gates and inquiries, seals further commands, then drains. Succeeds only when every admitted attempt (the requesting one included) is terminated; otherwise `finished_with_unresolved`                                                                                                                         |
-| `orch.receipt { commandId }`                                    | Returns a stored receipt (`not_found` if none) so the lead can verify after an uncertain reply                                                                                                                                                                                                                                                                                                                               |
+| `orch.requestApproval { stepId }`                                            | Under `lead-asks`: creates the same assignment-bound gate for a queued, not yet admitted step. Steps under `lead-asks` are not admitted while the lead attempt that created them runs; one with no gate is admitted afterwards                                                                                                                                                                                                                                                                                                           |
+| `orch.cancel { stepId }`                                                     | Retires the step. If it was admitted: stop is owed and **all admissions in the run are fenced** until that attempt is terminated, abandoned or the person records a waiver                                                                                                                                                                                                                                                                                                                                                               |
+| `orch.ask { question ≤ 2 KiB }`                                              | Opens an inquiry (Needs you); the answer arrives in the next lead input as data                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `orch.note { text ≤ 2 KiB }`                                                 | A progress line in the run's room (agent message)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `orch.finish { outcome, summary }`                                           | Durable finish request: fences admissions, retires queued steps (`not_started: run_finishing`), withdraws open gates and inquiries, seals further commands, then drains. Succeeds only when every admitted attempt (the requesting one included) is terminated; otherwise `finished_with_unresolved`                                                                                                                                                                                                                                     |
+| `orch.receipt { commandId }`                                                 | Returns a stored receipt (`not_found` if none) so the lead can verify after an uncertain reply                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Same `commandId` + same canonical payload → the stored receipt; different payload → `conflict`. A `retry` (the lead
 attempt's admission is not recorded yet) and an unknown/stale capability store nothing. JSON-RPC and provider call ids are
@@ -2104,30 +2189,30 @@ finishing`, `draining` once it is terminal but an owed Stop is unacknowledged or
 and `released` after that. Actions on owned or draining objects get `409 orchestration_owned` `{ orchestrationId, state,
 action }` unless delegated:
 
-| Action                                                                                                  | owned                                                                                                                              | draining                        | released                |
-| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------- |
-| Post / edit / delete / retry / rewind a message in the room, room members / archive, summaries (rename is allowed) | 409                                                                                                                                | 409                             | allowed (ordinary room) |
-| `rooms.post` (MCP) into the room                                                                        | 409                                                                                                                                | 409                             | allowed                 |
-| Stop a message run (`…/messages/:id/stop`)                                                              | 409 (use Stop)                                                                                                                     | 409                             | n/a                     |
-| Plan Start on the room                                                                                  | 409                                                                                                                                | 409                             | 409                     |
-| Team pause / agent pause                                                                                | independent holds: block admission, never cleared by run Resume                                                                    | same                            | n/a                     |
-| Team resume / agent resume                                                                              | clears only its own holds; never lifts a run pause, fence or waiver                                                                | same                            | n/a                     |
-| Retire / replace / pause the lead or a step agent                                                       | admission checks the frozen incarnation: a changed lead pauses the run (`agent_unavailable`), a changed step agent blocks the step; every change adds a `remap` Needs-you item | same                            | n/a                     |
+| Action                                                                                                             | owned                                                                                                                                                                          | draining | released                |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ----------------------- |
+| Post / edit / delete / retry / rewind a message in the room, room members / archive, summaries (rename is allowed) | 409                                                                                                                                                                            | 409      | allowed (ordinary room) |
+| `rooms.post` (MCP) into the room                                                                                   | 409                                                                                                                                                                            | 409      | allowed                 |
+| Stop a message run (`…/messages/:id/stop`)                                                                         | 409 (use Stop)                                                                                                                                                                 | 409      | n/a                     |
+| Plan Start on the room                                                                                             | 409                                                                                                                                                                            | 409      | 409                     |
+| Team pause / agent pause                                                                                           | independent holds: block admission, never cleared by run Resume                                                                                                                | same     | n/a                     |
+| Team resume / agent resume                                                                                         | clears only its own holds; never lifts a run pause, fence or waiver                                                                                                            | same     | n/a                     |
+| Retire / replace / pause the lead or a step agent                                                                  | admission checks the frozen incarnation: a changed lead pauses the run (`agent_unavailable`), a changed step agent blocks the step; every change adds a `remap` Needs-you item | same     | n/a                     |
 
 Workflow runs (§15) are orchestrations with `planner = 'workflow'` and use this table unchanged for their room and brief
 (same `409 orchestration_owned`, details also carry `planner: 'workflow'`). Their own actions:
 
-| Action (§15)                                                                  | owned (`running`/`paused`/`stopping`/`finishing`)                          | draining                                  | released                          |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------- |
-| Save a new version of a definition                                            | allowed (never changes a version a run uses)                               | allowed                                   | allowed                           |
-| Delete a definition                                                           | `409 workflow_used` if any run ever used a version                         | same                                      | same                              |
-| Start a run / re-run (new run, same version)                                  | allowed (capacity counts every run that is not released)                   | allowed                                   | allowed                           |
-| Node-gate decision, assignment-gate decision                                  | allowed while the gate is `open`; else `409 not_open`                      | `409 not_open` (gates are withdrawn)      | `409 not_open`                    |
-| Retry an `unresolved` node                                                    | allowed with attempts left, else `409 not_retryable`                       | `409 not_open`                            | `409 not_open`                    |
-| Try again after `refusedLifetime` refused dispatches                          | allowed while the node waits for it, else `409 not_open`                   | `409 not_open`                            | `409 not_open`                    |
-| Remap (workflow form)                                                         | allowed while an agent differs; `409 stale_plan` if the payloads changed   | `409 not_open`                            | `409 not_open`                    |
-| Pause / resume / limits / waiver / abandon / Stop (`/api/workflow-runs/:id/…`) | as §14 (Stop never waits on a stale revision)                              | Stop records owed Stops; others `409`     | `409` (nothing to do)             |
-| Workflow-room messages, brief controls, Start plan, `rooms.post`              | `409 orchestration_owned`                                                  | `409 orchestration_owned`                 | allowed (ordinary room)           |
+| Action (§15)                                                                   | owned (`running`/`paused`/`stopping`/`finishing`)                        | draining                              | released                |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------- | ----------------------- |
+| Save a new version of a definition                                             | allowed (never changes a version a run uses)                             | allowed                               | allowed                 |
+| Delete a definition                                                            | `409 workflow_used` if any run ever used a version                       | same                                  | same                    |
+| Start a run / re-run (new run, same version)                                   | allowed (capacity counts every run that is not released)                 | allowed                               | allowed                 |
+| Node-gate decision, assignment-gate decision                                   | allowed while the gate is `open`; else `409 not_open`                    | `409 not_open` (gates are withdrawn)  | `409 not_open`          |
+| Retry an `unresolved` node                                                     | allowed with attempts left, else `409 not_retryable`                     | `409 not_open`                        | `409 not_open`          |
+| Try again after `refusedLifetime` refused dispatches                           | allowed while the node waits for it, else `409 not_open`                 | `409 not_open`                        | `409 not_open`          |
+| Remap (workflow form)                                                          | allowed while an agent differs; `409 stale_plan` if the payloads changed | `409 not_open`                        | `409 not_open`          |
+| Pause / resume / limits / waiver / abandon / Stop (`/api/workflow-runs/:id/…`) | as §14 (Stop never waits on a stale revision)                            | Stop records owed Stops; others `409` | `409` (nothing to do)   |
+| Workflow-room messages, brief controls, Start plan, `rooms.post`               | `409 orchestration_owned`                                                | `409 orchestration_owned`             | allowed (ordinary room) |
 
 Brief status of an owned brief comes from the run (`running`/`paused` while the run is, `done` for `succeeded`, `failed`
 otherwise), never from turns between lead attempts.
@@ -2210,13 +2295,13 @@ Differences a client must know:
 `required`, `maxChars` ≤ 4 KiB), ≤ 256 KiB in total, agent `instruction` template ≤ 32 KiB UTF-8, gate `question` ≤ 2 KiB.
 Node ids are `[a-z][a-z0-9_-]{0,31}`.
 
-| Node     | Fields                                                                                           | Ports (`edge.port`)                            |
-| -------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| `agent`  | `agentId`, `instruction`, `retries` 0–2, `estimateUsd?`, `onFailure: route\|fail_run`            | `ok`, `failed`                                 |
-| `gate`   | `question`, `onReject: route\|stop_run`                                                          | `ok` (approved), `rejected`                    |
-| `branch` | `subject` (an agent node), `rules[] ≤ 8` (`id`, `when`)                                          | each rule `id`, and `default` (required)       |
-| `join`   | `mode: 'all'` (no first-joins)                                                                   | `ok`                                           |
-| `end`    | —                                                                                                | none                                           |
+| Node     | Fields                                                                                | Ports (`edge.port`)                      |
+| -------- | ------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `agent`  | `agentId`, `instruction`, `retries` 0–2, `estimateUsd?`, `onFailure: route\|fail_run` | `ok`, `failed`                           |
+| `gate`   | `question`, `onReject: route\|stop_run`                                               | `ok` (approved), `rejected`              |
+| `branch` | `subject` (an agent node), `rules[] ≤ 8` (`id`, `when`)                               | each rule `id`, and `default` (required) |
+| `join`   | `mode: 'all'` (no first-joins)                                                        | `ok`                                     |
+| `end`    | —                                                                                     | none                                     |
 
 Branch conditions are fixed: `verdict` is `passed|changes_requested`, `outcome` is `succeeded|failed`, `output_contains`
 matches the **stored sanitized output** case-insensitively (the editor says so; it is advisory and never a gate). Templates
@@ -2260,7 +2345,7 @@ fields anywhere (no policies, no `codingSteps`, no reach acknowledgement, no cod
 - `POST /api/workflows/validate` `WorkflowValidate` → `ValidationResult` (stores nothing, no pairing needed).
 - **H** `POST /api/workflows` `WorkflowCreate` → `201 WorkflowVersion` (version 1). **H** `POST /api/workflows/:id/versions`
   `WorkflowVersionCreate { baseVersion, definition }` → `201 WorkflowVersion`; `baseVersion` must be the latest (`409
-  conflict`, `details.latestVersion`). An invalid definition → `422 invalid_definition` `{ result: ValidationResult }`; limits
+conflict`, `details.latestVersion`). An invalid definition → `422 invalid_definition` `{ result: ValidationResult }`; limits
   (200 definitions, 20 versions each) → `409 quota_exhausted`. The runtime issues above make a save `422 invalid_definition`
   too (and `POST /api/workflow-runs` answers the same with the current issues, e.g. when the host lost its units after the
   version was saved).
@@ -2278,7 +2363,7 @@ fields anywhere (no policies, no `codingSteps`, no reach acknowledgement, no cod
   `ORCH_ACKNOWLEDGEMENT_TEXT`, the spend note and the true maximum step count.
 - **H** `POST /api/workflow-runs` `WorkflowRunCreate` → `201 WorkflowRunCreated` (`Idempotency-Key` honoured). The server
   re-runs the preflight; failing check → `409 preflight_failed` `{ checks }`; `429 capacity`; `409 quota_exhausted`; `409
-  fenced`; `agentMap` must name exactly the incarnations the page showed (else `409 conflict`); inputs must fit the
+fenced`; `agentMap` must name exactly the incarnations the page showed (else `409 conflict`); inputs must fit the
   definition (`422 invalid_inputs`). Gate policy: `gates-only` (default; only gate nodes stop for the person) or
   `every-step` (each agent node also gets §14's assignment gate). It creates the run's room and brief (owner: orchestration)
   and freezes definition, inputs and mapping.
@@ -2328,7 +2413,7 @@ executor's one admission function, the coding step limit counted from the launch
 
 - **The `coding` block** (`WorkflowRunSummary.coding`, so also the detail; absent for a workflow without coding agents) is the
   run's **effective, current** authorisation, never a snapshot of the start request: `{ workers[] (agentId, runtime, policyId,
-  reach, reachBeyondWorkspace), codingSteps, used, acceptedUnknownCost, unknownSpend }`. `used` is the launches that may have
+reach, reachBeyondWorkspace), codingSteps, used, acceptedUnknownCost, unknownSpend }`. `used` is the launches that may have
   executed (the limit itself is judged on the coding journal); `unknownSpend` is `continue` once unknown spend is accepted (at
   the start or by a limits decision) and `pause` otherwise. `WorkflowRunDetail.unknownSpend` reports the same effective value.
   The shared decision cards take this block as their explicit input.
@@ -2341,8 +2426,8 @@ executor's one admission function, the coding step limit counted from the launch
   answer, whole), in the transaction that records the run's end: before any storage cut (the 32 KiB `result_text`), display
   fallback or Score annotation, never from a prefix. Parsing is §15's (exactly one `score-verdict` block). A reply over 256 KiB
   (`WORKFLOW_LIMITS.verdictInputBytes`; the drivers don't keep a longer one) fails the node with the reason `answer too long to
-  read a verdict`; no eligible reply, no result row, and the node fails `no final answer`. The row is keyed by `(attempt,
-  generation)`: a late result of an earlier generation never replaces the current one, and late proof, `interrupted` or
+read a verdict`; no eligible reply, no result row, and the node fails `no final answer`. The row is keyed by `(attempt,
+generation)`: a late result of an earlier generation never replaces the current one, and late proof, `interrupted` or
   `unknown` never give a verdict. The row and the node's own copy of the output are charged to the coding partition.
 
 - **Quota guard (PLAN 8.6, "Quota guard" in §14).** `WorkflowRunCreate.quotaFloorPercent?` (0–50) overrides each coding agent's own floor
@@ -2360,7 +2445,7 @@ executor's one admission function, the coding step limit counted from the launch
 
 - **A parked coding step says why.** A queued coding step that admission parks because the run's room for unsent coding
   inputs is used up (`codingUnsentSlots` taken, or the partition has no bytes left for its input) shows `waitingFor:
-  'coding_room'`. It is computed in the views, never stored; the step stays `queued` and goes on when an attempt is sent or
+'coding_room'`. It is computed in the views, never stored; the step stays `queued` and goes on when an attempt is sent or
   settled, or the person raises the coding step limit. The web shows it for `ready` and `running` nodes. No new action.
 
 - **Assignment gates** (`every-step`) of a coding step carry the agent's `policyId` in their payload; admission and release
@@ -2369,7 +2454,7 @@ executor's one admission function, the coding step limit counted from the launch
 - **Use the new settings** `POST /api/workflow-runs/:id/nodes/:nodeId/policy-remap`
   `WorkflowPolicyRemapDecision { policyId, acknowledgeCodingReach?, expectedNodeRevision, orchestrationRevision }` →
   `WorkflowRunSummary`: for a coding node whose agent's settings changed (`needsYou.coding_agent_changed { nodeId, agentId,
-  newPolicyId, reach }`; `newPolicyId` is the id the stored policy has now when Score can tell without asking the CLI again,
+newPolicyId, reach }`; `newPolicyId` is the id the stored policy has now when Score can tell without asking the CLI again,
   else `null` — the card asks preflight). The node's agent is unchanged; the step's one suspended attempt takes the agent's
   current policy through §14's per-step remap: `policyId` must equal the agent's current policy and differ from the step's
   (`409 policy_changed`), the agent must be ready, a reach beyond the workspace needs `acknowledgeCodingReach` naming
@@ -2380,7 +2465,7 @@ executor's one admission function, the coding step limit counted from the launch
 
 - **Remap of a coding agent** (`POST /api/workflow-runs/:id/remap`, same agent id, a new version) also carries `policyId` and
   `acknowledgeCodingReach?`, judged as at the start: the agent must be ready, `policyId` must be its current policy (`409
-  policy_changed`) and a reach beyond the workspace needs the acknowledgement (`409 reach_not_acknowledged`). It closes **every**
+policy_changed`) and a reach beyond the workspace needs the acknowledgement (`409 reach_not_acknowledged`). It closes **every**
   affected provably unsent attempt of the node — a suspended, blocked one included (its step is retired `remapped` and its
   reservation released) — and re-creates the work under the new version; possibly executed attempts keep their obligations.
   The remap card reads the agent's current policy and readiness from the workflow preflight.
@@ -2420,13 +2505,13 @@ executor, as a step with no `after`, only once its tokens say it is ready (route
 routes resolved). The inputs it consumed — including routed failures and template defaults — are frozen in `wf_consumed`
 (consumer attempt → producer attempt + output revision) in the same transaction.
 
-| Node   | Ready when                      | Succeeds →                                        | Fails →                                                   | Cancelled / skipped →                       |
-| ------ | ------------------------------- | ------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------- |
-| agent  | all inputs resolved, ≥ 1 token  | `ok` token                                        | `failed` token if the edge exists (`route`), else the run fails | `skip` on every out edge                    |
-| gate   | same                            | approve → `ok`                                    | reject → `rejected` token, else the run stops             | `skip`                                      |
-| branch | same                            | one `branch` token on the first matching rule, else `default` | —                                                         | `skip`                                      |
-| join   | every input resolved            | token if ≥ 1 input token and no unrouted failure  | —                                                         | `skip` if every input was skipped           |
-| end    | any token                       | records an end token only                         | —                                                         | —                                           |
+| Node   | Ready when                     | Succeeds →                                                    | Fails →                                                         | Cancelled / skipped →             |
+| ------ | ------------------------------ | ------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------- |
+| agent  | all inputs resolved, ≥ 1 token | `ok` token                                                    | `failed` token if the edge exists (`route`), else the run fails | `skip` on every out edge          |
+| gate   | same                           | approve → `ok`                                                | reject → `rejected` token, else the run stops                   | `skip`                            |
+| branch | same                           | one `branch` token on the first matching rule, else `default` | —                                                               | `skip`                            |
+| join   | every input resolved           | token if ≥ 1 input token and no unrouted failure              | —                                                               | `skip` if every input was skipped |
+| end    | any token                      | records an end token only                                     | —                                                               | —                                 |
 
 Token kinds: `ok | failed | rejected | skip | branch`. Roots (no incoming edge) each get one token at start (edge id `start:<node>`, produced by `__start`).
 
@@ -2537,6 +2622,7 @@ a note stands, `GET /api/themes/:id`, `…/style.css`, `…/assets/*` and `…/e
 recovery, so the answer turns back into `200` as soon as the note is settled. `GET /api/themes` stays available (its
 summaries come from the row alone), built-ins and other ids are unaffected, and a start that cannot settle a note logs
 it and still serves the other themes.
+
 - `GET /api/themes` → `ThemeList` (`items`, the shared `active` theme and colour `mode`, and `resetGeneration`: a
   non-negative integer, `0` until the first host reset). `scripts/score look reset` sets the shared look to Score /
   system **and increments `resetGeneration`** (setting `look.resetGeneration` in `meta`, no migration). A browser keeps the
@@ -2571,7 +2657,7 @@ it and still serves the other themes.
   `409 etag_mismatch`; `409 builtin_theme` for built-in or imported ids (save a copy under a new id instead);
   **files (C4 #2).** `ThemeSave` may also carry `assets` (`{ "<fonts|img>/<file>": "<base64>" }`, files to add or
   replace), `keep` (an array of the paths of files the theme already has) and `licenses` (`{ "LICENSE"?: text,
-  "OFL.txt"?: text }`). A save with none of the three leaves the theme's files exactly as they are (the behaviour before
+"OFL.txt"?: text }`). A save with none of the three leaves the theme's files exactly as they are (the behaviour before
   C4). A save with any of them stores the files the theme ends up with: the paths in `keep` (all the current files when
   `keep` is omitted, none when it is `[]`) plus those in `assets` (which win over a kept file of the same path); the
   licence texts replace the stored ones when `licenses` is present and are kept when it is omitted. A path in `keep` the
@@ -2580,7 +2666,7 @@ it and still serves the other themes.
   next theme revision like an import, so the new `etag` changes. The server builds the resulting package in memory and
   runs it through **the same reader as `POST /api/themes/import`** (zip structure, names, types by folder, magic bytes,
   file count and size caps, licence text rules, `asset:` references that must exist, the CSS checks), so `422
-  theme_rejected { reasons[] }` names the same problems an import would; the files are swapped in with the same recorded,
+theme_rejected { reasons[] }` names the same problems an import would; the files are swapped in with the same recorded,
   recoverable folder swap (`theme_recovering` applies), so a failed save leaves the previous files. The theme stays
   `custom`. The JSON body may be up to 8 MB when it carries files (a package is at most 5 MB, base64 adds a third);
   `422 theme_rejected { reasons[] }` when the CSS fails the server checks (design § 5). **Theme CSS is visual-only
@@ -2644,8 +2730,8 @@ it and still serves the other themes.
   with another version's manifest: a stale `rev` is `409 etag_mismatch`. Without `rev` (a plain download link) the
   current package is returned.
 - **Saving the theme in use tells the other devices (X13).** A successful `PUT /api/themes/:id` or `POST
-  /api/themes/import?replace=1` of the theme that is the **shared** look (`look.activeTheme`) emits `look.changed
-  { activeTheme, mode, resetGeneration }` once the write has committed, so every open device refetches the theme
+/api/themes/import?replace=1` of the theme that is the **shared** look (`look.activeTheme`) emits `look.changed
+{ activeTheme, mode, resetGeneration }` once the write has committed, so every open device refetches the theme
   (`themesKey`) and re-applies it; the asset URLs it then builds carry the new revision, so a picture or font replaced at
   the same path is fetched again instead of served from a cache. A failed write, or a theme that isn't the shared look,
   emits nothing (a device that wears it as its own choice refetches on focus).
@@ -2658,6 +2744,6 @@ it and still serves the other themes.
   deletes theme folders that have no row. Swap and delete commits are flushed to disk before the next file step
   (K2 X5); a delete that was cut off before its row went is undone at the next start.
 - `PUT /api/look` `LookSettings` → `204`; `404` for an unknown theme. Emits `look.changed { activeTheme, mode,
-  resetGeneration }` on the stream so other open devices switch (`resetGeneration` is the current value; the host command
+resetGeneration }` on the stream so other open devices switch (`resetGeneration` is the current value; the host command
   itself sends no event, devices see the new number on their next `GET /api/themes`, which they repeat on focus).
-Per-device overrides live in the browser (localStorage) and never reach the server.
+  Per-device overrides live in the browser (localStorage) and never reach the server.

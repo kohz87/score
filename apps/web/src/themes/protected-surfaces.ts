@@ -77,6 +77,8 @@ export const protectedClasses = [
   'bold-dm-share-menu',
   'bold-dm-add',
   'bold-shared',
+  // 3.3.0: the live screen's "someone has taken over" privacy line
+  'bold-screen-human',
   // PLAN 11.9d: a trigger-started job's "Started by" card in the team room
   'bold-source',
   // PLAN 11.4c: the thread's confirmation before stopping a job

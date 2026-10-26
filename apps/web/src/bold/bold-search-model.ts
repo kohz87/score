@@ -35,6 +35,9 @@ export type BoldSearchResult =
       jobId: string
       roomName: string
       unread: number
+      state: Job['state']
+      /** Whoever holds the job (or is working on it), shown as its mark. */
+      agentId: string | null
     })
   | (ResultBase & {
       kind: 'chat'
@@ -176,6 +179,8 @@ export function buildBoldSearchGroups(input: BoldSearchInput): BoldSearchGroup[]
       jobId: job.id,
       roomName: input.roomName,
       unread: job.unread,
+      state: job.state,
+      agentId: job.holderAgentId ?? job.activeAgents[0] ?? null,
     }))
 
   const chats: BoldSearchResult[] = input.directChats.flatMap(({ agentId, chats: list }) =>

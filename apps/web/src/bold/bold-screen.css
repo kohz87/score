@@ -15,8 +15,10 @@
   --watch-window: #23252e;
   --watch-window-bar: #20232c;
   --watch-window-dot: #3a3e4a;
-  --watch-muted: var(--muted);
-  --watch-faint: #626670;
+  /* The window is dark in both looks: its muted text can't follow the light look's grey. */
+  --watch-muted: #a9adb8;
+  /* Path parts and diff line numbers on the tree and code surface: readable (≥ 4.5:1 on #171922), as in the Workbench. */
+  --watch-faint: #8a8f9c;
   --watch-bright: #e8eaf0;
   --watch-tree: #171922;
   --watch-live: var(--live);
@@ -450,6 +452,11 @@
   min-height: 0;
 }
 
+/* Line numbers sit on added/removed rows' tints too: the diff text grey stays ≥ 4.5:1 on all of them. */
+[data-ui='bold'] .bold-screen-window .watch-diff__number {
+  color: #9ea3b0;
+}
+
 [data-ui='bold'] .bold-screen-window .watch-terminal {
   font-size: 14px;
   line-height: 1.9;
@@ -460,6 +467,12 @@
 [data-ui='bold'] .bold-screen-state {
   margin: 0;
   color: var(--muted);
+}
+
+/* The window is always the dark code surface, so its text takes the code ink, not the look's muted grey. */
+[data-ui='bold'] .bold-screen-window .bold-screen-empty,
+[data-ui='bold'] .bold-screen-window .bold-screen-state {
+  color: var(--code-ink);
 }
 
 [data-ui='bold'] .bold-screen-window > .bold-screen-empty {
@@ -584,7 +597,8 @@
 }
 
 [data-ui='bold'] .bold-screen .watch-replay__live {
-  color: var(--live);
+  /* --live (#d93a4e) is 3.8:1 on the dark look's card; --bad is the look's readable red. */
+  color: var(--bad);
 }
 
 [data-ui='bold'] .bold-screen .watch-replay__live:focus-visible,
@@ -689,4 +703,51 @@
   [data-ui='bold'] .bold-screen .watch-terminal__cursor {
     animation: none !important;
   }
+}
+
+[data-ui='bold'] .bold-live-screen {
+  border-radius: calc(26px * var(--bold-r, 1));
+  background: var(--code-bg);
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-live-screen-head {
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--bold-d, 1));
+}
+
+/* The card is always the dark code surface (like the replay below it), so its text takes the replay's light inks in
+   both looks. */
+[data-ui='bold'] .bold-live-screen-title {
+  margin: 0;
+  font-size: 15px;
+  color: #e8eaf0;
+}
+
+[data-ui='bold'] .bold-live-screen-toggle {
+  margin-left: auto;
+  background: #20232c;
+  color: #e8eaf0;
+}
+
+[data-ui='bold'] .bold-live-screen-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  border-radius: calc(16px * var(--bold-r, 1));
+  background: #000;
+  user-select: none;
+  pointer-events: none;
+}
+
+[data-ui='bold'] .bold-live-screen-line {
+  margin: 0;
+  font-size: 14px;
+  color: var(--code-ink);
 }
