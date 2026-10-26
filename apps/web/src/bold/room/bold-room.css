@@ -2033,3 +2033,36 @@
   border-radius: var(--radius-14);
   font: inherit;
 }
+
+/* 3.7.0: on a portrait tablet the room's title and its actions share one row, flush with the content below (on a phone
+   the actions drop to a second row). */
+@media (min-width: 601px) and (max-width: 860px) {
+  [data-ui='bold'] .roomhead.bold-phone-list-head {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* The title keeps its width; a long team's glyph row wraps under it (never clipped: an agent who needs you is a
+     protected mark). */
+  [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-title {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-title .roomtitle {
+    flex: 0 1 auto;
+    max-width: 100%;
+    min-width: 0;
+    white-space: normal;
+    text-align: left;
+  }
+
+  [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-actions {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+}

@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.0] — 2026-10-26
+
+### Fixed
+- **Tablets.** Held upright (about 600–860 px wide), the team room now uses the whole width with its header lined up
+  with the jobs and the message box; a one-to-one's messages and box fill the sheet; Usage shows two cards per row.
+  On a touchscreen tablet held sideways, buttons, chips, links and message actions are big enough for a finger
+  (44 px), and message actions always show (a touchscreen has no hover).
+
 ## [3.6.1] — 2026-10-26
 
 ### Changed
