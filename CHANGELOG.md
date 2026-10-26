@@ -3,6 +3,19 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.2.0] — 2026-10-26
+
+### Added
+- **Room tools** for rooms other than the team room (⋯ menu): Rename…, Pin / Unpin (pinned first in the room list),
+  Archive / Unarchive (archived rooms hide behind "Show archived"; an open archived room shows a badge with Unarchive),
+  Project… (choose, create with a colour, or clear; the list groups by project) and **Export as JSON** (also on the team
+  room).
+- **Recent runs** on an agent's page: filter by outcome and see each run's cost.
+
+### Fixed
+- A room whose messages were all deleted can show them again ("Show deleted messages" appears when something was
+  deleted).
+
 ## [3.1.0] — 2026-10-26
 
 ### Added

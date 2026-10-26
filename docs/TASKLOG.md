@@ -1478,3 +1478,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   (Forget confirm, By agent table, the glyph exemption) → fixed, targeted green, web unit 2943. Codex not used (owner:
   on another project).
 - **v3.1.0 deployed live** (~10:28 UTC): backup score-pre-3.1.0-20261026.db, restart, no new errors.
+- **v3.2.0 room tools, runs filter, show deleted (Sonnet coder, lead review).** Review 1: the deleted toggle showed on
+  every starter board → gated on the room's delete versions (real toggle); archiving the open room → Archived badge +
+  Unarchive in its header; JSON export keyboard-reachable. Review 2: phone header squeeze → the badge wraps (lead).
+  Merge with 3.1.0 (RoomMenus/test conflicts) resolved keeping both (Team lead + room tools). Full e2e 822 passed, 1
+  failed (workflows.spec:32 — two "Decide on Approve the draft" regions from other specs on the shared fake server;
+  12/12 alone; test-isolation debt: unique recipe names); pnpm check green (server 4784, web 2952, contract 1512).
