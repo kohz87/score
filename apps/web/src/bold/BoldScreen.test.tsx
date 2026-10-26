@@ -488,12 +488,12 @@ test('live, the large slot follows the newest frame; a click holds until a newer
   expect(screen.getByText('http://localhost:5173/feed')).toBeDefined()
 })
 
-test('the replay badge is a status; the live one is not', () => {
+test('replay start is announced once, not on every scrub tick', () => {
   renderScreen()
-  expect(
-    screen.getByText('Live', { selector: '.bold-screen-badge' }).getAttribute('role'),
-  ).toBeNull()
+  const status = () =>
+    [...document.querySelectorAll('.sr-only[role="status"]')].map((node) => node.textContent)
+  expect(status()).toContain('Live')
   fireEvent.click(screen.getByRole('button', { name: /Opened the activity feed/ }))
-  const badge = screen.getByText(/^Replaying /)
-  expect(badge.getAttribute('role')).toBe('status')
+  expect(screen.getByText(/^Replaying /).getAttribute('role')).toBeNull()
+  expect(status()).toContain('Replaying')
 })

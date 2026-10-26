@@ -195,11 +195,18 @@ function StepList({
   const expanded = all || currentHidden
   const shown = expanded ? entries : entries.slice(0, INITIAL_STEPS)
   const list = useRef<HTMLOListElement>(null)
+  // While replaying, the replayed step is kept in view inside the list (never the page). Live, the newest step is
+  // already first, so a reader scrolled down the history is left where they are.
   useEffect(() => {
-    const current = list.current?.querySelector('[aria-current="true"]')
-    if (current && typeof current.scrollIntoView === 'function')
-      current.scrollIntoView({ block: 'nearest' })
-  }, [currentKey, expanded])
+    if (live) return
+    const box = list.current
+    const current = box?.querySelector<HTMLElement>('[aria-current="true"]')
+    if (!box || !current) return
+    const top =
+      current.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop
+    if (top < box.scrollTop || top + current.offsetHeight > box.scrollTop + box.clientHeight)
+      box.scrollTop = Math.max(0, top - 8)
+  }, [currentKey, expanded, live])
   const row = (item: ActivityItem) => {
     const current = item.key === currentKey
     return (
@@ -355,7 +362,7 @@ export function BoldScreenView({
 }) {
   const [selected, setSelected] = useState<WatchMarker | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [pinned, setPinned] = useState<{ frame: number | null; surface: Surface } | null>(null)
+  const [pinned, setPinned] = useState<{ from: Surface | null; surface: Surface } | null>(null)
   const [swapped, setSwapped] = useState('')
   const [command, setCommand] = useState<{ text: string; copied: boolean } | null>(null)
   const [fromApplied, setFromApplied] = useState(from === null)
@@ -377,9 +384,9 @@ export function BoldScreenView({
   const stage = useMemo(() => stageAt(frames, seq), [frames, seq])
   const items = useMemo(() => activityItems(frames, approvals), [frames, approvals])
   // The large slot follows the newest frame's surface (as the classic stage did); a click holds the person's choice
-  // until another frame comes to the front.
+  // until the agent moves to another surface (more frames on the same one keep it).
   const front = stage.front
-  const pin = pinned && pinned.frame === (front?.seq ?? null) ? pinned.surface : null
+  const pin = pinned && pinned.from === (front?.surface ?? null) ? pinned.surface : null
   const top: Surface | null = pin && stage.bySurface[pin] ? pin : (front?.surface ?? null)
   const frame = top ? (stage.bySurface[top] ?? null) : null
   const small = surfaces.filter((name) => name !== top)
@@ -540,8 +547,12 @@ export function BoldScreenView({
             className="bold-screen-stage"
             style={{ '--watch-agent': agent.style.color } as CSSProperties}
           >
-            <span className="bold-screen-badge" role={live ? undefined : 'status'}>
+            <span className="bold-screen-badge">
               {live ? 'Live' : `Replaying ${clock(marker!.at)}`}
+            </span>
+            {/* Announced when replay starts or ends, not on every scrub tick. */}
+            <span className="sr-only" role="status">
+              {live ? 'Live' : 'Replaying'}
             </span>
             <div className="bold-screen-stage-head">
               <span className="bold-screen-who">{agentDisplayName(agent)}’s screen</span>
@@ -574,7 +585,7 @@ export function BoldScreenView({
                     surface={name}
                     frame={stage.bySurface[name]}
                     onShow={() => {
-                      setPinned({ frame: front?.seq ?? null, surface: name })
+                      setPinned({ from: front?.surface ?? null, surface: name })
                       setSwapped(`${surfaceLabels[name]} is now the large screen.`)
                     }}
                   />
