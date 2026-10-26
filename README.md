@@ -264,11 +264,15 @@ model it runs on, and fallback models. Add agent creates a Hermes profile (see
 
 ### An agent's screen
 
-![The agent's screen: the steps builder took, a browser, terminal and editor frame, and a replay bar](docs/screenshots/screen.png)
+![The agent's screen: the steps builder took, the live view of its Bot Desktop, and the replay below](docs/screenshots/screen.png)
 
 **Look at its screen** replays what an agent did: its steps, the browser, terminal and editor as they were at each
 moment, and a replay bar you can scrub or set back to Live. It is a replay of recorded steps, not a remote desktop, and
 it is read-only. The agent keeps working while you watch, and a pending approval is answered right there.
+
+**Live screen**: when the agent has a Hermes Bot Desktop (computer use) running, its screen shows live above the replay,
+about once a second. It is a picture only: Score never sends keys or clicks and never takes control. While someone has
+taken over the screen in Hermes, Score hides it. A screen inside the agent's sandbox can't be shown.
 
 ### The Library
 
