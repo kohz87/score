@@ -805,3 +805,92 @@ test('a reuse confirm can’t ride on a stale preview (2.0.8)', async () => {
   })
   expect(stale.statusCode).toBe(409)
 })
+
+// 3.2.2: removing an agent whose setup stopped abandons that setup first.
+test('a setup that stopped before Hermes made the profile can be removed: only the name is retired', async () => {
+  const { HttpError } = await import('../../src/errors.ts')
+  const real = port.profileStep.bind(port)
+  let refuse = true
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step, context) => {
+    if (step === 'create_profile' && refuse) throw new HttpError(409, 'conflict', 'Hermes refused.')
+    return real(step, context)
+  })
+  const added = await create()
+  expect(await finished(added.id)).toMatchObject({
+    state: 'needs_attention',
+    nextStep: 'create_profile',
+  })
+  refuse = false
+  const preview = (
+    await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })
+  ).json()
+  expect(preview.blockers).toEqual([])
+  expect(preview.exportPath).toBeNull()
+  expect(preview.effects.join(' ')).toMatch(/never made the profile/)
+  const steps: string[] = []
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step, context) => {
+    steps.push(step)
+    return real(step, context)
+  })
+  const removed = await mutate(
+    '/api/agents/helper',
+    { typedName: 'helper', previewHash: preview.hash },
+    'DELETE',
+  )
+  expect(removed.statusCode).toBe(202)
+  expect((await finished(removed.json().id)).state).toBe('completed')
+  // Nothing was exported or deleted in Hermes.
+  expect(steps.filter((step) => step !== 'retire')).toEqual([])
+  expect((await app.inject('/api/agents/helper')).json()).toMatchObject({
+    lifecycle: { state: 'removed' },
+  })
+  expect((await finished(added.id)).state).toBe('completed')
+})
+
+test('a setup that stopped after Hermes made the profile is removed like any agent', async () => {
+  const { HttpError } = await import('../../src/errors.ts')
+  const real = port.profileStep.bind(port)
+  let fail = true
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step, context) => {
+    if (step === 'permissions' && fail)
+      throw new HttpError(409, 'conflict', 'Team permission readback did not match.')
+    return real(step, context)
+  })
+  const added = await create()
+  expect(await finished(added.id)).toMatchObject({
+    state: 'needs_attention',
+    nextStep: 'permissions',
+  })
+  fail = false
+  const preview = (
+    await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })
+  ).json()
+  expect(preview.blockers).toEqual([])
+  expect(preview.exportPath).toMatch(/\/profile-backups\/helper-/)
+  expect(preview.effects.join(' ')).toMatch(/abandoned first/)
+  const removed = await mutate(
+    '/api/agents/helper',
+    { typedName: 'helper', previewHash: preview.hash },
+    'DELETE',
+  )
+  expect(removed.statusCode).toBe(202)
+  expect((await finished(removed.json().id)).state).toBe('completed')
+  expect((await app.inject('/api/agents/helper')).json()).toMatchObject({
+    lifecycle: { state: 'removed' },
+  })
+})
+
+test('a setup that is still running is never abandoned by a removal', async () => {
+  const real = port.profileStep.bind(port)
+  let release: () => void = () => {}
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step, context) => {
+    if (step === 'create_profile') await new Promise<void>((done) => (release = done))
+    return real(step, context)
+  })
+  await create()
+  const preview = (
+    await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })
+  ).json()
+  expect(preview.blockers.join(' ')).toMatch(/An operation already holds this agent/)
+  release()
+})

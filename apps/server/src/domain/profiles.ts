@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import type { DatabaseSync } from 'node:sqlite'
 import {
   AgentCreateInputSchema,
   AgentDetailSchema,
@@ -68,6 +69,23 @@ const importSteps: ProfileStepName[] = [
   'verify_ready',
 ]
 const deleteSteps: ProfileStepName[] = ['export', 'delete_profile', 'purge_identity', 'retire']
+
+/**
+ * 3.2.2: the create (or import) that stopped and holds an agent in needs_attention, when removing the agent should
+ * abandon it. Null while the operation still runs or when something else holds the agent.
+ */
+function stoppedSetup(sqlite: DatabaseSync, name: string): { id: string } | null {
+  const lifecycle = lifecycleOf(sqlite, name)
+  if (lifecycle?.state !== 'needs_attention' || !lifecycle.operation_id) return null
+  const row = sqlite
+    .prepare(
+      "SELECT id, operation FROM profile_operations WHERE id = ? AND state = 'needs_attention'",
+    )
+    .get(lifecycle.operation_id) as { id: string; operation: string } | undefined
+  if (!row) return null
+  const kind = z.object({ kind: z.string() }).safeParse(JSON.parse(row.operation)).data?.kind
+  return kind === 'create' || kind === 'import' ? { id: row.id } : null
+}
 function hash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
@@ -133,6 +151,8 @@ export class ProfileOperations {
     const lifecycle = lifecycleOf(this.db.sqlite, name)
     const pendingWork = this.pending(name)
     const blockers = [...inventory.blockers]
+    // Removing an agent whose setup stopped abandons that setup first (3.2.2).
+    const abandon = request.kind === 'delete' ? stoppedSetup(this.db.sqlite, name) : null
     if (name === 'default') blockers.push('The default profile is reserved.')
     if (request.kind === 'create') {
       if (inventory.exists)
@@ -140,7 +160,8 @@ export class ProfileOperations {
           'A profile with this name already exists; Score never adopts it automatically.',
         )
     } else {
-      if (!inventory.exists || lifecycle?.state === 'removed') blockers.push('Agent not found.')
+      if ((!inventory.exists && !abandon) || lifecycle?.state === 'removed')
+        blockers.push('Agent not found.')
       if (
         pendingWork.activeRuns ||
         pendingWork.queuedTurns ||
@@ -151,7 +172,7 @@ export class ProfileOperations {
           'Finish active runs, queued turns, pending approvals and unfinished assignments before deleting.',
         )
     }
-    if (lifecycle && !['ready', 'removed'].includes(lifecycle.state))
+    if (lifecycle && !['ready', 'removed'].includes(lifecycle.state) && !abandon)
       blockers.push('An operation already holds this agent.')
     // A removed agent's name may be used again on purpose (2.0.8): its history keeps the name, so the person confirms.
     const reusesName = request.kind === 'create' && lifecycle?.state === 'removed'
@@ -163,7 +184,9 @@ export class ProfileOperations {
       if (match) providerLabel = match.providerLabel
     }
     const exportPath =
-      request.kind === 'delete' ? this.port.profileExportPath(name, inventory.revision) : null
+      request.kind === 'delete' && inventory.exists
+        ? this.port.profileExportPath(name, inventory.revision)
+        : null
     const data = {
       kind: request.kind,
       targetName: name,
@@ -187,6 +210,13 @@ export class ProfileOperations {
                 : []),
             ]
           : [
+              ...(abandon
+                ? [
+                    inventory.exists
+                      ? 'The setup that stopped is abandoned first; what it made is exported and deleted like any agent.'
+                      : 'The setup that stopped is abandoned first. Hermes never made the profile, so there is nothing to export or delete: Score only retires the name.',
+                  ]
+                : []),
               'Freeze new admissions, export privately, delete and purge profile identity, then retire routing references.',
               'The export omits credentials and is not a full undo. It may contain sensitive conversations and is kept privately until you remove it locally.',
             ],
@@ -231,6 +261,12 @@ export class ProfileOperations {
       throw new HttpError(400, 'bad_request', 'Confirm what the new agent inherits first.')
     const id = randomUUID()
     const now = new Date(this.clock()).toISOString()
+    const abandon =
+      request.kind === 'delete' ? stoppedSetup(this.db.sqlite, preview.targetName) : null
+    // Nothing to export or delete when the stopped setup never made the profile: only the Score-side retirement runs.
+    const profileMissing =
+      abandon !== null &&
+      !ProfileInventorySchema.parse(await this.port.profileInventory(preview.targetName)).exists
     const input =
       request.kind === 'create'
         ? AgentCreateInputSchema.parse({
@@ -256,7 +292,7 @@ export class ProfileOperations {
       steps: (imported ? importSteps : request.kind === 'create' ? createSteps : deleteSteps).map(
         (name) => ({
           name,
-          state: 'pending',
+          state: profileMissing && name !== 'retire' ? 'completed' : 'pending',
         }),
       ),
       createdAt: now,
@@ -265,7 +301,9 @@ export class ProfileOperations {
         ? 'import_profile'
         : request.kind === 'create'
           ? 'create_profile'
-          : 'export',
+          : profileMissing
+            ? 'retire'
+            : 'export',
       error: null,
       exportPath: preview.exportPath,
     })
@@ -276,6 +314,29 @@ export class ProfileOperations {
       source: 'profile-operations',
       identity: `begin:${id}`,
       apply: ({ sqlite }) => {
+        // The stopped setup ends here, in the same transaction that starts the removal.
+        if (abandon) {
+          const held = sqlite
+            .prepare(
+              "SELECT operation FROM profile_operations WHERE id = ? AND state = 'needs_attention'",
+            )
+            .get(abandon.id) as { operation: string } | undefined
+          if (!held)
+            throw new HttpError(
+              409,
+              'conflict',
+              'The setup changed. Preview again before removing.',
+            )
+          const stopped = JSON.parse(held.operation) as Record<string, unknown>
+          sqlite
+            .prepare(
+              "UPDATE profile_operations SET operation = ?, state = 'completed' WHERE id = ?",
+            )
+            .run(
+              JSON.stringify({ ...stopped, state: 'completed', abandoned: true, updatedAt: now }),
+              abandon.id,
+            )
+        }
         if (
           sqlite
             .prepare(
