@@ -1434,3 +1434,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   fixes: 993 passed, 8 failed → 7 were Watch's fragile specs fixed in 2.6.0 (merged), 1 the ledger phone Settings
   screenshot (expected text change, re-baselined); after merging 2.6.0 the affected specs 196/196; pnpm check green.
 - **v2.7.0 deployed live** (~02:52 UTC): backup score-pre-2.7.0-20261026.db, restart, no new errors.
+- **v2.8.0 Recipes page and editor (Sonnet coder, lead review; decision 131 board C).** Lead held the first
+  hand-back: 3 theme-consent X1 tests skipped and a coding-reach test removed, one workflows spec failing. Review 1
+  (Sonnet): the failure = Start a job's $5 default budget pauses a retried step with unknown spend (spec fixed to start
+  without a budget, as the classic dialog; Start a job now says so); X1 + reach tests ported to Start a job; missing
+  start options added (More options); redirects keep the hash. Review 2: X1 weaker (hidden field + budget/Ask-me not
+  in the hidden set) → ported fully, which found the budget/Ask-me/More options blocks were NOT protected (fixed +
+  registered); option ranges checked. Review 3 clean (P3: only the first invalid option is shown). Not built: the
+  mock-up's "Import a recipe file" (no server route). Merge with 2.6.0/2.7.0 resolved by the coder (9 files). Full e2e
+  992 passed, 2 known phone flakes (bold-terminal back, bold-start-job); pnpm check green (server 4784, web 3176).

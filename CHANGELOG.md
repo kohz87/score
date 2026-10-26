@@ -3,6 +3,20 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.0] — 2026-10-26
+
+### Changed
+- **Recipes is its own page** (`/b/recipes`, Recipes in the top bar) with your recipes and saved workflows in one list
+  and the editor in the new style: the graph (add, connect, drag, delete, keyboard, undo/redo, preview, the live
+  overlay of a running copy, issues), an "As text" step list, step settings, saved versions, duplicate, delete.
+  Run opens Start a job with the recipe. Old workflow links open it.
+- **Start a job** has the recipe options the old start dialog had, under More options (steps at the same time, an
+  estimate per step, most coding steps, quota floor), checked before Start, and says that with a spend cap a step
+  whose cost Hermes doesn't report pauses the run.
+
+### Fixed
+- The budget, "Ask me before" and More options parts of Start a job are now protected from themes like the rest of it.
+
 ## [2.7.0] — 2026-10-26
 
 ### Changed
