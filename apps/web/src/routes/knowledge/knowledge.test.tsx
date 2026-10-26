@@ -256,47 +256,6 @@ function type(view: EditorView, text: string) {
 }
 const puts = () => calls.filter((c) => c.method === 'PUT' && c.url.includes('/notes/'))
 
-test(
-  'Knowledge is in the main nav after Team and opens the page',
-  { timeout: 20_000 },
-  async () => {
-    mount()
-    const nav = await screen.findByRole('navigation', { name: 'Main' })
-    const names = within(nav)
-      .getAllByRole('link')
-      .map((link) => link.textContent)
-    expect(names.indexOf('Knowledge')).toBe(names.indexOf('Team') + 1)
-    // The first visit loads the lazy chunk (slow when the machine is busy).
-    expect(
-      await screen.findByRole('heading', { name: 'Knowledge' }, { timeout: 10_000 }),
-    ).toBeDefined()
-    expect(await screen.findByText(/3 notes in/)).toBeDefined()
-  },
-)
-
-test('the folder tree is an ARIA tree with keyboard navigation and recent notes', async () => {
-  mount()
-  const tree = await screen.findByRole('tree', { name: 'Notes' })
-  const items = within(tree).getAllByRole('treeitem')
-  expect(items.map((item) => item.getAttribute('data-kn-path'))).toEqual([
-    'empty',
-    'projects',
-    'projects/Idea.md',
-    'projects/Plan.md',
-    'Home.md',
-  ])
-  expect(screen.getByRole('heading', { name: 'Recent' })).toBeDefined()
-  items[1]!.focus()
-  fireEvent.keyDown(items[1]!, { key: 'ArrowLeft' })
-  expect(within(tree).queryByRole('treeitem', { name: /Plan/ })).toBeNull()
-  fireEvent.keyDown(items[1]!, { key: 'ArrowRight' })
-  const plan = within(tree).getByRole('treeitem', { name: /Plan/ })
-  fireEvent.keyDown(plan, { key: 'Enter' })
-  expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
-  expect(router.state.location.pathname).toBe('/knowledge/projects/Plan.md')
-  expect(screen.getByRole('treeitem', { name: /Plan/ }).getAttribute('aria-selected')).toBe('true')
-})
-
 test('typing autosaves one second later with the etag, and the status says so', async () => {
   const view = await openEditor()
   expect(view.state.doc.toString()).toBe('# Plan\n\nGoals\n')
@@ -361,40 +320,6 @@ test('[[ completion offers titles and paths from the tree', () => {
   expect(run('[[done]] and more')).toBeNull()
 })
 
-test('the editor shows the note formatted; a missing link offers Create in the side panel', async () => {
-  mount('/knowledge/Home.md')
-  await screen.findByLabelText('Contents of Home.md')
-  const dom = document.querySelector<HTMLElement>('.cm-editor')!
-  expect(dom.querySelector('.cm-lp-h1')?.textContent).toContain('Home')
-  const found = dom.querySelector('.cm-lp-wikilink[data-wikilink="Plan"]')!
-  expect(found.classList.contains('is-missing')).toBe(false)
-  expect(dom.querySelector('.cm-lp-wikilink[data-wikilink="Ghost"]')?.classList).toContain(
-    'is-missing',
-  )
-  const side = screen.getByRole('complementary', { name: 'Note details' })
-  fireEvent.click(await within(side).findByRole('button', { name: /Create/ }))
-  const dialog = screen.getByRole('dialog', { name: 'New note' })
-  expect((within(dialog).getByLabelText('Path in Knowledge') as HTMLInputElement).value).toBe(
-    'Ghost',
-  )
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Create note' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge/Ghost.md'))
-  expect(puts()[0]!.body).toMatchObject({ etag: null })
-})
-
-test('side panels: backlinks, links with a missing note, properties', async () => {
-  await openEditor()
-  const side = await screen.findByRole('complementary', { name: 'Note details' })
-  expect(within(side).getByRole('link', { name: 'Home' }).getAttribute('href')).toBe(
-    '/knowledge/Home.md',
-  )
-  expect(within(side).getByRole('link', { name: 'Plan' })).toBeDefined()
-  expect(within(side).getAllByText('Ghost').length).toBeGreaterThan(0)
-  expect(within(side).getByText('missing')).toBeDefined()
-  expect(within(side).getByText('status')).toBeDefined()
-  expect(within(side).getByText('draft')).toBeDefined()
-})
-
 test('history: view a version, diff it against the current text, and restore it', async () => {
   await openEditor()
   const section = await screen.findByRole('heading', { name: 'History' })
@@ -413,55 +338,6 @@ test('history: view a version, diff it against the current text, and restore it'
   expect(restore.body).toEqual({ commit: 'bbbbbbb' })
 })
 
-test('Ctrl+K focuses search, results highlight the match and open the note', async () => {
-  mount()
-  await screen.findByRole('tree', { name: 'Notes' })
-  const search = screen.getByRole('searchbox', { name: 'Search notes' })
-  fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true })
-  expect(document.activeElement).toBe(search)
-  expect(screen.queryByRole('dialog', { name: 'Search or run a command' })).toBeNull()
-  fireEvent.change(search, { target: { value: 'launch' } })
-  const results = await screen.findByRole('region', { name: 'Search results' })
-  const link = await within(results).findByRole('link', { name: /Plan/ })
-  expect(within(link).getByText('launch').tagName).toBe('MARK')
-  expect(calls.some((c) => c.url === '/api/knowledge/search?q=launch&limit=20')).toBe(true)
-  fireEvent.click(link)
-  expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
-  // From the search box, the same key reaches the command palette.
-  search.focus()
-  fireEvent.keyDown(search, { key: 'k', ctrlKey: true })
-  expect(screen.getByRole('dialog', { name: 'Search or run a command' })).toBeDefined()
-})
-
-test('Ctrl+N asks for a path, creates the note with etag null and opens it', async () => {
-  mount()
-  await screen.findByRole('tree', { name: 'Notes' })
-  fireEvent.keyDown(document.body, { key: 'n', ctrlKey: true })
-  const dialog = screen.getByRole('dialog', { name: 'New note' })
-  fireEvent.change(within(dialog).getByLabelText('Path in Knowledge'), {
-    target: { value: 'ideas/launch plan' },
-  })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Create note' }))
-  await waitFor(() =>
-    expect(router.state.location.pathname).toBe('/knowledge/ideas/launch%20plan.md'),
-  )
-  expect(puts()[0]!.url).toBe('/api/knowledge/notes/ideas/launch%20plan.md')
-  expect(puts()[0]!.body).toEqual({ body: '# launch plan\n\n', etag: null })
-})
-
-test('creating over an existing note shows the error', async () => {
-  mount()
-  await screen.findByRole('tree', { name: 'Notes' })
-  fireEvent.keyDown(document.body, { key: 'n', ctrlKey: true })
-  const dialog = screen.getByRole('dialog', { name: 'New note' })
-  fireEvent.change(within(dialog).getByLabelText('Path in Knowledge'), {
-    target: { value: 'Home' },
-  })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Create note' }))
-  expect(await within(dialog).findByRole('alert')).toBeDefined()
-  expect(within(dialog).getByRole('alert').textContent).toContain('already exists')
-})
-
 test('a move says which notes still link to the old name', async () => {
   await openEditor()
   fireEvent.click(screen.getByRole('button', { name: 'Rename or move' }))
@@ -477,54 +353,6 @@ test('a move says which notes still link to the old name', async () => {
       { timeout: 5000 },
     ),
   ).toBeDefined()
-})
-
-test('rename with update links shows the count; delete asks first', async () => {
-  await openEditor()
-  fireEvent.click(screen.getByRole('button', { name: 'Rename or move' }))
-  const dialog = screen.getByRole('dialog', { name: /Rename or move/ })
-  fireEvent.change(within(dialog).getByLabelText('New path'), {
-    target: { value: 'archive/Plan' },
-  })
-  expect(
-    (within(dialog).getByLabelText('Update links in other notes') as HTMLInputElement).checked,
-  ).toBe(true)
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }))
-  // Several async hops (move, navigate, reload, delete); generous waits so a loaded machine doesn't fail it.
-  expect(
-    await screen.findByText(/Updated links in 3 notes/, undefined, { timeout: 5000 }),
-  ).toBeDefined()
-  expect(calls.find((c) => c.url === '/api/knowledge/move')!.body).toEqual({
-    from: 'projects/Plan.md',
-    to: 'archive/Plan.md',
-    updateLinks: true,
-  })
-  await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge/archive/Plan.md'), {
-    timeout: 5000,
-  })
-
-  // The moved note loads again under its new path: click Delete on that page, not on the one being replaced.
-  await screen.findByLabelText('Contents of archive/Plan.md', undefined, { timeout: 5000 })
-  fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
-  const confirm = await screen.findByRole('dialog', { name: 'Delete Plan?' }, { timeout: 5000 })
-  expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
-  fireEvent.click(within(confirm).getByRole('button', { name: 'Delete note' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge'), { timeout: 5000 })
-  expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('archive/Plan.md'))).toBe(true)
-}, 15_000)
-
-test('a change by an agent to the open note shows a banner instead of overwriting the editor', async () => {
-  const view = await openEditor()
-  notes.get('projects/Plan.md')!.body = '# Plan\n\nAgent text\n'
-  notes.get('projects/Plan.md')!.etag = 'p2'
-  emit({ path: 'projects/Plan.md', kind: 'written', to: null, by: { agentId: 'builder' } })
-  const banner = await screen.findByText(/Changed by/)
-  expect(banner.textContent).toContain('Builder')
-  expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n')
-  expect(editorView()).toBe(view)
-  fireEvent.click(within(banner).getByRole('button', { name: 'Reload' }))
-  await waitFor(() => expect(editorView().state.doc.toString()).toBe('# Plan\n\nAgent text\n'))
-  expect(screen.queryByText(/Changed by/)).toBeNull()
 })
 
 test('a change by you updates the tree but shows no banner; other notes never show one', async () => {
@@ -565,34 +393,6 @@ test('a missing note at a deep link offers to create it', async () => {
   expect((within(dialog).getByLabelText('Path in Knowledge') as HTMLInputElement).value).toBe(
     'nope/Missing',
   )
-})
-
-test('Settings › Knowledge shows the vault, git status and the agent switch', async () => {
-  mount('/settings/knowledge')
-  const section = await screen.findByRole('region', { name: 'Knowledge' })
-  expect(await within(section).findByText('/vault')).toBeDefined()
-  expect(within(section).getByText(/Versioned with git/)).toBeDefined()
-  const toggle = within(section).getByRole('switch', { name: 'Agents can use Knowledge' })
-  expect((toggle as HTMLInputElement).checked).toBe(true)
-  fireEvent.click(toggle)
-  await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false))
-  const put = calls.find((c) => c.url === '/api/knowledge/settings')!
-  expect(put).toMatchObject({ method: 'PUT', body: { agentAccess: false } })
-})
-
-test('Settings › Knowledge has a switch for saving compacted summaries as memory notes (PLAN 8.2)', async () => {
-  mount('/settings/knowledge')
-  const section = await screen.findByRole('region', { name: 'Knowledge' })
-  const toggle = await within(section).findByRole('switch', {
-    name: 'Save compacted summaries as memory notes',
-  })
-  expect((toggle as HTMLInputElement).checked).toBe(true)
-  fireEvent.click(toggle)
-  await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false))
-  expect(calls.find((c) => c.url === '/api/knowledge/settings')).toMatchObject({
-    method: 'PUT',
-    body: { memoryNotes: false },
-  })
 })
 
 // Audit wave 4 (batch B): the draft is never replaced by anything the person did not ask for.
@@ -638,22 +438,6 @@ test('leaving the note during a save still saves what was typed meanwhile', asyn
   release()
   await waitFor(() => expect(puts()).toHaveLength(2), { timeout: 3000 })
   expect(puts()[1]!.body).toMatchObject({ body: '# Plan\n\nGoals\n first second', etag: 'e1' })
-})
-
-test('renaming a note with unsaved text saves the text first', async () => {
-  const view = await openEditor()
-  type(view, ' draft')
-  fireEvent.click(screen.getByRole('button', { name: 'Rename or move' }))
-  const dialog = screen.getByRole('dialog', { name: /Rename or move/ })
-  fireEvent.change(within(dialog).getByLabelText('New path'), { target: { value: 'archive/Plan' } })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge/archive/Plan.md'))
-  const order = calls
-    .filter((c) => c.method === 'PUT' || c.url.endsWith('/move'))
-    .map((c) => c.method)
-  expect(order.slice(0, 2)).toEqual(['PUT', 'POST'])
-  expect(puts()[0]!.body).toMatchObject({ body: '# Plan\n\nGoals\n draft' })
-  expect(notes.get('archive/Plan.md')!.body).toBe('# Plan\n\nGoals\n draft')
 })
 
 test('a failed background read keeps the editor and the unsaved text', async () => {

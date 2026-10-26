@@ -1,12 +1,12 @@
-// Kept classic pages (workflows, runs, Watch, the Customizer) also open inside the bold shell (decision 123, 2.0.2).
-// Their links name the classic paths; inside the bold frame `Link` and `useNavigate` here map them to their /b homes.
+// Components kept from the removed classic shell (3.0.0) still name their old paths in links. Inside the bold frame
+// `Link` and `useNavigate` here map those to their /b homes; the router redirects the same old addresses on load.
 import { boldOneToOneLink } from '../bold/bold-links.ts'
 import { createContext, forwardRef, useCallback, useContext } from 'react'
 import { Link as RouterLink, useNavigate as useRouterNavigate } from 'react-router'
 import type { Room } from '@score/contract'
 import type { LinkProps, NavigateFunction, NavigateOptions, To } from 'react-router'
 
-/** Provided by the bold shell around its Outlet; null in the classic shell. */
+/** Provided by the bold shell around its Outlet. */
 export type FrameRoom = Pick<Room, 'id' | 'kind' | 'role' | 'leadAgentId' | 'members'>
 export type BoldFrame = { look: 'light' | 'dark'; rooms?: readonly FrameRoom[] }
 export const BoldFrameContext = createContext<BoldFrame | null>(null)
@@ -77,18 +77,50 @@ function chatRoomPath(path: string, rooms: readonly FrameRoom[]): string {
   return `/b?room=${encodeURIComponent(roomId)}`
 }
 
+/** `/b?<extra>&<existing query>`: a /b address that keeps whatever query the old address carried. */
+function boldRoot(extra: Record<string, string>, search: string, hash: string): string {
+  const params = new URLSearchParams(extra)
+  for (const [key, value] of new URLSearchParams(search))
+    if (!params.has(key)) params.set(key, value)
+  const query = params.toString()
+  return `/b${query ? `?${query}` : ''}${hash}`
+}
+
+function decoded(value: string): string | null {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return null
+  }
+}
+
 /**
- * Where the bold shell sends someone who opens an old classic path: the /b home for the kept pages, null otherwise
- * (the classic shell keeps serving everything else).
+ * Where an old classic address goes (3.0.0: the classic shell is gone, so every one of its paths leads into the new
+ * shell), or null for an address that is not an old classic one. Query and #hash are kept.
  */
-export function boldRedirectFor(pathname: string, search: string, hash = ''): string | null {
+export function classicRedirectFor(pathname: string, search: string, hash = ''): string | null {
   const recipes = recipesPath(pathname, `${search}${hash}`)
   if (recipes) return recipes
   const watch = WATCH.exec(pathname)
   if (watch) return `/b/screen/${watch[1]}${search}${hash}`
-  const keep = ['/terminal', '/settings/look/customize']
-  if (!keep.some((root) => under(pathname, root))) return null
-  return `/b${pathname}${search}${hash}`
+  const attempt = /^\/attempts\/([^/]+)$/.exec(pathname)
+  if (attempt) return `/b/attempts/${attempt[1]}${search}${hash}`
+  if (under(pathname, '/chat')) {
+    const id = pathname.split('/')[2]
+    const roomId = id ? decoded(id) : null
+    return boldRoot(roomId ? { room: roomId } : {}, search, hash)
+  }
+  const member = /^\/team\/([^/]+)(?:\/workspace)?$/.exec(pathname)
+  if (member) return `/b/team/${member[1]}${search}${hash}`
+  if (pathname === '/team') return `/b/team${search}${hash}`
+  if (under(pathname, '/knowledge')) {
+    const note = pathname === '/knowledge' ? null : decoded(pathname.slice('/knowledge/'.length))
+    return boldRoot(note ? { note } : { library: '1' }, search, hash)
+  }
+  if (pathname === '/reports') return `/b/settings/usage${search}${hash}`
+  if (under(pathname, '/settings') || under(pathname, '/terminal'))
+    return `/b${pathname}${search}${hash}`
+  return null
 }
 
 export function useFramed(): BoldFrame | null {

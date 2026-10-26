@@ -12,7 +12,6 @@ import { BoldLook } from './BoldLook.tsx'
 import { BoldSystem } from './BoldSystem.tsx'
 import { BoldTools } from './BoldTools.tsx'
 import { BoldUsage } from './BoldUsage.tsx'
-import { saveUi } from './bold-ui.ts'
 import '../routes/settings/settings.css'
 import './bold-settings.css'
 
@@ -144,16 +143,6 @@ export function BoldSettings() {
               <span className="small muted">{item.description}</span>
             </button>
           ))}
-          <button
-            type="button"
-            className="btn sm ghost settings-classic"
-            onClick={() => {
-              saveUi('classic')
-              void navigate('/chat')
-            }}
-          >
-            Use the classic view
-          </button>
         </nav>
         <div className="setmain">
           {customizing && (

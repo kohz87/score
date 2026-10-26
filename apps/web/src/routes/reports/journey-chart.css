@@ -7,7 +7,7 @@
 .journey__legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
+  gap: 8px 20px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -17,7 +17,7 @@
 .journey__legend li {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
 }
 .journey__legend .journey__mark {
   fill: var(--ink);
@@ -25,12 +25,12 @@
 .journey__note {
   margin: 0;
   font-size: 13px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 .journey__scroll {
   min-width: 0;
   overflow-x: auto;
-  padding: var(--space-1);
+  padding: 4px;
   margin: -4px;
 }
 .journey__grid-rows {
@@ -42,7 +42,7 @@
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-3);
+  gap: 12px;
 }
 .journey__name {
   display: flex;
@@ -59,25 +59,25 @@
   display: block;
   width: 100%;
   height: auto;
-  font-family: var(--font-body);
+  font-family: var(--font-b);
 }
 .journey__grid {
-  stroke: var(--hairline);
+  stroke: var(--line);
   stroke-width: 1;
 }
 .journey__lane {
-  stroke: var(--hairline);
+  stroke: var(--line);
   stroke-width: 2;
   stroke-linecap: round;
 }
 .journey__mark {
-  stroke: var(--card);
+  stroke: var(--panel);
   stroke-width: 1.5;
   opacity: 0.92;
 }
 .journey__tick {
   font-size: 13px;
-  fill: var(--ink-muted);
+  fill: var(--muted);
 }
 .journey__table-scroll {
   overflow-x: auto;

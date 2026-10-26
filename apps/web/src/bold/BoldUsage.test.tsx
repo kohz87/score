@@ -9,13 +9,37 @@ import { createStreamClient } from '../data/stream.ts'
 import { stubReducedMotion } from '../motion/test-support.ts'
 import { jsonResponse, reportAgents, reportFixture } from '../test/reports-fixtures.ts'
 
-vi.mock('../shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
-
 class MockEventSource extends EventTarget {
   constructor(readonly url: string) {
     super()
   }
   close() {}
+}
+
+const journeyFixture = {
+  from: '2026-03-04',
+  to: '2026-03-10',
+  truncated: false,
+  agents: [
+    {
+      id: 'builder',
+      events: [
+        { at: '2026-03-09T10:00:00.000Z', kind: 'task_done', label: 'Fix the feed', ref: 't1' },
+        { at: '2026-03-07T10:00:00.000Z', kind: 'skill_changed', label: 'code-review', ref: null },
+      ],
+    },
+    {
+      id: 'reviewer',
+      events: [
+        {
+          at: '2026-03-06T10:00:00.000Z',
+          kind: 'note_written',
+          label: 'Release retro',
+          ref: 'r.md',
+        },
+      ],
+    },
+  ],
 }
 
 let router: ReturnType<typeof createMemoryRouter>
@@ -51,6 +75,8 @@ beforeEach(() => {
         const range = (url.searchParams.get('range') ?? '7d') as 'today' | '7d' | '30d' | 'custom'
         return Promise.resolve(jsonResponse(reportForRange(range)))
       }
+      if (url.pathname === '/api/reports/journey')
+        return Promise.resolve(jsonResponse(journeyFixture))
       return Promise.resolve(jsonResponse({ error: { code: 'not_found', message: 'No' } }, 404))
     }),
   )
@@ -224,10 +250,20 @@ test('range switching refetches and the CSV link carries the same range', async 
   )
 })
 
-test('the classic view button stays at the bottom of the nav', async () => {
+test('the Journey view draws one row per agent with a legend and a count table', async () => {
   const router = open('/b/settings/usage')
   await screen.findByRole('region', { name: 'Usage in numbers' })
-  fireEvent.click(screen.getByRole('button', { name: 'Use the classic view' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/chat'))
-  expect(window.localStorage.getItem('score.ui')).toBe('classic')
+  fireEvent.click(screen.getByRole('button', { name: 'Journey' }))
+  expect(router.state.location.search).toContain('tab=journey')
+  expect(
+    await screen.findByRole('img', { name: /Journey from 2026-03-04 to 2026-03-10: 3 marks/ }),
+  ).toBeDefined()
+  expect(screen.queryByRole('region', { name: 'Usage in numbers' })).toBeNull()
+  expect(
+    within(screen.getByRole('list', { name: 'Legend' })).getByText('Skill changed'),
+  ).toBeDefined()
+  expect(screen.getByRole('table', { name: 'Journey counts per agent' })).toBeDefined()
+  expect(calls.some((c) => c.startsWith('/api/reports/journey?from='))).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Overview' }))
+  expect(await screen.findByRole('region', { name: 'Usage in numbers' })).toBeDefined()
 })

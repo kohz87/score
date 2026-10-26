@@ -396,50 +396,6 @@ test('an import that can’t be used is explained and nothing is sent', async ({
   expect(sent).toBe(0)
 })
 
-test('Settings › Look shows an added theme in its own colours', async ({ page }) => {
-  await pair(page)
-  made.add('e2e-swatch')
-  try {
-    const put = await page.request.put('/api/themes/e2e-swatch', {
-      headers: web,
-      data: {
-        manifest: {
-          format: 1,
-          id: 'e2e-swatch',
-          name: 'E2E Swatch',
-          version: '1.0.0',
-          colors: {
-            light: { ground: '#ffe9d6', card: '#fffaf5', ink: '#4a1d00', 'link-hover': '#d9480f' },
-          },
-        },
-        css: '',
-        etag: null,
-      },
-    })
-    expect(put.status()).toBe(200)
-    await page.addInitScript(() => window.localStorage.setItem('score.theme', 'light'))
-    await page.goto('/settings/look')
-    const card = page.getByRole('radio', { name: /E2E Swatch/ })
-    const preview = card.locator('.look-pack-preview')
-    await expect(preview).toBeVisible()
-    await expect
-      .poll(() => preview.evaluate((el) => getComputedStyle(el).backgroundColor))
-      .toBe('rgb(255, 233, 214)')
-    expect(
-      await preview
-        .locator('.look-pack-button')
-        .evaluate((el) => getComputedStyle(el).backgroundColor),
-    ).toBe('rgb(217, 72, 15)')
-    // The built-in cards are as they were.
-    const score = page.getByRole('radio', { name: /^Score/ }).locator('.look-pack-preview')
-    expect(await score.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
-      'rgb(236, 238, 242)',
-    )
-  } finally {
-    await cleanUp(page)
-  }
-})
-
 // Roles, names and focus order: every control has a name, the sections are a tab list with one panel, dialogs trap focus.
 test('roles, names and focus order', async ({ page }) => {
   await pair(page)

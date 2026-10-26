@@ -1,55 +1,5 @@
 /* Layout and spacing from docs/design/html/settings.html. */
-.settings-layout {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 28px;
-  align-items: flex-start;
-}
-.settings-nav {
-  flex: 1 1 220px;
-  max-width: 250px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding-top: 6px;
-}
-.settings-nav h1 {
-  margin: 0 0 14px 12px;
-  font-weight: 700;
-  font-size: 40px;
-  letter-spacing: -0.04em;
-  line-height: 1;
-}
-.settings-nav a {
-  padding: 10px 14px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-14);
-  color: var(--chat-secondary);
-  text-decoration: none;
-}
-.settings-nav a[aria-current='page'] {
-  background: var(--card);
-  border-color: var(--hairline);
-  color: var(--ink);
-  font-weight: 600;
-}
-.settings-nav p {
-  margin: 18px 12px 0;
-  font-size: 13px;
-  color: var(--muted);
-}
 /* The heading a section change moves focus to is not a control: no ring on it. */
-.settings-content [tabindex='-1']:focus {
-  outline: none;
-}
-.settings-content {
-  flex: 999 1 640px;
-  min-width: 0;
-  max-width: 980px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
 .settings-card {
   background: var(--card);
   border: 1px solid var(--hairline);
@@ -81,8 +31,7 @@
 .settings-muted-strong {
   color: var(--ink-muted);
 }
-.settings-rows,
-.settings-chips {
+.settings-rows {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -105,8 +54,7 @@
   font-weight: 600;
   font-size: 16px;
 }
-.settings-row-name[data-missing='true'],
-.settings-chip-name[data-missing='true'] {
+.settings-row-name[data-missing='true'] {
   color: var(--ink-muted);
 }
 .settings-glyphs {
@@ -158,50 +106,6 @@
   /* Disabled must look it: Save key stays off until a key and the plain-HTTP acknowledgement are in. */
   opacity: 0.45;
   cursor: not-allowed;
-}
-.settings-columns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-}
-.settings-column {
-  flex: 1 1 300px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.settings-chips {
-  gap: 10px;
-}
-.settings-chip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 14px;
-  border-radius: var(--radius-16);
-  background: var(--subtle);
-}
-.settings-chip[data-status='needs_signin'],
-.settings-chip[data-status='error'] {
-  background: var(--agent-saffron-tint);
-}
-.settings-chip-name {
-  flex: 1;
-}
-.settings-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--agent-jade);
-}
-.settings-dot[data-status='needs_signin'],
-.settings-dot[data-status='error'] {
-  background: var(--amber);
-}
-.settings-dot[data-status='disconnected'] {
-  background: transparent;
-  border: 1.5px solid var(--line-strong);
 }
 .settings-form {
   display: flex;
@@ -575,42 +479,6 @@
   flex-direction: column;
   gap: var(--space-2);
 }
-
-.plugins-theme-choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-.plugins-theme-choice {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 40px;
-  padding: 0 14px 0 var(--space-2);
-  border: 1.5px solid transparent;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--ink);
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-}
-.plugins-theme-choice[aria-checked='true'] {
-  border-color: var(--ink);
-}
-.plugins-theme-swatch {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-pill);
-  border: 2px solid var(--ink);
-  background: #eceef2;
-}
-.plugins-theme-swatch[data-choice='dark'] {
-  background: #12131a;
-}
-.plugins-theme-swatch[data-choice='system'] {
-  background: linear-gradient(90deg, #eceef2 50%, #12131a 50%);
-}
 .settings-banner {
   background: var(--agent-saffron-tint);
   border-color: var(--agent-saffron);
@@ -683,12 +551,6 @@
 }
 .settings-key {
   flex-basis: 100%;
-}
-.settings-warning {
-  padding: 10px var(--space-3);
-  border-radius: var(--radius-14);
-  background: var(--agent-saffron-tint);
-  font-weight: 600;
 }
 .settings-form label.settings-check {
   flex-direction: row;
@@ -843,38 +705,12 @@
   align-items: center;
 }
 /* Look: theme and display currency stacked; a side-by-side grid stretched the one-line theme row. */
-.look-stack {
-  display: grid;
-  gap: var(--space-3);
-}
-.plugins-sendkey {
-  flex-direction: column;
-  align-items: flex-start;
-}
-.plugins-sendkey p {
-  margin: 0;
-}
 
 /* Phone and tablet (PLAN 5.34): the section list collapses into one "Section" disclosure above the content. */
 .settings-jump {
   display: none;
 }
 @media (width < 1024px) {
-  .settings-layout {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    align-items: stretch;
-    gap: var(--space-4);
-  }
-  .settings-nav {
-    flex: none;
-    max-width: none;
-    padding-top: 0;
-  }
-  .settings-nav h1 {
-    margin: 0 0 8px;
-    font-size: clamp(34px, 8vw, 40px);
-  }
   .settings-jump {
     display: flex;
     align-items: center;
@@ -918,16 +754,8 @@
   .settings-jump-list a:focus-visible {
     background: var(--subtle);
   }
-  .settings-nav a[aria-current='page'] {
-    background: transparent;
-    border-color: transparent;
-  }
   .settings-jump-list a[aria-current='page'] {
     font-weight: 600;
-  }
-  .settings-content {
-    flex: none;
-    gap: var(--space-4);
   }
 }
 @media (width < 600px) {
@@ -986,138 +814,8 @@
 }
 
 /* Look › Style: the theme cards (PLAN 8.3, always shown since 9.2). */
-.look-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-.look-shared {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: var(--space-3);
-}
-.look-shared label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: 14px;
-  font-weight: 600;
-}
-.look-packs {
-  align-self: stretch;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-}
-.look-pack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2);
-  border: 1.5px solid var(--hairline);
-  border-radius: var(--radius-16);
-  background: var(--card);
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-}
-.look-pack[aria-checked='true'] {
-  border-color: var(--ink);
-}
-.look-pack-name {
-  font-weight: 600;
-  padding: 0 var(--space-1);
-}
-.look-pack-blurb {
-  font-size: 13px;
-  color: var(--ink-muted);
-  padding: 0 var(--space-1) var(--space-1);
-}
 /* The preview takes its look from its own data-pack and data-theme, whatever the page is wearing. */
-.look-pack-preview {
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: 14px 1fr;
-  gap: 5px;
-  height: 92px;
-  padding: 6px;
-  background: var(--ground);
-  border-radius: var(--radius-m);
-  font-family: var(--font-body);
-  color: var(--ink);
-}
-.look-pack-preview[data-layout='side'] {
-  grid-template-columns: 22px 1fr;
-  grid-template-rows: 1fr;
-}
-.look-pack-nav {
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: calc(var(--radius-card) / 4);
-}
-.look-pack-page {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.look-pack-title {
-  color: var(--look-accent, inherit);
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 15px;
-  line-height: 1;
-}
-.look-pack-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px;
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: calc(var(--radius-card) / 3);
-}
-.look-pack-line {
-  height: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--track-2);
-}
 .look-pack-line--short {
   width: 60%;
 }
-.look-pack-button {
-  margin-top: auto;
-  width: 34px;
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--look-accent, var(--ink));
-}
-
-.look-check {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  font-weight: 600;
-}
 /* Look: the way into the Customizer (PLAN 9.4). */
-.look-customize {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-}
-.look-customize-link {
-  display: inline-flex;
-  align-items: center;
-  text-decoration: none;
-}

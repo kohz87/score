@@ -6,9 +6,11 @@ import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { formatMoney, useDisplayCurrency, USD } from '../data/currency.ts'
 import { formatDuration, formatPercent } from '../routes/reports/reports-format.ts'
+import { JourneyChart } from '../routes/reports/JourneyChart.tsx'
 import {
   reportCsvHref,
   reportRanges,
+  useJourney,
   useReports,
   type ReportSpec,
 } from '../routes/reports/reports-queries.ts'
@@ -329,9 +331,23 @@ export function BoldUsage() {
   const range = rangeFrom(params)
   const spec = useMemo<ReportSpec>(() => ({ range }), [range])
   const reports = useReports(spec)
+  const journeyOn = params.get('tab') === 'journey'
+  const journey = useJourney(spec, journeyOn)
   const agents = useStreamQuery(agentsQuery).data ?? []
   const report = reports.data
   const stale = reports.isPlaceholderData
+
+  function setTab(tab: 'overview' | 'journey') {
+    setParams(
+      (current) => {
+        const copy = new URLSearchParams(current)
+        if (tab === 'journey') copy.set('tab', 'journey')
+        else copy.delete('tab')
+        return copy
+      },
+      { replace: true },
+    )
+  }
 
   function setRange(next: Range) {
     setParams(
@@ -353,6 +369,24 @@ export function BoldUsage() {
     <div className="usage">
       <div className="row wrap usage-head">
         <h2 className="grow">Usage</h2>
+        <div className="seg" role="group" aria-label="View">
+          <button
+            type="button"
+            className={journeyOn ? undefined : 'on'}
+            aria-pressed={!journeyOn}
+            onClick={() => setTab('overview')}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            className={journeyOn ? 'on' : undefined}
+            aria-pressed={journeyOn}
+            onClick={() => setTab('journey')}
+          >
+            Journey
+          </button>
+        </div>
         <div className="seg" role="group" aria-label="Range">
           {reportRanges.map(({ id, label }) => (
             <button
@@ -369,12 +403,37 @@ export function BoldUsage() {
             </button>
           ))}
         </div>
-        <a className="btn sm" href={reportCsvHref(spec)} download>
-          Download CSV
-        </a>
+        {!journeyOn && (
+          <a className="btn sm" href={reportCsvHref(spec)} download>
+            Download CSV
+          </a>
+        )}
       </div>
 
-      {reports.isError && (
+      {journeyOn && (
+        <section
+          className={`card usage-figure usage-journey${journey.isPlaceholderData ? ' usage-body--stale' : ''}`}
+          aria-labelledby="usage-journey-title"
+          aria-busy={journey.isFetching}
+        >
+          <h3 id="usage-journey-title">Journey: tasks, notes, skills and memory over time</h3>
+          {journey.data ? (
+            <JourneyChart journey={journey.data} agents={agents} />
+          ) : journey.isError ? (
+            <p role="alert" className="usage-error">
+              Couldn’t load the journey.{' '}
+              <button type="button" className="link" onClick={() => void journey.refetch()}>
+                Try again
+              </button>
+            </p>
+          ) : (
+            <p role="status" className="usage-loading">
+              Loading the journey…
+            </p>
+          )}
+        </section>
+      )}
+      {reports.isError && !journeyOn && (
         <p role="alert" className="usage-error">
           Couldn’t load reports.{' '}
           <button type="button" className="link" onClick={() => void reports.refetch()}>
@@ -382,12 +441,12 @@ export function BoldUsage() {
           </button>
         </p>
       )}
-      {!report && !reports.isError && (
+      {!report && !reports.isError && !journeyOn && (
         <p role="status" className="usage-loading">
           Loading…
         </p>
       )}
-      {report && (
+      {report && !journeyOn && (
         <div
           className={`usage-body${stale ? ' usage-body--stale' : ''}`}
           aria-busy={reports.isFetching}

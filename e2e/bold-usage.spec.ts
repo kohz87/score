@@ -92,6 +92,17 @@ test('Show as table reveals the same task rows', async ({ page }) => {
   await expect(table.locator('thead th').nth(1)).toHaveText('Jobs done')
 })
 
+test('Journey view shows one row per agent and a text alternative', async ({ page }) => {
+  await pair(page)
+  await page.goto('/b/settings/usage?tab=journey')
+  await expect(page.getByRole('heading', { name: /^Journey: tasks, notes/ })).toBeVisible()
+  await expect(page.locator('.journey__row').first()).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Legend' })).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Journey counts per agent' })).toBeAttached()
+  await page.getByRole('button', { name: 'Overview' }).click()
+  await expect(page.getByRole('region', { name: 'Usage in numbers' })).toBeVisible()
+})
+
 test.describe('reduced motion', () => {
   test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
 

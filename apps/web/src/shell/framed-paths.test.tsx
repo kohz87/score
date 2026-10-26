@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   BoldFrameContext,
   type FrameRoom,
-  boldRedirectFor,
+  classicRedirectFor,
   Link,
   toBoldPath,
 } from './framed-paths.tsx'
@@ -51,16 +51,33 @@ describe('toBoldPath', () => {
   })
 })
 
-describe('boldRedirectFor', () => {
-  it('redirects only the kept classic pages, keeping the query', () => {
-    expect(boldRedirectFor('/workflows', '?a=1')).toBe('/b/recipes?a=1')
-    expect(boldRedirectFor('/workflows/new', '')).toBe('/b/recipes/new')
-    expect(boldRedirectFor('/runs/b1', '?x=y', '#z')).toBeNull()
-    expect(boldRedirectFor('/watch/lead', '?from=3')).toBe('/b/screen/lead?from=3')
-    expect(boldRedirectFor('/settings/look/customize/t', '')).toBe('/b/settings/look/customize/t')
-    expect(boldRedirectFor('/terminal', '')).toBe('/b/terminal')
-    expect(boldRedirectFor('/settings/look', '')).toBeNull()
-    expect(boldRedirectFor('/team', '')).toBeNull()
+describe('classicRedirectFor', () => {
+  it.each([
+    ['/workflows', '?a=1', '', '/b/recipes?a=1'],
+    ['/workflows/new', '', '', '/b/recipes/new'],
+    ['/watch/lead', '?from=3', '#t', '/b/screen/lead?from=3#t'],
+    ['/attempts/kr_1', '?x=1', '#h', '/b/attempts/kr_1?x=1#h'],
+    ['/chat', '', '', '/b'],
+    ['/chat', '?job=j1', '#m', '/b?job=j1#m'],
+    ['/chat/room-1', '?job=j1', '#m', '/b?room=room-1&job=j1#m'],
+    ['/team', '?add=agent', '', '/b/team?add=agent'],
+    ['/team/lead', '?x=1', '#agent-routines', '/b/team/lead?x=1#agent-routines'],
+    ['/team/lead/workspace', '?path=a', '', '/b/team/lead?path=a'],
+    ['/knowledge', '', '', '/b?library=1'],
+    ['/knowledge/projects/plan.md', '?x=1', '#h', '/b?note=projects%2Fplan.md&x=1#h'],
+    ['/reports', '?range=30d', '', '/b/settings/usage?range=30d'],
+    ['/settings', '', '', '/b/settings'],
+    ['/settings/rules', '?x=1', '#a', '/b/settings/rules?x=1#a'],
+    ['/settings/look/customize/t', '', '', '/b/settings/look/customize/t'],
+    ['/terminal', '', '', '/b/terminal'],
+  ])('%s%s%s goes to %s', (path, search, hash, target) => {
+    expect(classicRedirectFor(path, search, hash)).toBe(target)
+  })
+  it('leaves new-shell and unknown addresses alone', () => {
+    expect(classicRedirectFor('/b/team', '')).toBeNull()
+    expect(classicRedirectFor('/pair', '')).toBeNull()
+    expect(classicRedirectFor('/runs/b1', '?x=y', '#z')).toBeNull()
+    expect(classicRedirectFor('/chatter', '')).toBeNull()
   })
 })
 

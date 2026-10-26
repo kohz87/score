@@ -135,7 +135,7 @@ test.describe('bold Settings', () => {
       await page.goto('/b/settings')
 
       const nav = page.getByRole('navigation', { name: 'Settings' })
-      await expect(nav.getByRole('button')).toHaveCount(10)
+      await expect(nav.getByRole('button')).toHaveCount(9)
       for (const label of [
         'Connections',
         'Tools and triggers',

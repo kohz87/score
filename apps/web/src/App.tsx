@@ -1,54 +1,16 @@
-import { lazy, Suspense, useEffect } from 'react'
-import { Outlet, redirect, RouterProvider, useLocation } from 'react-router'
+import { Outlet, redirect, RouterProvider } from 'react-router'
 import type { DataRouter, RouteObject } from 'react-router'
-import { applyUiParam, readUi } from './bold/bold-ui.ts'
 import { BoldTerminalPage } from './bold/BoldTerminal.tsx'
-import { boldRedirectFor } from './shell/framed-paths.tsx'
+import { classicRedirectFor } from './shell/framed-paths.tsx'
 import { BoldHome } from './bold/BoldHome.tsx'
 import { BoldShell } from './bold/BoldShell.tsx'
 import { BoldAgentPage } from './bold/BoldAgent.tsx'
+import { BoldAttemptPage } from './bold/BoldAttempt.tsx'
 import { BoldScreenPage } from './bold/BoldScreen.tsx'
 import { BoldSettings } from './bold/BoldSettings.tsx'
 import { BoldTeam } from './bold/BoldTeam.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
-import { AgentPage } from './routes/team/AgentPage.tsx'
-import { TeamLayout, TeamPage } from './routes/team/TeamPage.tsx'
-import { AppShell } from './shell/AppShell.tsx'
-import { destinations } from './shell/destinations.ts'
-import { SettingsPage } from './routes/settings/SettingsPage.tsx'
-import { ChatPage } from './routes/chat/ChatPage.tsx'
-import { AttemptPage } from './routes/attempts/AttemptPage.tsx'
-import { ReportsPage } from './routes/reports/ReportsPage.tsx'
-import { WatchPage } from './routes/watch/WatchPage.tsx'
 import { BoldRecipesPage } from './bold/BoldRecipes.tsx'
-
-// Knowledge brings CodeMirror and the Markdown renderer: loaded on first visit, not with the shell.
-const LazyKnowledgePage = lazy(async () => ({
-  default: (await import('./routes/knowledge/KnowledgePage.tsx')).KnowledgePage,
-}))
-function KnowledgeRoute() {
-  return (
-    <Suspense fallback={<p role="status">Opening Knowledge…</p>}>
-      <LazyKnowledgePage />
-    </Suspense>
-  )
-}
-
-// The terminal brings xterm.js: loaded on first visit.
-const LazyTerminalPage = lazy(async () => ({
-  default: (await import('./routes/terminal/TerminalPage.tsx')).TerminalPage,
-}))
-function TerminalRoute() {
-  return (
-    <Suspense fallback={<p role="status">Opening Terminal…</p>}>
-      <LazyTerminalPage />
-    </Suspense>
-  )
-}
-
-function StubPage({ title }: { title: string }) {
-  return <h1>{title}</h1>
-}
 
 function keepSearch(request: Request, path: string) {
   return `${path}${new URL(request.url).search}`
@@ -72,12 +34,11 @@ function keepAll(request: Request, path: string) {
   return `${path}${url.search}${hashOf(url)}`
 }
 
-/** The new shell's address for an old classic one (decision 123); the classic shell keeps serving its own paths. */
-function toBoldLoader({ request }: { request: Request }) {
-  if (readUi() !== 'bold') return null
+/** The new shell's address for an old classic one (3.0.0: the classic shell is gone), query and hash kept. */
+function classicLoader({ request }: { request: Request }) {
   const url = new URL(request.url)
-  const target = boldRedirectFor(url.pathname, url.search, hashOf(url))
-  return target ? redirect(target) : null
+  const target = classicRedirectFor(url.pathname, url.search, hashOf(url))
+  return redirect(target ?? '/b')
 }
 
 /** A run's old addresses (`/runs/:id`, `/b/runs/:id`, `/now/flow/:id`) open it in the Runs side panel (2.5.0). */
@@ -88,30 +49,26 @@ function runRedirect({ request, params }: { request: Request; params: { briefId?
   return redirect(`/b?${search.toString()}${hashOf(url)}`)
 }
 
-/** Applies `?ui=bold` / `?ui=classic` from any address to this device's choice; the index loader also applies it first. */
-function UiParamBoundary() {
-  const location = useLocation()
-  useEffect(() => {
-    applyUiParam(location.search)
-  }, [location.search])
-  return <Outlet />
-}
+/** Every address the classic shell served, each of which now leads into the new shell (see classicRedirectFor). */
+const CLASSIC_PATHS = [
+  '/chat',
+  '/chat/*',
+  '/team',
+  '/team/*',
+  '/knowledge',
+  '/knowledge/*',
+  '/reports',
+  '/settings',
+  '/settings/*',
+  '/terminal',
+  '/watch/:agentId',
+  '/attempts/:attemptId',
+]
 
 export const appRoutes: RouteObject[] = [
   {
-    Component: UiParamBoundary,
+    Component: Outlet,
     children: [
-      // Decision 131 E: the Customizer lives only inside Settings › Look of the new shell; the old addresses lead there
-      // whichever view the device uses (the classic Customizer page is gone), keeping the query and hash.
-      ...['/settings/look/customize', '/settings/look/customize/:themeId'].map(
-        (path): RouteObject => ({
-          path,
-          loader: ({ request }) => {
-            const url = new URL(request.url)
-            return redirect(`/b${url.pathname}${url.search}${hashOf(url)}`)
-          },
-        }),
-      ),
       // 11.3a: the bold shell has its own prefix and frame; screens inside it land in later tasks.
       {
         path: '/b',
@@ -141,6 +98,7 @@ export const appRoutes: RouteObject[] = [
               redirect(keepSearch(request, `/b/screen/${params.agentId ?? ''}`)),
           },
           { path: 'terminal', Component: BoldTerminalPage },
+          { path: 'attempts/:attemptId', Component: BoldAttemptPage },
           // Decision 131 E: the Customizer lives inside Settings › Look; BoldSettings loads it.
           { path: 'settings/look/customize', Component: BoldSettings },
           { path: 'settings/look/customize/:themeId', Component: BoldSettings },
@@ -149,104 +107,43 @@ export const appRoutes: RouteObject[] = [
           { path: '*', loader: () => redirect('/b') },
         ],
       },
+      { index: true, loader: () => redirect('/b') },
+      ...CLASSIC_PATHS.map((path): RouteObject => ({ path, loader: classicLoader })),
+      { path: '/workflows', loader: ({ request }) => redirect(keepAll(request, '/b/recipes')) },
       {
-        Component: AppShell,
-        HydrateFallback: AppShell,
-        children: [
-          {
-            index: true,
-            loader: ({ request }) => {
-              applyUiParam(new URL(request.url).search)
-              return redirect('/b')
-            },
-          },
-          ...destinations.map(({ path, title }): RouteObject => {
-            if (path === '/knowledge')
-              return {
-                path,
-                children: [
-                  { index: true, Component: KnowledgeRoute },
-                  { path: '*', Component: KnowledgeRoute },
-                ],
-              }
-            if (path === '/reports') return { path, Component: ReportsPage }
-            // 10.1: one page per section. `/settings` and `/settings#<id>` redirect; an unknown section shows the first one.
-            if (path === '/settings')
-              return {
-                path,
-                Component: SettingsPage,
-                children: [
-                  { index: true, element: <></> },
-                  { path: ':section', element: <></> },
-                ],
-              }
-            if (path === '/team')
-              return {
-                path,
-                Component: TeamLayout,
-                children: [
-                  { index: true, Component: TeamPage },
-                  { path: ':agentId', Component: AgentPage },
-                  // Deep link into the Workspace tab: /team/:agentId/workspace?path=<file> (workspace:// links in chat).
-                  { path: ':agentId/workspace', Component: AgentPage },
-                ],
-              }
-            // Built destinations render their page; the rest stay stubs until their tasks land.
-            const page = path === '/chat' ? <ChatPage /> : <StubPage title={title} />
-            return {
-              path,
-              children: [
-                { index: true, element: page },
-                ...(path === '/chat'
-                  ? [':roomId'].map((child) => ({ path: child, element: page }))
-                  : []),
-              ],
-            }
-          }),
-          // Kept classic pages that used to live under /now. The old paths redirect below.
-          {
-            path: '/workflows',
-            loader: ({ request }) => redirect(keepAll(request, '/b/recipes')),
-          },
-          {
-            path: '/workflows/:workflowId',
-            loader: ({ request, params }) =>
-              redirect(keepAll(request, `/b/recipes/${params.workflowId ?? ''}`)),
-          },
-          { path: '/watch/:agentId', loader: toBoldLoader, Component: WatchPage },
-          { path: '/runs/:briefId', loader: runRedirect },
-          // Stored links and notifications from before 11.11 still open the page they meant.
-          {
-            path: '/now/watch/:agentId',
-            loader: ({ request, params }) =>
-              redirect(keepSearch(request, `/watch/${params.agentId ?? ''}`)),
-          },
-          {
-            path: '/now/flow/workflows',
-            loader: ({ request }) => redirect(keepAll(request, '/b/recipes')),
-          },
-          {
-            path: '/now/flow/workflows/:workflowId',
-            loader: ({ request, params }) =>
-              redirect(keepAll(request, `/b/recipes/${params.workflowId ?? ''}`)),
-          },
-          {
-            path: '/now/flow/:briefId',
-            loader: ({ request, params }) => runRedirect({ request, params }),
-          },
-          {
-            path: '/now/routines',
-            loader: ({ request }) => redirect(keepSearch(request, '/b/team')),
-          },
-          { path: '/now/*', loader: ({ request }) => redirect(keepSearch(request, '/b')) },
-          { path: '/tasks/*', loader: () => redirect('/b') },
-          { path: '/u/*', loader: () => redirect('/b') },
-          { path: '/terminal', loader: toBoldLoader, Component: TerminalRoute },
-          { path: '/attempts/:attemptId', Component: AttemptPage },
-          { path: '/pair', loader: pairBrowser, Component: PairPage },
-          { path: '*', element: <StubPage title="Page not found" /> },
-        ],
+        path: '/workflows/:workflowId',
+        loader: ({ request, params }) =>
+          redirect(keepAll(request, `/b/recipes/${params.workflowId ?? ''}`)),
       },
+      { path: '/runs/:briefId', loader: runRedirect },
+      // Stored links and notifications from before 11.11 still open the page they meant.
+      {
+        path: '/now/watch/:agentId',
+        loader: ({ request, params }) =>
+          redirect(keepSearch(request, `/b/screen/${params.agentId ?? ''}`)),
+      },
+      {
+        path: '/now/flow/workflows',
+        loader: ({ request }) => redirect(keepAll(request, '/b/recipes')),
+      },
+      {
+        path: '/now/flow/workflows/:workflowId',
+        loader: ({ request, params }) =>
+          redirect(keepAll(request, `/b/recipes/${params.workflowId ?? ''}`)),
+      },
+      {
+        path: '/now/flow/:briefId',
+        loader: ({ request, params }) => runRedirect({ request, params }),
+      },
+      {
+        path: '/now/routines',
+        loader: ({ request }) => redirect(keepSearch(request, '/b/team')),
+      },
+      { path: '/now/*', loader: ({ request }) => redirect(keepSearch(request, '/b')) },
+      { path: '/tasks/*', loader: () => redirect('/b') },
+      { path: '/u/*', loader: () => redirect('/b') },
+      { path: '/pair', loader: pairBrowser, Component: PairPage },
+      { path: '*', loader: () => redirect('/b') },
     ],
   },
 ]

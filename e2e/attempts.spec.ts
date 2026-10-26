@@ -28,15 +28,25 @@ test.afterAll(async () => {
   await page.context().close()
 })
 
-test('Reports counts Unknown-agent work and Team history lists the attempts', async () => {
-  await page.goto('/reports')
-  const table = page.getByRole('table', { name: 'By agent', exact: true })
-  await expect(table.locator('tbody th', { hasText: 'Unknown agent' })).toBeVisible()
-  await expect(page.getByText(/counts only the runs Score could confirm/)).toBeVisible()
-  await page.goto('/team/designer')
-  await page.getByRole('tab', { name: 'History' }).click()
-  const panel = page.getByRole('tabpanel')
-  await expect(panel.locator('.team-channel-state', { hasText: 'Failed' })).toBeVisible()
-  await expect(panel.getByRole('link', { name: /Open this run/ })).toBeVisible()
-  await expect(panel.getByRole('link', { name: /Replay/ })).toHaveCount(0)
+test('a run opens from the agent page inside the new shell, and Back returns to it', async () => {
+  await page.goto('/b/team/designer')
+  await page.getByRole('button', { name: /^More/ }).click()
+  const open = page.getByRole('link', { name: 'Open run' }).first()
+  await expect(open).toBeVisible()
+  await open.click()
+  await expect(page).toHaveURL(/\/b\/attempts\/[^/]+$/)
+  await expect(page.locator('.bold-classic-page .attempt-card')).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /^Task run by/ })).toBeVisible()
+  await page.getByRole('button', { name: '← Back' }).click()
+  await expect(page).toHaveURL(/\/b\/team\/designer/)
+})
+
+test('the old /attempts address redirects into the frame and keeps the query', async () => {
+  await page.goto('/b/team/designer')
+  await page.getByRole('button', { name: /^More/ }).click()
+  const href = await page.getByRole('link', { name: 'Open run' }).first().getAttribute('href')
+  const id = href!.split('/').pop()!
+  await page.goto(`/attempts/${id}?x=1`)
+  await expect(page).toHaveURL(new RegExp(`/b/attempts/${id}\\?x=1$`))
+  await expect(page.locator('.bold-classic-page .attempt-card')).toBeVisible()
 })

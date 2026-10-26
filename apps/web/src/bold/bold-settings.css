@@ -46,13 +46,8 @@
   background: var(--panel);
 }
 
-.bold-settings-page .setnav button:not(.settings-classic) b {
+.bold-settings-page .setnav button b {
   font-weight: 600;
-}
-
-.bold-settings-page .setnav .settings-classic {
-  align-self: flex-start;
-  margin: 8px 0 0 12px;
 }
 
 .bold-settings-page .setmain {
@@ -1681,8 +1676,7 @@
 
 .bold-settings-page .bold-look-themes,
 .bold-settings-page .bold-look-shared,
-.bold-settings-page .bold-look-sendkey,
-.bold-settings-page .bold-look-new {
+.bold-settings-page .bold-look-sendkey {
   gap: 12px;
 }
 
@@ -1724,31 +1718,6 @@
 .bold-settings-page .bold-look-sendkey .seg,
 .bold-settings-page .bold-look-fieldset .seg {
   align-self: flex-start;
-}
-
-.bold-settings-page .bold-look-new {
-  justify-content: space-between;
-}
-
-.bold-settings-page .bold-look-new > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.bold-settings-page .bold-look-switch {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 44px;
-  cursor: pointer;
-}
-
-.bold-settings-page .bold-look-switch input {
-  width: 22px;
-  height: 22px;
-  accent-color: var(--ink);
-  flex: none;
 }
 
 .bold-settings-page .plugins-currency.bold-look-currency,
@@ -1798,10 +1767,6 @@
   .bold-settings-page .setnav h1 {
     flex: 0 0 100%;
     margin-bottom: 8px;
-  }
-
-  .bold-settings-page .setnav .settings-classic {
-    align-self: center;
   }
 
   .bold-settings-page .setmain {

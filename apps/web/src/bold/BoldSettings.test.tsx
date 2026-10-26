@@ -8,8 +8,6 @@ import { immediateFrameScheduler, createStreamQueryRegistry } from '../data/resy
 import { createStreamClient } from '../data/stream.ts'
 import { jsonResponse, reportFixture } from '../test/reports-fixtures.ts'
 
-vi.mock('../shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
-
 class MockEventSource extends EventTarget {
   constructor(readonly url: string) {
     super()

@@ -571,14 +571,6 @@ test('Team and Settings are real pages, and the search button and Ctrl+K open th
   expect(await screen.findByRole('dialog', { name: 'Search and commands' })).toBeDefined()
 })
 
-test('Settings offers the way back to the classic view', async () => {
-  const router = open('/b/settings')
-  expect(await screen.findByRole('heading', { name: 'Settings' })).toBeDefined()
-  fireEvent.click(screen.getByRole('button', { name: 'Use the classic view' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/chat'))
-  expect(window.localStorage.getItem('score.ui')).toBe('classic')
-})
-
 test('Look choices apply to the whole bold shell', async () => {
   window.localStorage.setItem('score.theme', 'light')
   window.localStorage.setItem('score.textScale', '1.15')
@@ -607,17 +599,9 @@ test.each(['ctrlKey', 'metaKey'])(
   },
 )
 
-test('the index follows the per-device choice and ?ui= sets it', async () => {
-  const bold = open('/?ui=bold')
+test('the index opens the new shell', async () => {
+  const bold = open('/')
   await waitFor(() => expect(bold.state.location.pathname).toBe('/b'))
-  expect(window.localStorage.getItem('score.ui')).toBeNull()
-})
-
-test('the index opens the bold shell even after choosing classic', async () => {
-  window.localStorage.setItem('score.ui', 'classic')
-  const classic = open('/?ui=classic')
-  await waitFor(() => expect(classic.state.location.pathname).toBe('/b'))
-  expect(window.localStorage.getItem('score.ui')).toBe('classic')
 })
 
 test('the Terminal button shows only when the server offers a terminal, and Back returns', async () => {

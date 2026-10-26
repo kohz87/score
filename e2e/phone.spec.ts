@@ -121,33 +121,6 @@ test('notifications ask for permission only on a click and then deliver through 
     .toContain('Score notifications work')
 })
 
-test.describe('on a phone', () => {
-  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true })
-
-  test('Enter adds a new line and the Send button sends', async ({ page }) => {
-    await pair(page)
-    await page.goto('/chat')
-    await page
-      .getByRole('navigation', { name: 'Rooms' })
-      .getByRole('link', { name: /#activity-feed/ })
-      .click({ timeout: 15_000 })
-    const composer = page.getByRole('combobox', { name: /^Message/ })
-    await expect(composer).toBeEnabled()
-    const text = `Phone message ${Date.now()}`
-    await composer.fill(text)
-    await composer.press('Enter')
-    await expect(composer).toHaveValue(`${text}\n`)
-    await page.getByRole('button', { name: 'Send', exact: true }).click()
-    await expect(composer).toHaveValue('')
-    await expect(
-      page
-        .getByRole('region', { name: 'Message history' })
-        .getByRole('article')
-        .filter({ hasText: text }),
-    ).toBeVisible()
-  })
-})
-
 // Passkeys need a domain, a secure origin and a real (here: virtual) authenticator, so this runs its own HTTPS server
 // that answers on localhost (a domain for WebAuthn) and on 127.0.0.1 (an IP address, where passkeys must be refused).
 test.describe('passkeys over HTTPS', () => {
@@ -217,7 +190,7 @@ test.describe('passkeys over HTTPS', () => {
       await page.goto(`${origin}/pair#${token}`)
       await page.getByRole('button', { name: 'Pair this browser' }).click()
       await expect(page.getByText('This browser is paired')).toBeVisible()
-      await page.goto(`${origin}/settings/remote-access`)
+      await page.goto(`${origin}/b/settings/security`)
       const setPassword = page.getByRole('form', { name: 'Set a security password' })
       await setPassword.getByLabel('New password (at least 8 characters)').fill(PASSWORD)
       await setPassword.getByLabel('New password again').fill(PASSWORD)
@@ -244,7 +217,7 @@ test.describe('passkeys over HTTPS', () => {
       await expect(page.getByRole('button', { name: 'Sign in with a passkey' })).toHaveCount(0)
 
       // Back on the domain: removing needs the password.
-      await page.goto(`${origin}/settings/remote-access`)
+      await page.goto(`${origin}/b/settings/security`)
       await page.getByLabel('Security password', { exact: true }).fill(PASSWORD)
       await page.getByRole('button', { name: 'Remove passkey E2E phone' }).click()
       await expect(page.getByText('Passkey removed.')).toBeVisible()

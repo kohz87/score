@@ -31,7 +31,7 @@ export function attemptAgentName(
  * page. Never a Watch URL: an attempt records no session to replay.
  */
 export function attemptPath(attempt: Pick<AttemptSummary, 'id' | 'task'>): string {
-  return `/attempts/${encodeURIComponent(attempt.id)}`
+  return `/b/attempts/${encodeURIComponent(attempt.id)}`
 }
 
 /** How the end of an attempt reads: an end time, a "no longer observed" boundary, or still running. */

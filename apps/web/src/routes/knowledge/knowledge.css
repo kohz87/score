@@ -1,10 +1,4 @@
 /* Knowledge: left tree, centre editor, right panels. Tokens only; white cards, ~28px radius, ink actions. */
-.kn-layout {
-  display: grid;
-  grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: start;
-}
 .kn-left,
 .kn-main {
   background: var(--card);
@@ -21,12 +15,6 @@
   top: 8px;
   max-height: calc(100vh - 24px);
   overflow-y: auto;
-}
-.kn-left-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
 }
 .kn-left h1,
 .kn-note h2,
@@ -75,7 +63,6 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.kn-search input,
 .kn-dialog input:not([type='checkbox']) {
   width: 100%;
   box-sizing: border-box;
@@ -87,7 +74,6 @@
   color: var(--ink);
   font: inherit;
 }
-.kn-search input:focus-visible,
 .kn-dialog input:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
@@ -141,83 +127,13 @@
   gap: 6px;
   align-items: center;
 }
-.kn-toggle {
-  display: inline-flex;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-}
-.kn-toggle button {
-  border: 0 !important;
-  border-radius: 0 !important;
-}
-.kn-toggle button[aria-pressed='true'] {
-  background: var(--ink) !important;
-  color: var(--card) !important;
-}
 
 /* Tree and lists */
-.kn-tree,
-.kn-recent,
-.kn-results,
 .kn-note ul,
 .kn-history-list {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-.kn-tree-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding-right: var(--space-2);
-  border-radius: var(--radius-8);
-  cursor: pointer;
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
-.kn-tree-row:hover {
-  background: var(--subtle);
-}
-.kn-tree-row:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: -2px;
-}
-.kn-tree-row.is-current {
-  background: var(--ink);
-  color: var(--card);
-}
-.kn-tree-mark {
-  width: 12px;
-  flex: none;
-  opacity: 0.6;
-}
-.kn-recent li,
-.kn-results li {
-  padding: var(--space-1) 0;
-  font-size: 14px;
-}
-.kn-results a {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-2) 10px;
-  border-radius: var(--radius-14);
-  color: var(--ink);
-  text-decoration: none;
-}
-.kn-results a:hover {
-  background: var(--subtle);
-}
-.kn-snippet {
-  font-size: 13px;
-  color: var(--ink-muted);
-}
-.kn-snippet mark {
-  background: var(--agent-saffron-tint);
-  color: var(--ink);
-  border-radius: 3px;
 }
 
 /* Note */
@@ -354,14 +270,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.kn-diff-added {
-  background: var(--agent-jade-tint);
-  color: var(--agent-jade-text);
-}
-.kn-diff-removed {
-  background: var(--agent-coral-tint);
-  color: var(--agent-coral-text);
-}
 .kn-empty {
   padding: var(--space-6) var(--space-1);
   display: flex;
@@ -435,28 +343,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.kn-notes-toggle {
-  display: none;
-}
 @media (width < 1024px) {
-  .kn-layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-3);
-  }
-  .kn-notes-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    height: 44px;
-    border-radius: var(--radius-pill);
-    border: 1px solid var(--hairline);
-    background: var(--card);
-    color: var(--ink);
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-  }
   .kn-left.responsive-drawer:not(.is-inline) {
     background: var(--card);
     max-height: none;
@@ -471,12 +358,6 @@
   .kn-main {
     border-radius: var(--radius-20);
   }
-}
-
-.kn-recent a {
-  color: var(--ink);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
 }
 
 /* Live preview editor (PLAN 6.5): prose in the body font, code in the code font; markup shows on the cursor's line. */
@@ -716,11 +597,6 @@
   border-color: var(--ink);
   color: var(--card);
 }
-.kn-left-tools {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
 .kn-type-badge {
   display: inline-block;
   margin-left: 6px;
@@ -735,12 +611,6 @@
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
-.kn-tree-row.is-current .kn-type-badge {
-  background: transparent;
-  color: var(--card);
-  border-color: color-mix(in srgb, var(--card) 40%, transparent);
-}
-.kn-tree-row.is-drop,
 .kn-files.is-drop,
 .kn-table tr.is-drop td {
   outline: 2px dashed var(--ink);

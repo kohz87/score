@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { AgentSummary } from '@score/contract'
@@ -7,7 +7,6 @@ import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
 import type { StreamClient } from '../../data/stream.ts'
-import { KnowledgeSection } from './KnowledgeSection.tsx'
 
 vi.mock('../../shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
 
@@ -19,7 +18,7 @@ let registry: ReturnType<typeof createStreamQueryRegistry>
 let putQueue: Response[]
 /** While set, every PUT waits for it: the upload is "sent" and the server is still working. */
 /** Responses for the next files-from-staged POSTs, in order; then 201. */
-let stagedQueue: Response[] = []
+const stagedQueue: Response[] = []
 let putGate: Promise<void> | null = null
 let documents: Array<Record<string, unknown>>
 
@@ -191,23 +190,6 @@ function mount(url = '/knowledge') {
     </QueryClientProvider>,
   )
 }
-const puts = () => calls.filter((c) => c.method === 'PUT')
-const file = (name: string, bytes = 8) => new File([new Uint8Array(bytes)], name)
-const upload = (files: File[]) =>
-  fireEvent.change(screen.getByLabelText('Choose files to upload'), { target: { files } })
-
-test('documents appear in the tree with a type badge and open on their own page', async () => {
-  mount()
-  const tree = await screen.findByRole('tree', { name: 'Notes' }, { timeout: 10_000 })
-  const row = within(tree).getByText('spec.pdf').closest('[role=treeitem]')!
-  expect(within(row as HTMLElement).getByText('PDF')).toBeDefined()
-  fireEvent.click(row)
-  await screen.findByRole('heading', { name: 'spec.pdf' })
-  expect(await screen.findByText('Quarterly budget extracted text')).toBeDefined()
-  const download = screen.getByRole('link', { name: 'Download' })
-  expect(download.getAttribute('href')).toBe('/api/knowledge/files/inbox/spec.pdf?download=1')
-  expect(screen.getByText('In Knowledge history (git)')).toBeDefined()
-})
 
 test('a PDF without text says so; an unversioned image says it has no history', async () => {
   mount('/knowledge/inbox/scan.pdf')
@@ -251,173 +233,6 @@ test('a zip page lists its files', async () => {
   expect(within(list).getByText('sub/b.csv')).toBeDefined()
 })
 
-test('search results show the document type', async () => {
-  mount()
-  fireEvent.change(await screen.findByPlaceholderText(/Search notes/), {
-    target: { value: 'budget' },
-  })
-  const results = await screen.findByRole('region', { name: 'Search results' })
-  await within(results).findByText('PDF')
-})
-
-test('the file manager lists folders, notes and documents with sizes, and opens folders', async () => {
-  mount('/knowledge?files=')
-  const region = await screen.findByRole(
-    'region',
-    { name: 'Files in this folder' },
-    { timeout: 10_000 },
-  )
-  expect(within(region).getByText('inbox')).toBeDefined()
-  expect(within(region).getByText('Home')).toBeDefined()
-  fireEvent.click(within(region).getByRole('button', { name: /inbox/ }))
-  const inbox = await screen.findByRole('region', { name: 'Files in this folder' })
-  await within(inbox).findByText('spec.pdf')
-  expect(within(inbox).getAllByText('2 KB').length).toBeGreaterThan(0)
-  expect(within(inbox).getByText('19.1 MB')).toBeDefined()
-  expect(within(inbox).getByText('no history')).toBeDefined()
-})
-
-test('uploading puts the raw file and reports it', async () => {
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('notes.pdf'), file('virus.exe'), file('big.csv', 257 * 1024 * 1024)])
-  await screen.findByText(/Added inbox\/notes\.pdf/)
-  expect(puts()).toHaveLength(1)
-  expect(puts()[0]!.url).toBe('/api/knowledge/files/inbox/notes.pdf?onConflict=ask')
-  const banner = screen.getByText(/Not added:/).textContent!
-  expect(banner).toContain('virus.exe: this file type isn’t supported')
-  expect(banner).toContain('big.csv: larger than the 256 MB limit')
-})
-
-test('a slow upload shows its progress until the server answers, then the panel goes', async () => {
-  let open!: () => void
-  putGate = new Promise((resolve) => (open = resolve))
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('notes.pdf')])
-  const name = await screen.findByText('notes.pdf', { selector: '.kn-upload-progress strong' })
-  const progress = name.closest('.kn-upload-progress')!
-  expect(progress.textContent).toContain('notes.pdf')
-  expect(progress.textContent).toContain('Saving…')
-  open()
-  putGate = null
-  await screen.findByText(/Added inbox\/notes\.pdf/)
-  expect(document.querySelector('.kn-upload-progress')).toBeNull()
-})
-
-test('a name that exists asks keep both or replace, once for the whole batch if ticked', async () => {
-  const exists = () =>
-    json(
-      {
-        error: {
-          code: 'exists',
-          message: 'exists',
-          details: {
-            existing: [{ path: 'inbox/a.pdf', mtime: '2026-03-04T00:00:00Z', size: 8 }],
-          },
-        },
-      },
-      409,
-    )
-  putQueue = [exists()]
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('a.pdf'), file('b.pdf')])
-  const dialog = await screen.findByRole('dialog', { name: /already exists/ })
-  expect(dialog.textContent).toMatch(/Replace \(existing from/)
-  fireEvent.click(within(dialog).getByRole('checkbox', { name: /remaining 1 file/ }))
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep both' }))
-  await screen.findByText(/Added 2 files/)
-  expect(puts().map((c) => c.url)).toEqual([
-    '/api/knowledge/files/inbox/a.pdf?onConflict=ask',
-    '/api/knowledge/files/inbox/a.pdf?onConflict=keep',
-    '/api/knowledge/files/inbox/b.pdf?onConflict=keep',
-  ])
-})
-
-test('Skip leaves the existing file alone', async () => {
-  putQueue = [
-    json(
-      {
-        error: {
-          code: 'exists',
-          message: 'x',
-          details: { existing: [{ path: 'inbox/a.pdf', mtime: '2026-03-04T00:00:00Z', size: 8 }] },
-        },
-      },
-      409,
-    ),
-  ]
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('a.pdf')])
-  fireEvent.click(await screen.findByRole('button', { name: 'Skip' }))
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(puts()).toHaveLength(1)
-})
-
-function zipPreview() {
-  return json({
-    entries: [
-      { path: 'a.md', size: 3, action: 'extract', reason: null },
-      { path: 'b.csv', size: 40, action: 'extract', reason: null },
-      { path: 'x.exe', size: 2, action: 'skip', reason: 'type not supported' },
-    ],
-    more: false,
-    extractCount: 2,
-  })
-}
-
-test('a zip asks: unzip into an editable folder after previewing, or keep as a zip', async () => {
-  putQueue = [zipPreview()]
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('pack.zip')])
-  const dialog = await screen.findByRole('dialog', { name: /Zip file: pack\.zip/ })
-  expect(puts()[0]!.url).toContain('mode=preview')
-  const list = within(dialog).getByRole('list', { name: 'Files in the zip' })
-  expect(within(list).getByText(/skipped: type not supported/)).toBeDefined()
-  expect(within(dialog).getByText(/2 files will be added; 1 will be skipped/)).toBeDefined()
-  const folder = within(dialog).getByLabelText('Folder') as HTMLInputElement
-  expect(folder.value).toBe('inbox/pack')
-  fireEvent.change(folder, { target: { value: 'inbox/renamed' } })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Unzip' }))
-  await screen.findByText(/Unzipped 2 files into inbox\/renamed \(1 skipped\)/)
-  expect(puts()[1]!.url).toBe(
-    '/api/knowledge/files/inbox/pack.zip?mode=unzip&folder=inbox%2Frenamed&onConflict=ask',
-  )
-})
-
-test('keeping a zip stores it as a file', async () => {
-  putQueue = [zipPreview()]
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('pack.zip')])
-  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
-  fireEvent.click(within(dialog).getByRole('radio', { name: /Keep as a zip/ }))
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep as a zip' }))
-  await screen.findByText(/Added inbox\/pack\.zip/)
-  expect(puts()[1]!.url).toBe('/api/knowledge/files/inbox/pack.zip?onConflict=ask')
-})
-
-test('a zip the server refuses is reported, with its reason', async () => {
-  putQueue = [
-    json({ error: { code: 'zip_limits', message: 'The zip holds more than 1000 entries' } }, 413),
-  ]
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('many.zip')])
-  await screen.findByText(/many\.zip: The zip holds more than 1000 entries/)
-})
-
-test('dropping files on a folder in the tree uploads into that folder', async () => {
-  mount()
-  const tree = await screen.findByRole('tree', { name: 'Notes' }, { timeout: 10_000 })
-  const folder = within(tree).getByText('inbox').closest('[role=treeitem]')!
-  fireEvent.drop(folder, { dataTransfer: { types: ['Files'], files: [file('dropped.pdf')] } })
-  await screen.findByText(/Added inbox\/dropped\.pdf/)
-})
-
 test('delete asks first, and only then removes the document', async () => {
   mount('/knowledge/inbox/spec.pdf')
   fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
@@ -450,174 +265,4 @@ test('moving a document keeps its type and offers no link update', async () => {
     to: 'inbox/renamed.pdf',
     updateLinks: true,
   })
-})
-
-test('a new folder is created from the file manager', async () => {
-  mount('/knowledge?files=inbox')
-  fireEvent.click(await screen.findByRole('button', { name: 'New folder' }, { timeout: 10_000 }))
-  const dialog = await screen.findByRole('dialog', { name: 'New folder' })
-  const input = within(dialog).getByLabelText('Folder path') as HTMLInputElement
-  expect(input.value).toBe('inbox/')
-  fireEvent.change(input, { target: { value: 'inbox/contracts' } })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Create folder' }))
-  await waitFor(() =>
-    expect(calls.find((c) => c.url === '/api/knowledge/folders')?.body).toEqual({
-      path: 'inbox/contracts',
-    }),
-  )
-})
-
-test('Settings › Knowledge shows how much the files take', async () => {
-  const queryClient = createQueryClient()
-  render(
-    <QueryClientProvider client={queryClient}>
-      <KnowledgeSection />
-    </QueryClientProvider>,
-  )
-  expect(await screen.findByText(/4 files, 3\.0 MB/)).toBeDefined()
-  void act
-})
-
-function stubDownload() {
-  const createObjectURL = vi.fn(() => 'blob:x')
-  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }))
-  const names: string[] = []
-  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
-    this: HTMLAnchorElement,
-  ) {
-    names.push(this.download)
-  })
-  return names
-}
-
-test('selected files and a folder are exported as zips', async () => {
-  const names = stubDownload()
-  mount('/knowledge?files=inbox')
-  const region = await screen.findByRole(
-    'region',
-    { name: 'Files in this folder' },
-    { timeout: 10_000 },
-  )
-  expect(screen.queryByRole('button', { name: /Download selected/ })).toBeNull()
-  fireEvent.click(within(region).getByRole('checkbox', { name: 'Select spec.pdf' }))
-  fireEvent.click(within(region).getByRole('checkbox', { name: 'Select scan.pdf' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Download selected (2)' }))
-  await waitFor(() => expect(names).toEqual(['knowledge-vault-2026-10-10.zip']))
-  expect(calls.find((c) => c.url === '/api/knowledge/export')?.body).toEqual({
-    paths: ['inbox/scan.pdf', 'inbox/spec.pdf'],
-  })
-  fireEvent.click(screen.getByRole('button', { name: 'Export this folder' }))
-  await waitFor(() => expect(names).toHaveLength(2))
-  expect(calls.filter((c) => c.url === '/api/knowledge/export').at(-1)?.body).toEqual({
-    folder: 'inbox',
-  })
-})
-
-test('exporting the whole vault shows the file count and size first', async () => {
-  const names = stubDownload()
-  mount('/knowledge')
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Export Knowledge' }, { timeout: 10_000 }),
-  )
-  const dialog = await screen.findByRole('dialog', { name: 'Export all of Knowledge' })
-  await within(dialog).findByText(/7 files, 5\.0 MB before compression/)
-  expect(names).toHaveLength(0)
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Download zip' }))
-  await waitFor(() => expect(names).toHaveLength(1))
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(calls.find((c) => c.url === '/api/knowledge/export')?.body).toEqual({ all: true })
-})
-
-test('a note has a Download link to its raw Markdown', async () => {
-  mount('/knowledge?files=')
-  const region = await screen.findByRole(
-    'region',
-    { name: 'Files in this folder' },
-    { timeout: 10_000 },
-  )
-  expect(within(region).getByRole('link', { name: 'Download Home.md' }).getAttribute('href')).toBe(
-    '/api/knowledge/notes/Home.md?download=1',
-  )
-})
-
-const stagedPreview = () => {
-  const response = zipPreview()
-  return response
-    .json()
-    .then((body) =>
-      json({ ...body, staged: { id: 'A'.repeat(32), expiresAt: '2026-01-01T00:30:00Z' } }),
-    )
-}
-const posts = () => calls.filter((c) => c.url === '/api/knowledge/files-from-staged')
-const clash = () =>
-  json(
-    {
-      error: {
-        code: 'exists',
-        message: 'x',
-        details: { existing: [{ path: 'inbox/pack.zip', mtime: '2026-03-04T00:00:00Z', size: 8 }] },
-      },
-    },
-    409,
-  )
-
-test('a previewed zip is kept without a second upload', async () => {
-  putQueue = [await stagedPreview()]
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('pack.zip')])
-  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
-  fireEvent.click(within(dialog).getByRole('radio', { name: /Keep as a zip/ }))
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep as a zip' }))
-  await screen.findByText(/Added inbox\/pack\.zip/)
-  expect(puts()).toHaveLength(1)
-  expect(posts()[0]!.body).toEqual({
-    stagedId: 'A'.repeat(32),
-    path: 'inbox/pack.zip',
-    mode: 'keep',
-    onConflict: 'ask',
-  })
-})
-
-test('a previewed zip is unzipped without a second upload', async () => {
-  putQueue = [await stagedPreview()]
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('pack.zip')])
-  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Unzip' }))
-  await screen.findByText(/Unzipped 2 files into inbox\/pack/)
-  expect(puts()).toHaveLength(1)
-  expect(posts()[0]!.body).toMatchObject({ mode: 'unzip', folder: 'inbox/pack' })
-})
-
-test('a 409 on a staged zip is retried from the stage, not re-sent', async () => {
-  putQueue = [await stagedPreview()]
-  stagedQueue = [clash()]
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('pack.zip')])
-  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
-  fireEvent.click(within(dialog).getByRole('radio', { name: /Keep as a zip/ }))
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep as a zip' }))
-  fireEvent.click(await screen.findByRole('button', { name: /Replace/ }))
-  await screen.findByText(/Added inbox\/pack\.zip/)
-  expect(puts()).toHaveLength(1)
-  expect(posts().map((c) => (c.body as { onConflict: string }).onConflict)).toEqual([
-    'ask',
-    'replace',
-  ])
-})
-
-test('a staged zip the server dropped is sent again', async () => {
-  putQueue = [await stagedPreview()]
-  stagedQueue = [json({ error: { code: 'staged_gone', message: 'gone' } }, 404)]
-  mount('/knowledge?files=inbox')
-  await screen.findByRole('region', { name: 'Files in this folder' }, { timeout: 10_000 })
-  upload([file('pack.zip')])
-  const dialog = await screen.findByRole('dialog', { name: /Zip file/ })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Unzip' }))
-  await screen.findByText(/Unzipped 2 files into inbox\/pack/)
-  expect(puts()).toHaveLength(2)
-  expect(puts()[1]!.url).toContain('mode=unzip')
 })

@@ -31,13 +31,6 @@ test('the bold Room dock shows eyes too', async ({ page }) => {
   await expect(dock.first().locator('.agent-face__socket')).toHaveCount(2)
 })
 
-test('a classic page keeps eyeless glyphs', async ({ page }) => {
-  await pair(page)
-  await page.goto('/team')
-  await expect(page.locator('.agent-glyph').first()).toBeVisible()
-  await expect(page.locator('.agent-face, .agent-glyph__body')).toHaveCount(0)
-})
-
 test.describe('reduced motion', () => {
   test.use({ reducedMotion: 'reduce' })
   test('eyes are static: nothing on a glyph is animating', async ({ page }) => {
