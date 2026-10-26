@@ -125,3 +125,32 @@ test('other versions of the group stay out of the room context a new version get
   const context = run.mock.calls.at(-1)![0].input.split('Room context:')[1] ?? ''
   expect(context).not.toContain('builder:')
 })
+
+test('a reply to the person is retryable; a hand-off reply is not, and says so (3.5.0)', async () => {
+  const { storeMessage } = await import('../../src/domain/rooms.ts')
+  await post(`/api/rooms/${roomId}/messages`, { text: '@builder name the release' })
+  await advance(4000)
+  const answer = messages().find((message) => message.author.kind === 'agent')!
+  expect(answer.retryable).toBe(true)
+  // A turn builder handed to reviewer: same chain, one hop on, from builder.
+  db.sqlite
+    .prepare(
+      `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, agents, created_at)
+       SELECT 'm-handoff', room_id, 'reviewer', chain_id, 1, 'turn-handoff', parent_message_id, 'builder', input, agents, created_at
+       FROM message_runs WHERE message_id = ?`,
+    )
+    .run(answer.id)
+  storeMessage(
+    db.sqlite,
+    {
+      ...answer,
+      id: 'm-handoff',
+      author: { kind: 'agent', agentId: 'reviewer' },
+      createdAt: new Date(Date.parse(answer.createdAt) + 1000).toISOString(),
+    },
+    new Date().toISOString(),
+  )
+  const handoff = messages().find((message) => message.id === 'm-handoff')!
+  expect(handoff.retryable).toBe(false)
+  expect((await post(`/api/rooms/${roomId}/messages/m-handoff/retry`, {})).statusCode).toBe(409)
+})

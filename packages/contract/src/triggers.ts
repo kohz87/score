@@ -76,6 +76,8 @@ export const TriggerSchema = z.object({
   sample: z.unknown().nullable(),
   lastCalledAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
+  /** Set when the report-back tool doesn't look like a reporting tool ("may change things, not just report"). */
+  warning: z.string().optional(),
 })
 export type Trigger = z.infer<typeof TriggerSchema>
 

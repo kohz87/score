@@ -109,6 +109,16 @@ export const ImportSessionResponseSchema = z.object({
   roomId: z.string().min(1),
   imported: z.int().nonnegative(),
 })
+/** `GET /api/outside-sessions/preview`: the session's text, read-only; nothing is created in Score. */
+export const OutsideSessionPreviewQuerySchema = z
+  .object({ agentId: AgentIdSchema, sessionId: z.string().min(1).max(256) })
+  .strict()
+export const OutsideSessionPreviewSchema = z.object({
+  messages: z.array(
+    z.object({ role: z.enum(['user', 'assistant']), text: z.string(), at: z.iso.datetime() }),
+  ),
+})
+export type OutsideSessionPreview = z.infer<typeof OutsideSessionPreviewSchema>
 export const ContinueSessionResponseSchema = z.object({
   mode: z.enum(['same_session', 'new_session']),
 })

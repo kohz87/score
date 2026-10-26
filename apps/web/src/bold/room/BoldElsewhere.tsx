@@ -1,4 +1,4 @@
-import type { AgentSummary, Job, Message, OutsideSession } from '@score/contract'
+import type { AgentSummary, Job, OutsideSession } from '@score/contract'
 import { useId, useMemo, useSyncExternalStore } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
@@ -51,13 +51,6 @@ function when(iso: string): string {
   })
 }
 
-function textOf(message: Message): string {
-  return message.parts
-    .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
-    .join('\n')
-    .trim()
-}
-
 /** One of the agents' own chats (PLAN 11.4d): read-only in Hermes, until the person brings it into a team job. */
 export function BoldElsewhere({
   session,
@@ -80,12 +73,6 @@ export function BoldElsewhere({
   const agent = agents.find((item) => item.id === session.agentId)
   const title = session.title.trim() || 'Untitled session'
   const source = session.sourceLabel
-  const nameOf = ({ author }: Message) => {
-    if (author.kind === 'you') return 'You'
-    const { agentId } = author
-    const found = agents.find((item) => item.id === agentId)
-    return found ? agentDisplayName(found) : agentId
-  }
   const previewed = preview.data
   const key = sessionKey(session)
   const brought = broughtIn.get(key)
@@ -121,29 +108,30 @@ export function BoldElsewhere({
       {!brought && previewed ? (
         <div className="bold-elsewhere-preview" aria-label="Conversation preview">
           <span className="small muted bold-elsewhere-preview-label">
-            Read-only preview · imported from {source}
+            Read-only preview · from {source}
           </span>
           {previewed.messages.length === 0 ? (
             <p className="small muted">This chat has no text to copy.</p>
           ) : (
             <ol className="bold-elsewhere-messages">
-              {previewed.messages.map((message) => {
-                const author = nameOf(message)
-                return message.author.kind === 'you' ? (
-                  <li key={message.id} className="bold-elsewhere-mine">
-                    <p className="bold-elsewhere-bub">{textOf(message)}</p>
+              {previewed.messages.map((message, index) =>
+                message.role === 'user' ? (
+                  <li key={index} className="bold-elsewhere-mine">
+                    <p className="bold-elsewhere-bub">{message.text}</p>
                     <span className="small muted">You</span>
                   </li>
                 ) : (
-                  <li key={message.id} className="bold-elsewhere-theirs">
+                  <li key={index} className="bold-elsewhere-theirs">
                     {agent && <AgentGlyph agent={agent} size="sm" bare decorative />}
                     <div>
-                      <span className="small muted">{author}</span>
-                      <p className="bold-elsewhere-bub">{textOf(message)}</p>
+                      <span className="small muted">
+                        {agent ? agentDisplayName(agent) : session.agentId}
+                      </span>
+                      <p className="bold-elsewhere-bub">{message.text}</p>
                     </div>
                   </li>
-                )
-              })}
+                ),
+              )}
             </ol>
           )}
         </div>
@@ -158,7 +146,7 @@ export function BoldElsewhere({
             {preview.isPending ? 'Previewing…' : 'Preview this chat'}
           </button>
           <span className="small muted">
-            Previewing adds an “Imported from {source}” room in Score. Hermes isn’t changed.
+            Previewing only reads it: nothing is added to Score and Hermes isn’t changed.
           </span>
         </div>
       ) : null}
@@ -170,7 +158,7 @@ export function BoldElsewhere({
             disabled={!team || bring.isPending}
             onClick={() => {
               if (!team) return
-              const current = attempts.get(key) ?? newBringOutsideSessionAttempt(previewed.roomId)
+              const current = attempts.get(key) ?? newBringOutsideSessionAttempt()
               attempts.set(key, current)
               bring.mutate(
                 { session, teamRoomId: team.id, attempt: current },
@@ -189,7 +177,7 @@ export function BoldElsewhere({
             {bring.isPending ? 'Bringing it in…' : 'Bring into a job'}
           </button>
           <span className="small muted">
-            Starts “{title}” in the team room with these messages attached. It also keeps the
+            Starts “{title}” in the team room with these messages attached. It also adds an
             “Imported from {source}” room in Score. Bringing the same chat in again later makes
             another job.
           </span>

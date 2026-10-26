@@ -459,6 +459,12 @@ export const MessageSchema = z.object({
    * The room shows the group as one message with its versions.
    */
   alternativeOf: z.string().min(1).nullish(),
+  /**
+   * 3.5.0, agent replies only: `true` when it answers the person's own message (Retry and Try another apply), `false`
+   * for a reply from a hand-off, a summary or an orchestration turn. Absent when Score doesn't know (older or imported
+   * messages): the server still decides on Retry.
+   */
+  retryable: z.boolean().optional(),
 })
 export type Message = z.infer<typeof MessageSchema>
 

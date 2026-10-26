@@ -1,5 +1,6 @@
 import {
   ImportSessionResponseSchema,
+  OutsideSessionPreviewSchema,
   JobSchema,
   JobsResponseSchema,
   MessagePageSchema,
@@ -11,9 +12,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, apiFetch } from './api.ts'
 import { newId } from './ids.ts'
 
+/** The text of an outside chat, read-only: nothing is created in Score until the person brings it in. */
 export interface OutsideSessionPreview {
-  roomId: string
-  messages: Message[]
+  messages: { role: 'user' | 'assistant'; text: string; at: string }[]
 }
 
 export interface BringOutsideSessionIntoJobResult {
@@ -145,25 +146,15 @@ export function sortImportedMessages(messages: Message[]): Message[] {
   )
 }
 
-/**
- * The contract has no single "preview and attach this outside chat to a job" call. Its pieces do fit together: import
- * the session as a read-only room, read the copied messages, then create a team job and share each text message into
- * it as the frozen copy the share endpoint defines. This exists because `GET /api/outside-sessions` returns session
- * metadata only, not a transcript.
- */
+/** Reads the chat's text without importing it (the import makes a room; only "Bring into a job" does that). */
 export async function previewOutsideSession(
   session: OutsideSession,
 ): Promise<OutsideSessionPreview> {
-  const imported = ImportSessionResponseSchema.parse(
-    await apiFetch('outside-sessions/import', {
-      method: 'POST',
-      body: JSON.stringify({ agentId: session.agentId, sessionId: session.id }),
-    }),
+  const params = new URLSearchParams({ agentId: session.agentId, sessionId: session.id })
+  const preview = OutsideSessionPreviewSchema.parse(
+    await apiFetch(`outside-sessions/preview?${params}`),
   )
-  return {
-    roomId: imported.roomId,
-    messages: (await importedMessages(imported.roomId)).filter((message) => textOf(message)),
-  }
+  return { messages: preview.messages.filter((message) => message.text.trim()) }
 }
 
 /**
