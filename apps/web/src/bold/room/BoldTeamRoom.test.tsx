@@ -1046,3 +1046,15 @@ test('the room menu gives export, share and delete the prototype’s menu rows',
   ).toBe(true)
   expect(menu.getAttribute('data-protected')).toBe('flex')
 })
+
+test('Team lead… opens from the team room menu and Cancel gives focus back to the menu button', async () => {
+  stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
+  const trigger = await screen.findByRole('button', { name: 'Room menu' })
+  fireEvent.click(trigger)
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Team lead…' }))
+  await screen.findByRole('dialog', { name: 'Team lead' })
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Team lead' })).toBeNull())
+  expect(document.activeElement).toBe(trigger)
+})
