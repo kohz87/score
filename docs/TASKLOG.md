@@ -1559,3 +1559,16 @@ One entry per completed task: what landed, review results, and any **rejected re
   team, trigger "Starts jobs in", Live screen). Review: the guide's session wording missed "lead decides" steps (fixed by
   the lead); the approval shot left designer's reply "Writing…" in later team-room shots — it now runs last and answers
   its card (lead). Docs only: no deploy restart needed.
+- **3.7.0** (2026-10-26; owner: "work on tablet view … not tablet", then "Fix all I found"). Lead audit at six tablet
+  sizes: one breakpoint (860) gave portrait tablets a cramped phone room (content capped ~620px, header out of line) and
+  landscape touch tablets desktop controls under 44px. Sonnet coder: a 601–860 band (room, one-to-one and Usage use the
+  width), coarse-pointer 44px targets ≥ 861, e2e at four sizes. Review: weak ready waits (a blank Library and a black Live
+  screen were captured) and box-based alignment checks — fixed by the coder; it then narrowed the 44px test to dodge 34px
+  message actions — the lead made message actions 44px under any coarse pointer and restored the test with a "some
+  action is visible" guard. Gate 1 found a real bug: a big team's glyph row (16 agents in the full run) squeezed the room
+  title on a portrait tablet — the title row now wraps (review 2: a long name then overflowed — the title wraps its text
+  within the row); test fakes 16 agents, a long name and a needs-you glyph. Gate 2: the tablet specs met a side sheet
+  opened by another spec's waiting question and a 29-agent roster (they close the sheet and count ≥ 16); the other 846
+  e2e passed and pnpm check was green (server 4817, web 2993, contract 1522); the spec fix passed after the polluting
+  specs on one server (37/37). Flakes seen once and passing alone: remote-access HTTPS retry, studio-light Team shot.
+- **v3.7.0 deployed live** (~15:18 UTC): idle, backup score-pre-3.7.0-20261026.db, restart, health ok, no new errors.
