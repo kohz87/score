@@ -3,6 +3,19 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.4.0] — 2026-10-26
+
+### Added
+- **More than one team**: Team room ▾ › **New team…** makes a team room with the agents you choose (an agent can be
+  in several teams) and a lead from among them. It works like the team room: jobs, hand-offs, needs-you cards,
+  recipes and "lead decides" runs started there. Rename, archive, delete it or change its **Members…** from its ⋯
+  menu; switch teams from the Team room ▾ menu. The first team room still holds everyone and is what triggers and
+  "Share to the team room" use.
+
+### Fixed
+- The agent page header: "Team" sits on the same line as the "/" and the name, and "Remove agent…" and "Look at its
+  screen" line up with the Message and Pause buttons.
+
 ## [3.3.0] — 2026-10-26
 
 ### Added
