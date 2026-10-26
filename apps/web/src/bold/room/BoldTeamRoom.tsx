@@ -15,7 +15,7 @@ import { agentDisplayName } from '../bold-agents.ts'
 import { DeleteRoomDialog } from '../../routes/chat/DeleteRoomDialog.tsx'
 import { ShareDialog } from '../../routes/chat/ShareDialog.tsx'
 import { useShowDeleted, setShowDeleted } from '../../routes/chat/deleted-toggle.ts'
-import { roomsQuery } from '../../routes/chat/queries.ts'
+import { roomsQuery, versionsQuery } from '../../routes/chat/queries.ts'
 import '../../routes/chat/chat.css'
 import { Composer } from '../../routes/chat/Composer.tsx'
 import { saveDraft } from '../../routes/chat/composer-model.ts'
@@ -366,11 +366,18 @@ function LoadedTeamRoom({
   const opened = shownJob && !openedJobs.includes(shownJob) ? [...openedJobs, shownJob] : openedJobs
 
   const namedJobs = allJobs.filter((job) => !job.isDefault)
+  // Only a room that had messages deleted offers the toggle on its starter board (a fresh board has nothing to show).
+  const versionsDefinition = useMemo(() => versionsQuery(room.id), [room.id])
+  const hasDeletes = (useStreamQuery(versionsDefinition).data ?? []).some(
+    (version) => version.mode === 'delete',
+  )
   const empty =
     jobsStatus === 'success' &&
     namedJobs.length === 0 &&
     baseMessages.status === 'success' &&
     (baseMessages.data?.items.length ?? 0) === 0 &&
+    // Turned on, the deleted markers show where the starter board would be (every message may have been deleted).
+    !showDeleted &&
     // An older or imported phone room is still a chat: its one job must be reachable even before any message.
     !(phone && room.role !== 'team')
   const job = allJobs.find((item) => item.id === selectedJob)
@@ -542,7 +549,21 @@ function LoadedTeamRoom({
           onShowClosed={() => setPhoneClosedList((shown) => !shown)}
         />
       ) : empty ? (
-        <RoomEmpty agents={agents} onStart={startWith} />
+        <>
+          {hasDeletes && (
+            <div className="bold-room-tools">
+              <button
+                type="button"
+                className="bold-filter bold-deleted-toggle"
+                aria-pressed={false}
+                onClick={() => setShowDeleted(room.id, true)}
+              >
+                Show deleted messages
+              </button>
+            </div>
+          )}
+          <RoomEmpty agents={agents} onStart={startWith} />
+        </>
       ) : phone && room.role === 'team' && !phoneJob ? (
         <PhoneJobList
           jobs={allJobs}

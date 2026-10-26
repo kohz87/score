@@ -864,3 +864,35 @@ body.fit [data-ui='bold'] .stream {
   color: var(--hi-bg);
   cursor: pointer;
 }
+
+[data-ui='bold'] .bold-room-project-list,
+[data-ui='bold'] .bold-room-project-colours {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+[data-ui='bold'] .bold-room-project-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-room-archived {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  /* On a narrow phone header it wraps under the title instead of squeezing it. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-room-kind-badge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 12px;
+}
