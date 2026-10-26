@@ -1425,3 +1425,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   outcome keys by position (lead). Final full e2e 998 passed; 3 run screenshots re-baselined (tab the run opens on),
   bold-terminal phone 3/3 alone (flake), bold-start-job phone known flake; pnpm check green (server 4784, web 3158).
   Owner rule reinforced (2026-10-26): no pre-fix gates — stopped a gate run started before the last fix.
+- **v2.6.0 deployed live** (~02:48 UTC): backup score-pre-2.6.0-20261026.db, restart, no new errors.
