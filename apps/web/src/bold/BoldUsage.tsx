@@ -8,14 +8,17 @@ import { formatMoney, useDisplayCurrency, USD } from '../data/currency.ts'
 import { formatDuration, formatPercent } from '../routes/reports/reports-format.ts'
 import { JourneyChart } from '../routes/reports/JourneyChart.tsx'
 import {
+  customRangeError,
   reportCsvHref,
   reportRanges,
   useJourney,
   useReports,
+  viewerToday,
   type ReportSpec,
 } from '../routes/reports/reports-queries.ts'
 
 type Range = Exclude<Reports['range'], 'custom'>
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const DEFAULT_RANGE: Range = '7d'
 const rangeIds = new Set<Range>(reportRanges.map(({ id }) => id))
@@ -67,6 +70,169 @@ function agentFor(agents: AgentSummary[], id: string): AgentSummary {
 function rangeFrom(params: URLSearchParams): Range {
   const value = params.get('range')
   return value && rangeIds.has(value as Range) ? (value as Range) : DEFAULT_RANGE
+}
+
+function shortDay(day: string, withYear: boolean): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return `${d} ${MONTHS[(m ?? 1) - 1]}${withYear ? ` ${y}` : ''}`
+}
+
+/** "3 Oct – 9 Oct", with the year when the range is not in the current one. */
+function customLabel(from: string, to: string): string {
+  const year = viewerToday().slice(0, 4)
+  const withYear = from.slice(0, 4) !== year || to.slice(0, 4) !== year
+  return `${shortDay(from, withYear)} – ${shortDay(to, withYear)}`
+}
+
+function CustomRangeForm({
+  spec,
+  onApply,
+}: {
+  spec: ReportSpec
+  onApply: (from: string, to: string) => void
+}) {
+  const today = viewerToday()
+  // The parent keys this form by the range, so a preset picked while it is open re-seeds the inputs.
+  const seedFrom = spec.range === 'custom' ? spec.from : today
+  const seedTo = spec.range === 'custom' ? spec.to : today
+  const [from, setFrom] = useState(seedFrom)
+  const [to, setTo] = useState(seedTo)
+  const problem = customRangeError(from, to, today)
+  return (
+    <form
+      id="usage-custom-form"
+      className="usage-custom"
+      aria-label="Custom range"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!problem) onApply(from, to)
+      }}
+    >
+      <label>
+        From
+        <input
+          type="date"
+          value={from}
+          max={to && to < today ? to : today}
+          onChange={(event) => setFrom(event.target.value)}
+        />
+      </label>
+      <label>
+        To
+        <input
+          type="date"
+          value={to}
+          min={from || undefined}
+          max={today}
+          onChange={(event) => setTo(event.target.value)}
+        />
+      </label>
+      <button type="submit" className="btn sm primary" disabled={problem !== null}>
+        Apply
+      </button>
+      {problem && (
+        <p className="usage-custom-problem small muted" role="status">
+          {problem}
+        </p>
+      )}
+    </form>
+  )
+}
+
+const noFigure = (why: string) => <span aria-label={why}>—</span>
+
+function ByAgentTable({
+  report,
+  agents,
+  money,
+}: {
+  report: Reports | undefined
+  agents: AgentSummary[]
+  money: (usd: number | null) => string
+}) {
+  const spendCell = (row: Reports['byAgent'][number]) =>
+    row.spendBasis === 'unknown' ? (
+      <span aria-label="This coding agent’s CLI gave no cost">unknown</span>
+    ) : row.spendBasis === 'estimated' ? (
+      `${money(row.spendUsd)} estimated`
+    ) : (
+      money(row.spendUsd)
+    )
+  return (
+    <section className="card usage-figure usage-by-agent" aria-labelledby="usage-by-agent-title">
+      <h3 id="usage-by-agent-title">By agent</h3>
+      {!report ? (
+        <p role="status" className="usage-loading">
+          Loading the table…
+        </p>
+      ) : report.byAgent.length === 0 && !report.unattributed ? (
+        <p className="usage-empty">No agents yet.</p>
+      ) : (
+        <div
+          className="usage-table-scroll"
+          role="region"
+          aria-label="By agent table, scroll to see all columns"
+          tabIndex={0}
+        >
+          <table className="usage-table usage-agent-table" aria-labelledby="usage-by-agent-title">
+            <thead>
+              <tr>
+                <th scope="col">Agent</th>
+                <th scope="col">Jobs done</th>
+                <th scope="col">Runs</th>
+                <th scope="col">Median time</th>
+                <th scope="col">First-time pass</th>
+                <th scope="col">Cache hits</th>
+                <th scope="col">Spend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.byAgent.map((row) => {
+                const agent = agentFor(agents, row.agentId)
+                return (
+                  <tr key={row.agentId}>
+                    <th scope="row">
+                      <span className="usage-agent-cell">
+                        <AgentGlyph agent={agent} size="xs" bare decorative />
+                        {agent.name}
+                      </span>
+                    </th>
+                    <td>{row.finished}</td>
+                    <td>{row.runs}</td>
+                    <td>{formatDuration(row.medianSec)}</td>
+                    <td>
+                      {row.firstPassRate !== null
+                        ? formatPercent(row.firstPassRate)
+                        : /review/i.test(agent.role)
+                          ? 'n/a, reviews'
+                          : noFigure('No reviewed tasks in this range')}
+                    </td>
+                    <td>
+                      {row.cacheHitRate === null
+                        ? noFigure('Hermes gave no cache figures')
+                        : formatPercent(row.cacheHitRate)}
+                    </td>
+                    <td>{spendCell(row)}</td>
+                  </tr>
+                )
+              })}
+              {report.unattributed && (
+                <tr>
+                  <th scope="row">Unknown agent</th>
+                  <td>—</td>
+                  <td>{report.unattributed.runs}</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
 }
 
 function dayLabel(date: string, days: number, index: number): string {
@@ -335,8 +501,17 @@ function SpendFigure({
 export function BoldUsage() {
   const money = useMoney()
   const [params, setParams] = useSearchParams()
+  const custom = params.get('range') === 'custom'
+  const urlFrom = params.get('from') ?? ''
+  const urlTo = params.get('to') ?? ''
   const range = rangeFrom(params)
-  const spec = useMemo<ReportSpec>(() => ({ range }), [range])
+  const spec = useMemo<ReportSpec>(() => {
+    // A shared link with a bad custom range falls back to the default instead of erroring.
+    if (custom && customRangeError(urlFrom, urlTo) === null)
+      return { range: 'custom', from: urlFrom, to: urlTo }
+    return { range }
+  }, [custom, urlFrom, urlTo, range])
+  const [customOpen, setCustomOpen] = useState(custom)
   const reports = useReports(spec)
   const journeyOn = params.get('tab') === 'journey'
   const journey = useJourney(spec, journeyOn)
@@ -361,6 +536,21 @@ export function BoldUsage() {
       (current) => {
         const copy = new URLSearchParams(current)
         copy.set('range', next)
+        copy.delete('from')
+        copy.delete('to')
+        return copy
+      },
+      { replace: true },
+    )
+  }
+
+  function setCustom(from: string, to: string) {
+    setParams(
+      (current) => {
+        const copy = new URLSearchParams(current)
+        copy.set('range', 'custom')
+        copy.set('from', from)
+        copy.set('to', to)
         return copy
       },
       { replace: true },
@@ -399,16 +589,29 @@ export function BoldUsage() {
             <button
               key={id}
               type="button"
-              className={range === id ? 'on' : undefined}
-              aria-pressed={range === id}
+              className={spec.range === id ? 'on' : undefined}
+              aria-pressed={spec.range === id}
               onClick={() => setRange(id)}
             >
               {label}
-              {range === id && reports.isFetching && (
+              {spec.range === id && reports.isFetching && (
                 <span className="usage-spinner" aria-hidden="true" />
               )}
             </button>
           ))}
+          <button
+            type="button"
+            className={spec.range === 'custom' ? 'on' : undefined}
+            aria-pressed={spec.range === 'custom'}
+            aria-expanded={customOpen}
+            aria-controls="usage-custom-form"
+            onClick={() => setCustomOpen((shown) => !shown)}
+          >
+            {spec.range === 'custom' ? customLabel(spec.from, spec.to) : 'Custom'}
+            {spec.range === 'custom' && reports.isFetching && (
+              <span className="usage-spinner" aria-hidden="true" />
+            )}
+          </button>
         </div>
         {!journeyOn && (
           <a className="btn sm" href={reportCsvHref(spec)} download>
@@ -416,6 +619,14 @@ export function BoldUsage() {
           </a>
         )}
       </div>
+
+      {customOpen && (
+        <CustomRangeForm
+          key={spec.range === 'custom' ? `${spec.from}/${spec.to}` : spec.range}
+          spec={spec}
+          onApply={setCustom}
+        />
+      )}
 
       {journeyOn && (
         <section
@@ -449,9 +660,12 @@ export function BoldUsage() {
         </p>
       )}
       {!report && !reports.isError && !journeyOn && (
-        <p role="status" className="usage-loading">
-          Loading…
-        </p>
+        <>
+          <p role="status" className="usage-loading">
+            Loading…
+          </p>
+          <ByAgentTable report={undefined} agents={agents} money={money} />
+        </>
       )}
       {report && !journeyOn && (
         <div
@@ -496,6 +710,8 @@ export function BoldUsage() {
             <TaskFigure report={report} agents={agents} />
             <SpendFigure report={report} agents={agents} money={money} />
           </div>
+
+          <ByAgentTable report={report} agents={agents} money={money} />
 
           {report.unattributed && (
             <p className="usage-note small muted">

@@ -7,18 +7,18 @@
   font-family: var(--font-body);
   font-size: var(--body-size);
   line-height: 1.5;
-  border-radius: 28px;
-  padding: 24px 20px;
+  border-radius: calc(28px * var(--bold-r, 1));
+  padding: calc(24px * var(--bold-d, 1)) calc(20px * var(--bold-d, 1));
   min-width: 0;
-  margin-top: 8px;
+  margin-top: calc(8px * var(--bold-d, 1));
 }
 
 /* Bold's element resets (bold.css) skip this wrapper, so the classic ones apply as drawn. */
 
 @media (max-width: 860px) {
   [data-ui='bold'] .bold-classic-page {
-    padding: 16px 12px;
-    border-radius: 22px;
+    padding: calc(16px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+    border-radius: calc(22px * var(--bold-r, 1));
   }
 }
 
@@ -30,7 +30,7 @@
   font: inherit;
   font-weight: 600;
   min-height: 44px;
-  padding: 0 12px 0 0;
+  padding: 0 calc(12px * var(--bold-d, 1)) 0 0;
   cursor: pointer;
   border-radius: 999px;
 }

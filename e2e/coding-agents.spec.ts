@@ -80,7 +80,11 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Usage
 
       // Usage (the old Reports): Claude Code's figure is an estimate.
       await page.goto('/b/settings/usage')
-      const row = page.getByRole('row', { name: new RegExp(`^${id} `) })
+      // The By agent table (3.1.0) lists the agent too: read the spend row of the coding agents' table.
+      const row = page
+        .getByRole('row', { name: new RegExp(`^${id} `) })
+        .filter({ hasText: 'estimated' })
+        .first()
       await expect(row).toContainText('estimated', { timeout: 15_000 })
 
       // Its screen (the old Watch): frames came from the parsed events.
