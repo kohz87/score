@@ -48,6 +48,8 @@ beforeEach(async () => {
     'x-score-client': 'web',
     cookie: paired.headers['set-cookie']!.toString().split(';')[0]!,
   }
+  // The app projects the roster at startup; the routes read that projection.
+  expect((await app.inject({ method: 'GET', url: '/api/agents', headers })).statusCode).toBe(200)
 })
 afterEach(async () => {
   await port.stop()
