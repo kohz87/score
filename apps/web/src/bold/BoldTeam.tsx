@@ -8,7 +8,13 @@ import { useMediaQuery } from '../data/use-media.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { useNow, useTeamPause } from '../data/team-pause.ts'
 import { useWatchOverview } from '../routes/watch/watch-queries.ts'
-import { agentDisplayName, agentMood, agentNameColor, agentStateLabel } from './bold-agents.ts'
+import {
+  agentDisplayName,
+  agentMood,
+  agentNameColor,
+  agentStateLabel,
+  canTalkTo,
+} from './bold-agents.ts'
 import { pairingProblem } from './bold-errors.ts'
 import { BoldAddAgent } from './BoldAddAgent.tsx'
 import './bold-team.css'
@@ -89,9 +95,11 @@ function AgentCard({
       </span>
       <span className="bold-agentcard-engine small muted">{engineLine(agent)}</span>
       <div className="bold-agentcard-actions">
-        <Link className="btn sm primary" to={`/b?with=${encodeURIComponent(agent.id)}`}>
-          Message
-        </Link>
+        {canTalkTo(agent) && (
+          <Link className="btn sm primary" to={`/b?with=${encodeURIComponent(agent.id)}`}>
+            Message
+          </Link>
+        )}
         <Link className="btn sm" to={`/b/team/${encodeURIComponent(agent.id)}`}>
           Open
         </Link>

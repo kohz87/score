@@ -13,7 +13,6 @@ export function agentDisplayName(agent: Pick<AgentSummary, 'id' | 'name'>): stri
   return agent.name || agent.id
 }
 
-/** The word the dock, agent page and one-to-one list use for an agent's state (the prototype's "free", "needs you", …). */
 /** On the team: everyone but a removed agent (whose history stays readable elsewhere). The dock and the Team page. */
 export function onTeam(agent: Pick<AgentSummary, 'lifecycle'>): boolean {
   return agent.lifecycle?.state !== 'removed'
@@ -24,6 +23,7 @@ export function canTalkTo(agent: Pick<AgentSummary, 'lifecycle'>): boolean {
   return !agent.lifecycle || agent.lifecycle.state === 'ready'
 }
 
+/** The word the dock, agent page and one-to-one list use for an agent's state (the prototype's "free", "needs you", …). */
 export function agentStateLabel(agent: AgentSummary): string {
   if (agent.status === 'waiting') return 'needs you'
   if (agent.status === 'idle') return 'free'

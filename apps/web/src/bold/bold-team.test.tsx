@@ -821,7 +821,8 @@ test('opening a removed agent’s page directly stays on it, with its history an
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(router.state.location.pathname).toBe('/b/team/builder')
   expect(screen.queryByRole('button', { name: 'Remove agent…' })).toBeNull()
-  expect(screen.queryByRole('button', { name: /^(Pause|Resume) builder/u })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^(Pause|Resume) builder/u })).toBeNull()  // 3.5.1: no one-to-one to start with an agent that has left.
+  expect(screen.queryByRole('link', { name: 'Message' })).toBeNull()
 })
 
 test('a page that saw the agent go from deleting to removed leaves for Team', async () => {

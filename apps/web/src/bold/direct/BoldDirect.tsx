@@ -10,7 +10,7 @@ import { usePendingDeletes } from '../../routes/chat/message-deletion.ts'
 import { setShowDeleted, useShowDeleted } from '../../routes/chat/deleted-toggle.ts'
 import { saveDraft } from '../../routes/chat/composer-model.ts'
 import { useBoldTeamRoom } from '../bold-search-queries.ts'
-import { agentDisplayName, agentNameColor } from '../bold-agents.ts'
+import { agentDisplayName, agentNameColor, canTalkTo } from '../bold-agents.ts'
 import { CloseIcon, HistoryIcon, LockIcon } from '../BoldIcons.tsx'
 import {
   boldAsideLink,
@@ -488,7 +488,7 @@ function AddSomeone({
   const [error, setError] = useState<string | null>(null)
   // The job exists once step one worked; a retry only repeats the message.
   const [job, setJob] = useState<Job | null>(null)
-  const choices = agents.filter((item) => item.id !== agent.id)
+  const choices = agents.filter((item) => item.id !== agent.id && canTalkTo(item))
   const title = chat.title || 'New chat'
 
   async function confirm() {

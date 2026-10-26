@@ -14,7 +14,7 @@ import { ModelTab } from '../routes/team/ModelTab.tsx'
 import { boldAgentScreenLink } from './bold-links.ts'
 import type { AgentFileName } from '../routes/team/file-queries.ts'
 import { useAgentPause } from '../routes/watch/watch-queries.ts'
-import { agentDisplayName, agentMood, agentStateLabel } from './bold-agents.ts'
+import { agentDisplayName, agentMood, agentStateLabel, canTalkTo } from './bold-agents.ts'
 import { pairingProblem } from './bold-errors.ts'
 import { questionNeedsYou, questionsQuery } from '../data/question-queries.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
@@ -242,9 +242,11 @@ function AgentProfile({ agentId }: { agentId: string }) {
         </h1>
         <span className="muted bold-agent-role">{agent.role}</span>
         <span className="row wrap bold-agent-actions">
-          <Link className="btn primary" to={`/b?with=${encodeURIComponent(agent.id)}`}>
-            Message
-          </Link>
+          {canTalkTo(agent) && (
+            <Link className="btn primary" to={`/b?with=${encodeURIComponent(agent.id)}`}>
+              Message
+            </Link>
+          )}
           {!inFlight && agent.lifecycle?.state !== 'removed' && (
             <button
               type="button"
