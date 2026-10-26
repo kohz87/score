@@ -212,3 +212,33 @@ for (const size of sizes) {
     })
   })
 }
+
+// A big team (the full test run adds a dozen agents) used to squeeze the room title on a portrait tablet: the glyph
+// row now wraps under the title, which keeps its place.
+test('a big team’s glyph row never moves the room title on a portrait tablet', async ({ page }) => {
+  await pair(page)
+  await page.setViewportSize({ width: 768, height: 1024 })
+  await page.route('**/api/agents', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const response = await route.fetch()
+    const body = (await response.json()) as { items: { id: string; name: string }[] }
+    const extra = Array.from({ length: 12 }, (_, i) => ({
+      ...body.items[0]!,
+      id: `extra-${i}`,
+      name: `extra-${i}`,
+    }))
+    await route.fulfill({ response, json: { ...body, items: [...body.items, ...extra] } })
+  })
+  await open(page, '/b', roomReady)
+  await expect(page.locator('.bold-phone-job').first()).toBeVisible()
+  await expect(page.locator('.bold-phone-presence-agent')).toHaveCount(16)
+  const gap = await page.evaluate(() => {
+    const range = document.createRange()
+    range.selectNodeContents(document.querySelector('.roomhead .roomtitle')!)
+    return Math.abs(
+      range.getBoundingClientRect().left -
+        document.querySelector('.bold-phone-job')!.getBoundingClientRect().left,
+    )
+  })
+  expect(gap).toBeLessThanOrEqual(2)
+})

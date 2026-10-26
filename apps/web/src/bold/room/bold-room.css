@@ -2044,14 +2044,17 @@
     justify-content: space-between;
   }
 
+  /* The title keeps its width; a long team's glyph row wraps under it (never clipped: an agent who needs you is a
+     protected mark). */
   [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-title {
     flex: 1 1 auto;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     justify-content: flex-start;
+    min-width: 0;
   }
 
   [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-title .roomtitle {
-    flex: 0 1 auto;
+    flex: none;
   }
 
   [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-actions {
