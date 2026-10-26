@@ -218,7 +218,19 @@ for (const size of sizes) {
 test('a big team’s glyph row never moves the room title on a portrait tablet', async ({ page }) => {
   await pair(page)
   await page.setViewportSize({ width: 768, height: 1024 })
-  await page.route('**/api/agents', async (route) => {
+  // A long team name too: it wraps inside the header instead of pushing past the actions.
+  await page.route(/\/api\/team-room(\?.*)?$/, async (route) => {
+    const response = await route.fetch()
+    const body = (await response.json()) as { room: { name: string } }
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        room: { ...body.room, name: 'The platform and release engineering team room' },
+      },
+    })
+  })
+  await page.route(/\/api\/agents(\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
     const response = await route.fetch()
     const body = (await response.json()) as { items: { id: string; name: string }[] }
@@ -226,6 +238,8 @@ test('a big team’s glyph row never moves the room title on a portrait tablet',
       ...body.items[0]!,
       id: `extra-${i}`,
       name: `extra-${i}`,
+      // The last one needs you: its protected mark must stay visible in the wrapped row.
+      ...(i === 11 ? { status: 'waiting' } : {}),
     }))
     await route.fulfill({ response, json: { ...body, items: [...body.items, ...extra] } })
   })
@@ -241,4 +255,10 @@ test('a big team’s glyph row never moves the room title on a portrait tablet',
     )
   })
   expect(gap).toBeLessThanOrEqual(2)
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+  ).toBeLessThanOrEqual(0)
+  const actions = await page.locator('.bold-phone-list-actions').boundingBox()
+  expect(actions!.x + actions!.width).toBeLessThanOrEqual(768)
+  await expect(page.locator('.bold-phone-presence-agent.needs')).toBeVisible()
 })

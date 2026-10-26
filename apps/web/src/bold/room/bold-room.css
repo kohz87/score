@@ -2054,7 +2054,11 @@
   }
 
   [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-title .roomtitle {
-    flex: none;
+    flex: 0 1 auto;
+    max-width: 100%;
+    min-width: 0;
+    white-space: normal;
+    text-align: left;
   }
 
   [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-actions {
