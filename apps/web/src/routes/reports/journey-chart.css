@@ -98,3 +98,45 @@
   font-size: 13px;
   color: var(--ink);
 }
+
+/* The count table, agent tile and empty line (moved here from the removed Reports page, in the bold tokens). */
+.journey .reports-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.journey .reports-table th,
+.journey .reports-table td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+.journey .reports-table thead th {
+  border-top: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.journey .reports-table tbody th {
+  font-weight: 600;
+}
+.journey .reports-table td {
+  font-variant-numeric: tabular-nums;
+}
+.journey .reports-table__agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.journey .reports-glyph .agent-glyph {
+  --glyph-radius: 8px;
+}
+.journey .reports-glyph--26 .agent-glyph {
+  --glyph-tile-size: 26px;
+  --glyph-svg-size: 16px;
+}
+.journey .reports-empty {
+  margin: 0;
+  color: var(--muted);
+}

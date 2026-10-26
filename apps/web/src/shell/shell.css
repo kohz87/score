@@ -18,32 +18,6 @@
   cursor: pointer;
 }
 
-.update-banner {
-  position: fixed;
-  left: 50%;
-  bottom: max(16px, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-2) var(--space-2) 18px;
-  border-radius: var(--radius-pill);
-  background: var(--rules-panel);
-  color: var(--on-dark);
-  box-shadow: 0 8px 24px rgb(var(--shadow-rgb) / 25%);
-}
-.update-banner button {
-  font: inherit;
-  font-weight: 600;
-  border: 0;
-  border-radius: var(--radius-pill);
-  padding: 6px var(--space-4);
-  background: #fff;
-  color: #12131a;
-  cursor: pointer;
-}
-
 .top-bar-terminal {
   width: 44px;
   height: 44px;

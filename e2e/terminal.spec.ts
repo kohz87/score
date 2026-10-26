@@ -38,7 +38,9 @@ function hostPassword(home: string) {
   )
 }
 
-test('open a terminal over HTTPS, run echo, see the output', async ({ page }) => {
+test('open a terminal over HTTPS, run echo, see the output, close it from Settings', async ({
+  page,
+}) => {
   const home = mkdtempSync(join(tmpdir(), 'score-terminal-e2e-'))
   const port = Number(process.env.SCORE_PORT ?? 8740) + 6
   const origin = `https://127.0.0.1:${port}`
@@ -155,6 +157,16 @@ test('open a terminal over HTTPS, run echo, see the output', async ({ page }) =>
     await page.keyboard.type('echo after-$((2+3))')
     await page.keyboard.press('Enter')
     await expect(screen).toContainText('after-5', { timeout: 5_000 })
+
+    // Settings lists the open terminal; Close ends it.
+    const settings = await page.context().newPage()
+    await settings.goto(`${origin}/b/settings/security`)
+    await settings
+      .getByRole('list', { name: 'Open terminals' })
+      .getByRole('button', { name: 'Close' })
+      .click()
+    await expect(page.getByText('Closed.')).toBeVisible({ timeout: 15_000 })
+    await settings.close()
   } finally {
     // The tmux server the clipboard steps started outlives the terminal's shell: stop it by its own socket name.
     try {

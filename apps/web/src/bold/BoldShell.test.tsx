@@ -52,6 +52,13 @@ const agents: AgentSummary[] = [
   },
 ]
 
+vi.mock('../notifications/NotificationBridge.tsx', () => ({
+  NotificationBridge: () => <span data-testid="notification-bridge" />,
+}))
+vi.mock('../pwa/UpdateBanner.tsx', () => ({
+  UpdateBanner: () => <span data-testid="update-banner" />,
+}))
+
 class Source extends EventTarget {
   close() {}
 }
@@ -638,4 +645,10 @@ test('Ctrl+` opens the terminal and returns, but not while typing', async () => 
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/terminal'))
   fireEvent.keyDown(document.body, { key: '`', metaKey: true })
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
+})
+
+test('the shell mounts the notification bridge and the update banner', async () => {
+  open('/b')
+  expect(await screen.findByTestId('notification-bridge')).toBeDefined()
+  expect(screen.getByTestId('update-banner')).toBeDefined()
 })

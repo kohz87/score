@@ -739,6 +739,12 @@ test('More offers the appearance editor', async () => {
   expect(screen.queryByRole('dialog', { name: 'Agent appearance' })).toBeNull()
 })
 
+test('a workspace link (?path=) opens More and the Files panel', async () => {
+  open('/b/team/builder?path=docs%2Fplan.md')
+  expect(await screen.findByRole('heading', { name: 'Files' })).toBeDefined()
+  expect(document.querySelector('#agent-files')).not.toBeNull()
+})
+
 test('a pause that fails still offers the same action again', async () => {
   let attempts = 0
   pauseReply = () =>

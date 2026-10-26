@@ -1,3 +1,4 @@
+import { OpenTerminals } from '../routes/settings/TerminalSection.tsx'
 import { Link } from 'react-router'
 import type { AgentSummary } from '@score/contract'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
@@ -91,6 +92,7 @@ export function BoldSecurity() {
         <Link className={security.data?.terminal ? 'btn sm primary' : 'btn sm'} to="/terminal">
           Open the terminal
         </Link>
+        <OpenTerminals className="security-terminals" />
       </section>
     </div>
   )

@@ -146,7 +146,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const location = useLocation()
   const [search] = useSearchParams()
   const [file, setFile] = useState<AgentFileName>('SOUL.md')
-  const [more, setMore] = useState(() => location.hash.startsWith('#agent-'))
+  const [more, setMore] = useState(() => location.hash.startsWith('#agent-') || search.has('path'))
   const client = useQueryClient()
   const pause = useAgentPause(agentId)
   const [removing, setRemoving] = useState(false)

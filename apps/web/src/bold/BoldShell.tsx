@@ -19,6 +19,8 @@ import { useFence } from '../routes/orchestrations/orchestration-queries.ts'
 import { questionNeedsYou, questionsQuery } from '../data/question-queries.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import { useRoomNeedsYouState } from './room/use-needs-you.ts'
+import { NotificationBridge } from '../notifications/NotificationBridge.tsx'
+import { UpdateBanner } from '../pwa/UpdateBanner.tsx'
 import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
 import { agentDisplayName, agentMood, agentStateLabel, dockProgress } from './bold-agents.ts'
@@ -346,6 +348,8 @@ function BoldShellFrame() {
 
           <main className="main">
             <ShellFenceNotice pathname={location.pathname} />
+            {!preview && <NotificationBridge />}
+            {!preview && <UpdateBanner />}
             <BoldFrameContext value={frame}>
               <Outlet context={{ sheetOpen, setSheetOpen } satisfies BoldSheetState} />
             </BoldFrameContext>
