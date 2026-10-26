@@ -57,3 +57,21 @@ test('a wheel gesture upward leaves the end at once', async () => {
   await act(tick)
   expect(el.scrollTop).toBe(0)
 })
+
+test('a stream that gets shorter while the reader is at the end keeps following', async () => {
+  const view = render(<Stream />)
+  const el = view.getByTestId('stream')
+  let height = 1200
+  geometry(el, () => height)
+  el.append(document.createElement('p'))
+  await act(tick)
+  expect(el.scrollTop).toBe(1200)
+  // A card collapses: the browser clamps scrollTop down with the height; the reader did not move.
+  height = 900
+  el.scrollTop = 800
+  el.dispatchEvent(new Event('scroll'))
+  height = 1100
+  el.append(document.createElement('p'))
+  await act(tick)
+  expect(el.scrollTop).toBe(1100)
+})

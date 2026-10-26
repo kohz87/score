@@ -30,20 +30,28 @@ export function useFollowEnd(
     // scrolled up while a reply streams would be snapped back. So the position is compared at every snap, and wheel,
     // touch and key input leave the end at once.
     let lastTop = element.scrollTop
+    let lastHeight = element.scrollHeight
+    // Up means the reader moved: a stream that got shorter also lowers scrollTop (the browser clamps it), and that
+    // is not the reader leaving the end.
+    const movedUp = () => element.scrollTop < lastTop - 1 && element.scrollHeight >= lastHeight
+    const remember = () => {
+      lastTop = element.scrollTop
+      lastHeight = element.scrollHeight
+    }
     const leave = () => {
       following.current = false
     }
     const toEnd = () => {
-      if (element.scrollTop < lastTop - 1) following.current = false
+      if (movedUp()) following.current = false
       if (following.current && !paused) element.scrollTop = element.scrollHeight
-      lastTop = element.scrollTop
+      remember()
     }
     const onScroll = () => {
-      if (element.scrollTop < lastTop - 1) following.current = false
+      if (movedUp()) following.current = false
       else
         following.current =
           element.scrollHeight - element.scrollTop - element.clientHeight < FOLLOW_SLACK
-      lastTop = element.scrollTop
+      remember()
     }
     const onWheel = (event: WheelEvent) => {
       if (event.deltaY < 0) leave()
