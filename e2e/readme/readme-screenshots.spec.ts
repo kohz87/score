@@ -222,6 +222,7 @@ test.describe('the seeded fake team', () => {
     })
     await shot(page, 'question')
   })
+
   test('approval card', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1300 })
     const room = await page.request.get('/api/team-room')

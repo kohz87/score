@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.6.1] — 2026-10-26
+
+### Changed
+- **User guide** (docs/USER-GUIDE.md) rewritten for the new shell: getting around, the team room, more teams, one-to-ones,
+  runs and recipes, an agent's page and live screen, the Library, Settings and coding agents.
+- **README** reworked for Score 3.6, with 22 new screenshots of the demo team.
+
 ## [3.6.0] — 2026-10-26
 
 ### Added
