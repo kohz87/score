@@ -1414,3 +1414,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   or contract support). Gates: full e2e 993 passed / 8 failed on the pre-fix build under 4 parallel builders → the 8
   (bold-screen, bold-workbench, chat-follow, themes-bold-visual paper Team) 81/81 on the final build; pnpm check green
   (server 4784, web 3148, contract 1512).
+- **v2.5.0 deployed live** (~02:00 UTC): backup score-pre-2.5.0-20261026.db, restart, no new errors.
