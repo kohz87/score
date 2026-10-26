@@ -75,6 +75,14 @@ const pages: { name: string; path: string; ready: Ready }[] = [
   { name: 'library', path: '/b?library=1', ready: libraryReady },
 ]
 
+/** Other specs on the shared server can leave something that opens the phone's side sheet (a waiting question):
+ * close it, so the room underneath is what gets measured. */
+async function closeSheet(page: Page) {
+  const toggle = page.getByRole('button', { name: 'Open side panel' })
+  if ((await toggle.getAttribute('aria-expanded')) === 'true') await page.keyboard.press('Escape')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+}
+
 async function open(page: Page, path: string, ready: Ready) {
   await page.goto(path)
   await ready(page)
@@ -130,6 +138,7 @@ for (const size of sizes) {
       if (portrait) {
         // The title's text, the first job card and the composer share a left edge; the header tools and the content
         // share a right edge.
+        await closeSheet(page)
         await expect(page.locator('.bold-phone-job').first()).toBeVisible()
         await expect(page.locator('.bold-phone-list-actions')).toBeVisible()
         await expect(page.locator('.bold-room-composer .chat-composer-box--room')).toBeVisible()
@@ -244,8 +253,10 @@ test('a big team’s glyph row never moves the room title on a portrait tablet',
     await route.fulfill({ response, json: { ...body, items: [...body.items, ...extra] } })
   })
   await open(page, '/b', roomReady)
+  await closeSheet(page)
   await expect(page.locator('.bold-phone-job').first()).toBeVisible()
-  await expect(page.locator('.bold-phone-presence-agent')).toHaveCount(16)
+  // The four demo agents plus twelve (more when other specs added agents to the shared server).
+  expect(await page.locator('.bold-phone-presence-agent').count()).toBeGreaterThanOrEqual(16)
   const gap = await page.evaluate(() => {
     const range = document.createRange()
     range.selectNodeContents(document.querySelector('.roomhead .roomtitle')!)
