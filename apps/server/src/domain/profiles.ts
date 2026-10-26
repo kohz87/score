@@ -737,7 +737,12 @@ export class ProfileOperations {
         RETRYABLE_STEPS.has(operation.nextStep)
       operation.error = `Next step: ${operation.nextStep}. ${error instanceof HttpError ? error.message : 'The step could not be verified. Inspect the profile locally; no automatic retry or rollback was attempted.'}`
       operation.updatedAt = new Date(this.clock()).toISOString()
-      await this.save(operation, identity)
+      try {
+        await this.save(operation, identity)
+      } catch (saveError) {
+        // Completed meanwhile (finished before a late failure, or abandoned by a removal): nothing to record.
+        if (!(saveError instanceof AbandonedOperation)) throw saveError
+      }
     }
   }
   /**
