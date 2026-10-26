@@ -225,6 +225,9 @@ function reachable(element: Element, box: DOMRect): boolean {
   let awaitingBlock = ownPosition === 'absolute'
   let outer: Element | null = null
   let pinned = false
+  // What the next pane up must be able to scroll into view: the card first, then each pane that carries it (a pane
+  // nested in another has to be reachable inside that one too).
+  let target: Box = box
   for (let node = element.parentElement; node && node !== root; node = node.parentElement) {
     const style = getComputedStyle(node)
     const positioned = style.position !== 'static'
@@ -234,10 +237,10 @@ function reachable(element: Element, box: DOMRect): boolean {
       if (pane.width < Math.min(box.width, 120) || pane.height < Math.min(box.height, 80))
         return false
       const extent = {
-        left: box.left - pane.left + node.scrollLeft,
-        top: box.top - pane.top + node.scrollTop,
-        right: box.right - pane.left + node.scrollLeft,
-        bottom: box.bottom - pane.top + node.scrollTop,
+        left: target.left - pane.left + node.scrollLeft,
+        top: target.top - pane.top + node.scrollTop,
+        right: target.right - pane.left + node.scrollLeft,
+        bottom: target.bottom - pane.top + node.scrollTop,
       }
       if (
         extent.right <= 0 ||
@@ -247,6 +250,7 @@ function reachable(element: Element, box: DOMRect): boolean {
       )
         return false
       outer = node
+      target = pane
     }
     if (positioned) awaitingBlock = style.position === 'absolute'
     // Nothing above a fixed container moves what is inside it.

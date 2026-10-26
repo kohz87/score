@@ -398,3 +398,39 @@ describe('pushed off screen, hostile layouts', () => {
     expect(findProtectedViolation()).toBeNull()
   })
 })
+
+test('a card in an inner pane the outer pane can never scroll to is pushed off screen (3.5.0 review)', () => {
+  document.body.innerHTML =
+    '<div id="outer"><div id="pane"><div id="card" data-protected><span id="words">May I install it?</span></div></div></div>'
+  rects = {
+    outer: [0, 0, 400, 600],
+    pane: [0, 0, 400, 300],
+    card: [0, 100, 400, 80],
+    words: [10, 110, 200, 20],
+  }
+  // The inner pane sits 5000px above the outer pane's content; the card lands back inside the outer extent.
+  rectsOn = {
+    ...rects,
+    pane: [0, -5000, 400, 300],
+    card: [0, 4000, 400, 80],
+    words: [10, 4010, 200, 20],
+  }
+  for (const [key, value] of [
+    ['scrollHeight', 800],
+    ['scrollWidth', 800],
+  ] as const)
+    Object.defineProperty(document.documentElement, key, { value, configurable: true })
+  for (const [id, height] of [
+    ['outer', 10000],
+    ['pane', 10000],
+  ] as const) {
+    const node = document.getElementById(id)!
+    Object.defineProperty(node, 'scrollHeight', { value: height, configurable: true })
+    Object.defineProperty(node, 'scrollWidth', { value: 400, configurable: true })
+  }
+  stage({
+    outer: { overflowY: 'auto', overflowX: 'visible' },
+    pane: { overflowY: 'auto', overflowX: 'visible' },
+  })
+  expect(findProtectedViolation()).toMatch(/pushed off screen/)
+})
