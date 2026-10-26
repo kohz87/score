@@ -36,8 +36,14 @@ import {
 import { PhoneJobList } from './PhoneJobList.tsx'
 import { useFollowEnd } from './follow-end.ts'
 import { beginJobUndo } from './job-undo.ts'
-import { jobMatchesFilter, type JobFilter } from './room-model.ts'
-import { changeCachedJob, roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
+import { isEveryoneRoom, jobMatchesFilter, type JobFilter } from './room-model.ts'
+import {
+  changeCachedJob,
+  roomJobsQuery,
+  roomMessagesQuery,
+  teamRoomQuery,
+  teamRoomsQuery,
+} from './room-queries.ts'
 import './bold-room.css'
 
 function RoomWaiting() {
@@ -537,7 +543,7 @@ function LoadedTeamRoom({
         jobs={allJobs}
         agents={agents}
         selectedJob={selectedJob}
-        teamRoom={room.role === 'team'}
+        teamRoom={isEveryoneRoom(room)}
         messages={baseMessages.data?.items ?? []}
       />
       {phone && room.role === 'team' && phoneJobMissing ? (
@@ -697,8 +703,14 @@ export function BoldTeamRoom({
   const teamJobCount =
     teamRead?.jobs.filter((job) => !job.isDefault && job.state !== 'closed').length ?? null
   const rooms = useStreamQuery(roomsQuery).data?.rooms ?? []
+  const teamRooms = useStreamQuery(teamRoomsQuery).data ?? []
   const current =
-    room ?? (override === null ? teamRoom : (rooms.find((item) => item.id === override) ?? null))
+    room ??
+    (override === null
+      ? teamRoom
+      : (rooms.find((item) => item.id === override) ??
+        teamRooms.find((item) => item.id === override) ??
+        null))
   const jobsDefinition = useMemo(() => roomJobsQuery(current?.id ?? null), [current?.id])
   const { data: jobs, status: jobsStatus } = useStreamQuery(jobsDefinition)
   const allJobs = useMemo(() => jobs ?? [], [jobs])
@@ -774,7 +786,7 @@ export function BoldTeamRoom({
 
   const selectRoom = (target: Room) => {
     const next = new URLSearchParams(params)
-    if (target.role === 'team') next.delete('room')
+    if (isEveryoneRoom(target)) next.delete('room')
     else next.set('room', target.id)
     next.delete('job')
     next.delete('message')

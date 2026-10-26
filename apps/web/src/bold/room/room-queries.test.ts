@@ -2,7 +2,13 @@ import type { StreamEvent } from '@score/contract'
 import { expect, test } from 'vitest'
 import { createQueryClient } from '../../data/query-client.ts'
 import { makeJob, room } from './room-test-utils.tsx'
-import { changeCachedJob, roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
+import {
+  changeCachedJob,
+  roomJobsQuery,
+  roomMessagesQuery,
+  teamRoomQuery,
+  teamRoomsQuery,
+} from './room-queries.ts'
 
 function jobEvent(data: ReturnType<typeof makeJob>): StreamEvent {
   return {
@@ -215,4 +221,21 @@ test('a local upsert puts a restored or renamed job back in the room and team re
   expect(queryClient.getQueryData(teamRoomQuery(null).key)).toMatchObject({
     data: { jobs: [renamed] },
   })
+})
+
+test('a chosen team’s update never replaces the first team room, and joins the team list', () => {
+  const team = { ...room, id: 'team-2', name: 'Review crew', everyone: false }
+  const event: StreamEvent = {
+    seq: 5,
+    ts: '2026-10-26T09:00:00.000Z',
+    type: 'room.upserted',
+    data: team,
+  }
+  const first = { room: { ...room, everyone: true }, jobs: [] }
+  expect(teamRoomQuery(null).reduce(first, event)).toBe(first)
+  const list = teamRoomsQuery.reduce([first.room], event)
+  expect(list.map((item) => item.id)).toEqual([room.id, 'team-2'])
+  expect(
+    teamRoomsQuery.reduce(list, { ...event, type: 'room.deleted', data: { id: 'team-2' } }),
+  ).toEqual([first.room])
 })
