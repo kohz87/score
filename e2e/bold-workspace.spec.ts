@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { composerOf, makeRoom, openBoldRoomById, streamOf } from './bold-chat-helpers.ts'
 import { pair } from './pair.ts'
 
@@ -26,6 +26,21 @@ async function replaceText(page: Page, label: string, text: string) {
   await editor.click()
   await page.keyboard.press('Control+a')
   await page.keyboard.insertText(text)
+}
+
+/**
+ * The element screenshot is cut at the panel's rounded page position, and the agent page above it (hundreds of pixels of
+ * folds that follow the shared fake's history) has fractional heights: a different history moved the cut by one row.
+ * Nothing above the panel is under test, so it is taken out of the layout and the panel always starts at the same place.
+ */
+async function pinPanelPosition(panel: Locator) {
+  await panel.evaluate((el) => {
+    for (let e: Element | null = el; e && e.tagName !== 'MAIN'; e = e.parentElement) {
+      for (let q = e.previousElementSibling; q; q = q.previousElementSibling) {
+        ;(q as HTMLElement).style.display = 'none'
+      }
+    }
+  })
 }
 
 test.beforeEach(async ({ page }) => {
@@ -137,6 +152,7 @@ test('looks right at desktop and phone width', async ({ page }) => {
       await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
     ).toBeLessThanOrEqual(1)
     await page.evaluate(() => document.fonts.ready)
+    await pinPanelPosition(panel)
     await expect(panel).toHaveScreenshot(`bold-workspace-${width}.png`, {
       animations: 'disabled',
       mask: [panel.locator('.ws-root code')],

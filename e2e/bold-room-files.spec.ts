@@ -44,7 +44,8 @@ test('the composer attaches an image, rejects a non-image, and the sent message 
     .getByTestId('attach-input')
     .setInputFiles({ name: 'dot.png', mimeType: 'image/png', buffer: PNG })
   const chips = page.getByRole('list', { name: 'Attachments' })
-  await expect(chips.getByText('dot.png')).toBeVisible()
+  // The upload's progress row shows the name too, and Send does nothing until it is done: its Remove button is the done mark.
+  await expect(chips.getByRole('button', { name: 'Remove dot.png' })).toBeVisible()
   const text = `See the attached picture ${Date.now()}`
   await composer.fill(text)
   await composer.press('Enter')
@@ -73,8 +74,8 @@ test('a PDF and a CSV attach, preview, and reach the agent; a workspace file att
     { name: 'data.csv', mimeType: 'text/csv', buffer: Buffer.from('name,qty\nbolt,4\nnut,9\n') },
   ])
   const chips = page.getByRole('list', { name: 'Attachments' })
-  await expect(chips.getByText('report.pdf')).toBeVisible()
-  await expect(chips.getByText('data.csv')).toBeVisible()
+  await expect(chips.getByRole('button', { name: 'Remove report.pdf' })).toBeVisible()
+  await expect(chips.getByRole('button', { name: 'Remove data.csv' })).toBeVisible()
 
   // A workspace file joins by reference, with no upload.
   await page.getByRole('button', { name: 'Attach, voice and commands' }).click()
@@ -130,7 +131,7 @@ test('a chat attachment can also be saved to Knowledge', async ({ page }) => {
     .getByTestId('attach-input')
     .setInputFiles({ name: file, mimeType: 'application/pdf', buffer: textPdf('From the chat') })
   const chips = page.getByRole('list', { name: 'Attachments' })
-  await expect(chips.getByText(file)).toBeVisible()
+  await expect(chips.getByRole('button', { name: `Remove ${file}` })).toBeVisible()
   const option = chips.getByRole('checkbox', { name: `Also save ${file} to Knowledge` })
   await expect(option).not.toBeChecked()
   await option.check()
