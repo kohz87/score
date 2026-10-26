@@ -92,8 +92,11 @@ function CustomRangeForm({
   onApply: (from: string, to: string) => void
 }) {
   const today = viewerToday()
-  const [from, setFrom] = useState(spec.range === 'custom' ? spec.from : today)
-  const [to, setTo] = useState(spec.range === 'custom' ? spec.to : today)
+  // The parent keys this form by the range, so a preset picked while it is open re-seeds the inputs.
+  const seedFrom = spec.range === 'custom' ? spec.from : today
+  const seedTo = spec.range === 'custom' ? spec.to : today
+  const [from, setFrom] = useState(seedFrom)
+  const [to, setTo] = useState(seedTo)
   const problem = customRangeError(from, to, today)
   return (
     <form
@@ -136,27 +139,33 @@ function CustomRangeForm({
   )
 }
 
-const pct = (value: number | null) => (value === null ? '—' : formatPercent(value))
+const noFigure = (why: string) => <span aria-label={why}>—</span>
 
 function ByAgentTable({
   report,
   agents,
   money,
 }: {
-  report: Reports
+  report: Reports | undefined
   agents: AgentSummary[]
   money: (usd: number | null) => string
 }) {
-  const spendText = (row: Reports['byAgent'][number]) =>
-    row.spendBasis === 'unknown'
-      ? 'unknown'
-      : row.spendBasis === 'estimated'
-        ? `${money(row.spendUsd)} estimated`
-        : money(row.spendUsd)
+  const spendCell = (row: Reports['byAgent'][number]) =>
+    row.spendBasis === 'unknown' ? (
+      <span aria-label="This coding agent’s CLI gave no cost">unknown</span>
+    ) : row.spendBasis === 'estimated' ? (
+      `${money(row.spendUsd)} estimated`
+    ) : (
+      money(row.spendUsd)
+    )
   return (
     <section className="card usage-figure usage-by-agent" aria-labelledby="usage-by-agent-title">
       <h3 id="usage-by-agent-title">By agent</h3>
-      {report.byAgent.length === 0 ? (
+      {!report ? (
+        <p role="status" className="usage-loading">
+          Loading the table…
+        </p>
+      ) : report.byAgent.length === 0 && !report.unattributed ? (
         <p className="usage-empty">No agents yet.</p>
       ) : (
         <div
@@ -191,12 +200,33 @@ function ByAgentTable({
                     <td>{row.finished}</td>
                     <td>{row.runs}</td>
                     <td>{formatDuration(row.medianSec)}</td>
-                    <td>{pct(row.firstPassRate)}</td>
-                    <td>{pct(row.cacheHitRate)}</td>
-                    <td>{spendText(row)}</td>
+                    <td>
+                      {row.firstPassRate !== null
+                        ? formatPercent(row.firstPassRate)
+                        : /review/i.test(agent.role)
+                          ? 'n/a, reviews'
+                          : noFigure('No reviewed tasks in this range')}
+                    </td>
+                    <td>
+                      {row.cacheHitRate === null
+                        ? noFigure('Hermes gave no cache figures')
+                        : formatPercent(row.cacheHitRate)}
+                    </td>
+                    <td>{spendCell(row)}</td>
                   </tr>
                 )
               })}
+              {report.unattributed && (
+                <tr>
+                  <th scope="row">Unknown agent</th>
+                  <td>—</td>
+                  <td>{report.unattributed.runs}</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -590,7 +620,13 @@ export function BoldUsage() {
         )}
       </div>
 
-      {customOpen && <CustomRangeForm spec={spec} onApply={setCustom} />}
+      {customOpen && (
+        <CustomRangeForm
+          key={spec.range === 'custom' ? `${spec.from}/${spec.to}` : spec.range}
+          spec={spec}
+          onApply={setCustom}
+        />
+      )}
 
       {journeyOn && (
         <section
@@ -624,9 +660,12 @@ export function BoldUsage() {
         </p>
       )}
       {!report && !reports.isError && !journeyOn && (
-        <p role="status" className="usage-loading">
-          Loading…
-        </p>
+        <>
+          <p role="status" className="usage-loading">
+            Loading…
+          </p>
+          <ByAgentTable report={undefined} agents={agents} money={money} />
+        </>
       )}
       {report && !journeyOn && (
         <div
