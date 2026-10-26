@@ -226,17 +226,21 @@ test.describe('a coding step in the live diagram', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 1280, height: 1100 })
     await page.goto('/runs/brief-orch-1')
+    // The decision is on the Steps tab (2.5.0); the diagram and the log are their own tabs.
+    const card = page.getByRole('region', { name: 'New settings for reviewer' })
+    await expect(card).toBeVisible()
+    await expect(card.getByRole('button', { name: 'Use the new settings' })).toBeEnabled()
+    await page.getByRole('tab', { name: 'Graph' }).click()
     const node = page.locator('[data-node="s2"]')
     await expect(node).toBeVisible()
     await expect(node).toContainText('Claude Code')
     await expect(node).toHaveAttribute('aria-label', /reviewer \(Claude Code\)/)
     await expect(page.locator('[data-node="s1"]')).not.toContainText('Claude Code')
+    await page.getByRole('tab', { name: 'Log' }).click()
     await expect(
       page.getByRole('log', { name: 'Events' }).getByText('Claude Code').first(),
     ).toBeVisible()
-    const card = page.getByRole('region', { name: 'New settings for reviewer' })
-    await expect(card).toBeVisible()
-    await expect(card.getByRole('button', { name: 'Use the new settings' })).toBeEnabled()
+    await page.getByRole('tab', { name: 'Graph' }).click()
     await page.evaluate(() => document.fonts.ready)
     if (shots) {
       mkdirSync(shots, { recursive: true })

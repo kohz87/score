@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLocation } from 'react-router'
 import { BoldFirstRun } from './BoldFirstRun.tsx'
 import { BoldRoom } from './BoldRoom.tsx'
@@ -9,7 +10,12 @@ export function BoldHome() {
   const location = useLocation()
   const forced = new URLSearchParams(location.search).get('first') === 'run'
   const team = useBoldTeamRoom()
-  const view = firstRunView(forced, firstRunDone(), team.data?.room, team.isPending)
+  const read = firstRunView(forced, firstRunDone(), team.data?.room, team.isPending)
+  // A room that is open stays open while its read is retried after a failure (the query reports pending again then):
+  // unmounting it would drop what the person has open in the side panel, such as a run's decision half filled in.
+  const [roomShown, setRoomShown] = useState(false)
+  const view = read === 'loading' && roomShown ? 'room' : read
+  if (view === 'room' && !roomShown) setRoomShown(true)
   // Recipes opens over `/b` (?recipes=1). The first-run page stays out from behind it, so none of it shows through the
   // backdrop or competes with the editor; closing Recipes (back to `/b`) brings first run back.
   const recipesOpen = new URLSearchParams(location.search).get('recipes') === '1'

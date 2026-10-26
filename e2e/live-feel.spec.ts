@@ -92,7 +92,11 @@ async function startOrchestration(page: Page, goal: string, policy?: string) {
     await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 2000 })
   }).toPass({ timeout: 20_000 })
   await page.getByRole('link', { name: 'Open the live diagram' }).first().click()
+  // The run opens in the Runs side panel on its Steps tab (2.5.0); the diagram is the Graph tab.
+  await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Graph' }).click()
   await expect(page.locator('[data-node="lead"]')).toBeVisible()
+  await page.getByRole('tab', { name: 'Steps' }).click()
 }
 
 test('an orchestration: the running step has a halo and a status line, a decided gate stays as a chip, the run ends with a summary', async ({
@@ -128,8 +132,12 @@ test('an orchestration: the running step has a halo and a status line, a decided
   await expect(summary).toContainText('2 steps')
   await expect(summary).toContainText('2 approvals')
   await expect(summary).not.toContainText('NaN')
-  // The counter shows the final figure.
-  await expect(page.locator('.orch-status')).toContainText('2 of 2 steps done')
+  // Both steps of the thread show as succeeded.
+  await expect
+    .poll(() =>
+      page.getByRole('list', { name: 'Steps' }).locator('[data-visual="succeeded"]').count(),
+    )
+    .toBeGreaterThanOrEqual(2)
 })
 
 test('a running step in the live diagram: status line as its caption and a halo that stops with reduced motion', async ({
@@ -144,6 +152,7 @@ test('a running step in the live diagram: status line as its caption and a halo 
     try {
       await pair(page)
       await startOrchestration(page, `Hold [fake:hold] e2e-b${reduced ? 'r' : ''}`, 'Never ask')
+      await page.getByRole('tab', { name: 'Graph' }).click()
       const step = page.locator('[data-node="s1"]')
       await expect(step).toHaveAttribute('data-state', 'running', { timeout: 60_000 })
       // What the agent is doing now, whichever moment the fake run is at.
@@ -161,11 +170,13 @@ test('a running step in the live diagram: status line as its caption and a halo 
         expect(await page.evaluate(() => document.getAnimations().length)).toBe(0)
       }
       // Stop it so the run doesn't linger.
-      await page.getByRole('button', { name: 'Stop', exact: true }).click()
-      await page.getByRole('button', { name: 'Stop the run' }).click()
+      const panel = page.getByRole('complementary', { name: 'Side panel' })
+      await panel.getByRole('button', { name: 'Stop', exact: true }).click()
+      await panel.getByRole('button', { name: 'Stop the run' }).click()
       // The fake Hermes answers a Stop with a run that is not confirmed ended: stop waiting for it, so the agent is
       // free for the specs that follow.
       await expect(step).toHaveAttribute('data-state', 'unknown', { timeout: 30_000 })
+      await page.getByRole('tab', { name: 'Steps' }).click()
       const card = page.getByRole('region', { name: 'Not confirmed as ended' })
       await expect(async () => {
         const before = await card.count()

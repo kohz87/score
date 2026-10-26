@@ -26,37 +26,37 @@
 }
 
 /* Element resets stop at a kept classic page (bold-classic.css): they would outrank its own class rules. */
-[data-ui='bold'] button:not(:where(.bold-classic-page button)),
-[data-ui='bold'] input:not(:where(.bold-classic-page input)),
-[data-ui='bold'] select:not(:where(.bold-classic-page select)),
-[data-ui='bold'] textarea:not(:where(.bold-classic-page textarea)) {
+[data-ui='bold'] button:not(:where(.bold-classic-page button, .bold-run-classic button)),
+[data-ui='bold'] input:not(:where(.bold-classic-page input, .bold-run-classic input)),
+[data-ui='bold'] select:not(:where(.bold-classic-page select, .bold-run-classic select)),
+[data-ui='bold'] textarea:not(:where(.bold-classic-page textarea, .bold-run-classic textarea)) {
   font: inherit;
   color: inherit;
 }
 
-[data-ui='bold'] button:not(:where(.bold-classic-page button)) {
+[data-ui='bold'] button:not(:where(.bold-classic-page button, .bold-run-classic button)) {
   cursor: pointer;
 }
 
-[data-ui='bold'] a:not(:where(.bold-classic-page a)) {
+[data-ui='bold'] a:not(:where(.bold-classic-page a, .bold-run-classic a)) {
   color: inherit;
 }
 
-[data-ui='bold'] :focus-visible:not(:where(.bold-classic-page *)) {
+[data-ui='bold'] :focus-visible:not(:where(.bold-classic-page *, .bold-run-classic *)) {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
-[data-ui='bold'] h1:not(:where(.bold-classic-page h1)),
-[data-ui='bold'] h2:not(:where(.bold-classic-page h2)),
-[data-ui='bold'] h3:not(:where(.bold-classic-page h3)) {
+[data-ui='bold'] h1:not(:where(.bold-classic-page h1, .bold-run-classic h1)),
+[data-ui='bold'] h2:not(:where(.bold-classic-page h2, .bold-run-classic h2)),
+[data-ui='bold'] h3:not(:where(.bold-classic-page h3, .bold-run-classic h3)) {
   font-family: var(--font-d);
   letter-spacing: -0.02em;
   margin: 0;
   text-wrap: balance;
 }
 
-[data-ui='bold'] code:not(:where(.bold-classic-page code)),
+[data-ui='bold'] code:not(:where(.bold-classic-page code, .bold-run-classic code)),
 [data-ui='bold'] .mono {
   font-family: var(--font-m);
 }

@@ -20,7 +20,6 @@ import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
 import { AttemptPage } from './routes/attempts/AttemptPage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
-import { RunPage } from './routes/runs/RunPage.tsx'
 import { WatchPage } from './routes/watch/WatchPage.tsx'
 import { WorkflowEditorRoute } from './routes/workflows/WorkflowEditor.tsx'
 import { WorkflowsPage } from './routes/workflows/WorkflowsPage.tsx'
@@ -77,6 +76,14 @@ function toBoldLoader({ request }: { request: Request }) {
   return target ? redirect(target) : null
 }
 
+/** A run's old addresses (`/runs/:id`, `/b/runs/:id`, `/now/flow/:id`) open it in the Runs side panel (2.5.0). */
+function runRedirect({ request, params }: { request: Request; params: { briefId?: string } }) {
+  const url = new URL(request.url)
+  const search = new URLSearchParams(url.search)
+  search.set('run', params.briefId ?? '')
+  return redirect(`/b?${search.toString()}${hashOf(url)}`)
+}
+
 const WorkflowsFramed = () => (
   <BoldClassicPage>
     <WorkflowsPage />
@@ -85,11 +92,6 @@ const WorkflowsFramed = () => (
 const WorkflowEditorFramed = () => (
   <BoldClassicPage>
     <WorkflowEditorRoute />
-  </BoldClassicPage>
-)
-const RunFramed = () => (
-  <BoldClassicPage>
-    <RunPage />
   </BoldClassicPage>
 )
 
@@ -129,7 +131,7 @@ export const appRoutes: RouteObject[] = [
           { path: 'screen/:agentId', Component: BoldScreenPage },
           { path: 'workflows', Component: WorkflowsFramed },
           { path: 'workflows/:workflowId', Component: WorkflowEditorFramed },
-          { path: 'runs/:briefId', Component: RunFramed },
+          { path: 'runs/:briefId', loader: runRedirect },
           // 2.6.0: Watch is the replay on the agent's screen page.
           {
             path: 'watch/:agentId',
@@ -221,7 +223,7 @@ export const appRoutes: RouteObject[] = [
             ],
           },
           { path: '/watch/:agentId', loader: toBoldLoader, Component: WatchPage },
-          { path: '/runs/:briefId', loader: toBoldLoader, Component: RunPage },
+          { path: '/runs/:briefId', loader: runRedirect },
           // Stored links and notifications from before 11.11 still open the page they meant.
           {
             path: '/now/watch/:agentId',
@@ -239,8 +241,7 @@ export const appRoutes: RouteObject[] = [
           },
           {
             path: '/now/flow/:briefId',
-            loader: ({ request, params }) =>
-              redirect(keepSearch(request, `/runs/${params.briefId ?? ''}`)),
+            loader: ({ request, params }) => runRedirect({ request, params }),
           },
           {
             path: '/now/routines',

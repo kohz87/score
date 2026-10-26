@@ -5,6 +5,8 @@ import { pair } from './pair.ts'
 // replies with a score-verdict block, [fake:fail] ends the step's run failed.
 
 test.describe.configure({ mode: 'serial' })
+
+const tab = (page: Page, name: string) => page.getByRole('tab', { name }).click()
 const web = { 'x-score-client': 'web' }
 
 const node = (page: Page, id: string) => page.locator(`[data-node="${id}"]`)
@@ -32,6 +34,8 @@ async function startFromList(page: Page, name: string, inputs: Record<string, st
   await expect(start).toBeEnabled({ timeout: 20_000 })
   await start.click()
   await expect(dialog).toBeHidden()
+  // The run opens in the Runs panel (2.5.0); its diagram is the Graph tab.
+  await tab(page, 'Graph')
 }
 
 test('build a workflow with a gate and a branch in the editor, save it, run it, approve the gate and replay it', async ({
@@ -124,6 +128,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   const startButton = dialog.getByRole('button', { name: 'Start the run' })
   await expect(startButton).toBeEnabled({ timeout: 20_000 })
   await startButton.click()
+  await tab(page, 'Graph')
 
   // The run view: the gate waits for the person with the draft the question is about.
   const gate = page.getByRole('region', { name: 'Decide on Approve the draft' })
@@ -146,8 +151,10 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await expect(node(page, 'end1')).toHaveAttribute('data-state', 'succeeded')
   await expect(node(page, 'end2')).toHaveAttribute('data-state', 'skipped')
   await expect(page.locator('[data-edge-state="skipped"]').first()).toBeAttached()
+  await tab(page, 'Log')
   const log = page.getByRole('log', { name: 'Events' })
   await expect(log).toContainText("Passed review? took 'verdict passed'")
+  await tab(page, 'Graph')
 
   // Clicking a node filters the log to it and shows what it read and its verdict.
   await node(page, 'step1').click()

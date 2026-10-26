@@ -1,0 +1,593 @@
+/* The Runs side panel (decision 131, boards A, B and F). Values come from docs/design/bold/prototype.html: panels
+   #1A1C23, fields #23252E, 20-30px radii, pills. The decisions, graph and log are the classic components wearing
+   their own token set inside `.bold-run-classic` (the light one for anything that asks the person to decide). */
+[data-ui='bold'] .bold-runs {
+  gap: 14px;
+}
+
+[data-ui='bold'] .bold-runs-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-runs-link {
+  border: 0;
+  background: none;
+  color: var(--ink2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* ---- the list ---- */
+[data-ui='bold'] .bold-runs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-runs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-runs-chip {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--panel);
+  color: var(--ink2);
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-runs-chip.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-runs-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-runs-row {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 20px;
+  padding: 10px 16px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-runs-row:hover {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-runs-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ui='bold'] .bold-runs-row-main b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-runs-row-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* "Waits for you" / "Needs you": the amber pill, carries data-protected. */
+[data-ui='bold'] .bold-run-wait {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 201, 77, 0.16);
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+/* ---- one run ---- */
+[data-ui='bold'] .bold-run {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-run-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-run-tabs {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--field);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+[data-ui='bold'] .bold-run-tabs button {
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  background: transparent;
+  color: var(--ink2);
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-run-tabs button.on {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-run-actions {
+  margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-run-head h2 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-run-sub {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-run-status {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-run-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-run-tile {
+  background: var(--panel);
+  border-radius: 20px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-run-tile-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-run-tile-head b {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-run-tile-line {
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-run-tile-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-run-meter {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--field);
+  display: flex;
+  overflow: hidden;
+}
+
+[data-ui='bold'] .bold-run-meter > span {
+  background: var(--ink);
+}
+
+[data-ui='bold'] .bold-run-meter > .is-provisional {
+  background: repeating-linear-gradient(45deg, var(--muted) 0 3px, var(--faint) 3px 6px);
+}
+
+[data-ui='bold'] .bold-run-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-run-chips code {
+  font-family: var(--font-m);
+  font-size: 12px;
+  background: var(--field);
+  border-radius: 999px;
+  padding: 3px 10px;
+  overflow-wrap: anywhere;
+}
+
+/* ---- the thread ---- */
+[data-ui='bold'] .bold-run-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-run-thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-ui='bold'] .bold-run-step {
+  display: flex;
+  gap: 14px;
+}
+
+[data-ui='bold'] .bold-run-step[data-future='true'] {
+  opacity: 0.6;
+}
+
+[data-ui='bold'] .bold-run-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-run-rail::after {
+  content: '';
+  flex: 1;
+  width: 2px;
+  background: var(--line);
+  margin: 4px 0;
+}
+
+[data-ui='bold'] .bold-run-step:last-child .bold-run-rail::after {
+  display: none;
+}
+
+[data-ui='bold'] .bold-run-num {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex: none;
+  background: var(--field);
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-run-num--succeeded {
+  background: var(--ok);
+  color: #12131a;
+}
+
+[data-ui='bold'] .bold-run-num--failed,
+[data-ui='bold'] .bold-run-num--rejected,
+[data-ui='bold'] .bold-run-num--blocked {
+  background: var(--bad);
+  color: #12131a;
+}
+
+[data-ui='bold'] .bold-run-num--gate {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-run-num--running,
+[data-ui='bold'] .bold-run-num--admitting {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+[data-ui='bold'] .bold-run-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 3px 0 18px;
+}
+
+[data-ui='bold'] .bold-run-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-run-title {
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-run-state,
+[data-ui='bold'] .bold-run-tries {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--field);
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-run-state--failed,
+[data-ui='bold'] .bold-run-state--rejected,
+[data-ui='bold'] .bold-run-state--blocked {
+  color: var(--bad);
+}
+
+[data-ui='bold'] .bold-run-state--succeeded {
+  color: var(--ok);
+}
+
+[data-ui='bold'] .bold-run-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-run-reply {
+  background: var(--field);
+  border-radius: 20px 20px 20px 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-run-reply p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+[data-ui='bold'] .bold-run-reply pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  font-family: var(--font-m);
+  font-size: 12.5px;
+}
+
+[data-ui='bold'] .bold-run-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-run-links a {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-run-more summary,
+[data-ui='bold'] .bold-run-budget summary {
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-run-foot {
+  margin: 0;
+  font-size: 13px;
+}
+
+[data-ui='bold'] .bold-run-foot a {
+  color: var(--muted);
+}
+
+/* ---- the kept classic parts ---- */
+[data-ui='bold'] .bold-run-classic {
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  line-height: 1.5;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-run-classic[data-tone='surface'] {
+  background: var(--ground);
+  border-radius: 24px;
+  padding: 16px;
+}
+
+/* The cards carry their own (light, "for you") fill; the frame around them has none. */
+[data-ui='bold'] .bold-run-classic[data-tone='for-you'] {
+  background: transparent;
+  padding: 0;
+}
+
+/* Nothing to decide: the cards render nothing, and the frame goes with them. */
+[data-ui='bold'] .bold-run-classic[data-tone='for-you']:not(:has(.orch-needs)) {
+  display: none;
+}
+
+[data-ui='bold'] .bold-run-classic[data-tone='plain'] {
+  background: transparent;
+  display: contents;
+}
+
+[data-ui='bold'] .bold-run-classic .orch-main[data-pane] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-ui='bold'] .bold-run-classic .orch-live[data-pane] .orch-main {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-run-head h2 {
+    font-size: 22px;
+  }
+  [data-ui='bold'] .bold-run-actions {
+    margin-left: 0;
+  }
+  [data-ui='bold'] .bold-run-step {
+    gap: 10px;
+  }
+  [data-ui='bold'] .bold-run-classic[data-tone='surface'] {
+    padding: 12px;
+    border-radius: 20px;
+  }
+}
+
+[data-ui='bold'] .bold-run-goal {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-run-warnings {
+  list-style: none;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 20px;
+  background: rgba(255, 201, 77, 0.12);
+  color: var(--warn);
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ---- the kept classic parts, in the new shell's look (decision 131) ----
+   The wrapper still carries the classic pack (spacing, radii, agent and halo tokens) but its colours, fonts and radii
+   are the prototype's. Literal values: a self-referencing var(--ink) would cycle on the element that sets it. Scoped to
+   this wrapper, so the classic pages that use the same components are untouched. */
+[data-ui='bold'] .bold-run-classic[data-pack][data-theme='dark'] {
+  --ground: #16171e;
+  --card: #1a1c23;
+  --ink: #ececf1;
+  --ink-muted: #a9adb8;
+  --muted: #a9adb8;
+  --hairline: #2c2f38;
+  --subtle: #23252e;
+  --subtle-2: #23252e;
+  --line-strong: #626670;
+  --flow-canvas: #12131a;
+  --flow-canvas-dot: #2c2f38;
+  --flow-edge: #a9adb8;
+  --flow-edge-planned: #626670;
+  --flow-edge-sent-back: #ffc94d;
+  --flow-done-border: #2c2f38;
+  --flow-log-border: #2c2f38;
+  --agent-jade-text: #5ee3bf;
+  --agent-saffron-text: #ffc94d;
+  --agent-coral-text: #ff97ae;
+  --agent-violet-text: #b3a6ff;
+}
+[data-ui='bold'] .bold-run-classic[data-pack][data-theme='light'] {
+  --ground: #ffffff;
+  --card: #ffffff;
+  --ink: #12131a;
+  --ink-muted: #5e626c;
+  --muted: #5e626c;
+  --hairline: #dfe2e8;
+  --subtle: #f4f5f8;
+  --subtle-2: #f4f5f8;
+  --line-strong: #9a9ea7;
+  --flow-canvas: #eceef2;
+  --flow-canvas-dot: #dfe2e8;
+  --flow-edge: #5e626c;
+  --flow-edge-planned: #9a9ea7;
+  --flow-edge-sent-back: #8a5a00;
+  --flow-done-border: #dfe2e8;
+  --flow-log-border: #dfe2e8;
+  --agent-jade-text: #00694f;
+  --agent-saffron-text: #8a5a00;
+  --agent-coral-text: #b01e43;
+  --agent-violet-text: #4a2fd9;
+}
+/* Decisions are the light object in the dark look and the dark one in the light look. */
+[data-ui='bold'] .bold-run-classic[data-pack][data-theme='dark'][data-tone='for-you'] {
+  --card: #ececf1;
+  --ink: #12131a;
+  --ink-muted: #3a3d45;
+  --muted: #3a3d45;
+  --hairline: #c9cbd2;
+  --subtle: #ffffff;
+  --subtle-2: #ffffff;
+}
+[data-ui='bold'] .bold-run-classic[data-pack][data-theme='light'][data-tone='for-you'] {
+  --card: #12131a;
+  --ink: #ffffff;
+  --ink-muted: #c9cbd2;
+  --muted: #c9cbd2;
+  --hairline: #3a3d45;
+  --subtle: #23252e;
+  --subtle-2: #23252e;
+}
+[data-ui='bold'] .bold-run-classic[data-pack] {
+  --font-heading: var(--font-d);
+  --font-body: var(--font-b);
+  --font-code: var(--font-m);
+  --radius-card: 24px;
+  font-family: var(--font-b);
+}
+[data-ui='bold'] .bold-run-classic h3,
+[data-ui='bold'] .bold-run-classic h4 {
+  font-family: var(--font-d);
+  letter-spacing: -0.02em;
+}
+[data-ui='bold'] .bold-run-classic .orch-decision,
+[data-ui='bold'] .bold-run-classic .orch-diagram,
+[data-ui='bold'] .bold-run-classic .orch-log,
+[data-ui='bold'] .bold-run-classic .orch-selected {
+  border-radius: 24px;
+}
+[data-ui='bold'] .bold-run-classic button {
+  font-weight: 700;
+  min-height: 36px;
+}
+[data-ui='bold'] .bold-run-classic .orch-diagram,
+[data-ui='bold'] .bold-run-classic .orch-log {
+  background: var(--flow-canvas);
+}
