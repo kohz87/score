@@ -15,7 +15,8 @@
   --watch-window: #23252e;
   --watch-window-bar: #20232c;
   --watch-window-dot: #3a3e4a;
-  --watch-muted: var(--muted);
+  /* The window is dark in both looks: its muted text can't follow the light look's grey. */
+  --watch-muted: #a9adb8;
   /* Path parts and diff line numbers on the tree and code surface: readable (≥ 4.5:1 on #171922), as in the Workbench. */
   --watch-faint: #8a8f9c;
   --watch-bright: #e8eaf0;
@@ -451,8 +452,9 @@
   min-height: 0;
 }
 
+/* Line numbers sit on added/removed rows' tints too: the diff text grey stays ≥ 4.5:1 on all of them. */
 [data-ui='bold'] .bold-screen-window .watch-diff__number {
-  color: var(--watch-faint);
+  color: #9ea3b0;
 }
 
 [data-ui='bold'] .bold-screen-window .watch-terminal {
