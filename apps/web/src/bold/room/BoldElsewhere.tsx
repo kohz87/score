@@ -12,6 +12,7 @@ import {
 } from '../../data/outside-job.ts'
 import { boldJobLink } from '../bold-links.ts'
 import { roomJobsQuery, teamRoomQuery } from './room-queries.ts'
+import { TeamSelect, useTeamChoice } from './team-choice.tsx'
 
 // A side panel is unmounted by closing the phone sheet, changing the side mode and leaving Elsewhere. The attempt and
 // its outcome belong to the page, not that mount: the job must not be made twice, and the view must keep saying where
@@ -62,7 +63,10 @@ export function BoldElsewhere({
   onBroughtIn: (jobId: string) => void
 }) {
   const teamDefinition = useMemo(() => teamRoomQuery(null), [])
-  const team = useStreamQuery(teamDefinition).data?.room
+  const firstTeam = useStreamQuery(teamDefinition).data?.room
+  // 3.6.0: with several team rooms the person chooses where the job starts; with one nothing is shown.
+  const teams = useTeamChoice()
+  const team = teams.chosen ?? firstTeam
   // The new job reaches the tabs through the stream; a re-read covers a stream that is reconnecting.
   const jobsDefinition = useMemo(() => roomJobsQuery(team?.id ?? ''), [team?.id])
   const refetchJobs = useStreamQueryRefetch(jobsDefinition)
@@ -152,6 +156,7 @@ export function BoldElsewhere({
       ) : null}
       {previewed && !brought && (
         <div className="row wrap bold-elsewhere-actions">
+          <TeamSelect choice={teams} label="Starts in" disabled={bring.isPending} />
           <button
             type="button"
             className="btn primary"
@@ -177,9 +182,9 @@ export function BoldElsewhere({
             {bring.isPending ? 'Bringing it in…' : 'Bring into a job'}
           </button>
           <span className="small muted">
-            Starts “{title}” in the team room with these messages attached. It also adds an
-            “Imported from {source}” room in Score. Bringing the same chat in again later makes
-            another job.
+            Starts “{title}” in {teams.chosen ? teams.chosen.name : 'the team room'} with these
+            messages attached. It also adds an “Imported from {source}” room in Score. Bringing the
+            same chat in again later makes another job.
           </span>
         </div>
       )}

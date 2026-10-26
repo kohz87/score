@@ -37,6 +37,7 @@ const RowSchema = z.object({
   created_at: z.string(),
   last_called_at: z.string().nullable(),
   deleted_at: z.string().nullable(),
+  team_room_id: z.string().nullable().default(null),
 })
 type Row = z.infer<typeof RowSchema>
 
@@ -64,6 +65,7 @@ function toTrigger(item: Row, origin: string | null): Trigger {
     sample: item.sample === null ? null : (JSON.parse(item.sample) as unknown),
     lastCalledAt: item.last_called_at,
     createdAt: item.created_at,
+    teamRoomId: item.team_room_id,
     ...(warning ? { warning } : {}),
   }
 }
@@ -79,14 +81,40 @@ export function listTriggers(sqlite: DatabaseSync, origin: string | null): Trigg
     .map((item) => toTrigger(item, origin))
 }
 
+/** 3.6.0: a trigger's team must be a team room (null: the first one). */
+function assertTeamRoom(sqlite: DatabaseSync, roomId: string | null | undefined): void {
+  if (!roomId) return
+  if (
+    !sqlite
+      .prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team' AND archived = 0")
+      .get(roomId)
+  )
+    throw new HttpError(400, 'bad_request', 'Choose one of your teams.')
+}
+
+/** The team room a call starts its job in: the trigger's own team, else (gone or archived) the first team room. */
+function teamOf(sqlite: DatabaseSync, trigger: Row): string | null {
+  if (
+    trigger.team_room_id &&
+    sqlite
+      .prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team' AND archived = 0")
+      .get(trigger.team_room_id)
+  )
+    return trigger.team_room_id
+  return teamRoomId(sqlite)
+}
+
 export function createTrigger(
   sqlite: DatabaseSync,
   seal: Sealer,
-  req: Pick<Trigger, 'name' | 'app' | 'mapping' | 'template' | 'reportBack'>,
+  req: Pick<Trigger, 'name' | 'app' | 'mapping' | 'template' | 'reportBack'> & {
+    teamRoomId?: string | null
+  },
   origin: string | null,
   now: string,
 ): { trigger: Trigger; secret: string } {
   if (req.reportBack.mode !== 'off') parseArgsTemplate(req.reportBack.args)
+  assertTeamRoom(sqlite, req.teamRoomId)
   // A create that is retried (the first answer was lost) must not leave a second trigger nobody knows: the same request
   // within a few minutes, on a trigger nobody has called yet, answers with that trigger and its secret again.
   const since = new Date(Date.parse(now) - RETRY_MINUTES * 60_000).toISOString()
@@ -94,7 +122,7 @@ export function createTrigger(
     sqlite
       .prepare(
         `SELECT * FROM triggers WHERE deleted_at IS NULL AND last_called_at IS NULL AND created_at >= ?
-             AND name = ? AND app = ? AND mapping = ? AND template = ? AND report_back = ?`,
+             AND name = ? AND app = ? AND mapping = ? AND template = ? AND report_back = ? AND team_room_id IS ?`,
       )
       .all(
         since,
@@ -103,6 +131,7 @@ export function createTrigger(
         JSON.stringify(req.mapping),
         req.template,
         JSON.stringify(req.reportBack),
+        req.teamRoomId ?? null,
       ),
   )[0]
   if (same) {
@@ -113,8 +142,8 @@ export function createTrigger(
   const secret = newWebhookSecret()
   sqlite
     .prepare(
-      `INSERT INTO triggers (id, name, app, secret_sealed, mapping, template, report_back, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO triggers (id, name, app, secret_sealed, mapping, template, report_back, created_at, updated_at, team_room_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -126,6 +155,7 @@ export function createTrigger(
       JSON.stringify(req.reportBack),
       now,
       now,
+      req.teamRoomId ?? null,
     )
   return { trigger: toTrigger(row(sqlite, id)!, origin), secret }
 }
@@ -140,16 +170,19 @@ function live(sqlite: DatabaseSync, id: string): Row {
 export function updateTrigger(
   sqlite: DatabaseSync,
   id: string,
-  change: Partial<Pick<Trigger, 'name' | 'app' | 'mapping' | 'template' | 'reportBack'>>,
+  change: Partial<
+    Pick<Trigger, 'name' | 'app' | 'mapping' | 'template' | 'reportBack' | 'teamRoomId'>
+  >,
   origin: string | null,
   now: string,
 ): Trigger {
   const current = toTrigger(live(sqlite, id), origin)
   const next = { ...current, ...change }
   if (next.reportBack.mode !== 'off') parseArgsTemplate(next.reportBack.args)
+  assertTeamRoom(sqlite, next.teamRoomId)
   sqlite
     .prepare(
-      'UPDATE triggers SET name = ?, app = ?, mapping = ?, template = ?, report_back = ?, updated_at = ? WHERE id = ?',
+      'UPDATE triggers SET name = ?, app = ?, mapping = ?, template = ?, report_back = ?, team_room_id = ?, updated_at = ? WHERE id = ?',
     )
     .run(
       next.name,
@@ -157,6 +190,7 @@ export function updateTrigger(
       JSON.stringify(next.mapping),
       next.template,
       JSON.stringify(next.reportBack),
+      next.teamRoomId ?? null,
       now,
       id,
     )
@@ -346,7 +380,7 @@ export function receiveCall(
   } catch {
     throw new HttpError(415, 'not_json', 'The body must be JSON.')
   }
-  const team = teamRoomId(sqlite)
+  const team = teamOf(sqlite, trigger)
   if (!team) throw new HttpError(503, 'not_ready', 'Score has no team room yet.')
   // Each call starts a job and a lead turn: bound how many a trigger can have open and start in a day (decision 121).
   const ofTrigger = "json_extract(source, '$.triggerId') = ?"

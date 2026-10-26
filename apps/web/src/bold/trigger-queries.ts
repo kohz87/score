@@ -21,6 +21,7 @@ export type TriggerCreateRequest = {
   mapping: TriggerMapping
   template: string
   reportBack: ReportBack
+  teamRoomId?: string | null
 }
 export type TriggerUpdateRequest = Partial<TriggerCreateRequest>
 

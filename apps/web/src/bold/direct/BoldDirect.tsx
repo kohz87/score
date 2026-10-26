@@ -37,6 +37,7 @@ import { QuestionCard, QuestionNote, useQuestionAnnouncement } from '../room/Que
 import { beginJobUndo } from '../room/job-undo.ts'
 import { ChatMenu, ClearChatDialog, DeleteChatDialog } from '../room/RoomMenus.tsx'
 import { changeCachedJob, roomMessagesQuery } from '../room/room-queries.ts'
+import { TeamSelect, useChosenTeamJobs, useTeamChoice } from '../room/team-choice.tsx'
 import { useMessageTools } from '../room/use-message-tools.ts'
 import './bold-direct.css'
 
@@ -397,6 +398,9 @@ function ShareMenu({
   useDialogDismiss(box, onClose)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const choice = useTeamChoice()
+  const chosenJobs = useChosenTeamJobs(choice)
+  const listed = choice.several ? (chosenJobs ?? []) : jobs
 
   async function share(jobId: string) {
     setBusy(jobId)
@@ -418,11 +422,11 @@ function ShareMenu({
       tabIndex={-1}
       className="bold-dm-share-menu"
       role="dialog"
-      aria-label="Share to the team room"
+      aria-label={choice.several ? 'Share to a team' : 'Share to the team room'}
       data-protected="block"
     >
       <div className="bold-dm-share-head">
-        <b>Share to the team room</b>
+        <b>{choice.several ? 'Share to a team' : 'Share to the team room'}</b>
         <button
           type="button"
           className="icon-btn sm"
@@ -432,11 +436,14 @@ function ShareMenu({
           <CloseIcon />
         </button>
       </div>
+      <TeamSelect choice={choice} label="Team" disabled={busy !== null} />
       <p className="small muted">Choose the job that should get a frozen copy of this reply.</p>
-      {jobs.length === 0 ? (
-        <p className="small muted">The team room has no open jobs yet.</p>
+      {listed.length === 0 ? (
+        <p className="small muted">
+          {choice.chosen ? `${choice.chosen.name} has` : 'The team room has'} no open jobs yet.
+        </p>
       ) : (
-        jobs.map((job) => (
+        listed.map((job) => (
           <button
             key={job.id}
             type="button"
@@ -488,11 +495,20 @@ function AddSomeone({
   const [error, setError] = useState<string | null>(null)
   // The job exists once step one worked; a retry only repeats the message.
   const [job, setJob] = useState<Job | null>(null)
-  const choices = agents.filter((item) => item.id !== agent.id && canTalkTo(item))
+  const teams = useTeamChoice()
+  // Only the chosen team's members can be added; with one team room every agent is a member, as before.
+  const choices = agents.filter(
+    (item) =>
+      item.id !== agent.id &&
+      canTalkTo(item) &&
+      (!teams.chosen || teams.chosen.members.includes(item.id)),
+  )
   const title = chat.title || 'New chat'
+  const startRoom = teams.chosen ?? team?.room ?? null
+  const startName = teams.chosen ? teams.chosen.name : 'the team room'
 
   async function confirm() {
-    if (!team || !target) {
+    if (!startRoom || !target) {
       setError('The team room isn’t ready yet.')
       return
     }
@@ -501,7 +517,7 @@ function AddSomeone({
     let made = job
     try {
       if (!made) {
-        made = await createTeamJob(team.room.id, chat)
+        made = await createTeamJob(startRoom.id, chat)
         setJob(made)
       }
     } catch {
@@ -510,11 +526,11 @@ function AddSomeone({
       return
     }
     try {
-      await postChatHandOff(team.room.id, made.id, chat, [agent.id, target.id])
+      await postChatHandOff(startRoom.id, made.id, chat, [agent.id, target.id])
       onMoved(made)
     } catch {
       setError(
-        `The job “${made.title}” is in the team room, but the message to ${target.id} didn’t send.`,
+        `The job “${made.title}” is in ${startName}, but the message to ${target.id} didn’t send.`,
       )
     } finally {
       setBusy(false)
@@ -543,10 +559,11 @@ function AddSomeone({
         </button>
       </div>
       <p>
-        A one-to-one has no room for a third. Adding someone starts a new job in the team room with
+        A one-to-one has no room for a third. Adding someone starts a new job in {startName} with
         this chat referenced, not copied; everyone there sees the frozen summary. This chat stays as
         it is.
       </p>
+      <TeamSelect choice={teams} label="Starts in" disabled={busy || target !== null} />
       {!target ? (
         <div className="bold-dm-add-list">
           {choices.map((item) => (
@@ -554,7 +571,7 @@ function AddSomeone({
               key={item.id}
               type="button"
               className="btn sm"
-              disabled={!team}
+              disabled={!startRoom}
               onClick={() => setTarget(item)}
             >
               <AgentGlyph agent={item} size="xs" bare decorative />
@@ -568,7 +585,7 @@ function AddSomeone({
             <b>What leaves this chat</b>
           </p>
           <p className="small">
-            Job in the team room: <b>{title}</b>
+            Starts in {startName}: <b>{title}</b>
           </p>
           <p className="small muted bold-dm-add-summary">
             {chat.summary ? `Summary shared: ${chat.summary}` : 'A summary of this chat is shared.'}
@@ -581,7 +598,7 @@ function AddSomeone({
             <button
               type="button"
               className="btn sm bold-dm-primary"
-              disabled={busy || !team}
+              disabled={busy || !startRoom}
               onClick={() => void confirm()}
             >
               {busy
