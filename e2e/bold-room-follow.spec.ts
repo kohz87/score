@@ -80,3 +80,24 @@ test('a reader who scrolled up is left where they are when a message grows', asy
   await page.waitForTimeout(300)
   expect(await page.locator('#bold-room-stream').evaluate((el) => el.scrollTop)).toBeLessThan(5)
 })
+
+test('scrolling up during a streaming reply stays put', async ({ page }) => {
+  await openSettled(page)
+  await expect.poll(() => distance(page)).toBeLessThanOrEqual(1)
+  // A wheel up and, in the same task, text arriving: the observer must not snap the reader back.
+  const top = await page.evaluate(async () => {
+    const scroll = document.querySelector<HTMLElement>('#bold-room-stream')!
+    const messages = scroll.querySelector<HTMLElement>('.bold-stream')!
+    scroll.scrollTop = Math.max(0, scroll.scrollTop - 300)
+    const at = scroll.scrollTop
+    for (let i = 0; i < 5; i++) {
+      const line = document.createElement('p')
+      line.textContent = `streamed ${i}`
+      messages.append(line)
+      await new Promise((done) => setTimeout(done, 30))
+    }
+    return [at, scroll.scrollTop]
+  })
+  expect(top[1]).toBeLessThanOrEqual(top[0]! + 2)
+  expect(await distance(page)).toBeGreaterThan(100)
+})

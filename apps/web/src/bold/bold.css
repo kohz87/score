@@ -834,13 +834,12 @@ body.fit [data-ui='bold'] .stream {
   font-weight: 600;
 }
 
-/* The update banner (3.0.0): a light object, for you, at the bottom centre; above the phone tab bar. */
+/* The update banner (3.0.0): a light object, for you, in the frame's flow at the top (like the other notices), so it covers nothing: not the composer, the tab bar or a request card. */
 [data-ui='bold'] .update-banner {
-  position: fixed;
-  left: 50%;
-  bottom: max(16px, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  z-index: 50;
+  flex: none;
+  align-self: center;
+  margin: 8px 16px 0;
+  max-width: calc(100% - 32px);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -862,10 +861,4 @@ body.fit [data-ui='bold'] .stream {
   background: var(--hi-ink);
   color: var(--hi-bg);
   cursor: pointer;
-}
-
-@media (max-width: 860px) {
-  [data-ui='bold'] .update-banner {
-    bottom: calc(76px + env(safe-area-inset-bottom));
-  }
 }

@@ -26,12 +26,30 @@ export function useFollowEnd(
       shown.current = resetKey
       following.current = true
     }
+    // The scroll event arrives a frame after the scroll, but the observer below runs in a microtask: a reader who just
+    // scrolled up while a reply streams would be snapped back. So the position is compared at every snap, and wheel,
+    // touch and key input leave the end at once.
+    let lastTop = element.scrollTop
+    const leave = () => {
+      following.current = false
+    }
     const toEnd = () => {
+      if (element.scrollTop < lastTop - 1) following.current = false
       if (following.current && !paused) element.scrollTop = element.scrollHeight
+      lastTop = element.scrollTop
     }
     const onScroll = () => {
-      following.current =
-        element.scrollHeight - element.scrollTop - element.clientHeight < FOLLOW_SLACK
+      if (element.scrollTop < lastTop - 1) following.current = false
+      else
+        following.current =
+          element.scrollHeight - element.scrollTop - element.clientHeight < FOLLOW_SLACK
+      lastTop = element.scrollTop
+    }
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) leave()
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) leave()
     }
     toEnd()
     // Text streaming in, a code block highlighting, a card appearing: all are DOM changes under the stream.
@@ -40,10 +58,16 @@ export function useFollowEnd(
     // An image or an embedded preview that finishes loading grows its message without a DOM change.
     element.addEventListener('load', toEnd, true)
     element.addEventListener('scroll', onScroll, { passive: true })
+    element.addEventListener('wheel', onWheel, { passive: true })
+    element.addEventListener('touchmove', leave, { passive: true })
+    element.addEventListener('keydown', onKey)
     return () => {
       mutations.disconnect()
       element.removeEventListener('load', toEnd, true)
       element.removeEventListener('scroll', onScroll)
+      element.removeEventListener('wheel', onWheel)
+      element.removeEventListener('touchmove', leave)
+      element.removeEventListener('keydown', onKey)
     }
   }, [mounted, resetKey, paused])
 

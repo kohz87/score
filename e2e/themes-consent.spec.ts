@@ -109,16 +109,6 @@ async function acceptLeadStart(dialog: Locator) {
   })
 }
 
-/** The guard may catch the hidden rule before the click or at it: either way the theme is off and nothing is sent. */
-async function expectStopped(page: Page, sent: unknown[]) {
-  await expect(page.locator('.look-banner')).toContainText(
-    /Nothing was sent|Score switched your theme off/,
-    { timeout: 15_000 },
-  )
-  await dropped(page)
-  expect(sent).toEqual([])
-}
-
 // Rules a theme author could write: each names a class of the form and is accepted by the sanitiser today (a protected
 // class, so it is dropped; the form is one protected decision, so nothing else of the theme reaches inside it either).
 const startLeadCss = [
@@ -171,7 +161,7 @@ test.describe('X1: starting a lead-decides job from Start a job is one decision'
         )
       document.querySelector<HTMLButtonElement>('.start-go')!.click()
     })
-    await expectStopped(page, sent)
+    await expectRefused(page, sent)
   })
 
   test('accepted CSS aimed at a field of the form never reaches it, and a rule that slips in refuses the first click', async ({
@@ -201,7 +191,7 @@ test.describe('X1: starting a lead-decides job from Start a job is one decision'
     })
     // The click is stopped, so the box does not change: click it, don't wait for it to be checked.
     await first.click()
-    await expectStopped(page, sent)
+    await expectRefused(page, sent)
     // Score's own look is back: the same form goes ahead.
     await acceptLeadStart(dialog)
     await dialog.getByRole('button', { name: 'Start the job' }).click()
@@ -273,7 +263,15 @@ test.describe('L1: a cached theme is vetted while the list or the theme is still
         .getByRole('checkbox')
         .first()
       await first.click()
-      await expectStopped(page, sent)
+      // The cached CSS is on the page before the click, so the guard may act first: then the click is not the one that
+      // is refused. Either banner is fine here; nothing may have been sent, even after a moment.
+      await expect(page.locator('.look-banner')).toContainText(
+        /Nothing was sent|Score switched your theme off/,
+        { timeout: 15_000 },
+      )
+      await dropped(page)
+      await page.waitForTimeout(500)
+      expect(sent).toEqual([])
       // The theme list arrives afterwards: this device keeps the choice the guard made.
       release()
       await page.waitForTimeout(500)
@@ -430,7 +428,8 @@ test.describe('X1: MCP read and write access is one decision', () => {
   }) => {
     test.setTimeout(90_000)
     await wear(page)
-    const { sent } = await mcpSection(page)
+    const { section, sent } = await mcpSection(page)
+    await expect(section.getByRole('checkbox').first()).toBeVisible()
     await page.evaluate(() => {
       document.adoptedStyleSheets
         .at(-1)!

@@ -78,6 +78,7 @@ test.describe('a hostile theme', () => {
     const ring = page.locator('.bold-needs[data-protected]').first()
     await expect(ring).toBeVisible()
     expect(await ring.evaluate((el) => getComputedStyle(el).display)).not.toBe('none')
+    await expect(ring).toHaveAccessibleName(/needs you/)
 
     await allowIt(card)
   })
@@ -90,6 +91,10 @@ test.describe('a hostile theme', () => {
     }
     const { card, allow, deny } = await startApproval(page, [fonty], look)
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    // The theme's font really is applied to the page, so the card's own font below is not vacuous.
+    expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain(
+      'Georgia',
+    )
     // Unsanitised CSS, with everything a theme must never get through, added behind the engine's back.
     await page.addStyleTag({
       content: `
