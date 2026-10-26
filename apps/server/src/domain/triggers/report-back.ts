@@ -27,6 +27,17 @@ const StoredSchema = z.object({
   at: z.string(),
 })
 
+const REPORTING = /comment|report|reply|post|note|message|notify|status|respond|send/i
+const CHANGING =
+  /delete|remove|close|create|merge|assign|transition|drop|destroy|archive|write|exec|run/i
+
+/** A warning when a report-back tool's name doesn't look like a reporting tool (any name is still accepted). */
+export function reportBackWarning(tool: string): string | undefined {
+  return REPORTING.test(tool) && !CHANGING.test(tool)
+    ? undefined
+    : 'This tool may change things, not just report.'
+}
+
 /** JSON with sorted keys and no spaces: the form the plugin digests a tool call's arguments in. */
 export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`

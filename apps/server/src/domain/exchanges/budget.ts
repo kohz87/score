@@ -102,10 +102,23 @@ export function hold(
   held: Omit<HeldTurn, 'resume'> | null,
   now: string,
   endedReason: string | null = null,
+  /** `release` re-holds the very turn it holds (checked again, or reassigned): that one may be replaced. */
+  replacesHeld = false,
 ): DomainEventDraft[] {
   const exchange = exchangeRow(sqlite, exchangeId)
   if (!exchange) return []
   const earlier = heldTurn(sqlite, exchangeId)
+  // A second turn that can't go on while the person hasn't answered the first: the first stays (it is never lost) and the
+  // newer one is dropped with a note on the exchange, so the person sees that something else was held back too.
+  if (earlier && held && !replacesHeld) {
+    const note = `another turn (${held.agentId}) was also held back and dropped`
+    return updateExchange(
+      sqlite,
+      exchangeId,
+      { ended_reason: [exchange.ended_reason, endedReason, note].filter(Boolean).join('; ') },
+      now,
+    )
+  }
   const resume: HeldTurn['resume'] =
     earlier?.resume ??
     (exchange.state === 'waiting_on_agent' || exchange.state === 'done' ? exchange.state : 'live')
@@ -155,13 +168,14 @@ export function release(
       { ...again, agentId },
       now,
       `${agentId} can't take work right now`,
+      true,
     )
   if (change.check) {
     // Checked as if the exchange were going again, against the exchange the turn belongs to (or the job).
     const limit = turnExchange
       ? limitFor(sqlite, turnExchange)
       : jobLimitFor(sqlite, exchange.job_id)
-    if (limit) return hold(sqlite, exchangeId, limit, { ...again, agentId }, now)
+    if (limit) return hold(sqlite, exchangeId, limit, { ...again, agentId }, now, null, true)
   }
   const drafts = updateExchange(
     sqlite,

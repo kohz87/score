@@ -937,6 +937,9 @@ Score's own runs (`score-<room>-<agent>`), compression children and empty sessio
   the first user message (redacted, cut to 120 characters). `busy` = not ended and active within the last 5 minutes.
   `roomId` = the Score room made from it, if imported. `unavailable` = profiles whose database is missing or has a changed
   schema.
+- `GET /api/outside-sessions/preview?agentId=&sessionId=` (3.5.0) → `{ messages: { role: 'user' | 'assistant'; text; at }[] }`:
+  the session's text as an import would copy it (redacted, original times, at most 1000), read-only. It creates **no
+  room**; only the explicit import below does ("Bring into a job", "Continue"). `404` for an unknown agent or session.
 - **H** `POST /api/outside-sessions/import` `{ agentId; sessionId }` → `{ roomId; imported }`: a new room (name
   `#<source>-<title> #imported #<source>`, lead and only member the agent, `importedFrom` set) holding read-only copies of
   the session's user and assistant text (redacted, original times, at most the first 1000 messages, ids start with
@@ -1859,7 +1862,10 @@ Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload 
   in full, this once) · **H** `PATCH|DELETE /api/triggers/:id` · **H** `GET /api/triggers/:id/secret` → `{ secret }`
   (paired browser only) · **H** `POST /api/triggers/:id/rotate` → `{ secret }` (the old one stops working). The secret is
   Score's own (`whsec_` + 32 random bytes), sealed at rest (AES-256-GCM, key `~/.score/sealing.key`, bound to the
-  trigger id). `Trigger.url` is `<public origin>/hooks/<id>`.
+  trigger id). `Trigger.url` is `<public origin>/hooks/<id>`. `Trigger.warning?: string` (3.5.0) is set, on every read, when
+  the report-back `tool` doesn't look like a reporting tool (its name has no comment/report/reply/post/note/message/notify/
+  status word, or has a changing verb such as delete/close/create/merge/remove/assign): "This tool may change things, not
+  just report." Any tool name is still accepted; the settings show the warning.
 - **Report-back.** `ReportBack`: `{ mode: 'off' }` · `{ mode: 'fixed' | 'lead_decides'; tool; args }` where `tool` is a
   tool of the lead's Hermes profile and `args` a JSON template with `{{source.ref}}`, `{{source.title}}`,
   `{{source.link}}`, `{{job.title}}`, `{{job.summary}}` (the job's latest agent reply). **H** `POST

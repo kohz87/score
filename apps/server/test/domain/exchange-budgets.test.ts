@@ -430,3 +430,30 @@ test('deciding while the lead is still deciding stops the lead’s turn', () => 
   h.finish(lead, 'Extending.')
   expect(h.exchanges()[0]).toMatchObject({ budget: 10, state: 'live' })
 })
+
+test('a second hold on an exchange keeps the first held turn and notes the dropped one', async () => {
+  const { hold, heldTurn } = await import('../../src/domain/exchanges/budget.ts')
+  const review = reviewUntilPaused()
+  const first = heldTurn(h.db.sqlite, review.id)!
+  const turn = { ...first, resume: undefined }
+  delete turn.resume
+  hold(
+    h.db.sqlite,
+    review.id,
+    'turn_failed',
+    { ...turn, agentId: 'designer', input: 'Another turn.' },
+    '2026-10-24T10:00:00.000Z',
+    "designer's turn failed",
+  )
+  expect(heldTurn(h.db.sqlite, review.id)).toEqual(first)
+  expect(h.exchanges()[0]).toMatchObject({
+    state: 'paused_budget',
+    pause: { reason: 'exchange_budget' },
+  })
+  const row = h.db.sqlite
+    .prepare('SELECT ended_reason FROM exchanges WHERE id = ?')
+    .get(review.id) as {
+    ended_reason: string
+  }
+  expect(row.ended_reason).toContain('designer')
+})

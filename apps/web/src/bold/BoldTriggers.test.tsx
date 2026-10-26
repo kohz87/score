@@ -203,3 +203,16 @@ test('going back to the first step after the address exists does not create a se
     calls.filter((call) => call.path === '/api/triggers' && call.method === 'POST'),
   ).toHaveLength(1)
 })
+
+test('a never-called trigger shows when it was created; a risky report-back tool shows its warning', async () => {
+  mount([
+    {
+      ...trigger,
+      reportBack: { mode: 'fixed', tool: 'tickets_close', args: '{}' },
+      warning: 'This tool may change things, not just report.',
+    },
+  ])
+  const card = (await screen.findByText('New support ticket')).closest('article')!
+  expect(card.textContent).toContain('last call never · created ')
+  expect(within(card).getByRole('note').textContent).toContain('may change things')
+})

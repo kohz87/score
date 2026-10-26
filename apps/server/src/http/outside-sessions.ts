@@ -3,6 +3,8 @@ import {
   ContinueSessionResponseSchema,
   ImportSessionRequestSchema,
   ImportSessionResponseSchema,
+  OutsideSessionPreviewQuerySchema,
+  OutsideSessionPreviewSchema,
   OutsideSessionsResponseSchema,
 } from '@score/contract'
 import type { FastifyInstance } from 'fastify'
@@ -52,6 +54,18 @@ export function registerOutsideSessionRoutes(
         roomId: rooms.get(`${item.agentId}\0${item.id}`) ?? null,
       })),
       unavailable: found.unavailable,
+    })
+  })
+
+  // Read-only: the text of a session without importing it (an import creates a room, only the person's explicit action).
+  app.get('/api/outside-sessions/preview', async (request) => {
+    const query = OutsideSessionPreviewQuerySchema.parse(request.query)
+    if (!(await agentIds()).includes(query.agentId))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
+    const history = await port.readOutsideSession(query.agentId, query.sessionId)
+    if (!history) throw new HttpError(404, 'not_found', 'That conversation is no longer available.')
+    return OutsideSessionPreviewSchema.parse({
+      messages: history.messages.map(({ role, text, at }) => ({ role, text, at })),
     })
   })
 

@@ -497,3 +497,43 @@ test('spraying random trigger ids from one address shares one failure budget', a
   )
   expect(answers.slice(TRIGGER_LIMITS.callsPerMinute)).toEqual(Array(5).fill(429))
 })
+
+test('a retried create answers with the same trigger and secret; a different one, or a later one, is new', async () => {
+  const first = await create()
+  const retry = await create()
+  expect(retry.trigger.id).toBe(first.trigger.id)
+  expect(retry.secret).toBe(first.secret)
+  const other = await app.inject({
+    method: 'POST',
+    url: '/api/triggers',
+    headers,
+    payload: { ...TRIGGER, name: 'Another' },
+  })
+  expect(other.json().trigger.id).not.toBe(first.trigger.id)
+  now += 11 * 60_000
+  expect((await create()).trigger.id).not.toBe(first.trigger.id)
+  const list = await app.inject({ method: 'GET', url: '/api/triggers', headers })
+  expect(list.json().items).toHaveLength(3)
+})
+
+test('a report-back tool that does not look like reporting carries a warning; reporting tools do not', async () => {
+  const warned = async (tool: string) => {
+    const made = await app.inject({
+      method: 'POST',
+      url: '/api/triggers',
+      headers,
+      payload: {
+        ...TRIGGER,
+        name: tool,
+        reportBack: { mode: 'fixed', tool, args: '{"id":"{{source.ref}}"}' },
+      },
+    })
+    expect(made.statusCode).toBe(201)
+    return made.json().trigger.warning as string | undefined
+  }
+  expect(await warned('tickets_add_comment')).toBeUndefined()
+  expect(await warned('tickets_delete_ticket')).toContain('may change things')
+  expect(await warned('tickets_frobnicate')).toContain('may change things')
+  const list = await app.inject({ method: 'GET', url: '/api/triggers', headers })
+  expect(list.json().items.filter((t: { warning?: string }) => t.warning)).toHaveLength(2)
+})
