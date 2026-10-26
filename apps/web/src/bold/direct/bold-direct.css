@@ -646,3 +646,18 @@
 [data-ui='bold'] .bold-dm-add-summary {
   overflow-wrap: anywhere;
 }
+
+/* 3.7.0: on a portrait tablet the sheet fills the screen, so the chat column and composer use its full width and share
+   the header's left and right edges instead of sitting in a 620px column. */
+@media (min-width: 601px) and (max-width: 860px) {
+  [data-ui='bold'] .bold-dm-thread,
+  [data-ui='bold'] .bold-dm-composer > .chat-composer,
+  [data-ui='bold'] .bold-dm-composer .chat-composer-notice,
+  [data-ui='bold'] .bold-dm-ref {
+    max-width: none;
+  }
+
+  [data-ui='bold'] .bold-dm-scroll {
+    padding-inline: calc(12px * var(--bold-d, 1));
+  }
+}

@@ -900,3 +900,16 @@
   color: var(--hi-ink);
   font-weight: 700;
 }
+
+/* 3.7.0: two columns on a portrait tablet. */
+@media (min-width: 601px) and (max-width: 860px) {
+  [data-ui='bold'] .grid2,
+  [data-ui='bold'] .grid3,
+  [data-ui='bold'] .grid4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-ui='bold'] .span2 {
+    grid-column: span 2;
+  }
+}

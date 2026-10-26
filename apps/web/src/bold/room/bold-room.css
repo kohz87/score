@@ -2033,3 +2033,29 @@
   border-radius: var(--radius-14);
   font: inherit;
 }
+
+/* 3.7.0: on a portrait tablet the room's title and its actions share one row, flush with the content below (on a phone
+   the actions drop to a second row). */
+@media (min-width: 601px) and (max-width: 860px) {
+  [data-ui='bold'] .roomhead.bold-phone-list-head {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-title {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+
+  [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-title .roomtitle {
+    flex: 0 1 auto;
+  }
+
+  [data-ui='bold'] .roomhead.bold-phone-list-head .bold-phone-list-actions {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+}

@@ -1904,3 +1904,16 @@
     font-weight: 600;
   }
 }
+
+/* 3.7.0: a portrait tablet is wide enough for two cards per row (the phone rule above stacks them one per row). */
+@media (min-width: 601px) and (max-width: 860px) {
+  .bold-settings-page .grid2,
+  .bold-settings-page .grid3,
+  .bold-settings-page .grid4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bold-settings-page .span2 {
+    grid-column: span 2;
+  }
+}
