@@ -251,9 +251,9 @@ test('look', async ({ page }) => {
 test('customizer', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await withShippedThemes(page, 'score')
-  await visit(page, '/settings/look/customize/harbour', 'h1:has-text("Customize")')
+  await visit(page, '/b/settings/look/customize/harbour', 'h2:has-text("Customizer")')
   await expect(
-    page.frameLocator('iframe[title="Preview of your theme"]').locator('.page-content').first(),
+    page.frameLocator('iframe[title="Preview of your theme"]').locator('[data-ui="bold"]').first(),
   ).toBeVisible({ timeout: 20_000 })
   await page.waitForTimeout(800)
   // The contrast bar at the foot is left out of the picture: it is a live check, not part of the layout to show.

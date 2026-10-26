@@ -14,7 +14,7 @@ export const BoldFrameContext = createContext<BoldFrame | null>(null)
 const SPLIT = /^([^?#]*)(.*)$/
 
 /** Paths that move under `/b` as they are: the kept classic pages. */
-const PREFIXED = ['/runs', '/settings', '/team']
+const PREFIXED = ['/settings', '/team']
 
 /** Watch is the replay on the agent's screen page (2.6.0). */
 const WATCH = /^\/watch\/([^/]+)$/
@@ -44,6 +44,19 @@ export function toBoldPath(to: string, rooms: readonly FrameRoom[] = []): string
   if (workspace) return `/b/team/${workspace[1]}`
   const recipes = recipesPath(path, rest)
   if (recipes) return recipes
+  // A run opens in the room's Runs side panel (2.5.0); the query and #hash go with it.
+  const run = /^\/runs\/([^/]+)$/.exec(path)
+  if (run) {
+    try {
+      const [query = '', hash = ''] = rest.split('#')
+      const params = new URLSearchParams(query)
+      params.set('run', decodeURIComponent(run[1] ?? ''))
+      return `/b?${params.toString()}${hash ? `#${hash}` : ''}`
+    } catch {
+      // A malformed %-escape: keep the raw path rather than throw while rendering a link.
+      return to
+    }
+  }
   const watch = WATCH.exec(path)
   if (watch) return `/b/screen/${watch[1]}${rest}`
   if (PREFIXED.some((root) => under(path, root))) return `/b${path}${rest}`
@@ -73,7 +86,7 @@ export function boldRedirectFor(pathname: string, search: string, hash = ''): st
   if (recipes) return recipes
   const watch = WATCH.exec(pathname)
   if (watch) return `/b/screen/${watch[1]}${search}${hash}`
-  const keep = ['/runs', '/terminal', '/settings/look/customize']
+  const keep = ['/terminal', '/settings/look/customize']
   if (!keep.some((root) => under(pathname, root))) return null
   return `/b${pathname}${search}${hash}`
 }

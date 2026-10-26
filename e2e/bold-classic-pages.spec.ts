@@ -88,8 +88,8 @@ for (const size of sizes) {
       const status = editor.getByLabel('Runs of this recipe')
       await expect(status).toContainText('1 run going')
       await status.getByRole('link', { name: 'Running' }).click()
-      await expect(page).toHaveURL(/\/b\/runs\/brief-wfrun-1$/)
-      await inFrame(page)
+      await expect(page).toHaveURL(/\/b\?run=brief-wfrun-1$/)
+      await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
       await page.goBack()
       await expect(page).toHaveURL(/\/b\/recipes\/wf-release$/)
       await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
@@ -118,19 +118,11 @@ for (const size of sizes) {
       await inFrame(page)
     })
 
-    test(`the recipe editor and a run page open under /b at ${size.name}`, async ({ page }) => {
+    test(`the recipe editor opens under /b at ${size.name}`, async ({ page }) => {
       await page.goto('/b/recipes/wf-draft')
       await inFrame(page)
       await expect(page.locator('[data-node="build"]')).toBeVisible()
       await noSideScroll(page)
-      await page.goto('/b/runs/brief-wfrun-1')
-      await inFrame(page)
-      await expect(page.locator('[data-node="approve"]')).toBeVisible()
-      await noSideScroll(page)
-      await expect(page).toHaveScreenshot(`bold-run-${size.name}.png`, {
-        animations: 'disabled',
-        maxDiffPixelRatio: 0.01,
-      })
     })
 
     test(`Watch is the replay on the agent's screen at ${size.name}`, async ({ page }) => {
@@ -175,18 +167,11 @@ test('old classic paths on the new shell redirect to /b and keep the query', asy
   await page.goto('/workflows')
   await expect(page).toHaveURL(/\/b\/recipes$/)
   await page.goto('/runs/brief-wfrun-1?x=1')
-  await expect(page).toHaveURL(/\/b\/runs\/brief-wfrun-1\?x=1$/)
+  await expect(page).toHaveURL(/\/b\?x=1&run=brief-wfrun-1$/)
   await page.goto('/watch/builder?from=3')
   await expect(page).toHaveURL(/\/b\/screen\/builder\?from=3$/)
   await page.goto('/settings/look/customize/score')
   await expect(page).toHaveURL(/\/b\/settings\/look\/customize\/score$/)
-})
-
-test('on the classic view the classic paths still render the classic shell', async ({ page }) => {
-  await page.addInitScript(() => window.localStorage.setItem('score.ui', 'classic'))
-  await page.goto('/runs/brief-wfrun-1')
-  await expect(page).toHaveURL(/\/runs\/brief-wfrun-1$/)
-  await expect(page.locator('.app-shell')).toBeVisible()
 })
 
 // Decisions inside the frame (2.0.2 review): the classic cards and bars still work, and still answer to the server.
@@ -204,10 +189,44 @@ for (const size of sizes) {
       await expect.poll(() => posts).toContain(`/api/approvals/${watchApprovalFixture.id}/decision`)
     })
 
-    test(`a run's needs-you card decides a gate inside /b at ${size.name}`, async ({ page }) => {
+    test(`a run opens in the Runs side panel as a thread of steps at ${size.name}`, async ({
+      page,
+    }) => {
       await page.goto('/b/runs/brief-wfrun-1')
-      await inFrame(page)
-      const card = page.locator('.bold-classic-page [data-protected]').filter({
+      await expect(page).toHaveURL(/\/b\?run=brief-wfrun-1$/)
+      await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
+      await noSideScroll(page)
+      await expect(page).toHaveScreenshot(`bold-run-${size.name}.png`, {
+        animations: 'disabled',
+        maxDiffPixelRatio: 0.01,
+      })
+      await page.getByRole('tab', { name: 'Graph' }).click()
+      await expect(page.locator('[data-node="approve"]')).toBeVisible()
+      await noSideScroll(page)
+      await page.getByRole('tab', { name: 'Log' }).click()
+      await expect(page.getByRole('log', { name: 'Events' })).toBeVisible()
+    })
+
+    test(`the Runs view lists every run and opens one at ${size.name}`, async ({ page }) => {
+      await page.goto('/b')
+      if (size.name === 'phone') await page.getByRole('button', { name: 'Open side panel' }).click()
+      const panel = page.getByRole('complementary', { name: 'Side panel' })
+      await panel.locator('.side-toggle').click()
+      await panel.getByRole('button', { name: /^Runs/ }).click()
+      const list = panel.getByRole('list', { name: 'Runs' })
+      await expect(list.getByRole('listitem').first()).toBeVisible()
+      await panel.getByRole('button', { name: 'Needs you', exact: true }).click()
+      await list.getByRole('button').first().click()
+      await expect(page).toHaveURL(/\/b\?run=/)
+      await expect(panel.getByRole('list', { name: 'Steps' })).toBeVisible()
+      await panel.getByRole('button', { name: 'All runs' }).click()
+      await expect(list).toBeVisible()
+    })
+
+    test(`a run's needs-you card decides a gate inside /b at ${size.name}`, async ({ page }) => {
+      await page.goto('/runs/brief-wfrun-1')
+      await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
+      const card = page.locator('.bold-run-classic .orch-decision[data-protected]').filter({
         hasText: 'Approve the draft',
       })
       await card
@@ -293,10 +312,10 @@ for (const mode of ['light', 'dark'] as const) {
     await mockThemes(page, [failing], look)
     await page.setViewportSize({ width: 1440, height: 900 })
 
-    await page.goto('/b/runs/brief-wfrun-1')
-    await inFrame(page)
+    await page.goto('/runs/brief-wfrun-1')
+    await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible()
     await expectGuardKeptTheme(page)
-    const card = page.locator('.bold-classic-page [data-protected]').filter({
+    const card = page.locator('.bold-run-classic .orch-decision[data-protected]').filter({
       hasText: 'Approve the draft',
     })
     await expect(card.first()).toHaveAttribute('data-protected', /.+/)
@@ -405,5 +424,5 @@ test.describe('the Customizer way back inside /b', () => {
 
 test('the old path keeps its #hash through the redirect', async ({ page }) => {
   await page.goto('/runs/brief-wfrun-1#step')
-  await expect(page).toHaveURL(/\/b\/runs\/brief-wfrun-1#step$/)
+  await expect(page).toHaveURL(/\/b\?run=brief-wfrun-1#step$/)
 })

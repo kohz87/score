@@ -12,16 +12,16 @@ async function open(
   page: Page,
   width = 1440,
   mode: 'light' | 'dark' = 'light',
-  path = '/settings/look/customize',
+  path = '/b/settings/look/customize',
 ) {
   await page.setViewportSize({ width, height: width < 900 ? 900 : 1000 })
   await page.addInitScript((m) => localStorage.setItem('score.theme', m), mode)
   await openWithTheme(page, [], { active: 'score', mode })
   await page.goto(path)
-  await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Customizer' })).toBeVisible()
   if (width >= 900) {
     const frame = page.frameLocator('iframe[title="Preview of your theme"]')
-    await expect(frame.locator('.page-content').first()).toBeVisible({
+    await expect(frame.locator('[data-ui="bold"]').first()).toBeVisible({
       timeout: 20_000,
     })
   }
@@ -30,7 +30,7 @@ async function open(
 
 test('one picture per section', async ({ page }) => {
   await open(page)
-  const tabs = ['Theme', 'Colours', 'Fonts', 'Shape', 'Layout', 'Chat', 'Background', 'Custom CSS']
+  const tabs = ['Theme', 'Colours', 'Background', 'Fonts', 'Shape', 'Spacing', 'Custom CSS']
   for (const name of tabs) {
     await page.getByRole('tab', { name, exact: true }).click()
     await page.waitForTimeout(300)
@@ -41,7 +41,7 @@ test('one picture per section', async ({ page }) => {
 test('contrast warning and custom CSS report', async ({ page }) => {
   await open(page)
   await page.getByRole('tab', { name: 'Colours', exact: true }).click()
-  const ink = page.getByRole('textbox', { name: 'Main text, colour value' })
+  const ink = page.getByRole('textbox', { name: 'Text, colour value', exact: true })
   await ink.fill('#b9bdc6')
   await page.waitForTimeout(500)
   await page.screenshot({ path: `${dir}/contrast-warning.png` })
@@ -106,7 +106,7 @@ test('phone', async ({ page }) => {
   await page.screenshot({ path: `${dir}/phone-edit.png`, fullPage: true })
   await page.getByRole('radio', { name: 'Preview' }).click()
   await expect(
-    page.frameLocator('iframe[title="Preview of your theme"]').locator('.page-content').first(),
+    page.frameLocator('iframe[title="Preview of your theme"]').locator('[data-ui="bold"]').first(),
   ).toBeVisible({ timeout: 20_000 })
   await page.waitForTimeout(800)
   await page.screenshot({ path: `${dir}/phone-preview.png`, fullPage: true })

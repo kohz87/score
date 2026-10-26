@@ -83,9 +83,22 @@ function colorsFor(look: Look, mode: ColorMode): Partial<Record<ThemeColorToken,
   return out
 }
 
+/**
+ * The new shell has its own code ground and text (`--code-bg`, `--code-ink`), and Score's defaults for `--watch-stage` and
+ * `--watch-text` are always on the root. A theme that sets those two also writes a `--t-code-*` twin, so bold-theme.css
+ * can tell "set by the theme" from "Score's own" and leave the code ground alone otherwise.
+ */
+const CODE_TWINS: Partial<Record<ThemeColorToken, string>> = {
+  'watch-stage': 'code-bg',
+  'watch-text': 'code-ink',
+}
+
 function declarations(colors: Partial<Record<ThemeColorToken, string>>): string {
   return Object.entries(colors)
-    .map(([token, value]) => `--${token}:${value};`)
+    .map(([token, value]) => {
+      const twin = CODE_TWINS[token as ThemeColorToken]
+      return `--${token}:${value};${twin ? `--t-${twin}:${value};` : ''}`
+    })
     .join('')
 }
 

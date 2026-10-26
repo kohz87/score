@@ -137,7 +137,7 @@ test('the release recipe loads as seven numbered steps, is checked live, and und
   const status = await within(dialog).findByLabelText('Runs of this recipe')
   expect(status.textContent).toContain('1 run going')
   expect(within(status).getByRole('link', { name: 'Running' }).getAttribute('href')).toMatch(
-    /^\/b\/runs\/brief-/,
+    /^\/b\?run=brief-/,
   )
   await waitFor(() => expect(within(steps).getAllByRole('listitem')).toHaveLength(7))
   await waitFor(() =>
@@ -551,7 +551,7 @@ test('the editor draws a run of the version on screen over the canvas, and links
     within(live.closest('p')!)
       .getByRole('link', { name: /Open the run/ })
       .getAttribute('href'),
-  ).toBe('/b/runs/brief-wfrun-1')
+  ).toBe('/b?run=brief-wfrun-1')
   // The gate of the running run waits for you; the steps before it are done. The draft is untouched.
   expect(
     await screen.findByRole('button', { name: /Gate Approve the draft.*needs you/ }),

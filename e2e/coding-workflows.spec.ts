@@ -212,8 +212,11 @@ test.describe('a coding step in the live workflow view', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 1280, height: 1300 })
     await page.goto('/runs/brief-wfrun-1')
+    // 2.5.0: the diagram is the Graph tab of the run; the decisions are on the Steps tab it opens on.
+    await page.getByRole('tab', { name: 'Graph' }).click()
     await expect(page.locator('[data-node="draft"]')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
+    await page.getByRole('tab', { name: 'Steps' }).click()
   }
 
   test('8.6: a coding step below its agent’s limit floor waits, and the card sends the three answers', async ({
@@ -257,6 +260,8 @@ test.describe('a coding step in the live workflow view', () => {
   test('the step names its program; new settings and the step limit are decided from the Needs-you cards', async ({
     page,
   }) => {
+    // Several decisions in one run, now behind a heavier page (the Runs panel): more than the default 30 s under load.
+    test.setTimeout(90_000)
     const posted: { url: string; body: unknown }[] = []
     await liveView(
       page,
@@ -275,10 +280,12 @@ test.describe('a coding step in the live workflow view', () => {
       ),
       posted,
     )
+    await page.getByRole('tab', { name: 'Graph' }).click()
     const node = page.locator('[data-node="draft"]')
     await expect(node).toContainText('Codex')
     await expect(node).toHaveAttribute('aria-label', /coder-a \(Codex\)/)
     await expect(page.locator('[data-node="review"]')).toContainText('Claude Code')
+    await page.getByRole('tab', { name: 'Steps' }).click()
     const card = page.getByRole('region', { name: 'New settings for coder-a' })
     await expect(card).toContainText('With the new settings: Reads any file you can read')
     await card.getByRole('checkbox', { name: /I understand what it can read now/ }).check()

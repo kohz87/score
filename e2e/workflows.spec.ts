@@ -6,6 +6,8 @@ import { finishStartJob, openRunOf, recipeIdByName, startRecipeByName } from './
 // replies with a score-verdict block, [fake:fail] ends the step's run failed.
 
 test.describe.configure({ mode: 'serial' })
+
+const tab = (page: Page, name: string) => page.getByRole('tab', { name }).click()
 const web = { 'x-score-client': 'web' }
 
 const node = (page: Page, id: string) => page.locator(`[data-node="${id}"]`)
@@ -23,6 +25,8 @@ async function createWorkflow(page: Page, definition: unknown): Promise<string> 
 async function startFromList(page: Page, name: string, inputs: Record<string, string> = {}) {
   // No budget, as the classic dialog had: a lost attempt's unknown spend would pause the retry under Start a job's $5 cap.
   await startRecipeByName(page, name, inputs, { noBudget: true })
+  // The run opens in the Runs panel (2.5.0); its diagram is the Graph tab.
+  await tab(page, 'Graph')
 }
 
 test('build a workflow with a gate and a branch in the editor, save it, run it, approve the gate and replay it', async ({
@@ -109,10 +113,11 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   // Start it from the editor: Run… opens Start a job with this recipe chosen.
   await page.getByRole('button', { name: 'Run…' }).click()
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
-  await expect(dialog.getByRole('radio', { name: unique })).toBeChecked()
+  await expect(dialog.getByRole('radio', { name: unique })).toBeChecked({ timeout: 30_000 })
   await expect(dialog.getByText(/Score controls the work it starts/).first()).toBeVisible()
   await finishStartJob(page, { Topic: 'the 2.4 release' })
   await openRunOf(page, await recipeIdByName(page, unique))
+  await tab(page, 'Graph')
 
   // The run view: the gate waits for the person with the draft the question is about.
   const gate = page.getByRole('region', { name: 'Decide on Approve the draft' })
@@ -135,8 +140,10 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await expect(node(page, 'end1')).toHaveAttribute('data-state', 'succeeded')
   await expect(node(page, 'end2')).toHaveAttribute('data-state', 'skipped')
   await expect(page.locator('[data-edge-state="skipped"]').first()).toBeAttached()
+  await tab(page, 'Log')
   const log = page.getByRole('log', { name: 'Events' })
   await expect(log).toContainText("Passed review? took 'verdict passed'")
+  await tab(page, 'Graph')
 
   // Clicking a node filters the log to it and shows what it read and its verdict.
   await node(page, 'step1').click()
@@ -237,7 +244,9 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
   await unknown.getByRole('checkbox').first().check()
   await unknown.getByRole('button', { name: 'Stop waiting for this' }).click()
   // Abandoning pauses the run; the step is unresolved and offers Retry once the run is resumed.
-  await expect(page.getByText(/Paused/).first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('region', { name: 'Paused' }).first()).toBeVisible({
+    timeout: 30_000,
+  })
   await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'abandoned')
   await page.getByRole('button', { name: 'Resume', exact: true }).click()
   const retry = page.getByRole('region', { name: 'Retry Flaky step' })

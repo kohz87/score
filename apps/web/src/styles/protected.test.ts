@@ -336,7 +336,7 @@ const consentForms: Record<string, { decisions: number; markers: string[] }> = {
   'routes/pair/PairPage.tsx': { decisions: 1, markers: ['pair-card'] },
   'routes/team/CodingAgent.tsx': { decisions: 1, markers: ['coding-acknowledge'] },
   'bold/BoldAddAgent.tsx': { decisions: 1, markers: ['coding-acknowledge'] },
-  // Not a consent, but the full-screen Customizer's way back (X7).
+  // Not a consent, but the Customizer's way back to Look (X7).
   'routes/customizer/Customizer.tsx': { decisions: 0, markers: ['cz-back'] },
 }
 

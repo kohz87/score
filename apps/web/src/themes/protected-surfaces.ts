@@ -48,6 +48,8 @@ export const protectedClasses = [
   'bold-trigger-card',
   'bold-trigger-secret',
   'bold-trigger-confirm',
+  // 2.5.0: a run's step that waits on the person, and the Runs list's Needs you count
+  'bold-run-wait',
   'orch-pill',
   'orch-node__flag',
   'bold-request',

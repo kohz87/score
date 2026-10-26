@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import { BoldFirstRun } from './BoldFirstRun.tsx'
 import { BoldRoom } from './BoldRoom.tsx'
@@ -13,6 +14,12 @@ export function BoldHome() {
   const oldRecipesLink = params.get('recipes') === '1'
   params.delete('recipes')
   const team = useBoldTeamRoom()
+  const read = firstRunView(forced, firstRunDone(), team.data?.room, team.isPending)
+  // A room that is open stays open while its read is retried after a failure (the query reports pending again then):
+  // unmounting it would drop what the person has open in the side panel, such as a run's decision half filled in.
+  const [roomShown, setRoomShown] = useState(false)
+  const view = read === 'loading' && roomShown ? 'room' : read
+  if (view === 'room' && !roomShown) setRoomShown(true)
   if (oldRecipesLink)
     return (
       <Navigate
@@ -24,7 +31,6 @@ export function BoldHome() {
         replace
       />
     )
-  const view = firstRunView(forced, firstRunDone(), team.data?.room, team.isPending)
   if (view === 'first-run') return <BoldFirstRun />
   if (view === 'loading')
     return <div className="bold-home-loading" role="status" aria-label="Finding the team room" />

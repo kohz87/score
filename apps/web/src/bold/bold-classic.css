@@ -15,28 +15,10 @@
 
 /* Bold's element resets (bold.css) skip this wrapper, so the classic ones apply as drawn. */
 
-/* The Customizer is a full-height editor: fill what is left under the top bar instead of the whole window. */
-[data-ui='bold'] .bold-classic-page[data-variant='customizer'] {
-  padding: 0;
-  overflow: hidden;
-}
-[data-ui='bold'] .bold-classic-page[data-variant='customizer'] .cz {
-  height: calc(100dvh - 96px);
-  min-height: 560px;
-}
-
 @media (max-width: 860px) {
   [data-ui='bold'] .bold-classic-page {
     padding: 16px 12px;
     border-radius: 22px;
-  }
-  [data-ui='bold'] .bold-classic-page[data-variant='customizer'] {
-    padding: 0;
-  }
-  /* The fixed tab bar is ~64px; main already pads 96px under the page. */
-  [data-ui='bold'] .bold-classic-page[data-variant='customizer'] .cz {
-    height: auto;
-    min-height: calc(100dvh - 180px);
   }
 }
 

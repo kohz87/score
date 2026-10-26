@@ -1,3 +1,4 @@
+import { boldRunLink } from './bold-links.ts'
 import {
   type AgentSummary,
   type WorkflowDetail,
@@ -356,8 +357,7 @@ function RecipeRunStatus({ recipe }: { recipe: WorkflowSummary | undefined }) {
       {last ? (
         <>
           {' '}
-          Last run:{' '}
-          <Link to={`/b/runs/${encodeURIComponent(last.briefId)}`}>{statusLabel[last.status]}</Link>
+          Last run: <Link to={boldRunLink(last.briefId)}>{statusLabel[last.status]}</Link>
           {last.graphOutcome ? `, ${graphOutcomeLabel[last.graphOutcome].toLowerCase()}` : ''}
         </>
       ) : (
@@ -1117,9 +1117,7 @@ function BoldRecipeEditor({
               <p className="wf-live small" role="status">
                 <span className="wf-live__dot" aria-hidden="true" />
                 Live: run started {clock(overlay.run.createdAt)}{' '}
-                <Link to={`/b/runs/${encodeURIComponent(overlay.run.briefId)}`}>
-                  Open the run ›
-                </Link>
+                <Link to={boldRunLink(overlay.run.briefId)}>Open the run ›</Link>
               </p>
             )}
             {previewing !== null ? (

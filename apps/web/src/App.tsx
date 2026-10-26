@@ -4,7 +4,6 @@ import type { DataRouter, RouteObject } from 'react-router'
 import { applyUiParam, readUi } from './bold/bold-ui.ts'
 import { BoldTerminalPage } from './bold/BoldTerminal.tsx'
 import { boldRedirectFor } from './shell/framed-paths.tsx'
-import { BoldClassicPage } from './bold/BoldClassicPage.tsx'
 import { BoldHome } from './bold/BoldHome.tsx'
 import { BoldShell } from './bold/BoldShell.tsx'
 import { BoldAgentPage } from './bold/BoldAgent.tsx'
@@ -20,7 +19,6 @@ import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
 import { AttemptPage } from './routes/attempts/AttemptPage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
-import { RunPage } from './routes/runs/RunPage.tsx'
 import { WatchPage } from './routes/watch/WatchPage.tsx'
 import { BoldRecipesPage } from './bold/BoldRecipes.tsx'
 
@@ -82,11 +80,13 @@ function toBoldLoader({ request }: { request: Request }) {
   return target ? redirect(target) : null
 }
 
-const RunFramed = () => (
-  <BoldClassicPage>
-    <RunPage />
-  </BoldClassicPage>
-)
+/** A run's old addresses (`/runs/:id`, `/b/runs/:id`, `/now/flow/:id`) open it in the Runs side panel (2.5.0). */
+function runRedirect({ request, params }: { request: Request; params: { briefId?: string } }) {
+  const url = new URL(request.url)
+  const search = new URLSearchParams(url.search)
+  search.set('run', params.briefId ?? '')
+  return redirect(`/b?${search.toString()}${hashOf(url)}`)
+}
 
 /** Applies `?ui=bold` / `?ui=classic` from any address to this device's choice; the index loader also applies it first. */
 function UiParamBoundary() {
@@ -101,15 +101,15 @@ export const appRoutes: RouteObject[] = [
   {
     Component: UiParamBoundary,
     children: [
-      // 9.4: the theme Customizer is a full-screen editor with no shell around it. It brings CodeMirror and the preview
-      // machinery, so it loads on first visit.
+      // Decision 131 E: the Customizer lives only inside Settings › Look of the new shell; the old addresses lead there
+      // whichever view the device uses (the classic Customizer page is gone), keeping the query and hash.
       ...['/settings/look/customize', '/settings/look/customize/:themeId'].map(
         (path): RouteObject => ({
           path,
-          loader: toBoldLoader,
-          lazy: async () => ({
-            Component: (await import('./routes/customizer/Customizer.tsx')).Customizer,
-          }),
+          loader: ({ request }) => {
+            const url = new URL(request.url)
+            return redirect(`/b${url.pathname}${url.search}${hashOf(url)}`)
+          },
         }),
       ),
       // 11.3a: the bold shell has its own prefix and frame; screens inside it land in later tasks.
@@ -133,7 +133,7 @@ export const appRoutes: RouteObject[] = [
             loader: ({ request, params }) =>
               redirect(keepAll(request, `/b/recipes/${params.workflowId ?? ''}`)),
           },
-          { path: 'runs/:briefId', Component: RunFramed },
+          { path: 'runs/:briefId', loader: runRedirect },
           // 2.6.0: Watch is the replay on the agent's screen page.
           {
             path: 'watch/:agentId',
@@ -141,21 +141,9 @@ export const appRoutes: RouteObject[] = [
               redirect(keepSearch(request, `/b/screen/${params.agentId ?? ''}`)),
           },
           { path: 'terminal', Component: BoldTerminalPage },
-          ...['settings/look/customize', 'settings/look/customize/:themeId'].map(
-            (path): RouteObject => ({
-              path,
-              lazy: async () => {
-                const { Customizer } = await import('./routes/customizer/Customizer.tsx')
-                return {
-                  Component: () => (
-                    <BoldClassicPage variant="customizer">
-                      <Customizer />
-                    </BoldClassicPage>
-                  ),
-                }
-              },
-            }),
-          ),
+          // Decision 131 E: the Customizer lives inside Settings › Look; BoldSettings loads it.
+          { path: 'settings/look/customize', Component: BoldSettings },
+          { path: 'settings/look/customize/:themeId', Component: BoldSettings },
           { path: 'settings', Component: BoldSettings },
           { path: 'settings/:section', Component: BoldSettings },
           { path: '*', loader: () => redirect('/b') },
@@ -226,7 +214,7 @@ export const appRoutes: RouteObject[] = [
               redirect(keepAll(request, `/b/recipes/${params.workflowId ?? ''}`)),
           },
           { path: '/watch/:agentId', loader: toBoldLoader, Component: WatchPage },
-          { path: '/runs/:briefId', loader: toBoldLoader, Component: RunPage },
+          { path: '/runs/:briefId', loader: runRedirect },
           // Stored links and notifications from before 11.11 still open the page they meant.
           {
             path: '/now/watch/:agentId',
@@ -244,8 +232,7 @@ export const appRoutes: RouteObject[] = [
           },
           {
             path: '/now/flow/:briefId',
-            loader: ({ request, params }) =>
-              redirect(keepSearch(request, `/runs/${params.briefId ?? ''}`)),
+            loader: ({ request, params }) => runRedirect({ request, params }),
           },
           {
             path: '/now/routines',

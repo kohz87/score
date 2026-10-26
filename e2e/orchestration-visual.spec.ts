@@ -47,8 +47,10 @@ async function open(page: Page, target: (typeof pages)[number], width: number, d
   if (dark) await page.addInitScript(() => window.localStorage.setItem('score.theme', 'dark'))
   await page.setViewportSize({ width, height: 1100 })
   await page.goto(target.path)
+  // A run opens in the Runs side panel (2.5.0): its diagram is on the Graph tab.
+  if (target.path.startsWith('/runs/')) await page.getByRole('tab', { name: 'Graph' }).click()
   await expect(page.locator(target.ready).first()).toBeVisible()
-  await expect(page.getByText(/^Loading/)).toHaveCount(0)
+  await expect(page.getByText(/^Loading the run/)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   // The thread pins itself to the newest message; the baseline shows the panel from its top.
   await page.evaluate(() => {

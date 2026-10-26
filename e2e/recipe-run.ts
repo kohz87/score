@@ -53,7 +53,8 @@ export async function openRunOf(page: Page, workflowId: string) {
     expect(run).toBeTruthy()
     briefId = run!.briefId
   }).toPass({ timeout: 20_000 })
-  await page.goto(`/b/runs/${briefId}`)
+  // A run opens in the Runs side panel (2.5.0); its diagram is the Graph tab (callers open it where they need it).
+  await page.goto(`/b?run=${encodeURIComponent(briefId)}`)
 }
 
 /** Starts a saved recipe by its id from its page and lands on the run. */

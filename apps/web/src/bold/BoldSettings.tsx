@@ -1,4 +1,5 @@
-import { Navigate, useNavigate, useParams } from 'react-router'
+import { lazy, Suspense } from 'react'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router'
 import { useStreamQuery } from '../data/query-client.ts'
 import { AdvancedSection } from '../routes/settings/AdvancedSection.tsx'
 import { NotificationsSection } from '../routes/settings/NotificationsSection.tsx'
@@ -14,6 +15,11 @@ import { BoldUsage } from './BoldUsage.tsx'
 import { saveUi } from './bold-ui.ts'
 import '../routes/settings/settings.css'
 import './bold-settings.css'
+
+// The Customizer brings CodeMirror and the preview machinery: it loads when Look › Customizer is opened.
+const Customizer = lazy(async () => ({
+  default: (await import('../routes/customizer/Customizer.tsx')).Customizer,
+}))
 
 type SettingsSection =
   | 'connections'
@@ -110,13 +116,20 @@ export function BoldSettings() {
   const params = useParams()
   const navigate = useNavigate()
   const agents = useAgents()
-  const section = isSettingsSection(params.section) ? params.section : 'usage'
+  const location = useLocation()
+  // Decision 131 E: /b/settings/look/customize[/:themeId] is the Customizer, framed by Settings with Look selected.
+  const customizing = /^\/b\/settings\/look\/customize(\/|$)/.test(location.pathname)
+  const section = customizing
+    ? 'look'
+    : isSettingsSection(params.section)
+      ? params.section
+      : 'usage'
   // An unknown section is not silently Usage under its own name.
   if (params.section !== undefined && !isSettingsSection(params.section))
     return <Navigate to="/b/settings/usage" replace />
   return (
     <div className="page bold-settings-page">
-      <div className="setgrid">
+      <div className="setgrid" data-section-page={customizing || undefined}>
         <nav className="setnav" aria-label="Settings">
           <h1>Settings</h1>
           {SETTINGS_SECTIONS.map((item) => (
@@ -143,8 +156,23 @@ export function BoldSettings() {
           </button>
         </nav>
         <div className="setmain">
+          {customizing && (
+            <button
+              type="button"
+              className="bold-settings-all"
+              onClick={() => void navigate('/b/settings')}
+            >
+              ‹ All settings
+            </button>
+          )}
           <HermesVersionBanner />
-          <Section section={section} agents={agents} />
+          {customizing ? (
+            <Suspense fallback={<p role="status">Opening the Customizer…</p>}>
+              <Customizer />
+            </Suspense>
+          ) : (
+            <Section section={section} agents={agents} />
+          )}
         </div>
       </div>
     </div>

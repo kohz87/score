@@ -1415,3 +1415,22 @@ One entry per completed task: what landed, review results, and any **rejected re
   (bold-screen, bold-workbench, chat-follow, themes-bold-visual paper Team) 81/81 on the final build; pnpm check green
   (server 4784, web 3148, contract 1512).
 - **v2.5.0 deployed live** (~02:00 UTC): backup score-pre-2.5.0-20261026.db, restart, no new errors.
+- **v2.6.0 Runs in the side panel (Sonnet coder, lead review; decision 131 boards A/B/F; branch task/2.5.0-runs).**
+  Review 1 (Sonnet, 4 P2): goal/plan missing, agent-change warnings + definition link missing, /runs links dropped
+  the hash and could throw, a closed run didn't reopen — all fixed; lead: Graph/Log/decision cards restyled in the new
+  look. Round-2 review (P2): the location.key reopen also fired on in-place replaces → lead fix (a replace keeps the
+  run's key). Full e2e after the fixes: 11 failures → the run specs now read the Graph/Log tabs; Watch's specs open
+  Full history first (they broke in full runs since 2.5.0's 5-newest list); a real bug found: BoldHome unmounted the
+  room while retrying a failed read (half-typed fields lost) → fixed. Round-3 review: fullHistory waits for the list,
+  outcome keys by position (lead). Final full e2e 998 passed; 3 run screenshots re-baselined (tab the run opens on),
+  bold-terminal phone 3/3 alone (flake), bold-start-job phone known flake; pnpm check green (server 4784, web 3158).
+  Owner rule reinforced (2026-10-26): no pre-fix gates — stopped a gate run started before the last fix.
+- **v2.6.0 deployed live** (~02:48 UTC): backup score-pre-2.6.0-20261026.db, restart, no new errors.
+- **v2.7.0 Customizer under Settings › Look (Sonnet coder, lead review; decision 131 board E).** Lead spotted the
+  blank Save pill in the baselines → review: the CSS is right, the baselines were stale (regenerated and viewed);
+  review P2s fixed: classic-view contrast checks kept, phone opens the editor first ("All settings" back); P3 accepted:
+  classic-view warnings also show for themes that only set ink/card (noise). Engine also writes --t-code-bg/ink and
+  lets a theme's backdrop show through the shell (review: protected surfaces keep their own fills). Full e2e after the
+  fixes: 993 passed, 8 failed → 7 were Watch's fragile specs fixed in 2.6.0 (merged), 1 the ledger phone Settings
+  screenshot (expected text change, re-baselined); after merging 2.6.0 the affected specs 196/196; pnpm check green.
+- **v2.7.0 deployed live** (~02:52 UTC): backup score-pre-2.7.0-20261026.db, restart, no new errors.

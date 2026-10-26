@@ -41,7 +41,7 @@ describe('colour checks', () => {
     expect(main.text).toMatch(
       /Main text on cards is hard to read \(1\.\d:1; 4\.5:1 is the least that works\)/,
     )
-    expect(main.text).toContain('“Main text” or “Card background”')
+    expect(main.text).toContain('“Text” or “Panels”')
     expect(findings.some((f) => f.id === 'protected:light')).toBe(true)
     expect(findings.some((f) => f.where === 'Dark')).toBe(false)
   })
@@ -60,8 +60,8 @@ describe('colour checks', () => {
   it('puts a short warning on each colour of a faint pair', () => {
     const d = setColor(blank(), 'dark', 'ground', '#e0e0e0')
     const warnings = tokenWarnings(pairProblems(d.manifest, defaults), 'dark')
-    expect(warnings.ink).toMatch(/Hard to read on “Page background”/)
-    expect(warnings.ground).toMatch(/“Main text” is hard to read on this/)
+    expect(warnings.ink).toMatch(/Hard to read on “Ground”/)
+    expect(warnings.ground).toMatch(/“Text” is hard to read on this/)
     expect(tokenWarnings(pairProblems(d.manifest, defaults), 'light')).toEqual({})
   })
 
@@ -88,5 +88,15 @@ describe('worstRatio', () => {
   it('lays translucent cards over the picture first', () => {
     const glass = [1, 1, 1, 0.9] as const
     expect(worstRatio(black, [glass], [black])).toBeGreaterThan(8)
+  })
+})
+
+describe('classic-view colour checks (still emitted by the engine)', () => {
+  it('warns about a faint classic pair and says so', () => {
+    const d = setColor(blank(), 'light', 'chat-text', '#f0f0f0')
+    const set = setColor(d, 'light', 'chat-soft', '#ffffff')
+    const findings = colourFindings(set.manifest, (t, m) => score[m]![t] ?? '#000000')
+    const hit = findings.find((f) => f.id === 'pair:light:chat-text:chat-soft')
+    expect(hit?.text).toContain('(classic view)')
   })
 })

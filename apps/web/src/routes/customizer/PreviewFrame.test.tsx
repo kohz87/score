@@ -43,7 +43,7 @@ test('K3 X16: a preview page is measured against the applied theme background', 
     background: { image: 'admin.png', dim: 0.1 },
     views: { user: { background: { image: 'user.png', dim: 0.4 } } },
   } as unknown as ThemeManifest
-  const chat = previewPages.find((page) => page.id === 'chat')!
+  const chat = previewPages.find((page) => page.id === 'b-room')!
   const { container } = render(
     <QueryClientProvider client={new QueryClient()}>
       <PreviewFrame
