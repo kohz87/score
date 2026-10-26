@@ -534,13 +534,13 @@ export function TeamLeadDialog({ room, onClose }: { room: Room; onClose: () => v
     setBusy(true)
     setError(null)
     try {
-      const updated = RoomSchema.parse(
+      // The stream brings the changed room to every view; the reply only proves the server took it.
+      RoomSchema.parse(
         await apiFetch(`rooms/${encodeURIComponent(room.id)}`, {
           method: 'PATCH',
           body: JSON.stringify({ leadAgentId: chosen }),
         }),
       )
-      if (updated.leadAgentId !== chosen) throw new Error('The lead did not change.')
       onClose()
     } catch (failure) {
       setError(
@@ -709,7 +709,16 @@ export function RoomMenu({
           )}
         </div>
       )}
-      {leadOpen && <TeamLeadDialog room={room} onClose={() => setLeadOpen(false)} />}
+      {leadOpen && (
+        <TeamLeadDialog
+          room={room}
+          onClose={() => {
+            setLeadOpen(false)
+            // The menu that opened the dialog is gone: give focus back to its button.
+            trigger.current?.focus()
+          }}
+        />
+      )}
     </span>
   )
 }
