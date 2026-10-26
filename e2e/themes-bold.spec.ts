@@ -178,7 +178,15 @@ for (const id of themed) {
       await expect(shell).toHaveAttribute('data-look', mode)
       await expect(page.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible()
       // The shell's ground and its panels are the theme's ground and card.
-      await expect(shell).toHaveCSS('background-color', rgb(themeColour(id, mode, 'ground')))
+      // (A theme with a background picture lets it through: the shell is clear and the picture's veil is the ground.)
+      const ground = rgb(themeColour(id, mode, 'ground'))
+      await expect
+        .poll(async () => {
+          const shellFill = await shell.evaluate((el) => getComputedStyle(el).backgroundColor)
+          if (shellFill !== 'rgba(0, 0, 0, 0)') return shellFill
+          return page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+        })
+        .toBe(ground)
       const panel = await page
         .locator('.bold-shell .panel, .bold-shell .card, .bold-shell [class*="team-card"]')
         .first()
@@ -203,7 +211,14 @@ test('safe mode and the reset shortcut work on the new shell', async ({ page }) 
   await page.goto('/b/team')
   const shell = page.locator('[data-ui="bold"]')
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
-  await expect(shell).toHaveCSS('background-color', rgb(themeColour('harbour', 'dark', 'ground')))
+  await expect
+    .poll(async () => {
+      const fill = await shell.evaluate((el) => getComputedStyle(el).backgroundColor)
+      return fill !== 'rgba(0, 0, 0, 0)'
+        ? fill
+        : page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+    })
+    .toBe(rgb(themeColour('harbour', 'dark', 'ground')))
 
   await page.goto('/b/team?look=safe')
   await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
@@ -225,12 +240,12 @@ test('safe mode and the reset shortcut work on the new shell', async ({ page }) 
 test('the Customizer previews the new look’s screens in the chosen colours', async ({ page }) => {
   await pair(page)
   await page.goto('/settings/look/customize')
-  await expect(page.getByRole('heading', { name: 'Customize' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Customizer' })).toBeVisible()
   const picker = page.getByLabel('Page to preview')
   const frame = page.frameLocator('iframe[title="Preview of your theme"]')
   const hostBody = page.locator('body')
 
-  await picker.selectOption({ label: 'New look: Team' })
+  await picker.selectOption({ label: 'Team' })
   await expect(frame.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible({
     timeout: 30_000,
   })
@@ -240,7 +255,7 @@ test('the Customizer previews the new look’s screens in the chosen colours', a
   await page.getByRole('radio', { name: 'Dark', exact: true }).click()
   await expect(shell).toHaveAttribute('data-look', 'dark')
 
-  await picker.selectOption({ label: 'New look: Room' })
+  await picker.selectOption({ label: 'Team room' })
   await expect(
     frame.locator('[data-ui="bold"] .bold-sidecol, [data-ui="bold"] .side').first(),
   ).toBeVisible({
@@ -249,9 +264,11 @@ test('the Customizer previews the new look’s screens in the chosen colours', a
   // The room fits its own frame; the Customizer page around it is untouched.
   await expect(hostBody).not.toHaveClass(/fit/)
 
-  await picker.selectOption({ label: 'New look: Agent page' })
+  await picker.selectOption({ label: 'Agent page' })
   await expect(frame.locator('[data-ui="bold"] h1').first()).toBeVisible({ timeout: 30_000 })
-  await picker.selectOption({ label: 'New look: Settings' })
+  await picker.selectOption({ label: 'Agent screen' })
+  await expect(frame.locator('[data-ui="bold"]')).toBeVisible({ timeout: 30_000 })
+  await picker.selectOption({ label: 'Settings' })
   await expect(frame.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible({
     timeout: 30_000,
   })

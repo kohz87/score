@@ -29,7 +29,26 @@ export function SectionColours({ draft, edit, mode, setMode, defaults, problems 
       </div>
       {tokenGroups.map((group) => (
         <fieldset key={group.id} className="cz-group">
-          <legend>{group.label}</legend>
+          <legend>
+            {group.id === 'for-you' && (
+              <svg
+                className="cz-lock"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="5" y="11" width="14" height="10" rx="2" />
+                <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+              </svg>
+            )}
+            {group.label}
+          </legend>
           {group.tokens.map(({ token, label, hint }) => {
             if (!THEME_COLOR_TOKENS.includes(token)) return null
             const value = (set as Record<string, string | undefined>)[token]

@@ -39,25 +39,57 @@ const pairs: Pair[] = [
   },
   { text: 'muted', background: 'ground', minimum: 4.5, what: 'Quiet text on the page background' },
   { text: 'card', background: 'ink', minimum: 4.5, what: 'Text on the main buttons' },
-  { text: 'panel-ink', background: 'panel-card', minimum: 4.5, what: 'Text on approval panels' },
-  { text: 'chat-text', background: 'chat-soft', minimum: 4.5, what: 'Text on message cards' },
+  {
+    text: 'panel-ink',
+    background: 'panel-card',
+    minimum: 4.5,
+    what: 'Text on requests, your messages and results',
+  },
+  {
+    text: 'watch-text',
+    background: 'watch-stage',
+    minimum: 4.5,
+    what: 'Text in the terminal and code',
+  },
+  { text: 'line-strong', background: 'card', minimum: 3, what: 'Strong lines on cards' },
+  // The engine still writes these and the classic view still reads them: an older theme that sets them badly is
+  // still told, as "classic view" (the new shell doesn't draw them).
+  {
+    text: 'chat-text',
+    background: 'chat-soft',
+    minimum: 4.5,
+    what: 'Text on message cards (classic view)',
+  },
   {
     text: 'bubble-own-ink',
     background: 'bubble-own',
     minimum: 4.5,
-    what: 'Text in your message bubble',
+    what: 'Text in your message bubble (classic view)',
   },
-  { text: 'tasks-note', background: 'tasks-done', minimum: 4.5, what: 'Text on done tasks' },
-  { text: 'ink', background: 'tasks-ground', minimum: 4.5, what: 'Text on the Tasks board' },
-  { text: 'link-hover', background: 'card', minimum: 4.5, what: 'Links when pointed at' },
   {
-    text: 'watch-text',
-    background: 'watch-window',
+    text: 'tasks-note',
+    background: 'tasks-done',
     minimum: 4.5,
-    what: 'Text in the Watch window',
+    what: 'Text on done tasks (classic view)',
   },
-  { text: 'line-strong', background: 'card', minimum: 3, what: 'Strong lines on cards' },
-  { text: 'flow-edge', background: 'flow-canvas', minimum: 3, what: 'Lines between steps in Flow' },
+  {
+    text: 'ink',
+    background: 'tasks-ground',
+    minimum: 4.5,
+    what: 'Text on the Tasks board (classic view)',
+  },
+  {
+    text: 'link-hover',
+    background: 'card',
+    minimum: 4.5,
+    what: 'Links when pointed at (classic view)',
+  },
+  {
+    text: 'flow-edge',
+    background: 'flow-canvas',
+    minimum: 3,
+    what: 'Lines between steps in Flow (classic view)',
+  },
 ]
 
 const FALLBACK: Partial<Record<ThemeColorToken, ThemeColorToken>> = {

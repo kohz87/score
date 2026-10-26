@@ -108,15 +108,15 @@ export const appRoutes: RouteObject[] = [
   {
     Component: UiParamBoundary,
     children: [
-      // 9.4: the theme Customizer is a full-screen editor with no shell around it. It brings CodeMirror and the preview
-      // machinery, so it loads on first visit.
+      // Decision 131 E: the Customizer lives only inside Settings › Look of the new shell; the old addresses lead there
+      // whichever view the device uses (the classic Customizer page is gone), keeping the query and hash.
       ...['/settings/look/customize', '/settings/look/customize/:themeId'].map(
         (path): RouteObject => ({
           path,
-          loader: toBoldLoader,
-          lazy: async () => ({
-            Component: (await import('./routes/customizer/Customizer.tsx')).Customizer,
-          }),
+          loader: ({ request }) => {
+            const url = new URL(request.url)
+            return redirect(`/b${url.pathname}${url.search}${hashOf(url)}`)
+          },
         }),
       ),
       // 11.3a: the bold shell has its own prefix and frame; screens inside it land in later tasks.
@@ -139,21 +139,9 @@ export const appRoutes: RouteObject[] = [
               redirect(keepSearch(request, `/b/screen/${params.agentId ?? ''}`)),
           },
           { path: 'terminal', Component: BoldTerminalPage },
-          ...['settings/look/customize', 'settings/look/customize/:themeId'].map(
-            (path): RouteObject => ({
-              path,
-              lazy: async () => {
-                const { Customizer } = await import('./routes/customizer/Customizer.tsx')
-                return {
-                  Component: () => (
-                    <BoldClassicPage variant="customizer">
-                      <Customizer />
-                    </BoldClassicPage>
-                  ),
-                }
-              },
-            }),
-          ),
+          // Decision 131 E: the Customizer lives inside Settings › Look; BoldSettings loads it.
+          { path: 'settings/look/customize', Component: BoldSettings },
+          { path: 'settings/look/customize/:themeId', Component: BoldSettings },
           { path: 'settings', Component: BoldSettings },
           { path: 'settings/:section', Component: BoldSettings },
           { path: '*', loader: () => redirect('/b') },
