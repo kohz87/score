@@ -473,7 +473,9 @@ export class BotScreens {
   async frame(agentId: string): Promise<BotScreenFrame | BotScreenStatus> {
     const status = await this.status(agentId)
     if (status.state !== 'running') return status
-    const entry = this.sessions.get(agentId)!
+    const entry = this.sessions.get(agentId)
+    // Swept or dropped between the status read and here.
+    if (!entry || entry.session.closed) return { state: 'off' }
     const { session } = entry
     if (entry.png?.seq !== session.seq)
       entry.png = {
