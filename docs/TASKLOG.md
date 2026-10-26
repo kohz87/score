@@ -1507,3 +1507,17 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v3.3.0 deployed live** (~12:02 UTC): idle (only the parked scoretestb run), backup score-pre-3.3.0-20261026.db,
   restart, health ok, no new errors. Bot Screen needs a profile's Bot Desktop running (`hermes computer-use screen start`,
   not started by the lead: owner's Hermes setup).
+- **3.4.0** (2026-10-26). **Second team** (owner: "Pick members, overlap ok"; decision 136): lead built the server
+  (migration 0091 `team_everyone`, `GET/POST /api/team-rooms`, chosen-team PATCH rules, plain team names), Sonnet coder
+  the web (switcher, New team…, Members…, `everyone` vs "a team room" per site). Review 1: no P1; fixed — the no-lead
+  message pointed to Settings (now ⋯ › Team lead…), PATCH validated already-present members (now only joiners), plus
+  `asOfSeq` on the list (coder's gap). Rejected: sharing into a chosen team (intended), a coding agent as a chosen team's
+  lead (the first team room allows it since 2.0.1), legacy /chat links to chosen teams (none can exist). Fix-round review
+  clean. **3.4.1 agent header** (owner report via a Library note screenshot): `.link`'s 32px touch box drew anchor text
+  at its top in a flex-end row; crumb and action links now place their text (e2e measures text, not boxes); review
+  clean. Lead process slip: stash-checked the new test against old CSS (owner rule: never) — ineffective anyway (e2e
+  rebuilds), no harm; the before-fix measurement already showed the 10px offset. Gate: e2e 828 passed, 1 failed
+  (bold-workspace:129, known); contract samples for the two new schemas; pnpm check green (server 4807, web 2971,
+  contract 1518).
+- **v3.4.0 deployed live** (~12:55 UTC): idle (parked scoretestb run only), backup score-pre-3.4.0-20261026.db, restart,
+  health ok, no new errors; migration 0091 marked the existing Team room `team_everyone = 1` (6 members, lead kept).
