@@ -87,7 +87,9 @@ export const startPolicyB = 'b'.repeat(64)
  * with reach beyond its workspace. Nothing is created: the browser's own POST is answered 409 `policy_changed` and its
  * body recorded. `policy.id` is what the next preflight says.
  */
-export async function openCodingRecipeStart(page: Page, name: string) {
+export async function openCodingRecipeStart(page: Page, label: string) {
+  // Tests run in parallel on one server: the name must be unique to this test.
+  const name = `${label} ${Math.random().toString(36).slice(2, 7)}`
   const created = await page.request.post('/api/workflows', {
     headers: web,
     data: {
@@ -146,6 +148,6 @@ export async function openCodingRecipeStart(page: Page, name: string) {
   })
   await page.goto(`/b?start=job&recipe=${id}`)
   const dialog = page.getByRole('dialog', { name: 'Start a job' })
-  await expect(dialog.getByRole('radio', { name })).toBeChecked({ timeout: 20_000 })
+  await expect(dialog.getByRole('radio', { name })).toBeChecked({ timeout: 30_000 })
   return { dialog, bodies, policy, id }
 }

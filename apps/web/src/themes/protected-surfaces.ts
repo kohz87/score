@@ -33,6 +33,9 @@ export const protectedClasses = [
   'bold-start-dialog',
   'start-checks',
   'start-secret',
+  'start-limits',
+  'start-ask',
+  'start-more',
   // PLAN 11.9a: bold credential panels, the Add tool server form, and trigger secrets / rotate-delete decisions
   'bold-connect-panel',
   'bold-tool-add',

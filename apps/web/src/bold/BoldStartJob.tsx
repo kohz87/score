@@ -234,10 +234,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   // The policy ids the person accepted the reach of, as one key: a changed id is not covered and is asked again.
   const [reachAcceptedKey, setReachAcceptedKey] = useState<string | null>(null)
   // Recipe options under "More options"; blank/null = the preflight's own defaults (the classic start dialog's).
-  const [codingSteps, setCodingSteps] = useState<number | null>(null)
+  // Raw text, so an empty field is invalid rather than 0; null = untouched = the preflight's default.
+  const [codingSteps, setCodingSteps] = useState<string | null>(null)
   const [quotaFloor, setQuotaFloor] = useState('')
-  const [concurrent, setConcurrent] = useState<number | null>(null)
-  const [estimate, setEstimate] = useState<number | null>(null)
+  const [concurrent, setConcurrent] = useState<string | null>(null)
+  const [estimate, setEstimate] = useState<string | null>(null)
   const [saveRecipe, setSaveRecipe] = useState(false)
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [allowed, setAllowed] = useState<string[] | null>(null)
@@ -321,6 +322,26 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const quotaFloorValid =
     quotaFloor.trim() === '' ||
     (Number.isInteger(Number(quotaFloor)) && Number(quotaFloor) >= 0 && Number(quotaFloor) <= 50)
+  const textIn = (text: string | null, min: number, max: number, whole: boolean) =>
+    text === null ||
+    (text.trim() !== '' &&
+      Number.isFinite(Number(text)) &&
+      Number(text) >= min &&
+      Number(text) <= max &&
+      (!whole || Number.isInteger(Number(text))))
+  const concurrentValid = textIn(concurrent, 1, 3, true)
+  const estimateValid = textIn(estimate, 0.01, 1000, false)
+  const codingStepsValid = textIn(codingSteps, 1, ORCH_LIMITS.maxCodingSteps, true)
+  const optionProblems = [
+    ...(concurrentValid ? [] : ['Steps at the same time must be 1 to 3']),
+    ...(estimateValid ? [] : ['Estimate per step must be above 0 and at most 1000']),
+    ...(workflowWorkers.length > 0 && !codingStepsValid
+      ? [`Most coding steps must be 1 to ${ORCH_LIMITS.maxCodingSteps}`]
+      : []),
+    ...(workflowWorkers.length > 0 && !quotaFloorValid
+      ? ['Quota floor must be a whole number from 0 to 50, or blank']
+      : []),
+  ]
 
   const nowOnce = when === 'once'
   const isLead = nowOnce && recipe.kind === 'lead'
@@ -361,6 +382,9 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
           status: 'fail' as const,
           text: issue.message,
         })),
+      ...(optionProblems.length
+        ? [{ key: 'options', status: 'fail' as const, text: `More options: ${optionProblems[0]}` }]
+        : []),
       ...(missingInputs.length
         ? [
             {
@@ -451,7 +475,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     ack &&
     checksPass &&
     reachCovered &&
-    quotaFloorValid &&
+    (!isSavedRecipe || optionProblems.length === 0) &&
     missingInputs.length === 0 &&
     (!needsLead || leadId !== '')
 
@@ -643,13 +667,15 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       ...(cap > 0 ? { budgetUsd: cap } : {}),
       ...(deadlineAt ? { deadlineAt } : {}),
       unknownSpend,
-      maxConcurrentSteps: concurrent ?? data.defaults.maxConcurrentSteps,
-      stepEstimateUsd: estimate ?? data.defaults.stepEstimateUsd,
+      maxConcurrentSteps:
+        concurrent === null ? data.defaults.maxConcurrentSteps : Number(concurrent),
+      stepEstimateUsd: estimate === null ? data.defaults.stepEstimateUsd : Number(estimate),
       acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
       ...(workflowWorkers.length > 0
         ? {
             codingPolicies,
-            codingSteps: codingSteps ?? data.defaults.codingSteps ?? 1,
+            codingSteps:
+              codingSteps === null ? (data.defaults.codingSteps ?? 1) : Number(codingSteps),
             ...(quotaFloor.trim() !== '' && quotaFloorValid
               ? { quotaFloorPercent: Number(quotaFloor) }
               : {}),
@@ -1061,7 +1087,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
               </fieldset>
 
               {showAsk && (
-                <fieldset className="inner" style={{ border: 0, margin: 0 }}>
+                <fieldset
+                  className="inner start-ask"
+                  data-protected="block"
+                  style={{ border: 0, margin: 0 }}
+                >
                   <legend className="lab start-legend">Ask me before</legend>
                   <div className="start-clear">
                     {(
@@ -1089,7 +1119,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
               )}
 
               {nowOnce && (
-                <div className="inner start-limits">
+                <div className="inner start-limits" data-protected="block">
                   <span className="lab">{isSavedRecipe ? 'Budget and deadline' : 'Limits'}</span>
                   {!isSavedRecipe && (
                     <>
@@ -1178,7 +1208,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
             </div>
 
             {isSavedRecipe && (
-              <details className="inner start-more">
+              <details className="inner start-more" data-protected="block">
                 <summary>More options</summary>
                 <div className="start-clear">
                   <label className="start-field">
@@ -1188,9 +1218,13 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                       type="number"
                       min={1}
                       max={3}
-                      value={concurrent ?? workflowPreflight.data?.defaults.maxConcurrentSteps ?? 2}
+                      value={
+                        concurrent ??
+                        String(workflowPreflight.data?.defaults.maxConcurrentSteps ?? 2)
+                      }
+                      aria-invalid={!concurrentValid}
                       onChange={(event) => {
-                        setConcurrent(Number(event.target.value))
+                        setConcurrent(event.target.value)
                         touch()
                       }}
                     />
@@ -1202,9 +1236,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                       type="number"
                       min={0.01}
                       step={0.01}
-                      value={estimate ?? workflowPreflight.data?.defaults.stepEstimateUsd ?? 0.5}
+                      value={
+                        estimate ?? String(workflowPreflight.data?.defaults.stepEstimateUsd ?? 0.5)
+                      }
+                      aria-invalid={!estimateValid}
                       onChange={(event) => {
-                        setEstimate(Number(event.target.value))
+                        setEstimate(event.target.value)
                         touch()
                       }}
                     />
@@ -1218,9 +1255,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                           type="number"
                           min={1}
                           max={ORCH_LIMITS.maxCodingSteps}
-                          value={codingSteps ?? workflowPreflight.data?.defaults.codingSteps ?? 1}
+                          value={
+                            codingSteps ?? String(workflowPreflight.data?.defaults.codingSteps ?? 1)
+                          }
+                          aria-invalid={!codingStepsValid}
                           onChange={(event) => {
-                            setCodingSteps(Number(event.target.value))
+                            setCodingSteps(event.target.value)
                             touch()
                           }}
                         />

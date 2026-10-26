@@ -525,3 +525,34 @@ test('a coding agent whose policy changed has to be accepted again', async () =>
     within(dialog).getByRole('button', { name: 'Start the job' }).hasAttribute('disabled'),
   ).toBe(true)
 })
+
+test('More options are range-checked: an empty or out-of-range field blocks Start and says why', async () => {
+  workflowPreflightNow = {
+    ...workflowPreflight,
+    workers: [codingWorker('a'.repeat(64), false)],
+    defaults: { ...workflowPreflight.defaults, codingSteps: 4 },
+  }
+  const dialog = await recipeDialog()
+  fireEvent.change(within(dialog).getByLabelText(/Topic|Release/i, { selector: 'textarea' }), {
+    target: { value: 'x' },
+  })
+  fireEvent.click(acknowledgement(dialog))
+  const start = within(dialog).getByRole('button', { name: 'Start the job' })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(within(dialog).getByText('More options'))
+
+  const cases: [RegExp, string[], string, RegExp][] = [
+    [/^Steps at the same time/, ['0', '4', ''], '2', /Steps at the same time must be 1 to 3/],
+    [/^Estimate per step/, ['0', '1001', ''], '0.5', /Estimate per step must be above 0/],
+    [/^Most coding steps/, ['0', '999', ''], '4', /Most coding steps must be 1 to/],
+  ]
+  for (const [label, bad, good, reason] of cases) {
+    for (const value of bad) {
+      fireEvent.change(within(dialog).getByLabelText(label), { target: { value } })
+      await waitFor(() => expect(start.hasAttribute('disabled')).toBe(true))
+      expect(within(dialog).getByText(reason)).toBeDefined()
+    }
+    fireEvent.change(within(dialog).getByLabelText(label), { target: { value: good } })
+    await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  }
+})

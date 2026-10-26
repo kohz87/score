@@ -322,7 +322,14 @@ const consentForms: Record<string, { decisions: number; markers: string[] }> = {
   },
   'bold/BoldStartJob.tsx': {
     decisions: 1,
-    markers: ['bold-start-dialog', 'start-checks', 'start-secret'],
+    markers: [
+      'bold-start-dialog',
+      'start-checks',
+      'start-secret',
+      'start-limits',
+      'start-ask',
+      'start-more',
+    ],
   },
   'routes/team/McpAccessSection.tsx': { decisions: 1, markers: ['team-mcp-access'] },
   'routes/settings/RemoteSection.tsx': { decisions: 1, markers: ['settings-remote'] },
