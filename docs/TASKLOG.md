@@ -1389,3 +1389,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   once (also found zod 4 `z.unknown()` keys are required → optional); P2 "a compaction-rotated tip id isn't a Score id"
   — **rejected**: a lineage delete lists every id incl. the root, and the 2.3.0 refused-turn path covers the rest.
   Gates: full e2e 992 passed; pnpm check green (server 4782, web 3116, contract 1510); plugin pytest 366.
+- **v2.3.1 plugin live** (~00:20 UTC, owner OK): score_bridge/__init__.py (2 new hooks) on default + scoretesta (old copies in $JOB/tmp/plugin-pre-2.3.1/), hermes-gateway restarted idle, producers re-registered (107 → 110).
