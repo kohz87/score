@@ -1,34 +1,47 @@
 import {
   type AgentSummary,
-  type BranchCondition,
   type WorkflowDetail,
   type WorkflowNode,
   type WorkflowNodeKind,
   type WorkflowSummary,
 } from '@score/contract'
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router'
+import { Link, useBlocker, useNavigate, useParams } from 'react-router'
 import { statusLabel } from '../routes/orchestrations/orch-model.ts'
 import { graphOutcomeLabel } from '../routes/workflows/workflow-run-model.ts'
-import { AgentGlyph } from '../components/AgentGlyph.tsx'
-import { runtimeLabel } from '../components/runtime-label.ts'
 import { ApiError } from '../data/api.ts'
 import { useStreamQuery } from '../data/query-client.ts'
+import { clock } from '../live/resolved.ts'
 import { pairingProblem } from './bold-errors.ts'
+import { boldRecipesLink, boldStartJobLink } from './bold-links.ts'
 import { taskAgentsQuery } from '../data/task-queries.ts'
 import { EditorCanvas, type Selection } from '../routes/workflows/EditorCanvas.tsx'
 import { ExportDialog } from '../routes/workflows/ExportDialog.tsx'
-import { InputsEditor } from '../routes/workflows/EditorParts.tsx'
-import { TemplateField } from '../routes/workflows/TemplateField.tsx'
+import { InputsEditor, IssueList, Outline, Palette } from '../routes/workflows/EditorParts.tsx'
+import { NodeInspector } from '../routes/workflows/NodeInspector.tsx'
+import { WorkflowPreview } from '../routes/workflows/PreviewRun.tsx'
 import { useDraftHistory } from '../routes/workflows/use-draft-history.ts'
+import { useLiveOverlay } from '../routes/workflows/use-live-overlay.ts'
+import { placeNewNode } from '../routes/workflows/workflow-layout.ts'
 import {
-  addRule,
-  removeRule,
+  addNode,
+  connect,
+  disconnect,
+  portsOf,
+  removeNode,
   sameDraft,
   starterDraft,
   updateNode,
-  updateRule,
   type Draft,
 } from '../routes/workflows/workflow-model.ts'
 import {
@@ -38,64 +51,41 @@ import {
   useSaveWorkflow,
   useValidation,
   useWorkflow,
+  useWorkflowVersion,
   useWorkflows,
   workflowRunsQuery,
 } from '../routes/workflows/workflow-queries.ts'
-import { combine, indexIssues, shapeIssues } from '../routes/workflows/workflow-validation.ts'
+import {
+  combine,
+  indexIssues,
+  issuesForNode,
+  shapeIssues,
+  summaryLine,
+} from '../routes/workflows/workflow-validation.ts'
 import {
   RECIPE_STEP_LABEL,
-  RECIPE_STEP_MARK,
   addRecipeStep,
   analyzeRecipe,
   moveRecipeStepProblem,
   planRecipeMove,
   recipeClientProblems,
   removeRecipeStep,
-  setFailureMode,
   setPortTarget,
-  setRejectMode,
-  targetStepLabel,
-  type RecipeAnalysis,
   type RecipeProblem,
-  type RecipeRow,
 } from './recipe-model.ts'
+import { RecipeInspector, RecipeStepRow } from './BoldRecipeText.tsx'
 import '../routes/orchestrations/orchestrations.css'
 import '../routes/workflows/workflows.css'
-import { PlusIcon, TrashIcon } from './BoldIcons.tsx'
+import { PlusIcon } from './BoldIcons.tsx'
 import './bold-recipes.css'
 
-// PLAN 11.10d: the recipe editor on the bold shell. A recipe is a 7.1 workflow; this dialog is a step-list face over
-// the same definition and the same API. The prototype (docs/design/bold/prototype.html, mRecipe) is binding for the
-// screen. Two things deliberately differ: a graph that fans out from one port can't be shown faithfully as a list (it
-// opens read-only, with a way to the classic graph editor), and undo/redo is the prototype's keyboard pair rather than
-// extra buttons.
+// PLAN 11.10d, rebuilt as a page in 2.8.0 (decision 131, board C). A recipe is a 7.1 workflow: this page lists them
+// next to the built-in "lead decides", and edits one as a graph (the full editor: add, connect, move, delete, keyboard
+// on the canvas, preview, live states of a running copy) or "As text" (the step list). The step settings sit beside
+// both. docs/design/bold/prototype.html (mRecipe) is binding for colours and shapes; the page layout is the approved
+// mock-up's. Starting a run stays in Start a job (the editor's Run opens it with this recipe chosen).
 
-const AGENT_KINDS = new Set(['hermes', 'claude-code', 'codex'])
-
-type ConditionKey =
-  | 'verdict:passed'
-  | 'verdict:changes_requested'
-  | 'outcome:succeeded'
-  | 'outcome:failed'
-  | 'output_contains'
-
-function conditionKey(when: BranchCondition): ConditionKey {
-  if (when.kind === 'verdict') return `verdict:${when.is}`
-  if (when.kind === 'outcome') return `outcome:${when.is}`
-  return 'output_contains'
-}
-
-function conditionFrom(key: ConditionKey, current: BranchCondition): BranchCondition {
-  if (key === 'verdict:passed') return { kind: 'verdict', is: 'passed' }
-  if (key === 'verdict:changes_requested') return { kind: 'verdict', is: 'changes_requested' }
-  if (key === 'outcome:succeeded') return { kind: 'outcome', is: 'succeeded' }
-  if (key === 'outcome:failed') return { kind: 'outcome', is: 'failed' }
-  return { kind: 'output_contains', text: current.kind === 'output_contains' ? current.text : '' }
-}
-
-function refusalsFor(runtime: AgentSummary['runtime']): boolean {
-  return runtime !== undefined && runtime !== null && !AGENT_KINDS.has(runtime)
-}
+const BUILT_IN = 'lead-decides'
 
 function problemKey(problem: RecipeProblem): string {
   return `${problem.code}|${problem.nodeId ?? ''}|${problem.message}`
@@ -124,16 +114,19 @@ function describeError(error: unknown): string {
   return error.message
 }
 
-export function BoldRecipes({ onClose }: { onClose: () => void }) {
+/** The route: `/b/recipes`, `/b/recipes/new`, `/b/recipes/lead-decides` or `/b/recipes/:workflowId`. */
+export function BoldRecipesPage() {
+  const { workflowId } = useParams()
+  const navigate = useNavigate()
   const workflows = useWorkflows()
   const agentsQuery = useStreamQuery(taskAgentsQuery)
   const agents = agentsQuery.data ?? []
-  const [selection, setSelection] = useState<string | null>(null)
   const [newKey, setNewKey] = useState(0)
   const [notice, setNotice] = useState('')
   const recipes = useMemo(() => workflows.data?.items ?? [], [workflows.data])
-  const selected = selection ?? recipes[0]?.id ?? 'new'
-  const detail = useWorkflow(selected !== 'new' ? selected : undefined)
+  const selected = workflowId ?? recipes[0]?.id ?? (workflows.isPending ? null : 'new')
+  const isReal = selected !== null && selected !== 'new' && selected !== BUILT_IN
+  const detail = useWorkflow(isReal ? selected : undefined)
   const newDraft = useMemo(() => {
     const starter = starterDraft(
       agents.find((agent) => !agent.runtime || agent.runtime === 'hermes')?.id ??
@@ -145,137 +138,205 @@ export function BoldRecipes({ onClose }: { onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newKey])
 
-  const choose = useCallback((id: string) => {
-    setNotice('')
-    setSelection(id)
-  }, [])
-
+  const choose = useCallback(
+    (id: string) => {
+      setNotice('')
+      void navigate(boldRecipesLink(id))
+    },
+    [navigate],
+  )
   const startNew = useCallback(() => {
     setNotice('')
     setNewKey((value) => value + 1)
-    setSelection('new')
-  }, [])
+    void navigate(boldRecipesLink('new'))
+  }, [navigate])
 
-  const deleted = useCallback(
-    (id: string) => {
-      const next = recipes.find((recipe) => recipe.id !== id)?.id ?? 'new'
-      setNotice('Deleted the recipe.')
-      setSelection(next)
-    },
-    [recipes],
+  const list = (
+    <RecipeList recipes={recipes} selectedId={selected} onSelect={choose} onNew={startNew} />
   )
 
-  const content =
-    selection === null && workflows.isPending ? (
-      <BoldRecipeShell
-        recipes={recipes}
-        selectedId={selected}
-        onSelect={choose}
-        onNew={startNew}
-        onClose={onClose}
-      >
-        <p role="status" className="muted">
-          Loading recipes…
-        </p>
-      </BoldRecipeShell>
-    ) : selected === 'new' ? (
-      <BoldRecipeEditor
-        key={`new-${newKey}`}
-        detail={null}
-        initialDefinition={newDraft}
-        recipes={recipes}
-        selectedId="new"
-        agents={agents}
-        notice={notice}
-        onSelect={choose}
-        onNew={startNew}
-        onSaved={(id, version) => {
-          setNotice(`Saved as version ${version}.`)
-          setSelection(id)
-        }}
-        onDeleted={deleted}
-        onNotice={setNotice}
-        onClose={onClose}
-      />
-    ) : detail.data ? (
-      <BoldRecipeEditor
-        key={detail.data.id}
-        detail={detail.data}
-        initialDefinition={detail.data.latest.definition}
-        recipes={recipes}
-        selectedId={detail.data.id}
-        agents={agents}
-        notice={notice}
-        onSelect={choose}
-        onNew={startNew}
-        onSaved={(id, version) => {
-          setNotice(`Saved as version ${version}.`)
-          setSelection(id)
-        }}
-        onDeleted={deleted}
-        onNotice={setNotice}
-        onClose={onClose}
-      />
-    ) : (
-      <BoldRecipeShell
-        recipes={recipes}
-        selectedId={selected}
-        onSelect={choose}
-        onNew={startNew}
-        onClose={onClose}
-      >
-        {detail.isError ? (
-          <p role="alert" className="bold-error">
-            Couldn’t load this recipe. Try again or choose another.
+  if (selected === null || (isReal && !detail.data)) {
+    return (
+      <div className="bold-rp" data-ui-page="recipes">
+        {list}
+        <section className="bold-rp-main" aria-label="Recipe editor">
+          {isReal && detail.isError ? (
+            <p role="alert" className="bold-error">
+              Couldn’t load this recipe. Try again or choose another.
+            </p>
+          ) : workflows.isError ? (
+            <p role="alert" className="bold-error">
+              Couldn’t load recipes.{' '}
+              <button type="button" className="bold-link" onClick={() => void workflows.refetch()}>
+                Try again
+              </button>
+            </p>
+          ) : agentsQuery.status === 'error' ? (
+            <p role="alert" className="bold-error">
+              Couldn’t load the team, so the recipe can’t choose agents.
+            </p>
+          ) : (
+            <p role="status" className="muted">
+              {selected === null ? 'Loading recipes…' : 'Loading the recipe…'}
+            </p>
+          )}
+        </section>
+      </div>
+    )
+  }
+
+  if (selected === BUILT_IN)
+    return (
+      <div className="bold-rp" data-ui-page="recipes">
+        {list}
+        <section className="bold-rp-main" aria-label="Recipe editor">
+          <h2 className="bold-rp-title">lead decides</h2>
+          <p className="muted">
+            The built-in recipe. It has no fixed steps: the lead plans each job, asks the agents it
+            needs, and pauses for you where a decision is yours. There is nothing to edit here.
           </p>
-        ) : agentsQuery.status === 'error' ? (
-          <p role="alert" className="bold-error">
-            Couldn’t load the team, so the recipe can’t choose agents.
-          </p>
-        ) : (
-          <p role="status" className="muted">
-            Loading the recipe…
-          </p>
-        )}
-      </BoldRecipeShell>
+          <span>
+            <Link className="btn sm primary" to={boldStartJobLink()}>
+              Start a job
+            </Link>
+          </span>
+        </section>
+      </div>
     )
 
-  return content
+  const after = (id: string) => {
+    void navigate(boldRecipesLink(id), { replace: true })
+  }
+  const common = {
+    recipes,
+    list,
+    agents,
+    notice,
+    onSaved: (id: string, version: number) => {
+      setNotice(`Saved as version ${version}.`)
+      if (selected === 'new') after(id)
+    },
+    onDeleted: () => {
+      setNotice('Deleted the recipe.')
+      void navigate(boldRecipesLink(), { replace: true })
+    },
+    onDuplicated: (id: string) => {
+      setNotice('Made a copy. It is saved as version 1.')
+      after(id)
+    },
+    onNotice: setNotice,
+  }
+  return selected === 'new' ? (
+    <BoldRecipeEditor
+      key={`new-${newKey}`}
+      detail={null}
+      initialDefinition={newDraft}
+      {...common}
+    />
+  ) : (
+    <BoldRecipeEditor
+      key={detail.data!.id}
+      detail={detail.data!}
+      initialDefinition={detail.data!.latest.definition}
+      {...common}
+    />
+  )
 }
 
-function BoldRecipeShell({
+/** What each recipe is for at a glance: its version and how its runs are going. */
+function RecipeList({
   recipes,
   selectedId,
   onSelect,
   onNew,
-  onClose,
-  children,
 }: {
   recipes: WorkflowSummary[]
-  selectedId: string
+  selectedId: string | null
   onSelect: (id: string) => void
   onNew: () => void
-  onClose: () => void
-  children: React.ReactNode
 }) {
+  const runs = useStreamQuery(workflowRunsQuery).data
+  const [query, setQuery] = useState('')
+  const searchId = useId()
+  const needle = query.trim().toLowerCase()
+  const shown = recipes.filter((recipe) => recipe.name.toLowerCase().includes(needle))
+  const showLead = 'lead decides'.includes(needle)
   return (
-    <div className="bold-scrim">
-      <div className="bold-dialog wide" role="dialog" aria-modal="true" aria-label="Recipe editor">
-        <span className="row wrap">
-          <h2 className="bold-recipes-title">Recipes</h2>
-          <RecipeSwitcher
-            recipes={recipes}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            onNew={onNew}
-          />
-          <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
-            ×
-          </button>
-        </span>
-        {children}
+    <nav className="bold-rp-list" aria-label="Recipes">
+      <h1 className="bold-rp-h1">Recipes</h1>
+      <div className="row">
+        <label htmlFor={searchId} className="wf-visually-hidden">
+          Find a recipe
+        </label>
+        <input
+          id={searchId}
+          className="bold-field"
+          type="search"
+          placeholder="Find a recipe"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <button
+          type="button"
+          className="bold-rp-new"
+          aria-label="New recipe"
+          title="New recipe"
+          onClick={onNew}
+        >
+          <PlusIcon />
+        </button>
       </div>
-    </div>
+      {showLead && (
+        <button
+          type="button"
+          className="bold-rp-row"
+          aria-current={selectedId === BUILT_IN ? 'true' : undefined}
+          onClick={() => onSelect(BUILT_IN)}
+        >
+          <span className="row">
+            <b>lead decides</b>
+            <span className="bold-badge bold-badge--quiet">Built in</span>
+          </span>
+          <span className="small muted">No fixed steps: lead plans each job</span>
+        </button>
+      )}
+      {shown.map((recipe) => {
+        const count = runs?.filter((run) => run.workflowId === recipe.id).length ?? 0
+        const facts =
+          recipe.activeRuns > 0
+            ? 'running now'
+            : count > 0
+              ? `${count} ${count === 1 ? 'run' : 'runs'}`
+              : recipe.used
+                ? 'used by runs'
+                : 'not used yet'
+        return (
+          <button
+            key={recipe.id}
+            type="button"
+            className="bold-rp-row"
+            aria-current={selectedId === recipe.id ? 'true' : undefined}
+            onClick={() => onSelect(recipe.id)}
+          >
+            <b>{recipe.name}</b>
+            <span className="small muted">
+              Version {recipe.latestVersion} · {facts}
+            </span>
+          </button>
+        )
+      })}
+      {recipes.length > 0 && shown.length === 0 && !showLead && (
+        <p className="small muted" role="status">
+          No recipe matches “{query}”.
+        </p>
+      )}
+      {recipes.length === 0 && (
+        <p className="small muted">
+          No saved recipes yet. Start with the plus: an agent step, a gate for your approval and an
+          end.
+        </p>
+      )}
+    </nav>
   )
 }
 
@@ -306,105 +367,67 @@ function RecipeRunStatus({ recipe }: { recipe: WorkflowSummary | undefined }) {
   )
 }
 
-function RecipeSwitcher({
-  recipes,
-  selectedId,
-  onSelect,
-  onNew,
-}: {
-  recipes: WorkflowSummary[]
-  selectedId: string
-  onSelect: (id: string) => void
-  onNew: () => void
-}) {
-  return (
-    <div className="bold-seg" role="group" aria-label="Recipes">
-      {recipes.map((recipe) => (
-        <button
-          key={recipe.id}
-          type="button"
-          className={selectedId === recipe.id ? 'on' : undefined}
-          aria-pressed={selectedId === recipe.id}
-          onClick={() => onSelect(recipe.id)}
-        >
-          {recipe.name}
-        </button>
-      ))}
-      <button
-        type="button"
-        className={selectedId === 'new' ? 'on' : undefined}
-        aria-pressed={selectedId === 'new'}
-        onClick={onNew}
-      >
-        New recipe
-      </button>
-    </div>
-  )
-}
-
 function BoldRecipeEditor({
   detail,
   initialDefinition,
   recipes,
-  selectedId,
+  list,
   agents,
   notice,
-  onSelect,
-  onNew,
   onSaved,
   onDeleted,
+  onDuplicated,
   onNotice,
-  onClose,
 }: {
   detail: WorkflowDetail | null
   initialDefinition: Draft
   recipes: WorkflowSummary[]
-  selectedId: string
+  list: ReactNode
   agents: AgentSummary[]
   notice: string
-  onSelect: (id: string) => void
-  onNew: () => void
   onSaved: (id: string, version: number) => void
   onDeleted: (id: string) => void
+  onDuplicated: (id: string) => void
   onNotice: (text: string) => void
-  onClose: () => void
 }) {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const history = useDraftHistory<Draft>(initialDefinition)
   const { draft, commit } = history
   const analysis = useMemo(() => analyzeRecipe(draft), [draft])
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(
-    () => analysis.rows[0]?.node.id ?? null,
-  )
+  const [sel, setSel] = useState<Selection>(null)
+  const selectedNodeId = sel?.kind === 'node' ? sel.id : null
   const [saved, setSaved] = useState(() => ({
     workflowId: detail?.id ?? null,
     version: detail?.latestVersion ?? 0,
     definition: initialDefinition,
   }))
-  const [graph, setGraph] = useState(() => !analysis.listable)
+  const [graph, setGraph] = useState(true)
   const [conflict, setConflict] = useState<number | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [previewing, setPreviewing] = useState<Draft | null>(null)
+  const [viewVersion, setViewVersion] = useState<number | null>(null)
   const [loadedFrom, setLoadedFrom] = useState<number | null>(null)
   const [saveProblem, setSaveProblem] = useState('')
   const [announcement, setAnnouncement] = useState('')
   const save = useSaveWorkflow()
   const remove = useDeleteWorkflow()
-  const dialog = useRef<HTMLDivElement>(null)
+  const root = useRef<HTMLElement>(null)
+  const allowLeave = useRef(false)
   const nameId = useId()
-
-  useEffect(() => {
-    dialog.current?.focus()
-  }, [])
+  const viewed = useWorkflowVersion(saved.workflowId ?? undefined, viewVersion ?? undefined)
+  const viewing = viewVersion !== null
 
   const shape = useMemo(() => shapeIssues(draft), [draft])
   const validation = useValidation(shape.length === 0 ? draft : null)
-  const index = useMemo(
-    () => indexIssues(combine(shape, validation.data)),
-    [shape, validation.data],
-  )
+  const issues = useMemo(() => combine(shape, validation.data), [shape, validation.data])
+  const index = useMemo(() => indexIssues(issues), [issues])
+  // The step list's checks read the recipe as one line of steps; a recipe the list can't show is judged by the
+  // graph rules alone.
   const clientProblems = useMemo(
-    () => recipeClientProblems(draft, analysis.order),
-    [draft, analysis.order],
+    () => (analysis.listable ? recipeClientProblems(draft, analysis.order) : []),
+    [draft, analysis.order, analysis.listable],
   )
   const serverErrors = useMemo(
     () =>
@@ -432,7 +455,12 @@ function BoldRecipeEditor({
   const checkFailed = shape.length === 0 && validation.isError
   const dirty = !sameDraft(draft, saved.definition)
   const canSave =
-    problems.length === 0 && !checking && !checkFailed && analysis.listable && !save.isPending
+    problems.length === 0 &&
+    !checking &&
+    !checkFailed &&
+    !save.isPending &&
+    !viewing &&
+    (dirty || saved.workflowId === null)
   const selectedRow =
     analysis.rows.find((row) => row.node.id === selectedNodeId) ?? analysis.rows[0] ?? null
   const versions = detail?.versions ?? []
@@ -456,8 +484,40 @@ function BoldRecipeEditor({
       ),
     [analysis.rows, draft],
   )
+  const graphDraft: Draft = viewing && viewed.data ? viewed.data.definition : draft
+  const graphNode =
+    sel?.kind === 'node' ? graphDraft.nodes.find((node) => node.id === sel.id) : undefined
+  // A run of the version on screen that is going now: its states are drawn on the canvas; the draft is never touched.
+  const overlay = useLiveOverlay(
+    saved.workflowId,
+    saved.version,
+    !dirty && previewing === null && !viewing,
+  )
+  const previewBlocked =
+    shape.length > 0 || problems.length > 0
+      ? 'Fix the problems first: a preview needs a recipe without errors.'
+      : checking
+        ? 'Score is still checking the recipe.'
+        : null
 
-  const selectNode = useCallback((id: string | null) => setSelectedNodeId(id), [])
+  // Leaving with unsaved work asks first (the list, the top bar, a link).
+  const blocker = useBlocker(() => dirty && !allowLeave.current)
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    if (window.confirm('You have unsaved changes. Leave without saving?')) blocker.proceed()
+    else blocker.reset()
+  }, [blocker])
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  const selectNode = useCallback(
+    (id: string | null) => setSel(id ? { kind: 'node', id } : null),
+    [],
+  )
 
   const patch = useCallback(
     (change: Partial<WorkflowNode>, coalesce?: string) => {
@@ -467,6 +527,7 @@ function BoldRecipeEditor({
     [commit, draft, selectedRow],
   )
 
+  /** The text view's add: a step in the line, before the end. */
   function add(kind: WorkflowNodeKind) {
     if (!analysis.listable) return
     const agentId =
@@ -481,7 +542,61 @@ function BoldRecipeEditor({
       return
     }
     commit(result.draft)
-    setSelectedNodeId(result.id)
+    selectNode(result.id)
+  }
+
+  /** The graph's add: a step connected after the selected one (or dropped onto a step), placed beside it. */
+  function addAfter(
+    kind: WorkflowNodeKind,
+    agentId = '',
+    after: string | null = graphNode?.id ?? null,
+  ) {
+    const result = addNode(draft, kind, agentId)
+    if ('error' in result) {
+      setAnnouncement(result.error)
+      return
+    }
+    let next = result.draft
+    const source = after ? next.nodes.find((node) => node.id === after) : undefined
+    const agent = agents.find((item) => item.id === agentId)
+    if (kind === 'agent' && agent)
+      next = updateNode(next, result.id, { label: `${agent.name} step` })
+    let note = `Added ${kind === 'agent' && agent ? `${agent.name} step` : kind}.`
+    if (source && source.kind !== 'end') {
+      // The first way out of the selected node that leads nowhere yet (never a failure or rejection route).
+      const free = portsOf(source).find(
+        (port) =>
+          port.id !== 'failed' &&
+          port.id !== 'rejected' &&
+          !next.edges.some((edge) => edge.from === source.id && edge.port === port.id),
+      )
+      if (free) {
+        const joined = connect(next, source.id, free.id, result.id)
+        if ('draft' in joined) {
+          next = joined.draft
+          note = `${note} Connected after ${source.label}.`
+        }
+      }
+      if (kind === 'branch' && source.kind === 'agent')
+        next = updateNode(next, result.id, { subject: source.id })
+    }
+    next = placeNewNode(next, result.id, new Map(), after)
+    commit(next)
+    setSel({ kind: 'node', id: result.id })
+    setAnnouncement(note)
+  }
+
+  function deleteNode(id: string) {
+    const label = draft.nodes.find((node) => node.id === id)?.label ?? id
+    commit(removeNode(draft, id))
+    setSel(null)
+    setAnnouncement(`Removed ${label}.`)
+  }
+
+  function deleteEdge(id: string) {
+    commit(disconnect(draft, id))
+    setSel(null)
+    setAnnouncement('Removed the connection.')
   }
 
   function removeStep(id: string) {
@@ -491,7 +606,7 @@ function BoldRecipeEditor({
     const label = order[at]?.label || id
     const next = order[at + 1]?.id ?? order[at - 1]?.id ?? null
     commit(removeRecipeStep(draft, id))
-    setSelectedNodeId(next)
+    selectNode(next)
     setAnnouncement(`Removed ${label}`)
     focusStep(next, 'row')
   }
@@ -503,7 +618,7 @@ function BoldRecipeEditor({
     const label = analysis.order.find((node) => node.id === id)?.label || id
     const at = plan.order.findIndex((node) => node.id === id)
     commit(plan.draft)
-    setSelectedNodeId(id)
+    selectNode(id)
     setAnnouncement(`Moved ${label} to step ${at + 1}`)
     focusStep(id, direction === -1 ? 'up' : 'down')
   }
@@ -523,7 +638,10 @@ function BoldRecipeEditor({
       {
         onSuccess: (version) => {
           setConflict(null)
+          setLoadedFrom(null)
           setSaved({ workflowId: version.workflowId, version: version.version, definition: draft })
+          // A new recipe moves to its own address: that is not "leaving with unsaved work".
+          if (saved.workflowId === null) allowLeave.current = true
           onSaved(version.workflowId, version.version)
         },
         onError: (error) => {
@@ -543,7 +661,7 @@ function BoldRecipeEditor({
       const loaded = await fetchWorkflowVersion(queryClient, saved.workflowId, version)
       history.reset(loaded.definition)
       setSaved({ workflowId: saved.workflowId, version, definition: loaded.definition })
-      setSelectedNodeId(loaded.definition.nodes[0]?.id ?? null)
+      selectNode(loaded.definition.nodes[0]?.id ?? null)
       setLoadedFrom(null)
       setConflict(null)
       onNotice(`Reloaded version ${version}. Your edits were discarded.`)
@@ -565,8 +683,9 @@ function BoldRecipeEditor({
       const loaded = await fetchWorkflowVersion(queryClient, saved.workflowId, version)
       // Load it as an edit, not a reset: the unsaved draft stays one undo away.
       history.commit(loaded.definition)
-      setSelectedNodeId(loaded.definition.nodes[0]?.id ?? null)
+      selectNode(loaded.definition.nodes[0]?.id ?? null)
       setLoadedFrom(version)
+      setViewVersion(null)
       onNotice(`Loaded version ${version} into the draft. Saving makes it a new version.`)
     } catch {
       onNotice('Couldn’t load that version.')
@@ -577,13 +696,36 @@ function BoldRecipeEditor({
     if (!saved.workflowId || !window.confirm(`Delete ${draft.name}? Its saved versions go too.`))
       return
     onNotice('')
+    setMoreOpen(false)
     remove.mutate(saved.workflowId, {
-      onSuccess: () => onDeleted(saved.workflowId!),
+      onSuccess: () => {
+        allowLeave.current = true
+        onDeleted(saved.workflowId!)
+      },
       onError: (error) => onNotice(describeError(error)),
     })
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  function duplicate() {
+    if (!saved.workflowId) return
+    setMoreOpen(false)
+    const definition = {
+      ...saved.definition,
+      name: `${saved.definition.name} (copy)`.slice(0, 120),
+    }
+    save.mutate(
+      { workflowId: null, definition },
+      {
+        onSuccess: (version) => {
+          allowLeave.current = true
+          onDuplicated(version.workflowId)
+        },
+        onError: (error) => onNotice(describeError(error)),
+      },
+    )
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     const target = event.target as HTMLElement | null
     const typing =
       !!target &&
@@ -591,31 +733,26 @@ function BoldRecipeEditor({
         ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) ||
         !!target.closest('.cm-editor'))
     if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'z') {
-      // A text field keeps its native undo; the recipe history is for the step list itself.
-      if (typing) return
+      // A text field keeps its native undo; the recipe history is for the steps themselves.
+      if (typing || viewing || previewing) return
       event.preventDefault()
       if (event.shiftKey) history.redo()
       else history.undo()
       return
     }
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && moreOpen) {
       event.preventDefault()
-      requestClose()
+      setMoreOpen(false)
     }
-  }
-
-  function requestClose() {
-    if (dirty && !window.confirm('You have unsaved changes. Close without saving?')) return
-    onClose()
   }
 
   function focusStep(id: string | null, control: 'row' | 'up' | 'down') {
     requestAnimationFrame(() => {
       if (id === null) {
-        dialog.current?.focus()
+        root.current?.focus()
         return
       }
-      const row = dialog.current?.querySelector<HTMLElement>(`[data-recipe-step="${id}"]`)
+      const row = root.current?.querySelector<HTMLElement>(`[data-recipe-step="${id}"]`)
       if (control === 'row') {
         row?.querySelector<HTMLButtonElement>('.bold-step')?.focus()
         return
@@ -630,49 +767,68 @@ function BoldRecipeEditor({
     })
   }
 
-  const graphSelection: Selection = selectedRow ? { kind: 'node', id: selectedRow.node.id } : null
+  const inspector = graph ? (
+    graphNode ? (
+      <fieldset className="bold-rp-readonly" disabled={viewing}>
+        <NodeInspector
+          draft={graphDraft}
+          node={graphNode}
+          agents={agents}
+          issues={issuesForNode(index, graphDraft, graphNode.id)}
+          commit={commit}
+          onDelete={() => deleteNode(graphNode.id)}
+          announce={setAnnouncement}
+        />
+      </fieldset>
+    ) : (
+      <div className="wf-inspector wf-inspector--empty">
+        <h3>Nothing selected</h3>
+        <p className="small muted">
+          Select a step on the graph, or a problem above, to edit it here.
+        </p>
+      </div>
+    )
+  ) : selectedRow ? (
+    <RecipeInspector
+      row={selectedRow}
+      analysis={analysis}
+      draft={draft}
+      agents={agents}
+      editable={analysis.listable && !viewing}
+      commit={commit}
+      patch={patch}
+      point={(port, target) => point(selectedRow.node.id, port, target)}
+    />
+  ) : (
+    <span className="muted small">Add a step to edit it.</span>
+  )
 
   return (
-    <div
-      className="bold-scrim"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) requestClose()
-      }}
-    >
-      <div
-        ref={dialog}
-        className="bold-dialog wide"
-        role="dialog"
-        aria-modal="true"
+    <div className="bold-rp" data-ui-page="recipes">
+      {list}
+
+      <section
+        ref={root}
+        className="bold-rp-main"
         aria-label="Recipe editor"
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
-        <span className="row wrap">
-          <h2 className="bold-recipes-title">Recipes</h2>
-          <RecipeSwitcher
-            recipes={recipes}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            onNew={onNew}
+        <div className="bold-rp-head">
+          <label className="wf-visually-hidden" htmlFor={nameId}>
+            Recipe name
+          </label>
+          <input
+            id={nameId}
+            className="bold-rp-name"
+            value={draft.name}
+            maxLength={120}
+            aria-invalid={draft.name.trim() === '' || undefined}
+            disabled={viewing}
+            onChange={(event) => commit({ ...draft, name: event.target.value }, 'name')}
           />
-          <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>
-            ×
-          </button>
-        </span>
-
-        {notice && (
-          <p className="small muted bold-recipes-notice" role="status">
-            {notice}
-          </p>
-        )}
-        <p className="wf-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
-          {announcement}
-        </p>
-
-        <div className="row wrap">
           <span
-            className={`bold-badge ${problems.length > 0 ? 'bold-badge--bad' : 'bold-badge--ok'}`}
+            className={`bold-badge ${problems.length > 0 || checkFailed ? 'bold-badge--bad' : 'bold-badge--ok'}`}
             role="status"
           >
             {badge}
@@ -686,10 +842,76 @@ function BoldRecipeEditor({
           {saved.workflowId !== null && (
             <RecipeRunStatus recipe={recipes.find((recipe) => recipe.id === saved.workflowId)} />
           )}
-          <span className="row bold-recipes-actions" style={{ marginLeft: 'auto' }}>
-            <button type="button" className="btn sm" onClick={() => setGraph((value) => !value)}>
-              {graph ? 'Show as list' : 'Show as graph'}
+        </div>
+
+        <div className="bold-rp-bar">
+          <div className="bold-seg" role="tablist" aria-label="How to show the recipe">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={graph}
+              className={graph ? 'on' : undefined}
+              onClick={() => setGraph(true)}
+            >
+              Graph
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!graph}
+              className={!graph ? 'on' : undefined}
+              onClick={() => setGraph(false)}
+            >
+              As text
+            </button>
+          </div>
+          <span className="row bold-recipes-actions" style={{ marginLeft: 'auto' }}>
+            <button
+              type="button"
+              className="btn sm"
+              disabled={!history.canUndo || viewing || previewing !== null}
+              onClick={history.undo}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              className="btn sm"
+              disabled={!history.canRedo || viewing || previewing !== null}
+              onClick={history.redo}
+            >
+              Redo
+            </button>
+            <button
+              type="button"
+              className="btn sm"
+              disabled={previewing !== null || previewBlocked !== null || viewing}
+              aria-describedby={previewBlocked ? 'bold-rp-preview-why' : undefined}
+              title={previewBlocked ?? 'Play the recipe through without running anything'}
+              onClick={() => {
+                setPreviewing(draft)
+                setGraph(true)
+                setSel(null)
+              }}
+            >
+              Preview, nothing runs
+            </button>
+            {previewBlocked && (
+              <span id="bold-rp-preview-why" className="wf-visually-hidden">
+                {previewBlocked}
+              </span>
+            )}
+            {saved.workflowId !== null && (
+              <button
+                type="button"
+                className="btn sm"
+                disabled={dirty || checking || viewing}
+                title={dirty ? 'Save first: a run uses a saved version' : undefined}
+                onClick={() => void navigate(boldStartJobLink(saved.workflowId!))}
+              >
+                Run…
+              </button>
+            )}
             <button
               type="button"
               className="btn sm"
@@ -705,6 +927,65 @@ function BoldRecipeEditor({
             >
               Export
             </button>
+            <span className="bold-rp-more">
+              <button
+                type="button"
+                className="btn sm"
+                aria-haspopup="true"
+                aria-expanded={moreOpen}
+                onClick={() => setMoreOpen((value) => !value)}
+              >
+                More
+              </button>
+              {moreOpen && (
+                <div className="bold-rp-morepanel" role="group" aria-label="More">
+                  <button
+                    type="button"
+                    className="btn sm"
+                    disabled={!saved.workflowId || dirty || save.isPending}
+                    title={dirty ? 'Save first: a copy is made from the saved version.' : undefined}
+                    onClick={duplicate}
+                  >
+                    Duplicate
+                  </button>
+                  {versions.length > 0 && (
+                    <label className="bold-lab">
+                      View a saved version (read-only)
+                      <select
+                        className="bold-field"
+                        value={viewVersion ?? ''}
+                        onChange={(event) => {
+                          const value = Number(event.target.value)
+                          setViewVersion(value || null)
+                          setGraph(true)
+                          setSel(null)
+                          setPreviewing(null)
+                          setMoreOpen(false)
+                        }}
+                      >
+                        <option value="">Choose a version…</option>
+                        {[...versions].reverse().map((version) => (
+                          <option key={version.version} value={version.version}>
+                            Version {version.version}
+                            {version.used ? ' (used by runs)' : ''}, {version.nodes} steps
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {saved.workflowId && (
+                    <button
+                      type="button"
+                      className="btn sm bold-danger"
+                      disabled={remove.isPending}
+                      onClick={removeRecipe}
+                    >
+                      {remove.isPending ? 'Deleting…' : 'Delete recipe'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </span>
             <button
               type="button"
               className="btn sm primary"
@@ -716,9 +997,7 @@ function BoldRecipeEditor({
                     ? "Score couldn't check this recipe. Try again before saving."
                     : checking
                       ? 'Score is still checking the recipe'
-                      : analysis.listable
-                        ? undefined
-                        : 'This recipe can only be edited in the graph editor'
+                      : undefined
               }
               onClick={onSave}
             >
@@ -727,7 +1006,16 @@ function BoldRecipeEditor({
           </span>
         </div>
 
-        {problems.length > 0 && (
+        {notice && (
+          <p className="small muted bold-recipes-notice" role="status">
+            {notice}
+          </p>
+        )}
+        <p className="wf-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+          {announcement}
+        </p>
+
+        {!graph && problems.length > 0 && (
           <div className="small bold-recipes-problems" role="status">
             {problems.map((problem) => (
               <div key={problemKey(problem)}>
@@ -735,10 +1023,7 @@ function BoldRecipeEditor({
                   <button
                     type="button"
                     className="bold-link"
-                    onClick={() => {
-                      selectNode(problem.nodeId)
-                      setGraph(false)
-                    }}
+                    onClick={() => selectNode(problem.nodeId)}
                   >
                     {problem.message}
                   </button>
@@ -749,7 +1034,7 @@ function BoldRecipeEditor({
             ))}
           </div>
         )}
-        {warnings > 0 && (
+        {!graph && warnings > 0 && (
           <p className="small muted">
             {warnings} {warnings === 1 ? 'warning' : 'warnings'} — saving is still allowed.
           </p>
@@ -798,34 +1083,168 @@ function BoldRecipeEditor({
           </p>
         )}
 
-        {!analysis.listable && (
-          <section className="bold-inner bold-recipes-graphnote" aria-label="Graph-only recipe">
-            <b>This recipe needs the graph editor.</b>
-            <p>
-              {analysis.graphOnlyReasons.join(' ')} The step list can’t show every path faithfully,
-              so it is read-only here.
-            </p>
-            {saved.workflowId && (
-              <Link className="btn sm" to={`/b/workflows/${encodeURIComponent(saved.workflowId)}`}>
-                Edit this one in the graph editor
-              </Link>
+        {viewing && (
+          <section
+            className="bold-inner bold-recipes-graphnote"
+            aria-label="Viewing a saved version"
+          >
+            <b>Version {viewVersion} (read-only)</b>
+            <p>A saved version never changes. Edit a copy of it to make a new version.</p>
+            <div className="row wrap">
+              <button
+                type="button"
+                className="btn sm primary"
+                disabled={!viewed.data}
+                onClick={() => void loadOlder(viewVersion)}
+              >
+                Edit a copy of version {viewVersion}
+              </button>
+              <button type="button" className="btn sm" onClick={() => setViewVersion(null)}>
+                Back to my draft
+              </button>
+            </div>
+            {viewed.isError && (
+              <p role="alert" className="bold-error">
+                Couldn’t load that version.
+              </p>
             )}
           </section>
         )}
 
+        {graph ? (
+          <div className="bold-rp-graph wf-editor">
+            {overlay && previewing === null && !viewing && (
+              <p className="wf-live small" role="status">
+                <span className="wf-live__dot" aria-hidden="true" />
+                Live: run started {clock(overlay.run.createdAt)}{' '}
+                <Link to={`/b/runs/${encodeURIComponent(overlay.run.briefId)}`}>
+                  Open the run ›
+                </Link>
+              </p>
+            )}
+            {previewing !== null ? (
+              <WorkflowPreview
+                key="preview"
+                draft={previewing}
+                agents={agents}
+                onStop={() => setPreviewing(null)}
+              />
+            ) : viewing && !viewed.data ? (
+              <p role="status" className="muted">
+                Loading version {viewVersion}…
+              </p>
+            ) : (
+              <EditorCanvas
+                readOnly={viewing}
+                overlay={viewing ? null : overlay}
+                draft={graphDraft}
+                agents={agents}
+                issues={index}
+                selected={sel}
+                onSelect={setSel}
+                onConnect={(from, port, to) => {
+                  const result = connect(draft, from, port, to)
+                  if ('error' in result) return result.error
+                  commit(result.draft)
+                  const names = (id: string) =>
+                    draft.nodes.find((node) => node.id === id)?.label ?? id
+                  setAnnouncement(`Connected ${names(from)} to ${names(to)}.`)
+                  return null
+                }}
+                onDropKind={(payload, onto) => addAfter(payload.kind, payload.agentId, onto)}
+                onDeleteNode={deleteNode}
+                onDeleteEdge={deleteEdge}
+                onLayout={(next, key) => commit(next, key)}
+                announce={setAnnouncement}
+              />
+            )}
+            {!viewing && previewing === null && (
+              <Palette
+                agents={agents}
+                onAdd={(kind, agentId) => addAfter(kind, agentId)}
+                disabled={false}
+              />
+            )}
+            <IssueList
+              issues={issues}
+              draft={graphDraft}
+              onSelect={setSel}
+              checking={checking}
+              headline={summaryLine(index, checking)}
+            />
+            <details className="bold-rp-outline">
+              <summary>Outline: the graph as text</summary>
+              <Outline draft={graphDraft} issues={index} selected={sel} onSelect={setSel} />
+            </details>
+          </div>
+        ) : (
+          <div className="bold-rp-text">
+            {analysis.listable ? null : (
+              <section className="bold-inner bold-recipes-graphnote" aria-label="Graph-only recipe">
+                <b>This recipe is easier to edit as a graph.</b>
+                <p>
+                  {analysis.graphOnlyReasons.join(' ')} The step list can’t show every path
+                  faithfully, so it is read-only here.
+                </p>
+                <button type="button" className="btn sm" onClick={() => setGraph(true)}>
+                  Open the graph
+                </button>
+              </section>
+            )}
+            <ol className="bold-recipes-list" aria-label="Steps">
+              {analysis.rows.map((row) => (
+                <RecipeStepRow
+                  key={row.node.id}
+                  row={row}
+                  analysis={analysis}
+                  agents={agents}
+                  editable={analysis.listable && !viewing}
+                  selected={selectedRow?.node.id === row.node.id}
+                  moveProblems={moveProblems.get(row.node.id) ?? { up: null, down: null }}
+                  onSelect={() => selectNode(row.node.id)}
+                  onMove={(direction) => move(row.node.id, direction)}
+                  onRemove={() => removeStep(row.node.id)}
+                  onTarget={point}
+                />
+              ))}
+            </ol>
+            {analysis.listable && !viewing && (
+              <div className="row wrap">
+                {(['agent', 'gate', 'branch', 'join', 'end'] as WorkflowNodeKind[]).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className="btn sm ghost"
+                    data-add-step={kind}
+                    onClick={() => add(kind)}
+                  >
+                    <PlusIcon />
+                    {kind === 'agent' ? 'Agent step' : RECIPE_STEP_LABEL[kind].split(' ·')[0]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <details className="bold-inner bold-recipes-details">
           <summary>Recipe details</summary>
-          <fieldset className="bold-recipes-details-fields" disabled={!analysis.listable}>
-            <label className="bold-lab" htmlFor={nameId}>
-              Name
+          <fieldset className="bold-recipes-details-fields" disabled={viewing}>
+            <label className="bold-lab">
+              Description (optional)
+              <textarea
+                className="bold-field"
+                rows={2}
+                maxLength={500}
+                value={draft.description ?? ''}
+                onChange={(event) => {
+                  const next = { ...draft }
+                  if (event.target.value === '') delete next.description
+                  else next.description = event.target.value
+                  commit(next, 'description')
+                }}
+              />
             </label>
-            <input
-              id={nameId}
-              className="bold-field"
-              value={draft.name}
-              maxLength={120}
-              onChange={(event) => commit({ ...draft, name: event.target.value }, 'name')}
-            />
             <div className="wf-editor bold-recipes-inputs">
               <InputsEditor draft={draft} commit={commit} issues={shape} />
             </div>
@@ -851,112 +1270,15 @@ function BoldRecipeEditor({
               </select>
             </label>
           )}
-          {saved.workflowId && (
-            <div className="row wrap">
-              <button
-                type="button"
-                className="btn sm bold-danger"
-                disabled={remove.isPending}
-                onClick={removeRecipe}
-              >
-                {remove.isPending ? 'Deleting…' : 'Delete recipe'}
-              </button>
-            </div>
-          )}
         </details>
+      </section>
 
-        <div className="bold-recipes-columns">
-          <div className="bold-recipes-listcol">
-            {graph ? (
-              <div className="bold-inner bold-recipes-graph">
-                <p className="small muted">
-                  Read-only graph. Edit the steps in the list, or open the classic graph editor for
-                  connections and positions.
-                </p>
-                <EditorCanvas
-                  readOnly
-                  draft={draft}
-                  agents={agents}
-                  issues={index}
-                  selected={graphSelection}
-                  onSelect={(selection) => {
-                    if (selection?.kind === 'node') selectNode(selection.id)
-                  }}
-                  onConnect={() => 'This graph is read-only.'}
-                  onDropKind={() => undefined}
-                  onDeleteNode={() => undefined}
-                  onDeleteEdge={() => undefined}
-                  onLayout={() => undefined}
-                  announce={() => undefined}
-                />
-                {saved.workflowId && (
-                  <Link
-                    className="btn sm"
-                    to={`/b/workflows/${encodeURIComponent(saved.workflowId)}`}
-                  >
-                    Open the graph editor
-                  </Link>
-                )}
-              </div>
-            ) : (
-              <>
-                <ol className="bold-recipes-list" aria-label="Steps">
-                  {analysis.rows.map((row) => (
-                    <RecipeStepRow
-                      key={row.node.id}
-                      row={row}
-                      analysis={analysis}
-                      agents={agents}
-                      editable={analysis.listable}
-                      selected={selectedRow?.node.id === row.node.id}
-                      moveProblems={moveProblems.get(row.node.id) ?? { up: null, down: null }}
-                      onSelect={() => selectNode(row.node.id)}
-                      onMove={(direction) => move(row.node.id, direction)}
-                      onRemove={() => removeStep(row.node.id)}
-                      onTarget={point}
-                    />
-                  ))}
-                </ol>
-                {analysis.listable && (
-                  <div className="row wrap">
-                    {(['agent', 'gate', 'branch', 'join', 'end'] as WorkflowNodeKind[]).map(
-                      (kind) => (
-                        <button
-                          key={kind}
-                          type="button"
-                          className="btn sm ghost"
-                          data-add-step={kind}
-                          onClick={() => add(kind)}
-                        >
-                          <PlusIcon />
-                          {kind === 'agent' ? 'Agent step' : RECIPE_STEP_LABEL[kind].split(' ·')[0]}
-                        </button>
-                      ),
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="bold-inner bold-recipes-inspector wf-editor" aria-label="Step inspector">
-            {selectedRow ? (
-              <RecipeInspector
-                row={selectedRow}
-                analysis={analysis}
-                draft={draft}
-                agents={agents}
-                editable={analysis.listable}
-                commit={commit}
-                patch={patch}
-                point={(port, target) => point(selectedRow.node.id, port, target)}
-              />
-            ) : (
-              <span className="muted small">Add a step to edit it.</span>
-            )}
-          </div>
-        </div>
-      </div>
+      <aside
+        className="bold-inner bold-rp-aside bold-recipes-inspector wf-editor"
+        aria-label="Selected step"
+      >
+        {inspector}
+      </aside>
 
       {exporting && saved.workflowId && (
         <ExportDialog
@@ -967,461 +1289,5 @@ function BoldRecipeEditor({
         />
       )}
     </div>
-  )
-}
-
-function RecipeStepRow({
-  row,
-  analysis,
-  agents,
-  editable,
-  selected,
-  moveProblems,
-  onSelect,
-  onMove,
-  onRemove,
-  onTarget,
-}: {
-  row: RecipeRow
-  analysis: RecipeAnalysis
-  agents: AgentSummary[]
-  editable: boolean
-  selected: boolean
-  moveProblems: { up: string | null; down: string | null }
-  onSelect: () => void
-  onMove: (direction: -1 | 1) => void
-  onRemove: () => void
-  onTarget: (nodeId: string, port: string, target: string | null) => void
-}) {
-  const node = row.node
-  const label = node.label || node.id
-  const agent = node.kind === 'agent' ? agents.find((item) => item.id === node.agentId) : undefined
-  const incoming = row.incoming
-    .map((edge) => analysis.order.find((item) => item.id === edge.from)?.label || edge.from)
-    .join(', ')
-  return (
-    <li className={`bold-recipes-row${selected ? ' sel' : ''}`} data-recipe-step={node.id}>
-      <div className="bold-recipes-rowmain">
-        <button
-          type="button"
-          className={`bold-step${selected ? ' sel' : ''}`}
-          aria-current={selected ? 'true' : undefined}
-          onClick={onSelect}
-        >
-          <span className="mono small muted">{row.index + 1}</span>
-          {agent ? (
-            <AgentGlyph agent={agent} size="xs" decorative />
-          ) : node.kind === 'agent' ? (
-            <span className="bold-step-mark bold-step-mark--missing" aria-hidden="true">
-              ?
-            </span>
-          ) : (
-            <span className="bold-step-mark" aria-hidden="true">
-              {RECIPE_STEP_MARK[node.kind]}
-            </span>
-          )}
-          <span className="grow bold-step-copy">
-            <b>{label}</b>
-            <span className="small muted">
-              {RECIPE_STEP_LABEL[node.kind]}
-              {node.kind === 'agent'
-                ? ` · ${node.agentId || 'no agent'} · retries ${node.retries}`
-                : ''}
-            </span>
-            {node.kind === 'join' && (
-              <span className="small muted">Waits for {incoming || 'nothing yet'}.</span>
-            )}
-            {node.kind === 'branch' && (
-              <span className="small muted">
-                Looks at{' '}
-                {analysis.order.find((item) => item.id === node.subject)?.label ||
-                  node.subject ||
-                  'no step yet'}
-                .
-              </span>
-            )}
-          </span>
-        </button>
-        <div className="bold-recipes-rowactions">
-          <button
-            type="button"
-            className="icon-btn sm"
-            data-move="up"
-            aria-label={`Move ${label} up`}
-            title={moveProblems.up ?? `Move ${label} up`}
-            disabled={!editable || moveProblems.up !== null}
-            onClick={() => onMove(-1)}
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            className="icon-btn sm"
-            data-move="down"
-            aria-label={`Move ${label} down`}
-            title={moveProblems.down ?? `Move ${label} down`}
-            disabled={!editable || moveProblems.down !== null}
-            onClick={() => onMove(1)}
-          >
-            ↓
-          </button>
-          <button
-            type="button"
-            className="icon-btn sm bold-recipes-remove"
-            aria-label={`Remove ${label}`}
-            disabled={!editable}
-            onClick={onRemove}
-          >
-            <TrashIcon />
-          </button>
-        </div>
-      </div>
-      {node.kind === 'branch' && row.routes.length > 0 && (
-        <div className="bold-recipes-routes">
-          {row.routes.map((route) => {
-            const value = route.edges[0]?.to ?? ''
-            const unknown = value && !analysis.order.some((node) => node.id === value)
-            return (
-              <label key={route.port} className="bold-recipes-route">
-                <span>{route.label} →</span>
-                <select
-                  aria-label={`${label}: ${route.label} goes to`}
-                  value={value}
-                  disabled={!editable}
-                  onChange={(event) => onTarget(node.id, route.port, event.target.value || null)}
-                >
-                  <option value="">Not connected</option>
-                  {unknown && <option value={value}>Missing step {value}</option>}
-                  {analysis.order
-                    .filter((target) => target.id !== node.id)
-                    .map((target) => (
-                      <option key={target.id} value={target.id}>
-                        {targetStepLabel(analysis, target.id)}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            )
-          })}
-        </div>
-      )}
-    </li>
-  )
-}
-
-function RecipeInspector({
-  row,
-  analysis,
-  draft,
-  agents,
-  editable,
-  commit,
-  patch,
-  point,
-}: {
-  row: RecipeRow
-  analysis: RecipeAnalysis
-  draft: Draft
-  agents: AgentSummary[]
-  editable: boolean
-  commit: (next: Draft, coalesce?: string) => void
-  patch: (change: Partial<WorkflowNode>, coalesce?: string) => void
-  point: (port: string, target: string | null) => void
-}) {
-  const node = row.node
-  const agentNodes = draft.nodes.filter((item) => item.kind === 'agent')
-  const picked =
-    node.kind === 'agent' ? agents.find((agent) => agent.id === node.agentId) : undefined
-  const codingNote =
-    picked?.runtime === 'claude-code' || picked?.runtime === 'codex'
-      ? `${runtimeLabel(picked.runtime)} works on this computer, in its own workspace. Starting the run asks you to accept what it can read.`
-      : null
-  const doneRoute = row.routes.find((route) => route.port === 'ok')
-  const failRoute = row.routes.find((route) => route.port === 'failed')
-  const rejectRoute = row.routes.find((route) => route.port === 'rejected')
-  return (
-    <fieldset className="bold-recipes-fields" disabled={!editable}>
-      <b>Step {row.index + 1}</b>
-      <label className="orch-field">
-        <span>Title</span>
-        <input
-          value={node.label}
-          maxLength={80}
-          disabled={!editable}
-          onChange={(event) => patch({ label: event.target.value }, `label:${node.id}`)}
-        />
-      </label>
-
-      {node.kind === 'agent' && (
-        <>
-          <label className="orch-field">
-            <span>Agent</span>
-            <select
-              value={node.agentId}
-              disabled={!editable}
-              onChange={(event) => patch({ agentId: event.target.value })}
-            >
-              {node.agentId === '' && <option value="">Choose an agent…</option>}
-              {node.agentId !== '' && !agents.some((agent) => agent.id === node.agentId) && (
-                <option value={node.agentId}>{node.agentId} (not on this team)</option>
-              )}
-              {agents.map((agent) => {
-                const cli = runtimeLabel(agent.runtime)
-                const refused = refusalsFor(agent.runtime)
-                return (
-                  <option key={agent.id} value={agent.id} disabled={refused}>
-                    {agent.name}
-                    {cli ? ` · ${cli}` : ''}
-                    {refused ? ' (can’t take workflow steps)' : ''}
-                  </option>
-                )
-              })}
-            </select>
-          </label>
-          {codingNote && <p className="small muted bold-recipes-hint">{codingNote}</p>}
-          <TemplateField
-            label="Instruction"
-            value={node.instruction}
-            onChange={(value) => patch({ instruction: value }, `instruction:${node.id}`)}
-            draft={draft}
-            nodeId={node.id}
-            rows={7}
-            invalid={node.instruction.trim() === ''}
-          />
-          <p className="small muted bold-recipes-hint">
-            Use <code>{`{{inputs.${draft.inputs[0]?.name ?? 'name'}}}`}</code> or an earlier step’s{' '}
-            <code>{`{{nodes.${agentNodes.find((item) => item.id !== node.id)?.id ?? 'name'}.output}}`}</code>
-            .
-          </p>
-          <div className="bold-recipes-inspector-grid">
-            <label className="orch-field">
-              <span>Retries</span>
-              <select
-                value={node.retries}
-                disabled={!editable}
-                onChange={(event) => patch({ retries: Number(event.target.value) })}
-              >
-                {[0, 1, 2].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="orch-field">
-              <span>If it fails</span>
-              <select
-                value={node.onFailure}
-                disabled={!editable}
-                onChange={(event) =>
-                  commit(setFailureMode(draft, node.id, event.target.value as 'route' | 'fail_run'))
-                }
-              >
-                <option value="fail_run">Stop the job</option>
-                <option value="route">Go to a repair step</option>
-              </select>
-            </label>
-          </div>
-          {node.onFailure === 'route' && failRoute && (
-            <label className="orch-field">
-              <span>Failure goes to</span>
-              <select
-                value={failRoute.edges[0]?.to ?? ''}
-                disabled={!editable}
-                onChange={(event) => point('failed', event.target.value || null)}
-              >
-                <option value="">Not connected</option>
-                {analysis.order
-                  .filter((target) => target.id !== node.id)
-                  .map((target) => (
-                    <option key={target.id} value={target.id}>
-                      {targetStepLabel(analysis, target.id)}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          )}
-        </>
-      )}
-
-      {node.kind === 'gate' && (
-        <section data-protected="block" className="bold-recipes-gate" aria-label="Gate decision">
-          <TemplateField
-            label="Question"
-            value={node.question}
-            onChange={(value) => patch({ question: value }, `question:${node.id}`)}
-            draft={draft}
-            nodeId={node.id}
-            rows={3}
-            invalid={node.question.trim() === ''}
-          />
-          <p className="small muted">
-            The job stops here until you approve or reject. Rejecting stops the job unless you add a
-            rejection path.
-          </p>
-          <label className="orch-field">
-            <span>If rejected</span>
-            <select
-              value={node.onReject}
-              disabled={!editable}
-              onChange={(event) =>
-                commit(setRejectMode(draft, node.id, event.target.value as 'route' | 'stop_run'))
-              }
-            >
-              <option value="stop_run">Stop the job</option>
-              <option value="route">Go to its own path</option>
-            </select>
-          </label>
-          {node.onReject === 'route' && rejectRoute && (
-            <label className="orch-field">
-              <span>Rejection goes to</span>
-              <select
-                value={rejectRoute.edges[0]?.to ?? ''}
-                disabled={!editable}
-                onChange={(event) => point('rejected', event.target.value || null)}
-              >
-                <option value="">Not connected</option>
-                {analysis.order
-                  .filter((target) => target.id !== node.id)
-                  .map((target) => (
-                    <option key={target.id} value={target.id}>
-                      {targetStepLabel(analysis, target.id)}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          )}
-        </section>
-      )}
-
-      {(node.kind === 'agent' || node.kind === 'gate' || node.kind === 'join') && doneRoute && (
-        <label className="orch-field">
-          <span>{doneRoute.label} goes to</span>
-          <select
-            value={doneRoute.edges[0]?.to ?? ''}
-            disabled={!editable}
-            onChange={(event) => point('ok', event.target.value || null)}
-          >
-            <option value="">Not connected</option>
-            {analysis.order
-              .filter((target) => target.id !== node.id)
-              .map((target) => (
-                <option key={target.id} value={target.id}>
-                  {targetStepLabel(analysis, target.id)}
-                </option>
-              ))}
-          </select>
-        </label>
-      )}
-
-      {node.kind === 'branch' && (
-        <>
-          <label className="orch-field">
-            <span>Looks at</span>
-            <select
-              value={node.subject}
-              disabled={!editable}
-              onChange={(event) => patch({ subject: event.target.value })}
-            >
-              {node.subject === '' && <option value="">Choose an earlier agent step…</option>}
-              {agentNodes.map((other) => (
-                <option key={other.id} value={other.id}>
-                  {other.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <fieldset className="orch-field bold-recipes-rules">
-            <legend>Decide by</legend>
-            {node.rules.map((rule, index) => (
-              <div key={rule.id} className="bold-recipes-rule">
-                <select
-                  aria-label={index === 0 ? 'Decide by' : `Rule ${index + 1} condition`}
-                  value={conditionKey(rule.when)}
-                  disabled={!editable}
-                  onChange={(event) =>
-                    commit(
-                      updateRule(
-                        draft,
-                        node.id,
-                        rule.id,
-                        conditionFrom(event.target.value as ConditionKey, rule.when),
-                      ),
-                    )
-                  }
-                >
-                  <option value="verdict:passed">The verdict is passed</option>
-                  <option value="verdict:changes_requested">
-                    The verdict is changes requested
-                  </option>
-                  <option value="outcome:succeeded">The step succeeded</option>
-                  <option value="outcome:failed">The step failed</option>
-                  <option value="output_contains">Whether its output contains some text</option>
-                </select>
-                {rule.when.kind === 'output_contains' && (
-                  <input
-                    aria-label={`Rule ${index + 1} text`}
-                    value={rule.when.text}
-                    maxLength={200}
-                    disabled={!editable}
-                    onChange={(event) =>
-                      commit(
-                        updateRule(draft, node.id, rule.id, {
-                          kind: 'output_contains',
-                          text: event.target.value,
-                        }),
-                        `rule:${rule.id}`,
-                      )
-                    }
-                  />
-                )}
-                <button
-                  type="button"
-                  className="wf-link"
-                  disabled={!editable || node.rules.length <= 1}
-                  onClick={() => commit(removeRule(draft, node.id, rule.id))}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-            <div className="bold-recipes-rule">
-              <span className="small muted">otherwise</span>
-              <span className="small muted">Always needed</span>
-            </div>
-            <button
-              type="button"
-              className="btn sm"
-              disabled={!editable || node.rules.length >= 8}
-              onClick={() => commit(addRule(draft, node.id))}
-            >
-              Add a rule
-            </button>
-          </fieldset>
-          <p className="small muted">
-            Every branch needs an otherwise path. A recipe only moves forward, so a path can lead to
-            any later step, never back to an earlier one.
-          </p>
-        </>
-      )}
-
-      {node.kind === 'join' && (
-        <p className="small muted">
-          Waits for{' '}
-          {row.incoming
-            .map((edge) => analysis.order.find((item) => item.id === edge.from)?.label || edge.from)
-            .join(', ') || 'nothing yet'}
-          . A join waits for every path that leads into it.
-        </p>
-      )}
-
-      {node.kind === 'end' && <p className="small muted">The run finishes when it gets here.</p>}
-      <p className="small muted">
-        In the graph, this step is <code>{node.id}</code>.
-      </p>
-      <span className="small muted">
-        Step {row.index + 1} of {analysis.rows.length}
-      </span>
-    </fieldset>
   )
 }

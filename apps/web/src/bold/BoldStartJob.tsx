@@ -23,7 +23,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../data/api.ts'
 import { copyText } from '../data/clipboard.ts'
@@ -202,6 +202,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const closeButton = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const agents = useStreamQuery(agentsQuery).data ?? NO_AGENTS
   const workflows = useWorkflows()
@@ -442,6 +443,17 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     (!needsLead || leadId !== '')
 
   const savedRecipes = workflows.data?.items ?? []
+  // `?recipe=<id>` (the Recipes page's Run) opens the dialog with that saved recipe already chosen, once.
+  const wantedRecipe = new URLSearchParams(location.search).get('recipe')
+  const appliedWanted = useRef(false)
+  const wantedItem = wantedRecipe
+    ? savedRecipes.find((item) => item.id === wantedRecipe)
+    : undefined
+  useEffect(() => {
+    if (!wantedItem || appliedWanted.current) return
+    appliedWanted.current = true
+    setRecipe({ kind: 'workflow', id: wantedItem.id, name: wantedItem.name })
+  }, [wantedItem])
   const recipeOptions: { key: string; label: string; choice: RecipeChoice }[] = [
     { key: 'lead', label: 'lead decides', choice: { kind: 'lead' } },
     { key: 'none', label: 'None', choice: { kind: 'none' } },
@@ -887,10 +899,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                   })}
                   <Link
                     className="link"
-                    to="/b?recipes=1"
+                    to="/b/recipes"
                     onClick={() => {
                       onClose()
-                      void navigate('/b?recipes=1')
+                      void navigate('/b/recipes')
                     }}
                   >
                     Edit recipes

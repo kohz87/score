@@ -22,7 +22,6 @@ const shot = async (page: Page, name: string) => {
   mkdirSync(shots, { recursive: true })
   await page.screenshot({ path: `${shots}/${name}.png`, fullPage: false })
 }
-const web = { 'x-score-client': 'web' }
 
 /** Coding agents in front of the real server's team list (and an Antigravity one, which workflows refuse). */
 async function withCodingAgents(page: Page) {
@@ -81,10 +80,9 @@ test('the editor offers coding agents for a step, refuses Antigravity with the r
     })
   })
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/workflows')
-  await page.getByRole('link', { name: 'New workflow' }).click()
+  await page.goto('/b/recipes/new')
   await page.locator('[data-node="step1"]').click()
-  const inspector = page.getByRole('complementary', { name: 'Step settings' })
+  const inspector = page.getByRole('complementary', { name: 'Selected step' })
   const picker = inspector.getByLabel(/^Agent/)
   await expect(picker.locator('option', { hasText: 'coder-a · Codex' })).not.toHaveAttribute(
     'disabled',
@@ -114,7 +112,7 @@ test('the editor offers coding agents for a step, refuses Antigravity with the r
   )
   await expect(problems).toContainText('Settings › Coding')
   await expect(page.locator('[data-node="step1"]')).toHaveAttribute('aria-label', /1 problem/)
-  await expect(page.getByRole('button', { name: 'Save as new version' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Save as version \d+$/ })).toBeDisabled()
   await shot(page, 'validate-coding-issue')
   // A Hermes agent clears it.
   await picker.selectOption({ label: 'builder' })
@@ -122,106 +120,6 @@ test('the editor offers coding agents for a step, refuses Antigravity with the r
     timeout: 20_000,
   })
   await expect(problems).not.toContainText('Coding agents can take workflow steps')
-})
-
-test('the run dialog of a workflow with coding steps shows reach and risk, asks once, and sends policies, limit and unknown cost', async ({
-  page,
-}) => {
-  await pair(page)
-  await withCodingAgents(page)
-  const name = `Coding run ${Date.now().toString(36)}`
-  const created = await page.request.post('/api/workflows', {
-    headers: web,
-    data: {
-      definition: {
-        name,
-        inputs: [],
-        nodes: [
-          {
-            id: 'build',
-            kind: 'agent',
-            label: 'Build it',
-            agentId: 'builder',
-            instruction: 'Build the page.',
-            retries: 0,
-            onFailure: 'fail_run',
-          },
-          { id: 'done', kind: 'end', label: 'Done' },
-        ],
-        edges: [{ id: 'e1', from: 'build', port: 'ok', to: 'done' }],
-      },
-    },
-  })
-  expect(created.ok()).toBe(true)
-  // The workflow's coding step, as the preflight would report it for a computer with coding agents set up.
-  await page.route('**/api/workflow-runs/preflight*', async (route) => {
-    const response = await route.fetch()
-    const real = (await response.json()) as Record<string, unknown> & {
-      mapping: unknown[]
-      defaults: Record<string, unknown>
-    }
-    await route.fulfill({
-      response,
-      json: {
-        ...real,
-        ok: true,
-        mapping: [
-          ...real.mapping,
-          { agentId: 'coder-a', name: 'coder-a', incarnation: 'coder-a-incarnation' },
-        ],
-        workers: [codingPreflight.workers[0]],
-        defaults: { ...real.defaults, codingSteps: 3 },
-      },
-    })
-  })
-  let sent: Record<string, unknown> | undefined
-  await page.route('**/api/workflow-runs', async (route) => {
-    if (route.request().method() !== 'POST') return route.fallback()
-    sent = route.request().postDataJSON() as Record<string, unknown>
-    await route.fulfill({
-      status: 409,
-      json: {
-        error: { code: 'policy_changed', message: 'changed', details: { agentId: 'coder-a' } },
-      },
-    })
-  })
-  await page.setViewportSize({ width: 1280, height: 1300 })
-  await page.goto('/workflows')
-  await page.getByRole('listitem', { name }).getByRole('button', { name: /^Run/ }).click()
-  const dialog = page.getByRole('dialog', { name: new RegExp(`Start ${name}`) })
-  const section = dialog.getByRole('region', { name: 'Coding agents in this run' })
-  await expect(section).toContainText('Reads any file you can read')
-  await expect(section).toContainText(
-    'Whatever a coding agent can read, it can repeat in its answer',
-  )
-  await expect(section).toContainText('passed to the steps after it')
-  await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
-  const start = dialog.getByRole('button', { name: 'Start the run' })
-  await expect(start).toBeDisabled()
-  await section
-    .getByRole('checkbox', { name: /I understand what these coding agents can read/ })
-    .check()
-  await expect(start).toBeEnabled()
-  await dialog.getByText('Limits and estimates').click()
-  await expect(dialog.getByLabel('Most coding steps')).toHaveValue('3')
-  await dialog.getByLabel('Most coding steps').fill('5')
-  await dialog.getByLabel(/Keep going when the cost of Codex is unknown/).check()
-  await dialog.evaluate((element) => element.scrollTo(0, element.scrollHeight))
-  await section.scrollIntoViewIfNeeded()
-  await shot(page, 'run-dialog-coding')
-  await start.click()
-  await expect(dialog.getByText(/A coding agent changed since you looked/)).toBeVisible()
-  expect(sent).toMatchObject({
-    codingPolicies: { 'coder-a': codingPreflight.workers[0]!.policyId },
-    acknowledgeCodingReach: { policyIds: [codingPreflight.workers[0]!.policyId] },
-    codingSteps: 5,
-    acceptUnknownCost: ['codex'],
-  })
-  // The policy id is the same on the second look, so the acknowledgement still covers it (a changed id doesn't: see the
-  // component tests).
-  await expect(
-    section.getByRole('checkbox', { name: /I understand what these coding agents can read/ }),
-  ).toBeChecked()
 })
 
 test.describe('a coding step in the live workflow view', () => {

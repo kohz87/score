@@ -3,8 +3,8 @@ import { fixtureNow } from './now-fixture.ts'
 import { okValidation, unfinishedValidation, workflowFixtures } from './workflow-fixtures.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
-// Baselines for the workflow pages (PLAN 7.1b), from frozen fixtures: the list, the editor with an unfinished draft
-// (problems on a node, a connection and the whole), and a run caught with its gate waiting for the person.
+// Baselines for the workflow pages (PLAN 7.1b), from frozen fixtures: a run caught with its gate waiting for the person,
+// and the room's run panel. The list and the editor became the Recipes page (2.8.0; e2e/bold-classic-pages.spec.ts).
 
 test.use({ timezoneId: 'UTC', locale: 'en-GB' })
 
@@ -42,20 +42,6 @@ test.beforeEach(async ({ page }) => {
 })
 
 const pages = [
-  { name: 'workflows-list', path: '/workflows', ready: '.wf-card', widths: [1440, 390] },
-  {
-    name: 'workflow-editor',
-    path: '/workflows/wf-draft',
-    ready: '[data-node="build"]',
-    widths: [1440, 768, 390],
-    select: '[data-node="build"]',
-  },
-  {
-    name: 'workflow-editor-drawn',
-    path: '/workflows/wf-drawn',
-    ready: '[data-node="draft"]',
-    widths: [1440, 390],
-  },
   {
     name: 'workflow-run',
     path: '/runs/brief-wfrun-1',
@@ -77,7 +63,6 @@ async function open(page: Page, target: (typeof pages)[number], width: number, d
   await page.goto(target.path)
   await expect(page.locator(target.ready).first()).toBeVisible()
   await expect(page.getByText(/^Loading/)).toHaveCount(0)
-  if ('select' in target && width >= 1024) await page.locator(target.select).click()
   await page.evaluate(() => document.fonts.ready)
   await page.evaluate(() => {
     const scroll = document.querySelector('.chat-scroll')

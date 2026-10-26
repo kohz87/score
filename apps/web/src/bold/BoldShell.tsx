@@ -11,7 +11,6 @@ import {
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { BoldFrameContext } from '../shell/framed-paths.tsx'
-import { BoldRecipes } from './BoldRecipes.tsx'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useTextScale } from '../data/text-scale.ts'
 import { useMediaQuery } from '../data/use-media.ts'
@@ -23,7 +22,7 @@ import { useRoomNeedsYouState } from './room/use-needs-you.ts'
 import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
 import { agentDisplayName, agentMood, agentStateLabel, dockProgress } from './bold-agents.ts'
-import { boldCloseRecipesLink, boldOneToOneLink } from './bold-links.ts'
+import { boldOneToOneLink } from './bold-links.ts'
 import { BoldSearch } from './BoldSearch.tsx'
 import { GearIcon, RoomIcon, SearchIcon, TeamIcon, TerminalIcon } from './BoldIcons.tsx'
 import { useTerminalAvailable } from '../shell/TerminalButton.tsx'
@@ -40,11 +39,12 @@ import './bold-theme.css'
 
 const PHONE = '(max-width: 860px)'
 
-type View = 'room' | 'team' | 'settings'
+type View = 'room' | 'team' | 'recipes' | 'settings'
 
 function viewOf(path: string): View {
   if (path.startsWith('/b/team')) return 'team'
   if (path.startsWith('/b/settings')) return 'settings'
+  if (path.startsWith('/b/recipes')) return 'recipes'
   return 'room'
 }
 
@@ -116,7 +116,6 @@ function BoldShellFrame() {
   ])
   const navigate = useNavigate()
   const location = useLocation()
-  const recipesOpen = new URLSearchParams(location.search).get('recipes') === '1'
   const view = viewOf(location.pathname)
   const phone = useMediaQuery(PHONE)
   // The phone badge counts the same job the strip does. It waits for the canonical team-room read: before that the
@@ -167,6 +166,7 @@ function BoldShellFrame() {
     const params = new URLSearchParams(location.search)
     if (params.get('start') === 'job') {
       params.delete('start')
+      params.delete('recipe')
       const search = params.toString()
       void navigate(
         { pathname: location.pathname, search: search ? `?${search}` : '' },
@@ -261,7 +261,7 @@ function BoldShellFrame() {
         data-look={resolvedLook}
         style={{ '--scale': scale } as CSSProperties}
       >
-        <div className="bold-frame" inert={commandOpen || recipesOpen || startOpen}>
+        <div className="bold-frame" inert={commandOpen || startOpen}>
           <header className="top" inert={phone && sheetOpen}>
             <button
               type="button"
@@ -275,9 +275,7 @@ function BoldShellFrame() {
               <nav className="nav" aria-label="Main">
                 {navButton('room', 'Room', '/b')}
                 {navButton('team', 'Team', '/b/team')}
-                <button type="button" onClick={go('/b?recipes=1')}>
-                  Recipes
-                </button>
+                {navButton('recipes', 'Recipes', '/b/recipes')}
               </nav>
             )}
             {!phone && (
@@ -300,7 +298,7 @@ function BoldShellFrame() {
               </div>
             )}
             {phone && (
-              <button type="button" className="btn sm" onClick={go('/b?recipes=1')}>
+              <button type="button" className="btn sm" onClick={go('/b/recipes')}>
                 Recipes
               </button>
             )}
@@ -401,13 +399,6 @@ function BoldShellFrame() {
             </nav>
           )}
         </div>
-        {recipesOpen && (
-          <BoldRecipes
-            onClose={() => {
-              void navigate(boldCloseRecipesLink(location.search))
-            }}
-          />
-        )}
         {commandOpen && (
           <BoldSearch
             agents={agents}

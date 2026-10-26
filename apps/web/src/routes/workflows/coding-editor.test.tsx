@@ -12,7 +12,7 @@ import {
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
-import { WorkflowEditorRoute } from './WorkflowEditor.tsx'
+import { BoldRecipesPage } from '../../bold/BoldRecipes.tsx'
 
 // 7.7c-2 #3: the editor offers Claude Code and Codex agents for steps (with their program named), refuses Antigravity
 // with the reason, and Validate's coding issues show on the step they are about, with words for what to do.
@@ -125,8 +125,8 @@ function mountEditor() {
     queryClient.clear()
   })
   const router = createMemoryRouter(
-    [{ path: '/workflows/:workflowId', element: <WorkflowEditorRoute /> }],
-    { initialEntries: ['/workflows/wf-release'] },
+    [{ path: '/b/recipes/:workflowId', Component: BoldRecipesPage }],
+    { initialEntries: ['/b/recipes/wf-release'] },
   )
   render(
     <QueryClientProvider client={queryClient}>
@@ -140,7 +140,7 @@ function mountEditor() {
 test('the agent picker offers Claude Code and Codex agents with their program, and refuses Antigravity with the reason', async () => {
   mountEditor()
   fireEvent.click(await screen.findByRole('button', { name: /^Agent step Draft the notes/ }))
-  const inspector = await screen.findByRole('complementary', { name: 'Step settings' })
+  const inspector = await screen.findByRole('complementary', { name: 'Selected step' })
   const picker = within(inspector).getByRole('combobox', { name: /^Agent/ })
   const options = within(picker)
     .getAllByRole('option')
@@ -180,11 +180,11 @@ test('Validate’s coding issue shows on the step it is about, with words for wh
       name: /^Agent step Draft the notes, coder-c \(Antigravity\).*, 1 problem$/,
     }),
   ).toBeTruthy()
-  const save = screen.getByRole('button', { name: 'Save as new version' }) as HTMLButtonElement
+  const save = screen.getByRole('button', { name: /^Save as version/ }) as HTMLButtonElement
   await waitFor(() => expect(save.disabled).toBe(true))
   // Choosing an agent that can take the step clears it.
   fireEvent.click(within(problems).getByRole('button', { name: 'Draft the notes' }))
-  const inspector = screen.getByRole('complementary', { name: 'Step settings' })
+  const inspector = screen.getByRole('complementary', { name: 'Selected step' })
   fireEvent.change(within(inspector).getByRole('combobox', { name: /^Agent/ }), {
     target: { value: 'coder-b' },
   })

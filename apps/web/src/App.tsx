@@ -22,8 +22,7 @@ import { AttemptPage } from './routes/attempts/AttemptPage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
 import { RunPage } from './routes/runs/RunPage.tsx'
 import { WatchPage } from './routes/watch/WatchPage.tsx'
-import { WorkflowEditorRoute } from './routes/workflows/WorkflowEditor.tsx'
-import { WorkflowsPage } from './routes/workflows/WorkflowsPage.tsx'
+import { BoldRecipesPage } from './bold/BoldRecipes.tsx'
 
 // Knowledge brings CodeMirror and the Markdown renderer: loaded on first visit, not with the shell.
 const LazyKnowledgePage = lazy(async () => ({
@@ -77,16 +76,6 @@ function toBoldLoader({ request }: { request: Request }) {
   return target ? redirect(target) : null
 }
 
-const WorkflowsFramed = () => (
-  <BoldClassicPage>
-    <WorkflowsPage />
-  </BoldClassicPage>
-)
-const WorkflowEditorFramed = () => (
-  <BoldClassicPage>
-    <WorkflowEditorRoute />
-  </BoldClassicPage>
-)
 const RunFramed = () => (
   <BoldClassicPage>
     <RunPage />
@@ -132,8 +121,17 @@ export const appRoutes: RouteObject[] = [
           { path: 'team', Component: BoldTeam },
           { path: 'team/:agentId', Component: BoldAgentPage },
           { path: 'screen/:agentId', Component: BoldScreenPage },
-          { path: 'workflows', Component: WorkflowsFramed },
-          { path: 'workflows/:workflowId', Component: WorkflowEditorFramed },
+          { path: 'recipes', Component: BoldRecipesPage },
+          { path: 'recipes/:workflowId', Component: BoldRecipesPage },
+          {
+            path: 'workflows',
+            loader: ({ request }) => redirect(keepSearch(request, '/b/recipes')),
+          },
+          {
+            path: 'workflows/:workflowId',
+            loader: ({ request, params }) =>
+              redirect(keepSearch(request, `/b/recipes/${params.workflowId ?? ''}`)),
+          },
           { path: 'runs/:briefId', Component: RunFramed },
           { path: 'watch/:agentId', Component: WatchFramed },
           { path: 'terminal', Component: BoldTerminalPage },
@@ -214,11 +212,12 @@ export const appRoutes: RouteObject[] = [
           // Kept classic pages that used to live under /now. The old paths redirect below.
           {
             path: '/workflows',
-            loader: toBoldLoader,
-            children: [
-              { index: true, Component: WorkflowsPage },
-              { path: ':workflowId', Component: WorkflowEditorRoute },
-            ],
+            loader: ({ request }) => redirect(keepSearch(request, '/b/recipes')),
+          },
+          {
+            path: '/workflows/:workflowId',
+            loader: ({ request, params }) =>
+              redirect(keepSearch(request, `/b/recipes/${params.workflowId ?? ''}`)),
           },
           { path: '/watch/:agentId', loader: toBoldLoader, Component: WatchPage },
           { path: '/runs/:briefId', loader: toBoldLoader, Component: RunPage },
@@ -230,12 +229,12 @@ export const appRoutes: RouteObject[] = [
           },
           {
             path: '/now/flow/workflows',
-            loader: ({ request }) => redirect(keepSearch(request, '/workflows')),
+            loader: ({ request }) => redirect(keepSearch(request, '/b/recipes')),
           },
           {
             path: '/now/flow/workflows/:workflowId',
             loader: ({ request, params }) =>
-              redirect(keepSearch(request, `/workflows/${params.workflowId ?? ''}`)),
+              redirect(keepSearch(request, `/b/recipes/${params.workflowId ?? ''}`)),
           },
           {
             path: '/now/flow/:briefId',

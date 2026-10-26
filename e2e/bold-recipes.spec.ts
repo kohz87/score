@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+import { startRecipe } from './recipe-run.ts'
 
-// PLAN 11.10d against the fake adapter. A recipe is the 7.1 workflow definition, so every edit here goes through the
+// PLAN 11.10d, as the Recipes page since 2.8.0, against the fake adapter. A recipe is the 7.1 workflow definition, so every edit here goes through the
 // same API and engine; no model is called. Instruction markers script the fake agents: [fake:verdict:passed] replies
 // with a passed verdict and [fake:fail] ends that step's attempt failed.
 
@@ -12,11 +13,24 @@ const step = (page: Page, text: string) =>
   steps(page)
     .locator('.bold-step')
     .filter({ has: page.locator('.bold-step-copy > b', { hasText: exact(text) }) })
-const inspector = (page: Page) => page.locator('.bold-recipes-inspector')
+const inspector = (page: Page) => page.locator('.bold-rp-aside')
 
-async function openRecipes(page: Page) {
-  await page.goto('/b?recipes=1')
-  await expect(page.getByRole('dialog', { name: 'Recipe editor' })).toBeVisible()
+/** The page opens on the graph; the step list is the "As text" tab. */
+async function showText(page: Page) {
+  await page.getByRole('tab', { name: 'As text' }).click()
+  await expect(steps(page)).toBeVisible()
+}
+
+async function openRecipes(page: Page, id = 'new') {
+  await page.goto(id ? `/b/recipes/${id}` : '/b/recipes')
+  await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
+}
+
+/** Opens a saved recipe from the list and switches to its step list. */
+async function openRecipeText(page: Page, name: string) {
+  await openRecipes(page, 'new')
+  await page.getByRole('navigation', { name: 'Recipes' }).getByRole('button', { name }).click()
+  await showText(page)
 }
 
 async function openDetails(page: Page) {
@@ -27,8 +41,7 @@ async function openDetails(page: Page) {
 }
 
 async function nameRecipe(page: Page, name: string) {
-  const details = await openDetails(page)
-  await details.locator('.bold-recipes-details-fields input.bold-field').fill(name)
+  await page.getByRole('textbox', { name: 'Recipe name' }).fill(name)
 }
 
 async function chooseStep(page: Page, text: string) {
@@ -92,31 +105,17 @@ async function withCodingAgents(page: Page) {
   })
 }
 
-async function startFromList(page: Page, name: string, inputs: Record<string, string> = {}) {
-  await page.goto('/workflows')
-  const card = page.getByRole('listitem', { name })
-  await card.getByRole('button', { name: /^Run/ }).click()
-  const dialog = page.getByRole('dialog', { name: new RegExp(`Start ${name}`) })
-  for (const [label, value] of Object.entries(inputs))
-    await dialog.getByLabel(new RegExp(`^${label}`)).fill(value)
-  await expect(dialog.getByRole('list', { name: 'Agent mapping' })).toContainText('builder')
-  await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
-  const start = dialog.getByRole('button', { name: 'Start the run' })
-  await expect(start).toBeEnabled({ timeout: 20_000 })
-  await start.click()
-  await expect(dialog).toBeHidden()
-}
-
 test('build a gate and branch as a step list, save, run and approve it', async ({ page }) => {
   test.setTimeout(180_000)
   await pair(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await openRecipes(page)
-  await page.getByRole('button', { name: 'New recipe' }).click()
+  await openRecipes(page, 'new')
+  await showText(page)
 
   const name = `Release notes ${Date.now().toString(36)}`
   await nameRecipe(page, name)
+  await openDetails(page)
   const inputs = page.getByRole('region', { name: 'Start inputs' })
   await inputs.getByRole('button', { name: 'Add an input' }).click()
   await inputs.getByLabel('Name').fill('topic')
@@ -171,7 +170,8 @@ test('build a gate and branch as a step list, save, run and approve it', async (
   await page.getByRole('button', { name: 'Save as version 1' }).click()
   await expect(page.getByText('Saved as version 1.')).toBeVisible({ timeout: 20_000 })
 
-  await startFromList(page, name, { Topic: 'the 2.4 release' })
+  const created = (await workflows(page)).find((workflow) => workflow.name === name)!
+  await startRecipe(page, created.id, { Topic: 'the 2.4 release' })
   const gate = page.getByRole('region', { name: 'Decide on Approve the draft' })
   await expect(gate).toBeVisible({ timeout: 60_000 })
   await expect(gate).toContainText('Publish it?')
@@ -189,7 +189,7 @@ test('retries and a failure path, and a join that waits for both paths', async (
   await page.emulateMedia({ reducedMotion: 'reduce' })
 
   const failureName = `Failure path ${Date.now().toString(36)}`
-  await createViaApi(page, {
+  const failureId = await createViaApi(page, {
     name: failureName,
     inputs: [],
     nodes: [
@@ -219,8 +219,7 @@ test('retries and a failure path, and a join that waits for both paths', async (
       { id: 'e2', from: 'fix', port: 'ok', to: 'fixed' },
     ],
   })
-  await openRecipes(page)
-  await page.getByRole('button', { name: failureName }).click()
+  await openRecipeText(page, failureName)
   await chooseStep(page, 'Build')
   await inspector(page).getByLabel('Retries').selectOption('2')
   await inspector(page).getByLabel('If it fails').selectOption('route')
@@ -230,7 +229,7 @@ test('retries and a failure path, and a join that waits for both paths', async (
   })
   await page.getByRole('button', { name: 'Save as version 2' }).click()
   await expect(page.getByText('Saved as version 2.')).toBeVisible({ timeout: 20_000 })
-  await startFromList(page, failureName)
+  await startRecipe(page, failureId)
   await expect(page.getByText('Workflow reached its end').first()).toBeVisible({ timeout: 60_000 })
 
   const joinName = `Wait for both ${Date.now().toString(36)}`
@@ -284,11 +283,11 @@ test('retries and a failure path, and a join that waits for both paths', async (
       { id: 'e6', from: 'both', port: 'ok', to: 'done' },
     ],
   })
-  await openRecipes(page)
-  await page.getByRole('button', { name: joinName }).click()
+  await openRecipeText(page, joinName)
   await expect(step(page, 'Wait for both')).toContainText('Waits for Left, Right')
   await chooseStep(page, 'Wait for both')
   await expect(inspector(page)).toContainText('A join waits for every path that leads into it.')
+  await inspector(page).getByLabel('Title').fill('Wait for both sides')
   await page.getByRole('button', { name: 'Save as version 2' }).click()
   await expect(page.getByText('Saved as version 2.')).toBeVisible({ timeout: 20_000 })
 })
@@ -338,8 +337,7 @@ test('moving and removing steps re-links the saved graph', async ({ page }) => {
       { id: 'e3', from: 'three', port: 'ok', to: 'done' },
     ],
   })
-  await openRecipes(page)
-  await page.getByRole('button', { name }).click()
+  await openRecipeText(page, name)
 
   await page.getByRole('button', { name: 'Move Two up' }).click()
   await expect(steps(page).locator('.bold-step')).toHaveText([
@@ -410,8 +408,8 @@ test('the step list offers coding agents, refuses Antigravity, and Validate keep
   })
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await openRecipes(page)
-  await page.getByRole('button', { name: 'New recipe' }).click()
+  await openRecipes(page, 'new')
+  await showText(page)
   await chooseStep(page, 'First step')
   const picker = inspector(page).getByLabel('Agent')
   await expect(picker.locator('option', { hasText: 'coder-a · Codex' })).not.toHaveAttribute(
@@ -465,8 +463,7 @@ test('conflict, older version, scrubbed export and delete', async ({ page }) => 
     ],
     edges: [{ id: 'e1', from: 'one', port: 'ok', to: 'done' }],
   })
-  await openRecipes(page)
-  await page.getByRole('button', { name }).click()
+  await openRecipeText(page, name)
   await chooseStep(page, 'One')
   await inspector(page).getByLabel('Title').fill('One v2')
   await page.getByRole('button', { name: 'Save as version 2' }).click()
@@ -537,7 +534,8 @@ test('conflict, older version, scrubbed export and delete', async ({ page }) => 
   await exported.getByRole('button', { name: 'Close' }).click()
 
   page.once('dialog', (dialog) => dialog.accept())
-  await (await openDetails(page)).getByRole('button', { name: 'Delete recipe' }).click()
+  await page.getByRole('button', { name: 'More' }).click()
+  await page.getByRole('button', { name: 'Delete recipe' }).click()
   await expect(page.getByText('Deleted the recipe.')).toBeVisible({ timeout: 20_000 })
   expect((await workflows(page)).some((workflow) => workflow.id === id)).toBe(false)
 })
@@ -554,7 +552,7 @@ test("a failed live check says it couldn't check the recipe and keeps Save disab
   )
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await openRecipes(page)
+  await openRecipes(page, '')
   await expect(page.getByText("Couldn't check this recipe", { exact: true })).toBeVisible({
     timeout: 20_000,
   })
@@ -562,44 +560,162 @@ test("a failed live check says it couldn't check the recipe and keeps Save disab
   await expect(page.getByRole('button', { name: /^Save as version \d+$/u })).toBeDisabled()
 })
 
-test('Escape and a scrim click ask before closing a dirty recipe', async ({ page }) => {
+test('leaving a dirty recipe asks first, and the old addresses land on the page', async ({
+  page,
+}) => {
   await pair(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await openRecipes(page)
-  const dialog = page.getByRole('dialog', { name: 'Recipe editor' })
+  await openRecipes(page, 'new')
+  await showText(page)
   await inspector(page).getByLabel('Title').fill('Changed, not saved')
 
-  page.once('dialog', (prompt) => prompt.dismiss())
-  await page.keyboard.press('Escape')
-  await expect(dialog).toBeVisible()
+  let accept = false
+  page.on('dialog', (prompt) => void (accept ? prompt.accept() : prompt.dismiss()))
+  await page.getByRole('button', { name: /lead decides/ }).click()
+  await expect(page).toHaveURL(/\/b\/recipes\/new$/)
   await expect(inspector(page).getByLabel('Title')).toHaveValue('Changed, not saved')
 
-  page.once('dialog', (prompt) => prompt.accept())
-  await page.locator('.bold-scrim').click({ position: { x: 2, y: 2 } })
-  await expect(dialog).toBeHidden()
+  accept = true
+  await page.getByRole('button', { name: /lead decides/ }).click()
+  await expect(page).toHaveURL(/\/b\/recipes\/lead-decides$/)
+  await expect(page.getByRole('heading', { name: 'lead decides' })).toBeVisible()
+
+  for (const [from, to] of [
+    ['/b?recipes=1', /\/b\/recipes$/],
+    ['/b/workflows?x=1', /\/b\/recipes\?x=1$/],
+    ['/workflows', /\/b\/recipes$/],
+  ] as const) {
+    await page.goto(from)
+    await expect(page).toHaveURL(to)
+    await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
+  }
 })
 
-test('a phone turns the recipe dialog into a full-screen sheet with the inspector below the list', async ({
+test('the graph editor adds, connects and removes steps, keeps keyboard use, and saves what was drawn', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openRecipes(page, 'new')
+  await expect(page.getByRole('tab', { name: 'Graph', selected: true })).toBeVisible()
+  const name = `Drawn ${Date.now().toString(36)}`
+  await page.getByRole('textbox', { name: 'Recipe name' }).fill(name)
+
+  // The starter has one agent step and an end; select the agent step and give it an instruction.
+  const nodes = page.locator('[data-node]')
+  await expect(nodes).toHaveCount(2)
+  await page.locator('[data-node="step1"]').click()
+  await inspector(page).getByLabel('Agent').selectOption({ label: 'builder' })
+  await inspector(page).getByRole('combobox', { name: 'Instruction' }).fill('Write a short note.')
+
+  // Replace the starter end: delete it from the keyboard, then build the route with the palette.
+  const end = page.locator('[data-node="end1"]')
+  await end.focus()
+  await page.keyboard.press('Delete')
+  await expect(nodes).toHaveCount(1)
+  await page.locator('[data-node="step1"]').click()
+  await page.getByRole('button', { name: /Add a gate/ }).click()
+  await expect(nodes).toHaveCount(2)
+  await inspector(page).getByRole('combobox', { name: 'Question' }).fill('Publish it?')
+  await page.getByRole('button', { name: /Add an end/ }).click()
+  await expect(nodes).toHaveCount(3)
+  await expect(page.getByRole('status').filter({ hasText: 'Looks good' })).toBeVisible({
+    timeout: 20_000,
+  })
+
+  // Undo takes the gate's question away, redo brings it back.
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(page.getByRole('button', { name: 'Redo' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Redo' }).click()
+
+  // A step is deleted from the keyboard; undo returns it.
+  const gate = page.locator('[data-kind="gate"]')
+  await gate.focus()
+  await page.keyboard.press('Delete')
+  await expect(nodes).toHaveCount(2)
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(nodes).toHaveCount(3)
+
+  // The outline is the graph as text.
+  await page.getByText('Outline: the graph as text').click()
+  await expect(page.getByRole('region', { name: 'Outline' })).toContainText('when done goes to')
+
+  await expect(page.getByRole('status').filter({ hasText: 'Looks good' })).toBeVisible({
+    timeout: 20_000,
+  })
+  await page.getByRole('button', { name: /^Save as version 1$/ }).click()
+  await expect(page.getByText('Saved as version 1.')).toBeVisible({ timeout: 20_000 })
+  const saved = (await workflows(page)).find((workflow) => workflow.name === name)!
+  const detail = await workflowDetail(page, saved.id)
+  expect(detail.latest.definition.nodes).toHaveLength(3)
+  expect(detail.latest.definition.edges.length).toBeGreaterThanOrEqual(2)
+})
+
+test('a saved version opens read-only, Preview plays without running, and Run opens Start a job with the recipe', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await pair(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const name = `Versions view ${Date.now().toString(36)}`
+  const id = await createViaApi(page, {
+    name,
+    inputs: [],
+    nodes: [
+      {
+        id: 'one',
+        kind: 'agent',
+        label: 'One',
+        agentId: 'builder',
+        instruction: 'Do it',
+        retries: 0,
+        onFailure: 'fail_run',
+      },
+      { id: 'done', kind: 'end', label: 'Done' },
+    ],
+    edges: [{ id: 'e1', from: 'one', port: 'ok', to: 'done' }],
+  })
+  await openRecipes(page, id)
+  await expect(page.getByRole('textbox', { name: 'Recipe name' })).toHaveValue(name)
+
+  await page.getByRole('button', { name: 'More' }).click()
+  await page.getByLabel('View a saved version (read-only)').selectOption('1')
+  await expect(page.getByText('Version 1 (read-only)')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Save as version/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Arrange automatically' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Back to my draft' }).click()
+
+  await page.getByRole('button', { name: 'Preview, nothing runs' }).click()
+  await expect(page.getByText('Preview: nothing runs, no tokens')).toBeVisible()
+  await page.getByRole('button', { name: 'Stop' }).click()
+  await expect(page.locator('[data-node]').first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Run…' }).click()
+  await expect(page).toHaveURL(new RegExp(`start=job&recipe=${id}`))
+  const dialog = page.getByRole('dialog', { name: 'Start a job' })
+  await expect(dialog.getByRole('radio', { name })).toBeChecked()
+})
+
+test('a phone stacks the list, the recipe and the step settings without sideways scrolling', async ({
   page,
 }) => {
   await pair(page)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await openRecipes(page)
-  await page.getByRole('button', { name: 'New recipe' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Recipe editor' })
-  const box = await dialog.boundingBox()
-  expect(box?.x).toBe(0)
-  expect(box?.width).toBe(390)
-  expect(box?.height).toBeGreaterThanOrEqual(844)
-  const list = await page.locator('.bold-recipes-listcol').boundingBox()
+  await openRecipes(page, 'new')
+  const list = await page.getByRole('navigation', { name: 'Recipes' }).boundingBox()
+  const main = await page.getByRole('region', { name: 'Recipe editor' }).boundingBox()
   const panel = await inspector(page).boundingBox()
-  expect(panel!.y).toBeGreaterThan(list!.y + list!.height - 1)
+  expect(main!.y).toBeGreaterThan(list!.y + list!.height - 1)
+  expect(panel!.y).toBeGreaterThan(main!.y + main!.height - 1)
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     ),
   ).toBeLessThanOrEqual(0)
-  await expect(page.getByRole('button', { name: 'Save as version 1' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Save as version \d+$/u })).toBeVisible()
 })

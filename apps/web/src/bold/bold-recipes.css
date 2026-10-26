@@ -1,43 +1,5 @@
-/* PLAN 11.10d: the recipe editor, built from docs/design/bold/prototype.html (mRecipe and the .dialog/.seg/.step rules).
-   The scrim is absolute rather than fixed because the bold shell already owns the viewport and clips overflow; keeping
-   it absolute also keeps the theme guard's fixed/sticky allowlist unchanged. */
-[data-ui='bold'] .bold-scrim {
-  position: absolute;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  overflow-y: auto;
-  padding: max(40px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 40px
-    max(16px, env(safe-area-inset-left, 0px));
-  background: rgba(5, 6, 9, 0.62);
-}
-
-[data-ui='bold'] .bold-dialog {
-  width: 100%;
-  max-width: 760px;
-  max-height: calc(100dvh - 80px);
-  overflow-y: auto;
-  background: var(--panel);
-  color: var(--ink);
-  border-radius: 30px;
-  padding: 26px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
-}
-
-[data-ui='bold'] .bold-dialog.wide {
-  max-width: 1160px;
-}
-
-[data-ui='bold'] .bold-recipes-title {
-  font-size: 30px;
-  margin-right: 4px;
-}
-
+/* PLAN 11.10d / 2.8.0: the Recipes page (list, graph or step list, step settings), built from
+   docs/design/bold/prototype.html (mRecipe, .seg, .step) and the approved mock-up's layout (decision 131, board C). */
 [data-ui='bold'] .bold-seg {
   display: inline-flex;
   gap: 4px;
@@ -63,10 +25,6 @@
   color: var(--hi-ink);
 }
 
-[data-ui='bold'] .bold-dialog > .row > .icon-btn[aria-label='Close'] {
-  margin-left: auto;
-}
-
 [data-ui='bold'] .bold-badge {
   border-radius: 999px;
   padding: 2px 10px;
@@ -87,6 +45,7 @@
 
 [data-ui='bold'] .bold-recipes-actions {
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 [data-ui='bold'] .bold-recipes-problems {
@@ -399,30 +358,6 @@
 }
 
 @media (max-width: 860px) {
-  [data-ui='bold'] .bold-scrim {
-    padding: 0;
-  }
-
-  [data-ui='bold'] .bold-dialog,
-  [data-ui='bold'] .bold-dialog.wide {
-    max-width: none;
-    min-height: 100%;
-    max-height: none;
-    border-radius: 0;
-    padding: max(16px, env(safe-area-inset-top, 0px)) 14px
-      calc(24px + env(safe-area-inset-bottom, 0px));
-  }
-
-  [data-ui='bold'] .bold-recipes-columns {
-    flex-direction: column;
-  }
-
-  [data-ui='bold'] .bold-recipes-listcol,
-  [data-ui='bold'] .bold-recipes-inspector {
-    flex: none;
-    width: 100%;
-  }
-
   [data-ui='bold'] .bold-recipes-actions {
     width: 100%;
     margin-left: 0 !important;
@@ -437,21 +372,414 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  [data-ui='bold'] .bold-dialog,
-  [data-ui='bold'] .bold-dialog *,
-  [data-ui='bold'] .bold-dialog *::before,
-  [data-ui='bold'] .bold-dialog *::after {
-    animation: none !important;
-    transition: none !important;
-  }
+[data-ui='bold'] .icon-btn.bold-recipes-remove {
+  color: var(--bad);
 }
 
-/* The dialog takes focus only to hand it on; it draws no ring of its own (the prototype has none). */
-[data-ui='bold'] .bold-dialog.wide:focus {
+/* ---- 2.8.0: the page ---- */
+
+/* The graph editor, step settings, preview, issue and palette parts are the classic editor's components. They read
+   the classic token names; here those names point at the bold system, so they draw in the shell's colours in both
+   looks. Nothing leaks: the names are redefined on this page's root only. */
+[data-ui='bold'] .bold-rp {
+  --card: var(--panel);
+  --hairline: var(--line);
+  --line-strong: var(--faint);
+  --subtle: var(--field);
+  --subtle-2: var(--deep);
+  --ink-muted: var(--muted);
+  --flow-canvas: var(--deep);
+  --flow-canvas-dot: var(--line);
+  --flow-edge: var(--faint);
+  --flow-edge-planned: var(--line);
+  --flow-edge-sent-back: var(--warn);
+  --flow-log-border: var(--line);
+  --flow-done-border: var(--faint);
+  --node-agent: var(--panel);
+  --agent-coral-text: var(--bad);
+  --agent-jade-text: var(--ok);
+  --agent-saffron-text: var(--warn);
+  --agent-coral-tint: rgba(255, 151, 174, 0.16);
+  --agent-jade-tint: rgba(94, 227, 191, 0.16);
+  --agent-saffron-tint: rgba(255, 201, 77, 0.16);
+  --shadow-rgb: 0 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
+  min-width: 0;
+  color: var(--ink);
+}
+
+[data-ui='bold'][data-look='light'] .bold-rp {
+  --agent-coral-tint: rgba(176, 30, 67, 0.1);
+  --agent-jade-tint: rgba(0, 105, 79, 0.1);
+  --agent-saffron-tint: rgba(138, 90, 0, 0.12);
+  --shadow-rgb: 18 19 26;
+}
+
+[data-ui='bold'] .bold-rp-list {
+  flex: 1 1 250px;
+  max-width: 290px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-rp-h1 {
+  margin: 0 0 6px 6px;
+  font-family: var(--font-d);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+[data-ui='bold'] .bold-rp-list .bold-field {
+  background: var(--panel);
+  min-height: 44px;
+}
+
+[data-ui='bold'] .bold-rp-new {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-rp-row {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  border-radius: 18px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  font: inherit;
+}
+
+[data-ui='bold'] .bold-rp-row:hover {
+  background: var(--deep);
+}
+
+[data-ui='bold'] .bold-rp-row[aria-current='true'] {
+  background: var(--panel);
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+[data-ui='bold'] .bold-rp-row b {
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-badge--quiet {
+  background: var(--field);
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-rp-main {
+  flex: 999 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-rp-main:focus {
   outline: none;
 }
 
-[data-ui='bold'] .icon-btn.bold-recipes-remove {
+[data-ui='bold'] .bold-rp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+[data-ui='bold'] .bold-rp-title,
+[data-ui='bold'] .bold-rp-name {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-rp-name {
+  background: transparent;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 8px;
+  margin-left: -8px;
+  min-width: 0;
+  flex: 1 1 260px;
+  max-width: 100%;
+}
+
+[data-ui='bold'] .bold-rp-name:hover,
+[data-ui='bold'] .bold-rp-name:focus-visible {
+  background: var(--field);
+}
+
+[data-ui='bold'] .bold-rp-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-rp-more {
+  position: relative;
+  display: inline-flex;
+}
+
+[data-ui='bold'] .bold-rp-morepanel {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow:
+    0 0 0 1px var(--line),
+    var(--menu-shadow);
+}
+
+/* The graph sits in a rounded, dotted surface like the mock-up's. */
+[data-ui='bold'] .bold-rp-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-rp-graph .wf-canvas {
+  background: var(--deep);
+  border-radius: 26px;
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: hidden;
+  border: 0;
+}
+
+[data-ui='bold'] .bold-rp-graph .wf-canvas__bar {
+  padding: 10px 14px;
+}
+
+[data-ui='bold'] .bold-rp-graph .wf-canvas__viewport {
+  max-height: 640px;
+  min-height: 420px;
+  background-color: var(--deep);
+}
+
+[data-ui='bold'] .bold-rp-graph .orch-node {
+  background: var(--panel);
+  color: var(--ink);
+  border: 0;
+  border-radius: 16px;
+}
+
+[data-ui='bold'] .bold-rp-graph .orch-node--selected {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+[data-ui='bold'] .bold-rp-graph .wf-canvas button,
+[data-ui='bold'] .bold-rp-graph .wf-palette button,
+[data-ui='bold'] .bold-rp-graph .wf-banner button {
+  border: 0;
+  background: var(--field);
+  color: var(--ink);
+  border-radius: 999px;
+}
+
+[data-ui='bold'] .bold-rp-graph .wf-canvas button.orch-node {
+  background: var(--panel);
+  border-radius: 16px;
+}
+
+[data-ui='bold'] .bold-rp-graph .wf-palette {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+[data-ui='bold'] .bold-rp-graph .wf-palette button {
+  border-radius: 14px;
+}
+
+[data-ui='bold'] .bold-rp-graph .wf-palette h3,
+[data-ui='bold'] .bold-rp-graph .wf-palette h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+
+/* Step settings: the mock-up's aside. */
+[data-ui='bold'] .bold-rp-aside {
+  flex: 1 1 300px;
+  max-width: 350px;
+  background: var(--panel);
+  border-radius: 26px;
+  padding: 20px;
+  margin-top: 62px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+[data-ui='bold'] .bold-rp-aside .wf-inspector,
+[data-ui='bold'] .bold-rp-aside .wf-inspector--empty {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='bold'] .bold-rp-aside input,
+[data-ui='bold'] .bold-rp-aside select,
+[data-ui='bold'] .bold-rp-aside textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-rp-aside textarea {
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+[data-ui='bold'] .bold-rp-aside input[type='checkbox'],
+[data-ui='bold'] .bold-rp-aside input[type='radio'] {
+  width: auto;
+  min-height: 0;
+}
+
+[data-ui='bold'] .bold-rp-aside button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+[data-ui='bold'] .bold-rp-aside button.orch-danger,
+[data-ui='bold'] .bold-rp-aside button.wf-danger {
+  background: transparent;
   color: var(--bad);
+  box-shadow: inset 0 0 0 1.5px var(--bad);
+}
+
+[data-ui='bold'] .bold-rp-aside button.wf-link {
+  background: none;
+  min-height: 0;
+  padding: 0;
+  font-weight: 400;
+  text-decoration: underline;
+}
+
+[data-ui='bold'] .bold-rp-aside h3,
+[data-ui='bold'] .bold-rp-aside h4 {
+  font-family: var(--font-d);
+  font-size: 20px;
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-rp-aside .orch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-rp-aside .orch-field > span,
+[data-ui='bold'] .bold-rp-aside .orch-field > legend {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-rp-readonly {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-rp-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-rp .wf-live {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  [data-ui='bold'] .bold-rp-list {
+    flex: none;
+    max-width: none;
+    width: 100%;
+  }
+
+  [data-ui='bold'] .bold-rp-main,
+  [data-ui='bold'] .bold-rp-aside {
+    flex: none;
+    width: 100%;
+    max-width: none;
+  }
+
+  [data-ui='bold'] .bold-rp-aside {
+    margin-top: 0;
+  }
+
+  [data-ui='bold'] .bold-rp-name {
+    font-size: 24px;
+  }
+
+  [data-ui='bold'] .bold-rp-morepanel {
+    right: auto;
+    left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .bold-rp *,
+  [data-ui='bold'] .bold-rp *::before,
+  [data-ui='bold'] .bold-rp *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

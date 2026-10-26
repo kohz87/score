@@ -327,8 +327,10 @@ test('the redirect keeps the #hash only when the browser address is the page bei
 test('on the new shell the old classic paths redirect to their /b homes and keep the query', async () => {
   for (const [from, to] of [
     ['/watch/builder?from=3', '/b/watch/builder'],
-    ['/workflows', '/b/workflows'],
-    ['/workflows/wf-1', '/b/workflows/wf-1'],
+    ['/workflows', '/b/recipes'],
+    ['/workflows/wf-1', '/b/recipes/wf-1'],
+    ['/b/workflows', '/b/recipes'],
+    ['/b/workflows/wf-1', '/b/recipes/wf-1'],
     ['/runs/brief-1?x=y', '/b/runs/brief-1'],
     ['/settings/look/customize/score', '/b/settings/look/customize/score'],
   ] as const) {
@@ -339,9 +341,14 @@ test('on the new shell the old classic paths redirect to their /b homes and keep
   }
 })
 
+test('the old recipe dialog address opens the Recipes page', async () => {
+  const router = renderRoute('/b?recipes=1')
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/recipes'))
+})
+
 test('on the classic view the classic paths stay where they are', async () => {
   window.localStorage.setItem('score.ui', 'classic')
-  for (const path of ['/workflows', '/runs/brief-1', '/settings/look/customize/score']) {
+  for (const path of ['/runs/brief-1', '/settings/look/customize/score']) {
     const router = renderRoute(path)
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(router.state.location.pathname).toBe(path)
@@ -358,8 +365,8 @@ test.each([
   ['/u', '/b'],
   ['/u/rooms/one', '/b'],
   ['/now/watch/builder', '/b/watch/builder'],
-  ['/now/flow/workflows', '/b/workflows'],
-  ['/now/flow/workflows/wf-1', '/b/workflows/wf-1'],
+  ['/now/flow/workflows', '/b/recipes'],
+  ['/now/flow/workflows/wf-1', '/b/recipes/wf-1'],
   ['/now/flow/brief-1', '/b/runs/brief-1'],
 ])('%s redirects to %s', async (path, target) => {
   const router = renderRoute(path)

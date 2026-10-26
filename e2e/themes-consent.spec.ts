@@ -245,7 +245,10 @@ test.describe('L1: a cached theme is vetted while the list or the theme is still
 // ---------------------------------------------------------------------------------------------------------------------
 // Starting a workflow
 
-test.describe('X1: starting a workflow is one decision', () => {
+// 2.8.0: the list's Run button and its start dialog are gone; Start a job is the one start dialog (its protection is
+// covered by bold-protection.spec). The classic dialog is left only behind "Run again" on a finished run page, which
+// the Runs rebuild retires, so these three wait for that instead of an address that no longer shows it.
+test.describe.skip('X1: starting a workflow is one decision', () => {
   async function workflowDialog(page: Page) {
     const name = `Consent ${Date.now().toString(36)}`
     const sent: string[] = []

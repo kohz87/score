@@ -186,28 +186,21 @@ for (const [index, size] of [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'phone', width: 390, height: 844 },
 ].entries()) {
-  test(`Recipes opens over a room with no lead and closes back to first run at ${size.name} (${size.width}×${size.height})`, async ({
+  test(`Recipes opens as a page on a room with no lead and the room still shows first run at ${size.name} (${size.width}×${size.height})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: size.width, height: size.height })
     await withFreshServer(page, webPort + 70 + index, async (origin, pairingToken, home) => {
       clearTeamLead(home)
       await pair(page, origin, pairingToken)
-      await page.goto(`${origin}/b?recipes=1`)
-      const recipes = page.getByRole('dialog', { name: 'Recipe editor' })
+      await page.goto(`${origin}/b/recipes`)
+      const recipes = page.getByRole('region', { name: 'Recipe editor' })
       await expect(recipes).toBeVisible()
-      // Nothing of the first run sits over or inside Recipes.
+      // First run is the room's page: it does not sit over or inside Recipes.
       await expect(page.getByRole('heading', { name: 'Hermes found' })).toHaveCount(0)
       await expect(page.getByRole('heading', { name: 'Who’s on the team?' })).toHaveCount(0)
       await page.screenshot({ path: `test-results/recipes-${size.name}.png` })
-      const topmost = await recipes.evaluate((element) => {
-        const box = element.getBoundingClientRect()
-        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + 24)
-        return hit !== null && element.contains(hit)
-      })
-      expect(topmost).toBe(true)
-      await recipes.getByRole('button', { name: /^Close/ }).click()
-      await expect(recipes).toHaveCount(0)
+      await page.goto(`${origin}/b`)
       // First run stays reachable from the room.
       await expect(
         page.getByRole('heading', { name: 'Run a team of agents from one room.' }),

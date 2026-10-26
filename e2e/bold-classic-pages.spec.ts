@@ -82,47 +82,47 @@ for (const size of sizes) {
     test(`Recipes shows a recipe's run status and opens the run at ${size.name}`, async ({
       page,
     }) => {
-      await page.goto('/b?recipes=1')
-      const dialog = page.getByRole('dialog', { name: 'Recipe editor' })
-      await expect(dialog).toBeVisible({ timeout: 20_000 })
-      // Nothing in the new shell links to the classic list any more.
-      await expect(page.getByRole('link', { name: 'Workflow runs and versions' })).toHaveCount(0)
-      const status = dialog.getByLabel('Runs of this recipe')
+      await page.goto('/b/recipes/wf-release')
+      const editor = page.getByRole('region', { name: 'Recipe editor' })
+      await expect(editor).toBeVisible({ timeout: 20_000 })
+      const status = editor.getByLabel('Runs of this recipe')
       await expect(status).toContainText('1 run going')
       await status.getByRole('link', { name: 'Running' }).click()
       await expect(page).toHaveURL(/\/b\/runs\/brief-wfrun-1$/)
       await inFrame(page)
       await page.goBack()
-      await expect(page).toHaveURL(/\/b\?recipes=1$/)
-      await expect(page.getByRole('dialog', { name: 'Recipe editor' })).toBeVisible()
+      await expect(page).toHaveURL(/\/b\/recipes\/wf-release$/)
+      await expect(page.getByRole('region', { name: 'Recipe editor' })).toBeVisible()
     })
 
-    test(`the workflow list still renders under /b by its address at ${size.name}`, async ({
+    test(`the Recipes page lists the recipes next to the graph editor at ${size.name}`, async ({
       page,
     }) => {
-      await page.goto('/b/workflows')
+      await page.goto('/b/recipes')
       await inFrame(page)
-      await expect(page.locator('.bold-classic-page .wf-card').first()).toBeVisible()
+      const list = page.getByRole('navigation', { name: 'Recipes' })
+      await expect(list.getByRole('button', { name: /lead decides/ })).toBeVisible()
+      await expect(list.getByRole('button', { name: /Version 1/ }).first()).toBeVisible()
+      await expect(page.locator('[data-node]').first()).toBeVisible()
       await noSideScroll(page)
-      await expect(page).toHaveScreenshot(`bold-workflows-${size.name}.png`, {
+      await expect(page).toHaveScreenshot(`bold-recipes-${size.name}.png`, {
         animations: 'disabled',
         maxDiffPixelRatio: 0.01,
       })
-      // A link to another classic page stays in /b.
-      await page.locator('.bold-classic-page .wf-card a').first().click()
-      await expect(page).toHaveURL(/\/b\/workflows\/wf-[a-z-]+$/)
+      // Choosing another recipe changes the address, not the frame.
+      await list
+        .getByRole('button', { name: /Version 1/ })
+        .nth(1)
+        .click()
+      await expect(page).toHaveURL(/\/b\/recipes\/wf-[a-z-]+$/)
       await inFrame(page)
     })
 
-    test(`the workflow editor and a run page open under /b at ${size.name}`, async ({ page }) => {
-      await page.goto('/b/workflows/wf-draft')
+    test(`the recipe editor and a run page open under /b at ${size.name}`, async ({ page }) => {
+      await page.goto('/b/recipes/wf-draft')
       await inFrame(page)
       await expect(page.locator('[data-node="build"]')).toBeVisible()
       await noSideScroll(page)
-      await expect(page.getByRole('link', { name: 'All workflows' })).toHaveAttribute(
-        'href',
-        /\/b\/workflows$/,
-      )
       await page.goto('/b/runs/brief-wfrun-1')
       await inFrame(page)
       await expect(page.locator('[data-node="approve"]')).toBeVisible()
@@ -172,7 +172,7 @@ for (const size of sizes) {
 
 test('old classic paths on the new shell redirect to /b and keep the query', async ({ page }) => {
   await page.goto('/workflows')
-  await expect(page).toHaveURL(/\/b\/workflows$/)
+  await expect(page).toHaveURL(/\/b\/recipes$/)
   await page.goto('/runs/brief-wfrun-1?x=1')
   await expect(page).toHaveURL(/\/b\/runs\/brief-wfrun-1\?x=1$/)
   await page.goto('/watch/builder?from=3')
@@ -183,10 +183,6 @@ test('old classic paths on the new shell redirect to /b and keep the query', asy
 
 test('on the classic view the classic paths still render the classic shell', async ({ page }) => {
   await page.addInitScript(() => window.localStorage.setItem('score.ui', 'classic'))
-  await page.goto('/workflows')
-  await expect(page).toHaveURL(/\/workflows$/)
-  await expect(page.locator('.app-shell')).toBeVisible()
-  await expect(page.locator('[data-ui="bold"]')).toHaveCount(0)
   await page.goto('/runs/brief-wfrun-1')
   await expect(page).toHaveURL(/\/runs\/brief-wfrun-1$/)
   await expect(page.locator('.app-shell')).toBeVisible()
@@ -225,14 +221,14 @@ for (const size of sizes) {
   })
 }
 
-test('a framed page in the light look', async ({ page }) => {
+test('the Recipes page in the light look', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('score.theme', 'light'))
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/b/workflows')
+  await page.goto('/b/recipes')
   await inFrame(page)
   await expect(page.locator('[data-ui="bold"]')).toHaveAttribute('data-look', 'light')
-  await expect(page.locator('.bold-classic-page')).toHaveAttribute('data-theme', 'light')
-  await expect(page).toHaveScreenshot('bold-workflows-light-look.png', {
+  await expect(page.locator('[data-node]').first()).toBeVisible()
+  await expect(page).toHaveScreenshot('bold-recipes-light-look.png', {
     animations: 'disabled',
     maxDiffPixelRatio: 0.01,
   })
