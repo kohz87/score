@@ -39,11 +39,17 @@ const CHANGING = list(
 // Verbs that only make the reporting thing itself when their phrase ends in one (`create_comment`, `add_review`); with
 // anything else (`create_issue`, `update_issue_status`, `create_issue_with_comment`) they may change things. A status is
 // not one of those things: updating it changes state.
-const SOFT = list('create add update set')
+const SOFT = list('create add update set submit leave')
 const MADE_TO_REPORT = list(
-  'comment comments note notes message messages reply report review feedback reaction',
+  'comment comments note notes message messages reply replies report reports review reviews feedback reaction reactions',
 )
 const PHRASE_END = list('and then with on in for')
+// Every other word must be one of these places a report goes (3.5.0 review): an allowlist, since no list of risky
+// words is ever complete (`send_funds`, `post_tweet`, `reply_all` warn).
+const PLACES = list(
+  'issue issues pull pulls request requests pr prs ticket tickets thread threads channel channels chat room conversation discussion task card job result results back progress to the a slack github gitlab linear jira discord telegram teams mcp score',
+)
+const ALLOWED = new Set([...REPORTING, ...MADE_TO_REPORT, ...SOFT, ...PHRASE_END, ...PLACES])
 
 function words(tool: string): string[] {
   return tool
@@ -59,6 +65,8 @@ function words(tool: string): string[] {
  */
 export function reportBackWarning(tool: string): string | undefined {
   const parts = words(tool)
+  if (parts.length === 0 || parts.some((word) => !ALLOWED.has(word)))
+    return 'This tool may change things, not just report.'
   const reports = parts.some((word) => REPORTING.has(word))
   // A soft verb is excused only when its own phrase (the words after it, up to and/then/with/on/in/for or the end)
   // ends in a reporting thing: `create_issue_comment` yes, `post_message_and_create_issue` no.

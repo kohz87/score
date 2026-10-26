@@ -557,7 +557,20 @@ test('a reporting word does not hide a changing one in the report-back tool name
     'add_reaction',
   ])
     expect(reportBackWarning(tool), tool).toBeUndefined()
-  for (const tool of ['dataset_status', 'payload_report'])
+  // Words outside the reporting vocabulary warn, whatever else the name says (an allowlist).
+  for (const tool of [
+    'dataset_status',
+    'payload_report',
+    'send_funds',
+    'send_crypto',
+    'send_command',
+    'send_email',
+    'post_tweet',
+    'post_webhook',
+    'reply_all',
+  ])
+    expect(reportBackWarning(tool), tool).toMatch(/may change things/)
+  for (const tool of ['send_slack_message', 'post_to_channel', 'reply_in_thread'])
     expect(reportBackWarning(tool), tool).toBeUndefined()
   for (const tool of [
     'create_issue',
