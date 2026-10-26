@@ -1521,3 +1521,26 @@ One entry per completed task: what landed, review results, and any **rejected re
   contract 1518).
 - **v3.4.0 deployed live** (~12:30 UTC): idle (parked scoretestb run only), backup score-pre-3.4.0-20261026.db, restart,
   health ok, no new errors; migration 0091 marked the existing Team room `team_everyone = 1` (6 members, lead kept).
+- **3.5.0** (2026-10-26; owner: "then all the deferred items", plus two owner reports). Deferred server items (Sonnet
+  coder): hold() kept the first held turn (review 1: a hold without a turn still erased it, and dropped turns were
+  silent — lead: holds without a turn change nothing, dropped agents recorded on the held turn and shown on the pause
+  card); report-back tool warning (reviews kept finding names that slipped a word list — the lead ended it with an
+  allowlist plus phrase rules for create/add/update/set/submit/leave and post/send; the last tightening round, which only
+  adds warnings, skipped a further review: advisory, documented as a name check only); a retried trigger create returns
+  the first trigger (rejected review P2: a deliberate identical twin of an untouched trigger has no use); Elsewhere
+  previews read without importing (new `GET /api/outside-sessions/preview`). Lead: `Message.retryable` (migration 0092
+  `reply_kind`, backfilled: on live 59 person, 13 hand-off, 3 unknown) so Retry/Try another show only on replies to
+  the person. Test reliability (Sonnet coder): unique recipe names and gate titles, workspace phone shot pinned,
+  room-files waits for the upload; its theme-guard change (a card down a pane that scrolls itself is reachable) had a
+  false pass for fixed/absolute cards — lead rewrote `reachable()` containing-block aware, then review found a nested-
+  pane false pass, fixed (each carrying pane must be reachable inside the one above); hostile cases in
+  guard.measure.test. Items not fixable: chat-rooms fence e2e no longer exists; phone Team order was a real product bug
+  found by the gate (the agents reducer moved an updated agent to the end, so the dock and Team reshuffled whenever an
+  agent's status changed) — fixed in place. **3.5.1** (owner report): removed agents left the dock, the side panel's
+  one-to-ones, Search's Message actions, the move-chat picker and the Message buttons. Gate runs: 1st — Elsewhere spec
+  mocked no preview endpoint (fixture + "no import before Bring" assertion), phone Team (the reducer bug); 2nd — question
+  tests interfered across parallel viewports (builder's pending questions show in all its chats: new
+  'builder-questions' lock; one-to-one/phone specs press the composer's own Send); 3rd — 832 passed, 2 failed alone-
+  passing (a Chromium page crash; room-tools Unpin), check green (server 4814, web 2985, contract 1522).
+- **v3.5.0 deployed live** (~14:05 UTC): idle (parked scoretestb run only), backup score-pre-3.5.0-20261026.db,
+  migration 0092 applied, restart, health ok, no new errors.
