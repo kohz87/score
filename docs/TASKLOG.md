@@ -1466,3 +1466,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   agent-channels-history, themes-builtin studio light 390 fail only under full-suite load on the shared fake server.
   pnpm check green (server 4784, web 2931, contract 1512). Follow-ups for the owner: Usage custom range + per-agent
   table, Customizer shape/glass no effect, agent memory search, runs outcome filter, room rename/pin/archive/tags/JSON.
+- **v3.0.0 deployed live** (~08:38 UTC): backup score-pre-3.0.0-20261026.db, restart, no new errors.
