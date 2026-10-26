@@ -81,7 +81,7 @@ body.fit [data-ui='bold'] .bold-first-run {
 
 [data-ui='bold'] .bold-first-run-card {
   background: var(--panel);
-  border-radius: 24px;
+  border-radius: calc(24px * var(--bold-r, 1));
   padding: 18px;
   display: flex;
   flex-direction: column;
@@ -159,7 +159,7 @@ body.fit [data-ui='bold'] .bold-first-run {
   align-items: center;
   gap: 10px;
   background: var(--field);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   padding: 8px 12px;
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -195,7 +195,7 @@ body.fit [data-ui='bold'] .bold-first-run {
   gap: 8px;
   background: var(--code-bg);
   color: var(--code-ink);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   padding: 10px 12px;
 }
 
@@ -227,7 +227,7 @@ body.fit [data-ui='bold'] .bold-first-run {
   align-items: center;
   gap: 10px;
   background: var(--field);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   padding: 10px 12px;
   cursor: pointer;
 }

@@ -146,7 +146,7 @@ function radiusCss(shape: Look['shape']): string {
   if (typeof radius !== 'number' || !Number.isFinite(radius)) return ''
   const n = Math.min(40, Math.max(0, Math.round(radius)))
   const px = (factor: number) => `${Math.round(n * factor)}px`
-  return `--radius-xs:${px(0.2)};--radius-s:${px(0.3)};--radius-m:${px(0.5)};--radius-l:${px(0.7)};--radius-card:${n}px;`
+  return `--radius-xs:${px(0.2)};--radius-s:${px(0.3)};--radius-m:${px(0.5)};--radius-l:${px(0.7)};--radius-card:${n}px;--bold-r:${Math.round((n / 28) * 1000) / 1000};`
 }
 
 // `:root:root` raises the specificity by one class so the sheet wins wherever it sits in the cascade: the boot copy

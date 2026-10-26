@@ -58,7 +58,7 @@
 
 [data-ui='bold'] .bold-inner {
   background: var(--deep);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--bold-r, 1));
   padding: 16px;
 }
 
@@ -124,7 +124,7 @@
   align-items: center;
   gap: 12px;
   border: 0;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   padding: 12px 14px;
   text-align: left;
   background: var(--deep);
@@ -190,7 +190,7 @@
   width: 100%;
   min-height: 46px;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   padding: 0 14px;
   background: var(--field);
   color: var(--ink);
@@ -201,7 +201,7 @@
   width: 100%;
   min-height: 90px;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   padding: 12px 14px;
   background: var(--field);
   color: var(--ink);
@@ -272,7 +272,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bold-r, 1));
   background: var(--panel);
   box-shadow: inset 0 0 0 1px var(--line);
 }
@@ -346,7 +346,7 @@
 [data-ui='bold'] .bold-recipes-graph .wf-canvas__viewport {
   max-height: 540px;
   background: var(--deep);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-recipes-graph .origin-top-left {
@@ -457,7 +457,7 @@
   background: transparent;
   color: var(--ink);
   text-align: left;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -516,7 +516,7 @@
 [data-ui='bold'] .bold-rp-name {
   background: transparent;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   padding: 0 8px;
   margin-left: -8px;
   min-width: 0;
@@ -551,7 +551,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--bold-r, 1));
   background: var(--panel);
   box-shadow:
     0 0 0 1px var(--line),
@@ -569,7 +569,7 @@
 
 [data-ui='bold'] .bold-rp-graph .wf-canvas {
   background: var(--deep);
-  border-radius: 26px;
+  border-radius: calc(26px * var(--bold-r, 1));
   box-shadow: 0 0 0 1px var(--line);
   overflow: hidden;
   border: 0;
@@ -589,7 +589,7 @@
   background: var(--panel);
   color: var(--ink);
   border: 0;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-rp-graph .orch-node--selected {
@@ -607,7 +607,7 @@
 
 [data-ui='bold'] .bold-rp-graph .wf-canvas button.orch-node {
   background: var(--panel);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-rp-graph .wf-palette {
@@ -617,7 +617,7 @@
 }
 
 [data-ui='bold'] .bold-rp-graph .wf-palette button {
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-rp-graph .wf-palette h3,
@@ -633,7 +633,7 @@
   flex: 1 1 300px;
   max-width: 350px;
   background: var(--panel);
-  border-radius: 26px;
+  border-radius: calc(26px * var(--bold-r, 1));
   padding: 20px;
   margin-top: 62px;
   display: flex;
@@ -660,7 +660,7 @@
   box-sizing: border-box;
   min-height: 44px;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   padding: 0 14px;
   background: var(--field);
   color: var(--ink);

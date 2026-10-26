@@ -45,7 +45,7 @@
   min-height: 38px;
   margin-bottom: 8px;
   padding: 0 10px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
   background: var(--field);
   color: var(--muted);
 }
@@ -86,7 +86,7 @@
 [data-ui='bold'] .bold-library-group.is-drop {
   outline: 2px dashed var(--ink);
   outline-offset: -2px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-library-groups section + section .bold-library-folder {
@@ -98,7 +98,7 @@
   min-height: 38px;
   padding: 8px 10px;
   border: 0;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--bold-r, 1));
   background: transparent;
   color: var(--ink);
   text-align: left;
@@ -202,7 +202,7 @@
   width: 100%;
   padding: 8px 10px;
   border: 0;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--bold-r, 1));
   background: transparent;
   color: var(--ink);
   text-align: left;
@@ -230,7 +230,7 @@
 }
 
 [data-ui='bold'] .bold-library-snippet mark {
-  border-radius: 3px;
+  border-radius: calc(3px * var(--bold-r, 1));
   background: color-mix(in srgb, var(--agent-saffron-name) 26%, transparent);
   color: var(--ink);
 }
@@ -302,7 +302,7 @@
   min-height: 180px;
   padding: 12px 14px;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   background: var(--field);
 }
 
@@ -323,7 +323,7 @@
 [data-ui='bold'] .bold-library .kn-panel {
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   background: var(--panel);
   font-size: 13px;
 }

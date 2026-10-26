@@ -76,7 +76,7 @@
   min-height: 150px;
   min-width: 0;
   border: 0;
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
   background: #0f1116;
   color: #c9ccd4;
   padding: 12px 14px;
@@ -140,7 +140,7 @@
 
 [data-ui='bold'] .bold-screen-small-page {
   flex: 1;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
   background: #fff;
   color: #12131a;
   padding: 10px;
@@ -153,7 +153,7 @@
 }
 
 [data-ui='bold'] .bold-screen-card {
-  border-radius: 20px;
+  border-radius: calc(20px * var(--bold-r, 1));
   background: var(--panel);
   padding: 14px 16px;
   display: flex;
@@ -172,7 +172,7 @@
   display: block;
   margin-top: 6px;
   padding: 6px 10px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--bold-r, 1));
   background: var(--field);
   color: var(--ink2);
   overflow-wrap: anywhere;
@@ -323,7 +323,7 @@
   width: 100%;
   min-height: 46px;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   background: var(--deep);
   color: var(--ink);
   display: flex;
@@ -381,7 +381,7 @@
 [data-ui='bold'] .bold-screen-stage {
   position: relative;
   min-height: 600px;
-  border-radius: 26px;
+  border-radius: calc(26px * var(--bold-r, 1));
   background: var(--code-bg);
   padding: 16px;
   display: flex;
@@ -425,7 +425,7 @@
 [data-ui='bold'] .bold-screen-window {
   flex: 1;
   min-height: 0;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bold-r, 1));
   overflow: hidden;
   background: #1e2029;
   display: flex;
@@ -475,7 +475,7 @@
   position: static;
   width: auto;
   margin: 0;
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
   padding: 14px 16px;
   flex-direction: column;
   align-items: stretch;
@@ -534,7 +534,7 @@
 [data-ui='bold'] .bold-screen .watch-replay {
   background: var(--panel);
   border: 0;
-  border-radius: 24px;
+  border-radius: calc(24px * var(--bold-r, 1));
   padding: 14px 18px;
 }
 

@@ -49,7 +49,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 16px 18px;
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
   background: var(--hi-bg);
   color: var(--hi-ink);
 }
@@ -106,7 +106,7 @@
 
 [data-ui='bold'] .bold-thread-picker > button {
   border: 0;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   min-height: 54px;
   padding: 10px 14px;
   display: grid;
@@ -163,7 +163,7 @@
 }
 
 [data-ui='bold'] .bold-thread .bold-request {
-  border-radius: 24px;
+  border-radius: calc(24px * var(--bold-r, 1));
   padding: 20px 22px;
   gap: 12px;
 }
@@ -182,7 +182,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 18px;
-  border-radius: 24px;
+  border-radius: calc(24px * var(--bold-r, 1));
   background: var(--panel);
   border: 1px solid var(--line);
 }
@@ -232,7 +232,7 @@
 [data-ui='bold'] .bold-thread-recipe .orch-room-head {
   background: var(--field);
   border-color: var(--line);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   color: var(--ink);
 }
 
@@ -298,7 +298,7 @@
   background: var(--panel);
   border-color: var(--line);
   color: var(--ink);
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-thread .chat-ctx-panel h3,
@@ -344,7 +344,7 @@
   gap: 8px;
   min-height: 56px;
   padding: 6px 6px 6px 18px;
-  border-radius: 26px;
+  border-radius: calc(26px * var(--bold-r, 1));
   background: var(--field);
 }
 
@@ -401,7 +401,7 @@
   gap: 8px;
   margin: 0 16px 12px;
   padding: 12px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   background: var(--panel);
 }
 
@@ -418,7 +418,7 @@
   flex-direction: column;
   gap: 6px;
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   background: var(--field);
   font-size: 13px;
 }

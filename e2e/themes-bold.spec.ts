@@ -191,7 +191,10 @@ for (const id of themed) {
         .locator('.bold-shell .panel, .bold-shell .card, .bold-shell [class*="team-card"]')
         .first()
         .evaluate((el) => getComputedStyle(el).backgroundColor)
-      expect([rgb(themeColour(id, mode, 'card')), 'rgba(0, 0, 0, 0)']).toContain(panel)
+      // A glass theme (decision 133) paints the card colour at 70% over a blur.
+      const solid = [rgb(themeColour(id, mode, 'card')), 'rgba(0, 0, 0, 0)']
+      const glass = /^color\(srgb [\d. ]+ \/ 0\.7\)$/.test(panel)
+      expect(glass || solid.includes(panel)).toBe(true)
       await expect(shell).toHaveCSS('color', rgb(themeColour(id, mode, 'ink')))
     })
   }

@@ -115,7 +115,7 @@
   flex-direction: column;
   gap: 8px;
   background: var(--field);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   padding: 10px 12px;
 }
 
@@ -182,7 +182,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px 16px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--bold-r, 1));
   background: var(--deep);
   border: 1px solid var(--line);
 }

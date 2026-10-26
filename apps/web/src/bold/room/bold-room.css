@@ -122,7 +122,7 @@
   max-height: 40%;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-pins:empty {
@@ -169,7 +169,7 @@
 [data-ui='bold'] .bold-request {
   background: var(--hi-bg);
   color: var(--hi-ink);
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
@@ -243,7 +243,7 @@
   max-width: min(280px, calc(100vw - 48px));
   margin: 0;
   padding: 6px;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bold-r, 1));
   background: var(--panel);
   color: var(--ink);
   box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
@@ -256,7 +256,7 @@
   min-height: 40px;
   padding: 0 10px;
   border: 0;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--bold-r, 1));
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -303,7 +303,7 @@
 [data-ui='bold'] .bold-request-form select {
   width: 100%;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   min-height: 42px;
   padding: 10px 12px;
   background: color-mix(in srgb, var(--hi-bg) 78%, var(--hi-ink));
@@ -324,7 +324,7 @@
   align-items: flex-start;
   gap: 5px;
   padding: 12px 14px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--bold-r, 1));
   background: var(--deep);
   box-shadow: inset 0 0 0 1px var(--line);
   font-size: 13px;
@@ -387,7 +387,7 @@
 [data-ui='bold'] .bold-report-back--thread {
   margin: 0 16px 12px;
   padding: 10px 12px;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bold-r, 1));
   background: var(--field);
 }
 
@@ -397,7 +397,7 @@
   flex-wrap: wrap;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   background: var(--panel);
   color: var(--ink2);
   font-size: 13px;
@@ -468,7 +468,7 @@
   min-height: 58px;
   resize: vertical;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   padding: 10px 12px;
   background: var(--field);
   color: var(--ink);
@@ -541,7 +541,7 @@
 [data-ui='bold'] .bold-run-request .orch-field textarea,
 [data-ui='bold'] .bold-run-request .orch-field select {
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   background: color-mix(in srgb, var(--hi-bg) 78%, var(--hi-ink));
   color: var(--hi-ink);
 }
@@ -581,7 +581,7 @@
 
 [data-ui='bold'] .bold-capsule {
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--bold-r, 1));
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -799,7 +799,7 @@
   /* The source line above the bubble has no fill of its own: on a theme's picture (Harbour) its words are measured
      against anything. An opaque panel behind the whole message is the ground a protected text needs. */
   background: var(--panel);
-  border-radius: 24px;
+  border-radius: calc(24px * var(--bold-r, 1));
   padding: 6px 8px;
 }
 
@@ -836,7 +836,7 @@
 [data-ui='bold'] .bold-message .chat-code {
   background: var(--code-bg);
   color: var(--code-ink);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-message .chat-compact,
@@ -878,7 +878,7 @@
 [data-ui='bold'] .bold-message:focus-visible {
   outline: 2px solid var(--hi-bg);
   outline-offset: 4px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-history {
@@ -972,7 +972,7 @@
 [data-ui='bold'] .bold-message-hit {
   outline: 2px solid var(--hi-bg);
   outline-offset: 5px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-result {
@@ -980,7 +980,7 @@
   text-align: left;
   background: #fff;
   color: #12131a;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   padding: 12px;
   display: flex;
   align-items: center;
@@ -992,7 +992,7 @@
 [data-ui='bold'] .bold-result-icon {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
   background: var(--field);
   display: grid;
   place-items: center;
@@ -1028,7 +1028,7 @@
 
 [data-ui='bold'] .bold-room-unavailable {
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
   padding: 18px;
   display: flex;
   flex-direction: column;
@@ -1050,7 +1050,7 @@
 [data-ui='bold'] .bold-elsewhere-note {
   align-self: flex-start;
   padding: 8px 12px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   background: var(--field);
   color: var(--ink2);
   font-size: 13px;
@@ -1188,7 +1188,7 @@
   text-align: left;
   background: var(--panel);
   color: var(--ink);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--bold-r, 1));
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -1240,7 +1240,7 @@
   align-items: center;
   gap: 8px;
   border: 0;
-  border-radius: 26px;
+  border-radius: calc(26px * var(--bold-r, 1));
   background: var(--panel);
   padding: 6px;
   box-shadow: none;
@@ -1394,7 +1394,7 @@
 
 [data-ui='bold'] .chat-composer-box--room .chat-attach-list {
   border-color: var(--line);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   background: var(--panel);
   box-shadow: var(--menu-shadow);
   min-width: 210px;
@@ -1405,7 +1405,7 @@
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-attach-list button {
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
   color: var(--ink);
 }
 
@@ -1419,13 +1419,13 @@
   width: min(430px, calc(100% - 4px));
   background: var(--panel);
   border-color: var(--line);
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
   box-shadow: var(--menu-shadow);
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-menu button {
   color: var(--ink);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-menu button:hover,
@@ -1452,7 +1452,7 @@
 
 [data-ui='bold'] .bold-room-composer .chat-composer-notice {
   margin: 0 0 6px;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bold-r, 1));
   background: var(--panel);
   color: var(--ink2);
 }
@@ -1575,7 +1575,7 @@
     min-height: 72px;
     width: 100%;
     border: 0;
-    border-radius: 20px;
+    border-radius: calc(20px * var(--bold-r, 1));
     background: var(--panel);
     color: var(--ink);
     padding: 14px;
@@ -1589,7 +1589,7 @@
     width: 44px;
     height: 44px;
     flex: none;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--bold-r, 1));
     background: var(--field);
   }
 
@@ -1855,7 +1855,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   background: var(--panel);
   padding: 10px 14px;
 }

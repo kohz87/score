@@ -244,7 +244,7 @@
   font-family: var(--font-m);
   font-size: 12px;
   background: var(--field);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--bold-r, 1));
   padding: 2px 8px;
   color: var(--ink2);
 }
@@ -462,7 +462,7 @@
 [data-ui='bold'] .side {
   flex: 1;
   background: var(--deep);
-  border-radius: 30px;
+  border-radius: calc(30px * var(--bold-r, 1));
   box-shadow: 0 0 0 1px var(--line);
   display: flex;
   flex-direction: column;
@@ -535,7 +535,7 @@
   position: absolute;
   z-index: 30;
   background: var(--panel);
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -553,7 +553,7 @@
   gap: 12px;
   min-height: 44px;
   padding: 8px 12px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   color: var(--ink);
   width: 100%;
   /* rows grow with their content: a scrolling flex menu must not squeeze them */
@@ -674,7 +674,7 @@ body.fit [data-ui='bold'] .stream {
 
 [data-ui='bold'] .glow {
   animation: pulse 2.2s ease-in-out infinite;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--bold-r, 1));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -828,7 +828,7 @@ body.fit [data-ui='bold'] .stream {
   gap: 10px 14px;
   margin: 0 0 14px;
   padding: 12px 16px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--bold-r, 1));
   background: var(--hi-bg);
   color: var(--hi-ink);
   font-weight: 600;
