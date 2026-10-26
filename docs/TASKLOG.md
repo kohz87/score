@@ -1485,3 +1485,25 @@ One entry per completed task: what landed, review results, and any **rejected re
   failed (workflows.spec:32 — two "Decide on Approve the draft" regions from other specs on the shared fake server;
   12/12 alone; test-isolation debt: unique recipe names); pnpm check green (server 4784, web 2952, contract 1512).
 - **v3.2.0 deployed live** (~10:51 UTC): backup score-pre-3.2.0-20261026.db, restart, no new errors; pushed main + tags to GitHub (first push since 1.x, owner OK).
+- **3.3.0** (2026-10-26; owner order "new readme first, removing agent that setup stopped partway, bot screen, optional
+  second team then all the deferred items"). **3.2.1 README** (Sonnet coder): 17 new-shell fake-mode screenshots, README
+  rewritten; Sonnet review clean (the "7 days without use" claim checked by the lead: SESSION_IDLE_MS). **3.2.2 stopped
+  setup removal** (lead, decision 134): review 1 found a Retry/Confirm in flight could revive an abandoned op (save()
+  now refuses a completed op; run() stops before each step) and an interrupted (confirmable) step could orphan a Hermes
+  profile (such setups are confirmed, never abandoned); review 2 found the failure path's save could throw unhandled
+  (tolerated). **3.2.3 UI polish** (Sonnet coder, from the lead's screenshot check): run-page pills, job glyph in search,
+  default theme passes its contrast check, agent facts inline; review clean. **3.3.0 Bot Screen** (lead: design note
+  docs/briefs/3.3.0-bot-screen.md with adversarial table, decision 135; server: own RFB 3.8 client on
+  `<profile>/bot-desktop/rfb.sock`, writes only SetPixelFormat/SetEncodings/FramebufferUpdateRequest, lease read before
+  every frame, PNG via node:zlib; Sonnet coder: Live screen card). Review: concurrent first polls got a 0×0 frame (every
+  caller now waits for the first frame), bot-desktop folder symlink/uid unchecked (checked), unbounded buffering
+  (capped); fix-round review clean (P3 frame-after-sweep fixed). Lead fix: routes read Score's projection, not the Hermes
+  roster, per 1 s poll. Gate: 9 e2e failures — 6 intended baseline moves (viewed, updated; the screen baseline fixture
+  now answers bot-screen `off` and asserts it), the default-contrast spec finding real low-contrast text on the screen
+  page once the Live card pushed the replay into view (`--watch-faint`, diff numbers, `--watch-muted` on the always-dark
+  window; card inks), contract sample for BotScreenStatusSchema; room-files passed alone. Re-run full e2e 824 passed, 2
+  failed: bold-workspace:129 1px (known) and themes-builtin ledger light 1440 (27/27 alone; full-run-only, added to the
+  3.5.0 test-reliability task). pnpm check green (server 4800, web 2964, contract 1514).
+- **v3.3.0 deployed live** (~12:02 UTC): idle (only the parked scoretestb run), backup score-pre-3.3.0-20261026.db,
+  restart, health ok, no new errors. Bot Screen needs a profile's Bot Desktop running (`hermes computer-use screen start`,
+  not started by the lead: owner's Hermes setup).
