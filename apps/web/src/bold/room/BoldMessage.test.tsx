@@ -1,5 +1,6 @@
 import type { Message } from '@score/contract'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { useEditing, stopEdit } from '../../routes/chat/message-edit.ts'
 import { BoldMessage, retryableIds } from './BoldMessage.tsx'
@@ -232,4 +233,38 @@ test('a failed reply keeps Retry (empty body), a finished one gets Try another',
       ),
     ).toBe(true),
   )
+})
+
+test('switching versions starts the actions fresh: an error shown for one version does not carry over', async () => {
+  vi.stubGlobal(
+    'fetch',
+    mockFetch(() => jsonResponse({ code: 'conflict', message: 'Resume the work first.' }, 409)),
+  )
+  const second = makeMessage({ ...reply, id: 'reply-2', alternativeOf: reply.id })
+  function Switcher() {
+    const [shown, setShown] = useState<Message>(second)
+    return (
+      <>
+        <button type="button" onClick={() => setShown(reply)}>
+          show first
+        </button>
+        <BoldMessage
+          key="shown"
+          message={shown}
+          agents={agents}
+          versions={[]}
+          onView={() => undefined}
+          pinned={false}
+          pinBusy={false}
+          onTogglePin={() => undefined}
+          canRetry
+        />
+      </>
+    )
+  }
+  renderInRoom(<Switcher />)
+  fireEvent.click(act('Try another reply from builder'))
+  expect(await screen.findByRole('alert')).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'show first' }))
+  expect(screen.queryByRole('alert')).toBeNull()
 })

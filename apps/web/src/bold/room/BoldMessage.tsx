@@ -205,6 +205,17 @@ export function BoldMessage({
   const [retryError, setRetryError] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // One BoldMessage shows every version of a reply group (2.4.0, so the pager keeps focus): a switch to another
+  // version starts its actions fresh, so no confirm, label or error carries over to the other message.
+  const [shownId, setShownId] = useState(message.id)
+  if (shownId !== message.id) {
+    setShownId(message.id)
+    setCopied(false)
+    setSaving(false)
+    setConfirmDelete(false)
+    setRetry('idle')
+    setRetryError(null)
+  }
   useEffect(
     () => () => {
       clearTimeout(timer.current)
