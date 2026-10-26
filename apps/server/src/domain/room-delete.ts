@@ -146,7 +146,15 @@ export function deleteRoom(
     'messages',
   ])
     sqlite.prepare(`DELETE FROM ${table} WHERE room_id = ?`).run(roomId)
-  for (const table of ['job_sessions', 'job_reads', 'coding_sessions', 'review_comments'])
+  sqlite.prepare('DELETE FROM agent_questions WHERE room_id = ?').run(roomId)
+  for (const table of [
+    'job_sessions',
+    'job_reads',
+    'coding_sessions',
+    'review_comments',
+    'agent_questions',
+    'coding_pending_terminals',
+  ])
     sqlite
       .prepare(`DELETE FROM ${table} WHERE job_id IN (SELECT id FROM jobs WHERE room_id = ?)`)
       .run(roomId)

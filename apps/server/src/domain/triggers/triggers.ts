@@ -84,15 +84,21 @@ export function listTriggers(sqlite: DatabaseSync, origin: string | null): Trigg
 /** 3.6.0: a trigger's team must be a team room (null: the first one). */
 function assertTeamRoom(sqlite: DatabaseSync, roomId: string | null | undefined): void {
   if (!roomId) return
-  if (!sqlite.prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team'").get(roomId))
+  if (
+    !sqlite
+      .prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team' AND archived = 0")
+      .get(roomId)
+  )
     throw new HttpError(400, 'bad_request', 'Choose one of your teams.')
 }
 
-/** The team room a call starts its job in: the trigger's own team, else the first team room. */
+/** The team room a call starts its job in: the trigger's own team, else (gone or archived) the first team room. */
 function teamOf(sqlite: DatabaseSync, trigger: Row): string | null {
   if (
     trigger.team_room_id &&
-    sqlite.prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team'").get(trigger.team_room_id)
+    sqlite
+      .prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team' AND archived = 0")
+      .get(trigger.team_room_id)
   )
     return trigger.team_room_id
   return teamRoomId(sqlite)

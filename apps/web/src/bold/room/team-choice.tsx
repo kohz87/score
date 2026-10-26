@@ -18,7 +18,14 @@ export interface TeamChoice {
 /** 3.6.0: the team a piece of work goes to. One team room means no choice and no change on screen. */
 export function useTeamChoice(): TeamChoice {
   const all = useStreamQuery(teamRoomsQuery).data ?? NO_ROOMS
-  const teams = useMemo(() => all.filter((room) => !room.archived), [all])
+  // The first (everyone) room first by its flag, not by list position: a room update can move it in the list.
+  const teams = useMemo(
+    () =>
+      all
+        .filter((room) => !room.archived)
+        .sort((a, b) => Number(b.everyone === true) - Number(a.everyone === true)),
+    [all],
+  )
   const [picked, setPicked] = useState<string | null>(null)
   const several = teams.length > 1
   const chosen = several ? (teams.find((room) => room.id === picked) ?? teams[0] ?? null) : null

@@ -638,6 +638,36 @@ test('a trigger starts its jobs in its chosen team; deleting that team sends the
   })
   expect(refused.statusCode).toBe(400)
 
+  // An archived team can't be chosen, and a call while the chosen team is archived goes to the first team room.
+  db.sqlite.prepare('UPDATE rooms SET archived = 1 WHERE id = ?').run(teamId)
+  expect(
+    (
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/triggers/${trigger.id}`,
+        headers,
+        payload: { teamRoomId: teamId },
+      })
+    ).statusCode,
+  ).toBe(400)
+  expect(
+    (
+      await call(
+        trigger.id,
+        secret,
+        JSON.stringify({ ticket: { ...ticket.ticket, id: 'TCK-3' } }),
+        {
+          webhookId: 'msg_3',
+        },
+      )
+    ).statusCode,
+  ).toBe(200)
+  const everyone = db.sqlite
+    .prepare("SELECT id FROM rooms WHERE role = 'team' AND team_everyone = 1")
+    .get() as { id: string }
+  expect(room(jobs().at(-1)!.id)).toBe(everyone.id)
+  db.sqlite.prepare('UPDATE rooms SET archived = 0 WHERE id = ?').run(teamId)
+
   // Deleting the team (after its job is closed) sends the trigger back to the first team room.
   db.sqlite.prepare("UPDATE jobs SET state = 'closed' WHERE room_id = ?").run(teamId)
   db.sqlite
