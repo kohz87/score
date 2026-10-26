@@ -4,7 +4,7 @@
 [data-ui='bold'] .bold-room-tabs {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   min-width: 0;
 }
 
@@ -13,7 +13,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   min-width: 0;
 }
 
@@ -22,14 +22,14 @@
   border: 0;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   font-size: 0.87em;
   font-weight: 700;
   background: var(--panel);
   color: var(--ink2);
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: calc(7px * var(--bold-d, 1));
   white-space: nowrap;
 }
 
@@ -61,7 +61,7 @@
 [data-ui='bold'] .bold-unread {
   min-width: 20px;
   height: 20px;
-  padding: 0 5px;
+  padding: 0 calc(5px * var(--bold-d, 1));
   background: var(--bad);
   color: #fff;
   font-size: 11px;
@@ -86,7 +86,7 @@
   background: transparent;
   color: var(--muted);
   min-height: 30px;
-  padding-inline: 11px;
+  padding-inline: calc(11px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-filter.on {
@@ -98,7 +98,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   min-height: 24px;
   margin-top: -6px;
 }
@@ -118,11 +118,11 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
   max-height: 40%;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-pins:empty {
@@ -151,7 +151,7 @@
   border: 0;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   font: inherit;
   font-size: 0.87em;
   font-weight: 700;
@@ -159,7 +159,7 @@
   color: var(--ink2);
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: calc(7px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-pins-more[aria-expanded='true'] svg {
@@ -169,11 +169,11 @@
 [data-ui='bold'] .bold-request {
   background: var(--hi-bg);
   color: var(--hi-ink);
-  border-radius: 22px;
-  padding: 14px 16px;
+  border-radius: calc(22px * var(--bold-r, 1));
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 /* Agent names read against the light object (dark mode) or the dark one (light mode): the other mode's tints. The
@@ -196,7 +196,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: calc(7px * var(--bold-d, 1));
   font-size: 0.93em;
 }
 
@@ -220,7 +220,7 @@
 }
 
 [data-ui='bold'] .bold-approval .row {
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-request-failed {
@@ -242,8 +242,8 @@
   min-width: 230px;
   max-width: min(280px, calc(100vw - 48px));
   margin: 0;
-  padding: 6px;
-  border-radius: 16px;
+  padding: calc(6px * var(--bold-d, 1));
+  border-radius: calc(16px * var(--bold-r, 1));
   background: var(--panel);
   color: var(--ink);
   box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
@@ -254,9 +254,9 @@
 [data-ui='bold'] .bold-approval-menu button {
   width: 100%;
   min-height: 40px;
-  padding: 0 10px;
+  padding: 0 calc(10px * var(--bold-d, 1));
   border: 0;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--bold-r, 1));
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -290,7 +290,7 @@
 [data-ui='bold'] .bold-request-form label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-request-form label {
@@ -303,9 +303,9 @@
 [data-ui='bold'] .bold-request-form select {
   width: 100%;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   min-height: 42px;
-  padding: 10px 12px;
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   background: color-mix(in srgb, var(--hi-bg) 78%, var(--hi-ink));
   color: var(--hi-ink);
 }
@@ -322,9 +322,9 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 5px;
-  padding: 12px 14px;
-  border-radius: 20px;
+  gap: calc(5px * var(--bold-d, 1));
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  border-radius: calc(20px * var(--bold-r, 1));
   background: var(--deep);
   box-shadow: inset 0 0 0 1px var(--line);
   font-size: 13px;
@@ -342,11 +342,11 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-source-badge {
-  padding: 2px 8px;
+  padding: 2px calc(8px * var(--bold-d, 1));
   border-radius: 999px;
   background: var(--field);
   color: var(--ink2);
@@ -369,7 +369,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   color: var(--ink2);
   font-size: 12px;
 }
@@ -386,8 +386,8 @@
 
 [data-ui='bold'] .bold-report-back--thread {
   margin: 0 16px 12px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  border-radius: calc(16px * var(--bold-r, 1));
   background: var(--field);
 }
 
@@ -395,9 +395,9 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 18px;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  border-radius: calc(18px * var(--bold-r, 1));
   background: var(--panel);
   color: var(--ink2);
   font-size: 13px;
@@ -444,21 +444,21 @@
 [data-ui='bold'] .bold-task-agent {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   font-weight: 700;
 }
 
 [data-ui='bold'] .bold-task-action-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   width: 100%;
 }
 
 [data-ui='bold'] .bold-task-action-form label {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: calc(5px * var(--bold-d, 1));
   font-size: 12px;
   font-weight: 600;
 }
@@ -468,8 +468,8 @@
   min-height: 58px;
   resize: vertical;
   border: 0;
-  border-radius: 14px;
-  padding: 10px 12px;
+  border-radius: calc(14px * var(--bold-r, 1));
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   background: var(--field);
   color: var(--ink);
   font: inherit;
@@ -478,7 +478,7 @@
 [data-ui='bold'] .bold-task-steps {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: calc(3px * var(--bold-d, 1));
   margin: 0;
   padding: 0;
   list-style: none;
@@ -488,7 +488,7 @@
 
 [data-ui='bold'] .bold-task-steps li {
   display: flex;
-  gap: 7px;
+  gap: calc(7px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-task-steps li[data-done='true'] {
@@ -541,7 +541,7 @@
 [data-ui='bold'] .bold-run-request .orch-field textarea,
 [data-ui='bold'] .bold-run-request .orch-field select {
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
   background: color-mix(in srgb, var(--hi-bg) 78%, var(--hi-ink));
   color: var(--hi-ink);
 }
@@ -550,7 +550,7 @@
   border: 0;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   background: transparent;
   color: var(--hi-ink);
   box-shadow: inset 0 0 0 1.5px var(--hi-ink);
@@ -572,7 +572,7 @@
 [data-ui='bold'] .bold-capsules {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-capsules:empty {
@@ -581,11 +581,11 @@
 
 [data-ui='bold'] .bold-capsule {
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 12px 14px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   margin-left: 36px;
 }
 
@@ -597,7 +597,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: calc(7px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-capsule-faces {
@@ -623,13 +623,13 @@
 [data-ui='bold'] .bold-capsule-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-capsule-aside-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   margin-left: 36px;
 }
 
@@ -637,7 +637,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 34px;
-  padding: 0 12px;
+  padding: 0 calc(12px * var(--bold-d, 1));
   border: 0;
   border-radius: 999px;
   background: var(--field);
@@ -653,14 +653,14 @@
 [data-ui='bold'] .bold-capsule-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-capsule-thread {
   border: 0;
   border-radius: 999px;
   min-height: 30px;
-  padding: 0 11px;
+  padding: 0 calc(11px * var(--bold-d, 1));
   background: var(--panel);
   color: var(--ink2);
   font-size: 12px;
@@ -675,7 +675,7 @@
 [data-ui='bold'] .bold-stream {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   margin-top: auto;
 }
 
@@ -683,7 +683,7 @@
 [data-ui='bold'] .bold-stream-empty {
   margin: 0;
   text-align: center;
-  padding: 30px;
+  padding: calc(30px * var(--bold-d, 1));
   color: var(--muted);
 }
 
@@ -696,13 +696,13 @@
 [data-ui='bold'] .bold-message {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: calc(3px * var(--bold-d, 1));
   position: relative;
 }
 
 [data-ui='bold'] .bold-message .chat-message {
   width: 100%;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   align-items: flex-end;
   outline: none;
 }
@@ -720,7 +720,7 @@
 }
 
 [data-ui='bold'] .bold-message .chat-message-meta {
-  gap: 7px;
+  gap: calc(7px * var(--bold-d, 1));
   margin: 0 0 4px;
   font-size: 12px;
   line-height: 1.3;
@@ -738,12 +738,12 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-message .chat-text {
   max-width: 100%;
-  padding: 9px 14px;
+  padding: calc(9px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   border-radius: 20px 20px 20px 6px;
   background: var(--field);
   color: var(--ink);
@@ -799,8 +799,8 @@
   /* The source line above the bubble has no fill of its own: on a theme's picture (Harbour) its words are measured
      against anything. An opaque panel behind the whole message is the ground a protected text needs. */
   background: var(--panel);
-  border-radius: 24px;
-  padding: 6px 8px;
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: calc(6px * var(--bold-d, 1)) calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-meta {
@@ -825,7 +825,7 @@
 [data-ui='bold'] .bold-message .chat-md ul,
 [data-ui='bold'] .bold-message .chat-md ol,
 [data-ui='bold'] .bold-message .chat-md blockquote {
-  margin-bottom: 6px;
+  margin-bottom: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-message .chat-md :not(pre) > code {
@@ -836,7 +836,7 @@
 [data-ui='bold'] .bold-message .chat-code {
   background: var(--code-bg);
   color: var(--code-ink);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-message .chat-compact,
@@ -860,8 +860,8 @@
   display: none;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
-  padding-left: 36px;
+  gap: calc(4px * var(--bold-d, 1));
+  padding-left: calc(36px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-message > .chat-message--you + .bold-acts {
@@ -878,7 +878,7 @@
 [data-ui='bold'] .bold-message:focus-visible {
   outline: 2px solid var(--hi-bg);
   outline-offset: 4px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-history {
@@ -886,7 +886,7 @@
   border: 0;
   border-radius: 999px;
   min-height: 32px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   background: var(--panel);
   color: var(--ink2);
   font-size: 12px;
@@ -900,7 +900,7 @@
 
 [data-ui='bold'] .bold-act-error {
   align-self: flex-start;
-  padding-left: 36px;
+  padding-left: calc(36px * var(--bold-d, 1));
   color: var(--bad);
   font-size: 12px;
 }
@@ -911,7 +911,7 @@
   color: var(--ink2);
   border-radius: 999px;
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 calc(10px * var(--bold-d, 1));
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
@@ -924,11 +924,11 @@
 
 [data-ui='bold'] .bold-message > .small.muted {
   align-self: flex-start;
-  padding-left: 36px;
+  padding-left: calc(36px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-message .chat-version-control {
-  margin-top: 3px;
+  margin-top: calc(3px * var(--bold-d, 1));
   background: var(--panel);
   color: var(--muted);
   font-size: 12px;
@@ -952,7 +952,7 @@
   background: var(--panel);
   color: var(--muted);
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: calc(4px * var(--bold-d, 1)) calc(10px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-message .chat-version-bar .chat-version-control {
@@ -961,7 +961,7 @@
 
 [data-ui='bold'] .bold-message .chat-previous {
   border-left-color: var(--line);
-  padding: 6px 10px;
+  padding: calc(6px * var(--bold-d, 1)) calc(10px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-message .chat-opacity,
@@ -972,7 +972,7 @@
 [data-ui='bold'] .bold-message-hit {
   outline: 2px solid var(--hi-bg);
   outline-offset: 5px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .bold-result {
@@ -980,11 +980,11 @@
   text-align: left;
   background: #fff;
   color: #12131a;
-  border-radius: 18px;
-  padding: 12px;
+  border-radius: calc(18px * var(--bold-r, 1));
+  padding: calc(12px * var(--bold-d, 1));
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   width: min(280px, 100%);
   text-decoration: none;
 }
@@ -992,7 +992,7 @@
 [data-ui='bold'] .bold-result-icon {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
   background: var(--field);
   display: grid;
   place-items: center;
@@ -1028,11 +1028,11 @@
 
 [data-ui='bold'] .bold-room-unavailable {
   border: 1px solid var(--line);
-  border-radius: 22px;
-  padding: 18px;
+  border-radius: calc(22px * var(--bold-r, 1));
+  padding: calc(18px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: calc(5px * var(--bold-d, 1));
   color: var(--muted);
 }
 
@@ -1044,13 +1044,13 @@
 
 /* PLAN 11.4d: one of the agents' own chats, read-only until it is brought into a team job. */
 [data-ui='bold'] .bold-elsewhere {
-  gap: 16px;
+  gap: calc(16px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-elsewhere-note {
   align-self: flex-start;
-  padding: 8px 12px;
-  border-radius: 14px;
+  padding: calc(8px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  border-radius: calc(14px * var(--bold-r, 1));
   background: var(--field);
   color: var(--ink2);
   font-size: 13px;
@@ -1060,7 +1060,7 @@
 [data-ui='bold'] .bold-elsewhere-title {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: calc(5px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-elsewhere-title h2 {
@@ -1074,7 +1074,7 @@
 [data-ui='bold'] .bold-elsewhere-card {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: calc(5px * var(--bold-d, 1));
   border-color: var(--line);
   background: var(--panel);
   color: var(--ink2);
@@ -1092,7 +1092,7 @@
 [data-ui='bold'] .bold-elsewhere-preview {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-elsewhere-preview-label {
@@ -1105,7 +1105,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-elsewhere-mine {
@@ -1114,13 +1114,13 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
+  gap: calc(3px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-elsewhere-bub {
   margin: 0;
   border-radius: 20px 20px 6px 20px;
-  padding: 9px 14px;
+  padding: calc(9px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   background: var(--hi-bg);
   color: var(--hi-ink);
   white-space: pre-wrap;
@@ -1129,7 +1129,7 @@
 
 [data-ui='bold'] .bold-elsewhere-theirs {
   display: flex;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   align-items: flex-end;
   max-width: 90%;
 }
@@ -1137,7 +1137,7 @@
 [data-ui='bold'] .bold-elsewhere-theirs > div {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: calc(3px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-elsewhere-theirs .bold-elsewhere-bub {
@@ -1153,15 +1153,15 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 20px;
+  gap: calc(20px * var(--bold-d, 1));
   overflow-y: auto;
-  padding: 18px 2px;
+  padding: calc(18px * var(--bold-d, 1)) 2px;
 }
 
 [data-ui='bold'] .bold-empty-copy {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-empty-copy h2 {
@@ -1180,7 +1180,7 @@
 [data-ui='bold'] .bold-starters {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-starter {
@@ -1188,11 +1188,11 @@
   text-align: left;
   background: var(--panel);
   color: var(--ink);
-  border-radius: 20px;
-  padding: 16px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  padding: calc(16px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-starter:hover {
@@ -1238,11 +1238,11 @@
     'plus to text send'
     'attach attach attach attach';
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   border: 0;
-  border-radius: 26px;
+  border-radius: calc(26px * var(--bold-r, 1));
   background: var(--panel);
-  padding: 6px;
+  padding: calc(6px * var(--bold-d, 1));
   box-shadow: none;
 }
 
@@ -1258,7 +1258,7 @@
   white-space: nowrap;
   border-radius: 999px;
   background: var(--field);
-  padding: 6px 12px;
+  padding: calc(6px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   color: var(--ink2);
   font-size: 12px;
   font-weight: 700;
@@ -1276,7 +1276,7 @@
   font: inherit;
   font-size: 15px;
   line-height: 1.5;
-  padding: 10px 0;
+  padding: calc(10px * var(--bold-d, 1)) 0;
 }
 
 /* Read by screen readers always (aria-describedby); shown on the composer's own top edge while it has focus, so it
@@ -1303,7 +1303,7 @@
   top: -9px;
   border-radius: 999px;
   background: var(--field);
-  padding: 1px 10px;
+  padding: 1px calc(10px * var(--bold-d, 1));
   color: var(--muted);
   font-size: 11px;
 }
@@ -1369,7 +1369,7 @@
 
 [data-ui='bold'] .chat-composer-box--room .chat-send--stop {
   width: auto;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-send--stop > span {
@@ -1394,7 +1394,7 @@
 
 [data-ui='bold'] .chat-composer-box--room .chat-attach-list {
   border-color: var(--line);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bold-r, 1));
   background: var(--panel);
   box-shadow: var(--menu-shadow);
   min-width: 210px;
@@ -1405,7 +1405,7 @@
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-attach-list button {
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
   color: var(--ink);
 }
 
@@ -1419,13 +1419,13 @@
   width: min(430px, calc(100% - 4px));
   background: var(--panel);
   border-color: var(--line);
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bold-r, 1));
   box-shadow: var(--menu-shadow);
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-menu button {
   color: var(--ink);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-menu button:hover,
@@ -1439,7 +1439,7 @@
 
 [data-ui='bold'] .bold-room-composer .chat-editing {
   color: var(--warn);
-  padding: 0 10px;
+  padding: 0 calc(10px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-room-composer .chat-editing-cancel,
@@ -1452,7 +1452,7 @@
 
 [data-ui='bold'] .bold-room-composer .chat-composer-notice {
   margin: 0 0 6px;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bold-r, 1));
   background: var(--panel);
   color: var(--ink2);
 }
@@ -1471,7 +1471,7 @@
   /* PLAN 11.10a: board 18's job list, then board 03's full-screen job chat. The shell's tab bar stays under both. */
   [data-ui='bold'] .bold-phone-list-head,
   [data-ui='bold'] .bold-phone-chat-head {
-    gap: 8px;
+    gap: calc(8px * var(--bold-d, 1));
     padding: 0 2px;
   }
 
@@ -1485,7 +1485,7 @@
   [data-ui='bold'] .bold-phone-chat-head {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--bold-d, 1));
     min-width: 0;
   }
 
@@ -1517,14 +1517,28 @@
     margin-left: 0;
   }
 
+  /* A big team wraps onto more rows instead of running off the right edge of the phone (the glyphs there were cut
+     by the viewport, and a theme's different widths then looked like a theme clipping them). */
   [data-ui='bold'] .bold-phone-presence {
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 3px;
-    flex: none;
+    gap: calc(3px * var(--bold-d, 1));
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
     border-radius: 999px;
     background: var(--panel);
-    padding: 5px 8px;
+    padding: calc(5px * var(--bold-d, 1)) calc(8px * var(--bold-d, 1));
+  }
+
+  /* Beside the job's name it takes at most under half the row, so the name keeps its room. */
+  [data-ui='bold'] .bold-phone-chat-head .bold-phone-presence {
+    max-width: 45%;
+  }
+
+  [data-ui='bold'] .bold-phone-list-title {
+    flex-wrap: wrap;
   }
 
   [data-ui='bold'] .bold-phone-presence-agent {
@@ -1546,15 +1560,15 @@
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 2px 0 4px;
+    gap: calc(10px * var(--bold-d, 1));
+    padding: 2px 0 calc(4px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-phone-jobs-head {
     display: flex;
     align-items: center;
     min-height: 34px;
-    padding: 4px;
+    padding: calc(4px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-phone-jobs-head h2 {
@@ -1568,20 +1582,20 @@
   [data-ui='bold'] .bold-phone-job-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: calc(10px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-phone-job {
     min-height: 72px;
     width: 100%;
     border: 0;
-    border-radius: 20px;
+    border-radius: calc(20px * var(--bold-r, 1));
     background: var(--panel);
     color: var(--ink);
-    padding: 14px;
+    padding: calc(14px * var(--bold-d, 1));
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: calc(12px * var(--bold-d, 1));
     text-align: left;
   }
 
@@ -1589,7 +1603,7 @@
     width: 44px;
     height: 44px;
     flex: none;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--bold-r, 1));
     background: var(--field);
   }
 
@@ -1604,7 +1618,7 @@
   [data-ui='bold'] .bold-phone-job-title {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--bold-d, 1));
     min-width: 0;
   }
 
@@ -1682,7 +1696,7 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: calc(4px * var(--bold-d, 1));
     min-height: 44px;
     padding: 0 2px;
   }
@@ -1690,7 +1704,7 @@
   [data-ui='bold'] .bold-phone-chat-tools .bold-filter,
   [data-ui='bold'] .bold-phone-chat-tools .bold-job-thread {
     min-height: 44px;
-    padding-inline: 12px;
+    padding-inline: calc(12px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-phone-chat-tools .bold-deleted-toggle {
@@ -1780,7 +1794,7 @@
 
   [data-ui='bold'] .bold-empty-room {
     justify-content: flex-start;
-    padding-top: 10px;
+    padding-top: calc(10px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-empty-copy h2 {
@@ -1803,8 +1817,9 @@
       'plus text send'
       'attach attach attach';
     border-radius: 999px;
-    gap: 6px;
-    padding: 4px 4px 4px 6px;
+    gap: calc(6px * var(--bold-d, 1));
+    padding: calc(4px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1))
+      calc(6px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .chat-composer-box--room > .chat-composer-room-to {
@@ -1813,7 +1828,7 @@
 
   [data-ui='bold'] .chat-composer-box--room > textarea {
     font-size: 17px;
-    padding: 9px 0;
+    padding: calc(9px * var(--bold-d, 1)) 0;
   }
 
   [data-ui='bold'] .chat-composer-box--room .chat-attach,
@@ -1854,10 +1869,10 @@
 [data-ui='bold'] .bold-job-fold {
   display: flex;
   align-items: center;
-  gap: 12px;
-  border-radius: 18px;
+  gap: calc(12px * var(--bold-d, 1));
+  border-radius: calc(18px * var(--bold-r, 1));
   background: var(--panel);
-  padding: 10px 14px;
+  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-job-fold-copy {
@@ -1893,7 +1908,7 @@
   font: inherit;
   font-size: 12px;
   font-weight: 700;
-  padding: 6px 14px;
+  padding: calc(6px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   cursor: pointer;
 }
 
@@ -1901,7 +1916,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
   margin: 0;
   color: var(--muted);
   font-size: 12px;
@@ -1920,7 +1935,7 @@
 }
 
 [data-ui='bold'] .bold-question-options {
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-question-pill[aria-pressed='true'] {
@@ -1959,14 +1974,14 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 10px;
-  padding-left: 36px;
+  gap: calc(4px * var(--bold-d, 1)) calc(10px * var(--bold-d, 1));
+  padding-left: calc(36px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-vers {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   font-size: 12px;
   color: var(--muted);
 }

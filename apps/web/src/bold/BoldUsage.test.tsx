@@ -290,3 +290,108 @@ test('the Journey view draws one row per agent with a legend and a count table',
   fireEvent.click(screen.getByRole('button', { name: 'Overview' }))
   expect(await screen.findByRole('region', { name: 'Usage in numbers' })).toBeDefined()
 })
+
+test('Custom range asks for the days, refetches them and the CSV link follows', async () => {
+  const router = open('/b/settings/usage')
+  await screen.findByRole('region', { name: 'Usage in numbers' })
+  fireEvent.click(screen.getByRole('button', { name: 'Custom' }))
+  const form = screen.getByRole('form', { name: 'Custom range' })
+  fireEvent.change(within(form).getByLabelText('From'), { target: { value: '2026-02-01' } })
+  fireEvent.change(within(form).getByLabelText('To'), { target: { value: '2026-02-10' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Apply' }))
+  await waitFor(() =>
+    expect(calls.some((c) => c.includes('range=custom&from=2026-02-01&to=2026-02-10'))).toBe(true),
+  )
+  expect(router.state.location.search).toContain('range=custom')
+  expect(screen.getByRole('link', { name: 'Download CSV' }).getAttribute('href')).toMatch(
+    /range=custom&from=2026-02-01&to=2026-02-10/,
+  )
+})
+
+test('Custom range refuses a first day after the last day', async () => {
+  open('/b/settings/usage')
+  await screen.findByRole('region', { name: 'Usage in numbers' })
+  fireEvent.click(screen.getByRole('button', { name: 'Custom' }))
+  const form = screen.getByRole('form', { name: 'Custom range' })
+  fireEvent.change(within(form).getByLabelText('From'), { target: { value: '2026-02-10' } })
+  fireEvent.change(within(form).getByLabelText('To'), { target: { value: '2026-02-01' } })
+  expect(within(form).getByRole('status').textContent).toMatch(/must not be after/)
+  expect((within(form).getByRole('button', { name: 'Apply' }) as HTMLButtonElement).disabled).toBe(
+    true,
+  )
+})
+
+test('the By agent table lists each agent with its figures', async () => {
+  open('/b/settings/usage')
+  const table = await screen.findByRole('table', { name: /^By agent$/ })
+  const headers = within(table)
+    .getAllByRole('columnheader')
+    .map((cell) => cell.textContent)
+  expect(headers).toEqual([
+    'Agent',
+    'Jobs done',
+    'Runs',
+    'Median time',
+    'First-time pass',
+    'Cache hits',
+    'Spend',
+  ])
+  expect(within(table).getAllByRole('row').length).toBeGreaterThan(1)
+  expect(within(table).getAllByText('Builder').length).toBeGreaterThan(0)
+})
+
+test('a reviewer with no first-time figure reads "n/a, reviews"', async () => {
+  open('/b/settings/usage')
+  const table = await screen.findByRole('table', { name: /^By agent$/ })
+  const row = within(table)
+    .getByRole('rowheader', { name: /Reviewer/ })
+    .closest('tr')!
+  expect(row.textContent).toContain('n/a, reviews')
+})
+
+test('the By agent table has an Unknown agent row for unattributed runs', async () => {
+  reportForRange = (range) => ({
+    ...reportFixture(range),
+    unattributed: { runs: 4, workingSec: 120 },
+  })
+  open('/b/settings/usage')
+  const table = await screen.findByRole('table', { name: /^By agent$/ })
+  const row = within(table).getByRole('rowheader', { name: 'Unknown agent' }).closest('tr')!
+  expect(within(row).getAllByRole('cell')[1]!.textContent).toBe('4')
+})
+
+test('the By agent table says it is loading before the report arrives', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://x')
+      if (url.pathname === '/api/agents')
+        return Promise.resolve(jsonResponse({ asOfSeq: 0, items: reportAgents }))
+      return new Promise(() => {})
+    }),
+  )
+  open('/b/settings/usage')
+  expect(await screen.findByText('Loading the table…')).toBeDefined()
+  expect(screen.queryByText('No agents yet.')).toBeNull()
+})
+
+test('the custom form follows a preset picked while it is open', async () => {
+  open('/b/settings/usage')
+  await screen.findByRole('region', { name: 'Usage in numbers' })
+  fireEvent.click(screen.getByRole('button', { name: 'Custom' }))
+  const form = screen.getByRole('form', { name: 'Custom range' })
+  fireEvent.change(within(form).getByLabelText('From'), { target: { value: '2026-02-01' } })
+  fireEvent.change(within(form).getByLabelText('To'), { target: { value: '2026-02-10' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Apply' }))
+  await waitFor(() => expect(calls.some((c) => c.includes('range=custom'))).toBe(true))
+  fireEvent.click(screen.getByRole('button', { name: '30 days' }))
+  await waitFor(() =>
+    expect(
+      (
+        within(screen.getByRole('form', { name: 'Custom range' })).getByLabelText(
+          'From',
+        ) as HTMLInputElement
+      ).value,
+    ).not.toBe('2026-02-01'),
+  )
+})

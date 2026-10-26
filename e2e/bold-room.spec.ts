@@ -23,14 +23,43 @@ test('a second job keeps its unread badge until its own tab is opened (real fake
   await expect
     .poll(async () => (await page.request.get('/api/team-room')).status(), { timeout: 30_000 })
     .toBe(200)
-  const team = (await (await page.request.get('/api/team-room')).json()) as {
-    jobs: { title: string; unread: number }[]
+  const web = { 'x-score-client': 'web' }
+  const room = (await (await page.request.get('/api/team-room')).json()) as { room: { id: string } }
+  // The seeded Release notes job keeps its unread count only until some other spec opens it (the Results and Workbench
+  // specs do, on this same server), so the second job is one of this spec's own: a person's message into it, and the
+  // lead's reply is the unread message nobody has opened.
+  const title = `Release notes ${Date.now().toString(36)}`
+  const made = await page.request.post(`/api/rooms/${room.room.id}/jobs`, {
+    headers: web,
+    data: { title },
+  })
+  expect(made.status()).toBe(201)
+  const jobId = ((await made.json()) as { id: string }).id
+  const sent = await page.request.post(`/api/rooms/${room.room.id}/messages`, {
+    headers: web,
+    data: { text: 'Draft the release notes.', to: ['lead'], jobId },
+  })
+  expect(sent.ok()).toBe(true)
+  type TeamJob = { id: string; unread: number; activeAgents: string[] }
+  const read = async () => {
+    const team = (await (await page.request.get('/api/team-room')).json()) as { jobs: TeamJob[] }
+    return team.jobs.find((job) => job.id === jobId)
   }
-  const notes = team.jobs.find((job) => job.title === 'Release notes 2.4')
+  // The reply has landed and the agents are done, so the count no longer moves.
+  await expect
+    .poll(
+      async () => {
+        const job = await read()
+        return (job?.unread ?? 0) > 0 && job?.activeAgents.length === 0
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true)
+  const notes = await read()
   expect(notes?.unread ?? 0).toBeGreaterThan(0)
 
   await page.goto('/b')
-  const notesTab = page.getByRole('tab', { name: /Release notes 2\.4/ })
+  const notesTab = page.getByRole('tab', { name: new RegExp(title) })
   const badge = notesTab.locator('.bold-unread')
   await expect(badge).toHaveText(String(notes!.unread), { timeout: 30_000 })
 
@@ -39,7 +68,7 @@ test('a second job keeps its unread badge until its own tab is opened (real fake
   await expect(badge).toHaveText(String(notes!.unread))
 
   await notesTab.click()
-  await expectDestination(page, 'To: Release notes 2.4')
+  await expectDestination(page, `To: ${title}`)
   await expect(notesTab.locator('.bold-unread')).toHaveCount(0)
 })
 

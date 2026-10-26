@@ -1,0 +1,124 @@
+/* Customizer Shape on the new shell (decision 133). Only a custom theme sets data-look='custom' and the shape
+   attributes (themes/engine.ts), so Score's own look is untouched: --bold-r falls back to 1 in every border-radius
+   (a `calc(Npx * var(--bold-r, 1))`), pills (999px) never scale. Numeric radius writes --bold-r itself (engine.ts).
+   Border and shadow tokens come from themes/variants.css. Protected surfaces and anything holding one keep their own
+   fills, so glass never makes a decision surface translucent: a card that holds any protected surface stays solid —
+   except an agent glyph, which is identity (colour + shape on its own fill), not a decision. */
+:root[data-look='custom'][data-radius='sharp'] {
+  --bold-r: 0.15;
+}
+:root[data-look='custom'][data-radius='round'] {
+  --bold-r: 1.4;
+}
+
+/* The shell's cards and panels (dialogs, menus and overlays stay solid). */
+:root[data-look='custom'][data-elevation]
+  [data-ui='bold']
+  :is(
+    .card,
+    .agentcard,
+    .bold-screen-card,
+    .bold-run-tile,
+    .bold-runs-row,
+    .bold-first-run-card,
+    .bold-results-screen,
+    .bold-starter,
+    .bold-phone-job,
+    .bold-job-fold,
+    .bold-thread-recipe,
+    .bold-thread-tasks,
+    .chat-composer-box--room,
+    .bold-rp-as,
+    .bold-rp-morepanel,
+    .bold-library .kn-panel,
+    .bold-agent .team-card,
+    .bold-coding .team-card,
+    .bold-settings-page .rules-style,
+    .bold-settings-page .rules-column
+  ):not([data-protected]) {
+  box-shadow: var(--theme-card-shadow);
+}
+:root[data-look='custom'][data-border]
+  [data-ui='bold']
+  :is(
+    .card,
+    .agentcard,
+    .bold-screen-card,
+    .bold-run-tile,
+    .bold-runs-row,
+    .bold-first-run-card,
+    .bold-results-screen,
+    .bold-starter,
+    .bold-phone-job,
+    .bold-job-fold,
+    .bold-thread-recipe,
+    .bold-thread-tasks,
+    .chat-composer-box--room,
+    .bold-rp-as,
+    .bold-rp-morepanel,
+    .bold-library .kn-panel,
+    .bold-agent .team-card,
+    .bold-coding .team-card,
+    .bold-settings-page .rules-style,
+    .bold-settings-page .rules-column
+  ):not([data-protected]) {
+  border: var(--theme-card-border);
+}
+:root[data-look='custom'][data-surface='glass']
+  [data-ui='bold']
+  :is(
+    .card,
+    .agentcard,
+    .bold-screen-card,
+    .bold-run-tile,
+    .bold-runs-row,
+    .bold-first-run-card,
+    .bold-results-screen,
+    .bold-starter,
+    .bold-phone-job,
+    .bold-job-fold,
+    .bold-thread-recipe,
+    .bold-thread-tasks,
+    .chat-composer-box--room,
+    .bold-rp-as,
+    .bold-rp-morepanel,
+    .bold-library .kn-panel,
+    .bold-agent .team-card,
+    .bold-coding .team-card,
+    .bold-settings-page .rules-style,
+    .bold-settings-page .rules-column
+  ):not([data-protected]):not(:has([data-protected]:not(.agent-glyph))) {
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-look='custom'][data-surface='glass']
+    [data-ui='bold']
+    :is(
+      .card,
+      .agentcard,
+      .bold-screen-card,
+      .bold-run-tile,
+      .bold-runs-row,
+      .bold-first-run-card
+    ):not([data-protected]):not(:has([data-protected]:not(.agent-glyph))) {
+    background: color-mix(in srgb, var(--panel) 94%, transparent);
+  }
+}
+
+/* Density: the Customizer's compact / comfortable / airy scale the shell's paddings and gaps (every `padding` and
+   `gap` in the shell reads `calc(Npx * var(--bold-d, 1))`). Score's own look never sets it, so it stays as drawn. */
+:root[data-look='custom'][data-density='compact'] {
+  --bold-d: 0.85;
+}
+:root[data-look='custom'][data-density='airy'] {
+  --bold-d: 1.2;
+}
+
+/* A decision card is opaque by itself, whatever surrounds it (no blur, a solid fill). */
+[data-ui='bold'] .bold-request,
+[data-ui='bold'] .chat-approval {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

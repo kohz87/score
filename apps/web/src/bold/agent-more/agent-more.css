@@ -53,7 +53,7 @@
   border-radius: 999px;
   min-height: 30px;
   min-width: 30px;
-  padding: 0 10px;
+  padding: 0 calc(10px * var(--bold-d, 1));
   font-size: 12px;
   font-weight: 600;
   display: inline-flex;
@@ -103,7 +103,7 @@
 [data-ui='bold'] .bold-mc-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-mc-form textarea.field {
@@ -113,10 +113,10 @@
 [data-ui='bold'] .bold-mc-box {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   background: var(--field);
-  border-radius: 14px;
-  padding: 10px 12px;
+  border-radius: calc(14px * var(--bold-r, 1));
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-mc-box code,
@@ -128,7 +128,7 @@
 [data-ui='bold'] .bold-mc-details {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-mc-details > summary {
@@ -138,7 +138,7 @@
 
 [data-ui='bold'] .bold-mc .check {
   align-items: flex-start;
-  padding-block: 6px;
+  padding-block: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-mc-files {
@@ -157,7 +157,7 @@
   border: 0;
   border-radius: 999px;
   min-height: 32px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   background: var(--field);
   color: var(--ink);
   font: inherit;
@@ -180,9 +180,9 @@
   flex: 1 0 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 20px;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  border-radius: calc(20px * var(--bold-r, 1));
   background: var(--deep);
   border: 1px solid var(--line);
 }
@@ -190,4 +190,11 @@
 [data-ui='bold'] .bold-mc .bold-remove-confirm p {
   margin: 0;
   color: var(--ink2);
+}
+
+/* Memory search: matches are marked in the note, the same highlight as the Library's snippets. */
+[data-ui='bold'] .bold-mc .listrow mark {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--agent-saffron-name) 26%, transparent);
+  color: var(--ink);
 }

@@ -273,3 +273,10 @@ describe('theme engine', () => {
     expect(document.documentElement.hasAttribute('data-look')).toBe(false)
   })
 })
+
+describe('bold shell shape scale (decision 133)', () => {
+  test('a numeric radius also writes the scale the new shell multiplies its radii by', () => {
+    expect(tokenCss({ shape: { radius: 14 } }, 'harbour')).toContain('--bold-r:0.5;')
+    expect(tokenCss({ shape: { radius: 28 } }, 'harbour')).toContain('--bold-r:1;')
+  })
+})

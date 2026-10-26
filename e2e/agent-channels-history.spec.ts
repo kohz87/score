@@ -18,10 +18,15 @@ test('Channels shows the connect form and Recent runs lists runs with a Watch re
 
   const history = page.locator('#agent-history')
   await expect(history.getByRole('heading', { name: 'Recent runs', level: 3 })).toBeVisible()
+  // The card lists the newest few runs; other specs share this server and start builder runs of their own, so the
+  // scenario's run can sit below the fold: open the whole list (whenever the button is there) until it shows.
   // The fake scenario starts the builder's first run within a few seconds of startup.
-  await expect(history.getByText('Add pagination to the activity feed').first()).toBeVisible({
-    timeout: 30_000,
-  })
+  const pagination = history.getByText('Add pagination to the activity feed').first()
+  await expect(async () => {
+    const allRuns = history.getByRole('button', { name: 'All runs' })
+    if (await allRuns.isVisible()) await allRuns.click()
+    await expect(pagination).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 30_000 })
 
   // Replay needs recorded frames, which the scripted scenario only produces late: stub one finished run.
   await page.route('**/api/agents/builder/history*', (route) =>

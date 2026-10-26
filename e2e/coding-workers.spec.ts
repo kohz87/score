@@ -3,6 +3,7 @@ import { ORCH_ACKNOWLEDGEMENT_TEXT } from '../packages/contract/src/index.ts'
 import { expect, test, type Page } from '@playwright/test'
 import { fixtureNow } from './now-fixture.ts'
 import { orchestrationFixtures } from './orchestration-fixtures.ts'
+import { holdLockPerTest } from './locks.ts'
 import { pair } from './pair.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
@@ -93,6 +94,9 @@ async function openDialog(page: Page, agent: string) {
   }).toPass({ timeout: 15_000 })
   return dialog
 }
+
+// The dialog's allowed agents are the whole team: no other spec may add a coding agent while these run.
+holdLockPerTest('roster')
 
 test('a coding agent the computer can’t run as a service is refused in plain words', async ({
   page,

@@ -39,6 +39,7 @@ import { AgentFacesContext } from '../components/agent-faces-context.ts'
 import './tokens.css'
 import './bold.css'
 import './bold-theme.css'
+import './bold-shape.css'
 
 const PHONE = '(max-width: 860px)'
 

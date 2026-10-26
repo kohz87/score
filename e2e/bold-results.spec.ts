@@ -239,9 +239,14 @@ for (const size of sizes) {
           return [url.pathname, url.searchParams.get('job'), url.searchParams.get('work')]
         })
         .toEqual(['/b', job.id, 'workbench'])
+      // Since 11.12c the Workbench replaces the Results cards in the panel (BoldRoom hides them), so the carried job
+      // shows as the Workbench's own heading; the old check saw the cards only in the frame before the swap.
+      await expect(panel.getByRole('heading', { name: 'Activity feed', level: 2 })).toBeVisible({
+        timeout: 20_000,
+      })
       await expect(
         panel.locator('[data-card="change"]').filter({ hasText: 'Activity feed' }),
-      ).toBeVisible()
+      ).toBeHidden()
       await expect(panel.locator('[data-card="draft"]')).toHaveCount(0)
     })
   })

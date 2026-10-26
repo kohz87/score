@@ -1077,3 +1077,15 @@ test('a room whose messages were all deleted offers the real toggle on the start
     await screen.findByRole('heading', { name: 'Your team is ready. What first?' }),
   ).toBeDefined()
 })
+
+test('Team lead… opens from the team room menu and Cancel gives focus back to the menu button', async () => {
+  stubRoom([makeJob({ id: 'job-activity', title: 'Activity feed' })])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b?job=job-activity'])
+  const trigger = await screen.findByRole('button', { name: 'Room menu' })
+  fireEvent.click(trigger)
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Team lead…' }))
+  await screen.findByRole('dialog', { name: 'Team lead' })
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Team lead' })).toBeNull())
+  expect(document.activeElement).toBe(trigger)
+})
