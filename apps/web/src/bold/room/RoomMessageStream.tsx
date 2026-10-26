@@ -394,7 +394,7 @@ export function RoomMessageStream({
         onlyJobId: selectedJob === 'all' ? undefined : selectedJob,
         onBranchSelect: (messageId, version) =>
           setView(version ? { messageId, version, filter, selectedJob } : null),
-        renderMessage: (message) => (
+        renderMessage: (message, replyGroup) => (
           <BoldMessage
             key={message.id}
             message={message}
@@ -402,6 +402,7 @@ export function RoomMessageStream({
             versions={versions}
             approvalPointerIds={approvalPointerIds}
             canRetry={retryable.has(message.id)}
+            replyGroup={replyGroup}
             onView={(version) => setView({ messageId: message.id, version, filter, selectedJob })}
             pinned={isPinned(message.id)}
             pinBusy={pinBusy === message.id}

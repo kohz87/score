@@ -528,8 +528,8 @@ test('Retry is offered on agent replies that answer the person, and posts to the
   renderStream('job-1')
   await screen.findByText('Read layer is ready.')
   // The reviewer also answers the person's message (it follows the builder's reply): Retry there too.
-  expect(boldButton('Retry reply from reviewer')).toBeDefined()
-  fireEvent.click(boldButton('Retry reply from builder'))
+  expect(boldButton('Try another reply from reviewer')).toBeDefined()
+  fireEvent.click(boldButton('Try another reply from builder'))
   await waitFor(() =>
     expect(
       fetchMock.mock.calls.some(
@@ -538,7 +538,7 @@ test('Retry is offered on agent replies that answer the person, and posts to the
       ),
     ).toBe(true),
   )
-  expect(boldButton('Retry reply from builder').textContent).toContain('Retrying')
+  expect(boldButton('Try another reply from builder').textContent).toContain('Asking')
 })
 
 test('a newly completed agent message is announced once, after history loads', async () => {

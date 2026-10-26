@@ -99,19 +99,19 @@ for (const { name, viewport, agent } of sizes) {
       await expect(side(page).getByText(`First ${tag}`)).toHaveCount(0)
     })
 
-    test('retry an agent reply, then delete a message', async ({ page }) => {
+    test('try another reply, then delete a message', async ({ page }) => {
       const tag = `retry-${Date.now().toString(36)}`
       const chat = await makeChat(page, agent, `Question ${tag}`)
       await openChat(page, agent, chat.id)
       const replies = side(page).locator('.bold-dm-message:not(:has(.chat-message--you))')
       await settled(page, chat.roomId, chat.id)
-      const before = await replies.count()
       await replies.first().hover()
       await replies
         .first()
-        .getByRole('button', { name: /^Retry reply from/ })
+        .getByRole('button', { name: /^Try another reply from/ })
         .click()
-      await expect.poll(() => replies.count(), { timeout: 30_000 }).toBeGreaterThan(before)
+      // The new reply is a second version of the same message (one message with a pager), not a new message.
+      await expect(side(page).getByText('2 / 2')).toBeVisible({ timeout: 30_000 })
       await settled(page, chat.roomId, chat.id)
 
       const mine = side(page).locator('.bold-dm-message', { hasText: `Question ${tag}` })

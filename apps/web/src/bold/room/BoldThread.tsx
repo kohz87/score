@@ -38,7 +38,9 @@ import {
   threadRounds,
   threadTurns,
 } from './thread-model.ts'
-import { BoldMessage, retryableIds } from './BoldMessage.tsx'
+import { authorName, BoldMessage, retryableIds } from './BoldMessage.tsx'
+import { ReplyGroup, type ReplyGroupParts } from './ReplyGroup.tsx'
+import { groupReplies } from './reply-versions.ts'
 import { decisionError, ExchangeRequestCard } from './RoomRequests.tsx'
 import { useMessageTools } from './use-message-tools.ts'
 import { ReportBackLine } from './ReportBack.tsx'
@@ -308,6 +310,7 @@ function JobThread({
   )
   const olderCursor = olderPages.at(-1)?.nextCursor ?? messagesState.data?.nextCursor ?? null
   const reviewExchanges = exchanges.filter((item) => item.kind === 'review').length
+  const groups = useMemo(() => groupReplies(allMessages), [allMessages])
   const rounds = useMemo(
     () =>
       threadRounds(allMessages, {
@@ -484,25 +487,40 @@ function JobThread({
               aria-label={`${round.label} messages`}
             >
               <h3 className="bold-thread-round-label">{round.label}</h3>
-              {round.messages.map((message) => (
-                // The thread shows an approval's real card, not the room stream's pointer: the strip may be filtered to
-                // another job or covered by the phone sheet. Edit hands the message to the room's composer (its
+              {round.messages.map((message) => {
+                if (groups.folded.has(message.id)) return null
+                // The thread shows an approval's real card, not the room stream's pointer: the strip may be filtered
+                // to another job or covered by the phone sheet. Edit hands the message to the room's composer (its
                 // `jobId` keeps the correction in this job); there is no version branch view in this narrow panel.
-                <BoldMessage
-                  key={message.id}
-                  message={message}
-                  agents={agents}
-                  versions={[]}
-                  canRetry={retryable.has(message.id)}
-                  {...(onEdit ? { onEdit } : {})}
-                  onView={() => undefined}
-                  pinned={tools.isPinned(message.id)}
-                  pinBusy={tools.pinBusy === message.id}
-                  onTogglePin={() => void tools.togglePin(message.id)}
-                  className="bold-thread-message"
-                  bold={false}
-                />
-              ))}
+                const draw = (shown: Message, replyGroup?: ReplyGroupParts) => (
+                  <BoldMessage
+                    key={shown.id}
+                    message={shown}
+                    agents={agents}
+                    versions={[]}
+                    canRetry={retryable.has(shown.id)}
+                    replyGroup={replyGroup}
+                    {...(onEdit ? { onEdit } : {})}
+                    onView={() => undefined}
+                    pinned={tools.isPinned(shown.id)}
+                    pinBusy={tools.pinBusy === shown.id}
+                    onTogglePin={() => void tools.togglePin(shown.id)}
+                    className="bold-thread-message"
+                    bold={false}
+                  />
+                )
+                const group = groups.byHead.get(message.id)
+                return group ? (
+                  <ReplyGroup
+                    key={`group-${message.id}`}
+                    group={group}
+                    agentName={authorName(message, agents)}
+                    render={draw}
+                  />
+                ) : (
+                  draw(message)
+                )
+              })}
             </section>
           ))}
         </div>

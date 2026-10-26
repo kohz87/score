@@ -90,10 +90,10 @@ test('your own finished message has Edit, Copy, Pin and Delete, and no Retry', (
   ])
 })
 
-test('an agent reply to the person has Retry and Delete and no Edit', () => {
+test('an agent reply to the person has Try another and Delete and no Edit', () => {
   renderMessage(reply, { canRetry: true })
   const labels = names()
-  expect(labels).toContain('Retry reply from builder')
+  expect(labels).toContain('Try another reply from builder')
   expect(labels).toContain('Delete message from builder')
   expect(labels.some((label) => label.startsWith('Edit'))).toBe(false)
 })
@@ -127,14 +127,16 @@ test('Pin calls the place’s toggle and shows the pressed state', () => {
   expect(onTogglePin).toHaveBeenCalledOnce()
 })
 
-test('Retry posts to the message’s retry endpoint', async () => {
+test('Try another posts to the retry endpoint with another: true', async () => {
   const { fetchMock } = renderMessage(reply, { canRetry: true })
-  fireEvent.click(act('Retry reply from builder'))
+  fireEvent.click(act('Try another reply from builder'))
   await waitFor(() =>
     expect(
       fetchMock.mock.calls.some(
         ([url, init]) =>
-          String(url) === '/api/rooms/room-1/messages/reply-1/retry' && init?.method === 'POST',
+          String(url) === '/api/rooms/room-1/messages/reply-1/retry' &&
+          init?.method === 'POST' &&
+          init?.body === '{"another":true}',
       ),
     ).toBe(true),
   )
@@ -148,11 +150,11 @@ test('Delete on your message asks for the rewind', () => {
 
 test('an agent message that does not answer the person has no Retry', () => {
   renderMessage(reply)
-  expect(names()).not.toContain('Retry reply from builder')
+  expect(names()).not.toContain('Try another reply from builder')
   expect(names()).toContain('Delete message from builder')
 })
 
-test('a 409 on Retry is worded neutrally', async () => {
+test('a 409 on Try another is worded neutrally', async () => {
   const fetchMock = mockFetch(() =>
     jsonResponse({ code: 'conflict', message: 'Resume the work first.' }, 409),
   )
@@ -169,9 +171,9 @@ test('a 409 on Retry is worded neutrally', async () => {
       canRetry
     />,
   )
-  fireEvent.click(act('Retry reply from builder'))
+  fireEvent.click(act('Try another reply from builder'))
   expect((await screen.findByRole('alert')).textContent).toBe(
-    'This reply can’t be retried right now.',
+    'This reply can’t be tried again right now.',
   )
 })
 
@@ -210,4 +212,24 @@ describe('retryableIds', () => {
     // Retry on b is decided from the full list even though the render list drops q and a.
     expect(retryableIds(all).has('b')).toBe(true)
   })
+})
+
+test('a failed reply keeps Retry (empty body), a finished one gets Try another', async () => {
+  const failed = makeMessage({
+    id: 'reply-f',
+    author: { kind: 'agent', agentId: 'builder' },
+    parts: [{ kind: 'text', text: 'This run failed: boom' }],
+  })
+  const { fetchMock } = renderMessage(failed, { canRetry: true })
+  expect(names()).toContain('Retry reply from builder')
+  expect(names()).not.toContain('Try another reply from builder')
+  fireEvent.click(act('Retry reply from builder'))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url) === '/api/rooms/room-1/messages/reply-f/retry' && init?.body === '{}',
+      ),
+    ).toBe(true),
+  )
 })

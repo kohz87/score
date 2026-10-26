@@ -958,7 +958,7 @@ function DirectConversation({
               },
               onBranchSelect: (messageId, version) =>
                 setView(version ? { messageId, version, chatId: chat.id } : null),
-              renderMessage: (message) => (
+              renderMessage: (message, replyGroup) => (
                 <BoldMessage
                   key={message.id}
                   message={message}
@@ -970,6 +970,7 @@ function DirectConversation({
                   onTogglePin={() => void tools.togglePin(message.id)}
                   className="bold-dm-message"
                   canRetry={retryable.has(message.id)}
+                  replyGroup={replyGroup}
                 >
                   {message.id === lastAgent?.id && (
                     <div className="bold-dm-msg-actions">

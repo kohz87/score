@@ -20,6 +20,8 @@ import { saveCandidates, SaveToKnowledge } from '../../routes/knowledge/SaveToKn
 import { boldWorkspaceLink } from '../bold-links.ts'
 import { fetchJobResults, jobResultsKey } from '../bold-results-queries.ts'
 import { agentDisplayName } from '../bold-agents.ts'
+import { ReplyGroup, type ReplyGroupParts } from './ReplyGroup.tsx'
+import { groupReplies, isFailedReply } from './reply-versions.ts'
 
 // One message with the prototype's action row (Edit, Copy, Save, Retry, Pin, Delete) and its versions. The team room,
 // the one-to-one chat and the job thread all draw their messages with it, so a message does the same everywhere.
@@ -82,7 +84,8 @@ export function buildMessageNodes({
   branch: BranchSelection | null
   onBranchSelect: (messageId: string, version: BranchSelection['version'] | null) => void
   onlyJobId?: string | undefined
-  renderMessage: (message: Message) => ReactNode
+  /** `group` is set when the message is the shown version of a group of replies (Try another / Retry). */
+  renderMessage: (message: Message, group?: ReplyGroupParts) => ReactNode
   /**
    * Muted lines placed where they happened (an ended agent question). `used` is shared by the runs of one stream so a
    * line shows once; `tail` says whether the lines after the last message go here (the stream's final run).
@@ -122,7 +125,9 @@ export function buildMessageNodes({
       )
     }
   }
+  const groups = groupReplies(items)
   for (const message of items) {
+    if (groups.folded.has(message.id)) continue
     if (effective && anchor && atOrAfter(message, anchor)) {
       if (message.id === anchor.id)
         nodes.push(
@@ -138,7 +143,19 @@ export function buildMessageNodes({
       break
     }
     flush(message.createdAt)
-    nodes.push(renderMessage(message))
+    const group = groups.byHead.get(message.id)
+    nodes.push(
+      group ? (
+        <ReplyGroup
+          key={`group-${message.id}`}
+          group={group}
+          agentName={authorName(message, agents)}
+          render={renderMessage}
+        />
+      ) : (
+        renderMessage(message)
+      ),
+    )
   }
   flush(null)
   return { nodes, branched: effective !== null }
@@ -156,6 +173,7 @@ export function BoldMessage({
   className,
   bold = true,
   canRetry = false,
+  replyGroup,
   onEdit,
   children,
 }: {
@@ -173,6 +191,8 @@ export function BoldMessage({
   bold?: boolean
   /** Whether the message answers the person's own message (see `retryableIds`): only then is Retry offered. */
   canRetry?: boolean
+  /** Set when this is the shown version of a group of replies: its pager and memory note go under the bubble. */
+  replyGroup?: ReplyGroupParts | undefined
   /** Runs after Edit hands the message to the composer (the phone sheet closes so the composer can be used). */
   onEdit?: () => void
   /** Extra rows that belong to the message (the one-to-one's share row). */
@@ -232,13 +252,19 @@ export function BoldMessage({
     timer.current = setTimeout(() => setCopied(false), 2000)
   }
 
-  async function retryReply() {
+  const failed = isFailedReply(message)
+
+  async function retryReply(another: boolean) {
     setRetry('busy')
     setRetryError(null)
     try {
       await apiFetch(
         `rooms/${encodeURIComponent(message.roomId)}/messages/${encodeURIComponent(message.id)}/retry`,
-        { method: 'POST', headers: { 'Idempotency-Key': newId() }, body: '{}' },
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': newId() },
+          body: JSON.stringify(another ? { another: true } : {}),
+        },
       )
       setRetry('queued')
       clearTimeout(retryTimer.current)
@@ -247,8 +273,12 @@ export function BoldMessage({
       setRetry('idle')
       setRetryError(
         failure instanceof ApiError && failure.status === 409
-          ? 'This reply can’t be retried right now.'
-          : 'Couldn’t retry. Try again.',
+          ? another
+            ? 'This reply can’t be tried again right now.'
+            : 'This reply can’t be retried right now.'
+          : another
+            ? 'Couldn’t ask for another reply. Try again.'
+            : 'Couldn’t retry. Try again.',
       )
     }
   }
@@ -270,6 +300,12 @@ export function BoldMessage({
           <MessageVersionControl messageId={message.id} versions={versions} onSelect={onView} />
         }
       />
+      {replyGroup && (
+        <div className="bold-reply-versions">
+          {replyGroup.pager}
+          {replyGroup.note}
+        </div>
+      )}
       {finished && (
         <div className="bold-acts" role="group" aria-label={`Actions for message from ${author}`}>
           {mine && !imported && !message.editedBy && (
@@ -309,11 +345,11 @@ export function BoldMessage({
             <button
               type="button"
               className="bold-act"
-              aria-label={`Retry reply from ${author}`}
-              disabled={retry !== 'idle'}
-              onClick={() => void retryReply()}
+              aria-label={`${failed ? 'Retry reply' : 'Try another reply'} from ${author}`}
+              disabled={retry !== 'idle' || (!failed && replyGroup?.writing === true)}
+              onClick={() => void retryReply(!failed)}
             >
-              {retry === 'idle' ? 'Retry reply' : 'Retrying'}
+              {retry === 'idle' ? (failed ? 'Retry reply' : 'Try another') : 'Asking'}
             </button>
           )}
           {!imported && (
