@@ -67,6 +67,7 @@ function stubRoom(
     imported?: boolean
     outside?: OutsideSession[]
     approvals?: Approval[]
+    versions?: unknown[]
   } = {},
 ) {
   const fetchMock = mockFetch((url, init) => {
@@ -140,7 +141,7 @@ function stubRoom(
       })
     if (parsed.pathname === '/api/rooms/room-1/pins') return jsonResponse({ items: [] })
     if (parsed.pathname === '/api/rooms/room-1/versions')
-      return jsonResponse({ asOfSeq: 1, items: [] })
+      return jsonResponse({ asOfSeq: 1, items: options.versions ?? [] })
     if (parsed.pathname === '/api/approvals')
       return jsonResponse({ asOfSeq: 1, items: options.approvals ?? [], nextCursor: null })
     if (parsed.pathname === '/api/commands') return jsonResponse({ items: [] })
@@ -1047,10 +1048,27 @@ test('the room menu gives export, share and delete the prototype’s menu rows',
   expect(menu.getAttribute('data-protected')).toBe('flex')
 })
 
-test('a room whose messages were all deleted offers to show them from the starter board', async () => {
-  stubRoom([])
+test('a room whose messages were all deleted offers the real toggle on the starter board', async () => {
+  stubRoom([], {
+    versions: [
+      {
+        id: 'v1',
+        roomId: 'room-1',
+        anchorId: 'm1',
+        anchorCreatedAt: '2026-10-24T10:00:00.000Z',
+        mode: 'delete',
+        replacedBy: null,
+        number: 1,
+        count: 1,
+        hiddenCount: 1,
+        rewound: [],
+        skipped: [],
+        createdAt: '2026-10-24T10:01:00.000Z',
+      },
+    ],
+  })
   renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
-  fireEvent.click(await screen.findByRole('button', { name: 'Show what was deleted' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Show deleted messages' }))
   const toggle = await screen.findByRole('button', { name: 'Hide deleted messages' })
   expect(toggle.getAttribute('aria-pressed')).toBe('true')
   expect(screen.queryByRole('heading', { name: 'Your team is ready. What first?' })).toBeNull()

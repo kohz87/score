@@ -15,7 +15,7 @@ import { agentDisplayName } from '../bold-agents.ts'
 import { DeleteRoomDialog } from '../../routes/chat/DeleteRoomDialog.tsx'
 import { ShareDialog } from '../../routes/chat/ShareDialog.tsx'
 import { useShowDeleted, setShowDeleted } from '../../routes/chat/deleted-toggle.ts'
-import { roomsQuery } from '../../routes/chat/queries.ts'
+import { roomsQuery, versionsQuery } from '../../routes/chat/queries.ts'
 import '../../routes/chat/chat.css'
 import { Composer } from '../../routes/chat/Composer.tsx'
 import { saveDraft } from '../../routes/chat/composer-model.ts'
@@ -366,6 +366,11 @@ function LoadedTeamRoom({
   const opened = shownJob && !openedJobs.includes(shownJob) ? [...openedJobs, shownJob] : openedJobs
 
   const namedJobs = allJobs.filter((job) => !job.isDefault)
+  // Only a room that had messages deleted offers the toggle on its starter board (a fresh board has nothing to show).
+  const versionsDefinition = useMemo(() => versionsQuery(room.id), [room.id])
+  const hasDeletes = (useStreamQuery(versionsDefinition).data ?? []).some(
+    (version) => version.mode === 'delete',
+  )
   const empty =
     jobsStatus === 'success' &&
     namedJobs.length === 0 &&
@@ -545,16 +550,18 @@ function LoadedTeamRoom({
         />
       ) : empty ? (
         <>
-          <div className="bold-room-tools">
-            <button
-              type="button"
-              className="bold-filter bold-deleted-toggle"
-              aria-pressed={false}
-              onClick={() => setShowDeleted(room.id, true)}
-            >
-              Show what was deleted
-            </button>
-          </div>
+          {hasDeletes && (
+            <div className="bold-room-tools">
+              <button
+                type="button"
+                className="bold-filter bold-deleted-toggle"
+                aria-pressed={false}
+                onClick={() => setShowDeleted(room.id, true)}
+              >
+                Show deleted messages
+              </button>
+            </div>
+          )}
           <RoomEmpty agents={agents} onStart={startWith} />
         </>
       ) : phone && room.role === 'team' && !phoneJob ? (

@@ -23,10 +23,19 @@ for (const viewport of sizes) {
     await openBoldRoomById(page, made.id)
 
     await page.getByRole('button', { name: 'Room menu' }).click()
-    await expect(page.getByRole('menuitem', { name: 'Export as JSON' })).toHaveAttribute(
-      'href',
-      `/api/rooms/${made.id}/export.json`,
+    const json = page.getByRole('menuitem', { name: 'Export as JSON' })
+    await expect(json).toHaveAttribute('href', `/api/rooms/${made.id}/export.json`)
+    // Arrow keys reach the link and Enter downloads it.
+    for (
+      let step = 0;
+      step < 12 && !(await json.evaluate((el) => el === document.activeElement));
+      step += 1
     )
+      await page.keyboard.press('ArrowDown')
+    const download = page.waitForEvent('download')
+    await page.keyboard.press('Enter')
+    expect((await download).suggestedFilename()).toMatch(/\.json$/)
+    await page.getByRole('button', { name: 'Room menu' }).click()
     await page.getByRole('menuitem', { name: 'Rename…' }).click()
     const dialog = page.getByRole('dialog', { name: 'Rename room' })
     await expect(dialog).toHaveAttribute('data-protected', 'any')
@@ -59,6 +68,18 @@ for (const viewport of sizes) {
     // Archive: the room leaves the switcher until "Show archived" is on.
     await page.getByRole('button', { name: 'Room menu' }).click()
     await page.getByRole('menuitem', { name: 'Archive', exact: true }).click()
+    await expect(page.getByText('Archived', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Unarchive' })).toBeVisible()
+    // The open archived room stays reachable from its own switcher (desktop; the phone chat has no switcher).
+    if (!phone) {
+      await page.locator('.roomtitle').click()
+      await expect(
+        page
+          .getByRole('listbox', { name: 'Rooms and chats elsewhere' })
+          .getByRole('option', { name: new RegExp(`#${renamed}`) }),
+      ).toBeVisible()
+      await page.keyboard.press('Escape')
+    }
     await page.goto('/b')
     await page.locator('.roomtitle').click()
     const picker = page.getByRole('listbox', { name: 'Rooms and chats elsewhere' })
@@ -73,13 +94,8 @@ for (const viewport of sizes) {
     await pair(page)
     const made = await makeRoom(page, 'emptied')
     await openBoldRoomById(page, made.id)
-    if (phone) {
-      // An older room opens straight into its chat on a phone, which already carries the toggle.
-      await expect(page.getByRole('button', { name: 'Show deleted messages' })).toBeVisible()
-      return
-    }
-    await page.getByRole('button', { name: 'Show what was deleted' }).click()
-    await expect(page.getByRole('button', { name: 'Hide deleted messages' })).toBeVisible()
+    // Nothing was deleted, so a fresh room offers no toggle on its starter board.
+    await expect(page.getByRole('button', { name: /deleted messages/ })).toHaveCount(phone ? 1 : 0)
   })
 
   test(`Recent runs filters by outcome and shows each run's cost at ${at}`, async ({ page }) => {

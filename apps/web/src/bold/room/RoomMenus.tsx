@@ -137,8 +137,12 @@ export function RoomSwitcher({
 
   const [showArchived, setShowArchived] = useState(false)
   const projects = useStreamQuery(roomsQuery).data?.projects ?? []
-  const candidates = rooms.filter((room) => room.id !== teamRoom?.id && isOlderRoom(room))
-  const groups = groupRooms(candidates, projects, { showArchived, tag: null })
+  // The room that is open stays listed even when archived, so it is never unreachable from its own switcher.
+  const visible = (room: Room) => showArchived || !room.archived || room.id === current?.id
+  const candidates = rooms.filter(
+    (room) => room.id !== teamRoom?.id && isOlderRoom(room) && visible(room),
+  )
+  const groups = groupRooms(candidates, projects, { showArchived: true, tag: null })
   const imported = rooms
     .filter(
       (room) =>
@@ -146,7 +150,7 @@ export function RoomSwitcher({
         room.role !== 'team' &&
         room.kind === 'room' &&
         room.importedFrom &&
-        (showArchived || !room.archived),
+        visible(room),
     )
     .sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false))
   const archivedCount = rooms.filter(
@@ -337,6 +341,32 @@ export function RoomSwitcher({
             </div>
           )}
         </div>
+      )}
+    </span>
+  )
+}
+
+/** Shown beside the title while the open room is archived, with the way back right there. */
+export function ArchivedBadge({ room }: { room: Room | null }) {
+  const [failed, setFailed] = useState(false)
+  if (!room?.archived || room.role === 'team') return null
+  return (
+    <span className="bold-room-archived">
+      <span className="bold-room-kind-badge">Archived</span>
+      <button
+        type="button"
+        className="link"
+        onClick={() => {
+          setFailed(false)
+          patchRoom(room.id, { archived: false }).catch(() => setFailed(true))
+        }}
+      >
+        Unarchive
+      </button>
+      {failed && (
+        <span className="small" role="alert">
+          Couldn’t unarchive. Try again.
+        </span>
       )}
     </span>
   )
@@ -1127,6 +1157,7 @@ export function RoomTitle({
           </b>
           <span>{jobStateLine(phoneJob, agents)}</span>
         </span>
+        <ArchivedBadge room={current} />
         <PhonePresence agents={agents} />
       </div>
     )
@@ -1144,6 +1175,7 @@ export function RoomTitle({
             onSelectRoom={onSelectRoom}
             onOpenElsewhere={onOpenElsewhere}
           />
+          <ArchivedBadge room={current} />
           <PhonePresence agents={agents} />
         </div>
         <div className="bold-phone-list-actions">
@@ -1175,6 +1207,7 @@ export function RoomTitle({
         onSelectRoom={onSelectRoom}
         onOpenElsewhere={onOpenElsewhere}
       />
+      <ArchivedBadge room={current} />
       <span className="bold-room-grow" aria-hidden="true" />
       {current && <RoomMenu room={current} onShare={onShare} onDelete={onDelete} />}
       {current?.role === 'team' && (

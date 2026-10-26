@@ -171,3 +171,33 @@ test('Project chooses an existing project, creates one, or clears it', async () 
     projectId: 'proj-2',
   })
 })
+
+test('an archived room that is open stays in the switcher and offers Unarchive in the header', async () => {
+  const b = older('room-b', '#beta', { archived: true })
+  const { calls } = setup([b, older('room-a', '#alpha')], [], b)
+  expect(await screen.findByText('Archived')).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: /beta/ }))
+  const list = await screen.findByRole('listbox')
+  expect(within(list).getByRole('option', { name: /#beta/ })).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Unarchive' }))
+  await waitFor(() =>
+    expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({ archived: false }),
+  )
+})
+
+test('arrow keys reach the JSON export link and Enter activates it', async () => {
+  const b = older('room-b', '#beta')
+  setup([b], [], b)
+  fireEvent.click(await screen.findByRole('button', { name: 'Room menu' }))
+  const menu = await screen.findByRole('menu')
+  const json = within(menu).getByRole('menuitem', { name: 'Export as JSON' })
+  const items = within(menu).getAllByRole('menuitem')
+  items[0]!.focus()
+  for (let step = 0; step < items.indexOf(json); step += 1)
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(json)
+  const click = vi.fn((event: Event) => event.preventDefault())
+  json.addEventListener('click', click)
+  json.click()
+  expect(click).toHaveBeenCalled()
+})
