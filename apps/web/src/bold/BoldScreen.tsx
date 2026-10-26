@@ -1,8 +1,17 @@
-import type { AgentSummary, Approval, Job, Message, WatchFrame, WatchMarker } from '@score/contract'
+import type {
+  AgentSummary,
+  Approval,
+  Job,
+  Message,
+  WatchFrame,
+  WatchMarker,
+  WatchOverviewItem,
+} from '@score/contract'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { ApiError } from '../data/api.ts'
+import { copyText } from '../data/clipboard.ts'
 import { useStreamQuery } from '../data/query-client.ts'
 import { useApprovalDecision } from '../routes/chat/ApprovalCard.tsx'
 import { approvalsQuery } from '../routes/chat/queries.ts'
@@ -10,8 +19,11 @@ import { ScrubTimeline } from '../routes/watch/ScrubTimeline.tsx'
 import { BrowserPane, EditorPane, TerminalPane } from '../routes/watch/WatchStage.tsx'
 import '../routes/watch/watch.css'
 import {
+  fetchCurrentSession,
   pendingApprovalsQuery,
+  useAgentPause,
   useWatchLiveRefresh,
+  useWatchOverview,
   watchQuery,
 } from '../routes/watch/watch-queries.ts'
 import {
@@ -19,6 +31,8 @@ import {
   backFrom,
   clock,
   clockSeconds,
+  hostOf,
+  resumeCommand,
   stageAt,
   surfaceLabels,
   terminalHistory,
@@ -26,7 +40,7 @@ import {
   type Surface,
 } from '../routes/watch/watch-model.ts'
 import { agentDisplayName, agentMood, agentStateLabel } from './bold-agents.ts'
-import { boldJobLink } from './bold-links.ts'
+import { boldAgentScreenLink, boldJobLink } from './bold-links.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import { roomMessagesQuery, teamRoomQuery } from './room/room-queries.ts'
 import './bold-screen.css'
@@ -64,6 +78,7 @@ function ApprovalBar({
       aria-label="Approval needed"
       data-protected="flex"
     >
+      <span className="bold-screen-asked">Asked you at {clock(approval.createdAt)}</span>
       <span className="watch-approval__text">
         {agentDisplayName(agent)} stopped
         {approval.command ? (
@@ -87,31 +102,33 @@ function ApprovalBar({
         )}
         {answered && <span className="bold-screen-answer">Answer sent.</span>}
       </span>
-      {approval.actionable && approval.choices.includes('once') && (
-        <button
-          type="button"
-          className="watch-approval__go"
-          disabled={disabled}
-          onClick={() => void decide('once')}
-        >
-          {sending ? 'Sending…' : retrying ? 'Retry' : 'Approve'}
-        </button>
-      )}
-      {approval.actionable && approval.choices.includes('deny') && (
-        <button
-          type="button"
-          className="watch-approval__no"
-          disabled={disabled}
-          onClick={() => void decide('deny')}
-        >
-          {sending ? 'Sending…' : 'Deny'}
-        </button>
-      )}
-      {!approval.actionable && (
-        <Link className="watch-approval__link" to={jobId ? boldJobLink(jobId) : '/b'}>
-          {jobId ? 'Answer in the job' : 'Answer in the team room'}
-        </Link>
-      )}
+      <span className="bold-screen-approval-actions">
+        {approval.actionable && approval.choices.includes('once') && (
+          <button
+            type="button"
+            className="watch-approval__go"
+            disabled={disabled}
+            onClick={() => void decide('once')}
+          >
+            {sending ? 'Sending…' : retrying ? 'Retry' : 'Approve'}
+          </button>
+        )}
+        {approval.actionable && approval.choices.includes('deny') && (
+          <button
+            type="button"
+            className="watch-approval__no"
+            disabled={disabled}
+            onClick={() => void decide('deny')}
+          >
+            {sending ? 'Sending…' : 'Deny'}
+          </button>
+        )}
+        {!approval.actionable && (
+          <Link className="watch-approval__link" to={jobId ? boldJobLink(jobId) : '/b'}>
+            {jobId ? 'Answer in the job' : 'Answer in the team room'}
+          </Link>
+        )}
+      </span>
     </div>
   )
 }
@@ -124,6 +141,86 @@ function approvalJobId(approval: Approval, jobs: Job[], messages: Message[]): st
   return message?.jobId && jobs.some((job) => job.id === message.jobId) ? message.jobId : null
 }
 
+const surfaceIcons: Record<Surface, string> = {
+  terminal: 'M5 8l4 4-4 4M12 17h7',
+  editor: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5',
+  browser:
+    'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18',
+}
+
+function SurfaceIcon({ surface }: { surface: Surface }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={surfaceIcons[surface]} />
+    </svg>
+  )
+}
+
+/** The other two screens, small beside the large one: a short look at what is on them, and a button that swaps it large. */
+function SmallScreen({
+  surface,
+  frame,
+  onShow,
+}: {
+  surface: Surface
+  frame: WatchFrame | undefined
+  onShow: () => void
+}) {
+  const label = surfaceLabels[surface]
+  const where = frame?.terminal
+    ? frame.terminal.cwd
+    : frame?.editor
+      ? frame.editor.path
+      : frame?.browser
+        ? frame.browser.url
+          ? hostOf(frame.browser.url)
+          : (frame.browser.title ?? '')
+        : ''
+  return (
+    <button
+      type="button"
+      className={`bold-screen-small bold-screen-small--${surface}`}
+      disabled={!frame}
+      aria-label={frame ? `${label}, ${where}. Show large` : `${label}, nothing open`}
+      onClick={onShow}
+    >
+      <span className="bold-screen-small-head">
+        <SurfaceIcon surface={surface} />
+        {label}
+        {where && <span className="bold-screen-small-where"> · {where}</span>}
+      </span>
+      {!frame && <span className="bold-screen-small-empty">Nothing open</span>}
+      {frame?.terminal && (
+        <span className="bold-screen-small-body mono">
+          <span className="bold-screen-small-cmd">$ {frame.terminal.command}</span>
+          {frame.terminal.output.split('\n').slice(-4).join('\n')}
+        </span>
+      )}
+      {frame?.editor && (
+        <span className="bold-screen-small-body mono">
+          {frame.editor.diff.split('\n').slice(0, 6).join('\n')}
+        </span>
+      )}
+      {frame?.browser && (
+        <span className="bold-screen-small-page">
+          <b>{frame.browser.title || 'Untitled page'}</b>
+          <span>{frame.browser.url}</span>
+        </span>
+      )}
+    </button>
+  )
+}
+
 export function BoldScreenView({
   agent,
   frames,
@@ -131,6 +228,14 @@ export function BoldScreenView({
   approvals,
   jobs = [],
   messages = [],
+  gaps = 0,
+  working,
+  from = null,
+  onMoment,
+  onLive,
+  pause,
+  resumeSession,
+  others,
 }: {
   agent: AgentSummary
   frames: WatchFrame[]
@@ -139,10 +244,26 @@ export function BoldScreenView({
   /** The team room's jobs and loaded messages: an approval's card names its job there. */
   jobs?: Job[]
   messages?: Message[]
+  /** Stretches of events Score missed, so the replay may have holes. */
+  gaps?: number
+  /** Whether the agent has a run going (the terminal's live region); defaults to following the replay position. */
+  working?: boolean
+  /** History's "Replay" link: open the replay at the first moment at or after this event. */
+  from?: number | null
+  /** The replay moved to this event, so the page can load the frames around it. */
+  onMoment?: (seq: number) => void
+  /** The replay went back to live. */
+  onLive?: () => void
+  pause?: { pending: boolean; failed: boolean; onToggle: () => void }
+  /** Reads the agent's current session for the resume command (run events do not carry it). */
+  resumeSession?: () => Promise<string | null>
+  others?: { items: WatchOverviewItem[] | undefined; failed: boolean }
 }) {
   const [selected, setSelected] = useState<WatchMarker | null>(null)
   const [playing, setPlaying] = useState(false)
   const [surface, setSurface] = useState<Surface | null>(null)
+  const [command, setCommand] = useState<{ text: string; copied: boolean } | null>(null)
+  const [fromApplied, setFromApplied] = useState(from === null)
   const found = selected
     ? markers.findIndex(
         (marker) =>
@@ -153,10 +274,22 @@ export function BoldScreenView({
   const marker = cursor === null ? null : (markers[cursor] ?? null)
   const seq = marker?.seq ?? null
   const live = cursor === null
+  if (!fromApplied && from !== null && markers.length > 0) {
+    setFromApplied(true)
+    const index = markers.findIndex((candidate) => candidate.seq >= from)
+    setSelected(markers[index >= 0 ? index : markers.length - 1] ?? null)
+  }
   const stage = useMemo(() => stageAt(frames, seq), [frames, seq])
   const items = useMemo(() => activityItems(frames, approvals), [frames, approvals])
-  const top = surface && stage.bySurface[surface] ? surface : (stage.front?.surface ?? null)
+  // The editor is the large frame (board D) unless the person swapped another one in, or it is not open yet.
+  const top =
+    surface && stage.bySurface[surface]
+      ? surface
+      : stage.bySurface.editor
+        ? 'editor'
+        : (stage.front?.surface ?? null)
   const frame = top ? (stage.bySurface[top] ?? null) : null
+  const small = surfaces.filter((name) => name !== top)
   const currentKey = live
     ? (items[0]?.key ?? null)
     : marker?.kind === 'asked'
@@ -165,6 +298,7 @@ export function BoldScreenView({
         ? `frame-${stage.front.seq}`
         : null
   const waiting = pendingApproval(approvals, agent.id)
+  const paused = agent.status === 'paused'
   const history = useMemo(
     () =>
       frame?.terminal
@@ -185,14 +319,26 @@ export function BoldScreenView({
       if (cursor >= markers.length - 1) {
         setSelected(null)
         setPlaying(false)
-      } else setSelected(markers[cursor + 1] ?? null)
+        onLive?.()
+      } else {
+        const next = markers[cursor + 1] ?? null
+        setSelected(next)
+        if (next) onMoment?.(next.seq)
+      }
     }, PLAY_MS)
     return () => clearInterval(timer)
-  }, [cursor, markers, playing])
+  }, [cursor, markers, playing, onLive, onMoment])
 
   const select = (index: number) => {
     setPlaying(false)
-    setSelected(markers[index] ?? null)
+    const next = markers[index] ?? null
+    setSelected(next)
+    if (next) onMoment?.(next.seq)
+  }
+  const goLive = () => {
+    setPlaying(false)
+    setSelected(null)
+    onLive?.()
   }
   const selectItem = (item: ActivityItem) => {
     const exact = markers.findIndex((candidate) =>
@@ -222,6 +368,12 @@ export function BoldScreenView({
         : candidate.seq === item.seq && candidate.kind !== 'asked',
     )
   const chronological = [...items].reverse()
+  const copyResume = async () => {
+    const session = await (resumeSession?.() ?? Promise.resolve(null)).catch(() => null)
+    const text = resumeCommand(agent.id, session)
+    setCommand({ text, copied: await copyText(text) })
+  }
+  const otherScreens = (others?.items ?? []).filter((item) => item.agent.id !== agent.id)
 
   return (
     <section className="page bold-screen" aria-labelledby="bold-screen-title">
@@ -235,13 +387,61 @@ export function BoldScreenView({
           <h1 id="bold-screen-title">{agentDisplayName(agent)}’s screen</h1>
           <span className="muted">{agentStateLabel(agent)}</span>
         </div>
-        <Link className="btn ghost bold-screen-terminal" to="/terminal">
-          Open in terminal
-        </Link>
+        <div className="bold-screen-actions">
+          {pause && (
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={pause.pending}
+              onClick={pause.onToggle}
+            >
+              {paused ? 'Resume' : 'Pause'} {agentDisplayName(agent)}
+            </button>
+          )}
+          <Link className="btn ghost bold-screen-terminal" to="/terminal">
+            Open in terminal
+          </Link>
+        </div>
       </div>
+      {pause?.failed && (
+        <p className="bold-screen-state" role="alert">
+          Couldn’t {paused ? 'resume' : 'pause'} {agentDisplayName(agent)}. Try again.
+        </p>
+      )}
+      {from !== null && markers.length > 0 && from < markers[0]!.seq && (
+        <p className="bold-screen-state" role="status">
+          That moment is older than the history Score keeps, so the replay starts at the earliest
+          one available.
+        </p>
+      )}
+      {gaps > 0 && (
+        <p className="bold-screen-state" role="status">
+          Score missed some events ({gaps} gap{gaps === 1 ? '' : 's'}), so this replay may have
+          holes.
+        </p>
+      )}
 
       <div className="bold-screen-layout">
         <section className="bold-screen-log" aria-label={`What ${agentDisplayName(agent)} did`}>
+          {live && waiting && (
+            <ApprovalBar
+              key={waiting.id}
+              approval={waiting}
+              agent={agent}
+              jobs={jobs}
+              messages={messages}
+            />
+          )}
+          {!live && waiting && (
+            <button
+              type="button"
+              className="bold-screen-needs-live"
+              data-protected="inline-flex"
+              onClick={goLive}
+            >
+              Needs you — go live
+            </button>
+          )}
           <h2 className="bold-screen-log-title">What {agentDisplayName(agent)} did</h2>
           {chronological.length === 0 && (
             <p className="bold-screen-empty">Nothing yet. Steps show up here as they happen.</p>
@@ -271,6 +471,23 @@ export function BoldScreenView({
               )
             })}
           </ol>
+          <div className="bold-screen-card">
+            <p>
+              A replay of recorded steps, read-only. {agentDisplayName(agent)} keeps working and
+              can’t see you here.
+            </p>
+            <button type="button" className="btn sm" onClick={() => void copyResume()}>
+              Copy the command to continue in a terminal
+            </button>
+            {command && (
+              <p role="status">
+                {command.copied
+                  ? 'Copied. Paste this in a terminal:'
+                  : 'Select the command and press Ctrl+C, then run it in a terminal:'}{' '}
+                <code className="bold-screen-command">{command.text}</code>
+              </p>
+            )}
+          </div>
         </section>
 
         <div className="bold-screen-main">
@@ -283,58 +500,38 @@ export function BoldScreenView({
             </span>
             <div className="bold-screen-stage-head">
               <span className="bold-screen-who">{agentDisplayName(agent)}’s screen</span>
-              <div role="group" aria-label="Screens" className="bold-screen-surfaces">
-                {surfaces.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    aria-pressed={top === name}
-                    disabled={!stage.bySurface[name]}
-                    className={top === name ? 'on' : undefined}
-                    onClick={() => setSurface(name)}
-                  >
-                    {surfaceLabels[name]}
-                  </button>
-                ))}
-              </div>
               <span className="bold-screen-readonly">Read-only</span>
             </div>
-            <div className="bold-screen-window">
-              {!frame && (
-                <p className="bold-screen-empty">
-                  {live
-                    ? `${agentDisplayName(agent)} hasn’t opened anything yet.`
-                    : 'Nothing was on screen at that moment.'}
-                </p>
-              )}
-              {frame?.terminal && (
-                <TerminalPane terminal={frame.terminal} history={history} live={live} />
-              )}
-              {frame?.editor && <EditorPane editor={frame.editor} />}
-              {frame?.browser && <BrowserPane browser={frame.browser} />}
+            <div className="bold-screen-frames">
+              <div className="bold-screen-window">
+                {!frame && (
+                  <p className="bold-screen-empty">
+                    {live
+                      ? `${agentDisplayName(agent)} hasn’t opened anything yet.`
+                      : 'Nothing was on screen at that moment.'}
+                  </p>
+                )}
+                {frame?.terminal && (
+                  <TerminalPane
+                    terminal={frame.terminal}
+                    history={history}
+                    live={live && (working ?? true)}
+                  />
+                )}
+                {frame?.editor && <EditorPane editor={frame.editor} />}
+                {frame?.browser && <BrowserPane browser={frame.browser} />}
+              </div>
+              <div role="group" aria-label="Other windows" className="bold-screen-smalls">
+                {small.map((name) => (
+                  <SmallScreen
+                    key={name}
+                    surface={name}
+                    frame={stage.bySurface[name]}
+                    onShow={() => setSurface(name)}
+                  />
+                ))}
+              </div>
             </div>
-            {live && waiting && (
-              <ApprovalBar
-                key={waiting.id}
-                approval={waiting}
-                agent={agent}
-                jobs={jobs}
-                messages={messages}
-              />
-            )}
-            {!live && waiting && (
-              <button
-                type="button"
-                className="bold-screen-needs-live"
-                data-protected="inline-flex"
-                onClick={() => {
-                  setPlaying(false)
-                  setSelected(null)
-                }}
-              >
-                Needs you — go live
-              </button>
-            )}
           </div>
 
           <ScrubTimeline
@@ -343,10 +540,7 @@ export function BoldScreenView({
             cursor={cursor}
             playing={playing}
             onSelect={select}
-            onLive={() => {
-              setPlaying(false)
-              setSelected(null)
-            }}
+            onLive={goLive}
             onBack={() => {
               const target = backFrom(markers, cursor)
               if (target !== null) select(target)
@@ -357,9 +551,37 @@ export function BoldScreenView({
               } else setPlaying(!playing)
             }}
           />
-          <p className="bold-screen-note">
-            You’re watching. {agentDisplayName(agent)} keeps working and can’t see you here.
-          </p>
+          {others && (
+            <nav className="bold-screen-others" aria-label="Other screens">
+              <span className="bold-screen-others-title">Other screens</span>
+              {others.items === undefined && (
+                <span className="bold-screen-others-note" role={others.failed ? 'alert' : 'status'}>
+                  {others.failed
+                    ? 'Couldn’t load the other screens.'
+                    : 'Loading the other screens…'}
+                </span>
+              )}
+              {others.items && otherScreens.length === 0 && (
+                <span className="bold-screen-others-note">
+                  No other agents are on the team yet.
+                </span>
+              )}
+              {otherScreens.map((item) => (
+                <Link
+                  key={item.agent.id}
+                  className="bold-screen-chip"
+                  to={boldAgentScreenLink(item.agent.id)}
+                >
+                  <AgentGlyph agent={item.agent} size="xs" decorative />
+                  <span>{agentDisplayName(item.agent)}</span>
+                  <span className="bold-screen-chip-status">
+                    {item.live && <span className="bold-screen-chip-live" aria-hidden="true" />}
+                    {item.status}
+                  </span>
+                </Link>
+              ))}
+            </nav>
+          )}
         </div>
       </div>
     </section>
@@ -390,7 +612,18 @@ export function BoldScreenPage() {
 }
 
 function BoldScreenAgent({ agentId }: { agentId: string }) {
-  const watch = useStreamQuery(watchQuery(agentId))
+  // ?from=<seq> (History's Replay link) opens the replay at that moment; the frame window starts at the newest frames,
+  // so a moment outside it re-anchors the window there.
+  const [params] = useSearchParams()
+  const fromParam = /^\d{1,12}$/.test(params.get('from') ?? '') ? Number(params.get('from')) : null
+  const [anchor, setAnchor] = useState<number | null>(fromParam)
+  const watch = useStreamQuery(watchQuery(agentId, anchor))
+  // Moving the frame window re-fetches under a new key; keep the last page on screen so the replay position survives.
+  const [kept, setKept] = useState(watch.data)
+  if (watch.data && watch.data !== kept) setKept(watch.data)
+  const data = watch.data ?? kept
+  const overview = useWatchOverview()
+  const pause = useAgentPause(agentId)
   const team = useStreamQuery(teamRoomQuery(null))
   const teamData = team.data
   const jobs = teamData?.jobs ?? []
@@ -404,7 +637,16 @@ function BoldScreenAgent({ agentId }: { agentId: string }) {
     () => Object.values(messagesByJob).flatMap((items) => items ?? []),
     [messagesByJob],
   )
-  useWatchLiveRefresh(agentId, null, watch.data?.agent.status === 'paused')
+  const first = data?.frames[0]?.seq
+  const last = data?.frames.at(-1)?.seq
+  const onMoment = useCallback(
+    (seq: number) => {
+      if (first !== undefined && last !== undefined && (seq < first || seq > last)) setAnchor(seq)
+    },
+    [first, last],
+  )
+  const onLive = useCallback(() => setAnchor(null), [])
+  useWatchLiveRefresh(agentId, anchor, data?.agent.status === 'paused')
   const all = useStreamQuery(approvalsQuery)
   const pending = useStreamQuery(pendingApprovalsQuery(agentId))
   const approvals = useMemo(() => {
@@ -416,7 +658,7 @@ function BoldScreenAgent({ agentId }: { agentId: string }) {
     ]
   }, [all.data, pending.data, agentId])
 
-  if (!watch.data) {
+  if (!data) {
     const missing = watch.error instanceof ApiError && watch.error.status === 404
     return (
       <section className="page bold-screen">
@@ -442,12 +684,24 @@ function BoldScreenAgent({ agentId }: { agentId: string }) {
         />
       ))}
       <BoldScreenView
-        agent={watch.data.agent}
-        frames={watch.data.frames}
-        markers={watch.data.markers}
+        agent={data.agent}
+        frames={data.frames}
+        markers={data.markers}
         approvals={approvals}
         jobs={jobs}
         messages={messages}
+        gaps={data.gaps.length}
+        working={data.live}
+        from={fromParam}
+        onMoment={onMoment}
+        onLive={onLive}
+        pause={{
+          pending: pause.isPending,
+          failed: pause.isError,
+          onToggle: () => pause.mutate(data?.agent.status === 'paused' ? 'resume' : 'pause'),
+        }}
+        resumeSession={() => fetchCurrentSession(agentId).catch(() => data?.sessionId ?? null)}
+        others={{ items: overview.items, failed: overview.isError }}
       />
     </>
   )

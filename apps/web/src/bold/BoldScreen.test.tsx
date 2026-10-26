@@ -211,3 +211,158 @@ test('a non-actionable approval links to its job when its card names one', () =>
     '/b?job=job-feed',
   )
 })
+
+const editorFrame: WatchFrame = {
+  seq: 4,
+  at: '2026-10-24T09:12:00.000Z',
+  agentId: 'builder',
+  runId: 'run-1',
+  surface: 'editor',
+  editor: { path: 'api/events.py', language: 'python', diff: '@@ -1,1 +1,2 @@\n a\n+b' },
+  caption: 'Edited api/events.py',
+}
+const editorMarker: WatchMarker = { seq: 4, at: editorFrame.at, kind: 'file' }
+
+test('the editor is the large frame; the terminal and browser are small and swap in on click', () => {
+  render(
+    <MemoryRouter>
+      <BoldScreenView
+        agent={builder}
+        frames={[...frames, editorFrame]}
+        markers={[...markers, editorMarker]}
+        approvals={[]}
+      />
+    </MemoryRouter>,
+  )
+  expect(screen.getByLabelText('Changes to api/events.py')).toBeDefined()
+  const small = screen.getByRole('group', { name: 'Other windows' })
+  expect(within(small).getAllByRole('button')).toHaveLength(2)
+  fireEvent.click(within(small).getByRole('button', { name: /^Browser, localhost:5173/ }))
+  expect(screen.queryByLabelText('Changes to api/events.py')).toBeNull()
+  expect(screen.getByText('Browser, localhost:5173')).toBeDefined()
+  expect(within(small).getByRole('button', { name: /^Editor, api\/events.py/ })).toBeDefined()
+})
+
+test('the asked-you card is pinned above the step list', () => {
+  renderScreen()
+  const log = screen.getByRole('region', { name: 'What builder did' })
+  const bar = within(log).getByRole('group', { name: 'Approval needed' })
+  expect(bar.textContent).toContain('Asked you at')
+  expect(
+    bar.compareDocumentPosition(within(log).getByRole('list')) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy()
+})
+
+test('pause and resume, with the failure said plainly', () => {
+  const onToggle = vi.fn()
+  const { rerender } = render(
+    <MemoryRouter>
+      <BoldScreenView
+        agent={builder}
+        frames={frames}
+        markers={markers}
+        approvals={[]}
+        pause={{ pending: false, failed: false, onToggle }}
+      />
+    </MemoryRouter>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Pause builder' }))
+  expect(onToggle).toHaveBeenCalledTimes(1)
+  rerender(
+    <MemoryRouter>
+      <BoldScreenView
+        agent={{ ...builder, status: 'paused' }}
+        frames={frames}
+        markers={markers}
+        approvals={[]}
+        pause={{ pending: false, failed: true, onToggle }}
+      />
+    </MemoryRouter>,
+  )
+  expect(screen.getByRole('button', { name: 'Resume builder' })).toBeDefined()
+  expect(screen.getByRole('alert').textContent).toContain('Couldn’t resume builder')
+})
+
+test('copies the command that continues the agent’s session', async () => {
+  const write = vi.fn(async () => undefined)
+  vi.stubGlobal('navigator', { clipboard: { writeText: write } })
+  render(
+    <MemoryRouter>
+      <BoldScreenView
+        agent={builder}
+        frames={frames}
+        markers={markers}
+        approvals={[]}
+        resumeSession={async () => 'session-1'}
+      />
+    </MemoryRouter>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: /Copy the command to continue/ }))
+  const status = await screen.findByRole('status')
+  expect(status.textContent).toContain('hermes -p builder --resume session-1')
+  expect(write).toHaveBeenCalledWith('hermes -p builder --resume session-1')
+})
+
+test('a from moment opens the replay there, and an older one says so', () => {
+  const { rerender } = render(
+    <MemoryRouter>
+      <BoldScreenView agent={builder} frames={frames} markers={markers} approvals={[]} from={2} />
+    </MemoryRouter>,
+  )
+  expect(screen.getByText('Replaying 09:14')).toBeDefined()
+  rerender(
+    <MemoryRouter>
+      <BoldScreenView
+        key="old"
+        agent={builder}
+        frames={frames}
+        markers={markers}
+        approvals={[]}
+        from={0}
+        gaps={2}
+      />
+    </MemoryRouter>,
+  )
+  expect(screen.getByText(/older than the history/)).toBeDefined()
+  expect(screen.getByText(/Score missed some events \(2 gaps\)/)).toBeDefined()
+})
+
+test('other screens are chips that open each agent’s screen', () => {
+  render(
+    <MemoryRouter>
+      <BoldScreenView
+        agent={builder}
+        frames={frames}
+        markers={markers}
+        approvals={[]}
+        others={{
+          failed: false,
+          items: [
+            { agent: builder, status: 'working', live: true, surface: 'terminal', thumbnail: null },
+            {
+              agent: { ...builder, id: 'reviewer', name: 'reviewer' },
+              status: 'idle',
+              live: false,
+              surface: null,
+              thumbnail: null,
+            },
+          ] as never,
+        }}
+      />
+    </MemoryRouter>,
+  )
+  const nav = screen.getByRole('navigation', { name: 'Other screens' })
+  const links = within(nav).getAllByRole('link')
+  expect(links).toHaveLength(1)
+  expect(links[0]!.getAttribute('href')).toBe('/b/screen/reviewer')
+})
+
+test('an agent with nothing on screen says so, with no frames at all', () => {
+  render(
+    <MemoryRouter>
+      <BoldScreenView agent={builder} frames={[]} markers={[]} approvals={[]} />
+    </MemoryRouter>,
+  )
+  expect(screen.getByText('builder hasn’t opened anything yet.')).toBeDefined()
+  expect(screen.getByText('Nothing yet. Steps show up here as they happen.')).toBeDefined()
+})
