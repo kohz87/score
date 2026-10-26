@@ -32,7 +32,8 @@ import { apiFetch, ApiError } from '../data/api.ts'
 import { copyText } from '../data/clipboard.ts'
 import { newId } from '../data/ids.ts'
 import { useStreamQuery } from '../data/query-client.ts'
-import { teamRoomQuery } from './room/room-queries.ts'
+import { isEveryoneRoom } from './room/room-model.ts'
+import { teamRoomQuery, teamRoomsQuery } from './room/room-queries.ts'
 import { pairingProblem } from './bold-errors.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { describeCreateError } from '../routes/orchestrations/NewOrchestrationDialog.tsx'
@@ -220,6 +221,13 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const workflows = useWorkflows()
   // The same stream-kept read of the team room as the room and Results (one cache entry, one reducer).
   const teamRoomState = useStreamQuery(teamRoomQuery(null))
+  // 3.4.0: a job starts in the team room that is open (`?room=` names a team the person made), else the first one.
+  const teamRoomsState = useStreamQuery(teamRoomsQuery)
+  const openRoomId = new URLSearchParams(location.search).get('room')
+  const chosenTeam = openRoomId
+    ? teamRoomsState.data?.find((item) => item.id === openRoomId && !isEveryoneRoom(item))
+    : undefined
+  const startRoom = chosenTeam ?? teamRoomState.data?.room ?? null
   const teamRoom = {
     data: teamRoomState.data,
     isPending: teamRoomState.status === 'pending',
@@ -268,7 +276,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const recipeButtons = useRef(new Map<string, HTMLButtonElement>())
 
   const hermesAgents = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
-  const teamLead = teamRoom.data?.room.leadAgentId ?? null
+  const teamLead = startRoom?.leadAgentId ?? null
   const leadId =
     (teamLead && hermesAgents.some((agent) => agent.id === teamLead)
       ? teamLead
@@ -610,9 +618,9 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     limits: JobLimits,
     recipeLink?: { kind: 'orchestration' | 'workflow'; ref: string },
   ) {
-    if (!teamRoom.data) throw new Error('The team room is not ready yet.')
+    if (!startRoom) throw new Error('The team room is not ready yet.')
     return JobSchema.parse(
-      await attemptPost(`rooms/${encodeURIComponent(teamRoom.data.room.id)}/jobs`, {
+      await attemptPost(`rooms/${encodeURIComponent(startRoom.id)}/jobs`, {
         title,
         ...limits,
         ...(recipeLink ? { recipe: recipeLink } : {}),

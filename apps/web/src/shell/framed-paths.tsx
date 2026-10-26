@@ -7,7 +7,7 @@ import type { Room } from '@score/contract'
 import type { LinkProps, NavigateFunction, NavigateOptions, To } from 'react-router'
 
 /** Provided by the bold shell around its Outlet. */
-export type FrameRoom = Pick<Room, 'id' | 'kind' | 'role' | 'leadAgentId' | 'members'>
+export type FrameRoom = Pick<Room, 'id' | 'kind' | 'role' | 'leadAgentId' | 'members' | 'everyone'>
 export type BoldFrame = { look: 'light' | 'dark'; rooms?: readonly FrameRoom[] }
 export const BoldFrameContext = createContext<BoldFrame | null>(null)
 
@@ -68,7 +68,7 @@ function chatRoomPath(path: string, rooms: readonly FrameRoom[]): string {
   if (!id) return '/b'
   const roomId = decodeURIComponent(id)
   const room = rooms.find((item) => item.id === roomId)
-  if (room?.role === 'team') return '/b'
+  if (room?.role === 'team' && room.everyone !== false) return '/b'
   if (room && (room.role === 'direct' || room.kind === 'direct')) {
     const agentId = room.leadAgentId ?? room.members[0]
     if (agentId) return boldOneToOneLink(agentId)

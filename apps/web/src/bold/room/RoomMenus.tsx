@@ -30,7 +30,9 @@ import { ChevronIcon, PlusIcon, TrashIcon } from '../BoldIcons.tsx'
 import { useStartJob } from '../BoldStartJob.tsx'
 import { agentDisplayName } from '../bold-agents.ts'
 import { PhonePresence } from './PhoneJobList.tsx'
-import { jobStateLine } from './room-model.ts'
+import { isEveryoneRoom, jobStateLine } from './room-model.ts'
+import { teamRoomsQuery } from './room-queries.ts'
+import { NewTeamDialog, teamNameProblem, TeamMembersDialog } from './TeamDialogs.tsx'
 
 function DotsIcon() {
   return (
@@ -137,6 +139,11 @@ export function RoomSwitcher({
   const close = useMenu(open, setOpen, root, trigger)
 
   const [showArchived, setShowArchived] = useState(false)
+  const [makingTeam, setMakingTeam] = useState(false)
+  // The teams the person made. They belong here, not in the older-rooms lists (which never carry team rooms).
+  const chosenTeams = (useStreamQuery(teamRoomsQuery).data ?? []).filter(
+    (room) => !isEveryoneRoom(room),
+  )
   const projects = useStreamQuery(roomsQuery).data?.projects ?? []
   // The room that is open stays listed even when archived, so it is never unreachable from its own switcher.
   const visible = (room: Room) => showArchived || !room.archived || room.id === current?.id
@@ -154,10 +161,12 @@ export function RoomSwitcher({
         visible(room),
     )
     .sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false))
-  const archivedCount = rooms.filter(
-    (room) =>
-      room.id !== teamRoom?.id && room.role !== 'team' && room.kind === 'room' && room.archived,
-  ).length
+  const visibleTeams = chosenTeams.filter(visible)
+  const archivedCount =
+    rooms.filter(
+      (room) =>
+        room.id !== teamRoom?.id && room.role !== 'team' && room.kind === 'room' && room.archived,
+    ).length + chosenTeams.filter((room) => room.archived).length
   const grouped = groups.projects.some((group) => group.rooms.length > 0)
   const note = (room: Room) =>
     [room.pinned ? 'Pinned' : '', room.archived ? 'Archived' : ''].filter(Boolean).join(' · ')
@@ -214,6 +223,25 @@ export function RoomSwitcher({
               </span>
             </button>
           )}
+          {visibleTeams.map((team) => (
+            <button
+              key={team.id}
+              type="button"
+              role="option"
+              aria-selected={current?.id === team.id}
+              className={`mi${current?.id === team.id ? ' sel' : ''}`}
+              onClick={() => chooseRoom(team)}
+            >
+              <RoomDot team />
+              <span className="menu-copy">
+                <b>{team.name}</b>
+                <span className="small muted">
+                  Team of {team.members.length}
+                  {team.archived ? ' · Archived' : ''}
+                </span>
+              </span>
+            </button>
+          ))}
           {[
             { key: 'pinned', title: 'Pinned', rooms: groups.pinned },
             ...groups.projects.map((group) => ({
@@ -270,6 +298,22 @@ export function RoomSwitcher({
               </span>
             </button>
           ))}
+          <button
+            type="button"
+            role="option"
+            aria-selected={false}
+            className="mi"
+            onClick={() => {
+              close(false)
+              setMakingTeam(true)
+            }}
+          >
+            <PlusIcon />
+            <span className="menu-copy">
+              <b>New team…</b>
+              <span className="small muted">Pick the agents and a lead</span>
+            </span>
+          </button>
           {(archivedCount > 0 || showArchived) && (
             <button
               type="button"
@@ -343,6 +387,18 @@ export function RoomSwitcher({
           )}
         </div>
       )}
+      {makingTeam && (
+        <NewTeamDialog
+          onClose={() => {
+            setMakingTeam(false)
+            trigger.current?.focus()
+          }}
+          onCreated={(room) => {
+            setMakingTeam(false)
+            onSelectRoom(room)
+          }}
+        />
+      )}
     </span>
   )
 }
@@ -350,7 +406,7 @@ export function RoomSwitcher({
 /** Shown beside the title while the open room is archived, with the way back right there. */
 export function ArchivedBadge({ room }: { room: Room | null }) {
   const [failed, setFailed] = useState(false)
-  if (!room?.archived || room.role === 'team') return null
+  if (!room?.archived || isEveryoneRoom(room)) return null
   return (
     <span className="bold-room-archived">
       <span className="bold-room-kind-badge">Archived</span>
@@ -703,7 +759,7 @@ export function RenameRoomDialog({ room, onClose }: { room: Room; onClose: () =>
   }, [])
   async function rename() {
     if (busy) return
-    const problem = roomNameProblem(text)
+    const problem = room.role === 'team' ? teamNameProblem(text) : roomNameProblem(text)
     if (problem) return setError(problem)
     const name = text.trim()
     if (name === room.name || `#${name}` === room.name) return onClose()
@@ -906,9 +962,11 @@ export function RoomMenu({
   const trigger = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const close = useMenu(open, setOpen, root, trigger)
+  // `team` = any team room (the lead and members live here); `everyone` = the first one, which can't be changed.
   const team = room.role === 'team'
+  const everyone = isEveryoneRoom(room)
   const projects = useStreamQuery(roomsQuery).data?.projects ?? []
-  const [dialog, setDialog] = useState<'rename' | 'project' | 'lead' | null>(null)
+  const [dialog, setDialog] = useState<'rename' | 'project' | 'lead' | 'members' | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   async function organise(body: { pinned: boolean } | { archived: boolean }, what: string) {
     setFailure(null)
@@ -942,7 +1000,7 @@ export function RoomMenu({
           data-protected="flex"
           onKeyDown={moveInMenu}
         >
-          {!team && (
+          {!everyone && (
             <>
               <button
                 type="button"
@@ -955,19 +1013,21 @@ export function RoomMenu({
               >
                 Rename…
               </button>
-              <button
-                type="button"
-                className="mi"
-                role="menuitem"
-                onClick={() =>
-                  void organise(
-                    { pinned: !room.pinned },
-                    room.pinned ? 'unpin the room' : 'pin the room',
-                  )
-                }
-              >
-                {room.pinned ? 'Unpin' : 'Pin'}
-              </button>
+              {!team && (
+                <button
+                  type="button"
+                  className="mi"
+                  role="menuitem"
+                  onClick={() =>
+                    void organise(
+                      { pinned: !room.pinned },
+                      room.pinned ? 'unpin the room' : 'pin the room',
+                    )
+                  }
+                >
+                  {room.pinned ? 'Unpin' : 'Pin'}
+                </button>
+              )}
               <button
                 type="button"
                 className="mi"
@@ -981,17 +1041,19 @@ export function RoomMenu({
               >
                 {room.archived ? 'Unarchive' : 'Archive'}
               </button>
-              <button
-                type="button"
-                className="mi"
-                role="menuitem"
-                onClick={() => {
-                  close(false)
-                  setDialog('project')
-                }}
-              >
-                Project…
-              </button>
+              {!team && (
+                <button
+                  type="button"
+                  className="mi"
+                  role="menuitem"
+                  onClick={() => {
+                    close(false)
+                    setDialog('project')
+                  }}
+                >
+                  Project…
+                </button>
+              )}
               {failure && (
                 <div className="small bold-menu-note" role="alert">
                   {failure}
@@ -1051,7 +1113,20 @@ export function RoomMenu({
               Team lead…
             </button>
           )}
-          {team ? (
+          {team && !everyone && (
+            <button
+              type="button"
+              className="mi"
+              role="menuitem"
+              onClick={() => {
+                close(false)
+                setDialog('members')
+              }}
+            >
+              Members…
+            </button>
+          )}
+          {everyone ? (
             <div className="small muted bold-menu-note">
               The team room is always on, so it can’t be deleted. Delete jobs inside it instead.
             </div>
@@ -1073,6 +1148,15 @@ export function RoomMenu({
       )}
       {dialog === 'lead' && (
         <TeamLeadDialog
+          room={room}
+          onClose={() => {
+            setDialog(null)
+            trigger.current?.focus()
+          }}
+        />
+      )}
+      {dialog === 'members' && (
+        <TeamMembersDialog
           room={room}
           onClose={() => {
             setDialog(null)

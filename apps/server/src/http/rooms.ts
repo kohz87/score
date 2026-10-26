@@ -284,7 +284,7 @@ export function registerRoomRoutes(
         .all()
         .map((row) => readRoom(sqlite, z.object({ id: z.string() }).parse(row).id, now))
     })
-    return TeamRoomsResponseSchema.parse({ items: result.data })
+    return TeamRoomsResponseSchema.parse({ asOfSeq: result.asOfSeq, items: result.data })
   })
   app.post('/api/team-rooms', mutation, async (request, reply) => {
     const body = TeamRoomCreateRequestSchema.parse(request.body)

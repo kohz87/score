@@ -291,7 +291,10 @@ export const TeamRoomCreateRequestSchema = z.object({
   leadAgentId: AgentIdSchema,
 })
 export type TeamRoomCreateRequest = z.infer<typeof TeamRoomCreateRequestSchema>
-export const TeamRoomsResponseSchema = z.object({ items: z.array(RoomSchema) })
+export const TeamRoomsResponseSchema = z.object({
+  asOfSeq: z.int().nonnegative(),
+  items: z.array(RoomSchema),
+})
 export type TeamRoomsResponse = z.infer<typeof TeamRoomsResponseSchema>
 
 export const LaneBlockSchema = z.object({

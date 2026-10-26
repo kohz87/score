@@ -651,7 +651,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.
   - 3.4.0 (decision 136, docs/briefs/3.4.0-second-team.md): more than one team room. `GET /api/team-room` is always the
     **everyone** room (`Room.everyone: true`: every ready agent, kept in sync; can't be renamed, archived, deleted or given
-    other members). **S** `GET /api/team-rooms` → `{ items: Room[] }` (the everyone room first, then by name; archived
+    other members). **S** `GET /api/team-rooms` → `{ asOfSeq; items: Room[] }` (the everyone room first, then by name; archived
     included). **H** `POST /api/team-rooms { name /* plain, 1–80 */, members: AgentId[] /* ≥ 1, ready */, leadAgentId /* ∈
     members */ }` → `201 Room` (`role: 'team'`, `everyone: false`, exchanges routing, its own default job). A chosen team is
     renamed (plain name), archived, deleted and re-membered with the ordinary room routes; `PATCH` keeps ≥ 1 member and the
