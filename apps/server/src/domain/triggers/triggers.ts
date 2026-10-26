@@ -164,7 +164,9 @@ function live(sqlite: DatabaseSync, id: string): Row {
 export function updateTrigger(
   sqlite: DatabaseSync,
   id: string,
-  change: Partial<Pick<Trigger, 'name' | 'app' | 'mapping' | 'template' | 'reportBack' | 'teamRoomId'>>,
+  change: Partial<
+    Pick<Trigger, 'name' | 'app' | 'mapping' | 'template' | 'reportBack' | 'teamRoomId'>
+  >,
   origin: string | null,
   now: string,
 ): Trigger {

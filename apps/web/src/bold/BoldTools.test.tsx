@@ -1,9 +1,8 @@
 import type { AgentSummary } from '@score/contract'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { BoldTools } from './BoldTools.tsx'
+import { renderInRoom } from './room/room-test-utils.tsx'
 
 const builder: AgentSummary = {
   id: 'builder',
@@ -47,14 +46,7 @@ function mount() {
     )
   })
   vi.stubGlobal('fetch', fetch)
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <BoldTools agents={[builder]} />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
+  renderInRoom(<BoldTools agents={[builder]} />, ['/'])
   return fetch
 }
 

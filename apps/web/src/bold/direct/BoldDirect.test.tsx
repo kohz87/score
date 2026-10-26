@@ -49,9 +49,13 @@ const newer = makeJob({
 })
 const teamJob = makeJob({ id: 'team-job', roomId: teamRoom.id, title: 'Release notes 2.4' })
 
-function stub(chats = [newer, older]) {
+function stub(chats = [newer, older], extra?: (url: string) => Response | undefined) {
   const posts: { url: string; body: unknown }[] = []
   const fetchMock = mockFetch((url, init) => {
+    if (init.method !== 'POST') {
+      const made = extra?.(url)
+      if (made) return made
+    }
     if (init.method === 'POST') {
       posts.push({ url, body: init.body ? JSON.parse(String(init.body)) : null })
       if (url.endsWith('/chats'))
@@ -443,4 +447,68 @@ test('an open question is a card in the thread and an ended one a muted line whe
   expect(within(card).getByRole('button', { name: '9090' })).toBeTruthy()
   const note = await screen.findByText(/builder asked: Keep the cursor\?/)
   expect(note.textContent).toContain('you answered: Yes')
+})
+
+const docsTeam = {
+  ...teamRoom,
+  id: 'room-docs',
+  name: 'Docs team',
+  members: ['lead', 'builder'],
+  everyone: false,
+}
+const docsJob = makeJob({ id: 'docs-job', roomId: docsTeam.id, title: 'Docs sweep' })
+const twoTeams = (url: string) => {
+  if (url === '/api/team-rooms')
+    return jsonResponse({ asOfSeq: 1, items: [{ ...teamRoom, everyone: true }, docsTeam] })
+  if (url.startsWith(`/api/rooms/${docsTeam.id}/jobs`))
+    return jsonResponse({ asOfSeq: 1, items: [docsJob] })
+  return undefined
+}
+
+test('with one team room the share menu and Add someone show no team choice', async () => {
+  stub()
+  renderDirect()
+  fireEvent.click(await screen.findByRole('button', { name: 'Share to the team room' }))
+  const menu = await screen.findByRole('dialog', { name: 'Share to the team room' })
+  expect(within(menu).queryByRole('combobox')).toBeNull()
+})
+
+test('with two team rooms the share menu says "Share to a team" and lists the chosen team’s jobs', async () => {
+  const posts = stub([newer, older], twoTeams)
+  renderDirect()
+  fireEvent.click(await screen.findByRole('button', { name: 'Share to the team room' }))
+  const menu = await screen.findByRole('dialog', { name: 'Share to a team' })
+  expect(menu.getAttribute('data-protected')).toBe('block')
+  await within(menu).findByRole('button', { name: /Release notes 2\.4/ })
+  fireEvent.change(within(menu).getByRole('combobox'), { target: { value: 'room-docs' } })
+  fireEvent.click(await within(menu).findByRole('button', { name: /Docs sweep/ }))
+  await screen.findByText('Shared to the team room')
+  expect(posts.find((post) => post.url.endsWith('/share'))?.body).toEqual({ jobId: 'docs-job' })
+})
+
+test('with two team rooms Add someone starts the job in the chosen team and offers only its members', async () => {
+  const posts = stub([newer, older], twoTeams)
+  renderDirect()
+  fireEvent.click(await screen.findByRole('button', { name: 'Add someone' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Add someone to this one-to-one' })
+  fireEvent.change(await within(dialog).findByRole('combobox'), {
+    target: { value: 'room-docs' },
+  })
+  // reviewer is not in the Docs team, lead is.
+  expect(within(dialog).queryByRole('button', { name: 'Add reviewer' })).toBeNull()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Add lead' }))
+  expect(within(dialog).getByText(/Starts in Docs team/)).toBeTruthy()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Add lead and share a summary' }))
+  await waitFor(() =>
+    expect(posts.find((post) => post.url === '/api/rooms/room-docs/messages')).toBeDefined(),
+  )
+  expect(posts[0]?.url).toBe('/api/rooms/room-docs/jobs')
+})
+
+test('with one team room Add someone shows no team choice', async () => {
+  stub()
+  renderDirect()
+  fireEvent.click(await screen.findByRole('button', { name: 'Add someone' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Add someone to this one-to-one' })
+  expect(within(dialog).queryByRole('combobox')).toBeNull()
 })

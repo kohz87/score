@@ -4,6 +4,7 @@ import type { ReportBack, Trigger, TriggerMapping } from '@score/contract'
 import { ApiError } from '../data/api.ts'
 import { copyText } from '../data/clipboard.ts'
 import { failure } from '../routes/settings/TerminalCommand.tsx'
+import { useTeamChoice, type TeamChoice } from './room/team-choice.tsx'
 import { pairingProblem } from './bold-errors.ts'
 import {
   MAPPING_SLOTS,
@@ -37,6 +38,8 @@ type Wizard = {
   mapping: Record<MappingSlot, string>
   template: string
   reportMode: ReportMode
+  /** null = the first team room. */
+  teamRoomId: string | null
   tool: string
   args: string
   sample: unknown | null
@@ -81,6 +84,7 @@ function blankWizard(): Wizard {
     mapping: { ref: '', title: '', link: '', details: '' },
     template: '',
     reportMode: 'off',
+    teamRoomId: null,
     tool: '',
     args: DEFAULT_ARGS,
     sample: null,
@@ -101,6 +105,7 @@ function editWizard(trigger: Trigger): Wizard {
     mapping: slotsOf(trigger.mapping),
     template: trigger.template,
     reportMode: trigger.reportBack.mode,
+    teamRoomId: trigger.teamRoomId,
     tool: trigger.reportBack.mode === 'off' ? '' : trigger.reportBack.tool,
     args: trigger.reportBack.mode === 'off' ? DEFAULT_ARGS : trigger.reportBack.args,
     sample: trigger.sample,
@@ -117,6 +122,12 @@ function reportBackOf(wizard: Wizard): ReportBack {
     tool: wizard.tool.trim(),
     args: wizard.args,
   }
+}
+
+/** The team a trigger starts jobs in, named only when several exist and it isn't the first. */
+function teamNameOf(trigger: Trigger, teams: TeamChoice): string | null {
+  if (!teams.several || trigger.teamRoomId === null) return null
+  return teams.teams.find((team) => team.id === trigger.teamRoomId)?.name ?? null
 }
 
 function plainProblem(error: unknown, action: string): string {
@@ -180,6 +191,7 @@ function SecretCard({ secret, onClose }: { secret: Secret; onClose: () => void }
 function TriggerCard({
   trigger,
   busy,
+  teamName,
   onEdit,
   onReveal,
   onRotate,
@@ -187,6 +199,8 @@ function TriggerCard({
 }: {
   trigger: Trigger
   busy: boolean
+  /** Set only when several team rooms exist and this trigger starts jobs somewhere but the first. */
+  teamName: string | null
   onEdit: () => void
   onReveal: () => void
   onRotate: () => void
@@ -239,6 +253,7 @@ function TriggerCard({
           Delete
         </button>
         <span className="small muted bold-trigger-push">
+          {teamName ? `Starts jobs in ${teamName}. ` : ''}
           {trigger.reportBack.mode === 'off'
             ? 'Results stay in Score.'
             : `Reports back with ${trigger.reportBack.tool}.`}
@@ -263,6 +278,7 @@ function WizardBody({
   url,
   secret,
   appSuggestions,
+  teams,
   onChange,
   onClose,
   onCreate,
@@ -276,6 +292,7 @@ function WizardBody({
   url: string | null
   secret: Secret | null
   appSuggestions: string[]
+  teams: TeamChoice
   onChange: (change: Partial<Wizard>) => void
   onClose: () => void
   onCreate: () => void
@@ -352,6 +369,28 @@ function WizardBody({
               ))}
             </datalist>
           </label>
+          {teams.several && (
+            <label>
+              <span>Starts jobs in</span>
+              <select
+                className="field"
+                value={wizard.teamRoomId ?? teams.teams[0]!.id}
+                onChange={(event) =>
+                  onChange({
+                    teamRoomId:
+                      event.target.value === teams.teams[0]!.id ? null : event.target.value,
+                    problem: '',
+                  })
+                }
+              >
+                {teams.teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <span className="small muted">
             {wizard.mode === 'create' && !wizard.triggerId
               ? 'Score makes the address and shows its secret once. The app sends one signed test call before you map fields.'
@@ -738,6 +777,7 @@ export function BoldTriggers({ appSuggestions = [] }: { appSuggestions?: string[
   const [confirm, setConfirm] = useState<Confirmation | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
+  const teams = useTeamChoice()
   const triggers = useTriggers(wizard?.step === 2)
   const live = wizard?.triggerId
     ? triggers.data?.find((trigger) => trigger.id === wizard.triggerId)
@@ -785,6 +825,7 @@ export function BoldTriggers({ appSuggestions = [] }: { appSuggestions?: string[
       mapping: { ref: 'id' },
       template: 'A call from the app started a job.',
       reportBack: { mode: 'off' },
+      ...(teams.several ? { teamRoomId: wizard.teamRoomId } : {}),
     }
     update({ busy: true, problem: '' })
     try {
@@ -822,11 +863,17 @@ export function BoldTriggers({ appSuggestions = [] }: { appSuggestions?: string[
         mapping: cleanMapping(wizard.mapping),
         template: wizard.template.trim(),
         reportBack: reportBackOf(wizard),
+        ...(teams.several ? { teamRoomId: wizard.teamRoomId } : {}),
       })
       setNotice(
         wizard.mode === 'edit'
           ? 'Trigger saved.'
-          : `Trigger saved. The next call from ${wizard.app} starts a job in the team room.`,
+          : `Trigger saved. The next call from ${wizard.app} starts a job in ${
+              teams.several
+                ? (teams.teams.find((team) => team.id === wizard.teamRoomId)?.name ??
+                  teams.teams[0]!.name)
+                : 'the team room'
+            }.`,
       )
       closeWizard({ saved: true })
       void invalidate()
@@ -914,6 +961,7 @@ export function BoldTriggers({ appSuggestions = [] }: { appSuggestions?: string[
             key={trigger.id}
             trigger={trigger}
             busy={pending !== null}
+            teamName={teamNameOf(trigger, teams)}
             onEdit={() => {
               setNotice('')
               setSecret(null)
@@ -942,6 +990,7 @@ export function BoldTriggers({ appSuggestions = [] }: { appSuggestions?: string[
               url={url}
               secret={secret?.triggerId === wizard.triggerId ? secret : null}
               appSuggestions={appSuggestions}
+              teams={teams}
               onChange={update}
               onClose={closeWizard}
               onCreate={() => void createAddress()}
