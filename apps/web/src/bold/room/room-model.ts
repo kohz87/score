@@ -1,4 +1,4 @@
-import type { AgentSummary, Approval, Exchange, ExchangeOption, Job } from '@score/contract'
+import type { AgentSummary, Approval, Exchange, ExchangeOption, Job, Room } from '@score/contract'
 import { agentDisplayName } from '../bold-agents.ts'
 
 export type JobFilter = 'all' | 'needs' | 'working' | 'done' | 'closed'
@@ -180,4 +180,9 @@ export function reportBackWaiting(jobs: readonly Job[]): Job[] {
       job.state !== 'closed' &&
       (job.reportBack?.state === 'needs_ok' || job.reportBack?.state === 'not_confirmed'),
   )
+}
+
+/** The first team room (every ready agent, always on). A chosen team has `everyone: false`; a server that omits it sent the first. */
+export function isEveryoneRoom(room: Pick<Room, 'role' | 'everyone'>): boolean {
+  return room.role === 'team' && room.everyone !== false
 }

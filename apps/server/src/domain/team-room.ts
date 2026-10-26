@@ -6,15 +6,17 @@ import { agentAdmits } from './agent-lifecycle.ts'
 import { readAgentNames } from './agents.ts'
 import { retireAgentFromRooms, roomChanged } from './rooms.ts'
 
-// The always-on team room of the new shell (PLAN 11.1b, docs/briefs/11.0-bold.md §3.1): every agent is a member, jobs
+// The always-on team room of the new shell (since 3.4.0, decision 136, the "everyone" one; other team rooms hold chosen
+// agents and are made by the person) (PLAN 11.1b, docs/briefs/11.0-bold.md §3.1): every agent is a member, jobs
 // are its threads, agents route work with exchange actions. Its lead stays unset until the person picks one (first
 // run, 11.10b); Score never guesses which agent leads. The classic shell leaves the room out.
 
 export const TEAM_ROOM_NAME = 'Team room'
 
 export function teamRoomId(sqlite: DatabaseSync): string | null {
-  const row = sqlite.prepare("SELECT id FROM rooms WHERE role = 'team'").get() as
-    { id: string } | undefined
+  const row = sqlite
+    .prepare("SELECT id FROM rooms WHERE role = 'team' AND team_everyone = 1")
+    .get() as { id: string } | undefined
   return row?.id ?? null
 }
 
@@ -44,8 +46,8 @@ export function ensureTeamRoom(
     const roomId = randomUUID()
     sqlite
       .prepare(
-        `INSERT INTO rooms (id, name, kind, lead_agent_id, members, created_at, updated_at, role, routing)
-         VALUES (?, ?, 'room', NULL, ?, ?, ?, 'team', 'exchanges')`,
+        `INSERT INTO rooms (id, name, kind, lead_agent_id, members, created_at, updated_at, role, routing, team_everyone)
+         VALUES (?, ?, 'room', NULL, ?, ?, ?, 'team', 'exchanges', 1)`,
       )
       .run(roomId, freeName(sqlite), members, now, now)
     return roomChanged(sqlite, roomId, now)

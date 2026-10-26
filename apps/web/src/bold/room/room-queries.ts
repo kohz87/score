@@ -5,6 +5,7 @@ import {
   MessagePageSchema,
   RoomDetailSnapshotSchema,
   RoomPinsResponseSchema,
+  TeamRoomsResponseSchema,
   type Exchange,
   type Job,
   type Message,
@@ -17,6 +18,7 @@ import { defineStreamQuery, type StreamSnapshot } from '../../data/resync.ts'
 import { reduceMessages, type MessagePageData } from '../../routes/chat/queries.ts'
 import { fetchCompleteJobs, fetchCompleteTeamRoom } from '../bold-job-reads.ts'
 import { dropCachedJobFromSearch } from '../bold-search-queries.ts'
+import { isEveryoneRoom } from './room-model.ts'
 
 /** The job read model as it now ships: `job.upserted` carries every field the tabs need. */
 export type JobRead = Job
@@ -121,7 +123,8 @@ export function teamRoomQuery(roomIdOverride: string | null) {
       if (event.type !== 'room.upserted' || !data) return data
       if (roomIdOverride !== null)
         return event.data.id === roomIdOverride ? { ...data, room: event.data } : data
-      if (event.data.role === 'team') return { ...data, room: event.data }
+      // Only the first team room is this read; a chosen team's update must not replace it.
+      if (isEveryoneRoom(event.data)) return { ...data, room: event.data }
       return data.room.id === event.data.id ? { ...data, room: event.data } : data
     },
   })
@@ -342,3 +345,27 @@ export function roomExchangesQuery(jobIds: string[]) {
     },
   })
 }
+
+/**
+ * 3.4.0: every team room, the first (everyone) room first, then the person's teams by name; archived ones included.
+ */
+export const teamRoomsQuery = defineStreamQuery<Room[]>({
+  key: ['bold', 'team-rooms'],
+  async fetch(signal) {
+    const { asOfSeq, items } = TeamRoomsResponseSchema.parse(
+      await apiFetch('team-rooms', { signal }),
+    )
+    return { asOfSeq, data: items }
+  },
+  types: ['room.upserted', 'room.deleted'],
+  reduce(data, event) {
+    if (event.type === 'room.deleted') return data.filter((room) => room.id !== event.data.id)
+    if (event.type !== 'room.upserted' || event.data.role !== 'team') return data
+    const rest = data.filter((room) => room.id !== event.data.id)
+    const next = [...rest, event.data]
+    return next.sort(
+      (a, b) =>
+        Number(isEveryoneRoom(b)) - Number(isEveryoneRoom(a)) || a.name.localeCompare(b.name),
+    )
+  },
+})

@@ -715,6 +715,13 @@ job's exchange budget, note}` and `stop_exchange {note}` (tools `score_extend`, 
     and the classic search passes `jobs=default`. Summary routes take the job too: `POST …/summary { jobId? }`, `PATCH|DELETE
 …/summary?jobId=`.
   - **S** `GET /api/team-room` → `{ asOfSeq; room: Room; jobs: Job[] }`, `404 not_ready` until agents are known.
+  - 3.4.0 (decision 136, docs/briefs/3.4.0-second-team.md): more than one team room. `GET /api/team-room` is always the
+    **everyone** room (`Room.everyone: true`: every ready agent, kept in sync; can't be renamed, archived, deleted or given
+    other members). **S** `GET /api/team-rooms` → `{ asOfSeq; items: Room[] }` (the everyone room first, then by name; archived
+    included). **H** `POST /api/team-rooms { name /* plain, 1–80 */, members: AgentId[] /* ≥ 1, ready */, leadAgentId /* ∈
+    members */ }` → `201 Room` (`role: 'team'`, `everyone: false`, exchanges routing, its own default job). A chosen team is
+    renamed (plain name), archived, deleted and re-membered with the ordinary room routes; `PATCH` keeps ≥ 1 member and the
+    lead (when set) among them (`400`). An agent that leaves Score leaves every team.
   - **S** `GET /api/agents/:agentId/direct` → `{ asOfSeq; room: Room | null; chats: Job[] }` (newest activity first);
     **H** `POST /api/agents/:agentId/chats { title? }` → `201 Job` (a new one-to-one; makes the direct room on first
     use). Direct rooms route with exchanges (11.11) and may hold several jobs. A direct room's summaries run on

@@ -190,8 +190,10 @@ of exact origins (scheme, host, port) browsers use. The bridge plugin keeps usin
 8740). Type `pair` in the server terminal to mint another pairing link; manage and revoke browsers in Settings.
 
 ## 6d. One Score per team, and apps that start jobs (PLAN 11.1d, D14–D16)
-Score is built for one team on one machine: one Score, one set of Hermes profiles, one team room. For a team that
-works for other people (a client, a product), give it its own small VM:
+Score is built for one team of agents on one machine: one Score, one set of Hermes profiles. Since 3.4.0 that Score can
+hold more than one team room (Team room ▾ › New team…), each with the agents you choose and its own lead; they share the
+agents, their Hermes profiles, memory and credentials. For a team that works for other people (a client, a product),
+give it its own small VM:
 - **A VM** with Score and Hermes as in §1–§9, running as the service in §9a.
 - **Docker for the agents' work**: set each profile's Hermes terminal backend to Docker so commands run in a
   container, not on the VM itself (Team › agent › Where it works, PLAN 11.8a). What Docker confines depends on the
