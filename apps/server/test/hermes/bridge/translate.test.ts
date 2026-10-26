@@ -270,8 +270,15 @@ test('a session Hermes deleted moves its Score room to a successor at once; a de
     event(4, 'on_session_delete', { session_id: 'score-r1-builder~2', reason: 'empty_sweep' }),
     event(5, 'on_session_delete', { session_id: 'score-r1-builder', reason: 'delete' }),
   ])
+  await server.send(token, [
+    // One unreadable id in a sweep doesn't hide the rest.
+    event(6, 'on_session_delete', {
+      reason: 'empty_sweep',
+      deleted_ids: ['bad id with spaces', 'score-r1-builder~3', 'score-r1-builder~3'],
+    }),
+  ])
   expect(server.db.sqlite.prepare('SELECT count(*) AS n FROM session_successors').get()).toEqual({
-    n: 2,
+    n: 3,
   })
   expect(
     server.db.sqlite.prepare("SELECT count(*) AS n FROM messages WHERE room_id = 'r1'").get(),

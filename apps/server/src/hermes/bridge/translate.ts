@@ -99,10 +99,19 @@ const systemHooks = new Set([
 // Hermes 0.22.5 session hooks (decision 129): a deleted session moves Score's room to a successor; a compaction is
 // logged.
 const DeleteSchema = z.object({
-  session_id: BridgeIdentifierSchema.nullish(),
+  session_id: z.unknown().optional(),
   reason: z.string().max(64).nullish(),
-  deleted_ids: z.array(BridgeIdentifierSchema).max(500).nullish(),
+  deleted_ids: z.array(z.unknown()).nullish(),
 })
+/** Each id on its own: one odd id (or a long sweep) must not hide the others. */
+const sessionIds = (values: unknown[]): string[] => [
+  ...new Set(
+    values.flatMap((value) => {
+      const id = BridgeIdentifierSchema.safeParse(value)
+      return id.success ? [id.data] : []
+    }),
+  ),
+]
 const CompactionSchema = z.object({
   messages_removed: z.int().nonnegative().nullish(),
   before_tokens: z.int().nonnegative().nullish(),
@@ -318,10 +327,7 @@ export function translateBridgeEvent(
     checkpoint,
     apply({ sqlite, now }) {
       if (deleted) {
-        const ids = [
-          ...(deleted.deleted_ids ?? []),
-          ...(deleted.session_id ? [deleted.session_id] : []),
-        ]
+        const ids = sessionIds([...(deleted.deleted_ids ?? []), deleted.session_id])
         return [
           ...hermesDeletedSessions(sqlite, producer.profile, ids, deleted.reason ?? '', now),
           log(
