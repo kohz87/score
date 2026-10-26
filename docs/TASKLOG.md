@@ -1433,3 +1433,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   lets a theme's backdrop show through the shell (review: protected surfaces keep their own fills). Full e2e after the
   fixes: 993 passed, 8 failed → 7 were Watch's fragile specs fixed in 2.6.0 (merged), 1 the ledger phone Settings
   screenshot (expected text change, re-baselined); after merging 2.6.0 the affected specs 196/196; pnpm check green.
+- **v2.7.0 deployed live** (~02:52 UTC): backup score-pre-2.7.0-20261026.db, restart, no new errors.
