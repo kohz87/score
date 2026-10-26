@@ -1484,3 +1484,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   Merge with 3.1.0 (RoomMenus/test conflicts) resolved keeping both (Team lead + room tools). Full e2e 822 passed, 1
   failed (workflows.spec:32 — two "Decide on Approve the draft" regions from other specs on the shared fake server;
   12/12 alone; test-isolation debt: unique recipe names); pnpm check green (server 4784, web 2952, contract 1512).
+- **v3.2.0 deployed live** (~10:51 UTC): backup score-pre-3.2.0-20261026.db, restart, no new errors; pushed main + tags to GitHub (first push since 1.x, owner OK).
