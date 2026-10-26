@@ -4,7 +4,6 @@ import type { DataRouter, RouteObject } from 'react-router'
 import { applyUiParam, readUi } from './bold/bold-ui.ts'
 import { BoldTerminalPage } from './bold/BoldTerminal.tsx'
 import { boldRedirectFor } from './shell/framed-paths.tsx'
-import { BoldClassicPage } from './bold/BoldClassicPage.tsx'
 import { BoldHome } from './bold/BoldHome.tsx'
 import { BoldShell } from './bold/BoldShell.tsx'
 import { BoldAgentPage } from './bold/BoldAgent.tsx'
@@ -21,8 +20,7 @@ import { ChatPage } from './routes/chat/ChatPage.tsx'
 import { AttemptPage } from './routes/attempts/AttemptPage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
 import { WatchPage } from './routes/watch/WatchPage.tsx'
-import { WorkflowEditorRoute } from './routes/workflows/WorkflowEditor.tsx'
-import { WorkflowsPage } from './routes/workflows/WorkflowsPage.tsx'
+import { BoldRecipesPage } from './bold/BoldRecipes.tsx'
 
 // Knowledge brings CodeMirror and the Markdown renderer: loaded on first visit, not with the shell.
 const LazyKnowledgePage = lazy(async () => ({
@@ -68,6 +66,12 @@ export function hashOf(
   return here.pathname === url.pathname && here.search === url.search ? here.hash : ''
 }
 
+/** A redirect that keeps the query and the #hash (a loader's request has no hash of its own; see hashOf). */
+function keepAll(request: Request, path: string) {
+  const url = new URL(request.url)
+  return `${path}${url.search}${hashOf(url)}`
+}
+
 /** The new shell's address for an old classic one (decision 123); the classic shell keeps serving its own paths. */
 function toBoldLoader({ request }: { request: Request }) {
   if (readUi() !== 'bold') return null
@@ -83,17 +87,6 @@ function runRedirect({ request, params }: { request: Request; params: { briefId?
   search.set('run', params.briefId ?? '')
   return redirect(`/b?${search.toString()}${hashOf(url)}`)
 }
-
-const WorkflowsFramed = () => (
-  <BoldClassicPage>
-    <WorkflowsPage />
-  </BoldClassicPage>
-)
-const WorkflowEditorFramed = () => (
-  <BoldClassicPage>
-    <WorkflowEditorRoute />
-  </BoldClassicPage>
-)
 
 /** Applies `?ui=bold` / `?ui=classic` from any address to this device's choice; the index loader also applies it first. */
 function UiParamBoundary() {
@@ -129,8 +122,17 @@ export const appRoutes: RouteObject[] = [
           { path: 'team', Component: BoldTeam },
           { path: 'team/:agentId', Component: BoldAgentPage },
           { path: 'screen/:agentId', Component: BoldScreenPage },
-          { path: 'workflows', Component: WorkflowsFramed },
-          { path: 'workflows/:workflowId', Component: WorkflowEditorFramed },
+          { path: 'recipes', Component: BoldRecipesPage },
+          { path: 'recipes/:workflowId', Component: BoldRecipesPage },
+          {
+            path: 'workflows',
+            loader: ({ request }) => redirect(keepAll(request, '/b/recipes')),
+          },
+          {
+            path: 'workflows/:workflowId',
+            loader: ({ request, params }) =>
+              redirect(keepAll(request, `/b/recipes/${params.workflowId ?? ''}`)),
+          },
           { path: 'runs/:briefId', loader: runRedirect },
           // 2.6.0: Watch is the replay on the agent's screen page.
           {
@@ -204,11 +206,12 @@ export const appRoutes: RouteObject[] = [
           // Kept classic pages that used to live under /now. The old paths redirect below.
           {
             path: '/workflows',
-            loader: toBoldLoader,
-            children: [
-              { index: true, Component: WorkflowsPage },
-              { path: ':workflowId', Component: WorkflowEditorRoute },
-            ],
+            loader: ({ request }) => redirect(keepAll(request, '/b/recipes')),
+          },
+          {
+            path: '/workflows/:workflowId',
+            loader: ({ request, params }) =>
+              redirect(keepAll(request, `/b/recipes/${params.workflowId ?? ''}`)),
           },
           { path: '/watch/:agentId', loader: toBoldLoader, Component: WatchPage },
           { path: '/runs/:briefId', loader: runRedirect },
@@ -220,12 +223,12 @@ export const appRoutes: RouteObject[] = [
           },
           {
             path: '/now/flow/workflows',
-            loader: ({ request }) => redirect(keepSearch(request, '/workflows')),
+            loader: ({ request }) => redirect(keepAll(request, '/b/recipes')),
           },
           {
             path: '/now/flow/workflows/:workflowId',
             loader: ({ request, params }) =>
-              redirect(keepSearch(request, `/workflows/${params.workflowId ?? ''}`)),
+              redirect(keepAll(request, `/b/recipes/${params.workflowId ?? ''}`)),
           },
           {
             path: '/now/flow/:briefId',

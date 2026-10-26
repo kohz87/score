@@ -14,13 +14,20 @@ export const BoldFrameContext = createContext<BoldFrame | null>(null)
 const SPLIT = /^([^?#]*)(.*)$/
 
 /** Paths that move under `/b` as they are: the kept classic pages. */
-const PREFIXED = ['/workflows', '/settings', '/team']
+const PREFIXED = ['/settings', '/team']
 
 /** Watch is the replay on the agent's screen page (2.6.0). */
 const WATCH = /^\/watch\/([^/]+)$/
 
 function under(path: string, root: string): boolean {
   return path === root || path.startsWith(`${root}/`)
+}
+
+/** 2.8.0: the workflow list and editor became the Recipes page; `/workflows[/:id]` maps there, query and hash kept. */
+function recipesPath(path: string, rest: string): string | null {
+  if (path === '/workflows') return `/b/recipes${rest}`
+  if (path.startsWith('/workflows/')) return `/b/recipes/${path.slice('/workflows/'.length)}${rest}`
+  return null
 }
 
 /**
@@ -35,6 +42,8 @@ export function toBoldPath(to: string, rooms: readonly FrameRoom[] = []): string
   // The Workspace deep link has no /b page of its own: the agent's page is the nearest.
   const workspace = /^\/team\/([^/]+)\/workspace$/.exec(path)
   if (workspace) return `/b/team/${workspace[1]}`
+  const recipes = recipesPath(path, rest)
+  if (recipes) return recipes
   // A run opens in the room's Runs side panel (2.5.0); the query and #hash go with it.
   const run = /^\/runs\/([^/]+)$/.exec(path)
   if (run) {
@@ -73,9 +82,11 @@ function chatRoomPath(path: string, rooms: readonly FrameRoom[]): string {
  * (the classic shell keeps serving everything else).
  */
 export function boldRedirectFor(pathname: string, search: string, hash = ''): string | null {
+  const recipes = recipesPath(pathname, `${search}${hash}`)
+  if (recipes) return recipes
   const watch = WATCH.exec(pathname)
   if (watch) return `/b/screen/${watch[1]}${search}${hash}`
-  const keep = ['/workflows', '/terminal', '/settings/look/customize']
+  const keep = ['/terminal', '/settings/look/customize']
   if (!keep.some((root) => under(pathname, root))) return null
   return `/b${pathname}${search}${hash}`
 }

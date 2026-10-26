@@ -172,6 +172,6 @@ test('a workflow run names the definition and warns about an agent that changed,
   expect(warning.textContent).toContain('replaced')
   expect(warning.compareDocumentPosition(steps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   const facts = screen.getByRole('region', { name: 'This run' })
-  expect(facts.querySelector(`a[href*="/workflows/${runSnapshot.run.workflowId}"]`)).toBeTruthy()
+  expect(facts.querySelector(`a[href*="/recipes/${runSnapshot.run.workflowId}"]`)).toBeTruthy()
   expect(facts.textContent).toContain('replaced since')
 })

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+import { finishStartJob, openRunOf, recipeIdByName, startRecipeByName } from './recipe-run.ts'
 
 // PLAN 7.1b against the fake adapter: no model is called. Instruction markers script the agents: [fake:verdict:passed]
 // replies with a score-verdict block, [fake:fail] ends the step's run failed.
@@ -20,20 +21,10 @@ async function createWorkflow(page: Page, definition: unknown): Promise<string> 
   return ((await response.json()) as { workflowId: string }).workflowId
 }
 
+/** Run… on the recipe's page opens Start a job (2.8.0); the run opens on its own page. */
 async function startFromList(page: Page, name: string, inputs: Record<string, string> = {}) {
-  await page.goto('/workflows')
-  const card = page.getByRole('listitem', { name })
-  await card.getByRole('button', { name: /^Run/ }).click()
-  const dialog = page.getByRole('dialog', { name: new RegExp(`Start ${name}`) })
-  for (const [label, value] of Object.entries(inputs))
-    await dialog.getByLabel(new RegExp(`^${label}`)).fill(value)
-  await expect(dialog.getByRole('list', { name: 'Checks before starting' })).toBeVisible()
-  await expect(dialog.getByRole('list', { name: 'Agent mapping' })).toContainText('builder')
-  await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
-  const start = dialog.getByRole('button', { name: 'Start the run' })
-  await expect(start).toBeEnabled({ timeout: 20_000 })
-  await start.click()
-  await expect(dialog).toBeHidden()
+  // No budget, as the classic dialog had: a lost attempt's unknown spend would pause the retry under Start a job's $5 cap.
+  await startRecipeByName(page, name, inputs, { noBudget: true })
   // The run opens in the Runs panel (2.5.0); its diagram is the Graph tab.
   await tab(page, 'Graph')
 }
@@ -44,15 +35,16 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   test.setTimeout(180_000)
   await pair(page)
   const unique = `Release notes ${Date.now().toString(36)}`
-  await page.goto('/workflows')
-  await expect(page.getByRole('heading', { name: 'Workflows', level: 2 })).toBeVisible()
-  await page.getByRole('link', { name: 'New workflow' }).click()
+  await page.goto('/b/recipes')
+  await expect(page.getByRole('heading', { name: 'Recipes', level: 1 })).toBeVisible()
+  await page.getByRole('button', { name: 'New recipe' }).click()
 
   // The editor starts with one step and an end, already connected.
   await expect(page.getByRole('heading', { name: 'Nothing selected' })).toBeVisible()
-  await page.getByRole('textbox', { name: 'Workflow name' }).fill(unique)
+  await page.getByRole('textbox', { name: 'Recipe name' }).fill(unique)
 
   // A start input the steps can read.
+  await page.getByText('Recipe details').click()
   await page.getByRole('button', { name: 'Add an input' }).click()
   const inputs = page.getByRole('region', { name: 'Start inputs' })
   await inputs.getByLabel('Name').fill('topic')
@@ -65,7 +57,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
 
   // Step 1: the draft, by builder. The instruction reads the input through the autocomplete.
   await node(page, 'step1').click()
-  const inspector = page.getByRole('complementary', { name: 'Step settings' })
+  const inspector = page.getByRole('complementary', { name: 'Selected step' })
   await inspector.getByLabel('Title').fill('Draft')
   await inspector.getByLabel('Agent').selectOption({ label: 'builder' })
   const instruction = inspector.getByRole('combobox', { name: 'Instruction' })
@@ -105,6 +97,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await inspector.getByLabel('Title').fill('Repaired')
 
   // The outline lists the same graph as text.
+  await page.getByText('Outline: the graph as text').click()
   const outline = page.getByRole('region', { name: 'Outline' })
   await expect(outline).toContainText('Draft')
   await expect(outline).toContainText('when done goes to Approve the draft')
@@ -114,20 +107,16 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await expect(page.getByRole('status').filter({ hasText: 'Looks good' })).toBeVisible({
     timeout: 20_000,
   })
-  await page.getByRole('button', { name: 'Save as new version' }).click()
+  await page.getByRole('button', { name: /^Save as version 1$/ }).click()
   await expect(page.getByText('Saved as version 1.').first()).toBeVisible()
 
-  // Start it from the editor.
+  // Start it from the editor: Run… opens Start a job with this recipe chosen.
   await page.getByRole('button', { name: 'Run…' }).click()
-  const dialog = page.getByRole('dialog', { name: /Start/ })
-  await dialog.getByLabel(/^Topic/).fill('the 2.4 release')
-  await expect(dialog.getByRole('list', { name: 'Agent mapping' })).toContainText('builder')
+  const dialog = page.getByRole('dialog', { name: 'Start a job' })
+  await expect(dialog.getByRole('radio', { name: unique })).toBeChecked({ timeout: 30_000 })
   await expect(dialog.getByText(/Score controls the work it starts/).first()).toBeVisible()
-  await expect(dialog.getByRole('radio', { name: /Ask me only at gates/ })).toBeChecked()
-  await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
-  const startButton = dialog.getByRole('button', { name: 'Start the run' })
-  await expect(startButton).toBeEnabled({ timeout: 20_000 })
-  await startButton.click()
+  await finishStartJob(page, { Topic: 'the 2.4 release' })
+  await openRunOf(page, await recipeIdByName(page, unique))
   await tab(page, 'Graph')
 
   // The run view: the gate waits for the person with the draft the question is about.
@@ -255,7 +244,9 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
   await unknown.getByRole('checkbox').first().check()
   await unknown.getByRole('button', { name: 'Stop waiting for this' }).click()
   // Abandoning pauses the run; the step is unresolved and offers Retry once the run is resumed.
-  await expect(page.getByText(/Paused/).first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('region', { name: 'Paused' }).first()).toBeVisible({
+    timeout: 30_000,
+  })
   await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'abandoned')
   await page.getByRole('button', { name: 'Resume', exact: true }).click()
   const retry = page.getByRole('region', { name: 'Retry Flaky step' })
@@ -303,7 +294,7 @@ test('drag a node, save, reload: it is where it was left, and the run view draws
     ],
     edges: [{ id: 'e1', from: 'one', port: 'ok', to: 'finish' }],
   })
-  await page.goto(`/workflows/${id}`)
+  await page.goto(`/b/recipes/${id}`)
   const box = (nodeId: string) => page.locator(`.wf-node[data-wf-node="${nodeId}"]`)
   const place = async (nodeId: string) => ({
     left: await box(nodeId).evaluate((el) => (el as HTMLElement).style.left),
@@ -323,7 +314,7 @@ test('drag a node, save, reload: it is where it was left, and the run view draws
   expect(Number.parseFloat(moved.left) % 16).toBe(0)
   expect(Number.parseFloat(moved.top) % 16).toBe(0)
   await expect(page.getByText('unsaved changes')).toBeVisible()
-  await page.getByRole('button', { name: 'Save as new version' }).click()
+  await page.getByRole('button', { name: /^Save as version 2$/ }).click()
   await expect(page.getByText('Saved as version 2.').first()).toBeVisible()
 
   // Reload: same place. The first node was pinned by the first move, so it did not shift either.

@@ -4,7 +4,6 @@ import {
   boldAgentScreenLink,
   boldAgentWorkspaceLink,
   boldChatLink,
-  boldCloseRecipesLink,
   boldCommandLink,
   boldFirstRunLink,
   boldJobLink,
@@ -33,11 +32,9 @@ test('every bold-shell destination keeps its query parameters in one place', () 
   )
   expect(boldNoteLink('Projects/Roadmap.md')).toBe('/b?note=Projects%2FRoadmap.md')
   expect(boldStartJobLink()).toBe('/b?start=job')
-  expect(boldRecipesLink()).toBe('/b?recipes=1')
-  expect(boldCloseRecipesLink('?recipes=1&job=job+1&message=m+1&work=code&file=a.ts')).toBe(
-    '/b?job=job+1&message=m+1&work=code&file=a.ts',
-  )
-  expect(boldCloseRecipesLink('?recipes=1')).toBe('/b')
+  expect(boldStartJobLink('wf 1')).toBe('/b?start=job&recipe=wf+1')
+  expect(boldRecipesLink()).toBe('/b/recipes')
+  expect(boldRecipesLink('wf 1')).toBe('/b/recipes/wf%201')
   expect(boldFirstRunLink()).toBe('/b?first=run')
   expect(boldCommandLink('assign')).toBe('/b?command=assign')
   expect(boldAddAgentLink()).toBe('/b/team?add=agent')

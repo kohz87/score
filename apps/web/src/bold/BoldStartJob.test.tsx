@@ -177,11 +177,19 @@ class Source extends EventTarget {
 }
 
 let preflightFails = false
+let workflowPreflightNow: unknown = workflowPreflight
+let workflowRunBodies: Record<string, unknown>[] = []
+let workflowRunReply: () => Response = () =>
+  Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
 let triggerBody: unknown
 const disposers: (() => void)[] = []
 
 beforeEach(() => {
   preflightFails = false
+  workflowPreflightNow = workflowPreflight
+  workflowRunBodies = []
+  workflowRunReply = () =>
+    Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
   triggerBody = undefined
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
@@ -223,7 +231,11 @@ beforeEach(() => {
           versions: [version],
           latest: { ...version, workflowId: 'wf_release', definition },
         })
-      if (url.pathname === '/api/workflow-runs/preflight') return json(workflowPreflight)
+      if (url.pathname === '/api/workflow-runs/preflight') return json(workflowPreflightNow)
+      if (url.pathname === '/api/workflow-runs' && method === 'POST') {
+        workflowRunBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+        return Promise.resolve(workflowRunReply())
+      }
       if (url.pathname === '/api/orchestrations/preflight')
         return json(orchestrationCheck(!preflightFails))
       if (url.pathname.startsWith('/api/agents/') && url.pathname.endsWith('/routines'))
@@ -399,4 +411,148 @@ test('a trigger created by the dialog shows its address and secret once, in a pr
   fireEvent.click(screen.getByRole('button', { name: 'Start a job' }))
   const reopened = await startDialog()
   expect(within(reopened).queryByText('whsec_unit_secret')).toBeNull()
+})
+
+const codingWorker = (policyId: string, reach: boolean) => ({
+  agentId: 'coder-a',
+  runtime: 'codex',
+  readiness: 'ready',
+  detail: null,
+  policyId,
+  reach: 'Reads any file you can read, not only the ones in /work/site.',
+  reachBeyondWorkspace: reach,
+})
+
+async function recipeDialog() {
+  open('/b?start=job&recipe=wf_release')
+  const dialog = await startDialog()
+  await waitFor(() =>
+    expect(within(dialog).getByRole('radio', { name: 'Release recipe' })).toBeDefined(),
+  )
+  return dialog
+}
+
+test('a recipe says that a spend cap pauses a step whose cost is unknown', async () => {
+  const dialog = await recipeDialog()
+  expect(
+    within(dialog).getByText(/a step whose cost Hermes doesn’t report pauses the run/),
+  ).toBeDefined()
+  fireEvent.change(within(dialog).getByLabelText(/^Spend cap/), { target: { value: '0' } })
+  await waitFor(() =>
+    expect(
+      within(dialog).queryByText(/a step whose cost Hermes doesn’t report pauses the run/),
+    ).toBeNull(),
+  )
+})
+
+test('a coding recipe asks for its reach, and More options reach the posted body', async () => {
+  workflowPreflightNow = {
+    ...workflowPreflight,
+    workers: [codingWorker('a'.repeat(64), true)],
+    defaults: { ...workflowPreflight.defaults, codingSteps: 4 },
+  }
+  const dialog = await recipeDialog()
+  fireEvent.change(within(dialog).getByLabelText(/Topic|Release/i, { selector: 'textarea' }), {
+    target: { value: 'the 2.4 release' },
+  })
+  fireEvent.click(acknowledgement(dialog))
+  const start = within(dialog).getByRole('button', { name: 'Start the job' })
+  const reach = await within(dialog).findByRole('checkbox', {
+    name: /I understand what these coding agents can read/,
+  })
+  expect(
+    within(dialog)
+      .getByText(/Coding agents in this job/)
+      .closest('[data-protected]'),
+  ).not.toBeNull()
+  expect(start.hasAttribute('disabled')).toBe(true)
+
+  fireEvent.click(within(dialog).getByText('More options'))
+  expect((within(dialog).getByLabelText('Most coding steps') as HTMLInputElement).value).toBe('4')
+  fireEvent.change(within(dialog).getByLabelText('Most coding steps'), { target: { value: '6' } })
+  fireEvent.change(within(dialog).getByLabelText(/^Quota floor/), { target: { value: '20' } })
+  fireEvent.change(within(dialog).getByLabelText(/^Steps at the same time/), {
+    target: { value: '3' },
+  })
+  fireEvent.change(within(dialog).getByLabelText(/^Estimate per step/), {
+    target: { value: '0.75' },
+  })
+  expect(start.hasAttribute('disabled')).toBe(true)
+  fireEvent.click(reach)
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(start)
+  await waitFor(() => expect(workflowRunBodies).toHaveLength(1))
+  expect(workflowRunBodies[0]).toMatchObject({
+    workflowId: 'wf_release',
+    codingPolicies: { 'coder-a': 'a'.repeat(64) },
+    acknowledgeCodingReach: { policyIds: ['a'.repeat(64)] },
+    codingSteps: 6,
+    quotaFloorPercent: 20,
+    maxConcurrentSteps: 3,
+    stepEstimateUsd: 0.75,
+  })
+})
+
+test('a coding agent whose policy changed has to be accepted again', async () => {
+  workflowPreflightNow = { ...workflowPreflight, workers: [codingWorker('a'.repeat(64), true)] }
+  workflowRunReply = () =>
+    Response.json({ error: { code: 'policy_changed', message: 'changed' } }, { status: 409 })
+  const dialog = await recipeDialog()
+  fireEvent.change(within(dialog).getByLabelText(/Topic|Release/i, { selector: 'textarea' }), {
+    target: { value: 'x' },
+  })
+  fireEvent.click(acknowledgement(dialog))
+  fireEvent.click(
+    await within(dialog).findByRole('checkbox', {
+      name: /I understand what these coding agents can read/,
+    }),
+  )
+  const start = within(dialog).getByRole('button', { name: 'Start the job' })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  workflowPreflightNow = { ...workflowPreflight, workers: [codingWorker('b'.repeat(64), true)] }
+  fireEvent.click(start)
+  await waitFor(() => expect(workflowRunBodies).toHaveLength(1))
+  await waitFor(() =>
+    expect(
+      (
+        within(dialog).getByRole('checkbox', {
+          name: /I understand what these coding agents can read/,
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(false),
+  )
+  expect(
+    within(dialog).getByRole('button', { name: 'Start the job' }).hasAttribute('disabled'),
+  ).toBe(true)
+})
+
+test('More options are range-checked: an empty or out-of-range field blocks Start and says why', async () => {
+  workflowPreflightNow = {
+    ...workflowPreflight,
+    workers: [codingWorker('a'.repeat(64), false)],
+    defaults: { ...workflowPreflight.defaults, codingSteps: 4 },
+  }
+  const dialog = await recipeDialog()
+  fireEvent.change(within(dialog).getByLabelText(/Topic|Release/i, { selector: 'textarea' }), {
+    target: { value: 'x' },
+  })
+  fireEvent.click(acknowledgement(dialog))
+  const start = within(dialog).getByRole('button', { name: 'Start the job' })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(within(dialog).getByText('More options'))
+
+  const cases: [RegExp, string[], string, RegExp][] = [
+    [/^Steps at the same time/, ['0', '4', ''], '2', /Steps at the same time must be 1 to 3/],
+    [/^Estimate per step/, ['0', '1001', ''], '0.5', /Estimate per step must be above 0/],
+    [/^Most coding steps/, ['0', '999', ''], '4', /Most coding steps must be 1 to/],
+  ]
+  for (const [label, bad, good, reason] of cases) {
+    for (const value of bad) {
+      fireEvent.change(within(dialog).getByLabelText(label), { target: { value } })
+      await waitFor(() => expect(start.hasAttribute('disabled')).toBe(true))
+      expect(within(dialog).getByText(reason)).toBeDefined()
+    }
+    fireEvent.change(within(dialog).getByLabelText(label), { target: { value: good } })
+    await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  }
 })

@@ -1,7 +1,7 @@
 /**
  * Every destination inside the bold shell. The query parameters are read by later tasks:
  * `job`/`message` by the room (11.4), `with`/`chat` by one-to-ones (11.7), `note` by Library (11.10e),
- * `start` by Start a job (11.10c), `recipes` by the recipe editor (11.10d), `first` by first run (11.10b),
+ * `start` by Start a job (11.10c), `/b/recipes[/:id]` is the Recipes page (2.8.0), `first` by first run (11.10b),
  * `add` by Add an agent (11.8c), and `command` by the composer's slash-command hand-off (11.4a).
  */
 
@@ -58,21 +58,14 @@ export function boldRunLink(briefId: string): string {
   return boldQuery({ run: briefId })
 }
 
-/** 11.10c Start a job: open its dialog. */
-export function boldStartJobLink(): string {
-  return boldQuery({ start: 'job' })
+/** 11.10c Start a job: open its dialog, optionally with a saved recipe already chosen (2.8.0). */
+export function boldStartJobLink(recipeId?: string): string {
+  return boldQuery(recipeId ? { start: 'job', recipe: recipeId } : { start: 'job' })
 }
 
-/** 11.10d Recipe editor: open it. */
-export function boldRecipesLink(): string {
-  return boldQuery({ recipes: '1' })
-}
-
-/** Closing Recipes keeps the room, job, message, Workbench tab and file the person was looking at. */
-export function boldCloseRecipesLink(search: string): string {
-  const params = new URLSearchParams(search)
-  params.delete('recipes')
-  return params.size > 0 ? `/b?${params.toString()}` : '/b'
+/** 2.8.0 Recipes: the page, or one recipe (`new` starts a new one). */
+export function boldRecipesLink(recipeId?: string): string {
+  return recipeId ? `/b/recipes/${encodeURIComponent(recipeId)}` : '/b/recipes'
 }
 
 /** 11.10b First run: replay it. */
