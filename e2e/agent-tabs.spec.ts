@@ -122,6 +122,8 @@ test('Model, Skills, Memory and Tools cards read and edit', async ({ page }) => 
   await memory.getByRole('button', { name: 'Add', exact: true }).click()
   await expect(memory.getByText('The demo is on Monday.')).toBeVisible()
   await memory.getByRole('button', { name: /^Forget: The demo is on Monday/ }).click()
+  // Forgetting asks first (3.1.0).
+  await memory.getByRole('button', { name: 'Remove', exact: true }).click()
   await expect(memory.getByText('The demo is on Monday.')).toHaveCount(0)
   await expect(memory.getByText('Releases go out on Fridays.')).toBeVisible()
 

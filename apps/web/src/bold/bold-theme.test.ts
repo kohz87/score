@@ -157,14 +157,16 @@ it('the contrast fallback keeps the request cards’ agent names readable in bot
   }
 })
 
-// Decision 133: the shell's shape file never exempts a protected surface from the glass skip, and density is wired.
+// Decision 133: the shell's shape file exempts no protected surface from the glass skip but the agent glyph, and density is wired.
 import { it as shapeIt, expect as shapeExpect } from 'vitest'
 shapeIt(
   'bold-shape.css skips glass on any ancestor of a protected surface and scales density',
   () => {
     const shape = readFileSync(join(import.meta.dirname, 'bold-shape.css'), 'utf8')
-    shapeExpect(shape).toContain(':has([data-protected])')
-    shapeExpect(shape).not.toMatch(/:has\(\[data-protected\]:not/)
+    shapeExpect(shape).toContain(':has([data-protected]:not(.agent-glyph))')
+    // The only exemption is the agent glyph (identity, not a decision): never anything else.
+    shapeExpect(shape).not.toMatch(/:has\(\[data-protected\]:not\((?!\.agent-glyph\)\))/)
+    shapeExpect(shape).not.toMatch(/:not\(:has\(\[data-protected\]\)\)/)
     shapeExpect(shape).toMatch(/data-density='compact'\]\s*\{\s*--bold-d: 0\.85/)
     shapeExpect(shape).toMatch(/data-density='airy'\]\s*\{\s*--bold-d: 1\.2/)
   },
