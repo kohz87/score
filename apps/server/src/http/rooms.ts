@@ -18,6 +18,8 @@ import {
   type RewindSkipReason,
   type Message,
   type Room,
+  TeamRoomCreateRequestSchema,
+  TeamRoomsResponseSchema,
 } from '@score/contract'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -98,9 +100,12 @@ const CreateSchema = z
     members: z.array(AgentIdSchema).optional(),
   })
   .strict()
+// Team rooms carry plain names ("Team room", "Docs team"); other rooms keep `#slug` names (decision 136).
+const TeamNameSchema = TeamRoomCreateRequestSchema.shape.name
 const PatchSchema = z
   .object({
     ...CreateSchema.partial().shape,
+    name: z.string().min(1).max(200).optional(),
     pinned: z.boolean().optional(),
     archived: z.boolean().optional(),
     projectId: z.string().min(1).max(200).nullable().optional(),
@@ -155,9 +160,15 @@ export function registerRoomRoutes(
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
     onSend: receipts.onSend,
   }
+  // The everyone team room (decision 136): always the whole team under its own name. Chosen team rooms are ordinary
+  // rooms for renaming, archiving, members and deleting.
   const isTeamRoom = (roomId: string) =>
     db.read((sqlite) =>
-      Boolean(sqlite.prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team'").get(roomId)),
+      Boolean(
+        sqlite
+          .prepare("SELECT 1 FROM rooms WHERE id = ? AND role = 'team' AND team_everyone = 1")
+          .get(roomId),
+      ),
     )
   const routing = new RoutingDispatcher(db, ingest, port, (error) =>
     app.log.error({ err: error }, 'Room run admission failed'),
@@ -262,6 +273,51 @@ export function registerRoomRoutes(
     return { asOfSeq: result.asOfSeq, ...result.data }
   })
 
+  // 3.4.0 (decision 136): team rooms. The everyone room first, then the person's teams by name.
+  app.get('/api/team-rooms', async () => {
+    const result = snapshot(db, (sqlite) => {
+      const now = new Date(clock()).toISOString()
+      return sqlite
+        .prepare(
+          "SELECT id FROM rooms WHERE role = 'team' ORDER BY team_everyone DESC, name COLLATE NOCASE, id",
+        )
+        .all()
+        .map((row) => readRoom(sqlite, z.object({ id: z.string() }).parse(row).id, now))
+    })
+    return TeamRoomsResponseSchema.parse({ items: result.data })
+  })
+  app.post('/api/team-rooms', mutation, async (request, reply) => {
+    const body = TeamRoomCreateRequestSchema.parse(request.body)
+    const members = [...new Set(body.members)]
+    if (!members.includes(body.leadAgentId))
+      throw new HttpError(400, 'bad_request', 'The lead must be one of the team’s members.')
+    // Only agents that are ready (not setting up, needing attention or leaving) join a team.
+    await validateAgents(members)
+    const id = randomUUID()
+    let room: Room | undefined
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply({ sqlite, now }) {
+        insertRoom(
+          sqlite,
+          {
+            id,
+            name: body.name,
+            kind: 'room',
+            leadAgentId: body.leadAgentId,
+            members,
+            role: 'team',
+          },
+          now,
+        )
+        room = readRoom(sqlite, id, now)
+        return roomChanged(sqlite, id, now)
+      },
+    })
+    return reply.code(201).send(room)
+  })
+
   app.post('/api/rooms', mutation, async (request) => {
     const body = CreateSchema.parse(request.body)
     await validateAgents([...(body.members ?? []), ...(body.leadAgentId ? [body.leadAgentId] : [])])
@@ -324,7 +380,22 @@ export function registerRoomRoutes(
           body.leadAgentId !== row.lead_agent_id
         )
           throw new HttpError(409, 'conflict', 'A direct room belongs to its agent.')
-        const name = body.name ?? row.name
+        if (row.role === 'team' && row.team_everyone === 0) {
+          const members: string[] = body.members
+            ? [...new Set(body.members)]
+            : (JSON.parse(row.members) as string[])
+          const lead = body.leadAgentId === undefined ? row.lead_agent_id : body.leadAgentId
+          if (members.length === 0)
+            throw new HttpError(400, 'bad_request', 'A team needs at least one member.')
+          if (lead !== null && !members.includes(lead))
+            throw new HttpError(400, 'bad_request', 'The lead must be one of the team’s members.')
+        }
+        const name =
+          body.name === undefined
+            ? row.name
+            : row.role === 'team'
+              ? TeamNameSchema.parse(body.name)
+              : NameSchema.parse(body.name)
         if (sqlite.prepare('SELECT id FROM rooms WHERE name = ? AND id != ?').get(name, roomId))
           throw new HttpError(409, 'conflict', 'A room with that name already exists.')
         if (body.projectId) assertProject(sqlite, body.projectId)

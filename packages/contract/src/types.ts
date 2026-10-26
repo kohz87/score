@@ -271,8 +271,28 @@ export const RoomSchema = z.object({
   role: z.enum(['team', 'direct', 'room']).optional(),
   /** `mentions` = @mention hand-offs (D3.2), `exchanges` = agent actions (D3.3). The server always sends it. */
   routing: z.enum(['mentions', 'exchanges']).optional(),
+  /**
+   * 3.4.0 (decision 136), team rooms only: `true` = the first team room, which always holds every ready agent; `false` =
+   * a team the person made with the agents they chose.
+   */
+  everyone: z.boolean().optional(),
 })
 export type Room = z.infer<typeof RoomSchema>
+
+export const TeamRoomCreateRequestSchema = z.object({
+  // A plain name; no control characters.
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[^\p{Cc}]+$/u),
+  members: z.array(AgentIdSchema).min(1).max(64),
+  leadAgentId: AgentIdSchema,
+})
+export type TeamRoomCreateRequest = z.infer<typeof TeamRoomCreateRequestSchema>
+export const TeamRoomsResponseSchema = z.object({ items: z.array(RoomSchema) })
+export type TeamRoomsResponse = z.infer<typeof TeamRoomsResponseSchema>
 
 export const LaneBlockSchema = z.object({
   id: z.string().min(1),
