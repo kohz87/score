@@ -3,6 +3,28 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.3.0] — 2026-10-26
+
+### Added
+- **Live screen** on an agent's screen page: a read-only live view of the agent's Hermes Bot Desktop (computer use),
+  about once a second. Score reads it from the screen's own local socket and only ever asks for pictures: no keys,
+  clicks or clipboard, and it never takes control. While someone has taken over the screen in Hermes, nothing is shown;
+  a screen inside the agent's sandbox is reported, not shown. Hide/Show per device.
+- **Removing an agent whose setup stopped**: Remove agent… now works on an agent whose setup stopped with a recorded
+  error (for example a refused model step whose Retry keeps failing). The stopped setup is abandoned first; if Hermes
+  never made the profile, only Score's records are retired. A setup whose last step Score lost track of still asks you
+  to confirm what happened first.
+
+### Changed
+- **README** rewritten for the new shell, with 17 new screenshots of the demo team.
+
+### Fixed
+- A run's approval card and its Pause / Stop buttons use the new shell's pill buttons.
+- Search shows a job's agent instead of a blank square.
+- The default theme passes its own contrast check in dark and light (agent names on result cards, unread badges, the
+  replay's Live label, the screen's empty text).
+- The agent page keeps "needs you" and its facts on one row.
+
 ## [3.2.0] — 2026-10-26
 
 ### Added

@@ -313,8 +313,9 @@ function AgentProfile({ agentId }: { agentId: string }) {
           )}
         </span>
         {summary?.runtimeNote && <span className="small muted">{summary.runtimeNote}</span>}
+        {/* On the same row as the state (the prototype's agent page), so "needs you" is never alone on a line. */}
+        {!coding && <OverviewFacts agent={agent} agents={agents.data ?? []} />}
       </div>
-      {!coding && <OverviewFacts agent={agent} agents={agents.data ?? []} />}
       {pause.error && (
         <p role="alert" className="bold-team-error">
           {pairingProblem(pause.error) ??

@@ -7,7 +7,15 @@ import type {
   WatchMarker,
   WatchOverviewItem,
 } from '@score/contract'
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { ApiError } from '../data/api.ts'
@@ -41,6 +49,7 @@ import {
   type ActivityItem,
   type Surface,
 } from '../routes/watch/watch-model.ts'
+import { BoldLiveScreen } from './BoldLiveScreen.tsx'
 import { agentDisplayName, agentMood, agentStateLabel } from './bold-agents.ts'
 import { boldAgentScreenLink, boldJobLink } from './bold-links.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
@@ -337,7 +346,10 @@ export function BoldScreenView({
   pause,
   resumeSession,
   others,
+  liveScreen,
 }: {
+  /** The live Bot Desktop card, shown above the replay's surfaces (the page supplies it). */
+  liveScreen?: ReactNode
   agent: AgentSummary
   frames: WatchFrame[]
   markers: WatchMarker[]
@@ -543,6 +555,7 @@ export function BoldScreenView({
           )}
         </div>
         <div className="bold-screen-main">
+          {liveScreen}
           <div
             className="bold-screen-stage"
             style={{ '--watch-agent': agent.style.color } as CSSProperties}
@@ -777,6 +790,9 @@ function BoldScreenAgent({ agentId }: { agentId: string }) {
         />
       ))}
       <BoldScreenView
+        liveScreen={
+          <BoldLiveScreen agentId={data.agent.id} agentName={agentDisplayName(data.agent)} />
+        }
         agent={data.agent}
         frames={data.frames}
         markers={data.markers}

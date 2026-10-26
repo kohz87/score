@@ -2150,6 +2150,11 @@ const cases = [
     },
   ],
   [
+    'BotScreenStatusSchema',
+    { state: 'running', width: 960, height: 600, frameSeq: 3 },
+    { state: 'on', width: 0 },
+  ],
+  [
     'WaiverDecisionSchema',
     { orchestrationRevision: 2, acknowledge: true },
     { orchestrationRevision: 2, acknowledge: false },

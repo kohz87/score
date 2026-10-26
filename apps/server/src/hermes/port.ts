@@ -2,6 +2,7 @@ import {
   ApprovalChoiceSchema,
   ApprovalSchema,
   type AgentSummary,
+  type BotScreenStatus,
   type RunsOn,
   type RunsOnUpdate,
   type SystemStatus,
@@ -193,6 +194,10 @@ export interface HermesPort extends ProfileManagementPort {
    * Names and times only; memory contents are never read.
    */
   journeyFacts(req: { from: number; to: number; agentIds: string[] }): Promise<JourneyFacts>
+  /** 3.3.0: the agent's Hermes Bot Desktop, read-only (decision 135). */
+  botScreenStatus(agentId: string): Promise<BotScreenStatus>
+  /** The current screen as PNG, or the status saying why there is none. */
+  botScreenFrame(agentId: string): Promise<{ seq: number; png: Buffer } | BotScreenStatus>
   /** Live only: sessions active since `sinceMs` with cumulative cost, per readable profile, for Score's spend snapshots. */
   sessionCosts?(req: {
     sinceMs: number

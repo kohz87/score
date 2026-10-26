@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import type { DatabaseSync } from 'node:sqlite'
 import {
   AgentCreateInputSchema,
   AgentDetailSchema,
@@ -68,6 +69,35 @@ const importSteps: ProfileStepName[] = [
   'verify_ready',
 ]
 const deleteSteps: ProfileStepName[] = ['export', 'delete_profile', 'purge_identity', 'retire']
+
+/**
+ * 3.2.2: the create (or import) that stopped and holds an agent in needs_attention, when removing the agent should
+ * abandon it. Null while the operation still runs or when something else holds the agent.
+ */
+function stoppedSetup(sqlite: DatabaseSync, name: string): { id: string } | null {
+  const lifecycle = lifecycleOf(sqlite, name)
+  if (lifecycle?.state !== 'needs_attention' || !lifecycle.operation_id) return null
+  const row = sqlite
+    .prepare(
+      "SELECT id, operation FROM profile_operations WHERE id = ? AND state = 'needs_attention'",
+    )
+    .get(lifecycle.operation_id) as { id: string; operation: string } | undefined
+  if (!row) return null
+  const stored = z
+    .object({ kind: z.string(), confirmable: z.boolean().optional() })
+    .safeParse(JSON.parse(row.operation)).data
+  // A step Score lost track of (interrupted, outcome unknown: `confirmable`) is never abandoned — Hermes may still
+  // finish it, so the person confirms what happened first; only a recorded failure is abandoned.
+  if (!stored || stored.confirmable === true) return null
+  return stored.kind === 'create' || stored.kind === 'import' ? { id: row.id } : null
+}
+
+/** A save refused because the operation was abandoned meanwhile (a removal closed it): its run stops quietly. */
+class AbandonedOperation extends HttpError {
+  constructor() {
+    super(409, 'conflict', 'This setup was abandoned when the agent was removed.')
+  }
+}
 function hash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
@@ -133,6 +163,8 @@ export class ProfileOperations {
     const lifecycle = lifecycleOf(this.db.sqlite, name)
     const pendingWork = this.pending(name)
     const blockers = [...inventory.blockers]
+    // Removing an agent whose setup stopped abandons that setup first (3.2.2).
+    const abandon = request.kind === 'delete' ? stoppedSetup(this.db.sqlite, name) : null
     if (name === 'default') blockers.push('The default profile is reserved.')
     if (request.kind === 'create') {
       if (inventory.exists)
@@ -140,7 +172,8 @@ export class ProfileOperations {
           'A profile with this name already exists; Score never adopts it automatically.',
         )
     } else {
-      if (!inventory.exists || lifecycle?.state === 'removed') blockers.push('Agent not found.')
+      if ((!inventory.exists && !abandon) || lifecycle?.state === 'removed')
+        blockers.push('Agent not found.')
       if (
         pendingWork.activeRuns ||
         pendingWork.queuedTurns ||
@@ -151,7 +184,7 @@ export class ProfileOperations {
           'Finish active runs, queued turns, pending approvals and unfinished assignments before deleting.',
         )
     }
-    if (lifecycle && !['ready', 'removed'].includes(lifecycle.state))
+    if (lifecycle && !['ready', 'removed'].includes(lifecycle.state) && !abandon)
       blockers.push('An operation already holds this agent.')
     // A removed agent's name may be used again on purpose (2.0.8): its history keeps the name, so the person confirms.
     const reusesName = request.kind === 'create' && lifecycle?.state === 'removed'
@@ -163,7 +196,9 @@ export class ProfileOperations {
       if (match) providerLabel = match.providerLabel
     }
     const exportPath =
-      request.kind === 'delete' ? this.port.profileExportPath(name, inventory.revision) : null
+      request.kind === 'delete' && inventory.exists
+        ? this.port.profileExportPath(name, inventory.revision)
+        : null
     const data = {
       kind: request.kind,
       targetName: name,
@@ -187,6 +222,13 @@ export class ProfileOperations {
                 : []),
             ]
           : [
+              ...(abandon
+                ? [
+                    inventory.exists
+                      ? 'The setup that stopped is abandoned first; what it made is exported and deleted like any agent.'
+                      : 'The setup that stopped is abandoned first. Hermes never made the profile, so there is nothing to export or delete: Score only retires the name.',
+                  ]
+                : []),
               'Freeze new admissions, export privately, delete and purge profile identity, then retire routing references.',
               'The export omits credentials and is not a full undo. It may contain sensitive conversations and is kept privately until you remove it locally.',
             ],
@@ -231,6 +273,12 @@ export class ProfileOperations {
       throw new HttpError(400, 'bad_request', 'Confirm what the new agent inherits first.')
     const id = randomUUID()
     const now = new Date(this.clock()).toISOString()
+    const abandon =
+      request.kind === 'delete' ? stoppedSetup(this.db.sqlite, preview.targetName) : null
+    // Nothing to export or delete when the stopped setup never made the profile: only the Score-side retirement runs.
+    const profileMissing =
+      abandon !== null &&
+      !ProfileInventorySchema.parse(await this.port.profileInventory(preview.targetName)).exists
     const input =
       request.kind === 'create'
         ? AgentCreateInputSchema.parse({
@@ -256,7 +304,7 @@ export class ProfileOperations {
       steps: (imported ? importSteps : request.kind === 'create' ? createSteps : deleteSteps).map(
         (name) => ({
           name,
-          state: 'pending',
+          state: profileMissing && name !== 'retire' ? 'completed' : 'pending',
         }),
       ),
       createdAt: now,
@@ -265,7 +313,9 @@ export class ProfileOperations {
         ? 'import_profile'
         : request.kind === 'create'
           ? 'create_profile'
-          : 'export',
+          : profileMissing
+            ? 'retire'
+            : 'export',
       error: null,
       exportPath: preview.exportPath,
     })
@@ -276,6 +326,29 @@ export class ProfileOperations {
       source: 'profile-operations',
       identity: `begin:${id}`,
       apply: ({ sqlite }) => {
+        // The stopped setup ends here, in the same transaction that starts the removal.
+        if (abandon) {
+          const held = sqlite
+            .prepare(
+              "SELECT operation FROM profile_operations WHERE id = ? AND state = 'needs_attention'",
+            )
+            .get(abandon.id) as { operation: string } | undefined
+          if (!held)
+            throw new HttpError(
+              409,
+              'conflict',
+              'The setup changed. Preview again before removing.',
+            )
+          const stopped = JSON.parse(held.operation) as Record<string, unknown>
+          sqlite
+            .prepare(
+              "UPDATE profile_operations SET operation = ?, state = 'completed' WHERE id = ?",
+            )
+            .run(
+              JSON.stringify({ ...stopped, state: 'completed', abandoned: true, updatedAt: now }),
+              abandon.id,
+            )
+        }
         if (
           sqlite
             .prepare(
@@ -505,11 +578,14 @@ export class ProfileOperations {
       source: 'profile-operations',
       identity: randomUUID(),
       apply: ({ sqlite, now }) => {
-        sqlite
+        // A completed operation is final: a Retry, Confirm or run step still in flight when a removal abandoned the
+        // setup must not bring it back to life.
+        const saved = sqlite
           .prepare(
-            'UPDATE profile_operations SET operation = ?, state = ?, target_identity = COALESCE(?, target_identity) WHERE id = ?',
+            "UPDATE profile_operations SET operation = ?, state = ?, target_identity = COALESCE(?, target_identity) WHERE id = ? AND state != 'completed'",
           )
           .run(JSON.stringify(operation), operation.state, identity ?? null, operation.id)
+        if (saved.changes === 0) throw new AbandonedOperation()
         if (operation.state !== 'running') {
           sqlite
             .prepare('UPDATE agent_lifecycle SET state = ?, operation_id = ? WHERE agent_id = ?')
@@ -557,6 +633,11 @@ export class ProfileOperations {
     try {
       for (const step of operation.steps) {
         if (step.state === 'completed') continue
+        // Abandoned while this run was between steps: stop before touching Hermes again.
+        const current = this.db.sqlite
+          .prepare('SELECT state FROM profile_operations WHERE id = ?')
+          .get(id) as { state: string } | undefined
+        if (current?.state === 'completed') return
         operation.nextStep = step.name
         if (step.state === 'running' && step.name !== 'verify_ready')
           throw new Error(
@@ -643,6 +724,7 @@ export class ProfileOperations {
       // The uploaded archive has served its purpose; nothing keeps it after a finished import.
       if (stored.importUpload) this.imports?.remove(stored.importUpload)
     } catch (error) {
+      if (error instanceof AbandonedOperation) return
       // A refused or interrupted import step never reuses the archive (it is not retryable), so don't keep 200 MiB.
       if (operation.nextStep === 'import_profile' && stored.importUpload)
         this.imports?.remove(stored.importUpload)
@@ -655,7 +737,12 @@ export class ProfileOperations {
         RETRYABLE_STEPS.has(operation.nextStep)
       operation.error = `Next step: ${operation.nextStep}. ${error instanceof HttpError ? error.message : 'The step could not be verified. Inspect the profile locally; no automatic retry or rollback was attempted.'}`
       operation.updatedAt = new Date(this.clock()).toISOString()
-      await this.save(operation, identity)
+      try {
+        await this.save(operation, identity)
+      } catch (saveError) {
+        // Completed meanwhile (finished before a late failure, or abandoned by a removal): nothing to record.
+        if (!(saveError instanceof AbandonedOperation)) throw saveError
+      }
     }
   }
   /**
