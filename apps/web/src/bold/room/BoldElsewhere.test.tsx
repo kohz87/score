@@ -203,3 +203,47 @@ test('closing the panel mid-way keeps the attempt: a retry makes no second job a
   expect(posts.filter(([url]) => String(url) === '/api/messages/import%3A1/share')).toHaveLength(1)
   expect(posts.filter(([url]) => String(url) === '/api/messages/import%3A2/share')).toHaveLength(2)
 })
+
+test('with two team rooms the person chooses where the job starts; with one nothing is asked', async () => {
+  const docs = { ...room, id: 'room-docs', name: 'Docs team', everyone: false }
+  const first = { ...room, everyone: true }
+  const job = makeJob({ id: 'job-docs', roomId: docs.id, title: 'Plan the launch checklist' })
+  const fetchMock = mockFetch((url, init) => {
+    const parsed = new URL(url, 'http://x')
+    if (parsed.pathname === '/api/team-room')
+      return jsonResponse({ asOfSeq: 1, room: first, jobs: [] })
+    if (parsed.pathname === '/api/team-rooms')
+      return jsonResponse({ asOfSeq: 1, items: [first, docs] })
+    if (parsed.pathname === '/api/outside-sessions/preview')
+      return jsonResponse({
+        messages: [{ role: 'assistant', text: 'Outline.', at: '2026-10-23T08:00:00.000Z' }],
+      })
+    if (parsed.pathname === '/api/outside-sessions/import')
+      return jsonResponse({ roomId: 'room-imported', imported: 1 })
+    if (parsed.pathname === '/api/rooms/room-docs/jobs' && init.method === 'POST')
+      return jsonResponse(job)
+    if (parsed.pathname === '/api/messages/import%3A1/share')
+      return jsonResponse({ messageId: 's' }, 201)
+    if (parsed.pathname === '/api/rooms/room-imported/messages')
+      return jsonResponse({ asOfSeq: 1, items: [], nextCursor: null, jobId: 'job-imported' })
+    return jsonResponse({ asOfSeq: 1, items: [] })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  renderInRoom(<BoldElsewhere session={session} agents={agents} onBroughtIn={vi.fn()} />, ['/b'])
+  fireEvent.click(screen.getByRole('button', { name: 'Preview this chat' }))
+  await screen.findByText('Outline.')
+  const select = await screen.findByRole('combobox', { name: /Starts in/ })
+  expect(screen.getByText(/in the team room with these messages|in Team room with/)).toBeDefined()
+  fireEvent.change(select, { target: { value: 'room-docs' } })
+  expect(screen.getByText(/in Docs team with these messages/)).toBeDefined()
+  const bring = screen.getByRole('button', { name: 'Bring into a job' })
+  await waitFor(() => expect(bring.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(bring)
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url) === '/api/rooms/room-docs/jobs' && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  )
+})

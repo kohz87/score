@@ -1,8 +1,8 @@
 import type { Trigger } from '@score/contract'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { BoldTriggers } from './BoldTriggers.tsx'
+import { renderInRoom } from './room/room-test-utils.tsx'
 
 const SECRET = `whsec_${'A'.repeat(43)}=`
 const ROTATED = `whsec_${'B'.repeat(43)}=`
@@ -18,6 +18,7 @@ const trigger: Trigger = {
   sample: null,
   lastCalledAt: null,
   createdAt: '2026-10-24T10:00:00.000Z',
+  teamRoomId: null,
 }
 
 afterEach(() => {
@@ -25,15 +26,31 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount(items: Trigger[]) {
+function mount(items: Trigger[], teams: { id: string; name: string; archived?: boolean }[] = []) {
   let list = structuredClone(items)
   const calls: { path: string; method: string; body: unknown }[] = []
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), 'http://x')
     const method = init?.method ?? 'GET'
     const body = init?.body ? JSON.parse(String(init.body)) : null
     calls.push({ path: url.pathname, method, body })
+    if (url.pathname === '/api/team-rooms')
+      return Promise.resolve(
+        Response.json({
+          asOfSeq: 1,
+          items: teams.map((team, index) => ({
+            ...team,
+            kind: 'room',
+            leadAgentId: null,
+            members: [],
+            unread: 0,
+            activeAgents: [],
+            channels: [],
+            role: 'team',
+            everyone: index === 0,
+          })),
+        }),
+      )
     if (url.pathname === '/api/triggers' && method === 'GET')
       return Promise.resolve(Response.json({ items: list }))
     if (url.pathname === '/api/triggers/trg_1/secret' && method === 'GET')
@@ -69,11 +86,9 @@ function mount(items: Trigger[]) {
     )
   })
   vi.stubGlobal('fetch', fetch)
-  render(
-    <QueryClientProvider client={client}>
-      <BoldTriggers appSuggestions={['Tickets app']} />
-    </QueryClientProvider>,
-  )
+  const { queryClient: client } = renderInRoom(<BoldTriggers appSuggestions={['Tickets app']} />, [
+    '/b',
+  ])
   return { calls, client, setList: (next: Trigger[]) => (list = next) }
 }
 
@@ -215,4 +230,47 @@ test('a never-called trigger shows when it was created; a risky report-back tool
   const card = (await screen.findByText('New support ticket')).closest('article')!
   expect(card.textContent).toContain('last call never · created ')
   expect(within(card).getByRole('note').textContent).toContain('may change things')
+})
+
+const TWO_TEAMS = [
+  { id: 'room-1', name: 'Team room' },
+  { id: 'room-docs', name: 'Docs team' },
+]
+
+test('with one team room a trigger has no team choice and sends no team', async () => {
+  const { calls } = mount([])
+  fireEvent.click(screen.getByRole('button', { name: 'New trigger' }))
+  const dialog = screen.getByRole('dialog', { name: 'New trigger' })
+  expect(within(dialog).queryByLabelText('Starts jobs in')).toBeNull()
+  fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'T' } })
+  fireEvent.change(within(dialog).getByLabelText('App it comes from'), { target: { value: 'A' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Create the address' }))
+  await within(dialog).findByText(SECRET)
+  const post = calls.find((call) => call.path === '/api/triggers' && call.method === 'POST')
+  expect(post?.body).not.toHaveProperty('teamRoomId')
+})
+
+test('with two team rooms a new trigger can start jobs in the second, and its card says so', async () => {
+  const { calls } = mount([], TWO_TEAMS)
+  fireEvent.click(screen.getByRole('button', { name: 'New trigger' }))
+  const dialog = screen.getByRole('dialog', { name: 'New trigger' })
+  const select = (await within(dialog).findByLabelText('Starts jobs in')) as HTMLSelectElement
+  expect(select.value).toBe('room-1')
+  fireEvent.change(select, { target: { value: 'room-docs' } })
+  fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'T' } })
+  fireEvent.change(within(dialog).getByLabelText('App it comes from'), { target: { value: 'A' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Create the address' }))
+  await within(dialog).findByText(SECRET)
+  const post = calls.find((call) => call.path === '/api/triggers' && call.method === 'POST')
+  expect(post?.body).toMatchObject({ teamRoomId: 'room-docs' })
+})
+
+test('a trigger card names its team only when several exist and it is not the first', async () => {
+  mount([{ ...trigger, teamRoomId: 'room-docs' }], TWO_TEAMS)
+  const card = (await screen.findByText('New support ticket')).closest('article')!
+  await waitFor(() => expect(card.textContent).toContain('Starts jobs in Docs team.'))
+  cleanup()
+  mount([trigger], TWO_TEAMS)
+  const plain = (await screen.findByText('New support ticket')).closest('article')!
+  expect(plain.textContent).not.toContain('Starts jobs in')
 })

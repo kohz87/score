@@ -22,6 +22,14 @@ function blockedBy(sqlite: DatabaseSync, roomId: string, kind: string): RoomDele
       sqlite,
       `SELECT count(*) AS n FROM message_runs WHERE room_id = ? AND state IN ('pending', 'active')`,
       roomId,
+    ) > 0 ||
+    // A question still waiting for (or delivering) your answer belongs to a run that waits on it (3.6.0).
+    count(
+      sqlite,
+      `SELECT count(*) AS n FROM agent_questions
+       WHERE (room_id = ?1 OR job_id IN (SELECT id FROM jobs WHERE room_id = ?1))
+         AND (status = 'pending' OR delivery = 'delivering')`,
+      roomId,
     ) > 0
   )
     return 'room_busy'
@@ -146,11 +154,25 @@ export function deleteRoom(
     'messages',
   ])
     sqlite.prepare(`DELETE FROM ${table} WHERE room_id = ?`).run(roomId)
-  for (const table of ['job_sessions', 'job_reads', 'coding_sessions'])
+  sqlite.prepare('DELETE FROM agent_questions WHERE room_id = ?').run(roomId)
+  for (const table of [
+    'job_sessions',
+    'job_reads',
+    'coding_sessions',
+    'review_comments',
+    'agent_questions',
+    'coding_pending_terminals',
+  ])
     sqlite
       .prepare(`DELETE FROM ${table} WHERE job_id IN (SELECT id FROM jobs WHERE room_id = ?)`)
       .run(roomId)
+  // The calls that started this room's jobs go too: a repeat of one later starts a new job instead of naming a gone one.
+  sqlite
+    .prepare('DELETE FROM trigger_calls WHERE job_id IN (SELECT id FROM jobs WHERE room_id = ?)')
+    .run(roomId)
   sqlite.prepare('DELETE FROM jobs WHERE room_id = ?').run(roomId)
+  // A team's triggers go back to the first team room (3.6.0).
+  sqlite.prepare('UPDATE triggers SET team_room_id = NULL WHERE team_room_id = ?').run(roomId)
   sqlite.prepare('DELETE FROM rooms WHERE id = ?').run(roomId)
   return [{ type: 'room.deleted', data: { id: roomId } }]
 }

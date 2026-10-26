@@ -3,6 +3,19 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.6.0] — 2026-10-26
+
+### Added
+- **Choosing a team** when you have more than one: a trigger can start its jobs in any team (Settings › Tools and
+  triggers, "Starts jobs in"), with that team's lead; "Share to a team" from a one-to-one picks the team and its job;
+  "Add someone" and Elsewhere's "Bring into a job" start the job in the team you choose. With a single team nothing
+  changes on screen.
+
+### Fixed
+- Deleting a room whose jobs had Workbench review notes or trigger calls failed with an error; it works now. A room
+  with a question still waiting for your answer counts as busy and can't be deleted until it is answered.
+- A trigger whose team is archived or deleted starts its jobs in the first team room.
+
 ## [3.5.0] — 2026-10-26
 
 ### Fixed
