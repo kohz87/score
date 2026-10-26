@@ -27,15 +27,73 @@ const StoredSchema = z.object({
   at: z.string(),
 })
 
-const REPORTING = /comment|report|reply|post|note|message|notify|status|respond|send/i
-const CHANGING =
-  /delete|remove|close|create|merge|assign|transition|drop|destroy|archive|write|exec|run|pay|money|transfer|charge|refund|buy|order|deploy|publish|release|update|edit|set|move|rename|approve|reject|invite|grant|revoke|kick|ban/i
+// Whole words of the tool name (snake_case, kebab-case, dotted or camelCase), so `dataset_info` holds no "set".
+const list = (words: string) => new Set(words.split(' '))
+const REPORTING = list(
+  'comment comments report reply post note notes message messages notify notification status respond send review feedback reaction',
+)
+// Words that change things whatever else the name says.
+const CHANGING = list(
+  'delete remove close merge assign transition drop destroy archive write exec execute run pay payment money transfer charge refund buy order deploy publish release edit move rename approve reject invite grant revoke kick ban',
+)
+// Verbs that only make the reporting thing itself when their phrase ends in one (`create_comment`, `add_review`); with
+// anything else (`create_issue`, `update_issue_status`, `create_issue_with_comment`) they may change things. A status is
+// not one of those things: updating it changes state.
+const SOFT = list('create add update set submit leave')
+const MADE_TO_REPORT = list(
+  'comment comments note notes message messages reply replies report reports review reviews feedback reaction reactions',
+)
+const PHRASE_END = list('and then with on in for')
+// Sending verbs: what they send has to be a report, a status, or go to a conversation (`post_status`, `send_message`,
+// `post_to_channel`), not `post_pull_request`, `post_job` or `send_request`.
+const SENDING = list('post send')
+const CONVERSATIONS = list(
+  'channel channels thread threads chat room conversation discussion slack discord telegram teams',
+)
+// Every other word must be one of these places a report goes (3.5.0 review): an allowlist, since no list of risky
+// words is ever complete (`send_funds`, `post_tweet`, `reply_all` warn).
+const PLACES = list(
+  'issue issues pull pulls request requests pr prs ticket tickets thread threads channel channels chat room conversation discussion task card job result results back progress to the a slack github gitlab linear jira discord telegram teams mcp score',
+)
+const ALLOWED = new Set([...REPORTING, ...MADE_TO_REPORT, ...SOFT, ...PHRASE_END, ...PLACES])
 
-/** A warning when a report-back tool's name doesn't look like a reporting tool (any name is still accepted). */
+function words(tool: string): string[] {
+  return tool
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+}
+
+/**
+ * A warning when a report-back tool's name doesn't look like a reporting tool (any name is still accepted). A name check
+ * only: no warning doesn't prove a tool is harmless.
+ */
 export function reportBackWarning(tool: string): string | undefined {
-  return REPORTING.test(tool) && !CHANGING.test(tool)
-    ? undefined
-    : 'This tool may change things, not just report.'
+  const parts = words(tool)
+  if (parts.length === 0 || parts.some((word) => !ALLOWED.has(word)))
+    return 'This tool may change things, not just report.'
+  const reports = parts.some((word) => REPORTING.has(word))
+  // A soft verb is excused only when its own phrase (the words after it, up to and/then/with/on/in/for or the end)
+  // ends in a reporting thing: `create_issue_comment` yes, `post_message_and_create_issue` no.
+  const phraseEnd = (from: number) => {
+    const end = parts.findIndex((word, i) => i > from && PHRASE_END.has(word))
+    return parts.slice(from + 1, end === -1 ? undefined : end).at(-1)
+  }
+  const changes = parts.some((word, i) => {
+    if (CHANGING.has(word)) return true
+    const last = phraseEnd(i)
+    if (SENDING.has(word))
+      return (
+        last !== undefined &&
+        !MADE_TO_REPORT.has(last) &&
+        last !== 'status' &&
+        !CONVERSATIONS.has(last)
+      )
+    if (!SOFT.has(word)) return false
+    return last === undefined || !MADE_TO_REPORT.has(last)
+  })
+  return reports && !changes ? undefined : 'This tool may change things, not just report.'
 }
 
 /** JSON with sorted keys and no spaces: the form the plugin digests a tool call's arguments in. */

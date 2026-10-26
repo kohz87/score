@@ -542,6 +542,50 @@ test('a reporting word does not hide a changing one in the report-back tool name
   const { reportBackWarning } = await import('../../src/domain/triggers/report-back.ts')
   for (const tool of ['send_money', 'post_deploy', 'message_and_transfer', 'reply_then_publish'])
     expect(reportBackWarning(tool), tool).toMatch(/may change things/)
-  for (const tool of ['add_comment', 'post_status', 'notify_channel', 'send_reply'])
+  for (const tool of [
+    'add_comment',
+    'post_status',
+    'notify_channel',
+    'send_reply',
+    'create_comment',
+    'createIssueComment',
+    'github.create_issue_comment',
+    'create_pull_request_review',
+    'submit_review',
+    'add_review',
+    'leave_feedback',
+    'add_reaction',
+  ])
     expect(reportBackWarning(tool), tool).toBeUndefined()
+  // Words outside the reporting vocabulary warn, whatever else the name says (an allowlist).
+  for (const tool of [
+    'dataset_status',
+    'payload_report',
+    'send_funds',
+    'send_crypto',
+    'send_command',
+    'send_email',
+    'post_tweet',
+    'post_webhook',
+    'reply_all',
+    'post_pull_request',
+    'post_job',
+    'send_request',
+  ])
+    expect(reportBackWarning(tool), tool).toMatch(/may change things/)
+  for (const tool of ['send_slack_message', 'post_to_channel', 'reply_in_thread'])
+    expect(reportBackWarning(tool), tool).toBeUndefined()
+  for (const tool of [
+    'create_issue',
+    'update_ticket',
+    'set_owner',
+    'post_message_and_create_issue',
+    'notify_and_set_priority',
+    'reply_and_create_ticket',
+    'update_status',
+    'update_issue_status',
+    'create_issue_with_comment',
+    'update_issue_with_comment',
+  ])
+    expect(reportBackWarning(tool), tool).toMatch(/may change things/)
 })
