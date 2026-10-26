@@ -75,12 +75,22 @@ async function withCodingAgent(page: Page, id: string) {
 }
 
 async function openDialog(page: Page, agent: string) {
-  await page.goto('/chat')
-  await page.getByRole('button', { name: /New orchestration/ }).click()
-  const dialog = page.getByRole('dialog', { name: 'New orchestration' })
-  await dialog.getByRole('textbox', { name: 'Goal' }).fill('Add a changelog page to the site')
-  await dialog.getByRole('combobox', { name: 'Lead' }).selectOption({ label: 'lead' })
-  await dialog.getByRole('checkbox', { name: new RegExp(agent) }).check()
+  await page.goto('/b?start=job')
+  const dialog = page.getByRole('dialog', { name: 'Start a job' })
+  await expect(dialog).toBeVisible()
+  // "lead decides" is the default plan; the lead hands steps only to the agents ticked here.
+  await dialog.getByLabel('What should the team do?').fill('Add a changelog page to the site')
+  // Every teammate starts ticked: leave only the coding agent, as the old dialog started with none.
+  const picker = dialog.getByRole('group', { name: 'Agents allowed' })
+  // The team list can still be filling in: set it until only the coding agent is ticked.
+  await expect(async () => {
+    for (const box of await picker.getByRole('checkbox').all()) {
+      const name = (await box.locator('xpath=ancestor::label').innerText()).trim()
+      if (name === agent) await box.check()
+      else await box.uncheck()
+    }
+    await expect(picker.getByRole('checkbox', { checked: true })).toHaveCount(1)
+  }).toPass({ timeout: 15_000 })
   return dialog
 }
 
@@ -103,11 +113,11 @@ test('a coding agent the computer can’t run as a service is refused in plain w
     })
   })
   const dialog = await openDialog(page, id)
-  await expect(dialog.getByRole('alert')).toContainText(
+  await expect(dialog).toContainText(
     'Coding agents can take steps only where Score runs them as system services',
   )
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
-  await expect(dialog.getByRole('button', { name: 'Start orchestration' })).toBeDisabled()
+  await expect(dialog.getByRole('button', { name: 'Start the job' })).toBeDisabled()
 })
 
 test('the start dialog explains what a coding agent can read and asks for one acknowledgement', async ({
@@ -116,46 +126,50 @@ test('the start dialog explains what a coding agent can read and asks for one ac
   const id = `coder-${Date.now().toString(36)}`
   await pair(page)
   await withCodingAgent(page, id)
+  // The agent changes while the person decides: the next read carries another policy.
+  let current = policy
   await page.route('**/api/orchestrations/preflight*', async (route) => {
     await route.fulfill({
-      json: { ...readyPreflight, workers: [{ ...readyPreflight.workers[0], agentId: id }] },
+      json: {
+        ...readyPreflight,
+        workers: [{ ...readyPreflight.workers[0], agentId: id, policyId: current }],
+      },
     })
   })
   let created: Record<string, unknown> | undefined
   await page.route('**/api/orchestrations', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback()
     created = route.request().postDataJSON() as Record<string, unknown>
+    current = 'd'.repeat(64)
     await route.fulfill({
       status: 409,
       json: { error: { code: 'policy_changed', message: 'changed', details: { agentId: id } } },
     })
   })
   const dialog = await openDialog(page, id)
-  const section = dialog.getByRole('region', { name: 'Coding agents in this run' })
+  const section = dialog.locator('.start-reach')
+  await expect(section).toHaveAttribute('data-protected', 'block')
   await expect(section).toContainText('Reads any file you can read')
-  await expect(section).toContainText(
-    'Whatever a coding agent can read, it can repeat in its answer',
-  )
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
-  const start = dialog.getByRole('button', { name: 'Start orchestration' })
+  const start = dialog.getByRole('button', { name: 'Start the job' })
   await expect(start).toBeDisabled()
   await section
     .getByRole('checkbox', { name: /I understand what these coding agents can read/ })
     .check()
   await expect(start).toBeEnabled()
-  await dialog.getByText('Limits and estimates').click()
-  await dialog.getByLabel('Most coding steps').fill('6')
-  await dialog.evaluate((element) => element.scrollTo(0, 0))
-  await shot(page, 'start-dialog-top')
-  await section.scrollIntoViewIfNeeded()
   await shot(page, 'start-dialog-coding')
   await start.click()
   await expect(dialog.getByText(/A coding agent changed since you looked/)).toBeVisible()
+  // What it can read is read again, and has to be accepted again.
+  await expect(
+    section.getByRole('checkbox', { name: /I understand what these coding agents can read/ }),
+  ).not.toBeChecked({ timeout: 20_000 })
+  await expect(start).toBeDisabled()
   expect(created).toMatchObject({
     allowedAgents: [id],
     codingPolicies: { [id]: policy },
     acknowledgeCodingReach: { policyIds: [policy] },
-    codingSteps: 6,
+    codingSteps: readyPreflight.defaults.codingSteps,
   })
 })
 
@@ -225,7 +239,7 @@ test.describe('a coding step in the live diagram', () => {
     })
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 1280, height: 1100 })
-    await page.goto('/runs/brief-orch-1')
+    await page.goto('/b?run=brief-orch-1')
     // The decision is on the Steps tab (2.5.0); the diagram and the log are their own tabs.
     const card = page.getByRole('region', { name: 'New settings for reviewer' })
     await expect(card).toBeVisible()

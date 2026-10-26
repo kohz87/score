@@ -1,62 +1,63 @@
 import { expect, test } from '@playwright/test'
+import { holdLockPerTest } from './locks.ts'
 import { pair } from './pair.ts'
 
-test('Team › agent › Plugins: toggles per agent, the bridge is locked; Settings › Look: theme sticks', async ({
+// Plugins are Hermes state of one profile (the toggle changes it), so the specs that flip one take the roster lock.
+holdLockPerTest('roster')
+
+test('Team › agent › More › Plugins: toggles per agent, the bridge is locked; Settings › Look: colours stick', async ({
   page,
 }) => {
   await pair(page)
   const open = async (agent: string) => {
-    await page.goto(`/team/${agent}`)
-    await page.getByRole('tab', { name: 'Plugins' }).click()
-    return page.getByRole('tabpanel')
+    await page.goto(`/b/team/${agent}`)
+    const more = page.getByRole('button', {
+      name: 'More: memory, skills, tools, workspace, repeating jobs, delete',
+    })
+    if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click()
+    const card = page.locator('#agent-plugins')
+    await expect(card.getByRole('heading', { name: 'Plugins' })).toBeVisible()
+    return card
   }
   let panel = await open('designer')
-  const bridge = panel.getByRole('switch', { name: 'score-bridge for designer' })
+  const bridge = panel.getByRole('checkbox', { name: /score-bridge/ })
   await expect(bridge).toBeDisabled()
-  await expect(panel.getByText(/can’t be turned off here/)).toBeVisible()
+  await expect(panel.getByText(/Always on: Score needs it to see what it does/)).toBeVisible()
 
-  const notes = panel.getByRole('switch', { name: 'memory-notes for designer' })
-  await expect(notes).toHaveAttribute('aria-checked', 'true')
+  const notes = panel.getByRole('checkbox', { name: /memory-notes/ })
+  await expect(notes).toBeChecked()
   await notes.click()
-  await expect(notes).toHaveAttribute('aria-checked', 'false')
+  await expect(notes).not.toBeChecked()
   // Plugins are per profile, and the change survives a reload (it is Hermes state, not page state).
   panel = await open('designer')
-  await expect(panel.getByRole('switch', { name: 'memory-notes for designer' })).toHaveAttribute(
-    'aria-checked',
-    'false',
-  )
+  await expect(panel.getByRole('checkbox', { name: /memory-notes/ })).not.toBeChecked()
   panel = await open('reviewer')
-  await expect(panel.getByRole('switch', { name: 'memory-notes for reviewer' })).toHaveAttribute(
-    'aria-checked',
-    'true',
-  )
+  await expect(panel.getByRole('checkbox', { name: /memory-notes/ })).toBeChecked()
   panel = await open('designer')
-  await panel.getByRole('switch', { name: 'memory-notes for designer' }).click()
-  await expect(panel.getByRole('switch', { name: 'memory-notes for designer' })).toHaveAttribute(
-    'aria-checked',
-    'true',
-  )
+  await panel.getByRole('checkbox', { name: /memory-notes/ }).click()
+  await expect(panel.getByRole('checkbox', { name: /memory-notes/ })).toBeChecked()
 
-  await page.goto('/settings/look')
-  const region = page.getByRole('region', { name: 'Look' })
+  await page.goto('/b/settings/look')
   const html = page.locator('html')
-  const groundOf = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor)
-  const theme = region.getByRole('radiogroup', { name: 'Theme' })
-  await theme.getByRole('radio', { name: 'Dark' }).click()
+  const shell = page.locator('[data-ui="bold"]')
+  const dark = 'rgb(18, 19, 26)'
+  const light = 'rgb(236, 238, 242)'
+  const mode = page.getByRole('radiogroup', { name: 'Mode on this device' })
+  await mode.getByRole('radio', { name: /^Dark/ }).click()
   await expect(html).toHaveAttribute('data-theme', 'dark')
-  expect(await groundOf()).toBe('rgb(15, 17, 22)')
-  await page.goto('/settings/look')
+  await expect(shell).toHaveCSS('background-color', dark)
+  await page.goto('/b/settings/look')
   await expect(html).toHaveAttribute('data-theme', 'dark')
-  await expect(theme.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true')
+  await expect(mode.getByRole('radio', { name: /^Dark/ })).toHaveAttribute('aria-checked', 'true')
 
-  // System follows the OS preference.
-  await theme.getByRole('radio', { name: 'System' }).click()
+  // Match this device follows the OS preference.
+  await mode.getByRole('radio', { name: /^Match this device/ }).click()
   await expect(html).not.toHaveAttribute('data-theme')
   await page.emulateMedia({ colorScheme: 'dark' })
-  expect(await groundOf()).toBe('rgb(15, 17, 22)')
+  await expect(shell).toHaveCSS('background-color', dark)
   await page.emulateMedia({ colorScheme: 'light' })
-  expect(await groundOf()).toBe('rgb(236, 238, 242)')
-  await theme.getByRole('radio', { name: 'Light' }).click()
+  await expect(shell).toHaveCSS('background-color', light)
+  await mode.getByRole('radio', { name: /^Light/ }).click()
   await page.emulateMedia({ colorScheme: 'dark' })
-  expect(await groundOf()).toBe('rgb(236, 238, 242)')
+  await expect(shell).toHaveCSS('background-color', light)
 })

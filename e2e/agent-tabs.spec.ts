@@ -10,10 +10,9 @@ type Detail = {
   tools: Tool[]
 }
 
-// Edits need a paired browser and the single-use pairing link belongs to chat-composer.spec.ts, so the
-// writes are answered here. Reads come from the fake server and seed the state, so this exercises the real
+// Edits need a paired browser, so the writes are answered here. Reads come from the fake server and seed the state, so this exercises the real
 // response shapes; the server side of every write (fake and stubbed live adapters) is in the server tests.
-test('Model, Skills, Memory and Tools tabs read and edit', async ({ page }) => {
+test('Model, Skills, Memory and Tools cards read and edit', async ({ page }) => {
   const state: Partial<Detail> = {}
   const sent: string[] = []
   const seed = async (route: Route) => {
@@ -89,57 +88,55 @@ test('Model, Skills, Memory and Tools tabs read and edit', async ({ page }) => {
     await route.fulfill({ json: state.tools.find((tool) => tool.id === id) })
   })
 
-  await page.goto('/team/reviewer')
+  await page.goto('/b/team/reviewer')
   await expect(page.getByRole('heading', { name: 'reviewer', level: 1 })).toBeVisible()
 
-  // Model
-  await page.getByRole('tab', { name: 'Model' }).click()
-  const modelForm = page.getByRole('form', { name: 'Change model' })
+  // Model: the "Runs on" card
+  const runsOn = page.locator('#agent-model')
+  const modelForm = runsOn.getByRole('form', { name: 'Change model' })
   await modelForm.getByLabel('Model', { exact: true }).fill('demo/next-model')
   await modelForm.getByRole('button', { name: 'Change model' }).click()
-  await expect(page.getByText('Saved: demo/next-model')).toBeVisible()
+  await expect(runsOn.getByText('Saved: demo/next-model')).toBeVisible()
 
-  // Skills: toggle one, then find and install one from the (fake) hub
-  await page.getByRole('tab', { name: 'Skills' }).click()
-  const review = page.getByRole('switch', { name: 'code-review enabled for reviewer' })
-  await expect(review).toHaveAttribute('aria-checked', 'true')
-  await review.click()
-  await expect(review).toHaveAttribute('aria-checked', 'false')
-  await page.getByRole('searchbox', { name: 'Search skills' }).fill('changelog')
-  await page.getByRole('button', { name: 'Search', exact: true }).click()
-  await page.getByRole('button', { name: 'Install changelog-writer' }).click()
-  await expect(page.getByText('Installed changelog-writer for reviewer.')).toBeVisible()
-  await expect(
-    page.getByRole('switch', { name: 'changelog-writer enabled for reviewer' }),
-  ).toBeVisible()
+  await page
+    .getByRole('button', { name: 'More: memory, skills, tools, workspace, repeating jobs, delete' })
+    .click()
 
-  // Memory: add, search, delete with a confirmation
-  await page.getByRole('tab', { name: 'Memory' }).click()
-  await expect(page.getByText('Releases go out on Fridays.')).toBeVisible()
-  await page.getByLabel('New memory').fill('The demo is on Monday.')
-  await page.getByRole('button', { name: 'Add memory' }).click()
-  await expect(page.getByText('Memory added.')).toBeVisible()
-  await expect(page.getByText('The demo is on Monday.')).toBeVisible()
-  await page.getByRole('searchbox', { name: 'Search memory' }).fill('monday')
-  await page.getByRole('button', { name: 'Search', exact: true }).click()
-  await expect(page.getByText('Releases go out on Fridays.')).toHaveCount(0)
-  await page.getByRole('button', { name: /^Delete memory: The demo is on Monday/ }).click()
-  await page.getByRole('button', { name: /^Confirm deleting memory: The demo/ }).click()
-  await expect(page.getByText('Memory deleted.')).toBeVisible()
-  await expect(page.getByText('No memories match.')).toBeVisible()
+  // Skills: turn one off, then find and add one from the (fake) hub
+  const skills = page.locator('#agent-skills')
+  const review = skills.locator('.chip').filter({ hasText: 'code-review' })
+  await expect(review).not.toHaveClass(/bold-mc-off/)
+  await review.getByRole('button', { name: 'Turn off code-review' }).click()
+  await expect(review).toHaveClass(/bold-mc-off/)
+  await expect(review.getByRole('button', { name: 'Turn on code-review' })).toBeVisible()
+  await skills.getByLabel('Find a skill').fill('changelog')
+  await skills.getByRole('button', { name: 'Search', exact: true }).click()
+  await skills.getByRole('button', { name: 'Add changelog-writer' }).click()
+  await expect(skills.getByRole('button', { name: 'Installed changelog-writer' })).toBeDisabled()
+  await expect(skills.getByRole('button', { name: 'Turn off changelog-writer' })).toBeVisible()
 
-  // Tools: toggle a built-in; the MCP server is read-only
-  await page.getByRole('tab', { name: 'Tools' }).click()
-  const browser = page.getByRole('switch', { name: 'Browser Automation enabled for reviewer' })
-  await expect(browser).toHaveAttribute('aria-checked', 'false')
+  // Memory: add, then forget
+  const memory = page.locator('#agent-memory')
+  await expect(memory.getByText('Releases go out on Fridays.')).toBeVisible()
+  await memory.getByLabel('New memory').fill('The demo is on Monday.')
+  await memory.getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(memory.getByText('The demo is on Monday.')).toBeVisible()
+  await memory.getByRole('button', { name: /^Forget: The demo is on Monday/ }).click()
+  await expect(memory.getByText('The demo is on Monday.')).toHaveCount(0)
+  await expect(memory.getByText('Releases go out on Fridays.')).toBeVisible()
+
+  // Tools: toggle a built-in; the tool servers are read-only here and managed in Settings
+  const tools = page.locator('#agent-tools')
+  const browser = tools.getByRole('checkbox', { name: 'Browser Automation' })
+  await expect(browser).not.toBeChecked()
   await browser.click()
-  await expect(browser).toHaveAttribute('aria-checked', 'true')
-  await expect(page.getByText(/managed in Hermes/)).toBeVisible()
+  await expect(browser).toBeChecked()
+  await expect(tools.getByText(/Tool servers:/)).toBeVisible()
+  await expect(tools.getByRole('link', { name: 'Manage' })).toHaveAttribute(
+    'href',
+    '/b/settings/tools',
+  )
 
-  // The Overview shows the same state from the agent detail.
-  await page.getByRole('tab', { name: 'Overview' }).click()
-  await expect(page.getByText('code-review · Disabled')).toBeVisible()
-  await expect(page.getByText('changelog-writer')).toBeVisible()
   expect(sent).toEqual([
     'model demo/next-model undefined',
     'skill code-review false',

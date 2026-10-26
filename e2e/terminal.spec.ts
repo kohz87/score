@@ -85,7 +85,7 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
     await page.getByRole('button', { name: 'Pair this browser' }).click()
     await expect(page.getByText('This browser is paired')).toBeVisible()
 
-    await page.goto(`${origin}/terminal`)
+    await page.goto(`${origin}/b/terminal`)
     await expect(page.getByText(/This is a shell on the Score machine/)).toBeVisible()
     // A wrong password opens nothing.
     await page.getByLabel('Security password').fill('not the password')
@@ -160,8 +160,7 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
 
     // Settings lists the open terminal; Close ends it.
     const settings = await page.context().newPage()
-    await settings.goto(`${origin}/settings/terminal`)
-    await expect(settings.getByRole('heading', { name: 'Terminal' })).toBeVisible()
+    await settings.goto(`${origin}/b/settings/security`)
     await settings
       .getByRole('list', { name: 'Open terminals' })
       .getByRole('button', { name: 'Close' })

@@ -10,7 +10,7 @@ const helperName = (info: { repeatEachIndex: number; retry: number }) =>
     ? `picker-helper-${info.repeatEachIndex}-${info.retry}`
     : 'picker-helper'
 
-// Other specs count the team's agents (team.spec.ts, reports.spec.ts): whatever happened above, the helper must go.
+// Other specs count the team's agents (team.spec.ts, bold-team.spec.ts): whatever happened above, the helper must go.
 async function removeHelper(page: Page, id: string) {
   const live = async () => {
     const response = await page.request.get('/api/agents')
@@ -61,16 +61,15 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 })
 
-test('pick a model from the connected providers in Add agent and on the Model tab', async ({
+test('pick a model from the connected providers in Add an agent and on the agent page', async ({
   page,
 }, testInfo) => {
   const helper = helperName(testInfo)
   await pair(page)
-  await page.goto('/team')
-  await page.getByRole('button', { name: 'Add agent', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'Add agent' })
-  await dialog.getByLabel('Agent name').fill(helper)
-  await dialog.getByLabel('Role or description').fill('Checks the model picker')
+  await page.goto('/b/team?add=agent')
+  const dialog = page.getByRole('dialog', { name: 'Add an agent' })
+  await dialog.getByLabel('Name').fill(helper)
+  await dialog.getByLabel('What does it do?').fill('Checks the model picker')
   const picker = dialog.getByRole('combobox', { name: 'Model' })
   await picker.fill('gpt')
   const list = dialog.getByRole('listbox', { name: 'Model suggestions' })
@@ -86,16 +85,18 @@ test('pick a model from the connected providers in Add agent and on the Model ta
   await expect(picker).toHaveValue('gpt-6.1-sol')
   await dialog.getByRole('button', { name: 'Preview changes' }).click()
   await expect(dialog.getByText('Set the model to gpt-6.1-sol via ChatGPT (Codex).')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Create agent' }).click()
-  await expect(dialog.getByRole('heading', { name: / joined the team$/ })).toBeVisible()
+  await dialog.getByRole('button', { name: `Add ${helper}` }).click()
+  await expect(dialog.getByRole('heading', { name: / joined the team$/ })).toBeVisible({
+    timeout: 20_000,
+  })
   await dialog.getByRole('link', { name: /^Open / }).click()
 
-  await page.getByRole('tab', { name: 'Model' }).click()
-  const panel = page.getByRole('tabpanel')
+  // The agent's page carries the model picker in its "Runs on" card.
+  const panel = page.locator('#agent-model')
   await expect(panel.getByText('Through openai-codex.')).toBeVisible()
   const tabPicker = panel.getByRole('combobox', { name: 'Model', exact: true })
   await tabPicker.fill('solar')
-  // Only this picker's own list: the tab also has speech settings whose dropdowns have options too.
+  // Only this picker's own list: the card also has speech settings whose dropdowns have options too.
   const tabList = page.locator(`[id="${await tabPicker.getAttribute('aria-controls')}"]`)
   await expect(tabList.getByRole('option', { name: /upstage/ })).toBeVisible()
   await expect(tabList.getByRole('option')).toHaveCount(1)
@@ -106,9 +107,10 @@ test('pick a model from the connected providers in Add agent and on the Model ta
   await expect(panel.getByText('Saved: upstage/solar-mini4:free')).toBeVisible()
   await expect(panel.getByText('Through nous.')).toBeVisible()
 
-  await page.getByRole('tab', { name: 'Overview' }).click()
-  await page.getByRole('button', { name: 'Delete agent', exact: true }).click()
-  await page.getByLabel(`Type ${helper} to confirm`).fill(helper)
-  await page.getByRole('button', { name: 'Confirm deletion' }).click()
-  await expect(page.getByRole('heading', { name: 'Agent removed' })).toBeVisible()
+  // Remove it again behind its typed name (afterEach also removes it if anything above failed).
+  await page.getByRole('button', { name: 'Remove agent…' }).click()
+  const removal = page.getByRole('group', { name: `Remove ${helper}` })
+  await removal.getByLabel(`Type ${helper} to confirm`).fill(helper)
+  await removal.getByRole('button', { name: 'Remove', exact: true }).click()
+  await expect(page).toHaveURL(/\/b\/team$/, { timeout: 30_000 })
 })

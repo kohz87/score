@@ -1,12 +1,19 @@
 import { expect, test } from '@playwright/test'
+import { pair } from './pair.ts'
 
-// Saving needs a paired browser and the single-use pairing link belongs to chat-composer.spec.ts, so the
-// writes are answered here. Reads come from the fake server (real response shapes); the server side of every
+// The browser is paired (the shared session), and the writes are answered here so the shared fake server keeps its rules. Reads come from the fake server (real response shapes); the server side of every
 // write, including the stricter-only rule, is covered by the server tests.
 test('Settings rules: staged edit with a reviewed diff, then a stricter-only agent permission', async ({
   page,
 }) => {
   const sent: { url: string; body: unknown }[] = []
+  // Whether other agents differ from the team rules depends on what parallel specs did to the shared server: answer
+  // the read with no drift, so "Every agent follows the team rules." is what this page must say.
+  await page.route('**/api/settings/rules', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const response = await route.fetch()
+    await route.fulfill({ response, json: { ...((await response.json()) as object), drift: [] } })
+  })
   await page.route('**/api/settings/rules?dryRun=1', async (route) => {
     sent.push({ url: route.request().url(), body: route.request().postDataJSON() })
     await route.fulfill({ json: { preview: '+mode: manual\n+never: rm -rf /tmp/*' } })
@@ -20,8 +27,9 @@ test('Settings rules: staged edit with a reviewed diff, then a stricter-only age
     })
   })
 
-  await page.goto('/settings/rules')
-  const rules = page.getByRole('region', { name: 'Rules and approvals' })
+  await pair(page)
+  await page.goto('/b/settings/rules')
+  const rules = page.getByRole('region', { name: 'Rules', exact: true })
   await expect(rules.getByRole('group', { name: 'Go ahead' })).toBeVisible()
   await expect(rules.getByRole('group', { name: 'Ask me', exact: true })).toContainText(
     'kinds of risky commands',
@@ -77,13 +85,15 @@ test('Settings rules: staged edit with a reviewed diff, then a stricter-only age
       },
     })
   })
-  await page.goto('/team/builder')
-  await page.getByRole('tab', { name: 'Permissions' }).click()
-  const panel = page.getByRole('tabpanel')
-  await expect(panel.getByText(/never looser/)).toBeVisible()
-  await expect(panel.getByRole('button', { name: /remove/i })).toHaveCount(0)
+  await page.goto('/b/team/builder')
+  await page
+    .getByRole('button', { name: 'More: memory, skills, tools, workspace, repeating jobs, delete' })
+    .click()
+  const panel = page.locator('#agent-permissions')
+  await expect(panel.getByText(/looser isn’t/)).toBeVisible()
+  await expect(panel.getByRole('button', { name: /^remove/i })).toHaveCount(0)
   await panel.getByLabel(/Never allow commands that match/).fill('git push*')
-  await panel.getByRole('button', { name: 'Add Never rule' }).click()
+  await panel.getByRole('button', { name: 'Add', exact: true }).click()
   await expect
     .poll(() => decodeURIComponent(sent.at(-1)!.url))
     .toContain('permissions/never:git push*')

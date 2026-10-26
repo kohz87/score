@@ -19,8 +19,8 @@ test('About shows the version and checks for updates only when asked', async ({ 
   page.on('request', (request) => {
     if (request.url().includes('update-check')) checks.push(request.method())
   })
-  await page.goto('/settings/about')
-  const about = page.getByRole('region', { name: 'About Score' })
+  await page.goto('/b/settings/system')
+  const about = page.getByRole('region', { name: 'Score', exact: true })
   await expect(about.getByText(/^Score v\d+\.\d+\.\d+$/)).toBeVisible()
   await expect(about.getByText('Demo (fake data)')).toBeVisible()
   await about.scrollIntoViewIfNeeded()
@@ -51,8 +51,8 @@ test('an available update shows the steps', async ({ page }) => {
       },
     }),
   )
-  await page.goto('/settings/about')
-  const about = page.getByRole('region', { name: 'About Score' })
+  await page.goto('/b/settings/system')
+  const about = page.getByRole('region', { name: 'Score', exact: true })
   await about.getByRole('button', { name: 'Check for updates' }).click()
   const steps = about.getByRole('group', { name: 'Steps to update' })
   await expect(steps).toContainText('git pull --ff-only')

@@ -11,10 +11,10 @@ const keyOf = (ref: ModelRef) => `${ref.provider}\0${ref.model}`
 /** Settings › Models and keys: which models the pickers list by default, and the aliases of one agent. */
 export function ModelListSection({ agents }: { agents: AgentSummary[] }) {
   return (
-    <section className="settings-card" aria-labelledby="settings-model-list">
+    <section className="card" aria-labelledby="settings-model-list">
       <div>
         <h2 id="settings-model-list">Models in pickers</h2>
-        <p className="settings-muted-strong">
+        <p className="small muted">
           Hermes knows hundreds of models. Choose the ones the model pickers should list; the rest
           stay one click away under &ldquo;Show all&rdquo;.
         </p>

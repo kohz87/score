@@ -7,8 +7,8 @@ import { expect, test } from '@playwright/test'
 test('edit SOUL.md: preview the diff, hit a conflict, see the diff and overwrite', async ({
   page,
 }) => {
-  await page.goto('/team/builder')
-  await page.getByRole('button', { name: 'Edit personality' }).click()
+  await page.goto('/b/team/builder')
+  // The personality file is the editor the page opens with ("How builder works").
   const box = page.getByRole('textbox', { name: 'SOUL.md contents' })
   await expect(box).toHaveValue(/I am builder/)
   const original = await box.inputValue()
@@ -56,9 +56,9 @@ test('edit SOUL.md: preview the diff, hit a conflict, see the diff and overwrite
   expect(bodies[1]!.content).toBe(original + 'Always run the tests.\n')
 })
 
-test('the rules file is reachable from the overview', async ({ page }) => {
-  await page.goto('/team/lead')
-  await page.getByRole('button', { name: 'Edit rules' }).click()
+test('the rules file is reachable from the agent page', async ({ page }) => {
+  await page.goto('/b/team/lead')
+  await page.getByRole('button', { name: 'Operating rules · AGENTS.md' }).click()
   await expect(page.getByRole('textbox', { name: 'AGENTS.md contents' })).toHaveValue(
     /Keep changes small/,
   )

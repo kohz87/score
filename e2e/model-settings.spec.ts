@@ -6,9 +6,8 @@ import { pair } from './pair.ts'
 // Settings. Everything is undone at the end so other specs see the demo as it was.
 test('fallback chain, aliases, speech models and the chosen-models list', async ({ page }) => {
   await pair(page)
-  await page.goto('/team/designer')
-  await page.getByRole('tab', { name: 'Model' }).click()
-  const panel = page.getByRole('tabpanel')
+  await page.goto('/b/team/designer')
+  const panel = page.locator('#agent-model')
 
   const chain = panel.getByRole('group', { name: 'Fallback models' })
   await expect(chain.getByText('No fallback configured.')).toBeVisible()
@@ -38,23 +37,21 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
   await speech.getByLabel('Voice').fill('nova')
   await speech.getByRole('button', { name: 'Save speech models' }).click()
   await page.reload()
-  await page.getByRole('tab', { name: 'Model' }).click()
-  await expect(page.getByLabel('Voice')).toHaveValue('nova')
+  await expect(page.locator('#agent-model').getByLabel('Voice')).toHaveValue('nova')
 
   // The list is server-wide: hold the lock from narrowing to clearing so no picker-reading spec sees it narrowed.
   await withLock('model-lists', async () => {
     try {
-      // Settings: choose one model; the pickers list only it until Show all.
-      await page.goto('/settings')
+      // Settings › Connections › Models in pickers: choose one model; the pickers list only it until Show all.
+      await page.goto('/b/settings/connections')
       const chosen = page.getByRole('group', { name: 'Chosen models' })
       await chosen.getByLabel('Search models').fill('local-gpt-mini')
       await chosen.getByRole('checkbox', { name: /local-gpt-mini/ }).check()
       await chosen.getByRole('button', { name: 'Save chosen models' }).click()
       await expect(chosen.getByText('1 chosen. Pickers list only these.')).toBeVisible()
-      await page.goto('/team/designer')
-      await page.getByRole('tab', { name: 'Model' }).click()
+      await page.goto('/b/team/designer')
       const picker = page
-        .getByRole('tabpanel')
+        .locator('#agent-model')
         .getByRole('combobox', { name: 'Model', exact: true })
       await picker.fill('')
       await picker.focus()
@@ -64,7 +61,7 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
       await expect(list.getByRole('option').nth(1)).toBeVisible()
 
       // Undo.
-      await page.goto('/settings')
+      await page.goto('/b/settings/connections')
       await page
         .getByRole('group', { name: 'Chosen models' })
         .getByRole('button', { name: 'Clear (show all)' })
@@ -79,9 +76,8 @@ test('fallback chain, aliases, speech models and the chosen-models list', async 
       })
     }
   })
-  await page.goto('/team/designer')
-  await page.getByRole('tab', { name: 'Model' }).click()
-  const undo = page.getByRole('tabpanel')
+  await page.goto('/b/team/designer')
+  const undo = page.locator('#agent-model')
   await undo.getByRole('button', { name: 'Remove alias quick' }).click()
   await expect(undo.getByText('No aliases yet.')).toBeVisible()
   await undo.getByRole('button', { name: 'Remove upstage/solar-mini4:free' }).click()

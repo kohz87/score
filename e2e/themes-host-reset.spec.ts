@@ -12,7 +12,7 @@ test('a device override and boot cache from before a host reset are dropped on t
   const look: Look = { active: 'score', mode: 'light', resetGeneration: 0 }
   await mockThemes(page, [tidyTheme], look)
   await pair(page)
-  await page.goto('/chat')
+  await page.goto('/b')
   // The owner picked Tidy for this browser (its own choice, kept in localStorage).
   await page.evaluate(() => localStorage.setItem('score.look.device', 'tidy'))
   await page.reload()

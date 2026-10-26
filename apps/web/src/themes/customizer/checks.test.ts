@@ -90,13 +90,3 @@ describe('worstRatio', () => {
     expect(worstRatio(black, [glass], [black])).toBeGreaterThan(8)
   })
 })
-
-describe('classic-view colour checks (still emitted by the engine)', () => {
-  it('warns about a faint classic pair and says so', () => {
-    const d = setColor(blank(), 'light', 'chat-text', '#f0f0f0')
-    const set = setColor(d, 'light', 'chat-soft', '#ffffff')
-    const findings = colourFindings(set.manifest, (t, m) => score[m]![t] ?? '#000000')
-    const hit = findings.find((f) => f.id === 'pair:light:chat-text:chat-soft')
-    expect(hit?.text).toContain('(classic view)')
-  })
-})

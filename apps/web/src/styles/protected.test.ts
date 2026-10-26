@@ -331,7 +331,6 @@ const consentForms: Record<string, { decisions: number; markers: string[] }> = {
       'start-more',
     ],
   },
-  'routes/team/McpAccessSection.tsx': { decisions: 1, markers: ['team-mcp-access'] },
   'routes/settings/RemoteSection.tsx': { decisions: 1, markers: ['settings-remote'] },
   'routes/pair/PairPage.tsx': { decisions: 1, markers: ['pair-card'] },
   'routes/team/CodingAgent.tsx': { decisions: 1, markers: ['coding-acknowledge'] },

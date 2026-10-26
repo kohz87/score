@@ -10,30 +10,26 @@ type Routine = {
 }
 
 // Mutations need a paired browser, so the routines endpoints are stood in for here; the server side
-// (fake and stubbed live adapters, argv, idempotency) is covered by the server tests.
-test('create, pause, run now and delete a routine from the Team page', async ({ page }) => {
-  let items: Routine[] = []
+// (fake and stubbed live adapters, argv, idempotency) is covered by the server tests. Creating one is the Start a job
+// flow now (bold-start-job.spec.ts: "a schedule creates a routine"), so the list starts with one routine.
+test('pause, run now and delete a routine from the agent page', async ({ page }) => {
+  let items: Routine[] = [
+    {
+      id: 'builder:fake-routine-1',
+      title: 'Build check',
+      schedule: 'every 2h',
+      description: 'Check the build and report failures.',
+      lastRunAt: null,
+      enabled: true,
+    },
+  ]
   const sent: string[] = []
   await page.route('**/api/agents/builder/routines', async (route) => {
-    const request = route.request()
-    if (request.method() === 'POST') {
-      const body = request.postDataJSON() as { title: string; schedule: string; prompt: string }
-      expect(request.headers()['idempotency-key']).toBeTruthy()
-      sent.push(`create ${body.title}`)
-      const created: Routine = {
-        id: 'builder:fake-routine-1',
-        title: body.title,
-        schedule: body.schedule,
-        description: body.prompt,
-        lastRunAt: null,
-        enabled: true,
-      }
-      items = [...items, created]
-      await route.fulfill({ json: created })
-    } else await route.fulfill({ json: { items } })
+    await route.fulfill({ json: { items } })
   })
   await page.route('**/api/routines/**', async (route) => {
     const request = route.request()
+    expect(request.headers()['idempotency-key']).toBeTruthy()
     if (request.method() === 'PATCH') {
       const { enabled } = request.postDataJSON() as { enabled: boolean }
       sent.push(enabled ? 'resume' : 'pause')
@@ -50,18 +46,12 @@ test('create, pause, run now and delete a routine from the Team page', async ({ 
     }
   })
 
-  await page.goto('/team/builder')
+  await page.goto('/b/team/builder#agent-routines')
   await expect(page.getByRole('heading', { name: 'builder', level: 1 })).toBeVisible()
-  // The Overview link opens the create form on the Routines tab.
-  await page.getByRole('button', { name: 'New routine' }).click()
-  await expect(page.getByRole('tab', { name: 'Routines' })).toHaveAttribute('aria-selected', 'true')
-  const form = page.getByRole('form', { name: 'New routine' })
-  await form.getByLabel('Title').fill('Build check')
-  await form.getByLabel('Schedule').fill('every 2h')
-  await form.getByLabel('Prompt').fill('Check the build and report failures.')
-  await form.getByRole('button', { name: 'Create routine' }).click()
-
-  const row = page.getByRole('listitem').filter({ hasText: 'Build check' })
+  // The hash opens More at the repeating jobs card.
+  const card = page.locator('#agent-routines')
+  await expect(card.getByRole('link', { name: 'Start a repeating job' })).toBeVisible()
+  const row = card.locator('.listrow').filter({ hasText: 'Build check' })
   await expect(row).toBeVisible()
   await expect(row).toContainText('every 2h')
   await row.getByRole('button', { name: 'Pause Build check' }).click()
@@ -69,11 +59,23 @@ test('create, pause, run now and delete a routine from the Team page', async ({ 
   await row.getByRole('button', { name: 'Resume Build check' }).click()
   await expect(row.getByRole('button', { name: 'Pause Build check' })).toBeVisible()
   await row.getByRole('button', { name: 'Run Build check now' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'will run shortly' })).toBeVisible()
+  await expect(card.getByRole('status').filter({ hasText: 'will run shortly' })).toBeVisible()
+  // Deleting asks first (a protected decision), and cancelling changes nothing.
   await row.getByRole('button', { name: 'Delete Build check' }).click()
-  await row.getByRole('button', { name: 'Confirm deleting Build check' }).click()
-  await expect(page.getByText('No routines configured.')).toBeVisible()
-  expect(sent).toEqual(['create Build check', 'pause', 'resume', 'run', 'delete'])
+  const confirm = card.getByRole('group', { name: 'Remove Build check' })
+  await expect(confirm).toHaveAttribute('data-protected', 'block')
+  await confirm.getByRole('button', { name: 'Cancel' }).click()
+  await expect(confirm).toHaveCount(0)
+  expect(sent).toEqual(['pause', 'resume', 'run'])
+  await row.getByRole('button', { name: 'Delete Build check' }).click()
+  await card
+    .getByRole('group', { name: 'Remove Build check' })
+    .getByRole('button', { name: 'Remove' })
+    .click()
+  await expect(card.getByText('None yet.')).toBeVisible()
+  expect(sent).toEqual(['pause', 'resume', 'run', 'delete'])
+  // A refetch can still be inside a route handler; without this the worker errors and skips the next test.
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 test('the fake server lists routines for an agent and rejects unpaired writes', async ({

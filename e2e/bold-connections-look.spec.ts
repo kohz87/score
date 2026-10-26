@@ -437,15 +437,6 @@ test.describe('bold Connections, Tools and Look', () => {
         fullPage: true,
       })
 
-      // Turning off New look returns this device to classic Settings and stays off after a reload.
-      await openBoldSettings(page, 'look')
-      await page.getByRole('switch', { name: 'Use the new look on this device' }).click()
-      await expect(page).toHaveURL('/settings/look')
-      await expect(page.locator('[data-ui="bold"]')).toHaveCount(0)
-      await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
-      expect(await page.evaluate(() => localStorage.getItem('score.ui'))).toBe('classic')
-      await page.reload()
-      await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
       expect(currency()).toEqual({ code: 'EUR', rate: 0.92 })
     })
   }

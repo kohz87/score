@@ -5,7 +5,7 @@ test('advanced settings: search by name and comment, preview the diff, apply, an
   page,
 }) => {
   await pair(page)
-  await page.goto('/settings/advanced')
+  await page.goto('/b/settings/advanced')
   const advanced = page.getByRole('region', { name: 'Advanced' })
   const search = advanced.getByRole('searchbox', { name: 'Search settings' })
 

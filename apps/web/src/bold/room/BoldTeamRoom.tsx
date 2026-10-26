@@ -34,6 +34,7 @@ import {
   jobLifecycleError,
 } from './RoomMenus.tsx'
 import { PhoneJobList } from './PhoneJobList.tsx'
+import { useFollowEnd } from './follow-end.ts'
 import { beginJobUndo } from './job-undo.ts'
 import { jobMatchesFilter, type JobFilter } from './room-model.ts'
 import { changeCachedJob, roomJobsQuery, roomMessagesQuery, teamRoomQuery } from './room-queries.ts'
@@ -170,6 +171,7 @@ function LoadedTeamRoom({
   const seek = params.get('message')
   const command = params.get('command')
   const stream = useStream()
+  const streamRef = useFollowEnd(`${room.id}:${selectedJob}`, seek !== null)
 
   // The message page the composer writes into: the selected job, or the room's default job from All. Its query key
   // does not depend on the room's job list, so a new job never refetches it or drops an optimistic message.
@@ -554,7 +556,7 @@ function LoadedTeamRoom({
           Opening the room…
         </p>
       ) : (
-        <div className="stream" id="bold-room-stream">
+        <div className="stream" id="bold-room-stream" ref={streamRef}>
           {job && <StartedBy job={job} />}
           {/* On a phone the capsule (and its Take it aside) sits in the open job's chat, as the prototype shows it. */}
           {(!phone || phoneJob) && (

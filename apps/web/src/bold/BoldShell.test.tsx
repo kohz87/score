@@ -52,6 +52,13 @@ const agents: AgentSummary[] = [
   },
 ]
 
+vi.mock('../notifications/NotificationBridge.tsx', () => ({
+  NotificationBridge: () => <span data-testid="notification-bridge" />,
+}))
+vi.mock('../pwa/UpdateBanner.tsx', () => ({
+  UpdateBanner: () => <span data-testid="update-banner" />,
+}))
+
 class Source extends EventTarget {
   close() {}
 }
@@ -571,14 +578,6 @@ test('Team and Settings are real pages, and the search button and Ctrl+K open th
   expect(await screen.findByRole('dialog', { name: 'Search and commands' })).toBeDefined()
 })
 
-test('Settings offers the way back to the classic view', async () => {
-  const router = open('/b/settings')
-  expect(await screen.findByRole('heading', { name: 'Settings' })).toBeDefined()
-  fireEvent.click(screen.getByRole('button', { name: 'Use the classic view' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/chat'))
-  expect(window.localStorage.getItem('score.ui')).toBe('classic')
-})
-
 test('Look choices apply to the whole bold shell', async () => {
   window.localStorage.setItem('score.theme', 'light')
   window.localStorage.setItem('score.textScale', '1.15')
@@ -607,17 +606,9 @@ test.each(['ctrlKey', 'metaKey'])(
   },
 )
 
-test('the index follows the per-device choice and ?ui= sets it', async () => {
-  const bold = open('/?ui=bold')
+test('the index opens the new shell', async () => {
+  const bold = open('/')
   await waitFor(() => expect(bold.state.location.pathname).toBe('/b'))
-  expect(window.localStorage.getItem('score.ui')).toBeNull()
-})
-
-test('the index opens the bold shell even after choosing classic', async () => {
-  window.localStorage.setItem('score.ui', 'classic')
-  const classic = open('/?ui=classic')
-  await waitFor(() => expect(classic.state.location.pathname).toBe('/b'))
-  expect(window.localStorage.getItem('score.ui')).toBe('classic')
 })
 
 test('the Terminal button shows only when the server offers a terminal, and Back returns', async () => {
@@ -654,4 +645,10 @@ test('Ctrl+` opens the terminal and returns, but not while typing', async () => 
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/terminal'))
   fireEvent.keyDown(document.body, { key: '`', metaKey: true })
   await waitFor(() => expect(router.state.location.pathname).toBe('/b/team'))
+})
+
+test('the shell mounts the notification bridge and the update banner', async () => {
+  open('/b')
+  expect(await screen.findByTestId('notification-bridge')).toBeDefined()
+  expect(screen.getByTestId('update-banner')).toBeDefined()
 })

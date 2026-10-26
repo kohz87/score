@@ -1,74 +1,8 @@
 /* Watch: docs/design/html/watch.html */
-.watch-page {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  --watch-ink: color-mix(in srgb, var(--agent-jade) 20%, #000);
-}
-.watch-state {
-  margin: 0;
-  color: var(--ink-muted);
-}
 .watch-state--command code {
   color: var(--ink);
   font-size: 13px;
   user-select: all;
-}
-.watch-hero {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 18px;
-  padding: 6px var(--space-1) 0;
-}
-.watch-hero__who {
-  flex: 1 1 520px;
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
-}
-.watch-hero__who .agent-glyph {
-  --glyph-tile-size: 64px;
-  --glyph-radius: 20px;
-  --glyph-svg-size: 36px;
-}
-.watch-hero__title {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.watch-hero__back {
-  font-size: 14px;
-  color: var(--ink-muted);
-  text-decoration: none;
-}
-.watch-hero__back:hover {
-  color: var(--ink);
-}
-.watch-hero h1 {
-  font-size: 54px;
-}
-.watch-hero__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-.watch-button {
-  height: 48px;
-  border-radius: var(--radius-pill);
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.watch-button:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 .watch-button--outline {
   padding: 0 var(--space-5);
@@ -83,20 +17,6 @@
   color: var(--card);
   font-weight: 700;
   font-size: 15px;
-}
-
-.watch-layout {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-5);
-  align-items: flex-start;
-}
-.watch-main {
-  flex: 999 1 720px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
 }
 
 /* The stage */
@@ -646,14 +566,6 @@
 }
 
 /* Side panels */
-.watch-side {
-  flex: 1 1 320px;
-  max-width: 360px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
 .watch-panel {
   background: var(--card);
   border: 1px solid var(--hairline);
@@ -845,16 +757,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.watch-note {
-  margin: 0 8px;
-  font-size: 13px;
-  color: var(--ink-muted);
-}
 
 @media (max-width: 720px) {
-  .watch-hero h1 {
-    font-size: 36px;
-  }
   /* Overlapping windows do not fit a phone: the front window fills the stage and the others step aside. */
   .watch-stage {
     aspect-ratio: auto;
@@ -885,8 +789,5 @@
   }
   .watch-banner {
     right: 16px;
-  }
-  .watch-side {
-    max-width: none;
   }
 }

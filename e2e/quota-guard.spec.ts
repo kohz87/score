@@ -3,7 +3,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { fixtureNow } from './now-fixture.ts'
 import { orchestrationFixtures } from './orchestration-fixtures.ts'
 import { pair } from './pair.ts'
-import { openRoom, makeRoom } from './rooms.ts'
+import { from, openRoom, say } from './coding-helpers.ts'
+import { acquireLock } from './locks.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
 // PLAN 8.6: the quota guard in the browser, against the fake adapter. No model is called and no real CLI is started.
@@ -114,7 +115,7 @@ test.describe('a step held for a low limit', () => {
   }) => {
     const { answers } = await serveHeldRun(page)
     await page.setViewportSize({ width: 1280, height: 1100 })
-    await page.goto('/runs/brief-orch-1')
+    await page.goto('/b?run=brief-orch-1')
     // The decision is on the Steps tab (2.5.0), the diagram on the Graph tab.
     const card = page.getByRole('region', { name: 'reviewer’s limit is low' })
     await expect(card).toBeVisible()
@@ -147,6 +148,16 @@ test('coding agent page: the floor is a setting, marked on the limit bars, and i
   page,
 }) => {
   test.setTimeout(120_000)
+  // The agent is on the team for a moment (bold-team.spec.ts counts the team): hold the roster lock (locks.ts).
+  const release = await acquireLock('roster')
+  try {
+    await codingAgentPage(page)
+  } finally {
+    release()
+  }
+})
+
+async function codingAgentPage(page: Page) {
   const id = `quota-${Date.now().toString(36)}`
   await pair(page)
   const created = await page.request.post('/api/coding-agents', {
@@ -156,20 +167,16 @@ test('coding agent page: the floor is a setting, marked on the limit bars, and i
   expect(created.ok()).toBe(true)
   expect(((await created.json()) as { quotaFloorPercent: number }).quotaFloorPercent).toBe(10)
   // One turn, so the fake CLI's rate-limit record gives the page a reading to draw (94% and 78% left).
-  const room = await makeRoom(page, 'qg')
-  await openRoom(page, room.label)
-  const composer = page.getByRole('combobox', { name: /^Message/ })
-  await composer.fill(`@${id} please add a greeting`)
-  await composer.press('Enter')
-  await expect(
-    page
-      .getByRole('region', { name: 'Message history' })
-      .getByRole('article')
-      .filter({ hasText: 'Created hello.txt and changed it.' }),
-  ).toBeVisible({ timeout: 30_000 })
+  const room = await openRoom(page, 'qg')
+  await say(room, `@${id} please add a greeting`)
+  await expect(from(room, id).filter({ hasText: 'Created hello.txt and changed it.' })).toBeVisible(
+    {
+      timeout: 30_000,
+    },
+  )
 
-  await page.goto(`/team/${encodeURIComponent(id)}`)
-  const card = page.getByRole('tabpanel')
+  await page.goto(`/b/team/${encodeURIComponent(id)}`)
+  const card = page.locator('.bold-coding')
   const meters = card.getByRole('group', { name: 'Claude Code limits' })
   await expect(meters.getByRole('meter', { name: '5 hours left' })).toHaveAttribute(
     'aria-valuenow',
@@ -189,10 +196,13 @@ test('coding agent page: the floor is a setting, marked on the limit bars, and i
     '25',
   )
   await page.evaluate(() => document.fonts.ready)
-  await shot(page, 'agent', '.team-overview-grid')
+  await shot(page, 'agent', '.bold-coding')
 
   // Clean up so other specs see the usual team.
-  page.once('dialog', (confirm) => void confirm.accept())
-  await page.getByRole('button', { name: 'Remove agent' }).click()
-  await expect(page).toHaveURL(/\/team$/)
-})
+  await page.getByRole('button', { name: 'Remove agent…' }).click()
+  await page
+    .getByRole('group', { name: `Remove ${id}` })
+    .getByRole('button', { name: 'Remove', exact: true })
+    .click()
+  await expect(page).toHaveURL(/\/b\/team$/)
+}

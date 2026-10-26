@@ -29,9 +29,7 @@
 }
 .orch-live button:not(.orch-node),
 .orch-room button,
-.user-needs button,
-.orch-dialog button,
-.orch-now button {
+.orch-dialog button {
   font: inherit;
   border: 1px solid var(--hairline);
   background: var(--card);
@@ -41,8 +39,7 @@
   cursor: pointer;
 }
 .orch-live button.orch-link,
-.orch-room button.orch-link,
-.user-needs button.orch-link {
+.orch-room button.orch-link {
   border: 0;
   background: none;
   padding: 0 var(--space-1);
@@ -50,33 +47,27 @@
 }
 .orch-live button:focus-visible,
 .orch-room button:focus-visible,
-.user-needs button:focus-visible,
 .orch-dialog button:focus-visible,
-.orch-now button:focus-visible,
 .orch-node:focus-visible {
   outline: 3px solid var(--ink);
   outline-offset: 3px;
 }
 .orch-live button:disabled,
 .orch-dialog button:disabled,
-.orch-room button:disabled,
-.user-needs button:disabled,
-.orch-now button:disabled {
+.orch-room button:disabled {
   opacity: 0.55;
   cursor: default;
 }
 button.orch-primary,
 .orch-live button.orch-primary,
 .orch-room button.orch-primary,
-.orch-dialog button.orch-primary,
-.orch-now button.orch-primary {
+.orch-dialog button.orch-primary {
   background: var(--ink);
   color: var(--card);
   border-color: var(--ink);
 }
 .orch-live button.orch-danger,
-.orch-room button.orch-danger,
-.user-needs button.orch-danger {
+.orch-room button.orch-danger {
   border: 2px solid var(--agent-coral-text);
   color: var(--agent-coral-text);
   font-weight: 700;
@@ -759,10 +750,6 @@ button.orch-primary,
 }
 .orch-fence-items {
   padding-left: 18px;
-}
-.orch-now {
-  display: grid;
-  gap: var(--space-3);
 }
 
 /* Workflow runs (PLAN 7.1b): local nodes are shapes (gate diamond, branch hexagon, join and end pills), edges carry

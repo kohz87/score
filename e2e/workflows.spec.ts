@@ -38,6 +38,8 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await page.goto('/b/recipes')
   await expect(page.getByRole('heading', { name: 'Recipes', level: 1 })).toBeVisible()
   await page.getByRole('button', { name: 'New recipe' }).click()
+  // The editor of the recipe that was open is swapped for the new one: type only into the new one.
+  await expect(page).toHaveURL(/\/b\/recipes\/new$/)
 
   // The editor starts with one step and an end, already connected.
   await expect(page.getByRole('heading', { name: 'Nothing selected' })).toBeVisible()

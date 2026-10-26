@@ -16,7 +16,7 @@ test.describe('X15: the way back survives a slow theme list', () => {
       mode: 'light',
       resetGeneration: 0,
     })
-    await page.goto('/chat')
+    await page.goto('/b')
     await custom(page)
     // This device has never seen a reset; the host has reset once since (generation 1), and the list is slow.
     look.resetGeneration = 1
@@ -30,7 +30,7 @@ test.describe('X15: the way back survives a slow theme list', () => {
         await route.fallback()
       },
     )
-    await page.goto('/chat')
+    await page.goto('/b')
     await expect(page.locator('main')).toBeVisible()
     await page.keyboard.press('Control+Shift+Digit0')
     await dropped(page)

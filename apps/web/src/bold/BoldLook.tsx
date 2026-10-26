@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { forgetStoredTheme, readStoredTheme, saveTheme, type ThemeChoice } from '../data/theme.ts'
 import { saveLiveliness, useChosenLiveliness } from '../data/liveliness.ts'
 import { isTouchDevice, readSendKey, saveSendKey, type SendKey } from '../data/send-key.ts'
@@ -10,10 +10,9 @@ import {
   TEXT_SCALE_MIN,
   TEXT_SCALE_STEP,
 } from '../data/text-scale.ts'
-import { CurrencyCard } from '../routes/settings/LookSection.tsx'
+import { CurrencyCard } from '../routes/settings/CurrencyCard.tsx'
 import { useLook } from '../themes/use-look.ts'
 import { pairingProblem } from './bold-errors.ts'
-import { saveUi } from './bold-ui.ts'
 
 const modeLabels: Record<ThemeChoice, string> = {
   dark: 'Dark',
@@ -49,7 +48,6 @@ function ModePreview({ mode }: { mode: ThemeChoice }) {
 /** PLAN 11.9a: Settings › Look, rebuilt from the prototype's sLook() and board 16. */
 export function BoldLook() {
   const look = useLook()
-  const navigate = useNavigate()
   const motion = useChosenLiveliness()
   const scale = useTextScale()
   const deviceMode = readStoredTheme()
@@ -80,11 +78,6 @@ export function BoldLook() {
     } finally {
       setSavingShared(false)
     }
-  }
-
-  function turnOffNewLook() {
-    saveUi('classic')
-    void navigate('/settings/look')
   }
 
   return (
@@ -281,20 +274,6 @@ export function BoldLook() {
               : 'Ctrl+Enter (or Cmd+Enter) sends; Enter adds a new line.'}
             {isTouchDevice() && ' On this touch screen Enter always adds a new line: tap Send.'}
           </span>
-        </section>
-
-        <section className="card bold-look-new" aria-labelledby="bold-look-new-title">
-          <div>
-            <h3 id="bold-look-new-title">New look</h3>
-            <span className="small muted">
-              The bold shell you are using now. Switch it off to return to classic Score on this
-              device.
-            </span>
-          </div>
-          <label className="bold-look-switch">
-            <span>Use the new look on this device</span>
-            <input type="checkbox" role="switch" checked onChange={turnOffNewLook} />
-          </label>
         </section>
       </div>
 

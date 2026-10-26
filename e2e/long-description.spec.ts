@@ -1,5 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { holdLockPerTest } from './locks.ts'
 import { pair } from './pair.ts'
+
+// The agent is on the team for a moment, and bold-team.spec.ts / team.spec.ts count the team (locks.ts).
+holdLockPerTest('roster')
 
 // A long agent description (coding agents often have one) stays on one line in the @mention menu, with the full text on
 // hover; it used to wrap over the next options (owner report, 2026-10-16).
@@ -51,20 +55,18 @@ test('a long agent description stays on one line in the @mention menu', async ({
     await checkMention(page, id, suffix)
   } finally {
     // Other specs count the team's agents: never leave this one behind.
-    await page.goto(`/team/${encodeURIComponent(id)}`)
-    page.once('dialog', (confirm) => void confirm.accept())
-    await page.getByRole('button', { name: 'Remove agent' }).click()
-    await expect(page).toHaveURL(/\/team$/)
+    await page.goto(`/b/team/${encodeURIComponent(id)}`)
+    await page.getByRole('button', { name: 'Remove agent…' }).click()
+    await page
+      .getByRole('group', { name: `Remove ${id}` })
+      .getByRole('button', { name: 'Remove', exact: true })
+      .click()
+    await expect(page).toHaveURL(/\/b\/team$/)
   }
 })
 
 async function checkMention(page: Page, id: string, suffix: string): Promise<void> {
-  await api(page, 'rooms', { name: `desc-${suffix}`, leadAgentId: 'lead' })
-  await page.goto('/chat')
-  await page
-    .getByRole('navigation', { name: 'Rooms' })
-    .getByRole('link', { name: new RegExp(`desc-${suffix}`) })
-    .click({ timeout: 15_000 })
+  await page.goto('/b')
   const composer = page.getByRole('combobox', { name: /^Message/ })
   await composer.fill(`@long-${suffix.slice(0, 3)}`)
   const option = page

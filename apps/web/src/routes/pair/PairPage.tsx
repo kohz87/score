@@ -8,7 +8,6 @@ import { passkeysSupportedHere, signInWithPasskey } from '../../data/passkeys.ts
 import { useTextScale } from '../../data/text-scale.ts'
 import { useMediaQuery } from '../../data/use-media.ts'
 import { readTheme } from '../../data/theme.ts'
-import { readUi } from '../../bold/bold-ui.ts'
 import '../../bold/tokens.css'
 import './pair-bold.css'
 
@@ -130,10 +129,10 @@ export function PairPage() {
       </div>
     </>
   )
-  return readUi() === 'bold' ? <BoldPairFrame>{content}</BoldPairFrame> : content
+  return <BoldPairFrame>{content}</BoldPairFrame>
 }
 
-/** PLAN 11.9a: the pairing page under the bold tokens when the New look is on; classic keeps its own page. */
+/** PLAN 11.9a: the pairing page under the bold tokens. */
 function BoldPairFrame({ children }: { children: ReactNode }) {
   // The pairing page runs before this browser may read /api/themes. Paint from what this device stored, else the OS.
   const stored = readTheme()

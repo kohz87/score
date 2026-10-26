@@ -5,6 +5,7 @@ import { PairedBrowsersSchema } from '@score/contract'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../data/api.ts'
 import { ApiKeyPanel } from '../routes/settings/ApiKeyPanel.tsx'
+import { ModelListSection } from '../routes/settings/ModelListSection.tsx'
 import { MessagingSetup } from '../routes/settings/MessagingSetup.tsx'
 import { isLocalProvider, providerAction } from '../routes/settings/ProvidersSection.tsx'
 import { SignInPanel } from '../routes/settings/SignInPanel.tsx'
@@ -573,6 +574,9 @@ export function BoldConnections({ agents }: { agents: AgentSummary[] }) {
       <div className="grid2">
         <HermesCard agents={agents} />
         <ModelProvidersCard agents={agents} />
+        <div className="span2">
+          <ModelListSection agents={agents} />
+        </div>
         <ChannelsCard />
         <PhoneCard />
         <OtherAppsCard />

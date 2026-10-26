@@ -556,3 +556,22 @@ test('More options are range-checked: an empty or out-of-range field blocks Star
     await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
   }
 })
+
+test('an agent being set up, deleted or removed is never offered in Agents allowed', async () => {
+  const extra: AgentSummary[] = (['setting_up', 'deleting', 'removed'] as const).map((state) => ({
+    ...agents[1]!,
+    id: `gone-${state}`,
+    name: `gone-${state}`,
+    lifecycle: { state, incarnationId: '6f9619ff-8b86-4d11-b42d-00c04fc964ff', operationId: null },
+  }))
+  agents.push(...extra)
+  try {
+    open('/b?start=job')
+    const dialog = await startDialog()
+    const picker = await within(dialog).findByRole('group', { name: 'Agents allowed' })
+    await waitFor(() => expect(picker.textContent).toContain('builder'))
+    for (const agent of extra) expect(picker.textContent).not.toContain(agent.name)
+  } finally {
+    agents.splice(agents.length - extra.length, extra.length)
+  }
+})

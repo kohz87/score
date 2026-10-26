@@ -19,6 +19,9 @@ import { useFence } from '../routes/orchestrations/orchestration-queries.ts'
 import { questionNeedsYou, questionsQuery } from '../data/question-queries.ts'
 import { approvalNeedsYou } from './room/room-model.ts'
 import { useRoomNeedsYouState } from './room/use-needs-you.ts'
+import { needsHermesCheck, useSystemStatus } from '../routes/settings/settings-queries.ts'
+import { NotificationBridge } from '../notifications/NotificationBridge.tsx'
+import { UpdateBanner } from '../pwa/UpdateBanner.tsx'
 import { usePreview } from '../themes/preview-context.ts'
 import { useLook } from '../themes/use-look.ts'
 import { agentDisplayName, agentMood, agentStateLabel, dockProgress } from './bold-agents.ts'
@@ -322,6 +325,8 @@ function BoldShellFrame() {
                 type="button"
                 className={`icon-btn gear ${view === 'settings' ? 'on' : ''}`}
                 aria-label="Settings"
+                aria-current={view === 'settings' ? 'page' : undefined}
+                data-protected="raised"
                 onClick={go('/b/settings')}
               >
                 <GearIcon />
@@ -346,6 +351,9 @@ function BoldShellFrame() {
 
           <main className="main">
             <ShellFenceNotice pathname={location.pathname} />
+            <HermesCheckNotice pathname={location.pathname} />
+            {!preview && <NotificationBridge />}
+            {!preview && <UpdateBanner />}
             <BoldFrameContext value={frame}>
               <Outlet context={{ sheetOpen, setSheetOpen } satisfies BoldSheetState} />
             </BoldFrameContext>
@@ -391,6 +399,7 @@ function BoldShellFrame() {
                 type="button"
                 className={view === 'settings' ? 'on' : undefined}
                 aria-current={view === 'settings' ? 'page' : undefined}
+                data-protected="raised"
                 onClick={go('/b/settings')}
               >
                 <GearIcon size={22} />
@@ -429,6 +438,23 @@ function ShellFenceNotice({ pathname }: { pathname: string }) {
       <span>Starting work is blocked until you review the runs it stopped.</span>
       <Link className="btn sm" to="/b/settings/system#global-fence">
         Review the runs
+      </Link>
+    </div>
+  )
+}
+
+/**
+ * An unchecked Hermes build pauses approvals in Score. Settings shows the check itself (HermesVersionBanner); every
+ * other page says so here, so the person doesn't find out only when an approval never arrives.
+ */
+function HermesCheckNotice({ pathname }: { pathname: string }) {
+  const system = useSystemStatus()
+  if (!needsHermesCheck(system.data) || pathname.startsWith('/b/settings')) return null
+  return (
+    <div className="bold-fence-notice" role="status" data-protected="flex">
+      <span>Hermes was updated. Approvals in Score are paused until you check this version.</span>
+      <Link className="btn sm" to="/b/settings/connections">
+        Check this Hermes version
       </Link>
     </div>
   )

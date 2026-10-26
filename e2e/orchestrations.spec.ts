@@ -8,28 +8,47 @@ test.describe.configure({ mode: 'serial' })
 
 const tab = (page: Page, name: string) => page.getByRole('tab', { name }).click()
 
-async function start(page: Page, goal: string, policy?: string) {
-  await page.goto('/chat')
-  await page.getByRole('button', { name: /New orchestration/ }).click()
-  const dialog = page.getByRole('dialog', { name: 'New orchestration' })
-  await dialog.getByRole('textbox', { name: 'Goal' }).fill(goal)
-  await dialog.getByRole('combobox', { name: 'Lead' }).selectOption({ label: 'lead' })
-  await dialog.getByRole('checkbox', { name: /builder/ }).check()
-  await dialog.getByRole('checkbox', { name: /reviewer/ }).check()
-  if (policy) await dialog.getByRole('radio', { name: policy }).check()
-  // The acknowledgement, the estimates note and the preflight are on the start screen.
+async function start(page: Page, goal: string, policy: 'plan' | 'handoff' | 'risky' = 'plan') {
+  await page.goto('/b?start=job')
+  const dialog = page.getByRole('dialog', { name: 'Start a job' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByLabel('What should the team do?').fill(goal)
+  // Only the seeded agents are team members for the lead's preflight (other specs add agents to the shared server).
+  const picker = dialog.getByRole('group', { name: 'Agents allowed' })
+  for (const box of await picker.getByRole('checkbox').all()) {
+    const name = (await box.locator('xpath=ancestor::label').innerText()).trim()
+    if (['builder', 'reviewer'].includes(name)) await box.check()
+    else await box.uncheck()
+  }
+  const ask = { plan: 'The plan starts', handoff: 'Every hand-off', risky: 'Only risky actions' }
+  await dialog.getByRole('radio', { name: ask[policy] }).check()
+  // The acknowledgement and the preflight are on the start screen.
   await expect(dialog.getByText(/Score controls the work it starts/).first()).toBeVisible()
-  await expect(dialog.getByRole('list', { name: 'Checks before starting' })).toContainText(
+  await expect(dialog.getByRole('region', { name: 'Before it starts' })).toContainText(
     'The lead has an MCP token',
   )
-  await expect(dialog.getByText(/per lead turn and per step/)).toBeAttached()
-  const startButton = dialog.getByRole('button', { name: 'Start orchestration' })
+  const startButton = dialog.getByRole('button', { name: 'Start the job' })
   await expect(startButton).toBeDisabled()
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
   await expect(startButton).toBeEnabled({ timeout: 15_000 })
   await startButton.click()
+  await expect(dialog.getByRole('heading', { name: 'Started' })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Close' }).click()
   await expect(dialog).toBeHidden()
-  await expect(page.getByLabel('Orchestration', { exact: true }).first()).toBeVisible()
+}
+
+// The run lives in the Runs side panel, addressed by its brief id.
+async function runBriefId(page: Page, goal: string): Promise<string> {
+  let briefId = ''
+  await expect
+    .poll(async () => {
+      const response = await page.request.get('/api/orchestrations')
+      const body = (await response.json()) as { items: { title: string; briefId: string }[] }
+      briefId = body.items.find((item) => item.title.includes(goal.slice(0, 30)))?.briefId ?? ''
+      return briefId
+    })
+    .not.toBe('')
+  return briefId
 }
 
 // A gate decision carries the revision the page showed; a click that races a fresh update is answered with a
@@ -73,19 +92,10 @@ async function wasSeen(page: Page, selector: string) {
     .toBe(true)
 }
 
-async function openLive(page: Page) {
-  // The room panel is collapsed unless something needs the person.
-  const toggle = page.getByRole('button', { name: /Orchestration · / }).first()
-  await expect(toggle).toBeVisible()
-  // The panel also opens itself when something needs the person, so a click decided on a stale reading can collapse it:
-  // read, click, and check again until it is open.
-  await expect(async () => {
-    if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 2000 })
-  }).toPass({ timeout: 20_000 })
-  await page.getByRole('link', { name: 'Open the live diagram' }).first().click()
-  // The run opens in the Runs panel (2.5.0): the diagram is its Graph tab and the log its Log tab. Selection and replay
-  // carry over between them; the decisions are above every tab.
+async function openLive(page: Page, goal: string) {
+  // The run opens in the Runs side panel, addressed by its brief id; its Graph and Log tabs carry the diagram and the
+  // log. Selection and replay carry over between them; the decisions are above every tab.
+  await page.goto(`/b?run=${encodeURIComponent(await runBriefId(page, goal))}`)
   await tab(page, 'Graph')
   await expect(page.locator('[data-node="lead"]')).toBeVisible()
 }
@@ -95,13 +105,19 @@ test('start with every-step gates, approve each step, watch the diagram reach su
 }) => {
   test.setTimeout(120_000)
   await pair(page)
-  await start(page, 'Write the release notes e2e-a')
-  // The room is an ordinary room marked as an orchestration in the list; its composer answers 409 with a hint.
-  await expect(page.getByRole('link', { name: /Orchestration/ }).first()).toBeVisible()
-  // While the run owns the room the composer is disabled with a hint.
-  await expect(page.getByRole('textbox', { name: 'Message' })).toBeDisabled()
-  await expect(page.getByPlaceholder(/Use the run controls above/)).toBeVisible()
-  await openLive(page)
+  const goal = 'Write the release notes e2e-a'
+  await start(page, goal)
+  // While the run owns its room the composer is disabled with a hint.
+  const runs = await page.request.get('/api/orchestrations')
+  const roomId = ((await runs.json()) as { items: { title: string; roomId: string }[] }).items.find(
+    (item) => item.title.includes(goal.slice(0, 30)),
+  )!.roomId
+  await page.goto(`/b?room=${encodeURIComponent(roomId)}`)
+  const composer = page.getByRole('combobox', { name: /^Message/ })
+  await composer.fill('Can I add something?')
+  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText(/running orchestration/)
+  await openLive(page, goal)
 
   // The first step waits for the person, with the frozen assignment shown.
   const gate = page.getByRole('region', { name: 'Approve s1' })
@@ -168,7 +184,7 @@ test('dots travel along the edges for real events', async ({ page }) => {
   test.setTimeout(120_000)
   await pair(page)
   await start(page, 'Dots e2e-b')
-  await openLive(page)
+  await openLive(page, 'Dots e2e-b')
   await recordSeen(page, '.orch-dot')
   await approve(page, 's1')
   await wasSeen(page, '.orch-dot')
@@ -188,7 +204,7 @@ test('reduced motion: no travelling dot, the nodes and the edge light up instead
   try {
     await pair(page)
     await start(page, 'Reduced e2e-c')
-    await openLive(page)
+    await openLive(page, 'Reduced e2e-c')
     await recordSeen(page, '.orch-node--lit')
     await recordSeen(page, '.orch-dot')
     await approve(page, 's1')
@@ -213,8 +229,8 @@ test('the lead asks a question: it appears on the run, the answer reaches the le
 }) => {
   test.setTimeout(120_000)
   await pair(page)
-  await start(page, 'Ask first [fake:ask] e2e-d', 'Never ask')
-  await openLive(page)
+  await start(page, 'Ask first [fake:ask] e2e-d', 'risky')
+  await openLive(page, 'Ask first [fake:ask] e2e-d')
   // The run page carries the question inside its protected Needs-you wrapper.
   const needs = page.locator('.orch-needs[aria-label="Needs you"]')
   await expect(needs).toHaveAttribute('data-protected', 'grid')
@@ -230,13 +246,13 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
 }) => {
   test.setTimeout(120_000)
   await pair(page)
-  await start(page, 'Hold [fake:hold] e2e-e', 'Never ask')
-  await openLive(page)
+  await start(page, 'Hold [fake:hold] e2e-e', 'risky')
+  await openLive(page, 'Hold [fake:hold] e2e-e')
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'running', {
     timeout: 60_000,
   })
   // The room's own strip also has a Stop for this run; this is the run view's.
-  const panel = page.getByRole('complementary', { name: 'Side panel' })
+  const panel = page.locator('.bold-run')
   await panel.getByRole('button', { name: 'Stop', exact: true }).click()
   await panel.getByRole('button', { name: 'Stop the run' }).click()
   // The fake Hermes answers a Stop with a cancelled run, which is not termination evidence: "not confirmed ended".
@@ -264,7 +280,8 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
 test('Settings › Backup repeats that a restore outside scripts/score restore cannot be detected', async ({
   page,
 }) => {
-  await page.goto('/settings/backup')
+  await pair(page)
+  await page.goto('/b/settings/system')
   const backup = page.locator('#backup')
   await expect(backup).toContainText('scripts/score restore')
   await expect(backup).toContainText('can’t detect a restore done any other way')

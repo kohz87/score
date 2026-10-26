@@ -6,9 +6,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { PairPage, pairBrowser } from './PairPage.tsx'
 import { pairHint, RemoteSection } from '../settings/RemoteSection.tsx'
 import { apiFetch } from '../../data/api.ts'
-import { AppShell } from '../../shell/AppShell.tsx'
 
-vi.mock('../../shell/use-needs-you.ts', () => ({ useNeedsYou: () => false }))
 const routers: ReturnType<typeof createMemoryRouter>[] = []
 afterEach(() => {
   cleanup()
@@ -36,7 +34,6 @@ function pairPage(transport = 'tls') {
 }
 
 test('the New look restyles pairing without changing its protected consent card', async () => {
-  window.localStorage.setItem('score.ui', 'bold')
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
   pairPage()
   await screen.findByRole('button', { name: 'Pair this browser' })
@@ -54,7 +51,6 @@ test('the New look restyles pairing without changing its protected consent card'
 })
 
 test('the bold pairing page paints from the stored theme without asking the server for themes', async () => {
-  window.localStorage.setItem('score.ui', 'bold')
   window.localStorage.setItem('score.theme', 'light')
   const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
   vi.stubGlobal('fetch', fetch)
@@ -99,17 +95,6 @@ test('a consumed remote link explains terminal regeneration', async () => {
   pairPage()
   fireEvent.click(await screen.findByRole('button', { name: 'Pair this browser' }))
   await screen.findByText(/Type pair in the server terminal for a new link/)
-})
-test('remote pages show no plain-HTTP warning (remote mode is HTTPS-only)', () => {
-  document.documentElement.setAttribute('data-score-transport', 'tls')
-  const router = createMemoryRouter([{ path: '/', Component: AppShell }])
-  routers.push(router)
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() => Promise.reject(new Error('offline'))),
-  )
-  render(withClient(<RouterProvider router={router} />))
-  expect(screen.queryByLabelText('Transport warning')).toBeNull()
 })
 function withClient(children: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

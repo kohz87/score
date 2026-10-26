@@ -11,18 +11,13 @@
   white-space: nowrap;
   border: 0;
 }
-.wf-page,
 .wf-editor,
 .wf-run {
   font-size: 14px;
   line-height: 1.45;
   min-width: 0;
 }
-.wf-page button,
-.wf-editor button,
-.wf-run .wf-button,
-.wf-page .wf-button,
-.orch-dialog .wf-button {
+.wf-editor button {
   font: inherit;
   border: 1px solid var(--hairline);
   background: var(--card);
@@ -31,9 +26,7 @@
   padding: 6px 14px;
   cursor: pointer;
 }
-.wf-page button:focus-visible,
 .wf-editor button:focus-visible,
-.wf-page a:focus-visible,
 .wf-editor a:focus-visible,
 .wf-editor select:focus-visible,
 .wf-editor input:focus-visible,
@@ -41,31 +34,22 @@
   outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
-.wf-page button:disabled,
 .wf-editor button:disabled {
   opacity: 0.55;
   cursor: default;
 }
-.wf-page button.orch-primary,
 .wf-editor button.orch-primary,
 .wf-button--primary {
   background: var(--ink);
   color: var(--card);
   border-color: var(--ink);
 }
-.wf-page button.orch-danger,
 .wf-editor button.orch-danger {
   border: 2px solid var(--agent-coral-text);
   color: var(--agent-coral-text);
   font-weight: 700;
 }
-.wf-button {
-  display: inline-flex;
-  align-items: center;
-  text-decoration: none;
-}
 .wf-editor button.wf-link,
-.wf-page button.wf-link,
 .orch-dialog button.wf-link,
 .wf-link {
   border: 0;
@@ -80,36 +64,6 @@
 }
 
 /* The list */
-.wf-page__head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3) var(--space-6);
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 18px;
-}
-.wf-page__head h2 {
-  margin: 0 0 4px;
-  font-family: var(--font-heading);
-  font-size: 30px;
-}
-.wf-page__head p {
-  margin: 0;
-  max-width: 62ch;
-}
-.wf-empty {
-  background: var(--card);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-card);
-  padding: 28px;
-}
-.wf-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 14px;
-}
 .wf-card {
   display: flex;
   flex-wrap: wrap;
@@ -119,10 +73,6 @@
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
   padding: var(--space-5) var(--space-6);
-}
-.wf-card__main {
-  flex: 1 1 320px;
-  min-width: 0;
 }
 .wf-card h3 {
   margin: 0 0 4px;
@@ -135,35 +85,6 @@
 .wf-card p {
   margin: 4px 0;
 }
-.wf-card__facts,
-.wf-card__agents {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  align-items: center;
-}
-.wf-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: flex-start;
-  align-content: flex-start;
-  flex: 0 1 auto;
-}
-.wf-confirm {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-.wf-chip {
-  border-radius: var(--radius-pill);
-  padding: 1px 10px;
-  font-size: 12.5px;
-  font-weight: 600;
-  background: var(--subtle-2);
-  border: 1px solid var(--hairline);
-}
 .wf-chip--used {
   border-style: solid;
   border-color: var(--ink-muted);
@@ -172,84 +93,9 @@
   border: 2px solid var(--agent-jade-text);
   color: var(--agent-jade-text);
 }
-.wf-inventory {
-  margin-top: 14px;
-}
 
 /* The editor */
-.wf-editor__head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3) var(--space-5);
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 14px;
-}
-.wf-editor__title {
-  flex: 1 1 360px;
-  min-width: 0;
-}
-.wf-editor__title p {
-  margin: 2px 0 0;
-}
-.wf-back {
-  font-size: 13px;
-  color: var(--ink-muted);
-}
-.wf-name input {
-  width: 100%;
-  font-family: var(--font-heading);
-  font-size: 28px;
-  font-weight: 600;
-  border: 1px solid transparent;
-  border-radius: var(--radius-14);
-  background: transparent;
-  color: var(--ink);
-  padding: 2px var(--space-2);
-  margin-left: -8px;
-}
-.wf-name input:hover,
-.wf-name input:focus {
-  border-color: var(--line-strong);
-  background: var(--card);
-}
-.wf-editor__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-.wf-saved {
-  color: var(--agent-jade-text);
-  font-weight: 600;
-  margin: 0 0 10px;
-}
-.wf-conflict {
-  margin-bottom: 14px;
-}
-.wf-editor__body {
-  display: grid;
-  grid-template-columns: minmax(250px, 290px) minmax(0, 1fr) minmax(310px, 370px);
-  gap: var(--space-4);
-  align-items: start;
-}
-@media (width < 1180px) {
-  .wf-editor__body {
-    grid-template-columns: minmax(230px, 270px) minmax(0, 1fr);
-  }
-  .wf-editor__body > .wf-side--right {
-    grid-column: 1 / -1;
-  }
-}
-@media (width < 1024px) {
-  .wf-editor__body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .wf-main {
-    order: -1;
-  }
-}
 .wf-side,
-.wf-main > section,
 .wf-canvas {
   background: var(--card);
   border: 1px solid var(--hairline);
@@ -267,27 +113,6 @@
 .wf-side--right.responsive-drawer {
   background: var(--card);
 }
-.wf-main {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-}
-.wf-main > section {
-  padding: var(--space-4) var(--space-5);
-}
-.wf-main__bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) 14px;
-  align-items: center;
-}
-.wf-summary {
-  font-weight: 700;
-  border-radius: var(--radius-pill);
-  padding: 3px 14px;
-  border: 1px solid var(--hairline);
-  background: var(--subtle-2);
-}
 .wf-summary--ok {
   border: 2px solid var(--agent-jade-text);
   color: var(--agent-jade-text);
@@ -298,7 +123,6 @@
   background: var(--agent-coral-tint);
 }
 .wf-side h3,
-.wf-main h3,
 .wf-inspector h3 {
   margin: 0 0 6px;
   font-family: var(--font-heading);
@@ -516,9 +340,7 @@
 .wf-inspector .orch-field input,
 .wf-inspector .orch-field select,
 .wf-inspector .orch-field textarea,
-.wf-inputs-editor input,
-.wf-details textarea,
-.wf-details select {
+.wf-inputs-editor input {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
@@ -683,9 +505,6 @@
 .wf-inputs-editor .orch-field {
   margin: 4px 0;
 }
-.wf-drawer-close {
-  margin-bottom: 8px;
-}
 .wf-editor .responsive-drawer.wf-side--right {
   min-width: 0;
 }
@@ -757,11 +576,6 @@
 /* A workflow graph is wider than an orchestration's: the diagram gets the full width and the log goes below it. */
 .wf-run .orch-main {
   grid-template-columns: minmax(0, 1fr);
-}
-.wf-page .wf-button.wf-button--primary {
-  background: var(--ink);
-  color: var(--card);
-  border-color: var(--ink);
 }
 
 .wf-incarnation {

@@ -8,8 +8,6 @@ import { immediateFrameScheduler, createStreamQueryRegistry } from '../data/resy
 import { createStreamClient } from '../data/stream.ts'
 import { jsonResponse, reportFixture } from '../test/reports-fixtures.ts'
 
-vi.mock('../shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
-
 class MockEventSource extends EventTarget {
   constructor(readonly url: string) {
     super()
@@ -73,6 +71,8 @@ let agentAccess = false
 let memoryNotes = true
 let hermesTested = true
 
+let terminalOn = false
+
 beforeEach(() => {
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
@@ -86,6 +86,8 @@ beforeEach(() => {
   FakeNotification.shown = []
   FakeNotification.requestPermission.mockClear()
   vi.stubGlobal('Notification', FakeNotification)
+  // jsdom has no scrolling; a section change scrolls to the top.
+  vi.stubGlobal('scrollTo', vi.fn())
   Object.assign(window, { Notification: FakeNotification })
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -218,7 +220,7 @@ beforeEach(() => {
         return jsonResponse({
           passwordSet: true,
           origins: ['https://score.test'],
-          terminal: false,
+          terminal: terminalOn,
           terminalUnavailable: null,
         })
       if (url.pathname === '/api/session/browsers') return jsonResponse({ items: [browser] })
@@ -308,7 +310,22 @@ beforeEach(() => {
         return jsonResponse({ ...info, agentAccess, memoryNotes })
       }
       if (url.pathname === '/api/shares') return jsonResponse({ items: [] })
-      if (url.pathname === '/api/terminal/sessions') return jsonResponse({ items: [] })
+      if (url.pathname === '/api/terminal/sessions' && method === 'DELETE') return jsonResponse({})
+      if (url.pathname === '/api/terminal/sessions')
+        return jsonResponse({
+          items: terminalOn
+            ? [
+                {
+                  id: '3f1c6a52-1b7e-4c1c-9a53-0d5c1a2b3c4d',
+                  cols: 80,
+                  rows: 24,
+                  openedAt: '2026-10-26T10:00:00.000Z',
+                  lastActivityAt: '2026-10-26T10:05:00.000Z',
+                  address: '10.0.0.5',
+                },
+              ]
+            : [],
+        })
       if (url.pathname === '/api/reports') return jsonResponse(reportFixture('7d'))
       return jsonResponse({ error: { code: 'not_found', message: 'No' } }, 404)
     }),
@@ -563,4 +580,27 @@ test('the Customizer page marks the Settings frame as a section page (phone: the
   expect(document.querySelector('.setgrid[data-section-page]')).toBeTruthy()
   open('/b/settings/look')
   expect(await screen.findByRole('heading', { name: 'Look' })).toBeDefined()
+})
+
+test('Remote access and security lists open terminals and closes one', async () => {
+  terminalOn = true
+  try {
+    open('/b/settings/security')
+    const list = await screen.findByRole('list', { name: 'Open terminals' })
+    expect(await within(list).findByText(/from 10\.0\.0\.5/)).toBeDefined()
+    fireEvent.click(within(list).getByRole('button', { name: 'Close' }))
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.some(
+            ([url, init]) =>
+              String(url) === '/api/terminal/sessions/3f1c6a52-1b7e-4c1c-9a53-0d5c1a2b3c4d' &&
+              (init as RequestInit | undefined)?.method === 'DELETE',
+          ),
+      ).toBe(true),
+    )
+  } finally {
+    terminalOn = false
+  }
 })

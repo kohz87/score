@@ -1,11 +1,14 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
-import { makeRoom, say } from './rooms.ts'
-import { packagedThemeIds, type PackagedThemeId } from './themes-builtin-fixtures.ts'
+import { allowIt, isOnTop, startApproval } from './themes-decision.ts'
+
+const packagedThemeIds = ['harbour', 'ledger', 'studio'] as const
+type PackagedThemeId = (typeof packagedThemeIds)[number]
 
 // The built-in themes of PLAN 9.5 (Harbour, Ledger, Studio) against the real fake-mode server: they are listed, they
 // apply from Settings › Look with the settings of their manifest, their files load, and they keep every protected
-// surface and every way back (design docs/briefs/9-themes.md § 4), like any imported theme.
+// surface and every way back (design docs/briefs/9-themes.md § 4), like any imported theme. On the new shell (3.0.0) the
+// protected card is the Needs-you card of the approval fixture; the theme routes stay the real server's.
 
 const attributes: Record<PackagedThemeId, Record<string, string>> = {
   harbour: {
@@ -39,6 +42,7 @@ const attributes: Record<PackagedThemeId, Record<string, string>> = {
   },
 }
 
+/** Picks the theme for this device (the real server serves it); the caller pairs, directly or by opening the room. */
 async function useTheme(page: Page, id: PackagedThemeId, mode: 'light' | 'dark' = 'light') {
   await page.addInitScript(
     ([theme, m]) => {
@@ -47,38 +51,17 @@ async function useTheme(page: Page, id: PackagedThemeId, mode: 'light' | 'dark' 
     },
     [id, mode],
   )
-  await pair(page)
-}
-
-async function startApproval(page: Page): Promise<{ card: Locator }> {
-  const room = await makeRoom(page, 'builtin')
-  await say(page, room.id, `Please ask for approval before installing ${Date.now()}`)
-  await page.goto(`/chat/${room.id}`)
-  const card = page.getByRole('group', { name: /^Approval: / }).last()
-  await expect(card.getByRole('button', { name: 'Approve' })).toBeAttached({ timeout: 20_000 })
-  return { card }
-}
-
-async function isOnTop(target: Locator): Promise<boolean> {
-  return target.evaluate((element) => {
-    const box = element.getBoundingClientRect()
-    if (box.width === 0 || box.height === 0) return false
-    const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
-    return !!top && (element === top || element.contains(top))
-  })
 }
 
 for (const id of packagedThemeIds) {
   test.describe(id, () => {
     test('is offered in Settings › Look and applies its manifest', async ({ page }) => {
       await pair(page)
-      await page.goto('/settings/look')
-      const styles = page.getByRole('region', { name: 'Look' }).getByRole('radiogroup', {
-        name: 'Style',
-      })
+      await page.goto('/b/settings/look')
+      const styles = page.getByRole('radiogroup', { name: 'Style on this device' })
       for (const name of ['Score', 'Paper', 'Night shift', 'Dense', 'Harbour', 'Ledger', 'Studio'])
         await expect(styles.getByRole('radio', { name: new RegExp(name) })).toBeVisible()
-      const radio = styles.locator(`[data-pack-choice="${id}"]`)
+      const radio = styles.locator(`[data-theme-choice="${id}"]`)
       await expect(radio).toContainText(/\w{4,}/)
       await radio.click()
       const html = page.locator('html')
@@ -86,7 +69,7 @@ for (const id of packagedThemeIds) {
       for (const [name, value] of Object.entries(attributes[id]))
         await expect(html, name).toHaveAttribute(name, value)
       await expect(page.locator('.look-banner')).toHaveCount(0)
-      await expect(html).not.toHaveAttribute('data-contrast-fallback', '')
+      await expect(html).not.toHaveAttribute('data-contrast-fallback')
       // It survives a reload (the boot cache paints it before the app starts).
       await page.reload()
       await expect(html).toHaveAttribute('data-look', 'custom')
@@ -95,6 +78,7 @@ for (const id of packagedThemeIds) {
 
     test('loads its own files (picture, fonts) from Score', async ({ page }) => {
       await useTheme(page, id)
+      await pair(page)
       const files: { url: string; status: number; type: string }[] = []
       page.on('response', (response) => {
         const url = new URL(response.url())
@@ -105,7 +89,7 @@ for (const id of packagedThemeIds) {
             type: response.headers()['content-type'] ?? '',
           })
       })
-      await page.goto('/chat')
+      await page.goto('/b/team')
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await page.evaluate(() => document.fonts.ready)
       if (id === 'harbour') {
@@ -142,88 +126,84 @@ for (const id of packagedThemeIds) {
         page,
       }) => {
         await useTheme(page, id, mode)
-        const { card } = await startApproval(page)
+        const { card, allow, deny } = await startApproval(page, null)
         await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
         await expect(page.locator('.look-banner')).toHaveCount(0)
-        await expect(page.locator('html')).not.toHaveAttribute('data-contrast-fallback', '')
-        const approve = card.getByRole('button', { name: 'Approve' })
-        const deny = card.getByRole('button', { name: 'Deny' })
-        for (const part of [card, approve, deny]) {
+        await expect(page.locator('html')).not.toHaveAttribute('data-contrast-fallback')
+        for (const part of [card, allow, deny]) {
           await expect(part).toBeVisible()
           expect(await part.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
           expect(await isOnTop(part)).toBe(true)
         }
-        // A protected card is solid and dark in every theme: Score's own colours, never the theme's glass or ground.
-        expect(await card.evaluate((el) => getComputedStyle(el).backgroundColor)).toMatch(
-          /^rgb\((18|36), /,
-        )
-        expect(await card.evaluate((el) => getComputedStyle(el).backdropFilter)).toBe('none')
-        expect(await approve.evaluate((el) => getComputedStyle(el).fontFamily)).toContain(
+        // A protected card is solid in every theme: no glass, no picture behind its words.
+        const paint = await card.evaluate((el) => {
+          const style = getComputedStyle(el)
+          return {
+            fill: style.backgroundColor,
+            blur: style.backdropFilter,
+            image: style.backgroundImage,
+          }
+        })
+        expect(paint.fill).toMatch(/^rgb\(/)
+        expect(paint.blur).toBe('none')
+        expect(paint.image).toBe('none')
+        expect(await allow.evaluate((el) => getComputedStyle(el).fontFamily)).toContain(
           'Hanken Grotesk',
         )
-        await expect(page.getByRole('img', { name: 'Needs you' }).first()).toBeVisible()
+        await expect(page.locator('.bold-needs[data-protected]').first()).toBeVisible()
         await expect(page.locator('.agent-glyph').first()).toBeVisible()
-        await approve.click()
-        await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+        await allowIt(card)
       })
     }
 
     test('the protected layer holds when CSS is added behind the sanitiser', async ({ page }) => {
       await useTheme(page, id)
-      const { card } = await startApproval(page)
+      const { card, allow, deny } = await startApproval(page, null)
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await page.addStyleTag({
         content: `
-          .chat-approval, .chat-approval * { opacity: 0 !important; visibility: hidden !important; transform: translateX(-9999px) !important; }
-          .chat-approval { display: none !important; }
-          .needs-you-dot { display: none !important; }
+          .bold-request, .bold-request * { opacity: 0 !important; visibility: hidden !important; transform: translateX(-9999px) !important; }
+          .bold-request { display: none !important; }
+          .bold-needs { display: none !important; }
           .agent-glyph { display: none !important; }
         `,
       })
-      const approve = card.getByRole('button', { name: 'Approve' })
-      for (const part of [card, approve, card.getByRole('button', { name: 'Deny' })]) {
+      for (const part of [card, allow, deny]) {
         await expect(part).toBeVisible()
         expect(await part.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
         expect(await isOnTop(part)).toBe(true)
       }
-      await expect(page.getByRole('img', { name: 'Needs you' }).first()).toBeVisible()
-      await approve.click()
-      await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.bold-needs[data-protected]').first()).toBeVisible()
+      await allowIt(card)
     })
 
     test('Settings stays reachable, and the way back works (safe look, Ctrl+Shift+0)', async ({
       page,
     }) => {
       await useTheme(page, id)
-      await page.goto('/chat')
+      await pair(page)
+      await page.goto('/b')
       const html = page.locator('html')
       await expect(html).toHaveAttribute('data-look', 'custom')
-      if (id === 'ledger') await page.getByRole('button', { name: 'Menu' }).click()
-      const settings = (
-        id === 'ledger'
-          ? page.getByRole('dialog', { name: 'Menu' })
-          : page.getByRole('navigation', { name: 'Main' })
-      ).getByRole('link', { name: 'Settings' })
+      const settings = page.getByRole('button', { name: 'Settings', exact: true })
       await expect(settings).toBeVisible()
       await settings.click()
-      await expect(page).toHaveURL(/\/settings/)
-      // Settings opens its first section; the Look page holds the reset.
+      await expect(page).toHaveURL(/\/b\/settings/)
+      // Settings opens its first section; the Look section holds the reset.
       await page
-        .getByRole('navigation', { name: 'Settings sections' })
-        .getByRole('link', { name: 'Look', exact: true })
+        .getByRole('navigation', { name: 'Settings' })
+        .getByRole('button', { name: /^Look/ })
         .click()
       await expect(
-        page.getByRole('region', { name: 'Look' }).getByRole('button', {
-          name: 'Reset look on this device',
-        }),
+        page.getByRole('button', { name: 'Reset the look on this device' }),
       ).toBeVisible()
 
-      await page.goto('/chat?look=safe')
+      await page.goto('/b?look=safe')
       await expect(page.locator('.look-banner')).toContainText('Safe look')
       await expect(html).not.toHaveAttribute('data-look', 'custom')
       await expect(html).toHaveAttribute('data-pack', 'score')
 
-      await page.goto('/chat')
+      await page.goto('/b')
       await expect(html).toHaveAttribute('data-look', 'custom')
       await page.keyboard.press('Control+Shift+Digit0')
       await expect(html).not.toHaveAttribute('data-look', 'custom')
@@ -231,4 +211,30 @@ for (const id of packagedThemeIds) {
       await expect(html).not.toHaveAttribute('data-look', 'custom')
     })
   })
+}
+
+// A built-in theme must never trip the guard: its own pages (Settings › Look, the team room) keep it on, on a desktop
+// and on a phone, in both modes. (Found when Harbour was switched off on Settings by the Settings button's own pill.)
+for (const id of ['paper', 'night', 'dense', ...packagedThemeIds] as const) {
+  for (const [mode, viewport] of [
+    ['dark', { width: 1440, height: 900 }],
+    ['light', { width: 1440, height: 900 }],
+    ['light', { width: 390, height: 844 }],
+  ] as const) {
+    test(`${id} is not switched off by the guard on Settings › Look and the room (${mode}, ${viewport.width})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport)
+      await useTheme(page, id, mode)
+      await pair(page)
+      for (const path of ['/b/settings/look', '/b']) {
+        await page.goto(path)
+        if ((packagedThemeIds as readonly string[]).includes(id))
+          await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+        await page.waitForTimeout(2500)
+        await expect(page.locator('.look-banner'), path).toHaveCount(0)
+        await expect(page.locator('html'), path).not.toHaveAttribute('data-contrast-fallback')
+      }
+    })
+  }
 }

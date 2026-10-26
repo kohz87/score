@@ -1,62 +1,4 @@
 /* Layout and spacing from docs/design/html/team.html. */
-.team-layout {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-5);
-  align-items: flex-start;
-}
-.team-members {
-  flex: 1 1 200px;
-  max-width: 220px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: var(--space-1);
-}
-.team-members a {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 10px var(--space-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-18);
-  color: var(--ink);
-  font-weight: 600;
-  text-decoration: none;
-}
-.team-members a[aria-current='page'] {
-  background: var(--card);
-  border-color: var(--hairline);
-}
-.team-members a.team-all {
-  min-height: 40px;
-  padding-block: var(--space-1);
-}
-.team-content {
-  flex: 999 1 640px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-.team-profile {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-.team-list-heading p {
-  margin: 8px 0 0;
-  color: var(--ink-muted);
-}
-.team-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-4);
-}
 .team-agent-card {
   display: flex;
   flex-direction: column;
@@ -125,16 +67,6 @@
 }
 
 /* Header band */
-.team-band {
-  background: var(--team-color);
-  color: var(--team-band-ink);
-  border-radius: var(--radius-32);
-  padding: 30px var(--space-7);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 26px;
-}
 .team-style {
   position: relative;
   flex: 0 0 112px;
@@ -154,96 +86,8 @@
   width: 60px;
   height: 60px;
 }
-.team-band-copy {
-  flex: 1 1 320px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.team-band h1 {
-  font-weight: 700;
-  font-size: 72px;
-  line-height: 0.9;
-  letter-spacing: -0.045em;
-  overflow-wrap: anywhere;
-}
-.team-band p {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 500;
-}
-.team-status {
-  font-size: 14px;
-  font-weight: 600;
-}
-.team-band .team-status {
-  font-size: 15px;
-}
 
 /* Band actions (design: Message and Pause at the right; Watch is quieter). */
-.team-band-actions {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-3);
-}
-.team-band-main {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-3);
-}
-.team-band-primary,
-.team-band-secondary {
-  display: inline-flex;
-  align-items: center;
-  height: 52px;
-  border-radius: var(--radius-pill);
-  font: inherit;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: pointer;
-}
-.team-band-primary {
-  padding: 0 24px;
-  border: 1.5px solid var(--team-band-ink);
-  background: var(--team-band-ink);
-  color: var(--team-color);
-}
-.team-band-secondary {
-  padding: 0 22px;
-  border: 1.5px solid var(--team-band-ink);
-  background: transparent;
-  color: var(--team-band-ink);
-  font-size: 15px;
-}
-.team-band-secondary:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.team-band-primary[aria-disabled='true'] {
-  opacity: 0.6;
-  cursor: default;
-}
-.team-band-primary:focus-visible,
-.team-band-secondary:focus-visible,
-.team-band-link:focus-visible,
-.team-band-quiet {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.team-band-link {
-  font-size: 14px;
-  font-weight: 600;
-  color: inherit;
-  text-underline-offset: 3px;
-}
-.team-band .team-band-error {
-  font-size: 14px;
-  text-align: right;
-}
 
 /* Glyph popover */
 .team-style-popover {
@@ -308,41 +152,12 @@
 }
 
 /* Tabs */
-.team-tabs {
-  display: flex;
-  overflow-x: auto;
-  padding: var(--space-1);
-  margin: -4px;
-  min-width: 0;
-  gap: 6px;
-}
-.team-tabs button {
-  flex-shrink: 0;
-  white-space: nowrap;
-  height: 40px;
-  padding: 0 var(--space-4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-pill);
-  background: var(--card);
-  color: var(--ink);
-  font-size: 14px;
-  cursor: pointer;
-}
-.team-tabs button[aria-selected='true'] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--card);
-  font-weight: 600;
-}
 
 /* Overview cards: three equal columns, like the design; the same for Hermes and coding agents. */
 .team-overview-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
-}
-.team-overview-grid > .team-wide {
-  grid-column: 1 / -1;
 }
 .team-section-gap {
   margin-top: var(--space-4);
@@ -356,11 +171,6 @@
   .team-overview-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-.team-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--space-4);
 }
 .team-personality {
   grid-column: 1 / -1;
@@ -456,38 +266,6 @@
   letter-spacing: -0.03em;
   line-height: 1;
 }
-.team-skills {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-.team-skills li {
-  padding: 6px var(--space-3);
-  border-radius: var(--radius-pill);
-  background: var(--agent-jade-tint);
-  color: var(--agent-jade-text);
-  font-size: 14px;
-  font-weight: 600;
-}
-.team-skills li[data-enabled='false'] {
-  background: var(--subtle);
-  color: var(--ink-muted);
-}
-.team-card .team-memory {
-  padding: var(--space-3) 14px;
-  border-radius: var(--radius-16);
-  background: var(--subtle);
-  font-size: 14px;
-}
-.team-memory span {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--muted);
-}
 .team-rows {
   margin: 0;
   padding: 0;
@@ -536,110 +314,9 @@
   left: auto;
   right: 3px;
 }
-.team-routine {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.team-schedule {
-  width: 52px;
-  height: 52px;
-  flex: none;
-  border-radius: var(--radius-16);
-  background: var(--subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 15px;
-  text-align: center;
-  overflow: hidden;
-}
-.team-permission {
-  font-size: 13px;
-  font-weight: 700;
-}
-.team-permission-allowed {
-  color: var(--agent-jade-text);
-}
-.team-permission-asks {
-  color: var(--agent-saffron-text);
-}
-.team-permission-never {
-  color: var(--agent-coral-text);
-}
 
 /* Phone and tablet (PLAN 5.34): the member list is a scrolling strip, the band and tabs shrink. */
 @media (width < 1024px) {
-  .team-layout {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    align-items: stretch;
-    gap: var(--space-4);
-    /* The member strip bleeds to the screen edge (negative margin); a theme with a thin page gutter must not turn
-       that bleed into sideways page scroll. */
-    overflow-x: clip;
-  }
-  .team-members {
-    flex: none;
-    max-width: none;
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 2px var(--space-4) 2px 0;
-    margin-right: -16px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-  }
-  .team-members > * {
-    flex-shrink: 0;
-  }
-  .team-members a {
-    padding: 6px 14px 6px var(--space-2);
-    border-radius: var(--radius-pill);
-    border-color: var(--hairline);
-    background: var(--card);
-    white-space: nowrap;
-  }
-  .team-members a.team-all {
-    padding: var(--space-1) var(--space-4);
-  }
-  .team-members a[aria-current='page'] {
-    background: var(--ink);
-    border-color: var(--ink);
-    color: var(--card);
-  }
-  .team-members a .agent-glyph {
-    --glyph-tile-size: 28px;
-    --glyph-radius: 9px;
-    --glyph-svg-size: 18px;
-  }
-  .team-add-agent {
-    margin: 0;
-    height: 44px;
-    padding: 0 var(--space-4);
-    border-radius: var(--radius-pill);
-    white-space: nowrap;
-  }
-  .team-content {
-    flex: none;
-    gap: var(--space-4);
-  }
-  .team-band {
-    border-radius: var(--radius-card);
-    padding: 22px var(--space-6);
-    gap: var(--space-5);
-    flex-wrap: wrap;
-  }
-  .team-band-actions {
-    flex: 1 1 100%;
-    align-items: flex-start;
-  }
-  .team-band-main {
-    justify-content: flex-start;
-  }
   .team-style {
     flex: 0 0 88px;
   }
@@ -652,32 +329,8 @@
     width: 48px;
     height: 48px;
   }
-  .team-band-copy {
-    flex: 1 1 0;
-    min-width: 0;
-  }
-  .team-band h1 {
-    font-size: clamp(36px, 8vw, 60px);
-  }
-  .team-band p {
-    font-size: 16px;
-  }
-  .team-tabs {
-    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-    padding-right: 28px;
-  }
-  .team-grid {
-    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
-  }
 }
 @media (width < 600px) {
-  .team-band {
-    flex-direction: column;
-    align-items: flex-start;
-    border-radius: var(--radius-20);
-    padding: 18px;
-    gap: 14px;
-  }
   .team-style {
     flex-basis: auto;
   }
@@ -689,14 +342,6 @@
   .team-glyph-trigger svg.agent-glyph {
     width: 36px;
     height: 36px;
-  }
-  .team-band-copy {
-    flex: none;
-    width: 100%;
-  }
-  .team-band-actions {
-    flex: none;
-    width: 100%;
   }
   .team-card {
     padding: 18px var(--space-4);
@@ -843,43 +488,6 @@
   font: inherit;
   font-weight: 400;
 }
-.team-routine-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.team-routine-row {
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
-.team-routine-schedule {
-  min-width: 52px;
-  max-width: 140px;
-  min-height: 52px;
-  padding: 6px 10px;
-  flex: none;
-  border-radius: var(--radius-16);
-  background: var(--subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 14px;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-.team-routine-body {
-  flex: 1 1 220px;
-  min-width: 0;
-}
-.team-routine-body p {
-  overflow-wrap: anywhere;
-  white-space: pre-line;
-}
 .team-routine-actions {
   display: flex;
   flex-wrap: wrap;
@@ -916,9 +524,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-}
-.team-block {
-  display: block;
 }
 button.team-toggle {
   padding: 0;
@@ -973,11 +578,6 @@ button.team-toggle:focus-visible,
 }
 
 /* Permissions tab */
-.team-card h3.team-subheading {
-  margin: 8px 0 0;
-  font-size: 16px;
-  font-weight: 600;
-}
 .team-permission-form {
   display: flex;
   flex-wrap: wrap;
@@ -1006,36 +606,6 @@ button.team-toggle:focus-visible,
   opacity: 0.5;
   cursor: default;
 }
-.team-add-agent {
-  margin-top: 6px;
-  height: 48px;
-  border-radius: var(--radius-18);
-  border: 1.5px dashed var(--profile-dashed);
-  background: transparent;
-  color: var(--profile-add-ink);
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-}
-.team-profile-dialog {
-  width: min(640px, calc(100vw - 40px));
-  max-height: calc(100vh - 40px);
-  padding: var(--space-6) 28px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-card);
-  background: var(--card);
-  color: var(--ink);
-  overflow: auto;
-}
-.team-profile-dialog::backdrop {
-  background: rgb(var(--shadow-rgb) / 40%);
-}
-.team-profile-appearance {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-}
 .team-profile-confirm {
   flex-direction: row !important;
   align-items: center;
@@ -1047,7 +617,6 @@ button.team-toggle:focus-visible,
   margin: 0;
   padding-left: var(--space-5);
 }
-.team-profile-dialog code,
 .team-profile-danger code {
   overflow-wrap: anywhere;
 }
@@ -1058,11 +627,6 @@ button.team-toggle:focus-visible,
   background: var(--card);
   color: var(--ink);
   font: inherit;
-}
-.team-add-agent:focus-visible,
-.team-profile-dialog :focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
 }
 
 /* Channels and History tabs */
@@ -1109,7 +673,6 @@ a.team-pill-button {
 }
 
 /* Coding agents (PLAN 7.2): radio groups read as rows, not as stacked form fields. */
-.team-add-kind,
 .team-coding-permission {
   border: 0;
   margin: 0 0 12px;
@@ -1117,14 +680,12 @@ a.team-pill-button {
   display: grid;
   gap: var(--space-2);
 }
-.team-add-kind legend,
 .team-coding-permission legend {
   font-weight: 600;
   padding: 0;
   margin-bottom: 4px;
 }
-.team-routine-form .team-coding-permission label,
-.team-add-kind label {
+.team-routine-form .team-coding-permission label {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -1169,11 +730,6 @@ a.team-pill-button {
 }
 
 /* Antigravity's limits left: one plain line per model group, no bullets (the facts column is right-aligned). */
-.team-coding-quota {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
 
 /* The quota floor field (PLAN 8.6). */
 .team-quota-floor {
@@ -1315,38 +871,6 @@ a.team-pill-button {
 }
 
 /* "<name> joined the team": the end of Add agent and Import agent. */
-.team-added {
-  display: grid;
-  gap: var(--space-4);
-}
-.team-added-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.team-added-head h2 {
-  margin: 0;
-}
-.team-added-head p {
-  margin: var(--space-1) 0 0;
-}
-.team-added-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-.team-added-actions .team-primary {
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-pill);
-  background: var(--ink);
-  color: var(--card);
-  font-weight: 700;
-  text-decoration: none;
-}
 
 /* Look, colour and shape (PLAN 10.2): two looks and 22 shapes as native radio groups. */
 .team-appearance {

@@ -78,7 +78,6 @@ function mount() {
   const router = createMemoryRouter(
     [
       { path: '/b/settings/look', element: <BoldLook /> },
-      { path: '/settings/look', element: <p>Classic Look</p> },
       { path: '/settings/look/customize/:themeId', element: <p>Customizer</p> },
     ],
     { initialEntries: ['/b/settings/look'] },
@@ -138,15 +137,6 @@ test('this device can follow the shared colours again, and a shared look saves t
   )
   const put = calls.find((call) => call.url === '/api/look' && call.method === 'PUT')!
   expect(put.body).toEqual({ activeTheme: 'harbour', mode: 'light' })
-})
-
-test('the New look switch turns this device back to classic Score', async () => {
-  const router = mount()
-  await screen.findByRole('heading', { name: 'Look' })
-  fireEvent.click(screen.getByRole('switch', { name: 'Use the new look on this device' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/settings/look'))
-  expect(window.localStorage.getItem('score.ui')).toBe('classic')
-  expect(await screen.findByText('Classic Look')).toBeDefined()
 })
 
 test('Open the Customizer goes to the theme the device uses', async () => {

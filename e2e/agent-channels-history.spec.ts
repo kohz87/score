@@ -1,30 +1,27 @@
 import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
 
-test('Channels shows the connect command and History lists runs with a Watch replay', async ({
+test('Channels shows the connect form and Recent runs lists runs with a Watch replay', async ({
   page,
 }) => {
   await pair(page)
-  await page.goto('/team/builder')
-  await page.getByRole('tab', { name: 'Channels' }).click()
-  const panel = page.getByRole('tabpanel')
-  await expect(panel.getByRole('heading', { name: 'Channels', level: 2 })).toBeVisible()
-  await expect(panel.getByText('Connected', { exact: true })).toBeVisible()
-  await panel.getByRole('button', { name: 'Connect Discord', exact: true }).click()
+  await page.goto('/b/team/builder#agent-channels')
+  const channels = page.locator('#agent-channels')
+  await expect(channels.getByRole('heading', { name: 'Channels', level: 3 })).toBeVisible()
+  await expect(channels.getByText('Connected', { exact: true }).first()).toBeVisible()
+  await channels.getByRole('button', { name: 'Connect Discord', exact: true }).click()
   // Token-based platforms are set up in the browser (fake mode writes nothing).
-  const form = panel.getByRole('form', { name: 'Connect Discord' })
+  const form = channels.getByRole('form', { name: 'Connect Discord' })
   await form.getByLabel('Bot token', { exact: true }).fill('fake-discord-token')
   await form.getByRole('button', { name: 'Save' }).click()
-  await expect(panel.getByText(/Saved\. The gateway picks up/)).toBeVisible()
+  await expect(channels.getByText(/Saved\. The gateway picks up/)).toBeVisible()
 
-  await page.getByRole('tab', { name: 'History' }).click()
-  await expect(panel.getByRole('heading', { name: 'History', level: 2 })).toBeVisible()
+  const history = page.locator('#agent-history')
+  await expect(history.getByRole('heading', { name: 'Recent runs', level: 3 })).toBeVisible()
   // The fake scenario starts the builder's first run within a few seconds of startup.
-  await expect(panel.getByText('Add pagination to the activity feed').first()).toBeVisible({
+  await expect(history.getByText('Add pagination to the activity feed').first()).toBeVisible({
     timeout: 30_000,
   })
-  await panel.getByRole('combobox', { name: 'Outcome' }).selectOption('failed')
-  await expect(panel.getByText('No runs match.')).toBeVisible()
 
   // Replay needs recorded frames, which the scripted scenario only produces late: stub one finished run.
   await page.route('**/api/agents/builder/history*', (route) =>
@@ -49,8 +46,10 @@ test('Channels shows the connect command and History lists runs with a Watch rep
       },
     }),
   )
-  await panel.getByRole('combobox', { name: 'Outcome' }).selectOption('completed')
-  await expect(panel.getByText('$0.12', { exact: false })).toBeVisible()
-  await panel.getByRole('link', { name: 'Replay Fix the pager in Watch' }).click()
-  await expect(page).toHaveURL(/\/screen\/builder\?from=3/)
+  await page.reload()
+  const stubbed = page.locator('#agent-history')
+  await expect(stubbed.getByText('Fix the pager')).toBeVisible()
+  await expect(stubbed.getByText('Completed', { exact: false }).first()).toBeVisible()
+  await stubbed.getByRole('link', { name: 'Replay Fix the pager' }).click()
+  await expect(page).toHaveURL(/\/b\/screen\/builder\?from=3/)
 })

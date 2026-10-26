@@ -833,3 +833,32 @@ body.fit [data-ui='bold'] .stream {
   color: var(--hi-ink);
   font-weight: 600;
 }
+
+/* The update banner (3.0.0): a light object, for you, in the frame's flow at the top (like the other notices), so it covers nothing: not the composer, the tab bar or a request card. */
+[data-ui='bold'] .update-banner {
+  flex: none;
+  align-self: center;
+  margin: 8px 16px 0;
+  max-width: calc(100% - 32px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 20px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 600;
+  box-shadow: var(--menu-shadow);
+}
+
+[data-ui='bold'] .update-banner button {
+  font: inherit;
+  font-weight: 700;
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 16px;
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+  cursor: pointer;
+}

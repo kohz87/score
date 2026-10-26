@@ -97,7 +97,6 @@ function graphicContrast(element: Element): number | null | undefined {
 export const KNOWN_OVERLAYS = [
   '.responsive-drawer',
   '.nav-drawer',
-  '.update-banner',
   '.look-banner',
   '.top-bar',
   '.orch-room-head',

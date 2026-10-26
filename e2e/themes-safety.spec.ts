@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import {
   containedCss,
   guardCss,
@@ -12,11 +12,12 @@ import {
 import { layoutThemes, theme as layoutTheme } from './themes-layout-fixtures.ts'
 import { samplePng } from './png.ts'
 import { pair } from './pair.ts'
-import { makeRoom, say } from './rooms.ts'
+import { allowIt, isOnTop, sheetsText, startApproval } from './themes-decision.ts'
 import { visualHello } from './visual-fixtures.ts'
 
-// Themes (PLAN 9.2, design docs/briefs/9-themes.md § 4 and § 10): a hostile theme must not be able to hide, cover,
-// relabel or fake a protected surface, and the owner can always get back. The server routes are mocked per contract § 16.
+// Themes (PLAN 9.2, design docs/briefs/9-themes.md § 4 and § 10), on the new shell (3.0.0): a hostile theme must not be
+// able to hide, cover, relabel or fake a protected surface, and the owner can always get back. The decision here is the
+// Needs-you card of a tool approval. The server routes are mocked per contract § 16.
 
 const hostile: MockTheme = {
   id: 'hostile',
@@ -26,45 +27,12 @@ const hostile: MockTheme = {
   css: hostileCss,
 }
 
-async function startApproval(page: Page): Promise<{ card: Locator; roomId: string }> {
-  const room = await makeRoom(page, 'look')
-  await say(page, room.id, `Please ask for approval before installing ${Date.now()}`)
-  await page.goto(`/chat/${room.id}`)
-  const card = page.getByRole('group', { name: /^Approval: / }).last()
-  await expect(card.getByRole('button', { name: 'Approve' })).toBeAttached({ timeout: 20_000 })
-  return { card, roomId: room.id }
-}
-
-/** The topmost element at the middle of `target` is `target` or inside it: nothing covers it. */
-async function isOnTop(target: Locator): Promise<boolean> {
-  return target.evaluate((element) => {
-    const box = element.getBoundingClientRect()
-    if (box.width === 0 || box.height === 0) return false
-    const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
-    return !!top && (element === top || element.contains(top))
-  })
-}
-
-// The engine confines every theme rule to the outside of protected subtrees (G1 #3); that guard names data-protected
-// and is not part of what the theme wrote, so it is taken out before the text is judged.
-async function sheetsText(page: Page): Promise<string> {
-  const text = await page.evaluate(() =>
-    [
-      ...document.adoptedStyleSheets.flatMap((sheet) => [...sheet.cssRules].map((r) => r.cssText)),
-      ...[...document.querySelectorAll('style[data-score-look]')].map((s) => s.textContent ?? ''),
-    ].join('\n'),
-  )
-  return text.replaceAll(':where(:not([data-protected], [data-protected] *))', '')
-}
-
 test.describe('a hostile theme', () => {
   test('is cleaned by the sanitiser and still can’t hide, cover or relabel an approval', async ({
     page,
   }) => {
     const look: Look = { active: 'hostile', mode: 'light' }
-    await mockThemes(page, [hostile], look)
-    await pair(page)
-    const { card } = await startApproval(page)
+    const { card, allow, deny } = await startApproval(page, [hostile], look)
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     // The theme is in effect (its manifest colours and the cleaned CSS), minus everything dangerous.
     const sheets = await sheetsText(page)
@@ -75,28 +43,27 @@ test.describe('a hostile theme', () => {
       '9999',
       'fixed',
       'important',
-      'chat-approval',
+      'bold-request',
+      'bold-needs',
       'data-protected',
       'pointer-events',
     ])
       expect(sheets, gone).not.toContain(gone)
 
     // The real approval card is there, with its own labels, on top and not faded.
-    const approve = card.getByRole('button', { name: 'Approve' })
-    const deny = card.getByRole('button', { name: 'Deny' })
-    await expect(approve).toBeVisible()
+    await expect(allow).toBeVisible()
     await expect(deny).toBeVisible()
-    await expect(card.locator('.chat-approval-title')).toBeVisible()
+    await expect(card.locator('.bold-request-head')).toBeVisible()
     expect(await card.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
     expect(await deny.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
-    expect(await isOnTop(approve)).toBe(true)
+    expect(await isOnTop(allow)).toBe(true)
     expect(await isOnTop(deny)).toBe(true)
     // Visible labels: the card says what it said, and nothing else was added to it.
-    await expect(approve).toHaveText('Approve')
-    await expect(deny).toHaveText('Deny')
+    await expect(allow).toHaveText('Allow')
+    await expect(deny).toHaveText('Don’t allow')
     expect(await card.evaluate((el) => getComputedStyle(el, '::after').content)).toBe('none')
     // Text can't be made invisible without changing its colour, or painted over from behind.
-    for (const button of [approve, deny]) {
+    for (const button of [allow, deny]) {
       const paint = await button.evaluate((el) => {
         const style = getComputedStyle(el)
         return { fill: style.webkitTextFillColor, color: style.color, image: style.backgroundImage }
@@ -107,13 +74,13 @@ test.describe('a hostile theme', () => {
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await expect(page.locator('.look-banner')).toHaveCount(0)
 
-    // The Needs-you marker in the top bar is still shown.
-    const dot = page.getByRole('img', { name: 'Needs you' }).first()
-    await expect(dot).toBeVisible()
-    expect(await dot.evaluate((el) => getComputedStyle(el).display)).not.toBe('none')
+    // The Needs-you ring on an agent in the dock is still shown.
+    const ring = page.locator('.bold-needs[data-protected]').first()
+    await expect(ring).toBeVisible()
+    expect(await ring.evaluate((el) => getComputedStyle(el).display)).not.toBe('none')
+    await expect(ring).toHaveAccessibleName(/needs you/)
 
-    await approve.click()
-    await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+    await allowIt(card)
   })
 
   test('the protected layer alone holds when the sanitiser is bypassed', async ({ page }) => {
@@ -122,29 +89,26 @@ test.describe('a hostile theme', () => {
       ...tidyTheme,
       manifest: { ...tidyTheme.manifest, fonts: { body: 'Georgia', heading: 'Georgia' } },
     }
-    await mockThemes(page, [fonty], look)
-    await pair(page)
-    const { card } = await startApproval(page)
+    const { card, allow, deny } = await startApproval(page, [fonty], look)
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+    // The theme's font really is applied to the page, so the card's own font below is not vacuous.
     expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain(
       'Georgia',
     )
     // Unsanitised CSS, with everything a theme must never get through, added behind the engine's back.
     await page.addStyleTag({
       content: `
-        .chat-approval::after { content: "Approve"; position: fixed; inset: 0; z-index: 9999; background: red !important; }
-        .chat-approval, .chat-approval * { opacity: 0 !important; visibility: hidden !important; transform: translateX(-9999px) !important; filter: blur(9px) !important; clip-path: inset(100%) !important; }
-        .chat-approval { display: none !important; }
-        .needs-you-dot { display: none !important; opacity: 0 !important; }
-        .top-bar { position: absolute !important; inset: 0 !important; z-index: 90 !important; background: red !important; }
+        .bold-request::after { content: "Allow"; position: fixed; inset: 0; z-index: 9999; background: red !important; }
+        .bold-request, .bold-request * { opacity: 0 !important; visibility: hidden !important; transform: translateX(-9999px) !important; filter: blur(9px) !important; clip-path: inset(100%) !important; }
+        .bold-request { display: none !important; }
+        .bold-needs { display: none !important; opacity: 0 !important; }
+        .top { position: absolute !important; inset: 0 !important; z-index: 90 !important; background: red !important; }
         .agent-glyph { display: none !important; }
       `,
     })
-    const approve = card.getByRole('button', { name: 'Approve' })
-    const deny = card.getByRole('button', { name: 'Deny' })
-    await expect(approve).toBeVisible()
+    await expect(allow).toBeVisible()
     await expect(deny).toBeVisible()
-    for (const part of [card, approve, deny]) {
+    for (const part of [card, allow, deny]) {
       expect(await part.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
       expect(await part.evaluate((el) => getComputedStyle(el).visibility)).toBe('visible')
       expect(await isOnTop(part)).toBe(true)
@@ -152,29 +116,25 @@ test.describe('a hostile theme', () => {
     expect(await card.evaluate((el) => getComputedStyle(el).display)).toBe('flex')
     expect(await card.evaluate((el) => getComputedStyle(el, '::after').content)).toBe('none')
     // The theme's body font never reaches the card: its labels are set in Score's own.
-    expect(await approve.evaluate((el) => getComputedStyle(el).fontFamily)).toContain(
+    expect(await allow.evaluate((el) => getComputedStyle(el).fontFamily)).toContain(
       'Hanken Grotesk',
     )
-    await expect(page.getByRole('img', { name: 'Needs you' }).first()).toBeVisible()
-    await approve.click()
-    await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('.bold-needs[data-protected]').first()).toBeVisible()
+    await allowIt(card)
   })
 
   test('a theme whose colours fail contrast falls back to Score’s own on protected surfaces', async ({
     page,
   }) => {
     const look: Look = { active: 'hostile', mode: 'light' }
-    await mockThemes(page, [hostile], look)
-    await pair(page)
-    const { card } = await startApproval(page)
+    const { card } = await startApproval(page, [hostile], look)
     await expect(page.locator('html')).toHaveAttribute('data-contrast-fallback', '')
     // The theme asked for near-white on white: the card keeps Score's dark panel and white text.
     expect(await card.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
       'rgb(18, 19, 26)',
     )
     expect(await card.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(255, 255, 255)')
-    await card.getByRole('button', { name: 'Approve' }).click()
-    await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+    await allowIt(card)
   })
 
   for (const [name, css] of Object.entries(guardCss)) {
@@ -184,9 +144,11 @@ test.describe('a hostile theme', () => {
       // The allowlist drops these rules before they apply (the next test); the guard is the second wall, so each is
       // slipped into the theme's sheet after the sanitiser, as if it had missed one.
       const look: Look = { active: 'sneaky', mode: 'light' }
-      await mockThemes(page, [{ ...tidyTheme, id: 'sneaky', name: 'Sneaky' }], look)
-      await pair(page)
-      const { card } = await startApproval(page)
+      const { card, allow } = await startApproval(
+        page,
+        [{ ...tidyTheme, id: 'sneaky', name: 'Sneaky' }],
+        look,
+      )
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await page.evaluate((text) => {
         const sheet = document.adoptedStyleSheets.at(-1)!
@@ -198,29 +160,29 @@ test.describe('a hostile theme', () => {
       await expect(banner).toContainText('hid part of an approval or a security screen')
       await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
       expect(await sheetsText(page)).toBe('')
-      await expect(card.getByRole('button', { name: 'Approve' })).toBeVisible()
-      expect(await isOnTop(card.getByRole('button', { name: 'Approve' }))).toBe(true)
+      await expect(allow).toBeVisible()
+      expect(await isOnTop(allow)).toBe(true)
       // Sticky on this device: the next visit doesn't bring it back.
       expect(await page.evaluate(() => localStorage.getItem('score.look.device'))).toBe('score')
       await page.reload()
       await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
-      await expect(card.getByRole('button', { name: 'Approve' })).toBeVisible()
-      await card.getByRole('button', { name: 'Approve' }).click()
-      await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+      await expect(allow).toBeVisible()
+      await allowIt(card)
     })
 
     test(`never gets that far: the allowlist drops it (${name})`, async ({ page }) => {
       const look: Look = { active: 'sneaky', mode: 'light' }
-      await mockThemes(page, [{ id: 'sneaky', name: 'Sneaky', manifest: {}, css }], look)
-      await pair(page)
-      const { card } = await startApproval(page)
+      const { card, allow } = await startApproval(
+        page,
+        [{ id: 'sneaky', name: 'Sneaky', manifest: {}, css }],
+        look,
+      )
       await page.waitForTimeout(1500)
       // The theme stays on, nothing was applied that moves or fades anything, and the approval reads as Score draws it.
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await expect(page.locator('.look-banner')).toHaveCount(0)
-      const approve = card.getByRole('button', { name: 'Approve' })
-      await expect(approve).toBeVisible()
-      expect(await isOnTop(approve)).toBe(true)
+      await expect(allow).toBeVisible()
+      expect(await isOnTop(allow)).toBe(true)
       expect(await card.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
     })
   }
@@ -228,21 +190,19 @@ test.describe('a hostile theme', () => {
   for (const [name, css] of Object.entries(containedCss)) {
     test(`can’t reach inside a protected surface (${name})`, async ({ page }) => {
       const look: Look = { active: 'sneaky', mode: 'light' }
-      await mockThemes(page, [{ id: 'sneaky', name: 'Sneaky', manifest: {}, css }], look)
-      await pair(page)
-      const { card } = await startApproval(page)
+      const { card, allow } = await startApproval(
+        page,
+        [{ id: 'sneaky', name: 'Sneaky', manifest: {}, css }],
+        look,
+      )
       await page.waitForTimeout(1500)
       // The theme stays on, and the approval is exactly as Score draws it.
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await expect(page.locator('.look-banner')).toHaveCount(0)
-      const approve = card.getByRole('button', { name: 'Approve' })
-      await expect(approve).toBeVisible()
-      expect(await isOnTop(approve)).toBe(true)
-      expect(await approve.evaluate((el) => getComputedStyle(el).color)).not.toBe(
-        'rgba(0, 0, 0, 0)',
-      )
-      await approve.click()
-      await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+      await expect(allow).toBeVisible()
+      expect(await isOnTop(allow)).toBe(true)
+      expect(await allow.evaluate((el) => getComputedStyle(el).color)).not.toBe('rgba(0, 0, 0, 0)')
+      await allowIt(card)
     })
   }
 
@@ -253,24 +213,25 @@ test.describe('a hostile theme', () => {
       [
         {
           ...hostile,
-          css: '.rules-card, .look-reset { display: none; } main button { opacity: 0; }',
+          css: '.rules-card, .bold-look-reset { display: none; } main button { opacity: 0; }',
         },
       ],
       look,
     )
     await pair(page)
-    // Rules and approvals is a page of its own; the Look page holds the way back.
-    await page.goto('/settings/rules')
+    // Rules is a section of its own; the Look section holds the way back.
+    await page.goto('/b/settings/rules')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await expect(page.getByRole('region', { name: /Rules/ })).toBeVisible()
     await page
-      .getByRole('navigation', { name: 'Settings sections' })
-      .getByRole('link', { name: 'Look' })
+      .getByRole('navigation', { name: 'Settings' })
+      .getByRole('button', { name: /^Look/ })
       .click()
-    const region = page.getByRole('region', { name: 'Look' })
-    await expect(region.getByRole('button', { name: 'Reset look on this device' })).toBeVisible()
+    await expect(page).toHaveURL(/\/b\/settings\/look$/)
+    const reset = page.getByRole('button', { name: 'Reset the look on this device' })
+    await expect(reset).toBeVisible()
     // And the reset works from there.
-    await region.getByRole('button', { name: 'Reset look on this device' }).click()
+    await reset.click()
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
   })
 })
@@ -283,25 +244,27 @@ test.describe('the way back', () => {
     await mockThemes(page, [hostile], look)
     await page.addInitScript(() => localStorage.setItem('score.look.device', 'hostile'))
     await pair(page)
-    await page.goto('/settings')
+    await page.goto('/b/settings')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
-    await page.goto('/chat?look=safe')
+    await page.goto('/b?look=safe')
     const banner = page.locator('.look-banner')
     await expect(banner).toContainText('Safe look: your theme is off for this visit')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     await expect(page.locator('html')).toHaveAttribute('data-pack', 'score')
     expect(await sheetsText(page)).toBe('')
-    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+    // Score's own light ground (the look's mode), not the hostile theme's #ffe0e0.
+    await expect(page.locator('[data-ui="bold"]')).toHaveCSS(
+      'background-color',
       'rgb(236, 238, 242)',
     )
     // The link goes to Settings › Look without leaving safe mode.
     await banner.getByRole('link', { name: 'Settings › Look' }).click()
-    await expect(page).toHaveURL(/\/settings\/look$/)
+    await expect(page).toHaveURL(/\/b\/settings\/look$/)
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
-    await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Look', exact: true })).toBeVisible()
     // The device choice is untouched: the next ordinary visit has the theme again.
     expect(await page.evaluate(() => localStorage.getItem('score.look.device'))).toBe('hostile')
-    await page.goto('/chat')
+    await page.goto('/b')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   })
 
@@ -309,7 +272,7 @@ test.describe('the way back', () => {
     const look: Look = { active: 'hostile', mode: 'light' }
     await mockThemes(page, [hostile], look)
     await pair(page)
-    await page.goto('/chat')
+    await page.goto('/b')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await page.keyboard.press('Control+Shift+Digit0')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
@@ -326,12 +289,12 @@ test.describe('the way back', () => {
     const look: Look = { active: 'hostile', mode: 'light' }
     await mockThemes(page, [hostile], look)
     await pair(page)
-    await page.goto('/chat')
+    await page.goto('/b')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     await page.keyboard.press('Control+k')
-    const palette = page.getByRole('dialog', { name: 'Search or run a command' })
-    await palette.getByRole('searchbox').fill('reset look')
-    await palette.getByRole('button', { name: 'Reset look on this device' }).click()
+    const palette = page.getByRole('dialog', { name: 'Search and commands' })
+    await palette.getByRole('combobox', { name: 'Search or run a command' }).fill('reset look')
+    await palette.getByRole('option', { name: /Reset look on this device/ }).click()
     await expect(palette).toBeHidden()
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
   })
@@ -340,7 +303,7 @@ test.describe('the way back', () => {
     const look: Look = { active: 'gone', mode: 'light' }
     await mockThemes(page, [], look)
     await pair(page)
-    await page.goto('/chat')
+    await page.goto('/b')
     await expect(page.locator('.look-banner')).toContainText('Your theme couldn’t be loaded')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
@@ -354,24 +317,23 @@ test.describe('shared and per-device looks', () => {
     const look: Look = { active: 'tidy', mode: 'light' }
     await mockThemes(page, [tidyTheme], look)
     await pair(page)
-    await page.goto('/settings/look')
+    await page.goto('/b/settings/look')
     const html = page.locator('html')
     await expect(html).toHaveAttribute('data-look', 'custom')
-    const region = page.getByRole('region', { name: 'Look' })
-    const styles = region.getByRole('radiogroup', { name: 'Style' })
-    await expect(styles.getByRole('radio', { name: /Tidy/ })).toHaveAttribute(
+    const styles = page.getByRole('radiogroup', { name: 'Style on this device' })
+    await expect(styles.getByRole('radio', { name: 'Tidy' })).toHaveAttribute(
       'aria-checked',
       'true',
     )
-    await styles.getByRole('radio', { name: /Night shift/ }).click()
+    await styles.getByRole('radio', { name: 'Night shift' }).click()
     await expect(html).toHaveAttribute('data-pack', 'night')
     await expect(html).not.toHaveAttribute('data-look', 'custom')
     await expect(
-      region.getByText(/This device uses Night shift instead of the shared Tidy/),
+      page.getByText(/This device uses Night shift instead of the shared Tidy/),
     ).toBeVisible()
     await page.reload()
     await expect(html).toHaveAttribute('data-pack', 'night')
-    await region.getByRole('button', { name: 'Use the shared theme' }).click()
+    await page.getByRole('button', { name: 'Use the shared theme' }).click()
     await expect(html).toHaveAttribute('data-look', 'custom')
     await expect(html).toHaveAttribute('data-pack', 'score')
   })
@@ -380,11 +342,10 @@ test.describe('shared and per-device looks', () => {
     const look: Look = { active: 'score', mode: 'system' }
     const puts = await mockThemes(page, [tidyTheme], look)
     await pair(page)
-    await page.goto('/settings/look')
-    const region = page.getByRole('region', { name: 'Look' })
-    await region.getByLabel('Theme for every device').selectOption('tidy')
-    await region.getByLabel('Colours for every device').selectOption('dark')
-    await region.getByRole('button', { name: 'Save for every device' }).click()
+    await page.goto('/b/settings/look')
+    await page.getByLabel('Theme for every device').selectOption('tidy')
+    await page.getByLabel('Colours for every device').selectOption('dark')
+    await page.getByRole('button', { name: 'Save for every device' }).click()
     await expect.poll(() => puts.length).toBe(1)
     expect(puts[0]).toEqual({ activeTheme: 'tidy', mode: 'dark' })
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
@@ -409,7 +370,7 @@ test.describe('shared and per-device looks', () => {
       })
     })
     await pair(page)
-    await page.goto('/chat')
+    await page.goto('/b')
     await expect(page.locator('html')).toHaveAttribute('data-pack', 'score')
     await expect(page.locator('html')).not.toHaveAttribute('data-look', 'custom')
     // Another device saved a new shared theme.
@@ -463,6 +424,7 @@ test.describe('the sanitiser in a real browser', () => {
       '.g { color: blue !\\69mportant; }',
       '\\5b data-protected\\5d { color: red; }',
       '.card:has(\\2e chat-approval) { color: red; }',
+      '.card:has(\\2e bold-request) { color: red; }',
       '.keep { color: green; margin: 4px; }',
       '@font-face { font-family: Evil; src: url(asset:fonts/e.woff2); }',
     ].join('\n')
@@ -471,7 +433,7 @@ test.describe('the sanitiser in a real browser', () => {
       mode: 'light',
     })
     await pair(page)
-    await page.goto('/chat')
+    await page.goto('/b')
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     const sheets = await sheetsText(page)
     expect(sheets).toContain('.keep')
@@ -488,6 +450,7 @@ test.describe('the sanitiser in a real browser', () => {
       'important',
       'data-protected',
       'chat-approval',
+      'bold-request',
       'font-face',
       '@page',
     ])
@@ -533,11 +496,11 @@ const hostileLayouts: Record<string, MockTheme> = {
 
 async function assertProtectedHolds(card: Locator) {
   await card.scrollIntoViewIfNeeded()
-  const approve = card.getByRole('button', { name: 'Approve' })
-  const deny = card.getByRole('button', { name: 'Deny' })
-  await expect(approve).toBeVisible()
+  const allow = card.getByRole('button', { name: 'Allow', exact: true })
+  const deny = card.getByRole('button', { name: 'Don’t allow', exact: true })
+  await expect(allow).toBeVisible()
   await expect(deny).toBeVisible()
-  expect(await isOnTop(approve)).toBe(true)
+  expect(await isOnTop(allow)).toBe(true)
   expect(await isOnTop(deny)).toBe(true)
   const paint = await card.evaluate((el) => {
     const lum = (rgb: number[]) => {
@@ -559,7 +522,7 @@ async function assertProtectedHolds(card: Locator) {
     const style = getComputedStyle(el)
     const bg = parse(style.backgroundColor)
     // Every readable part against the nearest opaque background behind it.
-    const ratios = [...el.querySelectorAll('button, h2, h3, p, strong')]
+    const ratios = [...el.querySelectorAll('button, h2, h3, p, strong, code')]
       .filter((node) => node.getClientRects().length > 0 && (node.textContent ?? '').trim())
       .map((node) => {
         const fg = parse(getComputedStyle(node).color)
@@ -589,69 +552,60 @@ async function assertProtectedHolds(card: Locator) {
   expect(paint.minContrast).toBeGreaterThanOrEqual(4.5)
 }
 
+// The shape and background options still reach the new shell; the navigation, menu, width and chat-list options belong
+// to the classic layout (decision 131) and the shell ignores them, so those themes also prove that they change nothing.
 test.describe('layout options never weaken a protected surface', () => {
   for (const [name, layout] of Object.entries(hostileLayouts)) {
-    test(`${name}: the approval in Chat and the Needs-you marker`, async ({ page }) => {
+    test(`${name}: the approval in the room and the Needs-you marker`, async ({ page }) => {
       const look: Look = { active: layout.id, mode: 'light' }
-      await mockThemes(page, [layout], look)
-      await page.route('**/api/themes/*/assets/**', (route) =>
-        route.fulfill({ body: samplePng(960, 640), contentType: 'image/png' }),
-      )
-      await pair(page)
-      const { card, roomId } = await startApproval(page)
+      const { card, allow } = await startApproval(page, [layout], look, {}, async (frame) => {
+        await frame.route('**/api/themes/*/assets/**', (route) =>
+          route.fulfill({ body: samplePng(960, 640), contentType: 'image/png' }),
+        )
+      })
       if (name === 'glassPale') {
         // Pale text on a pale glass card: the protected surfaces wear Score's own colours (the contrast fallback), so
         // the card stays readable whether or not the guard also switches the theme off.
         await page.waitForTimeout(1500)
         await assertProtectedHolds(card)
-        await card.getByRole('button', { name: 'Approve' }).click()
-        await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
+        await allowIt(card)
         return
       }
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
       await assertProtectedHolds(card)
-      // Needs-you stays in the navigation.
-      await expect(page.getByRole('img', { name: 'Needs you' }).first()).toBeAttached()
+      // Needs-you stays in the dock.
+      await expect(page.locator('.bold-needs[data-protected]').first()).toBeAttached()
       // Settings can't be hidden, and the way back is on its page.
-      await page.goto('/settings/look')
-      await expect(page.getByRole('region', { name: 'Look' })).toBeVisible()
+      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      await page
+        .getByRole('navigation', { name: 'Settings' })
+        .getByRole('button', { name: /^Look/ })
+        .click()
       await expect(
-        page
-          .getByRole('region', { name: 'Look' })
-          .getByRole('button', { name: 'Reset look on this device' }),
+        page.getByRole('button', { name: 'Reset the look on this device' }),
       ).toBeVisible()
       // No banner: the guard didn't have to switch the theme off.
       await expect(page.locator('.look-banner')).toHaveCount(0)
       await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
-      await page.goto(`/chat/${roomId}`)
-      await page
-        .getByRole('group', { name: /^Approval: / })
-        .last()
-        .getByRole('button', { name: 'Approve' })
-        .click()
-      await expect(
-        page
-          .getByRole('group', { name: /^Approval: / })
-          .last()
-          .getByText('Approved by you'),
-      ).toBeVisible({ timeout: 15_000 })
+      await page.getByRole('button', { name: 'Score, go to the team room' }).click()
+      await expect(allow).toBeVisible()
+      await allowIt(card)
     })
   }
 
-  test('a theme can’t take Settings out of the menu, whatever the navigation', async ({ page }) => {
+  test('a theme can’t take Settings out of the shell, whatever its old navigation options say', async ({
+    page,
+  }) => {
     for (const nav of ['top', 'left', 'right', 'launcher'] as const) {
       const hide = layoutTheme(`hide-${nav}`, { layout: { nav, menu: [{ to: '/chat' }] } })
       await mockThemes(page, [hide], { active: hide.id, mode: 'light' })
       await pair(page)
-      await page.goto('/chat')
-      await expect(page.locator('html')).toHaveAttribute('data-nav', nav)
-      if (nav === 'launcher') await page.getByRole('button', { name: 'Menu' }).click()
-      const links =
-        nav === 'launcher'
-          ? page.getByRole('dialog', { name: 'Menu' })
-          : page.getByRole('navigation', { name: 'Main' })
-      await expect(links.getByRole('link', { name: 'Settings' })).toBeVisible()
-      await expect(links.getByRole('link', { name: 'Now' })).toHaveCount(0)
+      await page.goto('/b')
+      await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+      await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible()
+      await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button')).toHaveCount(
+        3,
+      )
       await page.unrouteAll({ behavior: 'ignoreErrors' })
     }
   })

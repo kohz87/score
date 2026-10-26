@@ -144,7 +144,7 @@ const attempt = (over: object = {}) => ({
 test('a failed attempt opens its read-only run page, never Watch', () => {
   const { router } = setup()
   const payload = router.handle(ev('attempt.updated', attempt()))!
-  expect(payload).toMatchObject({ kind: 'errors', url: '/attempts/kr_1', tag: 'attempt:kr_1' })
+  expect(payload).toMatchObject({ kind: 'errors', url: '/b/attempts/kr_1', tag: 'attempt:kr_1' })
   expect(payload.url).not.toContain('/watch/')
   // Once per attempt.
   expect(router.handle(ev('attempt.updated', attempt()))).toBeNull()
@@ -162,7 +162,7 @@ test('a failed attempt of an earlier copy of the board opens the attempt page', 
       }),
     ),
   )!
-  expect(payload.url).toBe('/attempts/kr_2')
+  expect(payload.url).toBe('/b/attempts/kr_2')
   expect(payload.title).toBe('A task run failed')
 })
 

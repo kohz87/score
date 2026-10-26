@@ -1,7 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { mockThemes, type Look, type MockTheme } from './themes-fixtures.ts'
-import { pair } from './pair.ts'
-import { makeRoom, say } from './rooms.ts'
+import { type Look, type MockTheme } from './themes-fixtures.ts'
+import { startApproval } from './themes-decision.ts'
 
 // Phase 9 re-gate H1 (decision 102): the trusted protected boundary, in a real browser. Theme CSS is an allowlist of
 // visual properties (so most of what these specs inject is dropped before it gets here); protected.css is the second
@@ -11,34 +10,34 @@ import { makeRoom, say } from './rooms.ts'
 const BLACK_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC'
 
+/** Wears the theme `edge` on the new shell's room with the fixture approval; resolves with the Needs-you card. */
 async function wear(page: Page, theme: Partial<MockTheme>) {
   const look: Look = { active: 'edge', mode: 'light' }
-  await mockThemes(page, [{ id: 'edge', name: 'Edge', source: 'imported', ...theme }], look)
-  await page.route('**/api/themes/edge/assets/**', (route) =>
-    route.fulfill({ body: Buffer.from(BLACK_PNG, 'base64'), contentType: 'image/png' }),
+  const { card } = await startApproval(
+    page,
+    [{ id: 'edge', name: 'Edge', source: 'imported', ...theme }],
+    look,
+    {},
+    async (frame) => {
+      await frame.route('**/api/themes/edge/assets/**', (route) =>
+        route.fulfill({ body: Buffer.from(BLACK_PNG, 'base64'), contentType: 'image/png' }),
+      )
+    },
   )
-  await pair(page)
-}
-
-async function startApproval(page: Page) {
-  const room = await makeRoom(page, 'edge')
-  await say(page, room.id, `Please ask for approval before installing ${Date.now()}`)
-  await page.goto(`/chat/${room.id}`)
-  const card = page.getByRole('group', { name: /^Approval: / }).last()
-  await expect(card.getByRole('button', { name: 'Approve' })).toBeAttached({ timeout: 20_000 })
   return card
 }
+
+const harmless = '.main { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }'
 
 test('re-gate 3: inherited typography from an ancestor can’t change how a decision reads', async ({
   page,
 }) => {
-  await wear(page, { css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
-  const card = await startApproval(page)
+  const card = await wear(page, { css: harmless })
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   // As if the sanitiser had missed these: an unlayered sheet on the ancestors.
   await page.addStyleTag({
     content:
-      ':root, body, .chat-message, .chat-thread, main { word-spacing: -100px; letter-spacing: -4px; text-transform: uppercase; writing-mode: vertical-rl; text-indent: 400px; text-shadow: 0 0 30px red; }',
+      ':root, body, .bold-shell, .bold-frame, .main, main { word-spacing: -100px; letter-spacing: -4px; text-transform: uppercase; writing-mode: vertical-rl; text-indent: 400px; text-shadow: 0 0 30px red; }',
   })
   const read = await card.evaluate((surface) => {
     const style = getComputedStyle(surface)
@@ -65,20 +64,18 @@ test('re-gate 3: inherited typography from an ancestor can’t change how a deci
   })
 })
 
-test('re-gate 5: a translucent rail over a black picture leaves the Settings link on an opaque background', async ({
+test('re-gate 5: a translucent top bar over a black picture leaves the Settings button on an opaque background', async ({
   page,
 }) => {
   await wear(page, {
     manifest: {
-      layout: { nav: 'left' },
       shape: { surface: 'glass' },
       background: { image: 'asset:img/black.png', fit: 'cover', dim: 0 },
     },
-    css: '.top-bar { background-color: rgb(255 255 255 / 70%); }',
+    css: '.bold-shell .bold-frame .top { background-color: rgb(255 255 255 / 70%); }',
   })
-  await page.goto('/chat')
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
-  const link = page.locator('a.main-nav-link[href="/settings"]')
+  const link = page.getByRole('button', { name: 'Settings', exact: true })
   await expect(link).toBeVisible()
   const result = await link.evaluate((element) => {
     const canvas = document.createElement('canvas')
@@ -134,8 +131,7 @@ for (const [name, rule] of [
   test(`third gate 2: a ::selection rule on ${name} can’t blank selected text inside a decision`, async ({
     page,
   }) => {
-    await wear(page, { css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
-    const card = await startApproval(page)
+    const card = await wear(page, { css: harmless })
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     // As if the sanitiser had missed it: an unlayered sheet after it.
     await page.addStyleTag({ content: rule })
@@ -164,10 +160,9 @@ for (const [name, rule] of [
 test('third gate 2: the same rule in the theme’s own CSS is dropped by the sanitiser, anywhere on the page', async ({
   page,
 }) => {
-  await wear(page, {
-    css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); } :root::selection, body::selection { color: transparent; background-color: transparent; }',
+  const card = await wear(page, {
+    css: '.main { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); } :root::selection, body::selection { color: transparent; background-color: transparent; }',
   })
-  const card = await startApproval(page)
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   const read = await card.evaluate((surface) => {
     getSelection()!.selectAllChildren(document.body)
@@ -237,10 +232,14 @@ async function painted(page: Page, box: Locator, { middle = 1, pad = 0 } = {}) {
 test('third gate 3: a background in the agent’s own colour doesn’t erase a bare glyph', async ({
   page,
 }) => {
-  await wear(page, { css: '.chat-active-agents { background-color: #6b4eff; }' })
-  await startApproval(page)
+  // The dock draws each agent as a bare glyph; lead's colour is #6B4EFF.
+  await wear(page, {
+    css: '.bold-shell .bold-frame .dock-ring-inner { background-color: #6b4eff; }',
+  })
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
-  const glyph = page.locator('.chat-active-agents svg.agent-glyph').first()
+  const glyph = page
+    .locator('.dock-ring-inner svg.agent-glyph[style*="--glyph-color: #6B4EFF"]')
+    .first()
   await expect(glyph).toBeVisible({ timeout: 20_000 })
   // The accepted rule is really painting the agent's colour behind it.
   expect(await glyph.evaluate((svg) => getComputedStyle(svg.parentElement!).backgroundColor)).toBe(
@@ -253,30 +252,25 @@ test('third gate 3: a background in the agent’s own colour doesn’t erase a b
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
 })
 
-test('third gate 3: a Needs-you dot stays distinguishable on a background of its own colour', async ({
+test('third gate 3: a Needs-you ring stays distinguishable on a background of its own colour', async ({
   page,
 }) => {
-  await wear(page, { css: '.main-nav-link, .top-bar { background-color: #ff6b8a; }' })
-  await startApproval(page)
-  // The marker rides on Chat, the first destination; off Chat its link is not the current page (whose own ink
-  // background would sit behind the dot).
-  await page.goto('/team')
+  // The ring that marks an agent waiting on the person is edged in Score's own two tones, so any ground shows it.
+  await wear(page, {
+    css: '.bold-shell .bold-frame .dock, .bold-shell .bold-frame .top, .bold-shell .bold-frame .ring { background-color: #ff6b8a; }',
+  })
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
-  const dot = page.locator('.needs-you-dot').first()
-  await expect(dot).toBeAttached({ timeout: 20_000 })
-  const dotColour = await dot.evaluate((el) => getComputedStyle(el).backgroundColor)
-  const behind = await dot.evaluate((el) => getComputedStyle(el.parentElement!).backgroundColor)
-  expect(behind).toBe('rgb(255, 107, 138)')
-  expect(dotColour).toBe('rgb(255, 107, 138)')
-  const result = await painted(page, dot, { pad: 3 })
+  const ring = page.locator('.bold-needs[data-protected]').first()
+  await expect(ring).toBeAttached({ timeout: 20_000 })
+  await expect(ring).toBeVisible()
+  const result = await painted(page, ring, { pad: 6 })
   expect(result.ratio).toBeGreaterThanOrEqual(3)
 })
 
 test('third gate 3: every agent colour gets a plate of at least 3:1, computed by the browser', async ({
   page,
 }) => {
-  await wear(page, { css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }' })
-  await page.goto('/chat')
+  await wear(page, { css: harmless })
   await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
   const worst = await page.evaluate(() => {
     const canvas = document.createElement('canvas')
@@ -327,23 +321,3 @@ test('third gate 3: every agent colour gets a plate of at least 3:1, computed by
   })
   expect(worst.ratio, worst.colour).toBeGreaterThanOrEqual(3)
 })
-
-// Third gate, finding 5: a manifest can't blank the Settings destination with an empty-looking label.
-for (const [name, label] of [
-  ['a space', ' '],
-  ['zero-width characters', '​⁠﻿'],
-] as const) {
-  test(`third gate 5: a Settings label of ${name} still shows a readable Settings link`, async ({
-    page,
-  }) => {
-    await wear(page, {
-      manifest: { layout: { menu: [{ to: '/chat' }, { to: '/settings', label }] } },
-      css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
-    })
-    await page.goto('/chat')
-    const link = page.locator('a.main-nav-link[href="/settings"]')
-    await expect(link).toBeVisible()
-    await expect(link).toHaveAccessibleName(/Settings/)
-    expect((await link.innerText()).trim()).toMatch(/\S/)
-  })
-}

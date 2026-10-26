@@ -40,15 +40,23 @@ test('a paused Hermes build is checked and re-enabled with one confirmed click',
     tested = true
     return route.fulfill({ json: { ok: true } })
   })
-  await page.goto('/settings')
+  // Every page of the shell says approvals are paused (the old header marker), and the link leads to the check.
+  await page.goto('/b/team')
+  const notice = page.getByRole('status').filter({ hasText: 'Approvals in Score are paused' })
+  await expect(notice).toHaveAttribute('data-protected', 'flex')
+  await notice.getByRole('link', { name: 'Check this Hermes version' }).click()
+  await expect(page).toHaveURL(/\/b\/settings\/connections$/)
   const banner = page.getByRole('region', { name: 'Hermes was updated' })
   await expect(banner).toContainText('Approvals in Score are paused until you check this version.')
-  await expect(page.getByRole('img', { name: 'Hermes version needs a check' })).toBeVisible()
+  // The Settings pages carry the check itself, not a second notice.
+  await expect(page.locator('.bold-fence-notice')).toHaveCount(0)
   await banner.getByRole('button', { name: 'Check this Hermes version' }).click()
   await expect(banner.getByRole('table')).toContainText('0.21.5 → 0.21.6')
   await banner.getByRole('button', { name: 'Turn approvals back on' }).click()
   await expect(banner).toBeHidden()
-  await expect(page.getByRole('img', { name: 'Hermes version needs a check' })).toBeHidden()
+  await page.goto('/b/team')
+  await expect(page.getByRole('heading', { name: 'Your team', level: 1 })).toBeVisible()
+  await expect(page.locator('.bold-fence-notice')).toHaveCount(0)
 })
 
 test('a changed Hermes build stays paused and lists what changed', async ({ page }) => {
@@ -69,7 +77,7 @@ test('a changed Hermes build stays paused and lists what changed', async ({ page
       },
     }),
   )
-  await page.goto('/settings')
+  await page.goto('/b/settings/connections')
   const banner = page.getByRole('region', { name: 'Hermes was updated' })
   await banner.getByRole('button', { name: 'Check this Hermes version' }).click()
   await expect(banner.getByRole('status')).toContainText('Changed: Kanban database schema')
