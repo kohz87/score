@@ -1046,3 +1046,16 @@ test('the room menu gives export, share and delete the prototype’s menu rows',
   ).toBe(true)
   expect(menu.getAttribute('data-protected')).toBe('flex')
 })
+
+test('a room whose messages were all deleted offers to show them from the starter board', async () => {
+  stubRoom([])
+  renderInRoom(<BoldTeamRoom agents={agents} />, ['/b'])
+  fireEvent.click(await screen.findByRole('button', { name: 'Show what was deleted' }))
+  const toggle = await screen.findByRole('button', { name: 'Hide deleted messages' })
+  expect(toggle.getAttribute('aria-pressed')).toBe('true')
+  expect(screen.queryByRole('heading', { name: 'Your team is ready. What first?' })).toBeNull()
+  fireEvent.click(toggle)
+  expect(
+    await screen.findByRole('heading', { name: 'Your team is ready. What first?' }),
+  ).toBeDefined()
+})

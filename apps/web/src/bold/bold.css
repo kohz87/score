@@ -862,3 +862,17 @@ body.fit [data-ui='bold'] .stream {
   color: var(--hi-bg);
   cursor: pointer;
 }
+
+[data-ui='bold'] .bold-room-project-list,
+[data-ui='bold'] .bold-room-project-colours {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+[data-ui='bold'] .bold-room-project-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

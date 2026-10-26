@@ -4,8 +4,10 @@ import {
   type Job,
   type OutsideSession,
   type Room,
+  type RoomProject,
 } from '@score/contract'
 import {
+  Fragment,
   useEffect,
   useId,
   useRef,
@@ -18,6 +20,11 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { useOutsideSessions } from '../../data/outside-sessions.ts'
+import { useStreamQuery } from '../../data/query-client.ts'
+import { createProject, patchRoom, PROJECT_COLORS } from '../../routes/chat/conversation-api.ts'
+import { roomsQuery } from '../../routes/chat/queries.ts'
+import { roomNameProblem } from '../../routes/chat/room-actions.ts'
+import { groupRooms } from '../../routes/chat/room-groups.ts'
 import { ChevronIcon, PlusIcon, TrashIcon } from '../BoldIcons.tsx'
 import { useStartJob } from '../BoldStartJob.tsx'
 import { agentDisplayName } from '../bold-agents.ts'
@@ -128,11 +135,27 @@ export function RoomSwitcher({
   const sessions = useOutsideSessions(open)
   const close = useMenu(open, setOpen, root, trigger)
 
-  const older = rooms.filter((room) => room.id !== teamRoom?.id && isOlderRoom(room))
-  const imported = rooms.filter(
+  const [showArchived, setShowArchived] = useState(false)
+  const projects = useStreamQuery(roomsQuery).data?.projects ?? []
+  const candidates = rooms.filter((room) => room.id !== teamRoom?.id && isOlderRoom(room))
+  const groups = groupRooms(candidates, projects, { showArchived, tag: null })
+  const imported = rooms
+    .filter(
+      (room) =>
+        room.id !== teamRoom?.id &&
+        room.role !== 'team' &&
+        room.kind === 'room' &&
+        room.importedFrom &&
+        (showArchived || !room.archived),
+    )
+    .sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false))
+  const archivedCount = rooms.filter(
     (room) =>
-      room.id !== teamRoom?.id && room.role !== 'team' && room.kind === 'room' && room.importedFrom,
-  )
+      room.id !== teamRoom?.id && room.role !== 'team' && room.kind === 'room' && room.archived,
+  ).length
+  const grouped = groups.projects.some((group) => group.rooms.length > 0)
+  const note = (room: Room) =>
+    [room.pinned ? 'Pinned' : '', room.archived ? 'Archived' : ''].filter(Boolean).join(' · ')
   const chooseRoom = (room: Room) => {
     close()
     onSelectRoom(room)
@@ -186,25 +209,41 @@ export function RoomSwitcher({
               </span>
             </button>
           )}
-          {older.map((room) => (
-            <button
-              key={room.id}
-              type="button"
-              role="option"
-              aria-selected={current?.id === room.id}
-              className={`mi${current?.id === room.id ? ' sel' : ''}`}
-              onClick={() => chooseRoom(room)}
-            >
-              <RoomDot team={false} />
-              <span className="menu-copy">
-                <b>{room.name}</b>
-                <span className="small muted">
-                  {room.importedFrom
-                    ? `Imported from ${room.importedFrom.label}`
-                    : 'Older room · read-write with @mentions'}
-                </span>
-              </span>
-            </button>
+          {[
+            { key: 'pinned', title: 'Pinned', rooms: groups.pinned },
+            ...groups.projects.map((group) => ({
+              key: group.project.id,
+              title: group.project.name,
+              rooms: group.rooms,
+            })),
+            { key: 'rest', title: grouped ? 'No project' : '', rooms: groups.rest },
+          ].map((section) => (
+            <Fragment key={section.key}>
+              {section.rooms.length > 0 && section.title && (
+                <div className="sec bold-room-group">{section.title}</div>
+              )}
+              {section.rooms.map((room) => (
+                <button
+                  key={room.id}
+                  type="button"
+                  role="option"
+                  aria-selected={current?.id === room.id}
+                  className={`mi${current?.id === room.id ? ' sel' : ''}`}
+                  onClick={() => chooseRoom(room)}
+                >
+                  <RoomDot team={false} />
+                  <span className="menu-copy">
+                    <b>{room.name}</b>
+                    <span className="small muted">
+                      {room.importedFrom
+                        ? `Imported from ${room.importedFrom.label}`
+                        : 'Older room · read-write with @mentions'}
+                      {note(room) ? ` · ${note(room)}` : ''}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </Fragment>
           ))}
           {imported.length > 0 && <div className="sec">Imported chats</div>}
           {imported.map((room) => (
@@ -221,10 +260,27 @@ export function RoomSwitcher({
                 <b>{room.name}</b>
                 <span className="small muted">
                   Imported from {room.importedFrom?.label ?? 'Elsewhere'} · read-write
+                  {note(room) ? ` · ${note(room)}` : ''}
                 </span>
               </span>
             </button>
           ))}
+          {(archivedCount > 0 || showArchived) && (
+            <button
+              type="button"
+              role="option"
+              aria-selected={showArchived}
+              className="mi"
+              onClick={() => setShowArchived((value) => !value)}
+            >
+              <span className="menu-copy">
+                <b>{showArchived ? 'Hide archived' : 'Show archived'}</b>
+                <span className="small muted">
+                  {archivedCount} archived {archivedCount === 1 ? 'room' : 'rooms'}
+                </span>
+              </span>
+            </button>
+          )}
           <div className="sec">Elsewhere · the agents’ own chats outside Score</div>
           {sessions.isPending && (
             <div className="small muted bold-menu-note" role="status">
@@ -504,6 +560,205 @@ export function DeleteJobDialog({
   )
 }
 
+export function RenameRoomDialog({ room, onClose }: { room: Room; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const [text, setText] = useState(room.name)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    dialog.current?.showModal?.()
+  }, [])
+  async function rename() {
+    if (busy) return
+    const problem = roomNameProblem(text)
+    if (problem) return setError(problem)
+    const name = text.trim()
+    if (name === room.name || `#${name}` === room.name) return onClose()
+    setBusy(true)
+    setError(null)
+    try {
+      // The new name arrives on the stream as room.upserted.
+      await patchRoom(room.id, { name })
+      onClose()
+    } catch (failure) {
+      setBusy(false)
+      setError(
+        failure instanceof ApiError && failure.status === 409
+          ? 'Another room already has that name.'
+          : 'Couldn’t rename the room. Try again.',
+      )
+    }
+  }
+  return (
+    <dialog
+      ref={dialog}
+      open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
+      className="chat-rewind-dialog bold-room-rename-dialog"
+      data-protected="any"
+      aria-labelledby="rename-room-title"
+      onCancel={(event) => {
+        event.preventDefault()
+        if (!busy) onClose()
+      }}
+    >
+      <h2 id="rename-room-title">Rename room</h2>
+      <label className="chat-delete-confirm">
+        <span>Name</span>
+        <input
+          value={text}
+          autoFocus
+          autoComplete="off"
+          maxLength={200}
+          disabled={busy}
+          aria-invalid={error !== null}
+          onChange={(event) => {
+            setText(event.target.value)
+            setError(null)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void rename()
+            }
+          }}
+        />
+      </label>
+      {error && (
+        <p className="chat-rewind-warning" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="chat-rewind-actions">
+        <button type="button" onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="chat-rewind-primary"
+          disabled={busy || !text.trim()}
+          onClick={() => void rename()}
+        >
+          {busy ? 'Renaming…' : 'Rename'}
+        </button>
+      </div>
+    </dialog>
+  )
+}
+
+/** Choose, create or clear the room's project (PLAN 5.26 routes). */
+export function RoomProjectDialog({
+  room,
+  projects,
+  onClose,
+}: {
+  room: Room
+  projects: RoomProject[]
+  onClose: () => void
+}) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const [choice, setChoice] = useState<string | null>(room.projectId ?? null)
+  const [name, setName] = useState('')
+  const [color, setColor] = useState<string>(PROJECT_COLORS[0].value)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    dialog.current?.showModal?.()
+  }, [])
+  const creating = name.trim().length > 0
+  async function save() {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      let projectId = choice
+      if (creating) projectId = (await createProject({ name: name.trim(), color })).id
+      if (projectId !== (room.projectId ?? null)) await patchRoom(room.id, { projectId })
+      onClose()
+    } catch (failure) {
+      setBusy(false)
+      setError(
+        failure instanceof ApiError && failure.status === 409
+          ? 'A project with that name already exists. Choose it from the list.'
+          : 'Couldn’t save the project. Try again.',
+      )
+    }
+  }
+  return (
+    <dialog
+      ref={dialog}
+      open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
+      className="chat-rewind-dialog bold-room-project-dialog"
+      data-protected="any"
+      aria-labelledby="room-project-title"
+      onCancel={(event) => {
+        event.preventDefault()
+        if (!busy) onClose()
+      }}
+    >
+      <h2 id="room-project-title">Project for {room.name}</h2>
+      <div role="radiogroup" aria-label="Project" className="bold-room-project-list">
+        {[{ id: null, name: 'No project' }, ...projects].map((project) => (
+          <label key={project.id ?? 'none'} className="bold-room-project-option">
+            <input
+              type="radio"
+              name="room-project"
+              checked={!creating && choice === project.id}
+              disabled={busy || creating}
+              onChange={() => setChoice(project.id)}
+            />
+            <span>{project.name}</span>
+          </label>
+        ))}
+      </div>
+      <label className="chat-delete-confirm">
+        <span>Or a new project</span>
+        <input
+          value={name}
+          autoComplete="off"
+          maxLength={60}
+          disabled={busy}
+          placeholder="Project name"
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      {creating && (
+        <div role="radiogroup" aria-label="Project colour" className="bold-room-project-colours">
+          {PROJECT_COLORS.map((item) => (
+            <label key={item.value} className="bold-room-project-option">
+              <input
+                type="radio"
+                name="room-project-colour"
+                checked={color === item.value}
+                disabled={busy}
+                onChange={() => setColor(item.value)}
+              />
+              <span>{item.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {error && (
+        <p className="chat-rewind-warning" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="chat-rewind-actions">
+        <button type="button" onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="chat-rewind-primary"
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </dialog>
+  )
+}
+
 export function RoomMenu({
   room,
   onShare,
@@ -519,6 +774,18 @@ export function RoomMenu({
   const menuId = useId()
   const close = useMenu(open, setOpen, root, trigger)
   const team = room.role === 'team'
+  const projects = useStreamQuery(roomsQuery).data?.projects ?? []
+  const [dialog, setDialog] = useState<'rename' | 'project' | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+  async function organise(body: { pinned: boolean } | { archived: boolean }, what: string) {
+    setFailure(null)
+    try {
+      await patchRoom(room.id, body)
+      close()
+    } catch {
+      setFailure(`Couldn’t ${what}. Try again.`)
+    }
+  }
   return (
     <span className="bold-room-menu-wrap" ref={root}>
       <button
@@ -542,6 +809,63 @@ export function RoomMenu({
           data-protected="flex"
           onKeyDown={moveInMenu}
         >
+          {!team && (
+            <>
+              <button
+                type="button"
+                className="mi"
+                role="menuitem"
+                onClick={() => {
+                  close(false)
+                  setDialog('rename')
+                }}
+              >
+                Rename…
+              </button>
+              <button
+                type="button"
+                className="mi"
+                role="menuitem"
+                onClick={() =>
+                  void organise(
+                    { pinned: !room.pinned },
+                    room.pinned ? 'unpin the room' : 'pin the room',
+                  )
+                }
+              >
+                {room.pinned ? 'Unpin' : 'Pin'}
+              </button>
+              <button
+                type="button"
+                className="mi"
+                role="menuitem"
+                onClick={() =>
+                  void organise(
+                    { archived: !room.archived },
+                    room.archived ? 'unarchive the room' : 'archive the room',
+                  )
+                }
+              >
+                {room.archived ? 'Unarchive' : 'Archive'}
+              </button>
+              <button
+                type="button"
+                className="mi"
+                role="menuitem"
+                onClick={() => {
+                  close(false)
+                  setDialog('project')
+                }}
+              >
+                Project…
+              </button>
+              {failure && (
+                <div className="small bold-menu-note" role="alert">
+                  {failure}
+                </div>
+              )}
+            </>
+          )}
           <a
             className="mi"
             role="menuitem"
@@ -553,6 +877,17 @@ export function RoomMenu({
             }}
           >
             Export this room
+          </a>
+          <a
+            className="mi"
+            role="menuitem"
+            href={`/api/rooms/${encodeURIComponent(room.id)}/export.json`}
+            download
+            onClick={() => {
+              window.setTimeout(() => close(), 0)
+            }}
+          >
+            Export as JSON
           </a>
           <button
             type="button"
@@ -589,6 +924,25 @@ export function RoomMenu({
             </button>
           )}
         </div>
+      )}
+      {dialog === 'rename' && (
+        <RenameRoomDialog
+          room={room}
+          onClose={() => {
+            setDialog(null)
+            trigger.current?.focus()
+          }}
+        />
+      )}
+      {dialog === 'project' && (
+        <RoomProjectDialog
+          room={room}
+          projects={projects}
+          onClose={() => {
+            setDialog(null)
+            trigger.current?.focus()
+          }}
+        />
       )}
     </span>
   )

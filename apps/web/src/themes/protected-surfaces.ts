@@ -65,6 +65,9 @@ export const protectedClasses = [
   'bold-room-delete-dialog',
   // PLAN 11.12b: a job's lifecycle (rename, delete confirmation, undo, still-working notice) and report-back
   'bold-job-rename-dialog',
+  // 3.2.0: renaming a room and choosing its project
+  'bold-room-rename-dialog',
+  'bold-room-project-dialog',
   'bold-job-delete-dialog',
   'bold-job-undo',
   'bold-job-lifecycle-notice',

@@ -371,6 +371,8 @@ function LoadedTeamRoom({
     namedJobs.length === 0 &&
     baseMessages.status === 'success' &&
     (baseMessages.data?.items.length ?? 0) === 0 &&
+    // Turned on, the deleted markers show where the starter board would be (every message may have been deleted).
+    !showDeleted &&
     // An older or imported phone room is still a chat: its one job must be reachable even before any message.
     !(phone && room.role !== 'team')
   const job = allJobs.find((item) => item.id === selectedJob)
@@ -542,7 +544,19 @@ function LoadedTeamRoom({
           onShowClosed={() => setPhoneClosedList((shown) => !shown)}
         />
       ) : empty ? (
-        <RoomEmpty agents={agents} onStart={startWith} />
+        <>
+          <div className="bold-room-tools">
+            <button
+              type="button"
+              className="bold-filter bold-deleted-toggle"
+              aria-pressed={false}
+              onClick={() => setShowDeleted(room.id, true)}
+            >
+              Show what was deleted
+            </button>
+          </div>
+          <RoomEmpty agents={agents} onStart={startWith} />
+        </>
       ) : phone && room.role === 'team' && !phoneJob ? (
         <PhoneJobList
           jobs={allJobs}
