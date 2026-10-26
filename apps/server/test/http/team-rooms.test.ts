@@ -237,3 +237,24 @@ test('a team whose jobs have Workbench review notes can be deleted (3.6.0)', asy
   expect(deleted.statusCode, deleted.body).toBe(204)
   expect(db.sqlite.prepare("SELECT 1 FROM review_comments WHERE id = 'rc1'").get()).toBeUndefined()
 })
+
+test('a team with a question still waiting for your answer can’t be deleted (3.6.0 review)', async () => {
+  const team = RoomSchema.parse(
+    (await createTeam({ name: 'Askers', members: ['builder'], leadAgentId: 'builder' })).json(),
+  )
+  const job = db.sqlite.prepare('SELECT id FROM jobs WHERE room_id = ?').get(team.id) as {
+    id: string
+  }
+  db.sqlite
+    .prepare(
+      "INSERT INTO agent_questions (id, profile, run_id, prompt_id, job_id, question, created_at, updated_at) VALUES ('q1', 'builder', 'run-1', 'p1', ?, 'Which branch?', '2026-10-26T10:00:00.000Z', '2026-10-26T10:00:00.000Z')",
+    )
+    .run(job.id)
+  const refused = await call('DELETE', `/api/rooms/${team.id}`, { confirm: 'Askers' })
+  expect(refused.statusCode).toBe(409)
+  expect(refused.json().error.code).toBe('room_busy')
+  db.sqlite.prepare("UPDATE agent_questions SET status = 'answered' WHERE id = 'q1'").run()
+  expect((await call('DELETE', `/api/rooms/${team.id}`, { confirm: 'Askers' })).statusCode).toBe(
+    204,
+  )
+})

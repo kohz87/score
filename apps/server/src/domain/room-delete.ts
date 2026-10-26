@@ -22,6 +22,14 @@ function blockedBy(sqlite: DatabaseSync, roomId: string, kind: string): RoomDele
       sqlite,
       `SELECT count(*) AS n FROM message_runs WHERE room_id = ? AND state IN ('pending', 'active')`,
       roomId,
+    ) > 0 ||
+    // A question still waiting for (or delivering) your answer belongs to a run that waits on it (3.6.0).
+    count(
+      sqlite,
+      `SELECT count(*) AS n FROM agent_questions
+       WHERE (room_id = ?1 OR job_id IN (SELECT id FROM jobs WHERE room_id = ?1))
+         AND (status = 'pending' OR delivery = 'delivering')`,
+      roomId,
     ) > 0
   )
     return 'room_busy'
