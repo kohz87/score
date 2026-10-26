@@ -1381,3 +1381,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   (terminal, themes-safety sanitiser) passed on rerun with the affected specs, 123/123; pnpm check green (server 4780,
   web 3116, contract 1510).
 - **v2.3.0 deployed live** (~23:58 UTC): backup score-pre-2.3.0-20261026.db, restart, migration 0089 applied, no new errors (only the parked scoretestb run's known poll timeout).
+- **v2.3.1 Hermes session hooks (lead, 2026-10-26, decision 129).** Plugin HOOKS += on_session_delete,
+  post_compaction (secret-variant fixtures for both); bridge: delete → retire Score's current session (successor) +
+  room notice for a person's delete (empty_sweep silent, archive ignored); compaction → system log line. Kanban
+  0.22.5 verbs/outcomes were already mapped (2.1.0). Not taken up (decision 129): MCP event webhooks, kanban-stream,
+  chat-completions `length`. Review (Sonnet): P2 one bad deleted id dropped the event → ids parsed one by one, counted
+  once (also found zod 4 `z.unknown()` keys are required → optional); P2 "a compaction-rotated tip id isn't a Score id"
+  — **rejected**: a lineage delete lists every id incl. the root, and the 2.3.0 refused-turn path covers the rest.
+  Gates: full e2e 992 passed; pnpm check green (server 4782, web 3116, contract 1510); plugin pytest 366.
+- **v2.3.1 plugin live** (~00:20 UTC, owner OK): score_bridge/__init__.py (2 new hooks) on default + scoretesta (old copies in $JOB/tmp/plugin-pre-2.3.1/), hermes-gateway restarted idle, producers re-registered (107 → 110).
