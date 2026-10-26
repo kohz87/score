@@ -458,6 +458,17 @@ test('opening the same run again after the phone sheet was closed opens the shee
   await screen.findByRole('complementary', { name: 'Side panel' })
 })
 
+test('an in-place edit of the address (a replace) does not reopen a run the person closed', async () => {
+  phone = true
+  const router = open('/b?run=brief-x')
+  await screen.findByRole('complementary', { name: 'Side panel' })
+  fireEvent.click(screen.getByRole('button', { name: 'Close side panel' }))
+  await act(async () => {
+    await router.navigate('/b?run=brief-x&ref=other', { replace: true })
+  })
+  expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull()
+})
+
 test('the phone Room badge waits for the team room and counts the job in the URL', async () => {
   phone = true
   approvalFixture = true

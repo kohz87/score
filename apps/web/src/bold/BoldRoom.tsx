@@ -1,6 +1,13 @@
 import type { AgentSummary, OutsideSession } from '@score/contract'
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Link, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router'
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+  useOutletContext,
+  useSearchParams,
+} from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStream, useStreamQuery } from '../data/query-client.ts'
 import { useMediaQuery } from '../data/use-media.ts'
@@ -63,8 +70,15 @@ export function BoldRoom() {
   // `?run=<brief id>` (a job's link, Search, a notification) opens the Runs view on that run, and stays while it is open.
   const runId = params.get('run')
   // Keyed on the navigation, not only the id: opening the same run again after the sheet was closed opens it again.
+  // An in-place edit of the address (a replace: clearing a reference, deleting a job) keeps the run's key, so it never
+  // pulls a person who closed the sheet or switched views back to the run.
+  const navigationType = useNavigationType()
   const [seenRunNav, setSeenRunNav] = useState<string | null>(null)
-  const runNav = runId ? `${location.key}:${runId}` : null
+  const runNav = !runId
+    ? null
+    : navigationType === 'REPLACE' && seenRunNav?.endsWith(`:${runId}`)
+      ? seenRunNav
+      : `${location.key}:${runId}`
   if (runNav !== seenRunNav) {
     setSeenRunNav(runNav)
     if (runId) setMode('runs')
@@ -190,8 +204,8 @@ export function BoldRoom() {
   }, [libraryRequest, phone, setSheetOpen])
 
   useEffect(() => {
-    if (phone && runId) setSheetOpen(true)
-  }, [phone, runId, location.key, setSheetOpen])
+    if (phone && runNav) setSheetOpen(true)
+  }, [phone, runNav, setSheetOpen])
 
   useEffect(() => {
     if (!libraryRequest) return
