@@ -29,7 +29,7 @@ const StoredSchema = z.object({
 
 const REPORTING = /comment|report|reply|post|note|message|notify|status|respond|send/i
 const CHANGING =
-  /delete|remove|close|create|merge|assign|transition|drop|destroy|archive|write|exec|run/i
+  /delete|remove|close|create|merge|assign|transition|drop|destroy|archive|write|exec|run|pay|money|transfer|charge|refund|buy|order|deploy|publish|release|update|edit|set|move|rename|approve|reject|invite|grant|revoke|kick|ban/i
 
 /** A warning when a report-back tool's name doesn't look like a reporting tool (any name is still accepted). */
 export function reportBackWarning(tool: string): string | undefined {

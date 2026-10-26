@@ -22,6 +22,8 @@ export const HeldTurnSchema = z.object({
   exchangeId: z.string().nullable(),
   /** The state the holding exchange goes back to when the turn is released. */
   resume: z.enum(['live', 'waiting_on_agent', 'done']),
+  /** Agents whose turns were dropped while this one was held (3.5.0): shown on the pause card. */
+  dropped: z.array(z.string()).max(8).optional(),
 })
 export type HeldTurn = z.infer<typeof HeldTurnSchema>
 
@@ -108,14 +110,15 @@ export function hold(
   const exchange = exchangeRow(sqlite, exchangeId)
   if (!exchange) return []
   const earlier = heldTurn(sqlite, exchangeId)
-  // A second turn that can't go on while the person hasn't answered the first: the first stays (it is never lost) and the
-  // newer one is dropped with a note on the exchange, so the person sees that something else was held back too.
-  if (earlier && held && !replacesHeld) {
-    const note = `another turn (${held.agentId}) was also held back and dropped`
+  // The person hasn't answered the first hold yet: that turn and its reason stand (a held turn is never lost). A newer
+  // turn that can't go on either is dropped, and the held turn records whose, so the pause card can say so (3.5.0).
+  if (earlier && !replacesHeld) {
+    if (!held) return []
+    const dropped = [...new Set([...(earlier.dropped ?? []), held.agentId])].slice(-8)
     return updateExchange(
       sqlite,
       exchangeId,
-      { ended_reason: [exchange.ended_reason, endedReason, note].filter(Boolean).join('; ') },
+      { held: JSON.stringify({ ...earlier, dropped }) },
       now,
     )
   }

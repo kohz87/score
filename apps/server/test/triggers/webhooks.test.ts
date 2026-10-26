@@ -537,3 +537,11 @@ test('a report-back tool that does not look like reporting carries a warning; re
   const list = await app.inject({ method: 'GET', url: '/api/triggers', headers })
   expect(list.json().items.filter((t: { warning?: string }) => t.warning)).toHaveLength(2)
 })
+
+test('a reporting word does not hide a changing one in the report-back tool name (3.5.0 review)', async () => {
+  const { reportBackWarning } = await import('../../src/domain/triggers/report-back.ts')
+  for (const tool of ['send_money', 'post_deploy', 'message_and_transfer', 'reply_then_publish'])
+    expect(reportBackWarning(tool), tool).toMatch(/may change things/)
+  for (const tool of ['add_comment', 'post_status', 'notify_channel', 'send_reply'])
+    expect(reportBackWarning(tool), tool).toBeUndefined()
+})

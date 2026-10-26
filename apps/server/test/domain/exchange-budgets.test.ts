@@ -431,11 +431,11 @@ test('deciding while the lead is still deciding stops the lead’s turn', () => 
   expect(h.exchanges()[0]).toMatchObject({ budget: 10, state: 'live' })
 })
 
-test('a second hold on an exchange keeps the first held turn and notes the dropped one', async () => {
+test('a second hold on an exchange keeps the first held turn and shows the dropped one on the pause', async () => {
   const { hold, heldTurn } = await import('../../src/domain/exchanges/budget.ts')
   const review = reviewUntilPaused()
   const first = heldTurn(h.db.sqlite, review.id)!
-  const turn = { ...first, resume: undefined }
+  const turn: Omit<typeof first, 'resume'> & { resume?: unknown } = { ...first }
   delete turn.resume
   hold(
     h.db.sqlite,
@@ -445,15 +445,23 @@ test('a second hold on an exchange keeps the first held turn and notes the dropp
     '2026-10-24T10:00:00.000Z',
     "designer's turn failed",
   )
+  expect(heldTurn(h.db.sqlite, review.id)).toEqual({ ...first, dropped: ['designer'] })
+  expect(h.exchanges()[0]).toMatchObject({
+    state: 'paused_budget',
+    pause: { reason: 'exchange_budget', droppedAgents: ['designer'] },
+  })
+})
+
+test('a hold without a turn never erases the held turn or its reason (review)', async () => {
+  const { hold, heldTurn } = await import('../../src/domain/exchanges/budget.ts')
+  const review = reviewUntilPaused()
+  const first = heldTurn(h.db.sqlite, review.id)!
+  for (const reason of ['no_decision', 'author_stalled'] as const)
+    hold(h.db.sqlite, review.id, reason, null, '2026-10-24T10:00:00.000Z', 'later')
   expect(heldTurn(h.db.sqlite, review.id)).toEqual(first)
   expect(h.exchanges()[0]).toMatchObject({
     state: 'paused_budget',
     pause: { reason: 'exchange_budget' },
   })
-  const row = h.db.sqlite
-    .prepare('SELECT ended_reason FROM exchanges WHERE id = ?')
-    .get(review.id) as {
-    ended_reason: string
-  }
-  expect(row.ended_reason).toContain('designer')
+  expect(h.exchanges()[0]!.pause!.droppedAgents).toBeUndefined()
 })

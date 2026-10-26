@@ -267,6 +267,18 @@ export function ExchangeRequestCard({
       </div>
       <b className="bold-request-title">{exchangePauseTitle(exchange)}</b>
       <span>{exchangePauseAsk(exchange)}</span>
+      {exchange.pause?.droppedAgents?.length ? (
+        <span className="small">
+          Also held back while this waits:{' '}
+          {exchange.pause.droppedAgents
+            .map((id) => {
+              const agent = agents.find((item) => item.id === id)
+              return agent ? agentDisplayName(agent) : id
+            })
+            .join(', ')}
+          . Their turns were dropped; ask them again once this is settled.
+        </span>
+      ) : null}
       <span className="small muted">{exchangeTurns(exchange)}</span>
 
       {pending !== null && (
