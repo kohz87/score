@@ -95,19 +95,21 @@ export function registerWatchRoutes(
   })
 
   // 3.3.0 Bot Screen (decision 135): read-only; the adapter never sends input or takes the lease.
-  async function botScreenAgent(params: unknown) {
+  function botScreenAgent(params: unknown) {
     const { agentId } = ParamsSchema.parse(params)
-    if (!(await agentIds()).includes(agentId))
+    // Polled about once a second: Score's projection answers, not a Hermes roster read (the watch route's agentIds()).
+    const agent = readAgent(db.sqlite, agentId)
+    if (!agent || (agent.lifecycle && agent.lifecycle.state !== 'ready'))
       throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return agentId
   }
   app.get('/api/agents/:agentId/bot-screen', async (request, reply) => {
-    const agentId = await botScreenAgent(request.params)
+    const agentId = botScreenAgent(request.params)
     reply.header('cache-control', 'no-store')
     return BotScreenStatusSchema.parse(await port.botScreenStatus(agentId))
   })
   app.get('/api/agents/:agentId/bot-screen/frame', async (request, reply) => {
-    const agentId = await botScreenAgent(request.params)
+    const agentId = botScreenAgent(request.params)
     const frame = await port.botScreenFrame(agentId)
     if (!('png' in frame))
       throw new HttpError(409, 'conflict', 'The screen isn’t showing right now.', {
