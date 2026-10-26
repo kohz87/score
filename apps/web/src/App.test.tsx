@@ -326,7 +326,7 @@ test('the redirect keeps the #hash only when the browser address is the page bei
 
 test('on the new shell the old classic paths redirect to their /b homes and keep the query', async () => {
   for (const [from, to] of [
-    ['/watch/builder?from=3', '/b/watch/builder'],
+    ['/watch/builder?from=3', '/b/screen/builder'],
     ['/workflows', '/b/workflows'],
     ['/workflows/wf-1', '/b/workflows/wf-1'],
     ['/runs/brief-1?x=y', '/b/runs/brief-1'],
@@ -366,7 +366,7 @@ test.each([
   ['/tasks/demo', '/b'],
   ['/u', '/b'],
   ['/u/rooms/one', '/b'],
-  ['/now/watch/builder', '/b/watch/builder'],
+  ['/now/watch/builder', '/b/screen/builder'],
   ['/now/flow/workflows', '/b/workflows'],
   ['/now/flow/workflows/wf-1', '/b/workflows/wf-1'],
   ['/now/flow/brief-1', '/b/runs/brief-1'],
@@ -377,7 +377,7 @@ test.each([
 
 test('old /now links keep their query string when they redirect', async () => {
   const router = renderRoute('/now/watch/builder?from=12')
-  await waitFor(() => expect(router.state.location.pathname).toBe('/b/watch/builder'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/b/screen/builder'))
   expect(router.state.location.search).toBe('?from=12')
 })
 

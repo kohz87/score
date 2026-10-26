@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.5.0] — 2026-10-26
+
+### Changed
+- **Watch is now part of the agent's screen page** (the last classic page it used to open). The editor is shown large,
+  the terminal and browser as small cards beside it (tap one to swap it in), other screens as chips, and whatever the
+  agent asked you stays pinned above its steps. While the agent works, the large screen follows what it is using; your
+  pick holds until it moves to another screen. Replay from any step or time, newest steps first with the full history
+  on request. Old Watch links open the screen page.
+
 ## [2.4.0] — 2026-10-26
 
 ### Added
