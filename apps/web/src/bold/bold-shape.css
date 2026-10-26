@@ -2,7 +2,8 @@
    attributes (themes/engine.ts), so Score's own look is untouched: --bold-r falls back to 1 in every border-radius
    (a `calc(Npx * var(--bold-r, 1))`), pills (999px) never scale. Numeric radius writes --bold-r itself (engine.ts).
    Border and shadow tokens come from themes/variants.css. Protected surfaces and anything holding one keep their own
-   fills, so glass never makes a decision surface translucent: a card that holds any protected surface stays solid. */
+   fills, so glass never makes a decision surface translucent: a card that holds any protected surface stays solid —
+   except an agent glyph, which is identity (colour + shape on its own fill), not a decision. */
 :root[data-look='custom'][data-radius='sharp'] {
   --bold-r: 0.15;
 }
@@ -86,7 +87,7 @@
     .bold-coding .team-card,
     .bold-settings-page .rules-style,
     .bold-settings-page .rules-column
-  ):not([data-protected]):not(:has([data-protected])) {
+  ):not([data-protected]):not(:has([data-protected]:not(.agent-glyph))) {
   background: color-mix(in srgb, var(--panel) 70%, transparent);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
   backdrop-filter: blur(14px) saturate(1.2);
@@ -101,7 +102,7 @@
       .bold-run-tile,
       .bold-runs-row,
       .bold-first-run-card
-    ):not([data-protected]):not(:has([data-protected])) {
+    ):not([data-protected]):not(:has([data-protected]:not(.agent-glyph))) {
     background: color-mix(in srgb, var(--panel) 94%, transparent);
   }
 }
