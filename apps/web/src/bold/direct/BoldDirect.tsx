@@ -773,6 +773,7 @@ function DirectConversation({
   const [shareFor, setShareFor] = useState<string | null>(null)
   const [shared, setShared] = useState<ReadonlySet<string>>(() => new Set())
   const [adding, setAdding] = useState(false)
+  const [compactSignal, setCompactSignal] = useState(0)
   const [starterKey, setStarterKey] = useState(0)
   const [bringing, setBringing] = useState(false)
   const [older, setOlder] = useState<OlderState>({ chatId: chat.id, cursors: [], pages: {} })
@@ -1053,6 +1054,7 @@ function DirectConversation({
           draftScope={draftScope}
           references={referenceJobId ? [{ jobId: referenceJobId }] : []}
           onSent={onClearReference}
+          onCompress={() => setCompactSignal((value) => value + 1)}
         />
         <div className="bold-dm-foot">
           <button type="button" className="bold-dm-link" onClick={() => setAdding(true)}>
@@ -1066,6 +1068,7 @@ function DirectConversation({
               // A direct room's default thread runs in the room's own session; every other chat has its job session.
               sessionId={chat.isDefault ? undefined : sessionId}
               finishedReplies={finishedReplies}
+              confirmSignal={compactSignal}
             />
           </span>
         </div>

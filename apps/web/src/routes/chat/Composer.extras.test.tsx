@@ -252,3 +252,49 @@ test('voice: tapping again stops, and a blocked microphone is reported', () => {
   act(() => FakeRecognizer.last!.onerror?.({ error: 'not-allowed' }))
   expect(screen.getByRole('alert').textContent).toBe('Microphone access was blocked.')
 })
+
+test('/compress in a composer without its own ring hands over to the ring’s owner (onCompress) and sends nothing', async () => {
+  const onCompress = vi.fn()
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <Composer
+          roomId="general"
+          roomName="general"
+          agents={[agent('lead')]}
+          leadAgentId="lead"
+          roomMode
+          onCompress={onCompress}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  type('/compress')
+  fireEvent.keyDown(box(), { key: 'Enter' })
+  fireEvent.keyDown(box(), { key: 'Enter' })
+  await waitFor(() => expect(onCompress).toHaveBeenCalledTimes(1))
+  expect(calls('POST')).toHaveLength(0)
+  expect(box().value).toBe('')
+})
+
+test('/compress in the team room (no ring anywhere) keeps the command and says where compaction is', async () => {
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <Composer
+          roomId="general"
+          roomName="general"
+          agents={[agent('lead')]}
+          leadAgentId="lead"
+          roomMode
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  type('/compress')
+  fireEvent.keyDown(box(), { key: 'Enter' })
+  fireEvent.keyDown(box(), { key: 'Enter' })
+  expect(await screen.findByText(/Compact from a one-to-one chat or a job/)).toBeTruthy()
+  expect(box().value).toBe('/compress')
+  expect(calls('POST')).toHaveLength(0)
+})

@@ -108,6 +108,7 @@ export function Composer({
   agents,
   leadAgentId = null,
   onSent,
+  onCompress,
   orchestrate,
   jobId = null,
   roomMode = false,
@@ -126,6 +127,11 @@ export function Composer({
   leadAgentId?: string | null
   /** The user view's first message opens its room once it is sent (PLAN 8.4). */
   onSent?: () => void
+  /**
+   * Where `/compress` goes when the composer shows no context ring of its own (the new shell's chats keep the ring in
+   * their footer): the owner of that ring opens its confirmation.
+   */
+  onCompress?: () => void
   /**
    * The user view starts orchestrations from the composer (PLAN 8.4): the "+" menu gets "Start an orchestration…",
    * and `/orchestrate <goal>` calls this with the goal (empty when none was typed).
@@ -491,8 +497,18 @@ export function Composer({
     try {
       if (command.kind === 'compress') {
         // The ring's details open on the compaction confirmation (PLAN 5.36).
-        setCompactSubject(subject)
-        setCompactSignal((value) => value + 1)
+        if (onCompress) onCompress()
+        else if (roomMode) {
+          // The team room's composer has no ring: say where compaction is, instead of clearing the command silently.
+          setText('/compress')
+          setNotice({
+            kind: 'info',
+            text: 'Compact from a one-to-one chat or a job: the context ring sits beside its message box.',
+          })
+        } else {
+          setCompactSubject(subject)
+          setCompactSignal((value) => value + 1)
+        }
       } else if (command.kind === 'usage') {
         setNotice({ kind: 'info', text: usageSummary(name, await fetchAgentContext(subject)) })
       } else {
