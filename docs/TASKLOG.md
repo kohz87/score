@@ -1542,7 +1542,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   tests interfered across parallel viewports (builder's pending questions show in all its chats: new
   'builder-questions' lock; one-to-one/phone specs press the composer's own Send); 3rd — 832 passed, 2 failed alone-
   passing (a Chromium page crash; room-tools Unpin), check green (server 4814, web 2985, contract 1522).
-- **v3.5.0 deployed live** (~14:05 UTC): idle (parked scoretestb run only), backup score-pre-3.5.0-20261026.db,
+- **v3.5.0 deployed live** (~14:00 UTC): idle (parked scoretestb run only), backup score-pre-3.5.0-20261026.db,
   migration 0092 applied, restart, health ok, no new errors.
 - **3.6.0** (2026-10-26; owner: "work on the team choice"; decision 137). Lead: triggers keep `team_room_id` (migration
   0093; null = the first team room) and start jobs there with that team's lead. Found on the way: deleting a room whose
@@ -1552,5 +1552,5 @@ One entry per completed task: what landed, review results, and any **rejected re
   trigger select took the first list item as the everyone room (by flag now). Review 2: a pending question didn't make
   the room busy (it does now, with a test). Review 3 clean. Gate: e2e 835 passed, 0 failed; contract samples needed
   `teamRoomId`; pnpm check green (server 4817, web 2993, contract 1522).
-- **v3.6.0 deployed live** (~14:40 UTC): idle, backup score-pre-3.6.0-20261026.db, migration 0093, restart, health ok,
+- **v3.6.0 deployed live** (~14:13 UTC): idle, backup score-pre-3.6.0-20261026.db, migration 0093, restart, health ok,
   no new errors.
