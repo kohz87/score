@@ -234,15 +234,27 @@
 }
 
 [data-ui='bold'] .bold-screen-layout {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 20px;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'ask main'
+    'steps main';
+  align-items: start;
+  column-gap: 20px;
+}
+
+[data-ui='bold'] .bold-screen-ask {
+  grid-area: ask;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-screen-ask:not(:empty) {
+  margin-bottom: 12px;
 }
 
 [data-ui='bold'] .bold-screen-log {
-  flex: 1 1 280px;
-  max-width: 360px;
+  grid-area: steps;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -263,6 +275,48 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* One bounded scroll area, so a long history never pushes the replay controls away. */
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+[data-ui='bold'] .bold-screen-steps--nested {
+  max-height: none;
+  overflow: visible;
+  margin: 4px 0 0 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+
+[data-ui='bold'] .bold-screen-group {
+  padding: 4px 0;
+}
+
+[data-ui='bold'] .bold-screen-dot {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  margin-top: 7px;
+  border-radius: 999px;
+}
+
+[data-ui='bold'] .bold-screen-more {
+  align-self: flex-start;
+  border: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-screen-more:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 [data-ui='bold'] .bold-screen-step {
@@ -317,7 +371,7 @@
 }
 
 [data-ui='bold'] .bold-screen-main {
-  flex: 999 1 520px;
+  grid-area: main;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -593,15 +647,17 @@
   }
 
   [data-ui='bold'] .bold-screen-layout {
-    flex-direction: column;
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'ask'
+      'main'
+      'steps';
+    row-gap: 16px;
   }
 
-  [data-ui='bold'] .bold-screen-log,
-  [data-ui='bold'] .bold-screen-main {
-    width: 100%;
-    max-width: none;
-    flex: none;
+  [data-ui='bold'] .bold-screen-ask:not(:empty) {
+    margin-bottom: 0;
   }
 
   [data-ui='bold'] .bold-screen-stage {

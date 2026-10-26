@@ -7,7 +7,7 @@ import type {
   WatchMarker,
   WatchOverviewItem,
 } from '@score/contract'
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { ApiError } from '../data/api.ts'
@@ -31,7 +31,9 @@ import {
   backFrom,
   clock,
   clockSeconds,
+  groupActivity,
   hostOf,
+  markerLabels,
   resumeCommand,
   stageAt,
   surfaceLabels,
@@ -166,6 +168,98 @@ function SurfaceIcon({ surface }: { surface: Surface }) {
   )
 }
 
+const INITIAL_STEPS = 5
+
+/** The step list: newest first, the five newest until "Full history", a sub-agent's steps grouped, one bounded scroll. */
+function StepList({
+  items,
+  currentKey,
+  live,
+  targets,
+  onSelect,
+}: {
+  items: ActivityItem[]
+  currentKey: string | null
+  live: boolean
+  targets: (item: ActivityItem) => number
+  onSelect: (item: ActivityItem) => void
+}) {
+  const [all, setAll] = useState(false)
+  const entries = groupActivity(items)
+  const holdsCurrent = (entry: (typeof entries)[number]) =>
+    entry.type === 'item'
+      ? entry.item.key === currentKey
+      : entry.items.some((i) => i.key === currentKey)
+  // A replayed step that fell outside the five newest opens the whole history, so the current step is always on screen.
+  const currentHidden = entries.slice(INITIAL_STEPS).some(holdsCurrent)
+  const expanded = all || currentHidden
+  const shown = expanded ? entries : entries.slice(0, INITIAL_STEPS)
+  const list = useRef<HTMLOListElement>(null)
+  useEffect(() => {
+    const current = list.current?.querySelector('[aria-current="true"]')
+    if (current && typeof current.scrollIntoView === 'function')
+      current.scrollIntoView({ block: 'nearest' })
+  }, [currentKey, expanded])
+  const row = (item: ActivityItem) => {
+    const current = item.key === currentKey
+    return (
+      <li key={item.key}>
+        <button
+          type="button"
+          className={`bold-screen-step${current ? ' sel' : ''}`}
+          aria-current={current ? 'true' : undefined}
+          disabled={targets(item) < 0}
+          onClick={() => onSelect(item)}
+        >
+          <span
+            className={`bold-screen-dot watch-marker--${item.kind}`}
+            role="img"
+            aria-label={markerLabels[item.kind]}
+          />
+          <time className="mono bold-screen-time" dateTime={item.at}>
+            {live && item === items[0] ? 'now' : clockSeconds(item.at)}
+          </time>
+          <span>{item.text}</span>
+        </button>
+      </li>
+    )
+  }
+  return (
+    <>
+      <ol ref={list} className="bold-screen-steps">
+        {shown.map((entry) =>
+          entry.type === 'item' ? (
+            row(entry.item)
+          ) : (
+            <li key={entry.key} className="bold-screen-group">
+              <span className="bold-screen-sub">
+                Sub-agent · {entry.items.length} {entry.items.length === 1 ? 'step' : 'steps'}
+              </span>
+              <ol
+                className="bold-screen-steps bold-screen-steps--nested"
+                aria-label="Sub-agent steps"
+              >
+                {entry.items.map(row)}
+              </ol>
+            </li>
+          ),
+        )}
+      </ol>
+      {entries.length > INITIAL_STEPS && (
+        <button
+          type="button"
+          className="bold-screen-more"
+          aria-expanded={expanded}
+          disabled={currentHidden && !all}
+          onClick={() => setAll(!all)}
+        >
+          {expanded ? 'Show less' : 'Full history'}
+        </button>
+      )}
+    </>
+  )
+}
+
 /** The other two screens, small beside the large one: a short look at what is on them, and a button that swaps it large. */
 function SmallScreen({
   surface,
@@ -261,7 +355,8 @@ export function BoldScreenView({
 }) {
   const [selected, setSelected] = useState<WatchMarker | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [surface, setSurface] = useState<Surface | null>(null)
+  const [pinned, setPinned] = useState<{ frame: number | null; surface: Surface } | null>(null)
+  const [swapped, setSwapped] = useState('')
   const [command, setCommand] = useState<{ text: string; copied: boolean } | null>(null)
   const [fromApplied, setFromApplied] = useState(from === null)
   const found = selected
@@ -281,13 +376,11 @@ export function BoldScreenView({
   }
   const stage = useMemo(() => stageAt(frames, seq), [frames, seq])
   const items = useMemo(() => activityItems(frames, approvals), [frames, approvals])
-  // The editor is the large frame (board D) unless the person swapped another one in, or it is not open yet.
-  const top =
-    surface && stage.bySurface[surface]
-      ? surface
-      : stage.bySurface.editor
-        ? 'editor'
-        : (stage.front?.surface ?? null)
+  // The large slot follows the newest frame's surface (as the classic stage did); a click holds the person's choice
+  // until another frame comes to the front.
+  const front = stage.front
+  const pin = pinned && pinned.frame === (front?.seq ?? null) ? pinned.surface : null
+  const top: Surface | null = pin && stage.bySurface[pin] ? pin : (front?.surface ?? null)
   const frame = top ? (stage.bySurface[top] ?? null) : null
   const small = surfaces.filter((name) => name !== top)
   const currentKey = live
@@ -367,7 +460,6 @@ export function BoldScreenView({
         ? candidate.kind === 'asked' && candidate.at === item.at
         : candidate.seq === item.seq && candidate.kind !== 'asked',
     )
-  const chronological = [...items].reverse()
   const copyResume = async () => {
     const session = await (resumeSession?.() ?? Promise.resolve(null)).catch(() => null)
     const text = resumeCommand(agent.id, session)
@@ -422,7 +514,7 @@ export function BoldScreenView({
       )}
 
       <div className="bold-screen-layout">
-        <section className="bold-screen-log" aria-label={`What ${agentDisplayName(agent)} did`}>
+        <div className="bold-screen-ask">
           {live && waiting && (
             <ApprovalBar
               key={waiting.id}
@@ -442,60 +534,13 @@ export function BoldScreenView({
               Needs you — go live
             </button>
           )}
-          <h2 className="bold-screen-log-title">What {agentDisplayName(agent)} did</h2>
-          {chronological.length === 0 && (
-            <p className="bold-screen-empty">Nothing yet. Steps show up here as they happen.</p>
-          )}
-          <ol className="bold-screen-steps">
-            {chronological.map((item, index) => {
-              const target = itemIndex(item)
-              const current = item.key === currentKey
-              return (
-                <li key={item.key}>
-                  <button
-                    type="button"
-                    className={`bold-screen-step${current ? ' sel' : ''}`}
-                    aria-current={current ? 'true' : undefined}
-                    disabled={target < 0}
-                    onClick={() => selectItem(item)}
-                  >
-                    <time className="mono bold-screen-time" dateTime={item.at}>
-                      {live && index === chronological.length - 1 ? 'now' : clockSeconds(item.at)}
-                    </time>
-                    <span>
-                      {item.sub && <span className="bold-screen-sub">Sub-agent · </span>}
-                      {item.text}
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ol>
-          <div className="bold-screen-card">
-            <p>
-              A replay of recorded steps, read-only. {agentDisplayName(agent)} keeps working and
-              can’t see you here.
-            </p>
-            <button type="button" className="btn sm" onClick={() => void copyResume()}>
-              Copy the command to continue in a terminal
-            </button>
-            {command && (
-              <p role="status">
-                {command.copied
-                  ? 'Copied. Paste this in a terminal:'
-                  : 'Select the command and press Ctrl+C, then run it in a terminal:'}{' '}
-                <code className="bold-screen-command">{command.text}</code>
-              </p>
-            )}
-          </div>
-        </section>
-
+        </div>
         <div className="bold-screen-main">
           <div
             className="bold-screen-stage"
             style={{ '--watch-agent': agent.style.color } as CSSProperties}
           >
-            <span className="bold-screen-badge">
+            <span className="bold-screen-badge" role={live ? undefined : 'status'}>
               {live ? 'Live' : `Replaying ${clock(marker!.at)}`}
             </span>
             <div className="bold-screen-stage-head">
@@ -522,14 +567,21 @@ export function BoldScreenView({
                 {frame?.browser && <BrowserPane browser={frame.browser} />}
               </div>
               <div role="group" aria-label="Other windows" className="bold-screen-smalls">
-                {small.map((name) => (
+                {/* Keyed by place, not surface: the clicked button stays mounted (and focused) and now shows the screen that was large. */}
+                {small.map((name, place) => (
                   <SmallScreen
-                    key={name}
+                    key={place}
                     surface={name}
                     frame={stage.bySurface[name]}
-                    onShow={() => setSurface(name)}
+                    onShow={() => {
+                      setPinned({ frame: front?.seq ?? null, surface: name })
+                      setSwapped(`${surfaceLabels[name]} is now the large screen.`)
+                    }}
                   />
                 ))}
+                <span className="sr-only" role="status">
+                  {swapped}
+                </span>
               </div>
             </div>
           </div>
@@ -583,6 +635,36 @@ export function BoldScreenView({
             </nav>
           )}
         </div>
+        <section className="bold-screen-log" aria-label={`What ${agentDisplayName(agent)} did`}>
+          <h2 className="bold-screen-log-title">What {agentDisplayName(agent)} did</h2>
+          {items.length === 0 && (
+            <p className="bold-screen-empty">Nothing yet. Steps show up here as they happen.</p>
+          )}
+          <StepList
+            items={items}
+            currentKey={currentKey}
+            live={live}
+            targets={itemIndex}
+            onSelect={selectItem}
+          />
+          <div className="bold-screen-card">
+            <p>
+              A replay of recorded steps, read-only. {agentDisplayName(agent)} keeps working and
+              can’t see you here.
+            </p>
+            <button type="button" className="btn sm" onClick={() => void copyResume()}>
+              Copy the command to continue in a terminal
+            </button>
+            {command && (
+              <p role="status">
+                {command.copied
+                  ? 'Copied. Paste this in a terminal:'
+                  : 'Select the command and press Ctrl+C, then run it in a terminal:'}{' '}
+                <code className="bold-screen-command">{command.text}</code>
+              </p>
+            )}
+          </div>
+        </section>
       </div>
     </section>
   )
