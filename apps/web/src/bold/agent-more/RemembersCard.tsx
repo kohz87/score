@@ -12,6 +12,8 @@ function Highlighted({ text, query }: { text: string; query: string }) {
   if (!query) return <>{text}</>
   const lower = text.toLowerCase()
   const needle = query.toLowerCase()
+  // A few characters change length when lowercased (e.g. "İ"): the offsets would no longer match the text, so no marks.
+  if (lower.length !== text.length) return <>{text}</>
   const parts: ReactNode[] = []
   let at = 0
   for (let hit = lower.indexOf(needle); hit >= 0; hit = lower.indexOf(needle, at)) {
