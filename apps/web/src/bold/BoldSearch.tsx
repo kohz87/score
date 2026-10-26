@@ -14,6 +14,7 @@ import { apiFetch } from '../data/api.ts'
 import { newId } from '../data/ids.ts'
 import { clearDeviceLook, lookStore } from '../themes/look-store.ts'
 import { SETTINGS_SECTIONS } from './BoldSettings.tsx'
+import { jobDot } from './room/RoomTabs.tsx'
 import { BookIcon, SearchIcon } from './BoldIcons.tsx'
 import {
   boldAddAgentLink,
@@ -408,15 +409,18 @@ function ResultGroup({
               ? result.agentId
               : result.kind === 'message'
                 ? result.agentId
-                : null
+                : result.kind === 'job'
+                  ? result.agentId
+                  : null
         const agent = agentId ? agents.get(agentId) : undefined
         const icon =
-          result.kind === 'job' ? (
-            <span className="bold-search-job-tile" />
-          ) : result.kind === 'note' ? (
+          result.kind === 'note' ? (
             <BookIcon size={22} />
           ) : agent ? (
             <AgentGlyph agent={agent} size="sm" bare decorative />
+          ) : result.kind === 'job' ? (
+            // The state dot the room's job tabs use, so a job with no agent yet is never an empty box.
+            <span className="bold-search-job-dot" style={{ background: jobDot(result.state) }} />
           ) : null
         return (
           <button

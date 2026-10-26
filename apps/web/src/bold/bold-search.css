@@ -111,11 +111,10 @@
   height: 22px;
 }
 
-[data-ui='bold'] .bold-search-job-tile {
-  width: 32px;
-  height: 32px;
-  border-radius: calc(10px * var(--bold-r, 1));
-  background: #ddf6ee;
+[data-ui='bold'] .bold-search-job-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
 }
 
 [data-ui='bold'] .bold-search-copy {

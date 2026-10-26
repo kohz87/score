@@ -462,6 +462,12 @@
   color: var(--muted);
 }
 
+/* The window is always the dark code surface, so its text takes the code ink, not the look's muted grey. */
+[data-ui='bold'] .bold-screen-window .bold-screen-empty,
+[data-ui='bold'] .bold-screen-window .bold-screen-state {
+  color: var(--code-ink);
+}
+
 [data-ui='bold'] .bold-screen-window > .bold-screen-empty {
   flex: 1;
   display: grid;
@@ -584,7 +590,8 @@
 }
 
 [data-ui='bold'] .bold-screen .watch-replay__live {
-  color: var(--live);
+  /* --live (#d93a4e) is 3.8:1 on the dark look's card; --bad is the look's readable red. */
+  color: var(--bad);
 }
 
 [data-ui='bold'] .bold-screen .watch-replay__live:focus-visible,
