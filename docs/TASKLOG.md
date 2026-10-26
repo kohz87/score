@@ -1426,3 +1426,10 @@ One entry per completed task: what landed, review results, and any **rejected re
   bold-terminal phone 3/3 alone (flake), bold-start-job phone known flake; pnpm check green (server 4784, web 3158).
   Owner rule reinforced (2026-10-26): no pre-fix gates — stopped a gate run started before the last fix.
 - **v2.6.0 deployed live** (~02:48 UTC): backup score-pre-2.6.0-20261026.db, restart, no new errors.
+- **v2.7.0 Customizer under Settings › Look (Sonnet coder, lead review; decision 131 board E).** Lead spotted the
+  blank Save pill in the baselines → review: the CSS is right, the baselines were stale (regenerated and viewed);
+  review P2s fixed: classic-view contrast checks kept, phone opens the editor first ("All settings" back); P3 accepted:
+  classic-view warnings also show for themes that only set ink/card (noise). Engine also writes --t-code-bg/ink and
+  lets a theme's backdrop show through the shell (review: protected surfaces keep their own fills). Full e2e after the
+  fixes: 993 passed, 8 failed → 7 were Watch's fragile specs fixed in 2.6.0 (merged), 1 the ledger phone Settings
+  screenshot (expected text change, re-baselined); after merging 2.6.0 the affected specs 196/196; pnpm check green.

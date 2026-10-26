@@ -3,6 +3,17 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.0] — 2026-10-26
+
+### Changed
+- **The Customizer is part of Settings › Look** in the new style (the last classic settings page). Tabs for Theme,
+  Colours, Background, Fonts, Shape, Spacing and Custom CSS; colour groups follow the new screens (ground and panels,
+  text, things for you and results, lines, agent screen and code); previews of the Team room, Team, an agent page, an
+  agent's screen and Settings. A theme's background picture now shows through the new shell. On a phone the editor
+  opens first, with a way back to all settings.
+- Dropped with the classic screens: the navigation rail and menu order options, page width, the Chat tab and the Flow
+  and Tasks colour groups (older themes keep those values; contrast warnings for them stay, marked "classic view").
+
 ## [2.6.0] — 2026-10-26
 
 ### Changed
