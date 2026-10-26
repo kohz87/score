@@ -228,3 +228,78 @@ test('credential-file reads keep neither result, error nor content in previews o
   expect(dump).not.toContain('willow-tree-17')
   expect(dump).toContain('.netrc')
 })
+
+// 2.3.1 (decision 129): Hermes 0.22.5's session hooks.
+test('a session Hermes deleted moves its Score room to a successor at once; a deletion the person made is said', async () => {
+  const at = '2026-10-26T00:00:00.000Z'
+  server.db.sqlite
+    .prepare(
+      `INSERT INTO rooms (id, name, kind, lead_agent_id, members, created_at, updated_at)
+       VALUES ('r1', 'one', 'room', 'lead', '["lead","builder"]', ?, ?)`,
+    )
+    .run(at, at)
+  const token = await server.token()
+  await server.send(token, [
+    event(1, 'on_session_delete', {
+      session_id: 'score-r1-builder',
+      reason: 'delete',
+      profile: 'builder',
+    }),
+    // Not a Score session, and an archive: nothing moves.
+    event(2, 'on_session_delete', { session_id: 'cli-123', reason: 'delete' }),
+    event(3, 'on_session_delete', { session_id: 'score-r1-lead', reason: 'archive' }),
+  ])
+  expect(
+    server.db.sqlite
+      .prepare('SELECT agent_id, retired_session_id, successor_session_id FROM session_successors')
+      .all(),
+  ).toEqual([
+    {
+      agent_id: 'builder',
+      retired_session_id: 'score-r1-builder',
+      successor_session_id: 'score-r1-builder~2',
+    },
+  ])
+  const notices = server.db.sqlite
+    .prepare("SELECT parts FROM messages WHERE room_id = 'r1' AND author_kind = 'agent'")
+    .all() as { parts: string }[]
+  expect(notices).toHaveLength(1)
+  expect(notices[0]!.parts).toContain('was deleted in Hermes')
+  // The sweep of an empty successor moves it on silently; a replay changes nothing.
+  await server.send(token, [
+    event(4, 'on_session_delete', { session_id: 'score-r1-builder~2', reason: 'empty_sweep' }),
+    event(5, 'on_session_delete', { session_id: 'score-r1-builder', reason: 'delete' }),
+  ])
+  expect(server.db.sqlite.prepare('SELECT count(*) AS n FROM session_successors').get()).toEqual({
+    n: 2,
+  })
+  expect(
+    server.db.sqlite.prepare("SELECT count(*) AS n FROM messages WHERE room_id = 'r1'").get(),
+  ).toEqual({ n: 1 })
+  expect(server.metrics.unknownHooks).toBe(0)
+})
+
+test('a compaction Hermes made is a system log line', async () => {
+  const token = await server.token()
+  await server.send(token, [
+    event(1, 'post_compaction', {
+      session_id: 'score-r1-builder',
+      kind: 'auto',
+      reason: 'context',
+      before_tokens: 9000,
+      after_tokens: 2100,
+      messages_removed: 40,
+    }),
+  ])
+  const logs = server.db.sqlite
+    .prepare("SELECT data FROM events WHERE type = 'log.line'")
+    .all()
+    .map((row) => JSON.parse(String(row.data)) as { kind: string; text: string })
+  expect(logs).toEqual([
+    expect.objectContaining({
+      kind: 'system',
+      text: 'Hermes compacted the conversation (40 messages summarised, 9000 → 2100 tokens)',
+    }),
+  ])
+  expect(server.metrics.unknownHooks).toBe(0)
+})

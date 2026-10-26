@@ -1,5 +1,6 @@
 import { BridgeEventSchema, BridgeIdentifierSchema, type BridgeEvent } from '@score/contract'
 import { z } from 'zod'
+import { hermesDeletedSessions } from '../../domain/session-retirement.ts'
 import {
   applyApprovalSignal,
   completeApprovalTool,
@@ -95,6 +96,19 @@ const systemHooks = new Set([
   'on_kanban_dispatch_tick',
 ])
 
+// Hermes 0.22.5 session hooks (decision 129): a deleted session moves Score's room to a successor; a compaction is
+// logged.
+const DeleteSchema = z.object({
+  session_id: BridgeIdentifierSchema.nullish(),
+  reason: z.string().max(64).nullish(),
+  deleted_ids: z.array(BridgeIdentifierSchema).max(500).nullish(),
+})
+const CompactionSchema = z.object({
+  messages_removed: z.int().nonnegative().nullish(),
+  before_tokens: z.int().nonnegative().nullish(),
+  after_tokens: z.int().nonnegative().nullish(),
+})
+
 function tooComplex(value: unknown): boolean {
   const pending = [{ value, depth: 0 }]
   let nodes = 0
@@ -180,7 +194,9 @@ export function translateBridgeEvent(
     parsed.hook === 'bridge.gap' ||
     parsed.hook === 'on_interim_message' ||
     approvalHooks.has(parsed.hook) ||
-    systemHooks.has(parsed.hook)
+    systemHooks.has(parsed.hook) ||
+    parsed.hook === 'on_session_delete' ||
+    parsed.hook === 'post_compaction'
   if (!supported) {
     return {
       source,
@@ -266,6 +282,14 @@ export function translateBridgeEvent(
     event.hook === 'bridge.gap' && !omitted
       ? GapPayloadSchema.refine((gap) => gap.to_counter <= event.counter).parse(event.payload)
       : undefined
+  const deleted =
+    event.hook === 'on_session_delete' && !omitted
+      ? DeleteSchema.safeParse(event.payload).data
+      : undefined
+  const compacted =
+    event.hook === 'post_compaction' && !omitted
+      ? CompactionSchema.safeParse(event.payload).data
+      : undefined
   const message = event.hook === 'on_interim_message'
   const system = systemHooks.has(event.hook) || (event.hook === 'bridge.gap' && omitted)
   const text =
@@ -293,6 +317,33 @@ export function translateBridgeEvent(
     identity,
     checkpoint,
     apply({ sqlite, now }) {
+      if (deleted) {
+        const ids = [
+          ...(deleted.deleted_ids ?? []),
+          ...(deleted.session_id ? [deleted.session_id] : []),
+        ]
+        return [
+          ...hermesDeletedSessions(sqlite, producer.profile, ids, deleted.reason ?? '', now),
+          log(
+            'system',
+            `Hermes deleted ${ids.length} session${ids.length === 1 ? '' : 's'} (${deleted.reason ?? 'unknown'})`,
+          ),
+        ]
+      }
+      if (event.hook === 'on_session_delete') return []
+      if (event.hook === 'post_compaction') {
+        const removed = compacted?.messages_removed
+        const tokens =
+          compacted?.before_tokens != null && compacted.after_tokens != null
+            ? `, ${compacted.before_tokens} → ${compacted.after_tokens} tokens`
+            : ''
+        return [
+          log(
+            'system',
+            `Hermes compacted the conversation${removed != null ? ` (${removed} messages summarised${tokens})` : ''}`,
+          ),
+        ]
+      }
       if (gap) {
         const reason = redact(
           `Bridge dropped ${gap.dropped} events (counters ${gap.from_counter}–${gap.to_counter})`,
