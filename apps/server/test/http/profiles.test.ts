@@ -894,3 +894,54 @@ test('a setup that is still running is never abandoned by a removal', async () =
   expect(preview.blockers.join(' ')).toMatch(/An operation already holds this agent/)
   release()
 })
+
+test('a retry still in flight when the setup is abandoned never brings it back (3.2.2)', async () => {
+  const { HttpError } = await import('../../src/errors.ts')
+  const real = port.profileStep.bind(port)
+  let fail = true
+  let hold: (() => void) | null = null
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step, context) => {
+    if (step === 'permissions' && fail)
+      throw new HttpError(409, 'conflict', 'Team permission readback did not match.')
+    if (step === 'permissions' && !fail) await new Promise<void>((done) => (hold = done))
+    return real(step, context)
+  })
+  const added = await create()
+  expect(await finished(added.id)).toMatchObject({ state: 'needs_attention' })
+  fail = false
+  // The retry starts and waits inside its step.
+  const retried = await mutate(`/api/agents/operations/${added.id}/retry`, {}, 'POST', {
+    'idempotency-key': 'retry-then-remove',
+  })
+  expect(retried.statusCode).toBe(200)
+  await vi.waitFor(() => expect(hold).not.toBeNull())
+  // While it waits, the op is running again, so the removal is refused rather than racing it.
+  const preview = (
+    await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })
+  ).json()
+  expect(preview.blockers.join(' ')).toMatch(/An operation already holds this agent/)
+  hold!()
+  await vi.waitFor(async () => expect((await finished(added.id)).state).toBe('completed'), {
+    timeout: 5000,
+  })
+})
+
+test('an interrupted setup step is confirmed, not abandoned (3.2.2)', async () => {
+  const added = await create()
+  await finished(added.id)
+  // Simulate Score losing track of create_profile: the step stays running in a stopped operation.
+  env.db.sqlite
+    .prepare(
+      "UPDATE profile_operations SET state = 'needs_attention', operation = json_set(operation, '$.state', 'needs_attention', '$.steps[0].state', 'running', '$.confirmable', json('true')) WHERE id = ?",
+    )
+    .run(added.id)
+  env.db.sqlite
+    .prepare(
+      "UPDATE agent_lifecycle SET state = 'needs_attention', operation_id = ? WHERE agent_id = 'helper'",
+    )
+    .run(added.id)
+  const preview = (
+    await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })
+  ).json()
+  expect(preview.blockers.join(' ')).toMatch(/An operation already holds this agent/)
+})

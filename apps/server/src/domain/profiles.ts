@@ -83,8 +83,20 @@ function stoppedSetup(sqlite: DatabaseSync, name: string): { id: string } | null
     )
     .get(lifecycle.operation_id) as { id: string; operation: string } | undefined
   if (!row) return null
-  const kind = z.object({ kind: z.string() }).safeParse(JSON.parse(row.operation)).data?.kind
-  return kind === 'create' || kind === 'import' ? { id: row.id } : null
+  const stored = z
+    .object({ kind: z.string(), confirmable: z.boolean().optional() })
+    .safeParse(JSON.parse(row.operation)).data
+  // A step Score lost track of (interrupted, outcome unknown: `confirmable`) is never abandoned — Hermes may still
+  // finish it, so the person confirms what happened first; only a recorded failure is abandoned.
+  if (!stored || stored.confirmable === true) return null
+  return stored.kind === 'create' || stored.kind === 'import' ? { id: row.id } : null
+}
+
+/** A save refused because the operation was abandoned meanwhile (a removal closed it): its run stops quietly. */
+class AbandonedOperation extends HttpError {
+  constructor() {
+    super(409, 'conflict', 'This setup was abandoned when the agent was removed.')
+  }
 }
 function hash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -566,11 +578,14 @@ export class ProfileOperations {
       source: 'profile-operations',
       identity: randomUUID(),
       apply: ({ sqlite, now }) => {
-        sqlite
+        // A completed operation is final: a Retry, Confirm or run step still in flight when a removal abandoned the
+        // setup must not bring it back to life.
+        const saved = sqlite
           .prepare(
-            'UPDATE profile_operations SET operation = ?, state = ?, target_identity = COALESCE(?, target_identity) WHERE id = ?',
+            "UPDATE profile_operations SET operation = ?, state = ?, target_identity = COALESCE(?, target_identity) WHERE id = ? AND state != 'completed'",
           )
           .run(JSON.stringify(operation), operation.state, identity ?? null, operation.id)
+        if (saved.changes === 0) throw new AbandonedOperation()
         if (operation.state !== 'running') {
           sqlite
             .prepare('UPDATE agent_lifecycle SET state = ?, operation_id = ? WHERE agent_id = ?')
@@ -618,6 +633,11 @@ export class ProfileOperations {
     try {
       for (const step of operation.steps) {
         if (step.state === 'completed') continue
+        // Abandoned while this run was between steps: stop before touching Hermes again.
+        const current = this.db.sqlite
+          .prepare('SELECT state FROM profile_operations WHERE id = ?')
+          .get(id) as { state: string } | undefined
+        if (current?.state === 'completed') return
         operation.nextStep = step.name
         if (step.state === 'running' && step.name !== 'verify_ready')
           throw new Error(
@@ -704,6 +724,7 @@ export class ProfileOperations {
       // The uploaded archive has served its purpose; nothing keeps it after a finished import.
       if (stored.importUpload) this.imports?.remove(stored.importUpload)
     } catch (error) {
+      if (error instanceof AbandonedOperation) return
       // A refused or interrupted import step never reuses the archive (it is not retryable), so don't keep 200 MiB.
       if (operation.nextStep === 'import_profile' && stored.importUpload)
         this.imports?.remove(stored.importUpload)
