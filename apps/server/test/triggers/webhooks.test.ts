@@ -589,3 +589,89 @@ test('a reporting word does not hide a changing one in the report-back tool name
   ])
     expect(reportBackWarning(tool), tool).toMatch(/may change things/)
 })
+
+// 3.6.0 (decision 137): a trigger can start its jobs in a chosen team.
+test('a trigger starts its jobs in its chosen team; deleting that team sends them to the first team room', async () => {
+  const team = await app.inject({
+    method: 'POST',
+    url: '/api/team-rooms',
+    headers: { ...headers, 'idempotency-key': 'team-1' },
+    payload: { name: 'Support', members: ['builder'], leadAgentId: 'builder' },
+  })
+  expect(team.statusCode).toBe(201)
+  const teamId = (team.json() as { id: string }).id
+  const made = await app.inject({
+    method: 'POST',
+    url: '/api/triggers',
+    headers,
+    payload: { ...TRIGGER, teamRoomId: teamId },
+  })
+  expect(made.statusCode).toBe(201)
+  const { trigger, secret } = made.json() as {
+    trigger: { id: string; teamRoomId: string | null }
+    secret: string
+  }
+  expect(trigger.teamRoomId).toBe(teamId)
+  expect((await call(trigger.id, secret, JSON.stringify(ticket))).statusCode).toBe(200)
+  const room = (jobId: string) =>
+    (db.sqlite.prepare('SELECT room_id FROM jobs WHERE id = ?').get(jobId) as { room_id: string })
+      .room_id
+  expect(room(jobs()[0]!.id)).toBe(teamId)
+  // The team's lead, not the first team room's, gets the turn.
+  const turn = db.sqlite
+    .prepare('SELECT agent_id FROM message_runs WHERE job_id = ?')
+    .get(jobs()[0]!.id) as { agent_id: string }
+  expect(turn.agent_id).toBe('builder')
+
+  // Only a team room can be chosen.
+  const plain = await app.inject({
+    method: 'POST',
+    url: '/api/rooms',
+    headers: { ...headers, 'idempotency-key': 'room-1' },
+    payload: { name: 'ops' },
+  })
+  const refused = await app.inject({
+    method: 'PATCH',
+    url: `/api/triggers/${trigger.id}`,
+    headers,
+    payload: { teamRoomId: (plain.json() as { id: string }).id },
+  })
+  expect(refused.statusCode).toBe(400)
+
+  // Deleting the team (after its job is closed) sends the trigger back to the first team room.
+  db.sqlite.prepare("UPDATE jobs SET state = 'closed' WHERE room_id = ?").run(teamId)
+  db.sqlite
+    .prepare(
+      "UPDATE message_runs SET state = 'completed' WHERE room_id = ? AND state IN ('pending', 'active')",
+    )
+    .run(teamId)
+  const deleted = await app.inject({
+    method: 'DELETE',
+    url: `/api/rooms/${teamId}`,
+    headers: { ...headers, 'idempotency-key': 'del-1' },
+    payload: { confirm: 'Support' },
+  })
+  expect(deleted.statusCode, deleted.body).toBe(204)
+  const listed = (await app.inject({ method: 'GET', url: '/api/triggers', headers })).json() as {
+    items: { id: string; teamRoomId: string | null }[]
+  }
+  expect(listed.items.find((item) => item.id === trigger.id)!.teamRoomId).toBeNull()
+  expect(
+    (
+      await call(
+        trigger.id,
+        secret,
+        JSON.stringify({ ticket: { ...ticket.ticket, id: 'TCK-2' } }),
+        {
+          webhookId: 'msg_2',
+        },
+      )
+    ).statusCode,
+  ).toBe(200)
+  const first = db.sqlite
+    .prepare("SELECT id FROM rooms WHERE role = 'team' AND team_everyone = 1")
+    .get() as {
+    id: string
+  }
+  expect(room(jobs().at(-1)!.id)).toBe(first.id)
+})

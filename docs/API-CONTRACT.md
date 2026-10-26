@@ -1963,6 +1963,9 @@ mapping: { ref; title?; link?; details? } (dot paths); template; reportBack }` �
   report, review, feedback or reaction (`create_comment`, `add_review` pass; `create_issue`, `update_status`,
   `send_funds`, `post_tweet` warn): "This tool may change things, not just report." It is a name check only: no warning doesn't
   prove a tool is harmless. Any tool name is still accepted; the settings show the warning.
+- **Team (3.6.0, decision 137).** `Trigger.teamRoomId: string | null` — the team room its jobs start in (its lead gets the
+  turn); `null` = the first (everyone) team room. Create and update accept `teamRoomId?: string | null`; anything but a
+  team room is `400`. Deleting that team sets its triggers back to `null` in the same transaction.
 - **Report-back.** `ReportBack`: `{ mode: 'off' }` · `{ mode: 'fixed' | 'lead_decides'; tool; args }` where `tool` is a
   tool of the lead's Hermes profile and `args` a JSON template with `{{source.ref}}`, `{{source.title}}`,
   `{{source.link}}`, `{{job.title}}`, `{{job.summary}}` (the job's latest agent reply). **H** `POST

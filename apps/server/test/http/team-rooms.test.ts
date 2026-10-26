@@ -218,3 +218,22 @@ test('an ordinary room keeps its #name rule; a team keeps plain names', async ()
     (await call('PATCH', `/api/rooms/${room.json().id}`, { name: 'Not A Slug' })).statusCode,
   ).toBe(400)
 })
+
+test('a team whose jobs have Workbench review notes can be deleted (3.6.0)', async () => {
+  const team = RoomSchema.parse(
+    (
+      await createTeam({ name: 'Reviewers', members: ['reviewer'], leadAgentId: 'reviewer' })
+    ).json(),
+  )
+  const job = db.sqlite.prepare('SELECT id FROM jobs WHERE room_id = ?').get(team.id) as {
+    id: string
+  }
+  db.sqlite
+    .prepare(
+      "INSERT INTO review_comments (id, job_id, turn_id, agent_id, action, path, line, text, created_at) VALUES ('rc1', ?, 't1', 'reviewer', 'review', 'src/a.ts', 3, 'Check this', '2026-10-26T10:00:00.000Z')",
+    )
+    .run(job.id)
+  const deleted = await call('DELETE', `/api/rooms/${team.id}`, { confirm: 'Reviewers' })
+  expect(deleted.statusCode, deleted.body).toBe(204)
+  expect(db.sqlite.prepare("SELECT 1 FROM review_comments WHERE id = 'rc1'").get()).toBeUndefined()
+})

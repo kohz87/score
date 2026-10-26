@@ -76,6 +76,8 @@ export const TriggerSchema = z.object({
   sample: z.unknown().nullable(),
   lastCalledAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
+  /** 3.6.0: the team room its jobs start in; null = the first (everyone) team room. */
+  teamRoomId: z.string().min(1).nullable().default(null),
   /** Set when the report-back tool doesn't look like a reporting tool ("may change things, not just report"). */
   warning: z.string().optional(),
 })
@@ -88,6 +90,7 @@ export const TriggerCreateRequestSchema = z
     mapping: TriggerMappingSchema,
     template: z.string().min(1).max(TRIGGER_LIMITS.templateChars),
     reportBack: ReportBackSchema,
+    teamRoomId: z.string().min(1).nullable().optional(),
   })
   .strict()
 export const TriggerUpdateRequestSchema = TriggerCreateRequestSchema.partial().strict()
