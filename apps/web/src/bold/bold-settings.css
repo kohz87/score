@@ -667,6 +667,59 @@
   text-decoration: none;
 }
 
+.bold-settings-page .usage-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.bold-settings-page .usage-custom label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.bold-settings-page .usage-custom input {
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  color-scheme: dark;
+}
+
+.bold-settings-page .usage-custom-problem {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.bold-settings-page .usage-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.bold-settings-page .usage-agent-table {
+  min-width: 560px;
+  font-size: 13px;
+}
+
+.bold-settings-page .usage-agent-table td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bold-settings-page .usage-agent-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .bold-settings-page .usage-body {
   display: flex;
   flex-direction: column;

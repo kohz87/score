@@ -109,6 +109,41 @@ test('Show as table reveals the same task rows', async ({ page }) => {
   await expect(table.locator('thead th').nth(1)).toHaveText('Jobs done')
 })
 
+test('Custom range and the By agent table, desktop and phone', async ({ page }) => {
+  await openUsage(page)
+  const table = page.getByRole('table', { name: 'By agent', exact: true })
+  await expect(table).toBeVisible()
+  await expect(table.locator('tbody tr')).not.toHaveCount(0)
+  await expect(table.getByRole('rowheader', { name: 'builder' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Custom' }).click()
+  const form = page.getByRole('form', { name: 'Custom range' })
+  const from = new Date(Date.now() - 4 * 86_400_000).toISOString().slice(0, 10)
+  await form.getByLabel('From').fill(from)
+  await form.getByLabel('To').fill(new Date().toISOString().slice(0, 10))
+  const response = page.waitForResponse(
+    (candidate) =>
+      candidate.url().includes('/api/reports?') && candidate.url().includes('range=custom'),
+  )
+  await form.getByRole('button', { name: 'Apply' }).click()
+  await response
+  await expect(page).toHaveURL(/range=custom&from=/)
+  await expect(page.getByRole('link', { name: 'Download CSV' })).toHaveAttribute(
+    'href',
+    /range=custom&from=/,
+  )
+  await expect(table).toBeVisible()
+
+  // Phone: the page itself never scrolls sideways; the table scrolls inside its own box.
+  await page.setViewportSize({ width: 390, height: 844 })
+  const scroller = page.getByRole('region', { name: /By agent table/ })
+  await expect(scroller).toBeVisible()
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBeLessThanOrEqual(0)
+})
+
 test('Journey view shows one row per agent and a text alternative', async ({ page }) => {
   await pair(page)
   await page.goto('/b/settings/usage?tab=journey')
