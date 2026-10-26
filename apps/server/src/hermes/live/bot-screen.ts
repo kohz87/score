@@ -174,6 +174,11 @@ export class RfbSession {
   private receive(chunk: Buffer) {
     if (this.closed) return
     this.queue.push(chunk)
+    // A raw full frame at the size cap is 64 MiB; more than that unparsed means the screen is misbehaving.
+    if (this.queue.available > MAX_SIDE * MAX_SIDE * 4 + (1 << 20)) {
+      this.close('The screen sent more than Score can hold.')
+      return
+    }
     try {
       while (!this.closed && this.step()) {
         /* keep parsing */
@@ -430,13 +435,21 @@ export class BotScreens {
       return { state: 'sandboxed' }
     }
     const socketPath = join(botDir, 'rfb.sock')
-    const info = await lstat(socketPath).catch(() => null)
-    if (!info) {
+    const dirInfo = await lstat(botDir).catch(() => null)
+    const info = dirInfo ? await lstat(socketPath).catch(() => null) : null
+    if (!dirInfo || !info) {
       this.drop(agentId)
       return { state: 'off' }
     }
     const uid = this.options.uid ?? process.getuid?.()
-    if (!info.isSocket() || info.isSymbolicLink() || (uid !== undefined && info.uid !== uid)) {
+    const ours = (stats: { uid: number }) => uid === undefined || stats.uid === uid
+    if (
+      !dirInfo.isDirectory() ||
+      !ours(dirInfo) ||
+      !info.isSocket() ||
+      info.isSymbolicLink() ||
+      !ours(info)
+    ) {
       this.drop(agentId)
       return { state: 'unavailable', reason: 'The screen’s socket isn’t one Score can trust.' }
     }
@@ -486,19 +499,31 @@ export class BotScreens {
     this.sessions.delete(agentId)
   }
   private async open(agentId: string, socketPath: string) {
-    const existing = this.sessions.get(agentId)
-    if (existing && !existing.session.closed) return existing
-    if (existing) this.sessions.delete(agentId)
-    const socket = (this.options.connect ?? ((path) => connect(path)))(socketPath)
-    const session = new RfbSession(socket, this.options.clock)
-    const entry = { session, lastUsed: this.now(), png: null }
-    this.sessions.set(agentId, entry)
-    this.sweep()
-    const timeout = new Promise<boolean>((resolve) =>
-      setTimeout(() => resolve(false), 5000).unref(),
-    )
-    if (!(await Promise.race([session.ready(), timeout]))) {
-      this.drop(agentId)
+    let entry = this.sessions.get(agentId)
+    if (entry?.session.closed) {
+      this.sessions.delete(agentId)
+      entry = undefined
+    }
+    if (!entry) {
+      const socket = (this.options.connect ?? ((path) => connect(path)))(socketPath)
+      entry = {
+        session: new RfbSession(socket, this.options.clock),
+        lastUsed: this.now(),
+        png: null,
+      }
+      this.sessions.set(agentId, entry)
+      this.sweep()
+    }
+    // Every caller (not only the one that connected) waits for the first full frame: a session still connecting has
+    // no size and no pixels yet.
+    let timer: NodeJS.Timeout | undefined
+    const timeout = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), 5000)
+    })
+    const ready = await Promise.race([entry.session.ready(), timeout])
+    clearTimeout(timer)
+    if (!ready || entry.session.seq === 0) {
+      if (this.sessions.get(agentId) === entry) this.drop(agentId)
       return null
     }
     return entry

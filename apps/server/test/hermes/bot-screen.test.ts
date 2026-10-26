@@ -262,3 +262,36 @@ test('PNG encoding keeps pixel order and size', () => {
   expect([width, height]).toEqual([2, 1])
   expect([...raw]).toEqual([0, 1, 2, 3, 4, 5, 6])
 })
+
+test('polls that arrive while the first connection is still opening wait for its first frame', async () => {
+  await fakeXvnc()
+  const bot = screens()
+  try {
+    const [a, b, frame] = await Promise.all([
+      bot.status('builder'),
+      bot.status('builder'),
+      bot.frame('builder'),
+    ])
+    expect(a).toMatchObject({ state: 'running', width: 4, height: 2 })
+    expect(b).toMatchObject({ state: 'running', width: 4, height: 2 })
+    expect('png' in frame && frame.png.readUInt32BE(16)).toBe(4)
+  } finally {
+    bot.close()
+  }
+})
+
+test('a symlinked bot-desktop folder is refused, never followed', async () => {
+  const real = join(dir, 'elsewhere')
+  mkdirSync(real)
+  rmSync(join(home, 'bot-desktop'), { recursive: true })
+  symlinkSync(real, join(home, 'bot-desktop'))
+  const other = createServer()
+  servers.push(other)
+  await new Promise<void>((resolve) => other.listen(join(real, 'rfb.sock'), resolve))
+  const bot = screens()
+  try {
+    expect((await bot.status('builder')).state).toBe('unavailable')
+  } finally {
+    bot.close()
+  }
+})
