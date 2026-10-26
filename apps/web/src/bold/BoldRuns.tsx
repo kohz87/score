@@ -22,11 +22,12 @@ import {
   useRun,
   useRunActions,
 } from '../routes/orchestrations/orchestration-queries.ts'
-import { RunNeeds } from '../routes/orchestrations/RunDecisions.tsx'
+import { AgentChip, RunNeeds } from '../routes/orchestrations/RunDecisions.tsx'
 import {
   BudgetBlock,
   EndSummary,
   FinishBlock,
+  PlanList,
   RunControls,
   StepCard,
 } from '../routes/orchestrations/RunPanel.tsx'
@@ -327,6 +328,10 @@ interface RunFrameProps {
   /** Extra buttons next to the controls (Run again…). */
   extra?: ReactNode
   outcome?: string | null
+  /** The lead's goal (orchestration). */
+  goal?: string
+  /** Shown before the thread, after the decisions (workflow agents that changed). */
+  warnings?: ReactNode
   onBack: () => void
 }
 
@@ -365,10 +370,12 @@ function RunFrame(props: RunFrameProps) {
           <span className="bold-run-status">{props.statusText}</span>
           {props.subtitle ? ` · ${props.subtitle}` : ''}
         </p>
+        {props.goal && <p className="bold-run-goal">{props.goal}</p>}
         {props.outcome && <p className="bold-run-sub">{props.outcome}</p>}
       </div>
       <div className="bold-run-tiles">{props.tiles}</div>
       {props.needs}
+      {props.warnings}
       <div
         id="bold-run-panel"
         role="tabpanel"
@@ -418,6 +425,7 @@ function OrchestrationRun({
       title={detail.title}
       subtitle={`Lead decides · started ${clock(detail.createdAt) ?? ''}`}
       statusText={statusLabel[detail.status]}
+      goal={detail.goal}
       over={over}
       roomId={detail.roomId}
       agents={agents}
@@ -459,6 +467,10 @@ function OrchestrationRun({
       controls={<RunControls run={detail} actions={actions} />}
       summary={
         <>
+          <section aria-label="Plan">
+            <h3>Plan</h3>
+            <PlanList run={detail} />
+          </section>
           <EndSummary
             run={detail}
             steps={detail.steps.succeeded}
@@ -493,6 +505,7 @@ function WorkflowRun({
   const [again, setAgain] = useState(false)
   const over = isRunOver(detail.status)
   const { graph, note } = outcomeLines(detail)
+  const changedAgents = detail.agentMap.filter((entry) => entry.status !== 'current')
   return (
     <>
       <RunFrame
@@ -543,23 +556,61 @@ function WorkflowRun({
           </ClassicPaper>
         }
         controls={<RunControls run={detail} actions={actions} />}
+        warnings={changedAgents.length > 0 ? <AgentWarnings entries={changedAgents} /> : null}
         extra={
           over && (
-            <button type="button" className="btn sm" onClick={() => setAgain(true)}>
-              Run again…
-            </button>
+            <>
+              {changedAgents.length > 0 && (
+                <span className="bold-run-wait" data-protected="inline">
+                  {changedAgents.length} {changedAgents.length === 1 ? 'agent' : 'agents'} changed
+                </span>
+              )}
+              <button type="button" className="btn sm" onClick={() => setAgain(true)}>
+                Run again…
+              </button>
+            </>
           )
         }
         summary={
-          <EndSummary
-            run={detail}
-            steps={detail.nodes.succeeded}
-            approvals={
-              [...detail.nodeGates, ...detail.assignmentGates].filter(
-                (gate) => gate.decidedAt !== null,
-              ).length
-            }
-          />
+          <>
+            <EndSummary
+              run={detail}
+              steps={detail.nodes.succeeded}
+              approvals={
+                [...detail.nodeGates, ...detail.assignmentGates].filter(
+                  (gate) => gate.decidedAt !== null,
+                ).length
+              }
+            />
+            <section aria-label="This run">
+              <h3>This run</h3>
+              <dl className="orch-facts">
+                <dt>Workflow</dt>
+                <dd>
+                  <Link to={`/workflows/${encodeURIComponent(detail.workflowId)}`}>
+                    {detail.workflowName}
+                  </Link>
+                  , version {detail.version}
+                </dd>
+                <dt>Agents</dt>
+                <dd>
+                  <ul className="wf-agents">
+                    {detail.agentMap.map((entry) => (
+                      <li key={entry.agentId}>
+                        <AgentChip agentId={entry.agentId} agents={agents} />{' '}
+                        <span className="orch-muted">version {entry.incarnation}</span>{' '}
+                        {entry.status !== 'current' && (
+                          <strong className="orch-error">
+                            {entry.status === 'changed' ? 'replaced since' : 'removed'}
+                          </strong>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </dl>
+            </section>
+          </>
         }
         details={(step) =>
           step.kind === 'lead' ? null : (
@@ -592,6 +643,22 @@ function WorkflowRun({
         </ClassicPaper>
       )}
     </>
+  )
+}
+
+/** An agent the run was started with that has since been replaced or removed: said before the results. */
+function AgentWarnings({ entries }: { entries: WorkflowRunDetail['agentMap'] }) {
+  return (
+    <ul className="bold-run-warnings" aria-label="Agents that changed" data-protected="block">
+      {entries.map((entry) => (
+        <li key={entry.agentId}>
+          <b>{entry.agentId}</b>{' '}
+          {entry.status === 'changed'
+            ? `was replaced since this run started (it runs with ${entry.incarnation}).`
+            : `was removed since this run started (it ran as ${entry.incarnation}).`}
+        </li>
+      ))}
+    </ul>
   )
 }
 

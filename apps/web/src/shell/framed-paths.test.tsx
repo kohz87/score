@@ -19,7 +19,11 @@ describe('toBoldPath', () => {
   })
   it('opens a run in the room’s Runs panel, keeping its query', () => {
     expect(toBoldPath('/runs/brief-1')).toBe('/b?run=brief-1')
-    expect(toBoldPath('/runs/brief%201?x=1#a')).toBe('/b?x=1&run=brief+1')
+    expect(toBoldPath('/runs/brief%201?x=1#a')).toBe('/b?x=1&run=brief+1#a')
+  })
+  it('keeps the #hash of a run link and survives a malformed escape', () => {
+    expect(toBoldPath('/runs/brief-1?x=1#step')).toBe('/b?x=1&run=brief-1#step')
+    expect(toBoldPath('/runs/%E0%A4%A')).toBe('/runs/%E0%A4%A')
   })
   it('sends team pages and chat rooms to their new homes', () => {
     expect(toBoldPath('/team/lead')).toBe('/b/team/lead')

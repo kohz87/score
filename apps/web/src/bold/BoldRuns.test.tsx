@@ -145,3 +145,33 @@ test('the fixtures still carry the brief ids the panel matches', () => {
   expect(orchestrationEvents.events.length).toBeGreaterThan(0)
   expect(runEvents.events.length).toBeGreaterThan(0)
 })
+
+test('a lead-decides run shows its goal and its plan', async () => {
+  mount('brief-orch-1')
+  await screen.findByRole('list', { name: 'Steps' })
+  const goal = orchestrationSnapshot.orchestration.goal
+  expect(screen.getByText(goal)).toBeTruthy()
+  expect(screen.getByRole('region', { name: 'Plan' })).toBeTruthy()
+})
+
+test('a workflow run names the definition and warns about an agent that changed, before the steps', async () => {
+  const changed = {
+    ...runSnapshot,
+    run: {
+      ...runSnapshot.run,
+      agentMap: runSnapshot.run.agentMap.map((entry, index) =>
+        index === 0 ? { ...entry, status: 'changed' as const } : entry,
+      ),
+    },
+  }
+  const base = fetchImpl
+  fetchImpl = (url) => (url === '/api/workflow-runs/wfrun-1' ? json(changed) : base(url))
+  mount('brief-wfrun-1')
+  const warning = await screen.findByRole('list', { name: 'Agents that changed' })
+  const steps = screen.getByRole('list', { name: 'Steps' })
+  expect(warning.textContent).toContain('replaced')
+  expect(warning.compareDocumentPosition(steps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  const facts = screen.getByRole('region', { name: 'This run' })
+  expect(facts.querySelector(`a[href*="/workflows/${runSnapshot.run.workflowId}"]`)).toBeTruthy()
+  expect(facts.textContent).toContain('replaced since')
+})

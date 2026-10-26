@@ -32,12 +32,18 @@ export function toBoldPath(to: string, rooms: readonly FrameRoom[] = []): string
   // The Workspace deep link has no /b page of its own: the agent's page is the nearest.
   const workspace = /^\/team\/([^/]+)\/workspace$/.exec(path)
   if (workspace) return `/b/team/${workspace[1]}`
-  // A run opens in the room's Runs side panel (2.5.0).
+  // A run opens in the room's Runs side panel (2.5.0); the query and #hash go with it.
   const run = /^\/runs\/([^/]+)$/.exec(path)
   if (run) {
-    const params = new URLSearchParams(rest.startsWith('?') ? rest.split('#')[0] : '')
-    params.set('run', decodeURIComponent(run[1] ?? ''))
-    return `/b?${params.toString()}`
+    try {
+      const [query = '', hash = ''] = rest.split('#')
+      const params = new URLSearchParams(query)
+      params.set('run', decodeURIComponent(run[1] ?? ''))
+      return `/b?${params.toString()}${hash ? `#${hash}` : ''}`
+    } catch {
+      // A malformed %-escape: keep the raw path rather than throw while rendering a link.
+      return to
+    }
   }
   if (PREFIXED.some((root) => under(path, root))) return `/b${path}${rest}`
   return to

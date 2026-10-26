@@ -438,11 +438,10 @@
   padding: 16px;
 }
 
+/* The cards carry their own (light, "for you") fill; the frame around them has none. */
 [data-ui='bold'] .bold-run-classic[data-tone='for-you'] {
-  background: var(--ground);
-  box-shadow: 0 0 0 2px var(--warn);
-  border-radius: 24px;
-  padding: 12px;
+  background: transparent;
+  padding: 0;
 }
 
 /* Nothing to decide: the cards render nothing, and the frame goes with them. */
@@ -477,4 +476,118 @@
     padding: 12px;
     border-radius: 20px;
   }
+}
+
+[data-ui='bold'] .bold-run-goal {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-run-warnings {
+  list-style: none;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 20px;
+  background: rgba(255, 201, 77, 0.12);
+  color: var(--warn);
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ---- the kept classic parts, in the new shell's look (decision 131) ----
+   The wrapper still carries the classic pack (spacing, radii, agent and halo tokens) but its colours, fonts and radii
+   are the prototype's. Literal values: a self-referencing var(--ink) would cycle on the element that sets it. Scoped to
+   this wrapper, so the classic pages that use the same components are untouched. */
+[data-ui='bold'] .bold-run-classic[data-pack][data-theme='dark'] {
+  --ground: #16171e;
+  --card: #1a1c23;
+  --ink: #ececf1;
+  --ink-muted: #a9adb8;
+  --muted: #a9adb8;
+  --hairline: #2c2f38;
+  --subtle: #23252e;
+  --subtle-2: #23252e;
+  --line-strong: #626670;
+  --flow-canvas: #12131a;
+  --flow-canvas-dot: #2c2f38;
+  --flow-edge: #a9adb8;
+  --flow-edge-planned: #626670;
+  --flow-edge-sent-back: #ffc94d;
+  --flow-done-border: #2c2f38;
+  --flow-log-border: #2c2f38;
+  --agent-jade-text: #5ee3bf;
+  --agent-saffron-text: #ffc94d;
+  --agent-coral-text: #ff97ae;
+  --agent-violet-text: #b3a6ff;
+}
+[data-ui='bold'] .bold-run-classic[data-pack][data-theme='light'] {
+  --ground: #ffffff;
+  --card: #ffffff;
+  --ink: #12131a;
+  --ink-muted: #5e626c;
+  --muted: #5e626c;
+  --hairline: #dfe2e8;
+  --subtle: #f4f5f8;
+  --subtle-2: #f4f5f8;
+  --line-strong: #9a9ea7;
+  --flow-canvas: #eceef2;
+  --flow-canvas-dot: #dfe2e8;
+  --flow-edge: #5e626c;
+  --flow-edge-planned: #9a9ea7;
+  --flow-edge-sent-back: #8a5a00;
+  --flow-done-border: #dfe2e8;
+  --flow-log-border: #dfe2e8;
+  --agent-jade-text: #00694f;
+  --agent-saffron-text: #8a5a00;
+  --agent-coral-text: #b01e43;
+  --agent-violet-text: #4a2fd9;
+}
+/* Decisions are the light object in the dark look and the dark one in the light look. */
+[data-ui='bold'] .bold-run-classic[data-pack][data-theme='dark'][data-tone='for-you'] {
+  --card: #ececf1;
+  --ink: #12131a;
+  --ink-muted: #3a3d45;
+  --muted: #3a3d45;
+  --hairline: #c9cbd2;
+  --subtle: #ffffff;
+  --subtle-2: #ffffff;
+}
+[data-ui='bold'] .bold-run-classic[data-pack][data-theme='light'][data-tone='for-you'] {
+  --card: #12131a;
+  --ink: #ffffff;
+  --ink-muted: #c9cbd2;
+  --muted: #c9cbd2;
+  --hairline: #3a3d45;
+  --subtle: #23252e;
+  --subtle-2: #23252e;
+}
+[data-ui='bold'] .bold-run-classic[data-pack] {
+  --font-heading: var(--font-d);
+  --font-body: var(--font-b);
+  --font-code: var(--font-m);
+  --radius-card: 24px;
+  font-family: var(--font-b);
+}
+[data-ui='bold'] .bold-run-classic h3,
+[data-ui='bold'] .bold-run-classic h4 {
+  font-family: var(--font-d);
+  letter-spacing: -0.02em;
+}
+[data-ui='bold'] .bold-run-classic .orch-decision,
+[data-ui='bold'] .bold-run-classic .orch-diagram,
+[data-ui='bold'] .bold-run-classic .orch-log,
+[data-ui='bold'] .bold-run-classic .orch-selected {
+  border-radius: 24px;
+}
+[data-ui='bold'] .bold-run-classic button {
+  font-weight: 700;
+  min-height: 36px;
+}
+[data-ui='bold'] .bold-run-classic .orch-diagram,
+[data-ui='bold'] .bold-run-classic .orch-log {
+  background: var(--flow-canvas);
 }

@@ -62,9 +62,11 @@ export function BoldRoom() {
   }
   // `?run=<brief id>` (a job's link, Search, a notification) opens the Runs view on that run, and stays while it is open.
   const runId = params.get('run')
-  const [seenRunId, setSeenRunId] = useState<string | null>(null)
-  if (runId !== seenRunId) {
-    setSeenRunId(runId)
+  // Keyed on the navigation, not only the id: opening the same run again after the sheet was closed opens it again.
+  const [seenRunNav, setSeenRunNav] = useState<string | null>(null)
+  const runNav = runId ? `${location.key}:${runId}` : null
+  if (runNav !== seenRunNav) {
+    setSeenRunNav(runNav)
     if (runId) setMode('runs')
   }
   const [menuOpen, setMenuOpen] = useState(false)
@@ -189,7 +191,7 @@ export function BoldRoom() {
 
   useEffect(() => {
     if (phone && runId) setSheetOpen(true)
-  }, [phone, runId, setSheetOpen])
+  }, [phone, runId, location.key, setSheetOpen])
 
   useEffect(() => {
     if (!libraryRequest) return
