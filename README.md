@@ -6,9 +6,17 @@ needs your decision (an approval, a review) waits for you in one place.
 It runs on your machine, keeps its own data in `~/.score`, and talks to Hermes through the `hermes` CLI and the
 gateway API. It never reads your Hermes credential files and never writes Hermes databases.
 
-![Score's room: a conversation with the team, tool cards and a message box](docs/screenshots/chat.png)
+![Score's team room: job tabs, a card that needs you, the conversation and the Results panel](docs/screenshots/team-room.png)
 
 (The screenshots show the built-in demo team: `lead`, `builder`, `reviewer`, `designer`.)
+
+## Requirements
+
+- Linux (tested on Ubuntu 26.04, x86_64), `git`, `curl`, `tar`, `xz`.
+- **Node.js 24** and **pnpm 12**. Coding agents and Library moves also use `python3` (3.9 or newer).
+- For real agents: [Hermes Agent](https://github.com/NousResearch/hermes-agent), tested with **v0.22.5**. Without
+  Hermes, Score runs a demo team (`SCORE_MODE=fake`) that calls no model.
+- A browser. Score serves its own web app; nothing is loaded from a CDN at runtime.
 
 ## Setup
 
@@ -17,7 +25,7 @@ Score runs on Linux (tested on Ubuntu 26.04, x86_64). Every step below installs 
 
 ### 1. Prerequisites
 
-You need `git`, `curl`, `tar` and `xz`, plus **Node.js 24** and **pnpm 12**. Coding agents and Knowledge moves also use
+You need `git`, `curl`, `tar` and `xz`, plus **Node.js 24** and **pnpm 12**. Coding agents and Library moves also use
 `python3` (3.9 or newer, already there wherever Hermes runs) for two kernel calls Node can't make. Node without sudo:
 
 ```bash
@@ -62,7 +70,7 @@ hermes setup
 hermes gateway start
 ```
 
-Score is tested with Hermes **v0.21.x**. More in the [Hermes Agent README](https://github.com/NousResearch/hermes-agent).
+Score is tested with Hermes **v0.22.5**. More in the [Hermes Agent README](https://github.com/NousResearch/hermes-agent).
 
 ### 4. Connect Score to Hermes
 
@@ -131,7 +139,7 @@ it). With **Tailscale** you can skip that: `scripts/score tailscale` fetches a r
   [Claude Code](https://docs.claude.com/claude-code), [Codex CLI](https://github.com/openai/codex) or
   [Antigravity `agy`](https://antigravity.google/docs/cli/install/) yourself; Score uses your own login and quota.
 - **Web terminal**: start Score with `SCORE_TERMINAL=1` in remote mode and set a password with `scripts/score password`.
-- **Knowledge folder**: notes live in `~/score-vault` (a git repository Score creates); set `SCORE_VAULT` to move it.
+- **Library folder**: notes live in `~/score-vault` (a git repository Score creates); set `SCORE_VAULT` to move it.
 
 ### Upgrading
 
@@ -155,6 +163,19 @@ someone with access to the server's terminal (or `$SCORE_HOME`) can get.
   password). Or run `scripts/score pair`.
 - A paired browser stays paired for up to 30 days (7 days without use). Clearing cookies unpairs it.
 
+## Security model
+
+- **Local by default.** Score listens on `127.0.0.1` only. Remote mode (phones, other computers) is always HTTPS, with
+  Score's own certificate or a Tailscale one, and only for the origins you list.
+- **Pairing.** There are no accounts. A browser must be paired with a one-time link before it can change anything
+  (see [Pairing](#pairing)); managing devices and the terminal also need a security password set on the host.
+- **Your credentials stay yours.** Score never reads Hermes credential files and never writes Hermes databases; it
+  talks to Hermes through its CLI and gateway API, and redacts what comes from hooks before storing it.
+- **Protected surfaces.** The cards that ask you to decide (approvals, questions, pauses, the privacy label) are
+  marked so that no theme, custom CSS or imported look can hide, cover or relabel them.
+- **Nothing runs without you.** Score controls the work it starts (turn and spend limits, deadline, stop) and says
+  plainly what it cannot control; the Start a job dialog asks you to confirm that.
+
 ## Create and manage agents
 
 Team, then Add agent, creates a Hermes profile (blank or copied from an existing agent), installs the bridge plugin
@@ -172,122 +193,130 @@ export in `$SCORE_HOME/profile-backups/`. Details: [docs/SETUP.md](docs/SETUP.md
 
 ## What is in the app
 
-Score opens in the new shell at `/b`: a room with your team, the Team page and Settings. Workflows, Watch,
-orchestration runs, and the classic Chat, Team, Knowledge, Reports and Settings pages stay reachable; use **Use the
-classic view** in Settings to browse those. [docs/USER-GUIDE.md](docs/USER-GUIDE.md) describes the main pages in
-detail. All pictures below come from the built-in demo team (`lead`, `builder`, `reviewer`, `designer`);
-`pnpm screenshots` regenerates them.
+Score opens on the room at `/b`. The pictures below come from the built-in demo team (`lead`, `builder`, `reviewer`,
+`designer`) running in demo mode, and `pnpm screenshots` regenerates them (see [Screenshots](#screenshots)).
+[docs/USER-GUIDE.md](docs/USER-GUIDE.md) has longer notes on the individual pages; some of its sections still use the
+older page names.
 
-### Orchestrations: a lead agent runs a goal
+### The team room
 
-![An orchestration's live diagram next to its log, with the plan and the budget below](docs/screenshots/orchestration.png)
+![The team room: job tabs, a card that needs you, and the Results panel](docs/screenshots/team-room.png)
 
-Give a lead agent a goal and it plans the steps and hands them to your team. The live diagram shows each step as it
-runs, the log records every request the lead made, and the plan and budget sit below. Score checks each request
-against the limits, the budget and your approval choice, and steps can wait for your approval before they start.
+The room is where the team works. Each **job** is its own tab with its own conversation; you write to the team, and
+agents hand work to each other with `@mentions`. Anything that needs your decision shows up pinned above the
+conversation as a card (an approval, a question, an exchange that used up its turns). The side panel shows the **Results** (what changed, attached files, a live preview) and the
+**Workbench**, and switches to Library or Runs from its **Work** menu.
 
-![The New orchestration dialog with a goal, a lead, the agents it may use, an approval setting, a budget and the checks that run before it starts](docs/screenshots/new-orchestration.png)
+![The team room on a phone: the needs-you card first, then the jobs, with the bottom navigation](docs/screenshots/team-room-phone.png)
 
-Start one from Chat with **New orchestration**: choose the lead, which agents it may hand work to, when
-you want to be asked (before each step, only when the lead asks, or never) and an optional budget or deadline.
+On a phone the same room is one column with a bottom bar for Room, Team, Search and Settings; the side panel opens from
+a button.
 
-### Workflows: draw the steps yourself
+### A private conversation with one agent
 
-![The workflow editor: a drawn graph of steps with problems flagged on the steps and a step's settings on the right](docs/screenshots/workflow-editor.png)
+![A one-to-one with lead: tool cards, the answer, and buttons to share it with the team room](docs/screenshots/one-to-one.png)
 
-Where an orchestration lets a lead agent plan, a workflow is a graph you draw: agent steps, gates that wait for your
-approval and branches that choose a path from a step's result. The editor checks the drawing as you go and saves
-versions you can run later.
+Click an agent's glyph at the top to talk to it privately. Only you and that agent see the conversation. When an answer
+is worth keeping, **Share to the team room** posts it into a job, or **Bring into a new chat** continues it elsewhere.
 
-![A workflow run: a card asking for approval above the live diagram and the run log](docs/screenshots/workflow-run.png)
+![Try another reply: the designer's reply with a 2 / 2 pager and its action row](docs/screenshots/try-another.png)
 
-A run asks for approval only where you placed a gate (or before every step, if you choose), draws itself live on the
-diagram and keeps a plain-language log you can replay.
+**Try another** asks the agent again and keeps every version as one message with a pager (on a phone, swipe sideways).
+Copy, Save to Library, Pin and Delete sit in the same row.
 
-### Watch: replay what an agent did
+### Start a job
 
-![Watch: an agent's terminal, an edited file and a browser window replayed with a timeline, and a card asking you to approve a command](docs/screenshots/watch.png)
+![The Start a job dialog: what to do, recipe, agents allowed, when, ask-me-before and limits, and the checks before it starts](docs/screenshots/start-job.png)
 
-Watch replays an agent's recorded work: its terminal, the files it changed and the pages it looked at, with a
-timeline you can drag back. It is a replay of events, not a remote view of a screen. From here you can pause the
-agent or copy a command to continue its session in your own terminal.
+**Job** opens Start a job. Say what the team should do, choose who may take a step, when it runs (now, on a schedule,
+or when another app calls), when it must ask you first, and its limits (turns per back-and-forth, a spend cap, an
+optional deadline). Score lists the checks it ran before it starts, and you confirm that it controls the work it starts.
+The recipe is either **lead decides** (the lead plans the steps) or one you saved.
 
-### Chat: rooms and direct conversations
+### Runs
 
-![Chat in a room: tool cards, a code block and a message box with To and Plan first](docs/screenshots/chat.png)
+![A run in the Runs panel: spend and limits, an approval gate and the steps so far](docs/screenshots/run-steps.png)
 
-Rooms and direct chats with your agents. Mention `@agent` to hand work over, use `/assign` and `/routine` to create
-tasks and schedules, and expand tool cards to see what an agent ran. Rooms keep a list of the files in play.
+A running job shows in the **Runs** panel: spend against its cap, the limits, the agents allowed, and every step with
+its result. A gate that needs you (here "Approve s3?") shows what exactly will start and lets you approve or reject it,
+with a note for the lead. Pause and Stop are always at the top.
 
-![Chat on a phone at 390 px wide](docs/screenshots/chat-phone.png)
+![The same run as a graph: finished steps, the running step and the step that needs you](docs/screenshots/run-graph.png)
 
-Score is usable on a phone: the same pages reflow to one column.
+The **Graph** tab draws the same run: queued steps are dashed, running steps glow in the agent's colour, a step that
+needs you is amber, and finished steps carry a tick.
 
-### Team and agent pages
+### Recipes
 
-![The Team page: four agent cards with their status and current activity](docs/screenshots/team.png)
+![The Recipes editor: a saved recipe drawn as a graph of steps, with its toolbar and the list of steps to add](docs/screenshots/recipes.png)
 
-Every agent at a glance. **Add agent** creates a new Hermes profile or imports an existing one.
+A recipe is a saved set of steps: agent steps, a gate that waits for you, and a branch on a result. Draw it on the
+graph or edit it **As text**, **Preview** it without running anything, and **Run** it from Start a job. Each save is a
+new version.
 
-![An agent's page with personality, model, skills and memory](docs/screenshots/agent.png)
+### Team and agents
 
-Each agent has a page with tabs for personality, model, skills, memory, tools, plugins, workspace, routines,
-channels, permissions and history.
+![An agent's page: personality, runs on, model and fallback models](docs/screenshots/agent.png)
 
-### Coding agents
+**Team** lists the agents; each has a page with its personality (`SOUL.md`), its operating rules (`AGENTS.md`), the
+model it runs on, and fallback models. Add agent creates a Hermes profile (see
+[Create and manage agents](#create-and-manage-agents)). Agents are always shown by colour and shape together.
 
-![The Add agent dialog set to Coding agent, with the coding CLI, a workspace folder and a permission level](docs/screenshots/coding-agent.png)
+### An agent's screen
 
-Claude Code, Codex and Antigravity (`agy`) can join the team next to your Hermes agents. Pick the CLI, a
-workspace folder and a permission level (read only, workspace write or full access); the agent then works in rooms like
-any other member. They use your own CLI login and plan quota (every CLI shows the limits left, and a **quota guard**
-stops runs from giving an agent new steps once a limit falls below its floor, 10% by default). Each has a Personality
-card (a role and instructions that Score hands to the CLI) and Claude Code can use sub-agents, whose steps show nested
-in Chat and runs. For Claude
-Code and Codex the permission level limits what they can change, not what they can read; Antigravity's sandbox also keeps
-reads inside the workspace below full access.
+![The agent's screen: the steps builder took, a browser, terminal and editor frame, and a replay bar](docs/screenshots/screen.png)
 
-### Knowledge: your notes
+**Look at its screen** replays what an agent did: its steps, the browser, terminal and editor as they were at each
+moment, and a replay bar you can scrub or set back to Live. It is a replay of recorded steps, not a remote desktop, and
+it is read-only. The agent keeps working while you watch, and a pending approval is answered right there.
 
-![The Knowledge page with a note open in the live-preview editor, including a table, a task list and a callout](docs/screenshots/knowledge.png)
+### The Library
 
-A folder of Markdown notes that you and your agents share. The editor shows Markdown rendered as you type and keeps
-the file as plain text; notes link to each other, show backlinks, properties and history, and edits made by an agent
-carry its name and can be undone.
+![The Library: a list of notes, an editor with a toolbar, backlinks and links in the note](docs/screenshots/library.png)
 
-### Reports
+The Library is your notes: Markdown files in a folder Score keeps in a git repository, with a rich editor (or the plain
+source), backlinks, upload and export. Agents can save their results there too.
 
-![Reports: tasks finished per day, where each agent's time goes and the approvals table](docs/screenshots/reports.png)
+### Search and commands
 
-Tasks finished per day, where each agent's time goes, review pass rate, spend and your approvals, for today, 7 days,
-30 days or a custom range. **Export CSV** saves the numbers.
+![Search and commands: results for "release" grouped into jobs, one-to-one chats, library notes and messages](docs/screenshots/search.png)
 
-### Settings
+**Search** (Ctrl+K or Cmd+K) finds jobs, private chats, Library notes and messages, and runs commands. Type `@` to talk
+to someone, `/` for a command.
 
-![Settings: Rules and approvals, with Go ahead, Ask me and Never lists](docs/screenshots/settings.png)
+### Needs you
 
-Models and keys, connections, rules and approvals (what agents may do alone, what they ask first and what they never
-do), notifications, Knowledge, shares, every Hermes setting under Advanced, backup, logs and remote access.
+![The needs-you cards: an exchange that used its turns and two approval requests](docs/screenshots/needs-you.png)
 
-Settings › Look switches between light and dark.
+When an agent wants to install something or run a risky command, the card says what and gives you **Allow**,
+**Don't allow** or **More**. These cards are built so no theme can hide, cover or relabel them.
 
-### Themes and the Customizer
+![An agent's question: "Which branch should I use?" with two options](docs/screenshots/question.png)
 
-![Settings › Look: seven theme cards in their own colours, the Customize button and the way back from a theme](docs/screenshots/look.png)
+An agent can also ask a question with options (or free text) and wait for your answer.
 
-Score ships seven themes (Score, Paper, Night shift, Dense, Harbour, Ledger and Studio). Pick one for this device or
-save one for every device. A theme changes colours, fonts, corners and spacing, where the navigation sits and how
-chat looks, but it is only data: **no theme code runs**, and approvals, decisions, password screens and
-the way back to the default look can't be hidden or made unreadable. If a theme gets in the way, press Ctrl+Shift+0,
-search for "Reset look" in the command palette, open Score with `?look=safe`, or run `scripts/score look reset` on the
-host.
+### Settings: Usage
 
-![The Customizer: a live preview of the app on the left, the theme's settings on the right](docs/screenshots/customizer.png)
+![Settings, Usage: jobs done, first-time pass rate, wait time and spend, with a per-agent table](docs/screenshots/usage.png)
 
-**Customize…** opens the Customizer: a live preview of any page (light or dark, desktop, tablet or phone) next to the
-controls for colours, fonts, shape, layout, chat, a background picture and custom CSS. It checks contrast
-as you go, **Start from** copies any built-in theme exactly, and themes can be saved with their pictures and fonts,
-exported as a `.zip` and imported again. The guide for writing a theme is [docs/THEMES.md](docs/THEMES.md).
+Settings holds Connections, Tools and triggers, Rules, Notifications, Look, Usage, Remote access and security, Advanced
+and System. **Usage** shows what got done and what it cost: jobs per day, spend by agent, and a table per agent (jobs,
+runs, median time, first-time pass, spend), with a CSV download.
+
+### Look and the Customizer
+
+![Settings, Look: dark, light or match the device, motion, text size and the themes](docs/screenshots/look.png)
+
+The app is dark by default. **Look** switches between dark, light and the device setting, and sets motion and text size.
+The built-in themes (Score, Paper, Night shift, Dense, Harbour, Ledger, Studio) change fonts, colours and shapes, never
+the agent glyphs or the cards that need you.
+
+![The Customizer: a live preview of the room next to colour, background, font, shape and spacing controls](docs/screenshots/customizer.png)
+
+The **Customizer** edits a theme against a live preview (desktop, tablet or phone, light or dark) with undo, export and
+import. A theme can be exported as a `.zip` and imported again. The guide for writing a theme is
+[docs/THEMES.md](docs/THEMES.md).
+
 
 ### Terminal
 
@@ -342,6 +371,10 @@ all; in live mode your own Hermes calls the providers you configured.
 
 ## For contributors
 
+- Screenshots: `pnpm screenshots` (set `SCORE_WEB_PORT` to a free port) builds the app, starts a fake-mode Score in a
+  throwaway folder under `/tmp`, pairs a browser with it and rewrites `docs/screenshots/*.png`
+  (`e2e/readme/readme-screenshots.spec.ts`). It never touches `~/.score` or a live server and calls no model; look at
+  the pictures before committing them.
 - Checks: `pnpm check` (lint, format, typecheck, tests, license check). End-to-end: `pnpm e2e` (see SETUP section 5).
 - Rules for coding agents and humans: [AGENTS.md](AGENTS.md). Plan: [docs/PLAN.md](docs/PLAN.md). Architecture:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). API contract: [docs/API-CONTRACT.md](docs/API-CONTRACT.md).
