@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.3.1] — 2026-10-26
+
+### Changed
+- **A conversation deleted in Hermes is noticed at once** (bridge plugin, `on_session_delete`): Score moves that room's
+  agent to a fresh conversation straight away and says so in the room when you deleted it; Hermes' own tidy-up of
+  empty conversations is followed silently. Before, Score found out on the next message.
+- **Hermes compacting a conversation is logged** in the agent's activity (`post_compaction`).
+
 ## [2.3.0] — 2026-10-26
 
 ### Added
