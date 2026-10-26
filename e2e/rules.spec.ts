@@ -7,6 +7,13 @@ test('Settings rules: staged edit with a reviewed diff, then a stricter-only age
   page,
 }) => {
   const sent: { url: string; body: unknown }[] = []
+  // Whether other agents differ from the team rules depends on what parallel specs did to the shared server: answer
+  // the read with no drift, so "Every agent follows the team rules." is what this page must say.
+  await page.route('**/api/settings/rules', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const response = await route.fetch()
+    await route.fulfill({ response, json: { ...((await response.json()) as object), drift: [] } })
+  })
   await page.route('**/api/settings/rules?dryRun=1', async (route) => {
     sent.push({ url: route.request().url(), body: route.request().postDataJSON() })
     await route.fulfill({ json: { preview: '+mode: manual\n+never: rm -rf /tmp/*' } })

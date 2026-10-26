@@ -212,3 +212,29 @@ for (const id of packagedThemeIds) {
     })
   })
 }
+
+// A built-in theme must never trip the guard: its own pages (Settings › Look, the team room) keep it on, on a desktop
+// and on a phone, in both modes. (Found when Harbour was switched off on Settings by the Settings button's own pill.)
+for (const id of ['paper', 'night', 'dense', ...packagedThemeIds] as const) {
+  for (const [mode, viewport] of [
+    ['dark', { width: 1440, height: 900 }],
+    ['light', { width: 1440, height: 900 }],
+    ['light', { width: 390, height: 844 }],
+  ] as const) {
+    test(`${id} is not switched off by the guard on Settings › Look and the room (${mode}, ${viewport.width})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport)
+      await useTheme(page, id, mode)
+      await pair(page)
+      for (const path of ['/b/settings/look', '/b']) {
+        await page.goto(path)
+        if ((packagedThemeIds as readonly string[]).includes(id))
+          await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+        await page.waitForTimeout(2500)
+        await expect(page.locator('.look-banner'), path).toHaveCount(0)
+        await expect(page.locator('html'), path).not.toHaveAttribute('data-contrast-fallback', '')
+      }
+    })
+  }
+}

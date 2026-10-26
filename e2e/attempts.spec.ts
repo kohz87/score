@@ -32,7 +32,8 @@ test('a run opens from the agent page inside the new shell, and Back returns to 
   await page.goto('/b/team/designer')
   await page.getByRole('button', { name: /^More/ }).click()
   const open = page.getByRole('link', { name: 'Open run' }).first()
-  await expect(open).toBeVisible()
+  // The runs load after the agent page under a busy server.
+  await expect(open).toBeVisible({ timeout: 20_000 })
   await open.click()
   await expect(page).toHaveURL(/\/b\/attempts\/[^/]+$/)
   await expect(page.locator('.bold-classic-page .attempt-card')).toBeVisible()

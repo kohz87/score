@@ -178,19 +178,15 @@ test.describe('X1: starting a lead-decides job from Start a job is one decision'
     await drawn(dialog.locator('label.lab').first())
     await custom(page)
     // A rule that got past the sanitiser anyway: the first click inside the form is stopped.
-    const first = dialog
-      .getByRole('group', { name: 'Agents allowed' })
-      .getByRole('checkbox')
-      .first()
     await page.evaluate(() => {
       document.adoptedStyleSheets
         .at(-1)!
         .insertRule(
           '.bold-start-dialog label.lab, .bold-start-dialog .start-what { color: transparent !important; }',
         )
+      // Same task as the click, so no timer or observer can notice the rule first: only click-time vetting can stop it.
+      document.querySelector<HTMLInputElement>('.bold-agent-pick input[type="checkbox"]')!.click()
     })
-    // The click is stopped, so the box does not change: click it, don't wait for it to be checked.
-    await first.click()
     await expectRefused(page, sent)
     // Score's own look is back: the same form goes ahead.
     await acceptLeadStart(dialog)

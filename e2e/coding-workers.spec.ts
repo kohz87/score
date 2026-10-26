@@ -82,11 +82,15 @@ async function openDialog(page: Page, agent: string) {
   await dialog.getByLabel('What should the team do?').fill('Add a changelog page to the site')
   // Every teammate starts ticked: leave only the coding agent, as the old dialog started with none.
   const picker = dialog.getByRole('group', { name: 'Agents allowed' })
-  for (const box of await picker.getByRole('checkbox').all()) {
-    const name = (await box.locator('xpath=ancestor::label').innerText()).trim()
-    if (name === agent) await box.check()
-    else await box.uncheck()
-  }
+  // The team list can still be filling in: set it until only the coding agent is ticked.
+  await expect(async () => {
+    for (const box of await picker.getByRole('checkbox').all()) {
+      const name = (await box.locator('xpath=ancestor::label').innerText()).trim()
+      if (name === agent) await box.check()
+      else await box.uncheck()
+    }
+    await expect(picker.getByRole('checkbox', { checked: true })).toHaveCount(1)
+  }).toPass({ timeout: 15_000 })
   return dialog
 }
 

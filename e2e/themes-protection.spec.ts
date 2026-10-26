@@ -113,26 +113,29 @@ async function unreadable(root: Locator): Promise<string[]> {
 async function glyphPaint(page: Page): Promise<string[]> {
   return page.evaluate(() =>
     Array.from(document.querySelectorAll('.agent-glyph')).flatMap((glyph) =>
-      Array.from(glyph.querySelectorAll('path, circle, rect, polygon')).map((shape) => {
-        const s = getComputedStyle(shape)
-        const box = (shape as SVGGraphicsElement).getBBox()
-        return [
-          shape.tagName,
-          s.opacity,
-          s.visibility,
-          s.display,
-          s.transform,
-          s.fill,
-          s.stroke,
-          s.strokeWidth,
-          s.getPropertyValue('d'),
-          s.clipPath,
-          s.mask,
-          s.filter,
-          Math.round(box.width),
-          Math.round(box.height),
-        ].join('|')
-      }),
+      Array.from(glyph.querySelectorAll('path, circle, rect, polygon'))
+        // The eyes animate (blink, look): their size differs between any two instants; protected.css pins their paint.
+        .filter((shape) => !shape.closest('.agent-face'))
+        .map((shape) => {
+          const s = getComputedStyle(shape)
+          const box = (shape as SVGGraphicsElement).getBBox()
+          return [
+            shape.tagName,
+            s.opacity,
+            s.visibility,
+            s.display,
+            s.transform,
+            s.fill,
+            s.stroke,
+            s.strokeWidth,
+            s.getPropertyValue('d'),
+            s.clipPath,
+            s.mask,
+            s.filter,
+            Math.round(box.width),
+            Math.round(box.height),
+          ].join('|')
+        }),
     ),
   )
 }
@@ -424,7 +427,7 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
   test('#6: an action on a hidden decision is refused, nothing is sent, and Score says why', async ({
     page,
   }) => {
-    const { card, allow } = await wearApproval(page, harmless)
+    const { card } = await wearApproval(page, harmless)
     await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
     const decisions: string[] = []
     page.on('request', (request) => {
@@ -436,13 +439,16 @@ test.describe('what a theme does later or on interaction can’t leave a decisio
       '@keyframes gate-slow { from { opacity: 1 } to { opacity: 0 } }',
       '.main { animation: gate-slow 600s linear forwards; }',
     )
+    // Same task as the click: nothing between them (no timer, no observer) can notice the fade before the click does.
     await page.evaluate(() => {
       for (const animation of document.getAnimations()) {
         if ((animation as CSSAnimation).animationName === 'gate-slow')
           animation.currentTime = 540_000
       }
+      ;[...document.querySelectorAll<HTMLButtonElement>('article[aria-label^="Needs you:"] button')]
+        .find((b) => b.textContent === 'Allow')!
+        .click()
     })
-    await allow.click({ force: true })
     await expect(page.locator('.look-banner')).toContainText('Nothing was sent', {
       timeout: 15_000,
     })

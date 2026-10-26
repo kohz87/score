@@ -61,7 +61,27 @@ export function useFollowEnd(
     }
     toEnd()
     // Text streaming in, a code block highlighting, a card appearing: all are DOM changes under the stream.
-    const mutations = new MutationObserver(toEnd)
+    // Interaction UI (the hover action row, menus, popovers) is not content: it must never move the reader.
+    const ui = '.bold-acts, [role="menu"], [role="dialog"], [role="listbox"], .menu'
+    const inUi = (node: Node | null) => {
+      const el = node instanceof Element ? node : (node?.parentElement ?? null)
+      return !!el?.closest(ui)
+    }
+    const isContent = (record: MutationRecord) => {
+      if (inUi(record.target)) return false
+      if (record.type === 'characterData') return true
+      const nodes = [...record.addedNodes, ...record.removedNodes]
+      return nodes.length === 0 || nodes.some((node) => !inUi(node))
+    }
+    const mutations = new MutationObserver((records) => {
+      // Only content that grew the stream moves it; a change that adds no height (a focus ring, a swapped label) never does.
+      if (!records.some(isContent) || element.scrollHeight <= lastHeight) {
+        if (movedUp()) following.current = false
+        remember()
+        return
+      }
+      toEnd()
+    })
     mutations.observe(element, { childList: true, subtree: true, characterData: true })
     // An image or an embedded preview that finishes loading grows its message without a DOM change.
     element.addEventListener('load', toEnd, true)

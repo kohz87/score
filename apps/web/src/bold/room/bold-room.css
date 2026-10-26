@@ -796,6 +796,11 @@
   flex: 0 1 90%;
   max-width: 90%;
   align-items: flex-start;
+  /* The source line above the bubble has no fill of its own: on a theme's picture (Harbour) its words are measured
+     against anything. An opaque panel behind the whole message is the ground a protected text needs. */
+  background: var(--panel);
+  border-radius: 24px;
+  padding: 6px 8px;
 }
 
 [data-ui='bold'] .bold-message .chat-message.bold-shared .chat-message-meta {

@@ -75,3 +75,29 @@ test('a stream that gets shorter while the reader is at the end keeps following'
   await act(tick)
   expect(el.scrollTop).toBe(1100)
 })
+
+test('interaction UI (the hover action row) never moves a reader near the end; content that grows the stream does', async () => {
+  const view = render(<Stream />)
+  const el = view.getByTestId('stream')
+  let height = 1000
+  geometry(el, () => height)
+  await act(tick)
+  el.scrollTop = 850
+  el.dispatchEvent(new Event('scroll'))
+  const row = document.createElement('div')
+  row.className = 'bold-acts'
+  el.append(row)
+  await act(tick)
+  expect(el.scrollTop).toBe(850)
+  // Even a growing act row is not content.
+  height = 1040
+  const button = document.createElement('button')
+  row.append(button)
+  await act(tick)
+  expect(el.scrollTop).toBe(850)
+  // A new message is.
+  height = 1200
+  el.append(document.createElement('p'))
+  await act(tick)
+  expect(el.scrollTop).toBe(1200)
+})

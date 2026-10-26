@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+import { releaseDefinition } from './workflow-fixtures.ts'
 import { pair } from './pair.ts'
 import { startRecipe } from './recipe-run.ts'
 
@@ -6,6 +7,16 @@ import { startRecipe } from './recipe-run.ts'
 // workflow editor's preview and live overlay.
 
 test.describe.configure({ mode: 'serial' })
+const web = { 'x-score-client': 'web' }
+
+async function createWorkflow(page: Page, name: string): Promise<string> {
+  const response = await page.request.post('/api/workflows', {
+    headers: web,
+    data: { definition: { ...releaseDefinition, name } },
+  })
+  expect(response.ok()).toBe(true)
+  return ((await response.json()) as { workflowId: string }).workflowId
+}
 
 test('the workflow editor previews a gate and a branch without calling the server, and Stop returns to the canvas', async ({
   page,

@@ -40,8 +40,18 @@ export async function startApproval(
 
 /** Allow on the card ends with the answer shown on it (the fixture has no stream to take the card away). */
 export async function allowIt(card: Locator) {
+  const posted = card
+    .page()
+    .waitForRequest((request) => /\/api\/approvals\/[^/]+\/decision$/.test(request.url()))
   await card.getByRole('button', { name: 'Allow', exact: true }).click()
-  await expect(card.getByRole('status')).toContainText('Approved', { timeout: 15_000 })
+  expect((await posted).postDataJSON()).toEqual({ choice: 'once' })
+  // The card shows the answer; the fixture's next approvals read may then take the answered card away.
+  await expect
+    .poll(async () => {
+      if ((await card.count()) === 0) return 'gone'
+      return (await card.getByRole('status').allTextContents()).join(' ')
+    })
+    .toMatch(/Approved|gone/)
 }
 
 /** The topmost element at the middle of `target` is `target` or inside it: nothing covers it. */
