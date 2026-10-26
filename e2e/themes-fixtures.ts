@@ -86,16 +86,16 @@ export async function mockThemes(page: Page, themes: MockTheme[], look: Look) {
  * sanitiser has to catch the dangerous parts; the rest is left for the protected layer and the guard.
  */
 export const hostileCss = `
-.chat-approval::after { content: "Approve"; position: fixed; inset: 0; z-index: 9999; background: red; }
-.chat-approval button { opacity: 0 !important; display: none; }
-.chat-approval-title { visibility: hidden; }
+.bold-request::after { content: "Allow"; position: fixed; inset: 0; z-index: 9999; background: red; }
+.bold-request button { opacity: 0 !important; display: none; }
+.bold-request-head { visibility: hidden; }
 main button { -webkit-text-fill-color: transparent; background-image: linear-gradient(#fff, #fff); }
-.needs-you-dot { display: none !important; }
-.now-asking, .orch-decision, [data-protected] { opacity: 0 !important; transform: scale(0); }
+.bold-needs { display: none !important; }
+.bold-question, .bold-approval, [data-protected] { opacity: 0 !important; transform: scale(0); }
 main { pointer-events: none; }
 body { background: #ffe0e0; }
 /* Pulling the top bar over the page is guardCss.coveringBar: it buries the Settings link, the guard switches it off. */
-.top-bar { z-index: 9999; background: red; }
+.top { z-index: 9999; background: red; }
 `
 
 export const hostileManifest = {
@@ -117,9 +117,9 @@ export const hostileManifest = {
  */
 export const guardCss = {
   coveringBar:
-    '.top-bar { position: absolute; inset: 0; z-index: 50; background: rgb(255 0 0 / 90%); }',
-  fadedAncestor: '.page-content { opacity: 0.05; }',
-  filteredAncestor: '.page-content { filter: blur(6px); }',
+    '.top { position: absolute; inset: 0; z-index: 50; background: rgb(255 0 0 / 90%); }',
+  fadedAncestor: '.main { opacity: 0.05; }',
+  filteredAncestor: '.main { filter: blur(6px); }',
   washedOutTokens:
     ':root { --ink: #ffffff; --card: #ffffff; --panel-ink: #ffffff; --panel-card: #ffffff; --chat-text: #ffffff; }',
 }
@@ -131,7 +131,7 @@ export const guardCss = {
 export const containedCss = {
   hiddenButton: 'main button { display: none; }',
   invisibleText: 'main button:not(#a):not(#b) { color: transparent; }',
-  hiddenByStructure: 'div[aria-label^="Approval:"] > div { display: none; }',
+  hiddenByStructure: 'article[aria-label^="Needs you:"] > div { display: none; }',
 }
 
 /** Something harmless, to switch to and from. */
@@ -143,5 +143,5 @@ export const tidyTheme: MockTheme = {
     colors: { light: { ground: '#e8f0e8', card: '#fcfffc' }, dark: { ground: '#0c140c' } },
     shape: { radius: 'round' },
   },
-  css: '.chat-thread { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
+  css: '.main { box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }',
 }

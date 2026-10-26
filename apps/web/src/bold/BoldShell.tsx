@@ -324,6 +324,7 @@ function BoldShellFrame() {
                 type="button"
                 className={`icon-btn gear ${view === 'settings' ? 'on' : ''}`}
                 aria-label="Settings"
+                data-protected="raised"
                 onClick={go('/b/settings')}
               >
                 <GearIcon />
@@ -395,6 +396,7 @@ function BoldShellFrame() {
                 type="button"
                 className={view === 'settings' ? 'on' : undefined}
                 aria-current={view === 'settings' ? 'page' : undefined}
+                data-protected="raised"
                 onClick={go('/b/settings')}
               >
                 <GearIcon size={22} />
