@@ -555,6 +555,13 @@ test('a reporting word does not hide a changing one in the report-back tool name
     expect(reportBackWarning(tool), tool).toBeUndefined()
   for (const tool of ['dataset_status', 'payload_report'])
     expect(reportBackWarning(tool), tool).toBeUndefined()
-  for (const tool of ['create_issue', 'update_ticket', 'set_owner'])
+  for (const tool of [
+    'create_issue',
+    'update_ticket',
+    'set_owner',
+    'post_message_and_create_issue',
+    'notify_and_set_priority',
+    'reply_and_create_ticket',
+  ])
     expect(reportBackWarning(tool), tool).toMatch(/may change things/)
 })

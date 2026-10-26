@@ -39,7 +39,7 @@ const CHANGING = new Set(
     ' ',
   ),
 )
-// Verbs that only make or change the reporting thing itself when the name also names one (`create_comment`,
+// Verbs that only make or change the reporting thing itself when their phrase names one (`create_comment`,
 // `update_status`); with anything else they may change things.
 const SOFT = new Set('create add update set'.split(' '))
 
@@ -55,7 +55,16 @@ function words(tool: string): string[] {
 export function reportBackWarning(tool: string): string | undefined {
   const parts = words(tool)
   const reports = parts.some((word) => REPORTING.has(word))
-  const changes = parts.some((word) => CHANGING.has(word) || (SOFT.has(word) && !reports))
+  // A soft verb is excused only when its own phrase (the words after it, up to "and"/"then" or the end) names a
+  // reporting thing: `create_issue_comment` yes, `post_message_and_create_issue` no.
+  const phrase = (from: number) => {
+    const end = parts.findIndex((word, i) => i > from && (word === 'and' || word === 'then'))
+    return parts.slice(from + 1, end === -1 ? undefined : end)
+  }
+  const changes = parts.some(
+    (word, i) =>
+      CHANGING.has(word) || (SOFT.has(word) && !phrase(i).some((next) => REPORTING.has(next))),
+  )
   return reports && !changes ? undefined : 'This tool may change things, not just report.'
 }
 
