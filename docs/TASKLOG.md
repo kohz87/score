@@ -1403,3 +1403,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   failures (bold-results Workbench focus, bold-start-job phone — known flake) passed on rerun with the affected specs
   164/164; pnpm check green (server 4784, contract 1512); web 3134 after the last fix; lint/format clean.
 - **v2.4.0 deployed live** (~00:53 UTC): backup score-pre-2.4.0-20261026.db, restart, migration 0090 applied, no new errors.
+- **v2.5.0 Watch on the agent's screen page (Sonnet coder, lead review; decision 131 board D; branch
+  task/2.6.0-watch, released first so numbered 2.5.0 — Runs, Customizer, Recipes follow as 2.6.0+).** Review round 1
+  (Sonnet, 4 P2, all fixed by the coder): step list regressed (newest first, 5 + full history, sub-agent grouping, kind
+  labels, bounded scroll, phone order), swap lost focus, live following weaker than classic, replay badge not
+  announced. Round 2 (Sonnet, 4 P2): the list scrolled the page while reading → scrolls only itself and only in
+  replay (lead); a pick released on any same-surface frame → holds until the agent changes surface (lead); the badge
+  announced every scrub tick → one sr-only status for start/end (lead); **accepted as is:** a focused small card can
+  show another screen after a live swap (no announcement; minor). Not built: the mock-up's 1×/2×/4× speed (no classic
+  or contract support). Gates: full e2e 993 passed / 8 failed on the pre-fix build under 4 parallel builders → the 8
+  (bold-screen, bold-workbench, chat-follow, themes-bold-visual paper Team) 81/81 on the final build; pnpm check green
+  (server 4784, web 3148, contract 1512).
+- **v2.5.0 deployed live** (~02:00 UTC): backup score-pre-2.5.0-20261026.db, restart, no new errors.

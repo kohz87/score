@@ -13,7 +13,7 @@ describe('toBoldPath', () => {
   it('moves the kept classic pages under /b and keeps query and hash', () => {
     expect(toBoldPath('/workflows')).toBe('/b/workflows')
     expect(toBoldPath('/workflows/wf-1?x=1#a')).toBe('/b/workflows/wf-1?x=1#a')
-    expect(toBoldPath('/watch/lead?from=4')).toBe('/b/watch/lead?from=4')
+    expect(toBoldPath('/watch/lead?from=4')).toBe('/b/screen/lead?from=4')
     expect(toBoldPath('/settings/look')).toBe('/b/settings/look')
     expect(toBoldPath('/settings/look/customize/t1')).toBe('/b/settings/look/customize/t1')
   })
@@ -57,7 +57,7 @@ describe('boldRedirectFor', () => {
     expect(boldRedirectFor('/workflows', '?a=1')).toBe('/b/workflows?a=1')
     expect(boldRedirectFor('/workflows/new', '')).toBe('/b/workflows/new')
     expect(boldRedirectFor('/runs/b1', '?x=y', '#z')).toBeNull()
-    expect(boldRedirectFor('/watch/lead', '?from=3')).toBe('/b/watch/lead?from=3')
+    expect(boldRedirectFor('/watch/lead', '?from=3')).toBe('/b/screen/lead?from=3')
     expect(boldRedirectFor('/settings/look/customize/t', '')).toBe('/b/settings/look/customize/t')
     expect(boldRedirectFor('/terminal', '')).toBe('/b/terminal')
     expect(boldRedirectFor('/settings/look', '')).toBeNull()

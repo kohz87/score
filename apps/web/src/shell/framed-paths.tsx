@@ -14,7 +14,10 @@ export const BoldFrameContext = createContext<BoldFrame | null>(null)
 const SPLIT = /^([^?#]*)(.*)$/
 
 /** Paths that move under `/b` as they are: the kept classic pages. */
-const PREFIXED = ['/workflows', '/watch', '/settings', '/team']
+const PREFIXED = ['/workflows', '/settings', '/team']
+
+/** Watch is the replay on the agent's screen page (2.6.0). */
+const WATCH = /^\/watch\/([^/]+)$/
 
 function under(path: string, root: string): boolean {
   return path === root || path.startsWith(`${root}/`)
@@ -45,6 +48,8 @@ export function toBoldPath(to: string, rooms: readonly FrameRoom[] = []): string
       return to
     }
   }
+  const watch = WATCH.exec(path)
+  if (watch) return `/b/screen/${watch[1]}${rest}`
   if (PREFIXED.some((root) => under(path, root))) return `/b${path}${rest}`
   return to
 }
@@ -68,7 +73,9 @@ function chatRoomPath(path: string, rooms: readonly FrameRoom[]): string {
  * (the classic shell keeps serving everything else).
  */
 export function boldRedirectFor(pathname: string, search: string, hash = ''): string | null {
-  const keep = ['/workflows', '/watch', '/terminal', '/settings/look/customize']
+  const watch = WATCH.exec(pathname)
+  if (watch) return `/b/screen/${watch[1]}${search}${hash}`
+  const keep = ['/workflows', '/terminal', '/settings/look/customize']
   if (!keep.some((root) => under(pathname, root))) return null
   return `/b${pathname}${search}${hash}`
 }

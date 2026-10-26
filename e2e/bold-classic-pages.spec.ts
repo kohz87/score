@@ -125,15 +125,16 @@ for (const size of sizes) {
       )
     })
 
-    test(`Watch opens under /b at ${size.name}`, async ({ page }) => {
+    test(`Watch is the replay on the agent's screen at ${size.name}`, async ({ page }) => {
       await page.goto('/b/watch/builder')
+      await expect(page).toHaveURL(/\/b\/screen\/builder$/)
       await inFrame(page)
-      await expect(page.getByRole('heading', { name: 'Watching builder', level: 1 })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'builder’s screen', level: 1 })).toBeVisible()
       // The approval is a decision surface: still visible and protected inside the frame.
       const approval = page.getByRole('group', { name: 'Approval needed' })
       await expect(approval).toContainText('npm install ws@8')
       await noSideScroll(page)
-      await expect(page).toHaveScreenshot(`bold-watch-${size.name}.png`, {
+      await expect(page).toHaveScreenshot(`bold-screen-${size.name}.png`, {
         animations: 'disabled',
         maxDiffPixelRatio: 0.01,
       })
@@ -168,7 +169,7 @@ test('old classic paths on the new shell redirect to /b and keep the query', asy
   await page.goto('/runs/brief-wfrun-1?x=1')
   await expect(page).toHaveURL(/\/b\?x=1&run=brief-wfrun-1$/)
   await page.goto('/watch/builder?from=3')
-  await expect(page).toHaveURL(/\/b\/watch\/builder\?from=3$/)
+  await expect(page).toHaveURL(/\/b\/screen\/builder\?from=3$/)
   await page.goto('/settings/look/customize/score')
   await expect(page).toHaveURL(/\/b\/settings\/look\/customize\/score$/)
 })
@@ -187,7 +188,7 @@ for (const size of sizes) {
     test.use({ viewport: { width: size.width, height: size.height } })
 
     test(`the watch bar decides an approval inside /b at ${size.name}`, async ({ page }) => {
-      await page.goto('/b/watch/builder')
+      await page.goto('/b/screen/builder')
       await inFrame(page)
       await page
         .getByRole('group', { name: 'Approval needed' })
@@ -329,7 +330,7 @@ for (const mode of ['light', 'dark'] as const) {
     await expectAA(card.first())
     await expectAA(card.first().getByRole('button', { name: 'Approve' }))
 
-    await page.goto('/b/watch/builder')
+    await page.goto('/b/screen/builder')
     await inFrame(page)
     await expectGuardKeptTheme(page)
     const bar = page.getByRole('group', { name: 'Approval needed' })
