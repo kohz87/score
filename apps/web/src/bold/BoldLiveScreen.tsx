@@ -63,10 +63,10 @@ export function BoldLiveScreen({ agentId, agentName }: { agentId: string; agentN
         />
       )
     } else if (status.state === 'off') {
-      body = <p className="bold-live-screen-line muted">The screen is off.</p>
+      body = <p className="bold-live-screen-line">The screen is off.</p>
     } else if (status.state === 'sandboxed') {
       body = (
-        <p className="bold-live-screen-line muted">
+        <p className="bold-live-screen-line">
           This screen runs inside the agent’s sandbox, where Score can’t show it.
         </p>
       )
@@ -78,13 +78,13 @@ export function BoldLiveScreen({ agentId, agentName }: { agentId: string; agentN
       )
     } else {
       body = (
-        <p className="bold-live-screen-line muted">
+        <p className="bold-live-screen-line">
           Score can’t show this screen.{status.reason ? ` ${status.reason}` : ''}
         </p>
       )
     }
   } else if (!hidden && query.isError) {
-    body = <p className="bold-live-screen-line muted">Score can’t show this screen.</p>
+    body = <p className="bold-live-screen-line">Score can’t show this screen.</p>
   }
 
   return (

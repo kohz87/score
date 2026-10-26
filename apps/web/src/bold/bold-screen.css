@@ -16,7 +16,8 @@
   --watch-window-bar: #20232c;
   --watch-window-dot: #3a3e4a;
   --watch-muted: var(--muted);
-  --watch-faint: #626670;
+  /* Path parts and diff line numbers on the tree and code surface: readable (≥ 4.5:1 on #171922), as in the Workbench. */
+  --watch-faint: #8a8f9c;
   --watch-bright: #e8eaf0;
   --watch-tree: #171922;
   --watch-live: var(--live);
@@ -450,6 +451,10 @@
   min-height: 0;
 }
 
+[data-ui='bold'] .bold-screen-window .watch-diff__number {
+  color: var(--watch-faint);
+}
+
 [data-ui='bold'] .bold-screen-window .watch-terminal {
   font-size: 14px;
   line-height: 1.9;
@@ -714,13 +719,18 @@
   gap: calc(10px * var(--bold-d, 1));
 }
 
+/* The card is always the dark code surface (like the replay below it), so its text takes the replay's light inks in
+   both looks. */
 [data-ui='bold'] .bold-live-screen-title {
   margin: 0;
   font-size: 15px;
+  color: #e8eaf0;
 }
 
 [data-ui='bold'] .bold-live-screen-toggle {
   margin-left: auto;
+  background: #20232c;
+  color: #e8eaf0;
 }
 
 [data-ui='bold'] .bold-live-screen-img {
@@ -737,4 +747,5 @@
 [data-ui='bold'] .bold-live-screen-line {
   margin: 0;
   font-size: 14px;
+  color: var(--code-ink);
 }
