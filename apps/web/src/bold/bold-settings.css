@@ -6,14 +6,14 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-top: 8px;
+  gap: calc(20px * var(--bold-d, 1));
+  padding-top: calc(8px * var(--bold-d, 1));
 }
 
 .bold-settings-page .setgrid {
   display: flex;
   flex-wrap: wrap;
-  gap: 28px;
+  gap: calc(28px * var(--bold-d, 1));
   align-items: flex-start;
 }
 
@@ -22,7 +22,7 @@
   max-width: 240px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
 }
 
 .bold-settings-page .setnav h1 {
@@ -36,7 +36,7 @@
   background: transparent;
   text-align: left;
   border-radius: calc(18px * var(--bold-r, 1));
-  padding: 10px 14px;
+  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
   color: var(--ink);
@@ -55,15 +55,15 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--bold-d, 1));
 }
 
 .bold-settings-page .seg {
   display: inline-flex;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   background: var(--field);
   border-radius: 999px;
-  padding: 4px;
+  padding: calc(4px * var(--bold-d, 1));
   flex-wrap: wrap;
 }
 
@@ -72,13 +72,13 @@
   background: transparent;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   font-weight: 700;
   font-size: 0.87em;
   color: var(--ink2);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 .bold-settings-page .seg button.on {
@@ -91,7 +91,7 @@
 .bold-settings-page .grid4 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 .bold-settings-page .grid3 {
@@ -109,10 +109,10 @@
 .bold-settings-page .card {
   background: var(--panel);
   border-radius: calc(24px * var(--bold-r, 1));
-  padding: 18px;
+  padding: calc(18px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   min-width: 0;
 }
 
@@ -134,14 +134,14 @@
   border: 0;
   border-radius: calc(14px * var(--bold-r, 1));
   min-height: 46px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   width: 100%;
 }
 
 .bold-settings-page .check {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
   min-height: 44px;
 }
 
@@ -172,8 +172,8 @@
   background: var(--panel);
   border: 0;
   border-radius: calc(24px * var(--bold-r, 1));
-  padding: 18px;
-  gap: 10px;
+  padding: calc(18px * var(--bold-d, 1));
+  gap: calc(10px * var(--bold-d, 1));
   color: var(--ink);
 }
 
@@ -202,13 +202,13 @@
   border: 0;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   font-weight: 700;
   font-size: 0.87em;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   background: var(--field);
   color: var(--ink);
 }
@@ -241,8 +241,8 @@
 .bold-settings-page .settings-form {
   background: var(--field);
   border-radius: calc(16px * var(--bold-r, 1));
-  padding: 14px 16px;
-  gap: 10px;
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 .bold-settings-page .settings-form label {
@@ -262,7 +262,7 @@
   border-radius: calc(14px * var(--bold-r, 1));
   color: var(--ink);
   min-height: 40px;
-  padding: 0 12px;
+  padding: 0 calc(12px * var(--bold-d, 1));
 }
 
 .bold-settings-page .settings-command {
@@ -276,13 +276,13 @@
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 16px;
+  gap: calc(8px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
 }
 
 .bold-settings-page .settings-check {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   min-height: 44px;
 }
 
@@ -297,7 +297,7 @@
 .bold-settings-page .rules-card {
   background: transparent;
   padding: 0;
-  gap: 16px;
+  gap: calc(16px * var(--bold-d, 1));
 }
 
 .bold-settings-page .rules-card > div:first-child h2 {
@@ -307,8 +307,8 @@
 .bold-settings-page .rules-style {
   background: var(--panel);
   border-radius: calc(24px * var(--bold-r, 1));
-  padding: 18px;
-  gap: 10px;
+  padding: calc(18px * var(--bold-d, 1));
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 .bold-settings-page .rules-style legend {
@@ -338,14 +338,14 @@
 .bold-settings-page .rules-columns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 .bold-settings-page .rules-column {
   background: var(--panel);
   border-radius: calc(24px * var(--bold-r, 1));
-  padding: 18px;
-  gap: 10px;
+  padding: calc(18px * var(--bold-d, 1));
+  gap: calc(10px * var(--bold-d, 1));
   color: var(--ink);
 }
 
@@ -380,14 +380,14 @@
   background: var(--hi-bg);
   color: var(--hi-ink);
   border-radius: calc(22px * var(--bold-r, 1));
-  padding: 14px 16px;
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
 }
 
 .bold-settings-page .rules-save pre {
   background: var(--code-bg);
   color: var(--code-ink);
   border-radius: calc(14px * var(--bold-r, 1));
-  padding: 12px;
+  padding: calc(12px * var(--bold-d, 1));
   overflow-x: auto;
 }
 
@@ -405,7 +405,7 @@
 .bold-settings-page .advanced-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
   align-items: flex-end;
 }
 
@@ -420,7 +420,7 @@
   border-radius: 999px;
   color: var(--ink);
   min-height: 44px;
-  padding: 0 16px;
+  padding: 0 calc(16px * var(--bold-d, 1));
 }
 
 .bold-settings-page .advanced-results {
@@ -429,16 +429,16 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 .bold-settings-page .advanced-item {
   background: var(--field);
   border-radius: calc(14px * var(--bold-r, 1));
-  padding: 10px 12px;
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
 }
 
 .bold-settings-page .advanced-line,
@@ -446,7 +446,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 .bold-settings-page .advanced-key,
@@ -463,7 +463,7 @@
   background: var(--hi-bg);
   color: var(--hi-ink);
   border-radius: calc(22px * var(--bold-r, 1));
-  padding: 14px 16px;
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
 }
 
 .bold-settings-page .advanced-tray h3 {
@@ -484,7 +484,7 @@
   background: var(--code-bg);
   color: var(--code-ink);
   border-radius: calc(14px * var(--bold-r, 1));
-  padding: 12px;
+  padding: calc(12px * var(--bold-d, 1));
   overflow-x: auto;
 }
 
@@ -492,7 +492,7 @@
 .bold-settings-page .bold-security {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-security > h2,
@@ -502,13 +502,13 @@
 }
 
 .bold-settings-page .settings-remote h3 {
-  margin-top: 4px;
+  margin-top: calc(4px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-agent-where-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   margin: 0;
   padding: 0;
   list-style: none;
@@ -518,8 +518,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: calc(8px * var(--bold-d, 1));
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   border-radius: calc(14px * var(--bold-r, 1));
   background: var(--field);
 }
@@ -527,7 +527,7 @@
 .bold-settings-page .bold-agent-where-name {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-agent-where .badge {
@@ -538,21 +538,21 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-look-customize > div {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   min-width: 200px;
 }
 
 .bold-settings-page .settings-password {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
@@ -563,7 +563,7 @@
   border: 0;
   border-radius: calc(14px * var(--bold-r, 1));
   min-height: 46px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   color: var(--ink);
 }
 
@@ -571,7 +571,7 @@
 .bold-settings-page .bold-system {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-system .settings-card h2 {
@@ -608,14 +608,14 @@
 .bold-settings-page .logs-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   align-items: flex-end;
 }
 
 .bold-settings-page .logs-controls label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   color: var(--muted);
   font-size: 13px;
 }
@@ -628,7 +628,7 @@
 .bold-settings-page .logs-scroll {
   background: var(--code-bg);
   border-radius: calc(18px * var(--bold-r, 1));
-  padding: 12px 14px;
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   color: var(--code-ink);
   font-family: var(--font-m);
   font-size: 12px;
@@ -650,12 +650,12 @@
 .bold-settings-page .usage {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--bold-d, 1));
   min-width: 0;
 }
 
 .bold-settings-page .usage-head {
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 .bold-settings-page .usage-head h2 {
@@ -670,7 +670,7 @@
 .bold-settings-page .usage-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--bold-d, 1));
   transition: opacity 0.15s;
 }
 
@@ -679,7 +679,7 @@
 }
 
 .bold-settings-page .usage-stats {
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 .bold-settings-page .usage-stat {
@@ -700,7 +700,7 @@
 }
 
 .bold-settings-page .usage-figure-head {
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   align-items: baseline;
 }
 
@@ -726,7 +726,7 @@
 }
 
 .bold-settings-page .usage-error {
-  padding: 14px 18px;
+  padding: calc(14px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
   border-radius: calc(18px * var(--bold-r, 1));
   background: var(--panel);
 }
@@ -749,7 +749,7 @@
 .bold-settings-page .usage-jobs-chart {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   min-width: 0;
 }
 
@@ -772,7 +772,7 @@
 }
 
 .bold-settings-page .usage-jobs-value {
-  margin-bottom: 4px;
+  margin-bottom: calc(4px * var(--bold-d, 1));
   font-size: 13px;
   font-weight: 700;
   line-height: 1.3;
@@ -796,7 +796,7 @@
 .bold-settings-page .usage-jobs-labels {
   display: flex;
   gap: 2px;
-  padding: 0 4px;
+  padding: 0 calc(4px * var(--bold-d, 1));
   color: var(--muted);
   font-size: 12px;
   text-align: center;
@@ -817,7 +817,7 @@
 
 .bold-settings-page .usage-table th,
 .bold-settings-page .usage-table td {
-  padding: 6px;
+  padding: calc(6px * var(--bold-d, 1));
   border-top: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
@@ -834,7 +834,7 @@
 }
 
 .bold-settings-page .usage-table caption {
-  padding-bottom: 6px;
+  padding-bottom: calc(6px * var(--bold-d, 1));
   color: var(--muted);
   text-align: left;
 }
@@ -855,14 +855,14 @@
 .bold-settings-page .usage-spend {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding-top: 6px;
+  gap: calc(14px * var(--bold-d, 1));
+  padding-top: calc(6px * var(--bold-d, 1));
 }
 
 .bold-settings-page .usage-spend-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
   min-width: 0;
 }
 
@@ -871,7 +871,7 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -883,7 +883,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 .bold-settings-page .usage-spend-bar {
@@ -911,7 +911,7 @@
 .bold-settings-page .bold-look {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-connections > h2,
@@ -933,7 +933,7 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
@@ -977,9 +977,9 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   min-height: 40px;
-  padding-block: 4px;
+  padding-block: calc(4px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-connect-name {
@@ -999,14 +999,14 @@
 .bold-settings-page .bold-local-model {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-local-model label,
 .bold-settings-page .bold-look-shared-fields label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
@@ -1019,19 +1019,19 @@
   border-radius: calc(14px * var(--bold-r, 1));
   color: var(--ink);
   min-height: 40px;
-  padding: 0 12px;
+  padding: 0 calc(12px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-phone {
   flex-direction: row;
-  gap: 18px;
+  gap: calc(18px * var(--bold-d, 1));
   align-items: flex-start;
 }
 
 .bold-settings-page .bold-phone .grow {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-phone-mark {
@@ -1054,9 +1054,9 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   min-height: 48px;
-  padding-block: 6px;
+  padding-block: calc(6px * var(--bold-d, 1));
   border-top: 1px solid var(--line);
 }
 
@@ -1073,15 +1073,15 @@
 .bold-settings-page .bold-tool-agents {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-tool-add {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 6px;
+  gap: calc(8px * var(--bold-d, 1));
+  padding-top: calc(6px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-tool-add label {
@@ -1116,18 +1116,18 @@
   border: 0;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   font-size: 0.87em;
   font-weight: 700;
   background: var(--field);
   color: var(--ink2);
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: calc(7px * var(--bold-d, 1));
 }
 
 .bold-settings-page textarea.field {
-  padding: 12px 14px;
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   resize: vertical;
   min-height: 90px;
 }
@@ -1149,13 +1149,13 @@
 .bold-settings-page .bold-trigger-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-card {
   background: var(--field);
   border-radius: calc(20px * var(--bold-r, 1));
-  padding: 16px;
+  padding: calc(16px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-url {
@@ -1181,10 +1181,10 @@
   max-width: 760px;
   background: var(--panel);
   border-radius: calc(30px * var(--bold-r, 1));
-  padding: 26px;
+  padding: calc(26px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: calc(18px * var(--bold-d, 1));
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
 }
 
@@ -1202,15 +1202,16 @@
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-steps li {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   border-radius: 999px;
-  padding: 4px 14px 4px 4px;
+  padding: calc(4px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1))
+    calc(4px * var(--bold-d, 1));
   background: var(--field);
   color: var(--muted);
   font-size: 13px;
@@ -1250,7 +1251,7 @@
 .bold-settings-page .bold-trigger-template {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-form label,
@@ -1263,7 +1264,7 @@
 .bold-settings-page .bold-trigger-form label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-test,
@@ -1271,16 +1272,16 @@
 .bold-settings-page .bold-trigger-report {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-inner {
   background: var(--deep);
   border-radius: calc(20px * var(--bold-r, 1));
-  padding: 16px;
+  padding: calc(16px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-inner p {
@@ -1290,13 +1291,13 @@
 .bold-settings-page .bold-trigger-secret {
   background: var(--deep);
   box-shadow: inset 0 0 0 1.5px var(--ink);
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-secret-value {
   display: block;
   overflow-wrap: anywhere;
-  padding: 12px;
+  padding: calc(12px * var(--bold-d, 1));
   border-radius: calc(14px * var(--bold-r, 1));
   background: var(--field);
 }
@@ -1305,13 +1306,13 @@
   background: var(--field);
   align-items: center;
   text-align: center;
-  gap: 12px;
-  padding: 28px;
+  gap: calc(12px * var(--bold-d, 1));
+  padding: calc(28px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-dots {
   display: inline-flex;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-dots span {
@@ -1353,7 +1354,7 @@
   max-height: 260px;
   overflow: auto;
   margin: 0;
-  padding: 12px;
+  padding: calc(12px * var(--bold-d, 1));
   border-radius: calc(14px * var(--bold-r, 1));
   background: var(--deep);
   color: var(--ink2);
@@ -1367,13 +1368,13 @@
 .bold-settings-page .bold-trigger-mapgrid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-payload {
   max-height: 420px;
   overflow: auto;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-leaf {
@@ -1381,10 +1382,10 @@
   background: transparent;
   color: var(--ink);
   border-radius: calc(10px * var(--bold-r, 1));
-  padding: 7px 8px;
+  padding: calc(7px * var(--bold-d, 1)) calc(8px * var(--bold-d, 1));
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   align-items: center;
   text-align: left;
   overflow-wrap: anywhere;
@@ -1407,7 +1408,7 @@
 
 .bold-settings-page .bold-trigger-leaf-slot {
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 2px calc(8px * var(--bold-d, 1));
   background: var(--hi-bg);
   color: var(--hi-ink);
   font-family: var(--font-b);
@@ -1418,16 +1419,16 @@
 .bold-settings-page .bold-trigger-slots {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-slot {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   background: var(--deep);
   border-radius: calc(16px * var(--bold-r, 1));
-  padding-right: 6px;
+  padding-right: calc(6px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-slot.on {
@@ -1444,7 +1445,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px 12px;
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   border-radius: calc(16px * var(--bold-r, 1));
   min-height: 52px;
 }
@@ -1464,27 +1465,27 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-modes legend {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: calc(6px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-trigger-mode {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   border-radius: calc(16px * var(--bold-r, 1));
   background: var(--field);
 }
 
 .bold-settings-page .bold-trigger-mode input {
-  margin-top: 4px;
+  margin-top: calc(4px * var(--bold-d, 1));
   accent-color: var(--ink);
 }
 
@@ -1499,7 +1500,7 @@
   max-width: 520px;
   margin-top: max(70px, env(safe-area-inset-top, 0px));
   background: var(--panel);
-  padding: 24px;
+  padding: calc(24px * var(--bold-d, 1));
   border-radius: calc(26px * var(--bold-r, 1));
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
 }
@@ -1516,11 +1517,11 @@
 
   .bold-settings-page .bold-trigger-scrim {
     padding-top: max(20px, env(safe-area-inset-top, 0px));
-    padding-inline: 12px;
+    padding-inline: calc(12px * var(--bold-d, 1));
   }
 
   .bold-settings-page .bold-trigger-dialog {
-    padding: 20px;
+    padding: calc(20px * var(--bold-d, 1));
     border-radius: calc(24px * var(--bold-r, 1));
   }
 }
@@ -1538,13 +1539,13 @@
 }
 
 .bold-settings-page .bold-look-subhead {
-  margin-top: 4px;
+  margin-top: calc(4px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-look-modes {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-look-mode {
@@ -1552,10 +1553,10 @@
   border-radius: calc(24px * var(--bold-r, 1));
   background: var(--panel);
   color: var(--ink);
-  padding: 14px;
+  padding: calc(14px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   text-align: left;
   font: inherit;
 }
@@ -1576,8 +1577,8 @@
   height: 110px;
   border-radius: calc(16px * var(--bold-r, 1));
   display: flex;
-  gap: 8px;
-  padding: 12px;
+  gap: calc(8px * var(--bold-d, 1));
+  padding: calc(12px * var(--bold-d, 1));
   background: #12131a;
 }
 
@@ -1594,7 +1595,7 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-look-mode-preview[data-preview='dark'] .bold-look-mode-line {
@@ -1633,14 +1634,14 @@
 .bold-settings-page .bold-look-fieldset {
   border: 0;
   margin: 0;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   min-width: 0;
 }
 
 .bold-settings-page .bold-look-fieldset legend {
   float: left;
   padding: 0;
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--bold-d, 1));
   font-family: var(--font-d);
   font-size: 20px;
   font-weight: 700;
@@ -1653,7 +1654,7 @@
 .bold-settings-page .bold-look-scale {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
   min-height: 52px;
   clear: both;
 }
@@ -1677,7 +1678,7 @@
 .bold-settings-page .bold-look-themes,
 .bold-settings-page .bold-look-shared,
 .bold-settings-page .bold-look-sendkey {
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-look-reset {
@@ -1687,14 +1688,14 @@
 .bold-settings-page .bold-look-theme-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-look-theme {
   border: 0;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   background: var(--field);
   color: var(--ink2);
   font: inherit;
@@ -1712,7 +1713,7 @@
 }
 
 .bold-settings-page .bold-look-shared-fields {
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 .bold-settings-page .bold-look-sendkey .seg,
@@ -1725,9 +1726,9 @@
   background: var(--panel);
   border: 0;
   border-radius: calc(24px * var(--bold-r, 1));
-  padding: 18px;
+  padding: calc(18px * var(--bold-d, 1));
   align-items: stretch;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   color: var(--ink);
 }
 
@@ -1766,7 +1767,7 @@
 
   .bold-settings-page .setnav h1 {
     flex: 0 0 100%;
-    margin-bottom: 8px;
+    margin-bottom: calc(8px * var(--bold-d, 1));
   }
 
   .bold-settings-page .setmain {
@@ -1818,8 +1819,8 @@
 .bold-settings-page .bold-remove-confirm {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
   border-radius: calc(20px * var(--bold-r, 1));
   background: var(--deep);
   border: 1px solid var(--line);
@@ -1843,7 +1844,7 @@
     align-items: center;
     align-self: flex-start;
     min-height: 44px;
-    padding: 0 14px 0 0;
+    padding: 0 calc(14px * var(--bold-d, 1)) 0 0;
     border: 0;
     background: transparent;
     color: var(--muted);

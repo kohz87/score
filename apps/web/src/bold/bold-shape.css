@@ -2,7 +2,7 @@
    attributes (themes/engine.ts), so Score's own look is untouched: --bold-r falls back to 1 in every border-radius
    (a `calc(Npx * var(--bold-r, 1))`), pills (999px) never scale. Numeric radius writes --bold-r itself (engine.ts).
    Border and shadow tokens come from themes/variants.css. Protected surfaces and anything holding one keep their own
-   fills, so glass never makes a decision surface translucent. */
+   fills, so glass never makes a decision surface translucent: a card that holds any protected surface stays solid. */
 :root[data-look='custom'][data-radius='sharp'] {
   --bold-r: 0.15;
 }
@@ -86,9 +86,7 @@
     .bold-coding .team-card,
     .bold-settings-page .rules-style,
     .bold-settings-page .rules-column
-  ):not([data-protected]):not(
-    :has([data-protected]:not(.agent-glyph, .needs-you-dot, .chat-approval, .chat-toast))
-  ) {
+  ):not([data-protected]):not(:has([data-protected])) {
   background: color-mix(in srgb, var(--panel) 70%, transparent);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
   backdrop-filter: blur(14px) saturate(1.2);
@@ -103,9 +101,23 @@
       .bold-run-tile,
       .bold-runs-row,
       .bold-first-run-card
-    ):not([data-protected]):not(
-      :has([data-protected]:not(.agent-glyph, .needs-you-dot, .chat-approval, .chat-toast))
-    ) {
+    ):not([data-protected]):not(:has([data-protected])) {
     background: color-mix(in srgb, var(--panel) 94%, transparent);
   }
+}
+
+/* Density: the Customizer's compact / comfortable / airy scale the shell's paddings and gaps (every `padding` and
+   `gap` in the shell reads `calc(Npx * var(--bold-d, 1))`). Score's own look never sets it, so it stays as drawn. */
+:root[data-look='custom'][data-density='compact'] {
+  --bold-d: 0.85;
+}
+:root[data-look='custom'][data-density='airy'] {
+  --bold-d: 1.2;
+}
+
+/* A decision card is opaque by itself, whatever surrounds it (no blur, a solid fill). */
+[data-ui='bold'] .bold-request,
+[data-ui='bold'] .chat-approval {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }

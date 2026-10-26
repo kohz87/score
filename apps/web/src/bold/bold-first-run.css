@@ -4,7 +4,7 @@
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding-block: 56px;
+  padding-block: calc(56px * var(--bold-d, 1));
 }
 
 /* First run lives at /b, where the shell fixes the window to the room's height (body.fit): scroll inside it, and stop
@@ -18,7 +18,7 @@ body.fit [data-ui='bold'] .bold-first-run {
 
 @media (max-width: 860px) {
   body.fit [data-ui='bold'] .bold-first-run {
-    padding-bottom: 96px;
+    padding-bottom: calc(96px * var(--bold-d, 1));
   }
 }
 
@@ -26,7 +26,7 @@ body.fit [data-ui='bold'] .bold-first-run {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 48px;
+  gap: calc(48px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-first-run-hero {
@@ -34,7 +34,7 @@ body.fit [data-ui='bold'] .bold-first-run {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: calc(20px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-first-run-hero .word {
@@ -59,8 +59,8 @@ body.fit [data-ui='bold'] .bold-first-run {
 [data-ui='bold'] .bold-first-run-glyphs {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
+  gap: calc(6px * var(--bold-d, 1));
+  margin-top: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-first-run-steps {
@@ -76,16 +76,16 @@ body.fit [data-ui='bold'] .bold-first-run {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-first-run-card {
   background: var(--panel);
   border-radius: calc(24px * var(--bold-r, 1));
-  padding: 18px;
+  padding: calc(18px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   color: var(--ink);
 }
 
@@ -105,7 +105,7 @@ body.fit [data-ui='bold'] .bold-first-run {
 [data-ui='bold'] .bold-first-run-hermes {
   flex-direction: row;
   align-items: flex-start;
-  gap: 16px;
+  gap: calc(16px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-first-run-hermes-copy {
@@ -135,7 +135,7 @@ body.fit [data-ui='bold'] .bold-first-run {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
   color: var(--ink2);
 }
 
@@ -149,7 +149,7 @@ body.fit [data-ui='bold'] .bold-first-run {
   list-style: none;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-first-run-member {
@@ -157,10 +157,10 @@ body.fit [data-ui='bold'] .bold-first-run {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   background: var(--field);
   border-radius: calc(14px * var(--bold-r, 1));
-  padding: 8px 12px;
+  padding: calc(8px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -192,11 +192,11 @@ body.fit [data-ui='bold'] .bold-first-run {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   background: var(--code-bg);
   color: var(--code-ink);
   border-radius: calc(18px * var(--bold-r, 1));
-  padding: 10px 12px;
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-first-run-command code {
@@ -218,17 +218,17 @@ body.fit [data-ui='bold'] .bold-first-run {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-first-run-option {
   min-height: 44px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   background: var(--field);
   border-radius: calc(14px * var(--bold-r, 1));
-  padding: 10px 12px;
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   cursor: pointer;
 }
 
@@ -259,13 +259,13 @@ body.fit [data-ui='bold'] .bold-first-run {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 10px;
-  padding-top: 6px;
+  gap: calc(10px * var(--bold-d, 1));
+  padding-top: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-first-run-open {
   min-height: 52px;
-  padding: 0 28px;
+  padding: 0 calc(28px * var(--bold-d, 1));
   font-size: 16px;
 }
 
@@ -277,11 +277,11 @@ body.fit [data-ui='bold'] .bold-first-run {
 
 @media (max-width: 860px) {
   [data-ui='bold'] .bold-first-run {
-    padding-block: 32px 24px;
+    padding-block: calc(32px * var(--bold-d, 1)) calc(24px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-first-run-grid {
-    gap: 28px;
+    gap: calc(28px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-first-run-steps {

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { openBoldRoomWith } from './bold-room-fixtures.ts'
 import { pair } from './pair.ts'
 import { mockThemes, type MockTheme } from './themes-fixtures.ts'
 
@@ -82,5 +83,66 @@ for (const viewport of sizes) {
       )
       expect(translucent).toBe(0)
     })
+  })
+}
+
+const glassTheme: MockTheme = {
+  id: 'glassy',
+  name: 'Glassy',
+  source: 'custom',
+  manifest: { shape: { surface: 'glass' } },
+}
+
+test('glass never makes a decision or anything holding one translucent, and the guard stays quiet', async ({
+  page,
+}) => {
+  await openBoldRoomWith(page, {}, async (frame) => {
+    await mockThemes(frame, [glassTheme], { active: 'glassy', mode: 'dark' })
+  })
+  await expect(page.locator('html')).toHaveAttribute('data-surface', 'glass')
+  const request = page.locator('[data-ui="bold"] .bold-request').first()
+  await expect(request).toBeVisible()
+  const report = await page.evaluate(() => {
+    const alpha = (value: string) => {
+      const m = value.match(/\/\s*([\d.]+)\)$|rgba\([^)]*,\s*([\d.]+)\)$/)
+      return m ? Number(m[1] ?? m[2]) : 1
+    }
+    const bad: string[] = []
+    for (const el of document.querySelectorAll('[data-protected]')) {
+      const own = getComputedStyle(el)
+      if (alpha(own.backgroundColor) < 1 && own.backgroundColor !== 'rgba(0, 0, 0, 0)')
+        bad.push(`own ${el.className}`)
+      for (let up = el.parentElement; up; up = up.parentElement) {
+        const style = getComputedStyle(up)
+        if (style.backdropFilter !== 'none') bad.push(`ancestor ${up.className}`)
+      }
+    }
+    const request = document.querySelector('[data-ui="bold"] .bold-request')
+    return {
+      bad,
+      count: document.querySelectorAll('[data-protected]').length,
+      requestAlpha: alpha(getComputedStyle(request!).backgroundColor),
+    }
+  })
+  expect(report.count).toBeGreaterThan(0)
+  expect(report.requestAlpha).toBe(1)
+  expect(report.bad).toEqual([])
+  await expect(page.locator('.look-banner')).toHaveCount(0)
+  await expect(page.locator('html')).toHaveAttribute('data-look', 'custom')
+})
+
+for (const viewport of sizes) {
+  test(`density scales card padding at ${viewport.width}×${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport)
+    const padding = async (density: string | null) => {
+      const card = await openCard(page, density ? { density } : null)
+      return Number.parseFloat(await card.evaluate((e) => getComputedStyle(e).paddingTop))
+    }
+    const base = await padding(null)
+    const compact = await padding('compact')
+    const airy = await padding('airy')
+    expect(compact).toBeLessThan(base)
+    expect(airy).toBeGreaterThan(base)
+    expect(await padding('comfortable')).toBe(base)
   })
 }

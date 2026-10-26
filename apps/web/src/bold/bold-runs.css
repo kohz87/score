@@ -2,7 +2,7 @@
    #1A1C23, fields #23252E, 20-30px radii, pills. The decisions, graph and log are the classic components wearing
    their own token set inside `.bold-run-classic` (the light one for anything that asks the person to decide). */
 [data-ui='bold'] .bold-runs {
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-runs-note {
@@ -26,20 +26,20 @@
 [data-ui='bold'] .bold-runs-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-runs-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-runs-chip {
   border: 0;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   font: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -59,7 +59,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-runs-row {
@@ -67,10 +67,10 @@
   min-height: 56px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   border: 0;
   border-radius: calc(20px * var(--bold-r, 1));
-  padding: 10px 16px;
+  padding: calc(10px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
   background: var(--panel);
   color: var(--ink);
   font: inherit;
@@ -104,7 +104,7 @@
 /* "Waits for you" / "Needs you": the amber pill, carries data-protected. */
 [data-ui='bold'] .bold-run-wait {
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 2px calc(10px * var(--bold-d, 1));
   font-size: 12px;
   font-weight: 700;
   background: rgba(255, 201, 77, 0.16);
@@ -116,7 +116,7 @@
 [data-ui='bold'] .bold-run {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
   min-width: 0;
 }
 
@@ -124,22 +124,22 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-run-tabs {
   display: inline-flex;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   background: var(--field);
   border-radius: 999px;
-  padding: 4px;
+  padding: calc(4px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-run-tabs button {
   border: 0;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   font: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -158,7 +158,7 @@
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-run-head h2 {
@@ -184,23 +184,23 @@
 [data-ui='bold'] .bold-run-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-run-tile {
   background: var(--panel);
   border-radius: calc(20px * var(--bold-r, 1));
-  padding: 14px 16px;
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   min-width: 0;
 }
 
 [data-ui='bold'] .bold-run-tile-head {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   font-size: 13px;
   color: var(--muted);
 }
@@ -237,7 +237,7 @@
 [data-ui='bold'] .bold-run-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-run-chips code {
@@ -245,7 +245,7 @@
   font-size: 12px;
   background: var(--field);
   border-radius: 999px;
-  padding: 3px 10px;
+  padding: calc(3px * var(--bold-d, 1)) calc(10px * var(--bold-d, 1));
   overflow-wrap: anywhere;
 }
 
@@ -253,7 +253,7 @@
 [data-ui='bold'] .bold-run-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
   min-width: 0;
 }
 
@@ -267,7 +267,7 @@
 
 [data-ui='bold'] .bold-run-step {
   display: flex;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-run-step[data-future='true'] {
@@ -333,15 +333,15 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 3px 0 18px;
+  gap: calc(6px * var(--bold-d, 1));
+  padding: calc(3px * var(--bold-d, 1)) 0 calc(18px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-run-who {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-run-title {
@@ -353,7 +353,7 @@
 [data-ui='bold'] .bold-run-state,
 [data-ui='bold'] .bold-run-tries {
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 2px calc(10px * var(--bold-d, 1));
   font-size: 12px;
   font-weight: 700;
   background: var(--field);
@@ -379,7 +379,7 @@
 [data-ui='bold'] .bold-run-reply {
   background: var(--field);
   border-radius: 20px 20px 20px 6px;
-  padding: 10px 14px;
+  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   font-size: 14px;
   overflow-wrap: anywhere;
 }
@@ -399,7 +399,7 @@
 [data-ui='bold'] .bold-run-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
   font-size: 13px;
 }
 
@@ -435,7 +435,7 @@
 [data-ui='bold'] .bold-run-classic[data-tone='surface'] {
   background: var(--ground);
   border-radius: calc(24px * var(--bold-r, 1));
-  padding: 16px;
+  padding: calc(16px * var(--bold-d, 1));
 }
 
 /* The cards carry their own (light, "for you") fill; the frame around them has none. */
@@ -470,10 +470,10 @@
     margin-left: 0;
   }
   [data-ui='bold'] .bold-run-step {
-    gap: 10px;
+    gap: calc(10px * var(--bold-d, 1));
   }
   [data-ui='bold'] .bold-run-classic[data-tone='surface'] {
-    padding: 12px;
+    padding: calc(12px * var(--bold-d, 1));
     border-radius: calc(20px * var(--bold-r, 1));
   }
 }
@@ -488,14 +488,14 @@
 [data-ui='bold'] .bold-run-warnings {
   list-style: none;
   margin: 0;
-  padding: 12px 16px;
+  padding: calc(12px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
   border-radius: calc(20px * var(--bold-r, 1));
   background: rgba(255, 201, 77, 0.12);
   color: var(--warn);
   font-size: 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
 }
 
 /* ---- the kept classic parts, in the new shell's look (decision 131) ----

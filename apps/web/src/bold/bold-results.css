@@ -5,10 +5,10 @@
 
 [data-ui='bold'] .bold-work-tabs {
   display: inline-flex;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   background: var(--field);
   border-radius: 999px;
-  padding: 4px;
+  padding: calc(4px * var(--bold-d, 1));
   flex-wrap: wrap;
 }
 
@@ -19,7 +19,7 @@
   background: transparent;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   font-weight: 700;
   font-size: 0.87em;
   color: var(--ink2);
@@ -52,7 +52,7 @@
 [data-ui='bold'] .bold-results-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
   align-content: start;
 }
 
@@ -60,10 +60,10 @@
   background: #fff;
   color: #12131a;
   border-radius: calc(24px * var(--bold-r, 1));
-  padding: 18px;
+  padding: calc(18px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   border: 0;
   text-align: left;
   text-decoration: none;
@@ -71,7 +71,7 @@
 
 [data-ui='bold'] .bold-results-preview {
   grid-column: span 2;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-results-card h2 {
@@ -88,7 +88,7 @@
 [data-ui='bold'] .bold-results-card-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   width: 100%;
 }
 
@@ -108,7 +108,7 @@
 
 [data-ui='bold'] .bold-results-badge {
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 2px calc(10px * var(--bold-d, 1));
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
@@ -142,13 +142,13 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-results-live {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   color: #5e626c;
   font-size: 12px;
   font-weight: 700;
@@ -173,7 +173,7 @@
   border-radius: calc(16px * var(--bold-r, 1));
   overflow: hidden;
   background: #f4f5f8;
-  padding: 12px;
+  padding: calc(12px * var(--bold-d, 1));
   text-decoration: none;
 }
 
@@ -188,7 +188,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-results-preview-page > span {
@@ -218,20 +218,20 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   font-size: 14px;
 }
 
 [data-ui='bold'] .bold-results-changes li {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   line-height: 1.45;
 }
 
 [data-ui='bold'] .bold-results-changes li.caught {
   border-radius: calc(12px * var(--bold-r, 1));
-  padding: 6px 8px;
+  padding: calc(6px * var(--bold-d, 1)) calc(8px * var(--bold-d, 1));
   margin: -6px -8px;
   background: #fff7e3;
 }
@@ -239,7 +239,7 @@
 [data-ui='bold'] .bold-results-changes .agent-glyph {
   width: 8px;
   height: 8px;
-  margin-top: 7px;
+  margin-top: calc(7px * var(--bold-d, 1));
   flex: none;
 }
 
@@ -250,7 +250,7 @@
 [data-ui='bold'] .bold-results-marker {
   width: 8px;
   height: 8px;
-  margin-top: 7px;
+  margin-top: calc(7px * var(--bold-d, 1));
   border-radius: 999px;
   background: #19c39a;
   flex: none;
@@ -281,7 +281,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-results-draft-preview > span:first-child {
@@ -308,14 +308,14 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   font-size: 13px;
 }
 
 [data-ui='bold'] .bold-results-agent {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: calc(5px * var(--bold-d, 1));
   font-weight: 600;
 }
 
@@ -333,7 +333,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   color: var(--muted);
 }
 
@@ -348,15 +348,16 @@
 [data-ui='bold'] .bold-results-screen-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-results-screen {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: calc(9px * var(--bold-d, 1));
   min-height: 50px;
-  padding: 5px 12px 5px 6px;
+  padding: calc(5px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1)) calc(5px * var(--bold-d, 1))
+    calc(6px * var(--bold-d, 1));
   border-radius: calc(16px * var(--bold-r, 1));
   background: var(--panel);
   color: var(--ink);
@@ -374,7 +375,7 @@
 [data-ui='bold'] .bold-results-screen-meta {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: calc(5px * var(--bold-d, 1));
   font-size: 13px;
 }
 
@@ -396,7 +397,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-results-error p,
@@ -408,8 +409,8 @@
 [data-ui='bold'] .bold-results-inline-error {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: calc(12px * var(--bold-d, 1));
+  margin-bottom: calc(14px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-results-empty {
@@ -418,8 +419,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  padding: 40px;
+  gap: calc(14px * var(--bold-d, 1));
+  padding: calc(40px * var(--bold-d, 1));
   text-align: center;
   color: var(--ink);
 }
@@ -427,7 +428,7 @@
 [data-ui='bold'] .bold-results-empty-tiles {
   display: grid;
   grid-template-columns: repeat(2, 88px);
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   opacity: 0.5;
 }
 

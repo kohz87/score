@@ -20,12 +20,12 @@
   --watch-bright: #e8eaf0;
   --watch-tree: #171922;
   --watch-live: var(--live);
-  gap: 18px;
+  gap: calc(18px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-head {
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-title {
@@ -48,7 +48,7 @@
   margin-left: auto;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-terminal {
@@ -61,13 +61,13 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-smalls {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
   min-width: 0;
 }
 
@@ -79,10 +79,10 @@
   border-radius: calc(22px * var(--bold-r, 1));
   background: #0f1116;
   color: #c9ccd4;
-  padding: 12px 14px;
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   text-align: left;
   font: inherit;
   overflow: hidden;
@@ -106,7 +106,7 @@
 [data-ui='bold'] .bold-screen-small-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   font-size: 13px;
   color: #a9adb8;
   white-space: nowrap;
@@ -143,10 +143,10 @@
   border-radius: calc(12px * var(--bold-r, 1));
   background: #fff;
   color: #12131a;
-  padding: 10px;
+  padding: calc(10px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   font-size: 12px;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -155,11 +155,11 @@
 [data-ui='bold'] .bold-screen-card {
   border-radius: calc(20px * var(--bold-r, 1));
   background: var(--panel);
-  padding: 14px 16px;
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   font-size: 13px;
   color: var(--muted);
 }
@@ -170,8 +170,8 @@
 
 [data-ui='bold'] .bold-screen-command {
   display: block;
-  margin-top: 6px;
-  padding: 6px 10px;
+  margin-top: calc(6px * var(--bold-d, 1));
+  padding: calc(6px * var(--bold-d, 1)) calc(10px * var(--bold-d, 1));
   border-radius: calc(10px * var(--bold-r, 1));
   background: var(--field);
   color: var(--ink2);
@@ -182,7 +182,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-others-title {
@@ -200,9 +200,9 @@
 [data-ui='bold'] .bold-screen-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   min-height: 40px;
-  padding: 0 14px 0 8px;
+  padding: 0 calc(14px * var(--bold-d, 1)) 0 calc(8px * var(--bold-d, 1));
   border-radius: 999px;
   background: var(--panel);
   color: var(--ink);
@@ -222,7 +222,7 @@
 [data-ui='bold'] .bold-screen-chip-status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   color: var(--muted);
 }
 
@@ -241,7 +241,7 @@
     'ask main'
     'steps main';
   align-items: start;
-  column-gap: 20px;
+  column-gap: calc(20px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-ask {
@@ -250,7 +250,7 @@
 }
 
 [data-ui='bold'] .bold-screen-ask:not(:empty) {
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-log {
@@ -258,7 +258,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-log-title {
@@ -274,7 +274,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   /* One bounded scroll area, so a long history never pushes the replay controls away. */
   max-height: 440px;
   overflow-y: auto;
@@ -284,19 +284,19 @@
   max-height: none;
   overflow: visible;
   margin: 4px 0 0 6px;
-  padding-left: 10px;
+  padding-left: calc(10px * var(--bold-d, 1));
   border-left: 2px solid var(--line);
 }
 
 [data-ui='bold'] .bold-screen-group {
-  padding: 4px 0;
+  padding: calc(4px * var(--bold-d, 1)) 0;
 }
 
 [data-ui='bold'] .bold-screen-dot {
   flex: 0 0 10px;
   width: 10px;
   height: 10px;
-  margin-top: 7px;
+  margin-top: calc(7px * var(--bold-d, 1));
   border-radius: 999px;
 }
 
@@ -305,7 +305,7 @@
   border: 0;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   background: var(--field);
   color: var(--ink);
   font: inherit;
@@ -328,8 +328,8 @@
   color: var(--ink);
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(10px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   text-align: left;
   font: inherit;
   cursor: pointer;
@@ -375,7 +375,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-stage {
@@ -383,10 +383,10 @@
   min-height: 600px;
   border-radius: calc(26px * var(--bold-r, 1));
   background: var(--code-bg);
-  padding: 16px;
+  padding: calc(16px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-badge {
@@ -395,7 +395,7 @@
   right: 28px;
   z-index: 2;
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: calc(4px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
   background: #20232c;
   color: #e8eaf0;
   font-size: 12px;
@@ -406,9 +406,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
+  gap: calc(8px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   min-height: 38px;
-  padding-right: 132px;
+  padding-right: calc(132px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-who {
@@ -453,7 +453,7 @@
 [data-ui='bold'] .bold-screen-window .watch-terminal {
   font-size: 14px;
   line-height: 1.9;
-  padding: 18px 20px;
+  padding: calc(18px * var(--bold-d, 1)) calc(20px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-empty,
@@ -466,7 +466,7 @@
   flex: 1;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: calc(24px * var(--bold-d, 1));
 }
 
 /* The approval bar is a decision for you: the shell's light "for you" object, whose pair the contrast fallback pins to
@@ -476,10 +476,10 @@
   width: auto;
   margin: 0;
   border-radius: calc(22px * var(--bold-r, 1));
-  padding: 14px 16px;
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   box-shadow: none;
   background: var(--hi-bg);
 }
@@ -493,7 +493,7 @@
 [data-ui='bold'] .bold-screen-approval-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen-approval .watch-approval__go {
@@ -522,7 +522,7 @@
   border: 1px solid #f0a39d;
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   background: #2a2026;
   color: #ffd8d5;
   font: inherit;
@@ -535,7 +535,7 @@
   background: var(--panel);
   border: 0;
   border-radius: calc(24px * var(--bold-r, 1));
-  padding: 14px 18px;
+  padding: calc(14px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-screen .watch-replay__buttons button {
@@ -617,7 +617,7 @@
 
 @media (max-width: 860px) {
   [data-ui='bold'] .bold-screen {
-    gap: 16px;
+    gap: calc(16px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-screen-head {
@@ -653,7 +653,7 @@
       'ask'
       'main'
       'steps';
-    row-gap: 16px;
+    row-gap: calc(16px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-screen-ask:not(:empty) {
@@ -662,7 +662,7 @@
 
   [data-ui='bold'] .bold-screen-stage {
     min-height: 480px;
-    padding: 12px;
+    padding: calc(12px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-screen-stage-head {
@@ -676,11 +676,11 @@
   }
 
   [data-ui='bold'] .bold-screen .watch-replay {
-    padding: 12px;
+    padding: calc(12px * var(--bold-d, 1));
   }
 
   [data-ui='bold'] .bold-screen .watch-replay__legend {
-    gap: 10px;
+    gap: calc(10px * var(--bold-d, 1));
   }
 }
 

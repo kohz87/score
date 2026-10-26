@@ -2,11 +2,11 @@
    docs/design/bold/prototype.html (mRecipe, .seg, .step) and the approved mock-up's layout (decision 131, board C). */
 [data-ui='bold'] .bold-seg {
   display: inline-flex;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   flex-wrap: wrap;
   background: var(--field);
   border-radius: 999px;
-  padding: 4px;
+  padding: calc(4px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-seg button {
@@ -15,7 +15,7 @@
   color: var(--ink2);
   border-radius: 999px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   font-size: 0.87em;
   font-weight: 700;
 }
@@ -27,7 +27,7 @@
 
 [data-ui='bold'] .bold-badge {
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 2px calc(10px * var(--bold-d, 1));
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
@@ -44,7 +44,7 @@
 }
 
 [data-ui='bold'] .bold-recipes-actions {
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   flex-wrap: wrap;
 }
 
@@ -59,14 +59,14 @@
 [data-ui='bold'] .bold-inner {
   background: var(--deep);
   border-radius: calc(20px * var(--bold-r, 1));
-  padding: 16px;
+  padding: calc(16px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-columns {
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
-  gap: 18px;
+  gap: calc(18px * var(--bold-d, 1));
   min-height: 0;
 }
 
@@ -75,7 +75,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-inspector {
@@ -83,13 +83,13 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-fields {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -102,19 +102,19 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-row {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: calc(5px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-rowmain {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-step {
@@ -122,10 +122,10 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
   border: 0;
   border-radius: calc(18px * var(--bold-r, 1));
-  padding: 12px 14px;
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   text-align: left;
   background: var(--deep);
   color: var(--ink);
@@ -160,7 +160,7 @@
 
 [data-ui='bold'] .bold-recipes-rowactions {
   display: flex;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .icon-btn.bold-recipes-remove {
@@ -170,14 +170,15 @@
 [data-ui='bold'] .bold-recipes-routes {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px 12px;
-  padding: 0 10px 4px 48px;
+  gap: calc(5px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
+  padding: 0 calc(10px * var(--bold-d, 1)) calc(4px * var(--bold-d, 1))
+    calc(48px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-route {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   min-width: 0;
   color: var(--muted);
   font-size: 0.87em;
@@ -191,7 +192,7 @@
   min-height: 46px;
   border: 0;
   border-radius: calc(14px * var(--bold-r, 1));
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   background: var(--field);
   color: var(--ink);
   font: inherit;
@@ -202,7 +203,7 @@
   min-height: 90px;
   border: 0;
   border-radius: calc(14px * var(--bold-r, 1));
-  padding: 12px 14px;
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   background: var(--field);
   color: var(--ink);
   font: inherit;
@@ -216,7 +217,7 @@
 
 [data-ui='bold'] .bold-lab {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: calc(6px * var(--bold-d, 1));
   color: var(--muted);
   font-size: 0.87em;
   font-weight: 600;
@@ -242,7 +243,7 @@
 [data-ui='bold'] .bold-recipes-inspector .wf-template__bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: calc(4px * var(--bold-d, 1)) calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-inspector .wf-template__bar button,
@@ -260,7 +261,7 @@
 [data-ui='bold'] .bold-recipes-inspector-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: calc(14px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-hint {
@@ -270,8 +271,8 @@
 [data-ui='bold'] .bold-recipes-gate {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(12px * var(--bold-d, 1));
   border-radius: calc(16px * var(--bold-r, 1));
   background: var(--panel);
   box-shadow: inset 0 0 0 1px var(--line);
@@ -280,14 +281,14 @@
 [data-ui='bold'] .bold-recipes-rules {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-rule {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-rule select,
@@ -321,7 +322,7 @@
 [data-ui='bold'] .bold-recipes-graphnote {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-recipes-conflict p,
@@ -406,7 +407,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 20px;
+  gap: calc(20px * var(--bold-d, 1));
   min-width: 0;
   color: var(--ink);
 }
@@ -423,7 +424,7 @@
   max-width: 290px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
   min-width: 0;
 }
 
@@ -458,10 +459,10 @@
   color: var(--ink);
   text-align: left;
   border-radius: calc(18px * var(--bold-r, 1));
-  padding: 12px 14px;
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--bold-d, 1));
   width: 100%;
   font: inherit;
 }
@@ -489,7 +490,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-rp-main:focus {
@@ -500,7 +501,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 10px;
+  gap: calc(4px * var(--bold-d, 1)) calc(10px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-rp-title,
@@ -517,7 +518,7 @@
   background: transparent;
   border: 0;
   border-radius: calc(14px * var(--bold-r, 1));
-  padding: 0 8px;
+  padding: 0 calc(8px * var(--bold-d, 1));
   margin-left: -8px;
   min-width: 0;
   flex: 1 1 260px;
@@ -533,7 +534,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-rp-more {
@@ -549,8 +550,8 @@
   width: 260px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: calc(10px * var(--bold-d, 1));
+  padding: calc(14px * var(--bold-d, 1));
   border-radius: calc(20px * var(--bold-r, 1));
   background: var(--panel);
   box-shadow:
@@ -562,7 +563,7 @@
 [data-ui='bold'] .bold-rp-graph {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
   min-width: 0;
   font-size: 14px;
 }
@@ -576,7 +577,7 @@
 }
 
 [data-ui='bold'] .bold-rp-graph .wf-canvas__bar {
-  padding: 10px 14px;
+  padding: calc(10px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-rp-graph .wf-canvas__viewport {
@@ -634,11 +635,11 @@
   max-width: 350px;
   background: var(--panel);
   border-radius: calc(26px * var(--bold-r, 1));
-  padding: 20px;
-  margin-top: 62px;
+  padding: calc(20px * var(--bold-d, 1));
+  margin-top: calc(62px * var(--bold-d, 1));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
   min-width: 0;
   box-sizing: border-box;
 }
@@ -650,7 +651,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-rp-aside input,
@@ -661,7 +662,7 @@
   min-height: 44px;
   border: 0;
   border-radius: calc(14px * var(--bold-r, 1));
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
   background: var(--field);
   color: var(--ink);
   font: inherit;
@@ -669,7 +670,7 @@
 }
 
 [data-ui='bold'] .bold-rp-aside textarea {
-  padding: 12px 14px;
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
   resize: vertical;
 }
 
@@ -688,7 +689,7 @@
   font-weight: 700;
   font-size: 13px;
   min-height: 36px;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-rp-aside button.orch-danger,
@@ -716,7 +717,7 @@
 [data-ui='bold'] .bold-rp-aside .orch-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--bold-d, 1));
   margin: 0;
 }
 
@@ -737,14 +738,14 @@
 [data-ui='bold'] .bold-rp-text {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--bold-d, 1));
 }
 
 [data-ui='bold'] .bold-rp .wf-live {
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--bold-d, 1));
 }
 
 @media (max-width: 860px) {
