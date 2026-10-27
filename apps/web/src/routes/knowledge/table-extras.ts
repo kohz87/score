@@ -91,12 +91,17 @@ export function followGrip(
   const x = event.clientX
   const y = event.clientY
   handle.setPointerCapture(event.pointerId)
-  const onMove = (next: PointerEvent) => move(next.clientX - x, next.clientY - y)
+  let moved = false
+  const onMove = (next: PointerEvent) => {
+    moved = true
+    move(next.clientX - x, next.clientY - y)
+  }
   const onUp = () => {
     handle.removeEventListener('pointermove', onMove)
     handle.removeEventListener('pointerup', onUp)
     handle.removeEventListener('pointercancel', onUp)
-    done()
+    // A click (the first half of a double-click reset) saves nothing; only a drag does.
+    if (moved) done()
   }
   handle.addEventListener('pointermove', onMove)
   handle.addEventListener('pointerup', onUp)

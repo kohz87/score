@@ -84,10 +84,14 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
   )
   // 3.8.4 (owner): entries that name only an attempt (a run handle) belong to the run the journal started it in. A run
   // whose room was deleted is pruned without compacting the journal first, so its handles stay; they are no doubt either.
-  const attemptRun = new Map<string, string>()
+  // An attempt id two runs claim maps to neither, so its entries are checked (fail closed).
+  const attemptRun = new Map<string, string | null>()
   for (const entry of entries)
-    if ('orchestrationId' in entry && 'attemptId' in entry && typeof entry.attemptId === 'string')
-      attemptRun.set(entry.attemptId, entry.orchestrationId as string)
+    if ('orchestrationId' in entry && 'attemptId' in entry && typeof entry.attemptId === 'string') {
+      const seen = attemptRun.get(entry.attemptId)
+      const run = entry.orchestrationId as string
+      attemptRun.set(entry.attemptId, seen === undefined || seen === run ? run : null)
+    }
   const dbSeq = readGlobal(sqlite).fence_seq
   let journalSeq = 0
   // The last pause/resume per orchestration decides whether the journal expects a pause.
@@ -131,7 +135,7 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
       'orchestrationId' in entry
         ? (entry.orchestrationId as string)
         : 'attemptId' in entry && typeof entry.attemptId === 'string'
-          ? attemptRun.get(entry.attemptId)
+          ? (attemptRun.get(entry.attemptId) ?? undefined)
           : undefined
     if (orchestrationId && pruned.has(orchestrationId)) continue
     const kind = entry.kind === 'tombstone' ? entry.of : entry.kind
