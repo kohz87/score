@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.8.0] — 2026-10-27
+
+### Added
+- **Archive a recipe.** A recipe that has runs can be archived: it leaves the Recipes list (an Archived filter shows it,
+  with Unarchive) and Start a job, and its past runs keep their history. (decision 142)
+- **Delete with runs.** When a recipe really should go, Delete with runs removes it and every run of it after you type
+  its name; refused while one of its runs is still going.
+
 ## [3.7.13] — 2026-10-27
 
 ### Fixed
