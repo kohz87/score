@@ -33,7 +33,7 @@ test('a stopped turn Hermes cancelled says so, and Stop waiting needs the checkb
   const abandon = show()
   const card = screen.getByRole('region', { name: 'Not confirmed as ended' })
   expect(card.textContent).toContain('Hermes cancelled the run after it was stopped')
-  expect(card.textContent).toContain('closes the turn and the run moves on')
+  expect(card.textContent).toContain('A running job then pauses for you to decide')
   const button = screen.getByRole('button', { name: 'Stop waiting for this' })
   expect(button.hasAttribute('disabled')).toBe(true)
   fireEvent.click(screen.getByRole('checkbox'))
