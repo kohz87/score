@@ -130,6 +130,19 @@ describe('the policy', () => {
     return { root, home, workspace, cli, inputs, context }
   }
 
+  test('an unlisted version passes only when Score checked it itself (3.7.7)', () => {
+    const { inputs, context } = world()
+    const newer = { ...inputs, version: '2.1.399' }
+    expect(() => buildPolicy(newer, context)).toThrow(PolicyUnverifiable)
+    expect(() =>
+      buildPolicy(newer, { ...context, checkedVersions: new Set(['codex@2.1.399']) }),
+    ).toThrow(PolicyUnverifiable)
+    expect(
+      buildPolicy(newer, { ...context, checkedVersions: new Set(['claude-code@2.1.399']) }).cli
+        .version,
+    ).toBe('2.1.399')
+  })
+
   test('canonical JSON is key-order independent and the id is the hash of it', () => {
     expect(canonicalJson({ b: 1, a: [2, { d: 1, c: 2 }] })).toBe(
       canonicalJson({ a: [2, { c: 2, d: 1 }], b: 1 }),

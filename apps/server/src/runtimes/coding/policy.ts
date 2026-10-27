@@ -87,6 +87,8 @@ export interface PolicyContext {
   command: { file: string; args: readonly string[] }
   /** Read the settings file's bytes from disk (the launch path) instead of trusting the intended bytes. */
   settingsOnDisk: boolean
+  /** Versions Score checked itself from their help text (3.7.7), as `runtime@version`. */
+  checkedVersions?: ReadonlySet<string>
 }
 
 export interface PolicyInputs {
@@ -115,7 +117,10 @@ export function workerDriver(runtime: CodingRuntime): CodingDriver & {
 export function buildPolicy(inputs: PolicyInputs, context: PolicyContext): WorkerPolicy {
   const driver = workerDriver(inputs.runtime)
   const { worker } = driver
-  if (!worker.versions.includes(inputs.version))
+  if (
+    !worker.versions.includes(inputs.version) &&
+    !context.checkedVersions?.has(`${inputs.runtime}@${inputs.version}`)
+  )
     throw new PolicyUnverifiable(
       `Score hasn’t verified what ${driver.label} ${inputs.version} reads on its own, so it can’t say what a step could reach.`,
     )

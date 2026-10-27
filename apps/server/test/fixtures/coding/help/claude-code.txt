@@ -1,0 +1,56 @@
+Usage: claude [options] [command] [prompt]
+
+Options:
+  --allowedTools, --allowed-tools <tools...>
+      Comma or space-separated list of tool names to allow (e.g. "Bash(git *)
+      Edit")
+  --disallowedTools, --disallowed-tools <tools...>
+      Comma or space-separated list of tool names to deny (e.g. "Bash(git *)
+      Edit")
+  --model <model>                       Model for the current session. Provide
+                                        an alias for the latest model (e.g.
+                                        'fable', 'opus', or 'sonnet') or a
+                                        model's full name.
+  --output-format <format>              Output format (only works with --print):
+                                        "text" (default), "json" (single
+                                        result), or "stream-json" (realtime
+                                        streaming) (choices: "text", "json",
+                                        "stream-json")
+  --permission-mode <mode>              Permission mode to use for the session
+                                        (choices: "acceptEdits", "auto",
+                                        "bypassPermissions", "manual",
+                                        "dontAsk", "plan")
+  --permission-prompts <target>         Who answers permission prompts with
+                                        --print: "host" (the SDK host or
+                                        --permission-prompt-tool) or "none"
+                                        (nobody: anything that would prompt is
+                                        denied automatically; the permission
+                                        mode still decides everything else)
+                                        (choices: "host", "none", default:
+                                        "host")
+  -p, --print                           Print response and exit (useful for
+                                        pipes). Note: The workspace trust dialog
+                                        is skipped when Claude is run in
+                                        non-interactive mode (via -p, or when
+                                        stdout is not a TTY, e.g. piped or
+                                        redirected output). Only use this in
+                                        directories you trust. Settings files
+                                        that fail validation are silently
+                                        ignored in this mode (no error dialog is
+                                        shown).
+  -r, --resume [value]                  Resume a conversation by session ID or
+                                        name, or open interactive picker with
+                                        optional search term
+  --setting-sources <sources>           Comma-separated list of setting sources
+                                        to load (user, project, local).
+  --settings <file-or-json>             Path to a settings JSON file or a JSON
+                                        string to load additional settings from
+  --strict-mcp-config                   Only use MCP servers from --mcp-config,
+                                        ignoring all other MCP configurations
+  --tools <tools...>                    Specify the list of available tools from
+                                        the built-in set. Use "" to disable all
+                                        tools, "default" to use the default set,
+                                        or specify tool names (e.g.
+                                        "Bash,Edit,Read").
+  --verbose                             Override verbose mode setting from
+                                        config

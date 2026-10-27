@@ -147,6 +147,15 @@ export interface WorkerDeclaration {
   bound(context: WorkerContext): readonly string[]
   /** What the worker can reach, in plain words, and whether that goes beyond its workspace. */
   reach(permission: CodingPermission, workspace: string): { text: string; beyondWorkspace: boolean }
+  /**
+   * 3.7.7 (decision 138): how Score checks a version not in `versions` itself. `<cli> …args` (help only, never a prompt)
+   * must still document every flag a worker launch relies on, each with these phrases in its own entry (whitespace
+   * collapsed). The same check the lead did by hand for each release; it can't see a new default-on configuration source.
+   */
+  readonly help: {
+    readonly args: readonly string[]
+    readonly flags: readonly { readonly flag: string; readonly phrases: readonly string[] }[]
+  }
 }
 
 export interface CodingDriver {

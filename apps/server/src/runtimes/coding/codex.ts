@@ -415,6 +415,36 @@ export const codexDriver: CodingDriver = {
         evidence: '"--ignore-rules  Do not load user or project execpolicy `.rules` files"',
       },
     ],
+    help: {
+      args: ['exec', '--help'],
+      // The wording of 0.160.1, unchanged in 0.164.0 (2026-10-27).
+      flags: [
+        { flag: '--config', phrases: ['Override a configuration value'] },
+        { flag: '--model', phrases: ['Model the agent should use'] },
+        {
+          flag: '--sandbox',
+          phrases: [
+            'Select the sandbox policy to use when executing model-generated shell commands',
+            'read-only',
+            'workspace-write',
+          ],
+        },
+        { flag: '--cd', phrases: ['use the specified directory as its working root'] },
+        {
+          flag: '--skip-git-repo-check',
+          phrases: ['Allow running Codex outside a Git repository'],
+        },
+        {
+          flag: '--ignore-user-config',
+          phrases: ['Do not load `$CODEX_HOME/config.toml`; auth still uses `CODEX_HOME`'],
+        },
+        {
+          flag: '--ignore-rules',
+          phrases: ['Do not load user or project execpolicy `.rules` files'],
+        },
+        { flag: '--json', phrases: ['Print events to stdout as JSONL'] },
+      ],
+    },
     // The help documents no switch for the project's .codex/ folder, managed config or AGENTS.md files: bound by identity.
     bound: ({ home, workspace, env }) => {
       const codexHome = env['CODEX_HOME'] ?? join(home, '.codex')

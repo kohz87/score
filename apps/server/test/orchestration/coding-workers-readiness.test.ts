@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { byTurn } from '../../src/hermes/fake/fake-lead.ts'
@@ -74,6 +74,46 @@ describe('readiness', () => {
     expect(await worker()).toMatchObject({ readiness: 'ready' })
     rmSync(h.workspace, { recursive: true })
     expect(await worker()).toMatchObject({ readiness: 'reach_unverifiable' })
+  })
+
+  // 3.7.7 (decision 138): a newer CLI the person confirmed is checked from its help and remembered, so it can take steps.
+  test('a confirmed newer version is checked from its help, remembered, and can take a step', async () => {
+    h = await workerHarness()
+    h.addAgent()
+    h.cliEnv['SCORE_CODING_FAKE_VERSION'] = '2.1.399'
+    h.db.sqlite.prepare("UPDATE coding_agents SET confirmed_version = '2.1.399'").run()
+    expect(await worker()).toMatchObject({ readiness: 'ready', detail: null })
+    expect(h.rows('SELECT runtime, version FROM checked_cli_versions')).toEqual([
+      { runtime: 'claude-code', version: '2.1.399' },
+    ])
+    // Remembered: a help that no longer reads the same doesn't undo a version already checked.
+    h.cliEnv['SCORE_CODING_FAKE_HELP'] = join(h.workspace, 'missing-help.txt')
+    expect(await worker()).toMatchObject({ readiness: 'ready' })
+  })
+
+  test('a newer version whose help changed a flag Score relies on, or that has no help, isn’t accepted', async () => {
+    h = await workerHarness()
+    h.addAgent()
+    h.db.sqlite.prepare("UPDATE coding_agents SET confirmed_version = '2.1.400'").run()
+    h.cliEnv['SCORE_CODING_FAKE_VERSION'] = '2.1.400'
+    const changed = join(h.workspace, 'changed-help.txt')
+    writeFileSync(
+      changed,
+      readFileSync(
+        join(import.meta.dirname, '../fixtures/coding/help/claude-code.txt'),
+        'utf8',
+      ).replace(
+        'ignoring all other MCP configurations',
+        'merged with your other MCP configurations',
+      ),
+    )
+    h.cliEnv['SCORE_CODING_FAKE_HELP'] = changed
+    const report = await worker()
+    expect(report).toMatchObject({ readiness: 'reach_unverifiable', policyId: null })
+    expect(report.detail).toContain('no longer describes --strict-mcp-config')
+    h.cliEnv['SCORE_CODING_FAKE_HELP'] = join(h.workspace, 'missing-help.txt')
+    expect((await worker()).detail).toContain('couldn’t read Claude Code 2.1.400’s help')
+    expect(h.rows('SELECT version FROM checked_cli_versions')).toEqual([])
   })
 
   test('create refuses a worker that isn’t ready (preflight_failed)', async () => {
