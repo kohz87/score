@@ -3,6 +3,16 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.13.1] — 2026-10-27
+
+### Added
+- **Who votes.** Under Helpers on Start a job you can pick the agents that answer votes (for example the model you keep
+  for small decisions). Votes go only to them; the helpers keep searching, grepping and auditing. Left empty, the helpers
+  vote as before.
+- **Coding-agent launches.** Lead jobs that use coding agents now have a launch limit you can set. It is prefilled from
+  your choices: each helper step, vote answer and advisor consult on a coding agent is one launch, so a job with Claude
+  Code helpers or advisor no longer runs out at the old fixed 10.
+
 ## [3.13.0] — 2026-10-27
 
 ### Added
