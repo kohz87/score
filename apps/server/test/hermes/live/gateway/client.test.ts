@@ -25,6 +25,7 @@ test.each(['default', 'builder'])(
       model: 'fixture-model',
       provider: 'fixture-provider',
       sessionId: 'fixture-session',
+      instructions: 'Shown as Markdown.',
     }
     const admission = await env.gateway.startRun(request, 'client-turn')
     expect(admission.replayed).toBe(false)
@@ -52,6 +53,8 @@ test.each(['default', 'builder'])(
       path: `${prefix}/v1/runs`,
       body: {
         input: 'hello',
+        // 3.7.11: Score renders Markdown, against Hermes' "assume plain text" hint for its API server.
+        instructions: 'Shown as Markdown.',
         model: 'fixture-model',
         provider: 'fixture-provider',
         session_id: 'fixture-session',
