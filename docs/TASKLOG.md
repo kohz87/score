@@ -1586,3 +1586,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   2995, contract 1522).
 - **v3.7.1 deployed live** (~00:31 UTC 2026-10-27): idle (the parked scoretestb run only), backup
   score-pre-3.7.1-20261027.db, restart, health ok, no new errors.
+- **3.7.2** (2026-10-27; owner: "the screenshot show stop is misaligned. and the job cannot be stopped"). Hermes'
+  log showed six accepted stops (`POST …/stop` 200) for the parked scoretestb run while status polling kept seeing it
+  non-terminal: Hermes accepts the stop but never ends a run stuck on an approval it forgot. Lead: live-port stopRun
+  remembers when it first asked; a later Stop ≥ 5 s after, with the run still non-terminal, ends Score's record
+  `cancelled` ("Hermes accepted the stop but the run never ended"); the Remove panel offers "Stop … anyway"; the
+  one-to-one composer's Stop widens into a pill (a 44px DM rule outranked the room's Stop rule). Review: no P1; the
+  impatient-second-click trade-off accepted and stated in the CHANGELOG; the in-memory map now forgets entries after an
+  hour; the test restores the clock in finally (that small round verified by tests, no further review). Gate: 847 e2e
+  passed, 1 failed (the tablet 768 layout flake from 3.7.1: the room opening builder's one-to-one under shared state —
+  still to find), check green (server 4820, web 2995, contract 1522).
+- **v3.7.2 deployed live** (~01:01 UTC): backup score-pre-3.7.2-20261027.db, restart, health ok, no new errors.
