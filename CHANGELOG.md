@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.12.0] — 2026-10-27
+
+### Added
+- **Speed figures.** Each finished agent reply shows a quiet line: time to first token, average tokens per second and
+  tokens (e.g. "first token 1.2 s · 48 tok/s avg · 1,240 tokens"). Settings › Usage has "Speed by agent" with medians per
+  agent for the period. Measured by Score from the stream; Claude Code's own first-token time is used where it reports
+  one. Tokens/s is averaged over the whole reply, tool time included. (decision 148)
+
 ## [3.11.0] — 2026-10-27
 
 ### Added
