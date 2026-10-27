@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.11] — 2026-10-27
+
+### Fixed
+- **Replies use Markdown, and tables show as tables.** Hermes tells models on its API server to "assume plain text", so
+  some wrote tables as bare `|` lines. Every run Score starts now says Score renders GitHub Markdown (tables need a
+  separator row), and the chat shows a table written without that row as a table once the reply is complete.
+  (decision 141)
+
 ## [3.7.10] — 2026-10-27
 
 ### Fixed
