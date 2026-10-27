@@ -325,6 +325,9 @@ export function AttemptLine({
   )
 }
 
+// 'scan_stack' → 'scan: stack'
+const helperRoleLabel = (role: string) => role.replace(/^scan[_:\s]+/, 'scan: ')
+
 export function StepCard({
   step,
   run,
@@ -352,6 +355,9 @@ export function StepCard({
         <strong>{step.id}</strong>
         <AgentChip agentId={step.agentId} agents={agents} />
         <StateMark visual={visual} />
+        {step.role === 'helper' && step.helperRole && (
+          <span className="orch-helper-role">{helperRoleLabel(step.helperRole)}</span>
+        )}
         {onSelect && (
           <button type="button" className="orch-link" onClick={() => onSelect(step.id)}>
             Show in log

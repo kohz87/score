@@ -111,9 +111,9 @@ export interface GraphEdge {
   label?: string
 }
 
-/** 3.14: the steps that are the lead's work; an advisor's consults are shown in the Advisor card instead. */
+/** 3.14/3.16: the steps that are the lead's work; an advisor's consults and the helpers' votes are shown in cards instead. */
 export const leadSteps = <T extends { role?: string | null }>(steps: readonly T[]): T[] =>
-  steps.filter((step) => step.role !== 'advisor')
+  steps.filter((step) => step.role !== 'advisor' && step.role !== 'vote')
 
 /** A lead node plus one node per step; edges from `after` and `replaces` (dashed); the lead feeds steps with no `after`. */
 export function buildGraph(

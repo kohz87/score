@@ -303,6 +303,13 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   // 3.14: the advisor; '' = none. Derived below so a lead change to the same agent clears it.
   const [advisorPick, setAdvisorPick] = useState('')
   const [checkFolder, setCheckFolder] = useState<string | null>(null)
+  // 3.15: helpers. Picks are filtered below (never the lead, only known agents).
+  const [helperPick, setHelperPick] = useState<string[]>([])
+  const [helperConcurrent, setHelperConcurrent] = useState('3')
+  const [helperSteps, setHelperSteps] = useState('20')
+  const [helperScan, setHelperScan] = useState(false)
+  const [helperFolder, setHelperFolder] = useState<string | null>(null)
+  const [helperSplit, setHelperSplit] = useState<'lead' | 'person'>('lead')
   const [checkEachStep, setCheckEachStep] = useState(false)
   const [checkMinutes, setCheckMinutes] = useState('10')
   const [authNeeded, setAuthNeeded] = useState(false)
@@ -332,9 +339,15 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     advisorPick !== '' && advisorPick !== leadId && agents.some((agent) => agent.id === advisorPick)
       ? advisorPick
       : ''
-  // The advisor runs as a step, so the preflight checks it like an allowed agent (its policy and reach included).
-  const preflightAgents =
-    advisorId !== '' && !allowedFor.includes(advisorId) ? [...allowedFor, advisorId] : allowedFor
+  const helperIds = helperPick.filter(
+    (id) => id !== leadId && agents.some((agent) => agent.id === id),
+  )
+  // The advisor and the helpers run as steps, so the preflight checks them like allowed agents (policy and reach included).
+  const preflightAgents = [
+    ...allowedFor,
+    ...(advisorId !== '' ? [advisorId] : []),
+    ...helperIds,
+  ].filter((id, index, all) => all.indexOf(id) === index)
   const orchestrationPreflight = usePreflight(leadId, preflightAgents)
   const codingAgents = useQuery({
     queryKey: ['coding', 'agents'],
@@ -346,6 +359,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     allowedFor.includes(item.id),
   )?.workspace
   const checkFolderNow = checkFolder ?? codingWorkspace ?? ''
+  // The scan folder follows the check's folder until the person types one.
+  const helperFolderNow = helperFolder ?? checkFolderNow
+  const helperConcurrentNumber = Number(helperConcurrent)
+  const helperStepsNumber = Number(helperSteps)
 
   const routineQueries = useQueries({
     queries: agents.map((agent) => ({
@@ -417,6 +434,20 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       : !checkMinutesValid
         ? 'The check timeout must be 1 to 60 minutes'
         : null
+  const helpersOn = helperIds.length > 0
+  const helperProblem = !helpersOn
+    ? null
+    : !(
+          Number.isInteger(helperConcurrentNumber) &&
+          helperConcurrentNumber >= 1 &&
+          helperConcurrentNumber <= 6
+        )
+      ? 'Helpers at once must be 1 to 6'
+      : !(Number.isInteger(helperStepsNumber) && helperStepsNumber >= 1 && helperStepsNumber <= 60)
+        ? 'Helper steps must be 1 to 60'
+        : helperScan && !helperFolderNow.trim().startsWith('/')
+          ? 'The scan needs an absolute folder, like /home/you/project'
+          : null
   const optionProblems = [
     ...(concurrentValid ? [] : ['Steps at the same time must be 1 to 3']),
     ...(estimateValid ? [] : ['Estimate per step must be above 0 and at most 1000']),
@@ -562,7 +593,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     checksPass &&
     reachCovered &&
     (!isSavedRecipe || optionProblems.length === 0) &&
-    (!isLead || checkProblem === null) &&
+    (!isLead || (checkProblem === null && helperProblem === null)) &&
     missingInputs.length === 0 &&
     (!needsLead || leadId !== '')
 
@@ -713,6 +744,18 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       leadAgentId: leadId,
       allowedAgents: allowedFor,
       ...(advisorId !== '' ? { advisorAgentId: advisorId } : {}),
+      ...(helpersOn
+        ? {
+            helpers: {
+              agentIds: helperIds,
+              maxConcurrent: helperConcurrentNumber,
+              maxSteps: helperStepsNumber,
+              scan: helperScan,
+              ...(helperScan ? { scanFolder: helperFolderNow.trim() } : {}),
+              splitTo: helperSplit,
+            },
+          }
+        : {}),
       gatePolicy: orchestrationPolicy(ask),
       ...(cap > 0 ? { budgetUsd: cap } : {}),
       ...(deadlineAt ? { deadlineAt } : {}),
@@ -1309,6 +1352,137 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                     for reviewing: it runs with its own tools.
                   </span>
                 </label>
+              )}
+
+              {isLead && (
+                <details className="inner start-helpers" data-protected="block">
+                  <summary>
+                    Helpers
+                    {helpersOn && (
+                      <span className="small muted">
+                        {' '}
+                        · {helperIds.length} {helperIds.length === 1 ? 'helper' : 'helpers'}
+                        {helperScan && <> · scans {helperFolderNow.trim() || 'no folder yet'}</>}
+                      </span>
+                    )}
+                  </summary>
+                  <div className="start-clear">
+                    <fieldset className="start-field">
+                      <legend>Helper agents (1 to 4)</legend>
+                      {agents
+                        .filter((agent) => agent.id !== leadId)
+                        .map((agent) => {
+                          const on = helperIds.includes(agent.id)
+                          return (
+                            <label className="check small" key={agent.id}>
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                disabled={!on && helperIds.length >= 4}
+                                onChange={(event) => {
+                                  setHelperPick(
+                                    event.target.checked
+                                      ? [...helperIds, agent.id]
+                                      : helperIds.filter((id) => id !== agent.id),
+                                  )
+                                  touch()
+                                }}
+                              />
+                              {agent.name}
+                            </label>
+                          )
+                        })}
+                    </fieldset>
+                    <label className="start-field">
+                      <span>At once (1 to 6)</span>
+                      <input
+                        className="field"
+                        type="number"
+                        min={1}
+                        max={6}
+                        value={helperConcurrent}
+                        onChange={(event) => {
+                          setHelperConcurrent(event.target.value)
+                          touch()
+                        }}
+                      />
+                    </label>
+                    <label className="start-field">
+                      <span>Helper steps (1 to 60)</span>
+                      <input
+                        className="field"
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={helperSteps}
+                        onChange={(event) => {
+                          setHelperSteps(event.target.value)
+                          touch()
+                        }}
+                      />
+                    </label>
+                    <label className="check small">
+                      <input
+                        type="checkbox"
+                        checked={helperScan}
+                        onChange={(event) => {
+                          setHelperScan(event.target.checked)
+                          touch()
+                        }}
+                      />
+                      Scan the project first
+                    </label>
+                    {helperScan && (
+                      <label className="start-field">
+                        <span>Scan folder</span>
+                        <input
+                          className="field start-check-command"
+                          value={helperFolderNow}
+                          placeholder="/home/you/project"
+                          spellCheck={false}
+                          autoComplete="off"
+                          onChange={(event) => {
+                            setHelperFolder(event.target.value)
+                            touch()
+                          }}
+                        />
+                      </label>
+                    )}
+                    <fieldset className="start-field">
+                      <legend>When the helpers split on a vote</legend>
+                      {(
+                        [
+                          ['lead', 'The lead decides'],
+                          ['person', 'Ask me'],
+                        ] as const
+                      ).map(([id, label]) => (
+                        <label className="check small" key={id}>
+                          <input
+                            type="radio"
+                            name="start-helper-split"
+                            checked={helperSplit === id}
+                            onChange={() => {
+                              setHelperSplit(id)
+                              touch()
+                            }}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </fieldset>
+                    <span className="small muted">
+                      Cheap agents for narrow, read-only work: the lead hands them searches, greps
+                      and audits, and asks them to vote on small choices. A clear majority (70% or
+                      more) is taken; a split goes to the lead or to you. They run with their own
+                      tools, so choose agents set up for reading.
+                    </span>
+                    {helperProblem && (
+                      <span className="small" role="alert">
+                        {helperProblem}
+                      </span>
+                    )}
+                  </div>
+                </details>
               )}
 
               {isLead && (

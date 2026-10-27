@@ -802,3 +802,54 @@ test('no advisor means no advisorAgentId in the body (3.14)', async () => {
   await waitFor(() => expect(orchestrationBodies.length).toBe(1))
   expect(orchestrationBodies[0]).not.toHaveProperty('advisorAgentId')
 })
+
+test('helpers are folded, optional, checked in the preflight, and sent with their limits (3.15)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  expect(section.open).toBe(false)
+  expect(within(section).getByText(/A clear majority \(70% or more\)/)).toBeDefined()
+  // The lead itself is not offered as a helper.
+  expect(within(section).queryByRole('checkbox', { name: 'lead' })).toBeNull()
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  await waitFor(() =>
+    expect(preflightUrls.some((ids) => ids.split(',').includes('builder'))).toBe(true),
+  )
+  fireEvent.change(within(section).getByLabelText('At once (1 to 6)'), { target: { value: '4' } })
+  fireEvent.click(within(section).getByRole('radio', { name: 'Ask me' }))
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]).toMatchObject({
+    helpers: {
+      agentIds: ['builder'],
+      maxConcurrent: 4,
+      maxSteps: 20,
+      scan: false,
+      splitTo: 'person',
+    },
+  })
+  expect(orchestrationBodies[0]!.helpers).not.toHaveProperty('scanFolder')
+  expect(orchestrationBodies[0]!.allowedAgents).not.toContain('lead')
+})
+
+test('no helpers picked means no helpers in the body (3.15)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]).not.toHaveProperty('helpers')
+})
+
+test('the scan folder follows the check folder and shows on the folded summary (3.15)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
+  fireEvent.change(within(dialog).getByLabelText('Folder'), { target: { value: '/work/app' } })
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'Scan the project first' }))
+  expect((within(section).getByLabelText('Scan folder') as HTMLInputElement).value).toBe(
+    '/work/app',
+  )
+  expect(section.querySelector('summary')!.textContent).toContain('scans /work/app')
+})

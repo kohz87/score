@@ -4,6 +4,7 @@ import { Link } from '../../shell/framed-paths.tsx'
 import { leadSteps, orchCoding, statusLabel } from './orch-model.ts'
 import { useRun, useRunActions } from './orchestration-queries.ts'
 import { AdvisorCard } from './AdvisorCard.tsx'
+import { HelpersCard } from './HelpersCard.tsx'
 import { CheckCard } from './CheckCard.tsx'
 import { RunNeeds } from './RunDecisions.tsx'
 import {
@@ -90,6 +91,7 @@ export function RoomRunPanel({
                 ))}
               </div>
               <AdvisorCard run={detail} agents={agents} />
+              <HelpersCard run={detail} agents={agents} />
               <CheckCard run={detail} actions={actions} />
               <FinishBlock run={detail} />
               <details>
