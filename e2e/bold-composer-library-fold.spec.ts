@@ -93,6 +93,9 @@ for (const size of sizes) {
     await note.getByLabel('Path in Knowledge').fill(`${folder}/first`)
     await note.getByRole('button', { name: 'Create note' }).click()
     await expect(page.getByLabel(`Contents of ${folder}/first.md`)).toBeVisible({ timeout: 15_000 })
+    // 3.8.1: on a phone the list folds once a note is open; the bar opens it again.
+    const fold = nav.getByRole('button', { name: /^Notes and files/ })
+    if (await fold.isVisible()) await fold.click()
     await chevron.click()
     await expect(nav.getByRole('button', { name: `Expand ${folder}` })).toHaveAttribute(
       'aria-expanded',
