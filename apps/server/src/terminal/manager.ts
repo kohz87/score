@@ -72,6 +72,8 @@ export interface TerminalAudit {
 
 interface Live {
   id: string
+  /** 3.11.0: the agent whose CLI runs here. */
+  agent: string | undefined
   session: string
   address: string
   socket: TerminalSocket
@@ -122,6 +124,7 @@ export class TerminalManager {
   list(): TerminalSession[] {
     return [...this.#live.values()].map((terminal) => ({
       id: terminal.id,
+      ...(terminal.agent ? { agent: terminal.agent } : {}),
       openedAt: new Date(terminal.openedAt).toISOString(),
       lastActivityAt: new Date(terminal.lastActivityAt).toISOString(),
       address: terminal.address,
@@ -131,7 +134,14 @@ export class TerminalManager {
   }
 
   /** The id of the terminal now serving `socket`, or undefined if it was refused (the socket is then closed). */
-  open(socket: TerminalSocket, session: string, address: string): string | undefined {
+  open(
+    socket: TerminalSocket,
+    session: string,
+    address: string,
+    /** 3.11.0: an agent's CLI instead of the login shell (same user, same environment). */
+    run?: { agent: string; file: string; args: string[]; cwd: string },
+  ): string | undefined {
+    const launch = run ? { ...this.launch, file: run.file, args: run.args, cwd: run.cwd } : this.launch
     if (this.full) {
       this.sendFrame(socket, { type: 'exit', reason: 'limit', code: null })
       socket.close(1013, 'Too many terminals')
@@ -139,7 +149,7 @@ export class TerminalManager {
     }
     let pty: PtyProcess
     try {
-      pty = this.spawn(this.launch, DEFAULT_SIZE)
+      pty = this.spawn(launch, DEFAULT_SIZE)
     } catch (error) {
       this.audit.info({ event: 'terminal.failed', err: String(error) }, 'Terminal could not start')
       socket.close(1011, 'Could not start the shell')
@@ -150,6 +160,7 @@ export class TerminalManager {
     const done = new Promise<void>((resolve) => (finish = resolve))
     const terminal: Live = {
       id: randomUUID(),
+      agent: run?.agent,
       session,
       address,
       socket,
@@ -169,10 +180,16 @@ export class TerminalManager {
     }
     this.#live.set(terminal.id, terminal)
     this.audit.info(
-      { event: 'terminal.open', terminalId: terminal.id, session: session.slice(0, 8), address },
+      {
+        event: 'terminal.open',
+        terminalId: terminal.id,
+        session: session.slice(0, 8),
+        address,
+        ...(run ? { agent: run.agent } : {}),
+      },
       'Terminal opened',
     )
-    this.sendFrame(socket, { type: 'ready', id: terminal.id, user: this.launch.user })
+    this.sendFrame(socket, { type: 'ready', id: terminal.id, user: launch.user })
 
     pty.onData((data) => {
       terminal.lastActivityAt = this.clock()

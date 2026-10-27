@@ -1,3 +1,4 @@
+import { resolveOnPath } from './native-exec.ts'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -251,6 +252,23 @@ export class CodingRuntime {
   isCodingAgent(id: string): boolean {
     return getCodingAgent(this.deps.db.sqlite, id) !== null
   }
+  /**
+   * 3.11.0 (owner): the command for a live session with this coding agent: its CLI's own interactive session, fresh (never
+   * one Score is using), in the agent's workspace, as this user. Null when the agent, its CLI or its workspace is gone.
+   */
+  async interactiveCommand(
+    agentId: string,
+  ): Promise<{ file: string; args: string[]; cwd: string } | null> {
+    const agent = getCodingAgent(this.deps.db.sqlite, agentId)
+    if (!agent) return null
+    const driver = driverFor(agent.runtime)
+    const file = resolveOnPath(driver.executable, this.deps.locator.childEnv().PATH)
+    if (!file) return null
+    const checked = await checkRoot(agent.workspace, this.deps.policy)
+    if (!checked.ok) return null
+    return { file, args: [], cwd: checked.real }
+  }
+
   agents(): StoredCodingAgent[] {
     return listCodingAgents(this.deps.db.sqlite)
   }

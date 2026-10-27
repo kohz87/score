@@ -2,7 +2,11 @@ import { createRequire } from 'node:module'
 import type { FastifyInstance } from 'fastify'
 import websocket from '@fastify/websocket'
 import { z } from 'zod'
-import { TerminalSessionsSchema, TerminalTicketSchema } from '@score/contract'
+import {
+  TerminalSessionsSchema,
+  TerminalTicketRequestSchema,
+  TerminalTicketSchema,
+} from '@score/contract'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
 import { RateLimiter } from '../shares/rate-limit.ts'
@@ -27,6 +31,12 @@ export interface TerminalOptions {
   hostEnrolled?: () => boolean
   /** Is this request on a real TLS connection? (The socket decides, never a header; tests substitute.) */
   isSecure?: (request: { raw: { socket: unknown } }) => boolean
+  /**
+   * 3.11.0 (owner): an agent's own CLI for a "live session" terminal: a fresh interactive session as this user, built by
+   * the Hermes adapter or the coding runtime. Throws an HttpError when the agent can't have one (unknown, not ready).
+   * Absent: tickets naming an agent are refused.
+   */
+  agentRun?: (agentId: string) => Promise<{ file: string; args: string[]; cwd: string }>
 }
 
 const tlsSocket = (request: { raw: { socket: unknown } }): boolean =>
@@ -98,6 +108,7 @@ export function registerTerminalRoutes(
     requireTls(request)
     const origin = originOf(request)
     const session = sessionOf(request.headers.cookie)
+    const wanted = TerminalTicketRequestSchema.parse(request.body ?? {})
     if (!mintLimit.allow(session))
       throw new HttpError(
         429,
@@ -117,6 +128,12 @@ export function registerTerminalRoutes(
         'second_factor_not_enrolled',
         'Set the security password on the Score machine with scripts/score password first.',
       )
+    // An agent's CLI is checked before the password check is used up, so a refusal costs no second confirmation.
+    if (wanted.agent) {
+      if (!options.agentRun)
+        throw new HttpError(404, 'not_found', 'Live sessions aren’t available here.')
+      await options.agentRun(wanted.agent)
+    }
     // Taken (and used up) before anything is minted: one password or passkey check opens one terminal.
     if (!app.pairing.takeFresh(session, FRESH_AUTH_MS))
       throw new HttpError(
@@ -124,7 +141,7 @@ export function registerTerminalRoutes(
         'fresh_auth_required',
         'Confirm your security password or passkey first.',
       )
-    const minted = tickets.mint(session, origin)
+    const minted = tickets.mint(session, origin, wanted.agent)
     if (!minted)
       throw new HttpError(
         429,
@@ -169,21 +186,36 @@ export function registerTerminalRoutes(
             )
           const session = sessionOf(request.headers.cookie)
           const parsed = QuerySchema.safeParse(request.query)
-          if (!parsed.success || !tickets.redeem(parsed.data.ticket, session, origin))
+          const redeemed = parsed.success
+            ? tickets.redeem(parsed.data.ticket, session, origin)
+            : undefined
+          if (!redeemed)
             throw new HttpError(
               403,
               'ticket_invalid',
               'The terminal link is invalid or has expired. Open the terminal again.',
             )
+          // The agent's CLI is resolved again at open time: the agent may have changed in the ticket's 60 s.
+          const run =
+            redeemed.agent && options.agentRun
+              ? { agent: redeemed.agent, ...(await options.agentRun(redeemed.agent)) }
+              : undefined
           ;(request as unknown as { terminalSession: string }).terminalSession = session
+          ;(request as unknown as { terminalRun: typeof run }).terminalRun = run
         },
       },
       (socket, request) => {
         const session = (request as unknown as { terminalSession: string }).terminalSession
+        const run = (
+          request as unknown as {
+            terminalRun?: { agent: string; file: string; args: string[]; cwd: string }
+          }
+        ).terminalRun
         const id = manager.open(
           socket as unknown as TerminalSocket,
           session,
           request.ip || 'unknown',
+          run,
         )
         if (id === undefined) return
         const forget = app.pairing.onRevoked(session, () => manager.closeSession(session))

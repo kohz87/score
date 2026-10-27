@@ -8,8 +8,19 @@ export const TerminalTicketSchema = z.object({
 })
 export type TerminalTicket = z.infer<typeof TerminalTicketSchema>
 
+/**
+ * 3.11.0 (owner): `POST /api/terminal/tickets` may name an agent: that terminal runs the agent's own CLI (a fresh
+ * interactive session) instead of a login shell. Same password/passkey, TLS and one-time ticket rules.
+ */
+export const TerminalTicketRequestSchema = z
+  .object({ agent: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).optional() })
+  .strict()
+export type TerminalTicketRequest = z.infer<typeof TerminalTicketRequestSchema>
+
 export const TerminalSessionSchema = z.object({
   id: z.uuid(),
+  /** The agent whose CLI this terminal runs (3.11.0); absent for a login shell. */
+  agent: z.string().optional(),
   openedAt: z.iso.datetime(),
   lastActivityAt: z.iso.datetime(),
   /** The paired browser's address when it opened the terminal. */

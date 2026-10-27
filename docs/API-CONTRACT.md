@@ -495,6 +495,12 @@ method: string | null; url: string | null; status: number | null; durationMs: nu
     the request `Origin`**, single use (any redeem attempt burns it). Errors: `403 fresh_auth_required`,
     `429 too_many_terminals` (2 open), `429 too_many_attempts` (10 mints a minute per session), `403 forbidden` (missing or
     disallowed Origin).
+    **Live session (3.11.0, decision 149):** the body may be `{ agent }` (`TerminalTicketRequestSchema`): that terminal runs the
+    agent's own CLI as a fresh interactive session instead of the login shell (`hermes -p <agent>` from the Hermes adapter;
+    a coding agent's CLI in its workspace from the coding runtime), as the same user with the same six-variable environment.
+    The agent is checked before the password check is used up (`404 not_found` unknown or no live session here, `409
+    conflict` not ready or its CLI/workspace missing) and again when the terminal opens. `GET /api/terminal/sessions`
+    items carry `agent` for such terminals.
   - `GET /api/terminal/ws?ticket=…` (WebSocket upgrade). Same Host rule as remote mode (`Host` must be the `Origin`'s host), an
     allowed `Origin` (required), the paired-session cookie **and** a valid ticket for exactly this session and origin; any
     failure is a plain HTTP error before the upgrade (`401 not_paired`, `403 forbidden`, `403 ticket_invalid`). The ticket is
