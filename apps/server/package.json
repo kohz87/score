@@ -1,6 +1,6 @@
 {
   "name": "@score/server",
-  "version": "3.7.4",
+  "version": "3.7.5",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
