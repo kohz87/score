@@ -1572,3 +1572,17 @@ One entry per completed task: what landed, review results, and any **rejected re
   e2e passed and pnpm check was green (server 4817, web 2993, contract 1522); the spec fix passed after the polluting
   specs on one server (37/37). Flakes seen once and passing alone: remote-access HTTPS retry, studio-light Team shot.
 - **v3.7.0 deployed live** (~15:18 UTC): idle, backup score-pre-3.7.0-20261026.db, restart, health ok, no new errors.
+- **3.7.1** (2026-10-27; owner: "cannot delete agent, even after typing the confirmation text", then "on desktop, trying
+  to delete scoretestb"). Cause: scoretestb was held by the lead's test run parked since 2026-10-25 (Hermes still
+  reports it non-terminal; its approval expired on Score's side) plus its active turn — the delete blocker, with no way to
+  stop it. Lead: `POST /api/agents/:id/stop-work` + "Stop <agent>'s work" in the Remove panel (rechecks the preview);
+  typed name ignores case/spaces (tablet keyboards capitalise) with a mismatch hint; the panel follows the server's
+  blockers, so a stopped setup is removable as decision 134 intended (the 3.2.2 review had wrongly judged no web change
+  needed). Review 1: queued exchange turns were failed bare (now failMessageRun: exchanges settle, a notice) and a stop of
+  a run Hermes forgot stayed active forever (live-port stopRun now records it lost). Review 2: orchestration's own queued
+  turns stay quiet; a forgotten run that was asked to stop ends `cancelled`, not `interrupted`. Review 3 clean. Gate: 846
+  e2e passed, 2 failed and pass alone (room-files upload timing; tablet 768 layout — the room navigated into builder's
+  one-to-one on its own under the full run's shared state: cause not found yet, tracked), check green (server 4819, web
+  2995, contract 1522).
+- **v3.7.1 deployed live** (~00:31 UTC 2026-10-27): idle (the parked scoretestb run only), backup
+  score-pre-3.7.1-20261027.db, restart, health ok, no new errors.
