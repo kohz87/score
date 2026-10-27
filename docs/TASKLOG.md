@@ -1749,3 +1749,8 @@ One entry per completed task: what landed, review results, and any **rejected re
   unhandled jsdom `scrollIntoView` in the 3.8.1 phone-fold unit test (the test now defines it), then green (server 4853,
   web 3026, contract 1528).
 - **v3.8.5 deployed live** (~08:36 UTC, idle guard passed): backup score-pre-3.8.5-20261027.db, health ok, no fence.
+- **3.8.6** (2026-10-27, lead; owner: "why are the text still stuck to the boundary?"). 3.8.5 kept an 80ch cap on the
+  wide Library's text lines; removed, so text uses the editor's whole width like tables (e2e asserts it). Review clean.
+  Gate: e2e 853 passed, 1 failed (themes-builtin "Settings stays reachable": failed once more alone on another theme while
+  a coder's checks loaded the VM, then 3/3), check green (server 4853, web 3026, contract 1528).
+- **v3.8.6 deployed live** (~09:12 UTC, idle guard passed): backup score-pre-3.8.6-20261027.db, health ok.
