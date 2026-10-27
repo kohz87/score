@@ -1766,3 +1766,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   Effort card, regenerated and checked by eye; tablet flake), check green (server 4862, web 3030, contract 1532).
 - **v3.9.0 deployed live** (~09:36 UTC, idle guard passed): backup score-pre-3.9.0-20261027.db, health ok; after the
   restart the browser's agent list stored every agent idle/served (the offline bug confirmed fixed live).
+- **3.11.0** (2026-10-27, lead; owner: "a live session of the agent where i can enter directly and key command… like
+  sudo for the agent" → "The agent's own CLI"). Terminal tickets may name an agent (`TerminalTicketRequestSchema`): the
+  terminal runs `hermes -p <agent>` (Hermes adapter `interactiveCommand`) or the coding CLI in its workspace (coding runtime),
+  a fresh session, same user and six-variable environment, same TLS/Origin/Host/host-issued password/passkey/one-time
+  ticket rules; checked at mint and again at open. "Open live session" on the agent page. Decision 149. Security review: no
+  hole; fail-closed when a ticket names an agent without a resolver, open-time failure a 409 not a 500 (fixed, tests);
+  rejected: checking the agent after the password check (a paired session can list agents; checking first spares a second
+  confirmation). Release merge conflicted in DECISIONS (147/149): the guard stopped, resolved; the gate first started on the
+  unmerged tree and failed at once (no script), rerun. Gate: e2e 852 passed, 2 failed (tablet flake ×2); check failed on the
+  contract schema table (TerminalTicketRequestSchema added), rerun green (server 4865, web 3031, contract 1534).
+- **v3.11.0 deployed live** (~09:52 UTC, idle guard passed): backup score-pre-3.11.0-20261027.db, health ok.
