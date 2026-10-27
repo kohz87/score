@@ -2,6 +2,8 @@ import {
   OrchAskArgsSchema,
   OrchAssignArgsSchema,
   OrchCancelArgsSchema,
+  OrchCheckArgsSchema,
+  OrchVoteArgsSchema,
   OrchFinishArgsSchema,
   OrchNoteArgsSchema,
   OrchPlanArgsSchema,
@@ -15,6 +17,15 @@ import type { z } from 'zod'
 import { agentAdmits, lifecycleOf } from '../agent-lifecycle.ts'
 import { storeMessage } from '../rooms.ts'
 import { redact } from '../../redact.ts'
+import { checkConfigOf, finishRefusal, queueCheck } from './checks.ts'
+import { awaitCheckpoint, consult, consultsOf, isAdvisorStep } from './advisor.ts'
+import {
+  helperStepsUsed,
+  helpersOf,
+  insertHelperStep,
+  ROLE_PREAMBLE,
+  startVote,
+} from './helpers.ts'
 import { budgetView, canReserve, unknownCostBlocks } from './budget.ts'
 import { readWorkerPolicy } from './coding-policy.ts'
 import { agentsWithRoom, holdStep, quotaCheck, windowPhrase } from './quota-guard.ts'
@@ -57,6 +68,8 @@ export const TOOLS = [
   'orch.note',
   'orch.finish',
   'orch.receipt',
+  'orch.check',
+  'orch.vote',
 ] as const
 export type ToolName = (typeof TOOLS)[number]
 
@@ -69,6 +82,8 @@ const SCHEMAS = {
   'orch.note': OrchNoteArgsSchema,
   'orch.finish': OrchFinishArgsSchema,
   'orch.receipt': OrchReceiptArgsSchema,
+  'orch.check': OrchCheckArgsSchema,
+  'orch.vote': OrchVoteArgsSchema,
 } as const
 
 export function parseToolArgs(
@@ -277,8 +292,157 @@ const quotaRefusal = (o: OrchRow, bytes: number): OrchReceipt | undefined =>
     ? refuse('quota', "This run's storage allowance is used up; finish or stop the run")
     : undefined
 
+/**
+ * 3.15: a step for a helper, with a role. Same rules as any assignment (the run's gate policy, budget, the agent the run
+ * was started with, the advisor's look at the plan), but in the helpers' allowance and slots, without dependencies.
+ */
+function assignHelper(ctx: Ctx, o: OrchRow, attempt: AttemptRow, args: Args): OrchReceipt {
+  const { sqlite, now } = ctx
+  const helpers = helpersOf(o)
+  const agent = args.agent as string
+  const role = args.role as keyof typeof ROLE_PREAMBLE
+  if (!helpers) return refuse('no_helpers', 'This job has no helpers; assign without a role')
+  if (!helpers.agentIds.includes(agent))
+    return refuse('agent_not_allowed', `${agent} is not a helper (${helpers.agentIds.join(', ')})`)
+  if (args.after !== undefined || args.replaces !== undefined)
+    return refuse('bad_request', 'Helper steps take no after or replaces; assign a new one instead')
+  if (o.gate_policy === 'none' && args.needsApproval === true)
+    return refuse('not_lead_asks', "This run's gate policy is none; leave needsApproval out")
+  const rawInstruction = args.instruction as string
+  if (containsCapability(rawInstruction))
+    return refuse(
+      'capability_in_text',
+      'The instruction contains something shaped like a capability; remove it',
+    )
+  if (o.deadline_at !== null && now >= o.deadline_at)
+    return refuse('deadline_passed', 'The run deadline has passed')
+  const frozen = frozenIncarnation(sqlite, o.id, agent)
+  if (
+    frozen !== undefined &&
+    frozen !== (lifecycleOf(sqlite, agent)?.incarnation_id ?? 'untracked')
+  )
+    return refuse('agent_changed', `${agent} was replaced after this run started`)
+  if (!agentAdmits(sqlite, agent))
+    return refuse('agent_unavailable', `${agent} is not ready for new work`)
+  if (helperStepsUsed(sqlite, o.id) >= helpers.maxSteps)
+    return refuse(
+      'helper_limit',
+      `The helpers are limited to ${helpers.maxSteps} steps in this run`,
+    )
+  const waiting = awaitCheckpoint(ctx, o, 'before_plan', attempt.id)
+  if (waiting) return refuse(waiting.code, waiting.message)
+  const view = budgetView(sqlite, o)
+  if (unknownCostBlocks(sqlite, o, view))
+    return refuse(
+      'unknown_spend',
+      'Spend of an earlier attempt is unknown; the person has to accept that first',
+    )
+  if (!canReserve(view, o.step_estimate_usd))
+    return refuse(
+      'budget_exceeded',
+      `The budget has about $${(view.remainingUsd ?? 0).toFixed(2)} left`,
+    )
+  const instruction = `${ROLE_PREAMBLE[role]}\n\n${redact(rawInstruction)}`
+  const quota = quotaRefusal(o, utf8Bytes(instruction) + 512)
+  if (quota) return quota
+  const gated = o.gate_policy === 'every-step' || args.needsApproval === true
+  const id = insertHelperStep(ctx, o, {
+    agentId: agent,
+    instruction,
+    role: 'helper',
+    helperRole: role,
+    createdIn: attempt.id,
+    status: gated ? 'pending_gate' : 'queued',
+  })
+  let gateId: string | undefined
+  if (gated) {
+    const payloadText = JSON.stringify({
+      agentId: agent,
+      agentIncarnation: lifecycleOf(sqlite, agent)?.incarnation_id ?? 'untracked',
+      instruction,
+      after: [],
+      replaces: null,
+      estimateUsd: o.step_estimate_usd,
+      dependencyRevisions: {},
+      ...policyField(sqlite, o.id, agent),
+    })
+    gateId = `g${gatesOf(sqlite, o.id).length + 1}`
+    sqlite
+      .prepare(
+        `INSERT INTO orc_gates (orchestration_id, id, step_id, requested_by, payload, payload_hash, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'open', ?)`,
+      )
+      .run(
+        o.id,
+        gateId,
+        id,
+        args.needsApproval === true ? 'lead' : 'policy',
+        payloadText,
+        createHash('sha256').update(payloadText).digest('hex'),
+        now,
+      )
+    addStored(sqlite, o.id, utf8Bytes(payloadText))
+  }
+  return ok({
+    stepId: id,
+    role,
+    ...(gateId ? { gateId } : {}),
+    status: gated ? 'pending_gate' : 'queued',
+  })
+}
+
 const HANDLERS: Record<ToolName, Handler> = {
-  'orch.plan'(ctx, o, _attempt, args) {
+  'orch.vote'(ctx, o, attempt, args) {
+    const { sqlite, now } = ctx
+    const helpers = helpersOf(o)
+    if (!helpers) return refuse('no_helpers', 'This job has no helpers to vote')
+    // Votes start without approval; a job where the person approves every step gets none.
+    if (o.gate_policy === 'every-step')
+      return refuse(
+        'gated',
+        'The person approves every step in this job, so votes are off; decide yourself or orch.ask',
+      )
+    if (o.deadline_at !== null && now >= o.deadline_at)
+      return refuse('deadline_passed', 'The run deadline has passed')
+    // Like any work, a vote waits for the advisor's look at the plan, and for unknown spend to be accepted.
+    const waiting = awaitCheckpoint(ctx, o, 'before_plan', attempt.id)
+    if (waiting) return refuse(waiting.code, waiting.message)
+    if (unknownCostBlocks(sqlite, o, budgetView(sqlite, o)))
+      return refuse(
+        'unknown_spend',
+        'Spend of an earlier attempt is unknown; the person has to accept that first',
+      )
+    const k = args.k as number
+    if (helperStepsUsed(sqlite, o.id) + k > helpers.maxSteps)
+      return refuse(
+        'helper_limit',
+        `A vote of ${k} needs ${k} helper steps; ${helpers.maxSteps - helperStepsUsed(sqlite, o.id)} are left`,
+      )
+    if (!helpers.agentIds.some((agent) => agentAdmits(sqlite, agent)))
+      return refuse('agent_unavailable', 'No helper is ready for new work')
+    const view = budgetView(sqlite, o)
+    if (!canReserve(view, o.step_estimate_usd * k))
+      return refuse(
+        'budget_exceeded',
+        `A vote of ${k} is estimated at $${(o.step_estimate_usd * k).toFixed(2)}; the budget can't cover it`,
+      )
+    const question = redact(args.question as string)
+    const options = (args.options as string[]).map((option) => redact(option))
+    if (containsCapability(question) || options.some(containsCapability))
+      return refuse(
+        'capability_in_text',
+        'The vote contains something shaped like a capability; remove it',
+      )
+    const quota = quotaRefusal(o, (utf8Bytes(question) + 512) * (k + 1))
+    if (quota) return quota
+    const voteId = startVote(ctx, o, helpers, { question, options, k, createdIn: attempt.id })
+    return ok({
+      voteId,
+      note: 'The helpers are voting; the tally starts a new turn for you. End this turn.',
+    })
+  },
+
+  'orch.plan'(ctx, o, attempt, args) {
     const entries = (args.entries as string[]).map((entry) => redact(entry))
     const bytes = utf8Bytes(JSON.stringify(entries))
     const quota = quotaRefusal(o, bytes)
@@ -287,10 +451,21 @@ const HANDLERS: Record<ToolName, Handler> = {
       .prepare('UPDATE orchestrations SET plan = ? WHERE id = ?')
       .run(JSON.stringify(entries), o.id)
     addStored(ctx.sqlite, o.id, bytes)
-    return ok({ entries: entries.length })
+    // 3.14: the first plan goes to the advisor before any work starts (orch.assign waits for its advice).
+    const advising =
+      o.advisor_agent_id &&
+      !consultsOf(ctx.sqlite, o.id).some((step) => step.checkpoint === 'before_plan') &&
+      consult(ctx, { ...o, plan: entries }, 'before_plan', '', attempt.id) !== null
+    return ok({
+      entries: entries.length,
+      ...(advising
+        ? { advisor: 'The advisor is looking at this plan; its advice starts your next turn.' }
+        : {}),
+    })
   },
 
   'orch.assign'(ctx, o, attempt, args) {
+    if (args.role !== undefined) return assignHelper(ctx, o, attempt, args)
     const { sqlite, now } = ctx
     const agent = args.agent as string
     const rawInstruction = args.instruction as string
@@ -353,7 +528,13 @@ const HANDLERS: Record<ToolName, Handler> = {
     }
     if (o.steps_created >= o.max_steps)
       return refuse('step_limit', `The run is limited to ${o.max_steps} steps`)
-    const steps = stepsOf(sqlite, o.id)
+    // 3.14: no work starts before the advisor has seen the plan.
+    const waiting = awaitCheckpoint(ctx, o, 'before_plan', attempt.id)
+    if (waiting) return refuse(waiting.code, waiting.message)
+    // The advisor's consults and vote answers are Score's: the lead can't depend on or replace them.
+    const steps = stepsOf(sqlite, o.id).filter(
+      (step) => !isAdvisorStep(step) && step.role !== 'vote',
+    )
     const byId = new Map(steps.map((step) => [step.id, step]))
     if (new Set(after).size !== after.length)
       return refuse('bad_dependency', 'after lists a step twice')
@@ -474,7 +655,8 @@ const HANDLERS: Record<ToolName, Handler> = {
       )
     const stepId = args.stepId as string
     const step = readStep(sqlite, o.id, stepId)
-    if (!step) return refuse('unknown_step', `${stepId} is not a step of this run`)
+    if (!step || isAdvisorStep(step) || step.role === 'vote')
+      return refuse('unknown_step', `${stepId} is not a step of this run`)
     if (attemptsOf(sqlite, o.id).some((x) => x.step_id === stepId))
       return refuse(
         'already_admitted',
@@ -521,7 +703,8 @@ const HANDLERS: Record<ToolName, Handler> = {
     const { sqlite, now } = ctx
     const stepId = args.stepId as string
     const step = readStep(sqlite, o.id, stepId)
-    if (!step) return refuse('unknown_step', `${stepId} is not a step of this run`)
+    if (!step || isAdvisorStep(step))
+      return refuse('unknown_step', `${stepId} is not a step of this run`)
     if (isFinalStep(step.status) || step.retired)
       return refuse('already_final', `${stepId} is already ${step.status}`)
     const attempt = attemptsOf(sqlite, o.id).findLast((a) => a.step_id === stepId)
@@ -595,8 +778,31 @@ const HANDLERS: Record<ToolName, Handler> = {
     return ok({ messageId: id })
   },
 
+  'orch.check'(ctx, o) {
+    if (checkConfigOf(ctx.sqlite, o.id) === null)
+      return refuse(
+        'no_check',
+        'This job has no check. Only the person can set one, when the job starts.',
+      )
+    const checkId = queueCheck(ctx, o.id, 'lead')
+    if (checkId === null)
+      return refuse(
+        'check_limit',
+        'The check has run as often as this job allows; finish partial or failed, or ask the person',
+      )
+    return ok({ checkId, note: 'Queued. Its result starts a new turn for you; end this turn.' })
+  },
+
   'orch.finish'(ctx, o, attempt, args) {
     const outcome = args.outcome as 'success' | 'partial' | 'failed'
+    // 3.14: the advisor looks once before a successful finish (first, so the check then runs after its turn too); the
+    // lead may finish anyway after its advice.
+    const waiting =
+      outcome === 'success' ? awaitCheckpoint(ctx, o, 'before_done', attempt.id) : null
+    if (waiting) return refuse(waiting.code, waiting.message)
+    // 3.13: the oracle. A successful finish needs a current pass (or the person's waiver).
+    const refusal = outcome === 'success' ? finishRefusal(ctx.sqlite, o) : null
+    if (refusal) return refuse(refusal.code, refusal.message)
     const summary = redact(args.summary as string)
     const retired = beginFinish(ctx, o, attempt.id, outcome, summary)
     return ok({ finishing: true, retiredSteps: retired })

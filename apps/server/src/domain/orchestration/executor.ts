@@ -47,7 +47,7 @@ import { isNotDispatched, type HermesPort } from '../../hermes/index.ts'
 import type { DomainEventDraft, Ingest } from '../../hub/ingest.ts'
 import { headSeq } from '../../hub/snapshot.ts'
 import type { McpAccessStore } from '../../mcp/access.ts'
-import { redactBounded } from '../../redact.ts'
+import { redact, redactBounded } from '../../redact.ts'
 import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { briefTitle, createBrief, emitBriefChange } from '../briefs.ts'
 import { insertRoom, storeMessage } from '../rooms.ts'
@@ -73,6 +73,7 @@ import {
   abandonAttempts,
   answerInquiry,
   decideGate,
+  expectRevision,
   grantWaiver,
   remapAgent,
   pauseRun,
@@ -149,6 +150,40 @@ import { nodesOf, readResult, requireWfRun } from '../workflows/store.ts'
 import { timelineOf } from './timeline.ts'
 import { pruneOrchestrationRows } from './prune.ts'
 import {
+  type HelpersConfig,
+  effectiveSize,
+  helperLines,
+  helpersOf,
+  settleHelpers,
+  startScan,
+  usesHelperSlot,
+} from './helpers.ts'
+import {
+  ADVISOR_STEPS,
+  adviceArrived,
+  adviseOnRepeatCheckFailure,
+  adviseOnRepeatFailure,
+  isAdvisorStep,
+} from './advisor.ts'
+import { splitCommand } from './check-command.ts'
+import {
+  CHECK_LEAD_BYTES,
+  CHECK_OUTPUT_BYTES,
+  CHECK_RESERVE_BYTES,
+  CHECK_STORED_BYTES,
+  type CheckConfig,
+  checkConfigOf,
+  checkIsCurrent,
+  checkPending,
+  checksOf,
+  personRunsCheck,
+  shownCommand,
+  queueCheckAfterStep,
+  tailBytes,
+  waiveCheck,
+} from './checks.ts'
+import type { CheckProcess, CheckSpawner } from '../../runtimes/check/spawn-check.ts'
+import {
   AttemptRowSchema,
   addCause,
   addHistory,
@@ -195,6 +230,12 @@ const isEvidence = (run: RunFacts): boolean =>
 
 export const ORCHESTRATION_QUOTA_BYTES = 200 * 1024 * 1024
 const SWEEP_MS = 10_000
+
+/** Every step a run may hold: the lead's, its helpers' and the advisor's consults (3.14–3.16). */
+const effectiveSteps = (body: OrchestrationCreate): number =>
+  body.maxSteps +
+  (body.helpers?.maxSteps ?? 0) +
+  (body.advisorAgentId !== undefined ? ADVISOR_STEPS : 0)
 const RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 
 export interface OrchestratorOptions {
@@ -221,6 +262,8 @@ export interface OrchestratorOptions {
    * The default allows everything.
    */
   releaseChecks?: ReleaseChecks
+  /** 3.13: starts the oracle's command (absent: a job with a check has every run refused). */
+  checks?: CheckSpawner
 }
 
 /** What a release check is told about the launch it is judging. */
@@ -303,6 +346,10 @@ export class Orchestrator {
   private readonly fingerprints = new Map<string, string>()
   private readonly ownershipSeen = new Map<string, string>()
   private readonly served = new Map<string, boolean>()
+  /** 3.13: check runs in flight, by check id. */
+  private readonly checkJobs = new Map<string, { orchId: string; proc: CheckProcess }>()
+  /** Check ids between "marked running" and "recorded": a running row outside this set is stuck (review P2). */
+  private readonly checksInFlight = new Set<string>()
 
   constructor(private readonly options: OrchestratorOptions) {
     this.db = options.db
@@ -345,6 +392,9 @@ export class Orchestrator {
     clearInterval(this.timer)
     clearInterval(this.maintenanceTimer)
     await this.pumping?.catch(() => undefined)
+    // A check still running is stopped with its process group; the next start records it as interrupted.
+    // Killed outright: the process is about to exit, so a grace timer would never fire.
+    for (const job of this.checkJobs.values()) job.proc.stop(true)
     // Stops in flight get up to 5 s to answer; the rest stay durably owed and are asked again after the next start.
     if (this.stopJobs.size > 0) {
       let timer: NodeJS.Timeout | undefined
@@ -427,6 +477,7 @@ export class Orchestrator {
       const jobs = await this.mutate((ctx) => this.admit(ctx))
       for (const id of jobs) progressed = (await this.dispatch(id)) || progressed
       progressed = (await this.serviceStops()) || progressed
+      progressed = (await this.serviceChecks()) || progressed
       if (!progressed) return
     }
   }
@@ -840,9 +891,25 @@ export class Orchestrator {
     body: OrchestrationCreate,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<OrchestrationCreated> {
+    // 3.14–3.15: the advisor and helpers are checked (served, coding consent) like the agents the lead may assign to.
+    const advisor = body.advisorAgentId
+    if (advisor !== undefined && advisor === body.leadAgentId)
+      throw new HttpError(400, 'bad_request', 'The advisor has to be another agent than the lead.')
+    const helpers = body.helpers
+    if (helpers) {
+      if (helpers.agentIds.includes(body.leadAgentId))
+        throw new HttpError(400, 'bad_request', 'The lead can’t be one of its own helpers.')
+      if (new Set(helpers.agentIds).size !== helpers.agentIds.length)
+        throw new HttpError(400, 'bad_request', 'A helper is listed twice.')
+      if (helpers.scan && !helpers.scanFolder && !body.check)
+        throw new HttpError(400, 'bad_request', 'Say which folder the helpers should scan.')
+    }
+    const extra = [
+      ...new Set([...(advisor !== undefined ? [advisor] : []), ...(helpers?.agentIds ?? [])]),
+    ].filter((agent) => !body.allowedAgents.includes(agent))
     const { preflight, reports } = await this.preflightWith(
       body.leadAgentId,
-      body.allowedAgents,
+      [...body.allowedAgents, ...extra],
       agents,
       body.maxConcurrentSteps,
     )
@@ -898,8 +965,76 @@ export class Orchestrator {
           { agentId, policyId: report.policyId },
         )
     }
+    let check: CheckConfig | null = null
+    if (body.check) {
+      const split = splitCommand(body.check.command)
+      if (!split.ok) throw new HttpError(400, 'invalid_check', split.reason)
+      check = {
+        argv: split.argv,
+        workspace: body.check.workspace,
+        timeoutSec: body.check.timeoutSec,
+        when: body.check.when,
+      }
+    }
     const id = `orc-${randomUUID().slice(0, 8)}`
-    await this.mutate((ctx) => this.insert(ctx, id, body, preflight, reports))
+    await this.mutate((ctx) => {
+      this.insert(ctx, id, body, preflight, reports)
+      if (helpers) {
+        const config: HelpersConfig = {
+          agentIds: helpers.agentIds,
+          maxConcurrent: helpers.maxConcurrent,
+          maxSteps: helpers.maxSteps,
+          scan: helpers.scan,
+          scanFolder: helpers.scanFolder ?? (helpers.scan ? (body.check?.workspace ?? null) : null),
+          splitTo: helpers.splitTo,
+        }
+        ctx.sqlite
+          .prepare('UPDATE orchestrations SET helpers_json = ? WHERE id = ?')
+          .run(JSON.stringify(config), id)
+        const freeze = ctx.sqlite.prepare(
+          `INSERT OR IGNORE INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, 'agent', ?, ?)`,
+        )
+        for (const agent of helpers.agentIds)
+          freeze.run(
+            id,
+            agent,
+            lifecycleOf(ctx.sqlite, agent)?.incarnation_id ?? 'untracked',
+            ctx.now,
+          )
+        addHistory(ctx.sqlite, id, 'helpers_set', { ...config }, ctx.now)
+        if (config.scan && config.scanFolder)
+          startScan(ctx, readOrch(ctx.sqlite, id)!, config.scanFolder)
+      }
+      if (advisor !== undefined) {
+        ctx.sqlite
+          .prepare('UPDATE orchestrations SET advisor_agent_id = ? WHERE id = ?')
+          .run(advisor, id)
+        // Frozen like every agent the run was started with, so a replaced advisor waits for the person's remap.
+        ctx.sqlite
+          .prepare(
+            `INSERT OR IGNORE INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, 'agent', ?, ?)`,
+          )
+          .run(
+            id,
+            advisor,
+            lifecycleOf(ctx.sqlite, advisor)?.incarnation_id ?? 'untracked',
+            ctx.now,
+          )
+        addHistory(ctx.sqlite, id, 'advisor_set', { agentId: advisor }, ctx.now)
+      }
+      if (check) {
+        ctx.sqlite
+          .prepare('UPDATE orchestrations SET check_json = ? WHERE id = ?')
+          .run(JSON.stringify(check), id)
+        addHistory(
+          ctx.sqlite,
+          id,
+          'check_set',
+          { command: shownCommand(check.argv), workspace: check.workspace },
+          ctx.now,
+        )
+      }
+    })
     this.kick()
     return { orchestration: this.summary(id), preflight }
   }
@@ -925,14 +1060,16 @@ export class Orchestrator {
         'capacity',
         `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running.`,
       )
-    const reserve = reserveFor(
-      body.maxSteps,
-      body.maxLeadTurns,
-      reports.size > 0
-        ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps)
-        : 0,
-      reports.size > 0 ? codingUnsentBytes(body.maxSteps, body.maxConcurrentSteps) : 0,
-    )
+    // 3.14–3.16 (review): helper work and consults are steps too; the storage and coding reserves are sized for them.
+    const steps = effectiveSteps(body)
+    const concurrent = body.maxConcurrentSteps + (body.helpers?.maxConcurrent ?? 0)
+    const reserve =
+      reserveFor(
+        steps,
+        body.maxLeadTurns,
+        reports.size > 0 ? codingItemsFor(steps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) : 0,
+        reports.size > 0 ? codingUnsentBytes(steps, concurrent) : 0,
+      ) + (body.check ? CHECK_RESERVE_BYTES : 0)
     if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
       throw new HttpError(
         409,
@@ -1010,9 +1147,12 @@ export class Orchestrator {
         body.codingSteps ?? ORCH_DEFAULTS.codingSteps,
         JSON.stringify([...new Set(body.acceptUnknownCost ?? [])].sort()),
         reports.size > 0
-          ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) *
+          ? codingItemsFor(effectiveSteps(body), body.codingSteps ?? ORCH_DEFAULTS.codingSteps) *
               CODING_ITEM_EXTRA_BYTES +
-              codingUnsentBytes(body.maxSteps, body.maxConcurrentSteps)
+              codingUnsentBytes(
+                effectiveSteps(body),
+                body.maxConcurrentSteps + (body.helpers?.maxConcurrent ?? 0),
+              )
           : 0,
       )
     if (body.quotaFloorPercent !== undefined)
@@ -1073,7 +1213,8 @@ export class Orchestrator {
         lifecycleOf(sqlite, agentId)?.incarnation_id ?? 'untracked',
         now,
       )
-    addCause(sqlite, id, 'started', null, now)
+    // 3.15: with a scan, the lead's first turn waits for it (settleHelpers adds 'started' when it is done).
+    if (!body.helpers?.scan) addCause(sqlite, id, 'started', null, now)
     addHistory(
       sqlite,
       id,
@@ -1111,6 +1252,22 @@ export class Orchestrator {
   }
   resume(id: string, body: RunControl) {
     return this.decide(id, (ctx) => resumeRun(ctx, id, body))
+  }
+  /** 3.13: the person runs the job's check now. */
+  runCheck(id: string, body: RunControl) {
+    return this.decide(id, (ctx) => {
+      const o = requireLeadOrch(ctx.sqlite, id)
+      expectRevision(o, body.orchestrationRevision)
+      personRunsCheck(ctx, o)
+    })
+  }
+  /** 3.13: the person lets the job finish successfully without a passing check. */
+  waiveCheck(id: string, body: RunControl) {
+    return this.decide(id, (ctx) => {
+      const o = requireLeadOrch(ctx.sqlite, id)
+      expectRevision(o, body.orchestrationRevision)
+      waiveCheck(ctx, o)
+    })
   }
   /** Stop ignores a stale page: it can only reduce risk. */
   stop(id: string) {
@@ -1864,6 +2021,22 @@ export class Orchestrator {
   async recover(): Promise<void> {
     await this.mutate((ctx) => {
       const { sqlite, now } = ctx
+      // 3.13: a check that was running when Score stopped went down with it: never a pass.
+      for (const row of sqlite
+        .prepare("SELECT id, orchestration_id FROM orc_checks WHERE outcome = 'running'")
+        .all() as { id: string; orchestration_id: string }[]) {
+        sqlite
+          .prepare("UPDATE orc_checks SET outcome = 'interrupted', ended_at = ? WHERE id = ?")
+          .run(now, row.id)
+        addCause(
+          sqlite,
+          row.orchestration_id,
+          'check_interrupted',
+          row.id,
+          now,
+          'Score restarted while it ran',
+        )
+      }
       this.repairRecoveredResults(ctx)
       this.backfillLegacyMappings(ctx)
       for (const o of listOrchs(sqlite)) {
@@ -2000,6 +2173,8 @@ export class Orchestrator {
     let o = readOrch(sqlite, orchId)
     if (!o || isTerminalStatus(o.status)) return false
     cascadeBlocked(sqlite, orchId, now)
+    // 3.15–3.16: a finished scan starts the lead; a vote whose answers have ended is tallied.
+    settleHelpers(ctx, o)
     // A workflow run's planner is its graph: it runs inside the transaction of whatever woke the run.
     if (o.planner === 'workflow') {
       const planned = planWorkflow(ctx, o)
@@ -2059,6 +2234,8 @@ export class Orchestrator {
           ['ready', 'gate_open', 'running', 'unresolved'].includes(n.state),
         )) ||
       (o.planner === 'lead' && causesAfter(sqlite, orchId, o.causes_consumed_up_to).length > 0) ||
+      // A check queued or running ends with a cause that wakes the lead (3.13).
+      checkPending(sqlite, orchId) ||
       steps.some((s) => ['pending_gate', 'queued', 'admitted'].includes(s.status)) ||
       inquiriesOf(sqlite, orchId).some((q) => q.status === 'open') ||
       gatesOf(sqlite, orchId).some((g) => g.status === 'open') ||
@@ -2159,6 +2336,8 @@ export class Orchestrator {
           causes: pending,
           budget: view,
           now,
+          check: this.leadCheck(sqlite, o.id),
+          helperLines: helperLines(sqlite, o),
         })
         if (!input.includes(ORC_CAPABILITY_PLACEHOLDER))
           throw new Error('Lead input lost its capability placeholder')
@@ -2230,7 +2409,11 @@ export class Orchestrator {
       }
       if (!agentAdmits(sqlite, step.agent_id) || agentPausedAt(sqlite, step.agent_id) !== null)
         continue
-      if ((counts.perRun.get(o.id) ?? 0) >= o.max_concurrent_steps) continue
+      // 3.15: helper work and vote answers have their own slots; the lead's limit is for its own steps.
+      const helperConfig = usesHelperSlot(step) ? helpersOf(o) : null
+      const slot = helperConfig ? `${o.id}#helpers` : o.id
+      if ((counts.perRun.get(slot) ?? 0) >= (helperConfig?.maxConcurrent ?? o.max_concurrent_steps))
+        continue
       if (counts.total >= ORCH_CAPACITY.concurrentSteps) continue
       if ((counts.perAgent.get(step.agent_id) ?? 0) >= ORCH_CAPACITY.stepsPerAgent) continue
       // The quota guard (8.6): a coding agent below its floor takes no new step; the step is held and the person asked.
@@ -2267,7 +2450,7 @@ export class Orchestrator {
             suspended.id,
           )
         setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
-        counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
+        counts.perRun.set(slot, (counts.perRun.get(slot) ?? 0) + 1)
         counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
         counts.total++
         touch(ctx, o.id)
@@ -2280,7 +2463,7 @@ export class Orchestrator {
       if (codingStep) {
         const fresh = readOrch(sqlite, o.id) ?? o
         if (
-          unsentCoding >= codingUnsentSlots(o.max_steps, o.max_concurrent_steps) ||
+          unsentCoding >= codingUnsentSlots(effectiveSize(o).steps, effectiveSize(o).concurrent) ||
           fresh.coding_stored_bytes + Buffer.byteLength(input) > fresh.coding_reserve_bytes
         )
           continue
@@ -2313,7 +2496,7 @@ export class Orchestrator {
       // A workflow step's input also lives in its reply row and its dispatch intent: every retained copy is charged.
       if (codingStep) addCodingStored(sqlite, o.id, Buffer.byteLength(input))
       else addStored(sqlite, o.id, Buffer.byteLength(input) * (o.planner === 'workflow' ? 3 : 1))
-      counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
+      counts.perRun.set(slot, (counts.perRun.get(slot) ?? 0) + 1)
       counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
       counts.total++
       touch(ctx, o.id)
@@ -3121,13 +3304,7 @@ export class Orchestrator {
       o.id,
       Buffer.byteLength(result) * 2 + Buffer.byteLength(run.output ?? ''),
     )
-    addCause(
-      sqlite,
-      o.id,
-      disposition === 'completed' ? 'step_succeeded' : 'step_failed',
-      step.id,
-      now,
-    )
+    this.stepEnded(ctx, o, step, disposition === 'completed', result, attempt.id)
   }
 
   // ------------------------------------------------------------------------------------------------ observation
@@ -3360,16 +3537,227 @@ export class Orchestrator {
         Buffer.byteLength(messageText) +
         Buffer.byteLength(run.output ?? ''),
     )
-    addCause(
-      sqlite,
-      o.id,
-      evidence === 'completed' ? 'step_succeeded' : 'step_failed',
-      step.id,
-      now,
-    )
+    this.stepEnded(ctx, o, step, evidence === 'completed', result, attempt.id)
   }
 
   // ---------------------------------------------------------------------------------------------------- stops
+
+  /**
+   * A step's result was accepted: the lead is told (an advisor consult as advice, 3.14), a check set to run after each
+   * step is queued (3.13), and a failure like an earlier one is taken to the advisor.
+   */
+  private stepEnded(
+    ctx: Ctx,
+    o: OrchRow,
+    step: StepRow,
+    ok: boolean,
+    result: string,
+    attemptId: string,
+  ): void {
+    if (isAdvisorStep(step)) return adviceArrived(ctx, o, step, ok)
+    // 3.15–3.16: a vote answer reaches the lead only through the tally, a scan part only with the whole scan
+    // (settleHelpers); a helper's read-only work leaves nothing for the check to test.
+    if (step.role === 'vote' || step.helper_role?.startsWith('scan_')) return
+    addCause(ctx.sqlite, o.id, ok ? 'step_succeeded' : 'step_failed', step.id, ctx.now)
+    if (ok && step.role !== 'helper') queueCheckAfterStep(ctx, o.id)
+    else if (!ok)
+      adviseOnRepeatFailure(ctx, o, { ...step, status: 'failed', result }, result, attemptId)
+  }
+
+  // --------------------------------------------------------------------------------------------------- checks (3.13)
+
+  /**
+   * Starts queued check runs (one at a time per job, only while it runs), stops the ones whose job no longer runs, and
+   * cancels queued ones of jobs that ended. A run's end is recorded by itself (its own transaction) and wakes the lead.
+   */
+  private async serviceChecks(): Promise<boolean> {
+    for (const [id, job] of this.checkJobs) {
+      const status = this.db.read((sqlite) => readOrch(sqlite, job.orchId)?.status)
+      if (status === undefined || !['running', 'paused'].includes(status)) {
+        job.proc.stop()
+        this.checkJobs.delete(id)
+      }
+    }
+    const starts = await this.mutate((ctx) => {
+      const { sqlite, now } = ctx
+      const rows = sqlite
+        .prepare(
+          `SELECT c.id, c.orchestration_id, o.status FROM orc_checks c JOIN orchestrations o ON o.id = c.orchestration_id
+           WHERE c.outcome = 'queued' ORDER BY c.queued_at, c.rowid`,
+        )
+        .all() as { id: string; orchestration_id: string; status: string }[]
+      const started: { id: string; orchId: string; config: CheckConfig }[] = []
+      // A run marked running that nothing is carrying (its recording failed) would hold the job forever: end it.
+      for (const stuck of sqlite
+        .prepare("SELECT id, orchestration_id FROM orc_checks WHERE outcome = 'running'")
+        .all() as { id: string; orchestration_id: string }[]) {
+        if (this.checksInFlight.has(stuck.id)) continue
+        sqlite
+          .prepare("UPDATE orc_checks SET outcome = 'interrupted', ended_at = ? WHERE id = ?")
+          .run(now, stuck.id)
+        addCause(
+          sqlite,
+          stuck.orchestration_id,
+          'check_interrupted',
+          stuck.id,
+          now,
+          'its result was lost',
+        )
+        touch(ctx, stuck.orchestration_id)
+      }
+      for (const row of rows) {
+        if (!['running', 'paused'].includes(row.status)) {
+          sqlite
+            .prepare("UPDATE orc_checks SET outcome = 'cancelled', ended_at = ? WHERE id = ?")
+            .run(now, row.id)
+          touch(ctx, row.orchestration_id)
+          continue
+        }
+        // A paused job's checks wait; and one run at a time per job.
+        if (row.status !== 'running' || isFenced(sqlite)) continue
+        const busy = sqlite
+          .prepare("SELECT 1 FROM orc_checks WHERE orchestration_id = ? AND outcome = 'running'")
+          .get(row.orchestration_id)
+        if (busy || started.some((s) => s.orchId === row.orchestration_id)) continue
+        const config = checkConfigOf(sqlite, row.orchestration_id)
+        if (config === null) {
+          sqlite
+            .prepare("UPDATE orc_checks SET outcome = 'cancelled', ended_at = ? WHERE id = ?")
+            .run(now, row.id)
+          continue
+        }
+        sqlite
+          .prepare("UPDATE orc_checks SET outcome = 'running', started_at = ? WHERE id = ?")
+          .run(now, row.id)
+        addHistory(sqlite, row.orchestration_id, 'check_started', { checkId: row.id }, now)
+        touch(ctx, row.orchestration_id)
+        started.push({ id: row.id, orchId: row.orchestration_id, config })
+        this.checksInFlight.add(row.id)
+      }
+      return started
+    })
+    for (const start of starts) void this.runCheckProcess(start)
+    return false
+  }
+
+  private async runCheckProcess(start: {
+    id: string
+    orchId: string
+    config: CheckConfig
+  }): Promise<void> {
+    const record = async (
+      outcome: 'passed' | 'failed' | 'timed_out' | 'refused' | 'cancelled',
+      exitCode: number | null,
+      output: string,
+    ) => {
+      // Redacted before it is cut, so a secret straddling the cut is still recognised (review P3).
+      const kept = tailBytes(redact(output), CHECK_STORED_BYTES)
+      await this.mutate((ctx) => {
+        const { sqlite, now } = ctx
+        const row = sqlite.prepare('SELECT outcome FROM orc_checks WHERE id = ?').get(start.id) as
+          { outcome: string } | undefined
+        if (row?.outcome !== 'running') return
+        sqlite
+          .prepare(
+            'UPDATE orc_checks SET outcome = ?, exit_code = ?, ended_at = ?, output = ? WHERE id = ?',
+          )
+          .run(outcome, exitCode, now, kept, start.id)
+        addStored(sqlite, start.orchId, Buffer.byteLength(kept))
+        addHistory(
+          sqlite,
+          start.orchId,
+          'check_ended',
+          { checkId: start.id, outcome, exitCode },
+          now,
+        )
+        // Only Score's own words here: the command's output reaches the lead quoted, never as an unquoted cause line.
+        const detail =
+          outcome === 'passed'
+            ? 'exit 0'
+            : outcome === 'timed_out'
+              ? 'timed out'
+              : outcome === 'refused'
+                ? 'could not run'
+                : outcome === 'cancelled'
+                  ? 'stopped'
+                  : `exit ${exitCode ?? '?'}`
+        addCause(
+          sqlite,
+          start.orchId,
+          outcome === 'passed' ? 'check_passed' : 'check_failed',
+          start.id,
+          now,
+          detail,
+        )
+        // 3.14: the same check failure twice in a row goes to the advisor.
+        const o = readOrch(sqlite, start.orchId)
+        if (o && outcome !== 'passed') adviseOnRepeatCheckFailure(ctx, o)
+        touch(ctx, start.orchId)
+      })
+      this.kick()
+    }
+    try {
+      if (!this.options.checks) return await record('refused', null, 'Checks can’t run here.')
+      const proc = await this.options.checks({
+        argv: start.config.argv,
+        cwd: start.config.workspace,
+        timeoutMs: start.config.timeoutSec * 1000,
+        keepBytes: CHECK_OUTPUT_BYTES,
+      })
+      if ('refused' in proc) return await record('refused', null, proc.refused)
+      this.checkJobs.set(start.id, { orchId: start.orchId, proc })
+      const result = await proc.done
+      this.checkJobs.delete(start.id)
+      if (this.closed) return // recorded as interrupted at the next start
+      await record(
+        result.timedOut
+          ? 'timed_out'
+          : result.stopped
+            ? 'cancelled'
+            : result.exitCode === 0
+              ? 'passed'
+              : 'failed',
+        result.exitCode,
+        result.output,
+      )
+    } catch (error) {
+      this.err(error)
+      this.checkJobs.delete(start.id)
+    } finally {
+      // Not recorded by now (a failed write): the next pass ends it as interrupted rather than leaving it running.
+      this.checksInFlight.delete(start.id)
+      this.kick()
+    }
+  }
+
+  /** What the lead reads about the check: the command, and the last run's verdict and output tail. */
+  private leadCheck(sqlite: DatabaseSync, orchId: string) {
+    const config = checkConfigOf(sqlite, orchId)
+    if (config === null) return null
+    const latest = checksOf(sqlite, orchId, 5).find(
+      (row) => !['queued', 'cancelled'].includes(row.outcome),
+    )
+    return {
+      argv: config.argv,
+      workspace: config.workspace,
+      when: config.when,
+      waived:
+        (
+          sqlite.prepare('SELECT check_waived_at FROM orchestrations WHERE id = ?').get(orchId) as {
+            check_waived_at: string | null
+          }
+        ).check_waived_at !== null,
+      pending: checkPending(sqlite, orchId),
+      latest: latest
+        ? {
+            outcome: latest.outcome,
+            exitCode: latest.exit_code,
+            current: latest.outcome === 'passed' && checkIsCurrent(sqlite, orchId, latest),
+            output: tailBytes(latest.output, CHECK_LEAD_BYTES),
+          }
+        : null,
+    }
+  }
 
   /** Delivers owed Stops until Hermes acknowledges. Abandoned attempts keep theirs. */
   private async serviceStops(): Promise<boolean> {

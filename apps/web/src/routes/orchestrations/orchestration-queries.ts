@@ -284,6 +284,9 @@ export function useRunActions(id: string) {
       body: v.body,
     })),
     abandon: useRunPost<AbandonDecision>(id, plain('abandon')),
+    // 3.13: the oracle. Both need the run's revision, like pause and resume.
+    checkRun: useRunPost<RunControl>(id, plain('check/run')),
+    checkWaive: useRunPost<RunControl>(id, plain('check/waive')),
   }
 }
 

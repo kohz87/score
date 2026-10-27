@@ -9,6 +9,7 @@ import type {
 import { useState } from 'react'
 import {
   isRunOver,
+  leadStepCounts,
   pauseReasonText,
   statusLabel,
   stepVisual,
@@ -144,6 +145,7 @@ export function RunStatus({
   /** The room panel already shows the badge in its sticky header. */
   badge?: boolean
 }) {
+  const counts = leadStepCounts(run.stepsList)
   return (
     <div className="orch-status">
       {badge && (
@@ -158,7 +160,7 @@ export function RunStatus({
       {run.endReason && <span>{run.endReason}</span>}
       <span className="orch-muted">
         Lead turn <LiveCount value={run.leadTurnsUsed} /> of {run.maxLeadTurns},{' '}
-        <LiveCount value={run.steps.succeeded} /> of {run.steps.total} steps done
+        <LiveCount value={counts.succeeded} /> of {counts.total} steps done
       </span>
       <RunSpend budget={run.budget} />
     </div>
@@ -325,6 +327,9 @@ export function AttemptLine({
   )
 }
 
+// 'scan_stack' → 'scan: stack'
+const helperRoleLabel = (role: string) => role.replace(/^scan[_:\s]+/, 'scan: ')
+
 export function StepCard({
   step,
   run,
@@ -352,6 +357,9 @@ export function StepCard({
         <strong>{step.id}</strong>
         <AgentChip agentId={step.agentId} agents={agents} />
         <StateMark visual={visual} />
+        {step.role === 'helper' && step.helperRole && (
+          <span className="orch-helper-role">{helperRoleLabel(step.helperRole)}</span>
+        )}
         {onSelect && (
           <button type="button" className="orch-link" onClick={() => onSelect(step.id)}>
             Show in log

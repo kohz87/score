@@ -157,6 +157,111 @@ const goal = z
   .refine((v) => utf8Bytes(v) <= ORCH_LIMITS.goalBytes, 'goal is limited to 8 KiB')
   .refine((v) => !v.includes('\0'), 'No NUL')
 
+/**
+ * 3.13 (decision 150): the oracle. A command the person sets, run in a workspace; exit code 0 passes. A successful finish
+ * needs a pass that started after the last step attempt ended. Only the person writes it; the lead can only run it.
+ */
+export const ORCH_CHECK_LIMITS = {
+  commandChars: 4096,
+  maxArgs: 64,
+  defaultTimeoutSec: 600,
+  maxTimeoutSec: 3600,
+} as const
+export const OrchestrationCheckSchema = z
+  .object({
+    /** One line; split into arguments without a shell (quotes and backslashes only). */
+    command: z
+      .string()
+      .trim()
+      .min(1)
+      .max(ORCH_CHECK_LIMITS.commandChars)
+      .refine((v) => !/[\r\n\0]/.test(v)),
+    /** An absolute folder the Workspace roots allow. */
+    workspace: z.string().min(1).max(4096).startsWith('/'),
+    timeoutSec: z
+      .int()
+      .min(10)
+      .max(ORCH_CHECK_LIMITS.maxTimeoutSec)
+      .default(ORCH_CHECK_LIMITS.defaultTimeoutSec),
+    /** Before finishing only (the lead runs it), or also after every step that succeeds (a formatter, a linter). */
+    when: z.enum(['finish', 'each_step']).default('finish'),
+  })
+  .strict()
+export type OrchestrationCheck = z.infer<typeof OrchestrationCheckSchema>
+export const CheckOutcomeSchema = z.enum([
+  'queued',
+  'cancelled',
+  'running',
+  'passed',
+  'failed',
+  'timed_out',
+  'interrupted',
+  'refused',
+])
+export const CheckRunViewSchema = z.object({
+  id: z.string().min(1),
+  /** Who asked for it: the lead (orch.check), a step that succeeded (when = each_step), or the person. */
+  reason: z.enum(['lead', 'step', 'person']),
+  queuedAt: z.iso.datetime(),
+  startedAt: z.iso.datetime().nullable(),
+  endedAt: z.iso.datetime().nullable(),
+  exitCode: z.int().nullable(),
+  outcome: CheckOutcomeSchema,
+  /** The last part of what it printed, redacted. */
+  output: z.string(),
+  /** Started after the last step attempt ended, so a pass counts for finishing. */
+  current: z.boolean(),
+})
+export type CheckRunView = z.infer<typeof CheckRunViewSchema>
+
+/**
+ * 3.15 (decision 150): helpers, a swarm of (usually cheap) agents for narrow, read-only work the lead hands out with a role,
+ * in their own slots and step allowance. `scan` has them read the folder first (stack, scripts, risks) before the lead's
+ * first turn. 3.16: they also answer the lead's votes; `splitTo` says who decides a split vote.
+ */
+export const HelperRoleSchema = z.enum(['search', 'grep', 'audit'])
+export const OrchestrationHelpersSchema = z
+  .object({
+    agentIds: z.array(AgentIdSchema).min(1).max(4),
+    maxConcurrent: z.int().min(1).max(6).default(3),
+    maxSteps: z.int().min(1).max(60).default(20),
+    scan: z.boolean().default(false),
+    /** The folder the scan reads (absolute; the Workspace rules apply). Needed with `scan` unless the check has one. */
+    scanFolder: z.string().min(1).max(4096).startsWith('/').optional(),
+    splitTo: z.enum(['lead', 'person']).default('lead'),
+  })
+  .strict()
+export const VoteViewSchema = z.object({
+  id: z.string().min(1),
+  question: z.string(),
+  options: z.array(z.string()),
+  k: z.int().positive(),
+  status: z.enum(['voting', 'sharp', 'split', 'failed']),
+  /** Votes per option (same order as `options`); unusable answers are not counted. */
+  counts: z.array(z.int().nonnegative()),
+  /** The winning option's index when sharp, else null. */
+  choice: z.int().nonnegative().nullable(),
+  /** The top option's share of the usable votes (0–1), once tallied. */
+  share: z.number().min(0).max(1).nullable(),
+  /** A split sent to the person: the question they were asked. */
+  inquiryId: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+})
+export type VoteView = z.infer<typeof VoteViewSchema>
+
+export const AdvisorCheckpointSchema = z.enum(['before_plan', 'repeat_failure', 'before_done'])
+export const AdvisorConsultViewSchema = z.object({
+  stepId: z.string().min(1),
+  checkpoint: AdvisorCheckpointSchema,
+  /** Why Score asked (the repeated failure, in Score's words). */
+  reason: z.string(),
+  status: StepStatusSchema,
+  /** The advice, redacted; null until it arrives. */
+  advice: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+})
+export type AdvisorConsultView = z.infer<typeof AdvisorConsultViewSchema>
+
 export const OrchestrationCreateSchema = z
   .object({
     title: z.string().min(1).max(ORCH_LIMITS.titleChars).optional(),
@@ -188,6 +293,15 @@ export const OrchestrationCreateSchema = z
     codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
     /** 8.6: the quota floor for every coding agent of this run; omitted = each agent's own floor. */
     quotaFloorPercent: QuotaFloorSchema.optional(),
+    /** 3.13: the oracle (needs the security password or passkey confirmed in the last minute). */
+    check: OrchestrationCheckSchema.optional(),
+    /**
+     * 3.14: an agent Score consults by itself at three checkpoints (before the plan, after the same failure twice, before
+     * done). Not the lead; its advice is data for the lead, never a veto.
+     */
+    advisorAgentId: AgentIdSchema.optional(),
+    /** 3.15: the helpers and their limits. */
+    helpers: OrchestrationHelpersSchema.optional(),
   })
   .strict()
 export type OrchestrationCreate = z.infer<typeof OrchestrationCreateSchema>
@@ -316,6 +430,10 @@ export const StepViewSchema = z.object({
   updatedAt: z.iso.datetime(),
   /** 8.6: set while the step's coding agent is below its quota floor. */
   quotaHold: QuotaHoldViewSchema.nullable().optional(),
+  /** 3.14: a consult Score started for the advisor (not the lead's work); absent or null for ordinary steps. */
+  role: z.enum(['advisor', 'helper', 'vote']).nullable().optional(),
+  /** 3.15: a helper step's role (search, grep, audit, or a scan part). */
+  helperRole: z.string().nullable().optional(),
 })
 export type StepView = z.infer<typeof StepViewSchema>
 
@@ -460,6 +578,41 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
   storage: z.object({ reserveBytes: z.int(), storedBytes: z.int() }),
   /** 8.6: the run's quota floor; null = each coding agent's own. */
   quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
+  /** 3.15: the helpers, their limits and use; 3.16: the votes (oldest first). Null = no helpers. */
+  helpers: z
+    .object({
+      agentIds: z.array(AgentIdSchema),
+      maxConcurrent: z.int(),
+      maxSteps: z.int(),
+      used: z.int(),
+      scan: z.boolean(),
+      scanFolder: z.string().nullable(),
+      splitTo: z.enum(['lead', 'person']),
+      votes: z.array(VoteViewSchema),
+    })
+    .nullable()
+    .optional(),
+  /** 3.14: the advisor and its consults (oldest first); null = no advisor. */
+  advisor: z
+    .object({
+      agentId: AgentIdSchema,
+      consults: z.array(AdvisorConsultViewSchema),
+    })
+    .nullable()
+    .optional(),
+  /** 3.13: the oracle and its runs (newest first); null = no check. */
+  check: z
+    .object({
+      command: z.string(),
+      workspace: z.string(),
+      timeoutSec: z.int(),
+      when: z.enum(['finish', 'each_step']),
+      runs: z.array(CheckRunViewSchema),
+      /** The person let the run finish without a passing check. */
+      waivedAt: z.iso.datetime().nullable(),
+    })
+    .nullable()
+    .optional(),
   /** 7.7b: the run's coding limits and the policy each coding worker was approved with. */
   coding: z
     .object({
@@ -657,6 +810,8 @@ export const OrchPlanArgsSchema = z.object({
 export const OrchAssignArgsSchema = z.object({
   ...toolBase,
   agent: AgentIdSchema,
+  /** 3.15: hand the step to a helper with a role (its own slots and allowance; read-only by instruction). */
+  role: HelperRoleSchema.optional(),
   instruction: bytes(ORCH_LIMITS.instructionBytes),
   after: z.array(z.string().min(1).max(64)).max(ORCH_LIMITS.maxSteps).optional(),
   replaces: z.string().min(1).max(64).optional(),
@@ -675,6 +830,17 @@ export const OrchRequestApprovalArgsSchema = z.object({
   stepId: z.string().min(1).max(64),
 })
 export const OrchNoteArgsSchema = z.object({ ...toolBase, text: bytes(ORCH_LIMITS.noteBytes) })
+/** 3.16: ask the helpers the same multiple-choice question; a clear majority (≥ 70%) is "sharp". */
+export const OrchVoteArgsSchema = z.object({
+  ...toolBase,
+  question: bytes(1024),
+  options: z.array(z.string().min(1).max(200)).min(2).max(6),
+  k: z.int().min(3).max(7).default(5),
+})
+
+/** 3.13: run the person's check now (no arguments: the lead can't change it). */
+export const OrchCheckArgsSchema = z.object({ ...toolBase })
+
 export const OrchFinishArgsSchema = z.object({
   ...toolBase,
   outcome: z.enum(['success', 'partial', 'failed']),

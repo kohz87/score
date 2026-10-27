@@ -188,6 +188,13 @@ let workflowRunBodies: Record<string, unknown>[] = []
 let workflowRunReply: () => Response = () =>
   Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
 let triggerBody: unknown
+/** 3.13: calls the oracle tests watch, in order, and what the orchestration POST answers. */
+let calls: string[] = []
+let orchestrationBodies: Record<string, unknown>[] = []
+let preflightUrls: string[] = []
+let orchestrationReply: () => Response = () =>
+  Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
+let securityReply: () => Response = () => Response.json({ ok: true })
 let extraWorkflows: (typeof workflow)[] = []
 const disposers: (() => void)[] = []
 
@@ -198,7 +205,12 @@ beforeEach(() => {
   workflowRunReply = () =>
     Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
   triggerBody = undefined
+  calls = []
+  orchestrationBodies = []
+  preflightUrls = []
   extraWorkflows = []
+  codingLead = null
+  securityReply = () => Response.json({ ok: true })
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
   vi.stubGlobal(
@@ -256,6 +268,7 @@ beforeEach(() => {
         return Promise.resolve(workflowRunReply())
       }
       if (url.pathname === '/api/orchestrations/preflight') {
+        preflightUrls.push(url.searchParams.get('allowedAgents') ?? '')
         const check = orchestrationCheck(!preflightFails)
         if (toolsListed)
           check.checks.push({
@@ -267,6 +280,15 @@ beforeEach(() => {
                 : "The lead's Hermes hasn't asked Score for its tools",
           })
         return json(check)
+      }
+      if (url.pathname === '/api/session/security/check' && method === 'POST') {
+        calls.push('security-check')
+        return Promise.resolve(securityReply())
+      }
+      if (url.pathname === '/api/orchestrations' && method === 'POST') {
+        calls.push('orchestrations')
+        orchestrationBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+        return Promise.resolve(orchestrationReply())
       }
       if (url.pathname === '/api/agents/lead/mcp/reload' && method === 'POST') {
         reloads.push('lead')
@@ -678,4 +700,241 @@ test('the tool check offers Reload MCP, asks first, restarts the lead’s gatewa
   } finally {
     toolsListed = null
   }
+})
+
+async function fillLeadJob(dialog: HTMLElement) {
+  fireEvent.change(within(dialog).getByLabelText('What should the team do?'), {
+    target: { value: 'Fix the failing tests' },
+  })
+  fireEvent.click(acknowledgement(dialog))
+  const start = within(dialog).getByRole('button', { name: 'Start the job' })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  return start
+}
+
+test('a check is folded, needs the folder, and starting asks for the password first (3.13)', async () => {
+  orchestrationReply = () =>
+    Response.json(
+      { error: { code: 'invalid_check', message: 'That folder is outside your workspace roots.' } },
+      { status: 400 },
+    )
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-check') as HTMLDetailsElement
+  expect(section.open).toBe(false)
+  expect(section.getAttribute('data-protected')).toBe('block')
+  expect(
+    within(section).getByText(/Score runs this command in the folder, without a shell/),
+  ).toBeDefined()
+  const start = await fillLeadJob(dialog)
+
+  fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
+  // No folder known yet: Start is blocked and says why.
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(true))
+  expect(within(dialog).getByText(/absolute folder/)).toBeDefined()
+  fireEvent.change(within(dialog).getByLabelText('Folder'), { target: { value: '/work/site' } })
+  fireEvent.click(within(dialog).getByLabelText('Also run after every step'))
+  fireEvent.change(within(dialog).getByLabelText('Timeout (minutes, 1 to 60)'), {
+    target: { value: '5' },
+  })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+
+  fireEvent.click(start)
+  const confirm = await within(dialog).findByRole('form', { name: 'Confirm it’s you' })
+  expect(confirm.getAttribute('data-protected')).toBe('block')
+  // Nothing was posted before the person proved it.
+  expect(calls).toEqual([])
+  fireEvent.change(within(confirm).getByLabelText('Security password'), {
+    target: { value: 'correct horse' },
+  })
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm and start' }))
+
+  // The server's own words for a refused check show inline.
+  expect(await within(dialog).findByText(/outside your workspace roots/)).toBeDefined()
+  expect(calls).toEqual(['security-check', 'orchestrations'])
+  expect(orchestrationBodies[0]).toMatchObject({
+    check: { command: 'pnpm test', workspace: '/work/site', timeoutSec: 300, when: 'each_step' },
+  })
+})
+
+test('a job without a check posts none and starts without the password prompt (3.13)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const start = await fillLeadJob(dialog)
+  fireEvent.click(start)
+  await waitFor(() => expect(calls).toEqual(['orchestrations']))
+  expect(orchestrationBodies[0]).not.toHaveProperty('check')
+  expect(within(dialog).queryByRole('form', { name: 'Confirm it’s you' })).toBeNull()
+})
+
+test('an advisor is optional, checked in the preflight, sent by id, and cleared when it becomes the lead (3.14)', async () => {
+  codingLead = 'coder'
+  try {
+    open('/b?start=job')
+    const dialog = await startDialog()
+    const advisor = within(dialog).getByLabelText('Advisor') as HTMLSelectElement
+    expect(advisor.value).toBe('')
+    expect(within(dialog).getByText(/the lead decides/)).toBeDefined()
+    // The lead itself is not offered.
+    expect(within(advisor).queryByRole('option', { name: 'lead' })).toBeNull()
+    fireEvent.change(advisor, { target: { value: 'builder' } })
+    await waitFor(() =>
+      expect(preflightUrls.some((ids) => ids.split(',').includes('builder'))).toBe(true),
+    )
+    const start = await fillLeadJob(dialog)
+    fireEvent.click(start)
+    await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+    expect(orchestrationBodies[0]).toMatchObject({ advisorAgentId: 'builder' })
+
+    // Making the advisor the planner resets the choice.
+    fireEvent.change(within(dialog).getByLabelText('Who plans it'), {
+      target: { value: 'builder' },
+    })
+    await waitFor(() =>
+      expect((within(dialog).getByLabelText('Advisor') as HTMLSelectElement).value).toBe(''),
+    )
+  } finally {
+    codingLead = null
+  }
+})
+
+test('no advisor means no advisorAgentId in the body (3.14)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]).not.toHaveProperty('advisorAgentId')
+})
+
+test('helpers are folded, optional, checked in the preflight, and sent with their limits (3.15)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  expect(section.open).toBe(false)
+  expect(within(section).getByText(/A clear majority \(70% or more\)/)).toBeDefined()
+  // The lead itself is not offered as a helper.
+  expect(within(section).queryByRole('checkbox', { name: 'lead' })).toBeNull()
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  await waitFor(() =>
+    expect(preflightUrls.some((ids) => ids.split(',').includes('builder'))).toBe(true),
+  )
+  fireEvent.change(within(section).getByLabelText('At once (1 to 6)'), { target: { value: '4' } })
+  fireEvent.click(within(section).getByRole('radio', { name: 'Ask me' }))
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]).toMatchObject({
+    helpers: {
+      agentIds: ['builder'],
+      maxConcurrent: 4,
+      maxSteps: 20,
+      scan: false,
+      splitTo: 'person',
+    },
+  })
+  expect(orchestrationBodies[0]!.helpers).not.toHaveProperty('scanFolder')
+  expect(orchestrationBodies[0]!.allowedAgents).not.toContain('lead')
+})
+
+test('no helpers picked means no helpers in the body (3.15)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]).not.toHaveProperty('helpers')
+})
+
+test('the scan folder follows the check folder and shows on the folded summary (3.15)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
+  fireEvent.change(within(dialog).getByLabelText('Folder'), { target: { value: '/work/app' } })
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'Scan the project first' }))
+  expect((within(section).getByLabelText('Scan folder') as HTMLInputElement).value).toBe(
+    '/work/app',
+  )
+  expect(section.querySelector('summary')!.textContent).toContain('scans /work/app')
+})
+
+test('a dropped lead pick does not come back: builder helper, builder lead, then another lead (3.15)', async () => {
+  codingLead = 'coder'
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  fireEvent.change(within(dialog).getByLabelText('Advisor'), { target: { value: 'builder' } })
+  const planner = await within(dialog).findByLabelText('Who plans it')
+  fireEvent.change(planner, { target: { value: 'builder' } })
+  await waitFor(() =>
+    expect(within(section).queryByRole('checkbox', { name: 'builder' })).toBeNull(),
+  )
+  fireEvent.change(planner, { target: { value: 'reviewer' } })
+  const back = await waitFor(() => within(section).getByRole('checkbox', { name: 'builder' }))
+  expect((back as HTMLInputElement).checked).toBe(false)
+  expect((within(dialog).getByLabelText('Advisor') as HTMLSelectElement).value).toBe('')
+})
+
+test('a check, an advisor and helpers together: one body, and nothing posted before the password (3.13-3.15)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  fireEvent.change(within(dialog).getByLabelText('Advisor'), { target: { value: 'reviewer' } })
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'designer' }))
+  fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
+  fireEvent.change(within(dialog).getByLabelText('Folder'), { target: { value: '/work/site' } })
+  const start = await fillLeadJob(dialog)
+  fireEvent.click(start)
+  const confirm = await within(dialog).findByRole('form', { name: 'Confirm it’s you' })
+  expect(calls).toEqual([])
+  expect(orchestrationBodies).toEqual([])
+  // Focus moves to the password field when the form appears.
+  await waitFor(() =>
+    expect(document.activeElement).toBe(within(confirm).getByLabelText('Security password')),
+  )
+  fireEvent.change(within(confirm).getByLabelText('Security password'), {
+    target: { value: 'correct horse' },
+  })
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm and start' }))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(calls).toEqual(['security-check', 'orchestrations'])
+  expect(orchestrationBodies[0]).toMatchObject({
+    advisorAgentId: 'reviewer',
+    helpers: { agentIds: ['builder', 'designer'], splitTo: 'lead' },
+    check: { command: 'pnpm test', workspace: '/work/site' },
+  })
+})
+
+test('a wrong password shows inline and posts nothing; a fresh_auth_required answer re-opens the form (3.13)', async () => {
+  securityReply = () =>
+    Response.json({ error: { code: 'wrong_password', message: 'no' } }, { status: 401 })
+  open('/b?start=job')
+  const dialog = await startDialog()
+  fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
+  fireEvent.change(within(dialog).getByLabelText('Folder'), { target: { value: '/work/site' } })
+  fireEvent.click(await fillLeadJob(dialog))
+  let confirm = await within(dialog).findByRole('form', { name: 'Confirm it’s you' })
+  fireEvent.change(within(confirm).getByLabelText('Security password'), {
+    target: { value: 'wrong horse' },
+  })
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm and start' }))
+  expect(await within(confirm).findByText('That is not the security password.')).toBeDefined()
+  expect(orchestrationBodies).toEqual([])
+
+  securityReply = () => Response.json({ ok: true })
+  orchestrationReply = () =>
+    Response.json({ error: { code: 'fresh_auth_required', message: 'again' } }, { status: 403 })
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm and start' }))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  confirm = await within(dialog).findByRole('form', { name: 'Confirm it’s you' })
+  expect(within(confirm).getByText(/Confirm your password or passkey again/)).toBeDefined()
+})
+
+test('a bad check timeout opens the folded check section so the reason is visible (3.13)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-check') as HTMLDetailsElement
+  fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
+  await waitFor(() => expect(section.open).toBe(true))
 })

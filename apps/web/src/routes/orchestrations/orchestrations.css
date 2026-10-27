@@ -971,3 +971,154 @@ button.orch-primary,
   line-height: 1.5;
   white-space: nowrap;
 }
+
+/* 3.13: the job's check card */
+.orch-check {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 14px var(--space-4);
+  margin-top: 16px;
+  min-width: 0;
+}
+.orch-check-command code {
+  display: block;
+  font-family: var(--font-code);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.orch-check .orch-mono {
+  overflow-wrap: anywhere;
+}
+.orch-check-runs {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.orch-check-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.orch-check-pill {
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  padding: 1px 10px;
+  font-weight: 700;
+  font-size: 12px;
+}
+.orch-check-pill--passed {
+  border-color: var(--agent-mint-text, currentColor);
+}
+.orch-check-pill--failed,
+.orch-check-pill--timed_out,
+.orch-check-pill--refused,
+.orch-check-pill--interrupted {
+  border-color: var(--agent-coral-text, currentColor);
+  color: var(--agent-coral-text, inherit);
+}
+.orch-check-output {
+  max-height: 220px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--field, var(--hairline));
+  font-family: var(--font-code);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.orch-check-waive {
+  margin-top: 8px;
+}
+
+/* 3.14: the advisor card reuses the check card's look. */
+.orch-advisor {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 14px var(--space-4);
+  margin-top: 16px;
+  min-width: 0;
+}
+.orch-advisor-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.orch-advisor-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.orch-advisor-advice {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 3.15/3.16: helpers and votes reuse the advisor card; bars shrink on a phone. */
+.orch-helpers h4 {
+  margin: 12px 0 0;
+}
+.orch-helpers .orch-agent {
+  margin-right: 10px;
+}
+.orch-vote-options {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.orch-vote-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(40px, 30%) auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+.orch-vote-label {
+  overflow-wrap: anywhere;
+}
+.orch-vote-option--chosen .orch-vote-label {
+  font-weight: 700;
+}
+.orch-vote-bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--hairline);
+  overflow: hidden;
+  min-width: 0;
+}
+.orch-vote-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--ink, currentColor);
+}
+.orch-vote-option--chosen .orch-vote-bar > span {
+  background: var(--agent-mint-text, var(--ink, currentColor));
+}
+.orch-vote-pill--sharp {
+  border-color: var(--agent-mint-text, currentColor);
+}
+.orch-vote-pill--failed {
+  border-color: var(--agent-coral-text, currentColor);
+  color: var(--agent-coral-text, inherit);
+}
+.orch-helper-role {
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  padding: 1px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}

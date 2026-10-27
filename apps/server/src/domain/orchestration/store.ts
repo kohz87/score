@@ -65,6 +65,10 @@ export const OrchRowSchema = z.object({
   ended_at: z.string().nullable(),
   end_reason: z.string().nullable(),
   admission_seen: z.int(),
+  /** 3.14: the advisor, if the person named one. */
+  advisor_agent_id: z.string().nullable().optional(),
+  /** 3.15: the helpers' settings (JSON), if the person named helpers. */
+  helpers_json: z.string().nullable().optional(),
 })
 export type OrchRow = z.infer<typeof OrchRowSchema>
 
@@ -107,6 +111,13 @@ export const StepRowSchema = z.object({
   created_in_attempt: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
+  /** 3.14: an advisor consult (Score's step, not the lead's), its checkpoint, failure signature and reason. */
+  role: z.enum(['advisor', 'helper', 'vote']).nullable().optional(),
+  helper_role: z.string().nullable().optional(),
+  vote_id: z.string().nullable().optional(),
+  checkpoint: z.enum(['before_plan', 'repeat_failure', 'before_done']).nullable().optional(),
+  signature: z.string().nullable().optional(),
+  reason: z.string().nullable().optional(),
 })
 export type StepRow = z.infer<typeof StepRowSchema>
 

@@ -25,3 +25,15 @@ test('rows are newest first and the filters pick needs-you, running and done', (
   expect(filterRuns(rows, 'needs').every((row) => row.needs > 0)).toBe(true)
   expect(filterRuns(rows, 'running').length + filterRuns(rows, 'done').length).toBe(2)
 })
+
+test('advisor steps are not in the lead thread (3.14)', () => {
+  const run = orchestrationSnapshot.orchestration
+  const first = run.stepsList[0]!
+  const withAdvisor = {
+    ...run,
+    stepsList: [...run.stepsList, { ...first, id: 'advisor-step', role: 'advisor' as const }],
+  }
+  const thread = orchestrationThread(withAdvisor)
+  expect(thread.some((step) => step.id === 'advisor-step')).toBe(false)
+  expect(thread.filter((step) => step.kind === 'agent').length).toBe(run.stepsList.length)
+})

@@ -78,6 +78,14 @@ describe('state to visuals', () => {
       'replaces:s1>s3',
     ])
   })
+
+  test('an advisor consult is not a node of the lead graph (3.14)', () => {
+    const graph = buildGraph({
+      leadAgentId: 'lead',
+      stepsList: [step('s1'), step('a1', { role: 'advisor' })],
+    })
+    expect(graph.nodes.map((node) => node.id)).toEqual([LEAD_NODE, 's1'])
+  })
 })
 
 describe('events to effects', () => {

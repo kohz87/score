@@ -252,16 +252,20 @@ export interface ActiveCounts {
 export function activeStepCounts(sqlite: DatabaseSync): ActiveCounts {
   const rows = sqlite
     .prepare(
-      `SELECT orchestration_id AS orch, agent_id AS agent, COUNT(*) AS n FROM orc_attempts
-       WHERE kind = 'step' AND state IN ('created', 'send_started', 'running', 'unknown') AND abandoned_at IS NULL
-         AND suspended = 0
-       GROUP BY orchestration_id, agent_id`,
+      `SELECT a.orchestration_id AS orch, a.agent_id AS agent, COUNT(*) AS n,
+              COALESCE(s.role IN ('helper', 'vote'), 0) AS helper
+         FROM orc_attempts a LEFT JOIN orc_steps s ON s.orchestration_id = a.orchestration_id AND s.id = a.step_id
+       WHERE a.kind = 'step' AND a.state IN ('created', 'send_started', 'running', 'unknown') AND a.abandoned_at IS NULL
+         AND a.suspended = 0
+       GROUP BY a.orchestration_id, a.agent_id, helper`,
     )
-    .all() as { orch: string; agent: string; n: number }[]
+    .all() as { orch: string; agent: string; n: number; helper: number }[]
   const counts: ActiveCounts = { perAgent: new Map(), perRun: new Map(), total: 0 }
   for (const row of rows) {
     counts.perAgent.set(row.agent, (counts.perAgent.get(row.agent) ?? 0) + row.n)
-    counts.perRun.set(row.orch, (counts.perRun.get(row.orch) ?? 0) + row.n)
+    // 3.15: helper work counts in the run's helper slots (`<run>#helpers`), not the lead's.
+    const slot = row.helper ? `${row.orch}#helpers` : row.orch
+    counts.perRun.set(slot, (counts.perRun.get(slot) ?? 0) + row.n)
     counts.total += row.n
   }
   return counts
