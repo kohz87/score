@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.8.2] — 2026-10-27
+
+### Fixed
+- **Claude Code job steps no longer fail after writing their answer.** Claude Code 2.1.311 sends notices Score didn't
+  know (a thinking estimate, a refused tool call, sub-agent bookkeeping); they no longer count as a possible failure.
+  When an unknown record does stop a step, the message now names its kind. (decision 143)
+
 ## [3.8.1] — 2026-10-27
 
 ### Fixed
