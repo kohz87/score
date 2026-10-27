@@ -508,6 +508,7 @@ function StopReply({ message, name }: { message: Message; name: string }) {
       <button
         type="button"
         className="chat-stop-reply"
+        data-protected="inline-flex"
         aria-label={
           state === 'busy' ? `Stopping the reply from ${name}` : `Stop reply from ${name}`
         }

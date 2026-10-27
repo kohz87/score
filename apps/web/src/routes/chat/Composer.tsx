@@ -1346,6 +1346,7 @@ export function Composer({
               <button
                 type="button"
                 className="chat-send chat-send--stop"
+                data-protected="inline-flex"
                 aria-label={stopping ? 'Stopping…' : 'Stop'}
                 title="Stop"
                 aria-busy={stopping}

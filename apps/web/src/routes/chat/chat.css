@@ -1022,13 +1022,18 @@
   opacity: 0.6;
   cursor: default;
 }
-/* Stop is an icon (a red rounded square): the reply's own Stop is a small round button. */
+/* Stop is an icon (a red rounded square): the reply's own Stop is a small round button. Centred with flex, which the
+   protected list keeps under a custom theme. */
+.chat-stop-reply,
+.chat-send--stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .chat-stop-reply {
   width: 32px;
   height: 32px;
   padding: 0;
-  display: inline-grid;
-  place-items: center;
 }
 .chat-send--stop[aria-busy='true'] .stop-icon,
 .chat-stop-reply[aria-busy='true'] .stop-icon {
