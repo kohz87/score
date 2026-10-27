@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.6] — 2026-10-27
+
+### Fixed
+- **Claude Code 2.1.311** (the version that updated itself on this machine) is verified for orchestration and recipe
+  steps: what it reads on its own is unchanged from 2.1.302, so Score can say what a step could reach again.
+
 ## [3.7.5] — 2026-10-27
 
 ### Fixed
