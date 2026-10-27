@@ -189,6 +189,7 @@ export function reduceMessages(
           ...message,
           streaming: false,
           ...(update.data.parts ? { parts: update.data.parts } : {}),
+          ...(update.data.speed ? { speed: update.data.speed } : {}),
         }
       const parts = [...message.parts]
       const index = parts.findLastIndex((part) => part.kind === 'text')

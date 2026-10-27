@@ -369,6 +369,8 @@ export function appendRunMessage(
   append: string,
   now: string,
 ): DomainEventDraft[] {
+  // The first reply text is the run's first output (time to first token), whether or not a message shows it.
+  if (append.trim().length > 0) markFirstOutput(sqlite, runId, now)
   const value = sqlite.prepare('SELECT * FROM message_runs WHERE run_id = ?').get(runId)
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
@@ -780,8 +782,12 @@ export function completeRunMessage(
       )
   }
   sqlite
-    .prepare('UPDATE messages SET parts = ? WHERE id = ?')
-    .run(JSON.stringify(message.parts), message.id)
+    .prepare('UPDATE messages SET parts = ?, speed = ? WHERE id = ?')
+    .run(
+      JSON.stringify(message.parts),
+      status === 'completed' ? runSpeedJson(sqlite, runId) : null,
+      message.id,
+    )
   sqlite.prepare("UPDATE message_runs SET state = 'completed' WHERE message_id = ?").run(message.id)
   return [
     ...drafts,
@@ -959,4 +965,5 @@ import { defaultJobId, ensureJobSession } from './job-sessions.ts'
 import { exchangeEvent, jobEvent, updateJob } from './exchanges/store.ts'
 import { crossContext } from './exchanges/sharing.ts'
 import { agentText } from './message-text.ts'
+import { markFirstOutput, runSpeedJson } from './run-speed.ts'
 import { jobState, settleExchangeTurn } from './exchanges/apply.ts'

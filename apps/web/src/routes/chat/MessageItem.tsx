@@ -22,6 +22,7 @@ import { nestSubagentCalls, subagentLine, subagentReport } from '../../component
 import { useStreamQuery } from '../../data/query-client.ts'
 import { MODEL_DIDNT_ANSWER, formatElapsed, isNotProcessedNotice, stalledFor } from './stall.ts'
 import type { WorkspaceTarget } from './workspace-link.ts'
+import { speedLine } from './speed-format.ts'
 
 /** Expand all / Collapse all (PLAN 5.25): a counter, so pressing the same button twice still reaches cards opened by hand. */
 type Expansion = { open: boolean; version: number }
@@ -591,6 +592,8 @@ export function MessageItem({
     working: writing,
     parts: message.parts,
   })
+  // Quiet figures under a finished agent reply; nothing while it is still being written.
+  const speed = !you && !message.streaming ? speedLine(message.speed) : null
   return (
     <article
       id={`message-${message.id}`}
@@ -612,6 +615,7 @@ export function MessageItem({
               minute: '2-digit',
             })}
           </time>
+          {speed && <span className="chat-speed">{speed}</span>}
           {message.editedBy && <span className="chat-edited">edited</span>}
           {imported && importedLabel && (
             <span className="chat-imported-chip">from {importedLabel}</span>

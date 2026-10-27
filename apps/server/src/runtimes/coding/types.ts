@@ -43,7 +43,14 @@ export type CodingEvent =
       durationMs?: number
       totalTokens?: number
     }
-  | { kind: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number }
+  | {
+      kind: 'usage'
+      inputTokens: number
+      outputTokens: number
+      costUsd?: number
+      /** The CLI's own time to first token (Claude Code's `ttft_ms`). */
+      ttftMs?: number
+    }
   | {
       kind: 'result'
       ok: boolean

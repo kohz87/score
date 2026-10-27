@@ -563,3 +563,19 @@ test('a reply cancelled while Hermes admits it does not stream into the room and
     status: 'cancelled',
   })
 })
+
+test('3.10.0: a finished reply carries the speed of its run; a streaming one carries none', async () => {
+  replies.lead = 'A short answer that streams in a few pieces. '.repeat(3)
+  await send({ text: 'hello' })
+  await advance(600)
+  const writing = messages().find((message) => message.author.kind === 'agent')!
+  expect(writing.streaming).toBe(true)
+  expect(writing.speed).toBeUndefined()
+  await advance(5000)
+  const done = messages().find((message) => message.id === writing.id)!
+  expect(done.streaming).toBe(false)
+  expect(done.speed).toMatchObject({ outputTokens: 240 })
+  expect(done.speed?.ttftMs).toBeGreaterThanOrEqual(0)
+  const completed = events().find((event) => event.type === 'message.completed')
+  expect(completed?.data).toMatchObject({ speed: { outputTokens: 240 } })
+})

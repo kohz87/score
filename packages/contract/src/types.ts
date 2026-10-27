@@ -431,6 +431,14 @@ export const MessagePartSchema = z.discriminatedUnion('kind', [
 ])
 export type MessagePart = z.infer<typeof MessagePartSchema>
 
+/** 3.10.0: speed figures of the run behind an agent reply. A figure Score did not measure is null, never guessed. */
+export const MessageSpeedSchema = z.object({
+  ttftMs: z.number().nonnegative().nullable(),
+  tokensPerSecond: z.number().nonnegative().nullable(),
+  outputTokens: z.int().nonnegative().nullable(),
+})
+export type MessageSpeed = z.infer<typeof MessageSpeedSchema>
+
 export const MessageSchema = z.object({
   id: z.string().min(1),
   roomId: z.string().min(1),
@@ -465,6 +473,8 @@ export const MessageSchema = z.object({
    * messages): the server still decides on Retry.
    */
   retryable: z.boolean().optional(),
+  /** 3.10.0, finished agent replies: the speed of the run behind it. Absent/null = not measured. */
+  speed: MessageSpeedSchema.nullish(),
 })
 export type Message = z.infer<typeof MessageSchema>
 

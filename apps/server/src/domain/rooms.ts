@@ -3,6 +3,8 @@ import type { DatabaseSync } from 'node:sqlite'
 import {
   AgentIdSchema,
   MessageSchema,
+  MessageSpeedSchema,
+  type MessageSpeed,
   RoomImportSchema,
   RoomSchema,
   RoomTagSchema,
@@ -57,6 +59,7 @@ export const MessageRowSchema = z.object({
   job_id: z.string().nullish(),
   alternative_of: z.string().nullish(),
   reply_kind: z.enum(['person', 'handoff']).nullish(),
+  speed: z.string().nullish(),
 })
 const CountSchema = z.object({ count: z.int().nonnegative() })
 
@@ -426,6 +429,17 @@ export function refreshRooms(sqlite: DatabaseSync, now: string): DomainEventDraf
   return resend(sqlite, now, index, changedRooms(sqlite, now, index))
 }
 
+/** A malformed or old-shaped stored value is no speed: one bad row must never break a room's message list. */
+function speedOf(stored: string | null | undefined): MessageSpeed | null {
+  if (!stored) return null
+  try {
+    const parsed = MessageSpeedSchema.safeParse(JSON.parse(stored))
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
+  }
+}
+
 export function messageFromRow(value: unknown): Message {
   const row = MessageRowSchema.parse(value)
   return MessageSchema.parse({
@@ -444,6 +458,7 @@ export function messageFromRow(value: unknown): Message {
     ...(row.job_id ? { jobId: row.job_id } : {}),
     ...(row.alternative_of ? { alternativeOf: row.alternative_of } : {}),
     ...(row.reply_kind ? { retryable: row.reply_kind === 'person' } : {}),
+    ...(speedOf(row.speed) ? { speed: speedOf(row.speed) } : {}),
   })
 }
 
@@ -558,7 +573,12 @@ export function updateMessage(
     ? [
         {
           type: 'message.completed',
-          data: parts ? { messageId, roomId, parts: message.parts } : { messageId, roomId },
+          data: {
+            messageId,
+            roomId,
+            ...(parts ? { parts: message.parts } : {}),
+            ...(message.speed ? { speed: message.speed } : {}),
+          },
         },
       ]
     : [{ type: 'message.delta', data: { messageId, roomId, append } }]
