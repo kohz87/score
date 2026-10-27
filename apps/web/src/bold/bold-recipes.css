@@ -784,3 +784,53 @@
     transition: none !important;
   }
 }
+
+/* 3.8.0: archived recipes in the list, and the delete-with-runs decision (a protected surface). */
+[data-ui='bold'] .bold-rp-archived-row {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-rp-archived-row .bold-rp-row {
+  flex: 1;
+  min-width: 0;
+  opacity: 0.8;
+}
+
+[data-ui='bold'] .bold-rp-archived-toggle {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-rp-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(5, 6, 9, 0.62);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: max(40px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 40px
+    max(16px, env(safe-area-inset-left, 0px));
+}
+
+[data-ui='bold'] .bold-rp-confirm {
+  width: 100%;
+  max-width: 520px;
+  margin-top: max(70px, env(safe-area-inset-top, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--bold-d, 1));
+  background: var(--panel);
+  padding: calc(24px * var(--bold-d, 1));
+  border-radius: calc(26px * var(--bold-r, 1));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+[data-ui='bold'] .bold-rp-confirm p {
+  margin: 0;
+  color: var(--ink2);
+}

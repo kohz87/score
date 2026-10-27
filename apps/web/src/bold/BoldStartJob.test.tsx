@@ -104,6 +104,7 @@ const workflow = {
   createdAt: iso,
   updatedAt: iso,
   activeRuns: 0,
+  archivedAt: null as string | null,
 }
 const routine = {
   id: 'lead:nightly',
@@ -187,6 +188,7 @@ let workflowRunBodies: Record<string, unknown>[] = []
 let workflowRunReply: () => Response = () =>
   Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
 let triggerBody: unknown
+let extraWorkflows: (typeof workflow)[] = []
 const disposers: (() => void)[] = []
 
 beforeEach(() => {
@@ -196,6 +198,7 @@ beforeEach(() => {
   workflowRunReply = () =>
     Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
   triggerBody = undefined
+  extraWorkflows = []
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
   vi.stubGlobal(
@@ -232,7 +235,7 @@ beforeEach(() => {
         })
       if (url.pathname === '/api/workflows')
         return json({
-          items: [workflow],
+          items: [workflow, ...extraWorkflows],
           inventory: {
             definitions: 1,
             versions: 1,
@@ -382,6 +385,29 @@ test('the recipe, When and required inputs each block and then unblock Start', a
   expect(within(dialog).getByText('Fill in Topic')).toBeDefined()
   fireEvent.change(within(dialog).getByLabelText(/^Topic/), { target: { value: '2.4' } })
   await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+})
+
+test('an archived recipe is not offered', async () => {
+  extraWorkflows = [
+    { ...workflow, id: 'wf_old', name: 'Old recipe', archivedAt: iso },
+    { ...workflow, id: 'wf_new', name: 'New recipe' },
+  ]
+  open('/b?start=job')
+  const dialog = await startDialog()
+  expect(await within(dialog).findByRole('radio', { name: 'New recipe' })).toBeDefined()
+  expect(within(dialog).queryByRole('radio', { name: 'Old recipe' })).toBeNull()
+})
+
+test('a ?recipe= link to an archived recipe says so and falls back to lead decides', async () => {
+  extraWorkflows = [{ ...workflow, id: 'wf_old', name: 'Old recipe', archivedAt: iso }]
+  open('/b?start=job&recipe=wf_old')
+  const dialog = await startDialog()
+  expect(
+    await within(dialog).findByText('That recipe is archived. Unarchive it in Recipes to use it.'),
+  ).toBeDefined()
+  expect(
+    within(dialog).getByRole('radio', { name: 'lead decides' }).getAttribute('aria-checked'),
+  ).toBe('true')
 })
 
 test('existing routines are listed as scheduled jobs', async () => {

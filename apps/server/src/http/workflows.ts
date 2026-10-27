@@ -7,6 +7,7 @@ import {
   WaiverDecisionSchema,
   type WorkflowDefinition,
   WorkflowCreateSchema,
+  WorkflowDeleteWithRunsSchema,
   WorkflowExportRequestSchema,
   WorkflowPolicyRemapDecisionSchema,
   WorkflowRemapDecisionSchema,
@@ -17,6 +18,8 @@ import {
   WorkflowVersionCreateSchema,
 } from '@score/contract'
 import type { FastifyInstance } from 'fastify'
+import { randomUUID } from 'node:crypto'
+import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
@@ -25,13 +28,16 @@ import {
   addVersion,
   createWorkflow,
   deleteWorkflow,
+  deleteWorkflowWithRuns,
   exportVersion,
   getWorkflow,
   listWorkflows,
   readVersion,
+  setWorkflowArchived,
 } from '../domain/workflows/definitions.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import { HttpError } from '../errors.ts'
+import type { Ingest } from '../hub/ingest.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 const IdParams = z.object({ id: z.string().min(1).max(100) })
@@ -50,6 +56,7 @@ export function registerWorkflowRoutes(
   deps: {
     orchestrator: Orchestrator
     db: ScoreDb
+    ingest?: Ingest
     port: Pick<HermesPort, 'listAgents'>
     clock?: () => number
   },
@@ -104,6 +111,30 @@ export function registerWorkflowRoutes(
   app.delete('/api/workflows/:id', mutation, async (request, reply) => {
     db.tx((sqlite) => deleteWorkflow(sqlite, IdParams.parse(request.params).id))
     return reply.code(204).send()
+  })
+  // Archive (3.8.0): a recipe with runs is hidden, not deleted. Not streamed: the web refetches the list.
+  for (const [action, archived] of [
+    ['archive', true],
+    ['unarchive', false],
+  ] as const)
+    app.post(`/api/workflows/:id/${action}`, mutation, async (request) =>
+      db.tx((sqlite) =>
+        setWorkflowArchived(sqlite, IdParams.parse(request.params).id, archived, now()),
+      ),
+    )
+  app.post('/api/workflows/:id/delete-with-runs', mutation, async (request) => {
+    const { id } = IdParams.parse(request.params)
+    const body = WorkflowDeleteWithRunsSchema.parse(request.body)
+    let deletedRuns = 0
+    const apply = ({ sqlite, now: at }: { sqlite: DatabaseSync; now: string }) => {
+      const result = deleteWorkflowWithRuns(sqlite, id, body.confirm, at)
+      deletedRuns = result.deletedRuns
+      return result.events
+    }
+    if (deps.ingest)
+      await deps.ingest.submit({ source: 'workflows', identity: randomUUID(), apply })
+    else db.tx((sqlite) => apply({ sqlite, now: now() }))
+    return { deletedRuns }
   })
   app.post('/api/workflows/:id/versions/:version/export', async (request) => {
     const { id, version } = VersionParams.parse(request.params)

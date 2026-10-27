@@ -48,6 +48,8 @@ export const protectedClasses = [
   'bold-trigger-card',
   'bold-trigger-secret',
   'bold-trigger-confirm',
+  // 3.8.0: Delete a recipe with its runs (typed name)
+  'bold-rp-confirm',
   // 2.5.0: a run's step that waits on the person, and the Runs list's Needs you count
   'bold-run-wait',
   'orch-pill',
