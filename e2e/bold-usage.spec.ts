@@ -48,10 +48,29 @@ test('Usage fits 1440×900 and 390×844 with the phone nav above the content', a
     'reviewer',
     'lead',
   ])
+  // 3.7.13 (owner): a long amount beside the longest bar stays inside the card ("$0.49 estimated" overflowed).
+  const spend = page.getByRole('region', { name: 'Spend by agent' })
+  await spend
+    .locator('.usage-spend-value')
+    .first()
+    .evaluate((node) => {
+      node.textContent = '$0.49 estimated'
+    })
+  const card = (await spend.boundingBox())!
+  for (const value of await spend.locator('.usage-spend-value').all()) {
+    const box = (await value.boundingBox())!
+    expect(box.x + box.width).toBeLessThanOrEqual(card.x + card.width)
+  }
   await page.screenshot({ path: testInfo.outputPath('bold-usage-1440.png'), fullPage: true })
 
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(page.getByRole('button', { name: 'Score, go to the team room' })).toBeVisible()
+  // And on a phone, where the card is narrowest.
+  const phoneCard = (await spend.boundingBox())!
+  for (const value of await spend.locator('.usage-spend-value').all()) {
+    const box = (await value.boundingBox())!
+    expect(box.x + box.width).toBeLessThanOrEqual(phoneCard.x + phoneCard.width)
+  }
   const navBox = await nav.boundingBox()
   const mainBox = await page.locator('.bold-settings-page .setmain').boundingBox()
   expect(navBox).not.toBeNull()

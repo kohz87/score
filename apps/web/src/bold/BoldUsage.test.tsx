@@ -254,6 +254,27 @@ test('a coding agent’s estimated or unknown spend is marked beside the figure'
   expect(rows[2]!.textContent).toContain('unknown')
 })
 
+test('a removed agent with nothing spent is left out; one that spent stays (3.7.13)', async () => {
+  reportForRange = (range) => {
+    const fixture = reportFixture(range)
+    const [builder] = fixture.byAgent
+    return reportFixture(range, {
+      byAgent: [
+        ...fixture.byAgent,
+        { ...builder!, agentId: 'gone-quiet', spendUsd: null },
+        { ...builder!, agentId: 'gone-spent', spendUsd: 1.5 },
+      ],
+    })
+  }
+  open('/b/settings/usage')
+  const card = await screen.findByRole('region', { name: 'Spend by agent' })
+  const names = [...card.querySelectorAll('.usage-spend-name')].map((name) =>
+    name.textContent?.trim(),
+  )
+  expect(names).toContain('gone-spent')
+  expect(names).not.toContain('gone-quiet')
+})
+
 test('range switching refetches and the CSV link carries the same range', async () => {
   const router = open('/b/settings/usage')
   await screen.findByRole('region', { name: 'Usage in numbers' })

@@ -7,6 +7,7 @@ import { agentsQuery } from '../routes/chat/queries.ts'
 import { formatMoney, useDisplayCurrency, USD } from '../data/currency.ts'
 import { formatDuration, formatPercent } from '../routes/reports/reports-format.ts'
 import { JourneyChart } from '../routes/reports/JourneyChart.tsx'
+import { onTeam } from './bold-agents.ts'
 import {
   customRangeError,
   reportCsvHref,
@@ -402,6 +403,13 @@ function SpendFigure({
         ? `${money(row.spendUsd)} estimated`
         : money(row.spendUsd)
   const rows = report.byAgent
+    // 3.7.13 (owner): a removed agent with nothing spent in the period is noise; one that spent stays, so totals add up.
+    .filter((row) => {
+      // Until the agents load nothing is hidden, so a row doesn't flicker in.
+      if (row.spendUsd !== null || agents.length === 0) return true
+      const known = agents.find((agent) => agent.id === row.agentId)
+      return known !== undefined && onTeam(known)
+    })
     .map((row) => ({
       ...row,
       agent: agentFor(agents, row.agentId),
