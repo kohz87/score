@@ -2,7 +2,7 @@ import { MCP_CALLS_PER_MINUTE } from '@score/contract'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { FastifyInstance } from 'fastify'
 import { HttpError } from '../errors.ts'
-import { createMcpServer, type McpToolDeps } from './tools.ts'
+import { createMcpServer, servedToolNames, type McpToolDeps } from './tools.ts'
 
 export const MCP_PATH = '/bridge/mcp'
 const MINUTE = 60_000
@@ -117,6 +117,12 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): voi
       await transport.handleRequest(request.raw, reply.raw, request.body)
       handed = true
       maybeRelease()
+      // 3.7.8: Hermes keeps the list it is handed per connection; remember it so preflight can say what the lead has.
+      if (
+        (request.body as { method?: unknown } | null)?.method === 'tools/list' &&
+        reply.raw.statusCode < 300
+      )
+        access.recordListed(identity.agentId, servedToolNames(server), match![1]!)
     } catch (error) {
       handed = true
       maybeRelease()
