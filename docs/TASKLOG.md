@@ -1777,3 +1777,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   unmerged tree and failed at once (no script), rerun. Gate: e2e 852 passed, 2 failed (tablet flake ×2); check failed on the
   contract schema table (TerminalTicketRequestSchema added), rerun green (server 4865, web 3031, contract 1534).
 - **v3.11.0 deployed live** (~09:52 UTC, idle guard passed): backup score-pre-3.11.0-20261027.db, health ok.
+- **3.12.0** (2026-10-27; task 3.10.0; owner: "is there a way to show tps, ttft etc?" → "On each reply + per agent",
+  decision 148). `runs.first_output_at` (migration 0099, set once on the first non-whitespace reply text; Claude's
+  `ttft_ms` used only within the run), `messages.speed` kept on finished replies, a muted reply line ("first token 1.2 s ·
+  48 tok/s avg · 1,240 tokens") and "Speed by agent" medians in Settings › Usage; tokens/s labelled an average (tool time
+  included). Sonnet coder from docs/briefs/3.10.0-speed.md, 1 fix round (a malformed stored speed broke the room's
+  message list — now read defensively; ttft bounds; whitespace; labels; runs(started_at) index); re-review clean. Release
+  merge conflicted in DECISIONS (148/149), resolved. Gate: e2e 853 passed, 1 failed (tablet flake), check green (server 4877,
+  web 3034, contract 1536).
+- **v3.12.0 deployed live** (~10:05 UTC, idle guard passed): backup score-pre-3.10.0-20261027.db, health ok.
