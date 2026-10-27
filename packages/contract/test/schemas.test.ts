@@ -1479,6 +1479,19 @@ const cases = [
     { command: 'pnpm test', workspace: 'relative/path' },
   ],
   ['CheckOutcomeSchema', 'timed_out', 'maybe'],
+  ['AdvisorCheckpointSchema', 'before_done', 'after_lunch'],
+  [
+    'AdvisorConsultViewSchema',
+    {
+      stepId: 'adv1',
+      checkpoint: 'before_plan',
+      reason: '',
+      status: 'succeeded',
+      advice: 'Add a test step.',
+      createdAt: '2026-10-27T10:00:00.000Z',
+    },
+    { stepId: 'adv1', checkpoint: 'whenever' },
+  ],
   [
     'CheckRunViewSchema',
     {

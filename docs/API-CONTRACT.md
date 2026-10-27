@@ -2216,6 +2216,28 @@ are never refused for this. `when: 'each_step'` also queues a run (reason `step`
   decision surface); records `check_waivedAt`, history `check_waived`, lead cause `check_waived`; success is then not refused.
 - History kinds: `check_set`, `check_requested`, `check_started`, `check_ended`, `check_waived`.
 
+### The advisor (3.14, decision 150)
+
+`OrchestrationCreate.advisorAgentId?`: an agent Score consults by itself (never the lead: `400 bad_request`). It is checked like
+an allowed agent (preflight, a coding advisor's policy consent and reach acknowledgement) but is not added to `allowedAgents`.
+A consult is a step of Score's (`StepView.role: 'advisor'`, ids `adv1`, `adv2`, …): queued without a gate, admitted, budgeted,
+stopped and recovered like any step, not counted in `maxSteps`; the lead can't cancel, depend on or replace it
+(`unknown_step`, `bad_dependency`, `bad_replaces`). Its input is a briefing (≤ 24 KiB: goal, plan, the person's check and its
+last result, the lead's steps newest first with results quoted as data) asking for advice in ≤ 1,200 characters.
+
+Checkpoints:
+- **before plan:** the first `orch.plan` starts a consult; `orch.assign` is refused `advice_pending` until it has ended (a
+  first `orch.assign` without a plan starts it too).
+- **same failure twice:** a step that fails like an earlier failed step (normalised text: case, numbers, ids and spacing
+  ignored), or the check failing twice in a row with the same ending, starts one consult per failure; at most 3 per job.
+- **before done:** `orch.finish { outcome: 'success' }` (after the check rule) starts a consult and is refused
+  `advice_pending` until it has ended; once it has, success is accepted. `partial`/`failed` never wait.
+Advice reaches the lead as cause `advice` (or `advice_failed`) and the latest three as quoted `ADVICE advN` blocks. It is
+never a veto. A consult the budget can't cover is skipped (history `advice_skipped`) and nothing waits for it.
+- `OrchestrationDetail.advisor?: { agentId; consults: AdvisorConsultView[] } | null`; `AdvisorConsultView { stepId;
+  checkpoint: 'before_plan'|'repeat_failure'|'before_done'; reason; status: StepStatus; advice: string|null; createdAt }`.
+- History kinds: `advisor_set`, `advisor_consulted`, `advice_skipped`.
+
 A stale revision answers `409 conflict` with `details.currentRevision`. `GET /api/orchestrations/:id` also carries, per
 attempt, `state`, `evidence`, `unknownReason`, owed-Stop timestamps and spend, so the page can show "not confirmed ended".
 Not in stage A: the Watch replay scoped to an attempt's session (design v3 "Watch scope"); orchestration frames stay in the
