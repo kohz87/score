@@ -540,6 +540,8 @@
 }
 .cm-lp-table {
   overflow-x: auto;
+  /* 3.8.5: the size grips sit on the edges; they never make the table scroll up and down. */
+  overflow-y: hidden;
   max-width: 100%;
   margin: 6px 0;
   border: 1px solid var(--hairline);
@@ -553,6 +555,10 @@
 }
 .cm-lp-table th,
 .cm-lp-table td {
+  /* 3.8.5: words wrap between words (the editor's own word-break let a narrow column split "Card" letter by letter);
+     a table too wide for its space scrolls sideways instead. */
+  word-break: normal;
+  overflow-wrap: break-word;
   border-bottom: 1px solid var(--hairline);
   padding: var(--space-2) var(--space-3);
   text-align: left;
@@ -604,6 +610,10 @@
   cursor: row-resize;
   touch-action: none;
   z-index: 1;
+}
+/* The last row's grip stays inside the table (the wrap clips what hangs below it). */
+.cm-lp-table tr:last-child .cm-lp-row-resize {
+  bottom: 0;
 }
 .cm-lp-row-resize:hover,
 .cm-lp-row-resize:active {
