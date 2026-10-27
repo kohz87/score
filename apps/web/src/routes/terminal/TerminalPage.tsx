@@ -8,6 +8,7 @@ import {
   TerminalServerFrameSchema,
   TerminalTicketSchema,
 } from '@score/contract'
+import { useSearchParams } from 'react-router'
 import { apiFetch } from '../../data/api.ts'
 import { passkeysSupportedHere, signInWithPasskey } from '../../data/passkeys.ts'
 import { KEY_BYTES, clipboardKey, osc52Text, withCtrl } from './keys.ts'
@@ -46,6 +47,10 @@ const endings: Record<string, string> = {
 }
 
 export function TerminalPage() {
+  // 3.11.0 (owner): `?agent=<id>` opens a live session with that agent's own CLI instead of a shell.
+  const [params] = useSearchParams()
+  const agentParam = params.get('agent')
+  const agent = agentParam && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(agentParam) ? agentParam : null
   const security = useQuery({
     queryKey: ['session', 'security'],
     queryFn: async () => SecurityStatusSchema.parse(await apiFetch('session/security')),
@@ -257,7 +262,11 @@ export function TerminalPage() {
       await proof(controller.signal)
       if (!alive.current || controller.signal.aborted) return
       const ticket = TerminalTicketSchema.parse(
-        await apiFetch('terminal/tickets', { method: 'POST', signal: controller.signal }),
+        await apiFetch('terminal/tickets', {
+          method: 'POST',
+          signal: controller.signal,
+          ...(agent ? { body: JSON.stringify({ agent }) } : {}),
+        }),
       ).ticket
       if (!alive.current || controller.signal.aborted) return
       setPassword('')
@@ -293,11 +302,12 @@ export function TerminalPage() {
   const showTerminal = phase === 'open' || phase === 'ended'
   return (
     <section className="terminal-page">
-      <h1>Terminal</h1>
+      <h1>{agent ? `Live session: ${agent}` : 'Terminal'}</h1>
       <p className="terminal-notice">
-        This is a shell on the Score machine{user ? ` as ${user}` : ''}. Anyone who can use it can
-        do anything that account can. Closed after 15 minutes without activity: use tmux for long
-        jobs.
+        {agent
+          ? `This is ${agent}'s own CLI, a new session of its own, running on the Score machine${user ? ` as ${user}` : ''}: type to it directly, slash commands included. It can do what that CLI can do as that account, outside Score's chats and rules.`
+          : `This is a shell on the Score machine${user ? ` as ${user}` : ''}. Anyone who can use it can do anything that account can.`}{' '}
+        Closed after 15 minutes without activity: use tmux for long jobs.
       </p>
       {phase === 'auth' && (
         <form

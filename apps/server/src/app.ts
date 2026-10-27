@@ -1,3 +1,6 @@
+import { HttpError } from './errors.ts'
+import { isCodingAgent } from './runtimes/coding/store.ts'
+import { lifecycleOf } from './domain/agent-lifecycle.ts'
 import type { SecureContextOptions, TlsOptions } from 'node:tls'
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify'
 import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
@@ -509,6 +512,25 @@ export function buildApp({
         registerTerminalRoutes(app, {
           origins: allowedOriginsFor(config),
           hostEnrolled: () => securityPassword?.hostIssued() ?? false,
+          // 3.11.0: a live session runs the agent's own CLI (Hermes or a coding CLI), fresh, as this user.
+          agentRun: async (agentId) => {
+            if (db && isCodingAgent(db.sqlite, agentId)) {
+              const command = await coding?.interactiveCommand(agentId)
+              if (!command)
+                throw new HttpError(
+                  409,
+                  'conflict',
+                  'This agent’s CLI or its workspace isn’t available on this computer.',
+                )
+              return command
+            }
+            const life = db ? lifecycleOf(db.sqlite, agentId) : undefined
+            if (life && life.state !== 'ready')
+              throw new HttpError(409, 'conflict', 'This agent isn’t ready for a live session.')
+            const command = port.interactiveCommand?.(agentId) ?? null
+            if (!command) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
+            return command
+          },
           ...terminal,
         }),
       )

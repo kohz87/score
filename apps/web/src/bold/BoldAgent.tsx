@@ -12,6 +12,7 @@ import { AgentFiles } from '../routes/team/AgentFiles.tsx'
 import { CodingOverview } from '../routes/team/CodingAgent.tsx'
 import { ModelTab } from '../routes/team/ModelTab.tsx'
 import { boldAgentScreenLink } from './bold-links.ts'
+import { useTerminalAvailable } from '../shell/TerminalButton.tsx'
 import type { AgentFileName } from '../routes/team/file-queries.ts'
 import { useAgentPause } from '../routes/watch/watch-queries.ts'
 import { agentDisplayName, agentMood, agentStateLabel, canTalkTo } from './bold-agents.ts'
@@ -145,6 +146,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const questions = useStreamQuery(questionsQuery).data ?? []
   const location = useLocation()
   const [search] = useSearchParams()
+  // 3.11.0: "Open live session" exists only when the server offers a terminal.
+  const terminalOffered = useTerminalAvailable()
   const [file, setFile] = useState<AgentFileName>('SOUL.md')
   const [more, setMore] = useState(() => location.hash.startsWith('#agent-') || search.has('path'))
   const client = useQueryClient()
@@ -245,6 +248,16 @@ function AgentProfile({ agentId }: { agentId: string }) {
           {canTalkTo(agent) && (
             <Link className="btn primary" to={`/b?with=${encodeURIComponent(agent.id)}`}>
               Message
+            </Link>
+          )}
+          {/* 3.11.0 (owner): the agent's own CLI in Score's Terminal (same password/passkey lock). */}
+          {terminalOffered && canTalkTo(agent) && (
+            <Link
+              className="btn ghost"
+              to={`/b/terminal?agent=${encodeURIComponent(agent.id)}`}
+              state={{ terminalFrom: `${location.pathname}${location.search}` }}
+            >
+              Open live session
             </Link>
           )}
           {!inFlight && agent.lifecycle?.state !== 'removed' && (

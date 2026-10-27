@@ -1,3 +1,5 @@
+import { resolveOnPath } from '../../runtimes/coding/native-exec.ts'
+import { homedir } from 'node:os'
 import { type AgentSummary, type HermesCheck, type ModelRef } from '@score/contract'
 import { ProfilesReader, agentSummary } from './profiles.ts'
 import { ProfileFiles } from './profile-files.ts'
@@ -533,6 +535,14 @@ export class LivePort implements HermesPort {
   async setPluginEnabled(agentId: string, id: string, enabled: boolean) {
     this.requireStarted()
     return this.tabs.setPluginEnabled(agentId, id, enabled)
+  }
+  interactiveCommand(agentId: string): { file: string; args: string[]; cwd: string } | null {
+    const parsed = ProfileNameSchema.safeParse(agentId)
+    if (!parsed.success || !this.profiles.profileHome(parsed.data)) return null
+    const file = resolveOnPath('hermes', process.env.PATH)
+    if (!file) return null
+    // `hermes -p <profile>` opens its interactive chat: messages and its own slash commands, as this user.
+    return { file, args: ['-p', parsed.data], cwd: homedir() }
   }
   async restartGateway(agentId: string): Promise<void> {
     const profile = this.approvalProfile(agentId)
