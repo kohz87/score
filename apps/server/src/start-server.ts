@@ -76,6 +76,7 @@ import { CodingRuntime } from './runtimes/coding/service.ts'
 import { fallbackForced, fenceBarrier, UnitBackend } from './runtimes/coding/unit-backend.ts'
 import { CodingJournal } from './domain/orchestration/coding-journal.ts'
 import { defaultRootPolicy } from './workspace/policy.ts'
+import { makeCheckSpawner } from './runtimes/check/spawn-check.ts'
 
 /** Stands in for the installation id while it is unresolved: the backend is disabled and launches nothing. */
 const UNRESOLVED_INSTALLATION = '00000000-0000-4000-8000-000000000000'
@@ -447,6 +448,10 @@ export async function startServer(
       access: new McpAccessStore(database),
       fence: fenceStore,
       codingFacts: codingRuntime.workerFacts(),
+      // 3.13: the oracle runs only in folders the Workspace tab would allow (never Score's or Hermes's homes).
+      checks: makeCheckSpawner(
+        defaultRootPolicy([config.home, resolveHermesHome(runtimeHome), resolveHermesHome()]),
+      ),
       mcpAvailable: Boolean(config.remote),
       onError: (error) => app?.log.error({ err: error }, 'Orchestration executor failed'),
     })

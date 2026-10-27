@@ -1,5 +1,6 @@
 import { ORCH_LIMITS, ORC_CAPABILITY_PLACEHOLDER, type BudgetView } from '@score/contract'
 import type { CauseRow, GateRow, InquiryRow, OrchRow, StepRow } from './store.ts'
+import { joinCommand } from './check-command.ts'
 
 // Rendering of the two kinds of orchestration input. The lead's input is frozen at its claim and stored with a
 // placeholder where the capability goes; step inputs never contain a capability (they are scanned before admission).
@@ -50,6 +51,38 @@ export interface LeadInputArgs {
   causes: CauseRow[]
   budget: BudgetView
   now: string
+  /** 3.13: the person's check and its last run; null or absent when the job has none. */
+  check?: LeadCheck | null
+}
+
+export interface LeadCheck {
+  argv: string[]
+  workspace: string
+  when: 'finish' | 'each_step'
+  waived: boolean
+  pending: boolean
+  latest: { outcome: string; exitCode: number | null; current: boolean; output: string } | null
+}
+
+function checkLines(check: LeadCheck): string[] {
+  const lines = [
+    `Check (set by the person; you can run it with orch.check() but never change it): ${joinCommand(check.argv)} in ${check.workspace}${check.when === 'each_step' ? ', also run by Score after every step that succeeds' : ''}.`,
+    check.waived
+      ? 'The person lets you finish with outcome success without a passing check.'
+      : 'orch.finish with outcome success is refused until the check passes in a run that started after the last step ended. Finishing partial or failed is always possible.',
+  ]
+  if (check.pending)
+    lines.push('A check run is queued or running; its result starts a new turn for you.')
+  const latest = check.latest
+  if (latest === null) lines.push('Last check: none yet.')
+  else {
+    lines.push(
+      `Last check: ${latest.outcome}${latest.exitCode !== null ? ` (exit ${latest.exitCode})` : ''}${latest.outcome === 'passed' ? (latest.current ? ', after the last step' : ', but before a later step ended') : ''}.`,
+    )
+    if (latest.outcome !== 'passed' && latest.output.trim() !== '')
+      lines.push(quote('CHECK OUTPUT (the end)', latest.output))
+  }
+  return lines
 }
 
 const DATA_NOTICE =
@@ -67,7 +100,7 @@ export function renderLeadInput(args: LeadInputArgs): string {
     `Capability (pass it as the "capability" argument of every orch.* call this turn; keep it private, never put it in an instruction or note): ${ORC_CAPABILITY_PLACEHOLDER}`,
     'Every orch.* call also needs a "commandId" you choose (1-64 characters of letters, digits and . _ : -), unique within this turn. To repeat a call whose reply you never saw, send it again with the SAME commandId and the same arguments, or ask orch.receipt with that commandId.',
     '',
-    'Tools: orch.plan(entries), orch.assign(agent, instruction, after?, replaces?, needsApproval?, ifQuotaLow?) (needsApproval only under the lead-asks policy, in the same call; it cannot be added later; a coding agent low on its usage limit is refused with quota_low and the agents that have room: choose one of them, or pass ifQuotaLow: "ask_owner" when only that agent can do the step), orch.cancel(stepId), orch.ask(question), orch.note(text), orch.finish(outcome, summary), orch.receipt(commandId).',
+    `Tools: orch.plan(entries), orch.assign(agent, instruction, after?, replaces?, needsApproval?, ifQuotaLow?) (needsApproval only under the lead-asks policy, in the same call; it cannot be added later; a coding agent low on its usage limit is refused with quota_low and the agents that have room: choose one of them, or pass ifQuotaLow: "ask_owner" when only that agent can do the step), orch.cancel(stepId), orch.ask(question), orch.note(text), orch.finish(outcome, summary), orch.receipt(commandId)${args.check ? ', orch.check()' : ''}.`,
     `A retry or replacement of a failed or cancelled step must say replaces: <stepId>. A step starts only when every step in "after" has succeeded. At most ${o.max_concurrent_steps} steps run at once.`,
     DATA_NOTICE,
     '',
@@ -80,6 +113,7 @@ export function renderLeadInput(args: LeadInputArgs): string {
       ? 'Budget: none set.'
       : `Budget: $${budget.limitUsd.toFixed(2)}, about $${(budget.remainingUsd ?? 0).toFixed(2)} left after reservations${budget.unknownSpend ? ' (some spend is unknown)' : ''}.`,
     o.deadline_at ? `Deadline: ${o.deadline_at}.` : 'Deadline: none.',
+    ...(args.check ? ['', ...checkLines(args.check)] : []),
     '',
   )
   lines.push('Plan:')

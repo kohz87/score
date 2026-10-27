@@ -18,6 +18,10 @@ import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Orchestrator } from '../domain/orchestration/executor.ts'
 import { requestIdempotency } from './idempotency.ts'
+import { HttpError } from '../errors.ts'
+import { FRESH_AUTH_MS } from '../terminal/tickets.ts'
+import { checkRoot, type RootPolicy } from '../workspace/policy.ts'
+import { splitCommand } from '../domain/orchestration/check-command.ts'
 
 const IdParams = z.object({ id: z.string().min(1).max(100) })
 const GateParams = IdParams.extend({ gateId: z.string().min(1).max(100) })
@@ -45,6 +49,8 @@ export function registerOrchestrationRoutes(
     db: ScoreDb
     port: Pick<HermesPort, 'listAgents'>
     clock?: () => number
+    checkPolicy?: RootPolicy
+    hostEnrolled?: () => boolean
   },
 ): void {
   const { orchestrator } = deps
@@ -71,6 +77,28 @@ export function registerOrchestrationRoutes(
   app.get('/api/orchestrations', async () => orchestrator.list())
   app.post('/api/orchestrations', mutation, async (request, reply) => {
     const body = OrchestrationCreateSchema.parse(request.body)
+    if (body.check) {
+      // 3.13: the oracle runs a command as this user. Same bar as opening a terminal: the host set the security
+      // password, and this session proved it (or a passkey) in the last minute. Checked before anything is created.
+      if (!deps.checkPolicy || !deps.hostEnrolled?.())
+        throw new HttpError(
+          403,
+          'second_factor_not_enrolled',
+          'Set the security password on the Score machine with scripts/score password first.',
+        )
+      const split = splitCommand(body.check.command)
+      if (!split.ok) throw new HttpError(400, 'invalid_check', split.reason)
+      const root = await checkRoot(body.check.workspace, deps.checkPolicy)
+      if (!root.ok) throw new HttpError(400, 'invalid_check', root.reason)
+      const session = app.pairing.pairedSession(request.headers.cookie)
+      if (session === undefined || !app.pairing.takeFresh(session, FRESH_AUTH_MS))
+        throw new HttpError(
+          403,
+          'fresh_auth_required',
+          'Confirm your security password or passkey first.',
+        )
+      body.check = { ...body.check, workspace: root.real }
+    }
     const created = await orchestrator.create(body, await deps.port.listAgents())
     return reply.code(201).send(created)
   })
@@ -87,6 +115,14 @@ export function registerOrchestrationRoutes(
     // Stop never waits on a stale page: the body is validated but its revision is not compared.
     RunControlSchema.parse(request.body)
     return orchestrator.stop(id)
+  })
+  app.post('/api/orchestrations/:id/check/run', mutation, async (request) => {
+    const { id } = IdParams.parse(request.params)
+    return orchestrator.runCheck(id, RunControlSchema.parse(request.body))
+  })
+  app.post('/api/orchestrations/:id/check/waive', mutation, async (request) => {
+    const { id } = IdParams.parse(request.params)
+    return orchestrator.waiveCheck(id, RunControlSchema.parse(request.body))
   })
   app.post('/api/orchestrations/:id/pause', mutation, async (request) => {
     const { id } = IdParams.parse(request.params)

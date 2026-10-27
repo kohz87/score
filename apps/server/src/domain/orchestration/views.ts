@@ -8,6 +8,7 @@ import type {
   OwnershipState,
   StepView,
 } from '@score/contract'
+import { checkView } from './checks.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { workerPoliciesOf } from './coding-policy.ts'
 import { lifecycleOf } from '../agent-lifecycle.ts'
@@ -307,6 +308,7 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     endReason: o.end_reason,
     storage: { reserveBytes: o.reserve_bytes, storedBytes: o.stored_bytes },
     quotaFloorPercent: o.quota_floor_percent,
+    check: checkView(sqlite, o.id),
     coding: {
       stepLimit: o.coding_steps,
       acceptedUnknownCost: o.accepted_unknown_cost.filter(

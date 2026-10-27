@@ -47,7 +47,7 @@ import { isNotDispatched, type HermesPort } from '../../hermes/index.ts'
 import type { DomainEventDraft, Ingest } from '../../hub/ingest.ts'
 import { headSeq } from '../../hub/snapshot.ts'
 import type { McpAccessStore } from '../../mcp/access.ts'
-import { redactBounded } from '../../redact.ts'
+import { redact, redactBounded } from '../../redact.ts'
 import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { briefTitle, createBrief, emitBriefChange } from '../briefs.ts'
 import { insertRoom, storeMessage } from '../rooms.ts'
@@ -73,6 +73,7 @@ import {
   abandonAttempts,
   answerInquiry,
   decideGate,
+  expectRevision,
   grantWaiver,
   remapAgent,
   pauseRun,
@@ -148,6 +149,21 @@ import { decideNodeGate, remapWorkflow, retryNode, tryAgain } from '../workflows
 import { nodesOf, readResult, requireWfRun } from '../workflows/store.ts'
 import { timelineOf } from './timeline.ts'
 import { pruneOrchestrationRows } from './prune.ts'
+import { splitCommand } from './check-command.ts'
+import {
+  CHECK_LEAD_BYTES,
+  CHECK_OUTPUT_BYTES,
+  type CheckConfig,
+  checkConfigOf,
+  checkIsCurrent,
+  checkPending,
+  checksOf,
+  personRunsCheck,
+  queueCheckAfterStep,
+  tailBytes,
+  waiveCheck,
+} from './checks.ts'
+import type { CheckProcess, CheckSpawner } from '../../runtimes/check/spawn-check.ts'
 import {
   AttemptRowSchema,
   addCause,
@@ -221,6 +237,8 @@ export interface OrchestratorOptions {
    * The default allows everything.
    */
   releaseChecks?: ReleaseChecks
+  /** 3.13: starts the oracle's command (absent: a job with a check has every run refused). */
+  checks?: CheckSpawner
 }
 
 /** What a release check is told about the launch it is judging. */
@@ -303,6 +321,8 @@ export class Orchestrator {
   private readonly fingerprints = new Map<string, string>()
   private readonly ownershipSeen = new Map<string, string>()
   private readonly served = new Map<string, boolean>()
+  /** 3.13: check runs in flight, by check id. */
+  private readonly checkJobs = new Map<string, { orchId: string; proc: CheckProcess }>()
 
   constructor(private readonly options: OrchestratorOptions) {
     this.db = options.db
@@ -345,6 +365,8 @@ export class Orchestrator {
     clearInterval(this.timer)
     clearInterval(this.maintenanceTimer)
     await this.pumping?.catch(() => undefined)
+    // A check still running is stopped with its process group; the next start records it as interrupted.
+    for (const job of this.checkJobs.values()) job.proc.stop()
     // Stops in flight get up to 5 s to answer; the rest stay durably owed and are asked again after the next start.
     if (this.stopJobs.size > 0) {
       let timer: NodeJS.Timeout | undefined
@@ -427,6 +449,7 @@ export class Orchestrator {
       const jobs = await this.mutate((ctx) => this.admit(ctx))
       for (const id of jobs) progressed = (await this.dispatch(id)) || progressed
       progressed = (await this.serviceStops()) || progressed
+      progressed = (await this.serviceChecks()) || progressed
       if (!progressed) return
     }
   }
@@ -898,8 +921,33 @@ export class Orchestrator {
           { agentId, policyId: report.policyId },
         )
     }
+    let check: CheckConfig | null = null
+    if (body.check) {
+      const split = splitCommand(body.check.command)
+      if (!split.ok) throw new HttpError(400, 'invalid_check', split.reason)
+      check = {
+        argv: split.argv,
+        workspace: body.check.workspace,
+        timeoutSec: body.check.timeoutSec,
+        when: body.check.when,
+      }
+    }
     const id = `orc-${randomUUID().slice(0, 8)}`
-    await this.mutate((ctx) => this.insert(ctx, id, body, preflight, reports))
+    await this.mutate((ctx) => {
+      this.insert(ctx, id, body, preflight, reports)
+      if (check) {
+        ctx.sqlite
+          .prepare('UPDATE orchestrations SET check_json = ? WHERE id = ?')
+          .run(JSON.stringify(check), id)
+        addHistory(
+          ctx.sqlite,
+          id,
+          'check_set',
+          { argv: check.argv, workspace: check.workspace },
+          ctx.now,
+        )
+      }
+    })
     this.kick()
     return { orchestration: this.summary(id), preflight }
   }
@@ -1111,6 +1159,22 @@ export class Orchestrator {
   }
   resume(id: string, body: RunControl) {
     return this.decide(id, (ctx) => resumeRun(ctx, id, body))
+  }
+  /** 3.13: the person runs the job's check now. */
+  runCheck(id: string, body: RunControl) {
+    return this.decide(id, (ctx) => {
+      const o = requireLeadOrch(ctx.sqlite, id)
+      expectRevision(o, body.orchestrationRevision)
+      personRunsCheck(ctx, o)
+    })
+  }
+  /** 3.13: the person lets the job finish successfully without a passing check. */
+  waiveCheck(id: string, body: RunControl) {
+    return this.decide(id, (ctx) => {
+      const o = requireLeadOrch(ctx.sqlite, id)
+      expectRevision(o, body.orchestrationRevision)
+      waiveCheck(ctx, o)
+    })
   }
   /** Stop ignores a stale page: it can only reduce risk. */
   stop(id: string) {
@@ -1864,6 +1928,22 @@ export class Orchestrator {
   async recover(): Promise<void> {
     await this.mutate((ctx) => {
       const { sqlite, now } = ctx
+      // 3.13: a check that was running when Score stopped went down with it: never a pass.
+      for (const row of sqlite
+        .prepare("SELECT id, orchestration_id FROM orc_checks WHERE outcome = 'running'")
+        .all() as { id: string; orchestration_id: string }[]) {
+        sqlite
+          .prepare("UPDATE orc_checks SET outcome = 'interrupted', ended_at = ? WHERE id = ?")
+          .run(now, row.id)
+        addCause(
+          sqlite,
+          row.orchestration_id,
+          'check_interrupted',
+          row.id,
+          now,
+          'Score restarted while it ran',
+        )
+      }
       this.repairRecoveredResults(ctx)
       this.backfillLegacyMappings(ctx)
       for (const o of listOrchs(sqlite)) {
@@ -2059,6 +2139,8 @@ export class Orchestrator {
           ['ready', 'gate_open', 'running', 'unresolved'].includes(n.state),
         )) ||
       (o.planner === 'lead' && causesAfter(sqlite, orchId, o.causes_consumed_up_to).length > 0) ||
+      // A check queued or running ends with a cause that wakes the lead (3.13).
+      checkPending(sqlite, orchId) ||
       steps.some((s) => ['pending_gate', 'queued', 'admitted'].includes(s.status)) ||
       inquiriesOf(sqlite, orchId).some((q) => q.status === 'open') ||
       gatesOf(sqlite, orchId).some((g) => g.status === 'open') ||
@@ -2159,6 +2241,7 @@ export class Orchestrator {
           causes: pending,
           budget: view,
           now,
+          check: this.leadCheck(sqlite, o.id),
         })
         if (!input.includes(ORC_CAPABILITY_PLACEHOLDER))
           throw new Error('Lead input lost its capability placeholder')
@@ -3128,6 +3211,7 @@ export class Orchestrator {
       step.id,
       now,
     )
+    if (disposition === 'completed') queueCheckAfterStep(ctx, o.id)
   }
 
   // ------------------------------------------------------------------------------------------------ observation
@@ -3367,9 +3451,176 @@ export class Orchestrator {
       step.id,
       now,
     )
+    if (evidence === 'completed') queueCheckAfterStep(ctx, o.id)
   }
 
   // ---------------------------------------------------------------------------------------------------- stops
+
+  // --------------------------------------------------------------------------------------------------- checks (3.13)
+
+  /**
+   * Starts queued check runs (one at a time per job, only while it runs), stops the ones whose job no longer runs, and
+   * cancels queued ones of jobs that ended. A run's end is recorded by itself (its own transaction) and wakes the lead.
+   */
+  private async serviceChecks(): Promise<boolean> {
+    for (const [id, job] of this.checkJobs) {
+      const status = this.db.read((sqlite) => readOrch(sqlite, job.orchId)?.status)
+      if (status === undefined || !['running', 'paused'].includes(status)) {
+        job.proc.stop()
+        this.checkJobs.delete(id)
+      }
+    }
+    const starts = await this.mutate((ctx) => {
+      const { sqlite, now } = ctx
+      const rows = sqlite
+        .prepare(
+          `SELECT c.id, c.orchestration_id, o.status FROM orc_checks c JOIN orchestrations o ON o.id = c.orchestration_id
+           WHERE c.outcome = 'queued' ORDER BY c.queued_at, c.rowid`,
+        )
+        .all() as { id: string; orchestration_id: string; status: string }[]
+      const started: { id: string; orchId: string; config: CheckConfig }[] = []
+      for (const row of rows) {
+        if (!['running', 'paused'].includes(row.status)) {
+          sqlite
+            .prepare("UPDATE orc_checks SET outcome = 'cancelled', ended_at = ? WHERE id = ?")
+            .run(now, row.id)
+          touch(ctx, row.orchestration_id)
+          continue
+        }
+        // A paused job's checks wait; and one run at a time per job.
+        if (row.status !== 'running' || isFenced(sqlite)) continue
+        const busy = sqlite
+          .prepare("SELECT 1 FROM orc_checks WHERE orchestration_id = ? AND outcome = 'running'")
+          .get(row.orchestration_id)
+        if (busy || started.some((s) => s.orchId === row.orchestration_id)) continue
+        const config = checkConfigOf(sqlite, row.orchestration_id)
+        if (config === null) {
+          sqlite
+            .prepare("UPDATE orc_checks SET outcome = 'cancelled', ended_at = ? WHERE id = ?")
+            .run(now, row.id)
+          continue
+        }
+        sqlite
+          .prepare("UPDATE orc_checks SET outcome = 'running', started_at = ? WHERE id = ?")
+          .run(now, row.id)
+        addHistory(sqlite, row.orchestration_id, 'check_started', { checkId: row.id }, now)
+        touch(ctx, row.orchestration_id)
+        started.push({ id: row.id, orchId: row.orchestration_id, config })
+      }
+      return started
+    })
+    for (const start of starts) void this.runCheckProcess(start)
+    return false
+  }
+
+  private async runCheckProcess(start: {
+    id: string
+    orchId: string
+    config: CheckConfig
+  }): Promise<void> {
+    const record = async (
+      outcome: 'passed' | 'failed' | 'timed_out' | 'refused' | 'cancelled',
+      exitCode: number | null,
+      output: string,
+    ) => {
+      const kept = redact(tailBytes(output, CHECK_OUTPUT_BYTES))
+      await this.mutate((ctx) => {
+        const { sqlite, now } = ctx
+        const row = sqlite.prepare('SELECT outcome FROM orc_checks WHERE id = ?').get(start.id) as
+          { outcome: string } | undefined
+        if (row?.outcome !== 'running') return
+        sqlite
+          .prepare(
+            'UPDATE orc_checks SET outcome = ?, exit_code = ?, ended_at = ?, output = ? WHERE id = ?',
+          )
+          .run(outcome, exitCode, now, kept, start.id)
+        addStored(sqlite, start.orchId, Buffer.byteLength(kept))
+        addHistory(
+          sqlite,
+          start.orchId,
+          'check_ended',
+          { checkId: start.id, outcome, exitCode },
+          now,
+        )
+        const lastLine =
+          kept
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .at(-1) ?? ''
+        const detail =
+          outcome === 'passed'
+            ? 'exit 0'
+            : `${outcome === 'timed_out' ? 'timed out' : outcome === 'refused' ? 'could not run' : outcome === 'cancelled' ? 'stopped' : `exit ${exitCode ?? '?'}`}${lastLine ? ` · ${lastLine}` : ''}`
+        addCause(
+          sqlite,
+          start.orchId,
+          outcome === 'passed' ? 'check_passed' : 'check_failed',
+          start.id,
+          now,
+          detail,
+        )
+        touch(ctx, start.orchId)
+      })
+      this.kick()
+    }
+    try {
+      if (!this.options.checks) return await record('refused', null, 'Checks can’t run here.')
+      const proc = await this.options.checks({
+        argv: start.config.argv,
+        cwd: start.config.workspace,
+        timeoutMs: start.config.timeoutSec * 1000,
+        keepBytes: CHECK_OUTPUT_BYTES,
+      })
+      if ('refused' in proc) return await record('refused', null, proc.refused)
+      this.checkJobs.set(start.id, { orchId: start.orchId, proc })
+      const result = await proc.done
+      this.checkJobs.delete(start.id)
+      if (this.closed) return // recorded as interrupted at the next start
+      await record(
+        result.timedOut
+          ? 'timed_out'
+          : result.stopped
+            ? 'cancelled'
+            : result.exitCode === 0
+              ? 'passed'
+              : 'failed',
+        result.exitCode,
+        result.output,
+      )
+    } catch (error) {
+      this.err(error)
+    }
+  }
+
+  /** What the lead reads about the check: the command, and the last run's verdict and output tail. */
+  private leadCheck(sqlite: DatabaseSync, orchId: string) {
+    const config = checkConfigOf(sqlite, orchId)
+    if (config === null) return null
+    const latest = checksOf(sqlite, orchId, 5).find(
+      (row) => !['queued', 'cancelled'].includes(row.outcome),
+    )
+    return {
+      argv: config.argv,
+      workspace: config.workspace,
+      when: config.when,
+      waived:
+        (
+          sqlite.prepare('SELECT check_waived_at FROM orchestrations WHERE id = ?').get(orchId) as {
+            check_waived_at: string | null
+          }
+        ).check_waived_at !== null,
+      pending: checkPending(sqlite, orchId),
+      latest: latest
+        ? {
+            outcome: latest.outcome,
+            exitCode: latest.exit_code,
+            current: latest.outcome === 'passed' && checkIsCurrent(sqlite, orchId, latest),
+            output: tailBytes(latest.output, CHECK_LEAD_BYTES),
+          }
+        : null,
+    }
+  }
 
   /** Delivers owed Stops until Hermes acknowledges. Abandoned attempts keep theirs. */
   private async serviceStops(): Promise<boolean> {

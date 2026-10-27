@@ -6,6 +6,7 @@ import {
   OrchAskArgsSchema,
   OrchAssignArgsSchema,
   OrchCancelArgsSchema,
+  OrchCheckArgsSchema,
   OrchFinishArgsSchema,
   OrchNoteArgsSchema,
   OrchPlanArgsSchema,
@@ -333,6 +334,11 @@ export function createMcpServer(
       'orch.finish',
       'Finish the run: stops new work, retires queued steps and waits for started ones to end.',
       withoutBase(OrchFinishArgsSchema.shape),
+    )
+    orch(
+      'orch.check',
+      'Run the check the person set for this job (a command such as the tests) in its workspace. It takes no command: only the person sets it. Its result starts a new turn for you. A successful finish needs it to pass after the last step ended.',
+      withoutBase(OrchCheckArgsSchema.shape),
     )
     orch(
       'orch.receipt',

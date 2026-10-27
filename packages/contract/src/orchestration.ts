@@ -183,10 +183,14 @@ export const OrchestrationCheckSchema = z
       .min(10)
       .max(ORCH_CHECK_LIMITS.maxTimeoutSec)
       .default(ORCH_CHECK_LIMITS.defaultTimeoutSec),
+    /** Before finishing only (the lead runs it), or also after every step that succeeds (a formatter, a linter). */
+    when: z.enum(['finish', 'each_step']).default('finish'),
   })
   .strict()
 export type OrchestrationCheck = z.infer<typeof OrchestrationCheckSchema>
 export const CheckOutcomeSchema = z.enum([
+  'queued',
+  'cancelled',
   'running',
   'passed',
   'failed',
@@ -196,7 +200,10 @@ export const CheckOutcomeSchema = z.enum([
 ])
 export const CheckRunViewSchema = z.object({
   id: z.string().min(1),
-  startedAt: z.iso.datetime(),
+  /** Who asked for it: the lead (orch.check), a step that succeeded (when = each_step), or the person. */
+  reason: z.enum(['lead', 'step', 'person']),
+  queuedAt: z.iso.datetime(),
+  startedAt: z.iso.datetime().nullable(),
   endedAt: z.iso.datetime().nullable(),
   exitCode: z.int().nullable(),
   outcome: CheckOutcomeSchema,
@@ -518,6 +525,7 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
       command: z.string(),
       workspace: z.string(),
       timeoutSec: z.int(),
+      when: z.enum(['finish', 'each_step']),
       runs: z.array(CheckRunViewSchema),
       /** The person let the run finish without a passing check. */
       waivedAt: z.iso.datetime().nullable(),

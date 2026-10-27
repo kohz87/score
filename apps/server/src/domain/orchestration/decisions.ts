@@ -54,7 +54,7 @@ import { gatesOf, readStep } from './store.ts'
 // Human decisions (contract §14). Each is revision-bound: the page names the run revision it showed, and a stale one is
 // a 409. Stop is the exception: it can only reduce risk, so it never waits on a stale page.
 
-function expectRevision(o: OrchRow, revision: number): void {
+export function expectRevision(o: OrchRow, revision: number): void {
   if (o.revision !== revision)
     throw new HttpError(
       409,
