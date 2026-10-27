@@ -466,7 +466,7 @@ test('Score access offers Reload MCP once access and a key are set up, and says 
   refuse = false
   fireEvent.click(within(card).getByRole('button', { name: 'Reload MCP' }))
   fireEvent.click(within(card).getByRole('button', { name: 'Restart and reload' }))
-  expect(await within(card).findByText('Reloaded. Checking again…')).toBeDefined()
+  expect(await within(card).findByText('Reloaded.')).toBeDefined()
 })
 
 test('Score access keeps the card with a retry when it cannot load', async () => {

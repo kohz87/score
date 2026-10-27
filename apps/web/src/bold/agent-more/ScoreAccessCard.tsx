@@ -136,11 +136,7 @@ export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
             After a new key or a Score update, {agent.name}’s Hermes needs to fetch Score’s tools
             again.
           </span>
-          <ReloadMcp
-            agentId={agent.id}
-            agentName={agent.name}
-            onReloaded={() => void access.refetch()}
-          />
+          <ReloadMcp agentId={agent.id} agentName={agent.name} />
         </div>
       )}
     </MoreCard>

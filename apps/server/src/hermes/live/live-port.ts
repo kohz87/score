@@ -519,7 +519,7 @@ export class LivePort implements HermesPort {
     // No -y: for the shared gateway Hermes then refuses while sessions are live instead of interrupting them. Its output
     // stays private (cli.ts); the exit code is the answer, and the next tools/list is the proof.
     const result = await (this.options.runner ?? runHermes)(['-p', profile, 'gateway', 'restart'], {
-      timeoutMs: 60_000,
+      timeoutMs: 120_000,
       hermesHome: this.options.hermesHome,
       closeStdin: true,
     }).catch(() => ({ exitCode: -1 }))
@@ -527,9 +527,12 @@ export class LivePort implements HermesPort {
       throw new HttpError(
         502,
         'gateway_restart_failed',
-        profile === 'default'
-          ? 'Hermes didn’t restart the gateway. It refuses while any agent’s session is live; try again when nothing is running.'
-          : `Hermes didn’t restart ${profile}’s gateway. Check it with: hermes -p ${profile} gateway status`,
+        // -1: killed at the timeout or never started, so Hermes may still have restarted it.
+        result.exitCode === -1
+          ? `Hermes didn’t confirm the restart in time. Check it with: hermes -p ${profile} gateway status`
+          : profile === 'default'
+            ? 'Hermes didn’t restart the gateway. It refuses while any agent’s session is live; try again when nothing is running.'
+            : `Hermes didn’t restart ${profile}’s gateway. Check it with: hermes -p ${profile} gateway status`,
       )
   }
   private approvalProfile(agentId: string): string {

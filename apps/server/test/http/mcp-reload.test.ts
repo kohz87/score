@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
+import { requestRunApproval } from '../../src/domain/approvals.ts'
 import { HttpError } from '../../src/errors.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { setup } from '../hermes/live/gateway/helpers.ts'
@@ -65,9 +66,63 @@ test('a running agent is refused; another agent’s run doesn’t block a named 
   const busy = await reload('builder')
   expect(busy.statusCode).toBe(409)
   expect(busy.json().error).toMatchObject({ code: 'agent_busy' })
-  expect(busy.json().error.message).toContain('working right now')
+  expect(busy.json().error.message).toContain('working or has a turn queued')
   expect((await reload('reviewer')).statusCode).toBe(200)
   expect(port.gatewayRestarts).toEqual(['reviewer'])
+})
+
+test('a queued turn, an active one or a start Score has sent also count as busy', async () => {
+  const now = new Date().toISOString()
+  env.db.sqlite
+    .prepare(
+      "INSERT INTO rooms (id, name, kind, members, created_at, updated_at) VALUES ('room', 'room', 'room', '[\"builder\"]', ?, ?)",
+    )
+    .run(now, now)
+  env.db.sqlite
+    .prepare(
+      "INSERT INTO messages (id, room_id, author_kind, \"to\", parts, refs, streaming, created_at, updated_at) VALUES ('p', 'room', 'you', '[]', '[]', '[]', 0, ?, ?)",
+    )
+    .run(now, now)
+  const turn = (state: string) => {
+    env.db.sqlite.prepare('DELETE FROM message_runs').run()
+    env.db.sqlite
+      .prepare(
+        "INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, created_at, state) VALUES ('m', 'room', 'builder', 'p', 0, 't', 'p', 'Example', '[\"builder\"]', ?, ?)",
+      )
+      .run(now, state)
+  }
+  turn('pending')
+  expect((await reload('builder')).statusCode).toBe(409)
+  turn('active')
+  expect((await reload('builder')).statusCode).toBe(409)
+  turn('completed')
+  expect((await reload('builder')).statusCode).toBe(200)
+  env.db.sqlite
+    .prepare(
+      "INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at) VALUES ('i1', 'start_run', 'k1', ?, 'sent', ?, ?)",
+    )
+    .run(JSON.stringify({ profile: 'builder' }), now, now)
+  expect((await reload('builder')).statusCode).toBe(409)
+  expect((await reload('reviewer')).statusCode).toBe(200)
+  // A pending approval holds a paused step in the gateway.
+  env.db.sqlite.prepare('DELETE FROM command_intents').run()
+  env.db.tx((sqlite) =>
+    requestRunApproval(
+      sqlite,
+      {
+        profile: 'builder',
+        runId: 'external',
+        requestId: 'decision',
+        command: 'example',
+        description: 'Needs a decision',
+        choices: ['once', 'deny'],
+      },
+      now,
+    ),
+  )
+  const waiting = await reload('builder')
+  expect(waiting.statusCode).toBe(409)
+  expect(waiting.json().error.message).toContain('waiting for an approval')
 })
 
 test('default restarts the shared gateway, so any agent’s run or pending approval blocks it', async () => {
@@ -93,6 +148,8 @@ test('a refusal from Hermes is a 502 that names what to check; a second click wh
   const first = reload('builder')
   await vi.waitFor(() => expect(port.restartGateway).toHaveBeenCalledTimes(2))
   expect((await reload('builder')).statusCode).toBe(409)
+  // The same shared gateway: no other agent's reload while one runs either.
+  expect((await reload('reviewer')).statusCode).toBe(409)
   finish()
   expect((await first).statusCode).toBe(200)
 })

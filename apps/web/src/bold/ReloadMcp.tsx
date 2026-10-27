@@ -13,13 +13,21 @@ export function ReloadMcp({
 }: {
   agentId: string
   agentName: string
-  /** Called right away and again while Hermes reconnects (it lists the tools a few seconds after the restart). */
-  onReloaded: () => void
+  /**
+   * Where a check shows the result: called right away and again while Hermes reconnects (it lists the tools a few
+   * seconds after the restart). Absent: the place has no check to update.
+   */
+  onReloaded?: () => void
 }) {
   const [state, setState] = useState<'idle' | 'confirm' | 'busy' | 'done'>('idle')
   const [error, setError] = useState<string | null>(null)
   const timers = useRef<number[]>([])
+  const confirm = useRef<HTMLButtonElement>(null)
   useEffect(() => () => timers.current.forEach((timer) => window.clearTimeout(timer)), [])
+  // The button that opened the question is gone; the answer takes the focus.
+  useEffect(() => {
+    if (state === 'confirm') confirm.current?.focus()
+  }, [state])
   const shared = agentId === 'default'
 
   async function reload() {
@@ -32,9 +40,13 @@ export function ReloadMcp({
         }),
       )
       setState('done')
-      onReloaded()
-      for (const ms of [2_000, 5_000, 10_000])
-        timers.current.push(window.setTimeout(onReloaded, ms))
+      if (onReloaded) {
+        onReloaded()
+        for (const ms of [2_000, 5_000, 10_000])
+          timers.current.push(window.setTimeout(onReloaded, ms))
+      }
+      // Back to the button once the rechecks are done, in case the check still isn't green.
+      timers.current.push(window.setTimeout(() => setState('idle'), 12_000))
     } catch (caught) {
       setState('idle')
       setError(caught instanceof ApiError ? caught.message : 'The reload didn’t go through.')
@@ -44,7 +56,7 @@ export function ReloadMcp({
   if (state === 'done')
     return (
       <span className="small muted" role="status">
-        Reloaded. Checking again…
+        {onReloaded ? 'Reloaded. Checking again…' : 'Reloaded.'}
       </span>
     )
   return (
@@ -56,7 +68,7 @@ export function ReloadMcp({
               ? 'This restarts the Hermes gateway every agent runs in. Their chats on other apps reconnect once.'
               : `This restarts ${agentName}’s Hermes. Its chats on other apps reconnect once.`}
           </span>
-          <button type="button" className="btn sm" onClick={() => void reload()}>
+          <button ref={confirm} type="button" className="btn sm" onClick={() => void reload()}>
             Restart and reload
           </button>
           <button type="button" className="btn sm ghost" onClick={() => setState('idle')}>

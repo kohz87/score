@@ -30,8 +30,8 @@ export function registerMcpAccessRoutes(
   },
 ): void {
   const { access, bridgePort, db, port } = deps
-  // One restart at a time: a second click while Hermes is restarting would unserve the profile again.
-  const restarting = new Set<string>()
+  // One restart at a time, for any agent: every profile runs in the same shared gateway, and `default` restarts it all.
+  let restarting = false
   const view = (agentId: string): McpAccess => {
     const state = access.get(agentId)
     const url = bridgePort === undefined ? null : `http://127.0.0.1:${bridgePort}${MCP_PATH}`
@@ -81,13 +81,13 @@ export function registerMcpAccessRoutes(
     const shared = agentId === 'default'
     const blocker = db.read((sqlite) => gatewayRestartBlocker(sqlite, shared ? null : agentId))
     if (blocker) throw new HttpError(409, 'agent_busy', blocker)
-    if (restarting.has(agentId))
-      throw new HttpError(409, 'agent_busy', 'A reload is already running for this agent.')
-    restarting.add(agentId)
+    if (restarting)
+      throw new HttpError(409, 'agent_busy', 'A reload is already running. Try again in a moment.')
+    restarting = true
     try {
       await port.restartGateway(agentId)
     } finally {
-      restarting.delete(agentId)
+      restarting = false
     }
     return McpReloadResultSchema.parse({ agentId, scope: shared ? 'gateway' : 'profile' })
   })
