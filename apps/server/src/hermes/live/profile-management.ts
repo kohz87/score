@@ -14,7 +14,8 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { userInfo } from 'node:os'
+import { dirname, join, relative, resolve } from 'node:path'
 import { gunzipSync } from 'node:zlib'
 import { z } from 'zod'
 import type { ProfileStepName } from '@score/contract'
@@ -45,6 +46,42 @@ function identity(path: string): string | null {
   const value = stat(path)
   return value?.isDirectory() ? `${value.dev}:${value.ino}:${value.birthtimeMs}` : null
 }
+/**
+ * 3.7.4: the first path in a profile folder that belongs to another user (Hermes' Docker sandbox writes as root), or
+ * null. Hermes runs as this user, so it can't delete such a folder. Bounded; symlinks are not followed. Names only:
+ * nothing is opened or read.
+ */
+export function foreignOwned(home: string, uid = process.getuid?.(), limit = 50000): string | null {
+  if (uid === undefined) return null
+  const queue = [home]
+  let seen = 0
+  while (queue.length > 0 && seen < limit) {
+    const dir = queue.shift()!
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      // A folder this user can't even list is foreign too.
+      return dir === home ? null : dir
+    }
+    for (const entry of entries) {
+      seen += 1
+      const path = join(dir, entry.name)
+      const info = stat(path)
+      if (!info) continue
+      if (info.uid !== uid) return path
+      if (info.isDirectory()) queue.push(path)
+    }
+  }
+  return null
+}
+
+/** What to tell the person when a profile folder holds files only another user can delete. */
+export function foreignOwnedMessage(home: string, path: string): string {
+  const user = userInfo().username
+  return `Some files in this agent's folder belong to another user (for example ${relative(home, path)}, made by its Docker sandbox), so Hermes can't delete them. On the Score machine run: sudo chown -R ${user}: '${home}' — then try again.`
+}
+
 function privateDirectory(path: string) {
   mkdirSync(path, { mode: 0o700 })
   syncPath(dirname(path))
@@ -185,6 +222,11 @@ export class LiveProfileManagement implements ProfileManagementPort {
       credentialsPresent: [],
     }
     const blockers: string[] = []
+    // An existing profile with files only another user can delete would stop halfway through a removal: say so first.
+    if (targetIdentity) {
+      const foreign = foreignOwned(home)
+      if (foreign) blockers.push(foreignOwnedMessage(home, foreign))
+    }
     if (!targetIdentity && stat(home))
       blockers.push('The target path exists and cannot be adopted.')
     if (!targetIdentity && (!this.options.bridgeInstallUrl || !this.options.bridgeInstallRef))
@@ -523,7 +565,12 @@ export class LiveProfileManagement implements ProfileManagementPort {
       try {
         await this.cli(['-p', 'default', 'profile', 'delete', '-y', name])
       } catch (error) {
-        if (stat(home)) throw error
+        if (stat(home)) {
+          // Hermes' own output stays private (cli.ts); name what Score can see for itself.
+          const foreign = foreignOwned(home)
+          if (foreign) throw failure(foreignOwnedMessage(home, foreign))
+          throw error
+        }
       }
       if (stat(home)) throw failure('The profile folder still exists.')
     } else if (step === 'purge_identity') {
