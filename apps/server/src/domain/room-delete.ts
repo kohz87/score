@@ -113,7 +113,15 @@ export function deleteRoom(
             'SELECT id FROM jobs WHERE recipe_ref = ? AND room_id != ? AND deleted_at IS NULL',
           )
           .all(orchestration.id, roomId) as { id: string }[]
-      ).flatMap((job) => deleteJob(sqlite, job.id, nowIso))
+      ).flatMap((job) => {
+        // A job still working (a paused exchange, a pending turn) stays: the room delete isn't refused for it.
+        try {
+          return deleteJob(sqlite, job.id, nowIso)
+        } catch (error) {
+          if (error instanceof HttpError && error.status === 409) return []
+          throw error
+        }
+      })
     : []
 
   const briefs = (
