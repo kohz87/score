@@ -742,7 +742,8 @@ test('an agent that became unavailable after its ticket was minted opens nothing
   expect(minted.statusCode).toBe(200)
   const ticket = TerminalTicketSchema.parse(minted.json()).ticket
   available = false
-  await rejected(connect(app, ticket, cookie))
+  // A clear refusal before the upgrade (409), not a server error.
+  await expect(connect(app, ticket, cookie)).rejects.toThrow(/response: 409/)
   const sessions = await app.inject({
     url: '/api/terminal/sessions',
     headers: { ...headers, cookie },
