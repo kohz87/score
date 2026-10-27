@@ -290,7 +290,8 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     ? (agents.find((agent) => agent.id === teamLead)?.name ?? teamLead)
     : null
   const defaultAllowed = agents.filter((agent) => agent.id !== leadId).map((agent) => agent.id)
-  const allowedFor = allowed ?? defaultAllowed
+  // The planner is never also a step's agent, even after the person changed who plans (3.7.5 review).
+  const allowedFor = (allowed ?? defaultAllowed).filter((id) => id !== leadId)
   const leadAgent = agents.find((agent) => agent.id === leadId)
 
   const selectedWorkflowId = recipe.kind === 'workflow' ? recipe.id : undefined

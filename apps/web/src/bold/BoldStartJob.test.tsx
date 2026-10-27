@@ -605,6 +605,10 @@ test('in a room a coding agent leads, “lead decides” asks which Hermes agent
     expect(options).toContain('builder')
     fireEvent.change(planner, { target: { value: 'builder' } })
     expect((planner as HTMLSelectElement).value).toBe('builder')
+    // The planner leaves the steps' agents; the coding room lead can still take steps.
+    const pick = within(dialog).getByRole('group', { name: 'Agents allowed' })
+    expect(within(pick).queryByRole('checkbox', { name: /builder/ })).toBeNull()
+    expect(within(pick).getByRole('checkbox', { name: /coder/ })).toBeDefined()
   } finally {
     codingLead = null
   }
