@@ -441,6 +441,34 @@ test('Score access: a key is shown once, replaced, revoked, and Write too toggle
   await waitFor(() => expect(within(card).queryByText(token)).toBeNull())
 })
 
+test('Score access offers Reload MCP once access and a key are set up, and says when Hermes refused (3.7.9)', async () => {
+  let refuse = true
+  override = (path, method) => {
+    if (path.endsWith('/mcp') && method === 'GET')
+      return Response.json({ ...mcp, enabled: true, hasToken: true, tokenCreatedAt: at })
+    if (path.endsWith('/mcp/reload') && method === 'POST')
+      return refuse
+        ? Response.json(
+            { error: { code: 'agent_busy', message: 'It is working right now.' } },
+            { status: 409 },
+          )
+        : Response.json({ agentId: agent.id, scope: 'profile' })
+    return null
+  }
+  mount(<ScoreAccessCard agent={agent} />)
+  const card = await screen.findByRole('region', { name: 'Score access' })
+  fireEvent.click(await within(card).findByRole('button', { name: 'Reload MCP' }))
+  fireEvent.click(within(card).getByRole('button', { name: 'Restart and reload' }))
+  expect(await within(card).findByRole('alert')).toHaveProperty(
+    'textContent',
+    'It is working right now.',
+  )
+  refuse = false
+  fireEvent.click(within(card).getByRole('button', { name: 'Reload MCP' }))
+  fireEvent.click(within(card).getByRole('button', { name: 'Restart and reload' }))
+  expect(await within(card).findByText('Reloaded. Checking again…')).toBeDefined()
+})
+
 test('Score access keeps the card with a retry when it cannot load', async () => {
   let fail = true
   override = (path, method) =>

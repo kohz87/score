@@ -2118,6 +2118,12 @@ export class FakePort implements HermesPort {
   mcpTools(): Promise<string[] | null> {
     return Promise.resolve(this.fakeMcpTools)
   }
+  /** Fake mode has no gateway: a restart is a no-op that answers like a confirmed one (3.7.9). */
+  readonly gatewayRestarts: string[] = []
+  restartGateway(agentId: string): Promise<void> {
+    this.gatewayRestarts.push(agentId)
+    return Promise.resolve()
+  }
 
   async botScreenStatus(agentId: string) {
     return fakeBotScreenStatus(agentId, this.scheduler.now())

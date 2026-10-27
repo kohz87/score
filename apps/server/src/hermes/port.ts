@@ -361,6 +361,12 @@ export interface HermesPort extends ProfileManagementPort {
    */
   mcpTools?(agentId: string): Promise<string[] | null>
   /**
+   * 3.7.9 (decision 140): restart the agent's gateway so its Hermes reconnects MCP and lists Score's tools again. A named
+   * profile is unserved and served again inside the shared gateway (only that profile); `default` restarts the whole
+   * gateway, which Hermes refuses while any session is live. Resolves when Hermes confirmed by exit code.
+   */
+  restartGateway(agentId: string): Promise<void>
+  /**
    * Rewind one agent's room session by `turns` user turns (PLAN 5.33). Reads Hermes's own history first (the turn count
    * must match, the session must not have been compressed since `sinceMs`), then asks the Score bridge inside the
    * agent's gateway to run Hermes's own rewind. `dryRun` does the checks only. Never throws for a refusal.

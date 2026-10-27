@@ -2019,6 +2019,12 @@ url; command; postsThisHour; postLimitPerHour }`. `available: false` (and `url`/
 - **H** `POST /api/agents/:agentId/mcp/token` → `{ token; access: McpAccess }`: creates or rotates (the old token stops
   working at once); the only response that carries the token (`Cache-Control: no-store`).
 - **H** `DELETE /api/agents/:agentId/mcp/token` → `McpAccess` (revokes).
+- **H** `POST /api/agents/:agentId/mcp/reload` → `McpReloadResult` `{ agentId; scope: 'profile' | 'gateway' }` (3.7.9,
+  decision 140): restarts the agent's gateway so its Hermes reconnects MCP and lists Score's tools again (`hermes -p
+  <agent> gateway restart`: a named profile restarts alone inside the shared gateway; `default` restarts the whole
+  gateway, which Hermes refuses while any session is live). `409 agent_busy` while Score sees a run, a queued start, an
+  active turn or a pending approval for that agent (for `default`: for any agent), or a reload already running; `502
+  gateway_restart_failed` when Hermes didn't confirm; `404` for an agent without a Hermes profile.
 
 `command` is text for the owner to run in a terminal; **Score never runs it** and never writes Hermes configuration for
 this: `hermes --profile <agentId> mcp add score --url http://127.0.0.1:<bridge port>/bridge/mcp --auth header`. Hermes

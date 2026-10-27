@@ -2,6 +2,7 @@ import {
   MCP_POSTS_PER_HOUR,
   McpAccessPatchSchema,
   McpAccessSchema,
+  McpReloadResultSchema,
   McpTokenIssuedSchema,
   type McpAccess,
 } from '@score/contract'
@@ -11,15 +12,26 @@ import { humanGuard } from '../auth/human.ts'
 import { mcpAddCommand } from '../hermes/index.ts'
 import { MCP_PATH } from '../mcp/routes.ts'
 import type { McpAccessStore } from '../mcp/access.ts'
+import type { ScoreDb } from '../db/index.ts'
+import { gatewayRestartBlocker } from '../domain/gateway-restart.ts'
+import { HttpError } from '../errors.ts'
+import type { HermesPort } from '../hermes/index.ts'
 
 const ParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
 
 // Contract §13: the per-agent MCP switches and token (Team › agent › Tools). The MCP server itself is on the bridge listener.
 export function registerMcpAccessRoutes(
   app: FastifyInstance,
-  deps: { access: McpAccessStore; bridgePort: number | undefined },
+  deps: {
+    access: McpAccessStore
+    bridgePort: number | undefined
+    db: ScoreDb
+    port: Pick<HermesPort, 'restartGateway'>
+  },
 ): void {
-  const { access, bridgePort } = deps
+  const { access, bridgePort, db, port } = deps
+  // One restart at a time: a second click while Hermes is restarting would unserve the profile again.
+  const restarting = new Set<string>()
   const view = (agentId: string): McpAccess => {
     const state = access.get(agentId)
     const url = bridgePort === undefined ? null : `http://127.0.0.1:${bridgePort}${MCP_PATH}`
@@ -62,5 +74,21 @@ export function registerMcpAccessRoutes(
     const { agentId } = ParamsSchema.parse(request.params)
     access.revokeToken(agentId)
     return view(agentId)
+  })
+  // 3.7.9 (decision 140): Reload MCP = restart the agent's gateway, only while Score sees nothing in flight there.
+  app.post('/api/agents/:agentId/mcp/reload', guard, async (request) => {
+    const { agentId } = ParamsSchema.parse(request.params)
+    const shared = agentId === 'default'
+    const blocker = db.read((sqlite) => gatewayRestartBlocker(sqlite, shared ? null : agentId))
+    if (blocker) throw new HttpError(409, 'agent_busy', blocker)
+    if (restarting.has(agentId))
+      throw new HttpError(409, 'agent_busy', 'A reload is already running for this agent.')
+    restarting.add(agentId)
+    try {
+      await port.restartGateway(agentId)
+    } finally {
+      restarting.delete(agentId)
+    }
+    return McpReloadResultSchema.parse({ agentId, scope: shared ? 'gateway' : 'profile' })
   })
 }
