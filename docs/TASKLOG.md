@@ -1726,3 +1726,16 @@ One entry per completed task: what landed, review results, and any **rejected re
   caught before the gate finished, resolved (both rows), gate rerun; release merges now stop on a conflict. Gate: e2e 849
   passed, 1 failed (tablet flake), check green (server 4851, web 3024, contract 1528).
 - **v3.8.3 deployed live** (~07:18 UTC, idle guard passed): backup score-pre-3.8.3-20261027.db, health ok.
+- **3.8.4** (2026-10-27, lead; owner: the "Starting work is blocked" card's button was unseeable; "I can widen a column,
+  but not the table itself… height of each row"). The fence: deleting a run's room pruned its rows without compacting
+  the journal, so its `run_handle` entries (attempt only) raised journal_mismatch at every restart (fence_seq 3 and 4 came
+  from the 3.8.2/3.8.3 restarts; the owner lifted it at 07:23). The startup check maps attempts to runs from the journal
+  and skips pruned runs' entries; an id two runs claim maps to neither (fails closed). The classic primary button's text in
+  the new shell is `--bg` (it was the unset classic `--card`: white on light). Tables: a corner grip scales all columns, row
+  grips set heights (kept per note on this device). Decision 145. Review: ambiguity-aware map (fixed, test), a click on a
+  grip saved sizes (fixed); accepted: row heights reset when rows are added/removed. Gate: e2e 850 passed, 2 failed
+  (tablet; attempts "a run opens from the agent page": 15/15 alone), check green (server 4853, web 3026, contract 1528).
+- **v3.8.4 deployed live** (~07:50 UTC): the first deploy attempt was stopped by the idle guard (gem38 working in
+  room-orc-46be709a); the wait-for-idle script then failed safely (its backup file hadn't been written by the stopped
+  chain), deployed by hand once idle: backup score-pre-3.8.4-20261027.db, health ok, **no new fence at the restart**
+  (fence_seq stayed 4).
