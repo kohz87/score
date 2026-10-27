@@ -179,7 +179,7 @@ export function registerProfileRoutes(
     { preHandler: [humanGuard(app.pairing), localOnly] },
     async (request) => {
       const { opId } = z.object({ opId: z.uuid() }).parse(request.params)
-      return operations.refresh(opId)
+      return await operations.refresh(opId)
     },
   )
   app.post('/api/agents/operations/:opId/retry', mutation, async (request) => {

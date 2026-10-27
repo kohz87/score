@@ -79,6 +79,9 @@ export const protectedClasses = [
   'bold-shared',
   // 3.3.0: the live screen's "someone has taken over" privacy line
   'bold-screen-human',
+  // 3.7.3: Stop is a red icon now; the control that halts a run must stay visible under any theme
+  'chat-send--stop',
+  'chat-stop-reply',
   // PLAN 11.9d: a trigger-started job's "Started by" card in the team room
   'bold-source',
   // PLAN 11.4c: the thread's confirmation before stopping a job
