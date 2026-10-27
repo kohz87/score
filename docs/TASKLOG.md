@@ -1699,3 +1699,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   added the decision. Reviews: Sonnet ×2 (P3 left: Escape after focus leaves the dialog). Gate: e2e 848 passed, 0 failed;
   check green (server 4851, web 3014, contract 1528).
 - **v3.8.0 deployed live** (~05:39 UTC, idle guard passed): backup score-pre-3.8.0-20261027.db, health ok.
+- **3.8.1** (2026-10-27, lead; owner's Troubleshooting note: phone screenshots). The room/job/chat ⋯ menus were
+  right-anchored to their button and ran off the left edge on a phone: `useMenuPlacement` clamps them into the screen
+  (pure `menuBox`, unit-tested; e2e checks room and job menus on screen). The Library's notes list filled the phone screen
+  above the open note: it folds to "Notes and files ▾" + New note once a note is chosen (not the default first note, not
+  in Files). e2e helpers unfold where flows use the list. Review: re-picking the open note lost focus (pick counter);
+  untested clamp (unit tests). Rejected: the unfold-if-folded guards in e2e helpers (they serve phone and desktop; the
+  fold has its own phone assertion). Gate: e2e 847 passed, 1 failed (paper/light Team screenshot: 63/63 alone), check
+  green (server 4851, web 3018, contract 1528).
+- **v3.8.1 deployed live** (~06:08 UTC, idle guard passed): backup score-pre-3.8.1-20261027.db, health ok.
