@@ -58,6 +58,20 @@ test('a timeout kills the whole process group', async () => {
   expect(Date.now() - started).toBeLessThan(10_000)
 })
 
+test('a process that left the group and holds the pipes does not keep the check open', async () => {
+  const started = Date.now()
+  const result = await (
+    await run([
+      node,
+      '-e',
+      'require("child_process").spawn(process.execPath, ["-e", "setTimeout(()=>{}, 30000)"], {detached: true, stdio: "inherit"}).unref(); console.log("leader done")',
+    ])
+  ).done
+  expect(result.exitCode).toBe(0)
+  expect(result.output).toContain('leader done')
+  expect(Date.now() - started).toBeLessThan(8_000)
+})
+
 test('stop ends it and says so', async () => {
   const proc = await run([node, '-e', 'setTimeout(()=>{}, 60000)'])
   setTimeout(() => proc.stop(), 100)

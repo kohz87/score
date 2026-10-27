@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link } from '../../shell/framed-paths.tsx'
 import { orchCoding, statusLabel } from './orch-model.ts'
 import { useRun, useRunActions } from './orchestration-queries.ts'
+import { CheckCard } from './CheckCard.tsx'
 import { RunNeeds } from './RunDecisions.tsx'
 import {
   BudgetBlock,
@@ -85,6 +86,7 @@ export function RoomRunPanel({
                   <StepCard key={step.id} step={step} run={detail} agents={agents} />
                 ))}
               </div>
+              <CheckCard run={detail} actions={actions} />
               <FinishBlock run={detail} />
               <details>
                 <summary>Budget and limits</summary>

@@ -159,6 +159,7 @@ import {
   checkPending,
   checksOf,
   personRunsCheck,
+  shownCommand,
   queueCheckAfterStep,
   tailBytes,
   waiveCheck,
@@ -323,6 +324,8 @@ export class Orchestrator {
   private readonly served = new Map<string, boolean>()
   /** 3.13: check runs in flight, by check id. */
   private readonly checkJobs = new Map<string, { orchId: string; proc: CheckProcess }>()
+  /** Check ids between "marked running" and "recorded": a running row outside this set is stuck (review P2). */
+  private readonly checksInFlight = new Set<string>()
 
   constructor(private readonly options: OrchestratorOptions) {
     this.db = options.db
@@ -366,7 +369,8 @@ export class Orchestrator {
     clearInterval(this.maintenanceTimer)
     await this.pumping?.catch(() => undefined)
     // A check still running is stopped with its process group; the next start records it as interrupted.
-    for (const job of this.checkJobs.values()) job.proc.stop()
+    // Killed outright: the process is about to exit, so a grace timer would never fire.
+    for (const job of this.checkJobs.values()) job.proc.stop(true)
     // Stops in flight get up to 5 s to answer; the rest stay durably owed and are asked again after the next start.
     if (this.stopJobs.size > 0) {
       let timer: NodeJS.Timeout | undefined
@@ -943,7 +947,7 @@ export class Orchestrator {
           ctx.sqlite,
           id,
           'check_set',
-          { argv: check.argv, workspace: check.workspace },
+          { command: shownCommand(check.argv), workspace: check.workspace },
           ctx.now,
         )
       }
@@ -3479,6 +3483,24 @@ export class Orchestrator {
         )
         .all() as { id: string; orchestration_id: string; status: string }[]
       const started: { id: string; orchId: string; config: CheckConfig }[] = []
+      // A run marked running that nothing is carrying (its recording failed) would hold the job forever: end it.
+      for (const stuck of sqlite
+        .prepare("SELECT id, orchestration_id FROM orc_checks WHERE outcome = 'running'")
+        .all() as { id: string; orchestration_id: string }[]) {
+        if (this.checksInFlight.has(stuck.id)) continue
+        sqlite
+          .prepare("UPDATE orc_checks SET outcome = 'interrupted', ended_at = ? WHERE id = ?")
+          .run(now, stuck.id)
+        addCause(
+          sqlite,
+          stuck.orchestration_id,
+          'check_interrupted',
+          stuck.id,
+          now,
+          'its result was lost',
+        )
+        touch(ctx, stuck.orchestration_id)
+      }
       for (const row of rows) {
         if (!['running', 'paused'].includes(row.status)) {
           sqlite
@@ -3506,6 +3528,7 @@ export class Orchestrator {
         addHistory(sqlite, row.orchestration_id, 'check_started', { checkId: row.id }, now)
         touch(ctx, row.orchestration_id)
         started.push({ id: row.id, orchId: row.orchestration_id, config })
+        this.checksInFlight.add(row.id)
       }
       return started
     })
@@ -3523,7 +3546,8 @@ export class Orchestrator {
       exitCode: number | null,
       output: string,
     ) => {
-      const kept = redact(tailBytes(output, CHECK_OUTPUT_BYTES))
+      // Redacted before it is cut, so a secret straddling the cut is still recognised (review P3).
+      const kept = tailBytes(redact(output), CHECK_OUTPUT_BYTES)
       await this.mutate((ctx) => {
         const { sqlite, now } = ctx
         const row = sqlite.prepare('SELECT outcome FROM orc_checks WHERE id = ?').get(start.id) as
@@ -3542,16 +3566,17 @@ export class Orchestrator {
           { checkId: start.id, outcome, exitCode },
           now,
         )
-        const lastLine =
-          kept
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .at(-1) ?? ''
+        // Only Score's own words here: the command's output reaches the lead quoted, never as an unquoted cause line.
         const detail =
           outcome === 'passed'
             ? 'exit 0'
-            : `${outcome === 'timed_out' ? 'timed out' : outcome === 'refused' ? 'could not run' : outcome === 'cancelled' ? 'stopped' : `exit ${exitCode ?? '?'}`}${lastLine ? ` · ${lastLine}` : ''}`
+            : outcome === 'timed_out'
+              ? 'timed out'
+              : outcome === 'refused'
+                ? 'could not run'
+                : outcome === 'cancelled'
+                  ? 'stopped'
+                  : `exit ${exitCode ?? '?'}`
         addCause(
           sqlite,
           start.orchId,
@@ -3590,6 +3615,11 @@ export class Orchestrator {
       )
     } catch (error) {
       this.err(error)
+      this.checkJobs.delete(start.id)
+    } finally {
+      // Not recorded by now (a failed write): the next pass ends it as interrupted rather than leaving it running.
+      this.checksInFlight.delete(start.id)
+      this.kick()
     }
   }
 

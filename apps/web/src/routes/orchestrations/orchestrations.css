@@ -971,3 +971,69 @@ button.orch-primary,
   line-height: 1.5;
   white-space: nowrap;
 }
+
+/* 3.13: the job's check card */
+.orch-check {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 14px var(--space-4);
+  margin-top: 16px;
+  min-width: 0;
+}
+.orch-check-command code {
+  display: block;
+  font-family: var(--font-code);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.orch-check .orch-mono {
+  overflow-wrap: anywhere;
+}
+.orch-check-runs {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.orch-check-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.orch-check-pill {
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  padding: 1px 10px;
+  font-weight: 700;
+  font-size: 12px;
+}
+.orch-check-pill--passed {
+  border-color: var(--agent-mint-text, currentColor);
+}
+.orch-check-pill--failed,
+.orch-check-pill--timed_out,
+.orch-check-pill--refused,
+.orch-check-pill--interrupted {
+  border-color: var(--agent-coral-text, currentColor);
+  color: var(--agent-coral-text, inherit);
+}
+.orch-check-output {
+  max-height: 220px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--field, var(--hairline));
+  font-family: var(--font-code);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.orch-check-waive {
+  margin-top: 8px;
+}

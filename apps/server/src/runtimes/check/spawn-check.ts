@@ -22,7 +22,8 @@ export interface CheckResult {
   output: string
 }
 export interface CheckProcess {
-  stop(): void
+  /** SIGTERM, then SIGKILL after a grace; `force` kills at once (Score is shutting down). */
+  stop(force?: boolean): void
   done: Promise<CheckResult>
 }
 /** Starts a check, or says why it can't (the folder is no longer allowed). */
@@ -50,20 +51,20 @@ export function makeCheckSpawner(policy: RootPolicy): CheckSpawner {
     child.stderr.on('data', keep)
     let timedOut = false
     let stopped = false
-    let ended = false
+    // Once the leader has exited its pid may be reused: the group is never signalled again after that (review P2).
+    let exited = false
     let killTimer: NodeJS.Timeout | undefined
     const signalGroup = (signal: NodeJS.Signals) => {
-      if (child.pid === undefined) return
+      if (child.pid === undefined || exited) return
       try {
         process.kill(-child.pid, signal)
       } catch {
         // ESRCH: the group is gone already.
       }
     }
-    const terminate = () => {
-      if (ended) return
-      signalGroup('SIGTERM')
-      killTimer ??= setTimeout(() => signalGroup('SIGKILL'), KILL_AFTER_MS)
+    const terminate = (force = false) => {
+      signalGroup(force ? 'SIGKILL' : 'SIGTERM')
+      if (!force) killTimer ??= setTimeout(() => signalGroup('SIGKILL'), KILL_AFTER_MS)
     }
     const deadline = setTimeout(() => {
       timedOut = true
@@ -71,33 +72,51 @@ export function makeCheckSpawner(policy: RootPolicy): CheckSpawner {
     }, request.timeoutMs)
     const done = new Promise<CheckResult>((resolve) => {
       let spawnError: string | null = null
+      let settled = false
+      let exitCode: number | null = null
+      let exitSignal: string | null = null
+      const finish = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(deadline)
+        clearTimeout(killTimer)
+        child.stdout.destroy()
+        child.stderr.destroy()
+        const output =
+          kept.length > request.keepBytes ? kept.subarray(kept.length - request.keepBytes) : kept
+        resolve({
+          exitCode: spawnError ? null : exitCode,
+          signal: exitSignal,
+          timedOut,
+          stopped,
+          output: spawnError ?? output.toString('utf8'),
+        })
+      }
       child.on('error', (error: NodeJS.ErrnoException) => {
         spawnError =
           error.code === 'ENOENT'
             ? `Couldn’t start “${request.argv[0]}”: no such program.`
             : `Couldn’t start “${request.argv[0]}” (${error.code ?? 'error'}).`
       })
-      child.on('close', (code, signal) => {
-        ended = true
-        clearTimeout(deadline)
-        clearTimeout(killTimer)
-        // Anything the command left running in its group goes with it.
+      child.on('exit', (code, signal) => {
+        exitCode = code
+        exitSignal = signal ?? null
+        // Anything the command left running in its group goes with it, while the leader's pid still names the group.
         signalGroup('SIGKILL')
-        const output =
-          kept.length > request.keepBytes ? kept.subarray(kept.length - request.keepBytes) : kept
-        resolve({
-          exitCode: spawnError ? null : code,
-          signal: signal ?? null,
-          timedOut,
-          stopped,
-          output: spawnError ?? output.toString('utf8'),
-        })
+        exited = true
+        // A process that left the group (setsid) may hold the pipes open: wait briefly for the rest of the output only.
+        setTimeout(finish, 2_000).unref()
+      })
+      child.on('close', (code, signal) => {
+        if (exitCode === null) exitCode = code
+        exitSignal ??= signal ?? null
+        finish()
       })
     })
     return {
-      stop() {
+      stop(force = false) {
         stopped = true
-        terminate()
+        terminate(force)
       },
       done,
     }

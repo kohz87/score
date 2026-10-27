@@ -188,6 +188,11 @@ let workflowRunBodies: Record<string, unknown>[] = []
 let workflowRunReply: () => Response = () =>
   Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
 let triggerBody: unknown
+/** 3.13: calls the oracle tests watch, in order, and what the orchestration POST answers. */
+let calls: string[] = []
+let orchestrationBodies: Record<string, unknown>[] = []
+let orchestrationReply: () => Response = () =>
+  Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
 let extraWorkflows: (typeof workflow)[] = []
 const disposers: (() => void)[] = []
 
@@ -198,6 +203,8 @@ beforeEach(() => {
   workflowRunReply = () =>
     Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
   triggerBody = undefined
+  calls = []
+  orchestrationBodies = []
   extraWorkflows = []
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
@@ -267,6 +274,15 @@ beforeEach(() => {
                 : "The lead's Hermes hasn't asked Score for its tools",
           })
         return json(check)
+      }
+      if (url.pathname === '/api/session/security/check' && method === 'POST') {
+        calls.push('security-check')
+        return json({ ok: true })
+      }
+      if (url.pathname === '/api/orchestrations' && method === 'POST') {
+        calls.push('orchestrations')
+        orchestrationBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
+        return Promise.resolve(orchestrationReply())
       }
       if (url.pathname === '/api/agents/lead/mcp/reload' && method === 'POST') {
         reloads.push('lead')
@@ -678,4 +694,69 @@ test('the tool check offers Reload MCP, asks first, restarts the lead’s gatewa
   } finally {
     toolsListed = null
   }
+})
+
+async function fillLeadJob(dialog: HTMLElement) {
+  fireEvent.change(within(dialog).getByLabelText('What should the team do?'), {
+    target: { value: 'Fix the failing tests' },
+  })
+  fireEvent.click(acknowledgement(dialog))
+  const start = within(dialog).getByRole('button', { name: 'Start the job' })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+  return start
+}
+
+test('a check is folded, needs the folder, and starting asks for the password first (3.13)', async () => {
+  orchestrationReply = () =>
+    Response.json(
+      { error: { code: 'invalid_check', message: 'That folder is outside your workspace roots.' } },
+      { status: 400 },
+    )
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-check') as HTMLDetailsElement
+  expect(section.open).toBe(false)
+  expect(section.getAttribute('data-protected')).toBe('block')
+  expect(
+    within(section).getByText(/Score runs this command in the folder, without a shell/),
+  ).toBeDefined()
+  const start = await fillLeadJob(dialog)
+
+  fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
+  // No folder known yet: Start is blocked and says why.
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(true))
+  expect(within(dialog).getByText(/absolute folder/)).toBeDefined()
+  fireEvent.change(within(dialog).getByLabelText('Folder'), { target: { value: '/work/site' } })
+  fireEvent.click(within(dialog).getByLabelText('Also run after every step'))
+  fireEvent.change(within(dialog).getByLabelText('Timeout (minutes, 1 to 60)'), {
+    target: { value: '5' },
+  })
+  await waitFor(() => expect(start.hasAttribute('disabled')).toBe(false))
+
+  fireEvent.click(start)
+  const confirm = await within(dialog).findByRole('form', { name: 'Confirm it’s you' })
+  expect(confirm.getAttribute('data-protected')).toBe('block')
+  // Nothing was posted before the person proved it.
+  expect(calls).toEqual([])
+  fireEvent.change(within(confirm).getByLabelText('Security password'), {
+    target: { value: 'correct horse' },
+  })
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm and start' }))
+
+  // The server's own words for a refused check show inline.
+  expect(await within(dialog).findByText(/outside your workspace roots/)).toBeDefined()
+  expect(calls).toEqual(['security-check', 'orchestrations'])
+  expect(orchestrationBodies[0]).toMatchObject({
+    check: { command: 'pnpm test', workspace: '/work/site', timeoutSec: 300, when: 'each_step' },
+  })
+})
+
+test('a job without a check posts none and starts without the password prompt (3.13)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const start = await fillLeadJob(dialog)
+  fireEvent.click(start)
+  await waitFor(() => expect(calls).toEqual(['orchestrations']))
+  expect(orchestrationBodies[0]).not.toHaveProperty('check')
+  expect(within(dialog).queryByRole('form', { name: 'Confirm it’s you' })).toBeNull()
 })

@@ -22,6 +22,7 @@ import {
   useRun,
   useRunActions,
 } from '../routes/orchestrations/orchestration-queries.ts'
+import { CheckCard } from '../routes/orchestrations/CheckCard.tsx'
 import { AgentChip, RunNeeds } from '../routes/orchestrations/RunDecisions.tsx'
 import {
   BudgetBlock,
@@ -485,6 +486,7 @@ function OrchestrationRun({
             steps={detail.steps.succeeded}
             approvals={detail.gates.filter((gate) => gate.decidedAt !== null).length}
           />
+          <CheckCard run={detail} actions={actions} />
           <FinishBlock run={detail} />
         </>
       }

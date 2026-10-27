@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
 import type { Ctx } from './ctx.ts'
 import { touch } from './ctx.ts'
+import { redact } from '../../redact.ts'
 import { joinCommand } from './check-command.ts'
 import { addCause, addHistory, type OrchRow } from './store.ts'
 
@@ -85,12 +86,15 @@ export const checkPending = (sqlite: DatabaseSync, orchId: string): boolean =>
  */
 export function checkIsCurrent(sqlite: DatabaseSync, orchId: string, check: CheckRow): boolean {
   if (check.started_at === null) return false
+  // Review P1: an attempt Score can't confirm ended (unknown, abandoned) may still be writing: it counts as not ended. A
+  // created one that was never sent changed nothing (finishing retires it).
   const row = sqlite
     .prepare(
       `SELECT count(*) AS n FROM orc_attempts WHERE orchestration_id = ? AND kind = 'step'
-         AND (terminated_at IS NULL AND state IN ('created', 'send_started', 'running') OR terminated_at > ?)`,
+         AND ((terminated_at IS NULL AND state NOT IN ('created', 'refused', 'terminated'))
+              OR terminated_at > ? OR abandoned_at > ?)`,
     )
-    .get(orchId, check.started_at) as { n: number }
+    .get(orchId, check.started_at, check.started_at) as { n: number }
   return row.n === 0
 }
 
@@ -184,11 +188,17 @@ export function checkRunView(sqlite: DatabaseSync, orchId: string, row: CheckRow
   }
 }
 
+/** The command as one line, redacted (a token typed into it never reaches a page, a history row or the lead) and capped. */
+export function shownCommand(argv: readonly string[], maxChars = 1024): string {
+  const line = redact(joinCommand(argv))
+  return line.length > maxChars ? `${line.slice(0, maxChars)}…` : line
+}
+
 export function checkView(sqlite: DatabaseSync, orchId: string) {
   const config = checkConfigOf(sqlite, orchId)
   if (config === null) return null
   return {
-    command: joinCommand(config.argv),
+    command: shownCommand(config.argv, 4096),
     workspace: config.workspace,
     timeoutSec: config.timeoutSec,
     when: config.when,

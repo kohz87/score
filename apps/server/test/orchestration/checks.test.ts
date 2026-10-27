@@ -171,6 +171,40 @@ test('a pass from before a step ended does not count', async () => {
   expect(h.orch.snapshot(id).orchestration.check!.runs[0]!.current).toBe(false)
 })
 
+test('a step Score cannot confirm ended makes a pass stale (it may still be writing)', async () => {
+  const checks = fakeChecks()
+  h = await harness({
+    orchestrator: { checks: checks.spawner },
+    lead: { script: byTurn({ 1: async (t) => void (await t.call('orch.check', {})) }) },
+  })
+  const id = await h.create({ check: CHECK })
+  await h.until(() => checks.runs.length === 1)
+  checks.runs[0]!.finish(0)
+  await h.until(() => h.orch.snapshot(id).orchestration.check!.runs[0]!.outcome === 'passed')
+  expect(h.orch.snapshot(id).orchestration.check!.runs[0]!.current).toBe(true)
+  // A copy of the lead's attempt row standing in for a step attempt whose end was never confirmed.
+  const lead = h.rows<Record<string, unknown>>(
+    'SELECT * FROM orc_attempts WHERE orchestration_id = ? LIMIT 1',
+    id,
+  )[0]!
+  const row = {
+    ...lead,
+    id: 'att-u',
+    kind: 'step',
+    state: 'unknown',
+    terminated_at: null,
+    turn_id: 'turn-u',
+    run_id: null,
+  }
+  const keys = Object.keys(row)
+  h.db.sqlite
+    .prepare(
+      `INSERT INTO orc_attempts (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`,
+    )
+    .run(...(Object.values(row) as (string | number | null)[]))
+  expect(h.orch.snapshot(id).orchestration.check!.runs[0]!.current).toBe(false)
+})
+
 test('when = each_step, Score queues a check after every step that succeeds', async () => {
   const checks = fakeChecks()
   h = await harness({

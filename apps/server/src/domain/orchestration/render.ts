@@ -1,6 +1,6 @@
 import { ORCH_LIMITS, ORC_CAPABILITY_PLACEHOLDER, type BudgetView } from '@score/contract'
 import type { CauseRow, GateRow, InquiryRow, OrchRow, StepRow } from './store.ts'
-import { joinCommand } from './check-command.ts'
+import { shownCommand } from './checks.ts'
 
 // Rendering of the two kinds of orchestration input. The lead's input is frozen at its claim and stored with a
 // placeholder where the capability goes; step inputs never contain a capability (they are scanned before admission).
@@ -66,7 +66,7 @@ export interface LeadCheck {
 
 function checkLines(check: LeadCheck): string[] {
   const lines = [
-    `Check (set by the person; you can run it with orch.check() but never change it): ${joinCommand(check.argv)} in ${check.workspace}${check.when === 'each_step' ? ', also run by Score after every step that succeeds' : ''}.`,
+    `Check (set by the person; you can run it with orch.check() but never change it): ${shownCommand(check.argv)} in ${check.workspace}${check.when === 'each_step' ? ', also run by Score after every step that succeeds' : ''}.`,
     check.waived
       ? 'The person lets you finish with outcome success without a passing check.'
       : 'orch.finish with outcome success is refused until the check passes in a run that started after the last step ended. Finishing partial or failed is always possible.',

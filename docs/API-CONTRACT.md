@@ -2201,8 +2201,7 @@ for a terminal (`403 fresh_auth_required`; one confirmation is used up by one cr
 Runs: the command runs as Score's user in the folder, its own process group, the terminal's six-variable environment plus `TERM=dumb`
 and `CI=1`; exit 0 passes. Timeout → `timed_out` (group killed). One run at a time per job; queued runs start only while the job is
 `running`; runs of a job that ends are `cancelled` (a running one is stopped). A run interrupted by a Score restart is `interrupted`.
-The last 64 KiB of output are kept, redacted. Each end adds a lead cause `check_passed` or `check_failed` (detail: exit code and last
-line); the lead's input shows the command, the last verdict and, for a failure, the last 8 KiB of output as quoted data.
+The last 64 KiB of output are kept, redacted. Each end adds a lead cause `check_passed` or `check_failed` (detail: Score's words only, e.g. `exit 1`); the lead's input shows the command, the last verdict and, for a failure, the last 8 KiB of output as quoted data.
 
 **Finish rule:** `orch.finish { outcome: 'success' }` is refused `check_running` while a run is queued or running, and `check_required`
 unless the latest run `passed` **and** started after every step attempt of the job terminated (none still live). `partial` and `failed`
