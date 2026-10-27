@@ -214,6 +214,19 @@ export const CheckRunViewSchema = z.object({
 })
 export type CheckRunView = z.infer<typeof CheckRunViewSchema>
 
+export const AdvisorCheckpointSchema = z.enum(['before_plan', 'repeat_failure', 'before_done'])
+export const AdvisorConsultViewSchema = z.object({
+  stepId: z.string().min(1),
+  checkpoint: AdvisorCheckpointSchema,
+  /** Why Score asked (the repeated failure, in Score's words). */
+  reason: z.string(),
+  status: StepStatusSchema,
+  /** The advice, redacted; null until it arrives. */
+  advice: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+})
+export type AdvisorConsultView = z.infer<typeof AdvisorConsultViewSchema>
+
 export const OrchestrationCreateSchema = z
   .object({
     title: z.string().min(1).max(ORCH_LIMITS.titleChars).optional(),
@@ -247,6 +260,11 @@ export const OrchestrationCreateSchema = z
     quotaFloorPercent: QuotaFloorSchema.optional(),
     /** 3.13: the oracle (needs the security password or passkey confirmed in the last minute). */
     check: OrchestrationCheckSchema.optional(),
+    /**
+     * 3.14: an agent Score consults by itself at three checkpoints (before the plan, after the same failure twice, before
+     * done). Not the lead; its advice is data for the lead, never a veto.
+     */
+    advisorAgentId: AgentIdSchema.optional(),
   })
   .strict()
 export type OrchestrationCreate = z.infer<typeof OrchestrationCreateSchema>
@@ -375,6 +393,8 @@ export const StepViewSchema = z.object({
   updatedAt: z.iso.datetime(),
   /** 8.6: set while the step's coding agent is below its quota floor. */
   quotaHold: QuotaHoldViewSchema.nullable().optional(),
+  /** 3.14: a consult Score started for the advisor (not the lead's work); absent or null for ordinary steps. */
+  role: z.enum(['advisor']).nullable().optional(),
 })
 export type StepView = z.infer<typeof StepViewSchema>
 
@@ -519,6 +539,14 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
   storage: z.object({ reserveBytes: z.int(), storedBytes: z.int() }),
   /** 8.6: the run's quota floor; null = each coding agent's own. */
   quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
+  /** 3.14: the advisor and its consults (oldest first); null = no advisor. */
+  advisor: z
+    .object({
+      agentId: AgentIdSchema,
+      consults: z.array(AdvisorConsultViewSchema),
+    })
+    .nullable()
+    .optional(),
   /** 3.13: the oracle and its runs (newest first); null = no check. */
   check: z
     .object({

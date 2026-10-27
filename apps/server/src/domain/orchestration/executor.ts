@@ -149,6 +149,12 @@ import { decideNodeGate, remapWorkflow, retryNode, tryAgain } from '../workflows
 import { nodesOf, readResult, requireWfRun } from '../workflows/store.ts'
 import { timelineOf } from './timeline.ts'
 import { pruneOrchestrationRows } from './prune.ts'
+import {
+  adviceArrived,
+  adviseOnRepeatCheckFailure,
+  adviseOnRepeatFailure,
+  isAdvisorStep,
+} from './advisor.ts'
 import { splitCommand } from './check-command.ts'
 import {
   CHECK_LEAD_BYTES,
@@ -867,9 +873,15 @@ export class Orchestrator {
     body: OrchestrationCreate,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<OrchestrationCreated> {
+    // 3.14: the advisor is checked (served, coding consent) like the agents the lead may assign to.
+    const advisor = body.advisorAgentId
+    if (advisor !== undefined && advisor === body.leadAgentId)
+      throw new HttpError(400, 'bad_request', 'The advisor has to be another agent than the lead.')
     const { preflight, reports } = await this.preflightWith(
       body.leadAgentId,
-      body.allowedAgents,
+      advisor !== undefined && !body.allowedAgents.includes(advisor)
+        ? [...body.allowedAgents, advisor]
+        : body.allowedAgents,
       agents,
       body.maxConcurrentSteps,
     )
@@ -939,6 +951,23 @@ export class Orchestrator {
     const id = `orc-${randomUUID().slice(0, 8)}`
     await this.mutate((ctx) => {
       this.insert(ctx, id, body, preflight, reports)
+      if (advisor !== undefined) {
+        ctx.sqlite
+          .prepare('UPDATE orchestrations SET advisor_agent_id = ? WHERE id = ?')
+          .run(advisor, id)
+        // Frozen like every agent the run was started with, so a replaced advisor waits for the person's remap.
+        ctx.sqlite
+          .prepare(
+            `INSERT OR IGNORE INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, 'agent', ?, ?)`,
+          )
+          .run(
+            id,
+            advisor,
+            lifecycleOf(ctx.sqlite, advisor)?.incarnation_id ?? 'untracked',
+            ctx.now,
+          )
+        addHistory(ctx.sqlite, id, 'advisor_set', { agentId: advisor }, ctx.now)
+      }
       if (check) {
         ctx.sqlite
           .prepare('UPDATE orchestrations SET check_json = ? WHERE id = ?')
@@ -3208,14 +3237,7 @@ export class Orchestrator {
       o.id,
       Buffer.byteLength(result) * 2 + Buffer.byteLength(run.output ?? ''),
     )
-    addCause(
-      sqlite,
-      o.id,
-      disposition === 'completed' ? 'step_succeeded' : 'step_failed',
-      step.id,
-      now,
-    )
-    if (disposition === 'completed') queueCheckAfterStep(ctx, o.id)
+    this.stepEnded(ctx, o, step, disposition === 'completed', result, attempt.id)
   }
 
   // ------------------------------------------------------------------------------------------------ observation
@@ -3448,17 +3470,28 @@ export class Orchestrator {
         Buffer.byteLength(messageText) +
         Buffer.byteLength(run.output ?? ''),
     )
-    addCause(
-      sqlite,
-      o.id,
-      evidence === 'completed' ? 'step_succeeded' : 'step_failed',
-      step.id,
-      now,
-    )
-    if (evidence === 'completed') queueCheckAfterStep(ctx, o.id)
+    this.stepEnded(ctx, o, step, evidence === 'completed', result, attempt.id)
   }
 
   // ---------------------------------------------------------------------------------------------------- stops
+
+  /**
+   * A step's result was accepted: the lead is told (an advisor consult as advice, 3.14), a check set to run after each
+   * step is queued (3.13), and a failure like an earlier one is taken to the advisor.
+   */
+  private stepEnded(
+    ctx: Ctx,
+    o: OrchRow,
+    step: StepRow,
+    ok: boolean,
+    result: string,
+    attemptId: string,
+  ): void {
+    if (isAdvisorStep(step)) return adviceArrived(ctx, o, step, ok)
+    addCause(ctx.sqlite, o.id, ok ? 'step_succeeded' : 'step_failed', step.id, ctx.now)
+    if (ok) queueCheckAfterStep(ctx, o.id)
+    else adviseOnRepeatFailure(ctx, o, { ...step, status: 'failed', result }, result, attemptId)
+  }
 
   // --------------------------------------------------------------------------------------------------- checks (3.13)
 
@@ -3585,6 +3618,9 @@ export class Orchestrator {
           now,
           detail,
         )
+        // 3.14: the same check failure twice in a row goes to the advisor.
+        const o = readOrch(sqlite, start.orchId)
+        if (o && outcome !== 'passed') adviseOnRepeatCheckFailure(ctx, o)
         touch(ctx, start.orchId)
       })
       this.kick()

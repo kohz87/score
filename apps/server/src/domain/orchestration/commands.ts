@@ -17,6 +17,7 @@ import { agentAdmits, lifecycleOf } from '../agent-lifecycle.ts'
 import { storeMessage } from '../rooms.ts'
 import { redact } from '../../redact.ts'
 import { checkConfigOf, finishRefusal, queueCheck } from './checks.ts'
+import { awaitCheckpoint, consult, consultsOf, isAdvisorStep } from './advisor.ts'
 import { budgetView, canReserve, unknownCostBlocks } from './budget.ts'
 import { readWorkerPolicy } from './coding-policy.ts'
 import { agentsWithRoom, holdStep, quotaCheck, windowPhrase } from './quota-guard.ts'
@@ -282,7 +283,7 @@ const quotaRefusal = (o: OrchRow, bytes: number): OrchReceipt | undefined =>
     : undefined
 
 const HANDLERS: Record<ToolName, Handler> = {
-  'orch.plan'(ctx, o, _attempt, args) {
+  'orch.plan'(ctx, o, attempt, args) {
     const entries = (args.entries as string[]).map((entry) => redact(entry))
     const bytes = utf8Bytes(JSON.stringify(entries))
     const quota = quotaRefusal(o, bytes)
@@ -291,7 +292,17 @@ const HANDLERS: Record<ToolName, Handler> = {
       .prepare('UPDATE orchestrations SET plan = ? WHERE id = ?')
       .run(JSON.stringify(entries), o.id)
     addStored(ctx.sqlite, o.id, bytes)
-    return ok({ entries: entries.length })
+    // 3.14: the first plan goes to the advisor before any work starts (orch.assign waits for its advice).
+    const advising =
+      o.advisor_agent_id &&
+      !consultsOf(ctx.sqlite, o.id).some((step) => step.checkpoint === 'before_plan') &&
+      consult(ctx, { ...o, plan: entries }, 'before_plan', '', attempt.id) !== null
+    return ok({
+      entries: entries.length,
+      ...(advising
+        ? { advisor: 'The advisor is looking at this plan; its advice starts your next turn.' }
+        : {}),
+    })
   },
 
   'orch.assign'(ctx, o, attempt, args) {
@@ -357,7 +368,11 @@ const HANDLERS: Record<ToolName, Handler> = {
     }
     if (o.steps_created >= o.max_steps)
       return refuse('step_limit', `The run is limited to ${o.max_steps} steps`)
-    const steps = stepsOf(sqlite, o.id)
+    // 3.14: no work starts before the advisor has seen the plan.
+    const waiting = awaitCheckpoint(ctx, o, 'before_plan', attempt.id)
+    if (waiting) return refuse(waiting.code, waiting.message)
+    // The advisor's consults are Score's: the lead can't depend on or replace them.
+    const steps = stepsOf(sqlite, o.id).filter((step) => !isAdvisorStep(step))
     const byId = new Map(steps.map((step) => [step.id, step]))
     if (new Set(after).size !== after.length)
       return refuse('bad_dependency', 'after lists a step twice')
@@ -478,7 +493,8 @@ const HANDLERS: Record<ToolName, Handler> = {
       )
     const stepId = args.stepId as string
     const step = readStep(sqlite, o.id, stepId)
-    if (!step) return refuse('unknown_step', `${stepId} is not a step of this run`)
+    if (!step || isAdvisorStep(step))
+      return refuse('unknown_step', `${stepId} is not a step of this run`)
     if (attemptsOf(sqlite, o.id).some((x) => x.step_id === stepId))
       return refuse(
         'already_admitted',
@@ -525,7 +541,8 @@ const HANDLERS: Record<ToolName, Handler> = {
     const { sqlite, now } = ctx
     const stepId = args.stepId as string
     const step = readStep(sqlite, o.id, stepId)
-    if (!step) return refuse('unknown_step', `${stepId} is not a step of this run`)
+    if (!step || isAdvisorStep(step))
+      return refuse('unknown_step', `${stepId} is not a step of this run`)
     if (isFinalStep(step.status) || step.retired)
       return refuse('already_final', `${stepId} is already ${step.status}`)
     const attempt = attemptsOf(sqlite, o.id).findLast((a) => a.step_id === stepId)
@@ -614,6 +631,10 @@ const HANDLERS: Record<ToolName, Handler> = {
     // 3.13: the oracle. A successful finish needs a current pass (or the person's waiver).
     const refusal = outcome === 'success' ? finishRefusal(ctx.sqlite, o) : null
     if (refusal) return refuse(refusal.code, refusal.message)
+    // 3.14: the advisor looks once before a successful finish; the lead may finish anyway after its advice.
+    const waiting =
+      outcome === 'success' ? awaitCheckpoint(ctx, o, 'before_done', attempt.id) : null
+    if (waiting) return refuse(waiting.code, waiting.message)
     const summary = redact(args.summary as string)
     const retired = beginFinish(ctx, o, attempt.id, outcome, summary)
     return ok({ finishing: true, retiredSteps: retired })
