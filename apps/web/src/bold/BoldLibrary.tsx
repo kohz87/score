@@ -129,6 +129,7 @@ export function BoldLibrary({
   const phone = useMediaQuery(PHONE)
   // On a phone the notes list folds while a note is open (3.8.1); this unfolds it.
   const [listOpen, setListOpen] = useState(false)
+  const [picks, setPicks] = useState(0)
   // The panel's width picks the layout (rail ≥ 1180, two-column panels ≥ 860): measured, since a CSS container would
   // also contain the editor's fixed dialogs and upload toast.
   const rootRef = useRef<HTMLDivElement>(null)
@@ -252,6 +253,8 @@ export function BoldLibrary({
 
   function open(next: string) {
     setListOpen(false)
+    // Picking the note already open still moves focus to it (the list button that had focus folds away).
+    setPicks((count) => count + 1)
     revealPath(next)
     setSelected(next)
     setSection('notes')
@@ -278,7 +281,7 @@ export function BoldLibrary({
     }
     frame = requestAnimationFrame(moveToHeading)
     return () => cancelAnimationFrame(frame)
-  }, [active, phone, section])
+  }, [active, phone, section, picks])
 
   function openDialog(next: Dialog) {
     setDialogError(null)
