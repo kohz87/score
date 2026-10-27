@@ -118,8 +118,11 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): voi
       handed = true
       maybeRelease()
       // 3.7.8: Hermes keeps the list it is handed per connection; remember it so preflight can say what the lead has.
-      if ((request.body as { method?: unknown } | null)?.method === 'tools/list')
-        access.recordListed(identity.agentId, servedToolNames(server))
+      if (
+        (request.body as { method?: unknown } | null)?.method === 'tools/list' &&
+        reply.raw.statusCode < 300
+      )
+        access.recordListed(identity.agentId, servedToolNames(server), match![1]!)
     } catch (error) {
       handed = true
       maybeRelease()

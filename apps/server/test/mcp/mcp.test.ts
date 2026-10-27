@@ -205,6 +205,9 @@ test('end to end with the SDK client: tools list, rooms and tasks are scoped to 
   )
   // 3.7.8: Score remembers what it handed this agent's client on tools/list (and only on tools/list).
   expect(access.listed('builder')?.names).toEqual(tools)
+  // A list handed under a key that has been rotated since doesn't count.
+  access.recordListed('builder', ['old-key'], 'scm_' + 'x'.repeat(43))
+  expect(access.listed('builder')?.names).toEqual(tools)
   access.recordListed('builder', ['stale'])
   const rooms = await call(client, 'rooms.list')
   expect(access.listed('builder')?.names).toEqual(['stale'])

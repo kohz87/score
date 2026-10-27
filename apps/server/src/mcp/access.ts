@@ -126,12 +126,21 @@ export class McpAccessStore {
     )
   }
 
-  /** 3.7.8: what Score just handed this agent's Hermes on `tools/list` (it keeps that list until it reloads MCP). */
-  recordListed(agentId: string, names: readonly string[]): void {
+  /**
+   * 3.7.8: what Score just handed this agent's Hermes on `tools/list` (it keeps that list until it reloads MCP). Only
+   * while `token` is still the agent's key: a list handed under a key rotated meanwhile doesn't count.
+   */
+  recordListed(agentId: string, names: readonly string[], token?: string): void {
     this.db.tx((sqlite) =>
-      sqlite
-        .prepare('UPDATE mcp_access SET listed_tools = ?, listed_at = ? WHERE agent_id = ?')
-        .run(JSON.stringify([...names].sort()), this.clock(), agentId),
+      token === undefined
+        ? sqlite
+            .prepare('UPDATE mcp_access SET listed_tools = ?, listed_at = ? WHERE agent_id = ?')
+            .run(JSON.stringify([...names].sort()), this.clock(), agentId)
+        : sqlite
+            .prepare(
+              'UPDATE mcp_access SET listed_tools = ?, listed_at = ? WHERE agent_id = ? AND token_hash = ?',
+            )
+            .run(JSON.stringify([...names].sort()), this.clock(), agentId, hashMcpToken(token)),
     )
   }
 
