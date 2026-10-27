@@ -1597,3 +1597,16 @@ One entry per completed task: what landed, review results, and any **rejected re
   passed, 1 failed (the tablet 768 layout flake from 3.7.1: the room opening builder's one-to-one under shared state —
   still to find), check green (server 4820, web 2995, contract 1522).
 - **v3.7.2 deployed live** (~01:01 UTC): backup score-pre-3.7.2-20261027.db, restart, health ok, no new errors.
+- **3.7.3** (2026-10-27; owner: "instead of stop words, use stop icon (a rounded square red)"; "scoretesta encounter
+  error … stopped at Delete profile"; "now scoretesta is stuck on team page"). Stop icon (lead): components/StopIcon,
+  composer and a writing reply's Stop are icon-only with the "Stop" name. Review: no theme may hide the control that
+  halts a run — the buttons are now protected surfaces with a fixed red (rejected: a theme rule painting their ground —
+  theme rules never match protected elements, OUTSIDE_PROTECTED; but a themed `--card` could match the red, so the
+  square has a thin white edge). Delete retry (lead): Hermes' `profile delete` unregistered and tombstoned scoretesta but
+  its gateway recreated cron/ and bot-desktop/ during rmtree ("retry the delete once it settles" in Hermes' own code);
+  the operation's GET now marks a stopped delete retryable when the folder is the one recorded at begin (dev:inode:
+  birthtime) or gone. Review: rejected "a gone folder reruns the CLI delete and fails" — the live step treats a missing
+  folder as done. Also verified for the owner: scoretestb's profile is gone from Hermes (folder and list), Score shows
+  it removed, export kept. Gate: e2e 848 passed, 0 failed; pnpm check green (server 4821, web 2995, contract 1522).
+- **v3.7.3 deployed live** (~01:30 UTC): backup score-pre-3.7.3-20261027.db, restart, health ok; one error was the old
+  process still following scoretestb's removed run (credentials gone with the profile), none from the new one.
