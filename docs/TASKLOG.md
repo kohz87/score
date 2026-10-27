@@ -1628,3 +1628,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   stay in an edited "Agents allowed" list (always excluded now); test asserts the steps' agents. Gate: 847 passed,
   1 failed (the tablet layout flake, now at 820), check green (server 4826, web 2997, contract 1522).
 - **v3.7.5 deployed live** (~02:48 UTC): backup score-pre-3.7.5-20261027.db, restart, health ok, no new errors.
+- **3.7.6 + 3.7.7** (2026-10-27, shipped together as 3.7.7). Owner pasted Start a job's check for opus55: "Score hasn't
+  verified what Claude Code 2.1.311 reads on its own". The CLI had updated itself past the worker declaration's list
+  (2.1.302). 3.7.6 (lead): 2.1.311's help checked by hand (every flag Score relies on unchanged), added to the list. Owner:
+  "check itself and accept, otherwise user without claude code will get stuck" → 3.7.7 (lead, decision 138): an unlisted
+  version is checked from `--help` (`codex exec --help`) once at preflight; every declared flag must keep its phrases in
+  each of its entries; accepted versions go to `checked_cli_versions` (migration 0094), which buildPolicy honours. Codex
+  0.164.0 passes too. Review (Sonnet): a wrapped line read as an entry (every entry must pass now), the last entry took
+  the trailing text (a column-0 line ends it), the cached version could get a newer help's verdict (re-read fresh). Rejected:
+  defaults of --permission-prompts/--setting-sources (Score passes `none` explicitly; setting files are bound by identity).
+  Gate: e2e 847 passed, 1 failed (Team phone screenshot; with the 3.7.6 run's Terminal failure, 66/66 alone), check green
+  (server 4835, web 2997, contract 1522).
+- **v3.7.7 deployed live** (~03:21 UTC): backup score-pre-3.7.7-20261027.db, restart, health ok, no new errors.
