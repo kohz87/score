@@ -2238,6 +2238,7 @@ Workflow runs (§15) are orchestrations with `planner = 'workflow'` and use this
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------- | ----------------------- |
 | Save a new version of a definition                                             | allowed (never changes a version a run uses)                             | allowed                               | allowed                 |
 | Delete a definition                                                            | `409 workflow_used` if any run ever used a version                       | same                                  | same                    |
+| Delete a definition with its runs (`delete-with-runs`)                         | `409 run_active`                                                         | `409 run_active`                      | allowed                 |
 | Start a run / re-run (new run, same version)                                   | allowed (capacity counts every run that is not released)                 | allowed                               | allowed                 |
 | Node-gate decision, assignment-gate decision                                   | allowed while the gate is `open`; else `409 not_open`                    | `409 not_open` (gates are withdrawn)  | `409 not_open`          |
 | Retry an `unresolved` node                                                     | allowed with attempts left, else `409 not_retryable`                     | `409 not_open`                        | `409 not_open`          |
@@ -2382,6 +2383,14 @@ conflict`, `details.latestVersion`). An invalid definition → `422 invalid_defi
   too (and `POST /api/workflow-runs` answers the same with the current issues, e.g. when the host lost its units after the
   version was saved).
 - **H** `DELETE /api/workflows/:id` → `204`; `409 workflow_used` when any run ever used a version.
+- **Archive (3.8.0, decision 142).** `WorkflowSummary.archivedAt` (`string | null`; migration 0097). `GET /api/workflows` still
+  returns every recipe, archived ones flagged: the web hides them by default and does not offer them in Start a job, while
+  a past run still names its recipe and opens. **H** `POST /api/workflows/:id/archive` and `…/unarchive` → `WorkflowSummary`
+  (`404` unknown; archiving twice keeps the first time). Not streamed: the web refetches the list after the call.
+- **H** `POST /api/workflows/:id/delete-with-runs` `{ confirm }` → `{ deletedRuns }`. `confirm` must equal the recipe's name
+  (`400 bad_request`); `409 run_active` ("A run of this recipe is still going. Stop it first.") while any run is not
+  finished; `404` unknown. In one transaction every run's room is deleted as `DELETE /api/rooms/:roomId` does (its records
+  and the team-room job that started it go; the stream gets each `room.deleted`), then the versions and the definition.
 - `POST /api/workflows/:id/versions/:version/export` `WorkflowExportRequest` → `WorkflowExport` (format
   `score.workflow/1`): every free-text field passes `redact()`, `changes` lists every difference, `removePaths` drops fields
   the person removed, the result is revalidated, agents travel as `{ name, role }` descriptors, never as ids. It is described

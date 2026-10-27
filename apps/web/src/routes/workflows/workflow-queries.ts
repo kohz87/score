@@ -1,5 +1,6 @@
 import {
   ValidationResultSchema,
+  WorkflowDeletedWithRunsSchema,
   WorkflowDetailSchema,
   WorkflowExportSchema,
   WorkflowListSchema,
@@ -9,6 +10,7 @@ import {
   WorkflowRunListSchema,
   WorkflowRunSnapshotSchema,
   WorkflowRunSummarySchema,
+  WorkflowSummarySchema,
   WorkflowVersionSchema,
   type GateDecision,
   type LimitsDecision,
@@ -148,6 +150,40 @@ export function useDeleteWorkflow() {
   })
 }
 
+/** Archive or unarchive a recipe (3.8.0): hidden from the Recipes list and Start a job; its runs stay. */
+export function useArchiveWorkflow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; archived: boolean }) =>
+      WorkflowSummarySchema.parse(
+        await post(
+          `workflows/${encodeURIComponent(input.id)}/${input.archived ? 'archive' : 'unarchive'}`,
+          {},
+        ),
+      ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['workflows'] })
+    },
+  })
+}
+
+/** Delete a recipe with every run of it (3.8.0); `confirm` is the recipe's name. */
+export function useDeleteWorkflowWithRuns() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; confirm: string }) =>
+      WorkflowDeletedWithRunsSchema.parse(
+        await post(`workflows/${encodeURIComponent(input.id)}/delete-with-runs`, {
+          confirm: input.confirm,
+        }),
+      ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['workflows'] })
+      void queryClient.invalidateQueries({ queryKey: ['workflow-runs'] })
+    },
+  })
+}
+
 export function useExportWorkflow() {
   return useMutation({
     mutationFn: async (input: { id: string; version: number; removePaths: string[] }) =>
@@ -169,8 +205,10 @@ export const workflowRunsQuery = defineStreamQuery<WorkflowRunSummary[]>({
     const list = WorkflowRunListSchema.parse(await apiFetch('workflow-runs', { signal }))
     return { asOfSeq: list.asOfSeq, data: list.items }
   },
-  types: ['workflow.run.upserted'],
+  // A deleted room takes its run with it (a run's room is deleted with the run, 3.8.0 delete-with-runs).
+  types: ['workflow.run.upserted', 'room.deleted'],
   reduce(items, event) {
+    if (event.type === 'room.deleted') return items.filter((item) => item.roomId !== event.data.id)
     if (event.type !== 'workflow.run.upserted') return items
     const next = event.data
     return [...items.filter((item) => item.id !== next.id), next].sort(

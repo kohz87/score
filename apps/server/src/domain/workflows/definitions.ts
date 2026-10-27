@@ -15,7 +15,11 @@ import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
+import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { redact } from '../../redact.ts'
+import { isHeld, ownerOfRoom } from '../orchestration/ownership.ts'
+import { deleteRoom } from '../room-delete.ts'
+import { roomRow } from '../rooms.ts'
 import { bytesOf, definitionHash, validateDefinition } from './definition.ts'
 
 // Definitions (contract §15): immutable versions in `workflow_versions`, a mutable header in `workflow_definitions`.
@@ -27,6 +31,7 @@ const HeaderSchema = z.object({
   description: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
+  archived_at: z.string().nullable(),
 })
 const VersionRowSchema = z.object({
   workflow_id: z.string(),
@@ -79,6 +84,18 @@ export function readVersion(sqlite: DatabaseSync, id: string, version: number): 
   }
 }
 
+/** Runs of the recipe that are not finished (a draining run counts). */
+const activeRunCount = (sqlite: DatabaseSync, id: string): number =>
+  (
+    sqlite
+      .prepare(
+        `SELECT COUNT(*) AS n FROM wf_runs w JOIN orchestrations o ON o.id = w.orchestration_id
+         WHERE w.workflow_id = ? AND (o.status IN ('running','paused','stopping','finishing')
+           OR EXISTS (SELECT 1 FROM orc_attempts a WHERE a.orchestration_id = o.id AND a.state = 'unknown' AND a.abandoned_at IS NULL))`,
+      )
+      .get(id) as { n: number }
+  ).n
+
 function summaryOf(sqlite: DatabaseSync, header: z.infer<typeof HeaderSchema>): WorkflowSummary {
   const versions = z
     .array(VersionRowSchema)
@@ -89,13 +106,6 @@ function summaryOf(sqlite: DatabaseSync, header: z.infer<typeof HeaderSchema>): 
     )
   const latest = versions.at(-1)!
   const def = WorkflowDefinitionSchema.parse(JSON.parse(latest.definition))
-  const active = sqlite
-    .prepare(
-      `SELECT COUNT(*) AS n FROM wf_runs w JOIN orchestrations o ON o.id = w.orchestration_id
-       WHERE w.workflow_id = ? AND (o.status IN ('running','paused','stopping','finishing')
-         OR EXISTS (SELECT 1 FROM orc_attempts a WHERE a.orchestration_id = o.id AND a.state = 'unknown' AND a.abandoned_at IS NULL))`,
-    )
-    .get(header.id) as { n: number }
   return {
     id: header.id,
     name: header.name,
@@ -106,7 +116,8 @@ function summaryOf(sqlite: DatabaseSync, header: z.infer<typeof HeaderSchema>): 
     agentIds: [...new Set(def.nodes.flatMap((n) => (n.kind === 'agent' ? [n.agentId] : [])))],
     createdAt: header.created_at,
     updatedAt: header.updated_at,
-    activeRuns: active.n,
+    activeRuns: activeRunCount(sqlite, header.id),
+    archivedAt: header.archived_at,
   }
 }
 
@@ -252,6 +263,70 @@ export function deleteWorkflow(sqlite: DatabaseSync, id: string): void {
     throw new HttpError(409, 'workflow_used', 'This workflow has runs, so it can’t be deleted.')
   sqlite.prepare('DELETE FROM workflow_versions WHERE workflow_id = ?').run(id)
   sqlite.prepare('DELETE FROM workflow_definitions WHERE id = ?').run(id)
+}
+
+/** Archive or unarchive (3.8.0): hides the recipe from the list and Start a job; its runs are untouched. */
+export function setWorkflowArchived(
+  sqlite: DatabaseSync,
+  id: string,
+  archived: boolean,
+  now: string,
+): WorkflowSummary {
+  const header = sqlite.prepare('SELECT * FROM workflow_definitions WHERE id = ?').get(id)
+  if (header === undefined) throw new HttpError(404, 'not_found', 'Couldn’t find that workflow.')
+  const parsed = HeaderSchema.parse(header)
+  // Archiving twice keeps the first time.
+  const archivedAt = archived ? (parsed.archived_at ?? now) : null
+  sqlite.prepare('UPDATE workflow_definitions SET archived_at = ? WHERE id = ?').run(archivedAt, id)
+  return summaryOf(sqlite, { ...parsed, archived_at: archivedAt })
+}
+
+/**
+ * Deletes a recipe and every run of it (3.8.0), in the caller's transaction: each run's room goes the way deleting
+ * the room does, then the versions and the definition. Refused while a run is going.
+ */
+export function deleteWorkflowWithRuns(
+  sqlite: DatabaseSync,
+  id: string,
+  confirm: string,
+  now: string,
+): { deletedRuns: number; events: DomainEventDraft[] } {
+  const header = sqlite.prepare('SELECT * FROM workflow_definitions WHERE id = ?').get(id)
+  if (header === undefined) throw new HttpError(404, 'not_found', 'Couldn’t find that workflow.')
+  const parsed = HeaderSchema.parse(header)
+  if (confirm.trim() !== parsed.name.trim())
+    throw new HttpError(400, 'bad_request', 'Type the recipe’s name to delete it.')
+  const stillGoing = () =>
+    new HttpError(409, 'run_active', 'A run of this recipe is still going. Stop it first.')
+  if (activeRunCount(sqlite, id) > 0) throw stillGoing()
+  const runs = sqlite
+    .prepare(
+      `SELECT o.room_id AS room_id FROM wf_runs w JOIN orchestrations o ON o.id = w.orchestration_id
+       WHERE w.workflow_id = ?`,
+    )
+    .all(id) as { room_id: string | null }[]
+  // A finished run can still be draining (a stop not yet acknowledged): its room is held like a running one.
+  for (const { room_id } of runs)
+    if (room_id !== null && isHeld(ownerOfRoom(sqlite, room_id))) throw stillGoing()
+  const events: DomainEventDraft[] = []
+  for (const { room_id } of runs) {
+    if (room_id === null) continue
+    try {
+      events.push(...deleteRoom(sqlite, room_id, roomRow(sqlite, room_id).name, now))
+    } catch (error) {
+      // The caller's transaction rolls back, so nothing earlier in the loop stays deleted.
+      if (
+        error instanceof HttpError &&
+        (error.code === 'orchestration_owned' || error.code === 'room_busy')
+      )
+        throw stillGoing()
+      throw error
+    }
+  }
+  sqlite.prepare('DELETE FROM wf_runs WHERE workflow_id = ?').run(id)
+  sqlite.prepare('DELETE FROM workflow_versions WHERE workflow_id = ?').run(id)
+  sqlite.prepare('DELETE FROM workflow_definitions WHERE id = ?').run(id)
+  return { deletedRuns: runs.length, events }
 }
 
 // -------------------------------------------------------------------------------------------------------- export

@@ -154,6 +154,7 @@ const summary = (id: string, def: WorkflowDefinition, used: boolean, active: num
   createdAt: at(-86_400),
   updatedAt: at(-3600),
   activeRuns: active,
+  archivedAt: null,
 })
 
 export const releaseVersion = WorkflowVersionSchema.parse({

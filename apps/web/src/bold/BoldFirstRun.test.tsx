@@ -79,6 +79,7 @@ const workflowList = (names: string[] = []): WorkflowList => ({
     createdAt: '2026-10-24T10:00:00.000Z',
     updatedAt: '2026-10-24T10:00:00.000Z',
     activeRuns: 0,
+    archivedAt: null,
   })),
   inventory: {
     definitions: names.length,

@@ -522,13 +522,17 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     missingInputs.length === 0 &&
     (!needsLead || leadId !== '')
 
-  const savedRecipes = workflows.data?.items ?? []
+  // An archived recipe is not offered (3.8.0); a `?recipe=` link to one falls back to lead decides with a notice.
+  const savedRecipes = (workflows.data?.items ?? []).filter((item) => !item.archivedAt)
   // `?recipe=<id>` (the Recipes page's Run) opens the dialog with that saved recipe already chosen, once.
   const wantedRecipe = new URLSearchParams(location.search).get('recipe')
   const appliedWanted = useRef(false)
   const wantedItem = wantedRecipe
     ? savedRecipes.find((item) => item.id === wantedRecipe)
     : undefined
+  const wantedArchived =
+    wantedRecipe !== null &&
+    (workflows.data?.items ?? []).some((item) => item.id === wantedRecipe && item.archivedAt)
   useEffect(() => {
     if (!wantedItem || appliedWanted.current) return
     appliedWanted.current = true
@@ -969,6 +973,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
             {showRecipe && (
               <div>
                 <span className="lab">Recipe</span>
+                {wantedArchived && (
+                  <p className="small muted" role="status">
+                    That recipe is archived. Unarchive it in Recipes to use it.
+                  </p>
+                )}
                 <div className="row wrap" role="radiogroup" aria-label="Recipe">
                   {recipeOptions.map((option) => {
                     const chosen =
