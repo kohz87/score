@@ -3,6 +3,16 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.1] — 2026-10-27
+
+### Fixed
+- **Removing an agent that still has work.** Remove agent… now offers **Stop <agent>'s work** when running or queued
+  work is what holds the agent: queued messages end (with a note in their job) and running work is asked to stop, then
+  the panel checks again. A run Hermes no longer has is ended in Score as stopped, so it can't hold an agent forever.
+- The name you type to confirm ignores capitals and spaces (tablet and phone keyboards capitalise the first letter),
+  and the panel says when it doesn't match.
+- An agent whose setup stopped partway can be removed from the panel, as 3.3.0 intended.
+
 ## [3.7.0] — 2026-10-26
 
 ### Fixed
