@@ -271,7 +271,8 @@ export function DirectHeaderActions({
         {!iconOnly && <span>Earlier chats</span>}
       </button>
       {/* 3.12.1 (owner): a shortcut to the agent's screen, as "Look at its screen" on its page. */}
-      {agent.served && (
+      {/* A Hermes agent's Bot Desktop; coding agents have no screen to show. */}
+      {agent.served && (!agent.runtime || agent.runtime === 'hermes') && (
         <Link
           className="btn sm bold-dm-history-button bold-dm-history-icon bold-dm-screen"
           to={boldAgentScreenLink(agent.id)}

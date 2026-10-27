@@ -289,7 +289,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
                 Remove agent…
               </button>
             )}
-          {agent.served && (
+          {/* 3.12.1: a Hermes agent's Bot Desktop; coding agents have no screen to show. */}
+          {agent.served && (!agent.runtime || agent.runtime === 'hermes') && (
             <>
               <Link className="link bold-agent-watch" to={boldAgentScreenLink(agent.id)}>
                 Look at its screen
