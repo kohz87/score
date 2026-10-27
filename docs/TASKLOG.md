@@ -1786,3 +1786,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   merge conflicted in DECISIONS (148/149), resolved. Gate: e2e 853 passed, 1 failed (tablet flake), check green (server 4877,
   web 3034, contract 1536).
 - **v3.12.0 deployed live** (~10:05 UTC, idle guard passed): backup score-pre-3.10.0-20261027.db, health ok.
+- **3.12.1** (2026-10-27, lead; owner: "can we add a shortcut icon for one-to-one chat to see their screen?"). A screen
+  icon in the one-to-one header (DirectHeaderActions, desktop and phone) to `/b/screen/<id>`. Review: coding agents (no Bot
+  Desktop) got a link to an empty screen, here and on the agent page since 3.3.0: both now show it only for served Hermes
+  agents (test). Gate: e2e 851 passed, 3 failed (2 coding-agent page screenshots without the link, regenerated and checked by
+  eye; tablet flake), check green (server 4877, web 3037, contract 1536).
+- **v3.12.1 deployed live** (~10:47 UTC, idle guard passed): backup score-pre-3.12.1-20261027.db, health ok.
