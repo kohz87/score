@@ -60,6 +60,14 @@ export const StartRunSchema = z.object({
   images: z.array(z.string().min(1)).max(16).optional(),
 })
 export type StartRun = z.infer<typeof StartRunSchema>
+
+/**
+ * 3.7.11 (decision 141): Hermes tells a model on its API server that "the rendering layer is unknown — assume plain text.
+ * No markdown". Score renders GitHub Markdown, so every run carries this as its extra system prompt (`instructions`,
+ * which Hermes appends after its own, so it wins).
+ */
+export const SCORE_RENDERING_NOTE =
+  '[Score] Your replies are shown in Score, which renders GitHub-flavoured Markdown. Use headings, lists, bold, code blocks and tables where they help. A table needs a header row, then a separator row such as | --- | --- |. This replaces any instruction to answer in plain text.'
 const AdmissionSchema = z.object({
   run_id: z.string().min(1),
   status: UpstreamStatusSchema,
@@ -330,6 +338,7 @@ export class GatewayClient {
       AdmissionSchema,
       {
         input: wireInput ?? input,
+        instructions: SCORE_RENDERING_NOTE,
         ...(sessionId === undefined ? {} : { session_id: sessionId }),
         ...(model === undefined ? {} : { model }),
         ...(provider === undefined ? {} : { provider }),

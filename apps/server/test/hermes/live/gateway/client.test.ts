@@ -52,6 +52,8 @@ test.each(['default', 'builder'])(
       path: `${prefix}/v1/runs`,
       body: {
         input: 'hello',
+        // 3.7.11: Score renders Markdown, against Hermes' "assume plain text" hint for its API server.
+        instructions: expect.stringContaining('renders GitHub-flavoured Markdown'),
         model: 'fixture-model',
         provider: 'fixture-provider',
         session_id: 'fixture-session',
