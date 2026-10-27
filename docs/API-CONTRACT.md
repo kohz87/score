@@ -1205,11 +1205,12 @@ Deletion clears the agent's pause. Import still refuses a retired name.
   names one of the agent's aliases (case-insensitive) is replaced by the alias's model and provider.
 - `AgentDetail.model.fallback` is the agent's `fallback_providers` chain as text (`"model-a, then model-b"`), `null` when none.
 - **H** `GET|PUT /api/agents/:agentId/model-settings` (5.31, `packages/contract/src/model-settings.ts`) →
-  `ModelSettings` `{ fallbacks: { provider; model }[] /* ordered chain, Hermes `fallback_providers`, any length */;
+  `ModelSettings` `{ effort: string | null /* Hermes `agent.reasoning_effort`; null = Default (the model's own); a hand-set value outside low|medium|high|xhigh is shown as-is */;
+fallbacks: { provider; model }[] /* ordered chain, Hermes `fallback_providers`, any length */;
 fallbacksEditable: boolean /* false: an entry has a custom endpoint or key; shown, never rewritten (409) */;
 aliases: { name; model; provider: string | null; editable }[] /* Hermes `model_aliases`, per profile */;
 speech: { stt: { provider; model }; tts: { provider; model; voice } } }`. The PUT body is `ModelSettingsUpdate`
-  `{ fallbacks?; aliases? /* the full list of editable aliases wanted */; speech?: { stt?: { provider?; model? };
+  `{ effort?: 'low' | 'medium' | 'high' | 'xhigh' | null /* null = Default: `config unset agent.reasoning_effort` */; fallbacks?; aliases? /* the full list of editable aliases wanted */; speech?: { stt?: { provider?; model? };
 tts?: { provider?; model?; voice? } } }`, strict. Only keys whose value differs from what Hermes holds are written
   (`hermes -p <profile> config set …`, `config unset model_aliases.<name>` for a removed alias), and the answer is built from
   what was written, with no re-read. Speech provider ids and which of model/voice each has are `STT_PROVIDERS` /

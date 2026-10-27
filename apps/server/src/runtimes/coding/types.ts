@@ -1,3 +1,4 @@
+import { EffortWordSchema } from '@score/contract'
 import type { CodingPermission, CodingQuotaWindow, CodingRuntime } from '@score/contract'
 
 /**
@@ -103,6 +104,8 @@ export interface DriverRunOptions {
   prompt: string
   permission: CodingPermission
   model: string | null
+  /** Reasoning effort for the CLI (`--effort` / `model_reasoning_effort`); null/absent = send nothing. Not part of the worker policy. */
+  effort?: string | null
   /** The CLI's own session id from an earlier turn, to resume. */
   sessionId: string | null
   /** Extra settings file the driver wants (Claude Code deny rules), written by the caller before the spawn. */
@@ -215,3 +218,12 @@ export const CODING_LIMITS = {
   /** Kept tail of stderr, for the failure notice. */
   stderrBytes: 8 * 1024,
 } as const
+
+/** The effort to put on argv: a strict lowercase word that the runtime lists, else nothing (never free text). */
+export function checkedEffort(
+  effort: string | null | undefined,
+  allowed: readonly string[],
+): string | null {
+  if (!effort || !EffortWordSchema.safeParse(effort).success) return null
+  return allowed.includes(effort) ? effort : null
+}

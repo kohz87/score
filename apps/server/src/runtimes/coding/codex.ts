@@ -1,8 +1,12 @@
 import { z } from 'zod'
+import { CODING_EFFORTS } from '@score/contract'
 import { join } from 'node:path'
 import { boundId, MAX_REPLY_BYTES, rememberId, withBounds } from './note.ts'
 import { inRoots } from './worker-sources.ts'
+import { checkedEffort } from './types.ts'
 import type { CodingDriver, CodingEvent, DriverRunOptions, LineParser } from './types.ts'
+
+const CODEX_EFFORTS = CODING_EFFORTS.codex!
 
 // Codex CLI, headless: `codex exec --json`. Event shapes follow OpenAI's documented JSONL stream
 // (thread.started, item.started/completed, turn.completed/failed). Anything else is counted and dropped.
@@ -379,6 +383,8 @@ export const codexDriver: CodingDriver = {
         'approval_policy="never"',
       ]
       if (options.model) args.push('-m', options.model)
+      const effort = checkedEffort(options.effort, CODEX_EFFORTS)
+      if (effort) args.push('-c', `model_reasoning_effort="${effort}"`)
       args.push('-')
       return args
     }
@@ -396,6 +402,8 @@ export const codexDriver: CodingDriver = {
       'approval_policy="never"',
     ]
     if (options.model) args.push('-m', options.model)
+    const effort = checkedEffort(options.effort, CODEX_EFFORTS)
+    if (effort) args.push('-c', `model_reasoning_effort="${effort}"`)
     args.push('-')
     return args
   },

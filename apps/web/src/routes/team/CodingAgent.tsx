@@ -1,4 +1,5 @@
 import {
+  CODING_EFFORTS,
   CodingAgentSchema,
   CodingAgentsResponseSchema,
   CodingRuntimesResponseSchema,
@@ -17,7 +18,8 @@ import { runtimeLabel } from '../../components/runtime-label.ts'
 import { CodingBackend } from './CodingBackend.tsx'
 import { CodingPersonality } from './CodingPersonality.tsx'
 import { AGENT_ID_PATTERN, agentIdInput } from './agent-id.ts'
-import { ModelPicker } from './ModelPicker.tsx'
+import { ModelPicker, useCodingModels } from './ModelPicker.tsx'
+import { EffortSelect } from '../../components/model-settings/EffortSelect.tsx'
 import { ReleaseHeld } from './ReleaseHeld.tsx'
 import { AgentQuota, RuntimeQuotaLine } from './QuotaMeters.tsx'
 
@@ -456,7 +458,11 @@ export function CodingOverview({
             floor={coding.quotaFloorPercent}
           />
         </section>
-        <CodingModelCard key={`model:${coding.model ?? ''}`} coding={coding} onChanged={changed} />
+        <CodingModelCard
+          key={`model:${coding.model ?? ''}:${coding.effort ?? ''}`}
+          coding={coding}
+          onChanged={changed}
+        />
         <CodingAccessCard
           key={`access:${coding.permission}:${coding.quotaFloorPercent}`}
           coding={coding}
@@ -586,6 +592,9 @@ function CodingModelCard({ coding, onChanged }: { coding: CodingAgent; onChanged
               ? `Set for this agent. ${runtimeLabel(coding.runtime) ?? coding.runtime} uses it for every turn.`
               : 'The CLI picks its own model.'}
           </p>
+          {CODING_EFFORTS[coding.runtime] && (
+            <p className="team-muted-strong">Effort: {coding.effort ?? 'Default'}</p>
+          )}
           <button type="button" className="team-text-action" onClick={() => setEditing(true)}>
             Change model
           </button>
@@ -605,16 +614,36 @@ function ModelEditor({
   onClose: () => void
 }) {
   const [model, setModel] = useState(coding.model ?? '')
+  const [effort, setEffort] = useState(coding.effort ?? '')
   const save = useCodingPatch(coding, onChanged, onClose)
+  const models = useCodingModels(coding.runtime)
+  const runtimeLevels = CODING_EFFORTS[coding.runtime]
+  // Codex lists the levels per model; when the chosen model lists some, offer those the server accepts.
+  const levelsFor = (modelId: string) => {
+    const own = models.data?.models.find((item) => item.id === modelId.trim())?.efforts
+    return coding.runtime === 'codex' && own?.length
+      ? (runtimeLevels ?? []).filter((level) => own.includes(level))
+      : (runtimeLevels ?? [])
+  }
+  const levels = levelsFor(model)
+  // A model that doesn't list the current level puts the choice back on Default: that level is never sent for it.
+  const pickModel = (next: string) => {
+    setModel(next)
+    if (effort !== '' && !levelsFor(next).includes(effort)) setEffort('')
+  }
   return (
     <form
       className="team-routine-form"
       onSubmit={(event) => {
         event.preventDefault()
-        save.mutate({ model: model.trim() || null })
+        save.mutate({
+          model: model.trim() || null,
+          ...(runtimeLevels && effort !== (coding.effort ?? '') ? { effort: effort || null } : {}),
+        })
       }}
     >
-      <ModelPicker runtime={coding.runtime} value={model} onChange={setModel} />
+      <ModelPicker runtime={coding.runtime} value={model} onChange={pickModel} />
+      {runtimeLevels && <EffortSelect value={effort} levels={levels} onChange={setEffort} />}
       {save.error && <p role="alert">{save.error.message}</p>}
       <div className="team-file-actions">
         <button className="team-primary" disabled={save.isPending}>

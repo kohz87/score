@@ -3,6 +3,7 @@ import type { ModelSettings } from '@score/contract'
 import { speechChanges, type Draft } from './SpeechModels.tsx'
 
 const settings: ModelSettings = {
+  effort: null,
   fallbacks: [],
   fallbacksEditable: true,
   aliases: [],

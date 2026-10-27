@@ -1,9 +1,10 @@
-import type { CodingQuotaWindow } from '@score/contract'
+import { CODING_EFFORTS, type CodingQuotaWindow } from '@score/contract'
 import { claudeQuotaFromRecord } from './quota.ts'
 import { withBounds } from './note.ts'
 import { z } from 'zod'
 import { redact } from '../../redact.ts'
 import { join } from 'node:path'
+import { checkedEffort } from './types.ts'
 import { inRoots } from './worker-sources.ts'
 import type {
   CodingDriver,
@@ -12,6 +13,8 @@ import type {
   LineParser,
   ToolDetail,
 } from './types.ts'
+
+const CLAUDE_EFFORTS = CODING_EFFORTS['claude-code']!
 
 // Claude Code, headless: `claude -p --output-format stream-json --verbose`. Event shapes follow Anthropic's documented
 // stream-json output (system/init, assistant, user, result). Parsed defensively: anything that doesn't match is counted
@@ -541,6 +544,8 @@ export const claudeDriver: CodingDriver = {
     if (options.worker) args.push('--strict-mcp-config')
     args.push('--disallowed-tools', claudeDenyRules(options.denyPaths, options.denyFiles).join(','))
     if (options.model) args.push('--model', options.model)
+    const effort = checkedEffort(options.effort, CLAUDE_EFFORTS)
+    if (effort) args.push('--effort', effort)
     if (options.sessionId) args.push('--resume', options.sessionId)
     // The owner's role and instructions (PLAN 8.8): a file, never the text on argv. Claude Code records the system prompt
     // once per conversation, so a resumed session renders it fresh for an edit to apply (`claude --help`, 2.1.301).

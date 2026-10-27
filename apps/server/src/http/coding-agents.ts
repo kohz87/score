@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   CodingAgentCreateSchema,
+  CODING_EFFORTS,
   CodingAgentPatchSchema,
   CodingAgentSchema,
   AgentSummarySchema,
@@ -179,6 +180,12 @@ export function registerCodingAgentRoutes(
     const body = CodingAgentPatchSchema.parse(request.body)
     const agent = getCodingAgent(db.sqlite, agentId)
     if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
+    if (body.effort) {
+      const allowed = CODING_EFFORTS[agent.runtime]
+      if (!allowed) throw new HttpError(400, 'bad_request', 'This runtime has no effort setting.')
+      if (!allowed.includes(body.effort))
+        throw new HttpError(400, 'bad_request', `Effort must be one of: ${allowed.join(', ')}.`)
+    }
     if (body.permission && body.permission !== agent.permission)
       assertVerified(driverFor(agent.runtime), body.permission)
     // Raising the access level is the sensitive change; lowering it never needs the password. The password is
@@ -215,6 +222,7 @@ export function registerCodingAgentRoutes(
         ...(body.instructions !== undefined ? { instructions: body.instructions } : {}),
         ...(body.permission !== undefined ? { permission: body.permission } : {}),
         ...(body.model !== undefined ? { model: body.model } : {}),
+        ...(body.effort !== undefined ? { effort: body.effort } : {}),
         ...(workspace !== undefined ? { workspace } : {}),
         ...(body.quotaFloorPercent !== undefined
           ? { quotaFloorPercent: body.quotaFloorPercent }
