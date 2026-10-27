@@ -532,7 +532,11 @@ export const claudeDriver: CodingDriver = {
   worker: {
     // Checked against `claude --help` of 2.1.296 (the installed CLI, 2026-10-13); 2.1.295 is the pinned test version.
     // 2.1.302: `--strict-mcp-config` and `--setting-sources` help text identical to 2.1.301 (2026-10-18).
-    versions: ['2.1.295', '2.1.296', '2.1.301', '2.1.302'],
+    // 2.1.311 (the installed CLI, 2026-10-27): `--strict-mcp-config` and `--setting-sources` help text identical;
+    // `--permission-mode` still offers dontAsk, acceptEdits and bypassPermissions (it adds auto and manual, never sent);
+    // `--tools`, `--disallowed-tools`, `--settings`, `--system-prompt-snapshot`, `--resume` unchanged. New opt-in flags
+    // (`--restricted`, `--safe-mode`) aren't used.
+    versions: ['2.1.295', '2.1.296', '2.1.301', '2.1.302', '2.1.311'],
     neutralised: [
       {
         source: 'MCP servers (user, project, local and managed)',
