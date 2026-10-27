@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.4] — 2026-10-27
+
+### Fixed
+- **Removing an agent whose Docker sandbox left root-owned files.** Hermes can't delete such a folder, so the removal
+  preview now says so before anything starts and gives the exact command (`sudo chown -R <you>: '<folder>'`, which
+  hands the files back without deleting anything). If a removal still stops on them, the panel names the folder and
+  the same command instead of "The CLI refused or didn't confirm this step".
+
 ## [3.7.3] — 2026-10-27
 
 ### Changed
