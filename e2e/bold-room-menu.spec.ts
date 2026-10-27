@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { openBoldJob } from './bold-room-fixtures.ts'
 import { openMenuRoom } from './bold-room-menu-fixtures.ts'
 
@@ -43,6 +43,14 @@ async function share(page: Page, title: string) {
   await dialog.getByRole('button', { name: 'Create link' }).click()
   await expect(dialog.getByText('https://score.lan/s/ROOM-MENU')).toBeVisible()
   await dialog.getByRole('button', { name: 'Close' }).click()
+}
+
+/** 3.8.1 (owner, phone): an open menu sits wholly inside the screen, whichever side its ⋯ button is on. */
+async function onScreen(page: Page, menu: Locator) {
+  const box = (await menu.boundingBox())!
+  const width = page.viewportSize()!.width
+  expect(box.x).toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(width)
 }
 
 for (const viewport of sizes) {
@@ -163,6 +171,7 @@ for (const viewport of sizes) {
       await expect(menu).toContainText('Export this room')
       await expect(menu).toContainText('Share a read-only link')
       await expect(menu).toContainText('Delete #activity-feed')
+      await onScreen(page, menu)
 
       const download = page.waitForEvent('download')
       await menu.getByRole('menuitem', { name: 'Export this room' }).click()
@@ -237,6 +246,7 @@ for (const viewport of sizes) {
       await expect(menu).toContainText('Share a read-only link')
       await expect(menu).toContainText('Export the whole room as Markdown')
       await expect(menu).toContainText('Delete job')
+      await onScreen(page, menu)
 
       await menu.getByRole('menuitem', { name: 'Share a read-only link' }).click()
       await share(page, 'Activity feed')

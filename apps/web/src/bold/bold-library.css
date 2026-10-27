@@ -465,3 +465,25 @@
 [data-ui='bold'] .bold-library-empty {
   font-weight: 400;
 }
+
+/* 3.8.1 (owner, phone): the folded notes list is one bar above the note. */
+[data-ui='bold'] .bold-library-fold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--bold-d, 1));
+  width: 100%;
+  min-height: 44px;
+  padding: 0 calc(16px * var(--bold-d, 1));
+  border: 1px solid var(--line);
+  border-radius: calc(22px * var(--bold-r, 1));
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+[data-ui='bold'] .bold-library-nav[data-folded] {
+  flex: none;
+}

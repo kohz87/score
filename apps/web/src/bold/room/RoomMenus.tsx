@@ -33,6 +33,7 @@ import { PhonePresence } from './PhoneJobList.tsx'
 import { isEveryoneRoom, jobStateLine } from './room-model.ts'
 import { teamRoomsQuery } from './room-queries.ts'
 import { NewTeamDialog, teamNameProblem, TeamMembersDialog } from './TeamDialogs.tsx'
+import { useMenuPlacement } from './menu-placement.ts'
 
 function DotsIcon() {
   return (
@@ -963,6 +964,7 @@ export function RoomMenu({
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLSpanElement>(null)
+  useMenuPlacement(root, open)
   const trigger = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const close = useMenu(open, setOpen, root, trigger)
@@ -1210,6 +1212,7 @@ export function JobMenu({
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLSpanElement>(null)
+  useMenuPlacement(root, open)
   const trigger = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const close = useMenu(open, setOpen, root, trigger)
@@ -1454,6 +1457,7 @@ export function ChatMenu({
 }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLSpanElement>(null)
+  useMenuPlacement(root, open)
   const trigger = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const close = useMenu(open, setOpen, root, trigger)
