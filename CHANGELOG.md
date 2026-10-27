@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.13] — 2026-10-27
+
+### Fixed
+- **Spend by agent keeps a long amount inside the card** ("$0.49 estimated" ran off it); a removed agent with nothing
+  spent isn't listed.
+
 ## [3.7.12] — 2026-10-27
 
 ### Fixed
