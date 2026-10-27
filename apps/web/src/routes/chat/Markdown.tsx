@@ -197,7 +197,10 @@ export function Markdown({
         // `workspace:` is ours (it only ever becomes an in-app link); every other scheme keeps the default filter.
         urlTransform={(url) => (isWorkspaceHref(url) ? url : defaultUrlTransform(url))}
       >
-        {normalizeTables(normalizeBullets(shown))}
+        {
+          // While a reply streams, its last row is often half written: tables are found once it is complete.
+          streaming ? normalizeBullets(shown) : normalizeTables(normalizeBullets(shown))
+        }
       </ReactMarkdown>
     </div>
   )

@@ -1,9 +1,15 @@
 const FENCE = /^[ \t]{0,3}(`{3,}|~{3,})/
 const SEPARATOR = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/
 
-/** The cells of a pipe row, or null when the line has no pipe between two pieces of text. */
+/** A GFM separator row (a `---` line without a pipe is a rule, not a table). */
+const separator = (line: string) => line.includes('|') && SEPARATOR.test(line)
+
+/**
+ * The cells of a pipe row, or null. Not a row: indented code, a quote, a bullet item, inline code or an escaped pipe
+ * (their pipes aren't column borders), a separator, or a line with an empty cell.
+ */
 function cells(line: string): string[] | null {
-  if (SEPARATOR.test(line)) return null
+  if (separator(line) || /^( {4}|\t)|^\s*(>|[-*+]\s)/.test(line) || /`|\\\|/.test(line)) return null
   const inner = line.trim().replace(/^\|/, '').replace(/\|$/, '')
   if (!inner.includes('|')) return null
   const parts = inner.split('|').map((cell) => cell.trim())
@@ -32,7 +38,7 @@ export function normalizeTables(text: string): string {
       continue
     }
     // A real table: its separator row and every row under it stay as written.
-    if (fence === null && SEPARATOR.test(line) && line.includes('-')) {
+    if (fence === null && separator(line)) {
       out.push(line)
       i++
       while (i < lines.length && cells(lines[i]!)) out.push(lines[i++]!)
@@ -47,7 +53,7 @@ export function normalizeTables(text: string): string {
     let end = i + 1
     while (end < lines.length && cells(lines[end]!)?.length === first.length) end++
     // A header row followed by a separator is a real table's header.
-    const separated = end < lines.length && SEPARATOR.test(lines[end]!)
+    const separated = end < lines.length && separator(lines[end]!)
     if (end - i < 3 || separated) {
       out.push(line)
       i++

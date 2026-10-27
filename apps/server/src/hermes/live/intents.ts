@@ -3,7 +3,13 @@ import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import type { ObservationSink } from '../port.ts'
 import { CredentialsUnavailable } from './credentials.ts'
-import { GatewayClient, HermesHttpError, StartRunSchema, type StartRun } from './gateway.ts'
+import {
+  GatewayClient,
+  HermesHttpError,
+  SCORE_RENDERING_NOTE,
+  StartRunSchema,
+  type StartRun,
+} from './gateway.ts'
 import { attachRunMessage, isCancelledTurn } from '../../domain/message-runs.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { runDraft } from './translate.ts'
@@ -266,6 +272,7 @@ export async function startRunIntent(
   if (active.count) throw new CredentialsUnavailable(parsed.profile)
   const payload = PayloadSchema.parse({
     ...parsed,
+    instructions: parsed.instructions ?? SCORE_RENDERING_NOTE,
     credentialGeneration,
   })
   const id = randomUUID()

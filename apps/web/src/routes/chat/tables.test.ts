@@ -42,3 +42,22 @@ test('fenced code keeps its pipes byte for byte', () => {
   const code = '```sh\nls | grep a | wc\ncat x | sort | uniq\nps | head | tail\n```'
   expect(normalizeTables(code)).toBe(code)
 })
+
+test('indented code, quotes, bullet items, inline code and escaped pipes are not rows', () => {
+  for (const text of [
+    '    ls | grep a\n    cat x | sort\n    ps | head',
+    '> a | b\n> c | d\n> e | f',
+    '- a | b\n- c | d\n- e | f',
+    'run `a | b`\nrun `c | d`\nrun `e | f`',
+    'a \\| b | c\nd \\| e | f\ng \\| h | i',
+  ])
+    expect(normalizeTables(text)).toBe(text)
+})
+
+test('a --- rule before pipe rows is not a separator, and ~~~ fences are code', () => {
+  expect(normalizeTables('---\na | b\nc | d\ne | f')).toBe(
+    '---\n\n| a | b |\n| --- | --- |\n| c | d |\n| e | f |',
+  )
+  const tilde = '~~~\na | b\nc | d\ne | f\n~~~'
+  expect(normalizeTables(tilde)).toBe(tilde)
+})
