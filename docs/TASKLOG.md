@@ -1685,3 +1685,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   alone), check green (server 4848, web 3008, contract 1524).
 - **v3.7.12 deployed live** (~05:11 UTC, idle guard passed): backup score-pre-3.7.12-20261027.db, restart, health ok, no
   new errors; 0096 removed the one orphaned job.
+- **3.7.13** (2026-10-27, lead; owner: Spend by agent's "$0.49 estimated" overflowed the card, Troubleshooting note).
+  The bar's `max-width: calc(100% - 54px)` left 54px for the amount; the bar is now `flex: 0 1 auto` and gives way.
+  Removed agents with nothing spent aren't listed (kept until agents load). Review: a long amount shortening only its own
+  bar (accepted); first-render flicker (fixed). Gate: e2e 846 passed, 2 failed (tablet, phone manifest: 17/17 alone),
+  check green (server 4848, web 3009, contract 1524).
+- **v3.7.13 deployed live** (~05:27 UTC, idle guard passed): backup score-pre-3.7.13-20261027.db, health ok.
