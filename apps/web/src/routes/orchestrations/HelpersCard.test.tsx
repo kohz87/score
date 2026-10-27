@@ -97,3 +97,18 @@ test('vote steps are dropped from the step lists, helper steps stay', () => {
   ]
   expect(leadSteps(steps).map((step) => step.id)).toEqual(['s1', 's2'])
 })
+
+test('shows who votes when voters are set', () => {
+  const { container } = render(
+    <HelpersCard run={{ helpers: helpers([], { voterIds: ['builder'] }) }} agents={agents} />,
+  )
+  expect(container.textContent).toContain('Votes:')
+  expect(container.textContent).toContain('builder')
+})
+
+test('no voters line when voterIds is empty', () => {
+  const { container } = render(
+    <HelpersCard run={{ helpers: helpers([], { voterIds: [] }) }} agents={agents} />,
+  )
+  expect(container.textContent).not.toContain('Votes:')
+})
