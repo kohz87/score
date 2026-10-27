@@ -107,6 +107,7 @@ export function Composer({
   roomId,
   roomName,
   agents,
+  offered = agents,
   leadAgentId = null,
   onSent,
   onCompress,
@@ -125,6 +126,11 @@ export function Composer({
   roomId: string
   roomName: string
   agents: AgentSummary[]
+  /**
+   * 3.7.10: who @ and To offer (default: `agents`). `agents` stays the full list, so an edited message to a removed agent
+   * still shows its name.
+   */
+  offered?: AgentSummary[]
   leadAgentId?: string | null
   /** The user view's first message opens its room once it is sent (PLAN 8.4). */
   onSent?: () => void
@@ -349,11 +355,11 @@ export function Composer({
   const mentionItems = useMemo(() => {
     if (!mention) return []
     const query = mention.query.toLowerCase()
-    return agents.filter(
+    return offered.filter(
       (agent) =>
         agent.id.toLowerCase().startsWith(query) || agent.name.toLowerCase().startsWith(query),
     )
-  }, [mention, agents])
+  }, [mention, offered])
   const menu = closed ? null : slashItems.length ? 'slash' : mentionItems.length ? 'mention' : null
   const count = menu === 'slash' ? slashItems.length : mentionItems.length
   const index = Math.min(active, Math.max(count - 1, 0))
@@ -824,7 +830,7 @@ export function Composer({
     }
   }
 
-  const available = agents.filter((agent) => !to.includes(agent.id))
+  const available = offered.filter((agent) => !to.includes(agent.id))
   // "From workspace…" browses the workspace of whoever the message goes to: the To chips, else the room lead.
   const pickerAgents = agents.filter((agent) =>
     to.length ? to.includes(agent.id) : agent.id === (leadAgentId ?? agents[0]?.id),

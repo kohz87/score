@@ -616,7 +616,8 @@ function LoadedTeamRoom({
           key={`${composerKey}-${command ?? ''}`}
           roomId={room.id}
           roomName={room.name}
-          agents={talkable}
+          agents={agents}
+          offered={talkable}
           leadAgentId={room.leadAgentId}
           jobId={selectedJob === 'all' || (phone && !phoneJob) ? null : selectedJob}
           roomMode
