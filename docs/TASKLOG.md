@@ -1656,3 +1656,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   failed once on the contract schema table (McpReloadResultSchema added), then green (server 4843, web 2999, contract
   1524).
 - **v3.7.9 deployed live** (~04:05 UTC): backup score-pre-3.7.9-20261027.db, restart, health ok, no new errors.
+- **3.7.10** (2026-10-27, lead; owner: "after pressing @, it still shows deleted agents"). The team room passed every agent
+  (removed ones kept for history names) to the Composer. Composer takes `offered` for @ and To's Add someone; the room
+  passes `agents.filter(canTalkTo)` and keeps the full list for names. Review: a filtered `agents` degraded an edited
+  message to a removed agent (fixed by `offered`); test now pins it. Gate: e2e 847 passed, 1 failed (tablet flake), check
+  green (server 4843, web 3001, contract 1524).
+- **v3.7.10 deployed live** (~04:23 UTC): backup score-pre-3.7.10-20261027.db, restart, health ok, no new errors.
