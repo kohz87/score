@@ -41,3 +41,20 @@ test('symlinks are not followed and the walk is bounded', () => {
     rmSync(outside, { recursive: true, force: true })
   }
 })
+
+test('the message quotes the folder safely and keeps the example to plain, bounded text', () => {
+  const odd = "/tmp/it's here"
+  const message = foreignOwnedMessage(odd, `${odd}/sandboxes/do\u0007cker${'x'.repeat(300)}`)
+  expect(message).toContain(`'/tmp/it'\\''s here'`)
+  expect(message).not.toContain('\u0007')
+  expect(message.length).toBeLessThan(500)
+})
+
+test('only a folder with entries that another user owns blocks; an empty one does not', () => {
+  rmSync(join(home, 'sandboxes'), { recursive: true })
+  mkdirSync(join(home, 'empty'))
+  // With every folder "another user's", only one that holds entries is reported: here none does.
+  expect(foreignOwned(home, process.getuid!() + 1)).toBeNull()
+  writeFileSync(join(home, 'empty', 'f'), 'x')
+  expect(foreignOwned(home, process.getuid!() + 1)).toBe(join(home, 'empty'))
+})

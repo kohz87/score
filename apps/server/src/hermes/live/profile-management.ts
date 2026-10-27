@@ -47,9 +47,9 @@ function identity(path: string): string | null {
   return value?.isDirectory() ? `${value.dev}:${value.ino}:${value.birthtimeMs}` : null
 }
 /**
- * 3.7.4: the first path in a profile folder that belongs to another user (Hermes' Docker sandbox writes as root), or
- * null. Hermes runs as this user, so it can't delete such a folder. Bounded; symlinks are not followed. Names only:
- * nothing is opened or read.
+ * 3.7.4: the first folder in a profile that Hermes (running as this user) can't empty — one another user owns that still
+ * holds entries (Hermes' Docker sandbox writes as root), or one this user can't list. A foreign *file* in a folder this
+ * user owns is fine: unlinking needs the folder, not the file. Bounded; symlinks are not followed; names only.
  */
 export function foreignOwned(home: string, uid = process.getuid?.(), limit = 50000): string | null {
   if (uid === undefined) return null
@@ -61,16 +61,13 @@ export function foreignOwned(home: string, uid = process.getuid?.(), limit = 500
     try {
       entries = readdirSync(dir, { withFileTypes: true })
     } catch {
-      // A folder this user can't even list is foreign too.
       return dir === home ? null : dir
     }
+    if (dir !== home && entries.length > 0 && stat(dir)?.uid !== uid) return dir
     for (const entry of entries) {
       seen += 1
       const path = join(dir, entry.name)
-      const info = stat(path)
-      if (!info) continue
-      if (info.uid !== uid) return path
-      if (info.isDirectory()) queue.push(path)
+      if (stat(path)?.isDirectory()) queue.push(path)
     }
   }
   return null
@@ -79,7 +76,24 @@ export function foreignOwned(home: string, uid = process.getuid?.(), limit = 500
 /** What to tell the person when a profile folder holds files only another user can delete. */
 export function foreignOwnedMessage(home: string, path: string): string {
   const user = userInfo().username
-  return `Some files in this agent's folder belong to another user (for example ${relative(home, path)}, made by its Docker sandbox), so Hermes can't delete them. On the Score machine run: sudo chown -R ${user}: '${home}' — then try again.`
+  // The example comes from folder names the sandbox chose: shown as plain text, without control characters, bounded.
+  const example = [...relative(home, path)]
+    .filter((char) => char.charCodeAt(0) > 0x1f && char.charCodeAt(0) !== 0x7f)
+    .join('')
+    .slice(0, 120)
+  const quoted = `'${home.replace(/'/g, `'\\''`)}'`
+  return `Some files in this agent's folder belong to another user (for example ${example}, made by its Docker sandbox), so Hermes can't delete them. On the Score machine run: sudo chown -R ${user}: ${quoted} — then try again.`
+}
+
+/** Profile folders scanned in the last few seconds: a removal reads the inventory several times. */
+const foreignScans = new Map<string, { at: number; found: string | null }>()
+function foreignOwnedCached(home: string): string | null {
+  const now = Date.now()
+  const cached = foreignScans.get(home)
+  if (cached && now - cached.at < 15_000) return cached.found
+  const found = foreignOwned(home)
+  foreignScans.set(home, { at: now, found })
+  return found
 }
 
 function privateDirectory(path: string) {
@@ -224,7 +238,7 @@ export class LiveProfileManagement implements ProfileManagementPort {
     const blockers: string[] = []
     // An existing profile with files only another user can delete would stop halfway through a removal: say so first.
     if (targetIdentity) {
-      const foreign = foreignOwned(home)
+      const foreign = foreignOwnedCached(home)
       if (foreign) blockers.push(foreignOwnedMessage(home, foreign))
     }
     if (!targetIdentity && stat(home))
