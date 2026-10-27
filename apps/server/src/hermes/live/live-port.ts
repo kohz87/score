@@ -99,6 +99,9 @@ export interface LivePortOptions extends HermesPortDeps {
   readSourceFacts?: (sourceDir: string) => Promise<SourceFacts | null>
   following?: Pick<FollowOptions, 'backoff' | 'pollIntervalMs' | 'pollLimitMs' | 'now' | 'wait'>
 }
+/** How long Hermes gets to end a run it accepted a stop for before a second Stop ends Score's record (3.7.2). */
+const STOP_GRACE_MS = 5000
+
 export class LivePort implements HermesPort {
   readonly mode = 'live'
   readonly metrics: RunMetrics = { unknownEvents: 0 }
@@ -885,6 +888,8 @@ export class LivePort implements HermesPort {
     this.follow(result.runId)
     return result
   }
+  /** When Score last asked Hermes to stop each run (3.7.2): a second Stop after the grace ends a run that never did. */
+  private readonly stopAsked = new Map<string, number>()
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {
     // Kanban attempts are not runs and cannot be stopped from Score: refused before any profile or run lookup.
     assertNotKanbanAttempt(req.runId)
@@ -894,8 +899,32 @@ export class LivePort implements HermesPort {
     const row = readRun(db.sqlite, req.runId)
     if (row.profile !== req.agentId)
       throw new HttpError(404, 'not_found', 'Couldn’t find that run.')
+    const context = {
+      profile: req.agentId,
+      runId: req.runId,
+      credentialGeneration: row.credential_generation ?? 0,
+    }
+    // Old entries go (a run that ended normally keeps none past the hour).
+    for (const [runId, at] of this.stopAsked)
+      if (Date.now() - at > 3_600_000) this.stopAsked.delete(runId)
+    const asked = this.stopAsked.get(req.runId)
     try {
       await gateway.stopRun(req.agentId, req.runId, row.credential_generation ?? undefined)
+      // 3.7.2: Hermes can accept a stop and never end the run (one blocked on an approval it forgot). Asked again after
+      // the grace, Score ends its own record as stopped, so the job and the agent are free; Hermes may keep its copy.
+      if (
+        asked !== undefined &&
+        Date.now() - asked >= STOP_GRACE_MS &&
+        !runLifecycle.isTerminal(readRun(db.sqlite, req.runId).status) &&
+        this.sink
+      ) {
+        this.stopAsked.delete(req.runId)
+        await this.sink.submit(
+          runLostObservation(context, true, 'Hermes accepted the stop but the run never ended'),
+        )
+        return
+      }
+      if (asked === undefined) this.stopAsked.set(req.runId, Date.now())
     } catch (error) {
       // 3.7.1: Hermes no longer has the run (it was lost, or ended while nobody followed it). Stopping it means ending
       // Score's record the way a lost run ends, so its turn and the agent are free again.
@@ -905,16 +934,7 @@ export class LivePort implements HermesPort {
         error.code === 'run_not_found' &&
         this.sink
       ) {
-        await this.sink.submit(
-          runLostObservation(
-            {
-              profile: req.agentId,
-              runId: req.runId,
-              credentialGeneration: row.credential_generation ?? 0,
-            },
-            true,
-          ),
-        )
+        await this.sink.submit(runLostObservation(context, true))
         return
       }
       throw error
