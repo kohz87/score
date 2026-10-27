@@ -11,7 +11,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { useStream, useStreamQuery } from '../../data/query-client.ts'
-import { agentDisplayName } from '../bold-agents.ts'
+import { agentDisplayName, canTalkTo } from '../bold-agents.ts'
 import { DeleteRoomDialog } from '../../routes/chat/DeleteRoomDialog.tsx'
 import { ShareDialog } from '../../routes/chat/ShareDialog.tsx'
 import { useShowDeleted, setShowDeleted } from '../../routes/chat/deleted-toggle.ts'
@@ -388,6 +388,8 @@ function LoadedTeamRoom({
     !(phone && room.role !== 'team')
   const job = allJobs.find((item) => item.id === selectedJob)
   const lead = agents.find((agent) => agent.id === room.leadAgentId)
+  // Removed agents stay in `agents` for the history's names; @ and To offer only agents that can take a message (3.7.10).
+  const talkable = useMemo(() => agents.filter(canTalkTo), [agents])
   const olderRoom = room.role !== 'team' && room.routing === 'mentions'
   const allLabel = olderRoom
     ? 'Older room · @name'
@@ -615,6 +617,7 @@ function LoadedTeamRoom({
           roomId={room.id}
           roomName={room.name}
           agents={agents}
+          offered={talkable}
           leadAgentId={room.leadAgentId}
           jobId={selectedJob === 'all' || (phone && !phoneJob) ? null : selectedJob}
           roomMode

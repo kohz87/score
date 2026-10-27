@@ -195,6 +195,33 @@ test('a slash command handed over in the URL is loaded into the room composer an
   })
 })
 
+test('@ in the room offers only agents that can take a message, not removed ones (3.7.10, owner)', async () => {
+  stubRoom()
+  const removed = {
+    ...agents[1]!,
+    id: 'gone',
+    name: 'gone',
+    lifecycle: {
+      state: 'removed' as const,
+      incarnationId: '6f9619ff-8b86-4d11-b42d-00c04fc964ff',
+      operationId: null,
+    },
+  }
+  renderInRoom(<BoldTeamRoom agents={[...agents, removed]} />, ['/b'])
+  const composer = await screen.findByRole(
+    'combobox',
+    { name: /^Message Team room/ },
+    { timeout: 4000 },
+  )
+  fireEvent.change(composer, { target: { value: '@' } })
+  const list = await screen.findByRole('listbox', { name: 'Agents' })
+  const offered = Array.from(list.querySelectorAll('[role="option"]')).map(
+    (option) => option.textContent ?? '',
+  )
+  expect(offered.some((text) => text.includes(agents[1]!.id))).toBe(true)
+  expect(offered.some((text) => text.includes('gone'))).toBe(false)
+})
+
 test('the room shows job tabs, the To chip and the seeded unread count', async () => {
   stubRoom([
     makeJob({ id: 'job-1', title: 'Activity feed', unread: 2 }),
