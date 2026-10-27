@@ -53,6 +53,7 @@ const ResultEvent = z.object({
   result: z.string().optional(),
   session_id: z.string().optional(),
   total_cost_usd: z.number().finite().nonnegative().optional(),
+  ttft_ms: z.number().finite().nonnegative().optional(),
   usage: z
     .object({
       input_tokens: z.number().finite().nonnegative().optional(),
@@ -398,6 +399,7 @@ function createInnerClaudeParser(cwd?: string): LineParser {
             ...(result.data.total_cost_usd !== undefined
               ? { costUsd: result.data.total_cost_usd }
               : {}),
+            ...(result.data.ttft_ms !== undefined ? { ttftMs: result.data.ttft_ms } : {}),
           })
         }
         const failed =

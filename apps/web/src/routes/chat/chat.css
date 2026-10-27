@@ -716,6 +716,10 @@
   font-size: 12px;
   font-style: italic;
 }
+.chat-speed {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
 .chat-edited-link {
   border: 0;
   background: none;

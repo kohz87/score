@@ -231,6 +231,24 @@ test('spend by agent sorts highest first and keeps each agent glyph', async () =
   expect(rows[2]!.textContent).toContain('$9.30')
 })
 
+test('3.10.0: speed by agent shows medians and a dash where nothing was measured', async () => {
+  reportForRange = (range) =>
+    reportFixture(range, {
+      speedByAgent: [
+        { agentId: 'builder', runs: 7, medianTtftMs: 1200, medianTokensPerSecond: 48.2 },
+      ],
+    })
+  open('/b/settings/usage')
+  const card = await screen.findByRole('region', { name: 'Speed by agent' })
+  const rows = within(within(card).getByRole('table', { name: 'Speed by agent' })).getAllByRole(
+    'row',
+  )
+  const cells = (row: HTMLElement) =>
+    [...row.querySelectorAll('th, td')].map((cell) => cell.textContent)
+  expect(cells(rows[1]!)).toEqual(['Builder', '1.2 s', '48 tok/s', '7'])
+  expect(cells(rows[2]!)).toEqual(['Reviewer', '—', '—', '0'])
+})
+
 test('a coding agent’s estimated or unknown spend is marked beside the figure', async () => {
   reportForRange = (range) => {
     const fixture = reportFixture(range)

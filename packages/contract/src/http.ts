@@ -229,6 +229,17 @@ export const ReportsSchema = z.object({
       cacheHitRate: z.number().min(0).max(1).nullable().default(null),
     }),
   ),
+  /** 3.10.0: median time to first token and tokens/s per agent over the range; null = no measured run. */
+  speedByAgent: z
+    .array(
+      z.object({
+        agentId: AgentIdSchema,
+        runs: z.int().nonnegative(),
+        medianTtftMs: z.number().nonnegative().nullable(),
+        medianTokensPerSecond: z.number().nonnegative().nullable(),
+      }),
+    )
+    .optional(),
   /** The last 30 local days, oldest first, whatever the range is (5.29). */
   trend: z
     .array(
