@@ -904,6 +904,9 @@ export class LivePort implements HermesPort {
       runId: req.runId,
       credentialGeneration: row.credential_generation ?? 0,
     }
+    // Old entries go (a run that ended normally keeps none past the hour).
+    for (const [runId, at] of this.stopAsked)
+      if (Date.now() - at > 3_600_000) this.stopAsked.delete(runId)
     const asked = this.stopAsked.get(req.runId)
     try {
       await gateway.stopRun(req.agentId, req.runId, row.credential_generation ?? undefined)

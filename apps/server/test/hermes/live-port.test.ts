@@ -458,8 +458,11 @@ test('a run Hermes accepted a stop for but never ended is ended in Score by a se
   expect(readRun(env.db.sqlite, started.runId).status).toBe('running')
   const later = Date.now() + 6000
   vi.spyOn(Date, 'now').mockReturnValue(later)
-  await live.stopRun({ agentId: 'builder', runId: started.runId })
-  await expect.poll(() => readRun(env.db.sqlite, started.runId).status).toBe('cancelled')
-  expect(readRun(env.db.sqlite, started.runId).error).toMatch(/never ended/)
-  vi.restoreAllMocks()
+  try {
+    await live.stopRun({ agentId: 'builder', runId: started.runId })
+    await expect.poll(() => readRun(env.db.sqlite, started.runId).status).toBe('cancelled')
+    expect(readRun(env.db.sqlite, started.runId).error).toMatch(/never ended/)
+  } finally {
+    vi.restoreAllMocks()
+  }
 })
