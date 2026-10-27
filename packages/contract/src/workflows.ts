@@ -337,6 +337,8 @@ export const WorkflowSummarySchema = z.object({
   updatedAt: z.iso.datetime(),
   /** Runs that are not finished (a draining run counts), so the list can warn before a delete. */
   activeRuns: z.int().nonnegative(),
+  /** Archived recipes are hidden from the list and Start a job; their runs stay (3.8.0). */
+  archivedAt: z.iso.datetime().nullable(),
 })
 export type WorkflowSummary = z.infer<typeof WorkflowSummarySchema>
 
@@ -366,6 +368,14 @@ export const WorkflowDetailSchema = WorkflowSummarySchema.extend({
 export type WorkflowDetail = z.infer<typeof WorkflowDetailSchema>
 
 /** `POST /api/workflows/validate` and the bodies of the two save endpoints. */
+/** `POST /api/workflows/:id/delete-with-runs`: `confirm` must equal the recipe's name. */
+export const WorkflowDeleteWithRunsSchema = z
+  .object({ confirm: z.string().min(1).max(300) })
+  .strict()
+export type WorkflowDeleteWithRuns = z.infer<typeof WorkflowDeleteWithRunsSchema>
+export const WorkflowDeletedWithRunsSchema = z.object({ deletedRuns: z.int().nonnegative() })
+export type WorkflowDeletedWithRuns = z.infer<typeof WorkflowDeletedWithRunsSchema>
+
 export const WorkflowValidateSchema = z.object({ definition: WorkflowDefinitionSchema }).strict()
 export type WorkflowValidate = z.infer<typeof WorkflowValidateSchema>
 

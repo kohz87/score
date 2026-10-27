@@ -48,7 +48,9 @@ import {
 import {
   fetchWorkflowVersion,
   latestVersionOf,
+  useArchiveWorkflow,
   useDeleteWorkflow,
+  useDeleteWorkflowWithRuns,
   useSaveWorkflow,
   useValidation,
   useWorkflow,
@@ -125,7 +127,11 @@ export function BoldRecipesPage() {
   const [newKey, setNewKey] = useState(0)
   const [notice, setNotice] = useState('')
   const recipes = useMemo(() => workflows.data?.items ?? [], [workflows.data])
-  const selected = workflowId ?? recipes[0]?.id ?? (workflows.isPending ? null : 'new')
+  // Archived recipes are not the page's default; an archived one still opens from a link.
+  const selected =
+    workflowId ??
+    recipes.find((recipe) => !recipe.archivedAt)?.id ??
+    (workflows.isPending ? null : 'new')
   const isReal = selected !== null && selected !== 'new' && selected !== BUILT_IN
   const detail = useWorkflow(isReal ? selected : undefined)
   const newDraft = useMemo(() => {
@@ -258,9 +264,17 @@ function RecipeList({
 }) {
   const runs = useStreamQuery(workflowRunsQuery).data
   const [query, setQuery] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
+  const archive = useArchiveWorkflow()
   const searchId = useId()
   const needle = query.trim().toLowerCase()
-  const shown = recipes.filter((recipe) => recipe.name.toLowerCase().includes(needle))
+  const archivedCount = recipes.filter((recipe) => recipe.archivedAt).length
+  // The recipe you have open stays in the list even when archived, so the page never loses its place.
+  const shown = recipes.filter(
+    (recipe) =>
+      recipe.name.toLowerCase().includes(needle) &&
+      (showArchived || !recipe.archivedAt || recipe.id === selectedId),
+  )
   const showLead = 'lead decides'.includes(needle)
   return (
     <nav className="bold-rp-list" aria-label="Recipes">
@@ -287,6 +301,16 @@ function RecipeList({
           <PlusIcon />
         </button>
       </div>
+      {archivedCount > 0 && (
+        <label className="small muted bold-rp-archived-toggle">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(event) => setShowArchived(event.target.checked)}
+          />{' '}
+          Archived ({archivedCount})
+        </label>
+      )}
       {showLead && (
         <button
           type="button"
@@ -311,7 +335,7 @@ function RecipeList({
               : recipe.used
                 ? 'used by runs'
                 : 'not used yet'
-        return (
+        const row = (
           <button
             key={recipe.id}
             type="button"
@@ -319,11 +343,29 @@ function RecipeList({
             aria-current={selectedId === recipe.id ? 'true' : undefined}
             onClick={() => onSelect(recipe.id)}
           >
-            <b>{recipe.name}</b>
+            <span className="row">
+              <b>{recipe.name}</b>
+              {recipe.archivedAt && <span className="bold-badge bold-badge--quiet">Archived</span>}
+            </span>
             <span className="small muted">
               Version {recipe.latestVersion} · {facts}
             </span>
           </button>
+        )
+        if (!recipe.archivedAt) return row
+        return (
+          <div key={recipe.id} className="bold-rp-archived-row">
+            {row}
+            <button
+              type="button"
+              className="btn sm"
+              aria-label={`Unarchive ${recipe.name}`}
+              disabled={archive.isPending}
+              onClick={() => archive.mutate({ id: recipe.id, archived: false })}
+            >
+              Unarchive
+            </button>
+          </div>
         )
       })}
       {recipes.length > 0 && shown.length === 0 && !showLead && (
@@ -364,6 +406,101 @@ function RecipeRunStatus({ recipe }: { recipe: WorkflowSummary | undefined }) {
         ' No runs yet'
       )}
     </span>
+  )
+}
+
+/** The decision to delete a recipe together with its runs: the person types the recipe's name (3.8.0). */
+function DeleteWithRunsDialog({
+  name,
+  runs,
+  pending,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  name: string
+  runs: number
+  pending: boolean
+  error: string
+  onCancel: () => void
+  onConfirm: (confirm: string) => void
+}) {
+  const [typed, setTyped] = useState('')
+  const inputId = useId()
+  const input = useRef<HTMLInputElement>(null)
+  const dialog = useRef<HTMLElement>(null)
+  useEffect(() => input.current?.focus(), [])
+  // Escape cancels and Tab stays inside, as in the other confirmations.
+  function onKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape') {
+      event.stopPropagation()
+      if (!pending) onCancel()
+      return
+    }
+    if (event.key !== 'Tab' || !dialog.current) return
+    const items = [
+      ...dialog.current.querySelectorAll<HTMLElement>('input, button:not(:disabled)'),
+    ].filter((item) => !item.hasAttribute('disabled'))
+    const first = items[0]
+    const last = items.at(-1)
+    if (!first || !last) return
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+  return (
+    <div className="bold-rp-scrim">
+      <section
+        ref={dialog}
+        onKeyDown={onKeyDown}
+        className="card bold-rp-confirm"
+        data-protected="flex"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label="Delete recipe with its runs"
+      >
+        <h3>Delete {name} with its runs?</h3>
+        <p>
+          {runs > 0
+            ? `This deletes ${runs} ${runs === 1 ? 'run' : 'runs'} of this recipe, with their rooms, and the recipe itself.`
+            : 'This deletes every run of this recipe, with their rooms, and the recipe itself.'}{' '}
+          It can’t be undone. Archive keeps the runs.
+        </p>
+        <label className="bold-lab" htmlFor={inputId}>
+          Type the recipe’s name to confirm
+          <input
+            ref={input}
+            id={inputId}
+            className="bold-field"
+            value={typed}
+            autoComplete="off"
+            onChange={(event) => setTyped(event.target.value)}
+          />
+        </label>
+        {error && (
+          <p role="alert" className="bold-error">
+            {error}
+          </p>
+        )}
+        <div className="row wrap">
+          <button type="button" className="link" disabled={pending} onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn primary bold-danger"
+            disabled={pending || typed.trim() !== name.trim()}
+            onClick={() => onConfirm(typed.trim())}
+          >
+            {pending ? 'Deleting…' : 'Delete recipe and runs'}
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -413,6 +550,14 @@ function BoldRecipeEditor({
   const [announcement, setAnnouncement] = useState('')
   const save = useSaveWorkflow()
   const remove = useDeleteWorkflow()
+  const archive = useArchiveWorkflow()
+  const removeWithRuns = useDeleteWorkflowWithRuns()
+  const [deletingRuns, setDeletingRuns] = useState(false)
+  const moreButton = useRef<HTMLButtonElement>(null)
+  const recipe = recipes.find((item) => item.id === detail?.id)
+  const runCount =
+    useStreamQuery(workflowRunsQuery).data?.filter((run) => run.workflowId === detail?.id).length ??
+    0
   const root = useRef<HTMLElement>(null)
   const allowLeave = useRef(false)
   const nameId = useId()
@@ -706,6 +851,25 @@ function BoldRecipeEditor({
     })
   }
 
+  function toggleArchive() {
+    if (!saved.workflowId) return
+    onNotice('')
+    setMoreOpen(false)
+    const archiving = !recipe?.archivedAt
+    archive.mutate(
+      { id: saved.workflowId, archived: archiving },
+      {
+        onSuccess: () =>
+          onNotice(
+            archiving
+              ? 'Archived the recipe. Its runs stay.'
+              : 'Unarchived the recipe. It is offered again.',
+          ),
+        onError: (error) => onNotice(describeError(error)),
+      },
+    )
+  }
+
   function duplicate() {
     if (!saved.workflowId) return
     setMoreOpen(false)
@@ -839,10 +1003,20 @@ function BoldRecipeEditor({
             {dirty || saved.workflowId === null ? ' · unsaved changes' : ''} · inputs:{' '}
             {draft.inputs.length > 0 ? draft.inputs.map((input) => input.name).join(', ') : 'none'}
           </span>
+          {recipe?.archivedAt && <span className="bold-badge bold-badge--quiet">Archived</span>}
           {saved.workflowId !== null && (
-            <RecipeRunStatus recipe={recipes.find((recipe) => recipe.id === saved.workflowId)} />
+            <RecipeRunStatus recipe={recipes.find((item) => item.id === saved.workflowId)} />
           )}
         </div>
+        {recipe?.archivedAt && (
+          <p className="small muted bold-rp-archived-note" role="status">
+            Archived: this recipe is hidden from the list and not offered in Start a job. Its past
+            runs still open.{' '}
+            <button type="button" className="bold-link" onClick={toggleArchive}>
+              Unarchive
+            </button>
+          </p>
+        )}
 
         <div className="bold-rp-bar">
           <div className="bold-seg" role="tablist" aria-label="How to show the recipe">
@@ -931,6 +1105,7 @@ function BoldRecipeEditor({
               <button
                 type="button"
                 className="btn sm"
+                ref={moreButton}
                 aria-haspopup="true"
                 aria-expanded={moreOpen}
                 onClick={() => setMoreOpen((value) => !value)}
@@ -976,11 +1151,33 @@ function BoldRecipeEditor({
                   {saved.workflowId && (
                     <button
                       type="button"
+                      className="btn sm"
+                      disabled={archive.isPending}
+                      onClick={toggleArchive}
+                    >
+                      {recipe?.archivedAt ? 'Unarchive' : 'Archive'}
+                    </button>
+                  )}
+                  {saved.workflowId && !recipe?.used && (
+                    <button
+                      type="button"
                       className="btn sm bold-danger"
                       disabled={remove.isPending}
                       onClick={removeRecipe}
                     >
                       {remove.isPending ? 'Deleting…' : 'Delete recipe'}
+                    </button>
+                  )}
+                  {saved.workflowId && recipe?.used && (
+                    <button
+                      type="button"
+                      className="btn sm bold-danger"
+                      onClick={() => {
+                        setMoreOpen(false)
+                        setDeletingRuns(true)
+                      }}
+                    >
+                      Delete with runs…
                     </button>
                   )}
                 </div>
@@ -1014,6 +1211,31 @@ function BoldRecipeEditor({
         <p className="wf-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
           {announcement}
         </p>
+        {deletingRuns && saved.workflowId && (
+          <DeleteWithRunsDialog
+            name={detail?.name ?? draft.name}
+            runs={runCount}
+            pending={removeWithRuns.isPending}
+            error={removeWithRuns.isError ? describeError(removeWithRuns.error) : ''}
+            onCancel={() => {
+              removeWithRuns.reset()
+              setDeletingRuns(false)
+              moreButton.current?.focus()
+            }}
+            onConfirm={(confirm) =>
+              removeWithRuns.mutate(
+                { id: saved.workflowId!, confirm },
+                {
+                  onSuccess: () => {
+                    allowLeave.current = true
+                    setDeletingRuns(false)
+                    onDeleted(saved.workflowId!)
+                  },
+                },
+              )
+            }
+          />
+        )}
 
         {!graph && problems.length > 0 && (
           <div className="small bold-recipes-problems" role="status">

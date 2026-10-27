@@ -73,6 +73,7 @@ const workflowSummary = {
   createdAt: at,
   updatedAt: at,
   activeRuns: 0,
+  archivedAt: null,
 } as const
 const version = { ...versionSummary, workflowId: 'wf-1', definition: workflowDefinition } as const
 const verdict = {
@@ -364,6 +365,8 @@ export const workflowCases = [
   ['ValidationResultSchema', validation, { ok: true }],
   ['WorkflowVersionSummarySchema', versionSummary, { ...versionSummary, hash: 'short' }],
   ['WorkflowSummarySchema', workflowSummary, { id: 'wf-1' }],
+  ['WorkflowDeleteWithRunsSchema', { confirm: 'Release notes' }, { confirm: '' }],
+  ['WorkflowDeletedWithRunsSchema', { deletedRuns: 2 }, { deletedRuns: -1 }],
   [
     'WorkflowListSchema',
     {

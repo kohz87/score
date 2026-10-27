@@ -112,6 +112,7 @@ export const KNOWN_OVERLAYS = [
   '.bold-job-toasts',
   '.bold-start-scrim',
   '.bold-trigger-scrim',
+  '.bold-rp-scrim',
 ].join(', ')
 /** Dialog backdrops cover the page by design. */
 export const KNOWN_BACKDROPS =
