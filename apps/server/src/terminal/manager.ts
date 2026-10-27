@@ -141,7 +141,9 @@ export class TerminalManager {
     /** 3.11.0: an agent's CLI instead of the login shell (same user, same environment). */
     run?: { agent: string; file: string; args: string[]; cwd: string },
   ): string | undefined {
-    const launch = run ? { ...this.launch, file: run.file, args: run.args, cwd: run.cwd } : this.launch
+    const launch = run
+      ? { ...this.launch, file: run.file, args: run.args, cwd: run.cwd }
+      : this.launch
     if (this.full) {
       this.sendFrame(socket, { type: 'exit', reason: 'limit', code: null })
       socket.close(1013, 'Too many terminals')

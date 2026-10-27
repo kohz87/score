@@ -13,7 +13,12 @@ export type TerminalTicket = z.infer<typeof TerminalTicketSchema>
  * interactive session) instead of a login shell. Same password/passkey, TLS and one-time ticket rules.
  */
 export const TerminalTicketRequestSchema = z
-  .object({ agent: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).optional() })
+  .object({
+    agent: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
+      .optional(),
+  })
   .strict()
 export type TerminalTicketRequest = z.infer<typeof TerminalTicketRequestSchema>
 
