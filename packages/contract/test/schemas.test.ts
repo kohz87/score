@@ -862,6 +862,7 @@ const cases = [
     { passwordSet: true, origins: [], terminal: false, terminalUnavailable: null },
     { passwordSet: 'yes' },
   ],
+  ['TerminalTicketRequestSchema', { agent: 'builder' }, { agent: '../etc' }],
   [
     'TerminalTicketSchema',
     { ticket: 't'.repeat(43), expiresAt: '2026-10-09T10:00:00.000Z' },

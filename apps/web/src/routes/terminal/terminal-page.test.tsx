@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { MemoryRouter } from 'react-router'
 import { TerminalPage } from './TerminalPage.tsx'
 
 vi.mock('@xterm/xterm', () => ({
@@ -79,12 +80,14 @@ function delayedFetch() {
   return waiting
 }
 
-async function submit() {
+async function submit(entry = '/b/terminal') {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <TerminalPage />
+      <MemoryRouter initialEntries={[entry]}>
+        <TerminalPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
   const password = await screen.findByLabelText('Security password')
@@ -125,4 +128,16 @@ test('staying on the page opens the socket and closes it on leaving', async () =
   await waitFor(() => expect(sockets).toHaveLength(1))
   cleanup()
   expect(sockets[0]!.close).toHaveBeenCalled()
+})
+
+test('?agent= opens a live session: the ticket names the agent and the page says whose CLI it is (3.11.0)', async () => {
+  const waiting = delayedFetch()
+  const fetchMock = vi.mocked(fetch)
+  await submit('/b/terminal?agent=builder')
+  expect(screen.getByRole('heading', { name: 'Live session: builder' })).toBeDefined()
+  await waitFor(() => expect(waiting.has('/api/session/security/check')).toBe(true))
+  waiting.get('/api/session/security/check')!()
+  await waitFor(() => expect(waiting.has('/api/terminal/tickets')).toBe(true))
+  const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/terminal/tickets'))
+  expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ agent: 'builder' })
 })

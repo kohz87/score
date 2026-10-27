@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.11.0] — 2026-10-27
+
+### Added
+- **Open live session.** An agent's page has "Open live session": Score's Terminal (same security password or passkey)
+  opens the agent's own CLI as a new session of its own — `hermes -p <agent>` for a Hermes agent (type to it directly,
+  slash commands included), the coding CLI in its workspace for a coding agent. (decision 149)
+
 ## [3.9.0] — 2026-10-27
 
 ### Added

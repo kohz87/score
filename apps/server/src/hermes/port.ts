@@ -361,6 +361,12 @@ export interface HermesPort extends ProfileManagementPort {
    */
   mcpTools?(agentId: string): Promise<string[] | null>
   /**
+   * 3.11.0 (owner): the command for a live session with this agent: Hermes's own interactive CLI for the profile, as a
+   * fresh session (never one Score is using). Null when there is no such profile. Absent on adapters without a real
+   * Hermes (fake mode).
+   */
+  interactiveCommand?(agentId: string): { file: string; args: string[]; cwd: string } | null
+  /**
    * 3.7.9 (decision 140): restart the agent's gateway so its Hermes reconnects MCP and lists Score's tools again. A named
    * profile is unserved and served again inside the shared gateway (only that profile); `default` restarts the whole
    * gateway, which Hermes refuses while any session is live. Resolves when Hermes confirmed by exit code.
