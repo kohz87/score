@@ -2238,6 +2238,31 @@ never a veto. A consult the budget can't cover is skipped (history `advice_skipp
   checkpoint: 'before_plan'|'repeat_failure'|'before_done'; reason; status: StepStatus; advice: string|null; createdAt }`.
 - History kinds: `advisor_set`, `advisor_consulted`, `advice_skipped`.
 
+### Helpers and votes (3.15–3.16, decision 150)
+
+`OrchestrationCreate.helpers?: { agentIds: 1–4 (not the lead, no repeats); maxConcurrent?: 1–6 (default 3); maxSteps?: 1–60
+(default 20); scan?: boolean; scanFolder?: absolute path; splitTo?: 'lead'|'person' (default 'lead') }`. Helpers are checked like
+allowed agents (preflight, coding consent) but are not added to `allowedAgents`. `scanFolder` must pass the Workspace root rules
+(`400 bad_request` with the reason) and is stored resolved; a scan without a folder uses the check's (`400` when there is none).
+Helper work (`StepView.role: 'helper'`, `helperRole`, ids `h1`, `h2`, …) runs in the helpers' own slots (`maxConcurrent`, outside
+`maxConcurrentSteps`) and allowance (`maxSteps`, outside the run's `maxSteps`); gates, budget and admission are as for any step.
+
+- **`orch.assign { …, role: 'search'|'grep'|'audit' }`**: the step goes to `agent`, which must be a helper (`agent_not_allowed`);
+  no `after`/`replaces` (`bad_request`); `no_helpers`, `helper_limit` refusals; the instruction is prefixed with the role's
+  read-only brief.
+- **Scan first** (`scan: true`): at creation Score queues three helper steps (`scan_stack`, `scan_scripts`, `scan_risks`) without a
+  gate; the lead's first turn (cause `started`) waits until all three have ended and carries their results.
+- **`orch.vote { question ≤ 1 KiB, options: 2–6 × ≤ 200, k?: 3–7 (default 5) }`** → `{ voteId }`: k helper steps (`role: 'vote'`)
+  answer with an option number. Refused `gated` under the `every-step` gate policy (votes start without approval), `no_helpers`,
+  `helper_limit` (k steps), `budget_exceeded` (k × step estimate), `agent_unavailable`. When every answer has ended the vote is
+  tallied: **sharp** when the top option has ≥ 70% of the usable answers and at least half of k answered usably, else **split**
+  (or **failed** with none usable). Cause `vote_done` (detail e.g. `sharp: option 2 (0.86)`); a split with `splitTo: 'person'` opens
+  an inquiry (Needs you) with the options and counts, answered to the lead like `orch.ask`. Vote answers never reach the lead
+  one by one; its input lists the latest five votes.
+- `OrchestrationDetail.helpers?: { agentIds; maxConcurrent; maxSteps; used; scan; scanFolder; splitTo; votes: VoteView[] } | null`;
+  `VoteView { id; question; options; k; status: 'voting'|'sharp'|'split'|'failed'; counts; choice; share; inquiryId; createdAt }`.
+- History kinds: `helpers_set`, `scan_started`, `scan_done`, `vote_started`, `vote_tallied`.
+
 A stale revision answers `409 conflict` with `details.currentRevision`. `GET /api/orchestrations/:id` also carries, per
 attempt, `state`, `evidence`, `unknownReason`, owed-Stop timestamps and spend, so the page can show "not confirmed ended".
 Not in stage A: the Watch replay scoped to an attempt's session (design v3 "Watch scope"); orchestration frames stay in the
@@ -2259,6 +2284,7 @@ agent incarnation; the capability binds (run, lead attempt, generation). Replies
 | `orch.ask { question ≤ 2 KiB }`                                              | Opens an inquiry (Needs you); the answer arrives in the next lead input as data                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `orch.note { text ≤ 2 KiB }`                                                 | A progress line in the run's room (agent message)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `orch.finish { outcome, summary }`                                           | Durable finish request: fences admissions, retires queued steps (`not_started: run_finishing`), withdraws open gates and inquiries, seals further commands, then drains. Succeeds only when every admitted attempt (the requesting one included) is terminated; otherwise `finished_with_unresolved`                                                                                                                                                                                                                                     |
+| `orch.vote { question, options, k? }`                                       | 3.16: the helpers vote on a multiple-choice question → `{ voteId }`; the tally (sharp ≥ 70%, or split) starts a new lead turn. See "Helpers and votes"                                                                                                                                                                                                                                                                                       |
 | `orch.check {}`                                                              | 3.13: queues a run of the person's check (no arguments: the lead can't set or change the command) → `{ checkId }`. Refused `no_check` when the job has none. Its result arrives as a cause in a new lead turn                                                                                                                                                                                                                                                                                                                         |
 | `orch.receipt { commandId }`                                                 | Returns a stored receipt (`not_found` if none) so the lead can verify after an uncertain reply                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 

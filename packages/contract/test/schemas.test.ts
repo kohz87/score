@@ -1480,6 +1480,46 @@ const cases = [
   ],
   ['CheckOutcomeSchema', 'timed_out', 'maybe'],
   ['AdvisorCheckpointSchema', 'before_done', 'after_lunch'],
+  ['HelperRoleSchema', 'grep', 'write'],
+  [
+    'OrchestrationHelpersSchema',
+    {
+      agentIds: ['builder'],
+      maxConcurrent: 3,
+      maxSteps: 20,
+      scan: true,
+      scanFolder: '/home/user/repo',
+      splitTo: 'person',
+    },
+    { agentIds: [], scan: true },
+  ],
+  [
+    'VoteViewSchema',
+    {
+      id: 'v1',
+      question: 'Which file?',
+      options: ['a.ts', 'b.ts'],
+      k: 5,
+      status: 'sharp',
+      counts: [1, 4],
+      choice: 1,
+      share: 0.8,
+      inquiryId: null,
+      createdAt: '2026-10-27T10:00:00.000Z',
+    },
+    { id: 'v1', status: 'maybe' },
+  ],
+  [
+    'OrchVoteArgsSchema',
+    {
+      capability: `orc_${'a'.repeat(43)}`,
+      commandId: 'c1',
+      question: 'Which?',
+      options: ['a', 'b'],
+      k: 5,
+    },
+    { capability: `orc_${'a'.repeat(43)}`, commandId: 'c1', question: 'Which?', options: ['a'] },
+  ],
   [
     'AdvisorConsultViewSchema',
     {
