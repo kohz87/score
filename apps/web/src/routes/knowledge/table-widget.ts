@@ -350,7 +350,11 @@ export class TableWidget extends WidgetType {
         cell.dataset.row = String(row)
         cell.dataset.column = String(column)
         paint(cell, row, column)
-        cell.addEventListener('focus', () => syncSelection(row, column))
+        cell.addEventListener('focus', () => {
+          syncSelection(row, column)
+          // Shift+click or Shift+arrow without a range grows from the cell that has focus.
+          if (!range) anchor = { row, column }
+        })
         cell.addEventListener('mousedown', (event) => {
           const target = event.target as HTMLElement
           if (target instanceof HTMLInputElement) return
@@ -383,6 +387,8 @@ export class TableWidget extends WidgetType {
           // Leaving the pressed cell: its edit ends (its blur saves only what was typed) and the range starts.
           const pressed = cells[anchor.row]![anchor.column]!
           pressed.querySelector('input')?.blur()
+          // Text typed there was saved, which redraws the table: this grid is gone, so there is no range to show.
+          if (!wrap.isConnected) return
           showRange(rangeOf(anchor, { row, column }))
           pressed.focus()
         })

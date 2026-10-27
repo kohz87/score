@@ -250,6 +250,17 @@ test('dragging across cells selects them, Shift+arrow grows the range, Ctrl+C co
   expect(selected()).toBe(2)
 })
 
+test('typing in a cell and dragging on saves the text and leaves no stale range', async () => {
+  const v = open(SMALL)
+  click(cell(v, 1, 0))
+  input(v).value = 'x'
+  cell(v, 1, 1).dispatchEvent(new MouseEvent('mouseenter'))
+  document.dispatchEvent(new MouseEvent('mouseup'))
+  expect(v.state.doc.toString()).toContain('| x | 2 |')
+  await settle()
+  expect(v.dom.querySelectorAll('.cm-lp-cell-selected')).toHaveLength(0)
+})
+
 test('each header has a width handle; dragged widths are kept per note and a double-click resets them', () => {
   localStorage.clear()
   const v = open(SMALL, [], 'Notes/plan.md')

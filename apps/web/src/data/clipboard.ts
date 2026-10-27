@@ -28,6 +28,8 @@ export async function copyText(text: string, html?: string): Promise<boolean> {
   } catch {
     // Fall through to the legacy path.
   }
+  // The copy borrows the focus; it goes back where it was (a table cell keeps its keyboard).
+  const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const area = document.createElement('textarea')
   area.value = text
   area.setAttribute('readonly', '')
@@ -43,6 +45,7 @@ export async function copyText(text: string, html?: string): Promise<boolean> {
     copied = false
   }
   area.remove()
+  previous?.focus({ preventScroll: true })
   return copied
 }
 
