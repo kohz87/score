@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.7] — 2026-10-27
+
+### Added
+- **Score checks a new Claude Code or Codex version itself.** These CLIs update themselves; a version Score hadn't been
+  told about used to stop the agent taking job steps ("Score hasn't verified what … reads on its own"). Now Score reads
+  the new version's help (never a prompt, no quota) and accepts it when every flag Score relies on is still described
+  the same way. If one changed, the message names it. (decision 138)
+
 ## [3.7.6] — 2026-10-27
 
 ### Fixed
