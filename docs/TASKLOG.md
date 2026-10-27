@@ -1610,3 +1610,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   it removed, export kept. Gate: e2e 848 passed, 0 failed; pnpm check green (server 4821, web 2995, contract 1522).
 - **v3.7.3 deployed live** (~01:30 UTC): backup score-pre-3.7.3-20261027.db, restart, health ok; one error was the old
   process still following scoretestb's removed run (credentials gone with the profile), none from the new one.
+- **3.7.4** (2026-10-27; owner asked "will i have the same issue when deleting other", then "yes build 1 and 2"). The
+  real scoretesta blocker (found by running the same `hermes profile delete` Score runs): 30 root-owned paths in its
+  Docker sandbox (`sandboxes/docker/…`), Permission denied — the 3.7.3 "gateway recreated folders" reading was wrong; the
+  owner cleared them with sudo and Retry finished the removal. Other profiles: none root-owned. Lead: foreignOwned()
+  (names and owners only) blocks the removal preview with `sudo chown -R <user>: '<folder>'` and names it when a delete
+  fails (CLI output stays private by design, so Score explains what it can see). Review: only foreign-owned folders with
+  entries block (a foreign file in your folder unlinks), quote-safe command, plain bounded example, 15 s scan cache;
+  that round was test-covered and not re-reviewed. Gate: 847 passed, 1 failed (the tablet 768 flake, still open), check
+  green (server 4826, web 2995, contract 1522).
+- **v3.7.4 deployed live** (~02:09 UTC): backup score-pre-3.7.4-20261027.db, restart, health ok, no new errors.
