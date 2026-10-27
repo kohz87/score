@@ -32,6 +32,7 @@ import {
   type WorkerPolicy,
 } from './policy.ts'
 import { driverFor } from './drivers.ts'
+import { helpMismatch } from './help-check.ts'
 import { blockHash, frameOf, instructionsEtag, promptWithInstructions } from './instructions.ts'
 import { quotaFromUsage, readCodexQuota } from './quota.ts'
 import { aliasModels, parseAntigravityModels, readCodexModels } from './models.ts'
@@ -561,7 +562,45 @@ export class CodingRuntime {
       denyFiles: this.denyFiles(),
       command,
       settingsOnDisk,
+      checkedVersions: this.checkedVersions(),
     }
+  }
+
+  /** Versions Score checked itself (3.7.7), as `runtime@version`. */
+  private checkedVersions(): Set<string> {
+    const rows = this.deps.db.sqlite
+      .prepare('SELECT runtime, version FROM checked_cli_versions')
+      .all() as { runtime: string; version: string }[]
+    return new Set(rows.map((row) => `${row.runtime}@${row.version}`))
+  }
+
+  /**
+   * 3.7.7 (decision 138): a version the declaration doesn't list is checked from its help text once, and remembered when
+   * every flag a worker launch relies on still reads as declared. Returns why it can't be accepted, or null.
+   */
+  private async checkVersion(
+    driver: ReturnType<typeof driverFor>,
+    version: string,
+  ): Promise<string | null> {
+    const worker = driver.worker
+    if (!worker || worker.versions.includes(version)) return null
+    if (this.checkedVersions().has(`${driver.runtime}@${version}`)) return null
+    // The version read fresh, so the help that decides belongs to the version recorded (the cached reading may be stale).
+    const now = await this.deps.locator.detect(driver, { fresh: true })
+    if (now.version !== version)
+      return `${driver.label} changed while Score was checking it (now ${now.version ?? 'unknown'}). Try again.`
+    const help = await this.deps.locator.help(driver, worker.help.args)
+    if (help === null)
+      return `Score couldn’t read ${driver.label} ${version}’s help to check what it reads on its own, so it can’t say what a step could reach.`
+    const changed = helpMismatch(help, worker.help)
+    if (changed)
+      return `${driver.label} ${version} no longer describes ${changed} the way Score relies on, so Score can’t say what a step could reach. Score needs an update for this version.`
+    this.deps.db.sqlite
+      .prepare(
+        'INSERT OR IGNORE INTO checked_cli_versions (runtime, version, checked_at) VALUES (?, ?, ?)',
+      )
+      .run(driver.runtime, version, new Date().toISOString())
+    return null
   }
 
   /**
@@ -650,6 +689,8 @@ export class CodingRuntime {
     const native = this.deps.locator.nativeCommand(driver)
     if (!native.ok || cli.version === null)
       return none('not_installed', native.ok ? 'The CLI didn’t report a version.' : native.message)
+    const unchecked = await this.checkVersion(driver, cli.version)
+    if (unchecked) return none('reach_unverifiable', unchecked)
     try {
       const policy = buildPolicy(
         {
