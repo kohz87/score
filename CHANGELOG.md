@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.12.1] — 2026-10-27
+
+### Added
+- **A screen shortcut in one-to-one chats.** The chat's header has a screen icon that opens the agent's screen (as
+  "Look at its screen" on its page). Coding agents have no screen, so neither place offers one for them.
+
 ## [3.12.0] — 2026-10-27
 
 ### Added
