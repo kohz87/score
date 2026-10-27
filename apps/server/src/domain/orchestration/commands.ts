@@ -25,6 +25,7 @@ import {
   insertHelperStep,
   ROLE_PREAMBLE,
   startVote,
+  votersOf,
 } from './helpers.ts'
 import { budgetView, canReserve, unknownCostBlocks } from './budget.ts'
 import { readWorkerPolicy } from './coding-policy.ts'
@@ -418,8 +419,8 @@ const HANDLERS: Record<ToolName, Handler> = {
         'helper_limit',
         `A vote of ${k} needs ${k} helper steps; ${helpers.maxSteps - helperStepsUsed(sqlite, o.id)} are left`,
       )
-    if (!helpers.agentIds.some((agent) => agentAdmits(sqlite, agent)))
-      return refuse('agent_unavailable', 'No helper is ready for new work')
+    if (!votersOf(helpers).some((agent) => agentAdmits(sqlite, agent)))
+      return refuse('agent_unavailable', 'No voter is ready for new work')
     const view = budgetView(sqlite, o)
     if (!canReserve(view, o.step_estimate_usd * k))
       return refuse(

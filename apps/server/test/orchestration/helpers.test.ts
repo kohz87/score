@@ -222,3 +222,34 @@ test('readChoice reads a number or the exact option', () => {
   // An option that contains a number is read as itself.
   expect(readChoice('Python 3', ['Python 2', 'Go 1', 'Python 3'])).toBe(2)
 })
+
+test('3.13.1: votes go only to the voters; helpers keep the rest', async () => {
+  splitMode = false
+  h = await harness({
+    reply,
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.vote', { question: 'Which?', options: ['a', 'b'], k: 3 })
+          await t.call('orch.assign', { agent: 'designer', role: 'search', instruction: 'find' })
+        },
+      }),
+    },
+  })
+  const id = await h.create({ gatePolicy: 'none', helpers: { ...HELPERS, voterIds: ['builder'] } })
+  await h.until(() => steps(id).length === 4)
+  const byRole = (role: string) =>
+    steps(id)
+      .filter((s) => s.role === role)
+      .map((s) => s.agentId)
+  expect(byRole('vote')).toEqual(['builder', 'builder', 'builder'])
+  expect(byRole('helper')).toEqual(['designer'])
+  expect(h.orch.snapshot(id).orchestration.helpers!.voterIds).toEqual(['builder'])
+})
+
+test('3.13.1: the lead cannot be a voter', async () => {
+  h = await harness()
+  await expect(h.create({ helpers: { ...HELPERS, voterIds: ['lead'] } })).rejects.toThrow(
+    /vote on its own/,
+  )
+})

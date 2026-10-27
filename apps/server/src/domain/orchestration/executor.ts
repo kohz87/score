@@ -37,6 +37,7 @@ import {
   type WorkflowRunSnapshot,
   type WorkflowRunSummary,
   type WorkflowTryAgainDecision,
+  suggestedCodingSteps,
 } from '@score/contract'
 import { createHash, randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
@@ -891,6 +892,22 @@ export class Orchestrator {
     body: OrchestrationCreate,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<OrchestrationCreated> {
+    // 3.13.1: without a launch limit, one is sized for coding helpers, voters and advisor (each consult is a launch).
+    if (body.codingSteps === undefined && (body.helpers || body.advisorAgentId !== undefined)) {
+      const coding = (id: string) =>
+        (agents ?? []).some((a) => a.id === id && a.runtime && a.runtime !== 'hermes')
+      body = {
+        ...body,
+        codingSteps: suggestedCodingSteps({
+          codingHelpers: [
+            ...(body.helpers?.agentIds ?? []),
+            ...(body.helpers?.voterIds ?? []),
+          ].some(coding),
+          helperSteps: body.helpers?.maxSteps ?? 0,
+          codingAdvisor: body.advisorAgentId !== undefined && coding(body.advisorAgentId),
+        }),
+      }
+    }
     // 3.14–3.15: the advisor and helpers are checked (served, coding consent) like the agents the lead may assign to.
     const advisor = body.advisorAgentId
     if (advisor !== undefined && advisor === body.leadAgentId)
@@ -901,11 +918,20 @@ export class Orchestrator {
         throw new HttpError(400, 'bad_request', 'The lead can’t be one of its own helpers.')
       if (new Set(helpers.agentIds).size !== helpers.agentIds.length)
         throw new HttpError(400, 'bad_request', 'A helper is listed twice.')
+      const voters = helpers.voterIds ?? []
+      if (voters.includes(body.leadAgentId))
+        throw new HttpError(400, 'bad_request', 'The lead can’t vote on its own questions.')
+      if (new Set(voters).size !== voters.length)
+        throw new HttpError(400, 'bad_request', 'A voter is listed twice.')
       if (helpers.scan && !helpers.scanFolder && !body.check)
         throw new HttpError(400, 'bad_request', 'Say which folder the helpers should scan.')
     }
     const extra = [
-      ...new Set([...(advisor !== undefined ? [advisor] : []), ...(helpers?.agentIds ?? [])]),
+      ...new Set([
+        ...(advisor !== undefined ? [advisor] : []),
+        ...(helpers?.agentIds ?? []),
+        ...(helpers?.voterIds ?? []),
+      ]),
     ].filter((agent) => !body.allowedAgents.includes(agent))
     const { preflight, reports } = await this.preflightWith(
       body.leadAgentId,
@@ -987,6 +1013,7 @@ export class Orchestrator {
           scan: helpers.scan,
           scanFolder: helpers.scanFolder ?? (helpers.scan ? (body.check?.workspace ?? null) : null),
           splitTo: helpers.splitTo,
+          voterIds: helpers.voterIds ?? [],
         }
         ctx.sqlite
           .prepare('UPDATE orchestrations SET helpers_json = ? WHERE id = ?')
@@ -994,7 +1021,7 @@ export class Orchestrator {
         const freeze = ctx.sqlite.prepare(
           `INSERT OR IGNORE INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, 'agent', ?, ?)`,
         )
-        for (const agent of helpers.agentIds)
+        for (const agent of new Set([...helpers.agentIds, ...(helpers.voterIds ?? [])]))
           freeze.run(
             id,
             agent,

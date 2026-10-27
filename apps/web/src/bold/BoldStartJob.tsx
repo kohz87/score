@@ -4,6 +4,7 @@ import {
   JobSchema,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_DEFAULTS,
+  suggestedCodingSteps,
   ORCH_LIMITS,
   OrchestrationCreatedSchema,
   RoutineSummarySchema,
@@ -305,6 +306,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const [checkFolder, setCheckFolder] = useState<string | null>(null)
   // 3.15: helpers. Picks are filtered below (never the lead, only known agents).
   const [helperPick, setHelperPick] = useState<string[]>([])
+  // 3.13.1: who answers votes; empty = the helpers.
+  const [voterPick, setVoterPick] = useState<string[]>([])
+  // 3.13.1: raw text; null = follows the suggestion until the person types.
+  const [launchesText, setLaunchesText] = useState<string | null>(null)
   const [helperConcurrent, setHelperConcurrent] = useState('3')
   const [helperSteps, setHelperSteps] = useState('20')
   const [helperScan, setHelperScan] = useState(false)
@@ -336,6 +341,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     setSeenLead(leadId)
     if (advisorPick === leadId) setAdvisorPick('')
     if (helperPick.includes(leadId)) setHelperPick(helperPick.filter((id) => id !== leadId))
+    if (voterPick.includes(leadId)) setVoterPick(voterPick.filter((id) => id !== leadId))
   }
   const roomLeadName = teamLead
     ? (agents.find((agent) => agent.id === teamLead)?.name ?? teamLead)
@@ -357,11 +363,15 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const helperIds = helperPick.filter(
     (id) => id !== leadId && agents.some((agent) => agent.id === id),
   )
-  // The advisor and the helpers run as steps, so the preflight checks them like allowed agents (policy and reach included).
+  const voterIds = voterPick.filter(
+    (id) => id !== leadId && agents.some((agent) => agent.id === id),
+  )
+  // The advisor, the helpers and the voters run as steps, so the preflight checks them like allowed agents (policy and reach included).
   const preflightAgents = [
     ...allowedFor,
     ...(advisorId !== '' ? [advisorId] : []),
     ...helperIds,
+    ...voterIds,
   ].filter((id, index, all) => all.indexOf(id) === index)
   const orchestrationPreflight = usePreflight(leadId, preflightAgents)
   const codingAgents = useQuery({
@@ -450,8 +460,32 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
         ? 'The check timeout must be 1 to 60 minutes'
         : null
   const helpersOn = helperIds.length > 0
+  const isCodingAgent = (id: string) => {
+    const runtime = agents.find((agent) => agent.id === id)?.runtime
+    return runtime !== undefined && runtime !== 'hermes'
+  }
+  const codingHelpersNow = [...helperIds, ...voterIds].some(isCodingAgent)
+  const codingAdvisorNow = advisorId !== '' && isCodingAgent(advisorId)
+  const launchesInUse =
+    orchestrationWorkers.length > 0 ||
+    allowedFor.some(isCodingAgent) ||
+    codingHelpersNow ||
+    codingAdvisorNow
+  const launchesSuggested = suggestedCodingSteps({
+    codingHelpers: codingHelpersNow,
+    helperSteps: Number.isInteger(helperStepsNumber) ? helperStepsNumber : 20,
+    codingAdvisor: codingAdvisorNow,
+  })
+  const launchesNow = launchesText ?? String(launchesSuggested)
+  const launchesValid = textIn(launchesNow, 1, ORCH_LIMITS.maxCodingSteps, true)
+  const launchesProblem =
+    launchesInUse && !launchesValid
+      ? `Coding-agent launches must be a whole number from 1 to ${ORCH_LIMITS.maxCodingSteps}`
+      : null
   const helperProblem = !helpersOn
-    ? null
+    ? voterIds.length > 0
+      ? 'Pick at least one helper, or clear the voters'
+      : null
     : !(
           Number.isInteger(helperConcurrentNumber) &&
           helperConcurrentNumber >= 1 &&
@@ -608,7 +642,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     checksPass &&
     reachCovered &&
     (!isSavedRecipe || optionProblems.length === 0) &&
-    (!isLead || (checkProblem === null && helperProblem === null)) &&
+    (!isLead || (checkProblem === null && helperProblem === null && launchesProblem === null)) &&
     missingInputs.length === 0 &&
     (!needsLead || leadId !== '')
 
@@ -768,6 +802,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
               scan: helperScan,
               ...(helperScan ? { scanFolder: helperFolderNow.trim() } : {}),
               splitTo: helperSplit,
+              ...(voterIds.length > 0 ? { voterIds } : {}),
             },
           }
         : {}),
@@ -790,10 +825,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
             } satisfies OrchestrationCheck,
           }
         : {}),
+      ...(launchesInUse ? { codingSteps: Number(launchesNow) } : {}),
       ...(orchestrationWorkers.length > 0
         ? {
             codingPolicies,
-            codingSteps: ORCH_DEFAULTS.codingSteps,
             ...(orchestrationReach.length > 0
               ? { acknowledgeCodingReach: { policyIds: orchestrationReach } }
               : {}),
@@ -1414,6 +1449,39 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                           )
                         })}
                     </fieldset>
+                    <fieldset className="start-field">
+                      <legend>Who votes (up to 4)</legend>
+                      <span className="small muted" id="start-voters-help">
+                        {voterIds.length === 0 ? 'The helpers vote. ' : ''}Votes go only to these
+                        agents, for example the model you keep for small decisions; the helpers keep
+                        searching, grepping and auditing.
+                      </span>
+                      {agents
+                        .filter((agent) => agent.id !== leadId)
+                        .map((agent) => {
+                          const on = voterIds.includes(agent.id)
+                          return (
+                            <label className="check small" key={agent.id}>
+                              <input
+                                type="checkbox"
+                                aria-label={`Votes: ${agent.name}`}
+                                aria-describedby="start-voters-help"
+                                checked={on}
+                                disabled={!on && voterIds.length >= 4}
+                                onChange={(event) => {
+                                  setVoterPick(
+                                    event.target.checked
+                                      ? [...voterIds, agent.id]
+                                      : voterIds.filter((id) => id !== agent.id),
+                                  )
+                                  touch()
+                                }}
+                              />
+                              {agent.name}
+                            </label>
+                          )
+                        })}
+                    </fieldset>
                     <label className="start-field">
                       <span>At once (1 to 6)</span>
                       <input
@@ -1504,6 +1572,35 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                     )}
                   </div>
                 </details>
+              )}
+
+              {isLead && launchesInUse && (
+                <div className="start-field start-launches" data-protected="block">
+                  <label htmlFor="start-launches-input">Coding-agent launches (1–100)</label>
+                  <input
+                    id="start-launches-input"
+                    className="field"
+                    type="number"
+                    min={1}
+                    max={ORCH_LIMITS.maxCodingSteps}
+                    value={launchesNow}
+                    aria-invalid={!launchesValid}
+                    aria-describedby="start-launches-help"
+                    onChange={(event) => {
+                      setLaunchesText(event.target.value)
+                      touch()
+                    }}
+                  />
+                  <span className="small muted" id="start-launches-help">
+                    Each step, helper step, vote answer and advisor consult on a coding agent is one
+                    launch.
+                  </span>
+                  {launchesProblem && (
+                    <span className="small" role="alert">
+                      {launchesProblem}
+                    </span>
+                  )}
+                </div>
               )}
 
               {isLead && (
