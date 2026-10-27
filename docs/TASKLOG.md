@@ -1670,4 +1670,7 @@ One entry per completed task: what landed, review results, and any **rejected re
   eager (indented code, quotes, bullets, inline code, escaped pipes, --- rules) and flickered while streaming (all fixed,
   tests). Re-review clean. Gate: e2e 846 passed, 2 failed (tablet flake at 768 and 820), check green (server 4845, web
   3006, contract 1524).
-- **v3.7.11 deployed live** (~04:59 UTC): backup score-pre-3.7.11-20261027.db, restart, health ok, no new errors.
+- **v3.7.11 deployed live** (~04:45 UTC): backup score-pre-3.7.11-20261027.db, restart, health ok, no new errors.
+  **Process slip:** the idle check showed 1 active turn (gem38, an orchestration step in room-orc-c8342f50) and the
+  lead restarted anyway. Score reattached: the run kept `running` and updated after the restart. Deploys now stop on a
+  non-zero idle count (deploy-guard script).
