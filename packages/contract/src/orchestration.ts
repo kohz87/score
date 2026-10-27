@@ -229,6 +229,8 @@ export const OrchestrationHelpersSchema = z
     /** The folder the scan reads (absolute; the Workspace rules apply). Needed with `scan` unless the check has one. */
     scanFolder: z.string().min(1).max(4096).startsWith('/').optional(),
     splitTo: z.enum(['lead', 'person']).default('lead'),
+    /** 3.13.1: who answers votes (e.g. one model kept for voting); empty or absent = the helpers. */
+    voterIds: z.array(AgentIdSchema).max(4).optional(),
   })
   .strict()
 export const VoteViewSchema = z.object({
@@ -248,6 +250,24 @@ export const VoteViewSchema = z.object({
   createdAt: z.iso.datetime(),
 })
 export type VoteView = z.infer<typeof VoteViewSchema>
+
+/**
+ * 3.13.1: how many coding-agent launches a lead job should allow. Every helper step, vote answer and advisor consult on a
+ * coding agent is one launch, on top of the coding workers' own steps; the cap is `ORCH_LIMITS.maxCodingSteps`.
+ */
+export function suggestedCodingSteps(args: {
+  codingHelpers: boolean
+  helperSteps: number
+  codingAdvisor: boolean
+}): number {
+  const advisorConsults = 5
+  return Math.min(
+    ORCH_LIMITS.maxCodingSteps,
+    ORCH_DEFAULTS.codingSteps +
+      (args.codingHelpers ? args.helperSteps : 0) +
+      (args.codingAdvisor ? advisorConsults : 0),
+  )
+}
 
 export const AdvisorCheckpointSchema = z.enum(['before_plan', 'repeat_failure', 'before_done'])
 export const AdvisorConsultViewSchema = z.object({
@@ -588,6 +608,8 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
       scan: z.boolean(),
       scanFolder: z.string().nullable(),
       splitTo: z.enum(['lead', 'person']),
+      /** Who answers votes; empty = the helpers. */
+      voterIds: z.array(AgentIdSchema).optional(),
       votes: z.array(VoteViewSchema),
     })
     .nullable()
