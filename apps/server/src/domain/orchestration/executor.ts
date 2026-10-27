@@ -151,6 +151,7 @@ import { timelineOf } from './timeline.ts'
 import { pruneOrchestrationRows } from './prune.ts'
 import {
   type HelpersConfig,
+  effectiveSize,
   helperLines,
   helpersOf,
   settleHelpers,
@@ -168,6 +169,8 @@ import { splitCommand } from './check-command.ts'
 import {
   CHECK_LEAD_BYTES,
   CHECK_OUTPUT_BYTES,
+  CHECK_RESERVE_BYTES,
+  CHECK_STORED_BYTES,
   type CheckConfig,
   checkConfigOf,
   checkIsCurrent,
@@ -1060,12 +1063,13 @@ export class Orchestrator {
     // 3.14–3.16 (review): helper work and consults are steps too; the storage and coding reserves are sized for them.
     const steps = effectiveSteps(body)
     const concurrent = body.maxConcurrentSteps + (body.helpers?.maxConcurrent ?? 0)
-    const reserve = reserveFor(
-      steps,
-      body.maxLeadTurns,
-      reports.size > 0 ? codingItemsFor(steps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) : 0,
-      reports.size > 0 ? codingUnsentBytes(steps, concurrent) : 0,
-    )
+    const reserve =
+      reserveFor(
+        steps,
+        body.maxLeadTurns,
+        reports.size > 0 ? codingItemsFor(steps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) : 0,
+        reports.size > 0 ? codingUnsentBytes(steps, concurrent) : 0,
+      ) + (body.check ? CHECK_RESERVE_BYTES : 0)
     if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
       throw new HttpError(
         409,
@@ -2459,13 +2463,7 @@ export class Orchestrator {
       if (codingStep) {
         const fresh = readOrch(sqlite, o.id) ?? o
         if (
-          unsentCoding >=
-            codingUnsentSlots(
-              o.max_steps +
-                (helpersOf(o)?.maxSteps ?? 0) +
-                (o.advisor_agent_id ? ADVISOR_STEPS : 0),
-              o.max_concurrent_steps + (helpersOf(o)?.maxConcurrent ?? 0),
-            ) ||
+          unsentCoding >= codingUnsentSlots(effectiveSize(o).steps, effectiveSize(o).concurrent) ||
           fresh.coding_stored_bytes + Buffer.byteLength(input) > fresh.coding_reserve_bytes
         )
           continue
@@ -3653,7 +3651,7 @@ export class Orchestrator {
       output: string,
     ) => {
       // Redacted before it is cut, so a secret straddling the cut is still recognised (review P3).
-      const kept = tailBytes(redact(output), CHECK_OUTPUT_BYTES)
+      const kept = tailBytes(redact(output), CHECK_STORED_BYTES)
       await this.mutate((ctx) => {
         const { sqlite, now } = ctx
         const row = sqlite.prepare('SELECT outcome FROM orc_checks WHERE id = ?').get(start.id) as

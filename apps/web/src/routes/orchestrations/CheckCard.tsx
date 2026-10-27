@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { CheckRunView, OrchestrationDetail } from '@score/contract'
 import { describeOrchError } from './orchestration-queries.ts'
 
@@ -37,6 +38,7 @@ export function CheckCard({
   run: Pick<OrchestrationDetail, 'check' | 'status' | 'revision'>
   actions: CheckActions
 }) {
+  const [confirmWaive, setConfirmWaive] = useState(false)
   const check = run.check
   if (!check) return null
   const live = run.status === 'running' || run.status === 'paused'
@@ -102,14 +104,34 @@ export function CheckCard({
             <p className="orch-muted">
               The job can only finish as a success after the check passes. Only you can change that.
             </p>
-            <button
-              type="button"
-              className="orch-danger"
-              disabled={actions.checkWaive.isPending}
-              onClick={() => actions.checkWaive.mutate(control)}
-            >
-              Finish without a passing check
-            </button>
+            {confirmWaive ? (
+              <div role="group" aria-label="Confirm finishing without a check">
+                <p>Let it finish as a success without a passing check?</p>
+                <button
+                  type="button"
+                  className="orch-danger"
+                  disabled={actions.checkWaive.isPending}
+                  onClick={() => {
+                    actions.checkWaive.mutate(control)
+                    setConfirmWaive(false)
+                  }}
+                >
+                  Confirm
+                </button>{' '}
+                <button type="button" onClick={() => setConfirmWaive(false)}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="orch-danger"
+                disabled={actions.checkWaive.isPending}
+                onClick={() => setConfirmWaive(true)}
+              >
+                Finish without a passing check
+              </button>
+            )}
           </div>
         )
       )}

@@ -153,7 +153,7 @@ export function renderLeadInput(args: LeadInputArgs): string {
   if (steps.length === 0) lines.push('(none yet)')
   for (const step of steps)
     lines.push(
-      `- ${step.id} [${step.status}${step.disposition ? `: ${oneLine(step.disposition, 80)}` : ''}] agent=${step.agent_id}${step.after_steps.length ? ` after=${step.after_steps.join(',')}` : ''}${step.replaces ? ` replaces=${step.replaces}` : ''} result_revision=${step.result_revision}${step.helper_role ? ` role=${step.helper_role}` : ''}: ${oneLine(step.role === 'helper' ? step.instruction.slice(step.instruction.indexOf('\n\n') + 2) : step.instruction, 200)}`,
+      `- ${step.id} [${step.status}${step.disposition ? `: ${oneLine(step.disposition, 80)}` : ''}] agent=${step.agent_id}${step.after_steps.length ? ` after=${step.after_steps.join(',')}` : ''}${step.replaces ? ` replaces=${step.replaces}` : ''} result_revision=${step.result_revision}${step.helper_role ? ` role=${step.helper_role}` : ''}: ${oneLine(step.role === 'helper' && step.instruction.includes('\n\n') ? step.instruction.slice(step.instruction.indexOf('\n\n') + 2) : step.instruction, 200)}`,
     )
   const openGates = gates.filter((gate) => gate.status === 'open')
   if (openGates.length)

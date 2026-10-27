@@ -79,6 +79,14 @@ test('Run check and Finish without a passing check send the run revision, and th
   const waive = screen.getByRole('button', { name: 'Finish without a passing check' })
   expect(waive.closest('[data-protected]')).not.toBeNull()
   fireEvent.click(waive)
+  // Two steps: the first click only asks, inside the protected container.
+  expect(act.checkWaive.mutate).not.toHaveBeenCalled()
+  const question = screen.getByText('Let it finish as a success without a passing check?')
+  expect(question.closest('[data-protected]')).not.toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(act.checkWaive.mutate).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Finish without a passing check' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
   expect(act.checkWaive.mutate).toHaveBeenCalledWith({ orchestrationRevision: 7 })
 })
 

@@ -11,6 +11,7 @@ import { taskAgentsQuery } from '../data/task-queries.ts'
 import { OrchestrationLive } from '../routes/orchestrations/OrchestrationLive.tsx'
 import {
   isRunOver,
+  leadStepCounts,
   orchCoding,
   statusLabel,
   usd,
@@ -485,7 +486,7 @@ function OrchestrationRun({
           </section>
           <EndSummary
             run={detail}
-            steps={detail.steps.succeeded}
+            steps={leadStepCounts(detail.stepsList).succeeded}
             approvals={detail.gates.filter((gate) => gate.decidedAt !== null).length}
           />
           <AdvisorCard run={detail} agents={agents} />

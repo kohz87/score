@@ -316,12 +316,27 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const [authPassword, setAuthPassword] = useState('')
   const [authError, setAuthError] = useState<string | null>(null)
   const [authBusy, setAuthBusy] = useState(false)
+  const authInput = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!authNeeded) return
+    const input = authInput.current
+    input?.focus()
+    // jsdom has no scrollIntoView.
+    input?.scrollIntoView?.({ block: 'center' })
+  }, [authNeeded])
   const leadId =
     (teamLead && !leadIsCoding
       ? teamLead
       : planner && hermesAgents.some((agent) => agent.id === planner)
         ? planner
         : hermesAgents[0]?.id) ?? ''
+  // A pick that became the lead is dropped for good, so it doesn't come back when the lead changes again.
+  const [seenLead, setSeenLead] = useState(leadId)
+  if (seenLead !== leadId) {
+    setSeenLead(leadId)
+    if (advisorPick === leadId) setAdvisorPick('')
+    if (helperPick.includes(leadId)) setHelperPick(helperPick.filter((id) => id !== leadId))
+  }
   const roomLeadName = teamLead
     ? (agents.find((agent) => agent.id === teamLead)?.name ?? teamLead)
     : null
@@ -1328,9 +1343,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
               )}
 
               {isLead && (
-                <label className="start-field start-advisor">
-                  <span>Advisor</span>
+                <div className="start-field start-advisor">
+                  <label htmlFor="start-advisor-select">Advisor</label>
                   <select
+                    id="start-advisor-select"
+                    aria-describedby="start-advisor-help"
                     value={advisorId}
                     onChange={(event) => {
                       setAdvisorPick(event.target.value)
@@ -1346,16 +1363,20 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                         </option>
                       ))}
                   </select>
-                  <span className="small muted">
+                  <span className="small muted" id="start-advisor-help">
                     A strong model Score asks before the plan, when a failure repeats, and before it
                     finishes. Its advice goes to the lead; the lead decides. Choose an agent set up
                     for reviewing: it runs with its own tools.
                   </span>
-                </label>
+                </div>
               )}
 
               {isLead && (
-                <details className="inner start-helpers" data-protected="block">
+                <details
+                  className="inner start-helpers"
+                  data-protected="block"
+                  open={helperProblem ? true : undefined}
+                >
                   <summary>
                     Helpers
                     {helpersOn && (
@@ -1486,7 +1507,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
               )}
 
               {isLead && (
-                <details className="inner start-check" data-protected="block">
+                <details
+                  className="inner start-check"
+                  data-protected="block"
+                  open={checkProblem ? true : undefined}
+                >
                   <summary>
                     Check before it finishes
                     {/* The folder stays in sight when the section is folded: the command runs there as you. */}
@@ -1905,6 +1930,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                   <input
                     className="field"
                     type="password"
+                    ref={authInput}
                     autoComplete="current-password"
                     value={authPassword}
                     onChange={(event) => setAuthPassword(event.target.value)}
@@ -2174,6 +2200,9 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 function startError(error: unknown): string {
+  // Checked first: the server answers it with a 403, which pairingProblem would call "pair this browser".
+  if (error instanceof ApiError && error.code === 'fresh_auth_required')
+    return 'Confirm your password or passkey again, then start the job.'
   const pairing = pairingProblem(error)
   if (pairing) return pairing
   if (error instanceof ApiError) {

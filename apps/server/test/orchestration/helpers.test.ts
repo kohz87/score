@@ -219,4 +219,6 @@ test('readChoice reads a number or the exact option', () => {
   // Several numbers: unusable rather than guessed.
   expect(readChoice('1. a 2. b', options)).toBeNull()
   expect(readChoice('between 1 and 2', options)).toBeNull()
+  // An option that contains a number is read as itself.
+  expect(readChoice('Python 3', ['Python 2', 'Go 1', 'Python 3'])).toBe(2)
 })

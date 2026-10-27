@@ -38,6 +38,7 @@ export const protectedClasses = [
   'start-more',
   // 3.13: the oracle's command and folder in Start a job, and the person's "finish without a passing check" choice
   'start-check',
+  'start-helpers',
   'orch-check-waive',
   'orch-check-waived',
   // PLAN 11.9a: bold credential panels, the Add tool server form, and trigger secrets / rotate-delete decisions

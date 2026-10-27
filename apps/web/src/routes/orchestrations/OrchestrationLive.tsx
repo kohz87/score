@@ -9,6 +9,7 @@ import { LiveLog } from './LiveLog.tsx'
 import {
   buildGraph,
   leadSteps,
+  leadStepCounts,
   eventEffect,
   filterLog,
   isRunOver,
@@ -176,7 +177,7 @@ export function OrchestrationLive({
             <RunStatus run={detail} />
             <EndSummary
               run={detail}
-              steps={detail.steps.succeeded}
+              steps={leadStepCounts(detail.stepsList).succeeded}
               approvals={detail.gates.filter((gate) => gate.decidedAt !== null).length}
             />
           </div>

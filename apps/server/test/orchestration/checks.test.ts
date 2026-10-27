@@ -304,3 +304,35 @@ test('a command with shell syntax is refused when the job is created', async () 
     h.create({ check: { ...CHECK, command: 'pnpm lint && pnpm test' } }),
   ).rejects.toThrow(/needs a shell/)
 })
+
+test('a job makes at most 30 check runs (each keeps its output); then success needs the person', async () => {
+  const checks = fakeChecks()
+  const out: OrchReceipt[] = []
+  h = await harness({
+    orchestrator: { checks: checks.spawner },
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          out.push(r(await t.call('orch.check', {})))
+          out.push(r(await t.call('orch.finish', { outcome: 'success', summary: 'x' })))
+        },
+      }),
+    },
+  })
+  const id = await h.create({ check: CHECK })
+  // Thirty finished, failed runs already on record.
+  const insert = h.db.sqlite.prepare(
+    "INSERT INTO orc_checks (id, orchestration_id, reason, queued_at, started_at, ended_at, exit_code, outcome) VALUES (?, ?, 'lead', ?, ?, ?, 1, 'failed')",
+  )
+  for (let i = 0; i < 30; i++)
+    insert.run(
+      `chk-${i}`,
+      id,
+      '2026-01-01T00:00:00.000Z',
+      '2026-01-01T00:00:00.000Z',
+      '2026-01-01T00:00:01.000Z',
+    )
+  await h.until(() => out.length === 2)
+  expect(out.map((o) => o.code)).toEqual(['check_limit', 'check_limit'])
+  expect(checks.runs).toHaveLength(0)
+})

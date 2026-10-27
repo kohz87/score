@@ -7,6 +7,7 @@ import type { VoteView } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { lifecycleOf } from '../agent-lifecycle.ts'
+import { ADVISOR_STEPS } from './advisor.ts'
 import { touch, type Ctx } from './ctx.ts'
 import { addStored, utf8Bytes } from './ops.ts'
 import { addCause, addHistory, stepsOf, type OrchRow, type StepRow } from './store.ts'
@@ -196,14 +197,16 @@ export const SHARP_SHARE = 0.7
 /** The option an answer chose (1-based number at its start, or the option's exact text), or null. */
 export function readChoice(answer: string, options: readonly string[]): number | null {
   const text = answer.trim()
+  // The exact option text first ("Python 3" is an option, not the number 3).
+  const exact = options.findIndex((option) => option.trim().toLowerCase() === text.toLowerCase())
+  if (exact >= 0) return exact
   // One number, near the start ("2", "Option 2.", "answer: 2"); an answer naming several numbers is unusable.
   const number = /^\D{0,12}?(\d)\b/.exec(text)
   if (number && (text.match(/\d/g) ?? []).length === 1) {
     const index = Number(number[1]) - 1
     if (index >= 0 && index < options.length) return index
   }
-  const exact = options.findIndex((option) => option.trim().toLowerCase() === text.toLowerCase())
-  return exact >= 0 ? exact : null
+  return null
 }
 
 function tally(
@@ -338,4 +341,13 @@ export function helperLines(sqlite: DatabaseSync, o: OrchRow): string[] {
     )
   }
   return lines
+}
+
+/** Every step a run may hold and run at once: the lead's, its helpers' and the advisor's consults (sizes the reserves). */
+export function effectiveSize(o: OrchRow): { steps: number; concurrent: number } {
+  const helpers = helpersOf(o)
+  return {
+    steps: o.max_steps + (helpers?.maxSteps ?? 0) + (o.advisor_agent_id ? ADVISOR_STEPS : 0),
+    concurrent: o.max_concurrent_steps + (helpers?.maxConcurrent ?? 0),
+  }
 }

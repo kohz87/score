@@ -44,6 +44,10 @@ export type CheckRow = z.infer<typeof CheckRowSchema>
 
 /** What Score keeps of a run's output, and the part the lead reads. */
 export const CHECK_OUTPUT_BYTES = 64 * 1024
+/** What one run keeps in the database (the end of its output), and how many runs a job may make: reserved at creation. */
+export const CHECK_STORED_BYTES = 16 * 1024
+export const MAX_CHECK_RUNS = 30
+export const CHECK_RESERVE_BYTES = MAX_CHECK_RUNS * (CHECK_STORED_BYTES + 1024)
 export const CHECK_LEAD_BYTES = 8 * 1024
 
 export function checkConfigOf(sqlite: DatabaseSync, orchId: string): CheckConfig | null {
@@ -100,12 +104,25 @@ export function checkIsCurrent(sqlite: DatabaseSync, orchId: string, check: Chec
   return row.n === 0
 }
 
-/** Queues a run unless one is already waiting (a running one gets a fresh run queued behind it). */
-export function queueCheck(ctx: Ctx, orchId: string, reason: CheckRow['reason']): string {
+const runsMade = (sqlite: DatabaseSync, orchId: string): number =>
+  (
+    sqlite
+      .prepare(
+        "SELECT count(*) AS n FROM orc_checks WHERE orchestration_id = ? AND outcome != 'cancelled'",
+      )
+      .get(orchId) as { n: number }
+  ).n
+
+/**
+ * Queues a run unless one is already waiting (a running one gets a fresh run queued behind it). Null when the job has
+ * made all the runs its storage was reserved for (review: each run keeps its output).
+ */
+export function queueCheck(ctx: Ctx, orchId: string, reason: CheckRow['reason']): string | null {
   const waiting = ctx.sqlite
     .prepare("SELECT id FROM orc_checks WHERE orchestration_id = ? AND outcome = 'queued' LIMIT 1")
     .get(orchId) as { id: string } | undefined
   if (waiting) return waiting.id
+  if (runsMade(ctx.sqlite, orchId) >= MAX_CHECK_RUNS) return null
   const id = `chk-${randomUUID()}`
   ctx.sqlite
     .prepare(
@@ -135,6 +152,11 @@ export function finishRefusal(
     }
   const latest = checksOf(sqlite, o.id, 1)[0]
   if (latest?.outcome === 'passed' && checkIsCurrent(sqlite, o.id, latest)) return null
+  if (runsMade(sqlite, o.id) >= MAX_CHECK_RUNS)
+    return {
+      code: 'check_limit',
+      message: `The check has run ${MAX_CHECK_RUNS} times, its limit for this job, without a current pass. Finish with outcome partial or failed, or ask the person (they can let it finish).`,
+    }
   return {
     code: 'check_required',
     message:
@@ -150,7 +172,12 @@ export function personRunsCheck(ctx: Ctx, o: OrchRow): void {
     throw new HttpError(409, 'conflict', 'This job has no check.')
   if (o.status !== 'running' && o.status !== 'paused')
     throw new HttpError(409, 'conflict', `This job is ${o.status}.`)
-  queueCheck(ctx, o.id, 'person')
+  if (queueCheck(ctx, o.id, 'person') === null)
+    throw new HttpError(
+      409,
+      'conflict',
+      `This job has run its check ${MAX_CHECK_RUNS} times, its limit.`,
+    )
   addHistory(ctx.sqlite, o.id, 'check_requested', { by: 'person' }, ctx.now)
 }
 

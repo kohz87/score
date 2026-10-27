@@ -6,9 +6,9 @@
 import type { AdvisorConsultView } from '@score/contract'
 import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { lifecycleOf } from '../agent-lifecycle.ts'
+import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { budgetView, canReserve } from './budget.ts'
-import { checksOf, checkConfigOf } from './checks.ts'
+import { checksOf, checkConfigOf, shownCommand } from './checks.ts'
 import { touch, type Ctx } from './ctx.ts'
 import { addStored, utf8Bytes } from './ops.ts'
 import { quote, truncateBytes } from './render.ts'
@@ -99,7 +99,7 @@ export function renderBriefing(
     )
     lines.push(
       '',
-      `The person's check (it must pass before a successful finish): ${check.argv.join(' ')}.`,
+      `The person's check (it must pass before a successful finish): ${shownCommand(check.argv)}.`,
       last
         ? `Last check: ${last.outcome}${last.exit_code !== null ? ` (exit ${last.exit_code})` : ''}.`
         : 'Last check: none yet.',
@@ -207,6 +207,20 @@ export function awaitCheckpoint(
   createdIn: string,
 ): { code: string; message: string } | null {
   if (!o.advisor_agent_id) return null
+  // An advisor the person paused (or that can't take work) gives no advice: nothing waits for it (review: no hang).
+  if (
+    !agentAdmits(ctx.sqlite, o.advisor_agent_id) ||
+    agentPausedAt(ctx.sqlite, o.advisor_agent_id) !== null
+  ) {
+    addHistory(
+      ctx.sqlite,
+      o.id,
+      'advice_skipped',
+      { checkpoint, why: 'advisor unavailable' },
+      ctx.now,
+    )
+    return null
+  }
   const existing = consultsOf(ctx.sqlite, o.id).filter((step) => step.checkpoint === checkpoint)
   if (existing.length === 0) {
     const started = consult(ctx, o, checkpoint, '', createdIn)

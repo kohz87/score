@@ -237,6 +237,28 @@ test('when the person approves every step, a consult waits for their approval to
   expect(consult.gateId).not.toBeNull()
 })
 
+test('a paused advisor gives no advice and holds nothing up', async () => {
+  const out: OrchReceipt[] = []
+  h = await harness({
+    reply,
+    lead: {
+      script: byTurn({
+        1: async (t) =>
+          void out.push(r(await t.call('orch.finish', { outcome: 'success', summary: 'x' }))),
+      }),
+    },
+  })
+  h.db.sqlite
+    .prepare(
+      "INSERT INTO agent_pauses (agent_id, paused_at) VALUES ('reviewer', '2026-01-01T00:00:00.000Z')",
+    )
+    .run()
+  const id = await h.create({ advisorAgentId: 'reviewer' })
+  await h.until(() => status(id) === 'succeeded')
+  expect(out[0]!.status).toBe('ok')
+  expect(consults(id)).toEqual([])
+})
+
 test('the advisor cannot be the lead', async () => {
   h = await harness()
   await expect(h.create({ advisorAgentId: 'lead' })).rejects.toThrow(/another agent than the lead/)
