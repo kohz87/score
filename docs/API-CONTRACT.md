@@ -2241,7 +2241,12 @@ never a veto. A consult the budget can't cover is skipped (history `advice_skipp
 ### Helpers and votes (3.15–3.16, decision 150)
 
 `OrchestrationCreate.helpers?: { agentIds: 1–4 (not the lead, no repeats); maxConcurrent?: 1–6 (default 3); maxSteps?: 1–60
-(default 20); scan?: boolean; scanFolder?: absolute path; splitTo?: 'lead'|'person' (default 'lead') }`. Helpers are checked like
+(default 20); scan?: boolean; scanFolder?: absolute path; splitTo?: 'lead'|'person' (default 'lead'); voterIds?: ≤ 4 agents }`.
+**Voters (3.13.1):** when `voterIds` is non-empty, vote answers go only to those agents (round-robin by use); helpers keep
+the role work and the scan. Voters are checked and frozen like helpers, may not include the lead (`400 bad_request`), and
+use the helpers' slots and allowance. **Launches (3.13.1):** a lead job created with helpers or an advisor and no
+`codingSteps` gets `suggestedCodingSteps()` (contract package): the default plus the helper allowance when a helper or
+voter is a coding agent, plus 5 when the advisor is one, capped at `maxCodingSteps`. Helpers are checked like
 allowed agents (preflight, coding consent) but are not added to `allowedAgents`. `scanFolder` must pass the Workspace root rules
 (`400 bad_request` with the reason) and is stored resolved; a scan without a folder uses the check's (`400` when there is none).
 Helper work (`StepView.role: 'helper'`, `helperRole`, ids `h1`, `h2`, …) runs in the helpers' own slots (`maxConcurrent`, outside

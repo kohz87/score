@@ -71,6 +71,20 @@ export function HelpersCard({
           )
         })}
       </p>
+      {helpers.voterIds && helpers.voterIds.length > 0 && (
+        <p className="orch-advisor-who">
+          <span>Votes:</span>
+          {helpers.voterIds.map((id) => {
+            const agent = agents.find((item) => item.id === id)
+            return (
+              <span key={id} className="orch-agent">
+                {agent && <AgentGlyph agent={agent} size="xs" describeShape />}
+                <span>{agent?.name ?? id}</span>
+              </span>
+            )
+          })}
+        </p>
+      )}
       <p className="orch-muted">
         {helpers.used} of {helpers.maxSteps} helper steps, up to {helpers.maxConcurrent} at once.
         {helpers.scan && <> Scanned first: {helpers.scanFolder ?? 'no folder'}.</>}

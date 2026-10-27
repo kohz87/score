@@ -938,3 +938,101 @@ test('a bad check timeout opens the folded check section so the reason is visibl
   fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'pnpm test' } })
   await waitFor(() => expect(section.open).toBe(true))
 })
+
+test('voters are chosen apart from helpers, never the lead, and sent as voterIds with the preflight (3.13.1)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  expect(within(section).queryByRole('checkbox', { name: 'Votes: lead' })).toBeNull()
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'Votes: designer' }))
+  await waitFor(() =>
+    expect(preflightUrls.some((ids) => ids.split(',').includes('designer'))).toBe(true),
+  )
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]!.helpers).toMatchObject({
+    agentIds: ['builder'],
+    voterIds: ['designer'],
+  })
+})
+
+test('no voters picked means no voterIds in the body (3.13.1)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]!.helpers).not.toHaveProperty('voterIds')
+})
+
+test('a voter that becomes the lead is dropped (3.13.1)', async () => {
+  codingLead = 'coder'
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'Votes: builder' }))
+  const planner = await within(dialog).findByLabelText('Who plans it')
+  fireEvent.change(planner, { target: { value: 'builder' } })
+  await waitFor(() =>
+    expect(within(section).queryByRole('checkbox', { name: 'Votes: builder' })).toBeNull(),
+  )
+  fireEvent.change(planner, { target: { value: 'reviewer' } })
+  const back = await waitFor(() =>
+    within(section).getByRole('checkbox', { name: 'Votes: builder' }),
+  )
+  expect((back as HTMLInputElement).checked).toBe(false)
+})
+
+test('the launches field prefills from the suggestion, follows the choices, and stops once typed (3.13.1)', async () => {
+  codingLead = 'coder'
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  // The coding agent can take steps, so the field shows with the default (10).
+  const field = (await within(dialog).findByLabelText(
+    'Coding-agent launches (1–100)',
+  )) as HTMLInputElement
+  expect(field.value).toBe('10')
+  // A coding voter adds the helper steps (20); a coding advisor adds 5.
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'Votes: coder' }))
+  await waitFor(() => expect(field.value).toBe('30'))
+  fireEvent.change(within(dialog).getByLabelText('Advisor'), { target: { value: 'coder' } })
+  await waitFor(() => expect(field.value).toBe('35'))
+  fireEvent.change(within(section).getByLabelText('Helper steps (1 to 60)'), {
+    target: { value: '10' },
+  })
+  await waitFor(() => expect(field.value).toBe('25'))
+  // Typed: no longer follows.
+  fireEvent.change(field, { target: { value: '42' } })
+  fireEvent.change(within(dialog).getByLabelText('Advisor'), { target: { value: '' } })
+  expect(field.value).toBe('42')
+  expect(within(dialog).getByText(/Each step, helper step, vote answer/)).toBeDefined()
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]).toMatchObject({ codingSteps: 42 })
+})
+
+test('an invalid launches value blocks Start with the reason (3.13.1)', async () => {
+  codingLead = 'coder'
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const field = await within(dialog).findByLabelText('Coding-agent launches (1–100)')
+  const start = await fillLeadJob(dialog)
+  fireEvent.change(field, { target: { value: '0' } })
+  expect(within(dialog).getByText(/Coding-agent launches must be a whole number/)).toBeDefined()
+  expect((start as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.change(field, { target: { value: '5' } })
+  await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false))
+})
+
+test('no coding agent means no launches field and no codingSteps (3.13.1)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  expect(within(dialog).queryByLabelText('Coding-agent launches (1–100)')).toBeNull()
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]).not.toHaveProperty('codingSteps')
+})

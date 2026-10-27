@@ -19,6 +19,8 @@ export const HelpersConfigSchema = z.object({
   scan: z.boolean(),
   scanFolder: z.string().nullable(),
   splitTo: z.enum(['lead', 'person']),
+  /** 3.13.1: who answers votes; empty = the helpers. */
+  voterIds: z.array(z.string()).default([]),
 })
 export type HelpersConfig = z.infer<typeof HelpersConfigSchema>
 
@@ -56,14 +58,21 @@ export function helperStepsUsed(sqlite: DatabaseSync, orchId: string): number {
   return stepsOf(sqlite, orchId).filter(usesHelperSlot).length
 }
 
-/** The helper the next piece of work goes to: the one with the fewest steps so far (ties: listed order). */
-function nextHelper(sqlite: DatabaseSync, orchId: string, helpers: HelpersConfig): string {
+/** Who answers votes: the voters the person named, else the helpers. */
+export const votersOf = (helpers: HelpersConfig): string[] =>
+  helpers.voterIds.length > 0 ? helpers.voterIds : helpers.agentIds
+
+/** The agent the next piece of work goes to: the one with the fewest steps so far (ties: listed order). */
+function nextHelper(
+  sqlite: DatabaseSync,
+  orchId: string,
+  helpers: HelpersConfig,
+  pool: readonly string[] = helpers.agentIds,
+): string {
   const used = new Map<string, number>()
   for (const step of stepsOf(sqlite, orchId).filter(usesHelperSlot))
     used.set(step.agent_id, (used.get(step.agent_id) ?? 0) + 1)
-  return helpers.agentIds.reduce((best, id) =>
-    (used.get(id) ?? 0) < (used.get(best) ?? 0) ? id : best,
-  )
+  return pool.reduce((best, id) => ((used.get(id) ?? 0) < (used.get(best) ?? 0) ? id : best))
 }
 
 /** Inserts one helper or vote step (queued, or pending its gate when `gated`). Returns its id. */
@@ -291,7 +300,7 @@ export function startVote(
   ].join('\n')
   for (let i = 0; i < vote.k; i++)
     insertHelperStep(ctx, o, {
-      agentId: nextHelper(sqlite, o.id, helpers),
+      agentId: nextHelper(sqlite, o.id, helpers, votersOf(helpers)),
       instruction,
       role: 'vote',
       helperRole: null,
@@ -329,7 +338,7 @@ export function helperLines(sqlite: DatabaseSync, o: OrchRow): string[] {
   const helpers = helpersOf(o)
   if (!helpers) return []
   const lines = [
-    `Helpers: ${helpers.agentIds.join(', ')} (up to ${helpers.maxConcurrent} at once; ${helperStepsUsed(sqlite, o.id)} of ${helpers.maxSteps} helper steps used, outside your step limit). Hand them narrow read-only work with orch.assign(agent, instruction, role) where role is search, grep or audit. Ask them a multiple-choice question with orch.vote(question, options, k): a clear majority (70% or more) comes back as sharp; a split ${helpers.splitTo === 'person' ? 'goes to the person' : 'comes back to you to decide'}.`,
+    `Helpers: ${helpers.agentIds.join(', ')} (up to ${helpers.maxConcurrent} at once; ${helperStepsUsed(sqlite, o.id)} of ${helpers.maxSteps} helper steps used, outside your step limit). Hand them narrow read-only work with orch.assign(agent, instruction, role) where role is search, grep or audit. Ask ${helpers.voterIds.length > 0 ? `the voters (${helpers.voterIds.join(', ')})` : 'them'} a multiple-choice question with orch.vote(question, options, k): a clear majority (70% or more) comes back as sharp; a split ${helpers.splitTo === 'person' ? 'goes to the person' : 'comes back to you to decide'}.`,
   ]
   for (const vote of votesOf(sqlite, o.id).slice(-5)) {
     const options = JSON.parse(vote.options) as string[]
