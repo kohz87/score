@@ -195,11 +195,23 @@ export function registerTerminalRoutes(
               'ticket_invalid',
               'The terminal link is invalid or has expired. Open the terminal again.',
             )
-          // The agent's CLI is resolved again at open time: the agent may have changed in the ticket's 60 s.
-          const run =
-            redeemed.agent && options.agentRun
-              ? { agent: redeemed.agent, ...(await options.agentRun(redeemed.agent)) }
-              : undefined
+          // The agent's CLI is resolved again at open time: the agent may have changed in the ticket's 60 s. A ticket that
+          // names an agent never falls back to a login shell.
+          let run: { agent: string; file: string; args: string[]; cwd: string } | undefined
+          if (redeemed.agent) {
+            if (!options.agentRun)
+              throw new HttpError(403, 'ticket_invalid', 'Live sessions aren’t available here.')
+            try {
+              run = { agent: redeemed.agent, ...(await options.agentRun(redeemed.agent)) }
+            } catch (error) {
+              if (error instanceof HttpError) throw error
+              throw new HttpError(
+                409,
+                'conflict',
+                'This agent’s live session couldn’t start. Open it again.',
+              )
+            }
+          }
           ;(request as unknown as { terminalSession: string }).terminalSession = session
           ;(request as unknown as { terminalRun: typeof run }).terminalRun = run
         },

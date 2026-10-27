@@ -722,3 +722,32 @@ test('without a live-session resolver a ticket naming an agent is refused; an od
   })
   expect(odd.statusCode).toBe(400)
 })
+
+test('an agent that became unavailable after its ticket was minted opens nothing, and the ticket is used up (3.11.0)', async () => {
+  let available = true
+  const { app, home } = makeApp({}, undefined, {
+    agentRun: async () => {
+      if (!available) throw new Error('workspace gone')
+      return { file: '/bin/sh', args: ['-c', 'sleep 30'], cwd: home }
+    },
+  })
+  const cookie = await pair(app)
+  app.pairing.markFresh(cookie)
+  const minted = await app.inject({
+    method: 'POST',
+    url: '/api/terminal/tickets',
+    headers: { ...headers, cookie },
+    payload: { agent: 'builder' },
+  })
+  expect(minted.statusCode).toBe(200)
+  const ticket = TerminalTicketSchema.parse(minted.json()).ticket
+  available = false
+  await rejected(connect(app, ticket, cookie))
+  const sessions = await app.inject({
+    url: '/api/terminal/sessions',
+    headers: { ...headers, cookie },
+  })
+  expect(sessions.json().items).toEqual([])
+  available = true
+  await rejected(connect(app, ticket, cookie))
+})
