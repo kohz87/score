@@ -458,6 +458,17 @@ test('Score access offers Reload MCP once access and a key are set up, and says 
   mount(<ScoreAccessCard agent={agent} />)
   const card = await screen.findByRole('region', { name: 'Score access' })
   fireEvent.click(await within(card).findByRole('button', { name: 'Reload MCP' }))
+  // The question takes the focus; Cancel gives it back to the button.
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      within(card).getByRole('button', { name: 'Restart and reload' }),
+    ),
+  )
+  fireEvent.click(within(card).getByRole('button', { name: 'Cancel' }))
+  await waitFor(() =>
+    expect(document.activeElement).toBe(within(card).getByRole('button', { name: 'Reload MCP' })),
+  )
+  fireEvent.click(within(card).getByRole('button', { name: 'Reload MCP' }))
   fireEvent.click(within(card).getByRole('button', { name: 'Restart and reload' }))
   expect(await within(card).findByRole('alert')).toHaveProperty(
     'textContent',

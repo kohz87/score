@@ -23,10 +23,17 @@ export function ReloadMcp({
   const [error, setError] = useState<string | null>(null)
   const timers = useRef<number[]>([])
   const confirm = useRef<HTMLButtonElement>(null)
+  const opener = useRef<HTMLButtonElement>(null)
+  const cancelled = useRef(false)
   useEffect(() => () => timers.current.forEach((timer) => window.clearTimeout(timer)), [])
   // The button that opened the question is gone; the answer takes the focus.
   useEffect(() => {
     if (state === 'confirm') confirm.current?.focus()
+    // Cancel removes the focused button too: back to the one that asked.
+    if (state === 'idle' && cancelled.current) {
+      cancelled.current = false
+      opener.current?.focus()
+    }
   }, [state])
   const shared = agentId === 'default'
 
@@ -71,12 +78,20 @@ export function ReloadMcp({
           <button ref={confirm} type="button" className="btn sm" onClick={() => void reload()}>
             Restart and reload
           </button>
-          <button type="button" className="btn sm ghost" onClick={() => setState('idle')}>
+          <button
+            type="button"
+            className="btn sm ghost"
+            onClick={() => {
+              cancelled.current = true
+              setState('idle')
+            }}
+          >
             Cancel
           </button>
         </>
       ) : (
         <button
+          ref={opener}
           type="button"
           className="btn sm"
           disabled={state === 'busy'}
