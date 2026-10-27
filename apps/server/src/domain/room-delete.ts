@@ -5,6 +5,7 @@ import type { DomainEventDraft } from '../hub/ingest.ts'
 import { releaseMessageMedia, releaseShareMedia } from './media-refs.ts'
 import { isHeld, ownerOfRoom } from './orchestration/ownership.ts'
 import { pruneOrchestrationRows } from './orchestration/prune.ts'
+import { deleteJob } from './exchanges/job-life.ts'
 import { readOrch } from './orchestration/store.ts'
 import { compactingSessions, rewindingRooms } from './room-rewinding.ts'
 import { roomRow } from './rooms.ts'
@@ -103,6 +104,25 @@ export function deleteRoom(
     .prepare('SELECT id FROM orchestrations WHERE room_id = ?')
     .get(roomId) as { id: string } | undefined
   if (orchestration) pruneOrchestrationRows(sqlite, readOrch(sqlite, orchestration.id)!, nowIso)
+  // 3.7.12 (owner): the team-room job that started this run goes with it, as a job delete (undo brings it back). Its
+  // thread would otherwise stay in the Threads list pointing at a run that no longer exists.
+  const startedBy = orchestration
+    ? (
+        sqlite
+          .prepare(
+            'SELECT id FROM jobs WHERE recipe_ref = ? AND room_id != ? AND deleted_at IS NULL',
+          )
+          .all(orchestration.id, roomId) as { id: string }[]
+      ).flatMap((job) => {
+        // A job still working (a paused exchange, a pending turn) stays: the room delete isn't refused for it.
+        try {
+          return deleteJob(sqlite, job.id, nowIso)
+        } catch (error) {
+          if (error instanceof HttpError && error.status === 409) return []
+          throw error
+        }
+      })
+    : []
 
   const briefs = (
     sqlite.prepare('SELECT id FROM briefs WHERE room_id = ?').all(roomId) as { id: string }[]
@@ -174,5 +194,5 @@ export function deleteRoom(
   // A team's triggers go back to the first team room (3.6.0).
   sqlite.prepare('UPDATE triggers SET team_room_id = NULL WHERE team_room_id = ?').run(roomId)
   sqlite.prepare('DELETE FROM rooms WHERE id = ?').run(roomId)
-  return [{ type: 'room.deleted', data: { id: roomId } }]
+  return [...startedBy, { type: 'room.deleted', data: { id: roomId } }]
 }
