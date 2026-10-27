@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.5] — 2026-10-27
+
+### Fixed
+- **Coding agents can lead a room again.** Team lead… and New team offer Claude Code, Codex and Antigravity agents
+  (they lead the room's messages and hand-offs, as they could before 3.1.0). In a room a coding agent leads, Start a
+  job's "lead decides" asks **Who plans it** among your Hermes agents, since planning still needs a Hermes agent.
+
 ## [3.7.4] — 2026-10-27
 
 ### Fixed

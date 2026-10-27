@@ -55,3 +55,29 @@ test('Team lead offers ready Hermes agents, saves the choice and closes', async 
   expect(patches).toEqual([{ leadAgentId: agents[1]!.id }])
   expect(dialog.getAttribute('data-protected')).toBe('any')
 })
+
+test('a coding agent can lead too, with a note on who plans “lead decides” jobs (3.7.5)', async () => {
+  const coder = { ...agents[1]!, id: 'coder', name: 'coder', runtime: 'codex' as const }
+  const patches: unknown[] = []
+  vi.stubGlobal(
+    'fetch',
+    mockFetch((url, init) => {
+      const path = new URL(url, 'http://x').pathname
+      if (path === '/api/agents') return jsonResponse({ asOfSeq: 1, items: [...agents, coder] })
+      if (path === `/api/rooms/${room.id}` && init.method === 'PATCH') {
+        const body = JSON.parse(String(init.body)) as { leadAgentId: string }
+        patches.push(body)
+        return jsonResponse({ ...room, leadAgentId: body.leadAgentId })
+      }
+      return new Response(null, { status: 404 })
+    }),
+  )
+  const onClose = vi.fn()
+  renderInRoom(<TeamLeadDialog room={room} onClose={onClose} />)
+  const dialog = await screen.findByRole('dialog', { name: 'Team lead' })
+  fireEvent.click(await screen.findByRole('radio', { name: 'coder' }))
+  expect(dialog.textContent).toMatch(/planned by a Hermes\s+agent you pick/)
+  fireEvent.click(screen.getByRole('button', { name: 'Make lead' }))
+  await waitFor(() => expect(onClose).toHaveBeenCalled())
+  expect(patches).toEqual([{ leadAgentId: 'coder' }])
+})
