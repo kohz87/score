@@ -169,6 +169,30 @@ test('preflight on a live adapter explains what is missing: listener, MCP access
   // The writes switch is not required (v3.1).
   expect(h.access.get('lead').writesEnabled).toBe(false)
   expect(check(ready, 'tool_readiness').status).toBe('unknown')
+  expect(check(ready, 'tool_readiness').message).toContain("hasn't asked Score for its tools")
+  // 3.7.8: what Score's MCP server last handed the lead decides. An old list fails with "Reload MCP"; a full one passes.
+  const live = liveLike({ mcpAvailable: true, enabled: true, token: true })
+  h.access.recordListed('lead', ['rooms.list', 'orch.plan', 'orch.assign'])
+  const old = await live.preflight('lead', ['builder'])
+  expect(check(old, 'tool_readiness').status).toBe('fail')
+  expect(check(old, 'tool_readiness').message).toMatch(
+    /last handed a tool list without orch\.cancel.*Reload MCP/,
+  )
+  h.access.recordListed('lead', [
+    'orch.plan',
+    'orch.assign',
+    'orch.cancel',
+    'orch.ask',
+    'orch.requestApproval',
+    'orch.note',
+    'orch.finish',
+    'orch.receipt',
+  ])
+  const full = await live.preflight('lead', ['builder'])
+  expect(check(full, 'tool_readiness').status).toBe('ok')
+  // A new key means a new connection: the old list no longer counts.
+  h.access.issueToken('lead')
+  expect(h.access.listed('lead')).toBeNull()
   // An agent Hermes does not serve fails the check.
   const unserved = await liveLike({ mcpAvailable: true, enabled: true, token: true }).preflight(
     'lead',

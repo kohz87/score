@@ -1281,42 +1281,6 @@
   color: var(--chat-secondary);
   cursor: pointer;
 }
-.chat-menu {
-  position: absolute;
-  right: 0;
-  top: 40px;
-  z-index: 20;
-  min-width: 220px;
-  display: flex;
-  flex-direction: column;
-  padding: 6px;
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-16);
-  box-shadow: 0 10px 30px rgb(var(--shadow-rgb) / 14%);
-}
-.chat-menu > button,
-.chat-menu > a {
-  text-align: left;
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  padding: 0 var(--space-3);
-  border: 0;
-  border-radius: var(--radius-10);
-  background: none;
-  font: inherit;
-  font-size: 14px;
-  color: var(--ink);
-  text-decoration: none;
-  cursor: pointer;
-}
-.chat-menu > button:hover,
-.chat-menu > a:hover,
-.chat-menu > button:focus-visible,
-.chat-menu > a:focus-visible {
-  background: var(--subtle);
-}
 .chat-tags--filter {
   padding: 0 10px var(--space-2);
 }

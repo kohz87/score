@@ -41,3 +41,10 @@ export const McpTokenIssuedSchema = z.object({
   access: McpAccessSchema,
 })
 export type McpTokenIssued = z.infer<typeof McpTokenIssuedSchema>
+
+/** 3.7.9: `POST /api/agents/:agentId/mcp/reload`. `profile`: only this profile restarted in the shared gateway. */
+export const McpReloadResultSchema = z.object({
+  agentId: z.string(),
+  scope: z.enum(['profile', 'gateway']),
+})
+export type McpReloadResult = z.infer<typeof McpReloadResultSchema>

@@ -751,19 +751,30 @@ export class Orchestrator {
       'orch.finish',
       'orch.receipt',
     ]
+    // The adapter's answer where it can ask (fake); otherwise what Score's own MCP server last handed the lead (3.7.8).
+    const ownList = !leadProblem && !port.mcpTools
+    const handed = ownList ? access.listed(leadAgentId) : null
     const listed = leadProblem
       ? null
-      : ((await port.mcpTools?.(leadAgentId).catch(() => null)) ?? null)
+      : port.mcpTools
+        ? await port.mcpTools(leadAgentId).catch(() => null)
+        : (handed?.names ?? null)
     if (listed) {
       const missing = required.filter((name) => !listed.includes(name))
       add(
         'tool_readiness',
         missing.length ? 'fail' : 'ok',
         missing.length
-          ? `The lead's Hermes does not list ${missing.join(', ')}. Reload MCP (/reload-mcp in that profile, or restart its gateway), then try again.`
+          ? `The lead's Hermes ${handed ? 'was last handed a tool list without' : 'does not list'} ${missing.join(', ')}. Reload MCP (/reload-mcp in that profile, or restart its gateway), then try again.`
           : 'The lead sees every orch.* tool',
       )
-    } else
+    } else if (ownList)
+      add(
+        'tool_readiness',
+        'unknown',
+        "The lead's Hermes hasn't asked Score for its tools since its MCP key was set up. Reload MCP in that profile (/reload-mcp, or restart its gateway) so Score can check them.",
+      )
+    else
       add(
         'tool_readiness',
         fake ? 'ok' : 'unknown',

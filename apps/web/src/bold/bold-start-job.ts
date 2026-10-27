@@ -9,6 +9,8 @@ export type StartCheck = {
   key: string
   status: 'ok' | 'fail' | 'pending'
   text: string
+  /** 3.7.9: the lead's MCP tools are missing or unknown, so the line offers Reload MCP. */
+  reload?: boolean
 }
 
 /**

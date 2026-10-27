@@ -118,6 +118,11 @@ test('the composer sends a message that gets a streamed reply, and an /assign th
   const commands = page.getByRole('listbox', { name: 'Commands' })
   // /remember and /skill are not offered (501); /compress and /usage are the composer's own (PLAN 5.25).
   await expect(commands.getByRole('option')).toHaveCount(5)
+  // 3.7.8 (owner): every option is inside the list's box, not cut off after the first row.
+  const box = (await commands.boundingBox())!
+  const last = (await commands.getByRole('option').last().boundingBox())!
+  expect(box.height).toBeGreaterThan(4 * last.height)
+  expect(last.y + last.height).toBeLessThanOrEqual(box.y + box.height + 1)
   await composer.press('Enter')
   await expect(composer).toHaveValue('/assign ')
   await composer.pressSequentially('@bu')

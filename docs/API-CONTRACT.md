@@ -2019,6 +2019,12 @@ url; command; postsThisHour; postLimitPerHour }`. `available: false` (and `url`/
 - **H** `POST /api/agents/:agentId/mcp/token` → `{ token; access: McpAccess }`: creates or rotates (the old token stops
   working at once); the only response that carries the token (`Cache-Control: no-store`).
 - **H** `DELETE /api/agents/:agentId/mcp/token` → `McpAccess` (revokes).
+- **H** `POST /api/agents/:agentId/mcp/reload` → `McpReloadResult` `{ agentId; scope: 'profile' | 'gateway' }` (3.7.9,
+  decision 140): restarts the agent's gateway so its Hermes reconnects MCP and lists Score's tools again (`hermes -p
+  <agent> gateway restart`: a named profile restarts alone inside the shared gateway; `default` restarts the whole
+  gateway, which Hermes refuses while any session is live). `409 agent_busy` while Score sees a run, a queued start, an
+  active turn or a pending approval for that agent (for `default`: for any agent), or a reload already running; `502
+  gateway_restart_failed` when Hermes didn't confirm; `404` for an agent without a Hermes profile.
 
 `command` is text for the owner to run in a terminal; **Score never runs it** and never writes Hermes configuration for
 this: `hermes --profile <agentId> mcp add score --url http://127.0.0.1:<bridge port>/bridge/mcp --auth header`. Hermes
@@ -2293,7 +2299,7 @@ afterwards. Compaction keeps only the newest entry per run, hold target and rema
 
 - **Journal tombstones:** compaction turns each reconciled admission, Stop/Cancel fence and Finish/Pause/waiver/abandon transition into a permanent tombstone (same sequence number); a compacted `witness`, `send_refused` or `send_closed` becomes a tombstone that keeps the attempt, run and last generation, so an attempt with a dispatched generation always has a journal record and keeps a `checkpoint` so numbering never goes back; the file is replaced crash-safely (write, fsync, rename, fsync directory). Startup checks the database against tombstones, so a database older than any of them is detected after compaction. `finish`, `pause`/`resume`, `waiver`, `abandon`, cancel fences and fence lifts are journaled.
 - **`orch.assign { needsApproval: true }`** (lead-asks only; `not_lead_asks` otherwise) creates the gate in the assign call. `orch.requestApproval` on a step that already has an attempt → `already_admitted`.
-- **Preflight `tool_readiness`** asks the adapter which MCP tools the lead's serving Hermes lists (`HermesPort.mcpTools`): all `orch.*` present → ok; any missing → `fail` with "Reload MCP"; not establishable (the live adapter cannot ask yet) → `unknown` with the same instruction.
+- **Preflight `tool_readiness`** asks the adapter which MCP tools the lead's serving Hermes lists (`HermesPort.mcpTools`): all `orch.*` present → ok; any missing → `fail` with "Reload MCP"; not establishable → `unknown` with the same instruction. 3.7.8 (decision 139): an adapter without `mcpTools` (live) uses what Score's own MCP server last handed the lead on `tools/list` (`mcp_access.listed_tools`, cleared by a new or revoked key): all `orch.*` → ok, any missing → `fail`, never asked → `unknown` asking for a reload.
 - Capability recovery: never sent → new generation (older ones revoked in the same transaction); handle known → observe, no POST; possibly sent without handle → `unknown`, fenced, no replay.
 - Watch scoping to an attempt's session remains not done in 7.5a.
 

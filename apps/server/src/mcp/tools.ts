@@ -60,6 +60,11 @@ const failure = (message: string): CallToolResult => ({
   content: [{ type: 'text', text: message }],
 })
 
+/** The tool names each server registered, in order: what its `tools/list` hands the client (3.7.8). */
+const registered = new WeakMap<McpServer, string[]>()
+export const servedToolNames = (server: McpServer): readonly string[] =>
+  registered.get(server) ?? []
+
 /**
  * One MCP server per request, bound to the agent the bearer token named (contract §13). The agent id is a closure
  * value: no tool takes an agent argument, so a prompt-injected agent cannot act as another one. Every call re-checks the
@@ -73,6 +78,20 @@ export function createMcpServer(
 ): McpServer {
   const { db, access, ingest, port, knowledge, orchestrator, clock = Date.now } = deps
   const server = new McpServer({ name: 'score', version: '1' })
+  const names: string[] = []
+  registered.set(server, names)
+  const register = server.registerTool.bind(server)
+  // Every registration goes through here, so the list can't drift from what tools/list answers.
+  server.registerTool = ((
+    name: string,
+    ...rest: Parameters<typeof register> extends [string, ...infer R] ? R : never
+  ) => {
+    names.push(name)
+    return (register as (name: string, ...args: typeof rest) => ReturnType<typeof register>)(
+      name,
+      ...rest,
+    )
+  }) as typeof server.registerTool
 
   function guarded<A>(write: boolean, run: (args: A) => Promise<unknown> | unknown) {
     return async (args: A): Promise<CallToolResult> => {

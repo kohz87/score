@@ -311,6 +311,18 @@
   min-height: 32px;
 }
 
+/* 3.7.9: Reload MCP under the tool check's line. */
+[data-ui='bold'] .start-check-action {
+  display: block;
+  margin-top: 6px;
+}
+[data-ui='bold'] .bold-reload-mcp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 [data-ui='bold'] .start-error {
   margin: 0;
   color: var(--bad);

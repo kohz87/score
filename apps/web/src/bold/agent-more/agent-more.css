@@ -198,3 +198,10 @@
   background: color-mix(in srgb, var(--agent-saffron-name) 26%, transparent);
   color: var(--ink);
 }
+
+/* 3.7.9: Reload MCP on Score access. */
+[data-ui='bold'] .bold-mc-reload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
