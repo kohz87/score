@@ -1474,6 +1474,32 @@ const cases = [
   ],
   ['McpAccessPatchSchema', { enabled: true }, {}],
   [
+    'OrchestrationCheckSchema',
+    { command: 'pnpm test', workspace: '/home/user/repo', timeoutSec: 600, when: 'each_step' },
+    { command: 'pnpm test', workspace: 'relative/path' },
+  ],
+  ['CheckOutcomeSchema', 'timed_out', 'maybe'],
+  [
+    'CheckRunViewSchema',
+    {
+      id: 'chk-1',
+      reason: 'lead',
+      queuedAt: '2026-10-27T10:00:00.000Z',
+      startedAt: '2026-10-27T10:00:01.000Z',
+      endedAt: null,
+      exitCode: null,
+      outcome: 'running',
+      output: '',
+      current: false,
+    },
+    { id: 'chk-1', reason: 'model', queuedAt: 'x' },
+  ],
+  [
+    'OrchCheckArgsSchema',
+    { capability: `orc_${'a'.repeat(43)}`, commandId: 'c1' },
+    { commandId: 'c1' },
+  ],
+  [
     'McpReloadResultSchema',
     { agentId: 'builder', scope: 'profile' },
     { agentId: 'builder', scope: 'all' },

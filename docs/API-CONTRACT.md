@@ -2188,6 +2188,35 @@ group, leftPercent, resetsAt, otherAgents[] }`, the allowed agents not below the
 - History kinds: `quota_held`, `quota_override`, `quota_waited`.
 - `OrchAssignArgs` gains `ifQuotaLow?: 'ask_owner'`; `WorkflowRunCreate` gains `quotaFloorPercent?`.
 
+### The oracle: a check before finishing (3.13, decision 150; schemas in `packages/contract/src/orchestration.ts`)
+
+`OrchestrationCreate.check?: { command; workspace; timeoutSec?: 10–3600 (default 600); when?: 'finish'|'each_step' (default
+'finish') }`. Only the person sets it, at creation; nothing changes it later. `command` is one line split into arguments **without a
+shell** (whitespace separates; single and double quotes and backslash group; `| & ; < > $ * ? ( ) { } ~ #` and the backtick
+outside quotes are refused `400 invalid_check`, as are `$` and the backtick inside double quotes; a shell is only used when written out, e.g. `bash -lc '…'`). `workspace` must
+pass the Workspace tab's root rules (`400 invalid_check` with the reason; never Score's or Hermes's homes) and is stored resolved. A
+body with `check` needs the host security password (`403 second_factor_not_enrolled`) and a fresh second factor of this session, as
+for a terminal (`403 fresh_auth_required`; one confirmation is used up by one create). Shell syntax and the folder are checked first.
+
+Runs: the command runs as Score's user in the folder, its own process group, the terminal's six-variable environment plus `TERM=dumb`
+and `CI=1`; exit 0 passes. Timeout → `timed_out` (group killed). One run at a time per job; queued runs start only while the job is
+`running`; runs of a job that ends are `cancelled` (a running one is stopped). A run interrupted by a Score restart is `interrupted`.
+The last 64 KiB of output are kept, redacted. Each end adds a lead cause `check_passed` or `check_failed` (detail: exit code and last
+line); the lead's input shows the command, the last verdict and, for a failure, the last 8 KiB of output as quoted data.
+
+**Finish rule:** `orch.finish { outcome: 'success' }` is refused `check_running` while a run is queued or running, and `check_required`
+unless the latest run `passed` **and** started after every step attempt of the job terminated (none still live). `partial` and `failed`
+are never refused for this. `when: 'each_step'` also queues a run (reason `step`) after every step that succeeds.
+
+- `OrchestrationDetail.check?: { command; workspace; timeoutSec; when; runs: CheckRunView[] (newest first, ≤ 20); waivedAt } | null`;
+  `CheckRunView { id; reason: 'lead'|'step'|'person'; queuedAt; startedAt; endedAt; exitCode; outcome: 'queued'|'running'|'passed'|
+  'failed'|'timed_out'|'interrupted'|'refused'|'cancelled'; output; current }` (`current`: a pass that counts for finishing).
+- **H** `POST /api/orchestrations/:id/check/run` `RunControl` → `OrchestrationSummary`: the person queues a run (reason `person`);
+  `409` when the job has no check or is not running/paused.
+- **H** `POST /api/orchestrations/:id/check/waive` `RunControl` → `OrchestrationSummary`: "Finish without a passing check" (a protected
+  decision surface); records `check_waivedAt`, history `check_waived`, lead cause `check_waived`; success is then not refused.
+- History kinds: `check_set`, `check_requested`, `check_started`, `check_ended`, `check_waived`.
+
 A stale revision answers `409 conflict` with `details.currentRevision`. `GET /api/orchestrations/:id` also carries, per
 attempt, `state`, `evidence`, `unknownReason`, owed-Stop timestamps and spend, so the page can show "not confirmed ended".
 Not in stage A: the Watch replay scoped to an attempt's session (design v3 "Watch scope"); orchestration frames stay in the
@@ -2209,6 +2238,7 @@ agent incarnation; the capability binds (run, lead attempt, generation). Replies
 | `orch.ask { question ≤ 2 KiB }`                                              | Opens an inquiry (Needs you); the answer arrives in the next lead input as data                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `orch.note { text ≤ 2 KiB }`                                                 | A progress line in the run's room (agent message)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `orch.finish { outcome, summary }`                                           | Durable finish request: fences admissions, retires queued steps (`not_started: run_finishing`), withdraws open gates and inquiries, seals further commands, then drains. Succeeds only when every admitted attempt (the requesting one included) is terminated; otherwise `finished_with_unresolved`                                                                                                                                                                                                                                     |
+| `orch.check {}`                                                              | 3.13: queues a run of the person's check (no arguments: the lead can't set or change the command) → `{ checkId }`. Refused `no_check` when the job has none. Its result arrives as a cause in a new lead turn                                                                                                                                                                                                                                                                                                                         |
 | `orch.receipt { commandId }`                                                 | Returns a stored receipt (`not_found` if none) so the lead can verify after an uncertain reply                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Same `commandId` + same canonical payload → the stored receipt; different payload → `conflict`. A `retry` (the lead
