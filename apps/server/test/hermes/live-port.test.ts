@@ -433,5 +433,6 @@ test('stopping a run Hermes no longer has ends it in Score as lost (3.7.1)', asy
      INSERT INTO runs SELECT * FROM ghost; DROP TABLE ghost;`,
   )
   await live.stopRun({ agentId: 'builder', runId: 'run_ghost' })
-  await expect.poll(() => readRun(env.db.sqlite, 'run_ghost').status).toBe('interrupted')
+  // A stop of a forgotten run ends it as stopped, not as a failure (nothing retries it).
+  await expect.poll(() => readRun(env.db.sqlite, 'run_ghost').status).toBe('cancelled')
 })

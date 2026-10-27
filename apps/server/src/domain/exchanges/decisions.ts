@@ -314,8 +314,16 @@ export function stopAgentWork(sqlite: DatabaseSync, agentId: string, now: string
   // A queued turn ends like any turn that never started: its exchange hears it failed and waits on the person, and a
   // short notice says why (review: a bare state change stranded exchanges and placeholders).
   const queued = sqlite
-    .prepare("SELECT turn_id FROM message_runs WHERE agent_id = ? AND state = 'pending'")
+    .prepare(
+      "SELECT turn_id FROM message_runs WHERE agent_id = ? AND state = 'pending' AND orchestration_attempt_id IS NULL",
+    )
     .all(agentId) as { turn_id: string }[]
+  // An orchestration's own queued turns end as before, quietly: its executor owns their lifecycle.
+  sqlite
+    .prepare(
+      "UPDATE message_runs SET state = 'failed' WHERE agent_id = ? AND state = 'pending' AND orchestration_attempt_id IS NOT NULL",
+    )
+    .run(agentId)
   const drafts = queued.flatMap((row) =>
     failMessageRun(
       sqlite,

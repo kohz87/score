@@ -906,11 +906,14 @@ export class LivePort implements HermesPort {
         this.sink
       ) {
         await this.sink.submit(
-          runLostObservation({
-            profile: req.agentId,
-            runId: req.runId,
-            credentialGeneration: row.credential_generation ?? 0,
-          }),
+          runLostObservation(
+            {
+              profile: req.agentId,
+              runId: req.runId,
+              credentialGeneration: row.credential_generation ?? 0,
+            },
+            true,
+          ),
         )
         return
       }
