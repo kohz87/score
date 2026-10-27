@@ -86,6 +86,32 @@ export class CliLocator {
     this.cache.clear()
   }
 
+  /**
+   * The CLI's help text (3.7.7), for the version check only: `args` are a declaration's help arguments, never a prompt.
+   * Null when it can't be read; the caller never shows or stores the text.
+   */
+  help(driver: CodingDriver, args: readonly string[]): Promise<string | null> {
+    if (this.options.disabled) return Promise.resolve(null)
+    const command = this.command(driver)
+    const file = this.fake
+      ? command.file
+      : resolveOnPath(command.file, (this.options.env ?? process.env).PATH)
+    if (file === null) return Promise.resolve(null)
+    return new Promise((resolve) => {
+      execFile(
+        file,
+        [...command.args, ...args],
+        {
+          env: this.childEnv(),
+          timeout: this.options.probeTimeoutMs ?? (this.fake ? 60_000 : 10_000),
+          maxBuffer: 512 * 1024,
+          windowsHide: true,
+        },
+        (error, stdout) => resolve(error ? null : stdout),
+      )
+    })
+  }
+
   /** `fresh` skips the cache: used right before a spawn, where a stale reading must not decide. */
   async detect(driver: CodingDriver, { fresh = false } = {}): Promise<DetectedCli> {
     const now = (this.options.clock ?? Date.now)()

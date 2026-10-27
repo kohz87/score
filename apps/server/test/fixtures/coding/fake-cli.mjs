@@ -28,6 +28,14 @@ if (args.includes('--version')) {
   process.exit(0)
 }
 
+// 3.7.7: the help text the version check reads (an excerpt of the real one), or SCORE_CODING_FAKE_HELP's file instead.
+if (args.includes('--help')) {
+  const file = process.env.SCORE_CODING_FAKE_HELP ?? join(here, 'help', `${runtime}.txt`)
+  if (!existsSync(file)) process.exit(1)
+  process.stdout.write(readFileSync(file, 'utf8'))
+  process.exit(0)
+}
+
 // Antigravity takes the prompt as the value of -p; the others read it from stdin.
 let prompt = ''
 if (runtime === 'antigravity') prompt = args[args.indexOf('-p') + 1] ?? ''

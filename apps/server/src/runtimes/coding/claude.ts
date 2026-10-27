@@ -561,6 +561,49 @@ export const claudeDriver: CodingDriver = {
         '/etc/claude-code/CLAUDE.md',
       ]
     },
+    help: {
+      args: ['--help'],
+      // The wording of 2.1.311 (2026-10-27). Lists that grow (permission modes) are checked for the entries Score uses.
+      flags: [
+        { flag: '--print', phrases: ['Print response and exit'] },
+        { flag: '--output-format', phrases: ['"stream-json" (realtime streaming)'] },
+        { flag: '--verbose', phrases: ['Override verbose mode setting from config'] },
+        { flag: '--model', phrases: ['Model for the current session.'] },
+        { flag: '--resume', phrases: ['Resume a conversation by session ID'] },
+        {
+          flag: '--permission-mode',
+          phrases: ['Permission mode to use for the session', '"dontAsk"', '"acceptEdits"'],
+        },
+        {
+          flag: '--permission-prompts',
+          phrases: ['"none" (nobody: anything that would prompt is denied automatically'],
+        },
+        {
+          flag: '--tools',
+          phrases: [
+            'Specify the list of available tools from the built-in set. Use "" to disable all tools',
+          ],
+        },
+        { flag: '--disallowed-tools', phrases: ['list of tool names to deny'] },
+        { flag: '--allowed-tools', phrases: ['list of tool names to allow'] },
+        {
+          flag: '--settings',
+          phrases: [
+            'Path to a settings JSON file or a JSON string to load additional settings from',
+          ],
+        },
+        {
+          flag: '--setting-sources',
+          phrases: ['Comma-separated list of setting sources to load (user, project, local).'],
+        },
+        {
+          flag: '--strict-mcp-config',
+          phrases: [
+            'Only use MCP servers from --mcp-config, ignoring all other MCP configurations',
+          ],
+        },
+      ],
+    },
     reach: (permission, workspace) =>
       permission === 'read-only'
         ? {
