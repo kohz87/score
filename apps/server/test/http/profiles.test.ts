@@ -988,3 +988,46 @@ test('stop-work ends an agent’s queued turns and asks its running ones to stop
     { parts: string } | undefined
   expect(notice?.parts).toContain('stopped before it started')
 })
+
+test('a delete Hermes didn’t finish can be retried on the same folder, then removes the agent (3.7.3)', async () => {
+  const { HttpError } = await import('../../src/errors.ts')
+  const added = await create()
+  await finished(added.id)
+  const real = port.profileStep.bind(port)
+  let refuse = true
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step, context) => {
+    if (step === 'delete_profile' && refuse)
+      throw new HttpError(409, 'conflict', 'The CLI refused or didn’t confirm this step.')
+    return real(step, context)
+  })
+  const preview = (
+    await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })
+  ).json()
+  const removed = await mutate(
+    '/api/agents/helper',
+    { typedName: 'helper', previewHash: preview.hash },
+    'DELETE',
+  )
+  const opId = removed.json().id as string
+  const stuck = await finished(opId)
+  expect(stuck).toMatchObject({ state: 'needs_attention', nextStep: 'delete_profile' })
+  // Reading it (the panel polls) finds the same folder still there: Retry is offered.
+  const read = (
+    await app.inject({
+      url: `/api/agents/operations/${opId}`,
+      headers: { 'x-score-client': 'web', cookie },
+    })
+  ).json()
+  expect(read.retryable).toBe(true)
+  refuse = false
+  const retried = await mutate(`/api/agents/operations/${opId}/retry`, {}, 'POST', {
+    'idempotency-key': 'retry-delete',
+  })
+  expect(retried.statusCode).toBe(200)
+  await vi.waitFor(async () => expect((await finished(opId)).state).toBe('completed'), {
+    timeout: 5000,
+  })
+  expect((await app.inject('/api/agents/helper')).json()).toMatchObject({
+    lifecycle: { state: 'removed' },
+  })
+})

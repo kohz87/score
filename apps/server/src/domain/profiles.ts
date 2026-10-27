@@ -499,7 +499,8 @@ export class ProfileOperations {
   }
   /**
    * A person retries a step that failed with a recorded error after fixing its cause. Only steps whose repeat is
-   * harmless qualify; creating the profile, installing the plugin and the delete itself never run twice.
+   * harmless qualify; creating the profile and installing the plugin never run twice, and the delete only on the same
+   * folder it began on (see `refresh`).
    */
   retry(id: string) {
     const operation = this.get(id)
@@ -567,11 +568,36 @@ export class ProfileOperations {
     this.launch(id)
     return operation
   }
-  refresh(id: string) {
+  async refresh(id: string) {
     const operation = this.get(id)
     if (operation.state === 'needs_attention' && operation.nextStep === 'verify_ready')
       this.launch(id)
+    // 3.7.3: a delete Hermes didn't finish (its gateway still owned the profile and recreated folders while it was being
+    // removed; Hermes says "retry the delete once it settles") may be retried — but only on the very folder Score
+    // recorded when the removal began, or once it is gone: a new profile with the same name is never deleted.
+    if (
+      operation.state === 'needs_attention' &&
+      operation.kind === 'delete' &&
+      operation.nextStep === 'delete_profile' &&
+      !operation.retryable &&
+      (await this.deleteRetrySafe(operation))
+    ) {
+      operation.retryable = true
+      await this.save(operation)
+    }
     return operation
+  }
+  private async deleteRetrySafe(operation: AgentOperation): Promise<boolean> {
+    const recorded = this.db.sqlite
+      .prepare('SELECT target_identity FROM profile_operations WHERE id = ?')
+      .get(operation.id) as { target_identity: string | null } | undefined
+    const inventory = ProfileInventorySchema.parse(
+      await this.port.profileInventory(operation.targetName),
+    )
+    return (
+      !inventory.exists ||
+      (recorded?.target_identity != null && inventory.identity === recorded.target_identity)
+    )
   }
   private async save(operation: AgentOperation, identity?: string | null) {
     await this.ingest.submit({

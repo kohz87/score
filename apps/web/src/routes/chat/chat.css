@@ -1022,6 +1022,18 @@
   opacity: 0.6;
   cursor: default;
 }
+/* Stop is an icon (a red rounded square): the reply's own Stop is a small round button. */
+.chat-stop-reply {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+.chat-send--stop[aria-busy='true'] .stop-icon,
+.chat-stop-reply[aria-busy='true'] .stop-icon {
+  opacity: 0.5;
+}
 .chat-send--stop {
   background: var(--card);
   color: var(--ink);
