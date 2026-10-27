@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.2] — 2026-10-27
+
+### Fixed
+- **A job that wouldn't stop.** Hermes can accept a Stop and never end the run (one stuck on an approval it forgot).
+  Pressing Stop again at least 5 seconds later now ends it in Score as stopped, so the job and the agent are free; the
+  Remove panel offers "Stop … anyway" for the same case. (A second Stop means "stop it now": a run that was only slow
+  to finish is ended in Score too.)
+- The Stop button in a one-to-one is a pill that fits the word.
+
 ## [3.7.1] — 2026-10-27
 
 ### Fixed
