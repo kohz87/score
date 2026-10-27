@@ -58,8 +58,21 @@ export const StartRunSchema = z.object({
   provider: z.string().min(1).optional(),
   // Media ids only: bytes are read when the request is sent (never stored in the intent).
   images: z.array(z.string().min(1)).max(16).optional(),
+  /**
+   * Hermes' per-run extra system prompt. Frozen in the intent when it is created: Hermes fingerprints the whole body for
+   * the idempotency key, so a start recovered after an upgrade must send what it first sent.
+   */
+  instructions: z.string().min(1).optional(),
 })
 export type StartRun = z.infer<typeof StartRunSchema>
+
+/**
+ * 3.7.11 (decision 141): Hermes tells a model on its API server that "the rendering layer is unknown — assume plain text.
+ * No markdown". Score renders GitHub Markdown, so every run carries this as its extra system prompt (`instructions`,
+ * which Hermes appends after its own, so it wins). Set on each new run intent (intents.ts).
+ */
+export const SCORE_RENDERING_NOTE =
+  '[Score] Your replies are shown in Score, which renders GitHub-flavoured Markdown. Use headings, lists, bold, code blocks and tables where they help. A table needs a header row, then a separator row such as | --- | --- |. This replaces any instruction to answer in plain text.'
 const AdmissionSchema = z.object({
   run_id: z.string().min(1),
   status: UpstreamStatusSchema,
@@ -323,13 +336,15 @@ export class GatewayClient {
     generation?: number,
     wireInput?: unknown,
   ) {
-    const { profile, input, sessionId, model, provider } = StartRunSchema.parse(request)
+    const { profile, input, sessionId, model, provider, instructions } =
+      StartRunSchema.parse(request)
     const result = await this.json(
       profile,
       '/v1/runs',
       AdmissionSchema,
       {
         input: wireInput ?? input,
+        ...(instructions === undefined ? {} : { instructions }),
         ...(sessionId === undefined ? {} : { session_id: sessionId }),
         ...(model === undefined ? {} : { model }),
         ...(provider === undefined ? {} : { provider }),

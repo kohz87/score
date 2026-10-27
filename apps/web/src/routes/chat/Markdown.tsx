@@ -12,6 +12,7 @@ import { Link, useInRouterContext, useNavigate } from 'react-router'
 import remarkGfm from 'remark-gfm'
 import { copyText } from '../../data/clipboard.ts'
 import { normalizeBullets } from './bullets.ts'
+import { normalizeTables } from './tables.ts'
 import { normalizeLanguage, tokenize } from './highlight.ts'
 import { isWorkspaceHref, parseWorkspaceLink, type WorkspaceTarget } from './workspace-link.ts'
 
@@ -196,7 +197,10 @@ export function Markdown({
         // `workspace:` is ours (it only ever becomes an in-app link); every other scheme keeps the default filter.
         urlTransform={(url) => (isWorkspaceHref(url) ? url : defaultUrlTransform(url))}
       >
-        {normalizeBullets(shown)}
+        {
+          // While a reply streams, its last row is often half written: tables are found once it is complete.
+          streaming ? normalizeBullets(shown) : normalizeTables(normalizeBullets(shown))
+        }
       </ReactMarkdown>
     </div>
   )
