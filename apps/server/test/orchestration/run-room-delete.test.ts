@@ -82,3 +82,19 @@ test('a starting job that is still working stays, and the room is deleted anyway
     ).deleted_at,
   ).toBeNull()
 })
+
+test('a deleted run room is no doubt at the next start: its journal handles belong to a pruned run (3.8.4)', async () => {
+  const { GlobalFenceStore } = await import('../../src/domain/orchestration/fence.ts')
+  h = await harness()
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => h.orch.summary(id).status === 'succeeded')
+  const roomId = h.orch.summary(id).roomId
+  const name = (
+    h.db.sqlite.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string }
+  ).name
+  // The journal still holds the run's handles (nothing compacted it).
+  const own = h.journal.readOwn()
+  expect(own.ok && own.entries.some((entry) => entry.kind === 'run_handle')).toBe(true)
+  h.db.tx((sqlite) => deleteRoom(sqlite, roomId, name, new Date().toISOString()))
+  expect(new GlobalFenceStore(h.db, h.journal).startupCheck().fenced).toBe(false)
+})
