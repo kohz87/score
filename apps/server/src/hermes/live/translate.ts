@@ -565,17 +565,21 @@ export function runStatusObservation(context: RunContext, run: GatewayRun): Obse
   }
 }
 
-/** Hermes forgot the run (its record outlived the 24 h retention): end it visibly instead of waiting forever. */
-export function runLostObservation(context: RunContext): Observation {
+/**
+ * Hermes forgot the run (its record outlived the 24 h retention): end it visibly instead of waiting forever. `stopped`: the person (or Score) asked it to stop and Hermes no longer had it (3.7.1) — it
+ * ends as stopped, not interrupted, so nothing treats it as a failure to retry. Same identity as the follower's own.
+ */
+export function runLostObservation(context: RunContext, stopped = false): Observation {
   return {
     source: `run-sse:${context.profile}`,
     identity: `run_lost:${context.runId}`,
     apply({ sqlite, now }) {
       const row = readRun(sqlite, context.runId)
       if (runLifecycle.isTerminal(row.status)) return []
+      const status = stopped ? 'cancelled' : 'interrupted'
       const error = 'Hermes no longer has a record of this run'
       const changed = updateRun(sqlite, row, now, {
-        status: 'interrupted',
+        status,
         ended_at: now,
         error,
       })
@@ -585,7 +589,7 @@ export function runLostObservation(context: RunContext): Observation {
         ...closeRunQuestions(sqlite, row.id, now),
         ...completeRunMessage(sqlite, row.id, now, {
           handoffs: false,
-          status: 'interrupted',
+          status,
           error,
         }),
       ]
