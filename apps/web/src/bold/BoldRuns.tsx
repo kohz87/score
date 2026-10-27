@@ -22,6 +22,7 @@ import {
   useRun,
   useRunActions,
 } from '../routes/orchestrations/orchestration-queries.ts'
+import { AdvisorCard } from '../routes/orchestrations/AdvisorCard.tsx'
 import { CheckCard } from '../routes/orchestrations/CheckCard.tsx'
 import { AgentChip, RunNeeds } from '../routes/orchestrations/RunDecisions.tsx'
 import {
@@ -486,6 +487,7 @@ function OrchestrationRun({
             steps={detail.steps.succeeded}
             approvals={detail.gates.filter((gate) => gate.decidedAt !== null).length}
           />
+          <AdvisorCard run={detail} agents={agents} />
           <CheckCard run={detail} actions={actions} />
           <FinishBlock run={detail} />
         </>

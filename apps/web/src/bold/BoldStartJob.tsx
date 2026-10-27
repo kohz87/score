@@ -300,6 +300,8 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const [planner, setPlanner] = useState<string | null>(null)
   // 3.13: the oracle. The folder stays derived (the first chosen coding agent's workspace) until the person types one.
   const [checkCommand, setCheckCommand] = useState('')
+  // 3.14: the advisor; '' = none. Derived below so a lead change to the same agent clears it.
+  const [advisorPick, setAdvisorPick] = useState('')
   const [checkFolder, setCheckFolder] = useState<string | null>(null)
   const [checkEachStep, setCheckEachStep] = useState(false)
   const [checkMinutes, setCheckMinutes] = useState('10')
@@ -326,7 +328,14 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const workflowDefinition = workflow.data?.latest.definition
   const workflowVersion = workflow.data?.latestVersion
   const workflowPreflight = useWorkflowPreflight(selectedWorkflowId, workflowVersion)
-  const orchestrationPreflight = usePreflight(leadId, allowedFor)
+  const advisorId =
+    advisorPick !== '' && advisorPick !== leadId && agents.some((agent) => agent.id === advisorPick)
+      ? advisorPick
+      : ''
+  // The advisor runs as a step, so the preflight checks it like an allowed agent (its policy and reach included).
+  const preflightAgents =
+    advisorId !== '' && !allowedFor.includes(advisorId) ? [...allowedFor, advisorId] : allowedFor
+  const orchestrationPreflight = usePreflight(leadId, preflightAgents)
   const codingAgents = useQuery({
     queryKey: ['coding', 'agents'],
     queryFn: async ({ signal }) =>
@@ -703,6 +712,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       goal: what.trim(),
       leadAgentId: leadId,
       allowedAgents: allowedFor,
+      ...(advisorId !== '' ? { advisorAgentId: advisorId } : {}),
       gatePolicy: orchestrationPolicy(ask),
       ...(cap > 0 ? { budgetUsd: cap } : {}),
       ...(deadlineAt ? { deadlineAt } : {}),
@@ -1272,6 +1282,33 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                     ))}
                   </div>
                 </fieldset>
+              )}
+
+              {isLead && (
+                <label className="start-field start-advisor">
+                  <span>Advisor</span>
+                  <select
+                    value={advisorId}
+                    onChange={(event) => {
+                      setAdvisorPick(event.target.value)
+                      touch()
+                    }}
+                  >
+                    <option value="">None</option>
+                    {agents
+                      .filter((agent) => agent.id !== leadId)
+                      .map((agent) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </option>
+                      ))}
+                  </select>
+                  <span className="small muted">
+                    A strong model Score asks before the plan, when a failure repeats, and before it
+                    finishes. Its advice goes to the lead; the lead decides. Choose an agent set up
+                    for reviewing: it runs with its own tools.
+                  </span>
+                </label>
               )}
 
               {isLead && (

@@ -8,6 +8,7 @@ import { LiveDiagram } from './LiveDiagram.tsx'
 import { LiveLog } from './LiveLog.tsx'
 import {
   buildGraph,
+  leadSteps,
   eventEffect,
   filterLog,
   isRunOver,
@@ -37,7 +38,7 @@ import './orchestrations.css'
 /** Visual of every step from the snapshot (the authority while the run is live). */
 function liveVisuals(run: OrchestrationDetail): Map<string, NodeVisual> {
   return new Map(
-    run.stepsList.map((step) => [
+    leadSteps(run.stepsList).map((step) => [
       step.id,
       stepVisual(
         step,
@@ -72,7 +73,10 @@ export function OrchestrationLive({
   const [selected, setSelected] = useState<string | null>(null)
   const detail = run.data?.snapshot.orchestration
   const events: OrchEvent[] = useMemo(() => run.data?.events ?? [], [run.data])
-  const known = useMemo(() => new Set(detail?.stepsList.map((step) => step.id)), [detail])
+  const known = useMemo(
+    () => new Set(leadSteps(detail?.stepsList ?? []).map((step) => step.id)),
+    [detail],
+  )
   const {
     replaying,
     count,
@@ -99,7 +103,7 @@ export function OrchestrationLive({
     const running = liveVisuals(detail)
     return [
       ...(liveLead(detail) === 'working' ? [{ id: detail.leadAgentId, working: true }] : []),
-      ...detail.stepsList
+      ...leadSteps(detail.stepsList)
         .filter((step) => running.get(step.id) === 'running')
         .map((step) => ({ id: step.agentId, working: true })),
     ]
@@ -134,7 +138,11 @@ export function OrchestrationLive({
 
   const visuals = replaying ? replay.steps : liveVisuals(detail)
   const hidden = replaying
-    ? new Set(detail.stepsList.filter((step) => !replay.steps.has(step.id)).map((s) => s.id))
+    ? new Set(
+        leadSteps(detail.stepsList)
+          .filter((step) => !replay.steps.has(step.id))
+          .map((s) => s.id),
+      )
     : undefined
   const runtimeOfStep = new Map(
     detail.stepsList.map((item) => [
@@ -148,7 +156,7 @@ export function OrchestrationLive({
     ...event,
     badge: event.stepId ? (runtimeOfStep.get(event.stepId) ?? null) : null,
   }))
-  const step = detail.stepsList.find((item) => item.id === selected)
+  const step = leadSteps(detail.stepsList).find((item) => item.id === selected)
   const over = isRunOver(detail.status)
 
   return (

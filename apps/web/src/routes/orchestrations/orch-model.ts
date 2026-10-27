@@ -111,12 +111,18 @@ export interface GraphEdge {
   label?: string
 }
 
+/** 3.14: the steps that are the lead's work; an advisor's consults are shown in the Advisor card instead. */
+export const leadSteps = <T extends { role?: string | null }>(steps: readonly T[]): T[] =>
+  steps.filter((step) => step.role !== 'advisor')
+
 /** A lead node plus one node per step; edges from `after` and `replaces` (dashed); the lead feeds steps with no `after`. */
 export function buildGraph(
   detail: Pick<OrchestrationDetail, 'leadAgentId' | 'stepsList'>,
   visibleSteps?: ReadonlySet<string>,
 ): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const steps = detail.stepsList.filter((step) => !visibleSteps || visibleSteps.has(step.id))
+  const steps = leadSteps(detail.stepsList).filter(
+    (step) => !visibleSteps || visibleSteps.has(step.id),
+  )
   const ids = new Set(steps.map((step) => step.id))
   const nodes: GraphNode[] = [
     { id: LEAD_NODE, kind: 'lead', agentId: detail.leadAgentId, label: 'Lead' },

@@ -1037,3 +1037,30 @@ button.orch-primary,
 .orch-check-waive {
   margin-top: 8px;
 }
+
+/* 3.14: the advisor card reuses the check card's look. */
+.orch-advisor {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 14px var(--space-4);
+  margin-top: 16px;
+  min-width: 0;
+}
+.orch-advisor-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.orch-advisor-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.orch-advisor-advice {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -191,6 +191,7 @@ let triggerBody: unknown
 /** 3.13: calls the oracle tests watch, in order, and what the orchestration POST answers. */
 let calls: string[] = []
 let orchestrationBodies: Record<string, unknown>[] = []
+let preflightUrls: string[] = []
 let orchestrationReply: () => Response = () =>
   Response.json({ error: { code: 'internal', message: 'no' } }, { status: 500 })
 let extraWorkflows: (typeof workflow)[] = []
@@ -205,6 +206,7 @@ beforeEach(() => {
   triggerBody = undefined
   calls = []
   orchestrationBodies = []
+  preflightUrls = []
   extraWorkflows = []
   window.localStorage.clear()
   window.history.replaceState(null, '', '/')
@@ -263,6 +265,7 @@ beforeEach(() => {
         return Promise.resolve(workflowRunReply())
       }
       if (url.pathname === '/api/orchestrations/preflight') {
+        preflightUrls.push(url.searchParams.get('allowedAgents') ?? '')
         const check = orchestrationCheck(!preflightFails)
         if (toolsListed)
           check.checks.push({
@@ -759,4 +762,43 @@ test('a job without a check posts none and starts without the password prompt (3
   await waitFor(() => expect(calls).toEqual(['orchestrations']))
   expect(orchestrationBodies[0]).not.toHaveProperty('check')
   expect(within(dialog).queryByRole('form', { name: 'Confirm it’s you' })).toBeNull()
+})
+
+test('an advisor is optional, checked in the preflight, sent by id, and cleared when it becomes the lead (3.14)', async () => {
+  codingLead = 'coder'
+  try {
+    open('/b?start=job')
+    const dialog = await startDialog()
+    const advisor = within(dialog).getByLabelText(/^Advisor/) as HTMLSelectElement
+    expect(advisor.value).toBe('')
+    expect(within(dialog).getByText(/the lead decides/)).toBeDefined()
+    // The lead itself is not offered.
+    expect(within(advisor).queryByRole('option', { name: 'lead' })).toBeNull()
+    fireEvent.change(advisor, { target: { value: 'builder' } })
+    await waitFor(() =>
+      expect(preflightUrls.some((ids) => ids.split(',').includes('builder'))).toBe(true),
+    )
+    const start = await fillLeadJob(dialog)
+    fireEvent.click(start)
+    await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+    expect(orchestrationBodies[0]).toMatchObject({ advisorAgentId: 'builder' })
+
+    // Making the advisor the planner resets the choice.
+    fireEvent.change(within(dialog).getByLabelText('Who plans it'), {
+      target: { value: 'builder' },
+    })
+    await waitFor(() =>
+      expect((within(dialog).getByLabelText(/^Advisor/) as HTMLSelectElement).value).toBe(''),
+    )
+  } finally {
+    codingLead = null
+  }
+})
+
+test('no advisor means no advisorAgentId in the body (3.14)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]).not.toHaveProperty('advisorAgentId')
 })
