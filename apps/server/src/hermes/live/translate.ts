@@ -565,9 +565,8 @@ export function runStatusObservation(context: RunContext, run: GatewayRun): Obse
   }
 }
 
-/** Hermes forgot the run (its record outlived the 24 h retention): end it visibly instead of waiting forever. */
 /**
- * Hermes forgot the run. `stopped`: the person (or Score) asked it to stop and Hermes no longer had it (3.7.1) — it
+ * Hermes forgot the run (its record outlived the 24 h retention): end it visibly instead of waiting forever. `stopped`: the person (or Score) asked it to stop and Hermes no longer had it (3.7.1) — it
  * ends as stopped, not interrupted, so nothing treats it as a failure to retry. Same identity as the follower's own.
  */
 export function runLostObservation(context: RunContext, stopped = false): Observation {
