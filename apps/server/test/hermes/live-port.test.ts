@@ -415,3 +415,23 @@ test('FT #5: a frozen home refuses routine runs and task actions that start work
     live.taskAction({ taskId: 't_x', action: 'comment', text: 'hi' }),
   ).rejects.not.toMatchObject({ code: 'execution_frozen' })
 })
+
+test('stopping a run Hermes no longer has ends it in Score as lost (3.7.1)', async () => {
+  const live = create()
+  await live.start(env.ingest)
+  const started = await live.startRun({
+    agentId: 'builder',
+    input: 'hello',
+    turnId: 'ghost-source',
+    model: 'fixture-model',
+  })
+  await expect.poll(() => readRun(env.db.sqlite, started.runId).status).toBe('completed')
+  // A run Score still thinks is running, which Hermes has never heard of (parked, then forgotten).
+  env.db.sqlite.exec(
+    `CREATE TEMP TABLE ghost AS SELECT * FROM runs WHERE id = '${started.runId}';
+     UPDATE ghost SET id = 'run_ghost', status = 'running', ended_at = NULL, score_turn_id = 'ghost-turn';
+     INSERT INTO runs SELECT * FROM ghost; DROP TABLE ghost;`,
+  )
+  await live.stopRun({ agentId: 'builder', runId: 'run_ghost' })
+  await expect.poll(() => readRun(env.db.sqlite, 'run_ghost').status).toBe('interrupted')
+})

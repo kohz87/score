@@ -983,4 +983,8 @@ test('stop-work ends an agent’s queued turns and asks its running ones to stop
   const after = (await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })).json()
   expect(after.pendingWork).toMatchObject({ activeRuns: 0, queuedTurns: 0 })
   expect(after.blockers).toEqual([])
+  // The queued turn ended with a notice in its room, not silently.
+  const notice = env.db.sqlite.prepare("SELECT parts FROM messages WHERE id = 'reply'").get() as
+    { parts: string } | undefined
+  expect(notice?.parts).toContain('stopped before it started')
 })

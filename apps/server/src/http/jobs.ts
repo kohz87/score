@@ -91,7 +91,7 @@ export function registerJobRoutes(
   // 3.7.1: before removing an agent, stop what it is doing and drop what it has queued.
   app.post('/api/agents/:agentId/stop-work', mutation, async (request) => {
     const { agentId } = z.object({ agentId: z.string().min(1).max(128) }).parse(request.params)
-    await decide((sqlite) => stopAgentWork(sqlite, agentId))
+    await decide((sqlite, now) => stopAgentWork(sqlite, agentId, now))
     return { ok: true }
   })
   app.post('/api/jobs/:jobId/stop', mutation, async (request) => {

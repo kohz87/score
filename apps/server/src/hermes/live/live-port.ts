@@ -68,7 +68,13 @@ import { readApprovalConfig, updateProfileApprovals } from './approvals.ts'
 import type { ApprovalConfig } from '../approvals.ts'
 import { cachingRunner } from './config-cache.ts'
 import { runHermes, type HermesRunner, type HermesSpawner } from './cli.ts'
-import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
+import {
+  readRun,
+  RunRowSchema,
+  runLifecycle,
+  runLostObservation,
+  type RunMetrics,
+} from './translate.ts'
 import { LiveProfileManagement } from './profile-management.ts'
 import { BotScreens } from './bot-screen.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
@@ -888,7 +894,28 @@ export class LivePort implements HermesPort {
     const row = readRun(db.sqlite, req.runId)
     if (row.profile !== req.agentId)
       throw new HttpError(404, 'not_found', 'Couldn’t find that run.')
-    await gateway.stopRun(req.agentId, req.runId, row.credential_generation ?? undefined)
+    try {
+      await gateway.stopRun(req.agentId, req.runId, row.credential_generation ?? undefined)
+    } catch (error) {
+      // 3.7.1: Hermes no longer has the run (it was lost, or ended while nobody followed it). Stopping it means ending
+      // Score's record the way a lost run ends, so its turn and the agent are free again.
+      if (
+        error instanceof HermesHttpError &&
+        error.status === 404 &&
+        error.code === 'run_not_found' &&
+        this.sink
+      ) {
+        await this.sink.submit(
+          runLostObservation({
+            profile: req.agentId,
+            runId: req.runId,
+            credentialGeneration: row.credential_generation ?? 0,
+          }),
+        )
+        return
+      }
+      throw error
+    }
   }
   rewindSession(req: Parameters<HermesPort['rewindSession']>[0]) {
     return rewindSession(req, {
