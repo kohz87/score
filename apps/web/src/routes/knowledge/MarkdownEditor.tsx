@@ -34,6 +34,8 @@ type Props = {
   onNotice?: (message: string | null) => void
   /** Keyboard shortcuts that need the toolbar's dialog. */
   onShortcut?: (name: 'link') => void
+  /** The note's path: where a table's dragged column widths are remembered (3.8.3). */
+  tableKey?: string
 }
 
 // Wikilink autocomplete after `[[` (adapted from the behaviour of the owner's Artemis editor; code written for Score).
@@ -79,6 +81,7 @@ export function MarkdownEditor({
   onState,
   onNotice,
   onShortcut,
+  tableKey,
 }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const latest = useRef({
@@ -107,6 +110,8 @@ export function MarkdownEditor({
   const mode = useRef(new Compartment())
   const access = useRef(new Compartment())
   const initialSource = useRef(source)
+  // The editor is remounted for another note (its key), so the path it opened with is the one its tables belong to.
+  const tableKeyRef = useRef(tableKey)
   const initialReadOnly = useRef(readOnly)
   useEffect(() => {
     viewRef.current?.dispatch({ effects: refreshLive.of(null) })
@@ -117,7 +122,7 @@ export function MarkdownEditor({
     if (!view) return
     view.dispatch({
       effects: [
-        mode.current.reconfigure(modeExtensions(source, latest)),
+        mode.current.reconfigure(modeExtensions(source, latest, tableKeyRef.current)),
         setLiveFocus.of(view.hasFocus),
       ],
     })
@@ -158,7 +163,7 @@ export function MarkdownEditor({
             ...historyKeymap,
           ]),
           markdown({ base: markdownLanguage }),
-          mode.current.of(modeExtensions(initialSource.current, latest)),
+          mode.current.of(modeExtensions(initialSource.current, latest, tableKeyRef.current)),
           access.current.of(accessExtensions(initialReadOnly.current)),
           EditorView.lineWrapping,
           placeholder('Write in Markdown. Type [[ to link another note.'),
@@ -216,12 +221,14 @@ export function MarkdownEditor({
 function modeExtensions(
   source: boolean,
   latest: { current: { onOpenWikilink?: Props['onOpenWikilink']; isMissing?: Props['isMissing'] } },
+  tableKey: string | undefined,
 ) {
   return source
     ? sourceMode()
     : livePreview({
         onOpenWikilink: (target) => latest.current.onOpenWikilink?.(target),
         isMissing: (target) => latest.current.isMissing?.(target) ?? false,
+        ...(tableKey === undefined ? {} : { tableKey }),
       })
 }
 

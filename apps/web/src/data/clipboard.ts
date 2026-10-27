@@ -1,6 +1,23 @@
 // navigator.clipboard exists only in secure contexts (HTTPS or localhost); over plain HTTP on a LAN it is undefined.
 // Fall back to the classic selected-textarea copy, which browsers still allow from a click.
-export async function copyText(text: string): Promise<boolean> {
+// `html` (3.8.3): also put a rich version on the clipboard where the browser allows it (a table pastes as a table).
+export async function copyText(text: string, html?: string): Promise<boolean> {
+  if (html !== undefined)
+    try {
+      // eslint-disable-next-line no-restricted-syntax -- the sanctioned rich copy, guarded like the plain one
+      const clipboard = navigator.clipboard as Clipboard | undefined
+      if (clipboard?.write && typeof ClipboardItem !== 'undefined') {
+        await clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+            'text/html': new Blob([html], { type: 'text/html' }),
+          }),
+        ])
+        return true
+      }
+    } catch {
+      // Fall through to plain text.
+    }
   try {
     // eslint-disable-next-line no-restricted-syntax -- the one sanctioned use, guarded for insecure contexts
     const clipboard = navigator.clipboard as Clipboard | undefined
@@ -11,6 +28,8 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     // Fall through to the legacy path.
   }
+  // The copy borrows the focus; it goes back where it was (a table cell keeps its keyboard).
+  const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const area = document.createElement('textarea')
   area.value = text
   area.setAttribute('readonly', '')
@@ -26,6 +45,7 @@ export async function copyText(text: string): Promise<boolean> {
     copied = false
   }
   area.remove()
+  previous?.focus({ preventScroll: true })
   return copied
 }
 

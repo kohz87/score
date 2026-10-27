@@ -24,6 +24,8 @@ export type LivePreviewOptions = {
   onOpenWikilink: (target: string) => void
   /** True when no note matches, so the link is drawn as missing. */
   isMissing: (target: string) => boolean
+  /** The note's path: where a table's dragged column widths are remembered on this device (3.8.3). */
+  tableKey?: string
 }
 
 const options = Facet.define<LivePreviewOptions, LivePreviewOptions>({
