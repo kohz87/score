@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.8.3] — 2026-10-27
+
+### Added
+- **Library tables: drag a column wider.** Each header has a grip on its right edge (double-click resets). Widths are
+  kept in this browser for that note; the Markdown is unchanged. (decision 144)
+- **Library tables: select and copy cells.** Drag across cells (or Shift+click, Shift+arrows) to select them and press
+  Ctrl+C: they paste into a spreadsheet as cells and into a document as a table.
+
 ## [3.8.2] — 2026-10-27
 
 ### Fixed
