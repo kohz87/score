@@ -585,6 +585,10 @@ export class CodingRuntime {
     const worker = driver.worker
     if (!worker || worker.versions.includes(version)) return null
     if (this.checkedVersions().has(`${driver.runtime}@${version}`)) return null
+    // The version read fresh, so the help that decides belongs to the version recorded (the cached reading may be stale).
+    const now = await this.deps.locator.detect(driver, { fresh: true })
+    if (now.version !== version)
+      return `${driver.label} changed while Score was checking it (now ${now.version ?? 'unknown'}). Try again.`
     const help = await this.deps.locator.help(driver, worker.help.args)
     if (help === null)
       return `Score couldn’t read ${driver.label} ${version}’s help to check what it reads on its own, so it can’t say what a step could reach.`

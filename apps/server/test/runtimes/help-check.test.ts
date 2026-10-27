@@ -77,3 +77,22 @@ test('whitespace and line wrapping don’t matter', () => {
     }),
   ).toBeNull()
 })
+
+test('a wrapped line at option indent that names a flag must pass too, and a section ends the last entry', () => {
+  const declaration = {
+    args: [],
+    flags: [{ flag: '--verbose', phrases: ['Override verbose mode setting from config'] }],
+  }
+  const real = '  --verbose      Override verbose mode setting from config\n'
+  expect(helpMismatch(real, declaration)).toBeNull()
+  // A second "entry" for the flag (a description wrapped at six spaces) that says something else fails the check.
+  expect(helpMismatch(real + '      --verbose is now ignored\n', declaration)).toBe('--verbose')
+  // Text after a column-0 section isn't part of the last option's entry.
+  const strict = {
+    args: [],
+    flags: [{ flag: '--json', phrases: ['Print events to stdout as JSONL'] }],
+  }
+  expect(helpMismatch('  --json   Print events\n\nExamples:\n  to stdout as JSONL\n', strict)).toBe(
+    '--json',
+  )
+})
