@@ -315,6 +315,8 @@ export function buildApp({
     registerMcpAccessRoutes(app, {
       access: new McpAccessStore(db, clock),
       bridgePort: config.remote?.bridgePort,
+      db,
+      port,
     })
   registerRoutineRoutes(app, port, db, clock)
   registerSettingsRoutes(app, port, db, clock)

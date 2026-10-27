@@ -177,6 +177,9 @@ class Source extends EventTarget {
 }
 
 let preflightFails = false
+/** 3.7.9: the lead's tool list; after a reload the next preflight reports it ok. */
+let toolsListed: 'unknown' | 'ok' | null = null
+let reloads: string[] = []
 /** 3.7.5: a coding agent leading the room (null: the fixture's `lead`). */
 let codingLead: string | null = null
 let workflowPreflightNow: unknown = workflowPreflight
@@ -249,8 +252,24 @@ beforeEach(() => {
         workflowRunBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
         return Promise.resolve(workflowRunReply())
       }
-      if (url.pathname === '/api/orchestrations/preflight')
-        return json(orchestrationCheck(!preflightFails))
+      if (url.pathname === '/api/orchestrations/preflight') {
+        const check = orchestrationCheck(!preflightFails)
+        if (toolsListed)
+          check.checks.push({
+            id: 'tool_readiness',
+            status: toolsListed,
+            message:
+              toolsListed === 'ok'
+                ? 'The lead sees every orch.* tool'
+                : "The lead's Hermes hasn't asked Score for its tools",
+          })
+        return json(check)
+      }
+      if (url.pathname === '/api/agents/lead/mcp/reload' && method === 'POST') {
+        reloads.push('lead')
+        toolsListed = 'ok'
+        return json({ agentId: 'lead', scope: 'profile' })
+      }
       if (url.pathname.startsWith('/api/agents/') && url.pathname.endsWith('/routines'))
         return json({ items: url.pathname.includes('/agents/lead/') ? [routine] : [] })
       if (url.pathname === '/api/triggers' && method === 'POST') {
@@ -611,5 +630,26 @@ test('in a room a coding agent leads, “lead decides” asks which Hermes agent
     expect(within(pick).getByRole('checkbox', { name: /coder/ })).toBeDefined()
   } finally {
     codingLead = null
+  }
+})
+
+test('the tool check offers Reload MCP, asks first, restarts the lead’s gateway and checks again (3.7.9)', async () => {
+  toolsListed = 'unknown'
+  reloads = []
+  try {
+    open('/b?start=job')
+    const dialog = await startDialog()
+    const checks = within(dialog).getByRole('region', { name: 'Before it starts' })
+    fireEvent.click(await within(checks).findByRole('button', { name: 'Reload MCP' }))
+    expect(within(checks).getByText(/This restarts lead’s Hermes/)).toBeDefined()
+    expect(reloads).toEqual([])
+    fireEvent.click(within(checks).getByRole('button', { name: 'Restart and reload' }))
+    await waitFor(() => expect(reloads).toEqual(['lead']))
+    await waitFor(() =>
+      expect(within(checks).getByText('The lead sees every orch.* tool')).toBeDefined(),
+    )
+    expect(within(checks).queryByRole('button', { name: 'Reload MCP' })).toBeNull()
+  } finally {
+    toolsListed = null
   }
 })

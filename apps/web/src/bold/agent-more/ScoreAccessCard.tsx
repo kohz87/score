@@ -4,6 +4,7 @@ import { copyText } from '../../data/clipboard.ts'
 import { useChangeMcpAccess, useMcpAccess } from '../../routes/team/mcp-access-queries.ts'
 import { tabFailure } from '../../routes/team/tab-errors.ts'
 import { Fail, MoreCard, problem } from './MoreCard.tsx'
+import { ReloadMcp } from '../ReloadMcp.tsx'
 
 /** Lets the agent use Score's rooms, tasks and notes as MCP tools. A consent, so the card is protected. */
 export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
@@ -124,11 +125,19 @@ export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
           {data.hasToken && (
             <span className="small muted" data-testid="mcp-rotate-note">
               After creating a new key, replace <code>MCP_SCORE_API_KEY</code> in the profile’s{' '}
-              <code>.env</code> yourself (Score never reads or writes it), then run{' '}
-              <code>/reload-mcp</code> or start a new session.
+              <code>.env</code> yourself (Score never reads or writes it), then Reload MCP below.
             </span>
           )}
         </details>
+      )}
+      {data.enabled && data.hasToken && (
+        <div className="bold-mc-reload">
+          <span className="small muted">
+            After a new key or a Score update, {agent.name}’s Hermes needs to fetch Score’s tools
+            again.
+          </span>
+          <ReloadMcp agentId={agent.id} agentName={agent.name} />
+        </div>
       )}
     </MoreCard>
   )

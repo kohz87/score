@@ -62,6 +62,7 @@ import {
   type StartCheck,
   type When,
 } from './bold-start-job.ts'
+import { ReloadMcp } from './ReloadMcp.tsx'
 import './bold-start.css'
 
 type RecipeChoice =
@@ -124,6 +125,7 @@ function checksFromPreflight(
     key: check.id,
     status: check.status === 'ok' ? 'ok' : 'fail',
     text: check.status === 'unknown' ? `${check.message} (could not be checked)` : check.message,
+    ...(check.id === 'tool_readiness' && check.status !== 'ok' ? { reload: true } : {}),
   }))
 }
 
@@ -140,7 +142,16 @@ function Dot({ status }: { status: StartCheck['status'] }) {
   )
 }
 
-function Checklist({ checks, children }: { checks: StartCheck[]; children?: ReactNode }) {
+function Checklist({
+  checks,
+  reload,
+  children,
+}: {
+  checks: StartCheck[]
+  /** What a line that offers Reload MCP shows next to its text. */
+  reload?: ReactNode
+  children?: ReactNode
+}) {
   return (
     <section className="inner start-checks" aria-label="Before it starts" data-protected="block">
       <span className="lab">Before it starts</span>
@@ -148,7 +159,10 @@ function Checklist({ checks, children }: { checks: StartCheck[]; children?: Reac
         {checks.map((check) => (
           <li key={check.key} className="row small">
             <Dot status={check.status} />
-            <span className="grow">{check.text}</span>
+            <span className="grow">
+              {check.text}
+              {check.reload && reload && <span className="start-check-action">{reload}</span>}
+            </span>
             <span className="sr">
               {check.status === 'ok'
                 ? 'Passed'
@@ -1417,7 +1431,18 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
               </fieldset>
             ) : null}
 
-            <Checklist checks={checks}>
+            <Checklist
+              checks={checks}
+              reload={
+                leadId ? (
+                  <ReloadMcp
+                    agentId={leadId}
+                    agentName={leadAgent?.name ?? leadId}
+                    onReloaded={() => void orchestrationPreflight.refetch()}
+                  />
+                ) : undefined
+              }
+            >
               {workersAtStake.length > 0 && (
                 <div className="start-reach" data-protected="block">
                   <b className="small">Coding agents in this job</b>
