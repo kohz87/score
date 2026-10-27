@@ -105,7 +105,7 @@ test('Ctrl+K searches the vault and opens a note hit in the Library', async ({ p
   await expect(editor(page, path)).toBeVisible({ timeout: 15_000 })
 })
 
-test('a wide editor gives a table more room than a text line, and a size set on one screen keeps its proportion on another (3.8.5)', async ({
+test('a wide editor gives text and tables its whole width, and a size set on one screen keeps its proportion on another (3.8.5, 3.8.6)', async ({
   page,
 }) => {
   await openLibrary(page, { name: 'desktop', width: 2400, height: 1100 })
@@ -119,8 +119,10 @@ test('a wide editor gives a table more room than a text line, and a size set on 
   )
   const wrap = editor(page, path).locator('.cm-lp-table')
   const line = editor(page, path).locator('.cm-line').filter({ hasText: 'word word' }).first()
-  // Text lines keep a readable length; the table may use the whole editor.
-  expect((await wrap.boundingBox())!.width).toBeGreaterThan((await line.boundingBox())!.width + 100)
+  // 3.8.6: text and tables both use the whole editor; nothing stops at a narrower column.
+  const content = (await editor(page, path).boundingBox())!
+  expect((await line.boundingBox())!.width).toBeGreaterThan(content.width - 40)
+  expect((await wrap.boundingBox())!.width).toBeGreaterThan(content.width - 40)
   // "Card" is never split letter by letter.
   const card = wrap.getByRole('columnheader', { name: 'Card' })
   expect((await card.boundingBox())!.height).toBeLessThan(60)
