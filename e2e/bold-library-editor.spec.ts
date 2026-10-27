@@ -141,8 +141,7 @@ test('a wide editor gives a table more room than a text line, and a size set on 
   const wide = await share()
   expect(wide).toBeLessThan(0.75)
   await page.setViewportSize({ width: 1600, height: 1000 })
-  await expect.poll(share).toBeGreaterThan(wide - 0.03)
-  expect(await share()).toBeLessThan(wide + 0.03)
+  await expect.poll(async () => Math.abs((await share()) - wide)).toBeLessThan(0.03)
 })
 
 for (const size of sizes) {

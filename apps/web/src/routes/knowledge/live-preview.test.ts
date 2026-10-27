@@ -270,7 +270,7 @@ test('each header has a width handle; dragged widths are kept per note and a dou
   view?.destroy()
   localStorage.setItem(
     'score.tableWidths:Notes/plan.md\u0001A\u0001B',
-    JSON.stringify({ v: 2, table: 1.2, cols: [0.25, 0.75] }),
+    JSON.stringify({ v: 2, table: 1.2, cols: [0.25, 0.75], px: 400 }),
   )
   const again = open(SMALL, [], 'Notes/plan.md')
   const drawn = again.dom.querySelector<HTMLTableElement>('.cm-lp-table table')!
@@ -278,8 +278,8 @@ test('each header has a width handle; dragged widths are kept per note and a dou
   expect(drawn.style.tableLayout).toBe('fixed')
   expect(parseFloat(drawn.style.width)).toBe(120)
   expect(drawn.style.width.endsWith('%')).toBe(true)
-  // No column below 48 px on a narrow screen: the 25% column needs a table of at least 192 px.
-  expect(drawn.style.minWidth).toBe('192px')
+  // On a smaller screen it shrinks to 60% of the width it was given, then scrolls.
+  expect(drawn.style.minWidth).toBe('240px')
   expect([...drawn.querySelectorAll('col')].map((col) => parseFloat(col.style.width))).toEqual([
     25, 75,
   ])
