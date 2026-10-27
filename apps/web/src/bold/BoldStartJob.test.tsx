@@ -177,6 +177,8 @@ class Source extends EventTarget {
 }
 
 let preflightFails = false
+/** 3.7.5: a coding agent leading the room (null: the fixture's `lead`). */
+let codingLead: string | null = null
 let workflowPreflightNow: unknown = workflowPreflight
 let workflowRunBodies: Record<string, unknown>[] = []
 let workflowRunReply: () => Response = () =>
@@ -211,9 +213,20 @@ beforeEach(() => {
       const method = init?.method ?? 'GET'
       const json = (body: unknown, status = 200) => Promise.resolve(Response.json(body, { status }))
 
-      if (url.pathname === '/api/agents') return json({ asOfSeq: 1, items: agents })
+      if (url.pathname === '/api/agents')
+        return json({
+          asOfSeq: 1,
+          items: codingLead
+            ? [...agents, { ...agents[1]!, id: codingLead, name: codingLead, runtime: 'codex' }]
+            : agents,
+        })
       if (url.pathname === '/api/approvals') return json({ asOfSeq: 1, items: [] })
-      if (url.pathname === '/api/team-room') return json({ asOfSeq: 1, room, jobs: [] })
+      if (url.pathname === '/api/team-room')
+        return json({
+          asOfSeq: 1,
+          room: { ...room, leadAgentId: codingLead ?? room.leadAgentId },
+          jobs: [],
+        })
       if (url.pathname === '/api/workflows')
         return json({
           items: [workflow],
@@ -573,5 +586,26 @@ test('an agent being set up, deleted or removed is never offered in Agents allow
     for (const agent of extra) expect(picker.textContent).not.toContain(agent.name)
   } finally {
     agents.splice(agents.length - extra.length, extra.length)
+  }
+})
+
+test('in a room a coding agent leads, “lead decides” asks which Hermes agent plans it (3.7.5)', async () => {
+  codingLead = 'coder'
+  try {
+    open('/b?start=job')
+    const dialog = await startDialog()
+    const planner = await within(dialog).findByLabelText('Who plans it')
+    expect(
+      within(dialog).getByText(/coder leads this room, but a coding agent can’t plan/),
+    ).toBeDefined()
+    const options = within(planner)
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+    expect(options).not.toContain('coder')
+    expect(options).toContain('builder')
+    fireEvent.change(planner, { target: { value: 'builder' } })
+    expect((planner as HTMLSelectElement).value).toBe('builder')
+  } finally {
+    codingLead = null
   }
 })
