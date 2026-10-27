@@ -3,6 +3,17 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.3] — 2026-10-27
+
+### Changed
+- **Stop is an icon**: a red rounded square, in the message box and on a reply that is being written (screen readers
+  still hear "Stop"). It is a protected control, so no theme can hide it.
+
+### Fixed
+- **Removing an agent that Hermes didn't finish deleting.** Hermes can fail a profile delete when its gateway recreates
+  the profile's folders while they are being removed. "Delete profile" now offers Retry, but only on the very folder
+  the removal began on (a new profile with the same name is never deleted).
+
 ## [3.7.2] — 2026-10-27
 
 ### Fixed
