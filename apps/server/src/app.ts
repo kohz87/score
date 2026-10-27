@@ -445,11 +445,8 @@ export function buildApp({
         port,
         ...(clock ? { clock } : {}),
         // 3.13: a job with a check runs a command on this computer: the folder is checked and a fresh second factor asked.
-        checkPolicy: defaultRootPolicy([
-          config.home,
-          resolveHermesHome(config.hermesHome),
-          resolveHermesHome(),
-        ]),
+        checkPolicy: (({ home, hermesHome }: Pick<Config, 'home' | 'hermesHome'>) =>
+          defaultRootPolicy([home, resolveHermesHome(hermesHome), resolveHermesHome()]))(config),
         hostEnrolled: () => securityPassword?.hostIssued() ?? false,
       })
       registerWorkflowRoutes(app, {
