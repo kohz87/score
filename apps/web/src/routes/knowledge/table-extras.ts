@@ -11,26 +11,58 @@ export function widthsKey(note: string, header: readonly string[]): string {
   return `${PREFIX}${note}\u0001${header.join('\u0001')}`
 }
 
-export function readWidths(key: string, columns: number): number[] | null {
+/**
+ * 3.8.5 (owner: "shouldn't the size be subject to screen resolution?"): a table's size relative to its space, so it
+ * looks the same on any screen. `table` is its width as a share of the editor's line (1 = the whole line; more scrolls
+ * sideways); `cols` are each column's share of the table.
+ */
+export type TableSize = {
+  table: number
+  cols: number[]
+  /** The table's width in pixels when it was sized: on a smaller screen it shrinks to 60% of it, then scrolls. */
+  px?: number
+}
+
+/** Drawn pixel widths as a size relative to the space they were drawn in. */
+export function toSize(widths: readonly number[], available: number): TableSize {
+  const total = widths.reduce((sum, value) => sum + value, 0)
+  return {
+    table: total / Math.max(available, 1),
+    cols: widths.map((value) => value / Math.max(total, 1)),
+    px: Math.round(total),
+  }
+}
+
+export function readWidths(key: string, columns: number): TableSize | null {
   try {
     const raw = localStorage.getItem(key)
     if (!raw) return null
-    const parsed: unknown = JSON.parse(raw)
+    // Pixel arrays from 3.8.3/3.8.4 don't fit another screen: they are dropped and the table lays out again.
+    const parsed = JSON.parse(raw) as { v?: unknown; table?: unknown; cols?: unknown; px?: unknown }
+    const { table, cols, px } = parsed
     if (
-      !Array.isArray(parsed) ||
-      parsed.length !== columns ||
-      !parsed.every((value) => typeof value === 'number' && Number.isFinite(value))
+      parsed.v !== 2 ||
+      typeof table !== 'number' ||
+      !(table > 0 && table <= 10) ||
+      !Array.isArray(cols) ||
+      cols.length !== columns ||
+      !cols.every((value) => typeof value === 'number' && value > 0 && value <= 1)
     )
       return null
-    return parsed.map((value: number) => Math.max(MIN_COLUMN, Math.round(value)))
+    const sum = (cols as number[]).reduce((total, value) => total + value, 0)
+    return {
+      table,
+      cols: (cols as number[]).map((value) => value / sum),
+      ...(typeof px === 'number' && px > 0 && px < 20000 ? { px } : {}),
+    }
   } catch {
     return null
   }
 }
 
-export function writeWidths(key: string, widths: readonly number[] | null): void {
+export function writeWidths(key: string, size: TableSize | null): void {
   try {
-    if (widths) localStorage.setItem(key, JSON.stringify(widths.map((value) => Math.round(value))))
+    if (size) localStorage.setItem(key, JSON.stringify({ v: 2, ...size }))
     else localStorage.removeItem(key)
   } catch {
     // Storage can be blocked (private window): the widths last until the table is redrawn.
@@ -38,8 +70,9 @@ export function writeWidths(key: string, widths: readonly number[] | null): void
 }
 
 // 3.8.4 (owner): row heights, the same way (per note and header row, on this device). `null` is a row left to fit.
-const HEIGHTS = 'score.tableHeights:'
-export const MIN_ROW = 28
+// 3.8.5: in `em` of the table's text, so they follow the text size, not the screen's pixels.
+const HEIGHTS = 'score.tableHeights2:'
+export const MIN_ROW = 1.75
 
 export function heightsKey(note: string, header: readonly string[]): string {
   return `${HEIGHTS}${note}\u0001${header.join('\u0001')}`
@@ -59,7 +92,7 @@ export function readHeights(key: string, rows: number): (number | null)[] | null
     )
       return null
     return parsed.map((value: number | null) =>
-      value === null ? null : Math.max(MIN_ROW, Math.round(value)),
+      value === null ? null : Math.max(MIN_ROW, Math.round(value * 100) / 100),
     )
   } catch {
     return null
@@ -71,7 +104,9 @@ export function writeHeights(key: string, heights: readonly (number | null)[] | 
     if (heights && heights.some((value) => value !== null))
       localStorage.setItem(
         key,
-        JSON.stringify(heights.map((value) => (value === null ? null : Math.round(value)))),
+        JSON.stringify(
+          heights.map((value) => (value === null ? null : Math.round(value * 100) / 100)),
+        ),
       )
     else localStorage.removeItem(key)
   } catch {
