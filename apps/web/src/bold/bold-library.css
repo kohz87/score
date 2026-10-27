@@ -415,11 +415,13 @@
   display: flex;
   flex-direction: column;
 }
+/* 3.8.5 (owner): text lines keep a readable length; tables and pictures may use the editor's whole width (capping
+   the content box instead drew its focus ring as a "hard border" through the editor and boxed tables in). */
 [data-ui='bold']
   .bold-library[data-width='wide']
   .kn-editor-host
   .cm-editor:not(.cm-source)
-  .cm-content {
+  .cm-line {
   max-width: 80ch;
 }
 
