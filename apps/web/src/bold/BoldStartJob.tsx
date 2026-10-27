@@ -1,5 +1,6 @@
 import { boldRunLink } from './bold-links.ts'
 import {
+  CodingAgentsResponseSchema,
   JobSchema,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_DEFAULTS,
@@ -11,10 +12,11 @@ import {
   WorkflowVersionSchema,
   type AgentSummary,
   type CostSource,
+  type OrchestrationCheck,
   type OrchestrationCreate,
   type WorkflowRunCreate,
 } from '@score/contract'
-import { useQueries, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createContext,
   useContext,
@@ -23,6 +25,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FormEvent,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
@@ -30,6 +33,7 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../data/api.ts'
 import { copyText } from '../data/clipboard.ts'
+import { passkeysSupportedHere, signInWithPasskey } from '../data/passkeys.ts'
 import { newId } from '../data/ids.ts'
 import { useStreamQuery } from '../data/query-client.ts'
 import { isEveryoneRoom } from './room/room-model.ts'
@@ -294,12 +298,45 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   // "Lead decides" needs a Hermes planner (decision 60). A room led by a coding agent (3.7.5) lets the person choose one.
   const leadIsCoding = Boolean(teamLead) && !hermesAgents.some((agent) => agent.id === teamLead)
   const [planner, setPlanner] = useState<string | null>(null)
+  // 3.13: the oracle. The folder stays derived (the first chosen coding agent's workspace) until the person types one.
+  const [checkCommand, setCheckCommand] = useState('')
+  // 3.14: the advisor; '' = none. Derived below so a lead change to the same agent clears it.
+  const [advisorPick, setAdvisorPick] = useState('')
+  const [checkFolder, setCheckFolder] = useState<string | null>(null)
+  // 3.15: helpers. Picks are filtered below (never the lead, only known agents).
+  const [helperPick, setHelperPick] = useState<string[]>([])
+  const [helperConcurrent, setHelperConcurrent] = useState('3')
+  const [helperSteps, setHelperSteps] = useState('20')
+  const [helperScan, setHelperScan] = useState(false)
+  const [helperFolder, setHelperFolder] = useState<string | null>(null)
+  const [helperSplit, setHelperSplit] = useState<'lead' | 'person'>('lead')
+  const [checkEachStep, setCheckEachStep] = useState(false)
+  const [checkMinutes, setCheckMinutes] = useState('10')
+  const [authNeeded, setAuthNeeded] = useState(false)
+  const [authPassword, setAuthPassword] = useState('')
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authBusy, setAuthBusy] = useState(false)
+  const authInput = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!authNeeded) return
+    const input = authInput.current
+    input?.focus()
+    // jsdom has no scrollIntoView.
+    input?.scrollIntoView?.({ block: 'center' })
+  }, [authNeeded])
   const leadId =
     (teamLead && !leadIsCoding
       ? teamLead
       : planner && hermesAgents.some((agent) => agent.id === planner)
         ? planner
         : hermesAgents[0]?.id) ?? ''
+  // A pick that became the lead is dropped for good, so it doesn't come back when the lead changes again.
+  const [seenLead, setSeenLead] = useState(leadId)
+  if (seenLead !== leadId) {
+    setSeenLead(leadId)
+    if (advisorPick === leadId) setAdvisorPick('')
+    if (helperPick.includes(leadId)) setHelperPick(helperPick.filter((id) => id !== leadId))
+  }
   const roomLeadName = teamLead
     ? (agents.find((agent) => agent.id === teamLead)?.name ?? teamLead)
     : null
@@ -313,7 +350,34 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const workflowDefinition = workflow.data?.latest.definition
   const workflowVersion = workflow.data?.latestVersion
   const workflowPreflight = useWorkflowPreflight(selectedWorkflowId, workflowVersion)
-  const orchestrationPreflight = usePreflight(leadId, allowedFor)
+  const advisorId =
+    advisorPick !== '' && advisorPick !== leadId && agents.some((agent) => agent.id === advisorPick)
+      ? advisorPick
+      : ''
+  const helperIds = helperPick.filter(
+    (id) => id !== leadId && agents.some((agent) => agent.id === id),
+  )
+  // The advisor and the helpers run as steps, so the preflight checks them like allowed agents (policy and reach included).
+  const preflightAgents = [
+    ...allowedFor,
+    ...(advisorId !== '' ? [advisorId] : []),
+    ...helperIds,
+  ].filter((id, index, all) => all.indexOf(id) === index)
+  const orchestrationPreflight = usePreflight(leadId, preflightAgents)
+  const codingAgents = useQuery({
+    queryKey: ['coding', 'agents'],
+    queryFn: async ({ signal }) =>
+      CodingAgentsResponseSchema.parse(await apiFetch('coding-agents', { signal })).items,
+    retry: false,
+  })
+  const codingWorkspace = (codingAgents.data ?? []).find((item) =>
+    allowedFor.includes(item.id),
+  )?.workspace
+  const checkFolderNow = checkFolder ?? codingWorkspace ?? ''
+  // The scan folder follows the check's folder until the person types one.
+  const helperFolderNow = helperFolder ?? checkFolderNow
+  const helperConcurrentNumber = Number(helperConcurrent)
+  const helperStepsNumber = Number(helperSteps)
 
   const routineQueries = useQueries({
     queries: agents.map((agent) => ({
@@ -374,6 +438,31 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const concurrentValid = textIn(concurrent, 1, 3, true)
   const estimateValid = textIn(estimate, 0.01, 1000, false)
   const codingStepsValid = textIn(codingSteps, 1, ORCH_LIMITS.maxCodingSteps, true)
+  const checkMinutesNumber = Number(checkMinutes)
+  const checkMinutesValid =
+    Number.isInteger(checkMinutesNumber) && checkMinutesNumber >= 1 && checkMinutesNumber <= 60
+  const checkOn = checkCommand.trim() !== ''
+  const checkProblem = !checkOn
+    ? null
+    : !checkFolderNow.startsWith('/')
+      ? 'The check needs an absolute folder, like /home/you/project'
+      : !checkMinutesValid
+        ? 'The check timeout must be 1 to 60 minutes'
+        : null
+  const helpersOn = helperIds.length > 0
+  const helperProblem = !helpersOn
+    ? null
+    : !(
+          Number.isInteger(helperConcurrentNumber) &&
+          helperConcurrentNumber >= 1 &&
+          helperConcurrentNumber <= 6
+        )
+      ? 'Helpers at once must be 1 to 6'
+      : !(Number.isInteger(helperStepsNumber) && helperStepsNumber >= 1 && helperStepsNumber <= 60)
+        ? 'Helper steps must be 1 to 60'
+        : helperScan && !helperFolderNow.trim().startsWith('/')
+          ? 'The scan needs an absolute folder, like /home/you/project'
+          : null
   const optionProblems = [
     ...(concurrentValid ? [] : ['Steps at the same time must be 1 to 3']),
     ...(estimateValid ? [] : ['Estimate per step must be above 0 and at most 1000']),
@@ -519,6 +608,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     checksPass &&
     reachCovered &&
     (!isSavedRecipe || optionProblems.length === 0) &&
+    (!isLead || (checkProblem === null && helperProblem === null)) &&
     missingInputs.length === 0 &&
     (!needsLead || leadId !== '')
 
@@ -668,6 +758,19 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       goal: what.trim(),
       leadAgentId: leadId,
       allowedAgents: allowedFor,
+      ...(advisorId !== '' ? { advisorAgentId: advisorId } : {}),
+      ...(helpersOn
+        ? {
+            helpers: {
+              agentIds: helperIds,
+              maxConcurrent: helperConcurrentNumber,
+              maxSteps: helperStepsNumber,
+              scan: helperScan,
+              ...(helperScan ? { scanFolder: helperFolderNow.trim() } : {}),
+              splitTo: helperSplit,
+            },
+          }
+        : {}),
       gatePolicy: orchestrationPolicy(ask),
       ...(cap > 0 ? { budgetUsd: cap } : {}),
       ...(deadlineAt ? { deadlineAt } : {}),
@@ -677,6 +780,16 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       leadTurnEstimateUsd: ORCH_DEFAULTS.leadTurnEstimateUsd,
       stepEstimateUsd: ORCH_DEFAULTS.stepEstimateUsd,
       acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
+      ...(checkOn
+        ? {
+            check: {
+              command: checkCommand.trim(),
+              workspace: checkFolderNow.trim(),
+              timeoutSec: checkMinutesNumber * 60,
+              when: checkEachStep ? 'each_step' : 'finish',
+            } satisfies OrchestrationCheck,
+          }
+        : {}),
       ...(orchestrationWorkers.length > 0
         ? {
             codingPolicies,
@@ -773,8 +886,14 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     }
   }
 
-  async function start() {
+  async function start(proved = false) {
     if (!canStart || starting.current) return
+    // 3.13: a check runs a command as this user, so starting needs the password or passkey first.
+    if (isLead && checkOn && !proved) {
+      setAuthError(null)
+      setAuthNeeded(true)
+      return
+    }
     starting.current = true
     setBusy(true)
     setError(null)
@@ -849,6 +968,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       }
       await saveRecipeAfterStart()
     } catch (failure) {
+      if (failure instanceof ApiError && failure.code === 'fresh_auth_required') {
+        setAuthError(startError(failure))
+        setAuthNeeded(true)
+        return
+      }
       // A coding agent changed meanwhile: look again, and ask again where the reach changed.
       if (failure instanceof ApiError && ['policy_changed', 'conflict'].includes(failure.code)) {
         attemptKey.current = null
@@ -860,6 +984,33 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       starting.current = false
       setBusy(false)
     }
+  }
+
+  async function confirmThenStart(proof: () => Promise<unknown>) {
+    if (authBusy) return
+    setAuthBusy(true)
+    setAuthError(null)
+    try {
+      await proof()
+    } catch (failure) {
+      setAuthError(authProblem(failure))
+      setAuthBusy(false)
+      return
+    }
+    setAuthPassword('')
+    setAuthNeeded(false)
+    setAuthBusy(false)
+    await start(true)
+  }
+
+  function submitAuth(event: FormEvent) {
+    event.preventDefault()
+    void confirmThenStart(() =>
+      apiFetch('session/security/check', {
+        method: 'POST',
+        body: JSON.stringify({ password: authPassword }),
+      }),
+    )
   }
 
   async function createJobAgain() {
@@ -1191,6 +1342,257 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                 </fieldset>
               )}
 
+              {isLead && (
+                <div className="start-field start-advisor">
+                  <label htmlFor="start-advisor-select">Advisor</label>
+                  <select
+                    id="start-advisor-select"
+                    aria-describedby="start-advisor-help"
+                    value={advisorId}
+                    onChange={(event) => {
+                      setAdvisorPick(event.target.value)
+                      touch()
+                    }}
+                  >
+                    <option value="">None</option>
+                    {agents
+                      .filter((agent) => agent.id !== leadId)
+                      .map((agent) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </option>
+                      ))}
+                  </select>
+                  <span className="small muted" id="start-advisor-help">
+                    A strong model Score asks before the plan, when a failure repeats, and before it
+                    finishes. Its advice goes to the lead; the lead decides. Choose an agent set up
+                    for reviewing: it runs with its own tools.
+                  </span>
+                </div>
+              )}
+
+              {isLead && (
+                <details
+                  className="inner start-helpers"
+                  data-protected="block"
+                  open={helperProblem ? true : undefined}
+                >
+                  <summary>
+                    Helpers
+                    {helpersOn && (
+                      <span className="small muted">
+                        {' '}
+                        · {helperIds.length} {helperIds.length === 1 ? 'helper' : 'helpers'}
+                        {helperScan && <> · scans {helperFolderNow.trim() || 'no folder yet'}</>}
+                      </span>
+                    )}
+                  </summary>
+                  <div className="start-clear">
+                    <fieldset className="start-field">
+                      <legend>Helper agents (1 to 4)</legend>
+                      {agents
+                        .filter((agent) => agent.id !== leadId)
+                        .map((agent) => {
+                          const on = helperIds.includes(agent.id)
+                          return (
+                            <label className="check small" key={agent.id}>
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                disabled={!on && helperIds.length >= 4}
+                                onChange={(event) => {
+                                  setHelperPick(
+                                    event.target.checked
+                                      ? [...helperIds, agent.id]
+                                      : helperIds.filter((id) => id !== agent.id),
+                                  )
+                                  touch()
+                                }}
+                              />
+                              {agent.name}
+                            </label>
+                          )
+                        })}
+                    </fieldset>
+                    <label className="start-field">
+                      <span>At once (1 to 6)</span>
+                      <input
+                        className="field"
+                        type="number"
+                        min={1}
+                        max={6}
+                        value={helperConcurrent}
+                        onChange={(event) => {
+                          setHelperConcurrent(event.target.value)
+                          touch()
+                        }}
+                      />
+                    </label>
+                    <label className="start-field">
+                      <span>Helper steps (1 to 60)</span>
+                      <input
+                        className="field"
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={helperSteps}
+                        onChange={(event) => {
+                          setHelperSteps(event.target.value)
+                          touch()
+                        }}
+                      />
+                    </label>
+                    <label className="check small">
+                      <input
+                        type="checkbox"
+                        checked={helperScan}
+                        onChange={(event) => {
+                          setHelperScan(event.target.checked)
+                          touch()
+                        }}
+                      />
+                      Scan the project first
+                    </label>
+                    {helperScan && (
+                      <label className="start-field">
+                        <span>Scan folder</span>
+                        <input
+                          className="field start-check-command"
+                          value={helperFolderNow}
+                          placeholder="/home/you/project"
+                          spellCheck={false}
+                          autoComplete="off"
+                          onChange={(event) => {
+                            setHelperFolder(event.target.value)
+                            touch()
+                          }}
+                        />
+                      </label>
+                    )}
+                    <fieldset className="start-field">
+                      <legend>When the helpers split on a vote</legend>
+                      {(
+                        [
+                          ['lead', 'The lead decides'],
+                          ['person', 'Ask me'],
+                        ] as const
+                      ).map(([id, label]) => (
+                        <label className="check small" key={id}>
+                          <input
+                            type="radio"
+                            name="start-helper-split"
+                            checked={helperSplit === id}
+                            onChange={() => {
+                              setHelperSplit(id)
+                              touch()
+                            }}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </fieldset>
+                    <span className="small muted">
+                      Cheap agents for narrow, read-only work: the lead hands them searches, greps
+                      and audits, and asks them to vote on small choices. A clear majority (70% or
+                      more) is taken; a split goes to the lead or to you. They run with their own
+                      tools, so choose agents set up for reading.
+                    </span>
+                    {helperProblem && (
+                      <span className="small" role="alert">
+                        {helperProblem}
+                      </span>
+                    )}
+                  </div>
+                </details>
+              )}
+
+              {isLead && (
+                <details
+                  className="inner start-check"
+                  data-protected="block"
+                  open={checkProblem ? true : undefined}
+                >
+                  <summary>
+                    Check before it finishes
+                    {/* The folder stays in sight when the section is folded: the command runs there as you. */}
+                    {checkCommand.trim() !== '' && (
+                      <span className="small muted start-check-where">
+                        {' '}
+                        · runs in {checkFolderNow.trim() || 'no folder yet'}
+                      </span>
+                    )}
+                  </summary>
+                  <div className="start-clear">
+                    <label className="start-field">
+                      <span>Command</span>
+                      <input
+                        className="field start-check-command"
+                        value={checkCommand}
+                        placeholder="pnpm test"
+                        spellCheck={false}
+                        autoComplete="off"
+                        onChange={(event) => {
+                          setCheckCommand(event.target.value)
+                          setAuthNeeded(false)
+                          touch()
+                        }}
+                      />
+                    </label>
+                    <label className="start-field">
+                      <span>Folder</span>
+                      <input
+                        className="field start-check-command"
+                        value={checkFolderNow}
+                        placeholder="/home/you/project"
+                        spellCheck={false}
+                        autoComplete="off"
+                        onChange={(event) => {
+                          setCheckFolder(event.target.value)
+                          setAuthNeeded(false)
+                          touch()
+                        }}
+                      />
+                    </label>
+                    <label className="check small">
+                      <input
+                        type="checkbox"
+                        checked={checkEachStep}
+                        onChange={(event) => {
+                          setCheckEachStep(event.target.checked)
+                          touch()
+                        }}
+                      />
+                      Also run after every step
+                    </label>
+                    <label className="start-field">
+                      <span>Timeout (minutes, 1 to 60)</span>
+                      <input
+                        className="field"
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={checkMinutes}
+                        aria-invalid={!checkMinutesValid}
+                        onChange={(event) => {
+                          setCheckMinutes(event.target.value)
+                          touch()
+                        }}
+                      />
+                    </label>
+                    <span className="small muted">
+                      Score runs this command in the folder, without a shell, as your user (it runs
+                      the project’s own code, as when you run the tests yourself). The job can only
+                      finish as a success after it passes. Only you can change it.
+                    </span>
+                    {checkProblem && (
+                      <span className="small" role="alert">
+                        {checkProblem}
+                      </span>
+                    )}
+                  </div>
+                </details>
+              )}
+
               {nowOnce && (
                 <div className="inner start-limits" data-protected="block">
                   <span className="lab">{isSavedRecipe ? 'Budget and deadline' : 'Limits'}</span>
@@ -1511,6 +1913,66 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
               </p>
             )}
 
+            {authNeeded && (
+              <form
+                className="inner start-check start-check-auth"
+                data-protected="block"
+                aria-label="Confirm it’s you"
+                onSubmit={submitAuth}
+              >
+                <span className="lab">Confirm it’s you</span>
+                <span className="small muted">
+                  The check runs a command on the Score machine as its user. Confirm your security
+                  password or passkey to start the job.
+                </span>
+                <label className="start-field">
+                  <span>Security password</span>
+                  <input
+                    className="field"
+                    type="password"
+                    ref={authInput}
+                    autoComplete="current-password"
+                    value={authPassword}
+                    onChange={(event) => setAuthPassword(event.target.value)}
+                  />
+                </label>
+                <div className="row wrap">
+                  <button
+                    type="submit"
+                    className="btn primary"
+                    disabled={authBusy || authPassword.length < 8}
+                  >
+                    Confirm and start
+                  </button>
+                  {passkeysSupportedHere() && (
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={authBusy}
+                      onClick={() => void confirmThenStart(() => signInWithPasskey())}
+                    >
+                      Use a passkey
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => {
+                      setAuthNeeded(false)
+                      setAuthPassword('')
+                    }}
+                  >
+                    Not now
+                  </button>
+                </div>
+                {authError && (
+                  <p className="start-error" role="alert">
+                    {authError}
+                  </p>
+                )}
+              </form>
+            )}
+
             <div className="row wrap start-actions">
               {showSaveRecipe && (
                 <div className="start-save-recipe">
@@ -1738,6 +2200,9 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 function startError(error: unknown): string {
+  // Checked first: the server answers it with a 403, which pairingProblem would call "pair this browser".
+  if (error instanceof ApiError && error.code === 'fresh_auth_required')
+    return 'Confirm your password or passkey again, then start the job.'
   const pairing = pairingProblem(error)
   if (pairing) return pairing
   if (error instanceof ApiError) {
@@ -1747,7 +2212,19 @@ function startError(error: unknown): string {
       return describeCreateError(error)
     if (error.code === 'paused') return 'Work is paused. Resume the team or the agent first.'
     if (error.code === 'no_lead') return 'This team has no lead yet.'
+    if (error.code === 'invalid_check' || error.code === 'second_factor_not_enrolled')
+      return error.message
+    if (error.code === 'fresh_auth_required')
+      return 'Confirm your password or passkey again, then start the job.'
   }
   if (error instanceof Error && error.message) return error.message
   return describeCreateError(error)
+}
+
+function authProblem(error: unknown): string {
+  const code = error instanceof ApiError ? error.code : null
+  if (code === 'wrong_password') return 'That is not the security password.'
+  if (code === 'too_many_attempts') return 'Too many wrong passwords. Try again later.'
+  if (code === 'password_not_set') return 'Set a security password in Settings first.'
+  return 'Couldn’t confirm that. Try again.'
 }

@@ -3,6 +3,29 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.13.0] — 2026-10-27
+
+### Added
+Four orchestration layers for jobs where the lead decides (decision 150): a lead does the work, cheap helpers do narrow
+jobs in parallel, a strong advisor is asked only at checkpoints, and a check, not a model's opinion, decides "done".
+- **The oracle: a check before a job finishes.** Give a job a command (such as `pnpm test`) and a folder. The lead can
+  run it but never change it, and the job finishes as a success only after it passes in a run that started after the
+  last step ended. It can also run after every step (a formatter or linter). The job shows each run with the end of its
+  output, **Run check**, and **Finish without a passing check** (two steps) for tests broken for an unrelated reason. No
+  shell, its own process group, a clean environment, a folder the Workspace rules allow; your password or passkey is asked
+  when you start such a job. At most 30 runs per job.
+- **The advisor.** Pick an agent (usually your strongest model). Score asks it before the plan (work waits for its
+  advice), when the same failure happens twice, and before a successful finish. Its advice goes to the lead, quoted; it is
+  never a veto. The job shows each consult and its advice.
+- **Helpers.** Pick up to four (usually cheap) agents. The lead hands them searches, greps and audits in their own slots
+  and step allowance, outside its own limits. **Scan the project first** has them read the folder (stack, scripts, risky
+  paths) before the lead plans anything.
+- **Votes.** The lead can ask the helpers a multiple-choice question. A clear majority (70% or more) is taken; a split goes
+  back to the lead, or to you on Needs you if you chose that. The job shows each vote with its shares.
+
+Hermes can't limit an agent's tools for a single turn, so the advisor and helpers are asked to only read: choose agents
+set up for reading. Their turns count like any step (gates, budget, and a check pass made before them no longer counts).
+
 ## [3.12.1] — 2026-10-27
 
 ### Added

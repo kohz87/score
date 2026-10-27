@@ -111,12 +111,26 @@ export interface GraphEdge {
   label?: string
 }
 
+/** 3.14/3.16: the steps that are the lead's work; an advisor's consults and the helpers' votes are shown in cards instead. */
+export const leadSteps = <T extends { role?: string | null }>(steps: readonly T[]): T[] =>
+  steps.filter((step) => step.role !== 'advisor' && step.role !== 'vote')
+
+/** Done and total of the lead's own steps, so the counts match the steps that are listed. */
+export const leadStepCounts = (
+  steps: readonly { role?: string | null; status: string }[],
+): { succeeded: number; total: number } => {
+  const own = leadSteps(steps)
+  return { succeeded: own.filter((step) => step.status === 'succeeded').length, total: own.length }
+}
+
 /** A lead node plus one node per step; edges from `after` and `replaces` (dashed); the lead feeds steps with no `after`. */
 export function buildGraph(
   detail: Pick<OrchestrationDetail, 'leadAgentId' | 'stepsList'>,
   visibleSteps?: ReadonlySet<string>,
 ): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const steps = detail.stepsList.filter((step) => !visibleSteps || visibleSteps.has(step.id))
+  const steps = leadSteps(detail.stepsList).filter(
+    (step) => !visibleSteps || visibleSteps.has(step.id),
+  )
   const ids = new Set(steps.map((step) => step.id))
   const nodes: GraphNode[] = [
     { id: LEAD_NODE, kind: 'lead', agentId: detail.leadAgentId, label: 'Lead' },

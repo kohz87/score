@@ -1,8 +1,11 @@
 import type { AgentSummary, OrchestrationSummary } from '@score/contract'
 import { useState } from 'react'
 import { Link } from '../../shell/framed-paths.tsx'
-import { orchCoding, statusLabel } from './orch-model.ts'
+import { leadSteps, orchCoding, statusLabel } from './orch-model.ts'
 import { useRun, useRunActions } from './orchestration-queries.ts'
+import { AdvisorCard } from './AdvisorCard.tsx'
+import { HelpersCard } from './HelpersCard.tsx'
+import { CheckCard } from './CheckCard.tsx'
 import { RunNeeds } from './RunDecisions.tsx'
 import {
   BudgetBlock,
@@ -79,12 +82,17 @@ export function RoomRunPanel({
               <h3>Plan</h3>
               <PlanList run={detail} />
               <h3>Steps</h3>
-              {detail.stepsList.length === 0 && <p className="orch-muted">No steps yet.</p>}
+              {leadSteps(detail.stepsList).length === 0 && (
+                <p className="orch-muted">No steps yet.</p>
+              )}
               <div className="orch-steps">
-                {detail.stepsList.map((step) => (
+                {leadSteps(detail.stepsList).map((step) => (
                   <StepCard key={step.id} step={step} run={detail} agents={agents} />
                 ))}
               </div>
+              <AdvisorCard run={detail} agents={agents} />
+              <HelpersCard run={detail} agents={agents} />
+              <CheckCard run={detail} actions={actions} />
               <FinishBlock run={detail} />
               <details>
                 <summary>Budget and limits</summary>

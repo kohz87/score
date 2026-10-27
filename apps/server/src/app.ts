@@ -1,4 +1,5 @@
 import { HttpError } from './errors.ts'
+import { defaultRootPolicy } from './workspace/policy.ts'
 import { isCodingAgent } from './runtimes/coding/store.ts'
 import { lifecycleOf } from './domain/agent-lifecycle.ts'
 import type { SecureContextOptions, TlsOptions } from 'node:tls'
@@ -85,6 +86,7 @@ import { getSystemStatus as defaultSystemStatus } from './system-status.ts'
 import {
   createHermesPort,
   registerBridgeRoutes,
+  resolveHermesHome,
   registerBridgeCredentialGuard,
   type BridgeDeps,
   type HermesPort,
@@ -437,7 +439,16 @@ export function buildApp({
       ...(clock ? { clock } : {}),
     })
     if (orchestrator) {
-      registerOrchestrationRoutes(app, { orchestrator, db, port, ...(clock ? { clock } : {}) })
+      registerOrchestrationRoutes(app, {
+        orchestrator,
+        db,
+        port,
+        ...(clock ? { clock } : {}),
+        // 3.13: a job with a check runs a command on this computer: the folder is checked and a fresh second factor asked.
+        checkPolicy: (({ home, hermesHome }: Pick<Config, 'home' | 'hermesHome'>) =>
+          defaultRootPolicy([home, resolveHermesHome(hermesHome), resolveHermesHome()]))(config),
+        hostEnrolled: () => securityPassword?.hostIssued() ?? false,
+      })
       registerWorkflowRoutes(app, {
         orchestrator,
         db,

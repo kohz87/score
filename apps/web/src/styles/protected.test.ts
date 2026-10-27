@@ -329,7 +329,13 @@ const consentForms: Record<string, { decisions: number; markers: string[] }> = {
       'start-limits',
       'start-ask',
       'start-more',
+      'start-check',
+      'start-helpers',
     ],
+  },
+  'routes/orchestrations/CheckCard.tsx': {
+    decisions: 0,
+    markers: ['orch-check-waive', 'orch-check-waived'],
   },
   'routes/settings/RemoteSection.tsx': { decisions: 1, markers: ['settings-remote'] },
   'routes/pair/PairPage.tsx': { decisions: 1, markers: ['pair-card'] },

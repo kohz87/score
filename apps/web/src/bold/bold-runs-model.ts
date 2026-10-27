@@ -6,6 +6,7 @@ import type {
 } from '@score/contract'
 import {
   isRunOver,
+  leadSteps,
   pauseReasonText,
   stepVisual,
   statusLabel,
@@ -137,7 +138,7 @@ export function orchestrationThread(run: OrchestrationDetail): ThreadStep[] {
       tries: null,
       waitsOnYou: false,
     },
-    ...run.stepsList.map((step, index): ThreadStep => {
+    ...leadSteps(run.stepsList).map((step, index): ThreadStep => {
       const attempts = run.attempts.filter((attempt) => attempt.stepId === step.id)
       const visual = stepVisual(step, attempts.at(-1))
       const failed = ['failed', 'blocked', 'rejected', 'cancelled'].includes(visual)
