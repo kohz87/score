@@ -186,6 +186,7 @@ test('live fixture profiles expose served and unserved agents with run activity 
     )
     .run(now, now)
   const live = new LivePort({
+    firstStatusWaitMs: 0,
     scoreHome: env.home,
     hermesHome: upstream,
     db: env.db,

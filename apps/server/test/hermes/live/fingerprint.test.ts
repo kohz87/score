@@ -83,6 +83,7 @@ function createPort(
   version = async () => cli,
 ) {
   return (port = new LivePort({
+    firstStatusWaitMs: 0,
     scoreHome: env.home,
     hermesHome: home,
     db: env.db,

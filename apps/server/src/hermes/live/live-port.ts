@@ -81,7 +81,11 @@ import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
 
 const StateSchema = z.object({ served_profiles: z.array(ProfileNameSchema) })
+/** How long an agent read waits for the port's first gateway status after a restart. */
+export const FIRST_STATUS_WAIT_MS = 15_000
 export interface LivePortOptions extends HermesPortDeps {
+  /** How long an agent read waits for the first gateway status (default FIRST_STATUS_WAIT_MS; tests pass 0). */
+  firstStatusWaitMs?: number
   bridgeInstallUrl?: string
   bridgeInstallRef?: string
   scoreHome: string
@@ -118,6 +122,11 @@ export class LivePort implements HermesPort {
   private fingerprintAt = -Infinity
   private readonly accepted: AcceptedBuilds
   private readonly followers = new Map<string, Promise<void>>()
+  // 3.9.1 (owner: "codex agent keep showing offline when idle"): Score answers HTTP before the port has read which
+  // profiles the gateway serves. An agent list asked for in that window would mark every idle Hermes agent offline, and
+  // that answer is stored and pushed until something changes. Agent reads wait for the first status (bounded).
+  private statusReady!: () => void
+  private readonly firstStatus = new Promise<void>((resolve) => (this.statusReady = resolve))
   private current: ReturnType<HermesPort['status']> = {
     hermes: {
       version: null,
@@ -282,6 +291,8 @@ export class LivePort implements HermesPort {
     if (this.refresh) return this.refresh
     this.refresh = this.loadStatus().finally(() => {
       this.refresh = undefined
+      // Even a status read that failed releases the agent reads waiting for the first one (they don't wait again).
+      this.statusReady()
     })
     return this.refresh
   }
@@ -394,6 +405,15 @@ export class LivePort implements HermesPort {
     return this.agentDetailsFlight.then((details) => structuredClone(details))
   }
   private async readAgentDetails(): Promise<AgentDetail[]> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      this.firstStatus,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, this.options.firstStatusWaitMs ?? FIRST_STATUS_WAIT_MS)
+        timer.unref?.()
+      }),
+    ])
+    clearTimeout(timer)
     const served = this.current.hermes.servedProfiles
     const names = this.profiles.names(served)
     return Promise.all(

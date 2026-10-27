@@ -29,6 +29,7 @@ function create(runner?: LivePortOptions['runner'], frozen?: () => string | null
     JSON.stringify({ served_profiles: ['default', 'builder', 'reviewer'] }),
   )
   return (port = new LivePort({
+    firstStatusWaitMs: 0,
     scoreHome: env.home,
     hermesHome,
     ...(runner ? { runner } : {}),
@@ -165,6 +166,7 @@ test('startup re-follows existing nonterminal Score runs from persisted seq', as
 
 test('an unreachable gateway starts in degraded mode and stops cleanly', async () => {
   port = new LivePort({
+    firstStatusWaitMs: 0,
     scoreHome: env.home,
     hermesHome: join(env.home, 'missing-fixture'),
     db: env.db,
@@ -191,9 +193,15 @@ test('the live port uses the shared Score DB and refuses to start without it', a
     join(hermesHome, 'gateway_state.json'),
     JSON.stringify({ served_profiles: ['builder'] }),
   )
-  const orphan = new LivePort({ scoreHome: env.home, hermesHome, fetch: env.fake.fetch })
+  const orphan = new LivePort({
+    firstStatusWaitMs: 0,
+    scoreHome: env.home,
+    hermesHome,
+    fetch: env.fake.fetch,
+  })
   await expect(orphan.start(env.ingest)).rejects.toThrow('shared Score DB')
   port = new LivePort({
+    firstStatusWaitMs: 0,
     scoreHome: env.home,
     hermesHome,
     fetch: env.fake.fetch,
@@ -231,6 +239,7 @@ test.each([
       ? new Response(JSON.stringify(body), { status })
       : env.fake.fetch(url, init)
   port = new LivePort({
+    firstStatusWaitMs: 0,
     scoreHome: env.home,
     db: env.db,
     hermesHome: join(env.home, 'missing'),
@@ -309,6 +318,7 @@ test.each(['polling', 'error'] as const)(
     let now = Date.now()
     const errors: unknown[] = []
     port = new LivePort({
+      firstStatusWaitMs: 0,
       scoreHome: env.home,
       hermesHome: join(env.home, 'missing-fixture'),
       db: env.db,
@@ -347,6 +357,7 @@ test('gate #11 stopping the port interrupts supervisor backoff without restartin
   env.fake.terminalAfterPoll = Infinity
   const error = vi.fn()
   port = new LivePort({
+    firstStatusWaitMs: 0,
     scoreHome: env.home,
     hermesHome: join(env.home, 'missing-fixture'),
     db: env.db,

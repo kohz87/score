@@ -3,6 +3,18 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.9.0] — 2026-10-27
+
+### Added
+- **Effort per agent.** Each agent's model settings have an Effort choice: Hermes agents set their profile's reasoning
+  effort (Default, low, medium, high, xhigh); Claude Code agents pass `--effort` (low … max); Codex agents the levels
+  their model offers. Default leaves it to the model. (decision 147)
+
+### Fixed
+- **Idle Hermes agents no longer show as offline after Score restarts.** An agent list asked for in the first seconds
+  after a restart marked every idle agent offline until something changed; it now waits for Score's first look at the
+  gateway.
+
 ## [3.8.6] — 2026-10-27
 
 ### Fixed

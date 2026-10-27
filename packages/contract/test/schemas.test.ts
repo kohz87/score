@@ -1524,6 +1524,7 @@ const cases = [
   [
     'ModelSettingsSchema',
     {
+      effort: 'high',
       fallbacks: [{ provider: 'openrouter', model: 'gpt-x' }],
       fallbacksEditable: true,
       aliases: [],
@@ -1536,8 +1537,8 @@ const cases = [
   ],
   [
     'ModelSettingsUpdateSchema',
-    { fallbacks: [], speech: { tts: { voice: 'en-US-x' } } },
-    { speech: { tts: { api_key: 'k' } } },
+    { fallbacks: [], effort: null, speech: { tts: { voice: 'en-US-x' } } },
+    { effort: 'ultra' },
   ],
   [
     'ModelVisibilitySchema',
@@ -2017,6 +2018,7 @@ const cases = [
       workspace: '/work/coder',
       permission: 'read-only',
       model: null,
+      effort: null,
       style: { color: '#19C39A', shape: 'hexagon' },
       quota: 'Uses your ChatGPT plan quota.',
       quotaFloorPercent: 10,
@@ -2055,7 +2057,13 @@ const cases = [
       style: { color: '#19C39A', shape: 'hexagon' },
     },
   ],
-  ['CodingAgentPatchSchema', { permission: 'read-only' }, { password: 'only a password' }],
+  [
+    'CodingAgentPatchSchema',
+    { permission: 'read-only', effort: null },
+    { password: 'only a password' },
+  ],
+  ['EffortLevelSchema', 'xhigh', 'max'],
+  ['EffortWordSchema', 'minimal', 'Two words'],
   ['QuotaFloorSchema', 0, 51],
   [
     'QuotaHoldViewSchema',

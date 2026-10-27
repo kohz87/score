@@ -1754,3 +1754,15 @@ One entry per completed task: what landed, review results, and any **rejected re
   Gate: e2e 853 passed, 1 failed (themes-builtin "Settings stays reachable": failed once more alone on another theme while
   a coder's checks loaded the VM, then 3/3), check green (server 4853, web 3026, contract 1528).
 - **v3.8.6 deployed live** (~09:12 UTC, idle guard passed): backup score-pre-3.8.6-20261027.db, health ok.
+- **3.9.0** (2026-10-27). (a) Effort per agent (owner: "are we able to set effort level?" → "Yes, for every agent",
+  decision 147): Hermes `agent.reasoning_effort` through the model-settings read/write path (one allow-listed key, undo),
+  coding agents `effort` (migration 0098) → Claude `--effort`, Codex `-c model_reasoning_effort=…`, validated against fixed
+  lists and re-checked at spawn; not part of the worker policy. Sonnet coder from docs/briefs/3.9.0-effort.md, 1 fix round
+  (model change resets an unlisted effort; custom Hermes values shown and cleared by Default; bad stored effort reads as
+  Default); lead review of the argv/Hermes parts. (b) Lead (owner: "codex agent keep showing offline when idle?"): the
+  server listens before `port.start()`, so an /api/agents in that window (the browser reconnects after every restart) stored
+  every idle Hermes agent as offline; agent reads now wait (≤ 15 s) for the first gateway status, released in a finally.
+  Review: wait could repeat after a failed status (fixed). Gate: e2e 850 passed, 4 failed (3 agent-page screenshots: the new
+  Effort card, regenerated and checked by eye; tablet flake), check green (server 4862, web 3030, contract 1532).
+- **v3.9.0 deployed live** (~09:36 UTC, idle guard passed): backup score-pre-3.9.0-20261027.db, health ok; after the
+  restart the browser's agent list stored every agent idle/served (the offline bug confirmed fixed live).

@@ -36,7 +36,7 @@ export function modelChoices(models: CodingModelOption[]): ModelChoices {
   return { groups: [...groups].map(([family, list]) => ({ family, models: list })), single }
 }
 
-function useCodingModels(runtime: CodingRuntime) {
+export function useCodingModels(runtime: CodingRuntime) {
   return useQuery({
     queryKey: ['coding', 'models', runtime],
     // The server keeps a list for 5 minutes; opening the form asks it to look again.
