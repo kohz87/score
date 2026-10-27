@@ -930,3 +930,12 @@ body.fit [data-ui='bold'] .stream {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* 3.8.4 (owner: "the button is unseeable"): the classic primary button keeps its light ink fill in the new shell, but
+   its text used the classic --card (white), which the new shell doesn't set. Dark text on the light fill, everywhere
+   (the doubled class outranks the classic `.orch-room button.orch-primary` rules wherever this file loads). */
+[data-ui='bold'] button.orch-primary.orch-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}

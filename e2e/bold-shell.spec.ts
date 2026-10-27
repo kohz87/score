@@ -91,3 +91,26 @@ test.describe('normal motion', () => {
     )
   })
 })
+
+test('a classic primary button inside the new shell has readable text (3.8.4, owner)', async ({
+  page,
+}) => {
+  await pair(page)
+  await page.goto('/b/settings')
+  await expect(page.locator('[data-ui="bold"]')).toBeVisible()
+  const colours = await page.evaluate(() => {
+    const host = document.querySelector('[data-ui="bold"]')!
+    const room = document.createElement('div')
+    room.className = 'orch-room'
+    const button = document.createElement('button')
+    button.className = 'orch-primary'
+    button.textContent = 'Lift the block'
+    room.append(button)
+    host.append(room)
+    const style = getComputedStyle(button)
+    const result = { color: style.color, background: style.backgroundColor }
+    room.remove()
+    return result
+  })
+  expect(colours.color).not.toBe(colours.background)
+})

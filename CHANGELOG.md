@@ -3,6 +3,17 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.8.4] — 2026-10-27
+
+### Fixed
+- **Deleting a run's room no longer blocks new work after every restart.** The startup check now knows the run's
+  leftover journal entries belong to a deleted run. The "Starting work is blocked" card's button is readable again in
+  the new shell. (decision 145)
+
+### Added
+- **Library tables: resize the whole table and each row.** A corner grip makes the whole table wider or narrower; a
+  grip on each row's first cell sets its height. Kept on this device per note, like column widths.
+
 ## [3.8.3] — 2026-10-27
 
 ### Added

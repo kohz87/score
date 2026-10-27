@@ -82,3 +82,46 @@ test('a starting job that is still working stays, and the room is deleted anyway
     ).deleted_at,
   ).toBeNull()
 })
+
+test('a deleted run room is no doubt at the next start: its journal handles belong to a pruned run (3.8.4)', async () => {
+  const { GlobalFenceStore } = await import('../../src/domain/orchestration/fence.ts')
+  h = await harness()
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => h.orch.summary(id).status === 'succeeded')
+  const roomId = h.orch.summary(id).roomId
+  const name = (
+    h.db.sqlite.prepare('SELECT name FROM rooms WHERE id = ?').get(roomId) as { name: string }
+  ).name
+  // The journal still holds the run's handles (nothing compacted it).
+  const own = h.journal.readOwn()
+  expect(own.ok && own.entries.some((entry) => entry.kind === 'run_handle')).toBe(true)
+  h.db.tx((sqlite) => deleteRoom(sqlite, roomId, name, new Date().toISOString()))
+  expect(new GlobalFenceStore(h.db, h.journal).startupCheck().fenced).toBe(false)
+})
+
+test('an attempt id two runs claim is still checked: the map fails closed (3.8.4 review)', async () => {
+  const { GlobalFenceStore } = await import('../../src/domain/orchestration/fence.ts')
+  h = await harness()
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => h.orch.summary(id).status === 'succeeded')
+  const own = h.journal.readOwn()
+  const handle = own.ok ? own.entries.find((entry) => entry.kind === 'run_handle') : undefined
+  expect(handle).toBeDefined()
+  const attemptId = (handle as { attemptId: string }).attemptId
+  // A pruned run elsewhere that claims the same attempt id must not hide this run's handle.
+  h.journal.append({
+    kind: 'send_started',
+    attemptId,
+    orchestrationId: 'orc-elsewhere',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
+  h.db.sqlite
+    .prepare(
+      "INSERT INTO orc_history (orchestration_id, kind, detail, at) VALUES ('orc-elsewhere', 'pruned', '{}', ?)",
+    )
+    .run(new Date().toISOString())
+  h.db.sqlite.prepare('UPDATE orc_attempts SET run_id = NULL WHERE id = ?').run(attemptId)
+  expect(new GlobalFenceStore(h.db, h.journal).startupCheck().fenced).toBe(true)
+})
