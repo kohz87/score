@@ -1716,3 +1716,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   848 passed, 0 failed; check failed once on bold-team.test.tsx "removal that finishes after the panel is gone" (timing
   flake: 3/3 alone; to make reliable), rerun green (server 4851, web 3018, contract 1528).
 - **v3.8.2 deployed live** (~06:57 UTC, idle guard passed): backup score-pre-3.8.2-20261027.db, health ok.
+- **3.8.3** (2026-10-27, lead; owner: "on library editor, i cannot adjust table width or length? I cannot highlight
+  them and copy either" → chose "Drag column widths"). Header grips widen a column (colgroup + fixed layout; widths kept in
+  localStorage per note and header row, never in the Markdown; double-click resets); pressing a cell still edits it,
+  dragging on selects a range (Shift+click/arrows extend, Escape clears); Ctrl/Cmd+C copies the shown text as TSV + an
+  HTML table via copyText (new optional html part). Decision 144. Review: a drag after typing acted on the redrawn grid,
+  the plain-HTTP copy fallback dropped focus, stale anchor (all fixed); re-review clean. **Process slip:** the release
+  merge conflicted in docs/DECISIONS.md (143 vs 144 rows) and the one-liner committed the markers into the release commit;
+  caught before the gate finished, resolved (both rows), gate rerun; release merges now stop on a conflict. Gate: e2e 849
+  passed, 1 failed (tablet flake), check green (server 4851, web 3024, contract 1528).
+- **v3.8.3 deployed live** (~07:18 UTC, idle guard passed): backup score-pre-3.8.3-20261027.db, health ok.
