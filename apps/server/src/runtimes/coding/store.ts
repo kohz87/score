@@ -1,5 +1,6 @@
 import {
   DEFAULT_QUOTA_FLOOR_PERCENT,
+  EffortWordSchema,
   CodingPermissionSchema,
   CodingQuotaSchema,
   CodingRuntimeSchema,
@@ -58,7 +59,8 @@ const toAgent = (value: unknown): StoredCodingAgent => {
     workspace: row.workspace,
     permission: row.permission,
     model: row.model,
-    effort: row.effort,
+    // A hand-edited or damaged value reads as Default, so one bad row can't fail the whole list.
+    effort: EffortWordSchema.safeParse(row.effort).success ? row.effort : null,
     style: { color: row.color, shape: row.shape },
     confirmedVersion: row.confirmed_version,
     quotaFloorPercent: row.quota_floor_percent,

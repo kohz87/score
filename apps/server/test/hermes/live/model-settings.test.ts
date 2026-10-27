@@ -285,3 +285,20 @@ test('effort: a level outside the list is refused before any write; a failed sav
   ).rejects.toThrow()
   expect((config.agent as Record<string, unknown>).reasoning_effort).toBe('low')
 })
+
+test('effort: a number, object or unknown string Hermes holds shows as custom, and Default unsets it', async () => {
+  for (const held of [3, { a: 1 }, 'ultra']) {
+    config.agent = { reasoning_effort: held }
+    const shown = (await tabs.getModelSettings('builder')).effort
+    expect(shown).not.toBeNull()
+    runner.mockClear()
+    const saved = await tabs.updateModelSettings('builder', { effort: null })
+    expect(writes()).toEqual([['-p', 'builder', 'config', 'unset', 'agent.reasoning_effort']])
+    expect(saved.effort).toBeNull()
+  }
+  config.agent = { reasoning_effort: '' }
+  expect((await tabs.getModelSettings('builder')).effort).toBeNull()
+  runner.mockClear()
+  await tabs.updateModelSettings('builder', { effort: null })
+  expect(writes()).toEqual([])
+})

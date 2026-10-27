@@ -125,6 +125,13 @@ function effectiveChain(raw: RawSettings): { entries: ModelRef[]; editable: bool
   return { entries, editable: current.editable && legacy.editable }
 }
 
+/** null = Default (unset, null or ""); anything else Hermes holds is shown, even a number or object (as text). */
+function effortOf(value: unknown): string | null {
+  if (value === undefined || value === null) return null
+  if (typeof value === 'string') return value.trim() || null
+  return typeof value === 'object' ? JSON.stringify(value) : String(value)
+}
+
 export function deriveSettings(raw: RawSettings): ModelSettings {
   const chain = effectiveChain(raw)
   const tts = isRecord(raw.tts) ? raw.tts : {}
@@ -133,8 +140,7 @@ export function deriveSettings(raw: RawSettings): ModelSettings {
   const sttProvider = providerOf(stt, STT_PROVIDERS)
   const ttsInfo = TTS_PROVIDERS.find((item) => item.id === ttsProvider)
   const sttInfo = STT_PROVIDERS.find((item) => item.id === sttProvider)
-  const effortRaw = raw.agent?.reasoning_effort
-  const effort = typeof effortRaw === 'string' && effortRaw.trim() ? effortRaw.trim() : null
+  const effort = effortOf(raw.agent?.reasoning_effort)
   return {
     effort,
     fallbacks: chain.entries,
@@ -181,7 +187,9 @@ export function planWrites(raw: RawSettings, update: ModelSettingsUpdate): Op[] 
   }
   if (update.effort !== undefined) {
     if (update.effort === null) {
-      if (prior.effort !== null) ops.push({ kind: 'unset', key: 'agent.reasoning_effort' })
+      const held = raw.agent?.reasoning_effort
+      if (held !== undefined && held !== null && held !== '')
+        ops.push({ kind: 'unset', key: 'agent.reasoning_effort' })
     } else if (update.effort !== prior.effort) {
       ops.push({
         kind: 'set',

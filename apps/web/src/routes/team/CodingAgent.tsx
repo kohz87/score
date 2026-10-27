@@ -619,11 +619,18 @@ function ModelEditor({
   const models = useCodingModels(coding.runtime)
   const runtimeLevels = CODING_EFFORTS[coding.runtime]
   // Codex lists the levels per model; when the chosen model lists some, offer those the server accepts.
-  const own = models.data?.models.find((item) => item.id === model.trim())?.efforts
-  const levels =
-    coding.runtime === 'codex' && own?.length
+  const levelsFor = (modelId: string) => {
+    const own = models.data?.models.find((item) => item.id === modelId.trim())?.efforts
+    return coding.runtime === 'codex' && own?.length
       ? (runtimeLevels ?? []).filter((level) => own.includes(level))
       : (runtimeLevels ?? [])
+  }
+  const levels = levelsFor(model)
+  // A model that doesn't list the current level puts the choice back on Default: that level is never sent for it.
+  const pickModel = (next: string) => {
+    setModel(next)
+    if (effort !== '' && !levelsFor(next).includes(effort)) setEffort('')
+  }
   return (
     <form
       className="team-routine-form"
@@ -635,7 +642,7 @@ function ModelEditor({
         })
       }}
     >
-      <ModelPicker runtime={coding.runtime} value={model} onChange={setModel} />
+      <ModelPicker runtime={coding.runtime} value={model} onChange={pickModel} />
       {runtimeLevels && <EffortSelect value={effort} levels={levels} onChange={setEffort} />}
       {save.error && <p role="alert">{save.error.message}</p>}
       <div className="team-file-actions">
