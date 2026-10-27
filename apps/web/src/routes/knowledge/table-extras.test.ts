@@ -34,7 +34,7 @@ test('copied cells are tab-separated text and an escaped HTML table', () => {
 })
 
 test('a size is relative: the table to its space, each column to the table (3.8.5)', () => {
-  expect(toSize([200, 600], 1000)).toEqual({ table: 0.8, cols: [0.25, 0.75] })
+  expect(toSize([200, 600], 1000)).toEqual({ table: 0.8, cols: [0.25, 0.75], px: 800 })
   const key = widthsKey('n.md', ['A', 'B'])
   writeWidths(key, { table: 1.5, cols: [0.25, 0.75] })
   expect(readWidths(key, 2)).toEqual({ table: 1.5, cols: [0.25, 0.75] })

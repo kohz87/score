@@ -114,10 +114,9 @@ export class TableWidget extends WidgetType {
     const applySize = (size: TableSize | null) => {
       table.style.tableLayout = size ? 'fixed' : ''
       table.style.width = size ? `${(size.table * 100).toFixed(2)}%` : ''
-      // On a narrower screen no column gets thinner than the minimum (words would split); the table scrolls instead.
-      table.style.minWidth = size
-        ? `${Math.round(Math.max(...size.cols.map((share) => MIN_COLUMN / share)))}px`
-        : ''
+      // On a smaller screen the table shrinks with it, but not below 60% of the width it was given (its words would
+      // split); past that it scrolls. A per-column floor would force tables with a narrow "#" column to full width.
+      table.style.minWidth = size?.px ? `${Math.round(size.px * 0.6)}px` : ''
       cols.forEach(
         (col, index) => (col.style.width = size ? `${(size.cols[index]! * 100).toFixed(2)}%` : ''),
       )

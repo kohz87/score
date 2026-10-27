@@ -16,7 +16,12 @@ export function widthsKey(note: string, header: readonly string[]): string {
  * looks the same on any screen. `table` is its width as a share of the editor's line (1 = the whole line; more scrolls
  * sideways); `cols` are each column's share of the table.
  */
-export type TableSize = { table: number; cols: number[] }
+export type TableSize = {
+  table: number
+  cols: number[]
+  /** The table's width in pixels when it was sized: on a smaller screen it shrinks to 60% of it, then scrolls. */
+  px?: number
+}
 
 /** Drawn pixel widths as a size relative to the space they were drawn in. */
 export function toSize(widths: readonly number[], available: number): TableSize {
@@ -24,6 +29,7 @@ export function toSize(widths: readonly number[], available: number): TableSize 
   return {
     table: total / Math.max(available, 1),
     cols: widths.map((value) => value / Math.max(total, 1)),
+    px: Math.round(total),
   }
 }
 
@@ -32,8 +38,8 @@ export function readWidths(key: string, columns: number): TableSize | null {
     const raw = localStorage.getItem(key)
     if (!raw) return null
     // Pixel arrays from 3.8.3/3.8.4 don't fit another screen: they are dropped and the table lays out again.
-    const parsed = JSON.parse(raw) as { v?: unknown; table?: unknown; cols?: unknown }
-    const { table, cols } = parsed
+    const parsed = JSON.parse(raw) as { v?: unknown; table?: unknown; cols?: unknown; px?: unknown }
+    const { table, cols, px } = parsed
     if (
       parsed.v !== 2 ||
       typeof table !== 'number' ||
@@ -44,7 +50,11 @@ export function readWidths(key: string, columns: number): TableSize | null {
     )
       return null
     const sum = (cols as number[]).reduce((total, value) => total + value, 0)
-    return { table, cols: (cols as number[]).map((value) => value / sum) }
+    return {
+      table,
+      cols: (cols as number[]).map((value) => value / sum),
+      ...(typeof px === 'number' && px > 0 && px < 20000 ? { px } : {}),
+    }
   } catch {
     return null
   }
