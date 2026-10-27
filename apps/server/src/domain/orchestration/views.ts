@@ -10,6 +10,7 @@ import type {
 } from '@score/contract'
 import { checkView } from './checks.ts'
 import { consultViews } from './advisor.ts'
+import { helpersView } from './helpers.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { workerPoliciesOf } from './coding-policy.ts'
 import { lifecycleOf } from '../agent-lifecycle.ts'
@@ -254,6 +255,7 @@ export const stepViewOf = (
   updatedAt: s.updated_at,
   quotaHold: quotaHoldOf(s, holds),
   role: s.role ?? null,
+  helperRole: s.helper_role ?? null,
 })
 
 /** A step that hasn't started and has a hold row shows it; a started or finished step never does. */
@@ -312,6 +314,7 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     quotaFloorPercent: o.quota_floor_percent,
     check: checkView(sqlite, o.id),
     advisor: consultViews(sqlite, o),
+    helpers: helpersView(sqlite, o),
     coding: {
       stepLimit: o.coding_steps,
       acceptedUnknownCost: o.accepted_unknown_cost.filter(

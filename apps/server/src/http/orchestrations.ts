@@ -20,7 +20,7 @@ import type { Orchestrator } from '../domain/orchestration/executor.ts'
 import { requestIdempotency } from './idempotency.ts'
 import { HttpError } from '../errors.ts'
 import { FRESH_AUTH_MS } from '../terminal/tickets.ts'
-import { checkRoot, type RootPolicy } from '../workspace/policy.ts'
+import { checkRoot, defaultRootPolicy, type RootPolicy } from '../workspace/policy.ts'
 import { splitCommand } from '../domain/orchestration/check-command.ts'
 
 const IdParams = z.object({ id: z.string().min(1).max(100) })
@@ -98,6 +98,12 @@ export function registerOrchestrationRoutes(
           'Confirm your security password or passkey first.',
         )
       body.check = { ...body.check, workspace: root.real }
+    }
+    // 3.15: the folder the helpers scan is named in their instructions: it must be one the Workspace rules allow.
+    if (body.helpers?.scanFolder) {
+      const root = await checkRoot(body.helpers.scanFolder, deps.checkPolicy ?? defaultRootPolicy())
+      if (!root.ok) throw new HttpError(400, 'bad_request', root.reason)
+      body.helpers = { ...body.helpers, scanFolder: root.real }
     }
     const created = await orchestrator.create(body, await deps.port.listAgents())
     return reply.code(201).send(created)

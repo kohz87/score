@@ -51,7 +51,9 @@ test('before the plan: work waits for the advice, which reaches the lead quoted'
   expect(inputs[0]).toContain('Add a test step before the release notes.')
   // The consult is not part of the lead's work: not in its step list, not counted against its steps.
   expect(inputs[0]).not.toMatch(/^- adv1 /m)
-  expect(h.orch.summary(id).stepsCreated ?? 1).toBeLessThanOrEqual(1)
+  expect(h.rows('SELECT steps_created AS n FROM orchestrations WHERE id = ?', id)).toEqual([
+    { n: 1 },
+  ])
   expect(consults(id)).toEqual([
     expect.objectContaining({
       checkpoint: 'before_plan',
@@ -189,9 +191,9 @@ test('with a check: the before-done consult does not make the pass stale', async
       script: byTurn({
         1: async (t) => void (await t.call('orch.check', {})),
         2: async (t) =>
-          out.push(r(await t.call('orch.finish', { outcome: 'success', summary: 'x' }))),
+          void out.push(r(await t.call('orch.finish', { outcome: 'success', summary: 'x' }))),
         3: async (t) =>
-          out.push(r(await t.call('orch.finish', { outcome: 'success', summary: 'x' }))),
+          void out.push(r(await t.call('orch.finish', { outcome: 'success', summary: 'x' }))),
       }),
     },
   })

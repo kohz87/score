@@ -7,6 +7,7 @@ import {
   OrchAssignArgsSchema,
   OrchCancelArgsSchema,
   OrchCheckArgsSchema,
+  OrchVoteArgsSchema,
   OrchFinishArgsSchema,
   OrchNoteArgsSchema,
   OrchPlanArgsSchema,
@@ -307,7 +308,7 @@ export function createMcpServer(
     )
     orch(
       'orch.assign',
-      'Queue a step for a team agent. Score validates it against the run limits, budget and gates; the step starts when its "after" steps succeeded. Use replaces to retry or replace a failed or stopped step. A coding agent that is low on its usage limit is refused with quota_low and the agents that still have room: choose another agent, or call again with ifQuotaLow "ask_owner" when no other agent can do the step, and the person decides.',
+      'Queue a step for a team agent. Score validates it against the run limits, budget and gates; the step starts when its "after" steps succeeded. Use replaces to retry or replace a failed or stopped step. With role (search, grep or audit) the step goes to one of the job’s helpers, in their own slots and allowance. A coding agent that is low on its usage limit is refused with quota_low and the agents that still have room: choose another agent, or call again with ifQuotaLow "ask_owner" when no other agent can do the step, and the person decides.',
       withoutBase(OrchAssignArgsSchema.shape),
     )
     orch(
@@ -334,6 +335,11 @@ export function createMcpServer(
       'orch.finish',
       'Finish the run: stops new work, retires queued steps and waits for started ones to end.',
       withoutBase(OrchFinishArgsSchema.shape),
+    )
+    orch(
+      'orch.vote',
+      'Ask the helpers the same multiple-choice question (k answers, 3-7). A clear majority (70% or more) comes back as sharp; a split comes back to you (or goes to the person, if they chose that). The tally starts a new turn for you.',
+      withoutBase(OrchVoteArgsSchema.shape),
     )
     orch(
       'orch.check',

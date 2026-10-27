@@ -93,7 +93,7 @@ export function renderBriefing(
       lines.push(quote('CHECK OUTPUT (the end)', truncateTail(last.output, RESULT_BYTES)))
   }
   lines.push('', 'Steps so far (newest last):')
-  const work = stepsOf(sqlite, o.id).filter((step) => !isAdvisorStep(step))
+  const work = stepsOf(sqlite, o.id).filter((step) => !isAdvisorStep(step) && step.role !== 'vote')
   if (work.length === 0) lines.push('(none yet)')
   let text = lines.join('\n')
   // Newest results matter most: walk back from the end while the briefing has room.

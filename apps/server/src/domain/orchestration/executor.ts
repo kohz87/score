@@ -150,6 +150,14 @@ import { nodesOf, readResult, requireWfRun } from '../workflows/store.ts'
 import { timelineOf } from './timeline.ts'
 import { pruneOrchestrationRows } from './prune.ts'
 import {
+  type HelpersConfig,
+  helperLines,
+  helpersOf,
+  settleHelpers,
+  startScan,
+  usesHelperSlot,
+} from './helpers.ts'
+import {
   adviceArrived,
   adviseOnRepeatCheckFailure,
   adviseOnRepeatFailure,
@@ -873,15 +881,25 @@ export class Orchestrator {
     body: OrchestrationCreate,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<OrchestrationCreated> {
-    // 3.14: the advisor is checked (served, coding consent) like the agents the lead may assign to.
+    // 3.14–3.15: the advisor and helpers are checked (served, coding consent) like the agents the lead may assign to.
     const advisor = body.advisorAgentId
     if (advisor !== undefined && advisor === body.leadAgentId)
       throw new HttpError(400, 'bad_request', 'The advisor has to be another agent than the lead.')
+    const helpers = body.helpers
+    if (helpers) {
+      if (helpers.agentIds.includes(body.leadAgentId))
+        throw new HttpError(400, 'bad_request', 'The lead can’t be one of its own helpers.')
+      if (new Set(helpers.agentIds).size !== helpers.agentIds.length)
+        throw new HttpError(400, 'bad_request', 'A helper is listed twice.')
+      if (helpers.scan && !helpers.scanFolder && !body.check)
+        throw new HttpError(400, 'bad_request', 'Say which folder the helpers should scan.')
+    }
+    const extra = [
+      ...new Set([...(advisor !== undefined ? [advisor] : []), ...(helpers?.agentIds ?? [])]),
+    ].filter((agent) => !body.allowedAgents.includes(agent))
     const { preflight, reports } = await this.preflightWith(
       body.leadAgentId,
-      advisor !== undefined && !body.allowedAgents.includes(advisor)
-        ? [...body.allowedAgents, advisor]
-        : body.allowedAgents,
+      [...body.allowedAgents, ...extra],
       agents,
       body.maxConcurrentSteps,
     )
@@ -951,6 +969,32 @@ export class Orchestrator {
     const id = `orc-${randomUUID().slice(0, 8)}`
     await this.mutate((ctx) => {
       this.insert(ctx, id, body, preflight, reports)
+      if (helpers) {
+        const config: HelpersConfig = {
+          agentIds: helpers.agentIds,
+          maxConcurrent: helpers.maxConcurrent,
+          maxSteps: helpers.maxSteps,
+          scan: helpers.scan,
+          scanFolder: helpers.scanFolder ?? (helpers.scan ? (body.check?.workspace ?? null) : null),
+          splitTo: helpers.splitTo,
+        }
+        ctx.sqlite
+          .prepare('UPDATE orchestrations SET helpers_json = ? WHERE id = ?')
+          .run(JSON.stringify(config), id)
+        const freeze = ctx.sqlite.prepare(
+          `INSERT OR IGNORE INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, 'agent', ?, ?)`,
+        )
+        for (const agent of helpers.agentIds)
+          freeze.run(
+            id,
+            agent,
+            lifecycleOf(ctx.sqlite, agent)?.incarnation_id ?? 'untracked',
+            ctx.now,
+          )
+        addHistory(ctx.sqlite, id, 'helpers_set', { ...config }, ctx.now)
+        if (config.scan && config.scanFolder)
+          startScan(ctx, readOrch(ctx.sqlite, id)!, config.scanFolder)
+      }
       if (advisor !== undefined) {
         ctx.sqlite
           .prepare('UPDATE orchestrations SET advisor_agent_id = ? WHERE id = ?')
@@ -1154,7 +1198,8 @@ export class Orchestrator {
         lifecycleOf(sqlite, agentId)?.incarnation_id ?? 'untracked',
         now,
       )
-    addCause(sqlite, id, 'started', null, now)
+    // 3.15: with a scan, the lead's first turn waits for it (settleHelpers adds 'started' when it is done).
+    if (!body.helpers?.scan) addCause(sqlite, id, 'started', null, now)
     addHistory(
       sqlite,
       id,
@@ -2113,6 +2158,8 @@ export class Orchestrator {
     let o = readOrch(sqlite, orchId)
     if (!o || isTerminalStatus(o.status)) return false
     cascadeBlocked(sqlite, orchId, now)
+    // 3.15–3.16: a finished scan starts the lead; a vote whose answers have ended is tallied.
+    settleHelpers(ctx, o)
     // A workflow run's planner is its graph: it runs inside the transaction of whatever woke the run.
     if (o.planner === 'workflow') {
       const planned = planWorkflow(ctx, o)
@@ -2275,6 +2322,7 @@ export class Orchestrator {
           budget: view,
           now,
           check: this.leadCheck(sqlite, o.id),
+          helperLines: helperLines(sqlite, o),
         })
         if (!input.includes(ORC_CAPABILITY_PLACEHOLDER))
           throw new Error('Lead input lost its capability placeholder')
@@ -2346,7 +2394,11 @@ export class Orchestrator {
       }
       if (!agentAdmits(sqlite, step.agent_id) || agentPausedAt(sqlite, step.agent_id) !== null)
         continue
-      if ((counts.perRun.get(o.id) ?? 0) >= o.max_concurrent_steps) continue
+      // 3.15: helper work and vote answers have their own slots; the lead's limit is for its own steps.
+      const helperConfig = usesHelperSlot(step) ? helpersOf(o) : null
+      const slot = helperConfig ? `${o.id}#helpers` : o.id
+      if ((counts.perRun.get(slot) ?? 0) >= (helperConfig?.maxConcurrent ?? o.max_concurrent_steps))
+        continue
       if (counts.total >= ORCH_CAPACITY.concurrentSteps) continue
       if ((counts.perAgent.get(step.agent_id) ?? 0) >= ORCH_CAPACITY.stepsPerAgent) continue
       // The quota guard (8.6): a coding agent below its floor takes no new step; the step is held and the person asked.
@@ -2383,7 +2435,7 @@ export class Orchestrator {
             suspended.id,
           )
         setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
-        counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
+        counts.perRun.set(slot, (counts.perRun.get(slot) ?? 0) + 1)
         counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
         counts.total++
         touch(ctx, o.id)
@@ -2429,7 +2481,7 @@ export class Orchestrator {
       // A workflow step's input also lives in its reply row and its dispatch intent: every retained copy is charged.
       if (codingStep) addCodingStored(sqlite, o.id, Buffer.byteLength(input))
       else addStored(sqlite, o.id, Buffer.byteLength(input) * (o.planner === 'workflow' ? 3 : 1))
-      counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
+      counts.perRun.set(slot, (counts.perRun.get(slot) ?? 0) + 1)
       counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
       counts.total++
       touch(ctx, o.id)
@@ -3488,8 +3540,11 @@ export class Orchestrator {
     attemptId: string,
   ): void {
     if (isAdvisorStep(step)) return adviceArrived(ctx, o, step, ok)
+    // 3.15–3.16: a vote answer reaches the lead only through the tally, a scan part only with the whole scan
+    // (settleHelpers); a helper's read-only work leaves nothing for the check to test.
+    if (step.role === 'vote' || step.helper_role?.startsWith('scan_')) return
     addCause(ctx.sqlite, o.id, ok ? 'step_succeeded' : 'step_failed', step.id, ctx.now)
-    if (ok) queueCheckAfterStep(ctx, o.id)
+    if (ok && step.role !== 'helper') queueCheckAfterStep(ctx, o.id)
     else adviseOnRepeatFailure(ctx, o, { ...step, status: 'failed', result }, result, attemptId)
   }
 

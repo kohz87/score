@@ -53,6 +53,8 @@ export interface LeadInputArgs {
   now: string
   /** 3.13: the person's check and its last run; null or absent when the job has none. */
   check?: LeadCheck | null
+  /** 3.15–3.16: the helpers and the latest votes, already worded. */
+  helperLines?: string[]
 }
 
 export interface LeadCheck {
@@ -92,7 +94,8 @@ const DATA_NOTICE =
 export function renderLeadInput(args: LeadInputArgs): string {
   const { o, gates, inquiries, causes, budget } = args
   // 3.14: the advisor's consults are Score's, not the lead's work: their advice is shown on its own, quoted.
-  const steps = args.steps.filter((step) => step.role !== 'advisor')
+  // 3.16: vote answers are tallied, not read one by one: the votes are summed up in the helpers' lines.
+  const steps = args.steps.filter((step) => step.role !== 'advisor' && step.role !== 'vote')
   const consults = args.steps.filter((step) => step.role === 'advisor')
   const limit = ORCH_LIMITS.leadInputBytes
   const lines: string[] = []
@@ -103,7 +106,7 @@ export function renderLeadInput(args: LeadInputArgs): string {
     `Capability (pass it as the "capability" argument of every orch.* call this turn; keep it private, never put it in an instruction or note): ${ORC_CAPABILITY_PLACEHOLDER}`,
     'Every orch.* call also needs a "commandId" you choose (1-64 characters of letters, digits and . _ : -), unique within this turn. To repeat a call whose reply you never saw, send it again with the SAME commandId and the same arguments, or ask orch.receipt with that commandId.',
     '',
-    `Tools: orch.plan(entries), orch.assign(agent, instruction, after?, replaces?, needsApproval?, ifQuotaLow?) (needsApproval only under the lead-asks policy, in the same call; it cannot be added later; a coding agent low on its usage limit is refused with quota_low and the agents that have room: choose one of them, or pass ifQuotaLow: "ask_owner" when only that agent can do the step), orch.cancel(stepId), orch.ask(question), orch.note(text), orch.finish(outcome, summary), orch.receipt(commandId)${args.check ? ', orch.check()' : ''}.`,
+    `Tools: orch.plan(entries), orch.assign(agent, instruction, after?, replaces?, needsApproval?, ifQuotaLow?) (needsApproval only under the lead-asks policy, in the same call; it cannot be added later; a coding agent low on its usage limit is refused with quota_low and the agents that have room: choose one of them, or pass ifQuotaLow: "ask_owner" when only that agent can do the step), orch.cancel(stepId), orch.ask(question), orch.note(text), orch.finish(outcome, summary), orch.receipt(commandId)${args.check ? ', orch.check()' : ''}${args.helperLines?.length ? ', orch.vote(question, options, k?)' : ''}.`,
     `A retry or replacement of a failed or cancelled step must say replaces: <stepId>. A step starts only when every step in "after" has succeeded. At most ${o.max_concurrent_steps} steps run at once.`,
     DATA_NOTICE,
     '',
@@ -117,6 +120,7 @@ export function renderLeadInput(args: LeadInputArgs): string {
       : `Budget: $${budget.limitUsd.toFixed(2)}, about $${(budget.remainingUsd ?? 0).toFixed(2)} left after reservations${budget.unknownSpend ? ' (some spend is unknown)' : ''}.`,
     o.deadline_at ? `Deadline: ${o.deadline_at}.` : 'Deadline: none.',
     ...(args.check ? ['', ...checkLines(args.check)] : []),
+    ...(args.helperLines?.length ? ['', ...args.helperLines] : []),
     ...(o.advisor_agent_id
       ? [
           '',

@@ -214,6 +214,41 @@ export const CheckRunViewSchema = z.object({
 })
 export type CheckRunView = z.infer<typeof CheckRunViewSchema>
 
+/**
+ * 3.15 (decision 150): helpers, a swarm of (usually cheap) agents for narrow, read-only work the lead hands out with a role,
+ * in their own slots and step allowance. `scan` has them read the folder first (stack, scripts, risks) before the lead's
+ * first turn. 3.16: they also answer the lead's votes; `splitTo` says who decides a split vote.
+ */
+export const HelperRoleSchema = z.enum(['search', 'grep', 'audit'])
+export const OrchestrationHelpersSchema = z
+  .object({
+    agentIds: z.array(AgentIdSchema).min(1).max(4),
+    maxConcurrent: z.int().min(1).max(6).default(3),
+    maxSteps: z.int().min(1).max(60).default(20),
+    scan: z.boolean().default(false),
+    /** The folder the scan reads (absolute; the Workspace rules apply). Needed with `scan` unless the check has one. */
+    scanFolder: z.string().min(1).max(4096).startsWith('/').optional(),
+    splitTo: z.enum(['lead', 'person']).default('lead'),
+  })
+  .strict()
+export const VoteViewSchema = z.object({
+  id: z.string().min(1),
+  question: z.string(),
+  options: z.array(z.string()),
+  k: z.int().positive(),
+  status: z.enum(['voting', 'sharp', 'split', 'failed']),
+  /** Votes per option (same order as `options`); unusable answers are not counted. */
+  counts: z.array(z.int().nonnegative()),
+  /** The winning option's index when sharp, else null. */
+  choice: z.int().nonnegative().nullable(),
+  /** The top option's share of the usable votes (0–1), once tallied. */
+  share: z.number().min(0).max(1).nullable(),
+  /** A split sent to the person: the question they were asked. */
+  inquiryId: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+})
+export type VoteView = z.infer<typeof VoteViewSchema>
+
 export const AdvisorCheckpointSchema = z.enum(['before_plan', 'repeat_failure', 'before_done'])
 export const AdvisorConsultViewSchema = z.object({
   stepId: z.string().min(1),
@@ -265,6 +300,8 @@ export const OrchestrationCreateSchema = z
      * done). Not the lead; its advice is data for the lead, never a veto.
      */
     advisorAgentId: AgentIdSchema.optional(),
+    /** 3.15: the helpers and their limits. */
+    helpers: OrchestrationHelpersSchema.optional(),
   })
   .strict()
 export type OrchestrationCreate = z.infer<typeof OrchestrationCreateSchema>
@@ -394,7 +431,9 @@ export const StepViewSchema = z.object({
   /** 8.6: set while the step's coding agent is below its quota floor. */
   quotaHold: QuotaHoldViewSchema.nullable().optional(),
   /** 3.14: a consult Score started for the advisor (not the lead's work); absent or null for ordinary steps. */
-  role: z.enum(['advisor']).nullable().optional(),
+  role: z.enum(['advisor', 'helper', 'vote']).nullable().optional(),
+  /** 3.15: a helper step's role (search, grep, audit, or a scan part). */
+  helperRole: z.string().nullable().optional(),
 })
 export type StepView = z.infer<typeof StepViewSchema>
 
@@ -539,6 +578,20 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
   storage: z.object({ reserveBytes: z.int(), storedBytes: z.int() }),
   /** 8.6: the run's quota floor; null = each coding agent's own. */
   quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
+  /** 3.15: the helpers, their limits and use; 3.16: the votes (oldest first). Null = no helpers. */
+  helpers: z
+    .object({
+      agentIds: z.array(AgentIdSchema),
+      maxConcurrent: z.int(),
+      maxSteps: z.int(),
+      used: z.int(),
+      scan: z.boolean(),
+      scanFolder: z.string().nullable(),
+      splitTo: z.enum(['lead', 'person']),
+      votes: z.array(VoteViewSchema),
+    })
+    .nullable()
+    .optional(),
   /** 3.14: the advisor and its consults (oldest first); null = no advisor. */
   advisor: z
     .object({
@@ -757,6 +810,8 @@ export const OrchPlanArgsSchema = z.object({
 export const OrchAssignArgsSchema = z.object({
   ...toolBase,
   agent: AgentIdSchema,
+  /** 3.15: hand the step to a helper with a role (its own slots and allowance; read-only by instruction). */
+  role: HelperRoleSchema.optional(),
   instruction: bytes(ORCH_LIMITS.instructionBytes),
   after: z.array(z.string().min(1).max(64)).max(ORCH_LIMITS.maxSteps).optional(),
   replaces: z.string().min(1).max(64).optional(),
@@ -775,6 +830,14 @@ export const OrchRequestApprovalArgsSchema = z.object({
   stepId: z.string().min(1).max(64),
 })
 export const OrchNoteArgsSchema = z.object({ ...toolBase, text: bytes(ORCH_LIMITS.noteBytes) })
+/** 3.16: ask the helpers the same multiple-choice question; a clear majority (≥ 70%) is "sharp". */
+export const OrchVoteArgsSchema = z.object({
+  ...toolBase,
+  question: bytes(1024),
+  options: z.array(z.string().min(1).max(200)).min(2).max(6),
+  k: z.int().min(3).max(7).default(5),
+})
+
 /** 3.13: run the person's check now (no arguments: the lead can't change it). */
 export const OrchCheckArgsSchema = z.object({ ...toolBase })
 
