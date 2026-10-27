@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.8] — 2026-10-27
+
+### Fixed
+- **Start a job checks the planner's MCP tools on live.** "Score cannot see which MCP tools the lead has" showed every
+  time. Score now remembers the tool list its own MCP server hands each agent's Hermes: every `orch.*` tool → ✓; an
+  older list → "Reload MCP" (a real failure); never asked since its key was set up → one reload asked for. (decision 139)
+- **The composer's `/` and `@` lists show every option** instead of one row (a style left over from the classic shell).
+
 ## [3.7.7] — 2026-10-27
 
 ### Added
