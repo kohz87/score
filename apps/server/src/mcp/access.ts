@@ -108,7 +108,9 @@ export class McpAccessStore {
     this.db.tx((sqlite) => {
       this.ensure(sqlite, agentId)
       sqlite
-        .prepare('UPDATE mcp_access SET token_hash = ?, token_created_at = ? WHERE agent_id = ?')
+        .prepare(
+          'UPDATE mcp_access SET token_hash = ?, token_created_at = ?, listed_tools = NULL, listed_at = NULL WHERE agent_id = ?',
+        )
         .run(hashMcpToken(token), this.clock(), agentId)
     })
     return token
@@ -118,10 +120,31 @@ export class McpAccessStore {
     this.db.tx((sqlite) =>
       sqlite
         .prepare(
-          'UPDATE mcp_access SET token_hash = NULL, token_created_at = NULL WHERE agent_id = ?',
+          'UPDATE mcp_access SET token_hash = NULL, token_created_at = NULL, listed_tools = NULL, listed_at = NULL WHERE agent_id = ?',
         )
         .run(agentId),
     )
+  }
+
+  /** 3.7.8: what Score just handed this agent's Hermes on `tools/list` (it keeps that list until it reloads MCP). */
+  recordListed(agentId: string, names: readonly string[]): void {
+    this.db.tx((sqlite) =>
+      sqlite
+        .prepare('UPDATE mcp_access SET listed_tools = ?, listed_at = ? WHERE agent_id = ?')
+        .run(JSON.stringify([...names].sort()), this.clock(), agentId),
+    )
+  }
+
+  /** The tools this agent's Hermes was last handed, or null when it hasn't asked since its token was issued. */
+  listed(agentId: string): { names: string[]; at: number } | null {
+    const row = this.db.read((sqlite) =>
+      sqlite
+        .prepare('SELECT listed_tools, listed_at FROM mcp_access WHERE agent_id = ?')
+        .get(agentId),
+    ) as { listed_tools: string | null; listed_at: number | null } | undefined
+    if (!row?.listed_tools || row.listed_at === null) return null
+    const names = z.array(z.string()).safeParse(JSON.parse(row.listed_tools))
+    return names.success ? { names: names.data, at: row.listed_at } : null
   }
 
   /** The agent a bearer token belongs to, or undefined for a malformed, unknown or revoked token. */
