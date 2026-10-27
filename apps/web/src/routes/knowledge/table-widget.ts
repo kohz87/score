@@ -1,6 +1,15 @@
 import { WidgetType, type EditorView } from '@codemirror/view'
 import { renderInline } from './live-table.ts'
 import {
+  copyCells,
+  MIN_COLUMN,
+  rangeOf,
+  readWidths,
+  widthsKey,
+  writeWidths,
+  type CellRange,
+} from './table-extras.ts'
+import {
   applyOp,
   cellRanges,
   cellStarts,
@@ -22,6 +31,7 @@ import {
 export type TableHooks = {
   onOpenWikilink: (target: string) => void
   isMissing: (target: string) => boolean
+  tableKey?: string
 }
 
 type Pending = { from: number; row: number; column: number; edit: boolean }
@@ -85,9 +95,103 @@ export class TableWidget extends WidgetType {
       row === 0 ? model.header[column]! : (model.rows[row - 1]?.[column] ?? '')
     const start = () => view.posAtDOM(wrap)
 
+    // 3.8.3: dragged column widths, kept on this device for this note's table (the Markdown has no widths).
+    const key = hooks.tableKey ? widthsKey(hooks.tableKey, model.header) : null
+    const colgroup = document.createElement('colgroup')
+    const cols = Array.from({ length: width }, () =>
+      colgroup.appendChild(document.createElement('col')),
+    )
+    table.prepend(colgroup)
+    const applyWidths = (widths: readonly number[] | null) => {
+      table.style.tableLayout = widths ? 'fixed' : ''
+      table.style.width = widths ? `${widths.reduce((sum, value) => sum + value, 0)}px` : ''
+      cols.forEach((col, index) => (col.style.width = widths ? `${widths[index]}px` : ''))
+    }
+    applyWidths(key ? readWidths(key, width) : null)
+    const resizer = (column: number) => {
+      const handle = document.createElement('span')
+      handle.className = 'cm-lp-col-resize'
+      handle.setAttribute('aria-hidden', 'true')
+      handle.title = 'Drag to widen; double-click to reset'
+      handle.addEventListener('mousedown', (event) => event.stopPropagation())
+      handle.addEventListener('pointerdown', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        // Start from what is drawn now, so switching to fixed widths doesn't jump.
+        const widths = cells[0]!.map((cell) => cell.getBoundingClientRect().width)
+        const from = event.clientX
+        const before = widths[column]!
+        handle.setPointerCapture(event.pointerId)
+        const move = (next: PointerEvent) => {
+          widths[column] = Math.max(MIN_COLUMN, before + next.clientX - from)
+          applyWidths(widths)
+        }
+        const up = () => {
+          handle.removeEventListener('pointermove', move)
+          handle.removeEventListener('pointerup', up)
+          handle.removeEventListener('pointercancel', up)
+          if (key) writeWidths(key, widths)
+        }
+        handle.addEventListener('pointermove', move)
+        handle.addEventListener('pointerup', up)
+        handle.addEventListener('pointercancel', up)
+      })
+      handle.addEventListener('dblclick', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        applyWidths(null)
+        if (key) writeWidths(key, null)
+      })
+      return handle
+    }
+
+    // 3.8.3: a range of cells (drag across them, or Shift with a click or an arrow) is selected and copied together.
+    let anchor: { row: number; column: number } | null = null
+    let range: CellRange | null = null
+    let dragging = false
+    const status = document.createElement('span')
+    status.className = 'cm-lp-table-status'
+    status.setAttribute('role', 'status')
+    const showRange = (next: CellRange | null) => {
+      range = next
+      cells.forEach((line, row) =>
+        line.forEach((cell, column) =>
+          cell.classList.toggle(
+            'cm-lp-cell-selected',
+            next !== null &&
+              row >= next.r0 &&
+              row <= next.r1 &&
+              column >= next.c0 &&
+              column <= next.c1,
+          ),
+        ),
+      )
+    }
+    const copy = (fallback: { row: number; column: number }) => {
+      const area = range ?? rangeOf(fallback, fallback)
+      const values: string[][] = []
+      for (let row = area.r0; row <= area.r1; row += 1) {
+        const line: string[] = []
+        // What the cell shows (a cell being typed in: its text), so a spreadsheet gets "4", not "**4**".
+        for (let column = area.c0; column <= area.c1; column += 1) {
+          const cell = cells[row]![column]!
+          line.push(cell.querySelector('input')?.value ?? cell.textContent ?? '')
+        }
+        values.push(line)
+      }
+      const count = values.length * values[0]!.length
+      void copyCells(values).then((ok) => {
+        status.textContent = ok
+          ? `Copied ${count === 1 ? 'the cell' : `${count} cells`}`
+          : 'Couldn’t copy. Select the text in a cell instead.'
+        setTimeout(() => (status.textContent = ''), 2500)
+      })
+    }
+
     const paint = (cell: HTMLTableCellElement, row: number, column: number) => {
       cell.replaceChildren()
       renderInline(cell, valueAt(row, column), hooks)
+      if (row === 0) cell.append(resizer(column))
     }
 
     /** The editor's caret follows the focused cell, so toolbar actions know which cell they are for. */
@@ -258,7 +362,29 @@ export class TableWidget extends WidgetType {
           }
           if (target.closest('a')) return
           event.preventDefault()
+          if (event.shiftKey && anchor) {
+            showRange(rangeOf(anchor, { row, column }))
+            focusCell(row, column)
+            return
+          }
+          // A press edits the cell, as before; dragging on into other cells ends that edit and selects them instead.
+          anchor = { row, column }
+          showRange(null)
+          dragging = true
+          const release = () => {
+            document.removeEventListener('mouseup', release)
+            dragging = false
+          }
+          document.addEventListener('mouseup', release)
           focusCell(row, column, true)
+        })
+        cell.addEventListener('mouseenter', () => {
+          if (!dragging || !anchor || (anchor.row === row && anchor.column === column)) return
+          // Leaving the pressed cell: its edit ends (its blur saves only what was typed) and the range starts.
+          const pressed = cells[anchor.row]![anchor.column]!
+          pressed.querySelector('input')?.blur()
+          showRange(rangeOf(anchor, { row, column }))
+          pressed.focus()
         })
         cell.addEventListener('keydown', (event) => {
           if (event.target !== cell) return
@@ -269,8 +395,24 @@ export class TableWidget extends WidgetType {
             ArrowUp: [-1, 0],
           }
           const move = moves[event.key]
-          if (move) {
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
             event.preventDefault()
+            copy({ row, column })
+          } else if (move && event.shiftKey) {
+            // Shift+arrow grows the range from where it started.
+            event.preventDefault()
+            // A new range starts at the focused cell; an existing one keeps where it started.
+            if (!range) anchor = { row, column }
+            const to = {
+              row: Math.min(Math.max(row + move[0], 0), rowCount - 1),
+              column: Math.min(Math.max(column + move[1], 0), width - 1),
+            }
+            showRange(rangeOf(anchor ?? { row, column }, to))
+            focusCell(to.row, to.column)
+          } else if (move) {
+            event.preventDefault()
+            anchor = { row: row + move[0], column: column + move[1] }
+            showRange(null)
             focusCell(row + move[0], column + move[1])
           } else if (event.key === 'Enter' || event.key === 'F2') {
             event.preventDefault()
@@ -300,7 +442,10 @@ export class TableWidget extends WidgetType {
             else focusCell(row - 1, width - 1)
           } else if (event.key === 'Escape') {
             event.preventDefault()
-            view.contentDOM.focus()
+            if (range) {
+              showRange(null)
+              anchor = { row, column }
+            } else view.contentDOM.focus()
           } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
             // Typing on a cell replaces its content, as in a spreadsheet.
             event.preventDefault()
@@ -314,7 +459,7 @@ export class TableWidget extends WidgetType {
       }
       cells.push(line)
     }
-    wrap.append(table)
+    wrap.append(table, status)
 
     // A table redrawn after an edit or a toolbar action takes the focus the action asked for.
     requestAnimationFrame(() => {

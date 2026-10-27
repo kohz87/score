@@ -541,6 +541,7 @@ function Pane({
             key={`${path}:${session.version}`}
             initial={draft}
             label={`Contents of ${path}`}
+            tableKey={path}
             notes={() => notesRef.current}
             onChange={onChange}
             onOpenWikilink={openWikilink}

@@ -148,6 +148,60 @@ for (const size of sizes) {
       if (size.width < 500) await noPageOverflow(page)
     })
 
+    test('a column is dragged wider and stays so after a reload; cells dragged across are copied (3.8.3)', async ({
+      page,
+      context,
+    }) => {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+      await openLibrary(page, size)
+      const name = unique()
+      const path = await createNote(
+        page,
+        name,
+        `# ${name}\n\n| Item | Qty |\n| --- | --- |\n| Apples | 3 |\n| Pears | **4** |\n`,
+      )
+      const table = editor(page, path).locator('.cm-lp-table table')
+      const first = table.getByRole('columnheader', { name: 'Item' })
+      const before = (await first.boundingBox())!.width
+      const handle = first.locator('.cm-lp-col-resize')
+      const grip = (await handle.boundingBox())!
+      await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(grip.x + grip.width / 2 + 120, grip.y + grip.height / 2, { steps: 6 })
+      await page.mouse.up()
+      await expect.poll(async () => (await first.boundingBox())!.width).toBeGreaterThan(before + 80)
+      // The note itself is unchanged: widths live on this device.
+      expect(await noteBody(page, path)).toContain('| Item | Qty |')
+      await page.reload()
+      await openLibrary(page, size)
+      await page
+        .getByRole('navigation', { name: 'Library notes' })
+        .getByRole('button', { name: new RegExp(`^${name}`) })
+        .click()
+      const again = editor(page, path).locator('.cm-lp-table table')
+      await expect
+        .poll(
+          async () =>
+            (await again.getByRole('columnheader', { name: 'Item' }).boundingBox())!.width,
+        )
+        .toBeGreaterThan(before + 80)
+
+      // A touch drag scrolls on a phone (a cell's own text is copied from its field there): the range is a mouse thing.
+      if (size.width < 500) return
+      // Drag from Apples to 4: four cells; Ctrl+C copies what they show.
+      const apples = (await again.getByRole('cell', { name: 'Apples' }).boundingBox())!
+      await page.mouse.move(apples.x + 10, apples.y + apples.height / 2)
+      await page.mouse.down()
+      // Pressing a cell starts its edit, which may scroll the editor: measure the target after.
+      const four = (await again.locator('td').nth(3).boundingBox())!
+      await page.mouse.move(four.x + 10, four.y + four.height / 2, { steps: 6 })
+      await page.mouse.up()
+      await expect(again.locator('.cm-lp-cell-selected')).toHaveCount(4)
+      await page.keyboard.press('Control+c')
+      await expect(editor(page, path).getByRole('status')).toHaveText('Copied 4 cells')
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Apples\t3\nPears\t4')
+    })
+
     test('the toolbar formats text, and a table inserted from the size grid survives reopening', async ({
       page,
     }) => {

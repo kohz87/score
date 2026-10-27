@@ -1,7 +1,7 @@
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { afterEach, beforeAll, expect, test } from 'vitest'
+import { afterEach, beforeAll, expect, test, vi } from 'vitest'
 import { history, undo } from '@codemirror/commands'
 import { applyTableOp } from './editor-commands.ts'
 import { livePreview, setLiveFocus } from './live-preview.ts'
@@ -21,7 +21,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-function open(doc: string, missing: string[] = []) {
+function open(doc: string, missing: string[] = [], tableKey?: string) {
   const parent = document.createElement('div')
   document.body.append(parent)
   view = new EditorView({
@@ -31,7 +31,11 @@ function open(doc: string, missing: string[] = []) {
       extensions: [
         history(),
         markdown({ base: markdownLanguage }),
-        livePreview({ onOpenWikilink: () => undefined, isMissing: (t) => missing.includes(t) }),
+        livePreview({
+          onOpenWikilink: () => undefined,
+          isMissing: (t) => missing.includes(t),
+          ...(tableKey ? { tableKey } : {}),
+        }),
       ],
     }),
   })
@@ -221,4 +225,49 @@ test('a toolbar action saves the text being typed first, then acts on that cell'
   input(v).value = 'Q'
   applyTableOp(v, { kind: 'row', where: 'below' })
   expect(v.state.doc.toString()).toBe('| A | Q |\n| --- | --- |\n|  |  |\n| 1 | 2 |')
+})
+
+// 3.8.3 (owner): select a range of cells and copy it; drag a column wider.
+test('dragging across cells selects them, Shift+arrow grows the range, Ctrl+C copies what they show', async () => {
+  const writeText = vi.fn(async () => undefined)
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+  const v = open(TABLE)
+  click(cell(v, 1, 0))
+  cell(v, 2, 1).dispatchEvent(new MouseEvent('mouseenter'))
+  document.dispatchEvent(new MouseEvent('mouseup'))
+  const selected = () => v.dom.querySelectorAll('.cm-lp-cell-selected').length
+  expect(selected()).toBe(4)
+  // Dragging on ended the pressed cell's edit.
+  expect(v.dom.querySelector('.cm-lp-cell-input')).toBeNull()
+  key(cell(v, 1, 0), 'c', { ctrlKey: true })
+  await settle()
+  expect(writeText).toHaveBeenCalledWith('Apples\t3\nPears\t4')
+  expect(v.dom.querySelector('.cm-lp-table-status')?.textContent).toBe('Copied 4 cells')
+  key(cell(v, 1, 0), 'Escape')
+  expect(selected()).toBe(0)
+  // Shift+arrow from a focused cell.
+  key(cell(v, 0, 0), 'ArrowDown', { shiftKey: true })
+  expect(selected()).toBe(2)
+})
+
+test('each header has a width handle; dragged widths are kept per note and a double-click resets them', () => {
+  localStorage.clear()
+  const v = open(SMALL, [], 'Notes/plan.md')
+  expect(v.dom.querySelectorAll('th .cm-lp-col-resize')).toHaveLength(2)
+  const table = v.dom.querySelector<HTMLTableElement>('.cm-lp-table table')!
+  expect(table.style.tableLayout).toBe('')
+  view?.destroy()
+  localStorage.setItem('score.tableWidths:Notes/plan.md\u0001A\u0001B', '[180, 90]')
+  const again = open(SMALL, [], 'Notes/plan.md')
+  const drawn = again.dom.querySelector<HTMLTableElement>('.cm-lp-table table')!
+  expect(drawn.style.tableLayout).toBe('fixed')
+  expect([...drawn.querySelectorAll('col')].map((col) => col.style.width)).toEqual([
+    '180px',
+    '90px',
+  ])
+  again.dom
+    .querySelector('th .cm-lp-col-resize')!
+    .dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+  expect(drawn.style.tableLayout).toBe('')
+  expect(localStorage.getItem('score.tableWidths:Notes/plan.md\u0001A\u0001B')).toBeNull()
 })
