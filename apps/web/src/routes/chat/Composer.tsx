@@ -1,4 +1,5 @@
 import type { AgentSummary } from '@score/contract'
+import { StopIcon } from '../../components/StopIcon.tsx'
 import { sendsOnKey } from '../../data/send-key.ts'
 import { skipToken, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import {
@@ -1345,10 +1346,14 @@ export function Composer({
               <button
                 type="button"
                 className="chat-send chat-send--stop"
+                data-protected="inline-flex"
+                aria-label={stopping ? 'Stopping…' : 'Stop'}
+                title="Stop"
+                aria-busy={stopping}
                 disabled={stopping}
                 onClick={() => void stopReplies()}
               >
-                {stopping ? 'Stopping…' : 'Stop'}
+                <StopIcon />
               </button>
             ) : (
               <button

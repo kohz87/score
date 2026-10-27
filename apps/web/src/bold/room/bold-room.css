@@ -1368,13 +1368,9 @@
   display: none;
 }
 
+/* Stop is an icon, so the button stays round like Send; a light ground makes the red square read. */
 [data-ui='bold'] .chat-composer-box--room .chat-send--stop {
-  width: auto;
-  padding: 0 calc(14px * var(--bold-d, 1));
-}
-
-[data-ui='bold'] .chat-composer-box--room .chat-send--stop > span {
-  display: inline;
+  background: var(--panel);
 }
 
 [data-ui='bold'] .chat-composer-box--room .chat-attachments {

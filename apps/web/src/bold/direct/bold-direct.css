@@ -321,12 +321,6 @@
   height: 44px;
 }
 
-/* 3.7.2: Stop is a word, not an icon: the one-to-one's round send button widens into a pill for it, as in the room. */
-[data-ui='bold'] .bold-dm-composer .chat-composer-box--room .chat-send--stop {
-  width: auto;
-  padding: 0 calc(16px * var(--bold-d, 1));
-}
-
 [data-ui='bold'] .bold-dm-composer .chat-composer-box--room .chat-attach {
   width: 44px;
   height: 44px;

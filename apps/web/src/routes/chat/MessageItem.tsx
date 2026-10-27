@@ -1,5 +1,6 @@
 import type { AgentSummary, Message, MessagePart } from '@score/contract'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { StopIcon } from '../../components/StopIcon.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
 import { copyText } from '../../data/clipboard.ts'
 import { newId } from '../../data/ids.ts'
@@ -507,11 +508,16 @@ function StopReply({ message, name }: { message: Message; name: string }) {
       <button
         type="button"
         className="chat-stop-reply"
-        aria-label={`Stop reply from ${name}`}
+        data-protected="inline-flex"
+        aria-label={
+          state === 'busy' ? `Stopping the reply from ${name}` : `Stop reply from ${name}`
+        }
+        title="Stop"
+        aria-busy={state === 'busy'}
         disabled={state === 'busy'}
         onClick={() => void stop()}
       >
-        {state === 'busy' ? 'Stopping…' : 'Stop'}
+        <StopIcon />
       </button>
       {state === 'failed' && (
         <span className="chat-action-error" role="alert">

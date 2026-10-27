@@ -92,7 +92,12 @@ afterEach(() => {
 test('Send turns into Stop while a reply is being written, and Stop posts to the reply', async () => {
   mount([reply(true)])
   expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+  // Owner, 2026-10-27: Stop is an icon (a red rounded square), not the word; its name stays "Stop".
+  const stop = screen.getByRole('button', { name: 'Stop' })
+  expect(stop.textContent).toBe('')
+  expect(stop.querySelector('svg.stop-icon rect')?.getAttribute('fill')).toBe('#d64545')
+  expect(stop.getAttribute('data-protected')).toBe('inline-flex')
+  fireEvent.click(stop)
   await waitFor(() => expect(calls('POST')).toHaveLength(1))
   expect(String(calls('POST')[0]![0])).toBe('/api/rooms/general/messages/reply-1/stop')
 })
