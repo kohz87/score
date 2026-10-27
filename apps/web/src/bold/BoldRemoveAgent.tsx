@@ -176,10 +176,14 @@ export function BoldRemoveAgent({
                     >
                       {stopWork.isPending || rechecks > 0
                         ? 'Stopping its work…'
-                        : `Stop ${name}’s work`}
+                        : stopWork.isSuccess
+                          ? `Stop ${name}’s work anyway`
+                          : `Stop ${name}’s work`}
                     </button>
                     <span className="small muted">
-                      Ends its queued messages and asks its running work to stop.
+                      {stopWork.isSuccess
+                        ? 'Hermes hasn’t ended its work yet. Pressing again ends it in Score.'
+                        : 'Ends its queued messages and asks its running work to stop.'}
                     </span>
                   </div>
                 )}
