@@ -73,6 +73,20 @@ test.each(['', '?range=year', '?range=7d&x=1'])('a bad query %s is a 400', async
   expect(response.json().error.code).toBe('bad_request')
 })
 
+test('3.10.0: speedByAgent holds the medians of the range’s measured runs', async () => {
+  const insert = env.db.sqlite.prepare(
+    `INSERT INTO runs (id, profile, origin, status, started_at, first_output_at, ended_at, output_tokens, updated_at)
+     VALUES (?, 'builder', 'score', 'completed', '2026-03-10T08:00:00.000Z', ?, ?, ?, '2026-03-10T09:00:00.000Z')`,
+  )
+  insert.run('s1', '2026-03-10T08:00:01.000Z', '2026-03-10T08:00:03.000Z', 100)
+  insert.run('s2', '2026-03-10T08:00:03.000Z', '2026-03-10T08:00:05.000Z', 400)
+  insert.run('s3', null, '2026-03-10T08:00:05.000Z', 400)
+  const report = ReportsSchema.parse((await app.inject('/api/reports?range=today')).json())
+  expect(report.speedByAgent).toEqual([
+    { agentId: 'builder', runs: 2, medianTtftMs: 2000, medianTokensPerSecond: 125 },
+  ])
+})
+
 test('GET /api/reports/export.csv returns the By agent table as a download', async () => {
   const response = await app.inject('/api/reports/export.csv?range=7d')
   expect(response.statusCode).toBe(200)

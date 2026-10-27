@@ -213,6 +213,9 @@ type Message = {
     | string
     | null /* streaming agent replies: last sign of life from the run (text, tool, reasoning, approval); absent = createdAt. The web shows "Waiting for the model" after 60 s without it. */
   refs: Ref[]
+  speed?:
+    | { ttftMs: number | null; tokensPerSecond: number | null; outputTokens: number | null }
+    | null /* 3.10.0, agent replies: figures of the run behind it, set once the reply finished; any figure Score did not measure is null, never guessed. ttftMs = first reply text minus run start (or the CLI's own ttft_ms); tokensPerSecond = output tokens / (run end minus first reply text), only for spans of 0.5 s or more. */
 }
 
 type LaneBlock = {
@@ -347,7 +350,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `room.pins.changed`     | `{ roomId }` (PLAN 11.2)                                                                                                                                                                                                                                                                                                            | Pinned decisions                                                                                          |
 | `message.created`       | `Message`                                                                                                                                                                                                                                                                                                                           | Chat, Now thread                                                                                          |
 | `message.delta`         | `{ messageId, roomId, append: string }`                                                                                                                                                                                                                                                                                             | Chat (streaming text)                                                                                     |
-| `message.completed`     | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)                                                                                                                                                                                                                                           | Chat                                                                                                      |
+| `message.completed`     | `{ messageId, roomId, parts?: MessagePart[], speed?: MessageSpeed \| null }` (final parts replace the cached message's; 3.10.0 `speed` as on `Message`)                                                                                                                                                                                                                                           | Chat                                                                                                      |
 | `message.deleted`       | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                                                                                                                                                                                                                                                       | Chat, Now thread                                                                                          |
 | `message.updated`       | `{ roomId, messageId, editedBy?: MessageId \| null, parts?: MessagePart[] }` (`editedBy`: the original of an edit; `parts`: a summary edited or marked stale, or (PLAN 5.39) the tool and reasoning cards of a reply that is still streaming, replace the cached parts; the cards come before the text, as they stay at completion) | Chat                                                                                                      |
 | `message.progressed`    | `{ roomId, messageId, at }` (a streaming reply's run made a non-text move: tool call, reasoning, approval; set its `progressAt`. Text moves it via `message.delta`)                                                                                                                                                                 | Chat                                                                                                      |
@@ -1419,6 +1422,13 @@ WorkspaceInfo.root the browser is showing>`; when present and not the agent's cu
       cacheHitRate: number | null /* 5.29 */
     }
     ;[]
+    speedByAgent?: {
+      agentId
+      runs: number /* runs in the range that have a measured figure */
+      medianTtftMs: number | null
+      medianTokensPerSecond: number | null
+    }
+    ;[] /* 3.10.0: medians over the range's runs (Hermes and coding agents); null = no measured run */
     trend: { date: string; runs: number; spendUsd: number | null }[] /* 5.29: last 30 local days, any range */
     approvals: {
       asked: number

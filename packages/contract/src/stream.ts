@@ -18,6 +18,7 @@ import {
   LaneBlockSchema,
   LogLineSchema,
   MessagePartSchema,
+  MessageSpeedSchema,
   MessageSchema,
   RoomSchema,
   RefSchema,
@@ -40,6 +41,8 @@ export const MessageCompletedSchema = z.object({
   roomId: z.string().min(1),
   /** The authoritative final parts: completion can add a plan, tools summary or notice no delta carried. */
   parts: z.array(MessagePartSchema).optional(),
+  /** 3.10.0: the speed of the run behind the reply, known only once it ended. */
+  speed: MessageSpeedSchema.nullish(),
 })
 export type MessageCompleted = z.infer<typeof MessageCompletedSchema>
 

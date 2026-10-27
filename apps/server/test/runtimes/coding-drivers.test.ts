@@ -893,6 +893,13 @@ test('8.7: a real Claude Code 2.1.302 turn with a sub-agent: no loss, nesting, s
   expect(verdictOf(events)?.reply).toContain('README.txt')
 })
 
+test('3.10.0: Claude Code’s own ttft_ms rides on the usage event; absent stays absent', () => {
+  const withTtft = parseAll(createClaudeParser('/work/ws'), 'claude-subagent')
+  expect(withTtft.find((event) => event.kind === 'usage')).toMatchObject({ ttftMs: 5443 })
+  const without = parseAll(createClaudeParser('/work/ws'), 'claude-basic')
+  expect(without.find((event) => event.kind === 'usage')).not.toHaveProperty('ttftMs')
+})
+
 test('8.7: a failed sub-agent is visible on the sub-agent; the turn still follows the result record', () => {
   const lines = fixtureLines('claude-subagent').map((line) => {
     const record = JSON.parse(line) as Record<string, unknown>

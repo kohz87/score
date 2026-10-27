@@ -186,3 +186,28 @@ test('workspace links follow the caller’s linkFor (the bold room’s Workbench
   )
   expect(screen.getByRole('link', { name: 'the feed' }).getAttribute('href')).not.toContain('/b?')
 })
+
+test('3.10.0: a finished agent reply shows its speed figures quietly', () => {
+  const message: Message = {
+    ...make([{ kind: 'text', text: 'Done.' }]),
+    speed: { ttftMs: 1234, tokensPerSecond: 48.4, outputTokens: 1240 },
+  }
+  render(<MessageItem message={message} agents={[]} />)
+  expect(screen.getByText('first token 1.2 s · 48 tok/s · 1,240 tokens')).toBeTruthy()
+})
+
+test('3.10.0: unmeasured figures are left out, and a streaming reply shows none', () => {
+  const partial: Message = {
+    ...make([{ kind: 'text', text: 'Done.' }]),
+    speed: { ttftMs: 640, tokensPerSecond: null, outputTokens: null },
+  }
+  const { unmount } = render(<MessageItem message={partial} agents={[]} />)
+  expect(screen.getByText('first token 640 ms')).toBeTruthy()
+  unmount()
+  const streaming: Message = {
+    ...make([{ kind: 'text', text: 'Writing' }], true),
+    speed: { ttftMs: 640, tokensPerSecond: 10, outputTokens: 5 },
+  }
+  render(<MessageItem message={streaming} agents={[]} />)
+  expect(screen.queryByText(/first token/)).toBeNull()
+})

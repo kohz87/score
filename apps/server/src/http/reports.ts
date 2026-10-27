@@ -14,6 +14,7 @@ import {
 import { computeTrend, trendWindow } from '../domain/reports-trend.ts'
 import { computeJourney, readAgentNotes, readTaskTitles } from '../domain/journey.ts'
 import { reportsToCsv } from '../domain/reports-csv.ts'
+import { speedByAgent } from '../domain/run-speed.ts'
 import { codingSpendInWindow } from '../domain/coding-spend.ts'
 import { profileSpendInWindow, recordSessionCosts } from '../domain/spend.ts'
 import { readAgentNames } from '../domain/agents.ts'
@@ -188,6 +189,11 @@ export function registerReportRoutes(
           : row
       }),
       trend: trendRows,
+      speedByAgent: db
+        ? db
+            .read((sqlite) => speedByAgent(sqlite, window.from, window.to))
+            .filter((row) => !removed.has(row.agentId))
+        : [],
     })
     return { report, agents, today: window.days.at(-1) ?? new Date(now).toISOString().slice(0, 10) }
   }

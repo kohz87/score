@@ -57,6 +57,7 @@ export const MessageRowSchema = z.object({
   job_id: z.string().nullish(),
   alternative_of: z.string().nullish(),
   reply_kind: z.enum(['person', 'handoff']).nullish(),
+  speed: z.string().nullish(),
 })
 const CountSchema = z.object({ count: z.int().nonnegative() })
 
@@ -444,6 +445,7 @@ export function messageFromRow(value: unknown): Message {
     ...(row.job_id ? { jobId: row.job_id } : {}),
     ...(row.alternative_of ? { alternativeOf: row.alternative_of } : {}),
     ...(row.reply_kind ? { retryable: row.reply_kind === 'person' } : {}),
+    ...(row.speed ? { speed: JSON.parse(row.speed) as unknown } : {}),
   })
 }
 
@@ -558,7 +560,12 @@ export function updateMessage(
     ? [
         {
           type: 'message.completed',
-          data: parts ? { messageId, roomId, parts: message.parts } : { messageId, roomId },
+          data: {
+            messageId,
+            roomId,
+            ...(parts ? { parts: message.parts } : {}),
+            ...(message.speed ? { speed: message.speed } : {}),
+          },
         },
       ]
     : [{ type: 'message.delta', data: { messageId, roomId, append } }]

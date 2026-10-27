@@ -757,6 +757,11 @@ const cases = [
   ['LaneBlockSchema', f.lane, { ...f.lane, end: 'later' }],
   ['MessagePartSchema', f.parts[0], { kind: 'approval', approvalId: '' }],
   ['MessageSchema', f.message, { ...f.message, author: { kind: 'agent' } }],
+  [
+    'MessageSpeedSchema',
+    { ttftMs: 1200, tokensPerSecond: 48.5, outputTokens: 1240 },
+    { ttftMs: -1, tokensPerSecond: null, outputTokens: null },
+  ],
   ['RunSummarySchema', f.run, { ...f.run, status: 'done' }],
   ['TaskRefSchema', f.taskRef, { ...f.taskRef, current: 'yes' }],
   ['AttemptSummarySchema', f.attempt, { ...f.attempt, tools: [] }],

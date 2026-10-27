@@ -25,6 +25,7 @@ import {
   CODING_RESULT_BYTES,
 } from '../../domain/orchestration/ops.ts'
 import { recordRunResult } from '../../domain/workflows/verdict.ts'
+import { applyCliTtft } from '../../domain/run-speed.ts'
 import { rememberCliSession } from './store.ts'
 import type { CodingEvent, ToolDetail } from './types.ts'
 
@@ -41,7 +42,7 @@ export interface RunTranslation {
   owned: boolean
   seq: number
   calls: Map<string, { seq: number; startedAt: string; detail?: ToolDetail; parentCallId?: string }>
-  usage: { input: number; output: number; costUsd: number | null } | null
+  usage: { input: number; output: number; costUsd: number | null; ttftMs?: number } | null
 }
 /** Bytes the translator's per-run state holds (call ids and the tool details kept for their frames). */
 export function translationBytes(translation: RunTranslation): number {
@@ -367,6 +368,7 @@ export function eventObservation(
             input: Math.round(event.inputTokens),
             output: Math.round(event.outputTokens),
             costUsd: event.costUsd ?? null,
+            ...(event.ttftMs !== undefined ? { ttftMs: event.ttftMs } : {}),
           }
           break
         case 'subagent':
@@ -501,6 +503,8 @@ export function terminalObservation(
         // Score annotation, and stored with the run's generation (7.7c §3). Never from the 32 KiB copy above.
         recordRunResult(sqlite, runId, info.reply, now)
       }
+      // The CLI's own time to first token beats Score's measurement.
+      if (usage?.ttftMs !== undefined) applyCliTtft(sqlite, runId, usage.ttftMs)
       const changed = setRun(sqlite, runId, now, {
         status: info.status,
         ended_at: now,
