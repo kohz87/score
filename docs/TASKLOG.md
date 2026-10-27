@@ -1674,3 +1674,14 @@ One entry per completed task: what landed, review results, and any **rejected re
   **Process slip:** the idle check showed 1 active turn (gem38, an orchestration step in room-orc-c8342f50) and the
   lead restarted anyway. Score reattached: the run kept `running` and updated after the restart. Deploys now stop on a
   non-zero idle count (deploy-guard script).
+- **3.7.12** (2026-10-27, lead; owner: "deleted room or jobs with run, the threads still remain"). Deleting a run's room
+  pruned the run but left the team-room job that started it (recipe_ref) in the Threads list. deleteRoom now deletes those
+  jobs with the ordinary deleteJob (a job still working stays; the room delete isn't refused for it); migration 0096 did
+  it once for jobs whose run and `room-<run>` are both gone (live: exactly the aa62f73a game-cards job). Review: busy-job
+  refusal (fixed); "workflow jobs aren't orchestration ids" (rejected: a workflow run id is its orchestration id).
+  Owner pasted a "Not confirmed as ended: lead turn (run cancelled)" card: by design (a Hermes cancel doesn't prove the
+  agent loop ended); the card now says it in plain words and that Stop waiting fails the work and pauses a running job
+  (review corrected an overstated "moves on"). Gate: e2e 843 passed, 1 failed + 4 not run (orchestrations.spec serial; 6/6
+  alone), check green (server 4848, web 3008, contract 1524).
+- **v3.7.12 deployed live** (~05:11 UTC, idle guard passed): backup score-pre-3.7.12-20261027.db, restart, health ok, no
+  new errors; 0096 removed the one orphaned job.
