@@ -611,6 +611,10 @@
   touch-action: none;
   z-index: 1;
 }
+/* The last row's grip stays inside the table (the wrap clips what hangs below it). */
+.cm-lp-table tr:last-child .cm-lp-row-resize {
+  bottom: 0;
+}
 .cm-lp-row-resize:hover,
 .cm-lp-row-resize:active {
   background: linear-gradient(var(--line-strong), var(--line-strong)) center / 100% 2px no-repeat;

@@ -278,6 +278,8 @@ test('each header has a width handle; dragged widths are kept per note and a dou
   expect(drawn.style.tableLayout).toBe('fixed')
   expect(parseFloat(drawn.style.width)).toBe(120)
   expect(drawn.style.width.endsWith('%')).toBe(true)
+  // No column below 48 px on a narrow screen: the 25% column needs a table of at least 192 px.
+  expect(drawn.style.minWidth).toBe('192px')
   expect([...drawn.querySelectorAll('col')].map((col) => parseFloat(col.style.width))).toEqual([
     25, 75,
   ])
