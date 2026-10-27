@@ -48,6 +48,17 @@ export const DEFAULT_QUOTA_FLOOR_PERCENT = 10
 export const CODING_INSTRUCTIONS_MAX = 8000
 const InstructionsSchema = z.string().max(CODING_INSTRUCTIONS_MAX)
 
+/**
+ * Reasoning effort per coding runtime (3.9.0, decision 147). Claude Code: `claude --help` 2.1.311 "--effort <level>
+ * (low, medium, high, xhigh, max)". Codex: `model_reasoning_effort`; the chosen model's own list wins when known. Antigravity
+ * documents no effort flag. A level is also a strict `^[a-z]{1,12}$` word: it travels on argv.
+ */
+export const CODING_EFFORTS: Partial<Record<CodingRuntime, readonly string[]>> = {
+  'claude-code': ['low', 'medium', 'high', 'xhigh', 'max'],
+  codex: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+}
+export const EffortWordSchema = z.string().regex(/^[a-z]{1,12}$/)
+
 export const CodingAgentSchema = z.object({
   id: AgentIdSchema,
   name: z.string(),
@@ -60,6 +71,8 @@ export const CodingAgentSchema = z.object({
   workspace: z.string(),
   permission: CodingPermissionSchema,
   model: z.string().nullable(),
+  /** Reasoning effort passed to the CLI; null = Default (nothing sent). Claude Code and Codex only. */
+  effort: EffortWordSchema.nullable().default(null),
   style: AgentStyleSchema,
   quota: z.string(),
   /** Runs stop giving this agent new steps while a limit has less than this share left (0 = off; default 10). */
@@ -147,6 +160,8 @@ export const CodingAgentPatchSchema = z
     instructionsEtag: z.string().min(1).max(64).optional(),
     permission: CodingPermissionSchema.optional(),
     model: ModelSchema.nullable().optional(),
+    /** null = Default. The level must be in the runtime's list (`CODING_EFFORTS`); else `400`. */
+    effort: EffortWordSchema.nullable().optional(),
     workspace: z.string().min(1).max(4096).optional(),
     quotaFloorPercent: QuotaFloorSchema.optional(),
     password: z.string().max(1024).optional(),

@@ -60,7 +60,14 @@ export const SpeechSettingsSchema = z.object({
 })
 export type SpeechSettings = z.infer<typeof SpeechSettingsSchema>
 
+/** Reasoning effort levels Score offers for a Hermes agent (`agent.reasoning_effort`); unset = the model's default. */
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const
+export const EffortLevelSchema = z.enum(EFFORT_LEVELS)
+export type EffortLevel = z.infer<typeof EffortLevelSchema>
+
 export const ModelSettingsSchema = z.object({
+  /** `agent.reasoning_effort` as Hermes holds it (a hand-set value outside the list is shown as-is); null = Default. */
+  effort: z.string().nullable().default(null),
   /** Ordered chain Hermes tries when the model is unavailable (`fallback_providers`; any length). */
   fallbacks: z.array(ModelRefSchema),
   /** false when an entry has settings beyond provider and model (custom endpoint, key): shown, not rewritten. */
@@ -75,6 +82,8 @@ export const ModelSettingsUpdateSchema = z
   .object({
     fallbacks: z.array(ModelRefSchema).optional(),
     aliases: z.array(AliasInputSchema).max(200).optional(),
+    /** null goes back to Default (`config unset agent.reasoning_effort`). */
+    effort: EffortLevelSchema.nullable().optional(),
     speech: z
       .object({
         /** `provider: null` goes back to Automatic (`config unset stt.provider`). */

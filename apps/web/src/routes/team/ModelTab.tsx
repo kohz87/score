@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router'
 import type { AgentDetail } from '@score/contract'
 import { ModelPicker, type ModelChoice } from '../../components/ModelPicker.tsx'
 import { AliasEditor } from '../../components/model-settings/AliasEditor.tsx'
+import { EffortSetting } from '../../components/model-settings/EffortSetting.tsx'
 import { FallbackChain } from '../../components/model-settings/FallbackChain.tsx'
 import { SpeechModels } from '../../components/model-settings/SpeechModels.tsx'
 import { useModelSettings } from './model-settings-queries.ts'
@@ -100,6 +101,11 @@ export function ModelTab({ agent }: { agent: AgentDetail }) {
       )}
       {settings.data && (
         <>
+          <EffortSetting
+            key={settings.data.effort ?? ''}
+            agentId={agent.id}
+            settings={settings.data}
+          />
           <FallbackChain
             key={JSON.stringify(settings.data.fallbacks)}
             agentId={agent.id}

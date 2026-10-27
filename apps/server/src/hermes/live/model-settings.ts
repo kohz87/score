@@ -1,5 +1,6 @@
 import {
   AliasNameSchema,
+  EffortLevelSchema,
   ModelRefSchema,
   STT_PROVIDERS,
   TTS_PROVIDERS,
@@ -16,7 +17,14 @@ import type { HermesRunner } from './cli.ts'
 // Per-profile model settings that Hermes keeps in config.yaml (hermes_cli/config_defaults.py, fallback_config.py,
 // model_switch.py). Score never opens the file: it asks `config get --json` for four sections, keeps the few fields
 // it shows, and writes single keys with `config set` / `config unset`.
-const KEYS = ['fallback_providers', 'fallback_model', 'model_aliases', 'tts', 'stt'] as const
+const KEYS = [
+  'fallback_providers',
+  'fallback_model',
+  'model_aliases',
+  'tts',
+  'stt',
+  'agent.reasoning_effort',
+] as const
 export interface RawSettings {
   fallback_providers: unknown
   /** Legacy key: Hermes's `get_fallback_chain()` appends its entries after `fallback_providers`. */
@@ -24,6 +32,8 @@ export interface RawSettings {
   model_aliases: unknown
   tts: unknown
   stt: unknown
+  /** Only `agent.reasoning_effort` is ever read from this section; "" or unset means the model's own default. */
+  agent?: { reasoning_effort?: unknown }
 }
 export type Op = { kind: 'set'; key: string; value: string } | { kind: 'unset'; key: string }
 
@@ -45,7 +55,9 @@ export async function readRawSettings(
     const read = reads[index]!
     if (read.state === 'unavailable')
       throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read this agent from Hermes.')
-    raw[key] = read.state === 'ok' ? read.value : undefined
+    const value = read.state === 'ok' ? read.value : undefined
+    if (key === 'agent.reasoning_effort') raw.agent = { reasoning_effort: value }
+    else raw[key] = value
   })
   return raw as unknown as RawSettings
 }
@@ -113,6 +125,13 @@ function effectiveChain(raw: RawSettings): { entries: ModelRef[]; editable: bool
   return { entries, editable: current.editable && legacy.editable }
 }
 
+/** null = Default (unset, null or ""); anything else Hermes holds is shown, even a number or object (as text). */
+function effortOf(value: unknown): string | null {
+  if (value === undefined || value === null) return null
+  if (typeof value === 'string') return value.trim() || null
+  return typeof value === 'object' ? JSON.stringify(value) : String(value)
+}
+
 export function deriveSettings(raw: RawSettings): ModelSettings {
   const chain = effectiveChain(raw)
   const tts = isRecord(raw.tts) ? raw.tts : {}
@@ -121,7 +140,9 @@ export function deriveSettings(raw: RawSettings): ModelSettings {
   const sttProvider = providerOf(stt, STT_PROVIDERS)
   const ttsInfo = TTS_PROVIDERS.find((item) => item.id === ttsProvider)
   const sttInfo = STT_PROVIDERS.find((item) => item.id === sttProvider)
+  const effort = effortOf(raw.agent?.reasoning_effort)
   return {
+    effort,
     fallbacks: chain.entries,
     fallbacksEditable: chain.editable,
     aliases: aliasesOf(raw.model_aliases),
@@ -162,6 +183,19 @@ export function planWrites(raw: RawSettings, update: ModelSettingsUpdate): Op[] 
       // The legacy key would otherwise keep running after the person cleared or replaced the chain.
       if (raw.fallback_model !== undefined && raw.fallback_model !== null)
         ops.push({ kind: 'unset', key: 'fallback_model' })
+    }
+  }
+  if (update.effort !== undefined) {
+    if (update.effort === null) {
+      const held = raw.agent?.reasoning_effort
+      if (held !== undefined && held !== null && held !== '')
+        ops.push({ kind: 'unset', key: 'agent.reasoning_effort' })
+    } else if (update.effort !== prior.effort) {
+      ops.push({
+        kind: 'set',
+        key: 'agent.reasoning_effort',
+        value: EffortLevelSchema.parse(update.effort),
+      })
     }
   }
   if (update.aliases) ops.push(...aliasWrites(prior.aliases, update.aliases))
