@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.10] — 2026-10-27
+
+### Fixed
+- **@ in the team room no longer offers removed agents** (nor ones still being set up or deleted); To's Add someone
+  matches. An edited old message to a removed agent still shows its name.
+
 ## [3.7.9] — 2026-10-27
 
 ### Added
