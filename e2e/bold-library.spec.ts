@@ -48,7 +48,14 @@ async function createNote(page: Page, name: string, text: string) {
   return path
 }
 
+/** 3.8.1: on a phone the notes list folds while a note is open; this opens it again (nothing to do when it's open). */
+async function unfold(page: Page) {
+  const fold = page.getByRole('button', { name: /^Notes and files/ })
+  if (await fold.isVisible()) await fold.click()
+}
+
 async function showFiles(page: Page) {
+  await unfold(page)
   await page.getByRole('button', { name: 'Files', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
 }
@@ -111,6 +118,7 @@ for (const size of sizes) {
       const name = unique()
       const word = `zebrafinch${name.replace(/\W/g, '')}`
       const path = await createNote(page, name, `# ${name}\n\n${word} sings.\n`)
+      await unfold(page)
       await page.getByPlaceholder('Search').fill(word)
       const results = page.getByRole('region', { name: 'Search results' })
       await results.getByRole('button', { name: new RegExp(name) }).click()
@@ -123,6 +131,7 @@ for (const size of sizes) {
       const other = unique()
       const path = await createNote(page, name, `# ${name}\n\nfirst version\n`)
       await createNote(page, other, `# ${other}\n`)
+      await unfold(page)
       await noteButton(page, name).click()
       await editor(page, path).click()
       await page.keyboard.press('Control+a')
@@ -210,7 +219,9 @@ for (const size of sizes) {
       const notesName = `notes-${suffix}.md`
       const word = `heliotrope${unique()}`
       await showFiles(page)
+      await unfold(page)
       await page.locator('.bold-library-main').getByRole('button', { name: 'New folder' }).click()
+      await unfold(page)
       const folderDialog = page.getByRole('dialog', { name: 'New folder' })
       await folderDialog.getByLabel('Folder path').fill(folder)
       await folderDialog.getByRole('button', { name: 'Create folder' }).click()
@@ -265,6 +276,7 @@ for (const size of sizes) {
         timeout: 30_000,
       })
 
+      await unfold(page)
       await page.getByRole('button', { name: 'Export', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: 'Export all of Knowledge' })
       await expect(dialog.getByText(/before compression/)).toBeVisible()
@@ -311,7 +323,9 @@ for (const size of sizes) {
       const noteName = `notes-${suffix}.md`
       const dataName = `data-${suffix}.csv`
       await showFiles(page)
+      await unfold(page)
       await page.locator('.bold-library-main').getByRole('button', { name: 'New folder' }).click()
+      await unfold(page)
       const folderDialog = page.getByRole('dialog', { name: 'New folder' })
       await folderDialog.getByLabel('Folder path').fill(folder)
       await folderDialog.getByRole('button', { name: 'Create folder' }).click()
@@ -351,6 +365,7 @@ for (const size of sizes) {
       const targetPath = await createNote(page, target, `# ${target}\n\nMove me.\n`)
       const sourcePath = await createNote(page, source, `# ${source}\n\nSee [[${target}]].\n`)
 
+      await unfold(page)
       await noteButton(page, target).click()
       await expect(editor(page, targetPath)).toBeVisible()
       await page.getByRole('button', { name: 'Rename or move' }).click()
@@ -371,6 +386,7 @@ for (const size of sizes) {
       }
       expect(updated.body).toContain(`[[${moved}]]`)
       expect((await page.request.get(`/api/knowledge/notes/${targetPath}`)).status()).toBe(404)
+      await unfold(page)
       await noteButton(page, source).click()
       await expect(
         editor(page, sourcePath).locator(`.cm-lp-wikilink[data-wikilink="${moved}"]`),
@@ -386,13 +402,16 @@ for (const size of sizes) {
       const firstPath = await createNote(page, first, `# ${first}\n\nFirst.\n`)
       await createNote(page, second, `# ${second}\n\nSecond.\n`)
 
+      await unfold(page)
       await noteButton(page, first).click()
       await expect(editor(page, firstPath)).toBeVisible()
       await page.getByRole('button', { name: 'Delete', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: `Delete ${first}?` })
       await dialog.getByRole('button', { name: 'Delete note' }).click()
       await expect(page.getByText('Pick a note', { exact: true })).toBeVisible({ timeout: 15_000 })
+      await unfold(page)
       await expect(noteButton(page, first)).toHaveCount(0)
+      await unfold(page)
       await expect(noteButton(page, second)).toBeVisible()
       expect((await page.request.get(`/api/knowledge/notes/${firstPath}`)).status()).toBe(404)
     })
@@ -509,8 +528,13 @@ test('on a phone, tapping a note scrolls it into view and focuses its heading', 
   await createNote(page, first, `# ${first}\n\nFirst.\n`)
   await createNote(page, second, `# ${second}\n\nSecond.\n`)
 
+  await unfold(page)
   await noteButton(page, first).click()
   const panel = page.getByTestId('bold-library')
   await expect(page.locator('.kn-note-head h2', { hasText: first })).toBeFocused()
+  // 3.8.1 (owner): the list folds to one bar, so the note is what the phone shows.
+  const fold = page.getByRole('button', { name: /^Notes and files/ })
+  await expect(fold).toHaveAttribute('aria-expanded', 'false')
+  await expect(noteButton(page, second)).toHaveCount(0)
   await expect.poll(async () => panel.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
 })

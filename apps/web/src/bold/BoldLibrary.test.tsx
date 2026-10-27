@@ -175,6 +175,32 @@ test('lists folders, titles and who last edited each note, and opens the first n
   expect(screen.queryByText(/Activity feed job/)).toBeNull()
 })
 
+test('on a phone the list folds once a note is chosen, unfolds on a tap and folds again on the next pick (3.8.1)', async () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('max-width'),
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+  }))
+  mount()
+  const nav = await screen.findByRole('navigation', { name: 'Library notes' })
+  // Nothing chosen yet: the list is open, as before.
+  const notes = await within(nav).findAllByRole('button', { name: /Last edited by/ })
+  expect(within(nav).queryByRole('button', { name: /Notes and files/ })).toBeNull()
+  fireEvent.click(notes[0]!)
+  const fold = await within(nav).findByRole('button', { name: /Notes and files/ })
+  expect(fold.getAttribute('aria-expanded')).toBe('false')
+  expect(within(nav).queryAllByRole('button', { name: /Last edited by/ })).toHaveLength(0)
+  fireEvent.click(fold)
+  expect(
+    within(nav)
+      .getByRole('button', { name: /Hide the list/ })
+      .getAttribute('aria-expanded'),
+  ).toBe('true')
+  fireEvent.click(within(nav).getAllByRole('button', { name: /Last edited by/ })[1]!)
+  expect(await within(nav).findByRole('button', { name: /Notes and files/ })).toBeDefined()
+})
+
 test('an outside edit gets its own wording in the byline', async () => {
   entries = [{ ...notes[0]!, lastAuthor: 'outside' }]
   mount()

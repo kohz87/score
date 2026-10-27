@@ -127,6 +127,8 @@ export function BoldLibrary({
   openPath?: string | null
 }) {
   const phone = useMediaQuery(PHONE)
+  // On a phone the notes list folds while a note is open (3.8.1); this unfolds it.
+  const [listOpen, setListOpen] = useState(false)
   // The panel's width picks the layout (rail ≥ 1180, two-column panels ≥ 860): measured, since a CSS container would
   // also contain the editor's fixed dialogs and upload toast.
   const rootRef = useRef<HTMLDivElement>(null)
@@ -212,6 +214,9 @@ export function BoldLibrary({
     if (selected !== undefined) return selected
     return section === 'notes' ? (tree.data?.notes[0]?.path ?? null) : null
   }, [section, selected, tree.data])
+  // Folded only once the person chose a note (not the first one shown by default), and not while browsing files.
+  const chosen = phone && section === 'notes' && selected != null
+  const folded = chosen && !listOpen
 
   if (openPath && openPath !== openedPath) {
     setOpenedPath(openPath)
@@ -246,6 +251,7 @@ export function BoldLibrary({
   })
 
   function open(next: string) {
+    setListOpen(false)
     revealPath(next)
     setSelected(next)
     setSection('notes')
@@ -365,148 +371,25 @@ export function BoldLibrary({
           )}
         </p>
       )}
-      <nav className="bold-library-nav" aria-label="Library notes">
-        <label className="bold-library-search">
-          <SearchIcon size={14} />
-          <span className="kn-sr">Search the Library</span>
-          <input
-            type="search"
-            placeholder="Search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-
-        {searching ? (
-          <section className="bold-library-results" aria-label="Search results">
-            {search.isPending && debounced !== '' && <p role="status">Searching…</p>}
-            {search.isError && <p role="alert">Couldn’t search the Library. Try again.</p>}
-            {search.data && search.data.length === 0 && (
-              <p className="muted small">Nothing matches “{debounced}”.</p>
-            )}
-            <ul>
-              {(search.data ?? []).map((hit) => (
-                <li key={hit.path}>
-                  <button type="button" onClick={() => open(hit.path)}>
-                    <strong>
-                      {hit.title || baseName(hit.path)}
-                      {hit.kind === 'document' && hit.type && (
-                        <span className="kn-type-badge">{TYPE_LABEL[hit.type]}</span>
-                      )}
-                    </strong>
-                    <span className="kn-path">{hit.path}</span>
-                    <span className="bold-library-snippet">
-                      {splitSnippet(hit.snippet).map((part, index) =>
-                        part.match ? <mark key={index}>{part.text}</mark> : part.text,
-                      )}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : (
-          <div className="bold-library-groups">
-            {tree.isPending && <p role="status">Loading notes…</p>}
-            {tree.isError && <p role="alert">Couldn’t load the notes.</p>}
-            {tree.data &&
-              groups
-                .filter(
-                  ([folder]) =>
-                    !folderChain(folder)
-                      .slice(0, -1)
-                      .some((up) => collapsed.has(up)),
-                )
-                .map(([folder, items]) => (
-                  <section
-                    key={folder || 'root'}
-                    aria-label={folder || 'Notes'}
-                    className={`bold-library-group${dropTarget === folder ? ' is-drop' : ''}`}
-                    onDragOver={(event) => {
-                      if (!filesInDrag(event)) return
-                      event.preventDefault()
-                      event.stopPropagation()
-                      setDragging(true)
-                      setDropTarget(folder)
-                    }}
-                    onDragLeave={(event) => {
-                      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-                      setDropTarget((current) => (current === folder ? null : current))
-                    }}
-                    onDrop={(event) => {
-                      if (!filesInDrag(event)) return
-                      event.preventDefault()
-                      event.stopPropagation()
-                      upload([...event.dataTransfer.files], folder)
-                    }}
-                  >
-                    {folder === '' ? (
-                      <h2 className={`bold-library-folder${picked === '' ? ' is-picked' : ''}`}>
-                        <button
-                          type="button"
-                          className="bold-library-folder-toggle"
-                          aria-pressed={picked === ''}
-                          onClick={() => setPickedFolder('')}
-                        >
-                          Notes
-                        </button>
-                      </h2>
-                    ) : (
-                      <h2
-                        className={`bold-library-folder${picked === folder ? ' is-picked' : ''}`}
-                        style={{ paddingLeft: 10 + (folder.split('/').length - 1) * 14 }}
-                      >
-                        <button
-                          type="button"
-                          className="bold-library-folder-toggle bold-library-chevron"
-                          aria-expanded={!collapsed.has(folder)}
-                          aria-label={`${collapsed.has(folder) ? 'Expand' : 'Collapse'} ${folder}`}
-                          onClick={() => toggleFolder(folder)}
-                        >
-                          {collapsed.has(folder) ? '▸' : '▾'}
-                        </button>
-                        <button
-                          type="button"
-                          className="bold-library-folder-toggle"
-                          aria-pressed={picked === folder}
-                          title={folder}
-                          onClick={() => setPickedFolder(folder)}
-                        >
-                          {baseName(folder)}
-                          {items.length === 0 && (
-                            <span className="bold-library-empty"> (empty)</span>
-                          )}
-                        </button>
-                      </h2>
-                    )}
-                    {!collapsed.has(folder) &&
-                      items.map((note) => (
-                        <button
-                          key={note.path}
-                          type="button"
-                          className={`bold-library-item${active === note.path && section === 'notes' ? ' is-selected' : ''}`}
-                          aria-current={
-                            active === note.path && section === 'notes' ? 'page' : undefined
-                          }
-                          onClick={() => open(note.path)}
-                        >
-                          <span className="bold-library-item-title">
-                            {note.title || baseName(note.path)}
-                          </span>
-                          <Byline author={note.lastAuthor} agents={agents} />
-                        </button>
-                      ))}
-                  </section>
-                ))}
-            {tree.data && tree.data.notes.length === 0 && (
-              <p className="bold-library-empty-list">
-                No notes yet. Start one below or upload a file.
-              </p>
-            )}
-          </div>
+      <nav
+        className="bold-library-nav"
+        aria-label="Library notes"
+        data-folded={folded ? '' : undefined}
+      >
+        {chosen && (
+          // 3.8.1 (owner, phone): with a note open the list folds to this bar, so the note is what the screen shows.
+          <button
+            type="button"
+            className="bold-library-fold"
+            aria-expanded={!folded}
+            onClick={() => setListOpen((value) => !value)}
+          >
+            <span>{folded ? 'Notes and files' : 'Hide the list'}</span>
+            <span aria-hidden="true">{folded ? '▾' : '▴'}</span>
+          </button>
         )}
-
-        <div className="bold-library-tools">
+        {folded && (
+          // The one tool used while reading a note stays in reach; the rest are behind the bar.
           <button
             type="button"
             className="bold-library-new"
@@ -514,47 +397,205 @@ export function BoldLibrary({
           >
             <PlusIcon size={14} /> New note
           </button>
-          <button
-            type="button"
-            onClick={() => openDialog({ kind: 'folder', parent: picked, fromNav: true })}
-          >
-            <PlusIcon size={14} /> New folder
-          </button>
-          <input
-            ref={uploadInput}
-            type="file"
-            multiple
-            hidden
-            accept={ACCEPT_FILES}
-            aria-label="Choose files to upload to the Library"
-            onChange={(event) => {
-              const files = [...(event.target.files ?? [])]
-              event.target.value = ''
-              upload(files, uploadFolder)
-            }}
-          />
-          <button type="button" disabled={flow.busy} onClick={() => uploadInput.current?.click()}>
-            <UploadIcon size={14} /> {flow.busy ? 'Uploading…' : 'Upload'}
-          </button>
-          <button
-            type="button"
-            aria-pressed={section === 'files'}
-            onClick={() => {
-              setSection('files')
-              setQuery('')
-            }}
-          >
-            <BookIcon size={14} /> Files
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setExportRequest({ request: { all: true }, heading: 'Export all of Knowledge' })
-            }
-          >
-            Export
-          </button>
-        </div>
+        )}
+        {!folded && (
+          <>
+            <label className="bold-library-search">
+              <SearchIcon size={14} />
+              <span className="kn-sr">Search the Library</span>
+              <input
+                type="search"
+                placeholder="Search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+
+            {searching ? (
+              <section className="bold-library-results" aria-label="Search results">
+                {search.isPending && debounced !== '' && <p role="status">Searching…</p>}
+                {search.isError && <p role="alert">Couldn’t search the Library. Try again.</p>}
+                {search.data && search.data.length === 0 && (
+                  <p className="muted small">Nothing matches “{debounced}”.</p>
+                )}
+                <ul>
+                  {(search.data ?? []).map((hit) => (
+                    <li key={hit.path}>
+                      <button type="button" onClick={() => open(hit.path)}>
+                        <strong>
+                          {hit.title || baseName(hit.path)}
+                          {hit.kind === 'document' && hit.type && (
+                            <span className="kn-type-badge">{TYPE_LABEL[hit.type]}</span>
+                          )}
+                        </strong>
+                        <span className="kn-path">{hit.path}</span>
+                        <span className="bold-library-snippet">
+                          {splitSnippet(hit.snippet).map((part, index) =>
+                            part.match ? <mark key={index}>{part.text}</mark> : part.text,
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : (
+              <div className="bold-library-groups">
+                {tree.isPending && <p role="status">Loading notes…</p>}
+                {tree.isError && <p role="alert">Couldn’t load the notes.</p>}
+                {tree.data &&
+                  groups
+                    .filter(
+                      ([folder]) =>
+                        !folderChain(folder)
+                          .slice(0, -1)
+                          .some((up) => collapsed.has(up)),
+                    )
+                    .map(([folder, items]) => (
+                      <section
+                        key={folder || 'root'}
+                        aria-label={folder || 'Notes'}
+                        className={`bold-library-group${dropTarget === folder ? ' is-drop' : ''}`}
+                        onDragOver={(event) => {
+                          if (!filesInDrag(event)) return
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setDragging(true)
+                          setDropTarget(folder)
+                        }}
+                        onDragLeave={(event) => {
+                          if (event.currentTarget.contains(event.relatedTarget as Node | null))
+                            return
+                          setDropTarget((current) => (current === folder ? null : current))
+                        }}
+                        onDrop={(event) => {
+                          if (!filesInDrag(event)) return
+                          event.preventDefault()
+                          event.stopPropagation()
+                          upload([...event.dataTransfer.files], folder)
+                        }}
+                      >
+                        {folder === '' ? (
+                          <h2 className={`bold-library-folder${picked === '' ? ' is-picked' : ''}`}>
+                            <button
+                              type="button"
+                              className="bold-library-folder-toggle"
+                              aria-pressed={picked === ''}
+                              onClick={() => setPickedFolder('')}
+                            >
+                              Notes
+                            </button>
+                          </h2>
+                        ) : (
+                          <h2
+                            className={`bold-library-folder${picked === folder ? ' is-picked' : ''}`}
+                            style={{ paddingLeft: 10 + (folder.split('/').length - 1) * 14 }}
+                          >
+                            <button
+                              type="button"
+                              className="bold-library-folder-toggle bold-library-chevron"
+                              aria-expanded={!collapsed.has(folder)}
+                              aria-label={`${collapsed.has(folder) ? 'Expand' : 'Collapse'} ${folder}`}
+                              onClick={() => toggleFolder(folder)}
+                            >
+                              {collapsed.has(folder) ? '▸' : '▾'}
+                            </button>
+                            <button
+                              type="button"
+                              className="bold-library-folder-toggle"
+                              aria-pressed={picked === folder}
+                              title={folder}
+                              onClick={() => setPickedFolder(folder)}
+                            >
+                              {baseName(folder)}
+                              {items.length === 0 && (
+                                <span className="bold-library-empty"> (empty)</span>
+                              )}
+                            </button>
+                          </h2>
+                        )}
+                        {!collapsed.has(folder) &&
+                          items.map((note) => (
+                            <button
+                              key={note.path}
+                              type="button"
+                              className={`bold-library-item${active === note.path && section === 'notes' ? ' is-selected' : ''}`}
+                              aria-current={
+                                active === note.path && section === 'notes' ? 'page' : undefined
+                              }
+                              onClick={() => open(note.path)}
+                            >
+                              <span className="bold-library-item-title">
+                                {note.title || baseName(note.path)}
+                              </span>
+                              <Byline author={note.lastAuthor} agents={agents} />
+                            </button>
+                          ))}
+                      </section>
+                    ))}
+                {tree.data && tree.data.notes.length === 0 && (
+                  <p className="bold-library-empty-list">
+                    No notes yet. Start one below or upload a file.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="bold-library-tools">
+              <button
+                type="button"
+                className="bold-library-new"
+                onClick={() => openDialog({ kind: 'new', initial: picked ? `${picked}/` : '' })}
+              >
+                <PlusIcon size={14} /> New note
+              </button>
+              <button
+                type="button"
+                onClick={() => openDialog({ kind: 'folder', parent: picked, fromNav: true })}
+              >
+                <PlusIcon size={14} /> New folder
+              </button>
+              <input
+                ref={uploadInput}
+                type="file"
+                multiple
+                hidden
+                accept={ACCEPT_FILES}
+                aria-label="Choose files to upload to the Library"
+                onChange={(event) => {
+                  const files = [...(event.target.files ?? [])]
+                  event.target.value = ''
+                  upload(files, uploadFolder)
+                }}
+              />
+              <button
+                type="button"
+                disabled={flow.busy}
+                onClick={() => uploadInput.current?.click()}
+              >
+                <UploadIcon size={14} /> {flow.busy ? 'Uploading…' : 'Upload'}
+              </button>
+              <button
+                type="button"
+                aria-pressed={section === 'files'}
+                onClick={() => {
+                  setSection('files')
+                  setQuery('')
+                }}
+              >
+                <BookIcon size={14} /> Files
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setExportRequest({ request: { all: true }, heading: 'Export all of Knowledge' })
+                }
+              >
+                Export
+              </button>
+            </div>
+          </>
+        )}
       </nav>
 
       <section className="kn-main bold-library-main" aria-label="Library note" ref={mainRef}>
