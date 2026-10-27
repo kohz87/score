@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.8.5] — 2026-10-27
+
+### Fixed
+- **Library tables use the editor's width.** On a wide screen only text lines keep a readable length; a table can use
+  the whole editor (the "hard border" through the editor is gone). (decision 146)
+- **Table sizes fit any screen.** Widths are kept as shares of the space and row heights in text units, so a table
+  sized on one screen keeps its proportions on another; sizes saved earlier today reset once.
+- **Table cells wrap between words**, never letter by letter; a table too wide for its space scrolls sideways.
+
 ## [3.8.4] — 2026-10-27
 
 ### Fixed
