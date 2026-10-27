@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.8.1] — 2026-10-27
+
+### Fixed
+- **Phone: menus stay on screen.** The room, job and chat ⋯ menus ran off the left edge when their button sat on the
+  left; they now open under the button, shifted to fit.
+- **Phone: the Library's list folds.** Once you pick a note, the notes list folds to one bar (Notes and files ▾, with
+  New note) so the note fills the screen; a tap brings the list back, the next pick folds it again.
+
 ## [3.8.0] — 2026-10-27
 
 ### Added
