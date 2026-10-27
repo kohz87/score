@@ -158,6 +158,7 @@ import {
   usesHelperSlot,
 } from './helpers.ts'
 import {
+  ADVISOR_STEPS,
   adviceArrived,
   adviseOnRepeatCheckFailure,
   adviseOnRepeatFailure,
@@ -226,6 +227,12 @@ const isEvidence = (run: RunFacts): boolean =>
 
 export const ORCHESTRATION_QUOTA_BYTES = 200 * 1024 * 1024
 const SWEEP_MS = 10_000
+
+/** Every step a run may hold: the lead's, its helpers' and the advisor's consults (3.14–3.16). */
+const effectiveSteps = (body: OrchestrationCreate): number =>
+  body.maxSteps +
+  (body.helpers?.maxSteps ?? 0) +
+  (body.advisorAgentId !== undefined ? ADVISOR_STEPS : 0)
 const RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 
 export interface OrchestratorOptions {
@@ -1050,13 +1057,14 @@ export class Orchestrator {
         'capacity',
         `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running.`,
       )
+    // 3.14–3.16 (review): helper work and consults are steps too; the storage and coding reserves are sized for them.
+    const steps = effectiveSteps(body)
+    const concurrent = body.maxConcurrentSteps + (body.helpers?.maxConcurrent ?? 0)
     const reserve = reserveFor(
-      body.maxSteps,
+      steps,
       body.maxLeadTurns,
-      reports.size > 0
-        ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps)
-        : 0,
-      reports.size > 0 ? codingUnsentBytes(body.maxSteps, body.maxConcurrentSteps) : 0,
+      reports.size > 0 ? codingItemsFor(steps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) : 0,
+      reports.size > 0 ? codingUnsentBytes(steps, concurrent) : 0,
     )
     if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
       throw new HttpError(
@@ -1135,9 +1143,12 @@ export class Orchestrator {
         body.codingSteps ?? ORCH_DEFAULTS.codingSteps,
         JSON.stringify([...new Set(body.acceptUnknownCost ?? [])].sort()),
         reports.size > 0
-          ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) *
+          ? codingItemsFor(effectiveSteps(body), body.codingSteps ?? ORCH_DEFAULTS.codingSteps) *
               CODING_ITEM_EXTRA_BYTES +
-              codingUnsentBytes(body.maxSteps, body.maxConcurrentSteps)
+              codingUnsentBytes(
+                effectiveSteps(body),
+                body.maxConcurrentSteps + (body.helpers?.maxConcurrent ?? 0),
+              )
           : 0,
       )
     if (body.quotaFloorPercent !== undefined)
@@ -2448,7 +2459,13 @@ export class Orchestrator {
       if (codingStep) {
         const fresh = readOrch(sqlite, o.id) ?? o
         if (
-          unsentCoding >= codingUnsentSlots(o.max_steps, o.max_concurrent_steps) ||
+          unsentCoding >=
+            codingUnsentSlots(
+              o.max_steps +
+                (helpersOf(o)?.maxSteps ?? 0) +
+                (o.advisor_agent_id ? ADVISOR_STEPS : 0),
+              o.max_concurrent_steps + (helpersOf(o)?.maxConcurrent ?? 0),
+            ) ||
           fresh.coding_stored_bytes + Buffer.byteLength(input) > fresh.coding_reserve_bytes
         )
           continue
@@ -3545,7 +3562,8 @@ export class Orchestrator {
     if (step.role === 'vote' || step.helper_role?.startsWith('scan_')) return
     addCause(ctx.sqlite, o.id, ok ? 'step_succeeded' : 'step_failed', step.id, ctx.now)
     if (ok && step.role !== 'helper') queueCheckAfterStep(ctx, o.id)
-    else adviseOnRepeatFailure(ctx, o, { ...step, status: 'failed', result }, result, attemptId)
+    else if (!ok)
+      adviseOnRepeatFailure(ctx, o, { ...step, status: 'failed', result }, result, attemptId)
   }
 
   // --------------------------------------------------------------------------------------------------- checks (3.13)

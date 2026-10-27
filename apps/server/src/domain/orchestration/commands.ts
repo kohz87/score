@@ -404,6 +404,14 @@ const HANDLERS: Record<ToolName, Handler> = {
       )
     if (o.deadline_at !== null && now >= o.deadline_at)
       return refuse('deadline_passed', 'The run deadline has passed')
+    // Like any work, a vote waits for the advisor's look at the plan, and for unknown spend to be accepted.
+    const waiting = awaitCheckpoint(ctx, o, 'before_plan', attempt.id)
+    if (waiting) return refuse(waiting.code, waiting.message)
+    if (unknownCostBlocks(sqlite, o, budgetView(sqlite, o)))
+      return refuse(
+        'unknown_spend',
+        'Spend of an earlier attempt is unknown; the person has to accept that first',
+      )
     const k = args.k as number
     if (helperStepsUsed(sqlite, o.id) + k > helpers.maxSteps)
       return refuse(
@@ -647,7 +655,7 @@ const HANDLERS: Record<ToolName, Handler> = {
       )
     const stepId = args.stepId as string
     const step = readStep(sqlite, o.id, stepId)
-    if (!step || isAdvisorStep(step))
+    if (!step || isAdvisorStep(step) || step.role === 'vote')
       return refuse('unknown_step', `${stepId} is not a step of this run`)
     if (attemptsOf(sqlite, o.id).some((x) => x.step_id === stepId))
       return refuse(

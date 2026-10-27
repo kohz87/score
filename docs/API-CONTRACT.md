@@ -2220,7 +2220,7 @@ are never refused for this. `when: 'each_step'` also queues a run (reason `step`
 
 `OrchestrationCreate.advisorAgentId?`: an agent Score consults by itself (never the lead: `400 bad_request`). It is checked like
 an allowed agent (preflight, a coding advisor's policy consent and reach acknowledgement) but is not added to `allowedAgents`.
-A consult is a step of Score's (`StepView.role: 'advisor'`, ids `adv1`, `adv2`, …): queued without a gate, admitted, budgeted,
+A consult is a step of Score's (`StepView.role: 'advisor'`, ids `adv1`, `adv2`, …): queued (under `every-step`, behind a gate), admitted, budgeted,
 stopped and recovered like any step, not counted in `maxSteps`; the lead can't cancel, depend on or replace it
 (`unknown_step`, `bad_dependency`, `bad_replaces`). Its input is a briefing (≤ 24 KiB: goal, plan, the person's check and its
 last result, the lead's steps newest first with results quoted as data) asking for advice in ≤ 1,200 characters.
@@ -2231,7 +2231,7 @@ Checkpoints:
 - **same failure twice:** a step that fails like an earlier failed step (normalised text: case, numbers, ids and spacing
   ignored), or the check failing twice in a row with the same ending, starts one consult per failure; at most 3 per job.
 - **before done:** `orch.finish { outcome: 'success' }` (after the check rule) starts a consult and is refused
-  `advice_pending` until it has ended; once it has, success is accepted. `partial`/`failed` never wait.
+  `advice_pending` until it has ended; once it has, success is accepted (the check rule still applies: every step, consults included, makes an earlier pass stale). `partial`/`failed` never wait.
 Advice reaches the lead as cause `advice` (or `advice_failed`) and the latest three as quoted `ADVICE advN` blocks. It is
 never a veto. A consult the budget can't cover is skipped (history `advice_skipped`) and nothing waits for it.
 - `OrchestrationDetail.advisor?: { agentId; consults: AdvisorConsultView[] } | null`; `AdvisorConsultView { stepId;

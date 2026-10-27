@@ -177,12 +177,14 @@ test('the lead cannot cancel, depend on or replace a consult', async () => {
   expect(out.map((o) => o.code)).toEqual(['unknown_step', 'bad_dependency', 'bad_replaces'])
 })
 
-test('with a check: the before-done consult does not make the pass stale', async () => {
-  let finishCheck!: (result: CheckResult) => void
+test('with a check: after the before-done advice the check runs again (the advisor could have changed files)', async () => {
+  const finishers: ((result: CheckResult) => void)[] = []
   const checks: CheckSpawner = async () => ({
     stop() {},
-    done: new Promise<CheckResult>((resolve) => (finishCheck = resolve)),
+    done: new Promise<CheckResult>((resolve) => finishers.push(resolve)),
   })
+  const pass = () =>
+    finishers.at(-1)!({ exitCode: 0, signal: null, timedOut: false, stopped: false, output: 'ok' })
   const out: OrchReceipt[] = []
   h = await harness({
     reply,
@@ -192,7 +194,11 @@ test('with a check: the before-done consult does not make the pass stale', async
         1: async (t) => void (await t.call('orch.check', {})),
         2: async (t) =>
           void out.push(r(await t.call('orch.finish', { outcome: 'success', summary: 'x' }))),
-        3: async (t) =>
+        3: async (t) => {
+          out.push(r(await t.call('orch.finish', { outcome: 'success', summary: 'x' })))
+          await t.call('orch.check', {})
+        },
+        4: async (t) =>
           void out.push(r(await t.call('orch.finish', { outcome: 'success', summary: 'x' }))),
       }),
     },
@@ -201,10 +207,34 @@ test('with a check: the before-done consult does not make the pass stale', async
     advisorAgentId: 'reviewer',
     check: { command: 'pnpm test', workspace: '/tmp/repo', timeoutSec: 600, when: 'finish' },
   })
-  await h.until(() => finishCheck !== undefined)
-  finishCheck({ exitCode: 0, signal: null, timedOut: false, stopped: false, output: 'ok' })
+  await h.until(() => finishers.length === 1)
+  pass()
+  await h.until(() => finishers.length === 2)
+  pass()
   await h.until(() => status(id) === 'succeeded')
-  expect(out.map((o) => o.code ?? o.status)).toEqual(['advice_pending', 'ok'])
+  expect(out.map((o) => o.code ?? o.status)).toEqual(['advice_pending', 'check_required', 'ok'])
+})
+
+test('when the person approves every step, a consult waits for their approval too', async () => {
+  const out: OrchReceipt[] = []
+  h = await harness({
+    reply,
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.plan', { entries: ['x'] })
+          out.push(r(await t.call('orch.assign', { agent: 'builder', instruction: 'x' })))
+        },
+      }),
+    },
+  })
+  const id = await h.create({ advisorAgentId: 'reviewer', gatePolicy: 'every-step' })
+  await h.until(() => out.length === 1)
+  await h.settle()
+  expect(out[0]!.code).toBe('advice_pending')
+  const consult = h.orch.snapshot(id).orchestration.stepsList.find((s) => s.id === 'adv1')!
+  expect(consult.status).toBe('pending_gate')
+  expect(consult.gateId).not.toBeNull()
 })
 
 test('the advisor cannot be the lead', async () => {

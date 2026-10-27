@@ -86,18 +86,17 @@ export const checkPending = (sqlite: DatabaseSync, orchId: string): boolean =>
  */
 export function checkIsCurrent(sqlite: DatabaseSync, orchId: string, check: CheckRow): boolean {
   if (check.started_at === null) return false
-  // The advisor's consults (3.14) read and advise; they change nothing a check would test.
+  // Every step counts, the advisor's consults and helpers' work included (3.14–3.16): Hermes can't hold them read-only.
   // Review P1: an attempt Score can't confirm ended (unknown) may still be writing: it counts as not ended. One the
   // person abandoned counts only if that happened after the check started (they settled it before). A created one that
   // was never sent changed nothing (finishing retires it).
   const row = sqlite
     .prepare(
       `SELECT count(*) AS n FROM orc_attempts WHERE orchestration_id = ? AND kind = 'step'
-         AND (step_id IS NULL OR step_id NOT IN (SELECT id FROM orc_steps WHERE orchestration_id = ? AND role = 'advisor'))
          AND ((terminated_at IS NULL AND state NOT IN ('created', 'refused', 'terminated', 'abandoned'))
               OR terminated_at > ? OR abandoned_at > ?)`,
     )
-    .get(orchId, orchId, check.started_at, check.started_at) as { n: number }
+    .get(orchId, check.started_at, check.started_at) as { n: number }
   return row.n === 0
 }
 

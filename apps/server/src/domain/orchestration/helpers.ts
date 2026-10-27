@@ -111,7 +111,7 @@ export function insertHelperStep(
 /** At creation: the scan's three parts go to the helpers before the lead's first turn (no gate: the person asked). */
 export function startScan(ctx: Ctx, o: OrchRow, folder: string): void {
   const helpers = helpersOf(o)!
-  for (const part of SCAN_PARTS)
+  for (const part of SCAN_PARTS.slice(0, helpers.maxSteps))
     insertHelperStep(ctx, o, {
       agentId: nextHelper(ctx.sqlite, o.id, helpers),
       instruction: `You are a scan helper. Read the project in the folder ${folder} and answer, in at most 1,500 characters: ${part.ask} ${READ_ONLY}`,
@@ -196,8 +196,9 @@ export const SHARP_SHARE = 0.7
 /** The option an answer chose (1-based number at its start, or the option's exact text), or null. */
 export function readChoice(answer: string, options: readonly string[]): number | null {
   const text = answer.trim()
+  // One number, near the start ("2", "Option 2.", "answer: 2"); an answer naming several numbers is unusable.
   const number = /^\D{0,12}?(\d)\b/.exec(text)
-  if (number) {
+  if (number && (text.match(/\d/g) ?? []).length === 1) {
     const index = Number(number[1]) - 1
     if (index >= 0 && index < options.length) return index
   }

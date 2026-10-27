@@ -216,4 +216,7 @@ test('readChoice reads a number or the exact option', () => {
   expect(readChoice('src/hooks.ts', options)).toBe(1)
   expect(readChoice('9', options)).toBeNull()
   expect(readChoice('I am not sure', options)).toBeNull()
+  // Several numbers: unusable rather than guessed.
+  expect(readChoice('1. a 2. b', options)).toBeNull()
+  expect(readChoice('between 1 and 2', options)).toBeNull()
 })

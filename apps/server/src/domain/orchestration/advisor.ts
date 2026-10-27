@@ -4,6 +4,7 @@
 // result reaches the lead as quoted advice. Advice, never a veto: after "before done" the lead may finish anyway.
 
 import type { AdvisorConsultView } from '@score/contract'
+import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { lifecycleOf } from '../agent-lifecycle.ts'
 import { budgetView, canReserve } from './budget.ts'
@@ -11,7 +12,16 @@ import { checksOf, checkConfigOf } from './checks.ts'
 import { touch, type Ctx } from './ctx.ts'
 import { addStored, utf8Bytes } from './ops.ts'
 import { quote, truncateBytes } from './render.ts'
-import { addCause, addHistory, stepsOf, type OrchRow, type StepRow } from './store.ts'
+import {
+  addCause,
+  addHistory,
+  gatesOf,
+  readOrch,
+  stepsOf,
+  type OrchRow,
+  type StepRow,
+} from './store.ts'
+import { readWorkerPolicy } from './coding-policy.ts'
 
 export type Checkpoint = 'before_plan' | 'repeat_failure' | 'before_done'
 
@@ -20,6 +30,8 @@ export const MAX_REPEAT_CONSULTS = 3
 const BRIEFING_BYTES = 24 * 1024
 const RESULT_BYTES = 2 * 1024
 export const ADVICE_CHARS = 1200
+/** Consults one run can hold at most: before the plan, before done, and the repeat-failure ones. */
+export const ADVISOR_STEPS = 2 + MAX_REPEAT_CONSULTS
 
 export const isAdvisorStep = (step: Pick<StepRow, 'role'>): boolean => step.role === 'advisor'
 
@@ -74,8 +86,11 @@ export function renderBriefing(
     '',
     quote('GOAL', o.goal),
     '',
-    'Plan:',
-    ...(o.plan.length ? o.plan.map((entry, index) => `${index + 1}. ${entry}`) : ['(none)']),
+    // The plan and the steps are the lead's words, which a poisoned result may have shaped: quoted like the rest.
+    quote(
+      'PLAN',
+      o.plan.length ? o.plan.map((entry, index) => `${index + 1}. ${entry}`).join('\n') : '(none)',
+    ),
   ]
   const check = checkConfigOf(sqlite, o.id)
   if (check) {
@@ -100,7 +115,7 @@ export function renderBriefing(
   const blocks: string[] = []
   let room = BRIEFING_BYTES - utf8Bytes(text) - 512
   for (const step of work.slice().reverse()) {
-    const head = `- ${step.id} [${step.status}${step.disposition ? `: ${step.disposition}` : ''}] ${step.agent_id}: ${step.instruction.slice(0, 300)}`
+    const head = `- ${step.id} [${step.status}] ${step.agent_id}:\n${quote(`STEP ${step.id}`, `${step.instruction.slice(0, 300)}${step.disposition ? `\n(${step.disposition})` : ''}`)}`
     const body = step.result
       ? quote(`RESULT ${step.id}`, truncateBytes(step.result, RESULT_BYTES).text)
       : ''
@@ -127,8 +142,9 @@ function truncateTail(text: string, bytes: number): string {
 }
 
 /**
- * Starts a consult (a queued advisor step, no gate: the person chose the advisor when starting the job). Returns its id,
- * or null when there is no advisor or the budget can't cover it (recorded; the job goes on without advice).
+ * Starts a consult: a queued advisor step, or one waiting for the person's approval when they approve every step (its
+ * briefing carries the lead's words). Returns its id, or null when there is no advisor, the run isn't running, or the
+ * budget can't cover it (recorded; the job goes on without advice).
  */
 export function consult(
   ctx: Ctx,
@@ -141,6 +157,8 @@ export function consult(
   const advisor = o.advisor_agent_id
   if (!advisor) return null
   const { sqlite, now } = ctx
+  const current = readOrch(sqlite, o.id)
+  if (!current || (current.status !== 'running' && current.status !== 'paused')) return null
   if (!canReserve(budgetView(sqlite, o), o.step_estimate_usd)) {
     addHistory(sqlite, o.id, 'advice_skipped', { checkpoint, why: 'budget' }, now)
     return null
@@ -148,18 +166,21 @@ export function consult(
   const n = consultsOf(sqlite, o.id).length + 1
   const id = `adv${n}`
   const briefing = renderBriefing(sqlite, o, checkpoint, reason)
+  const gated = o.gate_policy === 'every-step'
   sqlite
     .prepare(
       `INSERT INTO orc_steps (orchestration_id, id, seq, agent_id, agent_incarnation, instruction, after_steps, replaces, status, estimate_usd, created_in_attempt, created_at, updated_at, role, checkpoint, signature, reason)
-       VALUES (?, ?, ?, ?, ?, ?, '[]', NULL, 'queued', ?, ?, ?, ?, 'advisor', ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, '[]', NULL, ?, ?, ?, ?, ?, 'advisor', ?, ?, ?)`,
     )
     .run(
       o.id,
       id,
-      o.steps_created + n * 1000,
+      // Seq 0: admitted ahead of queued work, so the advice isn't starved by the steps it is about.
+      0,
       advisor,
       lifecycleOf(sqlite, advisor)?.incarnation_id ?? 'untracked',
       briefing,
+      gated ? 'pending_gate' : 'queued',
       o.step_estimate_usd,
       createdIn,
       now,
@@ -169,6 +190,7 @@ export function consult(
       reason,
     )
   addStored(sqlite, o.id, utf8Bytes(briefing) + 256)
+  if (gated) openPolicyGate(sqlite, o, id, advisor, briefing, now)
   addHistory(sqlite, o.id, 'advisor_consulted', { stepId: id, checkpoint }, now)
   touch(ctx, o.id)
   return id
@@ -294,4 +316,42 @@ export function consultViews(
       createdAt: step.created_at,
     })),
   }
+}
+
+/** A gate bound to this exact step, as `orch.assign` opens under the every-step policy. */
+export function openPolicyGate(
+  sqlite: DatabaseSync,
+  o: OrchRow,
+  stepId: string,
+  agentId: string,
+  instruction: string,
+  now: string,
+): string {
+  const policyId = readWorkerPolicy(sqlite, o.id, agentId)?.policyId
+  const payloadText = JSON.stringify({
+    agentId,
+    agentIncarnation: lifecycleOf(sqlite, agentId)?.incarnation_id ?? 'untracked',
+    instruction,
+    after: [],
+    replaces: null,
+    estimateUsd: o.step_estimate_usd,
+    dependencyRevisions: {},
+    ...(policyId ? { policyId } : {}),
+  })
+  const gateId = `g${gatesOf(sqlite, o.id).length + 1}`
+  sqlite
+    .prepare(
+      `INSERT INTO orc_gates (orchestration_id, id, step_id, requested_by, payload, payload_hash, status, created_at)
+       VALUES (?, ?, ?, 'policy', ?, ?, 'open', ?)`,
+    )
+    .run(
+      o.id,
+      gateId,
+      stepId,
+      payloadText,
+      createHash('sha256').update(payloadText).digest('hex'),
+      now,
+    )
+  addStored(sqlite, o.id, utf8Bytes(payloadText))
+  return gateId
 }
