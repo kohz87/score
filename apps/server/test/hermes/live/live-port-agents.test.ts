@@ -70,7 +70,7 @@ test('an agent list asked for before the first gateway status waits for it, so a
   })
   // Score answers HTTP before the port has started: the read is asked for first, the status arrives after.
   const asked = live.listAgentDetails()
-  await (live as unknown as { loadStatus(): Promise<void> }).loadStatus()
+  await (live as unknown as { refreshStatus(): Promise<void> }).refreshStatus()
   const builder = (await asked).find((agent) => agent.id === 'builder')
   expect(builder?.status).toBe('idle')
   expect(builder?.served).toBe(true)

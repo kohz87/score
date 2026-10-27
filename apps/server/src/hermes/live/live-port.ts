@@ -291,6 +291,8 @@ export class LivePort implements HermesPort {
     if (this.refresh) return this.refresh
     this.refresh = this.loadStatus().finally(() => {
       this.refresh = undefined
+      // Even a status read that failed releases the agent reads waiting for the first one (they don't wait again).
+      this.statusReady()
     })
     return this.refresh
   }
@@ -366,7 +368,6 @@ export class LivePort implements HermesPort {
       compatibility,
       degraded,
     }
-    this.statusReady()
   }
   async listAgents(): Promise<AgentSummary[]> {
     return (await this.listAgentDetails()).map(agentSummary)
