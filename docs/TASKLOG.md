@@ -1792,3 +1792,20 @@ One entry per completed task: what landed, review results, and any **rejected re
   agents (test). Gate: e2e 851 passed, 3 failed (2 coding-agent page screenshots without the link, regenerated and checked by
   eye; tablet flake), check green (server 4877, web 3037, contract 1536).
 - **v3.12.1 deployed live** (~10:47 UTC, idle guard passed): backup score-pre-3.12.1-20261027.db, health ok.
+- **3.13.0 orchestration layers** (2026-10-27, decision 150; owner on the concept screenshots: "All four, step by step", then
+  "don't release them individually, do all of them then review together so there's only 1 e2e"). Lead built the server and
+  contract (oracle check + spawner, advisor consults, helpers with own slots + scan, votes with tally and split-to-person);
+  Sonnet coders built the screens (Start a job sections, Check/Advisor/Helpers cards). Reviews: oracle server (Sonnet: P1
+  unknown attempts didn't make a pass stale; P2 stuck runs, daemonised children, quoting, redaction order — fixed), oracle
+  round 2 (abandoned attempts, exit verdict, UI — fixed), advisor/helpers/votes server (P2 advisor edits after a pass,
+  unquoted lead text to the advisor + ungated consults under every-step, coding reserves — fixed; P3s fixed except: early
+  lead wake when a scan/vote step is blocked, extra lead turns from advice_pending — accepted), combined screens (focus,
+  hidden problems, stale picks, label, protected list, counts, two-step waive — fixed; "bold tokens undefined" rejected:
+  tokens.css defines them for both themes), combined server (redacted command to the advisor, codingSteps resize, check
+  output storage → 30-run cap with reserve, advisor before the check rule, paused advisor, vote text first — fixed; lead
+  input size with every layer at its maximum accepted: capped by truncateBytes), fix-round review clean (preflight
+  estimate without the check reserve accepted: create answers 409 with the reason). Gate: e2e 853 passed, 1 failed
+  (bold-room-files, passed 3/3 alone), check found a lint error, the db table list and the boundary rule (`config.hermesHome`
+  in app.ts) — fixed, check green (server 4931, web 3064, contract 1556).
+- **v3.13.0 deployed live** (~12:58 UTC, idle guard passed): backup score-pre-3.13.0-20261027.db, migrations 0100/0101
+  applied, health ok.
