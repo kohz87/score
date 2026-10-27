@@ -1662,3 +1662,12 @@ One entry per completed task: what landed, review results, and any **rejected re
   message to a removed agent (fixed by `offered`); test now pins it. Gate: e2e 847 passed, 1 failed (tablet flake), check
   green (server 4843, web 3001, contract 1524).
 - **v3.7.10 deployed live** (~04:23 UTC): backup score-pre-3.7.10-20261027.db, restart, health ok, no new errors.
+- **3.7.11** (2026-10-27, lead; owner: a reply's table showed as plain lines in an orchestration room). Hermes' API-server
+  platform hint says "assume plain text. No markdown"; sol61 wrote a table without the separator row. Every new run
+  intent now freezes `instructions` (SCORE_RENDERING_NOTE: Score renders GitHub Markdown) and the client sends it; the
+  chat view turns separator-less pipe runs into tables (decision 141). Review: Hermes fingerprints the run body for the
+  idempotency key, so the note is frozen in the intent (a pre-upgrade start replays unchanged); the table fallback was too
+  eager (indented code, quotes, bullets, inline code, escaped pipes, --- rules) and flickered while streaming (all fixed,
+  tests). Re-review clean. Gate: e2e 846 passed, 2 failed (tablet flake at 768 and 820), check green (server 4845, web
+  3006, contract 1524).
+- **v3.7.11 deployed live** (~04:59 UTC): backup score-pre-3.7.11-20261027.db, restart, health ok, no new errors.
