@@ -5,7 +5,7 @@ import { HttpError } from '../../errors.ts'
 import { assertJobOpen } from './job-life.ts'
 import type { DomainEventDraft } from '../../hub/ingest.ts'
 import { agentAdmits } from '../agent-lifecycle.ts'
-import { reserveMessageRun } from '../message-runs.ts'
+import { failMessageRun, reserveMessageRun } from '../message-runs.ts'
 import { storeMessage } from '../rooms.ts'
 import { roomMembers } from './actions.ts'
 import { z } from 'zod'
@@ -298,4 +298,40 @@ export function stopJob(sqlite: DatabaseSync, jobId: string, now: string): Decid
       ...running.map((row) => ({ agentId: row.agent_id, runId: row.run_id })),
     ],
   }
+}
+
+/**
+ * 3.7.1: everything an agent is doing or has queued, before it is removed. Its queued turns end now; its running turns
+ * (and runs Score started for it outside a turn) are asked to stop, and report back like any stopped run.
+ */
+export function stopAgentWork(sqlite: DatabaseSync, agentId: string, now: string): Decided {
+  const running = sqlite
+    .prepare(
+      `SELECT run_id FROM message_runs WHERE agent_id = ? AND state = 'active' AND run_id IS NOT NULL
+       UNION SELECT id FROM runs WHERE profile = ?1 AND status IN ('queued', 'running', 'waiting_for_approval')`,
+    )
+    .all(agentId) as { run_id: string }[]
+  // A queued turn ends like any turn that never started: its exchange hears it failed and waits on the person, and a
+  // short notice says why (review: a bare state change stranded exchanges and placeholders).
+  const queued = sqlite
+    .prepare(
+      "SELECT turn_id FROM message_runs WHERE agent_id = ? AND state = 'pending' AND orchestration_attempt_id IS NULL",
+    )
+    .all(agentId) as { turn_id: string }[]
+  // An orchestration's own queued turns end as before, quietly: its executor owns their lifecycle.
+  sqlite
+    .prepare(
+      "UPDATE message_runs SET state = 'failed' WHERE agent_id = ? AND state = 'pending' AND orchestration_attempt_id IS NOT NULL",
+    )
+    .run(agentId)
+  const drafts = queued.flatMap((row) =>
+    failMessageRun(
+      sqlite,
+      row.turn_id,
+      'stopped',
+      now,
+      'This was stopped before it started, so the agent could be removed.',
+    ),
+  )
+  return { drafts, running: running.map((row) => ({ agentId, runId: row.run_id })) }
 }

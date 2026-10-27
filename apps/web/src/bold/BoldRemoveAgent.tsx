@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { AgentSummary } from '@score/contract'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { apiFetch } from '../data/api.ts'
+import { newId } from '../data/ids.ts'
 import { ProfileOperation, useProfileOperation } from '../routes/team/ProfileOperation.tsx'
-import { useAgentDelete } from '../routes/team/use-agent-delete.ts'
+import { typedMatches, useAgentDelete } from '../routes/team/use-agent-delete.ts'
 import { useOperationDone } from './BoldAgentOperation.tsx'
 import { removeProblem } from './RemoveConfirm.tsx'
 
@@ -64,6 +65,32 @@ export function BoldRemoveAgent({
   }, [done, client, navigate])
 
   const preview = del.preview
+  // 3.7.1: work that is still going (a run that never finished, a queued turn) can be stopped from here, then the panel
+  // checks again a few times while the runs report that they stopped.
+  const [rechecks, setRechecks] = useState(0)
+  const stopWork = useMutation({
+    mutationFn: () =>
+      apiFetch(`agents/${encodeURIComponent(agentId)}/stop-work`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': newId() },
+        body: '{}',
+      }),
+    onSuccess: () => {
+      review.mutate()
+      setRechecks(6)
+    },
+  })
+  const busy = preview ? preview.pendingWork.activeRuns + preview.pendingWork.queuedTurns : 0
+  useEffect(() => {
+    if (rechecks <= 0 || busy === 0) return
+    const timer = window.setTimeout(() => {
+      review.mutate()
+      setRechecks((left) => left - 1)
+    }, 1500)
+    return () => window.clearTimeout(timer)
+    // The preview read is the mutation's own; rechecking re-runs it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rechecks, busy])
   const working = del.operation?.state === 'running'
   // Failed, needs attention or otherwise not completed: the progress stays, and the person can close the panel.
   const ended = Boolean(del.operation) && !working && !done
@@ -93,13 +120,16 @@ export function BoldRemoveAgent({
   const blockers = (preview?.blockers ?? []).filter(
     (text) => !(stuck && /operation already holds/i.test(text)),
   )
-  const blocked = Boolean(preview?.blockers.length) || (needsAttention && !heldDone)
+  // The server decides (3.3.0, decision 134): a setup that stopped with a recorded error may be removed (it is abandoned
+  // first), so its preview carries no blocker; one Score lost track of still says an operation holds the agent.
+  const blocked = Boolean(preview?.blockers.length)
   const problem = coding
     ? removeCoding.error
     : (del.remove.error ?? (review.error && !preview ? review.error : null))
   const canRemove = coding
     ? !removeCoding.isPending
-    : Boolean(preview) && !blocked && del.typedName === agentId && !del.remove.isPending
+    : Boolean(preview) && !blocked && typedMatches(del.typedName, agentId) && !del.remove.isPending
+  const mistyped = del.typedName.trim() !== '' && !typedMatches(del.typedName, agentId)
 
   return (
     <div
@@ -136,6 +166,26 @@ export function BoldRemoveAgent({
                   {preview.pendingWork.assignments} unfinished assignments.
                 </p>
                 <p>{preview.pendingWork.disposition}</p>
+                {busy > 0 && !del.operation && (
+                  <div className="row wrap">
+                    <button
+                      type="button"
+                      className="btn sm"
+                      disabled={stopWork.isPending || rechecks > 0}
+                      onClick={() => stopWork.mutate()}
+                    >
+                      {stopWork.isPending || rechecks > 0
+                        ? 'Stopping its work…'
+                        : `Stop ${name}’s work`}
+                    </button>
+                    <span className="small muted">
+                      Ends its queued messages and asks its running work to stop.
+                    </span>
+                  </div>
+                )}
+                {stopWork.isError && (
+                  <p role="alert">Couldn’t stop its work. Try again, or stop it from its job.</p>
+                )}
                 <p>
                   A private copy is kept first: <code>{preview.exportPath}</code>. It leaves out
                   credentials and isn’t a full undo.
@@ -145,15 +195,30 @@ export function BoldRemoveAgent({
                     {blocker}
                   </p>
                 ))}
-                {stuck && <p>Finish or retry the stopped step first:</p>}
-                {!del.operation && !stuck && (
+                {stuck && (
+                  <p>
+                    {blocked
+                      ? 'Finish or retry the stopped step first:'
+                      : 'Retry the stopped step, or remove the agent below (the stopped setup is abandoned first):'}
+                  </p>
+                )}
+                {!del.operation && !(stuck && blocked) && (
                   <label className="bold-remove-agent-type">
                     Type {agentId} to confirm
                     <input
                       value={del.typedName}
                       autoComplete="off"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      aria-describedby={mistyped ? 'bold-remove-agent-mistyped' : undefined}
                       onChange={(event) => del.setTypedName(event.target.value)}
                     />
+                    {mistyped && (
+                      <span id="bold-remove-agent-mistyped" className="small muted">
+                        That doesn’t match {agentId}.
+                      </span>
+                    )}
                   </label>
                 )}
               </>
