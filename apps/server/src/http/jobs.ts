@@ -18,7 +18,12 @@ import {
 import type { FastifyInstance, preHandlerHookHandler, onSendHookHandler } from 'fastify'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
-import { decideExchange, stopJob, type Decided } from '../domain/exchanges/decisions.ts'
+import {
+  decideExchange,
+  stopAgentWork,
+  stopJob,
+  type Decided,
+} from '../domain/exchanges/decisions.ts'
 import { jobResults } from '../domain/exchanges/results.ts'
 import { jobWorkbench } from '../domain/exchanges/workbench.ts'
 import {
@@ -81,6 +86,12 @@ export function registerJobRoutes(
     const { exchangeId } = ExchangeParams.parse(request.params)
     const body = ExchangeDecisionRequestSchema.parse(request.body)
     await decide((sqlite, now) => decideExchange(sqlite, exchangeId, body, now))
+    return { ok: true }
+  })
+  // 3.7.1: before removing an agent, stop what it is doing and drop what it has queued.
+  app.post('/api/agents/:agentId/stop-work', mutation, async (request) => {
+    const { agentId } = z.object({ agentId: z.string().min(1).max(128) }).parse(request.params)
+    await decide((sqlite) => stopAgentWork(sqlite, agentId))
     return { ok: true }
   })
   app.post('/api/jobs/:jobId/stop', mutation, async (request) => {

@@ -10,6 +10,14 @@ import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 import { useProfileOperation } from './ProfileOperation.tsx'
 
+/**
+ * Whether the typed confirmation names the agent. Profile names are lowercase, and a phone or tablet keyboard capitalises
+ * the first letter, so case and stray spaces don't count (3.7.1); the request then carries the exact name.
+ */
+export function typedMatches(typed: string, agentId: string): boolean {
+  return typed.trim().toLowerCase() === agentId.toLowerCase()
+}
+
 /** The Hermes agent delete flow (contract §8): preview, typed-name confirm, then the operation's progress. */
 export function useAgentDelete(
   agentId: string,
@@ -42,7 +50,10 @@ export function useAgentDelete(
         await apiFetch(`agents/${encodeURIComponent(agentId)}`, {
           method: 'DELETE',
           headers: { 'Idempotency-Key': newId() },
-          body: JSON.stringify({ typedName, previewHash: preview!.hash }),
+          body: JSON.stringify({
+            typedName: typedMatches(typedName, agentId) ? agentId : typedName,
+            previewHash: preview!.hash,
+          }),
         }),
       ),
     onSuccess: (value) => {

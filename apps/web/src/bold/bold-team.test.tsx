@@ -955,7 +955,8 @@ function stubDelete(reply: (call: Call) => Response | null) {
           (url.pathname === '/api/agents/builder' ||
             url.pathname === '/api/coding-agents/coder')) ||
         url.pathname.startsWith('/api/agents/operations/') ||
-        url.pathname === '/api/agents/preview'
+        url.pathname === '/api/agents/preview' ||
+        url.pathname.endsWith('/stop-work')
       if (isDelete) {
         calls.push(call)
         const response = reply(call)
@@ -1224,4 +1225,84 @@ test('the agent page keeps "needs you" and the overview facts on one row', async
   const row = document.querySelector('.bold-agent-now')
   expect(row?.querySelector('.bold-agent-state')).not.toBeNull()
   expect(row?.querySelector('.bold-agent-facts')).not.toBeNull()
+})
+
+test('a capitalised or padded name still confirms, and DELETE carries the exact name (3.7.1)', async () => {
+  const calls = stubDelete((call) => {
+    if (call.url === '/api/agents/preview')
+      return Response.json({
+        ...deletePreview(),
+        pendingWork: {
+          ...deletePreview().pendingWork,
+          activeRuns: 0,
+          queuedTurns: 0,
+          pendingApprovals: 0,
+          assignments: 0,
+        },
+      })
+    if (call.method === 'DELETE') return Response.json(deleteOp('running'), { status: 202 })
+    return null
+  })
+  open('/b/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove builder' })
+  const input = await within(panel).findByLabelText('Type builder to confirm')
+  expect(input.getAttribute('autocapitalize')).toBe('none')
+  fireEvent.change(input, { target: { value: 'Builde' } })
+  expect(within(panel).getByText('That doesn’t match builder.')).toBeDefined()
+  fireEvent.change(input, { target: { value: ' Builder ' } })
+  const remove = within(panel).getByRole('button', { name: 'Remove' }) as HTMLButtonElement
+  expect(remove.disabled).toBe(false)
+  fireEvent.click(remove)
+  await waitFor(() => expect(calls.some((call) => call.method === 'DELETE')).toBe(true))
+  expect(calls.find((call) => call.method === 'DELETE')!.body).toMatchObject({
+    typedName: 'builder',
+  })
+})
+
+test('Stop its work stops a stuck agent and checks again until the work is gone (3.7.1)', async () => {
+  let stopped = false
+  const calls = stubDelete((call) => {
+    if (call.url === '/api/agents/builder/stop-work') {
+      stopped = true
+      return Response.json({ ok: true })
+    }
+    if (call.url === '/api/agents/preview')
+      return Response.json(
+        stopped
+          ? {
+              ...deletePreview(),
+              pendingWork: {
+                ...deletePreview().pendingWork,
+                activeRuns: 0,
+                queuedTurns: 0,
+                pendingApprovals: 0,
+                assignments: 0,
+              },
+            }
+          : {
+              ...deletePreview([
+                'Finish active runs, queued turns, pending approvals and unfinished assignments before deleting.',
+              ]),
+              pendingWork: { ...deletePreview().pendingWork, pendingApprovals: 0, assignments: 0 },
+            },
+      )
+    return null
+  })
+  open('/b/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove agent…' }))
+  const panel = await screen.findByRole('group', { name: 'Remove builder' })
+  fireEvent.click(await within(panel).findByRole('button', { name: 'Stop builder’s work' }))
+  await waitFor(() =>
+    expect(calls.some((call) => call.url === '/api/agents/builder/stop-work')).toBe(true),
+  )
+  expect(
+    calls.find((call) => call.url === '/api/agents/builder/stop-work')!.headers['idempotency-key'],
+  ).toBeTruthy()
+  await waitFor(() =>
+    expect(
+      within(panel).queryByRole('button', { name: /Stop builder’s work|Stopping/ }),
+    ).toBeNull(),
+  )
+  expect(within(panel).queryByRole('alert')).toBeNull()
 })

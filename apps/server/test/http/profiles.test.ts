@@ -945,3 +945,42 @@ test('an interrupted setup step is confirmed, not abandoned (3.2.2)', async () =
   ).json()
   expect(preview.blockers.join(' ')).toMatch(/An operation already holds this agent/)
 })
+
+test('stop-work ends an agent’s queued turns and asks its running ones to stop, so it can be removed (3.7.1)', async () => {
+  const added = await create()
+  await finished(added.id)
+  const now = new Date().toISOString()
+  env.db.sqlite
+    .prepare(
+      "INSERT INTO runs (id, profile, origin, status, started_at, updated_at) VALUES ('stuck-run', 'helper', 'score', 'running', ?, ?)",
+    )
+    .run(now, now)
+  env.db.sqlite
+    .prepare(
+      "INSERT INTO rooms (id, name, kind, members, created_at, updated_at) VALUES ('busy-room', 'busy-room', 'room', '[\"helper\"]', ?, ?)",
+    )
+    .run(now, now)
+  env.db.sqlite
+    .prepare(
+      "INSERT INTO messages (id, room_id, author_kind, \"to\", parts, refs, streaming, created_at, updated_at) VALUES ('busy-message', 'busy-room', 'you', '[]', '[]', '[]', 0, ?, ?)",
+    )
+    .run(now, now)
+  env.db.sqlite
+    .prepare(
+      "INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, created_at) VALUES ('reply', 'busy-room', 'helper', 'busy-message', 0, 'queued-turn', 'busy-message', 'Example', '[\"helper\"]', ?)",
+    )
+    .run(now)
+  const before = (await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })).json()
+  expect(before.pendingWork).toMatchObject({ activeRuns: 1, queuedTurns: 1 })
+  const stop = vi.spyOn(port, 'stopRun').mockImplementation(async ({ runId }) => {
+    env.db.sqlite.prepare("UPDATE runs SET status = 'cancelled' WHERE id = ?").run(runId)
+  })
+  const stopped = await mutate('/api/agents/helper/stop-work', {}, 'POST', {
+    'idempotency-key': 'stop-helper',
+  })
+  expect(stopped.statusCode).toBe(200)
+  expect(stop).toHaveBeenCalledWith({ agentId: 'helper', runId: 'stuck-run' })
+  const after = (await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })).json()
+  expect(after.pendingWork).toMatchObject({ activeRuns: 0, queuedTurns: 0 })
+  expect(after.blockers).toEqual([])
+})

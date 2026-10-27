@@ -1092,6 +1092,10 @@ pauses, orchestrations, reports and MCP tools. The attempt page at `/attempts/:a
   `provider` (a provider id from `GET /api/models`) is set with the model; preview takes the same fields.
 - **H** `PATCH /api/agents/:agentId` `{ name?; role? }` → `AgentDetail`. Name is a Score display name; profile id never changes. Role is nonempty description text.
 - **H** `DELETE /api/agents/:agentId` `{ typedName; previewHash }` → `202 AgentOperation`.
+- **H** `POST /api/agents/:agentId/stop-work` `{}` → `{ ok: true }` (3.7.1): before a removal, ends the agent's queued turns
+  and asks its running work (active turns, and runs Score started for it) to stop; stopped runs report back as usual,
+  so a fresh preview shows the work gone once they have. Approvals and Kanban assignments are not touched (they need
+  the person's decision).
 - `GET /api/agents/operations/:opId` → `AgentOperation` (paired session required).
 - **H** `POST /api/agents/operations/:opId/retry` → `AgentOperation`: runs the failed step again when `retryable` (a recorded
   error on a step whose repeat is harmless: model, permissions, enable bridge, readiness, export, identity purge,
