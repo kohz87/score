@@ -512,3 +512,18 @@ test('with one team room Add someone shows no team choice', async () => {
   const dialog = await screen.findByRole('dialog', { name: 'Add someone to this one-to-one' })
   expect(within(dialog).queryByRole('combobox')).toBeNull()
 })
+
+test('the one-to-one has a shortcut to the agent’s screen while its Hermes serves it (3.12.1)', async () => {
+  stub()
+  renderInRoom(<DirectHeaderActions agent={builder} chatId={null} />, ['/b?with=builder'])
+  const link = await screen.findByRole('link', { name: `Look at ${builder.name}'s screen` })
+  expect(link.getAttribute('href')).toBe('/b/screen/builder')
+})
+
+test('no screen shortcut for an agent Hermes isn’t serving', () => {
+  stub()
+  renderInRoom(<DirectHeaderActions agent={{ ...builder, served: false }} chatId={null} />, [
+    '/b?with=builder',
+  ])
+  expect(screen.queryByRole('link', { name: /screen/ })).toBeNull()
+})

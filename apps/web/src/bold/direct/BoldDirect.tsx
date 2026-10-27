@@ -1,7 +1,7 @@
 import type { AgentSummary, Job, Message, Room } from '@score/contract'
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { Composer } from '../../routes/chat/Composer.tsx'
@@ -11,13 +11,14 @@ import { setShowDeleted, useShowDeleted } from '../../routes/chat/deleted-toggle
 import { saveDraft } from '../../routes/chat/composer-model.ts'
 import { useBoldTeamRoom } from '../bold-search-queries.ts'
 import { agentDisplayName, agentNameColor, canTalkTo } from '../bold-agents.ts'
-import { CloseIcon, HistoryIcon, LockIcon } from '../BoldIcons.tsx'
+import { CloseIcon, HistoryIcon, LockIcon, ScreenIcon } from '../BoldIcons.tsx'
 import {
   boldAsideLink,
   boldChatLink,
   boldChatRefLink,
   boldJobLink,
   boldOneToOneLink,
+  boldAgentScreenLink,
 } from '../bold-links.ts'
 import {
   directChatsQuery,
@@ -269,6 +270,17 @@ export function DirectHeaderActions({
         <HistoryIcon />
         {!iconOnly && <span>Earlier chats</span>}
       </button>
+      {/* 3.12.1 (owner): a shortcut to the agent's screen, as "Look at its screen" on its page. */}
+      {agent.served && (
+        <Link
+          className="btn sm bold-dm-history-button bold-dm-history-icon bold-dm-screen"
+          to={boldAgentScreenLink(agent.id)}
+          aria-label={`Look at ${agentDisplayName(agent)}'s screen`}
+          title={`Look at ${agentDisplayName(agent)}'s screen`}
+        >
+          <ScreenIcon />
+        </Link>
+      )}
       {roomId && shown && (
         <ChatMenu
           showDeleted={showDeleted}
