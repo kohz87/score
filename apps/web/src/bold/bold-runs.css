@@ -604,9 +604,10 @@
 [data-ui='bold'] .bold-run-classic .orch-actions button.orch-primary,
 [data-ui='bold'] .bold-run-classic .orch-controls button.orch-primary {
   background: var(--ink);
-  color: var(--card);
+  color: var(--bg);
   box-shadow: none;
 }
+
 [data-ui='bold'] .bold-run-classic .orch-actions button.orch-danger,
 [data-ui='bold'] .bold-run-classic .orch-controls button.orch-danger {
   color: var(--agent-coral-text);

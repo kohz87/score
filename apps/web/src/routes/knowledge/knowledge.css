@@ -591,6 +591,59 @@
     width: 18px;
   }
 }
+/* 3.8.4 (owner): a row's height (a grip on its first cell's bottom edge) and the whole table (the corner grip). */
+.cm-lp-table td {
+  position: relative;
+}
+.cm-lp-row-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 8px;
+  cursor: row-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.cm-lp-row-resize:hover,
+.cm-lp-row-resize:active {
+  background: linear-gradient(var(--line-strong), var(--line-strong)) center / 100% 2px no-repeat;
+}
+.cm-lp-table-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 2;
+  background: linear-gradient(
+    135deg,
+    transparent 45%,
+    var(--line-strong) 45%,
+    var(--line-strong) 55%,
+    transparent 55%,
+    transparent 70%,
+    var(--line-strong) 70%,
+    var(--line-strong) 80%,
+    transparent 80%
+  );
+  opacity: 0.6;
+}
+.cm-lp-table-resize:hover {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .cm-lp-row-resize {
+    bottom: -9px;
+    height: 18px;
+  }
+  .cm-lp-table-resize {
+    width: 22px;
+    height: 22px;
+  }
+}
 /* A range of cells being copied. */
 .cm-lp-table .cm-lp-cell.cm-lp-cell-selected {
   background: var(--subtle-2);

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { inflateRawSync } from 'node:zlib'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { storedZip, textPdf } from './knowledge-fixtures.ts'
 import { pair } from './pair.ts'
 import { pngSize, samplePng } from './png.ts'
@@ -200,6 +200,44 @@ for (const size of sizes) {
       await page.keyboard.press('Control+c')
       await expect(editor(page, path).getByRole('status')).toHaveText('Copied 4 cells')
       expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Apples\t3\nPears\t4')
+    })
+
+    test('the corner grip widens the whole table and a row grip makes a row taller; both stay after a reload (3.8.4)', async ({
+      page,
+    }) => {
+      await openLibrary(page, size)
+      const name = unique()
+      const path = await createNote(
+        page,
+        name,
+        `# ${name}\n\n| Item | Qty |\n| --- | --- |\n| Apples | 3 |\n| Pears | 4 |\n`,
+      )
+      const table = () => editor(page, path).locator('.cm-lp-table table')
+      const drag = async (grip: Locator, dx: number, dy: number) => {
+        const box = (await grip.boundingBox())!
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+        await page.mouse.down()
+        await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy, { steps: 6 })
+        await page.mouse.up()
+      }
+      const tableWidth = async () => (await table().boundingBox())!.width
+      const rowHeight = async () =>
+        (await table().locator('tbody tr').first().boundingBox())!.height
+      const width = await tableWidth()
+      const height = await rowHeight()
+      await drag(table().locator('.cm-lp-table-resize'), 90, 0)
+      await expect.poll(tableWidth).toBeGreaterThan(width + 60)
+      await drag(table().locator('tbody tr').first().locator('.cm-lp-row-resize'), 0, 40)
+      await expect.poll(rowHeight).toBeGreaterThan(height + 25)
+      expect(await noteBody(page, path)).toContain('| Item | Qty |')
+      await page.reload()
+      await openLibrary(page, size)
+      await page
+        .getByRole('navigation', { name: 'Library notes' })
+        .getByRole('button', { name: new RegExp(`^${name}`) })
+        .click()
+      await expect.poll(tableWidth).toBeGreaterThan(width + 60)
+      await expect.poll(rowHeight).toBeGreaterThan(height + 25)
     })
 
     test('the toolbar formats text, and a table inserted from the size grid survives reopening', async ({

@@ -2,7 +2,13 @@ import { WidgetType, type EditorView } from '@codemirror/view'
 import { renderInline } from './live-table.ts'
 import {
   copyCells,
+  followGrip,
+  heightsKey,
   MIN_COLUMN,
+  MIN_ROW,
+  readHeights,
+  scaleWidths,
+  writeHeights,
   rangeOf,
   readWidths,
   widthsKey,
@@ -108,6 +114,72 @@ export class TableWidget extends WidgetType {
       cols.forEach((col, index) => (col.style.width = widths ? `${widths[index]}px` : ''))
     }
     applyWidths(key ? readWidths(key, width) : null)
+    const drawnWidths = () => cells[0]!.map((cell) => cell.getBoundingClientRect().width)
+
+    // 3.8.4 (owner): the whole table (a corner grip scales every column) and each row's height (a grip on its first
+    // cell's bottom edge), kept the same way.
+    const hKey = hooks.tableKey ? heightsKey(hooks.tableKey, model.header) : null
+    const rowsDrawn: HTMLTableRowElement[] = []
+    let heights: (number | null)[] = Array.from({ length: rowCount }, () => null)
+    const applyHeights = () =>
+      rowsDrawn.forEach(
+        (tr, index) => (tr.style.height = heights[index] ? `${heights[index]}px` : ''),
+      )
+    const rowGrip = (row: number) => {
+      const handle = document.createElement('span')
+      handle.className = 'cm-lp-row-resize'
+      handle.setAttribute('aria-hidden', 'true')
+      handle.title = 'Drag to change the row’s height; double-click to reset'
+      handle.addEventListener('mousedown', (event) => event.stopPropagation())
+      handle.addEventListener('pointerdown', (event) => {
+        const before = rowsDrawn[row]!.getBoundingClientRect().height
+        followGrip(
+          handle,
+          event,
+          (_dx, dy) => {
+            heights[row] = Math.max(MIN_ROW, before + dy)
+            applyHeights()
+          },
+          () => hKey && writeHeights(hKey, heights),
+        )
+      })
+      handle.addEventListener('dblclick', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        heights[row] = null
+        applyHeights()
+        if (hKey) writeHeights(hKey, heights)
+      })
+      return handle
+    }
+    const tableGrip = () => {
+      const handle = document.createElement('span')
+      handle.className = 'cm-lp-table-resize'
+      handle.setAttribute('aria-hidden', 'true')
+      handle.title = 'Drag to resize the whole table; double-click to reset'
+      handle.addEventListener('mousedown', (event) => event.stopPropagation())
+      handle.addEventListener('pointerdown', (event) => {
+        const before = drawnWidths()
+        const total = before.reduce((sum, value) => sum + value, 0)
+        let widths = before
+        followGrip(
+          handle,
+          event,
+          (dx) => {
+            widths = scaleWidths(before, total + dx)
+            applyWidths(widths)
+          },
+          () => key && writeWidths(key, widths),
+        )
+      })
+      handle.addEventListener('dblclick', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        applyWidths(null)
+        if (key) writeWidths(key, null)
+      })
+      return handle
+    }
     const resizer = (column: number) => {
       const handle = document.createElement('span')
       handle.className = 'cm-lp-col-resize'
@@ -115,26 +187,18 @@ export class TableWidget extends WidgetType {
       handle.title = 'Drag to widen; double-click to reset'
       handle.addEventListener('mousedown', (event) => event.stopPropagation())
       handle.addEventListener('pointerdown', (event) => {
-        event.preventDefault()
-        event.stopPropagation()
         // Start from what is drawn now, so switching to fixed widths doesn't jump.
-        const widths = cells[0]!.map((cell) => cell.getBoundingClientRect().width)
-        const from = event.clientX
+        const widths = drawnWidths()
         const before = widths[column]!
-        handle.setPointerCapture(event.pointerId)
-        const move = (next: PointerEvent) => {
-          widths[column] = Math.max(MIN_COLUMN, before + next.clientX - from)
-          applyWidths(widths)
-        }
-        const up = () => {
-          handle.removeEventListener('pointermove', move)
-          handle.removeEventListener('pointerup', up)
-          handle.removeEventListener('pointercancel', up)
-          if (key) writeWidths(key, widths)
-        }
-        handle.addEventListener('pointermove', move)
-        handle.addEventListener('pointerup', up)
-        handle.addEventListener('pointercancel', up)
+        followGrip(
+          handle,
+          event,
+          (dx) => {
+            widths[column] = Math.max(MIN_COLUMN, before + dx)
+            applyWidths(widths)
+          },
+          () => key && writeWidths(key, widths),
+        )
       })
       handle.addEventListener('dblclick', (event) => {
         event.preventDefault()
@@ -192,6 +256,8 @@ export class TableWidget extends WidgetType {
       cell.replaceChildren()
       renderInline(cell, valueAt(row, column), hooks)
       if (row === 0) cell.append(resizer(column))
+      if (column === 0) cell.append(rowGrip(row))
+      if (row === rowCount - 1 && column === width - 1) cell.append(tableGrip())
     }
 
     /** The editor's caret follows the focused cell, so toolbar actions know which cell they are for. */
@@ -339,6 +405,7 @@ export class TableWidget extends WidgetType {
 
     for (let row = 0; row < rowCount; row += 1) {
       const tr = row === 0 ? head : body.insertRow()
+      rowsDrawn.push(tr)
       const line: HTMLTableCellElement[] = []
       for (let column = 0; column < width; column += 1) {
         const cell = document.createElement(row === 0 ? 'th' : 'td')
@@ -465,6 +532,8 @@ export class TableWidget extends WidgetType {
       }
       cells.push(line)
     }
+    heights = (hKey ? readHeights(hKey, rowCount) : null) ?? heights
+    applyHeights()
     wrap.append(table, status)
 
     // A table redrawn after an edit or a toolbar action takes the focus the action asked for.
