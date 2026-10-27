@@ -405,7 +405,8 @@ function SpendFigure({
   const rows = report.byAgent
     // 3.7.13 (owner): a removed agent with nothing spent in the period is noise; one that spent stays, so totals add up.
     .filter((row) => {
-      if (row.spendUsd !== null) return true
+      // Until the agents load nothing is hidden, so a row doesn't flicker in.
+      if (row.spendUsd !== null || agents.length === 0) return true
       const known = agents.find((agent) => agent.id === row.agentId)
       return known !== undefined && onTeam(known)
     })
