@@ -86,12 +86,13 @@ export const checkPending = (sqlite: DatabaseSync, orchId: string): boolean =>
  */
 export function checkIsCurrent(sqlite: DatabaseSync, orchId: string, check: CheckRow): boolean {
   if (check.started_at === null) return false
-  // Review P1: an attempt Score can't confirm ended (unknown, abandoned) may still be writing: it counts as not ended. A
-  // created one that was never sent changed nothing (finishing retires it).
+  // Review P1: an attempt Score can't confirm ended (unknown) may still be writing: it counts as not ended. One the
+  // person abandoned counts only if that happened after the check started (they settled it before). A created one that
+  // was never sent changed nothing (finishing retires it).
   const row = sqlite
     .prepare(
       `SELECT count(*) AS n FROM orc_attempts WHERE orchestration_id = ? AND kind = 'step'
-         AND ((terminated_at IS NULL AND state NOT IN ('created', 'refused', 'terminated'))
+         AND ((terminated_at IS NULL AND state NOT IN ('created', 'refused', 'terminated', 'abandoned'))
               OR terminated_at > ? OR abandoned_at > ?)`,
     )
     .get(orchId, check.started_at, check.started_at) as { n: number }

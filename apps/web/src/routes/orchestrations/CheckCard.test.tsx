@@ -100,3 +100,18 @@ test('a finished job offers neither button', () => {
   expect(screen.queryByRole('button', { name: 'Run check' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Finish without a passing check' })).toBeNull()
 })
+
+test('while a run is queued or running, Run check waits', () => {
+  render(
+    <CheckCard
+      run={{
+        check: check({ runs: [run({ outcome: 'running', endedAt: null, exitCode: null })] }),
+        status: 'running',
+        revision: 2,
+      }}
+      actions={actions()}
+    />,
+  )
+  const button = screen.getByRole('button', { name: 'Check running…' }) as HTMLButtonElement
+  expect(button.disabled).toBe(true)
+})

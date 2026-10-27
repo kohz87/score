@@ -44,6 +44,7 @@ export function CheckCard({
   const runs = check.runs.slice(0, 5)
   const waived = check.waivedAt !== null
   const error = actions.checkRun.error ?? actions.checkWaive.error
+  const pending = check.runs.some((item) => item.outcome === 'queued' || item.outcome === 'running')
   return (
     <section className="orch-check" aria-label="Check">
       <h3>Check</h3>
@@ -80,13 +81,14 @@ export function CheckCard({
         </ul>
       )}
       {live && (
+        // One run at a time: a queued or running one would make another click a conflict.
         <div className="orch-controls">
           <button
             type="button"
-            disabled={actions.checkRun.isPending}
+            disabled={actions.checkRun.isPending || pending}
             onClick={() => actions.checkRun.mutate(control)}
           >
-            Run check
+            {pending ? 'Check running…' : 'Run check'}
           </button>
         </div>
       )}

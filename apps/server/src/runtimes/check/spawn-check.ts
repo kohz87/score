@@ -99,6 +99,9 @@ export function makeCheckSpawner(policy: RootPolicy): CheckSpawner {
             : `Couldn’t start “${request.argv[0]}” (${error.code ?? 'error'}).`
       })
       child.on('exit', (code, signal) => {
+        // The verdict is the exit: a deadline or Stop arriving while the rest of the output drains changes nothing.
+        clearTimeout(deadline)
+        clearTimeout(killTimer)
         exitCode = code
         exitSignal = signal ?? null
         // Anything the command left running in its group goes with it, while the leader's pid still names the group.
@@ -115,6 +118,7 @@ export function makeCheckSpawner(policy: RootPolicy): CheckSpawner {
     })
     return {
       stop(force = false) {
+        if (exited) return
         stopped = true
         terminate(force)
       },

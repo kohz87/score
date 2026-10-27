@@ -1276,7 +1276,16 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
 
               {isLead && (
                 <details className="inner start-check" data-protected="block">
-                  <summary>Check before it finishes</summary>
+                  <summary>
+                    Check before it finishes
+                    {/* The folder stays in sight when the section is folded: the command runs there as you. */}
+                    {checkCommand.trim() !== '' && (
+                      <span className="small muted start-check-where">
+                        {' '}
+                        · runs in {checkFolderNow.trim() || 'no folder yet'}
+                      </span>
+                    )}
+                  </summary>
                   <div className="start-clear">
                     <label className="start-field">
                       <span>Command</span>
@@ -1335,7 +1344,8 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                       />
                     </label>
                     <span className="small muted">
-                      Score runs this command in the folder, without a shell. The job can only
+                      Score runs this command in the folder, without a shell, as your user (it runs
+                      the project’s own code, as when you run the tests yourself). The job can only
                       finish as a success after it passes. Only you can change it.
                     </span>
                     {checkProblem && (
