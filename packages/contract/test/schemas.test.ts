@@ -1468,6 +1468,11 @@ const cases = [
   ],
   ['McpAccessPatchSchema', { enabled: true }, {}],
   [
+    'McpReloadResultSchema',
+    { agentId: 'builder', scope: 'profile' },
+    { agentId: 'builder', scope: 'all' },
+  ],
+  [
     'McpTokenIssuedSchema',
     {
       token: `scm_${'a'.repeat(43)}`,
