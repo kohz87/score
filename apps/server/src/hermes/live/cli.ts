@@ -57,6 +57,8 @@ const ReadConfigKeys = [
   'model_aliases',
   'tts',
   'stt',
+  // Team › agent › Model › Effort: this one key, never the whole `agent` section.
+  'agent.reasoning_effort',
 ]
 /** Exact argv shapes whose stdout Score may read. Everything else keeps its output private. */
 export function captureReadShape(argv: string[]): boolean {

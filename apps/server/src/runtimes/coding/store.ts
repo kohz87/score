@@ -21,6 +21,7 @@ const RowSchema = z.object({
   workspace: z.string(),
   permission: CodingPermissionSchema,
   model: z.string().nullable(),
+  effort: z.string().nullable(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,
   confirmed_version: z.string().nullable(),
@@ -38,6 +39,8 @@ export interface StoredCodingAgent {
   workspace: string
   permission: CodingPermission
   model: string | null
+  /** Reasoning effort for the CLI; null = Default. */
+  effort: string | null
   style: AgentStyle
   confirmedVersion: string | null
   quotaFloorPercent: number
@@ -55,6 +58,7 @@ const toAgent = (value: unknown): StoredCodingAgent => {
     workspace: row.workspace,
     permission: row.permission,
     model: row.model,
+    effort: row.effort,
     style: { color: row.color, shape: row.shape },
     confirmedVersion: row.confirmed_version,
     quotaFloorPercent: row.quota_floor_percent,
@@ -90,16 +94,17 @@ export function insertCodingAgent(
   sqlite: DatabaseSync,
   agent: Omit<
     StoredCodingAgent,
-    'confirmedVersion' | 'removedAt' | 'quotaFloorPercent' | 'instructions'
+    'confirmedVersion' | 'removedAt' | 'quotaFloorPercent' | 'instructions' | 'effort'
   > & {
+    effort?: string | null
     quotaFloorPercent?: number
     instructions?: string
   },
 ): void {
   sqlite
     .prepare(
-      `INSERT INTO coding_agents (id, name, role, instructions, runtime, workspace, permission, model, color, shape, created_at, quota_floor_percent)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO coding_agents (id, name, role, instructions, runtime, workspace, permission, model, effort, color, shape, created_at, quota_floor_percent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       agent.id,
@@ -110,6 +115,7 @@ export function insertCodingAgent(
       agent.workspace,
       agent.permission,
       agent.model,
+      agent.effort ?? null,
       agent.style.color,
       agent.style.shape,
       agent.createdAt,
@@ -127,6 +133,7 @@ export function updateCodingAgent(
       | 'instructions'
       | 'permission'
       | 'model'
+      | 'effort'
       | 'workspace'
       | 'confirmedVersion'
       | 'quotaFloorPercent'
@@ -139,6 +146,7 @@ export function updateCodingAgent(
     instructions: 'instructions',
     permission: 'permission',
     model: 'model',
+    effort: 'effort',
     workspace: 'workspace',
     confirmedVersion: 'confirmed_version',
     quotaFloorPercent: 'quota_floor_percent',

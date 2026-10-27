@@ -1001,6 +1001,7 @@ export class FakePort implements HermesPort {
     let settings = this.modelSettings.get(agentId)
     if (!settings) {
       settings = {
+        effort: null,
         fallbacks: [],
         fallbacksEditable: true,
         aliases: [],
@@ -1021,6 +1022,7 @@ export class FakePort implements HermesPort {
     const update = ModelSettingsUpdateSchema.parse(input)
     this.agentOrThrow(agentId)
     const settings = this.modelSettingsOf(agentId)
+    if (update.effort !== undefined) settings.effort = update.effort
     if (update.fallbacks) settings.fallbacks = structuredClone(update.fallbacks)
     if (update.aliases)
       settings.aliases = update.aliases.map((alias) => ({

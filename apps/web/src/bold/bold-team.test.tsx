@@ -82,6 +82,7 @@ const coder: CodingAgent = {
   workspace: '/home/user/score-workspaces/coder',
   permission: 'workspace-write',
   model: null,
+  effort: null,
   style: { color: '#6B4EFF', shape: 'hexagon' },
   quota: 'Uses your ChatGPT plan quota.',
   quotaFloorPercent: 10,

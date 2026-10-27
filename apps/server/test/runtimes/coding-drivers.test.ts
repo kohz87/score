@@ -1097,3 +1097,26 @@ test('fix-argon A2: a Codex tool or command item after turn.completed takes the 
     expect(parser.lossReason?.(), line).toBeTruthy()
   }
 })
+
+test('3.9.0: effort is passed only when set and listed for the runtime (chat and worker launches alike)', () => {
+  const claude = (extra = {}) =>
+    claudeDriver.buildArgs({ ...base, permission: 'read-only', ...extra })
+  expect(claude()).not.toContain('--effort')
+  expect(claude({ effort: null })).not.toContain('--effort')
+  const withEffort = claude({ effort: 'xhigh' })
+  expect(withEffort[withEffort.indexOf('--effort') + 1]).toBe('xhigh')
+  expect(claude({ effort: 'xhigh', worker: true })).toContain('--effort')
+  for (const bad of ['minimal', 'High', '--x', 'a b', ''])
+    expect(claude({ effort: bad })).not.toContain('--effort')
+
+  const codex = (extra = {}) =>
+    codexDriver.buildArgs({ ...base, permission: 'read-only', ...extra })
+  expect(codex().join(' ')).not.toContain('model_reasoning_effort')
+  for (const sessionId of [null, 'abc']) {
+    const args = codex({ effort: 'minimal', sessionId })
+    expect(args[args.indexOf('model_reasoning_effort="minimal"') - 1]).toBe('-c')
+    expect(args.at(-1)).toBe('-')
+  }
+  expect(codex({ effort: 'max' }).join(' ')).not.toContain('model_reasoning_effort')
+  expect(codex({ effort: 'x"; rm' }).join(' ')).not.toContain('model_reasoning_effort')
+})

@@ -71,6 +71,7 @@ const builderDetail: AgentDetail = {
 type Responder = (path: string, init?: RequestInit) => Response | Promise<Response>
 let respond: Responder
 const modelSettings = {
+  effort: null,
   fallbacks: [
     { provider: 'acme', model: 'alpha-model' },
     { provider: 'acme', model: 'beta-model' },

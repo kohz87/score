@@ -2630,3 +2630,19 @@ test('8.8: instructions are saved with an etag; a stale one is a conflict that c
   const team = (await request('GET', '/api/agents')).json().items as { id: string; role: string }[]
   expect(team.find((item) => item.id === 'coder')!.role).toBe('Lead builder')
 })
+
+test('3.9.0: effort defaults to null, PATCH sets and clears it per runtime, and bad levels are refused', async () => {
+  const created = await addAgent()
+  expect(created.effort).toBeNull()
+  const set = await request('PATCH', '/api/coding-agents/coder', { effort: 'max' })
+  expect(set.statusCode, set.body).toBe(200)
+  expect(set.json().effort).toBe('max')
+  // Claude Code has no 'minimal'; free text and unknown words never reach argv.
+  for (const effort of ['minimal', 'High', 'a b', '--x', 'abcdefghijklm'])
+    expect((await request('PATCH', '/api/coding-agents/coder', { effort })).statusCode).toBe(400)
+  const cleared = await request('PATCH', '/api/coding-agents/coder', { effort: null })
+  expect(cleared.json().effort).toBeNull()
+  // Antigravity documents no effort flag.
+  await addAgent({ id: 'agy', name: 'Agy', runtime: 'antigravity' })
+  expect((await request('PATCH', '/api/coding-agents/agy', { effort: 'low' })).statusCode).toBe(400)
+})

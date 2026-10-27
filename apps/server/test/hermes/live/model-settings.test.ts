@@ -8,7 +8,12 @@ const runner = vi.fn<HermesRunner>()
 function answer(args: string[]): { exitCode: number; stdout?: string } {
   const rest = args.slice(2)
   if (rest[0] === 'config' && rest[1] === 'get') {
-    const value = config[rest[3]!]
+    const value = rest[3]!
+      .split('.')
+      .reduce<unknown>(
+        (node, part) => (node as Record<string, unknown> | undefined)?.[part],
+        config,
+      )
     return value === undefined ? { exitCode: 1 } : { exitCode: 0, stdout: JSON.stringify(value) }
   }
   if (rest[0] === 'config' && rest[1] === 'set') {
@@ -74,8 +79,8 @@ test('reads the fallback chain, aliases and the speech settings of the chosen pr
     stt: { provider: null, model: null },
     tts: { provider: 'edge', model: null, voice: 'en-US-AriaNeural' },
   })
-  // Nothing outside the four sections is read.
-  expect(reads()).toBe(5)
+  // Nothing outside the four sections and the one effort key is read.
+  expect(reads()).toBe(6)
 })
 
 test('a chain with a custom endpoint is shown but never rewritten', async () => {
@@ -110,7 +115,7 @@ test('only changed keys are written, and the answer comes from what was written'
     ['-p', 'builder', 'config', 'set', 'tts.provider', 'openai'],
     ['-p', 'builder', 'config', 'set', 'tts.openai.voice', 'nova'],
   ])
-  expect(reads()).toBe(5)
+  expect(reads()).toBe(6)
   expect(saved.speech.tts).toEqual({ provider: 'openai', model: 'gpt-4o-mini-tts', voice: 'nova' })
   expect(saved.speech.stt).toEqual({ provider: 'groq', model: 'whisper-large-v3-turbo' })
   expect(saved.fallbacks).toEqual([{ provider: 'openrouter', model: 'a/b' }])
@@ -243,4 +248,40 @@ test('a save that fails midway puts back what it already wrote (audit5-e)', asyn
   // Rolled back: no new alias, the old one and the speech provider are as they were.
   expect(config.model_aliases).toEqual({ old: { model: 'm-old', provider: 'openrouter' } })
   expect((config.stt as Record<string, unknown>).provider).toBe('groq')
+})
+
+test('effort: reads agent.reasoning_effort only, shows Default when unset and a hand-set value as-is', async () => {
+  expect((await tabs.getModelSettings('builder')).effort).toBeNull()
+  config.agent = { reasoning_effort: 'high' }
+  expect((await tabs.getModelSettings('builder')).effort).toBe('high')
+  config.agent = { reasoning_effort: 'ultra' }
+  expect((await tabs.getModelSettings('builder')).effort).toBe('ultra')
+  const keys = runner.mock.calls.map(([args]) => args[5])
+  expect(keys).not.toContain('agent')
+  expect(keys).toContain('agent.reasoning_effort')
+})
+
+test('effort: set writes the level, Default unsets it, an unchanged level writes nothing', async () => {
+  const saved = await tabs.updateModelSettings('builder', { effort: 'xhigh' })
+  expect(writes()).toEqual([['-p', 'builder', 'config', 'set', 'agent.reasoning_effort', 'xhigh']])
+  expect(saved.effort).toBe('xhigh')
+  runner.mockClear()
+  await tabs.updateModelSettings('builder', { effort: 'xhigh' })
+  expect(writes()).toEqual([])
+  const cleared = await tabs.updateModelSettings('builder', { effort: null })
+  expect(writes()).toEqual([['-p', 'builder', 'config', 'unset', 'agent.reasoning_effort']])
+  expect(cleared.effort).toBeNull()
+})
+
+test('effort: a level outside the list is refused before any write; a failed save puts the old value back', async () => {
+  await expect(tabs.updateModelSettings('builder', { effort: 'ultra' as never })).rejects.toThrow()
+  expect(writes()).toEqual([])
+  config.agent = { reasoning_effort: 'low' }
+  runner.mockImplementation(async (args) =>
+    args[3] === 'set' && args[4] === 'stt.provider' ? { exitCode: 1 } : answer(args),
+  )
+  await expect(
+    tabs.updateModelSettings('builder', { effort: 'high', speech: { stt: { provider: 'groq' } } }),
+  ).rejects.toThrow()
+  expect((config.agent as Record<string, unknown>).reasoning_effort).toBe('low')
 })
