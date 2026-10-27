@@ -157,6 +157,56 @@ const goal = z
   .refine((v) => utf8Bytes(v) <= ORCH_LIMITS.goalBytes, 'goal is limited to 8 KiB')
   .refine((v) => !v.includes('\0'), 'No NUL')
 
+/**
+ * 3.13 (decision 150): the oracle. A command the person sets, run in a workspace; exit code 0 passes. A successful finish
+ * needs a pass that started after the last step attempt ended. Only the person writes it; the lead can only run it.
+ */
+export const ORCH_CHECK_LIMITS = {
+  commandChars: 4096,
+  maxArgs: 64,
+  defaultTimeoutSec: 600,
+  maxTimeoutSec: 3600,
+} as const
+export const OrchestrationCheckSchema = z
+  .object({
+    /** One line; split into arguments without a shell (quotes and backslashes only). */
+    command: z
+      .string()
+      .trim()
+      .min(1)
+      .max(ORCH_CHECK_LIMITS.commandChars)
+      .refine((v) => !/[\r\n\0]/.test(v)),
+    /** An absolute folder the Workspace roots allow. */
+    workspace: z.string().min(1).max(4096).startsWith('/'),
+    timeoutSec: z
+      .int()
+      .min(10)
+      .max(ORCH_CHECK_LIMITS.maxTimeoutSec)
+      .default(ORCH_CHECK_LIMITS.defaultTimeoutSec),
+  })
+  .strict()
+export type OrchestrationCheck = z.infer<typeof OrchestrationCheckSchema>
+export const CheckOutcomeSchema = z.enum([
+  'running',
+  'passed',
+  'failed',
+  'timed_out',
+  'interrupted',
+  'refused',
+])
+export const CheckRunViewSchema = z.object({
+  id: z.string().min(1),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().nullable(),
+  exitCode: z.int().nullable(),
+  outcome: CheckOutcomeSchema,
+  /** The last part of what it printed, redacted. */
+  output: z.string(),
+  /** Started after the last step attempt ended, so a pass counts for finishing. */
+  current: z.boolean(),
+})
+export type CheckRunView = z.infer<typeof CheckRunViewSchema>
+
 export const OrchestrationCreateSchema = z
   .object({
     title: z.string().min(1).max(ORCH_LIMITS.titleChars).optional(),
@@ -188,6 +238,8 @@ export const OrchestrationCreateSchema = z
     codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
     /** 8.6: the quota floor for every coding agent of this run; omitted = each agent's own floor. */
     quotaFloorPercent: QuotaFloorSchema.optional(),
+    /** 3.13: the oracle (needs the security password or passkey confirmed in the last minute). */
+    check: OrchestrationCheckSchema.optional(),
   })
   .strict()
 export type OrchestrationCreate = z.infer<typeof OrchestrationCreateSchema>
@@ -460,6 +512,18 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
   storage: z.object({ reserveBytes: z.int(), storedBytes: z.int() }),
   /** 8.6: the run's quota floor; null = each coding agent's own. */
   quotaFloorPercent: QuotaFloorSchema.nullable().optional(),
+  /** 3.13: the oracle and its runs (newest first); null = no check. */
+  check: z
+    .object({
+      command: z.string(),
+      workspace: z.string(),
+      timeoutSec: z.int(),
+      runs: z.array(CheckRunViewSchema),
+      /** The person let the run finish without a passing check. */
+      waivedAt: z.iso.datetime().nullable(),
+    })
+    .nullable()
+    .optional(),
   /** 7.7b: the run's coding limits and the policy each coding worker was approved with. */
   coding: z
     .object({
@@ -675,6 +739,9 @@ export const OrchRequestApprovalArgsSchema = z.object({
   stepId: z.string().min(1).max(64),
 })
 export const OrchNoteArgsSchema = z.object({ ...toolBase, text: bytes(ORCH_LIMITS.noteBytes) })
+/** 3.13: run the person's check now (no arguments: the lead can't change it). */
+export const OrchCheckArgsSchema = z.object({ ...toolBase })
+
 export const OrchFinishArgsSchema = z.object({
   ...toolBase,
   outcome: z.enum(['success', 'partial', 'failed']),
