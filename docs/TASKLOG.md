@@ -1691,3 +1691,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   bar (accepted); first-render flicker (fixed). Gate: e2e 846 passed, 2 failed (tablet, phone manifest: 17/17 alone),
   check green (server 4848, web 3009, contract 1524).
 - **v3.7.13 deployed live** (~05:27 UTC, idle guard passed): backup score-pre-3.7.13-20261027.db, health ok.
+- **3.8.0** (2026-10-27; owner pasted "This recipe has runs, so it can't be deleted" and chose "Both", decision 142).
+  Recipes can be archived (migration 0097; hidden where offered, runs kept, Unarchive; an archived `?recipe=` link says
+  so) and a used recipe can be deleted with its runs (deleteRoom per run room, one transaction, typed name; 409
+  run_active while any run room is held). Coder: Sonnet from docs/briefs/3.8.0-recipe-archive.md, 1 fix round (draining or
+  busy runs gave deleteRoom's refusal instead of run_active; dialog focus/Escape; archived deep link was silent); the lead
+  added the decision. Reviews: Sonnet ×2 (P3 left: Escape after focus leaves the dialog). Gate: e2e 848 passed, 0 failed;
+  check green (server 4851, web 3014, contract 1528).
+- **v3.8.0 deployed live** (~05:39 UTC, idle guard passed): backup score-pre-3.8.0-20261027.db, health ok.
