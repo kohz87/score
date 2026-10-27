@@ -14,7 +14,8 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { userInfo } from 'node:os'
+import { dirname, join, relative, resolve } from 'node:path'
 import { gunzipSync } from 'node:zlib'
 import { z } from 'zod'
 import type { ProfileStepName } from '@score/contract'
@@ -45,6 +46,56 @@ function identity(path: string): string | null {
   const value = stat(path)
   return value?.isDirectory() ? `${value.dev}:${value.ino}:${value.birthtimeMs}` : null
 }
+/**
+ * 3.7.4: the first folder in a profile that Hermes (running as this user) can't empty — one another user owns that still
+ * holds entries (Hermes' Docker sandbox writes as root), or one this user can't list. A foreign *file* in a folder this
+ * user owns is fine: unlinking needs the folder, not the file. Bounded; symlinks are not followed; names only.
+ */
+export function foreignOwned(home: string, uid = process.getuid?.(), limit = 50000): string | null {
+  if (uid === undefined) return null
+  const queue = [home]
+  let seen = 0
+  while (queue.length > 0 && seen < limit) {
+    const dir = queue.shift()!
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return dir === home ? null : dir
+    }
+    if (dir !== home && entries.length > 0 && stat(dir)?.uid !== uid) return dir
+    for (const entry of entries) {
+      seen += 1
+      const path = join(dir, entry.name)
+      if (stat(path)?.isDirectory()) queue.push(path)
+    }
+  }
+  return null
+}
+
+/** What to tell the person when a profile folder holds files only another user can delete. */
+export function foreignOwnedMessage(home: string, path: string): string {
+  const user = userInfo().username
+  // The example comes from folder names the sandbox chose: shown as plain text, without control characters, bounded.
+  const example = [...relative(home, path)]
+    .filter((char) => char.charCodeAt(0) > 0x1f && char.charCodeAt(0) !== 0x7f)
+    .join('')
+    .slice(0, 120)
+  const quoted = `'${home.replace(/'/g, `'\\''`)}'`
+  return `Some files in this agent's folder belong to another user (for example ${example}, made by its Docker sandbox), so Hermes can't delete them. On the Score machine run: sudo chown -R ${user}: ${quoted} — then try again.`
+}
+
+/** Profile folders scanned in the last few seconds: a removal reads the inventory several times. */
+const foreignScans = new Map<string, { at: number; found: string | null }>()
+function foreignOwnedCached(home: string): string | null {
+  const now = Date.now()
+  const cached = foreignScans.get(home)
+  if (cached && now - cached.at < 15_000) return cached.found
+  const found = foreignOwned(home)
+  foreignScans.set(home, { at: now, found })
+  return found
+}
+
 function privateDirectory(path: string) {
   mkdirSync(path, { mode: 0o700 })
   syncPath(dirname(path))
@@ -185,6 +236,11 @@ export class LiveProfileManagement implements ProfileManagementPort {
       credentialsPresent: [],
     }
     const blockers: string[] = []
+    // An existing profile with files only another user can delete would stop halfway through a removal: say so first.
+    if (targetIdentity) {
+      const foreign = foreignOwnedCached(home)
+      if (foreign) blockers.push(foreignOwnedMessage(home, foreign))
+    }
     if (!targetIdentity && stat(home))
       blockers.push('The target path exists and cannot be adopted.')
     if (!targetIdentity && (!this.options.bridgeInstallUrl || !this.options.bridgeInstallRef))
@@ -523,7 +579,12 @@ export class LiveProfileManagement implements ProfileManagementPort {
       try {
         await this.cli(['-p', 'default', 'profile', 'delete', '-y', name])
       } catch (error) {
-        if (stat(home)) throw error
+        if (stat(home)) {
+          // Hermes' own output stays private (cli.ts); name what Score can see for itself.
+          const foreign = foreignOwned(home)
+          if (foreign) throw failure(foreignOwnedMessage(home, foreign))
+          throw error
+        }
       }
       if (stat(home)) throw failure('The profile folder still exists.')
     } else if (step === 'purge_identity') {
