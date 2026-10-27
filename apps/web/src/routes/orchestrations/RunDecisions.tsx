@@ -353,9 +353,14 @@ export function UnknownCard({
     >
       <h3>Not confirmed as ended: {label ?? attempt.stepId ?? 'lead turn'}</h3>
       <p>
-        Hermes hasn’t said this work finished (
-        {attempt.unknownReason?.replaceAll('_', ' ') ?? 'no reason recorded'}). Score keeps trying
-        to stop it. Until it ends, nothing new starts.
+        {attempt.unknownReason === 'run_cancelled' && attempt.stopRequestedAt
+          ? 'Hermes cancelled the run after it was stopped, but doesn’t confirm that everything the agent started (a tool call, a command) has finished.'
+          : `Hermes hasn’t said this work finished (${unknownReasonText(attempt.unknownReason)}).`}{' '}
+        Score keeps trying to stop it. Until it ends, nothing new starts.
+      </p>
+      <p className="small">
+        If you’re sure it’s done, or don’t mind: Stop waiting for this closes the turn and the run
+        moves on; anything it sends later is ignored.
       </p>
       <label className="orch-check">
         <input type="checkbox" checked={sure} onChange={(event) => setSure(event.target.checked)} />
@@ -694,4 +699,25 @@ export function RunNeeds({
       })}
     </div>
   )
+}
+
+/** 3.7.12: why an attempt isn't confirmed as ended, in plain words. */
+function unknownReasonText(reason: string | null | undefined): string {
+  switch (reason) {
+    case 'run_cancelled':
+      return 'the run was cancelled'
+    case 'run_interrupted':
+      return 'the run was interrupted'
+    case 'recovered_text_only':
+      return 'only its text came back'
+    case 'crash_after_send_started':
+      return 'Score restarted while sending it'
+    case 'run_not_proven_ended':
+      return 'its end isn’t proven'
+    case null:
+    case undefined:
+      return 'no reason recorded'
+    default:
+      return reason.replaceAll('_', ' ')
+  }
 }
