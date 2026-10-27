@@ -76,7 +76,23 @@ const IGNORABLE_SYSTEM = new Set([
   'api_retry',
   'status',
   'compact_boundary',
+  // 3.8.2 (owner: opus55's reviews all "failed"): print-mode notices in Claude Code 2.1.311's own code. A thinking-token
+  // estimate, a tool call the permission rules refused (the turn goes on; the result still decides), and sub-agent
+  // bookkeeping. None carries the answer or the turn's failure.
+  'thinking_tokens',
+  'permission_denied',
+  'background_tasks_changed',
 ])
+/** `system/<subtype>` when the subtype is a plain identifier, else `system`; "after the result" when it came late. */
+function systemKind(value: unknown, late: boolean): string {
+  const subtype = (value as { subtype?: unknown } | null)?.subtype
+  const name =
+    typeof subtype === 'string' && /^[a-z][a-z0-9_]{0,47}$/.test(subtype)
+      ? `system/${subtype}`
+      : 'system'
+  return late ? `${name}, after the result` : name
+}
+
 const SystemNotice = z.object({
   type: z.literal('system'),
   subtype: z.string().min(1),
@@ -436,7 +452,10 @@ function createInnerClaudeParser(cwd?: string): LineParser {
           notice.data.is_error === true ||
           resultSeen
         )
-          lose('Claude Code sent a system record that Score could not rule out as a failure')
+          // 3.8.2: the record's kind (a bare identifier, never its content) names what to look at next time.
+          lose(
+            `Claude Code sent a system record that Score could not rule out as a failure (${systemKind(value, resultSeen)})`,
+          )
       } else if (!IGNORABLE_RECORDS.has(envelopeType))
         lose('Claude Code sent a record Score could not validate')
       return events
