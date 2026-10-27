@@ -830,6 +830,27 @@ test('FV #3: Claude Code system records: only known notices that report no error
   expect(run([system({ subtype: 'hook_response', is_error: true }), success]).lost).not.toBeNull()
   expect(run([system({}), success]).lost).not.toBeNull()
   expect(run([success, system({ subtype: 'hook_started' })]).lost).not.toBeNull()
+  // 3.8.2: print-mode notices of Claude Code 2.1.311 (shapes from its own code), before the result.
+  for (const notice of [
+    { subtype: 'thinking_tokens', estimated_tokens: 1200, estimated_tokens_delta: 40 },
+    {
+      subtype: 'permission_denied',
+      tool_name: 'Read',
+      tool_use_id: 'toolu_1',
+      agent_id: null,
+      decision_reason_type: 'rule',
+    },
+    { subtype: 'background_tasks_changed', tasks: [] },
+  ])
+    expect(run([system(notice), success]).lost, notice.subtype).toBeNull()
+  // The loss names the record's kind, never its content, and says when it came after the result.
+  expect(run([system({ subtype: 'brand_new_thing', secret: 'x' }), success]).lost).toContain(
+    '(system/brand_new_thing)',
+  )
+  expect(run([success, system({ subtype: 'thinking_tokens' })]).lost).toContain(
+    '(system/thinking_tokens, after the result)',
+  )
+  expect(run([system({ subtype: 'Not An Identifier!' }), success]).lost).toContain('(system)')
 })
 
 // ---- PLAN 8.7: sub-agents ---------------------------------------------------------------------------------------------
