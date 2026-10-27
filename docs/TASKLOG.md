@@ -1620,3 +1620,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   that round was test-covered and not re-reviewed. Gate: 847 passed, 1 failed (the tablet 768 flake, still open), check
   green (server 4826, web 2995, contract 1522).
 - **v3.7.4 deployed live** (~02:09 UTC): backup score-pre-3.7.4-20261027.db, restart, health ok, no new errors.
+- **3.7.5** (2026-10-27; owner: "coding agent cannot act as lead?" → chose "Lead rooms now"). The server let coding
+  agents lead rooms since 2.0.1 (coding-team-room.test.ts), but the lead's 3.1.0 Team lead dialog and the 3.4.0 New team
+  dialog filtered them out, copying the "lead decides" rule (decision 60: an orchestration's planner is a Hermes agent).
+  Lead: both dialogs offer any ready agent (a note says who plans "lead decides" jobs); Start a job shows "Who plans it"
+  among Hermes agents in a room a coding agent leads (it used to pick the first one silently). Review: the planner could
+  stay in an edited "Agents allowed" list (always excluded now); test asserts the steps' agents. Gate: 847 passed,
+  1 failed (the tablet layout flake, now at 820), check green (server 4826, web 2997, contract 1522).
+- **v3.7.5 deployed live** (~02:48 UTC): backup score-pre-3.7.5-20261027.db, restart, health ok, no new errors.
