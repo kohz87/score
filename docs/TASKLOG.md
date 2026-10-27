@@ -1809,3 +1809,10 @@ One entry per completed task: what landed, review results, and any **rejected re
   in app.ts) — fixed, check green (server 4931, web 3064, contract 1556).
 - **v3.13.0 deployed live** (~12:58 UTC, idle guard passed): backup score-pre-3.13.0-20261027.db, migrations 0100/0101
   applied, health ok.
+- **3.13.1** (2026-10-27, owner: "wouldn't it be possible that haiku become accidentally called for the voting instead? all
+  my claude are on claude code though" → "Yes, both"). Lead: `helpers.voterIds` (votes only to voters; helpers keep role
+  work and the scan), `suggestedCodingSteps()` default for lead jobs with helpers/advisor; Sonnet coder: Who votes picker,
+  Coding-agent launches field (prefilled, follows choices until typed), voters on the Helpers card. Review clean (no P1/P2).
+  Gate: e2e 852 passed, 2 failed (tablet flake), check green (server 4933, web 3072, contract 1556+1). Noted for the owner: a
+  job's lead must be a Hermes agent (Claude Code as lead is a separate, bigger piece).
+- **v3.13.1 deployed live** (~13:36 UTC, idle guard passed): backup score-pre-3.13.1-20261027.db, health ok.
