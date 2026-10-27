@@ -277,12 +277,21 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
 
   const hermesAgents = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
   const teamLead = startRoom?.leadAgentId ?? null
+  // "Lead decides" needs a Hermes planner (decision 60). A room led by a coding agent (3.7.5) lets the person choose one.
+  const leadIsCoding = Boolean(teamLead) && !hermesAgents.some((agent) => agent.id === teamLead)
+  const [planner, setPlanner] = useState<string | null>(null)
   const leadId =
-    (teamLead && hermesAgents.some((agent) => agent.id === teamLead)
+    (teamLead && !leadIsCoding
       ? teamLead
-      : hermesAgents[0]?.id) ?? ''
+      : planner && hermesAgents.some((agent) => agent.id === planner)
+        ? planner
+        : hermesAgents[0]?.id) ?? ''
+  const roomLeadName = teamLead
+    ? (agents.find((agent) => agent.id === teamLead)?.name ?? teamLead)
+    : null
   const defaultAllowed = agents.filter((agent) => agent.id !== leadId).map((agent) => agent.id)
-  const allowedFor = allowed ?? defaultAllowed
+  // The planner is never also a step's agent, even after the person changed who plans (3.7.5 review).
+  const allowedFor = (allowed ?? defaultAllowed).filter((id) => id !== leadId)
   const leadAgent = agents.find((agent) => agent.id === leadId)
 
   const selectedWorkflowId = recipe.kind === 'workflow' ? recipe.id : undefined
@@ -1000,14 +1009,35 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
             {isLead && (
               <>
                 <div className="row wrap start-lead">
-                  {leadAgent && (
-                    <span className="chip start-agent-chip">
-                      <AgentGlyph agent={leadAgent} size="sm" bare decorative />
-                      <span>{leadAgent.name} plans</span>
-                    </span>
+                  {leadIsCoding && hermesAgents.length > 0 ? (
+                    <label className="start-planner">
+                      <span className="lab">Who plans it</span>
+                      <select
+                        value={leadId}
+                        onChange={(event) => {
+                          setPlanner(event.target.value)
+                          touch()
+                        }}
+                      >
+                        {hermesAgents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    leadAgent && (
+                      <span className="chip start-agent-chip">
+                        <AgentGlyph agent={leadAgent} size="sm" bare decorative />
+                        <span>{leadAgent.name} plans</span>
+                      </span>
+                    )
                   )}
                   <span className="small muted">
-                    The lead decides the steps and hands them out.
+                    {leadIsCoding
+                      ? `${roomLeadName} leads this room, but a coding agent can’t plan a “lead decides” job yet: a Hermes agent plans it.`
+                      : 'The lead decides the steps and hands them out.'}
                   </span>
                 </div>
                 <AgentPick

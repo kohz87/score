@@ -650,17 +650,14 @@ export function DeleteJobDialog({
 const NO_AGENTS: AgentSummary[] = []
 
 /**
- * 3.1.0: who leads the team room — unaddressed messages and "lead decides" jobs go to the lead. Only Hermes agents that
- * can take work are offered (as in Start a job).
+ * 3.1.0: who leads the team room — unaddressed messages and "lead decides" jobs go to the lead. Any agent that can take
+ * work may lead (3.7.5); a coding lead's "lead decides" jobs are planned by a Hermes agent chosen in Start a job.
  */
 export function TeamLeadDialog({ room, onClose }: { room: Room; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const all = useStreamQuery(agentsQuery).data ?? NO_AGENTS
-  const options = all.filter(
-    (agent) =>
-      (!agent.runtime || agent.runtime === 'hermes') &&
-      (!agent.lifecycle || agent.lifecycle.state === 'ready'),
-  )
+  // 3.7.5: coding agents lead rooms too (since 2.0.1); only "lead decides" planning needs a Hermes agent.
+  const options = all.filter((agent) => !agent.lifecycle || agent.lifecycle.state === 'ready')
   const [chosen, setChosen] = useState(room.leadAgentId ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -727,6 +724,13 @@ export function TeamLeadDialog({ room, onClose }: { room: Room; onClose: () => v
         ))}
         {options.length === 0 && <p className="small muted">No agent can lead right now.</p>}
       </div>
+      {options.find((agent) => agent.id === chosen)?.runtime &&
+        options.find((agent) => agent.id === chosen)?.runtime !== 'hermes' && (
+          <p className="small muted">
+            A coding agent leads the room’s messages and hand-offs. A “lead decides” job is planned
+            by a Hermes agent you pick when you start it.
+          </p>
+        )}
       {error && (
         <p className="chat-rewind-warning" role="alert">
           {error}

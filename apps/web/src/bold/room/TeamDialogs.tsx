@@ -94,10 +94,8 @@ export function NewTeamDialog({
   useEffect(() => {
     dialog.current?.showModal?.()
   }, [])
-  // The lead must be a checked member that can take work (a Hermes agent, as in Team lead…).
-  const leadOptions = agents.filter(
-    (agent) => members.includes(agent.id) && (!agent.runtime || agent.runtime === 'hermes'),
-  )
+  // The lead must be a checked member (any agent that can take work, coding agents too since 3.7.5).
+  const leadOptions = agents.filter((agent) => members.includes(agent.id))
   const leadId = leadOptions.some((agent) => agent.id === lead) ? lead : ''
   async function create() {
     if (busy) return
