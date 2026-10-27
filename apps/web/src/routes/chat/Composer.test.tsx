@@ -1,10 +1,11 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { AgentSummary, Message } from '@score/contract'
 import { createQueryClient } from '../../data/query-client.ts'
 import { Composer } from './Composer.tsx'
+import { startEdit, stopEdit } from './message-edit.ts'
 import { messagesQuery } from './queries.ts'
 
 const make = (id: string, color: string, shape: AgentSummary['style']['shape']): AgentSummary => ({
@@ -145,6 +146,37 @@ test('@autocomplete filters agents and is keyboard operable', () => {
   type('@')
   press('Escape')
   expect(screen.queryByRole('listbox')).toBeNull()
+})
+
+test('@ and To offer only `offered`; an edited message to an agent left out keeps its name (3.7.10)', () => {
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <Composer
+          roomId="general"
+          roomName="general"
+          agents={agents}
+          offered={agents.filter((agent) => agent.id !== 'reviewer')}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  type('@')
+  const options = within(screen.getByRole('listbox', { name: 'Agents' })).getAllByRole('option')
+  expect(options.map((option) => option.textContent)).not.toContain(
+    expect.stringContaining('reviewer'),
+  )
+  expect(options).toHaveLength(2)
+  press('Escape')
+  fireEvent.click(screen.getByRole('button', { name: 'Add someone' }))
+  expect(
+    within(screen.getByRole('list', { name: 'Add someone' })).queryByText('Reviewer'),
+  ).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Add someone' }))
+  // Editing an old message to the agent left out: its chip still has its name.
+  act(() => startEdit({ ...stored, roomId: 'general', to: ['reviewer'] }))
+  expect(screen.getByRole('button', { name: 'Remove Reviewer' })).toBeDefined()
+  act(() => stopEdit())
 })
 
 test('slash menu comes from /api/commands and supports arrows, Enter, Escape and click', async () => {
