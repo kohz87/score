@@ -1739,3 +1739,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   room-orc-46be709a); the wait-for-idle script then failed safely (its backup file hadn't been written by the stopped
   chain), deployed by hand once idle: backup score-pre-3.8.4-20261027.db, health ok, **no new fence at the restart**
   (fence_seq stayed 4).
+- **3.8.5** (2026-10-27, lead; owner: "i can't resize, is it because of a hard border in the editor?" + "shouldn't the
+  size be subject to screen/device resolution?"). The wide Library capped `.cm-content` at 80ch: tables were boxed in and
+  the content's focus outline was the "hard border". The cap moved to `.cm-line`; sizes are relative (v2: table share of
+  its line, column shares, row heights in em; 3.8.3/3.8.4 pixel sizes dropped once); cells wrap between words; the wrap
+  never scrolls vertically. Decision 146. Review: per-column 48px floor (added) — the gate's new e2e then caught that it
+  forced tables with a narrow "#" column to full width (its first wait could pass on the wrong value, also fixed): the floor
+  is now 60% of the width the table was given. Gate (third run): e2e 854 passed, 0 failed; check failed once on an
+  unhandled jsdom `scrollIntoView` in the 3.8.1 phone-fold unit test (the test now defines it), then green (server 4853,
+  web 3026, contract 1528).
+- **v3.8.5 deployed live** (~08:36 UTC, idle guard passed): backup score-pre-3.8.5-20261027.db, health ok, no fence.
