@@ -1708,3 +1708,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   fold has its own phone assertion). Gate: e2e 847 passed, 1 failed (paper/light Team screenshot: 63/63 alone), check
   green (server 4851, web 3018, contract 1528).
 - **v3.8.1 deployed live** (~06:08 UTC, idle guard passed): backup score-pre-3.8.1-20261027.db, health ok.
+- **3.8.2** (2026-10-27, lead; owner: opus55's job steps wrote reviews but were all "failed": "Claude Code sent a system
+  record that Score could not rule out as a failure"). Owner approved one tiny real 2.1.311 turn: clean (init, assistant,
+  rate_limit_event, result). Claude Code 2.1.311's own print-mode code emits `thinking_tokens`, `permission_denied` and
+  `background_tasks_changed`: allow-listed (before the result, never is_error); a loss now names `system/<subtype>`
+  (decision 143). The capture wasn't committed (its init lists the owner's plugins/skills/paths). Review clean. Gate: e2e
+  848 passed, 0 failed; check failed once on bold-team.test.tsx "removal that finishes after the panel is gone" (timing
+  flake: 3/3 alone; to make reliable), rerun green (server 4851, web 3018, contract 1528).
+- **v3.8.2 deployed live** (~06:57 UTC, idle guard passed): backup score-pre-3.8.2-20261027.db, health ok.
