@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.12] — 2026-10-27
+
+### Fixed
+- **Deleting a run's room also deletes the team-room job that started it**, so its thread leaves the Threads list
+  (an ordinary job delete: Undo brings it back; a job still working is left alone). Jobs already left behind by a
+  deleted run room are removed once (migration 0096).
+- **"Not confirmed as ended" says what happened in plain words**: a turn you stopped that Hermes cancelled says so, and
+  the card explains that Stop waiting for this marks the work failed and pauses a running job for you.
+
 ## [3.7.11] — 2026-10-27
 
 ### Fixed

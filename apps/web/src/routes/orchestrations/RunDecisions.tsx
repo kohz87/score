@@ -353,9 +353,15 @@ export function UnknownCard({
     >
       <h3>Not confirmed as ended: {label ?? attempt.stepId ?? 'lead turn'}</h3>
       <p>
-        Hermes hasn’t said this work finished (
-        {attempt.unknownReason?.replaceAll('_', ' ') ?? 'no reason recorded'}). Score keeps trying
-        to stop it. Until it ends, nothing new starts.
+        {attempt.unknownReason === 'run_cancelled' && attempt.stopRequestedAt
+          ? 'Hermes cancelled the run after it was stopped, but doesn’t confirm that everything the agent started (a tool call, a command) has finished.'
+          : `Hermes hasn’t said this work finished (${unknownReasonText(attempt.unknownReason)}).`}{' '}
+        Score keeps trying to stop it. Until it ends, nothing new starts.
+      </p>
+      <p className="small">
+        Stop waiting for this marks this work as failed and stops waiting for it. Score still asks
+        Hermes to stop it and ignores anything it sends later. A running job then pauses for you to
+        decide; a job being stopped finishes stopping.
       </p>
       <label className="orch-check">
         <input type="checkbox" checked={sure} onChange={(event) => setSure(event.target.checked)} />
@@ -694,4 +700,34 @@ export function RunNeeds({
       })}
     </div>
   )
+}
+
+/** 3.7.12: why an attempt isn't confirmed as ended, in plain words. */
+function unknownReasonText(reason: string | null | undefined): string {
+  switch (reason) {
+    case 'run_cancelled':
+      return 'the run was cancelled'
+    case 'run_interrupted':
+      return 'the run was interrupted'
+    case 'recovered_text_only':
+      return 'only its text came back'
+    case 'crash_after_send_started':
+      return 'Score restarted while sending it'
+    case 'run_not_proven_ended':
+      return 'its end isn’t proven'
+    case 'admission_uncertain':
+      return 'Score can’t tell whether Hermes took it'
+    case 'refusal_unjournaled':
+    case 'closure_unjournaled':
+      return 'Score couldn’t record how it ended'
+    case 'generation_missing':
+      return 'Score lost track of which start this was'
+    case 'run_failed':
+      return 'the run failed without proof it stopped'
+    case null:
+    case undefined:
+      return 'no reason recorded'
+    default:
+      return reason.replaceAll('_', ' ')
+  }
 }
