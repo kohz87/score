@@ -3,6 +3,14 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.9] — 2026-10-27
+
+### Added
+- **Reload MCP from Score.** Start a job's tool check (when it isn't ✓) and the agent's Score access card have a
+  **Reload MCP** button: it restarts that agent's Hermes inside the shared gateway (only that profile; for `default`
+  the whole gateway, which Hermes refuses while any session is live), so it fetches Score's tools again. It asks first,
+  and Score refuses while it sees the agent working, with a turn queued or waiting on an approval. (decision 140)
+
 ## [3.7.8] — 2026-10-27
 
 ### Fixed
