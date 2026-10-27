@@ -96,7 +96,8 @@ test('shell syntax and refused folders fail before the confirmation is used up',
 
 test('a job without a check needs no confirmation', async () => {
   await boot()
-  const { check: _check, ...plain } = body({})
+  const plain: Record<string, unknown> = { ...body({}) }
+  delete plain.check
   const response = await app.inject({
     method: 'POST',
     url: '/api/orchestrations',
