@@ -215,7 +215,7 @@ type Message = {
   refs: Ref[]
   speed?:
     | { ttftMs: number | null; tokensPerSecond: number | null; outputTokens: number | null }
-    | null /* 3.10.0, agent replies: figures of the run behind it, set once the reply finished; any figure Score did not measure is null, never guessed. ttftMs = first reply text minus run start (or the CLI's own ttft_ms); tokensPerSecond = output tokens / (run end minus first reply text), only for spans of 0.5 s or more. */
+    | null /* 3.10.0, agent replies: figures of the run behind it, set once the reply finished; any figure Score did not measure is null, never guessed. ttftMs = first reply text minus run start (or the CLI's own ttft_ms); tokensPerSecond = output tokens / (run end minus first reply text), only for spans of 0.5 s or more; averaged over the whole reply, tool time included (and reasoning tokens on Hermes). */
 }
 
 type LaneBlock = {
@@ -1429,7 +1429,7 @@ WorkspaceInfo.root the browser is showing>`; when present and not the agent's cu
       medianTtftMs: number | null
       medianTokensPerSecond: number | null
     }
-    ;[] /* 3.10.0: medians over the range's runs (Hermes and coding agents); null = no measured run */
+    ;[] /* 3.10.0: medians (tokens/s averaged over the whole reply, tool time included) over the range's runs (Hermes and coding agents); null = no measured run */
     trend: { date: string; runs: number; spendUsd: number | null }[] /* 5.29: last 30 local days, any range */
     approvals: {
       asked: number

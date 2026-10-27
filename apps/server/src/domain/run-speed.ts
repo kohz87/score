@@ -19,15 +19,25 @@ export function markFirstOutput(sqlite: DatabaseSync, runId: string, now: string
 }
 
 /** A CLI's own time to first token replaces Score's measurement: first output = start + ttft. */
-export function applyCliTtft(sqlite: DatabaseSync, runId: string, ttftMs: number): void {
+export function applyCliTtft(
+  sqlite: DatabaseSync,
+  runId: string,
+  ttftMs: number,
+  /** When the run ends, if the row doesn't say yet (the terminal observation sets it right after). */
+  endedAt?: string,
+): void {
   if (!Number.isFinite(ttftMs) || ttftMs < 0) return
-  const row = sqlite.prepare('SELECT started_at FROM runs WHERE id = ?').get(runId) as
-    { started_at: string } | undefined
+  const row = sqlite.prepare('SELECT started_at, ended_at FROM runs WHERE id = ?').get(runId) as
+    { started_at: string; ended_at: string | null } | undefined
   const start = row ? Date.parse(row.started_at) : NaN
   if (Number.isNaN(start)) return
+  const first = start + Math.round(ttftMs)
+  // A figure landing after the run ended is not credible: keep Score's own measurement.
+  const end = Date.parse(row?.ended_at ?? endedAt ?? '')
+  if (!Number.isNaN(end) && first > end) return
   sqlite
     .prepare('UPDATE runs SET first_output_at = ? WHERE id = ?')
-    .run(new Date(start + Math.round(ttftMs)).toISOString(), runId)
+    .run(new Date(first).toISOString(), runId)
 }
 
 /** Derived figures; anything missing is null. All null = nothing measured. */

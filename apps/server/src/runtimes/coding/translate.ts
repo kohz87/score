@@ -504,7 +504,7 @@ export function terminalObservation(
         recordRunResult(sqlite, runId, info.reply, now)
       }
       // The CLI's own time to first token beats Score's measurement.
-      if (usage?.ttftMs !== undefined) applyCliTtft(sqlite, runId, usage.ttftMs)
+      if (usage?.ttftMs !== undefined) applyCliTtft(sqlite, runId, usage.ttftMs, now)
       const changed = setRun(sqlite, runId, now, {
         status: info.status,
         ended_at: now,

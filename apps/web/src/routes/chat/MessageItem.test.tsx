@@ -193,7 +193,7 @@ test('3.10.0: a finished agent reply shows its speed figures quietly', () => {
     speed: { ttftMs: 1234, tokensPerSecond: 48.4, outputTokens: 1240 },
   }
   render(<MessageItem message={message} agents={[]} />)
-  expect(screen.getByText('first token 1.2 s · 48 tok/s · 1,240 tokens')).toBeTruthy()
+  expect(screen.getByText('first token 1.2 s · 48 tok/s avg · 1,240 tokens')).toBeTruthy()
 })
 
 test('3.10.0: unmeasured figures are left out, and a streaming reply shows none', () => {

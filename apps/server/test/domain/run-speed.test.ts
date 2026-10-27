@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
+import { messageFromRow } from '../../src/domain/rooms.ts'
+import { appendRunMessage } from '../../src/domain/message-runs.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import {
   applyCliTtft,
@@ -120,4 +122,64 @@ test('medians per agent over the window, with run counts', () => {
   expect(speedByAgent(db.sqlite, Date.parse(T0) + 5000, Date.parse(T0) + 9000)).toEqual([])
   expect(median([])).toBeNull()
   expect(median([1, 3])).toBe(2)
+})
+
+test('a CLI ttft outside the run (after its end) is ignored; Score’s measurement stays', () => {
+  addRun('r1', 'builder', 3000, 100)
+  markFirstOutput(db.sqlite, 'r1', at(1000))
+  applyCliTtft(db.sqlite, 'r1', 9000)
+  expect(firstOutput('r1')).toBe(at(1000))
+  applyCliTtft(db.sqlite, 'r1', 2000)
+  expect(firstOutput('r1')).toBe(at(2000))
+  // Run not ended yet in the row: the terminal's own end time bounds it.
+  addRun('r2', 'builder', null, null)
+  markFirstOutput(db.sqlite, 'r2', at(500))
+  applyCliTtft(db.sqlite, 'r2', 9000, at(3000))
+  expect(firstOutput('r2')).toBe(at(500))
+})
+
+test('a malformed or old-shaped stored speed reads as none and never breaks the message', () => {
+  const insert = db.sqlite.prepare(
+    `INSERT INTO rooms (id, name, kind, members, created_at, updated_at) VALUES ('rm', 'R', 'room', '[]', ?, ?)`,
+  )
+  insert.run(T0, T0)
+  const row = (speed: string | null) => ({
+    id: 'm1',
+    room_id: 'rm',
+    author_kind: 'agent',
+    author_agent_id: 'builder',
+    to: '[]',
+    parts: '[]',
+    refs: '[]',
+    streaming: 0,
+    created_at: T0,
+    updated_at: T0,
+    version: 1,
+    speed,
+  })
+  expect(messageFromRow(row('{not json')).speed).toBeUndefined()
+  expect(messageFromRow(row('{"tps":3}')).speed).toBeUndefined()
+  expect(
+    messageFromRow(row('{"ttftMs":-1,"tokensPerSecond":null,"outputTokens":null}')).speed,
+  ).toBeUndefined()
+  expect(messageFromRow(row('{"ttftMs":5,"tokensPerSecond":null,"outputTokens":2}')).speed).toEqual(
+    {
+      ttftMs: 5,
+      tokensPerSecond: null,
+      outputTokens: 2,
+    },
+  )
+})
+
+test('whitespace-only text is not the first output', () => {
+  db.sqlite
+    .prepare(
+      `INSERT INTO rooms (id, name, kind, members, created_at, updated_at) VALUES ('rm', 'R', 'room', '[]', ?, ?)`,
+    )
+    .run(T0, T0)
+  addRun('r1', 'builder', null, null)
+  appendRunMessage(db.sqlite, 'r1', '  \n', at(100))
+  expect(firstOutput('r1')).toBeNull()
+  appendRunMessage(db.sqlite, 'r1', 'Hello', at(200))
+  expect(firstOutput('r1')).toBe(at(200))
 })

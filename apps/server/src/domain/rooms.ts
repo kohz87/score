@@ -3,6 +3,8 @@ import type { DatabaseSync } from 'node:sqlite'
 import {
   AgentIdSchema,
   MessageSchema,
+  MessageSpeedSchema,
+  type MessageSpeed,
   RoomImportSchema,
   RoomSchema,
   RoomTagSchema,
@@ -427,6 +429,17 @@ export function refreshRooms(sqlite: DatabaseSync, now: string): DomainEventDraf
   return resend(sqlite, now, index, changedRooms(sqlite, now, index))
 }
 
+/** A malformed or old-shaped stored value is no speed: one bad row must never break a room's message list. */
+function speedOf(stored: string | null | undefined): MessageSpeed | null {
+  if (!stored) return null
+  try {
+    const parsed = MessageSpeedSchema.safeParse(JSON.parse(stored))
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
+  }
+}
+
 export function messageFromRow(value: unknown): Message {
   const row = MessageRowSchema.parse(value)
   return MessageSchema.parse({
@@ -445,7 +458,7 @@ export function messageFromRow(value: unknown): Message {
     ...(row.job_id ? { jobId: row.job_id } : {}),
     ...(row.alternative_of ? { alternativeOf: row.alternative_of } : {}),
     ...(row.reply_kind ? { retryable: row.reply_kind === 'person' } : {}),
-    ...(row.speed ? { speed: JSON.parse(row.speed) as unknown } : {}),
+    ...(speedOf(row.speed) ? { speed: speedOf(row.speed) } : {}),
   })
 }
 

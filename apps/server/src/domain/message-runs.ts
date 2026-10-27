@@ -370,7 +370,7 @@ export function appendRunMessage(
   now: string,
 ): DomainEventDraft[] {
   // The first reply text is the run's first output (time to first token), whether or not a message shows it.
-  if (append.length > 0) markFirstOutput(sqlite, runId, now)
+  if (append.trim().length > 0) markFirstOutput(sqlite, runId, now)
   const value = sqlite.prepare('SELECT * FROM message_runs WHERE run_id = ?').get(runId)
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)

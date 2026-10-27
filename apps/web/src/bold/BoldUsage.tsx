@@ -532,7 +532,7 @@ function SpeedByAgent({ report, agents }: { report: Reports; agents: AgentSummar
             <tr>
               <th scope="col">Agent</th>
               <th scope="col">First token (median)</th>
-              <th scope="col">Tokens per second (median)</th>
+              <th scope="col">Avg tokens/s (median)</th>
               <th scope="col">Runs</th>
             </tr>
           </thead>
@@ -553,7 +553,8 @@ function SpeedByAgent({ report, agents }: { report: Reports; agents: AgentSummar
         </table>
       )}
       <p className="small muted usage-note">
-        Measured by Score on each run; a dash means no measured run in this period.
+        Measured by Score on each run; a dash means no measured run in this period. Tokens/s is
+        averaged over the whole reply, tool time included.
       </p>
     </section>
   )
