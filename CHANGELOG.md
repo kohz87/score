@@ -3,6 +3,11 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.8.6] — 2026-10-27
+
+### Fixed
+- **Library text uses the editor's whole width**, like tables (it stopped at a reading-width column on wide screens).
+
 ## [3.8.5] — 2026-10-27
 
 ### Fixed
