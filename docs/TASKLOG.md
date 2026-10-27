@@ -1640,3 +1640,19 @@ One entry per completed task: what landed, review results, and any **rejected re
   Gate: e2e 847 passed, 1 failed (Team phone screenshot; with the 3.7.6 run's Terminal failure, 66/66 alone), check green
   (server 4835, web 2997, contract 1522).
 - **v3.7.7 deployed live** (~03:21 UTC): backup score-pre-3.7.7-20261027.db, restart, health ok, no new errors.
+- **3.7.8 + 3.7.9** (2026-10-27, shipped together as 3.7.9, lead). Owner pasted Start a job's "Score cannot see which MCP
+  tools the lead has … (could not be checked)": the live adapter never had `mcpTools`, so it showed every time. 3.7.8
+  (decision 139): Score's MCP server records each `tools/list` it answers per agent (migration 0095, cleared by a new
+  key); preflight uses it (all orch.* ok, missing fail, never asked unknown). Review: record only a successful answer
+  under the current key (fixed); write throttle (rejected: MCP rate limit bounds it); incarnation test (rejected: the
+  lead's access check fails first). Owner: the composer's / and @ lists showed one row (Troubleshooting note
+  screenshots): a classic RoomMenu `.chat-menu` rule left by 3.0.0 gave the list a `top`; deleted, e2e checks the box.
+  Owner: "can the reload or gateway restart be done from the score?" → "Reload button" → 3.7.9 (decision 140): `POST
+  /api/agents/:id/mcp/reload` runs `hermes -p <agent> gateway restart` (shared host gateway: a named profile is
+  unserved/served alone and rediscovers MCP; default restarts it all, Hermes refuses with live sessions), refused while
+  Score sees work; button on Start a job's tool check and the Score access card. Review: queued turns, one reload at a
+  time across agents, 120 s + timeout message, the button returns after rechecks, focus (all fixed); re-review clean
+  (Cancel focus fixed too). Gate: e2e 845 passed, 3 failed (tablet, Terminal, Team screenshot: 79/79 alone); check
+  failed once on the contract schema table (McpReloadResultSchema added), then green (server 4843, web 2999, contract
+  1524).
+- **v3.7.9 deployed live** (~04:05 UTC): backup score-pre-3.7.9-20261027.db, restart, health ok, no new errors.
