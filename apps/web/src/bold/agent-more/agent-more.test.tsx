@@ -319,6 +319,27 @@ test('Workspace shows the newest files first and opens one', async () => {
   expect(screen.getByRole('textbox', { name: 'Folder on this computer' })).toBeDefined()
 })
 
+test('3.13.2: a coding agent’s folder is set through its own settings, a Hermes agent’s through the workspace', async () => {
+  override = (path, method) => {
+    if (path.endsWith('/coding-agents/coder') && method === 'PATCH') return Response.json({})
+    if (path.endsWith('/workspace/root') && method === 'PUT')
+      return Response.json({ root: '/home/user/repo', available: true, reason: null })
+    return null
+  }
+  mount(
+    <WorkspaceCard agent={{ ...agent, id: 'coder', runtime: 'claude-code' }} onOpen={vi.fn()} />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Set folder' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Folder on this computer' }), {
+    target: { value: '/home/user/repo' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Use this folder' }))
+  await waitFor(() =>
+    expect(sent('PATCH', '/coding-agents/coder')?.body).toEqual({ workspace: '/home/user/repo' }),
+  )
+  expect(sent('PUT', '/workspace/root')).toBeUndefined()
+})
+
 test('Repeating jobs run now and link to Start a job', async () => {
   mount(<RoutinesCard agent={agent} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Run Nightly tests now' }))
