@@ -76,6 +76,7 @@ import {
   answerInquiry,
   decideGate,
   expectRevision,
+  personStopsStep,
   grantWaiver,
   remapAgent,
   pauseRun,
@@ -153,8 +154,10 @@ import { timelineOf } from './timeline.ts'
 import { pruneOrchestrationRows } from './prune.ts'
 import {
   type HelpersConfig,
+  autoAuditStep,
   effectiveSize,
   helperLines,
+  stepVotePending,
   helpersOf,
   settleHelpers,
   startScan,
@@ -1277,6 +1280,10 @@ export class Orchestrator {
   resume(id: string, body: RunControl) {
     return this.decide(id, (ctx) => resumeRun(ctx, id, body))
   }
+  /** 3.14: the person stops one step (the lead is told and can reassign it). */
+  stopStep(id: string, stepId: string, body: RunControl) {
+    return this.decide(id, (ctx) => personStopsStep(ctx, id, stepId, body))
+  }
   /** 3.13: the person runs the job's check now. */
   runCheck(id: string, body: RunControl) {
     return this.decide(id, (ctx) => {
@@ -2397,6 +2404,8 @@ export class Orchestrator {
     ).length
     for (const step of steps) {
       if (step.status !== 'queued') continue
+      // 3.14: a step the voters are still judging waits for their tally.
+      if (stepVotePending(sqlite, o.id, step.id)) continue
       // A lead-asks step waits until the turn that created it ends, so the lead can ask for approval first.
       if (o.gate_policy === 'lead-asks' && leadLive) continue
       if (!step.after_steps.every((id) => byId.get(id)?.status === 'succeeded')) continue
@@ -3583,6 +3592,8 @@ export class Orchestrator {
     // (settleHelpers); a helper's read-only work leaves nothing for the check to test.
     if (step.role === 'vote' || step.helper_role?.startsWith('scan_')) return
     addCause(ctx.sqlite, o.id, ok ? 'step_succeeded' : 'step_failed', step.id, ctx.now)
+    // 3.14: a helper audits each of the lead's own steps that succeeded (when the person turned that on).
+    if (ok && !step.role) autoAuditStep(ctx, o, step, result)
     if (ok && step.role !== 'helper') queueCheckAfterStep(ctx, o.id)
     else if (!ok)
       adviseOnRepeatFailure(ctx, o, { ...step, status: 'failed', result }, result, attemptId)

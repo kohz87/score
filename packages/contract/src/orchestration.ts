@@ -466,6 +466,8 @@ export const StepViewSchema = z.object({
   role: z.enum(['advisor', 'helper', 'vote']).nullable().optional(),
   /** 3.15: a helper step's role (search, grep, audit, or a scan part). */
   helperRole: z.string().nullable().optional(),
+  /** 3.14: when its current run last showed a sign of life (a running step quiet for long is stuck). */
+  lastActivityAt: z.iso.datetime().nullable().optional(),
 })
 export type StepView = z.infer<typeof StepViewSchema>
 

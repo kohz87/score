@@ -340,13 +340,14 @@ export function openPolicyGate(
   agentId: string,
   instruction: string,
   now: string,
+  after: readonly string[] = [],
 ): string {
   const policyId = readWorkerPolicy(sqlite, o.id, agentId)?.policyId
   const payloadText = JSON.stringify({
     agentId,
     agentIncarnation: lifecycleOf(sqlite, agentId)?.incarnation_id ?? 'untracked',
     instruction,
-    after: [],
+    after,
     replaces: null,
     estimateUsd: o.step_estimate_usd,
     dependencyRevisions: {},

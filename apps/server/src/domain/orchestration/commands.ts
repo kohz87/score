@@ -24,6 +24,7 @@ import {
   helpersOf,
   insertHelperStep,
   ROLE_PREAMBLE,
+  autoVoteStep,
   startVote,
   votersOf,
 } from './helpers.ts'
@@ -392,6 +393,42 @@ function assignHelper(ctx: Ctx, o: OrchRow, attempt: AttemptRow, args: Args): Or
   })
 }
 
+/**
+ * Retires a step: a queued one simply doesn't start; one that may be running is owed a Stop, and admissions in the run
+ * wait until it is confirmed ended (or the person decides). True when a Stop is owed. Shared by orch.cancel and the
+ * person's "Stop this step" (3.14).
+ */
+export function cancelStep(ctx: Ctx, o: OrchRow, stepId: string, why: string): boolean {
+  const { sqlite, now } = ctx
+  const step = readStep(sqlite, o.id, stepId)!
+  const attempt = attemptsOf(sqlite, o.id).findLast((a) => a.step_id === stepId)
+  let fence = false
+  if (step.status === 'admitted' || step.status === 'unknown') {
+    if (attempt && attempt.state === 'created')
+      refuseAttempt(sqlite, attempt, 'cancelled before it was sent', now)
+    else if (attempt && ['send_started', 'running', 'unknown'].includes(attempt.state)) {
+      oweStop(sqlite, attempt, now)
+      // The stop is journaled before this transaction commits (a restored database that lost it is detected).
+      journalSoft(ctx, () =>
+        ctx.journal.append({
+          kind: 'stop_fence',
+          orchestrationId: o.id,
+          attemptId: attempt.id,
+          reason: `cancel:${stepId}`,
+        }),
+      )
+      fence = true
+    }
+  }
+  setStepStatus(sqlite, o.id, stepId, 'cancelled', why, now)
+  sqlite
+    .prepare('UPDATE orc_steps SET retired = 1 WHERE orchestration_id = ? AND id = ?')
+    .run(o.id, stepId)
+  withdrawGates(sqlite, o.id, now, stepId)
+  cascadeBlocked(sqlite, o.id, now)
+  return fence
+}
+
 const HANDLERS: Record<ToolName, Handler> = {
   'orch.vote'(ctx, o, attempt, args) {
     const { sqlite, now } = ctx
@@ -639,11 +676,23 @@ const HANDLERS: Record<ToolName, Handler> = {
     }
     addStored(sqlite, o.id, bytes)
     if (below) holdStep(ctx, o, { id, agent_id: agent }, below, { tellLead: false })
+    // 3.14: the voters judge the step before it starts (it waits for their tally); not for a step the person gates.
+    const voteId = policyGate
+      ? null
+      : autoVoteStep(ctx, o, { id, agentId: agent, instruction }, attempt.id, (usd) =>
+          canReserve(budgetView(sqlite, o), usd),
+        )
     return ok({
       stepId: id,
       ...(gateId ? { gateId } : {}),
       status: policyGate ? 'pending_gate' : 'queued',
       ...(below ? { held: 'quota_low' } : {}),
+      ...(voteId
+        ? {
+            voteId,
+            note: 'The voters judge this step before it starts; their tally starts a new turn for you.',
+          }
+        : {}),
     })
   },
 
@@ -701,38 +750,13 @@ const HANDLERS: Record<ToolName, Handler> = {
   },
 
   'orch.cancel'(ctx, o, _attempt, args) {
-    const { sqlite, now } = ctx
     const stepId = args.stepId as string
-    const step = readStep(sqlite, o.id, stepId)
+    const step = readStep(ctx.sqlite, o.id, stepId)
     if (!step || isAdvisorStep(step))
       return refuse('unknown_step', `${stepId} is not a step of this run`)
     if (isFinalStep(step.status) || step.retired)
       return refuse('already_final', `${stepId} is already ${step.status}`)
-    const attempt = attemptsOf(sqlite, o.id).findLast((a) => a.step_id === stepId)
-    let fence = false
-    if (step.status === 'admitted' || step.status === 'unknown') {
-      if (attempt && attempt.state === 'created')
-        refuseAttempt(sqlite, attempt, 'cancelled before it was sent', now)
-      else if (attempt && ['send_started', 'running', 'unknown'].includes(attempt.state)) {
-        oweStop(sqlite, attempt, now)
-        // The stop is journaled before this transaction commits (a restored database that lost it is detected).
-        journalSoft(ctx, () =>
-          ctx.journal.append({
-            kind: 'stop_fence',
-            orchestrationId: o.id,
-            attemptId: attempt.id,
-            reason: `cancel:${stepId}`,
-          }),
-        )
-        fence = true
-      }
-    }
-    setStepStatus(sqlite, o.id, stepId, 'cancelled', 'cancelled by the lead', now)
-    sqlite
-      .prepare('UPDATE orc_steps SET retired = 1 WHERE orchestration_id = ? AND id = ?')
-      .run(o.id, stepId)
-    withdrawGates(sqlite, o.id, now, stepId)
-    cascadeBlocked(sqlite, o.id, now)
+    const fence = cancelStep(ctx, o, stepId, 'cancelled by the lead')
     return ok({ stepId, status: 'cancelled', admitted: fence, admissionsFenced: fence })
   },
 
