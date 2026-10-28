@@ -130,6 +130,21 @@ const base = {
   denyFiles: [],
 }
 
+test('3.15: the advisor on call: --agents with the file, and the sub-agent tool allowed for an editing worker', () => {
+  const args = claudeDriver.buildArgs({
+    ...base,
+    permission: 'workspace-write',
+    agentsFile: '/run/agents.json',
+  })
+  expect(args[args.indexOf('--agents') + 1]).toBe('/run/agents.json')
+  expect(args[args.indexOf('--allowed-tools') + 1]!.split(',')).toEqual(
+    expect.arrayContaining(['Agent', 'Task']),
+  )
+  const plain = claudeDriver.buildArgs({ ...base, permission: 'workspace-write' })
+  expect(plain).not.toContain('--agents')
+  expect(plain[plain.indexOf('--allowed-tools') + 1]!.split(',')).not.toContain('Agent')
+})
+
 test('claude flag mapping per permission level', () => {
   const args = (permission: 'read-only' | 'workspace-write' | 'full', extra = {}) =>
     claudeDriver.buildArgs({ ...base, permission, ...extra })

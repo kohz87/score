@@ -53,6 +53,7 @@ const bytesOfFiles = (): string =>
 
 /** Changes the world once, while the unit of generation 1 is being armed (after preparation, before the release). */
 const baseBody = (allowedAgents: string[]): OrchestrationCreate => ({
+  advisorMode: 'on_call',
   goal: 'g',
   leadAgentId: 'lead',
   allowedAgents,

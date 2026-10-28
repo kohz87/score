@@ -165,6 +165,7 @@ import {
 } from './helpers.ts'
 import {
   ADVISOR_STEPS,
+  onCallAdvisor,
   adviceArrived,
   adviseOnRepeatCheckFailure,
   adviseOnRepeatFailure,
@@ -1034,8 +1035,8 @@ export class Orchestrator {
       }
       if (advisor !== undefined) {
         ctx.sqlite
-          .prepare('UPDATE orchestrations SET advisor_agent_id = ? WHERE id = ?')
-          .run(advisor, id)
+          .prepare('UPDATE orchestrations SET advisor_agent_id = ?, advisor_mode = ? WHERE id = ?')
+          .run(advisor, body.advisorMode, id)
         // Frozen like every agent the run was started with, so a replaced advisor waits for the person's remap.
         ctx.sqlite
           .prepare(
@@ -2458,7 +2459,14 @@ export class Orchestrator {
       const dependencies = step.after_steps.map((id) => byId.get(id)!)
       // A workflow step's instruction already is the final, validated payload (it is never re-rendered or clipped).
       const input =
-        o.planner === 'workflow' ? step.instruction : renderStepInput({ o, step, dependencies })
+        o.planner === 'workflow'
+          ? step.instruction
+          : renderStepInput({
+              o,
+              step,
+              dependencies,
+              advisorOnCall: onCallAdvisor(sqlite, o.id, step.id) !== null,
+            })
       // Scanned after rendering and before anything is stored: a capability in a step input blocks admission.
       if (containsCapability(input) || containsCapability(step.instruction)) {
         setStepStatus(sqlite, o.id, step.id, 'blocked', 'capability_in_input', now)

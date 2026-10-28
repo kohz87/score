@@ -332,6 +332,11 @@ export const OrchestrationCreateSchema = z
      * done). Not the lead; its advice is data for the lead, never a veto.
      */
     advisorAgentId: AgentIdSchema.optional(),
+    /**
+     * 3.15 (decision 151): `on_call` also gives each Claude Code worker that edits the advisor as a subagent it consults
+     * itself (when stuck, after a failed fix, before a risky change); `checkpoints` keeps only the lead's checkpoints.
+     */
+    advisorMode: z.enum(['on_call', 'checkpoints']).default('on_call'),
     /** 3.15: the helpers and their limits. */
     helpers: OrchestrationHelpersSchema.optional(),
   })
@@ -636,6 +641,21 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
     .object({
       agentId: AgentIdSchema,
       consults: z.array(AdvisorConsultViewSchema),
+      /** 3.15: on call to the workers, or the lead's checkpoints only. */
+      mode: z.enum(['on_call', 'checkpoints']).optional(),
+      /** 3.15: the workers' own consults (their advisor subagent calls), oldest first. */
+      onCall: z
+        .array(
+          z.object({
+            stepId: z.string(),
+            agentId: AgentIdSchema,
+            at: z.iso.datetime(),
+            question: z.string(),
+            status: z.enum(['running', 'done', 'failed']),
+            totalTokens: z.int().nonnegative().nullable(),
+          }),
+        )
+        .optional(),
     })
     .nullable()
     .optional(),

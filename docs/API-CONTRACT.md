@@ -2268,6 +2268,17 @@ Helper work (`StepView.role: 'helper'`, `helperRole`, ids `h1`, `h2`, …) runs 
   `VoteView { id; question; options; k; status: 'voting'|'sharp'|'split'|'failed'; counts; choice; share; inquiryId; createdAt }`.
 - History kinds: `helpers_set`, `scan_started`, `scan_done`, `vote_started`, `vote_tallied`.
 
+### The advisor on call to workers (3.15, decision 151)
+
+`OrchestrationCreate.advisorMode?: 'on_call' | 'checkpoints'` (default `on_call`). With `on_call`, each of the lead's own steps
+done by a **Claude Code worker at workspace-write**, when the advisor is a **Claude Code agent**, launches with `--agents <file>`
+defining a subagent `advisor` (the advisor's model, tools Read/Grep/Glob, an advise-only prompt) and the sub-agent tool allowed;
+the step's input says when to ask it (stuck, after a failed fix, before a risky change; at most 2 per step). The lead keeps its
+checkpoints (before the plan, before done, same failure twice). Other workers (Hermes, Codex, read-only) and a Hermes advisor:
+checkpoints only. `OrchestrationDetail.advisor` gains `mode` and `onCall: { stepId, agentId, at, question, status, totalTokens }[]`,
+read from the workers' `advisor` subagent calls (tool calls of the job's step runs). `--agents` is not one of the worker's checked
+help flags: a CLI without it fails that step visibly.
+
 ### Automatic votes and audits, no-limit helpers, stopping one step (3.14)
 
 - `helpers.maxSteps: null` = no separate helper allowance (until the job ends); reserves and the launch suggestion size it as

@@ -47,6 +47,7 @@ export const create = (overrides: Partial<OrchestrationCreate> = {}): Orchestrat
   leadTurnEstimateUsd: 0.25,
   stepEstimateUsd: 0.5,
   acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
+  advisorMode: 'on_call',
   ...overrides,
 })
 
