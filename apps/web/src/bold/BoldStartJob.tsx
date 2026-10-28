@@ -652,7 +652,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
           max: ORCH_LIMITS.goalBytes,
           unit: 'KB' as const,
         }
-      : { size: [...what.trim()].length, max: WHAT_CHARS, unit: 'characters' as const }
+      : {
+          // UTF-16 units, as the server's limit and the trigger's own cut count them.
+          size: what.trim().length,
+          max: WHAT_CHARS,
+          unit: 'characters' as const,
+        }
   const whatProblem =
     whatLimit.size > whatLimit.max
       ? `That’s too long (${sizeText(whatLimit.size, whatLimit.unit)} of ${sizeText(whatLimit.max, whatLimit.unit)}). Put the details in a file the agents can read, and point to it here.`

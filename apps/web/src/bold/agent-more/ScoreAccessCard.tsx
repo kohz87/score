@@ -150,13 +150,10 @@ export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
               </button>
             </div>
           )}
-          {data.hasToken && (
+          {data.hasToken && data.command && (
             <span className="small muted" data-testid="mcp-rotate-note">
               After a new key, Hermes keeps the old one until you remove it: run{' '}
-              <code>
-                {(data.command ?? 'hermes').replace(/ mcp add .*$/, '')} config unset
-                MCP_SCORE_API_KEY
-              </code>
+              <code>{data.command.replace(/ mcp add .*$/, '')} config unset MCP_SCORE_API_KEY</code>
               , then the command above, and paste the new key when it asks (Score never reads or
               writes the profile). Then Reload MCP below.
             </span>
