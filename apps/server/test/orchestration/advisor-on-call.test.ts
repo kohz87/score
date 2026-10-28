@@ -158,6 +158,13 @@ test('the workers’ consults are read from their Claude Code advisor calls (too
     mode: 'on_call',
     onCall: [{ stepId: 's1' }, { stepId: 's1', status: 'running' }],
   })
+  // Not confirmed ended (unknown): it may still be running, so the consult stays live.
+  h.db.sqlite
+    .prepare(
+      "UPDATE orc_attempts SET state = 'unknown' WHERE orchestration_id = ? AND step_id = 's1'",
+    )
+    .run(id)
+  expect(onCallConsults(h.db.sqlite, id).map((c) => c.status)).toEqual(['done', 'running'])
   // A consult cut off with its run never shows as live once the run is over.
   h.db.sqlite
     .prepare(

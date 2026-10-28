@@ -429,7 +429,7 @@ export function onCallAdvisor(
 export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
   const rows = sqlite
     .prepare(
-      `SELECT a.step_id, a.agent_id, a.state AS attempt_state, t.started_at, t.status FROM tool_calls t
+      `SELECT a.step_id, a.agent_id, a.state AS attempt_state, a.abandoned_at, t.started_at, t.status FROM tool_calls t
          JOIN orc_attempts a ON a.run_id = t.run_id
          JOIN orc_steps s ON s.orchestration_id = a.orchestration_id AND s.id = a.step_id
        WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.tool = 'advisor' AND s.advisor_model IS NOT NULL
@@ -439,6 +439,7 @@ export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
     step_id: string
     agent_id: string
     attempt_state: string
+    abandoned_at: string | null
     started_at: string
     status: string
   }[]
@@ -451,9 +452,14 @@ export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
     // Only steps that had the advisor on call count (review: a person's own global advisor setting would also make calls
     // named advisor). A consult cut off with its run (stopped, crashed, timed out) never gets a result: once the run is
     // over it is shown as failed, never as live forever (review).
+    // An attempt not confirmed ended (unknown, not abandoned) may still be running, so its consult may be too (review).
     status: (row.status === 'ok'
       ? 'done'
-      : row.status === 'error' || !['send_started', 'running'].includes(row.attempt_state)
+      : row.status === 'error' ||
+          !(
+            ['send_started', 'running'].includes(row.attempt_state) ||
+            (row.attempt_state === 'unknown' && row.abandoned_at === null)
+          )
         ? 'failed'
         : 'running') as 'running' | 'done' | 'failed',
     totalTokens: null,
