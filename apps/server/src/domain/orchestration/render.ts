@@ -259,7 +259,7 @@ export function renderStepInput(args: StepInputArgs): string {
     ...(args.advisorOnCall
       ? [
           '',
-          'An advisor (a stronger model) is on call as the subagent "advisor". Ask it with the Agent tool when you are stuck, after a fix failed, or before a risky change, naming the exact file, line and what you or the helpers found. At most 2 times in this step; it only reads and advises, you decide.',
+          'An advisor (a stronger model) is on call through your advisor tool. Consult it when you are stuck, after a fix failed, before a risky change, and before you report this step done. It sees what you did and only advises; you decide.',
         ]
       : []),
   ]

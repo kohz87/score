@@ -59,6 +59,13 @@ test('who gets the advisor on call, and the note in their step', async () => {
   expect(onCallAdvisor(h.db.sqlite, id, 's9')).toBeNull()
   coding('reviewer', 'read-only', 'opus')
   expect(onCallAdvisor(h.db.sqlite, id, 's9')).toEqual({ advisorId: 'reviewer', model: 'opus' })
+  // Claude Code attaches an advisor only at or above the worker's model: an Opus worker gets no Sonnet advisor.
+  coding('bigcoder', 'workspace-write', 'opus')
+  step('bigcoder', 's7')
+  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'sonnet' WHERE id = 'reviewer'").run()
+  expect(onCallAdvisor(h.db.sqlite, id, 's7')).toBeNull()
+  expect(onCallAdvisor(h.db.sqlite, id, 's9')).toEqual({ advisorId: 'reviewer', model: 'sonnet' })
+  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'opus' WHERE id = 'reviewer'").run()
   // Not for a read-only worker, nor for helper work.
   expect(onCallAdvisor(h.db.sqlite, id, 's8')).toBeNull()
   expect(onCallAdvisor(h.db.sqlite, id, 'h9')).toBeNull()
@@ -80,10 +87,10 @@ test('who gets the advisor on call, and the note in their step', async () => {
     dependencies: [],
     advisorOnCall: true,
   })
-  expect(input).toContain('An advisor (a stronger model) is on call as the subagent "advisor"')
+  expect(input).toContain('An advisor (a stronger model) is on call through your advisor tool')
 })
 
-test('the workers’ consults are read from their advisor subagent calls', async () => {
+test('the workers’ consults are read from their Claude Code advisor calls (tool advisor)', async () => {
   h = await harness({
     lead: {
       // The advisor reads the plan first (assign waits for it), so the step is assigned on the second turn.
@@ -100,37 +107,36 @@ test('the workers’ consults are read from their advisor subagent calls', async
     h.orch.snapshot(id).orchestration.attempts.some((a) => a.stepId === 's1' && a.runId),
   )
   const runId = h.orch.snapshot(id).orchestration.attempts.find((a) => a.stepId === 's1')!.runId!
-  const call = (seq: number, sub: object) =>
+  const call = (seq: number, tool: string, status: string) =>
     h.db.sqlite
       .prepare(
-        `INSERT INTO tool_calls (run_id, seq, tool, status, started_at, call_id, subagent) VALUES (?, ?, 'Agent', 'ok', ?, ?, ?)`,
+        `INSERT INTO tool_calls (run_id, seq, tool, status, started_at, call_id) VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(runId, seq, `2026-01-01T00:00:0${seq}.000Z`, `c${seq}`, JSON.stringify(sub))
-  call(1, {
-    status: 'done',
-    subagentType: 'advisor',
-    description: 'Is rules.ts:41 safe to change?',
-    totalTokens: 9200,
-  })
-  call(2, {
-    status: 'done',
-    subagentType: 'general-purpose',
-    description: 'search',
-    totalTokens: 100,
-  })
+      .run(runId, seq, tool, status, `2026-01-01T00:00:0${seq}.000Z`, `c${seq}`)
+  call(1, 'advisor', 'ok')
+  call(2, 'Read', 'ok')
+  call(3, 'advisor', 'running')
   expect(onCallConsults(h.db.sqlite, id)).toEqual([
     {
       stepId: 's1',
       agentId: 'builder',
       at: '2026-01-01T00:00:01.000Z',
-      question: 'Is rules.ts:41 safe to change?',
+      question: '',
       status: 'done',
-      totalTokens: 9200,
+      totalTokens: null,
+    },
+    {
+      stepId: 's1',
+      agentId: 'builder',
+      at: '2026-01-01T00:00:03.000Z',
+      question: '',
+      status: 'running',
+      totalTokens: null,
     },
   ])
   expect(h.orch.snapshot(id).orchestration.advisor).toMatchObject({
     mode: 'on_call',
-    onCall: [{ stepId: 's1' }],
+    onCall: [{ stepId: 's1' }, { stepId: 's1', status: 'running' }],
   })
   // The decision is frozen on the step at admission: builder is a Hermes agent here, so no advisor model.
   const attempt = h.orch.snapshot(id).orchestration.attempts.find((a) => a.stepId === 's1')!

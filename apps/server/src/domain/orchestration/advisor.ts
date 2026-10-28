@@ -375,13 +375,18 @@ export function openPolicyGate(
 
 // ------------------------------------------------------------------------------------- on call to workers (3.15)
 
-/** What a worker's advisor subagent is told; it reads only and answers the worker's question. */
-export const ADVISOR_SUBAGENT = {
-  description:
-    'A senior reviewer on call. Ask it when you are stuck, after a fix failed, or before a risky change. Give it the exact file, line and what you (or the helpers) found.',
-  prompt: `You are the advisor of a coding agent doing one step of a job coordinated by Score. It asks you when it is stuck, after a fix failed, or before a risky change. Read what you need (you can only read), then answer in at most ${ADVICE_CHARS} characters: what is wrong or risky, and what to do instead. Be concrete; never change files.`,
-  tools: ['Read', 'Grep', 'Glob'],
-}
+/**
+ * Claude Code attaches an advisor only at or above the worker's own model (code.claude.com/docs/en/advisor). Ranked by the
+ * family name in the model id or alias; an unknown model ranks as unknown.
+ */
+const MODEL_RANK: [RegExp, number][] = [
+  [/haiku/i, 1],
+  [/sonnet/i, 2],
+  [/opus/i, 3],
+  [/fable/i, 4],
+]
+const rankOf = (model: string | null): number | null =>
+  model === null ? null : (MODEL_RANK.find(([pattern]) => pattern.test(model))?.[1] ?? null)
 
 /**
  * The advisor a step's worker gets on call, or null: only with the advisor on call, for the lead's own steps (not
@@ -408,6 +413,9 @@ export function onCallAdvisor(
   if (worker?.runtime !== 'claude-code' || worker.permission !== 'workspace-write') return null
   const advisor = coding(o.advisor_agent_id)
   if (advisor?.runtime !== 'claude-code') return null
+  // Below the worker's model it would not attach; a worker on the CLI's default model gets only an Opus-or-better advisor.
+  const advisorRank = rankOf(advisor.model || 'opus')
+  if (advisorRank === null || advisorRank < (rankOf(worker.model) ?? 3)) return null
   // An advisor the person paused or that can't take work isn't on call either (as for the lead's checkpoints).
   if (
     !agentAdmits(sqlite, o.advisor_agent_id) ||
@@ -417,41 +425,26 @@ export function onCallAdvisor(
   return { advisorId: o.advisor_agent_id, model: advisor.model || 'opus' }
 }
 
-/** The workers' own consults: their `advisor` subagent calls, read from the tool calls of the job's step runs. */
+/** The workers' own consults: their Claude Code advisor calls (tool `advisor`) in the job's step runs. */
 export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
   const rows = sqlite
     .prepare(
-      `SELECT a.step_id, a.agent_id, t.started_at, t.subagent FROM tool_calls t
+      `SELECT a.step_id, a.agent_id, t.started_at, t.status FROM tool_calls t
          JOIN orc_attempts a ON a.run_id = t.run_id
-       WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.subagent IS NOT NULL
+       WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.tool = 'advisor'
        ORDER BY t.started_at, t.seq`,
     )
-    .all(orchId) as { step_id: string; agent_id: string; started_at: string; subagent: string }[]
-  return rows.flatMap((row) => {
-    let sub: {
-      subagentType?: string | null
-      status?: string
-      description?: string | null
-      totalTokens?: number | null
-    }
-    try {
-      sub = JSON.parse(row.subagent) as typeof sub
-    } catch {
-      return []
-    }
-    if (sub.subagentType !== 'advisor') return []
-    return [
-      {
-        stepId: row.step_id,
-        agentId: row.agent_id,
-        at: row.started_at,
-        question: sub.description ?? '',
-        status: (sub.status === 'done' || sub.status === 'failed' ? sub.status : 'running') as
-          'running' | 'done' | 'failed',
-        totalTokens: typeof sub.totalTokens === 'number' ? sub.totalTokens : null,
-      },
-    ]
-  })
+    .all(orchId) as { step_id: string; agent_id: string; started_at: string; status: string }[]
+  return rows.map((row) => ({
+    stepId: row.step_id,
+    agentId: row.agent_id,
+    at: row.started_at,
+    // The call carries no question and its advice is encrypted for the worker: Score knows only that it asked.
+    question: '',
+    status: (row.status === 'ok' ? 'done' : row.status === 'error' ? 'failed' : 'running') as
+      'running' | 'done' | 'failed',
+    totalTokens: null,
+  }))
 }
 
 /** The on-call decision frozen on the step when it was admitted (its input says so), for the launch to read. */

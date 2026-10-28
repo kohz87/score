@@ -130,16 +130,61 @@ const base = {
   denyFiles: [],
 }
 
-test('3.15: the advisor on call adds --agents with the file and nothing else (no extra tool allowed)', () => {
+test('3.14.1: the advisor on call adds --advisor with its model and nothing else', () => {
   const args = claudeDriver.buildArgs({
     ...base,
     permission: 'workspace-write',
-    agentsFile: '/run/agents.json',
+    advisorModel: 'opus',
   })
   const plain = claudeDriver.buildArgs({ ...base, permission: 'workspace-write' })
-  expect(args[args.indexOf('--agents') + 1]).toBe('/run/agents.json')
-  expect(args.filter((arg) => arg !== '--agents' && arg !== '/run/agents.json')).toEqual(plain)
-  expect(plain).not.toContain('--agents')
+  expect(args[args.indexOf('--advisor') + 1]).toBe('opus')
+  expect(args.filter((arg) => arg !== '--advisor' && arg !== 'opus')).toEqual(plain)
+  expect(plain).not.toContain('--advisor')
+})
+
+test('3.14.1: a Claude Code advisor consult (captured shapes, 2.1.312) is a tool call, never loss', () => {
+  const parser = createClaudeParser('/work/ws')
+  const assistant = (content: object[]) =>
+    JSON.stringify({ type: 'assistant', message: { role: 'assistant', content } })
+  const events = [
+    assistant([{ type: 'server_tool_use', id: 'srvtoolu_1', name: 'advisor', input: {} }]),
+    assistant([
+      {
+        type: 'advisor_tool_result',
+        tool_use_id: 'srvtoolu_1',
+        content: { type: 'advisor_redacted_result', encrypted_content: 'Er4ECioIFRgC' },
+      },
+    ]),
+    assistant([{ type: 'text', text: 'Fixed: add should return a + b.' }]),
+    JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'Fixed.' }),
+  ].flatMap((line) => parser.parse(line))
+  expect(events).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: 'tool_start', callId: 'srvtoolu_1', tool: 'advisor' }),
+      expect.objectContaining({ kind: 'tool_end', callId: 'srvtoolu_1', ok: true }),
+    ]),
+  )
+  // The encrypted advice never reaches Score's records.
+  expect(JSON.stringify(events)).not.toContain('Er4ECioIFRgC')
+  expect(parser.lossReason?.() ?? null).toBeNull()
+  // An error result is a failed consult, not a lost turn; another server tool is still loss.
+  const second = createClaudeParser('/work/ws')
+  const failed = second.parse(
+    assistant([
+      {
+        type: 'advisor_tool_result',
+        tool_use_id: 'srvtoolu_2',
+        content: { type: 'advisor_tool_result_error' },
+      },
+    ]),
+  )
+  expect(failed[0]).toMatchObject({ kind: 'tool_end', ok: false })
+  expect(second.lossReason?.() ?? null).toBeNull()
+  const third = createClaudeParser('/work/ws')
+  third.parse(
+    assistant([{ type: 'server_tool_use', id: 'srvtoolu_3', name: 'web_search', input: {} }]),
+  )
+  expect(third.lossReason?.()).not.toBeNull()
 })
 
 test('claude flag mapping per permission level', () => {

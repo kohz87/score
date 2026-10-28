@@ -372,7 +372,9 @@ export function buildLog(
       id: `oncall-${entry.stepId}-${index}`,
       at: entry.at,
       layer: 'advisor',
-      text: `${nameOf(agent)} asked the advisor: ${entry.question}`,
+      text: entry.question
+        ? `${nameOf(agent)} asked the advisor: ${entry.question}`
+        : `${nameOf(agent)} asked the advisor`,
     })
   })
   return lines.sort((a, b) => a.at.localeCompare(b.at))

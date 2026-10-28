@@ -133,11 +133,8 @@ export interface DriverRunOptions {
   instructionsFile?: string | null
   /** A resumed session whose recorded system prompt must be rendered again so an edit (or a removal) applies. */
   refreshSystemPrompt?: boolean
-  /**
-   * 3.15 (decision 151): a file defining subagents (the advisor on call). The driver passes it and lets the worker call
-   * them; null/absent = none, and the subagent tool stays as the permission level has it.
-   */
-  agentsFile?: string | null
+  /** 3.14.1 (decision 151): the advisor model on call (Claude Code's `--advisor`); null/absent = none. */
+  advisorModel?: string | null
 }
 
 /** Where a worker's CLI looks for configuration: the user's home, the workspace, the allow-listed environment. */

@@ -81,8 +81,9 @@ function measureLinks(map: HTMLElement, workers: WorkerNode[]): AdvisorLink[] {
       running: asked.running,
       label: asked.running
         ? `${worker.name} is asking the advisor… (${ordinal(asked.count)} time)`
-        : `asked ${asked.count}× · ${formatTokens(asked.tokens)} tokens`,
-      question: asked.running ? (asked.questions.at(-1) ?? null) : null,
+        : `asked ${asked.count}×${asked.tokens > 0 ? ` · ${formatTokens(asked.tokens)} tokens` : ''}`,
+      // Claude Code's own advisor call has no question (and encrypted advice): nothing to show then.
+      question: asked.running ? asked.questions.at(-1) || null : null,
       labelX: edge - 8,
       labelY: wy - 8,
     })
@@ -206,7 +207,8 @@ function WorkerBox({
         </span>
         {asked && (
           <span className="jobmap-asked">
-            asked the advisor {asked.count}× ({formatTokens(asked.tokens)} tokens)
+            asked the advisor {asked.count}×
+            {asked.tokens > 0 ? ` (${formatTokens(asked.tokens)} tokens)` : ''}
           </span>
         )}
       </Node>
@@ -281,7 +283,7 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
   )
   const advisorCount =
     advisor &&
-    `${advisor.consults} ${advisor.consults === 1 ? 'consult' : 'consults'} · tokens read ${formatTokens(advisor.tokens)}`
+    `${advisor.consults} ${advisor.consults === 1 ? 'consult' : 'consults'}${advisor.tokens > 0 ? ` · tokens read ${formatTokens(advisor.tokens)}` : ''}`
 
   return (
     <section

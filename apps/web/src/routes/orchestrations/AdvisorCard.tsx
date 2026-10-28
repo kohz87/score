@@ -84,7 +84,7 @@ export function AdvisorCard({
                     <span className="orch-muted">{entry.totalTokens} tokens</span>
                   )}
                 </div>
-                <p>{entry.question}</p>
+                {entry.question && <p>{entry.question}</p>}
               </li>
             ))}
           </ul>
