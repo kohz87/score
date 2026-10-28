@@ -475,6 +475,8 @@ test('MCP: the orch tools need the access switch and the lead capability, not th
       'orch.note',
       'orch.finish',
       'orch.receipt',
+      'orch.check',
+      'orch.vote',
     ]),
   )
 

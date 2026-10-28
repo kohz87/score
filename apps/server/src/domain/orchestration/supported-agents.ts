@@ -57,7 +57,7 @@ export const forbiddenPermissionError = (agentIds: readonly string[]): HttpError
   new HttpError(
     422,
     'unsupported_agent',
-    `${agentIds.join(', ')} has full access. Orchestration steps need a coding agent that is read-only or limited to its workspace.`,
+    `${agentIds.join(', ')} ${agentIds.length > 1 ? 'have' : 'has'} full access. Job steps need a coding agent that is read-only or limited to its workspace: set Access to Read only (or Workspace write) on ${agentIds.length > 1 ? 'their pages' : 'its page'}.`,
   )
 
 /** Coding runtimes that can take orchestration steps (7.7b §1). Antigravity may leave scheduled work behind its run. */

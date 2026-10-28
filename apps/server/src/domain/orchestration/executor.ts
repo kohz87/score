@@ -68,7 +68,7 @@ import {
   valueHasCapability,
   withCapability,
 } from './capability.ts'
-import { runCommand, type ToolName, parseToolArgs } from './commands.ts'
+import { runCommand, TOOLS, type ToolName, parseToolArgs } from './commands.ts'
 import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
   abandonAttempts,
@@ -792,17 +792,9 @@ export class Orchestrator {
         ? 'There is room for another run'
         : 'Orchestration storage is full; remove old runs first',
     )
-    // Hermes caches the MCP tool list per connection: the lead's serving process must list every orch.* tool.
-    const required = [
-      'orch.plan',
-      'orch.assign',
-      'orch.cancel',
-      'orch.ask',
-      'orch.requestApproval',
-      'orch.note',
-      'orch.finish',
-      'orch.receipt',
-    ]
+    // Hermes caches the MCP tool list per connection: the lead's serving process must list every orch.* tool, the ones a
+    // Score upgrade added included (3.13.2: a list from before 3.13 lacked orch.check and orch.vote, and passed).
+    const required: readonly string[] = TOOLS
     // The adapter's answer where it can ask (fake); otherwise what Score's own MCP server last handed the lead (3.7.8).
     const ownList = !leadProblem && !port.mcpTools
     const handed = ownList ? access.listed(leadAgentId) : null
