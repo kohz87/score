@@ -1843,3 +1843,20 @@ One entry per completed task: what landed, review results, and any **rejected re
   advisor opus55 on call, helpers swarm-2/3 with auto vote and audit: advisor before plan → vote on s1 sharp 3/3 → s1 → audit
   (clean) → advisor before done → succeeded in ~80 s; s1 had the advisor on call (opus, note in its input; not consulted on a
   trivial task); 0 files changed in the workspace.
+
+## 3.14.1 — a Claude Code agent's own advisor (2026-10-28)
+- **Scope changed twice with the owner** (decision 152): first the advisor's line on the Job map (mock-up approved, built by a
+  Sonnet coder), then the worker's on-call advisor moved from a subagent to Claude Code's own `--advisor` after a capture
+  (lead), then the owner made it a Claude Code agent setting and asked for the graph to go back: the line was reverted
+  (never shipped), the job-level `advisorMode` retired (accepted, ignored), `workerAdvisorAsks` added on the job, migration
+  0103 `coding_agents.advisor_model`, the Model card's Advisor choice, the worker's "asked its advisor N×".
+- Reviews: native switch (P2 a consult cut off with its run stayed live forever — fixed; P3 counting only on-call steps,
+  zero-size anchors, label halo, tests — fixed); fix round (P2 an attempt not confirmed ended is still live — fixed); agent
+  setting (no P1/P2; P3 notice when a model change drops the advisor, tests, comments — fixed); two small fix rounds on the
+  notice (clears on any model change, announced, no empty gap — fixed). Rejected: none.
+- Gate: build ok; e2e 852 passed, 2 failed — coding agent phone baseline (the new "Advisor: Off" line, baseline updated and
+  checked by eye) and a tablet DM layout flake (passed 2 of 2 on rerun with the agent page spec, 38/38); check green (server
+  4946, web 3102, contract 1560).
+- **v3.14.1 deployed live** (~10:17 UTC, idle guard passed): backup score-pre-3.14.1-20261028.db, health ok, migration 0103
+  applied, all Claude Code agents start with the advisor off.
+
