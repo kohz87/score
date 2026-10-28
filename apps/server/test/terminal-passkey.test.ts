@@ -122,8 +122,8 @@ async function assert(
 
 const mint = (app: FastifyInstance, cookie: string) =>
   post(app, '/api/terminal/tickets', {}, cookie)
-const browsers = async (app: FastifyInstance, cookie: string) =>
-  (await app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie } })).json().items
+// Read directly: the HTTP list needs an unlock (3.14.2), and an unlock is itself a fresh password check.
+const browsers = async (app: FastifyInstance, cookie: string) => app.pairing.browsers(cookie)
 
 test('a valid passkey assertion by a paired browser makes it fresh, keeps its cookie and mints one ticket', async () => {
   const setup = makeApp(true)

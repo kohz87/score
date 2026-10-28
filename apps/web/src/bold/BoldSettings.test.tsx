@@ -222,6 +222,7 @@ beforeEach(() => {
           origins: ['https://score.test'],
           terminal: terminalOn,
           terminalUnavailable: null,
+          unlockedUntil: new Date(Date.now() + 300_000).toISOString(),
         })
       if (url.pathname === '/api/session/browsers') return jsonResponse({ items: [browser] })
       if (url.pathname === '/api/session/passkeys')
@@ -443,9 +444,8 @@ test('Remote access and security keeps the protected password, browsers and pass
   expect(within(where).getByRole('link', { name: 'Runs on' }).getAttribute('href')).toBe(
     '/b/team/builder#agent-where',
   )
-  const remote = document.querySelector('#remote-access')!
-  expect(remote.getAttribute('data-protected')).toBe('flex')
-  expect(remote.getAttribute('data-decision')).not.toBeNull()
+  const grid = document.querySelector('.bold-security-open')!
+  expect(grid.getAttribute('data-protected')).toBe('grid')
   expect(await screen.findByRole('list', { name: 'Paired browsers' })).toHaveProperty(
     'textContent',
     expect.stringContaining('Laptop'),

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Security on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+input::placeholder{color:#7C8291}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1500px; box-sizing: border-box; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; padding: 18px 16px 28px; display: flex; flex-direction: column; gap: 14px">
+<a href="#" style="font-size: 14px; color: #9AA0AD; text-decoration: none">‹ Settings</a>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 23px; font-weight: 700; line-height: 1.2">Remote access and security</h1>
+
+<sc-if value="{{locked}}" hint-placeholder-val="{{true}}">
+<section data-protected="block" aria-labelledby="pl-h" style="background: #ECEEF2; color: #12131A; border-radius: 24px; padding: 22px 20px; display: flex; flex-direction: column; gap: 12px">
+<span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 50%; background: #12131A; color: #ECEEF2; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></span>
+<h2 id="pl-h" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700">This section is locked</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #3A3E4A">Enter your security password to see paired devices, pairing links, passkeys and the terminal.</p>
+<form onSubmit="{{unlock}}" style="display: flex; flex-direction: column; gap: 10px">
+<label for="ppw" style="font-size: 14px; font-weight: 600">Security password</label>
+<input id="ppw" type="password" autocomplete="current-password" value="{{pw}}" onChange="{{typePw}}" style="min-height: 48px; border-radius: 16px; border: 1px solid #B9BDC7; background: #FFFFFF; color: #12131A; padding: 0 14px; font: 500 16px 'Hanken Grotesk', sans-serif">
+<button type="submit" style="min-height: 48px; border-radius: 999px; border: none; background: #12131A; color: #ECEEF2; font: 700 15px 'Hanken Grotesk', sans-serif; cursor: pointer">Unlock</button>
+<sc-if value="{{wrong}}" hint-placeholder-val="{{false}}"><p role="alert" style="margin: 0; font-size: 14px; font-weight: 600; color: #A1262F">That is not the security password.</p></sc-if>
+</form>
+<p style="margin: 0; font-size: 12px; color: #555B68; line-height: 1.5">Locks again after 5 minutes without use. Forgot it? <code style="font-family: 'JetBrains Mono', monospace">scripts/score password</code> on the Score machine.</p>
+</section>
+</sc-if>
+
+<sc-if value="{{open}}" hint-placeholder-val="{{false}}">
+<div data-protected="block" style="display: flex; flex-direction: column; gap: 12px">
+<span style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 14px; border-radius: 999px; background: #1F3A2E">
+<span style="font-size: 13px; font-weight: 600; color: #4FD1A5">Unlocked · locks in 4:52</span>
+<button type="button" onClick="{{lock}}" style="min-height: 40px; padding: 0 14px; border-radius: 999px; border: none; background: #12131A; color: #ECEEF2; font: 600 13px 'Hanken Grotesk', sans-serif; cursor: pointer">Lock now</button>
+</span>
+
+<section aria-labelledby="pd-h" style="background: #1A1C23; border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 id="pd-h" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 18px; font-weight: 700">Paired devices</h2>
+<sc-for list="{{devices}}" as="d" hint-placeholder-count="3">
+<span style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px; background: #12131A">
+<span style="font-weight: 700; overflow-wrap: anywhere">{{d.name}} <span style="font-size: 12px; font-weight: 600; color: {{d.tagColor}}">{{d.tag}}</span></span>
+<span style="font-size: 12px; color: #9AA0AD">{{d.meta}}</span>
+<span style="display: flex; gap: 8px">
+<button type="button" style="flex: 1; min-height: 44px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 13px 'Hanken Grotesk', sans-serif">Renew</button>
+<sc-if value="{{d.canEnd}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{d.end}}" style="flex: 1; min-height: 44px; border-radius: 999px; border: none; background: #ECEEF2; color: #12131A; font: 700 13px 'Hanken Grotesk', sans-serif">End</button></sc-if>
+</span>
+</span>
+</sc-for>
+<button type="button" style="min-height: 44px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif">End all other devices</button>
+</section>
+
+<section aria-labelledby="pp-h" style="background: #1A1C23; border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 id="pp-h" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 18px; font-weight: 700">Pair another device</h2>
+<p style="margin: 0; font-size: 13px; color: #C9CDD6">A one-time link, works once, expires in 15 minutes.</p>
+<button type="button" style="min-height: 44px; border-radius: 999px; border: none; background: #ECEEF2; color: #12131A; font: 700 14px 'Hanken Grotesk', sans-serif">Get a pairing link</button>
+</section>
+
+<section aria-labelledby="ppk-h" style="background: #1A1C23; border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 id="ppk-h" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 18px; font-weight: 700">Passkeys</h2>
+<span style="font-size: 14px"><b>Laptop</b> <span style="color: #9AA0AD">· added 12 Oct</span></span>
+<button type="button" style="min-height: 44px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif">Add a passkey</button>
+</section>
+
+<section aria-labelledby="pw2-h" style="background: #1A1C23; border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 id="pw2-h" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 18px; font-weight: 700">Security password</h2>
+<span style="font-size: 13px; color: #C9CDD6">Set · it unlocks this section.</span>
+<button type="button" style="min-height: 44px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif">Change password</button>
+</section>
+
+<section aria-labelledby="pt-h" style="background: #1A1C23; border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+<h2 id="pt-h" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 18px; font-weight: 700">Where agents run · Terminal</h2>
+<span style="font-size: 13px; color: #C9CDD6">lead, reviewer: this machine · builder: Docker</span>
+<a href="#" style="display: inline-flex; justify-content: center; align-items: center; min-height: 44px; border-radius: 999px; background: #ECEEF2; color: #12131A; font: 700 14px 'Hanken Grotesk', sans-serif; text-decoration: none">Open the terminal</a>
+</section>
+
+<button type="button" style="min-height: 44px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif">Log out this browser</button>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: false, pw: '', wrong: false, ended: [] };
+  }
+  renderVals() {
+    var s = this.state;
+    var self = this;
+    var all = [
+      { id: 'me', name: 'This phone', tag: 'this one', tagColor: '#4FD1A5', meta: 'ts.net · now · until 25 Nov', canEnd: false },
+      { id: 'pc', name: 'Chrome on Windows', tag: '', tagColor: '#9AA0AD', meta: 'LAN · 18:40 · until 27 Nov', canEnd: true },
+      { id: 'curl', name: 'curl/8.18.0', tag: 'not a browser', tagColor: '#F2A65A', meta: '127.0.0.1 · 17:14 · until 27 Nov', canEnd: true }
+    ];
+    return {
+      locked: !s.open,
+      open: s.open,
+      pw: s.pw,
+      wrong: s.wrong,
+      typePw: function (e) { self.setState({ pw: e.target.value, wrong: false }); },
+      unlock: function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        if (s.pw === 'wrong' || s.pw.length < 8) self.setState({ wrong: true });
+        else self.setState({ open: true, pw: '' });
+      },
+      lock: function () { self.setState({ open: false }); },
+      devices: all.filter(function (d) { return s.ended.indexOf(d.id) < 0; }).map(function (d) {
+        return Object.assign({}, d, { end: function () { self.setState({ ended: s.ended.concat([d.id]) }); } });
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

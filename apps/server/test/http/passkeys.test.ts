@@ -84,7 +84,15 @@ async function paired(app: FastifyInstance) {
     payload: { password: PASSWORD },
   })
   expect(set.statusCode).toBe(204)
+  // Setting the first password unlocks the section (3.14.2); lock it so each test proves what the password guards.
+  await post(app, '/api/session/security/lock', {}, cookie)
   return cookie
+}
+
+async function unlock(app: FastifyInstance, cookie: string) {
+  expect(
+    (await post(app, '/api/session/security/unlock', { password: PASSWORD }, cookie)).statusCode,
+  ).toBe(200)
 }
 
 async function registrationOptions(app: FastifyInstance, cookie: string, password = PASSWORD) {
@@ -164,6 +172,7 @@ test('a registered passkey is stored with its metadata and listed', async () => 
   const { app } = makeApp()
   const cookie = await paired(app)
   const device = await register(app, cookie)
+  await unlock(app, cookie)
   const list = await app.inject({ url: '/api/session/passkeys', headers: { ...headers, cookie } })
   const parsed = PasskeysSchema.parse(list.json())
   expect(parsed.available).toBe(true)
@@ -293,6 +302,7 @@ test('a sign-count regression is refused and flags the credential', async () => 
   expect((await signIn(app, device, { counter: 5 })).statusCode).toBe(204)
   expect((await signIn(app, device, { counter: 6 })).statusCode).toBe(204)
   expect((await signIn(app, device, { counter: 6 })).statusCode).toBe(401)
+  await unlock(app, cookie)
   const list = await app.inject({ url: '/api/session/passkeys', headers: { ...headers, cookie } })
   expect(list.json().items[0].flagged).toBe(true)
   // Flagged credentials stay refused, even with a counter that would otherwise be fine.
@@ -336,6 +346,7 @@ test('a passkey session behaves exactly like a paired one: list, renew, expiry, 
   expect(
     (await app.inject({ url: '/api/session', headers: { ...headers, cookie } })).json(),
   ).toEqual({ paired: true })
+  await unlock(app, cookie)
   const browsers = (
     await app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie } })
   ).json().items
@@ -392,10 +403,12 @@ test('removing a passkey needs the password; terminating other pairings keeps pa
   const device = await register(app, cookie)
   const url = `/api/session/passkeys/${device.id}/remove`
   expect((await post(app, url, {}, cookie)).statusCode).toBeGreaterThanOrEqual(400)
+  await unlock(app, cookie)
   expect(
     (await app.inject({ url: '/api/session/passkeys', headers: { ...headers, cookie } })).json()
       .items,
   ).toHaveLength(1)
+  await post(app, '/api/session/security/lock', {}, cookie)
   expect((await post(app, url, { password: 'wrong password!' }, cookie)).statusCode).toBe(403)
   expect((await post(app, url, { password: PASSWORD })).statusCode).toBe(401)
 
@@ -410,6 +423,7 @@ test('removing a passkey needs the password; terminating other pairings keeps pa
 
   expect((await post(app, url, { password: PASSWORD }, cookie)).statusCode).toBe(204)
   expect((await signIn(app, device)).statusCode).toBe(401)
+  await unlock(app, cookie)
   const list = await app.inject({ url: '/api/session/passkeys', headers: { ...headers, cookie } })
   expect(list.json().items).toEqual([])
   expect(await pair(app)).toMatch(/^score_session=/)
@@ -440,6 +454,7 @@ test('passkeys are not offered on an IP address, only on a domain name or localh
   const { app } = makeApp({ SCORE_PUBLIC_ORIGINS: `${origin},${lan}` })
   const lanHeaders = { ...headers, host: '192.168.1.20:8741', origin: lan }
   const cookie = await paired(app)
+  await unlock(app, cookie)
   const onLan = await app.inject({
     url: '/api/session/passkeys',
     headers: { ...lanHeaders, cookie },

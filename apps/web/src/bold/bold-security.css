@@ -1,0 +1,428 @@
+/* Remote access and security, locked behind the security password (3.14.2; docs/design/security/). Values come from
+   the approved mock-up; the dark/light objects use the bold tokens so a theme still restyles around them. */
+.bold-settings-page .bold-security-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .bold-security-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .bold-security-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #1f3a2e;
+  color: #4fd1a5;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Lock card and first-run card: the light object, "for you". */
+.bold-settings-page .bold-security-lock,
+.bold-settings-page .bold-security-first {
+  flex-direction: column;
+  gap: 16px;
+  max-width: 620px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  border-radius: 28px;
+  padding: 36px 40px;
+}
+
+.bold-settings-page .bold-security-first {
+  padding: 32px 36px;
+  gap: 14px;
+}
+
+.bold-settings-page .bold-security-lock h2,
+.bold-settings-page .bold-security-first h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.bold-settings-page .bold-security-lock-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bold-settings-page .bold-security-lock p {
+  margin: 0;
+}
+
+.bold-settings-page .bold-security-lock-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--hi-sub, var(--hi-ink));
+}
+
+.bold-settings-page .bold-security-lock-note {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hi-sub, var(--hi-ink));
+}
+
+.bold-settings-page .bold-security-lock code,
+.bold-settings-page .bold-security-first code {
+  font-size: 12px;
+  color: var(--hi-ink);
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-security-lock form,
+.bold-settings-page .bold-security-first form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bold-settings-page .bold-security-lock label,
+.bold-settings-page .bold-security-first label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-security-lock-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .bold-security-lock input,
+.bold-settings-page .bold-security-first input {
+  flex: 1 1 260px;
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid #b9bdc7;
+  background: #fff;
+  color: #12131a;
+  padding: 0 16px;
+  font: 500 16px var(--font-b, 'Hanken Grotesk', system-ui, sans-serif);
+}
+
+.bold-settings-page .bold-security-lock button,
+.bold-settings-page .bold-security-first button {
+  align-self: flex-start;
+  min-height: 48px;
+  padding: 0 26px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+  font: 700 15px var(--font-b, 'Hanken Grotesk', system-ui, sans-serif);
+  cursor: pointer;
+}
+
+.bold-settings-page .bold-security-lock button:disabled,
+.bold-settings-page .bold-security-first button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bold-settings-page .bold-security-lock [role='alert'],
+.bold-settings-page .bold-security-first [role='alert'] {
+  font-size: 14px;
+  font-weight: 600;
+  color: #a1262f;
+}
+
+/* The unlocked section: two columns, stacked on a phone. */
+.bold-settings-page .bold-security-open {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.bold-settings-page .bold-security-card {
+  background: var(--panel);
+  border-radius: 24px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bold-settings-page .bold-security-card.span-all {
+  grid-column: 1 / -1;
+}
+
+.bold-settings-page .bold-security-card h3 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.bold-settings-page .bold-security-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.bold-settings-page .bold-security-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .bold-security-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bold-settings-page .bold-security-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bold-settings-page .bold-security-device,
+.bold-settings-page .bold-security-passkey {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--bg);
+}
+
+.bold-settings-page .bold-security-device-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-security-device-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bold-settings-page .bold-security-tag {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-security-tag.ok {
+  color: #4fd1a5;
+}
+
+.bold-settings-page .bold-security-tag.warn {
+  color: #f2a65a;
+}
+
+.bold-settings-page .bold-security-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.bold-settings-page .bold-security-notice {
+  font-size: 13px;
+  color: #4fd1a5;
+}
+
+.bold-settings-page .bold-security-btn {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 600 13px var(--font-b, 'Hanken Grotesk', system-ui, sans-serif);
+  cursor: pointer;
+}
+
+.bold-settings-page .bold-security-btn.lg {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+
+.bold-settings-page .bold-security-btn.solid {
+  border-color: transparent;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 700;
+}
+
+.bold-settings-page .bold-security-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bold-settings-page .bold-security-card .bold-security-btn.lg:not(.span-all) {
+  align-self: flex-start;
+}
+
+.bold-settings-page .bold-security-actions .bold-security-btn,
+.bold-settings-page .bold-security-card-head .bold-security-btn,
+.bold-settings-page .bold-security-change .bold-security-btn {
+  align-self: auto;
+}
+
+.bold-settings-page .bold-security-origins {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.bold-settings-page .bold-security-link {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bold-settings-page .bold-security-link-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+
+.bold-settings-page .bold-security-link-text code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-security-link-text .bold-security-btn {
+  align-self: flex-start;
+}
+
+.bold-settings-page .bold-security-change {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.bold-settings-page .bold-security-change label,
+.bold-settings-page .bold-security-passkey-add label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-security-change input,
+.bold-settings-page .bold-security-passkey-add input {
+  min-height: 44px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  padding: 0 12px;
+}
+
+.bold-settings-page .bold-security-change .bold-security-btn {
+  justify-self: start;
+}
+
+.bold-settings-page .bold-security-passkey-add {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.bold-settings-page .bold-security-passkey-add label {
+  flex: 1 1 140px;
+}
+
+.bold-settings-page .bold-security-https summary {
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 28px;
+}
+
+.bold-settings-page .bold-security-https {
+  padding: 16px 22px;
+}
+
+.bold-settings-page .bold-security-https p {
+  margin-top: 10px;
+}
+
+@media (max-width: 860px) {
+  .bold-settings-page .bold-security-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bold-settings-page .bold-security-change {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .bold-settings-page .bold-security-lock,
+  .bold-settings-page .bold-security-first {
+    padding: 22px 20px;
+    border-radius: 24px;
+  }
+
+  .bold-settings-page .bold-security-lock button,
+  .bold-settings-page .bold-security-first button,
+  .bold-settings-page .bold-security-card .bold-security-btn.lg,
+  .bold-settings-page .bold-security-card-head .bold-security-btn,
+  .bold-settings-page .bold-security-actions .bold-security-btn {
+    width: 100%;
+    align-self: stretch;
+  }
+
+  .bold-settings-page .bold-security-pill-row {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .bold-settings-page .bold-security-device {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bold-settings-page .bold-security-device-actions .bold-security-btn {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .bold-settings-page .bold-security-card {
+    border-radius: 22px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .bold-settings-page .bold-security-passkey .bold-security-btn {
+    min-height: 44px;
+  }
+}
