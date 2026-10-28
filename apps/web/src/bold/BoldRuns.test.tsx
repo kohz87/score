@@ -97,6 +97,9 @@ test('an orchestration run is a thread of steps, with Graph and Log tabs', async
   const steps = await screen.findByRole('list', { name: 'Steps' })
   expect(steps.querySelectorAll('.bold-run-step').length).toBeGreaterThan(1)
   fireEvent.click(screen.getByRole('tab', { name: 'Graph' }))
+  // 3.15: the job map is the default view; the step diagram is one switch away.
+  expect(await screen.findByRole('button', { name: /^Lead layer/ })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Show the step diagram' }))
   expect(await screen.findByRole('button', { name: /Step s2, reviewer, running/ })).toBeTruthy()
   fireEvent.click(screen.getByRole('tab', { name: 'Log' }))
   expect(await screen.findByRole('log', { name: 'Events' })).toBeTruthy()

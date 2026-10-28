@@ -821,7 +821,10 @@ test('an advisor is optional, checked in the preflight, sent by id, and cleared 
     const start = await fillLeadJob(dialog)
     fireEvent.click(start)
     await waitFor(() => expect(orchestrationBodies.length).toBe(1))
-    expect(orchestrationBodies[0]).toMatchObject({ advisorAgentId: 'builder' })
+    expect(orchestrationBodies[0]).toMatchObject({
+      advisorAgentId: 'builder',
+      advisorMode: 'on_call',
+    })
 
     // Making the advisor the planner resets the choice.
     fireEvent.change(within(dialog).getByLabelText('Who plans it'), {
@@ -835,12 +838,33 @@ test('an advisor is optional, checked in the preflight, sent by id, and cleared 
   }
 })
 
+test('the advisor can be limited to the lead\u2019s checkpoints (3.15)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  // The choice only appears with an advisor, and on call is the default.
+  expect(within(dialog).queryByLabelText(/The lead only/)).toBeNull()
+  fireEvent.change(within(dialog).getByLabelText('Advisor'), { target: { value: 'builder' } })
+  const onCall = within(dialog).getByLabelText(
+    /The lead and the workers \(on call\)/,
+  ) as HTMLInputElement
+  expect(onCall.checked).toBe(true)
+  expect(within(dialog).getByText(/uses your Claude plan/)).toBeDefined()
+  fireEvent.click(within(dialog).getByLabelText(/The lead only \(checkpoints\)/))
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]).toMatchObject({
+    advisorAgentId: 'builder',
+    advisorMode: 'checkpoints',
+  })
+})
+
 test('no advisor means no advisorAgentId in the body (3.14)', async () => {
   open('/b?start=job')
   const dialog = await startDialog()
   fireEvent.click(await fillLeadJob(dialog))
   await waitFor(() => expect(orchestrationBodies.length).toBe(1))
   expect(orchestrationBodies[0]).not.toHaveProperty('advisorAgentId')
+  expect(orchestrationBodies[0]).not.toHaveProperty('advisorMode')
 })
 
 test('helpers are folded, optional, checked in the preflight, and sent with their limits (3.15)', async () => {

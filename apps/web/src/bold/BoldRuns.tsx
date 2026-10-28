@@ -9,6 +9,7 @@ import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery, useStreamQueryRefetch } from '../data/query-client.ts'
 import { taskAgentsQuery } from '../data/task-queries.ts'
 import { OrchestrationLive } from '../routes/orchestrations/OrchestrationLive.tsx'
+import { JobMap } from './jobmap/JobMap.tsx'
 import {
   isRunOver,
   leadStepCounts,
@@ -527,10 +528,40 @@ function OrchestrationRun({
           </>
         )
       }}
-      graph={(pane) => <OrchestrationLive orchestrationId={detail.id} pane={pane} />}
+      graph={(pane) =>
+        pane === 'graph' ? (
+          <JobGraph id={detail.id} />
+        ) : (
+          <OrchestrationLive orchestrationId={detail.id} pane={pane} />
+        )
+      }
       budget={<BudgetBlock run={detail} coding={coding} />}
       onBack={onBack}
     />
+  )
+}
+
+/** 3.15: the job map is the graph tab's default view; the step diagram stays one switch away. */
+function JobGraph({ id }: { id: string }) {
+  const [diagram, setDiagram] = useState(false)
+  return (
+    <>
+      <p className="bold-runs-note">
+        <button
+          type="button"
+          className="bold-runs-link"
+          aria-pressed={diagram}
+          onClick={() => setDiagram((value) => !value)}
+        >
+          {diagram ? 'Show the job map' : 'Show the step diagram'}
+        </button>
+      </p>
+      {diagram ? (
+        <OrchestrationLive orchestrationId={id} pane="graph" />
+      ) : (
+        <JobMap orchestrationId={id} />
+      )}
+    </>
   )
 }
 

@@ -21,6 +21,8 @@ const statusLabel: Record<AdvisorConsultView['status'], string> = {
   not_started: 'Did not start',
 }
 
+const onCallStatus = { running: 'Asking', done: 'Answered', failed: 'Failed' } as const
+
 const when = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
@@ -37,13 +39,20 @@ export function AdvisorCard({
   return (
     <section className="orch-advisor" aria-label="Advisor">
       <h3>Advisor</h3>
+      {advisor.mode && (
+        <p className="orch-muted">
+          {advisor.mode === 'on_call'
+            ? 'On call to the workers as well as the lead’s checkpoints.'
+            : 'The lead’s checkpoints only.'}
+        </p>
+      )}
       <p className="orch-advisor-who">
         {agent && <AgentGlyph agent={agent} size="xs" describeShape />}
         <span>{agent?.name ?? advisor.agentId}</span>
       </p>
-      {advisor.consults.length === 0 ? (
+      {advisor.consults.length === 0 && (advisor.onCall ?? []).length === 0 ? (
         <p className="orch-muted">It has not been asked yet.</p>
-      ) : (
+      ) : advisor.consults.length === 0 ? null : (
         <ul className="orch-advisor-list">
           {advisor.consults.map((consult) => (
             <li key={consult.stepId}>
@@ -57,6 +66,28 @@ export function AdvisorCard({
             </li>
           ))}
         </ul>
+      )}
+      {(advisor.onCall ?? []).length > 0 && (
+        <>
+          <h4>Asked by the workers</h4>
+          <ul className="orch-advisor-list" aria-label="Asked by the workers">
+            {(advisor.onCall ?? []).map((entry, index) => (
+              <li key={`${entry.stepId}-${index}`}>
+                <div className="orch-check-line">
+                  <strong>
+                    {entry.agentId} · step {entry.stepId}
+                  </strong>
+                  <span>{onCallStatus[entry.status]}</span>
+                  <span className="orch-muted">{when(entry.at)}</span>
+                  {entry.totalTokens !== null && (
+                    <span className="orch-muted">{entry.totalTokens} tokens</span>
+                  )}
+                </div>
+                <p>{entry.question}</p>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </section>
   )

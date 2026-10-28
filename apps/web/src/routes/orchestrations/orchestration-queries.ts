@@ -168,6 +168,10 @@ export function useRun(id: string | undefined) {
   })
 }
 
+/** The create body as the screens build it: `advisorMode` has a server default and is sent only with an advisor. */
+export type OrchestrationCreateBody = Omit<OrchestrationCreate, 'advisorMode'> &
+  Partial<Pick<OrchestrationCreate, 'advisorMode'>>
+
 export async function fetchPreflight(
   leadAgentId: string,
   allowedAgents: string[],
@@ -201,7 +205,7 @@ export const post = (path: string, body: unknown) =>
 
 export function useCreateOrchestration() {
   return useMutation({
-    mutationFn: async (body: OrchestrationCreate) =>
+    mutationFn: async (body: OrchestrationCreateBody) =>
       OrchestrationCreatedSchema.parse(await post('orchestrations', body)),
   })
 }
