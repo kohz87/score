@@ -70,6 +70,7 @@ import {
   type TerminalInfo,
 } from './translate.ts'
 import type { CodingEvent } from './types.ts'
+import { ADVISOR_SUBAGENT, frozenAdvisorModel } from '../../domain/orchestration/advisor.ts'
 import type { OrchestrationOwner } from '../../domain/orchestration/owner.ts'
 import type { CodingWorkerFacts } from '../../domain/orchestration/supported-agents.ts'
 import type { QuotaSource } from '../../domain/orchestration/quota-guard.ts'
@@ -1527,6 +1528,23 @@ export class CodingRuntime {
           message: input,
         })
       }
+      // 3.15 (decision 151): a worker of a job with the advisor on call gets it as a subagent it asks itself.
+      let agentsFile: string | null = null
+      if (driver.runtime === 'claude-code' && entry.owner) {
+        // Decided when the step was admitted (its input says so); never decided again here (review).
+        const model = frozenAdvisorModel(db.sqlite, entry.owner.attemptId)
+        if (model) {
+          const dir = join(this.deps.home, 'coding', agent.id)
+          mkdirSync(dir, { recursive: true, mode: 0o700 })
+          agentsFile = join(dir, `agents-${entry.runId}-${attempt}.json`)
+          temporary.push(agentsFile)
+          writeFileSync(agentsFile, JSON.stringify({ advisor: { ...ADVISOR_SUBAGENT, model } }), {
+            mode: 0o600,
+            flag: 'w',
+          })
+          chmodSync(agentsFile, 0o600)
+        }
+      }
       const cliArgs = [
         ...args,
         ...driver.buildArgs({
@@ -1542,6 +1560,7 @@ export class CodingRuntime {
           ...(frozenPolicy ? { worker: true } : {}),
           ...(delivery.file ? { instructionsFile: delivery.file } : {}),
           ...(delivery.refresh ? { refreshSystemPrompt: true } : {}),
+          ...(agentsFile ? { agentsFile } : {}),
         }),
       ]
       const stdin = driver.promptVia === 'stdin' ? delivery.prompt : ''

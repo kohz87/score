@@ -242,6 +242,8 @@ export interface StepInputArgs {
   o: Pick<OrchRow, 'id'>
   step: StepRow
   dependencies: StepRow[]
+  /** 3.15: the worker has the advisor subagent on call (decision 151). */
+  advisorOnCall?: boolean
 }
 
 /** A step's input: its instruction and the results of the steps it depends on, quoted. Never a capability. */
@@ -254,6 +256,12 @@ export function renderStepInput(args: StepInputArgs): string {
     `You are doing one step (${step.id}) of a larger piece of work coordinated by Score (run ${o.id}). Do exactly what the instruction asks and reply with the result as plain text; your reply is passed on as data. You cannot call the coordinator and you cannot start other steps.`,
     '',
     quote(`INSTRUCTION ${step.id}`, step.instruction),
+    ...(args.advisorOnCall
+      ? [
+          '',
+          'An advisor (a stronger model) is on call as the subagent "advisor". Ask it with the Agent tool when you are stuck, after a fix failed, or before a risky change, naming the exact file, line and what you or the helpers found. At most 2 times in this step; it only reads and advises, you decide.',
+        ]
+      : []),
   ]
   let remaining = ORCH_LIMITS.stepInputBytes - bytesOf(parts.join('\n')) - 512
   for (const dependency of dependencies) {

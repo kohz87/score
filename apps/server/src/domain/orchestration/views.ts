@@ -238,6 +238,7 @@ export const stepViewOf = (
   gates: GateRow[],
   attempts: AttemptRow[],
   holds: HoldRow[] = [],
+  activity: ReadonlyMap<string, string> = new Map(),
 ): StepView => ({
   id: s.id,
   agentId: s.agent_id,
@@ -255,6 +256,10 @@ export const stepViewOf = (
   updatedAt: s.updated_at,
   quotaHold: quotaHoldOf(s, holds),
   role: s.role ?? null,
+  lastActivityAt: (() => {
+    const runId = attempts.findLast((a) => a.step_id === s.id)?.run_id
+    return runId ? (activity.get(runId) ?? null) : null
+  })(),
   helperRole: s.helper_role ?? null,
 })
 
@@ -290,7 +295,11 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     leadTurnEstimateUsd: o.lead_turn_estimate_usd,
     stepEstimateUsd: o.step_estimate_usd,
     budget: budgetView(sqlite, o),
-    stepsList: steps.map((s) => stepViewOf(s, gates, attempts, holdsOf(sqlite, o.id))),
+    stepsList: (() => {
+      const activity = runActivity(sqlite, attempts)
+      const holds = holdsOf(sqlite, o.id)
+      return steps.map((s) => stepViewOf(s, gates, attempts, holds, activity))
+    })(),
     attempts: attempts.map(attemptViewOf),
     gates: gates.map(gateView),
     inquiries: inquiryViews,
@@ -333,3 +342,13 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
 }
 
 export { isFinalStep }
+
+/** When each run of these attempts last changed (its latest event), for the stuck-step view (3.14). */
+function runActivity(sqlite: DatabaseSync, attempts: readonly AttemptRow[]): Map<string, string> {
+  const ids = attempts.flatMap((a) => (a.run_id ? [a.run_id] : []))
+  if (ids.length === 0) return new Map()
+  const rows = sqlite
+    .prepare(`SELECT id, updated_at FROM runs WHERE id IN (${ids.map(() => '?').join(', ')})`)
+    .all(...ids) as { id: string; updated_at: string }[]
+  return new Map(rows.map((row) => [row.id, row.updated_at]))
+}

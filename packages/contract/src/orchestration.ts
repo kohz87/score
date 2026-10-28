@@ -224,13 +224,19 @@ export const OrchestrationHelpersSchema = z
   .object({
     agentIds: z.array(AgentIdSchema).min(1).max(4),
     maxConcurrent: z.int().min(1).max(6).default(3),
-    maxSteps: z.int().min(1).max(60).default(20),
+    /** null = no separate limit: helper work runs until the job ends (bounded by its budget, launches and lead turns). */
+    maxSteps: z.int().min(1).max(500).nullable().default(20),
     scan: z.boolean().default(false),
     /** The folder the scan reads (absolute; the Workspace rules apply). Needed with `scan` unless the check has one. */
     scanFolder: z.string().min(1).max(4096).startsWith('/').optional(),
     splitTo: z.enum(['lead', 'person']).default('lead'),
     /** 3.13.1: who answers votes (e.g. one model kept for voting); empty or absent = the helpers. */
     voterIds: z.array(AgentIdSchema).max(4).optional(),
+    /** 3.14: before each step the lead assigns starts, the voters judge it (k answers); not under every-step approval. */
+    autoVote: z.boolean().default(false),
+    autoVoteK: z.int().min(3).max(7).default(3),
+    /** 3.14: after each step the lead assigned succeeds, a helper audits the change; its findings reach the lead. */
+    autoAudit: z.boolean().default(false),
   })
   .strict()
 export const VoteViewSchema = z.object({
@@ -247,9 +253,14 @@ export const VoteViewSchema = z.object({
   share: z.number().min(0).max(1).nullable(),
   /** A split sent to the person: the question they were asked. */
   inquiryId: z.string().nullable(),
+  /** 3.14: the step this vote judged before it started (automatic votes); null for the lead's own votes. */
+  stepId: z.string().nullable().optional(),
   createdAt: z.iso.datetime(),
 })
 export type VoteView = z.infer<typeof VoteViewSchema>
+
+/** 3.14: what an unlimited helper allowance is sized as (storage and coding reserves, the suggested launches). */
+export const HELPER_STEPS_UNLIMITED_SIZING = 60
 
 /**
  * 3.13.1: how many coding-agent launches a lead job should allow. Every helper step, vote answer and advisor consult on a
@@ -257,14 +268,15 @@ export type VoteView = z.infer<typeof VoteViewSchema>
  */
 export function suggestedCodingSteps(args: {
   codingHelpers: boolean
-  helperSteps: number
+  /** null = no helper limit: sized as `HELPER_STEPS_UNLIMITED_SIZING`. */
+  helperSteps: number | null
   codingAdvisor: boolean
 }): number {
   const advisorConsults = 5
   return Math.min(
     ORCH_LIMITS.maxCodingSteps,
     ORCH_DEFAULTS.codingSteps +
-      (args.codingHelpers ? args.helperSteps : 0) +
+      (args.codingHelpers ? (args.helperSteps ?? HELPER_STEPS_UNLIMITED_SIZING) : 0) +
       (args.codingAdvisor ? advisorConsults : 0),
   )
 }
@@ -320,6 +332,11 @@ export const OrchestrationCreateSchema = z
      * done). Not the lead; its advice is data for the lead, never a veto.
      */
     advisorAgentId: AgentIdSchema.optional(),
+    /**
+     * 3.15 (decision 151): `on_call` also gives each Claude Code worker that edits the advisor as a subagent it consults
+     * itself (when stuck, after a failed fix, before a risky change); `checkpoints` keeps only the lead's checkpoints.
+     */
+    advisorMode: z.enum(['on_call', 'checkpoints']).default('on_call'),
     /** 3.15: the helpers and their limits. */
     helpers: OrchestrationHelpersSchema.optional(),
   })
@@ -454,6 +471,8 @@ export const StepViewSchema = z.object({
   role: z.enum(['advisor', 'helper', 'vote']).nullable().optional(),
   /** 3.15: a helper step's role (search, grep, audit, or a scan part). */
   helperRole: z.string().nullable().optional(),
+  /** 3.14: when its current run last showed a sign of life (a running step quiet for long is stuck). */
+  lastActivityAt: z.iso.datetime().nullable().optional(),
 })
 export type StepView = z.infer<typeof StepViewSchema>
 
@@ -603,8 +622,11 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
     .object({
       agentIds: z.array(AgentIdSchema),
       maxConcurrent: z.int(),
-      maxSteps: z.int(),
+      maxSteps: z.int().nullable(),
       used: z.int(),
+      autoVote: z.boolean().optional(),
+      autoVoteK: z.int().optional(),
+      autoAudit: z.boolean().optional(),
       scan: z.boolean(),
       scanFolder: z.string().nullable(),
       splitTo: z.enum(['lead', 'person']),
@@ -619,6 +641,21 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
     .object({
       agentId: AgentIdSchema,
       consults: z.array(AdvisorConsultViewSchema),
+      /** 3.15: on call to the workers, or the lead's checkpoints only. */
+      mode: z.enum(['on_call', 'checkpoints']).optional(),
+      /** 3.15: the workers' own consults (their advisor subagent calls), oldest first. */
+      onCall: z
+        .array(
+          z.object({
+            stepId: z.string(),
+            agentId: AgentIdSchema,
+            at: z.iso.datetime(),
+            question: z.string(),
+            status: z.enum(['running', 'done', 'failed']),
+            totalTokens: z.int().nonnegative().nullable(),
+          }),
+        )
+        .optional(),
     })
     .nullable()
     .optional(),

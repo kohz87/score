@@ -16,6 +16,7 @@ function VoteRow({ vote, splitTo }: { vote: VoteView; splitTo: 'lead' | 'person'
     <li className="orch-vote" data-status={vote.status}>
       <div className="orch-check-line">
         <strong>{vote.question}</strong>
+        {vote.stepId && <span className="orch-muted">about {vote.stepId}</span>}
         <span className={`orch-check-pill orch-vote-pill--${vote.status}`}>
           {voteStatus[vote.status]}
         </span>
@@ -86,9 +87,18 @@ export function HelpersCard({
         </p>
       )}
       <p className="orch-muted">
-        {helpers.used} of {helpers.maxSteps} helper steps, up to {helpers.maxConcurrent} at once.
+        {helpers.maxSteps === null
+          ? `${helpers.used} helper steps used, no limit`
+          : `${helpers.used} of ${helpers.maxSteps} helper steps`}
+        , up to {helpers.maxConcurrent} at once.
         {helpers.scan && <> Scanned first: {helpers.scanFolder ?? 'no folder'}.</>}
       </p>
+      {(helpers.autoVote || helpers.autoAudit) && (
+        <p className="orch-muted">
+          {helpers.autoVote && <>Votes on every step ({helpers.autoVoteK ?? 3} voters). </>}
+          {helpers.autoAudit && <>Audits every step.</>}
+        </p>
+      )}
       {helpers.votes.length > 0 && (
         <>
           <h4>Votes</h4>

@@ -553,6 +553,10 @@ export const claudeDriver: CodingDriver = {
     // once per conversation, so a resumed session renders it fresh for an edit to apply (`claude --help`, 2.1.301).
     if (options.instructionsFile) args.push('--append-system-prompt-file', options.instructionsFile)
     if (options.refreshSystemPrompt) args.push('--system-prompt-snapshot', 'off')
+    // A file, as the help asks for with --print ("with --print the path to a file that holds one"; 2.1.312, 2026-10-28).
+    // Not one of the worker's checked flags: only a job with the advisor on call sends it, and a CLI without it fails
+    // that step visibly instead of every worker being refused.
+    if (options.agentsFile) args.push('--agents', options.agentsFile)
     return args
   },
   worker: {

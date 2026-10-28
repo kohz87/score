@@ -38,6 +38,7 @@ import {
   type WorkflowRunSummary,
   type WorkflowTryAgainDecision,
   suggestedCodingSteps,
+  HELPER_STEPS_UNLIMITED_SIZING,
 } from '@score/contract'
 import { createHash, randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
@@ -75,6 +76,7 @@ import {
   answerInquiry,
   decideGate,
   expectRevision,
+  personStopsStep,
   grantWaiver,
   remapAgent,
   pauseRun,
@@ -152,8 +154,10 @@ import { timelineOf } from './timeline.ts'
 import { pruneOrchestrationRows } from './prune.ts'
 import {
   type HelpersConfig,
+  autoAuditStep,
   effectiveSize,
   helperLines,
+  stepVotePending,
   helpersOf,
   settleHelpers,
   startScan,
@@ -161,6 +165,7 @@ import {
 } from './helpers.ts'
 import {
   ADVISOR_STEPS,
+  onCallAdvisor,
   adviceArrived,
   adviseOnRepeatCheckFailure,
   adviseOnRepeatFailure,
@@ -235,7 +240,7 @@ const SWEEP_MS = 10_000
 /** Every step a run may hold: the lead's, its helpers' and the advisor's consults (3.14–3.16). */
 const effectiveSteps = (body: OrchestrationCreate): number =>
   body.maxSteps +
-  (body.helpers?.maxSteps ?? 0) +
+  (body.helpers ? (body.helpers.maxSteps ?? HELPER_STEPS_UNLIMITED_SIZING) : 0) +
   (body.advisorAgentId !== undefined ? ADVISOR_STEPS : 0)
 const RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 
@@ -895,7 +900,7 @@ export class Orchestrator {
             ...(body.helpers?.agentIds ?? []),
             ...(body.helpers?.voterIds ?? []),
           ].some(coding),
-          helperSteps: body.helpers?.maxSteps ?? 0,
+          helperSteps: body.helpers ? body.helpers.maxSteps : 0,
           codingAdvisor: body.advisorAgentId !== undefined && coding(body.advisorAgentId),
         }),
       }
@@ -1006,6 +1011,10 @@ export class Orchestrator {
           scanFolder: helpers.scanFolder ?? (helpers.scan ? (body.check?.workspace ?? null) : null),
           splitTo: helpers.splitTo,
           voterIds: helpers.voterIds ?? [],
+          // Score's own votes are made without the person: never under every-step approval.
+          autoVote: helpers.autoVote && body.gatePolicy !== 'every-step',
+          autoVoteK: helpers.autoVoteK,
+          autoAudit: helpers.autoAudit,
         }
         ctx.sqlite
           .prepare('UPDATE orchestrations SET helpers_json = ? WHERE id = ?')
@@ -1026,8 +1035,8 @@ export class Orchestrator {
       }
       if (advisor !== undefined) {
         ctx.sqlite
-          .prepare('UPDATE orchestrations SET advisor_agent_id = ? WHERE id = ?')
-          .run(advisor, id)
+          .prepare('UPDATE orchestrations SET advisor_agent_id = ?, advisor_mode = ? WHERE id = ?')
+          .run(advisor, body.advisorMode, id)
         // Frozen like every agent the run was started with, so a replaced advisor waits for the person's remap.
         ctx.sqlite
           .prepare(
@@ -1271,6 +1280,10 @@ export class Orchestrator {
   }
   resume(id: string, body: RunControl) {
     return this.decide(id, (ctx) => resumeRun(ctx, id, body))
+  }
+  /** 3.14: the person stops one step (the lead is told and can reassign it). */
+  stopStep(id: string, stepId: string, body: RunControl) {
+    return this.decide(id, (ctx) => personStopsStep(ctx, id, stepId, body))
   }
   /** 3.13: the person runs the job's check now. */
   runCheck(id: string, body: RunControl) {
@@ -2392,6 +2405,8 @@ export class Orchestrator {
     ).length
     for (const step of steps) {
       if (step.status !== 'queued') continue
+      // 3.14: a step the voters are still judging waits for their tally.
+      if (stepVotePending(sqlite, o.id, step.id)) continue
       // A lead-asks step waits until the turn that created it ends, so the lead can ask for approval first.
       if (o.gate_policy === 'lead-asks' && leadLive) continue
       if (!step.after_steps.every((id) => byId.get(id)?.status === 'succeeded')) continue
@@ -2443,8 +2458,16 @@ export class Orchestrator {
       }
       const dependencies = step.after_steps.map((id) => byId.get(id)!)
       // A workflow step's instruction already is the final, validated payload (it is never re-rendered or clipped).
+      // 3.15: whether the worker gets the advisor on call is decided once, here, and frozen on the step: its input says
+      // so and its launch reads the same answer (review: deciding twice could disagree).
+      const onCall = o.planner === 'workflow' ? null : onCallAdvisor(sqlite, o.id, step.id)
+      sqlite
+        .prepare('UPDATE orc_steps SET advisor_model = ? WHERE orchestration_id = ? AND id = ?')
+        .run(onCall?.model ?? null, o.id, step.id)
       const input =
-        o.planner === 'workflow' ? step.instruction : renderStepInput({ o, step, dependencies })
+        o.planner === 'workflow'
+          ? step.instruction
+          : renderStepInput({ o, step, dependencies, advisorOnCall: onCall !== null })
       // Scanned after rendering and before anything is stored: a capability in a step input blocks admission.
       if (containsCapability(input) || containsCapability(step.instruction)) {
         setStepStatus(sqlite, o.id, step.id, 'blocked', 'capability_in_input', now)
@@ -3578,6 +3601,8 @@ export class Orchestrator {
     // (settleHelpers); a helper's read-only work leaves nothing for the check to test.
     if (step.role === 'vote' || step.helper_role?.startsWith('scan_')) return
     addCause(ctx.sqlite, o.id, ok ? 'step_succeeded' : 'step_failed', step.id, ctx.now)
+    // 3.14: a helper audits each of the lead's own steps that succeeded (when the person turned that on).
+    if (ok && !step.role) autoAuditStep(ctx, o, step, result)
     if (ok && step.role !== 'helper') queueCheckAfterStep(ctx, o.id)
     else if (!ok)
       adviseOnRepeatFailure(ctx, o, { ...step, status: 'failed', result }, result, attemptId)

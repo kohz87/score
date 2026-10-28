@@ -333,6 +333,10 @@ const consentForms: Record<string, { decisions: number; markers: string[] }> = {
       'start-helpers',
     ],
   },
+  'routes/orchestrations/StepStop.tsx': {
+    decisions: 0,
+    markers: ['orch-stuck'],
+  },
   'routes/orchestrations/CheckCard.tsx': {
     decisions: 0,
     markers: ['orch-check-waive', 'orch-check-waived'],

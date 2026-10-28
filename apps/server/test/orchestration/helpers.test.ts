@@ -17,6 +17,9 @@ const HELPERS = {
   maxSteps: 20,
   scan: false,
   splitTo: 'lead' as const,
+  autoVote: false,
+  autoVoteK: 3,
+  autoAudit: false,
 }
 let splitMode = false
 const reply = (req: { agentId: string; input: string }) => {

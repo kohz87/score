@@ -37,3 +37,35 @@ test('advisor steps are not in the lead thread (3.14)', () => {
   expect(thread.some((step) => step.id === 'advisor-step')).toBe(false)
   expect(thread.filter((step) => step.kind === 'agent').length).toBe(run.stepsList.length)
 })
+
+test('each advisor consult is its own entry with the advice, and is not counted as a step (3.14)', () => {
+  const run = orchestrationSnapshot.orchestration
+  const first = run.stepsList[0]!
+  const withAdvisor = {
+    ...run,
+    stepsList: [
+      ...run.stepsList,
+      { ...first, id: 'advisor-step', role: 'advisor' as const, status: 'succeeded' as const },
+    ],
+    advisor: {
+      agentId: 'reviewer',
+      consults: [
+        {
+          stepId: 'advisor-step',
+          checkpoint: 'before_plan' as const,
+          reason: '',
+          status: 'succeeded' as const,
+          advice: 'Split it in two.',
+          createdAt: '2000-01-01T00:00:00.000Z',
+        },
+      ],
+    },
+  }
+  const thread = orchestrationThread(withAdvisor)
+  const entry = thread.find((step) => step.kind === 'advisor')!
+  expect(entry.title).toBe('Advisor · before the plan')
+  expect(entry.reply).toBe('Split it in two.')
+  expect(entry.agentId).toBe('reviewer')
+  expect(thread.filter((step) => step.kind === 'agent').length).toBe(run.stepsList.length)
+  expect(thread.map((step) => step.n)).toEqual(thread.map((_, index) => index + 1))
+})

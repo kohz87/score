@@ -3,7 +3,7 @@
 // is admitted, budgeted, stopped and recovered like any step, but the lead can't assign, cancel or depend on it, and its
 // result reaches the lead as quoted advice. Advice, never a veto: after "before done" the lead may finish anyway.
 
-import type { AdvisorConsultView } from '@score/contract'
+import type { OrchestrationDetail } from '@score/contract'
 import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
@@ -317,10 +317,12 @@ export function adviceArrived(ctx: Ctx, o: OrchRow, step: StepRow, ok: boolean):
 export function consultViews(
   sqlite: DatabaseSync,
   o: OrchRow,
-): { agentId: string; consults: AdvisorConsultView[] } | null {
+): NonNullable<OrchestrationDetail['advisor']> | null {
   if (!o.advisor_agent_id) return null
   return {
     agentId: o.advisor_agent_id,
+    mode: o.advisor_mode === 'checkpoints' ? ('checkpoints' as const) : ('on_call' as const),
+    onCall: onCallConsults(sqlite, o.id),
     consults: consultsOf(sqlite, o.id).map((step) => ({
       stepId: step.id,
       checkpoint: step.checkpoint ?? 'before_plan',
@@ -340,13 +342,14 @@ export function openPolicyGate(
   agentId: string,
   instruction: string,
   now: string,
+  after: readonly string[] = [],
 ): string {
   const policyId = readWorkerPolicy(sqlite, o.id, agentId)?.policyId
   const payloadText = JSON.stringify({
     agentId,
     agentIncarnation: lifecycleOf(sqlite, agentId)?.incarnation_id ?? 'untracked',
     instruction,
-    after: [],
+    after,
     replaces: null,
     estimateUsd: o.step_estimate_usd,
     dependencyRevisions: {},
@@ -368,4 +371,96 @@ export function openPolicyGate(
     )
   addStored(sqlite, o.id, utf8Bytes(payloadText))
   return gateId
+}
+
+// ------------------------------------------------------------------------------------- on call to workers (3.15)
+
+/** What a worker's advisor subagent is told; it reads only and answers the worker's question. */
+export const ADVISOR_SUBAGENT = {
+  description:
+    'A senior reviewer on call. Ask it when you are stuck, after a fix failed, or before a risky change. Give it the exact file, line and what you (or the helpers) found.',
+  prompt: `You are the advisor of a coding agent doing one step of a job coordinated by Score. It asks you when it is stuck, after a fix failed, or before a risky change. Read what you need (you can only read), then answer in at most ${ADVICE_CHARS} characters: what is wrong or risky, and what to do instead. Be concrete; never change files.`,
+  tools: ['Read', 'Grep', 'Glob'],
+}
+
+/**
+ * The advisor a step's worker gets on call, or null: only with the advisor on call, for the lead's own steps (not
+ * helpers, votes or consults), done by a Claude Code worker that edits, when the advisor is a Claude Code agent (its
+ * model is the subagent's).
+ */
+export function onCallAdvisor(
+  sqlite: DatabaseSync,
+  orchId: string,
+  stepId: string,
+): { advisorId: string; model: string } | null {
+  const o = sqlite
+    .prepare('SELECT advisor_agent_id, advisor_mode FROM orchestrations WHERE id = ?')
+    .get(orchId) as { advisor_agent_id: string | null; advisor_mode: string | null } | undefined
+  if (!o?.advisor_agent_id || o.advisor_mode !== 'on_call') return null
+  const step = sqlite
+    .prepare('SELECT agent_id, role FROM orc_steps WHERE orchestration_id = ? AND id = ?')
+    .get(orchId, stepId) as { agent_id: string; role: string | null } | undefined
+  if (!step || step.role) return null
+  const coding = (id: string) =>
+    sqlite.prepare('SELECT runtime, permission, model FROM coding_agents WHERE id = ?').get(id) as
+      { runtime: string; permission: string; model: string | null } | undefined
+  const worker = coding(step.agent_id)
+  if (worker?.runtime !== 'claude-code' || worker.permission !== 'workspace-write') return null
+  const advisor = coding(o.advisor_agent_id)
+  if (advisor?.runtime !== 'claude-code') return null
+  // An advisor the person paused or that can't take work isn't on call either (as for the lead's checkpoints).
+  if (
+    !agentAdmits(sqlite, o.advisor_agent_id) ||
+    agentPausedAt(sqlite, o.advisor_agent_id) !== null
+  )
+    return null
+  return { advisorId: o.advisor_agent_id, model: advisor.model || 'opus' }
+}
+
+/** The workers' own consults: their `advisor` subagent calls, read from the tool calls of the job's step runs. */
+export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
+  const rows = sqlite
+    .prepare(
+      `SELECT a.step_id, a.agent_id, t.started_at, t.subagent FROM tool_calls t
+         JOIN orc_attempts a ON a.run_id = t.run_id
+       WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.subagent IS NOT NULL
+       ORDER BY t.started_at, t.seq`,
+    )
+    .all(orchId) as { step_id: string; agent_id: string; started_at: string; subagent: string }[]
+  return rows.flatMap((row) => {
+    let sub: {
+      subagentType?: string | null
+      status?: string
+      description?: string | null
+      totalTokens?: number | null
+    }
+    try {
+      sub = JSON.parse(row.subagent) as typeof sub
+    } catch {
+      return []
+    }
+    if (sub.subagentType !== 'advisor') return []
+    return [
+      {
+        stepId: row.step_id,
+        agentId: row.agent_id,
+        at: row.started_at,
+        question: sub.description ?? '',
+        status: (sub.status === 'done' || sub.status === 'failed' ? sub.status : 'running') as
+          'running' | 'done' | 'failed',
+        totalTokens: typeof sub.totalTokens === 'number' ? sub.totalTokens : null,
+      },
+    ]
+  })
+}
+
+/** The on-call decision frozen on the step when it was admitted (its input says so), for the launch to read. */
+export function frozenAdvisorModel(sqlite: DatabaseSync, attemptId: string): string | null {
+  const row = sqlite
+    .prepare(
+      `SELECT s.advisor_model FROM orc_attempts a JOIN orc_steps s ON s.orchestration_id = a.orchestration_id AND s.id = a.step_id
+       WHERE a.id = ?`,
+    )
+    .get(attemptId) as { advisor_model: string | null } | undefined
+  return row?.advisor_model ?? null
 }

@@ -41,6 +41,8 @@ export const protectedClasses = [
   'start-helpers',
   'orch-check-waive',
   'orch-check-waived',
+  // 3.14: a step quiet for over 5 minutes, with its Stop
+  'orch-stuck',
   // PLAN 11.9a: bold credential panels, the Add tool server form, and trigger secrets / rotate-delete decisions
   'bold-connect-panel',
   'bold-tool-add',
