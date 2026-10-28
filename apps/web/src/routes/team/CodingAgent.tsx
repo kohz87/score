@@ -642,10 +642,11 @@ function ModelEditor({
     setModel(next)
     if (effort !== '' && !levelsFor(next).includes(effort)) setEffort('')
     // The advisor must stay stronger than the model: a model that catches up turns it off.
-    if (advisor !== '' && !advisorChoicesFor(next.trim() || null).includes(advisor as never)) {
-      setAdvisor('')
-      setAdvisorDropped(true)
-    }
+    // Only the change that drops it says so; any later model change clears the notice (review).
+    const drops =
+      advisor !== '' && !advisorChoicesFor(next.trim() || null).includes(advisor as never)
+    setAdvisorDropped(drops)
+    if (drops) setAdvisor('')
   }
   const advisorChoices = advisorChoicesFor(model.trim() || null)
   return (
@@ -732,11 +733,15 @@ function AdvisorSelect({
         </select>
       </label>
       <p id={hint} className="team-muted">
+        {choices.length === 0
+          ? 'No stronger model to advise this one.'
+          : 'A stronger model it consults when stuck and before it reports work done. Uses your Claude plan.'}
+      </p>
+      {/* Announced as it happens, for someone still typing in the model field (review). */}
+      <p role="status" className="team-muted">
         {dropped
           ? 'Advisor turned off: the model is now as strong as it. Pick a stronger one or leave it off.'
-          : choices.length === 0
-            ? 'No stronger model to advise this one.'
-            : 'A stronger model it consults when stuck and before it reports work done. Uses your Claude plan.'}
+          : ''}
       </p>
     </>
   )

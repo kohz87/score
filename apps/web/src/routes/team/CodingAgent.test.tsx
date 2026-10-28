@@ -790,8 +790,10 @@ test('3.14.1: a Claude Code agent picks its own advisor: only stronger models, o
   const modelBox = (await within(model).findByRole('textbox')) as HTMLInputElement
   fireEvent.change(modelBox, { target: { value: 'opus' } })
   await waitFor(() => expect(advisor.value).toBe(''))
-  expect(within(model).getByText(/Advisor turned off/)).toBeTruthy()
+  expect(within(model).getByRole('status').textContent).toMatch(/Advisor turned off/)
+  // Any later model change clears it.
   fireEvent.change(modelBox, { target: { value: 'sonnet' } })
+  expect(within(model).getByRole('status').textContent).toBe('')
   fireEvent.change(advisor, { target: { value: 'opus' } })
   expect(within(model).queryByText(/Advisor turned off/)).toBeNull()
   fireEvent.click(within(model).getByRole('button', { name: 'Save' }))
