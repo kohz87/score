@@ -8,6 +8,10 @@
   flex-wrap: wrap;
 }
 
+.bold-settings-page .bold-security-pill svg {
+  color: var(--ok);
+}
+
 .bold-settings-page .bold-security-pill-row {
   display: flex;
   align-items: center;
@@ -21,9 +25,11 @@
   gap: 8px;
   padding: 6px 14px;
   border-radius: 999px;
-  /* Theme colours (owner, 3.14.3): the theme's "ok" colour on a tint of itself. */
-  background: color-mix(in srgb, var(--ok) 14%, transparent);
-  color: var(--ok);
+  /* Theme colours (owner, 3.14.3): the theme's ink on its panel, "ok" on the ring and the lock mark (green text on a green
+     tint read 4.2:1 in the light look). */
+  background: var(--panel);
+  border: 1px solid var(--ok);
+  color: var(--ink);
   font-size: 13px;
   font-weight: 600;
 }
