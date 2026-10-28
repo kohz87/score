@@ -3,6 +3,18 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.14.2] — 2026-10-28
+
+### Changed
+- **Remote access and security is locked behind the security password.** The section opens with one card: enter the
+  password, Unlock. The server enforces it: until this browser unlocks, it doesn't even list paired devices or passkeys. An
+  unlock lasts 5 minutes from its last use (the countdown pill shows it), **Lock now** ends it, and leaving the section,
+  signing out or restarting Score locks it again. With no password yet, the section asks you to set one first.
+- **The section is tidied** to the approved mock-up: no password box at the top, no "Check password", no "enter the
+  password above" hints. Once unlocked, Renew, End, End all other devices, pairing links and passkeys just work; cards for
+  Paired devices (scripts like curl are tagged "not a browser"), Pair another device, Passkeys, Where agents run, the
+  terminal, the security password (Change password) and HTTPS setup (folded away).
+
 ## [3.14.1] — 2026-10-28
 
 ### Added
