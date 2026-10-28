@@ -1816,3 +1816,13 @@ One entry per completed task: what landed, review results, and any **rejected re
   Gate: e2e 852 passed, 2 failed (tablet flake), check green (server 4933, web 3072, contract 1556+1). Noted for the owner: a
   job's lead must be a Hermes agent (Claude Code as lead is a separate, bigger piece).
 - **v3.13.1 deployed live** (~13:36 UTC, idle guard passed): backup score-pre-3.13.1-20261027.db, health ok.
+- **3.13.2** (2026-10-28, lead; owner reports: "could not be checked", "Invalid MCP key", "the check could not be read when
+  coding agent is involved", "Coding agents don't have this: it's a Hermes feature", the 4,000-character task box). The tool
+  check requires every orch.* tool (a pre-3.13 list lacked orch.check/orch.vote and passed); the task box takes a lead job's
+  8 KB, counts, never cuts, grows; preflight refusals (full-access coding agents) show the reason and the fix; Replace key asks
+  first, the setup note names `config unset MCP_SCORE_API_KEY`; a coding agent's Workspace card sets its folder through its
+  own settings; Usage marks one busiest day on a tie (an e2e failed on today's date). Reviews: two P2s fixed (unset command
+  only with a known profile; trigger limit counted in UTF-16 units), coding workspace and tie reviews clean. Gate: e2e 846
+  passed, 4 failed (tablet + phone manifest flakes, orchestrations dots passed alone, bold-usage fixed and 7/7), check green
+  (server 4933, web 3076, contract 1557).
+- **v3.13.2 deployed live** (~07:04 UTC, idle guard passed): backup score-pre-3.13.2-20261028.db, health ok.
