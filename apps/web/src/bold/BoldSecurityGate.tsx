@@ -67,10 +67,12 @@ export function SecurityLockCard() {
             type="password"
             autoComplete="current-password"
             placeholder="Your security password"
+            required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
-          <button type="submit" disabled={busy || password.length === 0}>
+          {/* Never greyed out while empty (it read as broken, owner): an empty submit is stopped by `required`. */}
+          <button type="submit" disabled={busy}>
             {busy ? 'Unlocking…' : 'Unlock'}
           </button>
         </span>

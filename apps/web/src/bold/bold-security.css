@@ -8,6 +8,10 @@
   flex-wrap: wrap;
 }
 
+.bold-settings-page .bold-security-pill svg {
+  color: var(--ok);
+}
+
 .bold-settings-page .bold-security-pill-row {
   display: flex;
   align-items: center;
@@ -21,20 +25,27 @@
   gap: 8px;
   padding: 6px 14px;
   border-radius: 999px;
-  background: #1f3a2e;
-  color: #4fd1a5;
+  /* Theme colours (owner, 3.14.3): the theme's ink on its panel, "ok" on the ring and the lock mark (green text on a green
+     tint read 4.2:1 in the light look). */
+  background: var(--panel);
+  border: 1px solid var(--ok);
+  color: var(--ink);
   font-size: 13px;
   font-weight: 600;
 }
 
-/* Lock card and first-run card: the light object, "for you". */
+/* Lock card and first-run card. The owner asked them to follow the theme (3.14.3): the theme's panel and ink, with its
+   highlight colour on the lock mark and the Unlock button. `display` is set here: the protected attribute only sets it
+   under a custom look. */
 .bold-settings-page .bold-security-lock,
 .bold-settings-page .bold-security-first {
+  display: flex;
   flex-direction: column;
   gap: 16px;
   max-width: 620px;
-  background: var(--hi-bg);
-  color: var(--hi-ink);
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 28px;
   padding: 36px 40px;
 }
@@ -55,8 +66,8 @@
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: var(--hi-ink);
-  color: var(--hi-bg);
+  background: var(--hi-bg);
+  color: var(--hi-ink);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -69,19 +80,19 @@
 .bold-settings-page .bold-security-lock-text {
   font-size: 15px;
   line-height: 1.5;
-  color: var(--hi-sub, var(--hi-ink));
+  color: var(--ink2);
 }
 
 .bold-settings-page .bold-security-lock-note {
   font-size: 13px;
   line-height: 1.5;
-  color: var(--hi-sub, var(--hi-ink));
+  color: var(--muted);
 }
 
 .bold-settings-page .bold-security-lock code,
 .bold-settings-page .bold-security-first code {
   font-size: 12px;
-  color: var(--hi-ink);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -112,9 +123,9 @@
   flex: 1 1 260px;
   min-height: 48px;
   border-radius: 16px;
-  border: 1px solid #b9bdc7;
-  background: #fff;
-  color: #12131a;
+  border: 1px solid var(--line);
+  background: var(--field);
+  color: var(--ink);
   padding: 0 16px;
   font: 500 16px var(--font-b, 'Hanken Grotesk', system-ui, sans-serif);
 }
@@ -126,8 +137,8 @@
   padding: 0 26px;
   border-radius: 999px;
   border: 0;
-  background: var(--hi-ink);
-  color: var(--hi-bg);
+  background: var(--hi-bg);
+  color: var(--hi-ink);
   font: 700 15px var(--font-b, 'Hanken Grotesk', system-ui, sans-serif);
   cursor: pointer;
 }
@@ -142,11 +153,13 @@
 .bold-settings-page .bold-security-first [role='alert'] {
   font-size: 14px;
   font-weight: 600;
-  color: #a1262f;
+  color: var(--bad);
 }
 
 /* The unlocked section: two columns, stacked on a phone. */
 .bold-settings-page .bold-security-open {
+  display: grid;
+  margin-top: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
@@ -228,11 +241,11 @@
 }
 
 .bold-settings-page .bold-security-tag.ok {
-  color: #4fd1a5;
+  color: var(--ok);
 }
 
 .bold-settings-page .bold-security-tag.warn {
-  color: #f2a65a;
+  color: var(--warn);
 }
 
 .bold-settings-page .bold-security-actions {
@@ -244,7 +257,12 @@
 
 .bold-settings-page .bold-security-notice {
   font-size: 13px;
-  color: #4fd1a5;
+  color: var(--ok);
+}
+
+/* "Open the terminal" is a button-sized link, not a full-width bar. */
+.bold-settings-page .bold-security-card > a.btn {
+  align-self: flex-start;
 }
 
 .bold-settings-page .bold-security-btn {

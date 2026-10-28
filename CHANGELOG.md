@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.14.3] — 2026-10-28
+
+### Fixed
+- **Remote access and security matches the mock-up after unlocking**: two columns with space between the cards (the layout
+  only applied under a custom theme before), and "Open the terminal" is a button again, not a full-width bar.
+- **The lock follows the theme**: the lock and first-password cards use the theme's own panel and text, its highlight
+  colour on the lock mark and Unlock, and its colours for the Unlocked pill, tags and errors. Unlock no longer looks
+  disabled before you type.
+
 ## [3.14.2] — 2026-10-28
 
 ### Changed

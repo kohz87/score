@@ -271,11 +271,25 @@ test.describe('bold Settings', () => {
       await expect(lock.getByLabel('Security password', { exact: true })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Paired devices' })).toHaveCount(0)
       await expectMinHeight(lock.getByRole('button', { name: 'Unlock' }), 48)
+      // The lock card follows the theme (its panel, not a fixed light slab) and spaces its parts.
+      expect(await lock.evaluate((el) => getComputedStyle(el).display)).toBe('flex')
+      await expect(lock.getByRole('button', { name: 'Unlock' })).toBeEnabled()
       await expectNoOverflow(page, 'Remote access and security (locked)')
       unlocked = true
       await page.reload()
       const remote = page.locator('.bold-security-open')
       await expect(remote).toHaveAttribute('data-protected', 'grid')
+      // 3.14.3: laid out as the mock-up (two columns on a desktop, stacked on a phone) in the default look too, where the
+      // protected attribute sets no display of its own.
+      expect(await remote.evaluate((el) => getComputedStyle(el).display)).toBe('grid')
+      const pairTop = await remote
+        .getByRole('heading', { name: 'Pair another device' })
+        .evaluate((el) => el.getBoundingClientRect().top)
+      const passkeysTop = await remote
+        .getByRole('heading', { name: 'Passkeys' })
+        .evaluate((el) => el.getBoundingClientRect().top)
+      if (viewport.width > 860) expect(Math.abs(pairTop - passkeysTop)).toBeLessThan(2)
+      else expect(passkeysTop).toBeGreaterThan(pairTop)
       await expect(page.getByText(/Unlocked · locks in/)).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Where agents run' })).toBeVisible()
       // 11.12b: the list of agents and what each runs on replaces the old placeholder.
