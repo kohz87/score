@@ -2186,6 +2186,7 @@ const cases = [
       leadTurnEstimateUsd: 0.25,
       stepEstimateUsd: 0.5,
       acknowledgement: { text: contract.ORCH_ACKNOWLEDGEMENT_TEXT },
+      advisorMode: 'on_call',
       codingPolicies: { builder: orcPolicyId },
       acknowledgeCodingReach: { policyIds: [orcPolicyId] },
       acceptUnknownCost: ['codex'],

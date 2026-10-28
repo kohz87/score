@@ -441,6 +441,8 @@ function OrchestrationRun({
 }) {
   const actions = useRunActions(detail.id)
   const now = useNow() // one clock for every step's "quiet" test
+  // The Graph tab's choice (Job map or step diagram) outlives a visit to the Log tab.
+  const [diagram, setDiagram] = useState(false)
   const over = isRunOver(detail.status)
   const coding = orchCoding(detail.coding, detail.quotaFloorPercent)
   return (
@@ -528,40 +530,42 @@ function OrchestrationRun({
           </>
         )
       }}
-      graph={(pane) =>
-        pane === 'graph' ? (
-          <JobGraph id={detail.id} />
-        ) : (
-          <OrchestrationLive orchestrationId={detail.id} pane={pane} />
-        )
-      }
+      // The step diagram keeps one place in the tree for both tabs, so its selection and replay carry over to the log.
+      graph={(pane) => (
+        <>
+          {pane === 'graph' && <DiagramSwitch diagram={diagram} onDiagram={setDiagram} />}
+          {pane === 'graph' && !diagram ? (
+            <JobMap orchestrationId={detail.id} />
+          ) : (
+            <OrchestrationLive orchestrationId={detail.id} pane={pane} />
+          )}
+        </>
+      )}
       budget={<BudgetBlock run={detail} coding={coding} />}
       onBack={onBack}
     />
   )
 }
 
-/** 3.15: the job map is the graph tab's default view; the step diagram stays one switch away. */
-function JobGraph({ id }: { id: string }) {
-  const [diagram, setDiagram] = useState(false)
+/** 3.15: the Graph tab's switch between the job map (its default) and the step diagram. */
+function DiagramSwitch({
+  diagram,
+  onDiagram,
+}: {
+  diagram: boolean
+  onDiagram: (value: boolean) => void
+}) {
   return (
-    <>
-      <p className="bold-runs-note">
-        <button
-          type="button"
-          className="bold-runs-link"
-          aria-pressed={diagram}
-          onClick={() => setDiagram((value) => !value)}
-        >
-          {diagram ? 'Show the job map' : 'Show the step diagram'}
-        </button>
-      </p>
-      {diagram ? (
-        <OrchestrationLive orchestrationId={id} pane="graph" />
-      ) : (
-        <JobMap orchestrationId={id} />
-      )}
-    </>
+    <p className="bold-runs-note">
+      <button
+        type="button"
+        className="bold-runs-link"
+        aria-pressed={diagram}
+        onClick={() => onDiagram(!diagram)}
+      >
+        {diagram ? 'Show the job map' : 'Show the step diagram'}
+      </button>
+    </p>
   )
 }
 

@@ -81,13 +81,15 @@ for (const size of sizes) {
         /^\/b\?job=.+&work=draft$/,
       )
 
+      // Earlier specs' lead jobs show their own screens too since 3.14 (their run's turns count): the first is the seed's.
       const screens = panel.getByRole('region', { name: 'Screens' })
-      await expect(screens.getByRole('link', { name: 'Watch builder’s screen' })).toBeVisible()
+      await expect(
+        screens.getByRole('link', { name: 'Watch builder’s screen' }).first(),
+      ).toBeVisible()
       await expect(screens).toContainText('builder')
-      await expect(screens.getByRole('link', { name: 'Watch builder’s screen' })).toHaveAttribute(
-        'href',
-        /^\/b\?job=.+&work=screen$/,
-      )
+      await expect(
+        screens.getByRole('link', { name: 'Watch builder’s screen' }).first(),
+      ).toHaveAttribute('href', /^\/b\?job=.+&work=screen$/)
 
       const running = await panel.getByTestId('bold-results').evaluate((root) =>
         root

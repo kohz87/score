@@ -122,6 +122,8 @@ test.describe('a step held for a low limit', () => {
     await expect(card).toContainText('s3 is held:')
     await expect(card).toContainText(/has 6% of its 5-hour limit left, and it resets at [^.]+\./)
     await page.getByRole('tab', { name: 'Graph' }).click()
+    // 3.14: the Graph tab opens on the Job map; the step diagram these checks are about is one click away.
+    await page.getByRole('button', { name: 'Show the step diagram' }).click()
     const node = page.locator('[data-node="s3"]')
     await expect(node).toBeVisible()
     await expect(node).toContainText(/Held: limit low \(6% left, resets [^)]+\)/)
