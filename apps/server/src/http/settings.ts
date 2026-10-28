@@ -232,18 +232,26 @@ export function registerSettingsRoutes(
   app.post('/api/settings/hermes/check', { preHandler: [humanGuard(app.pairing)] }, async () =>
     port.checkHermes(),
   )
-  app.post('/api/settings/hermes/accept', mutation, async (request) => {
-    const body = HermesAcceptRequestSchema.parse(request.body)
-    if (body.override) {
-      // 3.14.4 (owner): an untested Hermes build turned on anyway is a security decision: the password, every time, with
-      // the same attempt limits as every other password check.
-      const password = security()
-      if (!password) throw new HttpError(501, 'unsupported', 'Not available here.')
-      await password.verify(body.password, sessionKey(request.headers.cookie))
-    }
-    await port.acceptHermes(body.hash, body.override ? { override: true } : {})
-    return { ok: true }
-  })
+  // The override carries the security password: its receipt never holds a plain hash of the body (D2.7), like a key.
+  app.post(
+    '/api/settings/hermes/accept',
+    {
+      preHandler: [humanGuard(app.pairing), keyReceipts.preHandler],
+      onSend: keyReceipts.onSend,
+    },
+    async (request) => {
+      const body = HermesAcceptRequestSchema.parse(request.body)
+      if (body.override) {
+        // 3.14.4 (owner): an untested Hermes build turned on anyway is a security decision: the password, every time, with
+        // the same attempt limits as every other password check.
+        const password = security()
+        if (!password) throw new HttpError(501, 'unsupported', 'Not available here.')
+        await password.verify(body.password, sessionKey(request.headers.cookie))
+      }
+      await port.acceptHermes(body.hash, body.override ? { override: true } : {})
+      return { ok: true }
+    },
+  )
   // Preview changes nothing; it still goes through the CSRF hook like every POST.
   app.post('/api/settings/config/preview', async (request) =>
     port.previewConfig(ConfigPreviewRequestSchema.parse(request.body).changes),
