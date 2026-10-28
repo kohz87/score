@@ -1860,3 +1860,8 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v3.14.1 deployed live** (~10:17 UTC, idle guard passed): backup score-pre-3.14.1-20261028.db, health ok, migration 0103
   applied, all Claude Code agents start with the advisor off.
 
+- **Live check** (owner: "do both"; temporary paired session, signed out after): new coding agent **sonnet55** (Claude Code,
+  Sonnet, workspace-write in story_suite, advisor Opus). Job orc-8f5fb601, lead gem38, worker sonnet55, job advisor opus55:
+  advisor before plan → s1 (sonnet55 read the project, **asked its own advisor once**, then reported a 5-line summary and a
+  risk) → advisor before done → succeeded in ~2.5 min. `workerAdvisorAsks` = one ask on s1, done; 0 files changed. Estimated
+  cost: s1 $0.30 (163k input tokens, including the Opus consult), the two checkpoint consults $0.09 and $0.10.
