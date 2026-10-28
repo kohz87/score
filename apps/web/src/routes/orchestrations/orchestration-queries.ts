@@ -229,7 +229,13 @@ export function describeOrchError(error: unknown): string {
 export type RunActions = ReturnType<typeof useRunActions>
 
 /** What a decision card needs from a mutation; orchestration and workflow runs both satisfy it (7.1b). */
-export type Act<V> = { mutate: (variables: V) => void; isPending: boolean; error: unknown }
+export type Act<V> = {
+  mutate: (variables: V) => void
+  isPending: boolean
+  error: unknown
+  /** The variables of the latest call (TanStack's mutation result has them). */
+  variables?: V | undefined
+}
 export type DecisionActions = {
   gate: Act<{ gateId: string; body: GateDecision }>
   limits: Act<LimitsDecision>

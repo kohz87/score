@@ -25,7 +25,7 @@ import {
 } from '../routes/orchestrations/orchestration-queries.ts'
 import { AdvisorCard } from '../routes/orchestrations/AdvisorCard.tsx'
 import { HelpersCard } from '../routes/orchestrations/HelpersCard.tsx'
-import { StepStopButton, StuckStepCard } from '../routes/orchestrations/StepStop.tsx'
+import { StepStopButton, StuckStepCard, useNow } from '../routes/orchestrations/StepStop.tsx'
 import { CheckCard } from '../routes/orchestrations/CheckCard.tsx'
 import { AgentChip, RunNeeds } from '../routes/orchestrations/RunDecisions.tsx'
 import {
@@ -439,6 +439,7 @@ function OrchestrationRun({
   onBack: () => void
 }) {
   const actions = useRunActions(detail.id)
+  const now = useNow() // one clock for every step's "quiet" test
   const over = isRunOver(detail.status)
   const coding = orchCoding(detail.coding, detail.quotaFloorPercent)
   return (
@@ -520,8 +521,9 @@ function OrchestrationRun({
               run={detail}
               agentName={name ? agentDisplayName(name) : item.agentId}
               stop={actions.stopStep}
+              now={now}
             />
-            <StepStopButton step={item} run={detail} stop={actions.stopStep} />
+            <StepStopButton step={item} run={detail} stop={actions.stopStep} now={now} />
           </>
         )
       }}

@@ -223,3 +223,119 @@ test('a recently active running step has no stuck card but still has a small Sto
   expect(screen.queryByText(/has been quiet/)).toBeNull()
   expect(screen.getByRole('button', { name: 'Stop s2' })).toBeTruthy()
 })
+
+type Snapshot = {
+  orchestration: Record<string, unknown> & { stepsList: { id: string }[] }
+}
+const orchBase = orchestrationFixtures['/api/orchestrations/orch-1'] as Snapshot
+
+function serve(
+  edit: (o: Snapshot['orchestration']) => Snapshot['orchestration'],
+  onPost: (url: string) => Response | Promise<Response>,
+) {
+  const snapshot = { ...orchBase, orchestration: edit(orchBase.orchestration) }
+  const previous = fetchImpl
+  fetchImpl = (url) => (url === '/api/orchestrations/orch-1' ? json(snapshot) : previous(url))
+  const posts: string[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        posts.push(String(input))
+        return Promise.resolve(onPost(String(input)))
+      }
+      return Promise.resolve(fetchImpl(String(input)))
+    }),
+  )
+  return posts
+}
+
+const withStatus = (statuses: Record<string, string>) => (o: Snapshot['orchestration']) => ({
+  ...o,
+  stepsList: o.stepsList.map((step) =>
+    statuses[step.id] ? { ...step, status: statuses[step.id] } : step,
+  ),
+})
+
+test('no Stop on a finished step, and none on anything while the run is stopping (3.14)', async () => {
+  serve(
+    (o) => o,
+    () => json(orchBase.orchestration),
+  )
+  mount('brief-orch-1')
+  await screen.findByRole('list', { name: 'Steps' })
+  expect(screen.getByRole('button', { name: 'Stop s2' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Stop s1' })).toBeNull()
+  cleanup()
+  serve(
+    (o) => ({ ...o, status: 'stopping' }),
+    () => json(orchBase.orchestration),
+  )
+  mount('brief-orch-1')
+  await screen.findByRole('list', { name: 'Steps' })
+  expect(screen.queryByRole('button', { name: /^Stop s\d/ })).toBeNull()
+})
+
+test('no Stop on an advisor entry (3.14)', async () => {
+  serve(
+    (o) => ({
+      ...o,
+      advisor: {
+        agentId: 'reviewer',
+        consults: [
+          {
+            stepId: 's2',
+            checkpoint: 'repeat_failure',
+            reason: 'Failed twice',
+            status: 'admitted',
+            advice: null,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    }),
+    () => json(orchBase.orchestration),
+  )
+  mount('brief-orch-1')
+  await screen.findByText(/Advisor · same failure twice/)
+  // The step s2 has its one Stop; the advisor entry adds none.
+  expect(screen.getAllByRole('button', { name: /^Stop s2$/ }).length).toBe(1)
+})
+
+test('Keep going posts nothing (3.14)', async () => {
+  const posts = serve(
+    (o) => o,
+    () => json(orchBase.orchestration),
+  )
+  mount('brief-orch-1')
+  await screen.findByRole('list', { name: 'Steps' })
+  fireEvent.click(screen.getByRole('button', { name: 'Stop s2' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Keep going' }))
+  expect(screen.queryByText(/Stop s2\? The lead is told/)).toBeNull()
+  expect(posts.length).toBe(0)
+})
+
+test('a 409 shows under its own step only, and a pending stop disables a second one (3.14)', async () => {
+  let release: (response: Response) => void = () => {}
+  const pending = new Promise<Response>((resolve) => {
+    release = resolve
+  })
+  const posts = serve(withStatus({ s3: 'queued' }), () => pending)
+  mount('brief-orch-1')
+  await screen.findByRole('list', { name: 'Steps' })
+  fireEvent.click(screen.getByRole('button', { name: 'Stop s2' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Stop s2' }))
+  const sending = await screen.findByRole('button', { name: 'Stopping…' })
+  expect((sending as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(sending)
+  expect(posts.length).toBe(1)
+  // The other step stays usable while this one is in flight.
+  expect((screen.getByRole('button', { name: 'Stop s3' }) as HTMLButtonElement).disabled).toBe(
+    false,
+  )
+  release(json({ error: { code: 'conflict', message: 'moved on' } }, 409))
+  const alert = await screen.findByText(/This changed while you were looking/)
+  expect(screen.getAllByText(/This changed while you were looking/).length).toBe(1)
+  expect(alert.closest('li')?.textContent).toContain('s2')
+  expect(alert.closest('li')?.textContent).not.toContain('s3')
+})

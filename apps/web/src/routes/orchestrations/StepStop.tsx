@@ -24,8 +24,8 @@ export function quietMinutes(
   return quiet > STUCK_AFTER_MS ? Math.floor(quiet / 60_000) : null
 }
 
-/** Re-renders every 30 s so a step turns "quiet" without a new event. */
-function useNow(): number {
+/** Re-renders every 30 s so a step turns "quiet" without a new event. Call it once per run and pass `now` down. */
+export function useNow(): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000)
@@ -49,7 +49,9 @@ function StopConfirm({
   compact?: boolean
 }) {
   const [confirming, setConfirming] = useState(false)
-  if (!confirming)
+  // One request at a time per step: every Stop of this step waits until it settles.
+  const sending = stop.isPending && stop.variables?.stepId === stepId
+  if (!confirming && !sending)
     return (
       <button
         type="button"
@@ -68,32 +70,43 @@ function StopConfirm({
       <button
         type="button"
         className="btn sm"
-        disabled={stop.isPending}
+        disabled={sending}
         onClick={() => {
+          if (sending) return
           stop.mutate({ stepId, body: { orchestrationRevision: run.revision } })
           setConfirming(false)
         }}
       >
-        Stop {stepId}
+        {sending ? 'Stopping…' : `Stop ${stepId}`}
       </button>{' '}
-      <button type="button" className="btn sm" onClick={() => setConfirming(false)}>
+      <button
+        type="button"
+        className="btn sm"
+        disabled={sending}
+        onClick={() => setConfirming(false)}
+      >
         Keep going
       </button>
     </span>
   )
 }
 
+const stepError = (stop: StopStepAction, stepId: string) =>
+  stop.error && stop.variables?.stepId === stepId ? describeOrchError(stop.error) : null
+
 /** The small "Stop" in a step row (a running or queued lead step). */
 export function StepStopButton({
   step,
   run,
   stop,
+  now,
 }: {
   step: Pick<StepView, 'id' | 'status' | 'lastActivityAt'>
   run: Pick<OrchestrationDetail, 'revision' | 'status' | 'attempts'>
   stop: StopStepAction
+  now: number
 }) {
-  const now = useNow()
+  const problem = stepError(stop, step.id)
   if (!canStopStep(step) || run.status === 'stopping') return null
   // A quiet step already carries the stuck card with its own Stop.
   const attempt = run.attempts.filter((item) => item.stepId === step.id).at(-1)
@@ -101,9 +114,9 @@ export function StepStopButton({
   return (
     <span className="orch-step-stop">
       <StopConfirm stepId={step.id} run={run} stop={stop} compact />
-      {stop.error ? (
+      {problem ? (
         <span role="alert" className="orch-error">
-          {describeOrchError(stop.error)}
+          {problem}
         </span>
       ) : null}
     </span>
@@ -116,28 +129,26 @@ export function StuckStepCard({
   run,
   agentName,
   stop,
+  now,
 }: {
   step: StepView
   run: Pick<OrchestrationDetail, 'revision' | 'attempts'>
   agentName: string
   stop: StopStepAction
+  now: number
 }) {
-  const now = useNow()
+  const problem = stepError(stop, step.id)
   const attempt = run.attempts.filter((item) => item.stepId === step.id).at(-1)
   const minutes = quietMinutes(step, attempt, now)
   if (minutes === null || !step.lastActivityAt) return null
   return (
-    <div className="orch-stuck" data-protected="block" role="status">
+    <div className="orch-stuck" data-protected="block" role="alert">
       <p>
         {agentName} (step {step.id}) has been quiet for {minutes} min — last sign of life{' '}
         {clockOf(step.lastActivityAt)}. The model may be stuck or retrying.
       </p>
       <StopConfirm stepId={step.id} run={run} stop={stop} />
-      {stop.error ? (
-        <p role="alert" className="orch-error">
-          {describeOrchError(stop.error)}
-        </p>
-      ) : null}
+      {problem ? <p className="orch-error">{problem}</p> : null}
     </div>
   )
 }

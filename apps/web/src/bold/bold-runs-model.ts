@@ -126,7 +126,7 @@ const checkpointText = {
   before_done: 'before it finishes',
 } as const
 
-/** The lead's steps and the advisor's consults in the order they were created (consults are not steps: not counted). */
+/** The lead's steps and the advisor's consults in the order they were created (consults are entries too and are numbered with the steps). */
 function threadEntries(run: OrchestrationDetail): ThreadStep[] {
   const waiting = waitingIds(run.needsYou)
   const entries: { at: string; entry: ThreadStep }[] = leadSteps(run.stepsList).map((step) => {
