@@ -25,12 +25,14 @@ export function quietMinutes(
 }
 
 /** Re-renders every 30 s so a step turns "quiet" without a new event. Call it once per run and pass `now` down. */
-export function useNow(): number {
+/** The clock the Stop controls read, ticking every 30 s; `enabled: false` keeps it still (no Stop shown, no timer). */
+export function useNow(enabled = true): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
+    if (!enabled) return
     const timer = setInterval(() => setNow(Date.now()), 30_000)
     return () => clearInterval(timer)
-  }, [])
+  }, [enabled])
   return now
 }
 
@@ -49,18 +51,28 @@ function StopConfirm({
   compact?: boolean
 }) {
   const [confirming, setConfirming] = useState(false)
-  // One request at a time per step: every Stop of this step waits until it settles.
-  const sending = stop.isPending && stop.variables?.stepId === stepId
+  // This control's own request (review: the mutation's variables hold only the newest call, so two steps stopped at
+  // once would lose track of the first): one at a time, and its error stays with it.
+  const [sending, setSending] = useState(false)
+  const [failure, setFailure] = useState<unknown>(null)
+  const problem = failure ? (
+    <span className="orch-error" role={compact ? 'alert' : undefined}>
+      {describeOrchError(failure)}
+    </span>
+  ) : null
   if (!confirming && !sending)
     return (
-      <button
-        type="button"
-        className={compact ? 'btn sm' : 'btn'}
-        onClick={() => setConfirming(true)}
-        aria-label={compact ? `Stop ${stepId}` : undefined}
-      >
-        {compact ? 'Stop' : 'Stop this step'}
-      </button>
+      <>
+        <button
+          type="button"
+          className={compact ? 'btn sm' : 'btn'}
+          onClick={() => setConfirming(true)}
+          aria-label={compact ? `Stop ${stepId}` : undefined}
+        >
+          {compact ? 'Stop' : 'Stop this step'}
+        </button>
+        {problem}
+      </>
     )
   return (
     <span role="group" aria-label={`Confirm stopping ${stepId}`}>
@@ -73,8 +85,18 @@ function StopConfirm({
         disabled={sending}
         onClick={() => {
           if (sending) return
-          stop.mutate({ stepId, body: { orchestrationRevision: run.revision } })
-          setConfirming(false)
+          setSending(true)
+          setFailure(null)
+          stop.mutate(
+            { stepId, body: { orchestrationRevision: run.revision } },
+            {
+              onError: setFailure,
+              onSettled: () => {
+                setSending(false)
+                setConfirming(false)
+              },
+            },
+          )
         }}
       >
         {sending ? 'Stopping…' : `Stop ${stepId}`}
@@ -87,12 +109,10 @@ function StopConfirm({
       >
         Keep going
       </button>
+      {problem}
     </span>
   )
 }
-
-const stepError = (stop: StopStepAction, stepId: string) =>
-  stop.error && stop.variables?.stepId === stepId ? describeOrchError(stop.error) : null
 
 /** The small "Stop" in a step row (a running or queued lead step). */
 export function StepStopButton({
@@ -106,7 +126,6 @@ export function StepStopButton({
   stop: StopStepAction
   now: number
 }) {
-  const problem = stepError(stop, step.id)
   if (!canStopStep(step) || run.status === 'stopping') return null
   // A quiet step already carries the stuck card with its own Stop.
   const attempt = run.attempts.filter((item) => item.stepId === step.id).at(-1)
@@ -114,11 +133,6 @@ export function StepStopButton({
   return (
     <span className="orch-step-stop">
       <StopConfirm stepId={step.id} run={run} stop={stop} compact />
-      {problem ? (
-        <span role="alert" className="orch-error">
-          {problem}
-        </span>
-      ) : null}
     </span>
   )
 }
@@ -137,7 +151,6 @@ export function StuckStepCard({
   stop: StopStepAction
   now: number
 }) {
-  const problem = stepError(stop, step.id)
   const attempt = run.attempts.filter((item) => item.stepId === step.id).at(-1)
   const minutes = quietMinutes(step, attempt, now)
   if (minutes === null || !step.lastActivityAt) return null
@@ -148,7 +161,6 @@ export function StuckStepCard({
         {clockOf(step.lastActivityAt)}. The model may be stuck or retrying.
       </p>
       <StopConfirm stepId={step.id} run={run} stop={stop} />
-      {problem ? <p className="orch-error">{problem}</p> : null}
     </div>
   )
 }

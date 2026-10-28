@@ -349,7 +349,8 @@ export function StepCard({
   /** 3.14: when given, a running or queued step shows Stop, and a quiet one the stuck card. */
   stop?: StopStepAction
 }) {
-  const now = useNow()
+  // Only a card that can show Stop keeps a clock (review: every card ticked, even without Stop).
+  const now = useNow(stop !== undefined)
   const attempts = run.attempts.filter((attempt) => attempt.stepId === step.id)
   const visual = stepVisual(step, attempts.at(-1))
   const preview = step.result ? step.result.replace(/\s+/g, ' ').slice(0, 200) : null
