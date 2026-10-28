@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Set a security password</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+</style>
+</helmet>
+<div style="width: 720px; height: 760px; box-sizing: border-box; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; padding: 32px 40px; display: flex; flex-direction: column; gap: 16px">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 26px; font-weight: 700">Remote access and security</h1>
+
+<sc-if value="{{setting}}" hint-placeholder-val="{{true}}">
+<section data-protected="block" aria-labelledby="set-h" style="background: #ECEEF2; color: #12131A; border-radius: 28px; padding: 32px 36px; display: flex; flex-direction: column; gap: 14px">
+<h2 id="set-h" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700">Set a security password first</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #3A3E4A">It locks this section, and pairing, ending pairings and passkeys need it, so a lost phone can't invite others or lock you out. Until it is set, nothing here can be changed.</p>
+<form onSubmit="{{save}}" style="display: flex; flex-direction: column; gap: 12px">
+<label for="n1" style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600">New password (at least 8 characters)<input id="n1" type="password" autocomplete="new-password" style="min-height: 48px; border-radius: 16px; border: 1px solid #B9BDC7; background: #FFFFFF; color: #12131A; padding: 0 16px; font: 500 16px 'Hanken Grotesk', sans-serif"></label>
+<label for="n2" style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600">The same password again<input id="n2" type="password" autocomplete="new-password" style="min-height: 48px; border-radius: 16px; border: 1px solid #B9BDC7; background: #FFFFFF; color: #12131A; padding: 0 16px; font: 500 16px 'Hanken Grotesk', sans-serif"></label>
+<button type="submit" style="align-self: flex-start; min-height: 48px; padding: 0 26px; border-radius: 999px; border: none; background: #12131A; color: #ECEEF2; font: 700 15px 'Hanken Grotesk', sans-serif; cursor: pointer">Set password and open</button>
+</form>
+<p style="margin: 0; font-size: 13px; color: #555B68">If you forget it, reset it on the Score machine with <code style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: #DCDFE6; padding: 1px 6px; border-radius: 6px">scripts/score password</code>.</p>
+</section>
+</sc-if>
+
+<sc-if value="{{done}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; padding: 16px 20px; border-radius: 20px; background: #1F3A2E; color: #4FD1A5; font-weight: 600">Password set. The section opens, unlocked for 5 minutes, as on the desktop board.</p>
+<button type="button" onClick="{{again}}" style="align-self: flex-start; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif; cursor: pointer">Show the first run again</button>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":720,"height":760}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { done: false };
+  }
+  renderVals() {
+    var self = this;
+    return {
+      setting: !this.state.done,
+      done: this.state.done,
+      save: function (e) { if (e && e.preventDefault) e.preventDefault(); self.setState({ done: true }); },
+      again: function () { self.setState({ done: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

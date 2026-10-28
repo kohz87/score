@@ -161,6 +161,9 @@ test('open a terminal over HTTPS, run echo, see the output, close it from Settin
     // Settings lists the open terminal; Close ends it.
     const settings = await page.context().newPage()
     await settings.goto(`${origin}/b/settings/security`)
+    // 3.14.2: the section is locked until the security password opens it.
+    await settings.getByLabel('Security password', { exact: true }).fill(PASSWORD)
+    await settings.getByRole('button', { name: 'Unlock' }).click()
     await settings
       .getByRole('list', { name: 'Open terminals' })
       .getByRole('button', { name: 'Close' })

@@ -341,7 +341,14 @@ const consentForms: Record<string, { decisions: number; markers: string[] }> = {
     decisions: 0,
     markers: ['orch-check-waive', 'orch-check-waived'],
   },
-  'routes/settings/RemoteSection.tsx': { decisions: 1, markers: ['settings-remote'] },
+  'bold/BoldSecurity.tsx': {
+    decisions: 1,
+    markers: ['bold-security-open', 'bold-security-pill-row'],
+  },
+  'bold/BoldSecurityGate.tsx': {
+    decisions: 0,
+    markers: ['bold-security-lock', 'bold-security-first'],
+  },
   'routes/pair/PairPage.tsx': { decisions: 1, markers: ['pair-card'] },
   'routes/team/CodingAgent.tsx': { decisions: 1, markers: ['coding-acknowledge'] },
   'bold/BoldAddAgent.tsx': { decisions: 1, markers: ['coding-acknowledge'] },

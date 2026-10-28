@@ -193,14 +193,14 @@ test.describe('passkeys over HTTPS', () => {
       await page.goto(`${origin}/b/settings/security`)
       const setPassword = page.getByRole('form', { name: 'Set a security password' })
       await setPassword.getByLabel('New password (at least 8 characters)').fill(PASSWORD)
-      await setPassword.getByLabel('New password again').fill(PASSWORD)
-      await setPassword.getByRole('button', { name: 'Set password' }).click()
-      await page.getByLabel('Security password', { exact: true }).fill(PASSWORD)
+      await setPassword.getByLabel('The same password again').fill(PASSWORD)
+      await setPassword.getByRole('button', { name: 'Set password and open' }).click()
+      await expect(page.getByText(/Unlocked · locks in/)).toBeVisible()
 
       const passkeys = page.getByRole('list', { name: 'Passkeys' })
       await page.getByLabel('Passkey name').fill('E2E phone')
       await page.getByRole('button', { name: 'Add a passkey' }).click()
-      await expect(passkeys.getByText(/E2E phone, added/)).toBeVisible()
+      await expect(passkeys.getByText(/E2E phone/)).toBeVisible()
       await expect(page.getByText('Passkey added.')).toBeVisible()
 
       // Signing out leaves the passkey: the pairing page offers it, and it opens a normal session.
@@ -216,9 +216,10 @@ test.describe('passkeys over HTTPS', () => {
       await expect(page.getByText(/Open the pairing link printed/)).toBeVisible()
       await expect(page.getByRole('button', { name: 'Sign in with a passkey' })).toHaveCount(0)
 
-      // Back on the domain: removing needs the password.
+      // Back on the domain: the section is locked until the password opens it.
       await page.goto(`${origin}/b/settings/security`)
       await page.getByLabel('Security password', { exact: true }).fill(PASSWORD)
+      await page.getByRole('button', { name: 'Unlock' }).click()
       await page.getByRole('button', { name: 'Remove passkey E2E phone' }).click()
       await expect(page.getByText('Passkey removed.')).toBeVisible()
       await expect(page.getByText('No passkeys yet.')).toBeVisible()

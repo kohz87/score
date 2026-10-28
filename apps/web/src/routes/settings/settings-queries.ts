@@ -298,9 +298,11 @@ export function useHermesCheck() {
 }
 
 /** Whether the web terminal is on (Settings › Terminal) and what else the security card shows; one read, shared. */
+export const securityKey = ['session', 'security'] as const
+
 export function useSecurityStatus(enabled = true) {
   return useQuery({
-    queryKey: ['session', 'security'],
+    queryKey: securityKey,
     enabled,
     queryFn: async () => SecurityStatusSchema.parse(await apiFetch('session/security')),
   })

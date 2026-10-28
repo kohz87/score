@@ -88,6 +88,20 @@ async function setPassword(app: FastifyInstance, cookie: string) {
     payload: { password: PASSWORD },
   })
   expect(response.statusCode).toBe(204)
+  // Setting the first password unlocks the section (3.14.2); lock it so each test proves what the password guards.
+  await app.inject({
+    method: 'POST',
+    url: '/api/session/security/lock',
+    headers: { ...headers, cookie },
+  })
+}
+async function unlock(app: FastifyInstance, cookie: string, password = PASSWORD) {
+  return app.inject({
+    method: 'POST',
+    url: '/api/session/security/unlock',
+    headers: { ...headers, cookie },
+    payload: { password },
+  })
 }
 async function pair(app: FastifyInstance, origin = headers.origin) {
   const response = await app.inject({
@@ -632,16 +646,38 @@ test('paired browsers can be listed and revoked over HTTP without exposing crede
   const app = makeApp()
   const first = await pair(app)
   const second = await pair(app)
-  const list = await app.inject({
-    url: '/api/session/browsers',
-    headers: { ...headers, cookie: first },
-  })
+  // Terminating a pairing needs the security password: first it must be set.
+  const anyId = '00000000-0000-4000-8000-000000000000'
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: `/api/session/browsers/${anyId}/revoke`,
+        headers: { ...headers, cookie: first },
+        payload: { password: PASSWORD },
+      })
+    ).statusCode,
+  ).toBe(409)
+  // 3.14.2: the list is locked until this browser unlocks the section.
+  const listOf = () =>
+    app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie: first } })
+  await setPassword(app, first)
+  expect((await listOf()).statusCode).toBe(403)
+  expect((await listOf()).json().error.code).toBe('locked')
+  expect((await unlock(app, first, 'not the password')).statusCode).toBe(403)
+  expect((await unlock(app, first)).statusCode).toBe(200)
+  const list = await listOf()
   expect(list.statusCode).toBe(200)
   const body = PairedBrowsersSchema.parse(list.json())
   expect(body.items).toHaveLength(2)
   expect(JSON.stringify(body)).not.toContain(first.split('=')[1]!)
   const other = body.items.find((item) => !item.current)!
-  // Terminating a pairing needs the security password: first it must be set, and a wrong one is refused.
+  // Locked again, a wrong password is refused.
+  await app.inject({
+    method: 'POST',
+    url: '/api/session/security/lock',
+    headers: { ...headers, cookie: first },
+  })
   const terminate = (password?: string) =>
     app.inject({
       method: 'POST',
@@ -649,8 +685,6 @@ test('paired browsers can be listed and revoked over HTTP without exposing crede
       headers: { ...headers, cookie: first },
       payload: password === undefined ? {} : { password },
     })
-  expect((await terminate(PASSWORD)).statusCode).toBe(409)
-  await setPassword(app, first)
   expect((await terminate('not the password')).statusCode).toBe(403)
   expect(
     (await app.inject({ url: '/api/system', headers: { ...headers, cookie: second } })).statusCode,
@@ -714,6 +748,12 @@ test('a paired browser can mint a one-time link that pairs a second device exact
     payload: { token },
   })
   expect(again.statusCode).toBe(401)
+  // A password sent with one action doesn't unlock the section; listing needs the unlock.
+  expect(
+    (await app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie } }))
+      .statusCode,
+  ).toBe(403)
+  await unlock(app, cookie)
   const list = await app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie } })
   expect(list.json().items).toHaveLength(2)
   // Unpaired callers cannot mint links.
@@ -760,6 +800,7 @@ test('Renew gives a browser a fresh 30 days and its next request re-sends the co
   expect(quiet.headers['set-cookie']).toBeUndefined()
   // Six days on (inside the 7-day idle limit), renew the other browser from this one.
   now += 6 * 24 * 60 * 60 * 1000
+  expect((await unlock(app, first)).statusCode).toBe(200)
   const items = (
     await app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie: first } })
   ).json().items as { id: string; current: boolean; expiresAt: string }[]
@@ -865,4 +906,90 @@ test('checking the security password answers 204 or 403 and counts wrong guesses
   expect((await check(PASSWORD)).statusCode).toBe(204)
   for (let i = 0; i < 5; i++) expect((await check('wrong guess')).statusCode).toBe(403)
   expect((await check(PASSWORD)).statusCode).toBe(429)
+})
+
+test('3.14.2: Remote access and security unlocks for 5 minutes from the last use, per browser, and locks again', async () => {
+  let now = Date.parse('2026-10-28T00:00:00Z')
+  const app = makeApp(() => now)
+  const first = await pair(app)
+  const second = await pair(app)
+  const status = async (cookie: string) =>
+    (await app.inject({ url: '/api/session/security', headers: { ...headers, cookie } })).json()
+  const listOf = (cookie: string) =>
+    app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie } })
+  // No password yet: nothing to unlock with.
+  expect((await unlock(app, first)).statusCode).toBe(409)
+  await setPassword(app, first)
+  expect(await status(first)).toMatchObject({ unlockedUntil: null })
+  const opened = await unlock(app, first)
+  expect(opened.json().unlockedUntil).toBe(new Date(now + 5 * 60_000).toISOString())
+  // Per browser: the other paired browser stays locked.
+  expect((await listOf(second)).statusCode).toBe(403)
+  // Each use pushes the end out; reading the status doesn't.
+  now += 4 * 60_000
+  expect((await listOf(first)).statusCode).toBe(200)
+  now += 4 * 60_000
+  expect((await status(first)).unlockedUntil).toBe(new Date(now + 60_000).toISOString())
+  expect((await listOf(first)).statusCode).toBe(200)
+  // Five quiet minutes lock it; an action then needs the password again.
+  now += 5 * 60_000 + 1
+  expect((await listOf(first)).statusCode).toBe(403)
+  const ids = app.pairing.browsers(first)
+  const other = ids.find((item) => !item.current)!
+  const end = (payload: object) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/session/browsers/${other.id}/renew`,
+      headers: { ...headers, cookie: first },
+      payload,
+    })
+  expect((await end({})).statusCode).toBeGreaterThanOrEqual(400)
+  // Unlocked, actions need no password; Lock now closes it at once.
+  await unlock(app, first)
+  expect((await end({})).statusCode).toBe(200)
+  await app.inject({
+    method: 'POST',
+    url: '/api/session/security/lock',
+    headers: { ...headers, cookie: first },
+  })
+  expect((await listOf(first)).statusCode).toBe(403)
+  // Ending the other devices locks them: their unlock goes with their pairing.
+  await unlock(app, second)
+  await unlock(app, first)
+  await app.inject({
+    method: 'POST',
+    url: '/api/session/browsers/revoke-others',
+    headers: { ...headers, cookie: first },
+    payload: {},
+  })
+  expect(app.pairing.unlockedUntil(second)).toBeNull()
+  expect((await unlock(app, second)).statusCode).toBe(401)
+  // A sign-out forgets the unlock.
+  await unlock(app, first)
+  await app.inject({
+    method: 'DELETE',
+    url: '/api/session',
+    headers: { ...headers, cookie: first },
+  })
+  expect(app.pairing.unlockedUntil(first)).toBeNull()
+  // Wrong passwords count against the same limit as every other password check.
+  const third = await pair(app)
+  for (let i = 0; i < 5; i++) expect((await unlock(app, third, 'wrong guess')).statusCode).toBe(403)
+  expect((await unlock(app, third)).statusCode).toBe(429)
+})
+
+test('3.14.2: setting the first password opens the section for that browser', async () => {
+  const app = makeApp()
+  const cookie = await pair(app)
+  const put = await app.inject({
+    method: 'PUT',
+    url: '/api/session/security/password',
+    headers: { ...headers, cookie },
+    payload: { password: PASSWORD },
+  })
+  expect(put.statusCode).toBe(204)
+  expect(
+    (await app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie } }))
+      .statusCode,
+  ).toBe(200)
 })

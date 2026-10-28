@@ -142,15 +142,15 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     const sections = page.getByRole('navigation', { name: 'Settings', exact: true })
     await sections.getByRole('button', { name: /^Remote access and security/ }).click()
     await expect(page).toHaveURL(`${origin}/b/settings/security`)
-    // Pair another device: set the security password, then the one-time link comes with a QR code.
+    // Set the security password (that opens the section), then the one-time link comes with a QR code.
     const setPassword = page.getByRole('form', { name: 'Set a security password' })
     await setPassword
       .getByLabel('New password (at least 8 characters)')
       .fill('correct horse battery')
-    await setPassword.getByLabel('New password again').fill('correct horse battery')
-    await setPassword.getByRole('button', { name: 'Set password' }).click()
-    await page.getByLabel('Security password', { exact: true }).fill('correct horse battery')
-    await page.getByRole('button', { name: 'Pair another device' }).click()
+    await setPassword.getByLabel('The same password again').fill('correct horse battery')
+    await setPassword.getByRole('button', { name: 'Set password and open' }).click()
+    await expect(page.getByText(/Unlocked · locks in/)).toBeVisible()
+    await page.getByRole('button', { name: 'Get a pairing link' }).click()
     await expect(page.getByRole('img', { name: 'QR code for the pairing link' })).toBeVisible()
     await expect(page.getByRole('group', { name: 'Pairing link' })).toContainText('/pair#')
     // Settings › System › Logs: parsed lines, filters, and secrets already removed on the server.
@@ -165,6 +165,10 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     await logs.getByLabel('Search').fill('cleanly')
     await expect(logs.getByText(/e2e failure/)).toHaveCount(0)
     await sections.getByRole('button', { name: /^Remote access and security/ }).click()
+    // Leaving the section locked it again: the password opens it for the log-out button.
+    await expect(page.getByRole('region', { name: 'This section is locked' })).toBeVisible()
+    await page.getByLabel('Security password', { exact: true }).fill('correct horse battery')
+    await page.getByRole('button', { name: 'Unlock' }).click()
     await page.getByRole('button', { name: 'Log out this browser' }).click()
     await expect(page).toHaveURL(`${origin}/pair`)
     await expect(page.getByText(/Open the pairing link printed/)).toBeVisible()

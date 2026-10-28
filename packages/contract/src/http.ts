@@ -329,7 +329,13 @@ export const SecurityStatusSchema = z.object({
   terminal: z.boolean().default(false),
   /** Why SCORE_TERMINAL=1 is not in effect (e.g. 'node-pty not built'); null otherwise. */
   terminalUnavailable: z.string().nullable().default(null),
+  /** 3.14.2: Remote access and security is unlocked for this browser until then (sliding, 5 minutes); null = locked. */
+  unlockedUntil: z.iso.datetime().nullable().default(null),
+  /** 3.14.2: the server's time with that answer, so a page counts down without trusting the device's clock. */
+  serverNow: z.iso.datetime().nullable().default(null),
 })
+/** 3.14.2: `POST /api/session/security/unlock`. */
+export const SecurityUnlockSchema = z.object({ unlockedUntil: z.iso.datetime() })
 export const RevokeOthersResponseSchema = z.object({ revoked: z.int().nonnegative() })
 export type PairedBrowser = z.infer<typeof PairedBrowserSchema>
 
