@@ -112,3 +112,24 @@ test('no voters line when voterIds is empty', () => {
   )
   expect(container.textContent).not.toContain('Votes:')
 })
+
+test('no limit, the automatic options and a vote about a step (3.14)', () => {
+  render(
+    <HelpersCard
+      run={{
+        helpers: helpers([vote({ stepId: 's3' })], {
+          maxSteps: null,
+          used: 7,
+          autoVote: true,
+          autoVoteK: 5,
+          autoAudit: true,
+        }),
+      }}
+      agents={agents}
+    />,
+  )
+  expect(screen.getByText(/7 helper steps used, no limit/)).toBeDefined()
+  expect(screen.getByText(/Votes on every step \(5 voters\)/)).toBeDefined()
+  expect(screen.getByText(/Audits every step/)).toBeDefined()
+  expect(screen.getByText('about s3')).toBeDefined()
+})

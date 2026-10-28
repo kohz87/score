@@ -323,6 +323,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const [launchesText, setLaunchesText] = useState<string | null>(null)
   const [helperConcurrent, setHelperConcurrent] = useState('3')
   const [helperSteps, setHelperSteps] = useState('20')
+  // 3.14: no helper limit (until the job ends), and the automatic votes and audits.
+  const [helperNoLimit, setHelperNoLimit] = useState(false)
+  const [autoVote, setAutoVote] = useState(false)
+  const [autoVoteK, setAutoVoteK] = useState('3')
+  const [autoAudit, setAutoAudit] = useState(false)
   const [helperScan, setHelperScan] = useState(false)
   const [helperFolder, setHelperFolder] = useState<string | null>(null)
   const [helperSplit, setHelperSplit] = useState<'lead' | 'person'>('lead')
@@ -399,6 +404,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   const helperFolderNow = helperFolder ?? checkFolderNow
   const helperConcurrentNumber = Number(helperConcurrent)
   const helperStepsNumber = Number(helperSteps)
+  const autoVoteKNumber = Number(autoVoteK)
+  // Under "approve every step" the votes are you, so Score doesn't vote first.
+  const autoVoteBlocked = ask === 'plan'
+  const autoVoteOn = autoVote && !autoVoteBlocked
 
   const routineQueries = useQueries({
     queries: agents.map((agent) => ({
@@ -484,7 +493,11 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
     codingAdvisorNow
   const launchesSuggested = suggestedCodingSteps({
     codingHelpers: codingHelpersNow,
-    helperSteps: Number.isInteger(helperStepsNumber) ? helperStepsNumber : 20,
+    helperSteps: helperNoLimit
+      ? null
+      : Number.isInteger(helperStepsNumber)
+        ? helperStepsNumber
+        : 20,
     codingAdvisor: codingAdvisorNow,
   })
   const launchesNow = launchesText ?? String(launchesSuggested)
@@ -503,11 +516,19 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
           helperConcurrentNumber <= 6
         )
       ? 'Helpers at once must be 1 to 6'
-      : !(Number.isInteger(helperStepsNumber) && helperStepsNumber >= 1 && helperStepsNumber <= 60)
+      : !helperNoLimit &&
+          !(
+            Number.isInteger(helperStepsNumber) &&
+            helperStepsNumber >= 1 &&
+            helperStepsNumber <= 60
+          )
         ? 'Helper steps must be 1 to 60'
-        : helperScan && !helperFolderNow.trim().startsWith('/')
-          ? 'The scan needs an absolute folder, like /home/you/project'
-          : null
+        : autoVoteOn &&
+            !(Number.isInteger(autoVoteKNumber) && autoVoteKNumber >= 3 && autoVoteKNumber <= 7)
+          ? 'Voters per vote must be 3 to 7'
+          : helperScan && !helperFolderNow.trim().startsWith('/')
+            ? 'The scan needs an absolute folder, like /home/you/project'
+            : null
   const optionProblems = [
     ...(concurrentValid ? [] : ['Steps at the same time must be 1 to 3']),
     ...(estimateValid ? [] : ['Estimate per step must be above 0 and at most 1000']),
@@ -829,7 +850,10 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
             helpers: {
               agentIds: helperIds,
               maxConcurrent: helperConcurrentNumber,
-              maxSteps: helperStepsNumber,
+              maxSteps: helperNoLimit ? null : helperStepsNumber,
+              autoVote: autoVoteOn,
+              autoVoteK: autoVoteOn ? autoVoteKNumber : 3,
+              autoAudit,
               scan: helperScan,
               ...(helperScan ? { scanFolder: helperFolderNow.trim() } : {}),
               splitTo: helperSplit,
@@ -1549,12 +1573,81 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                         min={1}
                         max={60}
                         value={helperSteps}
+                        disabled={helperNoLimit}
                         onChange={(event) => {
                           setHelperSteps(event.target.value)
                           touch()
                         }}
                       />
                     </label>
+                    <label className="check small">
+                      <input
+                        type="checkbox"
+                        aria-describedby="start-helper-nolimit-help"
+                        checked={helperNoLimit}
+                        onChange={(event) => {
+                          setHelperNoLimit(event.target.checked)
+                          touch()
+                        }}
+                      />
+                      No limit (until the job ends)
+                    </label>
+                    <span className="small muted" id="start-helper-nolimit-help">
+                      Still bounded by the job&apos;s budget, coding-agent launches and the
+                      lead&apos;s turns: set a budget.
+                    </span>
+                    <label className="check small">
+                      <input
+                        type="checkbox"
+                        aria-describedby="start-auto-vote-help"
+                        checked={autoVoteOn}
+                        disabled={autoVoteBlocked}
+                        onChange={(event) => {
+                          setAutoVote(event.target.checked)
+                          touch()
+                        }}
+                      />
+                      Vote on every step before it starts
+                    </label>
+                    <span className="small muted" id="start-auto-vote-help">
+                      {autoVoteBlocked
+                        ? 'Not available when you approve every step: the vote is then yours. '
+                        : ''}
+                      Before each step the lead assigns starts, the voters judge the agent and
+                      approach. A clear no stops it and the lead reassigns; a split goes to the lead
+                      or to you.
+                    </span>
+                    {autoVoteOn && (
+                      <label className="start-field">
+                        <span>Voters per vote (3 to 7)</span>
+                        <input
+                          className="field"
+                          type="number"
+                          min={3}
+                          max={7}
+                          value={autoVoteK}
+                          onChange={(event) => {
+                            setAutoVoteK(event.target.value)
+                            touch()
+                          }}
+                        />
+                      </label>
+                    )}
+                    <label className="check small">
+                      <input
+                        type="checkbox"
+                        aria-describedby="start-auto-audit-help"
+                        checked={autoAudit}
+                        onChange={(event) => {
+                          setAutoAudit(event.target.checked)
+                          touch()
+                        }}
+                      />
+                      Audit every step after it finishes
+                    </label>
+                    <span className="small muted" id="start-auto-audit-help">
+                      A helper checks each finished step&apos;s change; its findings go to the lead.
+                    </span>
                     <label className="check small">
                       <input
                         type="checkbox"

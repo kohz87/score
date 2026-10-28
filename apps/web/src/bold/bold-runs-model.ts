@@ -91,7 +91,7 @@ export function filterRuns(rows: readonly RunRow[], filter: RunFilter): RunRow[]
 export interface ThreadStep {
   id: string
   n: number
-  kind: 'lead' | 'agent' | 'gate' | 'branch' | 'join' | 'end'
+  kind: 'lead' | 'agent' | 'advisor' | 'gate' | 'branch' | 'join' | 'end'
   agentId: string | null
   /** What the step is: the instruction, the node's label or the gate's question. */
   title: string
@@ -120,8 +120,60 @@ function waitingIds(items: readonly object[]): Set<string> {
   return ids
 }
 
-export function orchestrationThread(run: OrchestrationDetail): ThreadStep[] {
+const checkpointText = {
+  before_plan: 'before the plan',
+  repeat_failure: 'same failure twice',
+  before_done: 'before it finishes',
+} as const
+
+/** The lead's steps and the advisor's consults in the order they were created (consults are not steps: not counted). */
+function threadEntries(run: OrchestrationDetail): ThreadStep[] {
   const waiting = waitingIds(run.needsYou)
+  const entries: { at: string; entry: ThreadStep }[] = leadSteps(run.stepsList).map((step) => {
+    const attempts = run.attempts.filter((attempt) => attempt.stepId === step.id)
+    const visual = stepVisual(step, attempts.at(-1))
+    const failed = ['failed', 'blocked', 'rejected', 'cancelled'].includes(visual)
+    return {
+      at: step.createdAt,
+      entry: {
+        id: step.id,
+        n: 0,
+        kind: 'agent',
+        agentId: step.agentId,
+        title: clip(step.instruction, 160),
+        visual,
+        reply: step.result,
+        note: failed ? (step.disposition ?? null) : null,
+        tries: attempts.length > 1 ? `${attempts.length} tries` : null,
+        waitsOnYou: waiting.has(step.id) || visual === 'gate',
+      },
+    }
+  })
+  const advisor = run.advisor
+  if (advisor)
+    for (const consult of advisor.consults) {
+      const attempts = run.attempts.filter((attempt) => attempt.stepId === consult.stepId)
+      const step = run.stepsList.find((item) => item.id === consult.stepId)
+      entries.push({
+        at: consult.createdAt,
+        entry: {
+          id: consult.stepId,
+          n: 0,
+          kind: 'advisor',
+          agentId: advisor.agentId,
+          title: `Advisor · ${checkpointText[consult.checkpoint]}`,
+          visual: step ? stepVisual(step, attempts.at(-1)) : 'queued',
+          reply: consult.advice,
+          note: consult.reason !== '' ? consult.reason : null,
+          tries: null,
+          waitsOnYou: false,
+        },
+      })
+    }
+  return entries.sort((a, b) => a.at.localeCompare(b.at)).map((item) => item.entry)
+}
+
+export function orchestrationThread(run: OrchestrationDetail): ThreadStep[] {
   const steps: ThreadStep[] = [
     {
       id: 'lead',
@@ -138,24 +190,11 @@ export function orchestrationThread(run: OrchestrationDetail): ThreadStep[] {
       tries: null,
       waitsOnYou: false,
     },
-    ...leadSteps(run.stepsList).map((step, index): ThreadStep => {
-      const attempts = run.attempts.filter((attempt) => attempt.stepId === step.id)
-      const visual = stepVisual(step, attempts.at(-1))
-      const failed = ['failed', 'blocked', 'rejected', 'cancelled'].includes(visual)
-      return {
-        id: step.id,
-        n: index + 2,
-        kind: 'agent',
-        agentId: step.agentId,
-        title: clip(step.instruction, 160),
-        visual,
-        reply: step.result,
-        note: failed ? (step.disposition ?? null) : null,
-        tries: attempts.length > 1 ? `${attempts.length} tries` : null,
-        waitsOnYou: waiting.has(step.id) || visual === 'gate',
-      }
-    }),
+    ...threadEntries(run),
   ]
+  steps.forEach((entry, index) => {
+    entry.n = index + 1
+  })
   if (run.finish)
     steps.push({
       id: 'finish',

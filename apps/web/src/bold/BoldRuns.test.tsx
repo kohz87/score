@@ -175,3 +175,51 @@ test('a workflow run names the definition and warns about an agent that changed,
   expect(facts.querySelector(`a[href*="/recipes/${runSnapshot.run.workflowId}"]`)).toBeTruthy()
   expect(facts.textContent).toContain('replaced since')
 })
+
+test('a running step quiet for over 5 minutes shows the stuck card, and Stop asks first then posts the revision (3.14)', async () => {
+  const quiet = new Date(Date.now() - 12 * 60_000).toISOString()
+  const base = orchestrationFixtures['/api/orchestrations/orch-1'] as {
+    orchestration: { revision: number; stepsList: { id: string }[] }
+  }
+  const snapshot = {
+    ...base,
+    orchestration: {
+      ...base.orchestration,
+      stepsList: base.orchestration.stepsList.map((step) =>
+        step.id === 's2' ? { ...step, lastActivityAt: quiet } : step,
+      ),
+    },
+  }
+  const posts: { url: string; body: unknown }[] = []
+  const previous = fetchImpl
+  fetchImpl = (url) => (url === '/api/orchestrations/orch-1' ? json(snapshot) : previous(url))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        posts.push({ url: String(input), body: JSON.parse(String(init.body)) })
+        return Promise.resolve(json(base.orchestration))
+      }
+      return Promise.resolve(fetchImpl(String(input)))
+    }),
+  )
+  mount('brief-orch-1')
+  const card = await screen.findByText(/has been quiet for 12 min/)
+  expect(card.closest('[data-protected]')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Stop this step' }))
+  expect(screen.getByText(/Stop s2\? The lead is told/)).toBeTruthy()
+  expect(posts.length).toBe(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Stop s2' }))
+  await waitFor(() => expect(posts.length).toBe(1))
+  expect(posts[0]).toEqual({
+    url: '/api/orchestrations/orch-1/steps/s2/stop',
+    body: { orchestrationRevision: base.orchestration.revision },
+  })
+})
+
+test('a recently active running step has no stuck card but still has a small Stop (3.14)', async () => {
+  mount('brief-orch-1')
+  await screen.findByRole('list', { name: 'Steps' })
+  expect(screen.queryByText(/has been quiet/)).toBeNull()
+  expect(screen.getByRole('button', { name: 'Stop s2' })).toBeTruthy()
+})

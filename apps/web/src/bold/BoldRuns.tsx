@@ -25,6 +25,7 @@ import {
 } from '../routes/orchestrations/orchestration-queries.ts'
 import { AdvisorCard } from '../routes/orchestrations/AdvisorCard.tsx'
 import { HelpersCard } from '../routes/orchestrations/HelpersCard.tsx'
+import { StepStopButton, StuckStepCard } from '../routes/orchestrations/StepStop.tsx'
 import { CheckCard } from '../routes/orchestrations/CheckCard.tsx'
 import { AgentChip, RunNeeds } from '../routes/orchestrations/RunDecisions.tsx'
 import {
@@ -194,11 +195,14 @@ function Thread({
   agents,
   over,
   details,
+  extras,
 }: {
   steps: ThreadStep[]
   agents: AgentSummary[]
   over: boolean
   details: (step: ThreadStep) => ReactNode
+  /** 3.14: the stuck-step card for a row (null for most). */
+  extras?: (step: ThreadStep) => ReactNode
 }) {
   return (
     <ol className="bold-run-thread" aria-label="Steps">
@@ -243,6 +247,7 @@ function Thread({
                 )}
               </div>
               {step.note && <p className="bold-run-note">{step.note}</p>}
+              {extras?.(step)}
               {step.reply && <Reply text={step.reply} />}
               {step.agentId && (
                 <div className="bold-run-links">
@@ -327,6 +332,8 @@ interface RunFrameProps {
   controls: ReactNode
   summary: ReactNode
   details: (step: ThreadStep) => ReactNode
+  /** 3.14: per-row additions (the stuck card and Stop on lead steps). */
+  stepExtras?: (step: ThreadStep) => ReactNode
   graph: (pane: 'graph' | 'log') => ReactNode
   budget: ReactNode
   /** Extra buttons next to the controls (Run again…). */
@@ -402,6 +409,7 @@ function RunFrame(props: RunFrameProps) {
               agents={props.agents}
               over={props.over}
               details={props.details}
+              extras={props.stepExtras}
             />
             <ClassicPaper>
               {props.summary}
@@ -497,7 +505,25 @@ function OrchestrationRun({
       }
       details={(step) => {
         const item = detail.stepsList.find((entry) => entry.id === step.id)
-        return item ? <StepCard step={item} run={detail} agents={agents} selected open /> : null
+        return item && step.kind !== 'advisor' ? (
+          <StepCard step={item} run={detail} agents={agents} selected open />
+        ) : null
+      }}
+      stepExtras={(step) => {
+        const item = step.kind === 'agent' ? detail.stepsList.find((e) => e.id === step.id) : null
+        if (!item) return null
+        const name = agents.find((a) => a.id === item.agentId)
+        return (
+          <>
+            <StuckStepCard
+              step={item}
+              run={detail}
+              agentName={name ? agentDisplayName(name) : item.agentId}
+              stop={actions.stopStep}
+            />
+            <StepStopButton step={item} run={detail} stop={actions.stopStep} />
+          </>
+        )
       }}
       graph={(pane) => <OrchestrationLive orchestrationId={detail.id} pane={pane} />}
       budget={<BudgetBlock run={detail} coding={coding} />}

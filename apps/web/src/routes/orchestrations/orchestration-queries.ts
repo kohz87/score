@@ -279,6 +279,11 @@ export function useRunActions(id: string) {
       path: `steps/${encodeURIComponent(v.stepId)}/remap`,
       body: v.body,
     })),
+    // 3.14: stop one step; the lead is told and can reassign the work.
+    stopStep: useRunPost<{ stepId: string; body: RunControl }>(id, (v) => ({
+      path: `steps/${encodeURIComponent(v.stepId)}/stop`,
+      body: v.body,
+    })),
     quota: useRunPost<{ stepId: string; body: QuotaDecision }>(id, (v) => ({
       path: `steps/${encodeURIComponent(v.stepId)}/quota`,
       body: v.body,

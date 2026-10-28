@@ -872,6 +872,48 @@ test('helpers are folded, optional, checked in the preflight, and sent with thei
   expect(orchestrationBodies[0]!.allowedAgents).not.toContain('lead')
 })
 
+test('no limit, automatic votes and audits are sent inside helpers (3.14)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  fireEvent.click(within(section).getByRole('checkbox', { name: /No limit/ }))
+  expect(
+    (within(section).getByLabelText('Helper steps (1 to 60)') as HTMLInputElement).disabled,
+  ).toBe(true)
+  fireEvent.click(within(section).getByRole('checkbox', { name: /Vote on every step/ }))
+  fireEvent.change(within(section).getByLabelText('Voters per vote (3 to 7)'), {
+    target: { value: '5' },
+  })
+  fireEvent.click(within(section).getByRole('checkbox', { name: /Audit every step/ }))
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]!.helpers).toMatchObject({
+    maxSteps: null,
+    autoVote: true,
+    autoVoteK: 5,
+    autoAudit: true,
+  })
+})
+
+test('automatic votes are off and disabled when you approve every step (3.14)', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const section = dialog.querySelector('details.start-helpers') as HTMLDetailsElement
+  fireEvent.click(within(section).getByRole('checkbox', { name: 'builder' }))
+  fireEvent.click(within(section).getByRole('checkbox', { name: /Vote on every step/ }))
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'The plan starts' }))
+  const vote = within(section).getByRole('checkbox', {
+    name: /Vote on every step/,
+  }) as HTMLInputElement
+  expect(vote.disabled).toBe(true)
+  expect(vote.checked).toBe(false)
+  expect(within(section).getByText(/the vote is then yours/)).toBeDefined()
+  fireEvent.click(await fillLeadJob(dialog))
+  await waitFor(() => expect(orchestrationBodies.length).toBe(1))
+  expect(orchestrationBodies[0]!.helpers).toMatchObject({ autoVote: false, maxSteps: 20 })
+})
+
 test('no helpers picked means no helpers in the body (3.15)', async () => {
   open('/b?start=job')
   const dialog = await startDialog()
