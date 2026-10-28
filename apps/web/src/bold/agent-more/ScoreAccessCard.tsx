@@ -12,6 +12,8 @@ export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
   const change = useChangeMcpAccess(agent.id)
   const [token, setToken] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  // 3.13.2 (owner: two presses of Replace key cut the profile off): replacing asks first.
+  const [confirmReplace, setConfirmReplace] = useState(false)
   if (access.isError || !access.data)
     return (
       <MoreCard id="agent-score-access" title="Score access" protectedKind="flex">
@@ -74,9 +76,11 @@ export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
         <button
           type="button"
           className="btn sm"
-          disabled={busy || !data.available}
+          disabled={busy || !data.available || confirmReplace}
           onClick={() =>
-            change.issue.mutate(undefined, { onSuccess: (issued) => setToken(issued.token) })
+            data.hasToken
+              ? setConfirmReplace(true)
+              : change.issue.mutate(undefined, { onSuccess: (issued) => setToken(issued.token) })
           }
         >
           {data.hasToken ? 'Replace key' : 'Create key'}
@@ -95,6 +99,30 @@ export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
           </button>
         )}
       </span>
+      {confirmReplace && (
+        <div role="alert" className="bold-mc-box">
+          <span className="small">
+            Replace the key? The current one stops working at once: {agent.name}’s Hermes can’t use
+            Score’s tools until you put the new key in its profile (Setup in Hermes below).
+          </span>
+          <span className="row wrap">
+            <button
+              type="button"
+              className="btn sm"
+              disabled={busy}
+              onClick={() => {
+                setConfirmReplace(false)
+                change.issue.mutate(undefined, { onSuccess: (issued) => setToken(issued.token) })
+              }}
+            >
+              Replace key
+            </button>
+            <button type="button" className="btn sm ghost" onClick={() => setConfirmReplace(false)}>
+              Cancel
+            </button>
+          </span>
+        </div>
+      )}
       {token && (
         <div role="status" className="bold-mc-box">
           <span className="small">Copy this key now. Score can’t show it again.</span>
@@ -124,8 +152,13 @@ export function ScoreAccessCard({ agent }: { agent: AgentDetail }) {
           )}
           {data.hasToken && (
             <span className="small muted" data-testid="mcp-rotate-note">
-              After creating a new key, replace <code>MCP_SCORE_API_KEY</code> in the profile’s{' '}
-              <code>.env</code> yourself (Score never reads or writes it), then Reload MCP below.
+              After a new key, Hermes keeps the old one until you remove it: run{' '}
+              <code>
+                {(data.command ?? 'hermes').replace(/ mcp add .*$/, '')} config unset
+                MCP_SCORE_API_KEY
+              </code>
+              , then the command above, and paste the new key when it asks (Score never reads or
+              writes the profile). Then Reload MCP below.
             </span>
           )}
         </details>

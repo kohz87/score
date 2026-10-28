@@ -441,6 +441,37 @@ test('Score access: a key is shown once, replaced, revoked, and Write too toggle
   await waitFor(() => expect(within(card).queryByText(token)).toBeNull())
 })
 
+test('Score access: replacing a key asks first, since the old one stops working (3.13.2)', async () => {
+  override = (path, method) => {
+    if (path.endsWith('/mcp/token') && method === 'POST')
+      return Response.json({
+        token,
+        access: { ...mcp, enabled: true, hasToken: true, tokenCreatedAt: at },
+      })
+    if (path.endsWith('/mcp') && method === 'GET')
+      return Response.json({ ...mcp, enabled: true, hasToken: true, tokenCreatedAt: at })
+    return null
+  }
+  mount(<ScoreAccessCard agent={agent} />)
+  const card = await screen.findByRole('region', { name: 'Score access' })
+  fireEvent.click(await within(card).findByRole('button', { name: 'Replace key' }))
+  const warning = await within(card).findByRole('alert')
+  expect(warning.textContent).toMatch(/stops working at once/)
+  expect(sent('POST', '/mcp/token')).toBeUndefined()
+  fireEvent.click(within(warning).getByRole('button', { name: 'Cancel' }))
+  expect(within(card).queryByRole('alert')).toBeNull()
+  expect(sent('POST', '/mcp/token')).toBeUndefined()
+  fireEvent.click(within(card).getByRole('button', { name: 'Replace key' }))
+  fireEvent.click(
+    within(await within(card).findByRole('alert')).getByRole('button', { name: 'Replace key' }),
+  )
+  expect(await within(card).findByText(token)).toBeDefined()
+  // The setup note names the command that clears the old key from the profile.
+  expect(within(card).getByTestId('mcp-rotate-note').textContent).toMatch(
+    /config unset MCP_SCORE_API_KEY/,
+  )
+})
+
 test('Score access offers Reload MCP once access and a key are set up, and says when Hermes refused (3.7.9)', async () => {
   let refuse = true
   override = (path, method) => {
