@@ -1896,3 +1896,17 @@ One entry per completed task: what landed, review results, and any **rejected re
   ink on panel, ok on the ring and icon; reviewed clean), the tablet DM flake; server check 1 failed (`orphan index` in a
   migration test, passed 17/17 on rerun, release touches no server code). Rerun of the affected specs: 69 passed.
 - **v3.14.3 deployed live** (~13:29 UTC, idle guard passed): backup score-pre-3.14.3-20261028.db, health ok.
+
+## 3.14.4 — turn approvals on anyway for an untested Hermes (2026-10-28)
+- Owner: on a machine with a newer Hermes, approvals stayed paused and the check offered no way to override (an
+  incompatible build shows only "Stay paused"). Owner chose the override with the security password (decision 154). Lead
+  built it (Hermes adapter boundary): `HermesCheck.overridable`, `accept { hash, override, password }`, `overridden` on the
+  stored entry, `AcceptedBuilds.baselines()` for later comparisons, the banner's password form; checked with fake-mode
+  screenshots (desktop, phone; dark, light) and fixed the check table breaking words mid-word on a phone.
+- Reviews: P1 the accept route's idempotency receipt stored a plain sha256 of a body carrying the password — already fixed by
+  the lead before the report (keyed HMAC receipt, as for pasted keys; re-reviewed clean). Rejected: "no HTTP test of the
+  password gate" (the third 3.14.4 test drives it over HTTP: not set, wrong, right); an overridden entry as the closest match
+  for the identical build (that is exactly what was overridden).
+- Gate: e2e 853 passed, 1 failed (agent-faces pointer animation, 10/10 on rerun); check green (server 4951, web 3104,
+  contract 1562).
+- **v3.14.4 deployed live** (~15:11 UTC, idle guard passed): backup score-pre-3.14.4-20261028.db, health ok.
