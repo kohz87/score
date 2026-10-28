@@ -184,11 +184,14 @@ export function BoldSecurity() {
   // Opening or locking swaps the whole card: keep keyboard focus on the section's heading, not lost on the page (review).
   const heading = useRef<HTMLHeadingElement>(null)
   const shown = useRef<boolean | null>(null)
+  const loaded = security.isSuccess
   useEffect(() => {
+    // Only a change after the status first loaded moves focus: a page that loads already unlocked keeps it (review).
+    if (!loaded) return
     const open = unlockedUntil !== null
     if (shown.current !== null && shown.current !== open) heading.current?.focus()
     shown.current = open
-  }, [unlockedUntil])
+  }, [loaded, unlockedUntil])
   return (
     <div className="bold-security">
       <div className="bold-security-head">
