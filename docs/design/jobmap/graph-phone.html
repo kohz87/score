@@ -24,6 +24,13 @@ a{color:#7DB8FF}a:hover{color:#B3D4FF}
 <span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 21px; font-weight: 700; line-height: 1.2">Story suite: refine the story blocks</span>
 </div>
 
+<div style="position: relative; display: flex; flex-direction: column; align-items: stretch">
+<div aria-hidden="true" style="position: absolute; right: -10px; top: 36px; width: 10px; height: 0; border-top: 2px dashed {{railColor}}"></div>
+<div aria-hidden="true" style="position: absolute; right: -12px; top: 36px; bottom: 60px; width: 0; border-left: 2px dashed {{railColor}}"></div>
+<div aria-hidden="true" style="position: absolute; right: -10px; bottom: 60px; width: 10px; height: 0; border-top: 2px dashed {{railColor}}"></div>
+<sc-if value="{{consulting}}" hint-placeholder-val="{{true}}">
+<div aria-hidden="true" style="position: absolute; right: -16px; top: 40px; width: 10px; height: 10px; border-radius: 50%; background: #B9A6FF; --run: 560px; animation: flowdown 2.2s linear infinite"></div>
+</sc-if>
 <button type="button" onClick="{{pickLead}}" style="text-align: left; background: #1A1C23; border-radius: 20px; padding: 14px 16px; border: 2px solid #F2A65A; color: #ECEEF2; font-family: inherit; cursor: pointer; animation: pulse 2.4s ease-in-out infinite">
 <span style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #F2A65A"><span>Lead · astra</span><span style="color: #B9A6FF">◆◇◇ advisor</span></span>
 <span style="display: block; margin-top: 6px; font-size: 16px; font-weight: 700">Turn 9 · assigning s5</span>
@@ -77,6 +84,8 @@ a{color:#7DB8FF}a:hover{color:#B3D4FF}
 <sc-if value="{{stopped}}" hint-placeholder-val="{{false}}">
 <span style="font-size: 14px; font-weight: 600">s5 stopped · astra is choosing who does it now</span>
 </sc-if>
+<button type="button" onClick="{{toggleConsult}}" style="align-self: flex-start; padding: 4px 12px; border-radius: 999px; border: 1px solid #B9A6FF; background: #1E1B2E; color: #DCD3FF; font: 600 12px 'Hanken Grotesk', sans-serif; cursor: pointer">{{consultLabel}}</button>
+</div>
 </div>
 
 <div aria-hidden="true" style="position: relative; height: 30px; align-self: center; width: 2px; background: #3A3E4A"><span style="position: absolute; left: -3px; top: 0; width: 8px; height: 8px; border-radius: 50%; background: #F5D06B; --run: 22px; animation: flowdown 1.6s linear infinite"></span></div>
@@ -119,11 +128,17 @@ class Component extends DCLogic {
       { at: '15:47', lane: 'you', text: 'stopped s4' },
       { at: '15:49', lane: 'swarm', text: 'grep → 7 call sites' },
       { at: '15:50', lane: 'votes', text: 's5 sharp yes → runs' },
-      { at: '15:51', lane: 'lead', text: 'assigning s5 to terra' }
+      { at: '15:51', lane: 'lead', text: 'assigning s5 to terra' },
+      { at: '15:52', lane: 'advisor', text: 'terra asked: is rules.ts:41 safe?' }
     ];
     var rows = all.filter(function (r) { return s.focus === 'all' || r.lane === s.focus; });
     if (s.stopped) rows = rows.concat([{ at: '15:53', lane: 'you', text: 'stopped s5' }]);
+    var consulting = s.consulting !== false;
     return {
+      consulting: consulting,
+      railColor: consulting ? '#B9A6FF' : '#5B5670',
+      consultLabel: consulting ? 'terra is asking the advisor…' : 'asked the advisor 2× · 18k tokens',
+      toggleConsult: function () { self.setState({ consulting: !consulting }); },
       votes: [
         { q: 's5 → terra?', w: '100%', c: '#4FD1A5', label: 'sharp' },
         { q: 's3 → terra?', w: '50%', c: '#F2A65A', label: 'split' }

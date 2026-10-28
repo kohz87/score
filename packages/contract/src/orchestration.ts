@@ -333,10 +333,10 @@ export const OrchestrationCreateSchema = z
      */
     advisorAgentId: AgentIdSchema.optional(),
     /**
-     * 3.15 (decision 151): `on_call` also gives each Claude Code worker that edits the advisor as a subagent it consults
-     * itself (when stuck, after a failed fix, before a risky change); `checkpoints` keeps only the lead's checkpoints.
+     * Retired in 3.14.1: accepted and ignored. A worker's own advisor is now a Claude Code agent setting
+     * (`CodingAgent.advisorModel`); the job's advisor keeps the lead's checkpoints.
      */
-    advisorMode: z.enum(['on_call', 'checkpoints']).default('on_call'),
+    advisorMode: z.enum(['on_call', 'checkpoints']).optional(),
     /** 3.15: the helpers and their limits. */
     helpers: OrchestrationHelpersSchema.optional(),
   })
@@ -641,23 +641,22 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
     .object({
       agentId: AgentIdSchema,
       consults: z.array(AdvisorConsultViewSchema),
-      /** 3.15: on call to the workers, or the lead's checkpoints only. */
-      mode: z.enum(['on_call', 'checkpoints']).optional(),
-      /** 3.15: the workers' own consults (their advisor subagent calls), oldest first. */
-      onCall: z
-        .array(
-          z.object({
-            stepId: z.string(),
-            agentId: AgentIdSchema,
-            at: z.iso.datetime(),
-            question: z.string(),
-            status: z.enum(['running', 'done', 'failed']),
-            totalTokens: z.int().nonnegative().nullable(),
-          }),
-        )
-        .optional(),
     })
     .nullable()
+    .optional(),
+  /**
+   * 3.14.1: each time a worker asked its own advisor (a Claude Code agent's `advisorModel`, Claude Code's `--advisor`),
+   * oldest first. The advice is encrypted for the worker: Score has only that it asked.
+   */
+  workerAdvisorAsks: z
+    .array(
+      z.object({
+        stepId: z.string(),
+        agentId: AgentIdSchema,
+        at: z.iso.datetime(),
+        status: z.enum(['running', 'done', 'failed']),
+      }),
+    )
     .optional(),
   /** 3.13: the oracle and its runs (newest first); null = no check. */
   check: z

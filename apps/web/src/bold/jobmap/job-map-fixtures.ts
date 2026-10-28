@@ -110,7 +110,6 @@ export const fullRun = {
   },
   advisor: {
     agentId: 'reviewer',
-    mode: 'on_call',
     consults: [
       {
         stepId: 'x1',
@@ -121,25 +120,11 @@ export const fullRun = {
         createdAt: at(2),
       },
     ],
-    onCall: [
-      {
-        stepId: 's5',
-        agentId: 'builder',
-        at: at(5),
-        question: 'which file?',
-        status: 'done',
-        totalTokens: 12000,
-      },
-      {
-        stepId: 's5',
-        agentId: 'builder',
-        at: at(8),
-        question: 'retry how?',
-        status: 'done',
-        totalTokens: 6000,
-      },
-    ],
   },
+  workerAdvisorAsks: [
+    { stepId: 's5', agentId: 'builder', at: at(5), status: 'done' },
+    { stepId: 's5', agentId: 'builder', at: at(8), status: 'done' },
+  ],
   check: {
     command: 'pnpm test',
     workspace: '/work/project',

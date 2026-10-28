@@ -3,6 +3,20 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.14.1] — 2026-10-28
+
+### Added
+- **A Claude Code agent's own advisor.** On a Claude Code agent's Model card, **Advisor** picks a stronger model (Sonnet,
+  Opus or Fable, only above the agent's own) that the agent consults by itself through Claude Code's advisor: when stuck,
+  after a failed fix, before a risky change and before reporting work done. It works in chat rooms and jobs alike. The advice
+  stays inside Claude Code (encrypted for the agent): Score shows that it asked and how often. Moving the agent's model up to
+  the advisor's level turns the advisor off, and the card says so.
+
+### Changed
+- **The Job map shows a worker's own advisor on the worker** ("its own advisor · Opus", "asked its advisor 2×"), not under
+  the job's Advisor. The job's Advisor is the lead's: it reviews the plan, a repeated failure and "done", for any lead.
+- **Start a job no longer asks "on call or checkpoints"**: on-call help is now the Claude Code agent's own setting.
+
 ## [3.14.0] — 2026-10-28
 
 ### Added

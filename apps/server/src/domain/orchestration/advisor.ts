@@ -321,8 +321,6 @@ export function consultViews(
   if (!o.advisor_agent_id) return null
   return {
     agentId: o.advisor_agent_id,
-    mode: o.advisor_mode === 'checkpoints' ? ('checkpoints' as const) : ('on_call' as const),
-    onCall: onCallConsults(sqlite, o.id),
     consults: consultsOf(sqlite, o.id).map((step) => ({
       stepId: step.id,
       checkpoint: step.checkpoint ?? 'before_plan',
@@ -375,92 +373,50 @@ export function openPolicyGate(
 
 // ------------------------------------------------------------------------------------- on call to workers (3.15)
 
-/** What a worker's advisor subagent is told; it reads only and answers the worker's question. */
-export const ADVISOR_SUBAGENT = {
-  description:
-    'A senior reviewer on call. Ask it when you are stuck, after a fix failed, or before a risky change. Give it the exact file, line and what you (or the helpers) found.',
-  prompt: `You are the advisor of a coding agent doing one step of a job coordinated by Score. It asks you when it is stuck, after a fix failed, or before a risky change. Read what you need (you can only read), then answer in at most ${ADVICE_CHARS} characters: what is wrong or risky, and what to do instead. Be concrete; never change files.`,
-  tools: ['Read', 'Grep', 'Glob'],
+/** 3.14.1 (owner): a Claude Code agent's own advisor model (its setting, Claude Code's --advisor), or null. */
+export function agentAdvisorModel(sqlite: DatabaseSync, agentId: string): string | null {
+  const row = sqlite
+    .prepare("SELECT advisor_model FROM coding_agents WHERE id = ? AND runtime = 'claude-code'")
+    .get(agentId) as { advisor_model: string | null } | undefined
+  return row?.advisor_model ?? null
 }
 
 /**
- * The advisor a step's worker gets on call, or null: only with the advisor on call, for the lead's own steps (not
- * helpers, votes or consults), done by a Claude Code worker that edits, when the advisor is a Claude Code agent (its
- * model is the subagent's).
+ * 3.14.1: each time a worker asked its own advisor (Claude Code's `--advisor`, tool `advisor`) in the lead's steps (not
+ * consult or helper steps). The call has no question and the advice is encrypted for the worker: only that it asked.
  */
-export function onCallAdvisor(
-  sqlite: DatabaseSync,
-  orchId: string,
-  stepId: string,
-): { advisorId: string; model: string } | null {
-  const o = sqlite
-    .prepare('SELECT advisor_agent_id, advisor_mode FROM orchestrations WHERE id = ?')
-    .get(orchId) as { advisor_agent_id: string | null; advisor_mode: string | null } | undefined
-  if (!o?.advisor_agent_id || o.advisor_mode !== 'on_call') return null
-  const step = sqlite
-    .prepare('SELECT agent_id, role FROM orc_steps WHERE orchestration_id = ? AND id = ?')
-    .get(orchId, stepId) as { agent_id: string; role: string | null } | undefined
-  if (!step || step.role) return null
-  const coding = (id: string) =>
-    sqlite.prepare('SELECT runtime, permission, model FROM coding_agents WHERE id = ?').get(id) as
-      { runtime: string; permission: string; model: string | null } | undefined
-  const worker = coding(step.agent_id)
-  if (worker?.runtime !== 'claude-code' || worker.permission !== 'workspace-write') return null
-  const advisor = coding(o.advisor_agent_id)
-  if (advisor?.runtime !== 'claude-code') return null
-  // An advisor the person paused or that can't take work isn't on call either (as for the lead's checkpoints).
-  if (
-    !agentAdmits(sqlite, o.advisor_agent_id) ||
-    agentPausedAt(sqlite, o.advisor_agent_id) !== null
-  )
-    return null
-  return { advisorId: o.advisor_agent_id, model: advisor.model || 'opus' }
-}
-
-/** The workers' own consults: their `advisor` subagent calls, read from the tool calls of the job's step runs. */
-export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
+export function workerAdvisorAsks(sqlite: DatabaseSync, orchId: string) {
   const rows = sqlite
     .prepare(
-      `SELECT a.step_id, a.agent_id, t.started_at, t.subagent FROM tool_calls t
+      `SELECT a.step_id, a.agent_id, a.state AS attempt_state, a.abandoned_at, t.started_at, t.status FROM tool_calls t
          JOIN orc_attempts a ON a.run_id = t.run_id
-       WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.subagent IS NOT NULL
+         JOIN orc_steps s ON s.orchestration_id = a.orchestration_id AND s.id = a.step_id
+       WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.tool = 'advisor' AND s.role IS NULL
        ORDER BY t.started_at, t.seq`,
     )
-    .all(orchId) as { step_id: string; agent_id: string; started_at: string; subagent: string }[]
-  return rows.flatMap((row) => {
-    let sub: {
-      subagentType?: string | null
-      status?: string
-      description?: string | null
-      totalTokens?: number | null
-    }
-    try {
-      sub = JSON.parse(row.subagent) as typeof sub
-    } catch {
-      return []
-    }
-    if (sub.subagentType !== 'advisor') return []
-    return [
-      {
-        stepId: row.step_id,
-        agentId: row.agent_id,
-        at: row.started_at,
-        question: sub.description ?? '',
-        status: (sub.status === 'done' || sub.status === 'failed' ? sub.status : 'running') as
-          'running' | 'done' | 'failed',
-        totalTokens: typeof sub.totalTokens === 'number' ? sub.totalTokens : null,
-      },
-    ]
-  })
-}
-
-/** The on-call decision frozen on the step when it was admitted (its input says so), for the launch to read. */
-export function frozenAdvisorModel(sqlite: DatabaseSync, attemptId: string): string | null {
-  const row = sqlite
-    .prepare(
-      `SELECT s.advisor_model FROM orc_attempts a JOIN orc_steps s ON s.orchestration_id = a.orchestration_id AND s.id = a.step_id
-       WHERE a.id = ?`,
-    )
-    .get(attemptId) as { advisor_model: string | null } | undefined
-  return row?.advisor_model ?? null
+    .all(orchId) as {
+    step_id: string
+    agent_id: string
+    attempt_state: string
+    abandoned_at: string | null
+    started_at: string
+    status: string
+  }[]
+  return rows.map((row) => ({
+    stepId: row.step_id,
+    agentId: row.agent_id,
+    at: row.started_at,
+    // A consult cut off with its run (stopped, crashed, timed out) never gets a result: once the run is over it shows as
+    // failed, never live forever. An attempt not confirmed ended (unknown, not abandoned) may still run, and so may the
+    // consult (review).
+    status: (row.status === 'ok'
+      ? 'done'
+      : row.status === 'error' ||
+          !(
+            ['send_started', 'running'].includes(row.attempt_state) ||
+            (row.attempt_state === 'unknown' && row.abandoned_at === null)
+          )
+        ? 'failed'
+        : 'running') as 'running' | 'done' | 'failed',
+  }))
 }

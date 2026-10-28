@@ -168,7 +168,7 @@ export function useRun(id: string | undefined) {
   })
 }
 
-/** The create body as the screens build it: `advisorMode` has a server default and is sent only with an advisor. */
+/** The create body as the screens build it: `advisorMode` is retired (3.14.1) and never sent. */
 export type OrchestrationCreateBody = Omit<OrchestrationCreate, 'advisorMode'> &
   Partial<Pick<OrchestrationCreate, 'advisorMode'>>
 

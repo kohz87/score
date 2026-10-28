@@ -18,7 +18,6 @@ import { visualLabel } from '../../routes/orchestrations/orch-model.ts'
 import { useFramed } from '../../shell/framed-paths.tsx'
 import {
   buildJobMap,
-  formatTokens,
   LAYER_LABEL,
   logFor,
   type LayerId,
@@ -128,14 +127,13 @@ function WorkerBox({
   const asked = worker.asked
   return (
     <div className="jobmap-worker" data-asked={asked ? '' : undefined}>
-      {asked && <Line dashed still label="on call" />}
       <Node
         layer="workers"
         selected={selected}
         onPick={onPick}
         tone="work"
         pulse={worker.running}
-        label={`Workers layer: ${worker.name}, steps ${states.join(', ')}${asked ? `, asked the advisor ${asked.count} times` : ''}`}
+        label={`Workers layer: ${worker.name}, steps ${states.join(', ')}${asked ? `, asked its advisor ${asked.count} times` : ''}`}
       >
         <span className="jobmap-kicker">
           {agent && <AgentGlyph agent={agent} size="xs" bare decorative />}
@@ -149,11 +147,7 @@ function WorkerBox({
             </Pill>
           ))}
         </span>
-        {asked && (
-          <span className="jobmap-asked">
-            asked the advisor {asked.count}× ({formatTokens(asked.tokens)} tokens)
-          </span>
-        )}
+        {asked && <span className="jobmap-asked">asked its advisor {asked.count}×</span>}
       </Node>
     </div>
   )
@@ -209,8 +203,7 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
     </span>
   )
   const advisorCount =
-    advisor &&
-    `${advisor.consults} ${advisor.consults === 1 ? 'consult' : 'consults'} · tokens read ${formatTokens(advisor.tokens)}`
+    advisor && `${advisor.consults} ${advisor.consults === 1 ? 'consult' : 'consults'}`
 
   return (
     <section
@@ -257,14 +250,14 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
         </Node>
         {!phone && advisor && (
           <>
-            <Line horizontal dashed still label="on call" />
+            <Line horizontal dashed still label="checkpoints" />
             <Node
               layer="advisor"
               selected={selected}
               onPick={pick}
               tone="advisor"
               pulse={advisor.working && !still}
-              label={`Advisor layer: ${advisor.name}, ${advisor.mode === 'on_call' ? 'on call to the workers' : 'checkpoints only'}, ${advisorCount}`}
+              label={`Advisor layer: ${advisor.name}, ${advisorCount}`}
               className="jobmap-advisor"
             >
               <span className="jobmap-kicker">Advisor · {advisor.name}</span>
