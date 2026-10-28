@@ -121,7 +121,10 @@ export class PairingService {
   unlock(cookie: string | undefined, ttlMs: number): number | undefined {
     const hash = this.pairedSession(cookie)
     if (hash === undefined) return undefined
-    const until = this.clock() + ttlMs
+    const now = this.clock()
+    // Ended unlocks of sessions that expired without a revoke are dropped here (review: keep the map bounded).
+    for (const [key, at] of this.#unlockedUntil) if (at <= now) this.#unlockedUntil.delete(key)
+    const until = now + ttlMs
     this.#unlockedUntil.set(hash, until)
     return until
   }

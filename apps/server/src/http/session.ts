@@ -105,7 +105,8 @@ export function registerSessionRoutes(
   // 3.14.2: unlock with the security password (the same attempt limits as every password check); lock at once.
   app.post('/api/session/security/unlock', guarded, async (request) => {
     await checkPassword(request.body, request.headers.cookie)
-    pairing.unlock(request.headers.cookie, UNLOCK_MS)
+    if (pairing.unlock(request.headers.cookie, UNLOCK_MS) === undefined)
+      throw new HttpError(401, 'not_paired', 'Pair this browser first.')
     return { unlockedUntil: unlockedUntilIso(request.headers.cookie) }
   })
   app.post('/api/session/security/lock', guarded, async (request, reply) => {

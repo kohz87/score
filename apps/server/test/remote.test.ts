@@ -953,6 +953,17 @@ test('3.14.2: Remote access and security unlocks for 5 minutes from the last use
     headers: { ...headers, cookie: first },
   })
   expect((await listOf(first)).statusCode).toBe(403)
+  // Ending the other devices locks them: their unlock goes with their pairing.
+  await unlock(app, second)
+  await unlock(app, first)
+  await app.inject({
+    method: 'POST',
+    url: '/api/session/browsers/revoke-others',
+    headers: { ...headers, cookie: first },
+    payload: {},
+  })
+  expect(app.pairing.unlockedUntil(second)).toBeNull()
+  expect((await unlock(app, second)).statusCode).toBe(401)
   // A sign-out forgets the unlock.
   await unlock(app, first)
   await app.inject({
@@ -962,9 +973,9 @@ test('3.14.2: Remote access and security unlocks for 5 minutes from the last use
   })
   expect(app.pairing.unlockedUntil(first)).toBeNull()
   // Wrong passwords count against the same limit as every other password check.
-  for (let i = 0; i < 5; i++)
-    expect((await unlock(app, second, 'wrong guess')).statusCode).toBe(403)
-  expect((await unlock(app, second)).statusCode).toBe(429)
+  const third = await pair(app)
+  for (let i = 0; i < 5; i++) expect((await unlock(app, third, 'wrong guess')).statusCode).toBe(403)
+  expect((await unlock(app, third)).statusCode).toBe(429)
 })
 
 test('3.14.2: setting the first password opens the section for that browser', async () => {
