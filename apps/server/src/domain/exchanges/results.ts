@@ -38,17 +38,56 @@ const firstLine = (text: string) =>
     .trim()
     .slice(0, 200)
 
+/**
+ * 3.14 (owner: "the workbench and work tabs are always empty"): the jobs whose turns count for this one. A job started
+ * as an orchestration or a recipe run is a link; the run's turns are recorded on its own room's job, so they count too.
+ */
+export function jobScope(sqlite: DatabaseSync, jobId: string): string[] {
+  const job = sqlite.prepare('SELECT recipe_kind, recipe_ref FROM jobs WHERE id = ?').get(jobId) as
+    { recipe_kind: string | null; recipe_ref: string | null } | undefined
+  if (!job?.recipe_ref || !['orchestration', 'workflow'].includes(job.recipe_kind ?? ''))
+    return [jobId]
+  const run = sqlite
+    .prepare('SELECT room_id FROM orchestrations WHERE id = ?')
+    .get(job.recipe_ref) as { room_id: string } | undefined
+  if (!run) return [jobId]
+  const linked = (
+    sqlite
+      .prepare('SELECT id FROM jobs WHERE room_id = ? AND deleted_at IS NULL')
+      .all(run.room_id) as {
+      id: string
+    }[]
+  ).map((row) => row.id)
+  return [...new Set([jobId, ...linked])]
+}
+
+/** `?, ?, …` for an IN list. */
+export const marks = (ids: readonly string[]): string => ids.map(() => '?').join(', ')
+
+/** Lines added and removed in a unified diff (headers and hunk lines excluded). */
+export function diffCounts(diff: string): { added: number; removed: number } {
+  let added = 0
+  let removed = 0
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) continue
+    if (line.startsWith('+')) added++
+    else if (line.startsWith('-')) removed++
+  }
+  return { added, removed }
+}
+
 export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults, 'asOfSeq'> {
   const job = jobRow(sqlite, jobId)
   if (!job) throw new HttpError(404, 'not_found', 'Couldn’t find that job.')
+  const scope = jobScope(sqlite, jobId)
   const room = sqlite.prepare('SELECT name FROM rooms WHERE id = ?').get(job.room_id) as {
     name: string
   }
   const messages = sqlite
     .prepare(
-      "SELECT * FROM messages WHERE job_id = ? AND deleted_at IS NULL AND author_kind = 'agent' ORDER BY created_at, id",
+      `SELECT * FROM messages WHERE job_id IN (${marks(scope)}) AND deleted_at IS NULL AND author_kind = 'agent' ORDER BY created_at, id`,
     )
-    .all(jobId)
+    .all(...scope)
     .map(messageFromRow)
   const items: ResultCard[] = []
 
@@ -65,6 +104,33 @@ export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults
       files.set(part.path, file)
       lastChange = message.createdAt
     }
+  // Agents that edit through their own tools (Hermes's patch and write_file) leave no file parts; the editor frames Watch
+  // recorded for the job's runs say which files changed, and their diffs how much (3.14).
+  if (files.size === 0) {
+    const edits = sqlite
+      .prepare(
+        `SELECT agent_id, at, payload FROM watch_frames WHERE surface = 'editor'
+           AND run_id IN (SELECT run_id FROM message_runs WHERE job_id IN (${marks(scope)}) AND run_id IS NOT NULL)
+         ORDER BY at, rowid LIMIT 2000`,
+      )
+      .all(...scope) as { agent_id: string; at: string; payload: string }[]
+    for (const edit of edits) {
+      let payload: { path?: unknown; diff?: unknown }
+      try {
+        payload = JSON.parse(edit.payload) as { path?: unknown; diff?: unknown }
+      } catch {
+        continue
+      }
+      if (typeof payload.path !== 'string' || payload.path === '') continue
+      const counts = diffCounts(typeof payload.diff === 'string' ? payload.diff : '')
+      const file = files.get(payload.path) ?? { added: 0, removed: 0, by: new Set<string>() }
+      file.added += counts.added
+      file.removed += counts.removed
+      file.by.add(edit.agent_id)
+      files.set(payload.path, file)
+      lastChange = edit.at
+    }
+  }
   const outcomes = z
     .array(
       z.object({
@@ -79,16 +145,16 @@ export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults
         .prepare(
           `SELECT a.args, mr.agent_id, mr.exchange_id, a.created_at
            FROM exchange_actions a JOIN message_runs mr ON mr.turn_id = a.turn_id
-           WHERE mr.job_id = ? AND a.state = 'applied' AND a.action IN ('approve', 'send_back')
+           WHERE mr.job_id IN (${marks(scope)}) AND a.state = 'applied' AND a.action IN ('approve', 'send_back')
            ORDER BY a.created_at, a.turn_id`,
         )
-        .all(jobId),
+        .all(...scope),
     )
   const review = sqlite
     .prepare(
-      "SELECT state, outcome FROM exchanges WHERE job_id = ? AND kind = 'review' ORDER BY created_at DESC, id DESC LIMIT 1",
+      `SELECT state, outcome FROM exchanges WHERE job_id IN (${marks(scope)}) AND kind = 'review' ORDER BY created_at DESC, id DESC LIMIT 1`,
     )
-    .get(jobId) as { state: string; outcome: string | null } | undefined
+    .get(...scope) as { state: string; outcome: string | null } | undefined
   if (files.size || outcomes.length) {
     items.push({
       kind: 'change',
@@ -125,18 +191,18 @@ export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults
     sqlite
       .prepare(
         `SELECT f.agent_id, f.seq, f.at, f.run_id, f.surface, f.caption FROM watch_frames f
-           WHERE f.run_id IN (SELECT run_id FROM message_runs WHERE job_id = ? AND run_id IS NOT NULL)
+           WHERE f.run_id IN (SELECT run_id FROM message_runs WHERE job_id IN (${marks(scope)}) AND run_id IS NOT NULL)
            ORDER BY f.at DESC, f.seq DESC`,
       )
-      .all(jobId),
+      .all(...scope),
   )
   const running = new Set(
     (
       sqlite
         .prepare(
-          "SELECT run_id FROM message_runs WHERE job_id = ? AND state = 'active' AND run_id IS NOT NULL",
+          `SELECT run_id FROM message_runs WHERE job_id IN (${marks(scope)}) AND state = 'active' AND run_id IS NOT NULL`,
         )
-        .all(jobId) as { run_id: string }[]
+        .all(...scope) as { run_id: string }[]
     ).map((row) => row.run_id),
   )
   // The newest browser frame whose page reads cleanly; payloads are loaded one at a time, newest first.

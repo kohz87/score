@@ -20,7 +20,7 @@ import { redact } from '../../redact.ts'
 import { checkConfigOf, finishRefusal, queueCheck } from './checks.ts'
 import { awaitCheckpoint, consult, consultsOf, isAdvisorStep } from './advisor.ts'
 import {
-  helperStepsUsed,
+  helperStepsLeft,
   helpersOf,
   insertHelperStep,
   ROLE_PREAMBLE,
@@ -325,7 +325,7 @@ function assignHelper(ctx: Ctx, o: OrchRow, attempt: AttemptRow, args: Args): Or
     return refuse('agent_changed', `${agent} was replaced after this run started`)
   if (!agentAdmits(sqlite, agent))
     return refuse('agent_unavailable', `${agent} is not ready for new work`)
-  if (helperStepsUsed(sqlite, o.id) >= helpers.maxSteps)
+  if (helperStepsLeft(sqlite, o.id, helpers) < 1)
     return refuse(
       'helper_limit',
       `The helpers are limited to ${helpers.maxSteps} steps in this run`,
@@ -414,10 +414,10 @@ const HANDLERS: Record<ToolName, Handler> = {
         'Spend of an earlier attempt is unknown; the person has to accept that first',
       )
     const k = args.k as number
-    if (helperStepsUsed(sqlite, o.id) + k > helpers.maxSteps)
+    if (helperStepsLeft(sqlite, o.id, helpers) < k)
       return refuse(
         'helper_limit',
-        `A vote of ${k} needs ${k} helper steps; ${helpers.maxSteps - helperStepsUsed(sqlite, o.id)} are left`,
+        `A vote of ${k} needs ${k} helper steps; ${helperStepsLeft(sqlite, o.id, helpers)} are left`,
       )
     if (!votersOf(helpers).some((agent) => agentAdmits(sqlite, agent)))
       return refuse('agent_unavailable', 'No voter is ready for new work')

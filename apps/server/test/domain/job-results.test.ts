@@ -132,6 +132,29 @@ test('the preview is the newest browser frame of the job’s runs; screens are e
   expect(results().items[0]).toMatchObject({ kind: 'preview', live: false })
 })
 
+test('3.14: agents that edit with their own tools show as changes from the editor frames, with diff counts', () => {
+  h.ask('builder', 'Fix the map.')
+  const running = h.start('builder')
+  frame(
+    'builder',
+    running.runId,
+    1,
+    'editor',
+    {
+      path: 'docs/MAP.md',
+      diff: '--- a/docs/MAP.md\n+++ b/docs/MAP.md\n@@ -1,2 +1,3 @@\n-old\n+new\n+more\n same',
+      language: 'markdown',
+    },
+    'Edited MAP.md',
+  )
+  const [change] = results().items
+  expect(change).toMatchObject({
+    kind: 'change',
+    authors: ['builder'],
+    files: [{ path: 'docs/MAP.md', added: 2, removed: 1, by: ['builder'] }],
+  })
+})
+
 test('drafts are the documents and workspace files agents attached in the job', () => {
   parts('designer', [
     {

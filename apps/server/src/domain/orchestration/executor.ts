@@ -38,6 +38,7 @@ import {
   type WorkflowRunSummary,
   type WorkflowTryAgainDecision,
   suggestedCodingSteps,
+  HELPER_STEPS_UNLIMITED_SIZING,
 } from '@score/contract'
 import { createHash, randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
@@ -235,7 +236,7 @@ const SWEEP_MS = 10_000
 /** Every step a run may hold: the lead's, its helpers' and the advisor's consults (3.14–3.16). */
 const effectiveSteps = (body: OrchestrationCreate): number =>
   body.maxSteps +
-  (body.helpers?.maxSteps ?? 0) +
+  (body.helpers ? (body.helpers.maxSteps ?? HELPER_STEPS_UNLIMITED_SIZING) : 0) +
   (body.advisorAgentId !== undefined ? ADVISOR_STEPS : 0)
 const RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 
@@ -895,7 +896,7 @@ export class Orchestrator {
             ...(body.helpers?.agentIds ?? []),
             ...(body.helpers?.voterIds ?? []),
           ].some(coding),
-          helperSteps: body.helpers?.maxSteps ?? 0,
+          helperSteps: body.helpers ? body.helpers.maxSteps : 0,
           codingAdvisor: body.advisorAgentId !== undefined && coding(body.advisorAgentId),
         }),
       }
@@ -1006,6 +1007,10 @@ export class Orchestrator {
           scanFolder: helpers.scanFolder ?? (helpers.scan ? (body.check?.workspace ?? null) : null),
           splitTo: helpers.splitTo,
           voterIds: helpers.voterIds ?? [],
+          // Score's own votes are made without the person: never under every-step approval.
+          autoVote: helpers.autoVote && body.gatePolicy !== 'every-step',
+          autoVoteK: helpers.autoVoteK,
+          autoAudit: helpers.autoAudit,
         }
         ctx.sqlite
           .prepare('UPDATE orchestrations SET helpers_json = ? WHERE id = ?')

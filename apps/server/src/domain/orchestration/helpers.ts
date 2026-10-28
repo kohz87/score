@@ -3,7 +3,7 @@
 // answer the lead's votes. Their steps run in their own slots (`maxConcurrent`) and allowance (`maxSteps`), outside the
 // lead's step limit; everything else (gates, budget, admission, stops, recovery) is the ordinary step machinery.
 
-import type { VoteView } from '@score/contract'
+import { HELPER_STEPS_UNLIMITED_SIZING, type VoteView } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { lifecycleOf } from '../agent-lifecycle.ts'
@@ -15,12 +15,17 @@ import { addCause, addHistory, stepsOf, type OrchRow, type StepRow } from './sto
 export const HelpersConfigSchema = z.object({
   agentIds: z.array(z.string()).min(1),
   maxConcurrent: z.int().positive(),
-  maxSteps: z.int().positive(),
+  /** null = no separate limit (until the job ends). */
+  maxSteps: z.int().positive().nullable(),
   scan: z.boolean(),
   scanFolder: z.string().nullable(),
   splitTo: z.enum(['lead', 'person']),
   /** 3.13.1: who answers votes; empty = the helpers. */
   voterIds: z.array(z.string()).default([]),
+  /** 3.14: Score's automatic votes on each of the lead's steps, and audits after each. */
+  autoVote: z.boolean().default(false),
+  autoVoteK: z.int().min(3).max(7).default(3),
+  autoAudit: z.boolean().default(false),
 })
 export type HelpersConfig = z.infer<typeof HelpersConfigSchema>
 
@@ -121,7 +126,7 @@ export function insertHelperStep(
 /** At creation: the scan's three parts go to the helpers before the lead's first turn (no gate: the person asked). */
 export function startScan(ctx: Ctx, o: OrchRow, folder: string): void {
   const helpers = helpersOf(o)!
-  for (const part of SCAN_PARTS.slice(0, helpers.maxSteps))
+  for (const part of SCAN_PARTS.slice(0, helpers.maxSteps ?? SCAN_PARTS.length))
     insertHelperStep(ctx, o, {
       agentId: nextHelper(ctx.sqlite, o.id, helpers),
       instruction: `You are a scan helper. Read the project in the folder ${folder} and answer, in at most 1,500 characters: ${part.ask} ${READ_ONLY}`,
@@ -338,7 +343,7 @@ export function helperLines(sqlite: DatabaseSync, o: OrchRow): string[] {
   const helpers = helpersOf(o)
   if (!helpers) return []
   const lines = [
-    `Helpers: ${helpers.agentIds.join(', ')} (up to ${helpers.maxConcurrent} at once; ${helperStepsUsed(sqlite, o.id)} of ${helpers.maxSteps} helper steps used, outside your step limit). Hand them narrow read-only work with orch.assign(agent, instruction, role) where role is search, grep or audit. Ask ${helpers.voterIds.length > 0 ? `the voters (${helpers.voterIds.join(', ')})` : 'them'} a multiple-choice question with orch.vote(question, options, k): a clear majority (70% or more) comes back as sharp; a split ${helpers.splitTo === 'person' ? 'goes to the person' : 'comes back to you to decide'}.`,
+    `Helpers: ${helpers.agentIds.join(', ')} (up to ${helpers.maxConcurrent} at once; ${helperStepsUsed(sqlite, o.id)}${helpers.maxSteps === null ? '' : ` of ${helpers.maxSteps}`} helper steps used, outside your step limit). Hand them narrow read-only work with orch.assign(agent, instruction, role) where role is search, grep or audit. Ask ${helpers.voterIds.length > 0 ? `the voters (${helpers.voterIds.join(', ')})` : 'them'} a multiple-choice question with orch.vote(question, options, k): a clear majority (70% or more) comes back as sharp; a split ${helpers.splitTo === 'person' ? 'goes to the person' : 'comes back to you to decide'}.`,
   ]
   for (const vote of votesOf(sqlite, o.id).slice(-5)) {
     const options = JSON.parse(vote.options) as string[]
@@ -356,7 +361,19 @@ export function helperLines(sqlite: DatabaseSync, o: OrchRow): string[] {
 export function effectiveSize(o: OrchRow): { steps: number; concurrent: number } {
   const helpers = helpersOf(o)
   return {
-    steps: o.max_steps + (helpers?.maxSteps ?? 0) + (o.advisor_agent_id ? ADVISOR_STEPS : 0),
+    steps:
+      o.max_steps +
+      (helpers ? (helpers.maxSteps ?? HELPER_STEPS_UNLIMITED_SIZING) : 0) +
+      (o.advisor_agent_id ? ADVISOR_STEPS : 0),
     concurrent: o.max_concurrent_steps + (helpers?.maxConcurrent ?? 0),
   }
+}
+
+/** Helper steps left before the allowance is used up; Infinity with no limit. */
+export function helperStepsLeft(
+  sqlite: DatabaseSync,
+  orchId: string,
+  helpers: HelpersConfig,
+): number {
+  return helpers.maxSteps === null ? Infinity : helpers.maxSteps - helperStepsUsed(sqlite, orchId)
 }
