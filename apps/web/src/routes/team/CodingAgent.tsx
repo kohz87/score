@@ -735,13 +735,13 @@ function AdvisorSelect({
       <p id={hint} className="team-muted">
         {choices.length === 0
           ? 'No stronger model to advise this one.'
-          : 'A stronger model it consults when stuck and before it reports work done. Uses your Claude plan.'}
-      </p>
-      {/* Announced as it happens, for someone still typing in the model field (review). */}
-      <p role="status" className="team-muted">
-        {dropped
-          ? 'Advisor turned off: the model is now as strong as it. Pick a stronger one or leave it off.'
-          : ''}
+          : 'A stronger model it consults when stuck and before it reports work done. Uses your Claude plan.'}{' '}
+        {/* Announced as it happens, for someone still typing in the model field; empty takes no room (review). */}
+        <span role="status">
+          {dropped
+            ? 'Advisor turned off: the model is now as strong as it. Pick a stronger one or leave it off.'
+            : ''}
+        </span>
       </p>
     </>
   )
