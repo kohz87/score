@@ -430,6 +430,14 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
     or server private key.
   - `GET /api/session/browsers` → `{ items: { id: uuid; label: string; address: string; createdAt: iso; lastSeenAt: iso;
 expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a management id, never a credential.
+  - **The section is locked (3.14.2, owner).** Settings › Remote access and security opens only after the security password:
+    `POST /api/session/security/unlock` `{ password }` → `{ unlockedUntil: iso }` (`SecurityUnlockSchema`; the same errors and
+    attempt limits as every password check, and like them it counts as the terminal's fresh check). The unlock belongs to this
+    paired session, lasts **5 minutes from its last use** (every locked read or action pushes it out; reading the status does
+    not), lives in memory (a restart, sign-out or revoke locks it) and `POST /api/session/security/lock` → `204` ends it at once.
+    While locked, `GET /api/session/browsers` and `GET /api/session/passkeys` are `403 locked`. Every password-guarded action
+    below accepts an unlocked session **or** its `{ password }` (scripts); a password sent with one action does not unlock.
+    `GET /api/session/security` adds `unlockedUntil: iso | null`. Setting the **first** password unlocks that session.
   - **Pairing management needs the security password** (owner, 2026-10-08), so a compromised paired browser can't invite
     devices, keep itself alive or terminate the owner's pairings. Body `{ password }`; `409 password_not_set`,
     `403 wrong_password`, `429 too_many_attempts` (5 wrong in 15 minutes per paired browser, 20 overall; a new

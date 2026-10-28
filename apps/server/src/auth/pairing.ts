@@ -26,6 +26,8 @@ export class PairingService {
   /** When each session's cookie lifetime was last re-sent (in memory: a restart just re-sends once). */
   readonly #cookieSentAt = new Map<string, number>()
   readonly #freshAuthAt = new Map<string, number>()
+  /** 3.14.2: Settings › Remote access and security is unlocked for this session until then (in memory, sliding). */
+  readonly #unlockedUntil = new Map<string, number>()
   readonly #revoked = new Map<string, Set<() => void>>()
 
   constructor(
@@ -110,6 +112,42 @@ export class PairingService {
   markFresh(cookie: string | undefined): void {
     const hash = this.pairedSession(cookie)
     if (hash !== undefined) this.#freshAuthAt.set(hash, this.clock())
+  }
+
+  /**
+   * 3.14.2 (owner): unlocks Remote access and security for this paired session for `ttlMs` after a correct security
+   * password. In memory on purpose, like the fresh check: a restart, a sign-out or a revoke locks it again.
+   */
+  unlock(cookie: string | undefined, ttlMs: number): number | undefined {
+    const hash = this.pairedSession(cookie)
+    if (hash === undefined) return undefined
+    const until = this.clock() + ttlMs
+    this.#unlockedUntil.set(hash, until)
+    return until
+  }
+
+  /** When this session's unlock ends, or null when it is locked (an ended unlock is forgotten). */
+  unlockedUntil(cookie: string | undefined): number | null {
+    const hash = this.pairedSession(cookie)
+    if (hash === undefined) return null
+    const until = this.#unlockedUntil.get(hash)
+    if (until === undefined) return null
+    if (until <= this.clock()) {
+      this.#unlockedUntil.delete(hash)
+      return null
+    }
+    return until
+  }
+
+  /** True while unlocked, and then pushes the end out by `ttlMs` (each use keeps it open). */
+  touchUnlock(cookie: string | undefined, ttlMs: number): boolean {
+    if (this.unlockedUntil(cookie) === null) return false
+    return this.unlock(cookie, ttlMs) !== undefined
+  }
+
+  lock(cookie: string | undefined): void {
+    const hash = this.sessionHash(cookie)
+    if (hash !== undefined) this.#unlockedUntil.delete(hash)
   }
 
   /**
@@ -249,6 +287,7 @@ export class PairingService {
   private revokeHash(hash: string): void {
     this.#cookieSentAt.delete(hash)
     this.#freshAuthAt.delete(hash)
+    this.#unlockedUntil.delete(hash)
     const listeners = this.#revoked.get(hash)
     this.#revoked.delete(hash)
     if (listeners) for (const callback of listeners) callback()

@@ -46,6 +46,25 @@ export function registerSessionRoutes(
     // A correct password is also the "fresh second factor" the web terminal asks for (PLAN 7.3).
     pairing.markFresh(cookie)
   }
+  // 3.14.2 (owner): Remote access and security is locked behind the security password. An unlock lasts 5 minutes from the
+  // last use; a management action needs an unlocked session or the password itself (scripts and older pages).
+  const UNLOCK_MS = 5 * 60_000
+  async function authorize(request: { body: unknown; headers: { cookie?: string | undefined } }) {
+    if (pairing.touchUnlock(request.headers.cookie, UNLOCK_MS)) return
+    await checkPassword(request.body, request.headers.cookie)
+  }
+  function requireUnlocked(cookie: string | undefined): void {
+    if (!pairing.touchUnlock(cookie, UNLOCK_MS))
+      throw new HttpError(
+        403,
+        'locked',
+        'Remote access and security is locked: unlock it with the security password.',
+      )
+  }
+  const unlockedUntilIso = (cookie: string | undefined) => {
+    const until = pairing.unlockedUntil(cookie)
+    return until === null ? null : new Date(until).toISOString()
+  }
   app.post('/api/session/pair', async (request, reply) => {
     const { token } = PairBodySchema.parse(request.body)
     const id = pairing.pair(token, request.ip, request.headers['user-agent'] ?? 'Browser')
@@ -67,24 +86,42 @@ export function registerSessionRoutes(
       .send()
   })
 
-  // Paired browsers only, in every mode (the remote guard isn't active locally). Ids are not credentials.
-  app.get('/api/session/browsers', { preHandler: humanGuard(pairing) }, async (request) => ({
-    items: app.pairing.browsers(request.headers.cookie),
-  }))
+  // Paired browsers only, in every mode (the remote guard isn't active locally). Ids are not credentials. 3.14.2: only
+  // while Remote access and security is unlocked.
+  app.get('/api/session/browsers', { preHandler: humanGuard(pairing) }, async (request) => {
+    requireUnlocked(request.headers.cookie)
+    return { items: app.pairing.browsers(request.headers.cookie) }
+  })
 
-  app.get('/api/session/security', guarded, async () => ({
+  app.get('/api/session/security', guarded, async (request) => ({
     passwordSet: security?.isSet() ?? false,
     origins: [...origins],
     terminal: terminal.enabled,
     terminalUnavailable: terminal.unavailable,
+    // Reading the status never extends an unlock.
+    unlockedUntil: unlockedUntilIso(request.headers.cookie),
   }))
+
+  // 3.14.2: unlock with the security password (the same attempt limits as every password check); lock at once.
+  app.post('/api/session/security/unlock', guarded, async (request) => {
+    await checkPassword(request.body, request.headers.cookie)
+    pairing.unlock(request.headers.cookie, UNLOCK_MS)
+    return { unlockedUntil: unlockedUntilIso(request.headers.cookie) }
+  })
+  app.post('/api/session/security/lock', guarded, async (request, reply) => {
+    pairing.lock(request.headers.cookie)
+    return reply.code(204).send()
+  })
   // First time from any paired browser; changing it needs the current password; a forgotten one is reset on the host.
   app.put('/api/session/security/password', guarded, async (request, reply) => {
     if (!security) throw new HttpError(501, 'unsupported', 'Not available here.')
     const body = z
       .object({ password: z.unknown(), current: z.unknown().optional() })
       .parse(request.body)
+    const first = !security.isSet()
     await security.set(body.password, body.current, sessionOf(request.headers.cookie))
+    // Setting the first password opens the section it now guards (the person just chose it).
+    if (first) pairing.unlock(request.headers.cookie, UNLOCK_MS)
     return reply.code(204).send()
   })
 
@@ -98,7 +135,7 @@ export function registerSessionRoutes(
   // keep itself alive or terminate the owner's pairings. The link is the same one-time, 15-minute token the console
   // prints (minting one replaces any earlier unused token).
   app.post('/api/session/pairing-links', guarded, async (request) => {
-    await checkPassword(request.body, request.headers.cookie)
+    await authorize(request)
     if (!origin) throw new HttpError(501, 'unsupported', 'Pairing links aren’t available here.')
     // Only a configured public origin may be put into a link; anything else is refused before a token is minted.
     const chosen = z
@@ -120,20 +157,20 @@ export function registerSessionRoutes(
 
   app.post('/api/session/browsers/:id/renew', guarded, async (request) => {
     const { id } = z.object({ id: z.uuid() }).parse(request.params)
-    await checkPassword(request.body, request.headers.cookie)
+    await authorize(request)
     return app.pairing.renewBrowser(id)
   })
 
   app.post('/api/session/browsers/:id/revoke', guarded, async (request, reply) => {
     const { id } = z.object({ id: z.uuid() }).parse(request.params)
-    await checkPassword(request.body, request.headers.cookie)
+    await authorize(request)
     app.pairing.revokeBrowser(id)
     return reply.code(204).send()
   })
 
   // "Terminate all other pairings": for a device found compromised, or when unsure which one it is.
   app.post('/api/session/browsers/revoke-others', guarded, async (request) => {
-    await checkPassword(request.body, request.headers.cookie)
+    await authorize(request)
     return { revoked: app.pairing.revokeOthers(request.headers.cookie) }
   })
 
@@ -152,6 +189,7 @@ export function registerSessionRoutes(
 
     app.get('/api/session/passkeys', guarded, async (request) => {
       const service = needed()
+      requireUnlocked(request.headers.cookie)
       const scheme = secure ? 'https' : 'http'
       return {
         ...service.availability(`${scheme}://${request.headers.host ?? ''}`),
@@ -161,7 +199,7 @@ export function registerSessionRoutes(
 
     app.post('/api/session/passkeys/registration-options', guarded, async (request) => {
       const service = needed()
-      await checkPassword(request.body, request.headers.cookie)
+      await authorize(request)
       const { label } = z
         .object({ label: z.string().trim().min(1).max(60).optional() })
         .loose()
@@ -187,7 +225,7 @@ export function registerSessionRoutes(
     app.post('/api/session/passkeys/:id/remove', guarded, async (request, reply) => {
       const service = needed()
       const { id } = z.object({ id: z.string().min(1).max(1400) }).parse(request.params)
-      await checkPassword(request.body, request.headers.cookie)
+      await authorize(request)
       service.remove(id)
       return reply.code(204).send()
     })

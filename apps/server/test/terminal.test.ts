@@ -581,9 +581,8 @@ test('remote mode: the terminal routes are not public, and Host is checked on th
   good.send(Buffer.from('echo remote-$((1+1))\r'))
   await screen.until('remote-2')
   // Terminating the paired browser ends its terminal.
-  const [{ id }] = (
-    await app.inject({ url: '/api/session/browsers', headers: { ...remoteHeaders, cookie } })
-  ).json().items
+  // Read directly: the HTTP list needs an unlock (3.14.2), which would also count as a fresh password check.
+  const { id } = app.pairing.browsers(cookie)[0]!
   expect(id).toBeTruthy()
   app.pairing.revokeBrowser(id)
   await expectGone(app)
