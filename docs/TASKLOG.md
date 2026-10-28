@@ -1826,3 +1826,20 @@ One entry per completed task: what landed, review results, and any **rejected re
   passed, 4 failed (tablet + phone manifest flakes, orchestrations dots passed alone, bold-usage fixed and 7/7), check green
   (server 4933, web 3076, contract 1557).
 - **v3.13.2 deployed live** (~07:04 UTC, idle guard passed): backup score-pre-3.13.2-20261028.db, health ok.
+- **3.14.0** (2026-10-28, released with what was planned as 3.15; owner: "don't need to wait for 3.14, sort out 3.15 and test
+  together"). Automatic votes before each lead step and audits after (opt-in), no-limit helper allowance, Stop this step (with
+  the waiver), last activity per step, advisor consults in the thread, Results/Workbench for orchestration-linked jobs (jobScope +
+  editor-frame changes), tests pinned to UTC (the VM moved to GMT+8); the Job map (decision 151: layered graph, desktop and
+  phone, mock-up approved) and the advisor on call to Claude Code workers (`--agents` subagent; decision frozen on the step at
+  admission; consults counted from tool calls). Lead built the server; Sonnet coders the screens. Reviews: server (P2 votes no
+  voter can answer, the person's stop waiving another step — fixed; P3s fixed), screens (pending/errors per step, one clock —
+  fixed), advisor on call (P1 consent and sub-agent tools: no extra tool allowed, consent stated in the contract; P2 decision
+  frozen at admission — fixed), Job map (phone log, lead "doing", chip cap, Stop rows — fixed), fix rounds clean. Gate: e2e 844
+  passed, 5 failed (contract fixture, three diagram specs now behind "Show the step diagram", Results spec counting earlier
+  jobs' screens) — fixed, plus the Graph tab keeps its diagram choice and selection; check green (server 4944, web 3104,
+  contract 1557).
+- **v3.14.0 deployed live** (~09:13 UTC, idle guard passed): backup score-pre-3.14.0-20261028.db, health ok.
+- **Live check** (owner-approved, temporary paired session, signed out after): job orc-60ff787f, lead gem38, builder swarm-1,
+  advisor opus55 on call, helpers swarm-2/3 with auto vote and audit: advisor before plan → vote on s1 sharp 3/3 → s1 → audit
+  (clean) → advisor before done → succeeded in ~80 s; s1 had the advisor on call (opus, note in its input; not consulted on a
+  trivial task); 0 files changed in the workspace.
