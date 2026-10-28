@@ -221,3 +221,12 @@ test('the countdown uses the server’s time, not the device clock', async () =>
   page()
   expect(await screen.findByText(/locks in (2:00|1:59)/)).toBeDefined()
 })
+
+test('a page that loads already unlocked doesn’t move focus', async () => {
+  state.unlockedUntil = unlockedIn(290_000)
+  page()
+  await screen.findByRole('heading', { name: 'Paired devices' })
+  expect(document.activeElement).not.toBe(
+    screen.getByRole('heading', { name: 'Remote access and security' }),
+  )
+})
