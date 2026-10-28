@@ -2116,6 +2116,8 @@ export class FakePort implements HermesPort {
     'orch.note',
     'orch.finish',
     'orch.receipt',
+    'orch.check',
+    'orch.vote',
   ]
   mcpTools(): Promise<string[] | null> {
     return Promise.resolve(this.fakeMcpTools)

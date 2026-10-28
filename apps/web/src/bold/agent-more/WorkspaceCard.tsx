@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { AgentDetail } from '@score/contract'
-import { ApiError } from '../../data/api.ts'
+import { ApiError, apiFetch } from '../../data/api.ts'
 import {
   useGitStatus,
   useTree,
   useWorkspace,
   useWorkspaceActions,
   workspaceFailure,
+  workspaceKey,
   WorkspaceRootContext,
 } from '../../routes/team/workspace-queries.ts'
 import { Fail, Loading, MoreCard, problem } from './MoreCard.tsx'
@@ -63,6 +65,25 @@ export function WorkspaceCard({
 }) {
   const info = useWorkspace(agent.id)
   const actions = useWorkspaceActions(agent.id)
+  const queryClient = useQueryClient()
+  // 3.13.2 (owner: "Coding agents don't have this: it's a Hermes feature"): a coding agent's folder is one of its own
+  // settings, changed through its settings route; a Hermes agent's is its profile's working directory.
+  const codingFolder = useMutation({
+    mutationFn: (path: string) =>
+      apiFetch(`coding-agents/${encodeURIComponent(agent.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ workspace: path }),
+      }),
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: [...workspaceKey(agent.id), 'tree'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: workspaceKey(agent.id) }),
+        queryClient.invalidateQueries({ queryKey: ['coding'] }),
+      ])
+    },
+  })
+  const setRoot =
+    agent.runtime !== undefined && agent.runtime !== 'hermes' ? codingFolder : actions.setRoot
   const [setting, setSetting] = useState(false)
   const [folder, setFolder] = useState('')
   const root = info.data?.root ?? null
@@ -70,7 +91,7 @@ export function WorkspaceCard({
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    actions.setRoot.mutate(folder.trim(), { onSuccess: () => setSetting(false) })
+    setRoot.mutate(folder.trim(), { onSuccess: () => setSetting(false) })
   }
   return (
     <MoreCard id="agent-workspace" title="Workspace">
@@ -98,7 +119,7 @@ export function WorkspaceCard({
           className="btn sm bold-mc-start"
           onClick={() => {
             setFolder(root ?? '')
-            actions.setRoot.reset()
+            setRoot.reset()
             setSetting(true)
           }}
         >
@@ -120,21 +141,12 @@ export function WorkspaceCard({
             value={folder}
             onChange={(event) => setFolder(event.target.value)}
           />
-          {actions.setRoot.isError && (
-            <Fail>
-              {problem(
-                actions.setRoot.error,
-                workspaceFailure(actions.setRoot.error, 'set the folder'),
-              )}
-            </Fail>
+          {setRoot.isError && (
+            <Fail>{problem(setRoot.error, workspaceFailure(setRoot.error, 'set the folder'))}</Fail>
           )}
           <span className="row">
-            <button
-              type="submit"
-              className="btn sm"
-              disabled={actions.setRoot.isPending || !folder.trim()}
-            >
-              {actions.setRoot.isPending ? 'Saving…' : 'Use this folder'}
+            <button type="submit" className="btn sm" disabled={setRoot.isPending || !folder.trim()}>
+              {setRoot.isPending ? 'Saving…' : 'Use this folder'}
             </button>
             <button type="button" className="link" onClick={() => setSetting(false)}>
               Cancel

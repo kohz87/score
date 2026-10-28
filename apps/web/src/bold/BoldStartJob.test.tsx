@@ -178,6 +178,8 @@ class Source extends EventTarget {
 }
 
 let preflightFails = false
+/** 3.13.2: the preflight itself refused (a full-access coding agent). */
+let preflightRefusal: { code: string; message: string } | null = null
 /** 3.7.9: the lead's tool list; after a reload the next preflight reports it ok. */
 let toolsListed: 'unknown' | 'ok' | null = null
 let reloads: string[] = []
@@ -200,6 +202,7 @@ const disposers: (() => void)[] = []
 
 beforeEach(() => {
   preflightFails = false
+  preflightRefusal = null
   workflowPreflightNow = workflowPreflight
   workflowRunBodies = []
   workflowRunReply = () =>
@@ -269,6 +272,8 @@ beforeEach(() => {
       }
       if (url.pathname === '/api/orchestrations/preflight') {
         preflightUrls.push(url.searchParams.get('allowedAgents') ?? '')
+        if (preflightRefusal)
+          return Promise.resolve(Response.json({ error: preflightRefusal }, { status: 422 }))
         const check = orchestrationCheck(!preflightFails)
         if (toolsListed)
           check.checks.push({
@@ -449,6 +454,38 @@ test('a failed preflight check keeps Start disabled and names the problem', asyn
   })
   fireEvent.click(acknowledgement(dialog))
   await waitFor(() => expect(within(dialog).getByText('Hermes is not reachable')).toBeDefined())
+  expect(
+    within(dialog).getByRole('button', { name: 'Start the job' }).hasAttribute('disabled'),
+  ).toBe(true)
+})
+
+test('3.13.2: a preflight refusal shows the server’s reason, not "could not be read"', async () => {
+  preflightRefusal = {
+    code: 'unsupported_agent',
+    message:
+      'swarm-1 has full access. Job steps need a coding agent that is read-only or limited to its workspace.',
+  }
+  open('/b?start=job')
+  const dialog = await startDialog()
+  expect(await within(dialog).findByText(/swarm-1 has full access/)).toBeDefined()
+  expect(within(dialog).queryByText('The checks could not be read')).toBeNull()
+})
+
+test('3.13.2: a long task is never cut; past its limit Start says why', async () => {
+  open('/b?start=job')
+  const dialog = await startDialog()
+  const box = within(dialog).getByLabelText('What should the team do?') as HTMLTextAreaElement
+  // Longer than the old 4,000-character cut, within a lead job's 8 KB.
+  const long = 'Implement the spec. '.repeat(330)
+  fireEvent.change(box, { target: { value: long } })
+  expect(box.value).toBe(long)
+  expect(box.hasAttribute('maxLength')).toBe(false)
+  expect(within(dialog).getByText(/KB of 8\.0 KB/)).toBeDefined()
+  fireEvent.change(box, { target: { value: 'x'.repeat(9000) } })
+  expect((await within(dialog).findByRole('alert')).textContent).toMatch(
+    /too long.*file the agents can read/,
+  )
+  fireEvent.click(acknowledgement(dialog))
   expect(
     within(dialog).getByRole('button', { name: 'Start the job' }).hasAttribute('disabled'),
   ).toBe(true)

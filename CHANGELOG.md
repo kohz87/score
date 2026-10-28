@@ -3,6 +3,20 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.13.2] — 2026-10-28
+
+### Fixed
+- **Start a job checks the lead has every job tool**, including the check and vote tools added in 3.13. A lead whose
+  Hermes still had the older list passed before and would only have failed mid-job; now it asks you to Reload MCP first.
+- **A long task is never cut.** "What should the team do?" takes a lead job's full 8 KB (it stopped at 4,000 characters
+  without a word), shows how much is used as you near the limit, says why Start is blocked past it, and grows as you type.
+- **The real reason when a job can't use an agent.** A coding agent with full access showed "The checks could not be
+  read"; now it says which agent and to set its Access to Read only or Workspace write.
+- **A coding agent's folder can be changed.** Set folder on its Workspace card said "Coding agents don't have this";
+  it now changes the agent's own workspace, so several agents can share one repo.
+- **Replace key asks first.** Replacing an agent's Score access key cuts its Hermes off until the new key is in its
+  profile, so the card asks before it does, and the setup note gives the command that clears the old key.
+
 ## [3.13.1] — 2026-10-27
 
 ### Added

@@ -101,6 +101,12 @@ const JOB_TURN_LIMIT = 40
 
 export const StartJobContext = createContext<{ openStartJob: () => void } | null>(null)
 
+/** What the box takes for anything but a lead job (the earlier limit, kept). */
+const WHAT_CHARS = 4000
+function sizeText(n: number, unit: 'KB' | 'characters'): string {
+  return unit === 'KB' ? `${(n / 1024).toFixed(1)} KB` : `${n.toLocaleString()} characters`
+}
+
 export function useStartJob() {
   return useContext(StartJobContext)
 }
@@ -121,8 +127,13 @@ function checksFromPreflight(
 ): StartCheck[] {
   if (pending)
     return [{ key: 'preflight', status: 'pending', text: 'Checking Hermes and the team' }]
-  // A coding agent on a computer that can't run it as a service: say so in plain words, not "could not be read".
-  if (failed && error instanceof ApiError && error.code === 'coding_workers_need_units')
+  // The server's own reason in plain words, not "could not be read": a coding agent on a computer that can't run it as a
+  // service, or one that can't take job steps (3.13.2, owner: full-access agents showed only "could not be read").
+  if (
+    failed &&
+    error instanceof ApiError &&
+    ['coding_workers_need_units', 'unsupported_agent'].includes(error.code)
+  )
     return [{ key: 'preflight', status: 'fail', text: describeCreateError(error) }]
   if (failed || !checks)
     return [{ key: 'preflight', status: 'fail', text: 'The checks could not be read' }]
@@ -632,12 +643,32 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
 
   const checksPass = checks.length > 0 && checks.every((check) => check.status === 'ok')
   const hasWhat = (isSavedRecipe && nowOnce) || what.trim().length > 0
+  // 3.13.2 (owner: a long prompt was cut at 4,000 characters without a word). A job the lead runs carries the text as its
+  // goal, which the server takes up to 8 KB; the other paths keep 4,000 characters. Nothing is cut: Start says why.
+  const whatLimit =
+    isLead && !isSavedRecipe
+      ? {
+          size: new TextEncoder().encode(what.trim()).length,
+          max: ORCH_LIMITS.goalBytes,
+          unit: 'KB' as const,
+        }
+      : {
+          // UTF-16 units, as the server's limit and the trigger's own cut count them.
+          size: what.trim().length,
+          max: WHAT_CHARS,
+          unit: 'characters' as const,
+        }
+  const whatProblem =
+    whatLimit.size > whatLimit.max
+      ? `That’s too long (${sizeText(whatLimit.size, whatLimit.unit)} of ${sizeText(whatLimit.max, whatLimit.unit)}). Put the details in a file the agents can read, and point to it here.`
+      : null
   const needsLead = isLead || when === 'schedule'
   const canStart =
     !busy &&
     !result &&
     !partial &&
     hasWhat &&
+    whatProblem === null &&
     ack &&
     checksPass &&
     reachCovered &&
@@ -1144,8 +1175,12 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                 <textarea
                   id="start-what"
                   className="field start-what"
-                  rows={2}
-                  maxLength={4000}
+                  rows={Math.min(
+                    14,
+                    Math.max(2, what.split('\n').length + Math.floor(what.length / 90)),
+                  )}
+                  aria-describedby="start-what-size"
+                  aria-invalid={whatProblem !== null}
                   value={what}
                   onChange={(event) => {
                     setWhat(event.target.value)
@@ -1153,6 +1188,16 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                   }}
                   autoFocus
                 />
+                {whatLimit.size > whatLimit.max * 0.75 && (
+                  <span
+                    id="start-what-size"
+                    className="small muted start-what-size"
+                    role={whatProblem ? 'alert' : undefined}
+                  >
+                    {whatProblem ??
+                      `${sizeText(whatLimit.size, whatLimit.unit)} of ${sizeText(whatLimit.max, whatLimit.unit)}`}
+                  </span>
+                )}
               </div>
             )}
 

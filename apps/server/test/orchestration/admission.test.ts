@@ -178,7 +178,8 @@ test('preflight on a live adapter explains what is missing: listener, MCP access
   expect(check(old, 'tool_readiness').message).toMatch(
     /last handed a tool list without orch\.cancel.*Reload MCP/,
   )
-  h.access.recordListed('lead', [
+  // 3.13.2: a list handed out before 3.13 lacks the tools that release added; it no longer passes.
+  const before313 = [
     'orch.plan',
     'orch.assign',
     'orch.cancel',
@@ -187,7 +188,12 @@ test('preflight on a live adapter explains what is missing: listener, MCP access
     'orch.note',
     'orch.finish',
     'orch.receipt',
-  ])
+  ]
+  h.access.recordListed('lead', before313)
+  const stale = await live.preflight('lead', ['builder'])
+  expect(check(stale, 'tool_readiness')).toMatchObject({ status: 'fail' })
+  expect(check(stale, 'tool_readiness').message).toMatch(/orch\.check, orch\.vote.*Reload MCP/)
+  h.access.recordListed('lead', [...before313, 'orch.check', 'orch.vote'])
   const full = await live.preflight('lead', ['builder'])
   expect(check(full, 'tool_readiness').status).toBe('ok')
   // A new key means a new connection: the old list no longer counts.

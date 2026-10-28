@@ -319,7 +319,8 @@ function TaskFigure({ report, agents }: { report: Reports; agents: AgentSummary[
           <div className="usage-jobs-bars" role="img" aria-label={`Jobs done: ${summary}.`}>
             {report.byDay.map((day, index) => {
               const total = totals[index] ?? 0
-              const busiest = max > 0 && total === max
+              // One busiest day: on a tie, the most recent (2026-10-28, two equal days showed two).
+              const busiest = max > 0 && index === totals.lastIndexOf(max)
               const height = max > 0 ? Math.max((total / max) * 150, total ? 4 : 0) : 0
               return (
                 <span

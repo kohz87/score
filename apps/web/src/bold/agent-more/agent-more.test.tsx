@@ -319,6 +319,27 @@ test('Workspace shows the newest files first and opens one', async () => {
   expect(screen.getByRole('textbox', { name: 'Folder on this computer' })).toBeDefined()
 })
 
+test('3.13.2: a coding agent’s folder is set through its own settings, a Hermes agent’s through the workspace', async () => {
+  override = (path, method) => {
+    if (path.endsWith('/coding-agents/coder') && method === 'PATCH') return Response.json({})
+    if (path.endsWith('/workspace/root') && method === 'PUT')
+      return Response.json({ root: '/home/user/repo', available: true, reason: null })
+    return null
+  }
+  mount(
+    <WorkspaceCard agent={{ ...agent, id: 'coder', runtime: 'claude-code' }} onOpen={vi.fn()} />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Set folder' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Folder on this computer' }), {
+    target: { value: '/home/user/repo' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Use this folder' }))
+  await waitFor(() =>
+    expect(sent('PATCH', '/coding-agents/coder')?.body).toEqual({ workspace: '/home/user/repo' }),
+  )
+  expect(sent('PUT', '/workspace/root')).toBeUndefined()
+})
+
 test('Repeating jobs run now and link to Start a job', async () => {
   mount(<RoutinesCard agent={agent} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Run Nightly tests now' }))
@@ -439,6 +460,37 @@ test('Score access: a key is shown once, replaced, revoked, and Write too toggle
   fireEvent.click(await within(card).findByRole('button', { name: 'Revoke' }))
   await waitFor(() => expect(sent('DELETE', '/mcp/token')).toBeDefined())
   await waitFor(() => expect(within(card).queryByText(token)).toBeNull())
+})
+
+test('Score access: replacing a key asks first, since the old one stops working (3.13.2)', async () => {
+  override = (path, method) => {
+    if (path.endsWith('/mcp/token') && method === 'POST')
+      return Response.json({
+        token,
+        access: { ...mcp, enabled: true, hasToken: true, tokenCreatedAt: at },
+      })
+    if (path.endsWith('/mcp') && method === 'GET')
+      return Response.json({ ...mcp, enabled: true, hasToken: true, tokenCreatedAt: at })
+    return null
+  }
+  mount(<ScoreAccessCard agent={agent} />)
+  const card = await screen.findByRole('region', { name: 'Score access' })
+  fireEvent.click(await within(card).findByRole('button', { name: 'Replace key' }))
+  const warning = await within(card).findByRole('alert')
+  expect(warning.textContent).toMatch(/stops working at once/)
+  expect(sent('POST', '/mcp/token')).toBeUndefined()
+  fireEvent.click(within(warning).getByRole('button', { name: 'Cancel' }))
+  expect(within(card).queryByRole('alert')).toBeNull()
+  expect(sent('POST', '/mcp/token')).toBeUndefined()
+  fireEvent.click(within(card).getByRole('button', { name: 'Replace key' }))
+  fireEvent.click(
+    within(await within(card).findByRole('alert')).getByRole('button', { name: 'Replace key' }),
+  )
+  expect(await within(card).findByText(token)).toBeDefined()
+  // The setup note names the command that clears the old key from the profile.
+  expect(within(card).getByTestId('mcp-rotate-note').textContent).toMatch(
+    /config unset MCP_SCORE_API_KEY/,
+  )
 })
 
 test('Score access offers Reload MCP once access and a key are set up, and says when Hermes refused (3.7.9)', async () => {
