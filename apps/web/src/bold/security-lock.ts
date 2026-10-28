@@ -65,16 +65,32 @@ export function clock(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
 }
 
-/** Seconds until `until`, counted down every second; `onExpired` runs each second once it has passed. */
-export function useCountdown(until: string, onExpired: () => void): number {
-  const target = Date.parse(until)
+/**
+ * Seconds until `until`, counted down every second. The time left is taken from the server (`until - serverNow`, read
+ * when the answer arrived at `receivedAt`), so a device clock that is minutes off can't shorten or stretch it (review).
+ * `onExpired` runs once per `until`.
+ */
+export function useCountdown(
+  until: string,
+  serverNow: string | null,
+  receivedAt: number,
+  onExpired: () => void,
+): number {
+  const leftAtReceipt = Date.parse(until) - (serverNow ? Date.parse(serverNow) : receivedAt)
+  const target = receivedAt + leftAtReceipt
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const timer = setInterval(() => {
+    let fired = false
+    const tick = () => {
       const current = Date.now()
       setNow(current)
-      if (current >= target) onExpired()
-    }, 1000)
+      if (current >= target && !fired) {
+        fired = true
+        onExpired()
+      }
+    }
+    tick()
+    const timer = setInterval(tick, 1000)
     return () => clearInterval(timer)
   }, [target, onExpired])
   return Math.max(0, Math.ceil((target - now) / 1000))

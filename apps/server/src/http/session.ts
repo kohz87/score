@@ -100,6 +100,7 @@ export function registerSessionRoutes(
     terminalUnavailable: terminal.unavailable,
     // Reading the status never extends an unlock.
     unlockedUntil: unlockedUntilIso(request.headers.cookie),
+    serverNow: new Date(pairing.now()).toISOString(),
   }))
 
   // 3.14.2: unlock with the security password (the same attempt limits as every password check); lock at once.

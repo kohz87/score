@@ -40,12 +40,14 @@ export function SecurityLockCard() {
           body: JSON.stringify({ password: typed }),
         }),
       )
-      await refresh()
     } catch (caught) {
       setError(securityFailure(caught, 'unlock this section'))
-    } finally {
       setBusy(false)
+      return
     }
+    // Unlocked: a slow or failed status read is not an unlock failure (review).
+    await refresh().catch(() => undefined)
+    setBusy(false)
   }
   return (
     <section className="bold-security-lock" data-protected="flex" aria-labelledby="security-lock-h">
@@ -107,13 +109,14 @@ export function SecurityFirstRun() {
         method: 'PUT',
         body: JSON.stringify({ password: typed }),
       })
-      // The server unlocked this session by setting the first password.
-      await refresh()
     } catch (caught) {
       setError(securityFailure(caught, 'save the password'))
-    } finally {
       setBusy(false)
+      return
     }
+    // The server unlocked this session by setting the first password.
+    await refresh().catch(() => undefined)
+    setBusy(false)
   }
   return (
     <section

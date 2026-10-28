@@ -129,6 +129,11 @@ export class PairingService {
     return until
   }
 
+  /** The server's time, for a countdown that must not trust the browser's clock. */
+  now(): number {
+    return this.clock()
+  }
+
   /** When this session's unlock ends, or null when it is locked (an ended unlock is forgotten). */
   unlockedUntil(cookie: string | undefined): number | null {
     const hash = this.pairedSession(cookie)

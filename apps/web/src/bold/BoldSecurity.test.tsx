@@ -28,7 +28,7 @@ const browsers = [
   },
 ]
 
-let state: { passwordSet: boolean; unlockedUntil: string | null }
+let state: { passwordSet: boolean; unlockedUntil: string | null; serverNow?: string | null }
 let calls: { url: string; method: string; body: unknown }[]
 let browsersAnswer: 'ok' | 'locked'
 
@@ -72,8 +72,10 @@ beforeEach(() => {
   )
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  // Leaving locks a tick later (so a development double-mount doesn't lock): let it land before the next test's stub.
+  await new Promise((resolve) => setTimeout(resolve, 10))
   vi.unstubAllGlobals()
 })
 
@@ -209,4 +211,13 @@ test('no password yet: only the first-run card, and setting it opens the section
   expect(calls.find((call) => call.method === 'PUT')?.body).toEqual({
     password: 'correct horse battery',
   })
+})
+
+test('the countdown uses the server’s time, not the device clock', async () => {
+  // The device clock is 10 minutes ahead of the server: the section still has 2 minutes left.
+  const serverNow = Date.now() - 600_000
+  state.serverNow = new Date(serverNow).toISOString()
+  state.unlockedUntil = new Date(serverNow + 120_000).toISOString()
+  page()
+  expect(await screen.findByText(/locks in (2:00|1:59)/)).toBeDefined()
 })

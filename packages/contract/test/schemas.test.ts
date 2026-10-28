@@ -870,6 +870,7 @@ const cases = [
       terminal: false,
       terminalUnavailable: null,
       unlockedUntil: null,
+      serverNow: null,
     },
     { passwordSet: 'yes' },
   ],

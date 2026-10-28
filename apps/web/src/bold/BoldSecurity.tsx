@@ -6,7 +6,7 @@ import { useStreamQuery } from '../data/query-client.ts'
 import { agentsQuery } from '../routes/chat/queries.ts'
 import { PasskeysPanel } from '../routes/settings/PasskeysPanel.tsx'
 import { apiFetch } from '../data/api.ts'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { securityKey } from '../routes/settings/settings-queries.ts'
 import { DevicesCard, HttpsSetup, PairCard, PasswordCard } from './BoldSecurityCards.tsx'
@@ -59,9 +59,13 @@ function UnlockPill({ until }: { until: string }) {
   const security = useSecurityStatus()
   const dropToLocked = useDropToLocked()
   const refetch = security.refetch
+  const [lockError, setLockError] = useState('')
   const left = useCountdown(
     until,
-    useCallback(() => void refetch(), [refetch]),
+    security.data?.serverNow ?? null,
+    security.dataUpdatedAt,
+    // Once, and never cancelled by a later tick (review).
+    useCallback(() => void refetch({ cancelRefetch: false }), [refetch]),
   )
   return (
     <span className="bold-security-pill-row" data-protected="flex">
@@ -83,13 +87,20 @@ function UnlockPill({ until }: { until: string }) {
       <button
         type="button"
         className="bold-security-btn lg"
-        onClick={() => {
-          void apiFetch('session/security/lock', { method: 'POST' }).catch(() => undefined)
-          dropToLocked()
+        onClick={async () => {
+          // The server locks first; only then does the page drop to the lock card, so a status read can't race it back.
+          setLockError('')
+          try {
+            await apiFetch('session/security/lock', { method: 'POST' })
+            dropToLocked()
+          } catch {
+            setLockError('Couldn’t lock it. Try again.')
+          }
         }}
       >
         Lock now
       </button>
+      {lockError && <span role="alert">{lockError}</span>}
     </span>
   )
 }
@@ -151,25 +162,39 @@ export function BoldSecurity() {
   const security = useSecurityStatus()
   const queryClient = useQueryClient()
   const unlockedUntil = security.data?.unlockedUntil ?? null
-  // Leaving the page locks the section at once (fire and forget) and forgets the unlocked status.
+  // Leaving the page locks the section at once (fire and forget) and forgets the unlocked status. Deferred a tick and
+  // cancelled by a remount, so React's development double-mount doesn't lock what was just opened (review).
   const wasUnlocked = useRef(false)
+  const pendingLock = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => {
     wasUnlocked.current = unlockedUntil !== null
   }, [unlockedUntil])
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    clearTimeout(pendingLock.current)
+    return () => {
       if (!wasUnlocked.current) return
-      void apiFetch('session/security/lock', { method: 'POST' }).catch(() => undefined)
-      queryClient.removeQueries({ queryKey: ['session', 'browsers'] })
-      queryClient.removeQueries({ queryKey: ['session', 'passkeys'] })
-      queryClient.removeQueries({ queryKey: securityKey })
-    },
-    [queryClient],
-  )
+      pendingLock.current = setTimeout(() => {
+        void apiFetch('session/security/lock', { method: 'POST' }).catch(() => undefined)
+        queryClient.removeQueries({ queryKey: ['session', 'browsers'] })
+        queryClient.removeQueries({ queryKey: ['session', 'passkeys'] })
+        queryClient.removeQueries({ queryKey: securityKey })
+      }, 0)
+    }
+  }, [queryClient])
+  // Opening or locking swaps the whole card: keep keyboard focus on the section's heading, not lost on the page (review).
+  const heading = useRef<HTMLHeadingElement>(null)
+  const shown = useRef<boolean | null>(null)
+  useEffect(() => {
+    const open = unlockedUntil !== null
+    if (shown.current !== null && shown.current !== open) heading.current?.focus()
+    shown.current = open
+  }, [unlockedUntil])
   return (
     <div className="bold-security">
       <div className="bold-security-head">
-        <h2 id="settings-security">Remote access and security</h2>
+        <h2 id="settings-security" ref={heading} tabIndex={-1}>
+          Remote access and security
+        </h2>
         {unlockedUntil && <UnlockPill until={unlockedUntil} />}
       </div>
       {security.isSuccess && !security.data.passwordSet && <SecurityFirstRun />}
