@@ -864,8 +864,19 @@ const cases = [
   ['PasskeyCeremonySchema', { challenge: 'abc' }, 'not an object'],
   [
     'SecurityStatusSchema',
-    { passwordSet: true, origins: [], terminal: false, terminalUnavailable: null },
+    {
+      passwordSet: true,
+      origins: [],
+      terminal: false,
+      terminalUnavailable: null,
+      unlockedUntil: null,
+    },
     { passwordSet: 'yes' },
+  ],
+  [
+    'SecurityUnlockSchema',
+    { unlockedUntil: '2026-10-28T00:05:00.000Z' },
+    { unlockedUntil: 'soon' },
   ],
   ['TerminalTicketRequestSchema', { agent: 'builder' }, { agent: '../etc' }],
   [
