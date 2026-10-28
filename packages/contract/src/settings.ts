@@ -247,10 +247,20 @@ export const HermesCheckSchema = z.object({
   }),
   parts: z.array(HermesCheckPartSchema),
   compatible: z.boolean(),
+  /**
+   * 3.14.4 (owner): an incompatible build the person may still turn approvals on for, with the security password: the
+   * build is identified (a code revision) and Hermes still has the bridge hooks and the approval functions Score calls.
+   */
+  overridable: z.boolean().default(false),
 })
 export type HermesCheck = z.infer<typeof HermesCheckSchema>
 export const HermesAcceptRequestSchema = z
-  .object({ hash: z.string().regex(/^[0-9a-f]{64}$/) })
+  .object({
+    hash: z.string().regex(/^[0-9a-f]{64}$/),
+    /** 3.14.4: turn approvals on anyway for an incompatible but overridable build; needs `password`. */
+    override: z.literal(true).optional(),
+    password: z.string().max(1024).optional(),
+  })
   .strict()
 export type HermesAcceptRequest = z.infer<typeof HermesAcceptRequestSchema>
 export const HermesAcceptResponseSchema = z.object({ ok: z.literal(true) })

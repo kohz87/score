@@ -12,6 +12,13 @@ const statusLabel = {
 
 function failure(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.code === 'wrong_password') return 'That is not the security password.'
+    if (error.code === 'too_many_attempts')
+      return 'Too many wrong passwords. Wait 15 minutes and try again.'
+    if (error.code === 'password_not_set')
+      return 'Set a security password first (Settings › Remote access and security).'
+    if (error.code === 'not_overridable')
+      return 'This Hermes lacks what approvals need, so they can’t be turned on.'
     if (error.code === 'not_paired')
       return 'Pair this browser using the link in the server terminal first.'
     if (error.status === 409 && error.code === 'conflict')
@@ -24,8 +31,9 @@ function failure(error: unknown): string {
 
 export function HermesVersionBanner() {
   const system = useSystemStatus()
-  const { check, accept } = useHermesCheck()
+  const { check, accept, override } = useHermesCheck()
   const [result, setResult] = useState<HermesCheck | null>(null)
+  const [password, setPassword] = useState('')
   if (!needsHermesCheck(system.data)) return null
   const version = system.data?.hermes.version
   const changedNames =
@@ -81,6 +89,40 @@ export function HermesVersionBanner() {
               Nothing Score depends on has changed. Turning approvals back on lets Score answer
               Hermes approval requests again.
             </p>
+          ) : result.overridable ? (
+            // 3.14.4 (owner): the person may turn approvals on anyway; it is their decision, with the password.
+            <form
+              className="settings-form"
+              aria-label="Turn approvals on anyway"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const typed = password
+                setPassword('')
+                override.mutate(
+                  { hash: result.hash, password: typed },
+                  { onSuccess: () => setResult(null) },
+                )
+              }}
+            >
+              <p role="status">
+                Changed: {changedNames}. Score hasn’t been tested with these changes: approvals may
+                fail or show wrong details. Hermes still has the approval functions Score uses, so
+                you can turn approvals on anyway.
+              </p>
+              <label>
+                Security password
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </label>
+              <button className="settings-primary" type="submit" disabled={override.isPending}>
+                {override.isPending ? 'Turning on…' : 'Turn approvals on anyway'}
+              </button>
+            </form>
           ) : (
             <p role="status">
               Approvals stay paused. Changed: {changedNames}. Score can’t accept this version until
@@ -103,7 +145,9 @@ export function HermesVersionBanner() {
               type="button"
               onClick={() => {
                 setResult(null)
+                setPassword('')
                 accept.reset()
+                override.reset()
               }}
             >
               {result.compatible ? 'Not now' : 'Stay paused'}
@@ -111,8 +155,8 @@ export function HermesVersionBanner() {
           </div>
         </>
       )}
-      {(check.isError || accept.isError) && (
-        <p role="alert">{failure(check.error ?? accept.error)}</p>
+      {(check.isError || accept.isError || override.isError) && (
+        <p role="alert">{failure(check.error ?? accept.error ?? override.error)}</p>
       )}
     </section>
   )

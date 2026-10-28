@@ -6,6 +6,8 @@ import { TestedFingerprintSchema, type TestedFingerprint } from './fingerprint.t
 // Builds the owner checked and accepted in Settings. Kept in $SCORE_HOME, never in the repo's tested registry.
 export const AcceptedBuildSchema = TestedFingerprintSchema.extend({
   addedPatternKeys: z.array(z.string()).default([]),
+  /** 3.14.4: the parts that differed when the person turned approvals on anyway; empty = a clean acceptance. */
+  overridden: z.array(z.string()).default([]),
 })
 export type AcceptedBuild = z.infer<typeof AcceptedBuildSchema>
 
@@ -30,6 +32,12 @@ export class AcceptedBuilds {
   }
   tested(): TestedFingerprint[] {
     return this.list().map(({ id, parts, testedAt, notes }) => ({ id, parts, testedAt, notes }))
+  }
+  /** Builds a later check may compare against: never one turned on anyway, so an untested build can't vouch for the next. */
+  baselines(): TestedFingerprint[] {
+    return this.list()
+      .filter((entry) => entry.overridden.length === 0)
+      .map(({ id, parts, testedAt, notes }) => ({ id, parts, testedAt, notes }))
   }
   patternKeys(): string[] {
     return [...new Set(this.list().flatMap((entry) => entry.addedPatternKeys))]

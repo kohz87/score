@@ -321,7 +321,8 @@ export interface HermesPort extends ProfileManagementPort {
   /** Compares the running Hermes build with the tested and accepted ones. Read-only. */
   checkHermes(): Promise<HermesCheck>
   /** Records the checked build as accepted and re-enables the gate. 409 `conflict` when the hash is stale, 409 `not_compatible`. */
-  acceptHermes(hash: string): Promise<void>
+  /** `override`: an incompatible but overridable build, after the HTTP layer checked the security password (3.14.4). */
+  acceptHermes(hash: string, options?: { override?: boolean }): Promise<void>
   /** Advanced config (contract §10). Secret-bearing and env-backed keys are never returned or written. */
   searchConfig(query: string): Promise<ConfigItem[]>
   previewConfig(changes: ConfigChange[]): Promise<ConfigPreviewResponse>

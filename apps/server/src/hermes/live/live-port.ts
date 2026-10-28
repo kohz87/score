@@ -758,7 +758,11 @@ export class LivePort implements HermesPort {
     const result = buildHermesCheck({
       fingerprint,
       facts,
-      tested: this.testedBuilds(),
+      // Compared only with builds that were really checked (an override is no baseline).
+      tested: [
+        ...(this.options.testedFingerprints ?? testedFingerprints),
+        ...this.accepted.baselines(),
+      ],
       knownPatternKeys: [...KNOWN_PATTERN_KEYS, ...this.accepted.patternKeys()],
     })
     return { ...result, fingerprint }
@@ -766,22 +770,30 @@ export class LivePort implements HermesPort {
   async checkHermes(): Promise<HermesCheck> {
     return (await this.runHermesCheck()).check
   }
-  async acceptHermes(hash: string): Promise<void> {
+  async acceptHermes(hash: string, options: { override?: boolean } = {}): Promise<void> {
     const { check, fingerprint, addedPatternKeys } = await this.runHermesCheck()
     if (check.hash !== hash)
       throw new HttpError(409, 'conflict', 'Hermes changed since it was checked. Check it again.')
-    if (!check.compatible)
+    if (!check.compatible && !(options.override && check.overridable))
       throw new HttpError(
         409,
-        'not_compatible',
-        'This Hermes build changed in ways Score can’t accept.',
+        options.override ? 'not_overridable' : 'not_compatible',
+        options.override
+          ? 'This Hermes build lacks what approvals need, so they can’t be turned on.'
+          : 'This Hermes build changed in ways Score can’t accept.',
       )
+    const overridden = check.compatible
+      ? []
+      : check.parts.filter((part) => part.status !== 'same').map((part) => part.name)
     this.accepted.add({
       id: fingerprint.id,
       parts: fingerprint.parts,
       testedAt: new Date().toISOString(),
-      notes: 'Accepted in Settings after the Hermes version check.',
+      notes: overridden.length
+        ? `Turned on anyway in Settings with the security password; differed: ${overridden.join(', ')}.`
+        : 'Accepted in Settings after the Hermes version check.',
       addedPatternKeys,
+      overridden,
     })
     this.fingerprint = fingerprint
     this.fingerprintAt = Date.now()

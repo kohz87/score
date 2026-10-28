@@ -502,6 +502,15 @@
   vertical-align: top;
   overflow-wrap: anywhere;
 }
+/* Short words (Changed, Unchanged, part names) never break mid-word on a phone; only the detail column may wrap anywhere. */
+.settings-check-table th,
+.settings-check-table td[data-status] {
+  overflow-wrap: normal;
+  hyphens: auto;
+}
+.settings-check-table td[data-status] {
+  white-space: nowrap;
+}
 .settings-check-table td[data-status='changed'],
 .settings-check-table td[data-status='removed'] {
   font-weight: 700;

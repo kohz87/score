@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { AgentSummary, ConnectionsResponse, ProviderItem } from '@score/contract'
@@ -392,4 +392,33 @@ test('a changed Hermes lists what changed and offers no accept', async () => {
   fireEvent.click(within(banner).getByRole('button', { name: 'Stay paused' }))
   expect(within(banner).getByRole('button', { name: 'Check this Hermes version' })).toBeDefined()
   expect(calls.some((call) => call.path === '/api/settings/hermes/accept')).toBe(false)
+})
+
+test('3.14.4: an untested Hermes that still has the approval functions can be turned on anyway with the password', async () => {
+  untestedHermes(false)
+  const base = respond
+  respond = (path, init) =>
+    path === '/api/settings/hermes/check'
+      ? json({ ...checkOf(false), overridable: true })
+      : base(path, init)
+  mount()
+  const banner = await screen.findByRole('region', { name: 'Hermes was updated' })
+  fireEvent.click(within(banner).getByRole('button', { name: 'Check this Hermes version' }))
+  const form = await within(banner).findByRole('form', { name: 'Turn approvals on anyway' })
+  expect(within(form).getByRole('status').textContent).toContain('approvals may fail')
+  fireEvent.change(within(form).getByLabelText('Security password'), {
+    target: { value: 'correct horse battery' },
+  })
+  fireEvent.click(within(form).getByRole('button', { name: 'Turn approvals on anyway' }))
+  await waitFor(() =>
+    expect(calls.some((call) => call.path === '/api/settings/hermes/accept')).toBe(true),
+  )
+  const sent = calls.find((call) => call.path === '/api/settings/hermes/accept')!
+  expect(JSON.parse(String(sent.init?.body))).toMatchObject({
+    override: true,
+    password: 'correct horse battery',
+  })
+  await waitFor(() =>
+    expect(screen.queryByRole('region', { name: 'Hermes was updated' })).toBeNull(),
+  )
 })
