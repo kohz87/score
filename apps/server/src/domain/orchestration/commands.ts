@@ -25,6 +25,7 @@ import {
   insertHelperStep,
   ROLE_PREAMBLE,
   autoVoteStep,
+  dropStepVote,
   startVote,
   votersOf,
 } from './helpers.ts'
@@ -426,6 +427,7 @@ export function cancelStep(ctx: Ctx, o: OrchRow, stepId: string, why: string): b
     .run(o.id, stepId)
   withdrawGates(sqlite, o.id, now, stepId)
   cascadeBlocked(sqlite, o.id, now)
+  dropStepVote(ctx, o.id, stepId)
   return fence
 }
 
@@ -677,11 +679,13 @@ const HANDLERS: Record<ToolName, Handler> = {
     addStored(sqlite, o.id, bytes)
     if (below) holdStep(ctx, o, { id, agent_id: agent }, below, { tellLead: false })
     // 3.14: the voters judge the step before it starts (it waits for their tally); not for a step the person gates.
-    const voteId = policyGate
-      ? null
-      : autoVoteStep(ctx, o, { id, agentId: agent, instruction }, attempt.id, (usd) =>
-          canReserve(budgetView(sqlite, o), usd),
-        )
+    // A step held for its agent's low quota waits for the person, not the voters.
+    const voteId =
+      policyGate || below
+        ? null
+        : autoVoteStep(ctx, o, { id, agentId: agent, instruction }, attempt.id, (usd) =>
+            canReserve(budgetView(sqlite, o), usd),
+          )
     return ok({
       stepId: id,
       ...(gateId ? { gateId } : {}),

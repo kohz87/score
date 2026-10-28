@@ -379,7 +379,13 @@ export function personStopsStep(ctx: Ctx, orchId: string, stepId: string, body: 
     throw new HttpError(409, 'conflict', `That step is already ${step.status}.`)
   const fenced = cancelStep(ctx, o, stepId, 'stopped by the person')
   addHistory(ctx.sqlite, orchId, 'step_stopped', { stepId, by: 'person' }, ctx.now)
-  if (fenced) {
+  // Only when this step is the one thing the job waits on: another stopped step that may still be running keeps its own
+  // card, which lists what the person is agreeing to (review).
+  const onlyThis = cancelFenceAttempts(
+    requireOrch(ctx.sqlite, orchId),
+    attemptsOf(ctx.sqlite, orchId),
+  ).every((attempt) => attempt.step_id === stepId)
+  if (fenced && onlyThis) {
     // The person's stop is also their decision to go on while the step may still be ending (the waiver): otherwise the
     // job would wait for a second confirmation that Hermes's cancelled run ended. The Stop stays owed until acknowledged.
     ctx.sqlite.prepare('UPDATE orchestrations SET waiver_at = ? WHERE id = ?').run(ctx.now, orchId)

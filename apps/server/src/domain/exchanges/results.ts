@@ -106,7 +106,9 @@ export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults
     }
   // Agents that edit through their own tools (Hermes's patch and write_file) leave no file parts; the editor frames Watch
   // recorded for the job's runs say which files changed, and their diffs how much (3.14).
-  if (files.size === 0) {
+  {
+    // Paths a file part already reports keep its numbers; frames add the paths no part named (review).
+    const reported = new Set(files.keys())
     const edits = sqlite
       .prepare(
         `SELECT agent_id, at, payload FROM watch_frames WHERE surface = 'editor'
@@ -121,7 +123,8 @@ export function jobResults(sqlite: DatabaseSync, jobId: string): Omit<JobResults
       } catch {
         continue
       }
-      if (typeof payload.path !== 'string' || payload.path === '') continue
+      if (typeof payload.path !== 'string' || payload.path === '' || reported.has(payload.path))
+        continue
       const counts = diffCounts(typeof payload.diff === 'string' ? payload.diff : '')
       const file = files.get(payload.path) ?? { added: 0, removed: 0, by: new Set<string>() }
       file.added += counts.added
