@@ -3,6 +3,29 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.14.0] — 2026-10-28
+
+### Added
+- **The Job map.** A lead-decides job now opens on a graph of its layers: you → the lead (with the advisor on call beside
+  it) → the votes → the swarm of helpers → the workers → the check, with the session log underneath. Each layer is one
+  node that sums itself up (a long job stays readable); click a node to see only its lines; dots run where work is
+  flowing. On a phone the layers stack. The old step diagram is still one click away.
+- **The advisor helps the workers too.** With an advisor "on call" (the default), a Claude Code worker that edits can ask
+  it itself while it works: when stuck, after a failed fix, before a risky change (at most twice a step), with the exact
+  spot it or the helpers found. Each consult and its tokens show on the job. "The lead only" keeps the checkpoints.
+- **Vote on every step.** With helpers, the voters can judge each step the lead assigns before it starts. A clear no stops
+  it and the lead reassigns; a split goes ahead as the lead chose, or waits for you if you chose "Ask me".
+- **Audit every step.** A helper checks each finished step's change; its findings go to the lead.
+- **No limit on helper steps** ("until the job ends"); the budget, launches and lead turns still bound the job.
+- **Stop this step.** A step quiet for over 5 minutes shows who, how long and its last sign of life, with Stop this step;
+  running steps have a Stop too. The lead is told and the job goes on.
+- **The advisor in the thread.** Each consult and its advice show in the job's thread.
+
+### Fixed
+- **Results and Workbench were empty for jobs started from Start a job**: they now show the run's changed files, from the
+  editors' diffs when agents edit with their own tools.
+- Tests read times as UTC whatever the machine's time zone.
+
 ## [3.13.2] — 2026-10-28
 
 ### Fixed
