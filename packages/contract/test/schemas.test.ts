@@ -1723,6 +1723,7 @@ const cases = [
       build: { version: '1', codeSha: null, fingerprint: 'f' },
       parts: [],
       compatible: true,
+      overridable: false,
     },
     { hash: 'short', build: {}, parts: [], compatible: true },
   ],

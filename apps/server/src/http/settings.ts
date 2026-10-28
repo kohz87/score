@@ -28,6 +28,8 @@ import { MCP_SERVER_NAME } from '../hermes/index.ts'
 import { readChosenModels, replaceChosenModels } from '../domain/model-visibility.ts'
 import { CUSTOM_ALIAS_REASON } from '../domain/model-aliases.ts'
 import { requestIdempotency } from './idempotency.ts'
+import type { SecurityPassword } from '../auth/security-password.ts'
+import { sessionKey } from './session.ts'
 
 const sameRow = (a: ModelOption, b: ModelOption) => a.provider === b.provider && a.model === b.model
 const SignInParamsSchema = z.object({ signInId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) })
@@ -38,6 +40,8 @@ export function registerSettingsRoutes(
   port: HermesPort,
   db?: ScoreDb,
   clock = Date.now,
+  /** 3.14.4: turning approvals on anyway needs the security password (read at request time: made later in app.ts). */
+  security: () => SecurityPassword | undefined = () => undefined,
 ): void {
   const receipts = requestIdempotency(db, clock)
   // The pasted key's route: the receipt never holds a plain hash of the body (D2.7).
@@ -229,7 +233,15 @@ export function registerSettingsRoutes(
     port.checkHermes(),
   )
   app.post('/api/settings/hermes/accept', mutation, async (request) => {
-    await port.acceptHermes(HermesAcceptRequestSchema.parse(request.body).hash)
+    const body = HermesAcceptRequestSchema.parse(request.body)
+    if (body.override) {
+      // 3.14.4 (owner): an untested Hermes build turned on anyway is a security decision: the password, every time, with
+      // the same attempt limits as every other password check.
+      const password = security()
+      if (!password) throw new HttpError(501, 'unsupported', 'Not available here.')
+      await password.verify(body.password, sessionKey(request.headers.cookie))
+    }
+    await port.acceptHermes(body.hash, body.override ? { override: true } : {})
     return { ok: true }
   })
   // Preview changes nothing; it still goes through the CSRF hook like every POST.

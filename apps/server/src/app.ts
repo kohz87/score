@@ -324,7 +324,7 @@ export function buildApp({
       port,
     })
   registerRoutineRoutes(app, port, db, clock)
-  registerSettingsRoutes(app, port, db, clock)
+  registerSettingsRoutes(app, port, db, clock, () => securityPassword)
   if (db)
     registerThemeRoutes(app, {
       db,

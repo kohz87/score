@@ -123,11 +123,18 @@ export function buildHermesCheck(input: {
         (part) =>
           part.status === 'same' || (part.name === 'Capabilities' && part.status === 'added'),
       )
+  // 3.14.4 (owner): the person may turn approvals on anyway for an identified build that still has what approvals call;
+  // without those, approvals can't work whatever they choose.
+  const overridable =
+    !compatible &&
+    current.codeSha !== null &&
+    parts.some((part) => part.name === 'Bridge hooks' && part.status === 'same') &&
+    parts.some((part) => part.name === 'Approval functions' && part.status === 'same')
   const build = {
     version: current.codeVersion,
     codeSha: current.codeSha,
     fingerprint: fingerprint.id,
   }
   const hash = createHash('sha256').update(JSON.stringify({ build, parts })).digest('hex')
-  return { check: { hash, build, parts, compatible }, addedPatternKeys }
+  return { check: { hash, build, parts, compatible, overridable }, addedPatternKeys }
 }
