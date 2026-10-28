@@ -110,6 +110,11 @@ export const protectedClasses = [
   'bold-add-joined-runs',
   'terminal-auth',
   'security-password',
+  // 3.14.2: the lock card, the first-run password card and the unlocked Remote access and security section
+  'bold-security-lock',
+  'bold-security-first',
+  'bold-security-open',
+  'bold-security-pill-row',
   // Agent identity and error toasts
   'agent-glyph',
   'chat-toast',

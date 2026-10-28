@@ -468,6 +468,7 @@ test.describe('X1: remote access with a password set is one decision', () => {
           origins: ['https://score.example.ts.net'],
           terminal: false,
           terminalUnavailable: null,
+          unlockedUntil: new Date(Date.now() + 3_600_000).toISOString(),
         },
       }),
     )
@@ -509,35 +510,33 @@ test.describe('X1: remote access with a password set is one decision', () => {
     )
     await asRemote(page, '/b/settings/security')
     await page.goto('/b/settings/security')
-    const section = page.locator('#remote-access')
+    const section = page.locator('.bold-security-open')
     await expect(section).toBeVisible()
-    await section.getByLabel('Security password').fill('correct horse battery')
-    await expect(section.getByRole('button', { name: 'Pair another device' })).toBeEnabled()
+    await expect(section.getByRole('button', { name: 'Get a pairing link' })).toBeEnabled()
     await custom(page)
     return { section, sent }
   }
 
-  test('accepted theme CSS cannot hide the password field, the pairing buttons or the paired browsers', async ({
+  test('accepted theme CSS cannot hide the pairing buttons, the passkeys or the paired browsers', async ({
     page,
   }) => {
     test.setTimeout(90_000)
     await wear(
       page,
-      `${ACCEPTED_TOKEN}\n.settings-password { opacity: 0; color: transparent; }\n.settings-pill { opacity: 0; }\n.settings-start { color: transparent; }\n#remote-access li { color: transparent; }`,
+      `${ACCEPTED_TOKEN}\n.bold-security-btn { opacity: 0; }\n.bold-security-card { color: transparent; }\n.bold-security-open li { color: transparent; }`,
     )
     const { section } = await remoteSection(page)
-    await drawn(section.locator('label.settings-password'))
-    await drawn(section.getByRole('button', { name: 'Pair another device' }))
+    await drawn(section.getByRole('button', { name: 'Get a pairing link' }))
     await drawn(section.getByRole('button', { name: /^Renew/ }).first())
-    await drawn(section.getByRole('button', { name: 'End all other pairings' }))
+    await drawn(section.getByRole('button', { name: 'End all other devices' }))
     await drawn(section.getByRole('button', { name: 'Add a passkey' }))
     await custom(page)
   })
 
   for (const [name, button] of [
-    ['Pair another device', 'Pair another device'],
+    ['Get a pairing link', 'Get a pairing link'],
     ['Renew', 'Renew this browser'],
-    ['End all other pairings', 'End all other pairings'],
+    ['End all other devices', 'End all other devices'],
   ] as const) {
     test(`unreadable words in the section refuse “${name}” and send nothing`, async ({ page }) => {
       test.setTimeout(90_000)
@@ -546,8 +545,10 @@ test.describe('X1: remote access with a password set is one decision', () => {
       await page.evaluate((label) => {
         document.adoptedStyleSheets
           .at(-1)!
-          .insertRule('#remote-access, #remote-access * { color: transparent !important; }')
-        ;[...document.querySelectorAll<HTMLButtonElement>('#remote-access button')]
+          .insertRule(
+            '.bold-security-open, .bold-security-open * { color: transparent !important; }',
+          )
+        ;[...document.querySelectorAll<HTMLButtonElement>('.bold-security-open button')]
           .find((b) => b.getAttribute('aria-label') === label || b.textContent === label)!
           .click()
       }, button)

@@ -32,10 +32,10 @@ export function passkeyOrigin(origins: readonly string[]): string | undefined {
 const post = (path: string, body: unknown) =>
   apiFetch(path, { method: 'POST', body: JSON.stringify(body) })
 
-/** Asks for options (after the security password), lets the authenticator create the passkey, and stores it. */
-export async function registerPasskey(password: string, label: string): Promise<void> {
+/** Asks for options (the unlocked section is the proof), lets the authenticator create the passkey, and stores it. */
+export async function registerPasskey(label: string): Promise<void> {
   const optionsJSON = PasskeyCeremonySchema.parse(
-    await post('session/passkeys/registration-options', { password, label }),
+    await post('session/passkeys/registration-options', { label }),
   )
   // The server shaped these options with @simplewebauthn/server; the browser library checks them again as it runs.
   const response = await startRegistration({

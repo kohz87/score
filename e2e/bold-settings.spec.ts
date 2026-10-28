@@ -224,6 +224,10 @@ test.describe('bold Settings', () => {
 
       // Remote access and security: password, paired browsers, passkeys, terminal and Where agents run.
       let passwordSet = false
+      let unlocked = false
+      await page.route(/\/api\/session\/browsers$/, (route) =>
+        route.fulfill({ json: { items: [] } }),
+      )
       await page.route(/\/api\/session\/security$/, (route) =>
         route.fulfill({
           status: 200,
@@ -233,6 +237,7 @@ test.describe('bold Settings', () => {
             origins: ['http://127.0.0.1:5173'],
             terminal: false,
             terminalUnavailable: null,
+            unlockedUntil: unlocked ? new Date(Date.now() + 3_600_000).toISOString() : null,
           }),
         }),
       )
@@ -255,18 +260,29 @@ test.describe('bold Settings', () => {
       )
       await page.goto('/b/settings/security')
       await expect(page.getByRole('heading', { name: 'Remote access and security' })).toBeVisible()
+      // 3.14.2: no password yet shows only the first-run card; with one, only the lock card until it is unlocked.
+      await expect(page.getByRole('form', { name: 'Set a security password' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Where agents run' })).toHaveCount(0)
+      await expectNoOverflow(page, 'Remote access and security (first run)')
+      passwordSet = true
+      await page.reload()
+      const lock = page.getByRole('region', { name: 'This section is locked' })
+      await expect(lock).toHaveAttribute('data-protected', 'flex')
+      await expect(lock.getByLabel('Security password', { exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Paired devices' })).toHaveCount(0)
+      await expectMinHeight(lock.getByRole('button', { name: 'Unlock' }), 48)
+      await expectNoOverflow(page, 'Remote access and security (locked)')
+      unlocked = true
+      await page.reload()
+      const remote = page.locator('.bold-security-open')
+      await expect(remote).toHaveAttribute('data-protected', 'grid')
+      await expect(page.getByText(/Unlocked · locks in/)).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Where agents run' })).toBeVisible()
       // 11.12b: the list of agents and what each runs on replaces the old placeholder.
       const where = page.getByRole('list', { name: 'Where agents run' })
       await expect(where).toBeVisible()
       await expect(where.getByRole('listitem').first()).toBeVisible()
-      await expect(page.getByRole('form', { name: 'Set a security password' })).toBeVisible()
-      passwordSet = true
-      await page.reload()
-      const remote = page.getByRole('region', { name: 'Remote access and security' })
-      await expect(remote).toHaveAttribute('data-protected', 'flex')
-      await expect(remote.getByLabel('Security password', { exact: true })).toBeVisible()
-      await expect(remote.getByRole('button', { name: 'Pair another device' })).toBeVisible()
+      await expect(remote.getByRole('button', { name: 'Get a pairing link' })).toBeVisible()
       // Local mode: only remote pairings are listed, so the list explains itself.
       await expect(remote.getByText('No browser is paired for remote access yet.')).toBeVisible()
       await expect(remote.getByRole('heading', { name: 'Passkeys' })).toBeVisible()
@@ -274,8 +290,8 @@ test.describe('bold Settings', () => {
       const removePasskey = remote.getByRole('button', { name: 'Remove passkey Phone' })
       await expect(signOut).toBeVisible()
       await expect(removePasskey).toBeVisible()
-      await expectMinHeight(signOut, viewport.width <= 640 ? 44 : 36)
-      await expectMinHeight(removePasskey, viewport.width <= 640 ? 44 : 36)
+      await expectMinHeight(signOut, 44)
+      await expectMinHeight(removePasskey, viewport.width <= 640 ? 44 : 40)
       await expect(page.getByRole('link', { name: 'Open the terminal' })).toHaveAttribute(
         'href',
         '/terminal',

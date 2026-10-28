@@ -19,15 +19,12 @@ afterEach(() => {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
-function panel(password = 'correct horse') {
+function panel() {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <PasskeysPanel
-        password={password}
-        origins={['https://192.168.1.2:8741', 'https://score.example.ts.net:8741']}
-      />
+      <PasskeysPanel origins={['https://192.168.1.2:8741', 'https://score.example.ts.net:8741']} />
     </QueryClientProvider>,
   )
 }
@@ -51,7 +48,7 @@ test('on a LAN IP it explains and links to the ts.net address instead of offerin
   expect(screen.queryByRole('button', { name: 'Add a passkey' })).toBeNull()
 })
 
-test('adding a passkey sends the password, runs the browser ceremony, then stores it', async () => {
+test('adding a passkey sends only the label, runs the browser ceremony, then stores it', async () => {
   const calls: { url: string; body: unknown }[] = []
   vi.stubGlobal(
     'fetch',
@@ -68,31 +65,24 @@ test('adding a passkey sends the password, runs the browser ceremony, then store
   fireEvent.click(screen.getByRole('button', { name: 'Add a passkey' }))
   await screen.findByText('Passkey added.')
   expect(calls.find((call) => call.url.endsWith('/registration-options'))?.body).toEqual({
-    password: 'correct horse',
     label: 'Laptop',
   })
   expect(browser.startRegistration).toHaveBeenCalledWith({ optionsJSON: { challenge: 'c' } })
   expect(calls.at(-2)?.body).toEqual({ response: { id: 'abc' } })
 })
 
-test('removal needs the password, and says that terminating pairings keeps passkeys', async () => {
+test('removal sends no password, and says that terminating pairings keeps passkeys', async () => {
   const fetch = vi.fn(async (url: string, init?: RequestInit) =>
     init?.method === 'POST'
       ? new Response(null, { status: 204 })
       : json({ available: true, rpId: 'x.y', items: [item] }),
   )
   vi.stubGlobal('fetch', fetch)
-  panel('short')
-  expect(await screen.findByText(/Ending other pairings does not remove passkeys/)).toBeDefined()
-  const remove = (await screen.findByRole('button', {
-    name: 'Remove passkey Phone',
-  })) as HTMLButtonElement
-  expect(remove.disabled).toBe(true)
-  cleanup()
   panel()
+  expect(await screen.findByText(/Ending other pairings does not remove passkeys/)).toBeDefined()
   fireEvent.click(await screen.findByRole('button', { name: 'Remove passkey Phone' }))
   await waitFor(() => expect(screen.getByText('Passkey removed.')).toBeDefined())
   const post = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!
   expect(post[0]).toBe('/api/session/passkeys/abc/remove')
-  expect(JSON.parse(String(post[1]!.body))).toEqual({ password: 'correct horse' })
+  expect(JSON.parse(String(post[1]!.body))).toEqual({})
 })
