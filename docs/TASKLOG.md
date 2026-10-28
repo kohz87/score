@@ -1883,3 +1883,16 @@ One entry per completed task: what landed, review results, and any **rejected re
   temporary paired session (signed out after): the device list answers `403 locked`, the status shows `unlockedUntil: null`
   and `serverNow`.
 
+
+## 3.14.3 — the security section follows the theme and matches the mock-up (2026-10-28)
+- Owner on live 3.14.2: "the password lock, can it follow the theme color" and "after unlocking, the UI doesn't match the mock
+  up". Cause: `.bold-security-open` and the lock card had no `display` of their own; `data-protected` sets one only under a
+  custom look, so the default look stacked every card with no gaps. Lead fixed it (explicit grid/flex), moved the lock and
+  first-run cards to the theme's panel/ink/line/field with its highlight on the lock mark and Unlock, `--ok/--warn/--bad` for
+  the pill, tags and errors, Unlock no longer disabled while empty, the terminal link a button again; checked with fake-mode
+  screenshots (dark, light, phone; not committed) and added e2e checks for the two columns and the lock card's layout.
+- Reviews: no P1; P2 `--ok/--warn/--bad` not in the contrast fallback — rejected (themes can't set them; they always pair with
+  Score's own panel of the same look). Gate: e2e 851 passed, 3 failed — the Unlocked pill at 4.2:1 in the light look (fixed:
+  ink on panel, ok on the ring and icon; reviewed clean), the tablet DM flake; server check 1 failed (`orphan index` in a
+  migration test, passed 17/17 on rerun, release touches no server code). Rerun of the affected specs: 69 passed.
+- **v3.14.3 deployed live** (~13:29 UTC, idle guard passed): backup score-pre-3.14.3-20261028.db, health ok.
