@@ -230,11 +230,7 @@ export type RunActions = ReturnType<typeof useRunActions>
 
 /** What a decision card needs from a mutation; orchestration and workflow runs both satisfy it (7.1b). */
 export type Act<V> = {
-  /** The options are per call (TanStack's mutate takes them), so one card can follow its own request. */
-  mutate: (
-    variables: V,
-    options?: { onError?: (error: unknown) => void; onSettled?: () => void },
-  ) => void
+  mutate: (variables: V) => void
   isPending: boolean
   error: unknown
   /** The variables of the latest call (TanStack's mutation result has them). */

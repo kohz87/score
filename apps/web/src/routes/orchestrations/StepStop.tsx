@@ -7,7 +7,14 @@ import { describeOrchError, type Act } from './orchestration-queries.ts'
 
 export const STUCK_AFTER_MS = 5 * 60_000
 
-export type StopStepAction = Act<{ stepId: string; body: { orchestrationRevision: number } }>
+type StopVariables = { stepId: string; body: { orchestrationRevision: number } }
+/**
+ * The stop mutation. Each control awaits its own call's promise: TanStack runs per-call `mutate` callbacks only for the
+ * newest call, so a step stopped while another stop was in flight would never hear back.
+ */
+export type StopStepAction = Act<StopVariables> & {
+  mutateAsync: (variables: StopVariables) => Promise<unknown>
+}
 
 const clockOf = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -24,8 +31,10 @@ export function quietMinutes(
   return quiet > STUCK_AFTER_MS ? Math.floor(quiet / 60_000) : null
 }
 
-/** Re-renders every 30 s so a step turns "quiet" without a new event. Call it once per run and pass `now` down. */
-/** The clock the Stop controls read, ticking every 30 s; `enabled: false` keeps it still (no Stop shown, no timer). */
+/**
+ * Re-renders every 30 s so a step turns "quiet" without a new event. Call it once per run and pass `now` down;
+ * `enabled: false` keeps it still (no Stop shown, no timer).
+ */
 export function useNow(enabled = true): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -87,16 +96,13 @@ function StopConfirm({
           if (sending) return
           setSending(true)
           setFailure(null)
-          stop.mutate(
-            { stepId, body: { orchestrationRevision: run.revision } },
-            {
-              onError: setFailure,
-              onSettled: () => {
-                setSending(false)
-                setConfirming(false)
-              },
-            },
-          )
+          stop
+            .mutateAsync({ stepId, body: { orchestrationRevision: run.revision } })
+            .catch(setFailure)
+            .finally(() => {
+              setSending(false)
+              setConfirming(false)
+            })
         }}
       >
         {sending ? 'Stopping…' : `Stop ${stepId}`}
