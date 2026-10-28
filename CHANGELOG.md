@@ -3,6 +3,18 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.14.4] — 2026-10-28
+
+### Added
+- **Turn approvals on anyway for an untested Hermes.** When a newer Hermes build changed in ways Score wasn't tested with
+  (say, its database layout), the check now offers **Turn approvals on anyway** with your security password, as long as
+  Hermes still has the approval functions and bridge hooks Score uses (otherwise approvals couldn't work at all). The
+  screen says what changed and that approvals may fail or show wrong details. The override is recorded and lasts until
+  Hermes changes again; it never vouches for a later build.
+
+### Fixed
+- The Hermes check's table no longer breaks words mid-word on a phone.
+
 ## [3.14.3] — 2026-10-28
 
 ### Fixed
