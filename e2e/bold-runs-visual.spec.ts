@@ -66,9 +66,16 @@ for (const run of runs) {
         maxDiffPixelRatio: 0.005,
       })
       await page.getByRole('tab', { name: 'Graph' }).click()
-      await expect(page.locator(`[data-node="${run.node}"]`)).toBeVisible()
-      // The panel scrolls inside the page: bring the diagram into the baseline.
-      await page.locator('.orch-diagram').scrollIntoViewIfNeeded()
+      // 3.15: a lead-decides job's Graph tab is the Job map; a workflow run keeps its step diagram.
+      if (run.name === 'orchestration') {
+        const map = page.getByRole('region', { name: 'Job map' })
+        await expect(map).toBeVisible()
+        await map.scrollIntoViewIfNeeded()
+      } else {
+        await expect(page.locator(`[data-node="${run.node}"]`)).toBeVisible()
+        // The panel scrolls inside the page: bring the diagram into the baseline.
+        await page.locator('.orch-diagram').scrollIntoViewIfNeeded()
+      }
       await page.evaluate(() => document.fonts.ready)
       if (width <= 768) await noSideScroll(page)
       await expect(page).toHaveScreenshot(`bold-${run.name}-graph-${width}.png`, {

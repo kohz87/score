@@ -130,6 +130,18 @@ const base = {
   denyFiles: [],
 }
 
+test('3.15: the advisor on call adds --agents with the file and nothing else (no extra tool allowed)', () => {
+  const args = claudeDriver.buildArgs({
+    ...base,
+    permission: 'workspace-write',
+    agentsFile: '/run/agents.json',
+  })
+  const plain = claudeDriver.buildArgs({ ...base, permission: 'workspace-write' })
+  expect(args[args.indexOf('--agents') + 1]).toBe('/run/agents.json')
+  expect(args.filter((arg) => arg !== '--agents' && arg !== '/run/agents.json')).toEqual(plain)
+  expect(plain).not.toContain('--agents')
+})
+
 test('claude flag mapping per permission level', () => {
   const args = (permission: 'read-only' | 'workspace-write' | 'full', extra = {}) =>
     claudeDriver.buildArgs({ ...base, permission, ...extra })

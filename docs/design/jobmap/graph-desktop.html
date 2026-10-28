@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Job map as a graph</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+@keyframes flowdown{0%{transform:translateY(0);opacity:0}15%{opacity:1}85%{opacity:1}100%{transform:translateY(var(--run));opacity:0}}
+@keyframes flowright{0%{transform:translateX(0);opacity:0}15%{opacity:1}85%{opacity:1}100%{transform:translateX(var(--run));opacity:0}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(242,166,90,0.45)}50%{box-shadow:0 0 0 8px rgba(242,166,90,0)}}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 1180px; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; overflow: hidden">
+
+<div style="position: absolute; left: 60px; top: 28px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; color: #9AA0AD">Job · running 42 min · $1.84 of $10</span>
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; font-weight: 700">Story suite: refine the story blocks</span>
+</div>
+
+<div style="position: absolute; left: 60px; top: 120px; width: 300px; background: #1A1C23; border-radius: 20px; padding: 16px; box-sizing: border-box; border: 1px solid #2B2E38">
+<span style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #ECEEF2">You · one prompt</span>
+<p style="margin: 8px 0 0; font-size: 14px; color: #C9CDD6; line-height: 1.45">The full prompt is in story_suite/prompt.md</p>
+</div>
+<div aria-hidden="true" style="position: absolute; left: 360px; top: 168px; width: 200px; height: 2px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 360px; top: 165px; width: 8px; height: 8px; border-radius: 50%; background: #F2A65A; --run: 192px; animation: flowright 2.4s linear infinite"></div>
+
+<button type="button" onClick="{{pickLead}}" style="position: absolute; left: 560px; top: 110px; width: 320px; text-align: left; background: #1A1C23; border-radius: 22px; padding: 16px 18px; box-sizing: border-box; border: 2px solid #F2A65A; color: #ECEEF2; font-family: inherit; cursor: pointer; animation: pulse 2.4s ease-in-out infinite">
+<span style="display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #F2A65A">Lead · astra</span>
+<span style="display: block; margin-top: 6px; font-size: 16px; font-weight: 700">Turn 9 · assigning s5</span>
+<span style="display: block; margin-top: 4px; font-size: 13px; color: #9AA0AD">plan 2 of 4 done · gpt · Hermes</span>
+</button>
+
+<div aria-hidden="true" style="position: absolute; left: 880px; top: 168px; width: 180px; height: 0; border-top: 2px dashed #5B5670"></div>
+<span style="position: absolute; left: 905px; top: 140px; font-size: 12px; color: #9AA0AD">on call</span>
+<button type="button" onClick="{{pickAdvisor}}" style="position: absolute; left: 1060px; top: 110px; width: 320px; text-align: left; background: #1A1C23; border-radius: 22px; padding: 16px 18px; box-sizing: border-box; border: 1px solid #B9A6FF; color: #ECEEF2; font-family: inherit; cursor: pointer">
+<span style="display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #B9A6FF">Advisor · opus55</span>
+<span style="display: block; margin-top: 8px; font-size: 14px">◆ before plan · ◇ failure ×2 · ◇ before done</span>
+<span style="display: block; margin-top: 4px; font-size: 13px; color: #9AA0AD">1 consult · silent on routine turns</span>
+</button>
+
+<div aria-hidden="true" style="position: absolute; left: 719px; top: 212px; width: 2px; height: 78px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 716px; top: 212px; width: 8px; height: 8px; border-radius: 50%; background: #F2A65A; --run: 70px; animation: flowdown 1.8s linear infinite"></div>
+
+<button type="button" onClick="{{pickVotes}}" style="position: absolute; left: 470px; top: 290px; width: 500px; text-align: left; background: #1A1C23; border-radius: 22px; padding: 16px 18px; box-sizing: border-box; border: 1px solid #4FD1A5; color: #ECEEF2; font-family: inherit; cursor: pointer">
+<span style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #4FD1A5"><span>Fork layer · votes</span><span style="color: #9AA0AD; letter-spacing: 0; text-transform: none; font-weight: 500">voter · 3 per vote</span></span>
+<sc-for list="{{votes}}" as="v" hint-placeholder-count="3">
+<span style="display: grid; grid-template-columns: minmax(0, 1fr) 110px 74px; gap: 10px; align-items: center; margin-top: 10px; font-size: 13px">
+<span style="color: #DDE0E6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{v.q}}</span>
+<span style="height: 8px; border-radius: 999px; background: #2B2E38; overflow: hidden; display: block"><span style="display: block; height: 100%; border-radius: 999px; width: {{v.w}}; background: {{v.c}}"></span></span>
+<span style="font-weight: 700; color: {{v.c}}">{{v.label}}</span>
+</span>
+</sc-for>
+</button>
+
+<div aria-hidden="true" style="position: absolute; left: 719px; top: 414px; width: 2px; height: 46px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 350px; top: 460px; width: 740px; height: 2px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 350px; top: 460px; width: 2px; height: 40px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 719px; top: 460px; width: 2px; height: 40px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 1088px; top: 460px; width: 2px; height: 40px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 347px; top: 462px; width: 8px; height: 8px; border-radius: 50%; background: #7DB8FF; --run: 34px; animation: flowdown 1.4s linear infinite"></div>
+<span style="position: absolute; left: 740px; top: 430px; font-size: 12px; color: #9AA0AD">delegate to the swarm · Haiku × 3</span>
+
+<sc-for list="{{swarm}}" as="s" hint-placeholder-count="3">
+<button type="button" onClick="{{s.pick}}" style="position: absolute; left: {{s.left}}; top: 500px; width: 300px; text-align: left; background: #1A1C23; border-radius: 20px; padding: 14px 16px; box-sizing: border-box; border: 1px solid {{s.border}}; color: #ECEEF2; font-family: inherit; cursor: pointer">
+<span style="display: flex; justify-content: space-between; align-items: center; gap: 8px"><span style="font-weight: 700">{{s.name}}</span><span style="padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; {{s.pill}}">{{s.state}}</span></span>
+<span style="display: block; margin-top: 6px; font-size: 13px; color: #7DB8FF; font-weight: 600">{{s.role}}</span>
+<span style="display: block; margin-top: 2px; font-size: 13px; color: #C9CDD6">{{s.what}}</span>
+</button>
+</sc-for>
+
+<div aria-hidden="true" style="position: absolute; left: 350px; top: 620px; width: 2px; height: 36px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 719px; top: 620px; width: 2px; height: 36px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 1088px; top: 620px; width: 2px; height: 36px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 350px; top: 656px; width: 740px; height: 2px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 719px; top: 656px; width: 2px; height: 34px; background: #3A3E4A"></div>
+<span style="position: absolute; left: 740px; top: 664px; font-size: 12px; color: #9AA0AD">back to the lead · findings</span>
+
+<div data-protected="block" style="position: absolute; left: 420px; top: 690px; width: 600px; background: #1A1C23; border-radius: 22px; padding: 16px 18px; box-sizing: border-box; border: 1px solid #ECEEF2; display: flex; flex-direction: column; gap: 10px">
+<span style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #ECEEF2"><span>Workers · terra</span><span style="color: #9AA0AD; letter-spacing: 0; text-transform: none; font-weight: 500">edits + runs</span></span>
+<span style="display: flex; gap: 6px; flex-wrap: wrap">
+<sc-for list="{{steps}}" as="st" hint-placeholder-count="5">
+<span style="padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; {{st.pill}}">{{st.label}}</span>
+</sc-for>
+</span>
+<sc-if value="{{stuck}}" hint-placeholder-val="{{true}}">
+<span style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #ECEEF2; color: #12131A; border-radius: 16px; padding: 10px 12px">
+<span style="flex: 1; min-width: 200px; font-size: 14px"><strong>s5 quiet for 12 min</strong> · last sign of life 15:34</span>
+<button type="button" onClick="{{stop}}" style="min-height: 44px; padding: 0 16px; border-radius: 999px; border: none; background: #12131A; color: #ECEEF2; font: 700 14px 'Hanken Grotesk', sans-serif; cursor: pointer">{{stopLabel}}</button>
+</span>
+</sc-if>
+<sc-if value="{{stopped}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 14px; font-weight: 600">s5 stopped · astra is choosing who does it now</span>
+</sc-if>
+</div>
+
+<div aria-hidden="true" style="position: absolute; left: 719px; top: 860px; width: 2px; height: 50px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="position: absolute; left: 716px; top: 860px; width: 8px; height: 8px; border-radius: 50%; background: #F5D06B; --run: 42px; animation: flowdown 1.6s linear infinite"></div>
+
+<button type="button" onClick="{{pickCheck}}" style="position: absolute; left: 520px; top: 910px; width: 400px; text-align: left; background: #1A1C23; border-radius: 22px; padding: 14px 18px; box-sizing: border-box; border: 1px solid #F5D06B; color: #ECEEF2; font-family: inherit; cursor: pointer">
+<span style="display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #F5D06B">Check · runs the code, not an opinion</span>
+<span style="display: flex; align-items: center; gap: 10px; margin-top: 8px"><code style="font-family: 'JetBrains Mono', monospace; font-size: 13px">npm test</code><span style="padding: 2px 10px; border-radius: 999px; background: #3A2326; color: #FF9AA2; font-size: 12px; font-weight: 700">failed · 15:41</span></span>
+</button>
+
+<div style="position: absolute; left: 60px; top: 1010px; width: 1320px; background: #1A1C23; border-radius: 20px; padding: 14px 18px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700">{{panelTitle}}</span>
+<sc-for list="{{panel}}" as="l" hint-placeholder-count="4">
+<span style="display: grid; grid-template-columns: 60px 90px minmax(0, 1fr); gap: 10px; padding: 5px 0; font-size: 14px; border-bottom: 1px solid #23262F">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9AA0AD">{{l.at}}</span>
+<span style="font-weight: 700; color: {{l.color}}">{{l.lane}}</span>
+<span style="color: #DDE0E6; overflow-wrap: anywhere">{{l.text}}</span>
+</span>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { focus: 'all', confirm: false, stopped: false };
+  }
+  renderVals() {
+    var s = this.state;
+    var self = this;
+    var done = 'background: #1F3A2E; color: #4FD1A5';
+    var run = 'background: #1C2C40; color: #7DB8FF';
+    var now = 'background: #3A2F1C; color: #F2A65A';
+    var off = 'background: #2B2E38; color: #9AA0AD';
+    var votes = [
+      { q: 's5 → terra: right agent and approach?', w: '100%', c: '#4FD1A5', label: 'sharp' },
+      { q: 'Which file holds the turn rules?', w: '86%', c: '#4FD1A5', label: 'sharp' },
+      { q: 's3 → terra: right agent and approach?', w: '50%', c: '#F2A65A', label: 'split' }
+    ];
+    var pick = function (f) { return function () { self.setState({ focus: f }); }; };
+    var swarm = [
+      { name: 'swarm-1', role: 'audit', what: 'checking the diff of s3', state: 'working', pill: run, left: '200px', border: '#7DB8FF', pick: pick('swarm') },
+      { name: 'swarm-2', role: 'grep', what: 'applyChoice → 7 call sites', state: 'done', pill: done, left: '570px', border: '#2B2E38', pick: pick('swarm') },
+      { name: 'swarm-3', role: 'scan: risks', what: 'npm-cache, lockfiles', state: 'done', pill: done, left: '940px', border: '#2B2E38', pick: pick('swarm') }
+    ];
+    var steps = [
+      { label: 's1 ✓', pill: done }, { label: 's2 ✓', pill: done }, { label: 's3 ✓', pill: done },
+      { label: 's4 stopped', pill: off },
+      { label: s.stopped ? 's5 stopped' : 's5 running', pill: s.stopped ? off : now }
+    ];
+    var C = { lead: '#F2A65A', advisor: '#B9A6FF', votes: '#4FD1A5', swarm: '#7DB8FF', worker: '#ECEEF2', check: '#F5D06B', you: '#FF9AA2' };
+    var all = [
+      { at: '15:23', lane: 'lead', text: 'astra wrote the plan (4 entries)' },
+      { at: '15:24', lane: 'advisor', text: 'before the plan: add a test step, split the npm fix from the refactor' },
+      { at: '15:24', lane: 'swarm', text: 'swarm-3 scan: risks → npm-cache, lockfiles' },
+      { at: '15:33', lane: 'votes', text: 's3: split → went ahead as astra chose' },
+      { at: '15:41', lane: 'check', text: 'npm test failed: expected 3 choices, got 2' },
+      { at: '15:47', lane: 'you', text: 'you stopped s4 (quiet for 14 min)' },
+      { at: '15:49', lane: 'swarm', text: 'swarm-2 grep applyChoice → 7 call sites' },
+      { at: '15:50', lane: 'votes', text: 's5: sharp yes (3 of 3) → runs' }
+    ];
+    var rows = all.filter(function (r) { return s.focus === 'all' || r.lane === s.focus; });
+    if (s.stopped) rows = rows.concat([{ at: '15:53', lane: 'you', text: 'you stopped s5 (quiet for 12 min)' }]);
+    var panel = rows.slice(-4).map(function (r) { return { at: r.at, lane: r.lane, text: r.text, color: C[r.lane] }; });
+    var titles = { all: 'Session log · click a node to see only its lines', lead: 'Lead', advisor: 'Advisor', votes: 'Votes', swarm: 'Swarm', check: 'Check' };
+    return {
+      votes: votes,
+      swarm: swarm,
+      steps: steps,
+      panel: panel,
+      panelTitle: titles[s.focus] || 'Session log',
+      stuck: !s.stopped,
+      stopped: s.stopped,
+      stopLabel: s.confirm ? 'Confirm: stop s5' : 'Stop this step',
+      stop: function () { if (s.confirm) self.setState({ stopped: true, confirm: false }); else self.setState({ confirm: true }); },
+      pickLead: pick('lead'),
+      pickAdvisor: pick('advisor'),
+      pickVotes: pick('votes'),
+      pickCheck: pick('check')
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -168,6 +168,10 @@ export function useRun(id: string | undefined) {
   })
 }
 
+/** The create body as the screens build it: `advisorMode` has a server default and is sent only with an advisor. */
+export type OrchestrationCreateBody = Omit<OrchestrationCreate, 'advisorMode'> &
+  Partial<Pick<OrchestrationCreate, 'advisorMode'>>
+
 export async function fetchPreflight(
   leadAgentId: string,
   allowedAgents: string[],
@@ -201,7 +205,7 @@ export const post = (path: string, body: unknown) =>
 
 export function useCreateOrchestration() {
   return useMutation({
-    mutationFn: async (body: OrchestrationCreate) =>
+    mutationFn: async (body: OrchestrationCreateBody) =>
       OrchestrationCreatedSchema.parse(await post('orchestrations', body)),
   })
 }
@@ -229,7 +233,13 @@ export function describeOrchError(error: unknown): string {
 export type RunActions = ReturnType<typeof useRunActions>
 
 /** What a decision card needs from a mutation; orchestration and workflow runs both satisfy it (7.1b). */
-export type Act<V> = { mutate: (variables: V) => void; isPending: boolean; error: unknown }
+export type Act<V> = {
+  mutate: (variables: V) => void
+  isPending: boolean
+  error: unknown
+  /** The variables of the latest call (TanStack's mutation result has them). */
+  variables?: V | undefined
+}
 export type DecisionActions = {
   gate: Act<{ gateId: string; body: GateDecision }>
   limits: Act<LimitsDecision>
@@ -277,6 +287,11 @@ export function useRunActions(id: string) {
     remap: useRunPost<RemapDecision>(id, plain('remap')),
     policyRemap: useRunPost<{ stepId: string; body: PolicyRemapDecision }>(id, (v) => ({
       path: `steps/${encodeURIComponent(v.stepId)}/remap`,
+      body: v.body,
+    })),
+    // 3.14: stop one step; the lead is told and can reassign the work.
+    stopStep: useRunPost<{ stepId: string; body: RunControl }>(id, (v) => ({
+      path: `steps/${encodeURIComponent(v.stepId)}/stop`,
       body: v.body,
     })),
     quota: useRunPost<{ stepId: string; body: QuotaDecision }>(id, (v) => ({

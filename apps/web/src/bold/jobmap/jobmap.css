@@ -1,0 +1,452 @@
+/* 3.15 (decision 151): the job map. Values from docs/design/jobmap/graph-desktop.html and graph-phone.html, on the bold
+   tokens. Light objects mean "for you": only the stuck-step card (the classic paper) is light. */
+[data-ui='bold'] .jobmap {
+  --jm-lead: #f2a65a;
+  --jm-advisor: #b9a6ff;
+  --jm-votes: var(--ok);
+  --jm-swarm: #7db8ff;
+  --jm-check: #f5d06b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 8px 0 4px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .jobmap-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+[data-ui='bold'] .jobmap-node {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 14px 18px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+[data-ui='bold'] .jobmap-node:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+[data-ui='bold'] .jobmap-node[aria-pressed='true'] {
+  background: var(--field);
+  box-shadow: 0 0 0 2px var(--ink2);
+}
+[data-ui='bold'] .jobmap-node[data-tone='lead'] {
+  border: 2px solid var(--jm-lead);
+  width: 320px;
+}
+[data-ui='bold'] .jobmap-node[data-tone='advisor'] {
+  border-color: var(--jm-advisor);
+  width: 320px;
+}
+[data-ui='bold'] .jobmap-node[data-tone='you'] {
+  width: 260px;
+}
+[data-ui='bold'] .jobmap-node[data-tone='votes'] {
+  border-color: var(--jm-votes);
+  width: 500px;
+}
+[data-ui='bold'] .jobmap-node[data-tone='swarm'] {
+  border-color: var(--jm-swarm);
+  border-radius: 20px;
+  width: 260px;
+}
+[data-ui='bold'] .jobmap-node[data-tone='work'] {
+  border-color: var(--ink);
+  width: 340px;
+}
+[data-ui='bold'] .jobmap-node[data-tone='check'] {
+  border-color: var(--jm-check);
+  width: 400px;
+}
+[data-ui='bold'] .jobmap-node[data-pulse] {
+  animation: jobmap-pulse 2.4s ease-in-out infinite;
+}
+
+[data-ui='bold'] .jobmap-kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+[data-ui='bold'] .jobmap-node[data-tone='lead'] .jobmap-kicker {
+  color: var(--jm-lead);
+}
+[data-ui='bold'] .jobmap-node[data-tone='advisor'] .jobmap-kicker {
+  color: var(--jm-advisor);
+}
+[data-ui='bold'] .jobmap-node[data-tone='votes'] .jobmap-kicker {
+  color: var(--jm-votes);
+}
+[data-ui='bold'] .jobmap-node[data-tone='check'] .jobmap-kicker {
+  color: var(--jm-check);
+}
+[data-ui='bold'] .jobmap-sub,
+[data-ui='bold'] .jobmap-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+[data-ui='bold'] .jobmap-empty {
+  margin: 8px 0;
+}
+[data-ui='bold'] .jobmap-two-lines {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--ink2);
+  line-height: 1.45;
+}
+[data-ui='bold'] .jobmap-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--ink);
+}
+[data-ui='bold'] .jobmap-phone-advisor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+
+[data-ui='bold'] .jobmap-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--field);
+  color: var(--muted);
+}
+[data-ui='bold'] .jobmap-pill[data-tone='done'] {
+  background: rgba(94, 227, 191, 0.14);
+  color: var(--ok);
+}
+[data-ui='bold'] .jobmap-pill[data-tone='run'] {
+  background: rgba(125, 184, 255, 0.16);
+  color: var(--jm-swarm);
+}
+[data-ui='bold'] .jobmap-pill[data-tone='now'] {
+  background: rgba(242, 166, 90, 0.16);
+  color: var(--jm-lead);
+}
+[data-ui='bold'] .jobmap-pill[data-tone='bad'] {
+  background: rgba(255, 151, 174, 0.14);
+  color: var(--bad);
+}
+[data-ui='bold'] .jobmap-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+[data-ui='bold'] .jobmap-asked {
+  color: var(--jm-advisor);
+  font-size: 13px;
+}
+
+/* ---- votes ---- */
+[data-ui='bold'] .jobmap-vote {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px 74px;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  margin-top: 4px;
+}
+[data-ui='bold'] .jobmap-vote-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-ui='bold'] .jobmap-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+[data-ui='bold'] .jobmap-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ok);
+}
+[data-ui='bold'] .jobmap-vote[data-status='split'] .jobmap-bar > span,
+[data-ui='bold'] .jobmap-vote[data-status='voting'] .jobmap-bar > span {
+  background: var(--jm-lead);
+}
+[data-ui='bold'] .jobmap-vote[data-status='failed'] .jobmap-bar > span {
+  background: var(--bad);
+}
+
+/* ---- swarm and workers ---- */
+[data-ui='bold'] .jobmap-swarm,
+[data-ui='bold'] .jobmap-workers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: 100%;
+}
+[data-ui='bold'] .jobmap-workers {
+  align-items: flex-start;
+}
+[data-ui='bold'] .jobmap-worker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+}
+[data-ui='bold'] .jobmap-swarm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+[data-ui='bold'] .jobmap-role {
+  color: var(--jm-swarm);
+  font-size: 13px;
+  font-weight: 600;
+}
+[data-ui='bold'] .jobmap-stops {
+  margin-top: 12px;
+  max-width: 600px;
+  width: 100%;
+  border-radius: 20px;
+  padding: 10px 12px;
+}
+[data-ui='bold'] .jobmap-stop-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+[data-ui='bold'] .jobmap-check-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+[data-ui='bold'] .jobmap-check-line code {
+  font-family: var(--font-m);
+  font-size: 13px;
+}
+
+/* ---- lines and dots ---- */
+[data-ui='bold'] .jobmap-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: none;
+  width: 2px;
+  height: 36px;
+  background: var(--faint);
+  margin: 0 auto;
+}
+[data-ui='bold'] .jobmap-line[data-horizontal] {
+  width: 48px;
+  height: 2px;
+}
+[data-ui='bold'] .jobmap-line[data-dashed] {
+  background: none;
+  border-left: 2px dashed var(--faint);
+  width: 0;
+}
+[data-ui='bold'] .jobmap-line[data-dashed][data-horizontal] {
+  border-left: 0;
+  border-top: 2px dashed var(--faint);
+  width: 64px;
+  height: 0;
+}
+[data-ui='bold'] .jobmap-line-label {
+  position: absolute;
+  left: 12px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+[data-ui='bold'] .jobmap-line[data-horizontal] .jobmap-line-label {
+  left: 50%;
+  top: -22px;
+  transform: translateX(-50%);
+}
+[data-ui='bold'] .jobmap-dot {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--jm-lead);
+  animation: jobmap-down 1.6s linear infinite;
+}
+[data-ui='bold'] .jobmap-line[data-horizontal] .jobmap-dot {
+  left: 0;
+  top: -3px;
+  animation-name: jobmap-right;
+}
+
+/* ---- the log ---- */
+[data-ui='bold'] .jobmap-log {
+  align-self: stretch;
+  margin-top: 24px;
+  background: var(--panel);
+  border-radius: 20px;
+  padding: 14px 18px;
+}
+[data-ui='bold'] .jobmap-log header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+[data-ui='bold'] .jobmap-log h3 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+[data-ui='bold'] .jobmap-clear {
+  border: 0;
+  background: none;
+  color: var(--ink2);
+  text-decoration: underline;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+[data-ui='bold'] .jobmap-log ol {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+[data-ui='bold'] .jobmap-log li {
+  display: grid;
+  grid-template-columns: 76px 84px minmax(0, 1fr);
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 14px;
+  border-bottom: 1px solid var(--line);
+}
+[data-ui='bold'] .jobmap-log time {
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--muted);
+}
+[data-ui='bold'] .jobmap-log li span {
+  overflow-wrap: anywhere;
+}
+
+/* ---- the phone: one column, the swarm as three columns ---- */
+[data-ui='bold'] .jobmap--phone .jobmap-row {
+  flex-direction: column;
+}
+[data-ui='bold'] .jobmap--phone .jobmap-node,
+[data-ui='bold'] .jobmap--phone .jobmap-node[data-tone] {
+  width: 100%;
+}
+[data-ui='bold'] .jobmap--phone .jobmap-line[data-horizontal] {
+  width: 2px;
+  height: 28px;
+}
+[data-ui='bold'] .jobmap--phone .jobmap-line[data-horizontal] .jobmap-dot {
+  left: -3px;
+  top: 0;
+  animation-name: jobmap-down;
+}
+[data-ui='bold'] .jobmap--phone .jobmap-swarm {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  gap: 8px;
+}
+[data-ui='bold'] .jobmap--phone .jobmap-swarm .jobmap-node {
+  padding: 10px;
+  border-radius: 16px;
+}
+[data-ui='bold'] .jobmap--phone .jobmap-swarm-head {
+  flex-direction: column;
+  align-items: flex-start;
+}
+[data-ui='bold'] .jobmap--phone .jobmap-workers,
+[data-ui='bold'] .jobmap--phone .jobmap-worker {
+  width: 100%;
+}
+[data-ui='bold'] .jobmap--phone .jobmap-vote {
+  grid-template-columns: minmax(0, 1fr) 60px 60px;
+}
+/* Phone: time and layer on one line, the text under them at full width (review: it was squeezed into a 56px column). */
+[data-ui='bold'] .jobmap--phone .jobmap-log li {
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+[data-ui='bold'] .jobmap--phone .jobmap-log li > span {
+  grid-column: 1 / -1;
+}
+
+/* ---- motion ---- */
+@keyframes jobmap-down {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(28px);
+    opacity: 0;
+  }
+}
+@keyframes jobmap-right {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+@keyframes jobmap-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(242, 166, 90, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(242, 166, 90, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .jobmap-node[data-pulse],
+  [data-ui='bold'] .jobmap-dot {
+    animation: none;
+  }
+}

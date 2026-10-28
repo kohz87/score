@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { cancelStep } from './commands.ts'
 import { effectiveSize } from './helpers.ts'
 import type {
   AbandonDecision,
@@ -50,7 +51,7 @@ import {
   isForbiddenPermission,
   type WorkerReport,
 } from './supported-agents.ts'
-import { gatesOf, readStep } from './store.ts'
+import { gatesOf, isFinalStep, readStep } from './store.ts'
 
 // Human decisions (contract §14). Each is revision-bound: the page names the run revision it showed, and a stale one is
 // a 409. Stop is the exception: it can only reduce risk, so it never waits on a stale page.
@@ -358,6 +359,49 @@ export function pauseRun(ctx: Ctx, orchId: string, body: RunControl): void {
   addHistory(ctx.sqlite, orchId, 'paused', { by: 'person' }, ctx.now)
   journalSoft(ctx, () =>
     ctx.journal.append({ kind: 'transition', orchestrationId: orchId, what: 'pause' }),
+  )
+  touch(ctx, orchId)
+}
+
+/**
+ * 3.14 (owner: a step hung for 14 minutes and only stopping the whole job could end it): the person stops one step.
+ * Same as the lead's orch.cancel; the lead is told and can reassign the work.
+ */
+export function personStopsStep(ctx: Ctx, orchId: string, stepId: string, body: RunControl): void {
+  const o = requireOrch(ctx.sqlite, orchId)
+  expectRevision(o, body.orchestrationRevision)
+  if (o.status !== 'running' && o.status !== 'paused')
+    throw new HttpError(409, 'conflict', `This run is ${o.status}.`)
+  const step = readStep(ctx.sqlite, orchId, stepId)
+  if (!step || step.role === 'advisor' || step.role === 'vote')
+    throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
+  if (isFinalStep(step.status) || step.retired)
+    throw new HttpError(409, 'conflict', `That step is already ${step.status}.`)
+  const fenced = cancelStep(ctx, o, stepId, 'stopped by the person')
+  addHistory(ctx.sqlite, orchId, 'step_stopped', { stepId, by: 'person' }, ctx.now)
+  // Only when this step is the one thing the job waits on: another stopped step that may still be running keeps its own
+  // card, which lists what the person is agreeing to (review).
+  const onlyThis = cancelFenceAttempts(
+    requireOrch(ctx.sqlite, orchId),
+    attemptsOf(ctx.sqlite, orchId),
+  ).every((attempt) => attempt.step_id === stepId)
+  if (fenced && onlyThis) {
+    // The person's stop is also their decision to go on while the step may still be ending (the waiver): otherwise the
+    // job would wait for a second confirmation that Hermes's cancelled run ended. The Stop stays owed until acknowledged.
+    ctx.sqlite.prepare('UPDATE orchestrations SET waiver_at = ? WHERE id = ?').run(ctx.now, orchId)
+    addHistory(ctx.sqlite, orchId, 'waiver', { stepId, by: 'stop_step' }, ctx.now)
+    bumpAdmission(ctx.sqlite)
+    journalSoft(ctx, () =>
+      ctx.journal.append({ kind: 'transition', orchestrationId: orchId, what: 'waiver' }),
+    )
+  }
+  addCause(
+    ctx.sqlite,
+    orchId,
+    'step_cancelled',
+    stepId,
+    ctx.now,
+    'stopped by the person; reassign the work if it is still needed',
   )
   touch(ctx, orchId)
 }

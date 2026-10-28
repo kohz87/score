@@ -1,5 +1,9 @@
 import { defineConfig } from 'vitest/config'
 
+// Tests and the e2e server read times as UTC whatever zone the machine is set to (the VM moved to GMT+8 on 2026-10-28,
+// and times rendered in the local zone broke tests written against UTC). Workers and the web server inherit it.
+process.env.TZ = 'UTC'
+
 export default defineConfig({
   test: {
     setupFiles: [

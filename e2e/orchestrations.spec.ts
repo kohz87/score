@@ -97,6 +97,8 @@ async function openLive(page: Page, goal: string) {
   // log. Selection and replay carry over between them; the decisions are above every tab.
   await page.goto(`/b?run=${encodeURIComponent(await runBriefId(page, goal))}`)
   await tab(page, 'Graph')
+  // 3.14: the Graph tab opens on the Job map; the step diagram these checks are about is one click away.
+  await page.getByRole('button', { name: 'Show the step diagram' }).click()
   await expect(page.locator('[data-node="lead"]')).toBeVisible()
 }
 

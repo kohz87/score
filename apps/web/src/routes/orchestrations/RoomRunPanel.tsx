@@ -87,7 +87,13 @@ export function RoomRunPanel({
               )}
               <div className="orch-steps">
                 {leadSteps(detail.stepsList).map((step) => (
-                  <StepCard key={step.id} step={step} run={detail} agents={agents} />
+                  <StepCard
+                    key={step.id}
+                    step={step}
+                    run={detail}
+                    agents={agents}
+                    stop={actions.stopStep}
+                  />
                 ))}
               </div>
               <AdvisorCard run={detail} agents={agents} />

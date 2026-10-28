@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { Workbench } from '@score/contract'
 import { z } from 'zod'
 import { readFrame } from '../watch-frames.ts'
-import { jobResults } from './results.ts'
+import { jobResults, jobScope, marks } from './results.ts'
 import { jobComments } from './review-comments.ts'
 import { replayWorkbench, type CommentEvent, type EditEvent } from './workbench-replay.ts'
 
@@ -20,16 +20,23 @@ const EditorPayloadSchema = z.object({
 export function jobWorkbench(sqlite: DatabaseSync, jobId: string): Omit<Workbench, 'asOfSeq'> {
   // jobResults also answers 404 for an unknown job.
   const results = jobResults(sqlite, jobId)
+  // 3.14: an orchestration or recipe job also shows its run's edits (jobScope).
+  const scope = jobScope(sqlite, jobId)
   // In recording order (rowid breaks ties between agents, whose seq counters are separate), and bounded: a job with
   // more edits than this shows the first ones and says the rest isn't exact.
   const rows = sqlite
     .prepare(
       `SELECT agent_id, seq, at, payload FROM watch_frames
          WHERE surface = 'editor'
-           AND run_id IN (SELECT run_id FROM message_runs WHERE job_id = ? AND run_id IS NOT NULL)
+           AND run_id IN (SELECT run_id FROM message_runs WHERE job_id IN (${marks(scope)}) AND run_id IS NOT NULL)
          ORDER BY at, rowid LIMIT ?`,
     )
-    .all(jobId, MAX_FRAMES + 1) as { agent_id: string; seq: number; at: string; payload: string }[]
+    .all(...scope, MAX_FRAMES + 1) as {
+    agent_id: string
+    seq: number
+    at: string
+    payload: string
+  }[]
   const capped = rows.length > MAX_FRAMES
   if (capped) rows.length = MAX_FRAMES
   const edits: EditEvent[] = []

@@ -249,6 +249,8 @@ test.describe('a coding step in the live diagram', () => {
     await expect(card).toBeVisible()
     await expect(card.getByRole('button', { name: 'Use the new settings' })).toBeEnabled()
     await page.getByRole('tab', { name: 'Graph' }).click()
+    // 3.14: the Graph tab opens on the Job map; the step diagram these checks are about is one click away.
+    await page.getByRole('button', { name: 'Show the step diagram' }).click()
     const node = page.locator('[data-node="s2"]')
     await expect(node).toBeVisible()
     await expect(node).toContainText('Claude Code')

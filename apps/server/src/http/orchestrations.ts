@@ -122,6 +122,10 @@ export function registerOrchestrationRoutes(
     RunControlSchema.parse(request.body)
     return orchestrator.stop(id)
   })
+  app.post('/api/orchestrations/:id/steps/:stepId/stop', mutation, async (request) => {
+    const { id, stepId } = StepParams.parse(request.params)
+    return orchestrator.stopStep(id, stepId, RunControlSchema.parse(request.body))
+  })
   app.post('/api/orchestrations/:id/check/run', mutation, async (request) => {
     const { id } = IdParams.parse(request.params)
     return orchestrator.runCheck(id, RunControlSchema.parse(request.body))

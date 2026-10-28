@@ -81,13 +81,18 @@ for (const size of sizes) {
         /^\/b\?job=.+&work=draft$/,
       )
 
+      // Earlier specs' lead jobs show their own screens too since 3.14 (their run's turns count): check the seeded job's
+      // own screen link, found by the job id of its change card.
+      const codeHref = await change
+        .getByRole('link', { name: 'See the code · 2 files' })
+        .getAttribute('href')
+      const seededJob = /job=([^&]+)/.exec(codeHref ?? '')?.[1]
+      expect(seededJob).toBeTruthy()
       const screens = panel.getByRole('region', { name: 'Screens' })
-      await expect(screens.getByRole('link', { name: 'Watch builder’s screen' })).toBeVisible()
+      const seededScreen = screens.locator(`a[href="/b?job=${seededJob}&work=screen"]`)
+      await expect(seededScreen).toHaveCount(1)
+      await expect(seededScreen).toHaveAccessibleName('Watch builder’s screen')
       await expect(screens).toContainText('builder')
-      await expect(screens.getByRole('link', { name: 'Watch builder’s screen' })).toHaveAttribute(
-        'href',
-        /^\/b\?job=.+&work=screen$/,
-      )
 
       const running = await panel.getByTestId('bold-results').evaluate((root) =>
         root

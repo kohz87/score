@@ -67,6 +67,8 @@ export const OrchRowSchema = z.object({
   admission_seen: z.int(),
   /** 3.14: the advisor, if the person named one. */
   advisor_agent_id: z.string().nullable().optional(),
+  /** 3.15: on call to the workers, or the lead's checkpoints only. */
+  advisor_mode: z.string().nullable().optional(),
   /** 3.15: the helpers' settings (JSON), if the person named helpers. */
   helpers_json: z.string().nullable().optional(),
 })

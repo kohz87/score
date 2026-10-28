@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Job map graph on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+@keyframes flowdown{0%{transform:translateY(0);opacity:0}15%{opacity:1}85%{opacity:1}100%{transform:translateY(var(--run));opacity:0}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(242,166,90,0.45)}50%{box-shadow:0 0 0 6px rgba(242,166,90,0)}}
+</style>
+</helmet>
+<div style="width: 390px; box-sizing: border-box; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; padding: 18px 16px 28px; display: flex; flex-direction: column; align-items: stretch">
+
+<div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px">
+<span style="font-size: 12px; color: #9AA0AD">Job · running 42 min · $1.84 of $10</span>
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 21px; font-weight: 700; line-height: 1.2">Story suite: refine the story blocks</span>
+</div>
+
+<button type="button" onClick="{{pickLead}}" style="text-align: left; background: #1A1C23; border-radius: 20px; padding: 14px 16px; border: 2px solid #F2A65A; color: #ECEEF2; font-family: inherit; cursor: pointer; animation: pulse 2.4s ease-in-out infinite">
+<span style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #F2A65A"><span>Lead · astra</span><span style="color: #B9A6FF">◆◇◇ advisor</span></span>
+<span style="display: block; margin-top: 6px; font-size: 16px; font-weight: 700">Turn 9 · assigning s5</span>
+<span style="display: block; margin-top: 2px; font-size: 13px; color: #9AA0AD">plan 2 of 4 · advisor opus55 on call</span>
+</button>
+
+<div aria-hidden="true" style="position: relative; height: 34px; align-self: center; width: 2px; background: #3A3E4A"><span style="position: absolute; left: -3px; top: 0; width: 8px; height: 8px; border-radius: 50%; background: #F2A65A; --run: 26px; animation: flowdown 1.6s linear infinite"></span></div>
+
+<button type="button" onClick="{{pickVotes}}" style="text-align: left; background: #1A1C23; border-radius: 20px; padding: 14px 16px; border: 1px solid #4FD1A5; color: #ECEEF2; font-family: inherit; cursor: pointer">
+<span style="display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #4FD1A5">Votes · voter</span>
+<sc-for list="{{votes}}" as="v" hint-placeholder-count="2">
+<span style="display: grid; grid-template-columns: minmax(0, 1fr) 70px 46px; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px">
+<span style="color: #DDE0E6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{v.q}}</span>
+<span style="height: 8px; border-radius: 999px; background: #2B2E38; overflow: hidden; display: block"><span style="display: block; height: 100%; border-radius: 999px; width: {{v.w}}; background: {{v.c}}"></span></span>
+<span style="font-weight: 700; font-size: 12px; color: {{v.c}}">{{v.label}}</span>
+</span>
+</sc-for>
+</button>
+
+<div aria-hidden="true" style="align-self: center; width: 2px; height: 18px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="margin: 0 16%; height: 2px; background: #3A3E4A"></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 0">
+<sc-for list="{{swarm}}" as="s" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; align-items: center">
+<div aria-hidden="true" style="width: 2px; height: 16px; background: #3A3E4A"></div>
+<button type="button" onClick="{{s.pick}}" style="width: 100%; text-align: left; background: #1A1C23; border-radius: 16px; padding: 10px; border: 1px solid {{s.border}}; color: #ECEEF2; font-family: inherit; cursor: pointer; min-height: 88px">
+<span style="display: block; font-weight: 700; font-size: 13px">{{s.name}}</span>
+<span style="display: block; margin-top: 4px; font-size: 12px; color: #7DB8FF; font-weight: 600">{{s.role}}</span>
+<span style="display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; {{s.pill}}">{{s.state}}</span>
+</button>
+<div aria-hidden="true" style="width: 2px; height: 16px; background: #3A3E4A"></div>
+</div>
+</sc-for>
+</div>
+<div aria-hidden="true" style="margin: 0 16%; height: 2px; background: #3A3E4A"></div>
+<div aria-hidden="true" style="align-self: center; width: 2px; height: 18px; background: #3A3E4A"></div>
+
+<div data-protected="block" style="background: #1A1C23; border-radius: 20px; padding: 14px 16px; border: 1px solid #ECEEF2; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700">Workers · terra</span>
+<span style="display: flex; gap: 6px; flex-wrap: wrap">
+<sc-for list="{{steps}}" as="st" hint-placeholder-count="5">
+<span style="padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; {{st.pill}}">{{st.label}}</span>
+</sc-for>
+</span>
+<sc-if value="{{stuck}}" hint-placeholder-val="{{true}}">
+<div style="background: #ECEEF2; color: #12131A; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 14px"><strong>s5 quiet for 12 min</strong> · last sign of life 15:34</span>
+<button type="button" onClick="{{stop}}" style="min-height: 44px; border-radius: 999px; border: none; background: #12131A; color: #ECEEF2; font: 700 14px 'Hanken Grotesk', sans-serif; cursor: pointer">{{stopLabel}}</button>
+</div>
+</sc-if>
+<sc-if value="{{stopped}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 14px; font-weight: 600">s5 stopped · astra is choosing who does it now</span>
+</sc-if>
+</div>
+
+<div aria-hidden="true" style="position: relative; height: 30px; align-self: center; width: 2px; background: #3A3E4A"><span style="position: absolute; left: -3px; top: 0; width: 8px; height: 8px; border-radius: 50%; background: #F5D06B; --run: 22px; animation: flowdown 1.6s linear infinite"></span></div>
+
+<button type="button" onClick="{{pickCheck}}" style="text-align: left; background: #1A1C23; border-radius: 20px; padding: 12px 16px; border: 1px solid #F5D06B; color: #ECEEF2; font-family: inherit; cursor: pointer">
+<span style="display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #F5D06B">Check</span>
+<span style="display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap"><code style="font-family: 'JetBrains Mono', monospace; font-size: 13px">npm test</code><span style="padding: 2px 10px; border-radius: 999px; background: #3A2326; color: #FF9AA2; font-size: 12px; font-weight: 700">failed · 15:41</span></span>
+</button>
+
+<div style="margin-top: 14px; background: #1A1C23; border-radius: 20px; padding: 12px 16px; display: flex; flex-direction: column">
+<span style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; margin-bottom: 4px">{{panelTitle}}</span>
+<sc-for list="{{panel}}" as="l" hint-placeholder-count="4">
+<span style="display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #23262F">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9AA0AD">{{l.at}}</span>
+<span style="color: #DDE0E6; overflow-wrap: anywhere"><span style="font-weight: 700; color: {{l.color}}">{{l.lane}}</span> {{l.text}}</span>
+</span>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1180}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { focus: 'all', confirm: false, stopped: false };
+  }
+  renderVals() {
+    var s = this.state;
+    var self = this;
+    var done = 'background: #1F3A2E; color: #4FD1A5';
+    var run = 'background: #1C2C40; color: #7DB8FF';
+    var now = 'background: #3A2F1C; color: #F2A65A';
+    var off = 'background: #2B2E38; color: #9AA0AD';
+    var pick = function (f) { return function () { self.setState({ focus: f }); }; };
+    var C = { lead: '#F2A65A', advisor: '#B9A6FF', votes: '#4FD1A5', swarm: '#7DB8FF', check: '#F5D06B', you: '#FF9AA2' };
+    var all = [
+      { at: '15:24', lane: 'advisor', text: 'before the plan: add a test step' },
+      { at: '15:33', lane: 'votes', text: 's3 split → went ahead' },
+      { at: '15:41', lane: 'check', text: 'npm test failed' },
+      { at: '15:47', lane: 'you', text: 'stopped s4' },
+      { at: '15:49', lane: 'swarm', text: 'grep → 7 call sites' },
+      { at: '15:50', lane: 'votes', text: 's5 sharp yes → runs' },
+      { at: '15:51', lane: 'lead', text: 'assigning s5 to terra' }
+    ];
+    var rows = all.filter(function (r) { return s.focus === 'all' || r.lane === s.focus; });
+    if (s.stopped) rows = rows.concat([{ at: '15:53', lane: 'you', text: 'stopped s5' }]);
+    return {
+      votes: [
+        { q: 's5 → terra?', w: '100%', c: '#4FD1A5', label: 'sharp' },
+        { q: 's3 → terra?', w: '50%', c: '#F2A65A', label: 'split' }
+      ],
+      swarm: [
+        { name: 'swarm-1', role: 'audit', state: 'working', pill: run, border: '#7DB8FF', pick: pick('swarm') },
+        { name: 'swarm-2', role: 'grep', state: 'done', pill: done, border: '#2B2E38', pick: pick('swarm') },
+        { name: 'swarm-3', role: 'scan', state: 'done', pill: done, border: '#2B2E38', pick: pick('swarm') }
+      ],
+      steps: [
+        { label: 's1 ✓', pill: done }, { label: 's2 ✓', pill: done }, { label: 's3 ✓', pill: done },
+        { label: 's4 stopped', pill: off },
+        { label: s.stopped ? 's5 stopped' : 's5 running', pill: s.stopped ? off : now }
+      ],
+      panel: rows.slice(-4).map(function (r) { return { at: r.at, lane: r.lane, text: r.text, color: C[r.lane] }; }),
+      panelTitle: s.focus === 'all' ? 'Session log · tap a node' : s.focus,
+      stuck: !s.stopped,
+      stopped: s.stopped,
+      stopLabel: s.confirm ? 'Confirm: stop s5' : 'Stop this step',
+      stop: function () { if (s.confirm) self.setState({ stopped: true, confirm: false }); else self.setState({ confirm: true }); },
+      pickLead: pick('lead'),
+      pickVotes: pick('votes'),
+      pickCheck: pick('check')
+    };
+  }
+}
+</script>
+</body>
+</html>

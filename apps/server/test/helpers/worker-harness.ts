@@ -258,6 +258,7 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
         leadAgentId: 'lead',
         allowedAgents: ['coder'],
         gatePolicy: 'none',
+        advisorMode: 'on_call',
         maxSteps: 12,
         maxLeadTurns: 20,
         maxConcurrentSteps: 2,

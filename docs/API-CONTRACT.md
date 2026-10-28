@@ -213,9 +213,11 @@ type Message = {
     | string
     | null /* streaming agent replies: last sign of life from the run (text, tool, reasoning, approval); absent = createdAt. The web shows "Waiting for the model" after 60 s without it. */
   refs: Ref[]
-  speed?:
-    | { ttftMs: number | null; tokensPerSecond: number | null; outputTokens: number | null }
-    | null /* 3.10.0, agent replies: figures of the run behind it, set once the reply finished; any figure Score did not measure is null, never guessed. ttftMs = first reply text minus run start (or the CLI's own ttft_ms); tokensPerSecond = output tokens / (run end minus first reply text), only for spans of 0.5 s or more; averaged over the whole reply, tool time included (and reasoning tokens on Hermes). */
+  speed?: {
+    ttftMs: number | null
+    tokensPerSecond: number | null
+    outputTokens: number | null
+  } | null /* 3.10.0, agent replies: figures of the run behind it, set once the reply finished; any figure Score did not measure is null, never guessed. ttftMs = first reply text minus run start (or the CLI's own ttft_ms); tokensPerSecond = output tokens / (run end minus first reply text), only for spans of 0.5 s or more; averaged over the whole reply, tool time included (and reasoning tokens on Hermes). */
 }
 
 type LaneBlock = {
@@ -350,7 +352,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `room.pins.changed`     | `{ roomId }` (PLAN 11.2)                                                                                                                                                                                                                                                                                                            | Pinned decisions                                                                                          |
 | `message.created`       | `Message`                                                                                                                                                                                                                                                                                                                           | Chat, Now thread                                                                                          |
 | `message.delta`         | `{ messageId, roomId, append: string }`                                                                                                                                                                                                                                                                                             | Chat (streaming text)                                                                                     |
-| `message.completed`     | `{ messageId, roomId, parts?: MessagePart[], speed?: MessageSpeed \| null }` (final parts replace the cached message's; 3.10.0 `speed` as on `Message`)                                                                                                                                                                                                                                           | Chat                                                                                                      |
+| `message.completed`     | `{ messageId, roomId, parts?: MessagePart[], speed?: MessageSpeed \| null }` (final parts replace the cached message's; 3.10.0 `speed` as on `Message`)                                                                                                                                                                             | Chat                                                                                                      |
 | `message.deleted`       | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                                                                                                                                                                                                                                                       | Chat, Now thread                                                                                          |
 | `message.updated`       | `{ roomId, messageId, editedBy?: MessageId \| null, parts?: MessagePart[] }` (`editedBy`: the original of an edit; `parts`: a summary edited or marked stale, or (PLAN 5.39) the tool and reasoning cards of a reply that is still streaming, replace the cached parts; the cards come before the text, as they stay at completion) | Chat                                                                                                      |
 | `message.progressed`    | `{ roomId, messageId, at }` (a streaming reply's run made a non-text move: tool call, reasoning, approval; set its `progressAt`. Text moves it via `message.delta`)                                                                                                                                                                 | Chat                                                                                                      |
@@ -502,7 +504,7 @@ method: string | null; url: string | null; status: number | null; durationMs: nu
     agent's own CLI as a fresh interactive session instead of the login shell (`hermes -p <agent>` from the Hermes adapter;
     a coding agent's CLI in its workspace from the coding runtime), as the same user with the same six-variable environment.
     The agent is checked before the password check is used up (`404 not_found` unknown or no live session here, `409
-    conflict` not ready or its CLI/workspace missing) and again when the terminal opens. `GET /api/terminal/sessions`
+conflict` not ready or its CLI/workspace missing) and again when the terminal opens. `GET /api/terminal/sessions`
     items carry `agent` for such terminals.
   - `GET /api/terminal/ws?ticket=…` (WebSocket upgrade). Same Host rule as remote mode (`Host` must be the `Origin`'s host), an
     allowed `Origin` (required), the paired-session cookie **and** a valid ticket for exactly this session and origin; any
@@ -728,7 +730,7 @@ job's exchange budget, note}` and `stop_exchange {note}` (tools `score_extend`, 
     **everyone** room (`Room.everyone: true`: every ready agent, kept in sync; can't be renamed, archived, deleted or given
     other members). **S** `GET /api/team-rooms` → `{ asOfSeq; items: Room[] }` (the everyone room first, then by name; archived
     included). **H** `POST /api/team-rooms { name /* plain, 1–80 */, members: AgentId[] /* ≥ 1, ready */, leadAgentId /* ∈
-    members */ }` → `201 Room` (`role: 'team'`, `everyone: false`, exchanges routing, its own default job). A chosen team is
+members */ }` → `201 Room` (`role: 'team'`, `everyone: false`, exchanges routing, its own default job). A chosen team is
     renamed (plain name), archived, deleted and re-membered with the ordinary room routes; `PATCH` keeps ≥ 1 member and the
     lead (when set) among them (`400`). An agent that leaves Score leaves every team.
   - **S** `GET /api/agents/:agentId/direct` → `{ asOfSeq; room: Room | null; chats: Job[] }` (newest activity first);
@@ -2038,10 +2040,10 @@ url; command; postsThisHour; postLimitPerHour }`. `available: false` (and `url`/
 - **H** `DELETE /api/agents/:agentId/mcp/token` → `McpAccess` (revokes).
 - **H** `POST /api/agents/:agentId/mcp/reload` → `McpReloadResult` `{ agentId; scope: 'profile' | 'gateway' }` (3.7.9,
   decision 140): restarts the agent's gateway so its Hermes reconnects MCP and lists Score's tools again (`hermes -p
-  <agent> gateway restart`: a named profile restarts alone inside the shared gateway; `default` restarts the whole
+<agent> gateway restart`: a named profile restarts alone inside the shared gateway; `default` restarts the whole
   gateway, which Hermes refuses while any session is live). `409 agent_busy` while Score sees a run, a queued start, an
   active turn or a pending approval for that agent (for `default`: for any agent), or a reload already running; `502
-  gateway_restart_failed` when Hermes didn't confirm; `404` for an agent without a Hermes profile.
+gateway_restart_failed` when Hermes didn't confirm; `404` for an agent without a Hermes profile.
 
 `command` is text for the owner to run in a terminal; **Score never runs it** and never writes Hermes configuration for
 this: `hermes --profile <agentId> mcp add score --url http://127.0.0.1:<bridge port>/bridge/mcp --auth header`. Hermes
@@ -2209,7 +2211,7 @@ are never refused for this. `when: 'each_step'` also queues a run (reason `step`
 
 - `OrchestrationDetail.check?: { command; workspace; timeoutSec; when; runs: CheckRunView[] (newest first, ≤ 20); waivedAt } | null`;
   `CheckRunView { id; reason: 'lead'|'step'|'person'; queuedAt; startedAt; endedAt; exitCode; outcome: 'queued'|'running'|'passed'|
-  'failed'|'timed_out'|'interrupted'|'refused'|'cancelled'; output; current }` (`current`: a pass that counts for finishing).
+'failed'|'timed_out'|'interrupted'|'refused'|'cancelled'; output; current }` (`current`: a pass that counts for finishing).
 - **H** `POST /api/orchestrations/:id/check/run` `RunControl` → `OrchestrationSummary`: the person queues a run (reason `person`);
   `409` when the job has no check or is not running/paused.
 - **H** `POST /api/orchestrations/:id/check/waive` `RunControl` → `OrchestrationSummary`: "Finish without a passing check" (a protected
@@ -2226,16 +2228,17 @@ stopped and recovered like any step, not counted in `maxSteps`; the lead can't c
 last result, the lead's steps newest first with results quoted as data) asking for advice in ≤ 1,200 characters.
 
 Checkpoints:
+
 - **before plan:** the first `orch.plan` starts a consult; `orch.assign` is refused `advice_pending` until it has ended (a
   first `orch.assign` without a plan starts it too).
 - **same failure twice:** a step that fails like an earlier failed step (normalised text: case, numbers, ids and spacing
   ignored), or the check failing twice in a row with the same ending, starts one consult per failure; at most 3 per job.
 - **before done:** `orch.finish { outcome: 'success' }` (after the check rule) starts a consult and is refused
   `advice_pending` until it has ended; once it has, success is accepted (the check rule still applies: every step, consults included, makes an earlier pass stale). `partial`/`failed` never wait.
-Advice reaches the lead as cause `advice` (or `advice_failed`) and the latest three as quoted `ADVICE advN` blocks. It is
-never a veto. A consult the budget can't cover is skipped (history `advice_skipped`) and nothing waits for it.
+  Advice reaches the lead as cause `advice` (or `advice_failed`) and the latest three as quoted `ADVICE advN` blocks. It is
+  never a veto. A consult the budget can't cover is skipped (history `advice_skipped`) and nothing waits for it.
 - `OrchestrationDetail.advisor?: { agentId; consults: AdvisorConsultView[] } | null`; `AdvisorConsultView { stepId;
-  checkpoint: 'before_plan'|'repeat_failure'|'before_done'; reason; status: StepStatus; advice: string|null; createdAt }`.
+checkpoint: 'before_plan'|'repeat_failure'|'before_done'; reason; status: StepStatus; advice: string|null; createdAt }`.
 - History kinds: `advisor_set`, `advisor_consulted`, `advice_skipped`.
 
 ### Helpers and votes (3.15–3.16, decision 150)
@@ -2268,6 +2271,45 @@ Helper work (`StepView.role: 'helper'`, `helperRole`, ids `h1`, `h2`, …) runs 
   `VoteView { id; question; options; k; status: 'voting'|'sharp'|'split'|'failed'; counts; choice; share; inquiryId; createdAt }`.
 - History kinds: `helpers_set`, `scan_started`, `scan_done`, `vote_started`, `vote_tallied`.
 
+### The advisor on call to workers (3.15, decision 151)
+
+`OrchestrationCreate.advisorMode?: 'on_call' | 'checkpoints'` (default `on_call`). With `on_call`, each of the lead's own steps
+done by a **Claude Code worker at workspace-write**, when the advisor is a **Claude Code agent**, launches with `--agents <file>`
+defining a subagent `advisor` (the advisor's model, tools Read/Grep/Glob, an advise-only prompt);
+the step's input says when to ask it (stuck, after a failed fix, before a risky change; at most 2 per step). The lead keeps its
+checkpoints (before the plan, before done, same failure twice). Other workers (Hermes, Codex, read-only) and a Hermes advisor:
+checkpoints only. `OrchestrationDetail.advisor` gains `mode` and `onCall: { stepId, agentId, at, question, status, totalTokens }[]`,
+read from the workers' `advisor` subagent calls (tool calls of the job's step runs; counted per attempt, so a retried step can
+show more than 2). `--agents` is not one of the worker's checked help flags: a CLI without it fails that step visibly.
+Whether a step gets the advisor is decided once, when it is admitted, and frozen on the step (`orc_steps.advisor_model`); the
+launch reads it. A paused or unavailable advisor is not on call. **Consent:** choosing an advisor "on call" at Start a job is the
+person's consent to its consults (on their Claude plan; the screen says so); it adds no tool to the worker (Claude Code workers
+could already call sub-agents, which run under the worker's own permission mode and deny rules), and the subagent reads in the
+worker's workspace, not the advisor agent's. The worker policy id is unchanged. The mode can't be changed once the job runs.
+
+### Automatic votes and audits, no-limit helpers, stopping one step (3.14)
+
+- `helpers.maxSteps: null` = no separate helper allowance (until the job ends); reserves and the launch suggestion size it as
+  `HELPER_STEPS_UNLIMITED_SIZING` (60). The job's budget, coding-agent launches and lead turns still bound it.
+- `helpers.autoVote` (with `autoVoteK` 3–7, default 3): every step the lead assigns without a gate gets a vote (`VoteView.stepId`)
+  before it may be admitted, options `Yes, go ahead` / `No: another agent should do it` / `No: the approach is wrong`; the
+  lead's instruction is quoted in the question. Sharp yes → the step runs; sharp no → the step is `rejected` (disposition
+  `vote: …`), not started; split → `splitTo: 'lead'` lets it run as the lead chose, `'person'` puts it behind a gate (Needs
+  you); no usable answers → it runs. Each tally is a `vote_done` cause. Skipped (history `auto_vote_skipped`) when the
+  allowance or budget can't cover k answers. Never under the every-step gate policy (stored `false`).
+- `helpers.autoAudit`: after each of the lead's own steps succeeds, a helper step (`helperRole: 'audit'`) checks the change; its
+  instruction quotes the step's instruction and report; under every-step it is gated. Its result reaches the lead as a step
+  result.
+- **H** `POST /api/orchestrations/:id/steps/:stepId/stop` `RunControl` → `OrchestrationSummary`: the person stops one step (as
+  `orch.cancel`); a step that may be running is owed a Stop and the waiver is recorded with it (the job goes on while Hermes
+  ends it); cause `step_cancelled` "stopped by the person"; history `step_stopped`, `waiver`. `409` for a finished step,
+  `404` for consults and vote answers.
+- `StepView.lastActivityAt`: when the step's current run last changed (its latest event); a running step quiet for long is
+  shown as stuck.
+- Job results and workbench (§11.2b, 11.6a): a job linked to an orchestration or recipe run (`recipe_kind`/`recipe_ref`) also
+  counts the turns of the jobs in the run's room; the change card lists files from editor frames (with diff line counts) when
+  no `file` parts exist.
+
 A stale revision answers `409 conflict` with `details.currentRevision`. `GET /api/orchestrations/:id` also carries, per
 attempt, `state`, `evidence`, `unknownReason`, owed-Stop timestamps and spend, so the page can show "not confirmed ended".
 Not in stage A: the Watch replay scoped to an attempt's session (design v3 "Watch scope"); orchestration frames stay in the
@@ -2289,8 +2331,8 @@ agent incarnation; the capability binds (run, lead attempt, generation). Replies
 | `orch.ask { question ≤ 2 KiB }`                                              | Opens an inquiry (Needs you); the answer arrives in the next lead input as data                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `orch.note { text ≤ 2 KiB }`                                                 | A progress line in the run's room (agent message)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `orch.finish { outcome, summary }`                                           | Durable finish request: fences admissions, retires queued steps (`not_started: run_finishing`), withdraws open gates and inquiries, seals further commands, then drains. Succeeds only when every admitted attempt (the requesting one included) is terminated; otherwise `finished_with_unresolved`                                                                                                                                                                                                                                     |
-| `orch.vote { question, options, k? }`                                       | 3.16: the helpers vote on a multiple-choice question → `{ voteId }`; the tally (sharp ≥ 70%, or split) starts a new lead turn. See "Helpers and votes"                                                                                                                                                                                                                                                                                       |
-| `orch.check {}`                                                              | 3.13: queues a run of the person's check (no arguments: the lead can't set or change the command) → `{ checkId }`. Refused `no_check` when the job has none. Its result arrives as a cause in a new lead turn                                                                                                                                                                                                                                                                                                                         |
+| `orch.vote { question, options, k? }`                                        | 3.16: the helpers vote on a multiple-choice question → `{ voteId }`; the tally (sharp ≥ 70%, or split) starts a new lead turn. See "Helpers and votes"                                                                                                                                                                                                                                                                                                                                                                                   |
+| `orch.check {}`                                                              | 3.13: queues a run of the person's check (no arguments: the lead can't set or change the command) → `{ checkId }`. Refused `no_check` when the job has none. Its result arrives as a cause in a new lead turn                                                                                                                                                                                                                                                                                                                            |
 | `orch.receipt { commandId }`                                                 | Returns a stored receipt (`not_found` if none) so the lead can verify after an uncertain reply                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Same `commandId` + same canonical payload → the stored receipt; different payload → `conflict`. A `retry` (the lead

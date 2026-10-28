@@ -1,4 +1,5 @@
 import { runtimeLabel } from '../../components/runtime-label.ts'
+import { StepStopButton, StuckStepCard, useNow, type StopStepAction } from './StepStop.tsx'
 import type {
   AgentSummary,
   AttemptView,
@@ -337,6 +338,7 @@ export function StepCard({
   selected,
   onSelect,
   open,
+  stop,
 }: {
   step: StepView
   run: OrchestrationDetail
@@ -344,7 +346,11 @@ export function StepCard({
   selected?: boolean
   onSelect?: (id: string) => void
   open?: boolean
+  /** 3.14: when given, a running or queued step shows Stop, and a quiet one the stuck card. */
+  stop?: StopStepAction
 }) {
+  // Only a card that can show Stop keeps a clock (review: every card ticked, even without Stop).
+  const now = useNow(stop !== undefined)
   const attempts = run.attempts.filter((attempt) => attempt.stepId === step.id)
   const visual = stepVisual(step, attempts.at(-1))
   const preview = step.result ? step.result.replace(/\s+/g, ' ').slice(0, 200) : null
@@ -365,7 +371,17 @@ export function StepCard({
             Show in log
           </button>
         )}
+        {stop && <StepStopButton step={step} run={run} stop={stop} now={now} />}
       </header>
+      {stop && (
+        <StuckStepCard
+          step={step}
+          run={run}
+          agentName={agents.find((item) => item.id === step.agentId)?.name ?? step.agentId}
+          stop={stop}
+          now={now}
+        />
+      )}
       <p className="orch-step-instruction">{step.instruction}</p>
       <p className="orch-muted">
         {step.after.length > 0 && <>After {step.after.join(', ')}. </>}

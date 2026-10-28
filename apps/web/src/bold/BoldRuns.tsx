@@ -9,6 +9,7 @@ import { AgentGlyph } from '../components/AgentGlyph.tsx'
 import { useStreamQuery, useStreamQueryRefetch } from '../data/query-client.ts'
 import { taskAgentsQuery } from '../data/task-queries.ts'
 import { OrchestrationLive } from '../routes/orchestrations/OrchestrationLive.tsx'
+import { JobMap } from './jobmap/JobMap.tsx'
 import {
   isRunOver,
   leadStepCounts,
@@ -25,6 +26,7 @@ import {
 } from '../routes/orchestrations/orchestration-queries.ts'
 import { AdvisorCard } from '../routes/orchestrations/AdvisorCard.tsx'
 import { HelpersCard } from '../routes/orchestrations/HelpersCard.tsx'
+import { StepStopButton, StuckStepCard, useNow } from '../routes/orchestrations/StepStop.tsx'
 import { CheckCard } from '../routes/orchestrations/CheckCard.tsx'
 import { AgentChip, RunNeeds } from '../routes/orchestrations/RunDecisions.tsx'
 import {
@@ -194,11 +196,14 @@ function Thread({
   agents,
   over,
   details,
+  extras,
 }: {
   steps: ThreadStep[]
   agents: AgentSummary[]
   over: boolean
   details: (step: ThreadStep) => ReactNode
+  /** 3.14: the stuck-step card for a row (null for most). */
+  extras?: (step: ThreadStep) => ReactNode
 }) {
   return (
     <ol className="bold-run-thread" aria-label="Steps">
@@ -243,6 +248,7 @@ function Thread({
                 )}
               </div>
               {step.note && <p className="bold-run-note">{step.note}</p>}
+              {extras?.(step)}
               {step.reply && <Reply text={step.reply} />}
               {step.agentId && (
                 <div className="bold-run-links">
@@ -327,6 +333,8 @@ interface RunFrameProps {
   controls: ReactNode
   summary: ReactNode
   details: (step: ThreadStep) => ReactNode
+  /** 3.14: per-row additions (the stuck card and Stop on lead steps). */
+  stepExtras?: (step: ThreadStep) => ReactNode
   graph: (pane: 'graph' | 'log') => ReactNode
   budget: ReactNode
   /** Extra buttons next to the controls (Run again…). */
@@ -402,6 +410,7 @@ function RunFrame(props: RunFrameProps) {
               agents={props.agents}
               over={props.over}
               details={props.details}
+              extras={props.stepExtras}
             />
             <ClassicPaper>
               {props.summary}
@@ -431,6 +440,9 @@ function OrchestrationRun({
   onBack: () => void
 }) {
   const actions = useRunActions(detail.id)
+  const now = useNow() // one clock for every step's "quiet" test
+  // The Graph tab's choice (Job map or step diagram) outlives a visit to the Log tab.
+  const [diagram, setDiagram] = useState(false)
   const over = isRunOver(detail.status)
   const coding = orchCoding(detail.coding, detail.quotaFloorPercent)
   return (
@@ -497,12 +509,63 @@ function OrchestrationRun({
       }
       details={(step) => {
         const item = detail.stepsList.find((entry) => entry.id === step.id)
-        return item ? <StepCard step={item} run={detail} agents={agents} selected open /> : null
+        return item && step.kind !== 'advisor' ? (
+          <StepCard step={item} run={detail} agents={agents} selected open />
+        ) : null
       }}
-      graph={(pane) => <OrchestrationLive orchestrationId={detail.id} pane={pane} />}
+      stepExtras={(step) => {
+        const item = step.kind === 'agent' ? detail.stepsList.find((e) => e.id === step.id) : null
+        if (!item) return null
+        const name = agents.find((a) => a.id === item.agentId)
+        return (
+          <>
+            <StuckStepCard
+              step={item}
+              run={detail}
+              agentName={name ? agentDisplayName(name) : item.agentId}
+              stop={actions.stopStep}
+              now={now}
+            />
+            <StepStopButton step={item} run={detail} stop={actions.stopStep} now={now} />
+          </>
+        )
+      }}
+      // The step diagram keeps one place in the tree for both tabs, so its selection and replay carry over to the log.
+      graph={(pane) => (
+        <>
+          {pane === 'graph' && <DiagramSwitch diagram={diagram} onDiagram={setDiagram} />}
+          {pane === 'graph' && !diagram ? (
+            <JobMap orchestrationId={detail.id} />
+          ) : (
+            <OrchestrationLive orchestrationId={detail.id} pane={pane} />
+          )}
+        </>
+      )}
       budget={<BudgetBlock run={detail} coding={coding} />}
       onBack={onBack}
     />
+  )
+}
+
+/** 3.15: the Graph tab's switch between the job map (its default) and the step diagram. */
+function DiagramSwitch({
+  diagram,
+  onDiagram,
+}: {
+  diagram: boolean
+  onDiagram: (value: boolean) => void
+}) {
+  return (
+    <p className="bold-runs-note">
+      <button
+        type="button"
+        className="bold-runs-link"
+        aria-pressed={diagram}
+        onClick={() => onDiagram(!diagram)}
+      >
+        {diagram ? 'Show the job map' : 'Show the step diagram'}
+      </button>
+    </p>
   )
 }
 
