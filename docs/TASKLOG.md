@@ -1865,3 +1865,21 @@ One entry per completed task: what landed, review results, and any **rejected re
   advisor before plan → s1 (sonnet55 read the project, **asked its own advisor once**, then reported a 5-line summary and a
   risk) → advisor before done → succeeded in ~2.5 min. `workerAdvisorAsks` = one ask on s1, done; 0 files changed. Estimated
   cost: s1 $0.30 (163k input tokens, including the Opus consult), the two checkpoint consults $0.09 and $0.10.
+
+## 3.14.2 — Remote access and security, locked and tidied (2026-10-28)
+- Owner asked for a tidier section locked behind the password; mock-up (desktop, first run, phone, after unlocking) approved.
+  Lead built the server lock (security boundary): `PairingService` unlock/unlockedUntil/touchUnlock/lock, routes
+  `POST /api/session/security/unlock|lock`, `403 locked` on the device and passkey lists, `authorize` (unlock or password)
+  on every management action, first password set unlocks, `unlockedUntil` + `serverNow` on the status. A Sonnet coder built
+  the screens (BoldSecurityGate, BoldSecurityCards, security-lock.ts; RemoteSection removed).
+- Reviews: server (no P1/P2; P3 unpaired unlock answered 200, unbounded map, thin tests — fixed; rejected: failed actions
+  extend the window (caller already unlocked), a passkey registration finishing after a lock (challenge session-bound and
+  short-lived; refusing it would break the password-only path)); screens (P2 countdown trusted the device clock, Lock now
+  raced the status read — fixed with `serverNow` and an awaited lock; P3 dev double-mount lock, focus, refetch failure read
+  as unlock failure — fixed; P3 change-password fields cleared on failure — kept); fix round (P2 focus stolen on a page that
+  loads unlocked — fixed; rejected: a missing `serverNow` from an older server — server and page ship together).
+- Gate: build ok; e2e 854 passed; check green (server 4948, web 3103, contract 1562).
+- **v3.14.2 deployed live** (~13:06 UTC, idle guard passed): backup score-pre-3.14.2-20261028.db, health ok. Live check with a
+  temporary paired session (signed out after): the device list answers `403 locked`, the status shows `unlockedUntil: null`
+  and `serverNow`.
+
