@@ -375,54 +375,12 @@ export function openPolicyGate(
 
 // ------------------------------------------------------------------------------------- on call to workers (3.15)
 
-/**
- * Claude Code attaches an advisor only at or above the worker's own model (code.claude.com/docs/en/advisor). Ranked by the
- * family name in the model id or alias; an unknown model ranks as unknown.
- */
-const MODEL_RANK: [RegExp, number][] = [
-  [/haiku/i, 1],
-  [/sonnet/i, 2],
-  [/opus/i, 3],
-  [/fable/i, 4],
-]
-const rankOf = (model: string | null): number | null =>
-  model === null ? null : (MODEL_RANK.find(([pattern]) => pattern.test(model))?.[1] ?? null)
-
-/**
- * The advisor a step's worker gets on call, or null: only with the advisor on call, for the lead's own steps (not
- * helpers, votes or consults), done by a Claude Code worker that edits, when the advisor is a Claude Code agent (its
- * model is the subagent's).
- */
-export function onCallAdvisor(
-  sqlite: DatabaseSync,
-  orchId: string,
-  stepId: string,
-): { advisorId: string; model: string } | null {
-  const o = sqlite
-    .prepare('SELECT advisor_agent_id, advisor_mode FROM orchestrations WHERE id = ?')
-    .get(orchId) as { advisor_agent_id: string | null; advisor_mode: string | null } | undefined
-  if (!o?.advisor_agent_id || o.advisor_mode !== 'on_call') return null
-  const step = sqlite
-    .prepare('SELECT agent_id, role FROM orc_steps WHERE orchestration_id = ? AND id = ?')
-    .get(orchId, stepId) as { agent_id: string; role: string | null } | undefined
-  if (!step || step.role) return null
-  const coding = (id: string) =>
-    sqlite.prepare('SELECT runtime, permission, model FROM coding_agents WHERE id = ?').get(id) as
-      { runtime: string; permission: string; model: string | null } | undefined
-  const worker = coding(step.agent_id)
-  if (worker?.runtime !== 'claude-code' || worker.permission !== 'workspace-write') return null
-  const advisor = coding(o.advisor_agent_id)
-  if (advisor?.runtime !== 'claude-code') return null
-  // Below the worker's model it would not attach; a worker on the CLI's default model gets only an Opus-or-better advisor.
-  const advisorRank = rankOf(advisor.model || 'opus')
-  if (advisorRank === null || advisorRank < (rankOf(worker.model) ?? 3)) return null
-  // An advisor the person paused or that can't take work isn't on call either (as for the lead's checkpoints).
-  if (
-    !agentAdmits(sqlite, o.advisor_agent_id) ||
-    agentPausedAt(sqlite, o.advisor_agent_id) !== null
-  )
-    return null
-  return { advisorId: o.advisor_agent_id, model: advisor.model || 'opus' }
+/** 3.14.1 (owner): a Claude Code agent's own advisor model (its setting, Claude Code's --advisor), or null. */
+export function agentAdvisorModel(sqlite: DatabaseSync, agentId: string): string | null {
+  const row = sqlite
+    .prepare("SELECT advisor_model FROM coding_agents WHERE id = ? AND runtime = 'claude-code'")
+    .get(agentId) as { advisor_model: string | null } | undefined
+  return row?.advisor_model ?? null
 }
 
 /** The workers' own consults: their Claude Code advisor calls (tool `advisor`) in the job's step runs. */
@@ -432,7 +390,7 @@ export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
       `SELECT a.step_id, a.agent_id, a.state AS attempt_state, a.abandoned_at, t.started_at, t.status FROM tool_calls t
          JOIN orc_attempts a ON a.run_id = t.run_id
          JOIN orc_steps s ON s.orchestration_id = a.orchestration_id AND s.id = a.step_id
-       WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.tool = 'advisor' AND s.advisor_model IS NOT NULL
+       WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.tool = 'advisor' AND s.role IS NULL
        ORDER BY t.started_at, t.seq`,
     )
     .all(orchId) as {
@@ -449,8 +407,7 @@ export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
     at: row.started_at,
     // The call carries no question and its advice is encrypted for the worker: Score knows only that it asked.
     question: '',
-    // Only steps that had the advisor on call count (review: a person's own global advisor setting would also make calls
-    // named advisor). A consult cut off with its run (stopped, crashed, timed out) never gets a result: once the run is
+    // The lead's own steps only (a consult or helper step is not a worker asking). A consult cut off with its run (stopped, crashed, timed out) never gets a result: once the run is
     // over it is shown as failed, never as live forever (review).
     // An attempt not confirmed ended (unknown, not abandoned) may still be running, so its consult may be too (review).
     status: (row.status === 'ok'
@@ -464,15 +421,4 @@ export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
         : 'running') as 'running' | 'done' | 'failed',
     totalTokens: null,
   }))
-}
-
-/** The on-call decision frozen on the step when it was admitted (its input says so), for the launch to read. */
-export function frozenAdvisorModel(sqlite: DatabaseSync, attemptId: string): string | null {
-  const row = sqlite
-    .prepare(
-      `SELECT s.advisor_model FROM orc_attempts a JOIN orc_steps s ON s.orchestration_id = a.orchestration_id AND s.id = a.step_id
-       WHERE a.id = ?`,
-    )
-    .get(attemptId) as { advisor_model: string | null } | undefined
-  return row?.advisor_model ?? null
 }

@@ -242,7 +242,7 @@ export interface StepInputArgs {
   o: Pick<OrchRow, 'id'>
   step: StepRow
   dependencies: StepRow[]
-  /** 3.15: the worker has the advisor subagent on call (decision 151). */
+  /** 3.14.1: the worker (a Claude Code agent) has its own advisor (`--advisor`). */
   advisorOnCall?: boolean
 }
 

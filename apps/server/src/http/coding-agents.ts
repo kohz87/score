@@ -17,6 +17,7 @@ import {
   CodingUsageSchema,
   CodingVersionConfirmSchema,
   type CodingPermission,
+  advisorChoicesFor,
 } from '@score/contract'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -186,6 +187,23 @@ export function registerCodingAgentRoutes(
       if (!allowed.includes(body.effort))
         throw new HttpError(400, 'bad_request', `Effort must be one of: ${allowed.join(', ')}.`)
     }
+    // 3.14.1 (owner): the agent's own advisor, Claude Code only and above its model. A model change that leaves the advisor
+    // at or below the new model turns the advisor off rather than refusing the model.
+    const nextModel = body.model !== undefined ? body.model : agent.model
+    if (body.advisorModel) {
+      if (agent.runtime !== 'claude-code')
+        throw new HttpError(400, 'bad_request', 'Only Claude Code agents can have an advisor.')
+      if (!advisorChoicesFor(nextModel).includes(body.advisorModel))
+        throw new HttpError(
+          400,
+          'bad_request',
+          `The advisor has to be a stronger model than ${nextModel ?? 'the default'}.`,
+        )
+    }
+    const advisorCleared =
+      body.advisorModel === undefined &&
+      agent.advisorModel !== null &&
+      !advisorChoicesFor(nextModel).includes(agent.advisorModel)
     if (body.permission && body.permission !== agent.permission)
       assertVerified(driverFor(agent.runtime), body.permission)
     // Raising the access level is the sensitive change; lowering it never needs the password. The password is
@@ -223,6 +241,8 @@ export function registerCodingAgentRoutes(
         ...(body.permission !== undefined ? { permission: body.permission } : {}),
         ...(body.model !== undefined ? { model: body.model } : {}),
         ...(body.effort !== undefined ? { effort: body.effort } : {}),
+        ...(body.advisorModel !== undefined ? { advisorModel: body.advisorModel } : {}),
+        ...(advisorCleared ? { advisorModel: null } : {}),
         ...(workspace !== undefined ? { workspace } : {}),
         ...(body.quotaFloorPercent !== undefined
           ? { quotaFloorPercent: body.quotaFloorPercent }

@@ -1,11 +1,7 @@
 // 3.15 (decision 151): the advisor on call to the workers. A Claude Code worker that edits gets the advisor (a Claude Code
 // agent) as a subagent it asks itself; its consults are counted from the worker's tool calls.
 import { afterEach, expect, test } from 'vitest'
-import {
-  frozenAdvisorModel,
-  onCallAdvisor,
-  onCallConsults,
-} from '../../src/domain/orchestration/advisor.ts'
+import { agentAdvisorModel, onCallConsults } from '../../src/domain/orchestration/advisor.ts'
 import { renderStepInput } from '../../src/domain/orchestration/render.ts'
 import { insertCodingAgent } from '../../src/runtimes/coding/store.ts'
 import { byTurn } from '../../src/hermes/fake/fake-lead.ts'
@@ -35,68 +31,23 @@ function coding(
   } as never)
 }
 
-test('who gets the advisor on call, and the note in their step', async () => {
+test('3.14.1: a worker with its own advisor (a Claude Code agent setting) is reminded when to ask it', async () => {
   h = await harness({
     lead: {
       script: byTurn({ 1: async (t) => void (await t.call('orch.plan', { entries: ['x'] })) }),
     },
   })
-  const id = await h.create({ advisorAgentId: 'reviewer' })
+  const id = await h.create()
   await h.settle()
-  const step = (agentId: string, stepId: string, role: string | null = null) =>
-    h.db.sqlite
-      .prepare(
-        `INSERT INTO orc_steps (orchestration_id, id, seq, agent_id, agent_incarnation, instruction, after_steps, status, estimate_usd, created_in_attempt, created_at, updated_at, role)
-         VALUES (?, ?, 1, ?, 'x', 'do it', '[]', 'queued', 0.5, 'a', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', ?)`,
-      )
-      .run(id, stepId, agentId, role)
   coding('coder', 'workspace-write', 'sonnet')
-  coding('reader', 'read-only', 'haiku')
-  step('coder', 's9')
-  step('reader', 's8')
-  step('coder', 'h9', 'helper')
-  // A Hermes advisor can't be a Claude subagent.
-  expect(onCallAdvisor(h.db.sqlite, id, 's9')).toBeNull()
-  coding('reviewer', 'read-only', 'opus')
-  expect(onCallAdvisor(h.db.sqlite, id, 's9')).toEqual({ advisorId: 'reviewer', model: 'opus' })
-  // Claude Code attaches an advisor only at or above the worker's model: an Opus worker gets no Sonnet advisor.
-  coding('bigcoder', 'workspace-write', 'opus')
-  step('bigcoder', 's7')
-  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'sonnet' WHERE id = 'reviewer'").run()
-  expect(onCallAdvisor(h.db.sqlite, id, 's7')).toBeNull()
-  expect(onCallAdvisor(h.db.sqlite, id, 's9')).toEqual({ advisorId: 'reviewer', model: 'sonnet' })
-  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'opus' WHERE id = 'reviewer'").run()
-  // Aliases and unknown names: an [1m] alias ranks by family; an unknown worker model needs an Opus-or-better advisor;
-  // an unknown advisor model is no advisor.
-  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'opus[1m]' WHERE id = 'reviewer'").run()
-  expect(onCallAdvisor(h.db.sqlite, id, 's7')).toEqual({ advisorId: 'reviewer', model: 'opus[1m]' })
-  h.db.sqlite.prepare("UPDATE coding_agents SET model = NULL WHERE id = 'bigcoder'").run()
-  expect(onCallAdvisor(h.db.sqlite, id, 's7')).toEqual({ advisorId: 'reviewer', model: 'opus[1m]' })
-  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'sonnet' WHERE id = 'reviewer'").run()
-  expect(onCallAdvisor(h.db.sqlite, id, 's7')).toBeNull()
-  h.db.sqlite
-    .prepare("UPDATE coding_agents SET model = 'mystery-model' WHERE id = 'reviewer'")
-    .run()
-  expect(onCallAdvisor(h.db.sqlite, id, 's9')).toBeNull()
-  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'opus' WHERE id = 'reviewer'").run()
-  // Not for a read-only worker, nor for helper work.
-  expect(onCallAdvisor(h.db.sqlite, id, 's8')).toBeNull()
-  expect(onCallAdvisor(h.db.sqlite, id, 'h9')).toBeNull()
-  // A paused advisor isn't on call either.
-  h.db.sqlite
-    .prepare(
-      "INSERT INTO agent_pauses (agent_id, paused_at) VALUES ('reviewer', '2026-01-01T00:00:00.000Z')",
-    )
-    .run()
-  expect(onCallAdvisor(h.db.sqlite, id, 's9')).toBeNull()
-  h.db.sqlite.prepare("DELETE FROM agent_pauses WHERE agent_id = 'reviewer'").run()
-  // Checkpoints only: no subagent.
-  h.db.sqlite.prepare("UPDATE orchestrations SET advisor_mode = 'checkpoints' WHERE id = ?").run(id)
-  expect(onCallAdvisor(h.db.sqlite, id, 's9')).toBeNull()
-  const row = h.rows<Record<string, unknown>>('SELECT * FROM orc_steps WHERE id = ?', 's9')[0]!
+  expect(agentAdvisorModel(h.db.sqlite, 'coder')).toBeNull()
+  h.db.sqlite.prepare("UPDATE coding_agents SET advisor_model = 'opus' WHERE id = 'coder'").run()
+  expect(agentAdvisorModel(h.db.sqlite, 'coder')).toBe('opus')
+  // A Hermes agent has no such setting.
+  expect(agentAdvisorModel(h.db.sqlite, 'builder')).toBeNull()
   const input = renderStepInput({
     o: { id },
-    step: { ...(row as object), after_steps: [] } as never,
+    step: { id: 's9', instruction: 'do it', after_steps: [], role: null } as never,
     dependencies: [],
     advisorOnCall: true,
   })
@@ -126,13 +77,6 @@ test('the workers’ consults are read from their Claude Code advisor calls (too
         `INSERT INTO tool_calls (run_id, seq, tool, status, started_at, call_id) VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(runId, seq, tool, status, `2026-01-01T00:00:0${seq}.000Z`, `c${seq}`)
-  // Only a step that had the advisor on call counts.
-  call(9, 'advisor', 'ok')
-  expect(onCallConsults(h.db.sqlite, id)).toEqual([])
-  h.db.sqlite.prepare('DELETE FROM tool_calls WHERE seq = 9').run()
-  h.db.sqlite
-    .prepare("UPDATE orc_steps SET advisor_model = 'opus' WHERE orchestration_id = ? AND id = 's1'")
-    .run(id)
   call(1, 'advisor', 'ok')
   call(2, 'Read', 'ok')
   call(3, 'advisor', 'running')
@@ -172,10 +116,4 @@ test('the workers’ consults are read from their Claude Code advisor calls (too
     )
     .run(id)
   expect(onCallConsults(h.db.sqlite, id).map((c) => c.status)).toEqual(['done', 'failed'])
-  h.db.sqlite
-    .prepare("UPDATE orc_steps SET advisor_model = NULL WHERE orchestration_id = ? AND id = 's1'")
-    .run(id)
-  // The decision is frozen on the step at admission: builder is a Hermes agent here, so no advisor model.
-  const attempt = h.orch.snapshot(id).orchestration.attempts.find((a) => a.stepId === 's1')!
-  expect(frozenAdvisorModel(h.db.sqlite, attempt.id)).toBeNull()
 })

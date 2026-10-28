@@ -12,3 +12,14 @@ test('suggestedCodingSteps adds coding helpers and advisor consults to the defau
     ORCH_LIMITS.maxCodingSteps,
   )
 })
+
+test('3.14.1: advisor choices are strictly above the agent’s model', async () => {
+  const { advisorChoicesFor, claudeModelRank } = await import('../src/index.ts')
+  expect(advisorChoicesFor('haiku')).toEqual(['sonnet', 'opus', 'fable'])
+  expect(advisorChoicesFor('claude-sonnet-5-5')).toEqual(['opus', 'fable'])
+  expect(advisorChoicesFor('opus[1m]')).toEqual(['fable'])
+  expect(advisorChoicesFor(null)).toEqual(['fable'])
+  expect(advisorChoicesFor('fable')).toEqual([])
+  expect(advisorChoicesFor('mystery')).toEqual([])
+  expect(claudeModelRank('opusplan')).toBe(3)
+})

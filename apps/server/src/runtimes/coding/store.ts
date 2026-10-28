@@ -9,6 +9,7 @@ import {
   type CodingPermission,
   type CodingQuota,
   type CodingRuntime,
+  ClaudeAdvisorModelSchema,
 } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
@@ -23,6 +24,7 @@ const RowSchema = z.object({
   permission: CodingPermissionSchema,
   model: z.string().nullable(),
   effort: z.string().nullable(),
+  advisor_model: z.string().nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,
   confirmed_version: z.string().nullable(),
@@ -42,6 +44,8 @@ export interface StoredCodingAgent {
   model: string | null
   /** Reasoning effort for the CLI; null = Default. */
   effort: string | null
+  /** 3.14.1: Claude Code's own advisor model on every turn; null = none. */
+  advisorModel: 'sonnet' | 'opus' | 'fable' | null
   style: AgentStyle
   confirmedVersion: string | null
   quotaFloorPercent: number
@@ -61,6 +65,9 @@ const toAgent = (value: unknown): StoredCodingAgent => {
     model: row.model,
     // A hand-edited or damaged value reads as Default, so one bad row can't fail the whole list.
     effort: EffortWordSchema.safeParse(row.effort).success ? row.effort : null,
+    advisorModel: ClaudeAdvisorModelSchema.safeParse(row.advisor_model).success
+      ? (row.advisor_model as 'sonnet' | 'opus' | 'fable')
+      : null,
     style: { color: row.color, shape: row.shape },
     confirmedVersion: row.confirmed_version,
     quotaFloorPercent: row.quota_floor_percent,
@@ -96,7 +103,12 @@ export function insertCodingAgent(
   sqlite: DatabaseSync,
   agent: Omit<
     StoredCodingAgent,
-    'confirmedVersion' | 'removedAt' | 'quotaFloorPercent' | 'instructions' | 'effort'
+    | 'confirmedVersion'
+    | 'removedAt'
+    | 'quotaFloorPercent'
+    | 'instructions'
+    | 'effort'
+    | 'advisorModel'
   > & {
     effort?: string | null
     quotaFloorPercent?: number
@@ -136,6 +148,7 @@ export function updateCodingAgent(
       | 'permission'
       | 'model'
       | 'effort'
+      | 'advisorModel'
       | 'workspace'
       | 'confirmedVersion'
       | 'quotaFloorPercent'
@@ -149,6 +162,7 @@ export function updateCodingAgent(
     permission: 'permission',
     model: 'model',
     effort: 'effort',
+    advisorModel: 'advisor_model',
     workspace: 'workspace',
     confirmedVersion: 'confirmed_version',
     quotaFloorPercent: 'quota_floor_percent',

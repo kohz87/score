@@ -2646,3 +2646,33 @@ test('3.9.0: effort defaults to null, PATCH sets and clears it per runtime, and 
   await addAgent({ id: 'agy', name: 'Agy', runtime: 'antigravity' })
   expect((await request('PATCH', '/api/coding-agents/agy', { effort: 'low' })).statusCode).toBe(400)
 })
+
+test('3.14.1: a Claude Code agent’s own advisor: off by default, only a stronger model, off again when the model catches up', async () => {
+  const created = await addAgent()
+  expect(created.advisorModel).toBeNull()
+  // The default model counts as Opus: only Fable is above it.
+  expect(
+    (await request('PATCH', '/api/coding-agents/coder', { advisorModel: 'opus' })).statusCode,
+  ).toBe(400)
+  const sonnet = await request('PATCH', '/api/coding-agents/coder', {
+    model: 'sonnet',
+    advisorModel: 'opus',
+  })
+  expect(sonnet.statusCode, sonnet.body).toBe(200)
+  expect(sonnet.json()).toMatchObject({ model: 'sonnet', advisorModel: 'opus' })
+  // Not at or below its own model.
+  expect(
+    (await request('PATCH', '/api/coding-agents/coder', { advisorModel: 'sonnet' })).statusCode,
+  ).toBe(400)
+  expect(
+    (await request('PATCH', '/api/coding-agents/coder', { advisorModel: 'gpt' })).statusCode,
+  ).toBe(400)
+  // A stronger model for the agent turns the advisor off rather than refusing the change.
+  const upgraded = await request('PATCH', '/api/coding-agents/coder', { model: 'opus' })
+  expect(upgraded.json()).toMatchObject({ model: 'opus', advisorModel: null })
+  // Only Claude Code has the setting.
+  await addAgent({ id: 'agy', name: 'Agy', runtime: 'antigravity' })
+  expect(
+    (await request('PATCH', '/api/coding-agents/agy', { advisorModel: 'opus' })).statusCode,
+  ).toBe(400)
+})

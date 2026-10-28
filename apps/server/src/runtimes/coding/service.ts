@@ -70,7 +70,6 @@ import {
   type TerminalInfo,
 } from './translate.ts'
 import type { CodingEvent } from './types.ts'
-import { frozenAdvisorModel } from '../../domain/orchestration/advisor.ts'
 import type { OrchestrationOwner } from '../../domain/orchestration/owner.ts'
 import type { CodingWorkerFacts } from '../../domain/orchestration/supported-agents.ts'
 import type { QuotaSource } from '../../domain/orchestration/quota-guard.ts'
@@ -289,6 +288,7 @@ export class CodingRuntime {
       permission: agent.permission,
       model: agent.model,
       effort: agent.effort,
+      advisorModel: agent.advisorModel,
       style: agent.style,
       quota: driver.quota,
       quotaFloorPercent: agent.quotaFloorPercent,
@@ -1528,12 +1528,8 @@ export class CodingRuntime {
           message: input,
         })
       }
-      // 3.14.1 (decision 151): a worker of a job with the advisor on call runs with Claude Code's own advisor, decided when
-      // its step was admitted (its input says so) and never decided again here.
-      const advisorModel =
-        driver.runtime === 'claude-code' && entry.owner
-          ? frozenAdvisorModel(db.sqlite, entry.owner.attemptId)
-          : null
+      // 3.14.1 (owner): the agent's own advisor (Claude Code's --advisor), on every turn, in chats and job steps alike.
+      const advisorModel = driver.runtime === 'claude-code' ? agent.advisorModel : null
       const cliArgs = [
         ...args,
         ...driver.buildArgs({
