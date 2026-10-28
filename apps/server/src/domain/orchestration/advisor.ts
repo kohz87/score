@@ -408,6 +408,12 @@ export function onCallAdvisor(
   if (worker?.runtime !== 'claude-code' || worker.permission !== 'workspace-write') return null
   const advisor = coding(o.advisor_agent_id)
   if (advisor?.runtime !== 'claude-code') return null
+  // An advisor the person paused or that can't take work isn't on call either (as for the lead's checkpoints).
+  if (
+    !agentAdmits(sqlite, o.advisor_agent_id) ||
+    agentPausedAt(sqlite, o.advisor_agent_id) !== null
+  )
+    return null
   return { advisorId: o.advisor_agent_id, model: advisor.model || 'opus' }
 }
 
@@ -446,4 +452,15 @@ export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
       },
     ]
   })
+}
+
+/** The on-call decision frozen on the step when it was admitted (its input says so), for the launch to read. */
+export function frozenAdvisorModel(sqlite: DatabaseSync, attemptId: string): string | null {
+  const row = sqlite
+    .prepare(
+      `SELECT s.advisor_model FROM orc_attempts a JOIN orc_steps s ON s.orchestration_id = a.orchestration_id AND s.id = a.step_id
+       WHERE a.id = ?`,
+    )
+    .get(attemptId) as { advisor_model: string | null } | undefined
+  return row?.advisor_model ?? null
 }

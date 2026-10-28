@@ -1,7 +1,11 @@
 // 3.15 (decision 151): the advisor on call to the workers. A Claude Code worker that edits gets the advisor (a Claude Code
 // agent) as a subagent it asks itself; its consults are counted from the worker's tool calls.
 import { afterEach, expect, test } from 'vitest'
-import { onCallAdvisor, onCallConsults } from '../../src/domain/orchestration/advisor.ts'
+import {
+  frozenAdvisorModel,
+  onCallAdvisor,
+  onCallConsults,
+} from '../../src/domain/orchestration/advisor.ts'
 import { renderStepInput } from '../../src/domain/orchestration/render.ts'
 import { insertCodingAgent } from '../../src/runtimes/coding/store.ts'
 import { byTurn } from '../../src/hermes/fake/fake-lead.ts'
@@ -58,6 +62,14 @@ test('who gets the advisor on call, and the note in their step', async () => {
   // Not for a read-only worker, nor for helper work.
   expect(onCallAdvisor(h.db.sqlite, id, 's8')).toBeNull()
   expect(onCallAdvisor(h.db.sqlite, id, 'h9')).toBeNull()
+  // A paused advisor isn't on call either.
+  h.db.sqlite
+    .prepare(
+      "INSERT INTO agent_pauses (agent_id, paused_at) VALUES ('reviewer', '2026-01-01T00:00:00.000Z')",
+    )
+    .run()
+  expect(onCallAdvisor(h.db.sqlite, id, 's9')).toBeNull()
+  h.db.sqlite.prepare("DELETE FROM agent_pauses WHERE agent_id = 'reviewer'").run()
   // Checkpoints only: no subagent.
   h.db.sqlite.prepare("UPDATE orchestrations SET advisor_mode = 'checkpoints' WHERE id = ?").run(id)
   expect(onCallAdvisor(h.db.sqlite, id, 's9')).toBeNull()
@@ -120,4 +132,7 @@ test('the workers’ consults are read from their advisor subagent calls', async
     mode: 'on_call',
     onCall: [{ stepId: 's1' }],
   })
+  // The decision is frozen on the step at admission: builder is a Hermes agent here, so no advisor model.
+  const attempt = h.orch.snapshot(id).orchestration.attempts.find((a) => a.stepId === 's1')!
+  expect(frozenAdvisorModel(h.db.sqlite, attempt.id)).toBeNull()
 })

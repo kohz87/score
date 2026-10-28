@@ -534,8 +534,7 @@ export const claudeDriver: CodingDriver = {
           '--permission-mode',
           'acceptEdits',
           '--allowed-tools',
-          // The advisor on call (3.15) is reached through the sub-agent tool (named Agent, Task before 2.1.30x).
-          [...WORKSPACE_ALLOWED, ...(options.agentsFile ? ['Agent', 'Task'] : [])].join(','),
+          WORKSPACE_ALLOWED.join(','),
         )
         break
       case 'full':

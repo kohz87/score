@@ -2458,15 +2458,16 @@ export class Orchestrator {
       }
       const dependencies = step.after_steps.map((id) => byId.get(id)!)
       // A workflow step's instruction already is the final, validated payload (it is never re-rendered or clipped).
+      // 3.15: whether the worker gets the advisor on call is decided once, here, and frozen on the step: its input says
+      // so and its launch reads the same answer (review: deciding twice could disagree).
+      const onCall = o.planner === 'workflow' ? null : onCallAdvisor(sqlite, o.id, step.id)
+      sqlite
+        .prepare('UPDATE orc_steps SET advisor_model = ? WHERE orchestration_id = ? AND id = ?')
+        .run(onCall?.model ?? null, o.id, step.id)
       const input =
         o.planner === 'workflow'
           ? step.instruction
-          : renderStepInput({
-              o,
-              step,
-              dependencies,
-              advisorOnCall: onCallAdvisor(sqlite, o.id, step.id) !== null,
-            })
+          : renderStepInput({ o, step, dependencies, advisorOnCall: onCall !== null })
       // Scanned after rendering and before anything is stored: a capability in a step input blocks admission.
       if (containsCapability(input) || containsCapability(step.instruction)) {
         setStepStatus(sqlite, o.id, step.id, 'blocked', 'capability_in_input', now)
