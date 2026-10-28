@@ -747,3 +747,50 @@ test('Codex: choosing a model that does not list the current effort resets it to
   await waitFor(() => expect(patches).toHaveLength(1))
   expect(patches[0]).toEqual({ model: 'small', effort: null })
 })
+
+test('3.14.1: a Claude Code agent picks its own advisor: only stronger models, off again when the model catches up', async () => {
+  const { CodingOverview } = await import('./CodingAgent.tsx')
+  let agent = personaAgent({
+    runtime: 'claude-code',
+    model: 'sonnet',
+    advisorModel: null,
+  }) as Record<string, unknown>
+  const patches: Record<string, unknown>[] = []
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>
+      patches.push(body)
+      agent = { ...agent, ...body }
+      return json(agent)
+    }
+    if (path.endsWith('/quota')) return json({ quota: null })
+    if (path.includes('/models')) return json({ models: [], source: 'none' })
+    if (path.endsWith('/backend'))
+      return json({ kind: 'unit', note: 'x', checks: [], checkedAt: '2026-10-17T00:00:00.000Z' })
+    if (path.endsWith('/runtimes')) return json({ items: runtimes })
+    return json({ items: [agent] })
+  })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <CodingOverview agent={{ id: 'builder' } as never} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  const model = await screen.findByRole('region', { name: 'Model' })
+  expect(model.textContent).toContain('Advisor: Off')
+  fireEvent.click(within(model).getByRole('button', { name: 'Change model' }))
+  const advisor = (await within(model).findByRole('combobox', {
+    name: 'Advisor',
+  })) as HTMLSelectElement
+  expect([...advisor.options].map((option) => option.value)).toEqual(['', 'opus', 'fable'])
+  fireEvent.change(advisor, { target: { value: 'opus' } })
+  fireEvent.click(within(model).getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(patches).toHaveLength(1))
+  expect(patches[0]).toMatchObject({ advisorModel: 'opus' })
+  // The card remounts with the saved agent.
+  await waitFor(() =>
+    expect(screen.getByRole('region', { name: 'Model' }).textContent).toContain('Advisor: Opus'),
+  )
+})

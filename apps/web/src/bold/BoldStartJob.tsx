@@ -317,7 +317,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
   // 3.14: the advisor; '' = none. Derived below so a lead change to the same agent clears it.
   const [advisorPick, setAdvisorPick] = useState('')
   // 3.15: who the advisor helps. On call (default) also lets a Claude Code worker ask it while it works.
-  const [advisorMode, setAdvisorMode] = useState<'on_call' | 'checkpoints'>('on_call')
   const [checkFolder, setCheckFolder] = useState<string | null>(null)
   // 3.15: helpers. Picks are filtered below (never the lead, only known agents).
   const [helperPick, setHelperPick] = useState<string[]>([])
@@ -848,7 +847,7 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
       goal: what.trim(),
       leadAgentId: leadId,
       allowedAgents: allowedFor,
-      ...(advisorId !== '' ? { advisorAgentId: advisorId, advisorMode } : {}),
+      ...(advisorId !== '' ? { advisorAgentId: advisorId } : {}),
       ...(helpersOn
         ? {
             helpers: {
@@ -1476,42 +1475,6 @@ export function BoldStartJob({ onClose }: { onClose: () => void }) {
                     finishes. Its advice goes to the lead; the lead decides. Choose an agent set up
                     for reviewing: it runs with its own tools.
                   </span>
-                  {advisorId !== '' && (
-                    <fieldset
-                      className="start-advisor-mode"
-                      aria-describedby="start-advisor-mode-help"
-                    >
-                      <legend>Helps</legend>
-                      <label>
-                        <input
-                          type="radio"
-                          name="start-advisor-mode"
-                          checked={advisorMode === 'on_call'}
-                          onChange={() => {
-                            setAdvisorMode('on_call')
-                            touch()
-                          }}
-                        />{' '}
-                        The lead and the workers (on call)
-                      </label>
-                      <label>
-                        <input
-                          type="radio"
-                          name="start-advisor-mode"
-                          checked={advisorMode === 'checkpoints'}
-                          onChange={() => {
-                            setAdvisorMode('checkpoints')
-                            touch()
-                          }}
-                        />{' '}
-                        The lead only (checkpoints)
-                      </label>
-                      <span className="small muted" id="start-advisor-mode-help">
-                        On call: a Claude Code worker can ask it while it works (uses your Claude
-                        plan). Other workers get the lead’s checkpoints only.
-                      </span>
-                    </fieldset>
-                  )}
                 </div>
               )}
 

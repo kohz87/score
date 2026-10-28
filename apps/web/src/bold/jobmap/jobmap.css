@@ -14,47 +14,6 @@
   min-width: 0;
 }
 
-[data-ui='bold'] .jobmap {
-  position: relative;
-}
-[data-ui='bold'] .jobmap-links {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-}
-[data-ui='bold'] .jobmap-link path {
-  fill: none;
-  stroke: var(--jm-advisor);
-  stroke-width: 2;
-  stroke-dasharray: 6 5;
-  opacity: 0.55;
-}
-[data-ui='bold'] .jobmap-link[data-live] path {
-  stroke-dasharray: none;
-  opacity: 1;
-}
-[data-ui='bold'] .jobmap-link text {
-  fill: var(--muted);
-  font-size: 12px;
-  /* A halo in the ground's color keeps the label readable where it crosses a node (review). */
-  paint-order: stroke;
-  stroke: var(--bg, #12131a);
-  stroke-width: 4px;
-  stroke-linejoin: round;
-}
-[data-ui='bold'] .jobmap-link[data-live] text {
-  fill: var(--jm-advisor);
-}
-[data-ui='bold'] .jobmap-link text.jobmap-link-q {
-  font-style: italic;
-}
-[data-ui='bold'] .jobmap-link-dot {
-  fill: var(--jm-advisor);
-}
-
 [data-ui='bold'] .jobmap-row {
   display: flex;
   align-items: center;

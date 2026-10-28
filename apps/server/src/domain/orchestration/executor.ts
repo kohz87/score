@@ -1036,7 +1036,7 @@ export class Orchestrator {
       if (advisor !== undefined) {
         ctx.sqlite
           .prepare('UPDATE orchestrations SET advisor_agent_id = ?, advisor_mode = ? WHERE id = ?')
-          .run(advisor, body.advisorMode, id)
+          .run(advisor, body.advisorMode ?? 'checkpoints', id)
         // Frozen like every agent the run was started with, so a replaced advisor waits for the person's remap.
         ctx.sqlite
           .prepare(

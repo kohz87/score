@@ -321,8 +321,6 @@ export function consultViews(
   if (!o.advisor_agent_id) return null
   return {
     agentId: o.advisor_agent_id,
-    mode: o.advisor_mode === 'checkpoints' ? ('checkpoints' as const) : ('on_call' as const),
-    onCall: onCallConsults(sqlite, o.id),
     consults: consultsOf(sqlite, o.id).map((step) => ({
       stepId: step.id,
       checkpoint: step.checkpoint ?? 'before_plan',
@@ -383,8 +381,11 @@ export function agentAdvisorModel(sqlite: DatabaseSync, agentId: string): string
   return row?.advisor_model ?? null
 }
 
-/** The workers' own consults: their Claude Code advisor calls (tool `advisor`) in the job's step runs. */
-export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
+/**
+ * 3.14.1: each time a worker asked its own advisor (Claude Code's `--advisor`, tool `advisor`) in the lead's steps (not
+ * consult or helper steps). The call has no question and the advice is encrypted for the worker: only that it asked.
+ */
+export function workerAdvisorAsks(sqlite: DatabaseSync, orchId: string) {
   const rows = sqlite
     .prepare(
       `SELECT a.step_id, a.agent_id, a.state AS attempt_state, a.abandoned_at, t.started_at, t.status FROM tool_calls t
@@ -405,11 +406,9 @@ export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
     stepId: row.step_id,
     agentId: row.agent_id,
     at: row.started_at,
-    // The call carries no question and its advice is encrypted for the worker: Score knows only that it asked.
-    question: '',
-    // The lead's own steps only (a consult or helper step is not a worker asking). A consult cut off with its run (stopped, crashed, timed out) never gets a result: once the run is
-    // over it is shown as failed, never as live forever (review).
-    // An attempt not confirmed ended (unknown, not abandoned) may still be running, so its consult may be too (review).
+    // A consult cut off with its run (stopped, crashed, timed out) never gets a result: once the run is over it shows as
+    // failed, never live forever. An attempt not confirmed ended (unknown, not abandoned) may still run, and so may the
+    // consult (review).
     status: (row.status === 'ok'
       ? 'done'
       : row.status === 'error' ||
@@ -419,6 +418,5 @@ export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
           )
         ? 'failed'
         : 'running') as 'running' | 'done' | 'failed',
-    totalTokens: null,
   }))
 }

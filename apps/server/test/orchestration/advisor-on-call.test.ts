@@ -1,7 +1,7 @@
 // 3.15 (decision 151): the advisor on call to the workers. A Claude Code worker that edits gets the advisor (a Claude Code
 // agent) as a subagent it asks itself; its consults are counted from the worker's tool calls.
 import { afterEach, expect, test } from 'vitest'
-import { agentAdvisorModel, onCallConsults } from '../../src/domain/orchestration/advisor.ts'
+import { agentAdvisorModel, workerAdvisorAsks } from '../../src/domain/orchestration/advisor.ts'
 import { renderStepInput } from '../../src/domain/orchestration/render.ts'
 import { insertCodingAgent } from '../../src/runtimes/coding/store.ts'
 import { byTurn } from '../../src/hermes/fake/fake-lead.ts'
@@ -80,40 +80,38 @@ test('the workers’ consults are read from their Claude Code advisor calls (too
   call(1, 'advisor', 'ok')
   call(2, 'Read', 'ok')
   call(3, 'advisor', 'running')
-  expect(onCallConsults(h.db.sqlite, id)).toEqual([
+  expect(workerAdvisorAsks(h.db.sqlite, id)).toEqual([
     {
       stepId: 's1',
       agentId: 'builder',
       at: '2026-01-01T00:00:01.000Z',
-      question: '',
       status: 'done',
-      totalTokens: null,
     },
     {
       stepId: 's1',
       agentId: 'builder',
       at: '2026-01-01T00:00:03.000Z',
-      question: '',
       status: 'running',
-      totalTokens: null,
     },
   ])
-  expect(h.orch.snapshot(id).orchestration.advisor).toMatchObject({
-    mode: 'on_call',
-    onCall: [{ stepId: 's1' }, { stepId: 's1', status: 'running' }],
-  })
+  // Their own: on the job, not under the job's advisor.
+  expect(h.orch.snapshot(id).orchestration.workerAdvisorAsks).toMatchObject([
+    { stepId: 's1' },
+    { stepId: 's1', status: 'running' },
+  ])
+  expect(h.orch.snapshot(id).orchestration.advisor).not.toHaveProperty('onCall')
   // Not confirmed ended (unknown): it may still be running, so the consult stays live.
   h.db.sqlite
     .prepare(
       "UPDATE orc_attempts SET state = 'unknown' WHERE orchestration_id = ? AND step_id = 's1'",
     )
     .run(id)
-  expect(onCallConsults(h.db.sqlite, id).map((c) => c.status)).toEqual(['done', 'running'])
+  expect(workerAdvisorAsks(h.db.sqlite, id).map((c) => c.status)).toEqual(['done', 'running'])
   // A consult cut off with its run never shows as live once the run is over.
   h.db.sqlite
     .prepare(
       "UPDATE orc_attempts SET state = 'terminated' WHERE orchestration_id = ? AND step_id = 's1'",
     )
     .run(id)
-  expect(onCallConsults(h.db.sqlite, id).map((c) => c.status)).toEqual(['done', 'failed'])
+  expect(workerAdvisorAsks(h.db.sqlite, id).map((c) => c.status)).toEqual(['done', 'failed'])
 })

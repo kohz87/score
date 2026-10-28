@@ -9,7 +9,7 @@ import type {
   StepView,
 } from '@score/contract'
 import { checkView } from './checks.ts'
-import { consultViews } from './advisor.ts'
+import { consultViews, workerAdvisorAsks } from './advisor.ts'
 import { helpersView } from './helpers.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { workerPoliciesOf } from './coding-policy.ts'
@@ -323,6 +323,7 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     quotaFloorPercent: o.quota_floor_percent,
     check: checkView(sqlite, o.id),
     advisor: consultViews(sqlite, o),
+    workerAdvisorAsks: workerAdvisorAsks(sqlite, o.id),
     helpers: helpersView(sqlite, o),
     coding: {
       stepLimit: o.coding_steps,

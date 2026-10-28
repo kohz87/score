@@ -35,12 +35,9 @@ export interface Chip {
   tone: Tone
 }
 
+/** 3.14.1: how often a worker asked its own advisor (a Claude Code agent setting); the advice stays with the worker. */
 export interface AskedAdvisor {
   count: number
-  tokens: number
-  questions: string[]
-  /** A consult of this worker is running now (3.14.1: the line back to the advisor is live). */
-  running: boolean
 }
 
 export interface WorkerNode {
@@ -96,10 +93,8 @@ export interface JobMapModel {
   advisor: {
     agentId: string
     name: string
-    mode: 'on_call' | 'checkpoints'
     marks: AdvisorMark[]
     consults: number
-    tokens: number
     working: boolean
   } | null
   votes: { rows: VoteRow[]; voting: boolean } | null
@@ -196,23 +191,11 @@ export function buildJobMap(
     working: leadWorking,
   }
 
-  // --- what the workers asked the advisor
-  const onCall = run.advisor?.onCall ?? []
+  // --- what the workers asked their own advisor (3.14.1: a Claude Code agent's setting, not the job's advisor)
   const askedBy = new Map<string, AskedAdvisor>()
-  for (const entry of onCall) {
+  for (const entry of run.workerAdvisorAsks ?? []) {
     const stepAgent = steps.find((step) => step.id === entry.stepId)?.agentId ?? entry.agentId
-    const have = askedBy.get(stepAgent) ?? {
-      count: 0,
-      tokens: 0,
-      questions: [],
-      running: false,
-    }
-    askedBy.set(stepAgent, {
-      count: have.count + 1,
-      tokens: have.tokens + (entry.totalTokens ?? 0),
-      questions: [...have.questions, entry.question],
-      running: have.running || entry.status === 'running',
-    })
+    askedBy.set(stepAgent, { count: (askedBy.get(stepAgent)?.count ?? 0) + 1 })
   }
 
   // --- advisor
@@ -220,18 +203,13 @@ export function buildJobMap(
     ? {
         agentId: run.advisor.agentId,
         name: nameOf(run.advisor.agentId),
-        mode: run.advisor.mode ?? 'checkpoints',
         marks: MARKS.map(([key, label]) => ({
           key,
           label,
           used: run.advisor!.consults.some((consult) => consult.checkpoint === key),
         })),
-        consults: run.advisor.consults.length + onCall.length,
-        tokens: onCall.reduce((sum, entry) => sum + (entry.totalTokens ?? 0), 0),
-        working:
-          !over &&
-          (run.advisor.consults.some((c) => c.status === 'admitted') ||
-            onCall.some((entry) => entry.status === 'running')),
+        consults: run.advisor.consults.length,
+        working: !over && run.advisor.consults.some((c) => c.status === 'admitted'),
       }
     : null
 
@@ -366,15 +344,13 @@ export function buildLog(
     text: event.summary,
   }))
   // The workers' own asks are not in the orchestration events: they come from the advisor read.
-  ;(run.advisor?.onCall ?? []).forEach((entry, index) => {
+  ;(run.workerAdvisorAsks ?? []).forEach((entry, index) => {
     const agent = byId.get(entry.stepId)?.agentId ?? entry.agentId
     lines.push({
       id: `oncall-${entry.stepId}-${index}`,
       at: entry.at,
-      layer: 'advisor',
-      text: entry.question
-        ? `${nameOf(agent)} asked the advisor: ${entry.question}`
-        : `${nameOf(agent)} asked the advisor`,
+      layer: 'workers',
+      text: `${nameOf(agent)} asked its advisor`,
     })
   })
   return lines.sort((a, b) => a.at.localeCompare(b.at))

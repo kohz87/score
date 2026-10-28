@@ -37,16 +37,11 @@ test('helper steps are the swarm, one node per helper agent, never the workers',
   ])
 })
 
-test('the advisor counts its checkpoint consults and the workers asks, and the tokens read', () => {
+test('the advisor counts its own checkpoint consults; a worker counts the asks of its own advisor (3.14.1)', () => {
   const model = buildJobMap(fullRun, events, agents)
-  expect(model.advisor).toMatchObject({ consults: 3, tokens: 18000, mode: 'on_call' })
+  expect(model.advisor).toMatchObject({ consults: 1 })
   expect(model.advisor?.marks.map((mark) => mark.used)).toEqual([true, false, false])
-  expect(model.workers[0]?.asked).toEqual({
-    count: 2,
-    tokens: 18000,
-    questions: ['which file?', 'retry how?'],
-    running: false,
-  })
+  expect(model.workers[0]?.asked).toEqual({ count: 2 })
   expect(model.workers[1]?.asked).toBeNull()
   expect(formatTokens(18000)).toBe('18k')
   expect(formatTokens(900)).toBe('900')
@@ -71,14 +66,24 @@ test('work flows into the layers that are active right now', () => {
 test('the log carries the worker asks and filters by layer', () => {
   const model = buildJobMap(fullRun, events, agents)
   expect(logFor(model, null).length).toBe(8)
-  expect(logFor(model, 'advisor').map((line) => line.text)).toContain(
-    'builder asked the advisor: which file?',
+  expect(logFor(model, 'advisor').map((line) => line.text)).not.toContain(
+    'builder asked its advisor',
   )
   expect(logFor(model, 'swarm').map((line) => line.text)).toEqual(['designer audits the diff'])
   expect(logFor(model, 'check').map((line) => line.text)).toEqual(['run the check'])
-  expect(logFor(model, 'workers').map((line) => line.text)).toEqual(['builder finished s1'])
+  expect(logFor(model, 'workers').map((line) => line.text)).toEqual([
+    'builder finished s1',
+    'builder asked its advisor',
+    'builder asked its advisor',
+  ])
   // The phone has no advisor node, so the lead's click covers both.
-  expect(logFor(model, 'lead', { phone: true }).length).toBeGreaterThan(
-    logFor(model, 'lead').length,
+  const withAdvice = {
+    log: [
+      ...model.log,
+      { id: 'adv', at: '2026-10-27T09:09:00.000Z', layer: 'advisor' as const, text: 'advice' },
+    ],
+  }
+  expect(logFor(withAdvice, 'lead', { phone: true }).length).toBeGreaterThan(
+    logFor(withAdvice, 'lead').length,
   )
 })
