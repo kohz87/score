@@ -2102,6 +2102,7 @@ const cases = [
       permission: 'read-only',
       model: null,
       effort: null,
+      advisorModel: null,
       style: { color: '#19C39A', shape: 'hexagon' },
       quota: 'Uses your ChatGPT plan quota.',
       quotaFloorPercent: 10,
@@ -2147,6 +2148,7 @@ const cases = [
   ],
   ['EffortLevelSchema', 'xhigh', 'max'],
   ['EffortWordSchema', 'minimal', 'Two words'],
+  ['ClaudeAdvisorModelSchema', 'opus', 'gpt'],
   ['QuotaFloorSchema', 0, 51],
   [
     'QuotaHoldViewSchema',

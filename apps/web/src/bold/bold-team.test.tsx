@@ -83,6 +83,7 @@ const coder: CodingAgent = {
   permission: 'workspace-write',
   model: null,
   effort: null,
+  advisorModel: null,
   style: { color: '#6B4EFF', shape: 'hexagon' },
   quota: 'Uses your ChatGPT plan quota.',
   quotaFloorPercent: 10,

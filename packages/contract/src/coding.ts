@@ -59,6 +59,31 @@ export const CODING_EFFORTS: Partial<Record<CodingRuntime, readonly string[]>> =
 }
 export const EffortWordSchema = z.string().regex(/^[a-z]{1,12}$/)
 
+/**
+ * 3.14.1 (owner): a Claude Code agent's own advisor (Claude Code's `--advisor`, code.claude.com/docs/en/advisor). The
+ * advisor must rank above the agent's model (haiku < sonnet < opus < fable); an agent on the CLI default can take only Fable.
+ */
+export const CLAUDE_ADVISOR_MODELS = ['sonnet', 'opus', 'fable'] as const
+export const ClaudeAdvisorModelSchema = z.enum(CLAUDE_ADVISOR_MODELS)
+const MODEL_RANKS: [RegExp, number][] = [
+  [/haiku/i, 1],
+  [/sonnet/i, 2],
+  [/opus/i, 3],
+  [/fable/i, 4],
+]
+/** The family rank of a Claude model id or alias; null when unknown (the CLI default counts as Opus). */
+export function claudeModelRank(model: string | null): number | null {
+  // Claude Code's default model is Opus-class today; if that changes, an advisor offered above it may be refused there.
+  if (model === null) return 3
+  return MODEL_RANKS.find(([pattern]) => pattern.test(model))?.[1] ?? null
+}
+/** The advisor models a Claude Code agent on `model` may take (strictly above it). */
+export function advisorChoicesFor(model: string | null): (typeof CLAUDE_ADVISOR_MODELS)[number][] {
+  const rank = claudeModelRank(model)
+  if (rank === null) return []
+  return CLAUDE_ADVISOR_MODELS.filter((choice) => claudeModelRank(choice)! > rank)
+}
+
 export const CodingAgentSchema = z.object({
   id: AgentIdSchema,
   name: z.string(),
@@ -73,6 +98,8 @@ export const CodingAgentSchema = z.object({
   model: z.string().nullable(),
   /** Reasoning effort passed to the CLI; null = Default (nothing sent). Claude Code and Codex only. */
   effort: EffortWordSchema.nullable().default(null),
+  /** 3.14.1: Claude Code only: the agent's own advisor model (`--advisor`) on every turn; null = none. */
+  advisorModel: ClaudeAdvisorModelSchema.nullable().default(null),
   style: AgentStyleSchema,
   quota: z.string(),
   /** Runs stop giving this agent new steps while a limit has less than this share left (0 = off; default 10). */
@@ -162,6 +189,8 @@ export const CodingAgentPatchSchema = z
     model: ModelSchema.nullable().optional(),
     /** null = Default. The level must be in the runtime's list (`CODING_EFFORTS`); else `400`. */
     effort: EffortWordSchema.nullable().optional(),
+    /** 3.14.1: null = none; Claude Code only, and above the agent's model (`advisorChoicesFor`); else `400`. */
+    advisorModel: ClaudeAdvisorModelSchema.nullable().optional(),
     workspace: z.string().min(1).max(4096).optional(),
     quotaFloorPercent: QuotaFloorSchema.optional(),
     password: z.string().max(1024).optional(),

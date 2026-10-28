@@ -165,7 +165,7 @@ import {
 } from './helpers.ts'
 import {
   ADVISOR_STEPS,
-  onCallAdvisor,
+  agentAdvisorModel,
   adviceArrived,
   adviseOnRepeatCheckFailure,
   adviseOnRepeatFailure,
@@ -1036,7 +1036,7 @@ export class Orchestrator {
       if (advisor !== undefined) {
         ctx.sqlite
           .prepare('UPDATE orchestrations SET advisor_agent_id = ?, advisor_mode = ? WHERE id = ?')
-          .run(advisor, body.advisorMode, id)
+          .run(advisor, body.advisorMode ?? 'checkpoints', id)
         // Frozen like every agent the run was started with, so a replaced advisor waits for the person's remap.
         ctx.sqlite
           .prepare(
@@ -2458,16 +2458,16 @@ export class Orchestrator {
       }
       const dependencies = step.after_steps.map((id) => byId.get(id)!)
       // A workflow step's instruction already is the final, validated payload (it is never re-rendered or clipped).
-      // 3.15: whether the worker gets the advisor on call is decided once, here, and frozen on the step: its input says
-      // so and its launch reads the same answer (review: deciding twice could disagree).
-      const onCall = o.planner === 'workflow' ? null : onCallAdvisor(sqlite, o.id, step.id)
-      sqlite
-        .prepare('UPDATE orc_steps SET advisor_model = ? WHERE orchestration_id = ? AND id = ?')
-        .run(onCall?.model ?? null, o.id, step.id)
+      // 3.14.1: a worker with its own advisor (a Claude Code agent's setting) is reminded when to ask it.
       const input =
         o.planner === 'workflow'
           ? step.instruction
-          : renderStepInput({ o, step, dependencies, advisorOnCall: onCall !== null })
+          : renderStepInput({
+              o,
+              step,
+              dependencies,
+              advisorOnCall: !step.role && agentAdvisorModel(sqlite, step.agent_id) !== null,
+            })
       // Scanned after rendering and before anything is stored: a capability in a step input blocks admission.
       if (containsCapability(input) || containsCapability(step.instruction)) {
         setStepStatus(sqlite, o.id, step.id, 'blocked', 'capability_in_input', now)

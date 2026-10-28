@@ -35,6 +35,19 @@ const ToolResultBlock = z.object({
   is_error: z.boolean().optional(),
   content: z.unknown().optional(),
 })
+// 3.14.1 (decision 151): Claude Code's own advisor (`--advisor`, 2.1.312, real capture 2026-10-28). A consult is a server tool
+// call named `advisor` with no input, answered in the same message by an `advisor_tool_result` whose advice is encrypted for
+// the model (`advisor_redacted_result`): Score sees that the worker asked, never what the advisor said.
+const AdvisorUseBlock = z.object({
+  type: z.literal('server_tool_use'),
+  id: z.string().min(1),
+  name: z.literal('advisor'),
+})
+const AdvisorResultBlock = z.object({
+  type: z.literal('advisor_tool_result'),
+  tool_use_id: z.string().min(1),
+  content: z.object({ type: z.string().min(1) }).loose(),
+})
 const Envelope = z.object({ type: z.string() }).loose()
 const InitEvent = z.object({
   type: z.literal('system'),
@@ -338,6 +351,8 @@ function createInnerClaudeParser(cwd?: string): LineParser {
           const thinking = ThinkingBlock.safeParse(block)
           const use = ToolUseBlock.safeParse(block)
           const result = ToolResultBlock.safeParse(block)
+          const advisorUse = AdvisorUseBlock.safeParse(block)
+          const advisorResult = AdvisorResultBlock.safeParse(block)
           // A sub-agent's own prose is its report to the Agent tool, not part of the turn's reply.
           if (parent && (text.success || thinking.success) && message.data.type === 'assistant')
             continue
@@ -357,6 +372,26 @@ function createInnerClaudeParser(cwd?: string): LineParser {
               tool: use.data.name,
               preview: preview(use.data.name, use.data.input),
               ...(toolDetail ? { detail: toolDetail } : {}),
+            })
+          } else if (advisorUse.success && message.data.type === 'assistant') {
+            events.push({
+              kind: 'tool_start',
+              callId: advisorUse.data.id,
+              ...(parent ? { parentCallId: parent } : {}),
+              tool: 'advisor',
+              preview: 'Asked the advisor',
+            })
+          } else if (advisorResult.success && message.data.type === 'assistant') {
+            // An error result (its type ends in _error) is a consult that failed; the turn goes on either way.
+            const failed = advisorResult.data.content.type.endsWith('_error')
+            events.push({
+              kind: 'tool_end',
+              callId: advisorResult.data.tool_use_id,
+              ...(parent ? { parentCallId: parent } : {}),
+              ok: !failed,
+              preview: failed
+                ? 'The advisor could not answer'
+                : 'Advice given (only the worker can read it)',
             })
           } else if (result.success) {
             events.push({
@@ -553,10 +588,9 @@ export const claudeDriver: CodingDriver = {
     // once per conversation, so a resumed session renders it fresh for an edit to apply (`claude --help`, 2.1.301).
     if (options.instructionsFile) args.push('--append-system-prompt-file', options.instructionsFile)
     if (options.refreshSystemPrompt) args.push('--system-prompt-snapshot', 'off')
-    // A file, as the help asks for with --print ("with --print the path to a file that holds one"; 2.1.312, 2026-10-28).
-    // Not one of the worker's checked flags: only a job with the advisor on call sends it, and a CLI without it fails
-    // that step visibly instead of every worker being refused.
-    if (options.agentsFile) args.push('--agents', options.agentsFile)
+    // Claude Code's own advisor (3.14.1; documented at code.claude.com/docs/en/advisor, not in `--help`). Not one of the
+    // worker's checked flags: sent on every turn of an agent with its own advisor set, and a CLI without it fails that turn visibly.
+    if (options.advisorModel) args.push('--advisor', options.advisorModel)
     return args
   },
   worker: {

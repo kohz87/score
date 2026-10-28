@@ -2271,21 +2271,23 @@ Helper work (`StepView.role: 'helper'`, `helperRole`, ids `h1`, `h2`, …) runs 
   `VoteView { id; question; options; k; status: 'voting'|'sharp'|'split'|'failed'; counts; choice; share; inquiryId; createdAt }`.
 - History kinds: `helpers_set`, `scan_started`, `scan_done`, `vote_started`, `vote_tallied`.
 
-### The advisor on call to workers (3.15, decision 151)
+### A Claude Code agent's own advisor (3.14.1, owner; replaces decision 151's on-call advisor)
 
-`OrchestrationCreate.advisorMode?: 'on_call' | 'checkpoints'` (default `on_call`). With `on_call`, each of the lead's own steps
-done by a **Claude Code worker at workspace-write**, when the advisor is a **Claude Code agent**, launches with `--agents <file>`
-defining a subagent `advisor` (the advisor's model, tools Read/Grep/Glob, an advise-only prompt);
-the step's input says when to ask it (stuck, after a failed fix, before a risky change; at most 2 per step). The lead keeps its
-checkpoints (before the plan, before done, same failure twice). Other workers (Hermes, Codex, read-only) and a Hermes advisor:
-checkpoints only. `OrchestrationDetail.advisor` gains `mode` and `onCall: { stepId, agentId, at, question, status, totalTokens }[]`,
-read from the workers' `advisor` subagent calls (tool calls of the job's step runs; counted per attempt, so a retried step can
-show more than 2). `--agents` is not one of the worker's checked help flags: a CLI without it fails that step visibly.
-Whether a step gets the advisor is decided once, when it is admitted, and frozen on the step (`orc_steps.advisor_model`); the
-launch reads it. A paused or unavailable advisor is not on call. **Consent:** choosing an advisor "on call" at Start a job is the
-person's consent to its consults (on their Claude plan; the screen says so); it adds no tool to the worker (Claude Code workers
-could already call sub-agents, which run under the worker's own permission mode and deny rules), and the subagent reads in the
-worker's workspace, not the advisor agent's. The worker policy id is unchanged. The mode can't be changed once the job runs.
+Two different advisors. **The job's advisor** (`OrchestrationCreate.advisorAgentId`, any agent) is Score's: it is consulted
+at the lead's checkpoints (before the plan, after the same failure twice, before done) and its advice goes to the lead.
+**A Claude Code agent's own advisor** is an agent setting: `CodingAgent.advisorModel: 'sonnet' | 'opus' | 'fable' | null`
+(default null), set by `PATCH /api/coding-agents/:id { advisorModel }`. It must rank strictly above the agent's model (haiku <
+sonnet < opus < fable; the CLI default counts as Opus; `advisorChoicesFor(model)` in `packages/contract`), else `400`; other
+runtimes `400`. A model change that leaves the advisor at or below the new model turns it off (null) instead of refusing.
+Every turn of that agent (chat rooms and job steps alike) launches with Claude Code's own advisor, `--advisor <model>`
+(code.claude.com/docs/en/advisor; not in `--help` and not one of the checked flags: a CLI without it fails that turn
+visibly). Claude decides when to consult; a job step's input reminds it to ask when stuck, after a failed fix, before a risky
+change and before reporting the step done. The advisor sees the whole turn and returns advice **encrypted for the worker**
+(`advisor_redacted_result`): Score records only that it asked (a tool call `advisor`, `tool_end` ok/failed), never the
+advice. `OrchestrationDetail.workerAdvisorAsks: { stepId, agentId, at, status: 'running' | 'done' | 'failed' }[]` lists them
+for the lead's steps (not consult or helper steps); an ask whose run ended without an answer is `failed`, one on an attempt not
+confirmed ended stays `running`. `OrchestrationCreate.advisorMode` is retired: accepted and ignored. The consults use the
+person's Claude plan; choosing the setting is their consent; it adds no tool or file access.
 
 ### Automatic votes and audits, no-limit helpers, stopping one step (3.14)
 

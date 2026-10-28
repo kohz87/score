@@ -109,6 +109,14 @@ a{color:#7DB8FF}a:hover{color:#B3D4FF}
 <span style="display: flex; align-items: center; gap: 10px; margin-top: 8px"><code style="font-family: 'JetBrains Mono', monospace; font-size: 13px">npm test</code><span style="padding: 2px 10px; border-radius: 999px; background: #3A2326; color: #FF9AA2; font-size: 12px; font-weight: 700">failed · 15:41</span></span>
 </button>
 
+<div aria-hidden="true" style="position: absolute; left: 1380px; top: 168px; width: 32px; height: 0; border-top: 2px dashed {{railColor}}"></div>
+<div aria-hidden="true" style="position: absolute; left: 1410px; top: 168px; width: 0; height: 600px; border-left: 2px dashed {{railColor}}"></div>
+<div aria-hidden="true" style="position: absolute; left: 1020px; top: 766px; width: 392px; height: 0; border-top: 2px dashed {{railColor}}"></div>
+<sc-if value="{{consulting}}" hint-placeholder-val="{{true}}">
+<div aria-hidden="true" style="position: absolute; left: 1406px; top: 172px; width: 10px; height: 10px; border-radius: 50%; background: #B9A6FF; --run: 590px; animation: flowdown 2.2s linear infinite"></div>
+</sc-if>
+<button type="button" onClick="{{toggleConsult}}" style="position: absolute; left: 1060px; top: 774px; padding: 4px 12px; border-radius: 999px; border: 1px solid #B9A6FF; background: #1E1B2E; color: #DCD3FF; font: 600 12px 'Hanken Grotesk', sans-serif; cursor: pointer">{{consultLabel}}</button>
+<span style="position: absolute; left: 1060px; top: 806px; width: 330px; font-size: 12px; color: #9AA0AD; line-height: 1.4">terra → advisor: “Is changing rules.ts:41 safe? swarm-2 found 7 call sites.”</span>
 <div style="position: absolute; left: 60px; top: 1010px; width: 1320px; background: #1A1C23; border-radius: 20px; padding: 14px 18px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
 <span style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700">{{panelTitle}}</span>
 <sc-for list="{{panel}}" as="l" hint-placeholder-count="4">
@@ -159,13 +167,20 @@ class Component extends DCLogic {
       { at: '15:41', lane: 'check', text: 'npm test failed: expected 3 choices, got 2' },
       { at: '15:47', lane: 'you', text: 'you stopped s4 (quiet for 14 min)' },
       { at: '15:49', lane: 'swarm', text: 'swarm-2 grep applyChoice → 7 call sites' },
-      { at: '15:50', lane: 'votes', text: 's5: sharp yes (3 of 3) → runs' }
+      { at: '15:50', lane: 'votes', text: 's5: sharp yes (3 of 3) → runs' },
+      { at: '15:52', lane: 'advisor', text: 'terra asked the advisor: is changing rules.ts:41 safe? (9k tokens)' },
+      { at: '15:53', lane: 'advisor', text: 'terra is asking the advisor again: the second call site fails' }
     ];
     var rows = all.filter(function (r) { return s.focus === 'all' || r.lane === s.focus; });
     if (s.stopped) rows = rows.concat([{ at: '15:53', lane: 'you', text: 'you stopped s5 (quiet for 12 min)' }]);
     var panel = rows.slice(-4).map(function (r) { return { at: r.at, lane: r.lane, text: r.text, color: C[r.lane] }; });
     var titles = { all: 'Session log · click a node to see only its lines', lead: 'Lead', advisor: 'Advisor', votes: 'Votes', swarm: 'Swarm', check: 'Check' };
+    var consulting = s.consulting !== false;
     return {
+      consulting: consulting,
+      railColor: consulting ? '#B9A6FF' : '#5B5670',
+      consultLabel: consulting ? 'terra is asking the advisor… (2nd time)' : 'asked 2× · 18k tokens',
+      toggleConsult: function () { self.setState({ consulting: !consulting }); },
       votes: votes,
       swarm: swarm,
       steps: steps,
