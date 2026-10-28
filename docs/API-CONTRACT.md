@@ -2268,6 +2268,29 @@ Helper work (`StepView.role: 'helper'`, `helperRole`, ids `h1`, `h2`, …) runs 
   `VoteView { id; question; options; k; status: 'voting'|'sharp'|'split'|'failed'; counts; choice; share; inquiryId; createdAt }`.
 - History kinds: `helpers_set`, `scan_started`, `scan_done`, `vote_started`, `vote_tallied`.
 
+### Automatic votes and audits, no-limit helpers, stopping one step (3.14)
+
+- `helpers.maxSteps: null` = no separate helper allowance (until the job ends); reserves and the launch suggestion size it as
+  `HELPER_STEPS_UNLIMITED_SIZING` (60). The job's budget, coding-agent launches and lead turns still bound it.
+- `helpers.autoVote` (with `autoVoteK` 3–7, default 3): every step the lead assigns without a gate gets a vote (`VoteView.stepId`)
+  before it may be admitted, options `Yes, go ahead` / `No: another agent should do it` / `No: the approach is wrong`; the
+  lead's instruction is quoted in the question. Sharp yes → the step runs; sharp no → the step is `rejected` (disposition
+  `vote: …`), not started; split → `splitTo: 'lead'` lets it run as the lead chose, `'person'` puts it behind a gate (Needs
+  you); no usable answers → it runs. Each tally is a `vote_done` cause. Skipped (history `auto_vote_skipped`) when the
+  allowance or budget can't cover k answers. Never under the every-step gate policy (stored `false`).
+- `helpers.autoAudit`: after each of the lead's own steps succeeds, a helper step (`helperRole: 'audit'`) checks the change; its
+  instruction quotes the step's instruction and report; under every-step it is gated. Its result reaches the lead as a step
+  result.
+- **H** `POST /api/orchestrations/:id/steps/:stepId/stop` `RunControl` → `OrchestrationSummary`: the person stops one step (as
+  `orch.cancel`); a step that may be running is owed a Stop and the waiver is recorded with it (the job goes on while Hermes
+  ends it); cause `step_cancelled` "stopped by the person"; history `step_stopped`, `waiver`. `409` for a finished step,
+  `404` for consults and vote answers.
+- `StepView.lastActivityAt`: when the step's current run last changed (its latest event); a running step quiet for long is
+  shown as stuck.
+- Job results and workbench (§11.2b, 11.6a): a job linked to an orchestration or recipe run (`recipe_kind`/`recipe_ref`) also
+  counts the turns of the jobs in the run's room; the change card lists files from editor frames (with diff line counts) when
+  no `file` parts exist.
+
 A stale revision answers `409 conflict` with `details.currentRevision`. `GET /api/orchestrations/:id` also carries, per
 attempt, `state`, `evidence`, `unknownReason`, owed-Stop timestamps and spend, so the page can show "not confirmed ended".
 Not in stage A: the Watch replay scoped to an attempt's session (design v3 "Watch scope"); orchestration frames stay in the
