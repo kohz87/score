@@ -294,7 +294,15 @@ export function useHermesCheck() {
       HermesAcceptResponseSchema.parse(await post('settings/hermes/accept', { hash })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: systemKey }),
   })
-  return { check, accept }
+  // 3.14.4 (owner): turn approvals on anyway for an untested build Score can still work with; needs the security password.
+  const override = useMutation({
+    mutationFn: async ({ hash, password }: { hash: string; password: string }) =>
+      HermesAcceptResponseSchema.parse(
+        await post('settings/hermes/accept', { hash, override: true, password }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: systemKey }),
+  })
+  return { check, accept, override }
 }
 
 /** Whether the web terminal is on (Settings › Terminal) and what else the security card shows; one read, shared. */

@@ -273,3 +273,98 @@ test('added API capabilities stay compatible; a removed one does not', async () 
   expect(check(['run_submission', 'run_events_sse', 'brand_new_api'])).toBe(true)
   expect(check(['run_submission'])).toBe(false)
 })
+
+test('3.14.4: an incompatible build that still has what approvals call can be turned on anyway, and is no baseline', async () => {
+  const tested = await testedBuild()
+  writeState(newSha, '0.21.6')
+  buildDb(join(home, 'kanban.db'), 'ALTER TABLE tasks ADD COLUMN extra TEXT')
+  const live = await start(tested)
+  const check = await live.checkHermes()
+  expect(check).toMatchObject({ compatible: false, overridable: true })
+  // A plain accept still refuses it; the override turns approvals on.
+  await expect(live.acceptHermes(check.hash)).rejects.toMatchObject({ code: 'not_compatible' })
+  await live.acceptHermes(check.hash, { override: true })
+  expect(live.status().compatibility).toMatchObject({ tested: true, disabled: [] })
+  const stored = JSON.parse(readFileSync(join(env.home, 'accepted-hermes-builds.json'), 'utf8'))
+  expect(stored[0].overridden).toEqual(
+    expect.arrayContaining(['Kanban database schema', 'Code revision']),
+  )
+  expect(stored[0].notes).toMatch(/Turned on anyway/)
+  // The next build is still compared with the build that was really tested: the schema change still shows.
+  writeState('1234567890abcdef1234567890abcdef12345678', '0.21.7')
+  await live.stop()
+  const next = await start(tested)
+  const later = await next.checkHermes()
+  expect(later.compatible).toBe(false)
+  expect(later.parts.find((part) => part.name === 'Kanban database schema')?.status).toBe('changed')
+})
+
+test('3.14.4: a build without the approval functions or bridge hooks can’t be overridden', async () => {
+  const tested = await testedBuild()
+  writeState(newSha, '0.21.6')
+  facts = { ...goodFacts(), validHooks: BRIDGE_HOOKS.slice(1) }
+  const live = await start(tested)
+  const check = await live.checkHermes()
+  expect(check).toMatchObject({ compatible: false, overridable: false })
+  await expect(live.acceptHermes(check.hash, { override: true })).rejects.toMatchObject({
+    status: 409,
+    code: 'not_overridable',
+  })
+  expect(live.status().compatibility.disabled).toEqual(['gateway-approvals'])
+})
+
+test('3.14.4: the override over HTTP needs the security password', async () => {
+  const tested = await testedBuild()
+  writeState(newSha, '0.21.6')
+  buildDb(join(home, 'state.db'), 'ALTER TABLE sessions ADD COLUMN extra TEXT')
+  const live = await start(tested)
+  const app = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake', SCORE_HOME: env.home }),
+    logger: false,
+    port: live,
+    db: env.db,
+    ingest: env.ingest,
+  })
+  try {
+    const paired = await app.inject({
+      method: 'POST',
+      url: '/api/session/pair',
+      headers: { 'x-score-client': 'web' },
+      payload: { token: app.pairing.createToken() },
+    })
+    const headers = {
+      'x-score-client': 'web',
+      cookie: paired.headers['set-cookie']!.toString().split(';')[0]!,
+    }
+    const check = HermesCheckSchema.parse(
+      (await app.inject({ method: 'POST', url: '/api/settings/hermes/check', headers })).json(),
+    )
+    expect(check.overridable).toBe(true)
+    let key = 0
+    const accept = (payload: object) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/settings/hermes/accept',
+        headers: { ...headers, 'idempotency-key': `k-${++key}` },
+        payload,
+      })
+    expect((await accept({ hash: check.hash, override: true })).json().error.code).toBe(
+      'password_not_set',
+    )
+    await app.inject({
+      method: 'PUT',
+      url: '/api/session/security/password',
+      headers,
+      payload: { password: 'correct horse battery' },
+    })
+    expect(
+      (await accept({ hash: check.hash, override: true, password: 'wrong guess!!' })).statusCode,
+    ).toBe(403)
+    expect(live.status().compatibility.disabled).toEqual(['gateway-approvals'])
+    const ok = await accept({ hash: check.hash, override: true, password: 'correct horse battery' })
+    expect(ok.statusCode, ok.body).toBe(200)
+    expect(live.status().compatibility.disabled).toEqual([])
+  } finally {
+    await app.close()
+  }
+})

@@ -1543,6 +1543,7 @@ export class FakePort implements HermesPort {
       build: { version: null, codeSha: null, fingerprint: 'fake' },
       parts: [{ name: 'Capabilities', status: 'same', detail: 'Fake adapter' }],
       compatible: true,
+      overridable: false,
     }
   }
   async acceptHermes(): Promise<void> {}

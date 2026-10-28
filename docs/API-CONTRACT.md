@@ -1624,6 +1624,11 @@ compatible: boolean }`. Read-only: compares the running build (version, code sha
 - **H** `POST /api/settings/hermes/accept` `{ hash }` → `{ ok: true }`: records this build in Score's own accepted-builds
   store (`$SCORE_HOME`, never the repo registry) so the compatibility gate re-enables `gateway-approvals`. `409 conflict`
   when the build changed since the check (hash differs), `409 not_compatible` when the check is not compatible.
+  **Override (3.14.4, owner):** `HermesCheck.overridable` is true for an incompatible build that has a code revision and still
+  has the bridge hooks and the private approval functions (`same`). `{ hash, override: true, password }` then accepts it
+  anyway: the security password is checked first (same errors and attempt limits as every password check), `409
+  not_overridable` otherwise. The stored entry lists the parts that differed (`overridden`) and is **never a comparison
+  baseline**: later checks compare with really tested or cleanly accepted builds only.
 - Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
 
 ### Where an agent runs ("Runs on", PLAN 11.8a, D15)
