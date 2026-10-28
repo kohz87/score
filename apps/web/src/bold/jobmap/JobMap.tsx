@@ -35,6 +35,9 @@ const clockOf = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
 /** The quiet part of a line between two nodes; dots run along it only while work flows into the layer below. */
+/** Step chips shown on one worker node before the rest are counted. */
+const CHIP_LIMIT = 12
+
 function Line({
   active,
   still,
@@ -115,7 +118,13 @@ function WorkerBox({
   selected: LayerId | null
   onPick: (layer: LayerId) => void
 }) {
-  const states = worker.chips.map((chip) => `${chip.stepId} ${visualLabel[chip.visual]}`)
+  // A long job stays readable: the latest 12 steps as chips, the rest counted (review: 40 chips made a tall node).
+  const shown = worker.chips.slice(-CHIP_LIMIT)
+  const hidden = worker.chips.length - shown.length
+  const counts = new Map<string, number>()
+  for (const chip of worker.chips)
+    counts.set(visualLabel[chip.visual], (counts.get(visualLabel[chip.visual]) ?? 0) + 1)
+  const states = [...counts].map(([label, n]) => `${n} ${label}`)
   const asked = worker.asked
   return (
     <div className="jobmap-worker" data-asked={asked ? '' : undefined}>
@@ -133,7 +142,8 @@ function WorkerBox({
           Worker · {worker.name}
         </span>
         <span className="jobmap-chips">
-          {worker.chips.map((chip) => (
+          {hidden > 0 && <Pill tone="muted">+{hidden} earlier</Pill>}
+          {shown.map((chip) => (
             <Pill key={chip.stepId} tone={chip.tone}>
               {chip.label}
             </Pill>
@@ -180,8 +190,10 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
         now,
       ) !== null,
   )
+  // Stop for the steps that run now (a queued step has its Stop in the Steps view): one row each, not one per queued step.
   const stoppable = run.stepsList.filter(
-    (step) => !step.role && canStopStep(step) && !stuck.includes(step),
+    (step) =>
+      !step.role && step.status === 'admitted' && canStopStep(step) && !stuck.includes(step),
   )
   const nameOfAgent = (id: string) => agentOf(id)?.name || id
 

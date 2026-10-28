@@ -173,8 +173,13 @@ export function buildJobMap(
       (attempt) =>
         attempt.kind === 'lead' && ['created', 'send_started', 'running'].includes(attempt.state),
     )
+  // The lead's own events only: a vote's or the check's command is not what the lead is doing (review).
   const lastLead = events.findLast(
-    (event) => event.kind === 'lead_wake' || event.kind === 'lead_done' || event.kind === 'command',
+    (event) =>
+      event.kind === 'lead_wake' ||
+      event.kind === 'lead_done' ||
+      (event.kind === 'command' &&
+        layerOfEvent(event, new Map(run.stepsList.map((step) => [step.id, step]))) === 'lead'),
   )
   const done = workerSteps.filter((step) => step.status === 'succeeded').length
   const lead: JobMapModel['lead'] = {

@@ -75,7 +75,8 @@ export function AdvisorCard({
               <li key={`${entry.stepId}-${index}`}>
                 <div className="orch-check-line">
                   <strong>
-                    {entry.agentId} · step {entry.stepId}
+                    {agents.find((agent) => agent.id === entry.agentId)?.name || entry.agentId} ·
+                    step {entry.stepId}
                   </strong>
                   <span>{onCallStatus[entry.status]}</span>
                   <span className="orch-muted">{when(entry.at)}</span>

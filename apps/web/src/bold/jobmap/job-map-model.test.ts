@@ -18,7 +18,7 @@ test('a full job draws every layer', () => {
 
 test('the lead shows its turn, plan progress and the latest thing it did', () => {
   const { lead } = buildJobMap(fullRun, events, agents)
-  expect(lead).toMatchObject({ turn: 9, maxTurns: 30, working: true, doing: 'run the check' })
+  expect(lead).toMatchObject({ turn: 9, maxTurns: 30, working: true, doing: 'assigning s5' })
   expect(lead.progress).toBe('4 plan lines · 2 of 5 steps done')
 })
 

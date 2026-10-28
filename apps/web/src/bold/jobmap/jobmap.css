@@ -398,11 +398,12 @@
 [data-ui='bold'] .jobmap--phone .jobmap-vote {
   grid-template-columns: minmax(0, 1fr) 60px 60px;
 }
+/* Phone: time and layer on one line, the text under them at full width (review: it was squeezed into a 56px column). */
 [data-ui='bold'] .jobmap--phone .jobmap-log li {
   grid-template-columns: 56px minmax(0, 1fr);
 }
-[data-ui='bold'] .jobmap--phone .jobmap-log li b {
-  grid-column: 2;
+[data-ui='bold'] .jobmap--phone .jobmap-log li > span {
+  grid-column: 1 / -1;
 }
 
 /* ---- motion ---- */

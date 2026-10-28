@@ -43,7 +43,7 @@ test('every layer is a focusable button with its state in the label', () => {
     /^Advisor layer: reviewer, on call to the workers/,
     /^Fork layer/,
     /^Swarm layer: designer, audit, working/,
-    /^Workers layer: builder, steps s1 succeeded/,
+    /^Workers layer: builder, steps \d+ succeeded/,
     /^Check layer: pnpm test, failed/,
   ])
     expect(screen.getAllByRole('button', { name })[0]).toBeTruthy()
