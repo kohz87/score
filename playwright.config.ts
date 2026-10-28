@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
+// Tests and the e2e server read times as UTC whatever zone the machine is set to (the VM moved to GMT+8 on 2026-10-28,
+// and times rendered in the local zone broke tests written against UTC). Workers and the web server inherit it.
+process.env.TZ = 'UTC'
+
 const webPort = process.env.SCORE_WEB_PORT ?? '5173'
 const baseURL = `http://127.0.0.1:${webPort}`
 // Kanban attempts (5.17a-1) are behind SCORE_KANBAN_ATTEMPTS, so their spec gets its own server with the flag on and
@@ -35,7 +39,7 @@ export default defineConfig({
   workers: Number(process.env['SCORE_E2E_WORKERS'] ?? 4),
   forbidOnly: !!process.env.CI,
   reporter: [['list']],
-  use: { baseURL, trace: 'on-first-retry' },
+  use: { baseURL, trace: 'on-first-retry', timezoneId: 'UTC' },
   projects: [
     // A project's testIgnore replaces the top-level one, so the README screenshot generator (its own config,
     // `pnpm screenshots`) is excluded here.

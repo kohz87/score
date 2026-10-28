@@ -5,6 +5,10 @@ import { join, resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Tests and the e2e server read times as UTC whatever zone the machine is set to (the VM moved to GMT+8 on 2026-10-28,
+// and times rendered in the local zone broke tests written against UTC). Workers and the web server inherit it.
+process.env.TZ = 'UTC'
+
 const serverPort = process.env.SCORE_PORT ?? '8740'
 // Point the dev proxy at a TLS Score (https://127.0.0.1:8741) to use the web terminal, which needs HTTPS end to end.
 const apiTarget = process.env.SCORE_API_TARGET ?? `http://127.0.0.1:${serverPort}`
