@@ -589,7 +589,7 @@ export const claudeDriver: CodingDriver = {
     if (options.instructionsFile) args.push('--append-system-prompt-file', options.instructionsFile)
     if (options.refreshSystemPrompt) args.push('--system-prompt-snapshot', 'off')
     // Claude Code's own advisor (3.14.1; documented at code.claude.com/docs/en/advisor, not in `--help`). Not one of the
-    // worker's checked flags: only a job with the advisor on call sends it, and a CLI without it fails that step visibly.
+    // worker's checked flags: sent on every turn of an agent with its own advisor set, and a CLI without it fails that turn visibly.
     if (options.advisorModel) args.push('--advisor', options.advisorModel)
     return args
   },

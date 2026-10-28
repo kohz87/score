@@ -73,6 +73,7 @@ const MODEL_RANKS: [RegExp, number][] = [
 ]
 /** The family rank of a Claude model id or alias; null when unknown (the CLI default counts as Opus). */
 export function claudeModelRank(model: string | null): number | null {
+  // Claude Code's default model is Opus-class today; if that changes, an advisor offered above it may be refused there.
   if (model === null) return 3
   return MODEL_RANKS.find(([pattern]) => pattern.test(model))?.[1] ?? null
 }

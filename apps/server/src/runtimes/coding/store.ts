@@ -65,9 +65,7 @@ const toAgent = (value: unknown): StoredCodingAgent => {
     model: row.model,
     // A hand-edited or damaged value reads as Default, so one bad row can't fail the whole list.
     effort: EffortWordSchema.safeParse(row.effort).success ? row.effort : null,
-    advisorModel: ClaudeAdvisorModelSchema.safeParse(row.advisor_model).success
-      ? (row.advisor_model as 'sonnet' | 'opus' | 'fable')
-      : null,
+    advisorModel: ClaudeAdvisorModelSchema.safeParse(row.advisor_model).data ?? null,
     style: { color: row.color, shape: row.shape },
     confirmedVersion: row.confirmed_version,
     quotaFloorPercent: row.quota_floor_percent,

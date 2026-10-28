@@ -625,6 +625,7 @@ function ModelEditor({
   const [model, setModel] = useState(coding.model ?? '')
   const [effort, setEffort] = useState(coding.effort ?? '')
   const [advisor, setAdvisor] = useState<string>(coding.advisorModel ?? '')
+  const [advisorDropped, setAdvisorDropped] = useState(false)
   const save = useCodingPatch(coding, onChanged, onClose)
   const models = useCodingModels(coding.runtime)
   const runtimeLevels = CODING_EFFORTS[coding.runtime]
@@ -641,8 +642,10 @@ function ModelEditor({
     setModel(next)
     if (effort !== '' && !levelsFor(next).includes(effort)) setEffort('')
     // The advisor must stay stronger than the model: a model that catches up turns it off.
-    if (advisor !== '' && !advisorChoicesFor(next.trim() || null).includes(advisor as never))
+    if (advisor !== '' && !advisorChoicesFor(next.trim() || null).includes(advisor as never)) {
       setAdvisor('')
+      setAdvisorDropped(true)
+    }
   }
   const advisorChoices = advisorChoicesFor(model.trim() || null)
   return (
@@ -662,7 +665,15 @@ function ModelEditor({
       <ModelPicker runtime={coding.runtime} value={model} onChange={pickModel} />
       {runtimeLevels && <EffortSelect value={effort} levels={levels} onChange={setEffort} />}
       {coding.runtime === 'claude-code' && (
-        <AdvisorSelect value={advisor} choices={advisorChoices} onChange={setAdvisor} />
+        <AdvisorSelect
+          value={advisor}
+          choices={advisorChoices}
+          dropped={advisorDropped && advisor === ''}
+          onChange={(next) => {
+            setAdvisor(next)
+            setAdvisorDropped(false)
+          }}
+        />
       )}
       {save.error && <p role="alert">{save.error.message}</p>}
       <div className="team-file-actions">
@@ -690,10 +701,13 @@ const advisorNames: Record<NonNullable<CodingAgent['advisorModel']>, string> = {
 function AdvisorSelect({
   value,
   choices,
+  dropped,
   onChange,
 }: {
   value: string
   choices: readonly string[]
+  /** A model change caught up with the advisor and turned it off (review: say so). */
+  dropped: boolean
   onChange: (value: string) => void
 }) {
   const id = useId()
@@ -718,9 +732,11 @@ function AdvisorSelect({
         </select>
       </label>
       <p id={hint} className="team-muted">
-        {choices.length === 0
-          ? 'No stronger model to advise this one.'
-          : 'A stronger model it consults when stuck and before it reports work done. Uses your Claude plan.'}
+        {dropped
+          ? 'Advisor turned off: the model is now as strong as it. Pick a stronger one or leave it off.'
+          : choices.length === 0
+            ? 'No stronger model to advise this one.'
+            : 'A stronger model it consults when stuck and before it reports work done. Uses your Claude plan.'}
       </p>
     </>
   )

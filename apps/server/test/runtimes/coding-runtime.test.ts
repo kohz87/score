@@ -2670,6 +2670,15 @@ test('3.14.1: a Claude Code agent’s own advisor: off by default, only a strong
   // A stronger model for the agent turns the advisor off rather than refusing the change.
   const upgraded = await request('PATCH', '/api/coding-agents/coder', { model: 'opus' })
   expect(upgraded.json()).toMatchObject({ model: 'opus', advisorModel: null })
+  // The CLI default counts as Opus: going back to it from Sonnet turns an Opus advisor off; Fable stays allowed.
+  await request('PATCH', '/api/coding-agents/coder', { model: 'sonnet', advisorModel: 'opus' })
+  const toDefault = await request('PATCH', '/api/coding-agents/coder', { model: null })
+  expect(toDefault.json()).toMatchObject({ model: null, advisorModel: null })
+  const fable = await request('PATCH', '/api/coding-agents/coder', { advisorModel: 'fable' })
+  expect(fable.json()).toMatchObject({ advisorModel: 'fable' })
+  // An explicit null turns it off.
+  const off = await request('PATCH', '/api/coding-agents/coder', { advisorModel: null })
+  expect(off.json().advisorModel).toBeNull()
   // Only Claude Code has the setting.
   await addAgent({ id: 'agy', name: 'Agy', runtime: 'antigravity' })
   expect(

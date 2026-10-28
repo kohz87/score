@@ -786,6 +786,14 @@ test('3.14.1: a Claude Code agent picks its own advisor: only stronger models, o
   })) as HTMLSelectElement
   expect([...advisor.options].map((option) => option.value)).toEqual(['', 'opus', 'fable'])
   fireEvent.change(advisor, { target: { value: 'opus' } })
+  // A model as strong as the advisor turns it off, and says so.
+  const modelBox = (await within(model).findByRole('textbox')) as HTMLInputElement
+  fireEvent.change(modelBox, { target: { value: 'opus' } })
+  await waitFor(() => expect(advisor.value).toBe(''))
+  expect(within(model).getByText(/Advisor turned off/)).toBeTruthy()
+  fireEvent.change(modelBox, { target: { value: 'sonnet' } })
+  fireEvent.change(advisor, { target: { value: 'opus' } })
+  expect(within(model).queryByText(/Advisor turned off/)).toBeNull()
   fireEvent.click(within(model).getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(patches).toHaveLength(1))
   expect(patches[0]).toMatchObject({ advisorModel: 'opus' })
