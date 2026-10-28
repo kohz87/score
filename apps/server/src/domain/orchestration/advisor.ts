@@ -429,20 +429,33 @@ export function onCallAdvisor(
 export function onCallConsults(sqlite: DatabaseSync, orchId: string) {
   const rows = sqlite
     .prepare(
-      `SELECT a.step_id, a.agent_id, t.started_at, t.status FROM tool_calls t
+      `SELECT a.step_id, a.agent_id, a.state AS attempt_state, t.started_at, t.status FROM tool_calls t
          JOIN orc_attempts a ON a.run_id = t.run_id
-       WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.tool = 'advisor'
+         JOIN orc_steps s ON s.orchestration_id = a.orchestration_id AND s.id = a.step_id
+       WHERE a.orchestration_id = ? AND a.kind = 'step' AND t.tool = 'advisor' AND s.advisor_model IS NOT NULL
        ORDER BY t.started_at, t.seq`,
     )
-    .all(orchId) as { step_id: string; agent_id: string; started_at: string; status: string }[]
+    .all(orchId) as {
+    step_id: string
+    agent_id: string
+    attempt_state: string
+    started_at: string
+    status: string
+  }[]
   return rows.map((row) => ({
     stepId: row.step_id,
     agentId: row.agent_id,
     at: row.started_at,
     // The call carries no question and its advice is encrypted for the worker: Score knows only that it asked.
     question: '',
-    status: (row.status === 'ok' ? 'done' : row.status === 'error' ? 'failed' : 'running') as
-      'running' | 'done' | 'failed',
+    // Only steps that had the advisor on call count (review: a person's own global advisor setting would also make calls
+    // named advisor). A consult cut off with its run (stopped, crashed, timed out) never gets a result: once the run is
+    // over it is shown as failed, never as live forever (review).
+    status: (row.status === 'ok'
+      ? 'done'
+      : row.status === 'error' || !['send_started', 'running'].includes(row.attempt_state)
+        ? 'failed'
+        : 'running') as 'running' | 'done' | 'failed',
     totalTokens: null,
   }))
 }

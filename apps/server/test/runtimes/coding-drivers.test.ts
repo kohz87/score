@@ -180,6 +180,23 @@ test('3.14.1: a Claude Code advisor consult (captured shapes, 2.1.312) is a tool
   )
   expect(failed[0]).toMatchObject({ kind: 'tool_end', ok: false })
   expect(second.lossReason?.() ?? null).toBeNull()
+  // Inside a sub-agent the consult keeps its parent.
+  const nested = createClaudeParser('/work/ws')
+  const inner = nested.parse(
+    JSON.stringify({
+      type: 'assistant',
+      parent_tool_use_id: 'toolu_parent',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'server_tool_use', id: 'srvtoolu_4', name: 'advisor', input: {} }],
+      },
+    }),
+  )
+  expect(inner[0]).toMatchObject({
+    kind: 'tool_start',
+    tool: 'advisor',
+    parentCallId: 'toolu_parent',
+  })
   const third = createClaudeParser('/work/ws')
   third.parse(
     assistant([{ type: 'server_tool_use', id: 'srvtoolu_3', name: 'web_search', input: {} }]),

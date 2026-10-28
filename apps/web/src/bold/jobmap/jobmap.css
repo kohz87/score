@@ -39,6 +39,11 @@
 [data-ui='bold'] .jobmap-link text {
   fill: var(--muted);
   font-size: 12px;
+  /* A halo in the ground's color keeps the label readable where it crosses a node (review). */
+  paint-order: stroke;
+  stroke: var(--bg, #12131a);
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 [data-ui='bold'] .jobmap-link[data-live] text {
   fill: var(--jm-advisor);

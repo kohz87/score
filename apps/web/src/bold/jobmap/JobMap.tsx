@@ -61,6 +61,8 @@ function measureLinks(map: HTMLElement, workers: WorkerNode[]): AdvisorLink[] {
   const from = map.querySelector('[data-anchor="advisor"]')
   if (!from) return []
   const a = from.getBoundingClientRect()
+  // A hidden anchor measures 0×0: no line rather than one to the corner (review).
+  if (a.width === 0 && a.height === 0) return []
   const ax = a.right - origin.left
   const ay = a.top + a.height / 2 - origin.top
   const out: AdvisorLink[] = []
@@ -70,6 +72,7 @@ function measureLinks(map: HTMLElement, workers: WorkerNode[]): AdvisorLink[] {
     const to = map.querySelector(`[data-anchor="worker:${CSS.escape(worker.agentId)}"]`)
     if (!to) continue
     const w = to.getBoundingClientRect()
+    if (w.width === 0 && w.height === 0) continue
     const wx = w.right - origin.left
     const wy = w.top + w.height / 2 - origin.top
     const edge = Math.max(ax, wx) + 14 + lane * 10
@@ -251,6 +254,8 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(measure)
     observer.observe(map)
+    // The nodes too: a font swap or more chips moves them without resizing the map (review).
+    for (const anchor of map.querySelectorAll('[data-anchor]')) observer.observe(anchor)
     return () => observer.disconnect()
   }, [model, phone])
 

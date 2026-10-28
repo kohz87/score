@@ -66,6 +66,19 @@ test('who gets the advisor on call, and the note in their step', async () => {
   expect(onCallAdvisor(h.db.sqlite, id, 's7')).toBeNull()
   expect(onCallAdvisor(h.db.sqlite, id, 's9')).toEqual({ advisorId: 'reviewer', model: 'sonnet' })
   h.db.sqlite.prepare("UPDATE coding_agents SET model = 'opus' WHERE id = 'reviewer'").run()
+  // Aliases and unknown names: an [1m] alias ranks by family; an unknown worker model needs an Opus-or-better advisor;
+  // an unknown advisor model is no advisor.
+  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'opus[1m]' WHERE id = 'reviewer'").run()
+  expect(onCallAdvisor(h.db.sqlite, id, 's7')).toEqual({ advisorId: 'reviewer', model: 'opus[1m]' })
+  h.db.sqlite.prepare("UPDATE coding_agents SET model = NULL WHERE id = 'bigcoder'").run()
+  expect(onCallAdvisor(h.db.sqlite, id, 's7')).toEqual({ advisorId: 'reviewer', model: 'opus[1m]' })
+  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'sonnet' WHERE id = 'reviewer'").run()
+  expect(onCallAdvisor(h.db.sqlite, id, 's7')).toBeNull()
+  h.db.sqlite
+    .prepare("UPDATE coding_agents SET model = 'mystery-model' WHERE id = 'reviewer'")
+    .run()
+  expect(onCallAdvisor(h.db.sqlite, id, 's9')).toBeNull()
+  h.db.sqlite.prepare("UPDATE coding_agents SET model = 'opus' WHERE id = 'reviewer'").run()
   // Not for a read-only worker, nor for helper work.
   expect(onCallAdvisor(h.db.sqlite, id, 's8')).toBeNull()
   expect(onCallAdvisor(h.db.sqlite, id, 'h9')).toBeNull()
@@ -113,6 +126,13 @@ test('the workers’ consults are read from their Claude Code advisor calls (too
         `INSERT INTO tool_calls (run_id, seq, tool, status, started_at, call_id) VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(runId, seq, tool, status, `2026-01-01T00:00:0${seq}.000Z`, `c${seq}`)
+  // Only a step that had the advisor on call counts.
+  call(9, 'advisor', 'ok')
+  expect(onCallConsults(h.db.sqlite, id)).toEqual([])
+  h.db.sqlite.prepare('DELETE FROM tool_calls WHERE seq = 9').run()
+  h.db.sqlite
+    .prepare("UPDATE orc_steps SET advisor_model = 'opus' WHERE orchestration_id = ? AND id = 's1'")
+    .run(id)
   call(1, 'advisor', 'ok')
   call(2, 'Read', 'ok')
   call(3, 'advisor', 'running')
@@ -138,6 +158,16 @@ test('the workers’ consults are read from their Claude Code advisor calls (too
     mode: 'on_call',
     onCall: [{ stepId: 's1' }, { stepId: 's1', status: 'running' }],
   })
+  // A consult cut off with its run never shows as live once the run is over.
+  h.db.sqlite
+    .prepare(
+      "UPDATE orc_attempts SET state = 'terminated' WHERE orchestration_id = ? AND step_id = 's1'",
+    )
+    .run(id)
+  expect(onCallConsults(h.db.sqlite, id).map((c) => c.status)).toEqual(['done', 'failed'])
+  h.db.sqlite
+    .prepare("UPDATE orc_steps SET advisor_model = NULL WHERE orchestration_id = ? AND id = 's1'")
+    .run(id)
   // The decision is frozen on the step at admission: builder is a Hermes agent here, so no advisor model.
   const attempt = h.orch.snapshot(id).orchestration.attempts.find((a) => a.stepId === 's1')!
   expect(frozenAdvisorModel(h.db.sqlite, attempt.id)).toBeNull()
