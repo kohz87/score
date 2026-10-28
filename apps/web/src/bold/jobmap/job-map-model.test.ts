@@ -45,6 +45,7 @@ test('the advisor counts its checkpoint consults and the workers asks, and the t
     count: 2,
     tokens: 18000,
     questions: ['which file?', 'retry how?'],
+    running: false,
   })
   expect(model.workers[1]?.asked).toBeNull()
   expect(formatTokens(18000)).toBe('18k')

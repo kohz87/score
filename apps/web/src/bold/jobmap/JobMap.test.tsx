@@ -101,3 +101,83 @@ test('reduced motion draws no moving dots', () => {
   expect(container.querySelector('.jobmap--still')).toBeTruthy()
   expect(container.querySelectorAll('.jobmap-dot').length).toBe(0)
 })
+
+function stubLayout() {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  )
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    const box = (left: number, top: number, w: number, h: number) =>
+      ({
+        left,
+        top,
+        right: left + w,
+        bottom: top + h,
+        width: w,
+        height: h,
+        x: left,
+        y: top,
+      }) as DOMRect
+    if (this.getAttribute('data-anchor') === 'advisor') return box(500, 10, 200, 60)
+    if (this.getAttribute('data-anchor')?.startsWith('worker:')) return box(50, 300, 300, 80)
+    return box(0, 0, 800, 600)
+  })
+}
+
+test('a worker that asked the advisor gets a dashed path back to the advisor, labelled', () => {
+  stubLayout()
+  const { container } = view()
+  const paths = container.querySelectorAll('.jobmap-links .jobmap-link')
+  expect(paths.length).toBe(1)
+  expect(paths[0]?.hasAttribute('data-live')).toBe(false)
+  expect(container.querySelector('.jobmap-links')?.getAttribute('aria-hidden')).toBe('true')
+  expect(
+    within(container.querySelector('.jobmap-links') as unknown as HTMLElement).getByText(
+      'asked 2× · 18k tokens',
+    ),
+  ).toBeTruthy()
+  expect(container.querySelector('.jobmap-link-dot')).toBeNull()
+})
+
+test('no path without on-call consults', () => {
+  stubLayout()
+  const { container } = view(plainRun)
+  expect(container.querySelector('.jobmap-links')).toBeNull()
+})
+
+test('a running consult makes the path live with a moving dot and the question', () => {
+  stubLayout()
+  const run = structuredClone(fullRun)
+  const last = run.advisor!.onCall!.at(-1)!
+  last.status = 'running'
+  const { container } = view(run)
+  expect(container.querySelector('.jobmap-link')?.hasAttribute('data-live')).toBe(true)
+  expect(container.querySelector('.jobmap-link-dot')).toBeTruthy()
+  expect(screen.getByText('builder is asking the advisor… (2nd time)')).toBeTruthy()
+  expect(screen.getByText('retry how?', { selector: 'text' })).toBeTruthy()
+})
+
+test('reduced motion keeps the live path but drops the moving dot', () => {
+  stubLayout()
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener() {},
+        removeEventListener() {},
+      }) as unknown as MediaQueryList,
+  )
+  const run = structuredClone(fullRun)
+  run.advisor!.onCall!.at(-1)!.status = 'running'
+  const { container } = view(run)
+  expect(container.querySelector('.jobmap-link')?.hasAttribute('data-live')).toBe(true)
+  expect(container.querySelector('.jobmap-link-dot')).toBeNull()
+})

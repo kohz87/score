@@ -1,5 +1,5 @@
 import type { AgentSummary, OrchEvent, OrchestrationDetail } from '@score/contract'
-import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { PHONE_QUERY, useMediaQuery } from '../../data/use-media.ts'
 import { usePrefersReducedMotion } from '../../motion/motion.ts'
@@ -38,6 +38,58 @@ const clockOf = (iso: string) =>
 /** Step chips shown on one worker node before the rest are counted. */
 const CHIP_LIMIT = 12
 
+interface AdvisorLink {
+  agentId: string
+  d: string
+  running: boolean
+  label: string
+  question: string | null
+  labelX: number
+  labelY: number
+}
+
+const ordinal = (n: number) => {
+  const tail = n % 100
+  if (tail >= 11 && tail <= 13) return `${n}th`
+  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`
+}
+
+/** Elbow paths from the advisor node (or the Lead card's advisor marks on a phone) down the map's right edge into each worker
+ * that asked it. jsdom has no layout, so tests stub getBoundingClientRect. */
+function measureLinks(map: HTMLElement, workers: WorkerNode[]): AdvisorLink[] {
+  const origin = map.getBoundingClientRect()
+  const from = map.querySelector('[data-anchor="advisor"]')
+  if (!from) return []
+  const a = from.getBoundingClientRect()
+  const ax = a.right - origin.left
+  const ay = a.top + a.height / 2 - origin.top
+  const out: AdvisorLink[] = []
+  let lane = 0
+  for (const worker of workers) {
+    if (!worker.asked) continue
+    const to = map.querySelector(`[data-anchor="worker:${CSS.escape(worker.agentId)}"]`)
+    if (!to) continue
+    const w = to.getBoundingClientRect()
+    const wx = w.right - origin.left
+    const wy = w.top + w.height / 2 - origin.top
+    const edge = Math.max(ax, wx) + 14 + lane * 10
+    lane += 1
+    const asked = worker.asked
+    out.push({
+      agentId: worker.agentId,
+      d: `M${ax},${ay} H${edge} V${wy} H${wx}`,
+      running: asked.running,
+      label: asked.running
+        ? `${worker.name} is asking the advisor… (${ordinal(asked.count)} time)`
+        : `asked ${asked.count}× · ${formatTokens(asked.tokens)} tokens`,
+      question: asked.running ? (asked.questions.at(-1) ?? null) : null,
+      labelX: edge - 8,
+      labelY: wy - 8,
+    })
+  }
+  return out
+}
+
 function Line({
   active,
   still,
@@ -73,6 +125,7 @@ function Node({
   pulse,
   children,
   className,
+  anchor,
 }: {
   layer: LayerId
   selected: LayerId | null
@@ -82,6 +135,7 @@ function Node({
   pulse?: boolean
   children: ReactNode
   className?: string
+  anchor?: string
 }) {
   return (
     <button
@@ -90,6 +144,7 @@ function Node({
       data-layer={layer}
       data-tone={tone}
       data-pulse={pulse ? '' : undefined}
+      data-anchor={anchor}
       aria-label={label}
       aria-pressed={selected === layer}
       onClick={() => onPick(layer)}
@@ -128,12 +183,12 @@ function WorkerBox({
   const asked = worker.asked
   return (
     <div className="jobmap-worker" data-asked={asked ? '' : undefined}>
-      {asked && <Line dashed still label="on call" />}
       <Node
         layer="workers"
         selected={selected}
         onPick={onPick}
         tone="work"
+        anchor={`worker:${worker.agentId}`}
         pulse={worker.running}
         label={`Workers layer: ${worker.name}, steps ${states.join(', ')}${asked ? `, asked the advisor ${asked.count} times` : ''}`}
       >
@@ -178,8 +233,24 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
   const pick = (layer: LayerId) => setSelected((current) => (current === layer ? null : layer))
   const agentOf = (id: string) => agents.find((agent) => agent.id === id)
   const lines = logFor(model, selected, { phone })
+  const mapRef = useRef<HTMLElement>(null)
+  const [links, setLinks] = useState<AdvisorLink[]>([])
   const { lead, advisor } = model
   const leadAgent = agentOf(lead.agentId)
+
+  useLayoutEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const measure = () => {
+      const next = measureLinks(map, model.workers)
+      setLinks((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(map)
+    return () => observer.disconnect()
+  }, [model, phone])
 
   const stuck = run.stepsList.filter(
     (step) =>
@@ -214,9 +285,37 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
 
   return (
     <section
+      ref={mapRef}
       className={`jobmap${phone ? ' jobmap--phone' : ''}${still ? ' jobmap--still' : ''}`}
       aria-label="Job map"
     >
+      {links.length > 0 && (
+        <svg className="jobmap-links" aria-hidden="true" focusable="false">
+          {links.map((link) => (
+            <g key={link.agentId} className="jobmap-link" data-live={link.running ? '' : undefined}>
+              <path d={link.d} />
+              {link.running && !still && (
+                <circle r="4" className="jobmap-link-dot">
+                  <animateMotion dur="2.4s" repeatCount="indefinite" path={link.d} />
+                </circle>
+              )}
+              <text x={link.labelX} y={link.labelY} textAnchor="end">
+                {link.label}
+              </text>
+              {link.question && (
+                <text
+                  x={link.labelX}
+                  y={link.labelY + 15}
+                  textAnchor="end"
+                  className="jobmap-link-q"
+                >
+                  {link.question}
+                </text>
+              )}
+            </g>
+          ))}
+        </svg>
+      )}
       <div className="jobmap-row jobmap-top">
         <Node
           layer="you"
@@ -248,7 +347,7 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
           </strong>
           <span className="jobmap-sub">{lead.progress}</span>
           {phone && advisor && (
-            <span className="jobmap-sub jobmap-phone-advisor">
+            <span className="jobmap-sub jobmap-phone-advisor" data-anchor="advisor">
               Advisor · {advisor.name}
               {marks}
               {advisorCount}
@@ -266,6 +365,7 @@ export function JobMapView({ run, events, agents, stop, now }: JobMapViewProps) 
               pulse={advisor.working && !still}
               label={`Advisor layer: ${advisor.name}, ${advisor.mode === 'on_call' ? 'on call to the workers' : 'checkpoints only'}, ${advisorCount}`}
               className="jobmap-advisor"
+              anchor="advisor"
             >
               <span className="jobmap-kicker">Advisor · {advisor.name}</span>
               {marks}

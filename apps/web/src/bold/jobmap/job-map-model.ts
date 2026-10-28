@@ -39,6 +39,8 @@ export interface AskedAdvisor {
   count: number
   tokens: number
   questions: string[]
+  /** A consult of this worker is running now (3.14.1: the line back to the advisor is live). */
+  running: boolean
 }
 
 export interface WorkerNode {
@@ -199,11 +201,17 @@ export function buildJobMap(
   const askedBy = new Map<string, AskedAdvisor>()
   for (const entry of onCall) {
     const stepAgent = steps.find((step) => step.id === entry.stepId)?.agentId ?? entry.agentId
-    const have = askedBy.get(stepAgent) ?? { count: 0, tokens: 0, questions: [] }
+    const have = askedBy.get(stepAgent) ?? {
+      count: 0,
+      tokens: 0,
+      questions: [],
+      running: false,
+    }
     askedBy.set(stepAgent, {
       count: have.count + 1,
       tokens: have.tokens + (entry.totalTokens ?? 0),
       questions: [...have.questions, entry.question],
+      running: have.running || entry.status === 'running',
     })
   }
 
