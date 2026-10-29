@@ -33,6 +33,7 @@ export function FilesView({
   onMove,
   onDelete,
   onDeleteFolder,
+  onRenameFolder,
   exporting,
   onExport,
 }: {
@@ -47,7 +48,10 @@ export function FilesView({
   onNewFolder: (parent: string) => void
   onMove: (path: string) => void
   onDelete: (path: string) => void
+  /** Opens the delete-folder confirmation (3.14.5: a folder with things in it can be deleted too). */
   onDeleteFolder: (path: string) => void
+  /** 3.14.5: rename or move a folder with everything in it. */
+  onRenameFolder: (path: string) => void
   exporting: boolean
   onExport: (request: KnowledgeExportRequest) => void
 }) {
@@ -101,10 +105,6 @@ export function FilesView({
       return { folder, paths: next }
     })
   const crumbs = folder === '' ? [] : folder.split('/')
-  const occupied = (path: string) =>
-    tree.notes.some((note) => note.path.startsWith(`${path}/`)) ||
-    tree.documents.some((document) => document.path.startsWith(`${path}/`)) ||
-    tree.folders.some((other) => other.startsWith(`${path}/`))
 
   return (
     <section
@@ -179,6 +179,16 @@ export function FilesView({
           <button type="button" onClick={() => onNewFolder(folder)}>
             New folder
           </button>
+          {folder !== '' && (
+            <>
+              <button type="button" onClick={() => onRenameFolder(folder)}>
+                Rename folder
+              </button>
+              <button type="button" onClick={() => onDeleteFolder(folder)}>
+                Delete folder
+              </button>
+            </>
+          )}
           {selected.length > 0 && (
             <button
               type="button"
@@ -257,18 +267,29 @@ export function FilesView({
                         <span aria-hidden="true">▸ </span>
                         {row.name}
                       </button>
+                      {/* Beside the name, so a narrow panel never scrolls them out of sight (3.14.5). */}
+                      <span className="kn-folder-actions">
+                        <button
+                          type="button"
+                          aria-label={`Rename ${row.name}`}
+                          onClick={() => onRenameFolder(row.path)}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${row.name}`}
+                          onClick={() => onDeleteFolder(row.path)}
+                        >
+                          Delete
+                        </button>
+                      </span>
                     </td>
                     <td>Folder</td>
                     <td />
                     <td />
                     <td />
-                    <td className="kn-row-actions">
-                      {!occupied(row.path) && (
-                        <button type="button" onClick={() => onDeleteFolder(row.path)}>
-                          Delete
-                        </button>
-                      )}
-                    </td>
+                    <td className="kn-row-actions" />
                   </tr>
                 ) : (
                   <tr key={`${row.kind}:${row.path}`}>

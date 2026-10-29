@@ -10,6 +10,8 @@ import {
   KnowledgeWriteResponseSchema,
   type KnowledgeChanged,
   type KnowledgeNote,
+  KnowledgeFolderDeleteResponseSchema,
+  KnowledgeFolderMoveResponseSchema,
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
@@ -189,6 +191,21 @@ export function useKnowledgeActions() {
     removeFolder: useMutation({
       mutationFn: (path: string) =>
         apiFetch(`knowledge/folders/${notePath(path)}`, { method: 'DELETE' }),
+      onSuccess: refresh,
+    }),
+    // 3.14.5 (owner): a folder with everything in it.
+    removeFolderWithContents: useMutation({
+      mutationFn: async (path: string) =>
+        KnowledgeFolderDeleteResponseSchema.parse(
+          await apiFetch(`knowledge/folders/${notePath(path)}?contents=1`, { method: 'DELETE' }),
+        ),
+      onSuccess: refresh,
+    }),
+    moveFolder: useMutation({
+      mutationFn: async (req: { from: string; to: string; updateLinks: boolean }) =>
+        KnowledgeFolderMoveResponseSchema.parse(
+          await apiFetch('knowledge/folders/move', { method: 'POST', body: JSON.stringify(req) }),
+        ),
       onSuccess: refresh,
     }),
     restore: useMutation({

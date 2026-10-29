@@ -24,6 +24,9 @@ import {
   KnowledgeVersionSchema,
   KnowledgeWriteRequestSchema,
   KnowledgeWriteResponseSchema,
+  KnowledgeFolderDeleteResponseSchema,
+  KnowledgeFolderMoveRequestSchema,
+  KnowledgeFolderMoveResponseSchema,
 } from '@score/contract'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
@@ -210,7 +213,17 @@ export function registerKnowledgeRoutes(
     const { path } = KnowledgeFolderRequestSchema.parse(request.body)
     return reply.code(201).send(await vault.createFolder(path))
   })
+  // 3.14.5 (owner): a folder can be renamed or moved, and deleted with what is in it (after the page confirms).
+  app.post('/api/knowledge/folders/move', guard, async (request) => {
+    const { from, to, updateLinks } = KnowledgeFolderMoveRequestSchema.parse(request.body)
+    return KnowledgeFolderMoveResponseSchema.parse(await vault.moveFolder(from, to, updateLinks))
+  })
   app.delete('/api/knowledge/folders/*', guard, async (request, reply) => {
+    const { contents } = z.object({ contents: z.enum(['1']).optional() }).parse(request.query ?? {})
+    if (contents)
+      return KnowledgeFolderDeleteResponseSchema.parse(
+        await vault.deleteFolderWithContents(rest(request)),
+      )
     await vault.deleteFolder(rest(request))
     return reply.code(204).send()
   })

@@ -1782,6 +1782,15 @@ written[]; skipped[]; history }` in one commit "Unzipped <name>.zip". The zip is
 - **H** `POST /api/knowledge/move` also moves documents (`updateLinks` is ignored for them).
 - **H** `POST /api/knowledge/folders` `{ path }` -> `{ path }` (creates the folder, `409 exists` if present);
   **H** `DELETE /api/knowledge/folders/*path` -> `204` for an empty folder (`409 not_empty` otherwise).
+  3.14.5 (owner): `?contents=1` deletes the folder with what is in it -> `{ deleted; leftBehind: { path; reason }[] }`
+  (`KnowledgeFolderDeleteResponseSchema`): each note through the note delete (kept in history), each document through the
+  document delete; a file Knowledge doesn't manage stays, and so does the folder holding it. **H** `POST
+  /api/knowledge/folders/move` `{ from; to; updateLinks }` -> `{ path; moved; updatedNotes; skipped; leftBehind }`
+  (`KnowledgeFolderMoveResponseSchema`): renames or moves a folder; each note moves as `POST /api/knowledge/move` moves one
+  (crash-safe, its links rewritten), each document likewise, empty subfolders come along; `400 bad_path` into itself, `404`,
+  `409 exists`. Not one transaction: each item moves safely on its own and a failure is reported in `leftBehind`. Hidden
+  entries and links inside are never followed or touched and are reported in `leftBehind` (they keep the folder). The
+  `knowledge.changed` events of both carry the **folder** path (`moved` with `to`, or `deleted`) after each item's own event.
 - **H** `POST /api/knowledge/files-from-media` `{ mediaId; path; onConflict }` -> `KnowledgeUploadResult`: saves a chat
   upload (`/api/media`) into Knowledge ("Also save to Knowledge"); same rules as an upload.
 - Search hits gain `kind: 'note'|'document'` and `type`. Agents: `knowledge_search` covers documents; `knowledge_read` on a
