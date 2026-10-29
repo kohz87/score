@@ -813,6 +813,19 @@
   white-space: nowrap;
   text-align: right;
 }
+/* Short columns (type, size, modified, by) never break a word letter by letter in a narrow panel (3.14.5). */
+.kn-table td:nth-child(n + 3) {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+/* A folder's Rename and Delete sit beside its name (3.14.5). */
+.kn-folder-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
 .kn-row-actions > * + * {
   margin-left: 4px;
 }

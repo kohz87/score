@@ -228,6 +228,123 @@ export function DeleteDialog({
   )
 }
 
+/** 3.14.5 (owner): rename or move a folder with everything in it. */
+export function FolderMoveDialog({
+  from,
+  busy,
+  error,
+  onSubmit,
+  onClose,
+}: {
+  from: string
+  busy: boolean
+  error: unknown
+  onSubmit: (to: string, updateLinks: boolean) => void
+  onClose: () => void
+}) {
+  const [value, setValue] = useState(from)
+  const [updateLinks, setUpdateLinks] = useState(true)
+  const to = normalizeFilePath(value)
+  const inside = to !== null && to.startsWith(`${from}/`)
+  return (
+    <Modal title={`Rename or move the folder ${from.split('/').pop()}`} onClose={onClose}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (to && to !== from && !inside) onSubmit(to, updateLinks)
+        }}
+      >
+        <label>
+          New folder path
+          <input value={value} maxLength={500} onChange={(event) => setValue(event.target.value)} />
+        </label>
+        <label className="kn-check">
+          <input
+            type="checkbox"
+            checked={updateLinks}
+            onChange={(event) => setUpdateLinks(event.target.checked)}
+          />
+          Update links in other notes
+        </label>
+        {inside && <p role="alert">A folder can’t move into itself.</p>}
+        {error != null && <p role="alert">{knowledgeFailure(error, 'move the folder')}</p>}
+        <div className="kn-actions">
+          <button
+            type="submit"
+            className="kn-primary"
+            disabled={!to || to === from || inside || busy}
+          >
+            {busy ? 'Moving…' : 'Move folder'}
+          </button>
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+/** 3.14.5 (owner): delete a folder, with what is in it after this confirmation. */
+export function FolderDeleteDialog({
+  path,
+  notes,
+  files,
+  unversionedFiles,
+  gitAvailable,
+  folders,
+  busy,
+  error,
+  onConfirm,
+  onClose,
+}: {
+  path: string
+  notes: number
+  files: number
+  /** Files stored without history (over 10 MB, or not versioned): gone for good (review). */
+  unversionedFiles: number
+  /** Without git nothing here has history. */
+  gitAvailable: boolean
+  folders: number
+  busy: boolean
+  error: unknown
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+  const parts = [
+    notes > 0 && plural(notes, 'note', 'notes'),
+    files > 0 && plural(files, 'file', 'files'),
+    folders > 0 && plural(folders, 'folder', 'folders'),
+  ].filter(Boolean)
+  return (
+    <Modal title={`Delete the folder ${path.split('/').pop()}?`} onClose={onClose}>
+      <p>
+        {parts.length === 0
+          ? 'The folder is empty.'
+          : `Everything in it goes too: ${parts.join(', ')}. ${
+              !gitAvailable
+                ? 'Git isn’t available for Knowledge, so none of it can be restored.'
+                : `Notes stay in Knowledge’s history unless .gitignore excludes them${
+                    unversionedFiles > 0
+                      ? `; ${plural(unversionedFiles, 'file has', 'files have')} no history and ${unversionedFiles === 1 ? 'is' : 'are'} gone for good`
+                      : ''
+                  }.`
+            }`}
+      </p>
+      {error != null && <p role="alert">{knowledgeFailure(error, 'delete the folder')}</p>}
+      <div className="kn-actions">
+        <button type="button" className="kn-primary" disabled={busy} onClick={onConfirm}>
+          {busy ? 'Deleting…' : parts.length === 0 ? 'Delete folder' : 'Delete folder and contents'}
+        </button>
+        <button type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 export function NewFolderDialog({
   parent,
   busy,

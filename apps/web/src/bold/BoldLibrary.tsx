@@ -13,6 +13,8 @@ import { FilesView } from '../routes/knowledge/FilesView.tsx'
 import {
   DeleteDialog,
   MoveDialog,
+  FolderMoveDialog,
+  FolderDeleteDialog,
   NewFolderDialog,
   NewNoteDialog,
 } from '../routes/knowledge/KnowledgeDialogs.tsx'
@@ -28,7 +30,6 @@ import {
 } from '../routes/knowledge/knowledge-paths.ts'
 import {
   UnsavedDraftError,
-  knowledgeFailure,
   useKnowledgeActions,
   useKnowledgeInfo,
   useKnowledgeLive,
@@ -46,6 +47,8 @@ type Dialog =
   | { kind: 'move'; path: string }
   | { kind: 'delete'; path: string }
   | { kind: 'folder'; parent: string; fromNav?: boolean }
+  | { kind: 'folder-move'; path: string }
+  | { kind: 'folder-delete'; path: string }
   | null
 
 type ExportRequest = { request: KnowledgeExportRequest; heading: string }
@@ -558,6 +561,25 @@ export function BoldLibrary({
               >
                 <PlusIcon size={14} /> New folder
               </button>
+              {/* 3.14.5 (owner): the picked folder can be renamed or deleted from here too. */}
+              {picked !== '' && (
+                <>
+                  <button
+                    type="button"
+                    aria-label={`Rename folder ${baseName(picked)}`}
+                    onClick={() => openDialog({ kind: 'folder-move', path: picked })}
+                  >
+                    Rename folder
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete folder ${baseName(picked)}`}
+                    onClick={() => openDialog({ kind: 'folder-delete', path: picked })}
+                  >
+                    Delete folder
+                  </button>
+                </>
+              )}
               <input
                 ref={uploadInput}
                 type="file"
@@ -642,12 +664,8 @@ export function BoldLibrary({
             onDelete={(path) => openDialog({ kind: 'delete', path })}
             exporting={exporter.busy}
             onExport={(request) => void exporter.run(request)}
-            onDeleteFolder={(folder) =>
-              actions.removeFolder.mutate(folder, {
-                onSuccess: () => setNotice(`Deleted the folder ${folder}.`),
-                onError: (error) => setNotice(knowledgeFailure(error, 'delete the folder')),
-              })
-            }
+            onDeleteFolder={(folder) => openDialog({ kind: 'folder-delete', path: folder })}
+            onRenameFolder={(folder) => openDialog({ kind: 'folder-move', path: folder })}
           />
         ) : active ? (
           <>
@@ -747,6 +765,86 @@ export function BoldLibrary({
           }}
         />
       )}
+      {dialog?.kind === 'folder-move' && (
+        <FolderMoveDialog
+          from={dialog.path}
+          busy={actions.moveFolder.isPending}
+          error={dialogError}
+          onClose={() => setDialog(null)}
+          onSubmit={(to, updateLinks) => {
+            const from = dialog.path
+            // The open note is saved first, as for a note move: it may be inside the folder.
+            void (flushRef.current?.() ?? Promise.resolve(true)).then((saved) => {
+              if (!saved) {
+                setDialogError(new UnsavedDraftError())
+                return
+              }
+              actions.moveFolder.mutate(
+                { from, to, updateLinks },
+                {
+                  onSuccess: (result) => {
+                    setDialog(null)
+                    const moveInto = (path: string) =>
+                      path === from || path.startsWith(`${from}/`)
+                        ? `${to}${path.slice(from.length)}`
+                        : path
+                    if (active) setSelected(moveInto(active))
+                    setFilesFolder((current) => moveInto(current))
+                    setNotice(
+                      result.leftBehind.length > 0
+                        ? `Moved ${result.moved} into ${to}; ${result.leftBehind.length} stayed in ${from} (${result.leftBehind.map((item) => `${item.path}: ${item.reason}`).join('; ')}).`
+                        : `Moved the folder to ${to}${result.updatedNotes > 0 ? `; links updated in ${result.updatedNotes} notes` : ''}.`,
+                    )
+                  },
+                  onError: setDialogError,
+                },
+              )
+            })
+          }}
+        />
+      )}
+      {dialog?.kind === 'folder-delete' &&
+        tree.data &&
+        (() => {
+          const folder = dialog.path
+          const inside = (path: string) => path.startsWith(`${folder}/`)
+          return (
+            <FolderDeleteDialog
+              path={folder}
+              notes={tree.data.notes.filter((note) => inside(note.path)).length}
+              files={tree.data.documents.filter((document) => inside(document.path)).length}
+              unversionedFiles={
+                tree.data.documents.filter(
+                  (document) => inside(document.path) && !document.versioned,
+                ).length
+              }
+              gitAvailable={info.data?.gitAvailable !== false}
+              folders={tree.data.folders.filter(inside).length}
+              busy={actions.removeFolderWithContents.isPending}
+              error={dialogError}
+              onClose={() => setDialog(null)}
+              onConfirm={() =>
+                actions.removeFolderWithContents.mutate(folder, {
+                  onSuccess: (result) => {
+                    setDialog(null)
+                    if (active && inside(active)) setSelected(null)
+                    setFilesFolder((current) =>
+                      current === folder || inside(current)
+                        ? folder.split('/').slice(0, -1).join('/')
+                        : current,
+                    )
+                    setNotice(
+                      result.leftBehind.length > 0
+                        ? `Deleted ${result.deleted} from ${folder}; ${result.leftBehind.length} stayed (${result.leftBehind.map((item) => `${item.path}: ${item.reason}`).join('; ')}).`
+                        : `Deleted the folder ${folder}.`,
+                    )
+                  },
+                  onError: setDialogError,
+                })
+              }
+            />
+          )
+        })()}
       {dialog?.kind === 'folder' && (
         <NewFolderDialog
           parent={dialog.parent}
