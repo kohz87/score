@@ -1910,3 +1910,19 @@ One entry per completed task: what landed, review results, and any **rejected re
 - Gate: e2e 853 passed, 1 failed (agent-faces pointer animation, 10/10 on rerun); check green (server 4951, web 3104,
   contract 1562).
 - **v3.14.4 deployed live** (~15:11 UTC, idle guard passed): backup score-pre-3.14.4-20261028.db, health ok.
+
+## 3.14.5 — Knowledge folders can be renamed, moved and deleted (2026-10-29)
+- Owner: "there's no way to edit or delete folder in knowledge" (only an empty folder had Delete, in Files; no rename). Lead
+  built it: `KnowledgeVault.moveFolder` (each note through `moveNote`, links rewritten; documents through `docs.move`; empty
+  subfolders recreated; a failure per item reported in `leftBehind`), `deleteFolderWithContents` (note and document deletes),
+  routes `POST /api/knowledge/folders/move` and `DELETE /api/knowledge/folders/*?contents=1`; Rename/Delete beside each
+  folder in Files, for the folder you are in, and for the picked folder in the notes list; confirm dialogs. Checked with
+  fake-mode screenshots (desktop, phone): moved the folder actions into the name cell (they were scrolled out of a narrow
+  panel) and stopped the short Files columns breaking "You" letter by letter.
+- Reviews: no P1; P2 the delete dialog promised history it may not keep — fixed (says when git is off, counts files without
+  history, names .gitignore); P2 folder events carry the folder path — documented in the contract; P3 hidden entries and
+  links skipped silently — now reported in `leftBehind`. Rejected: O(N) commits on large folders (by design: each note moves
+  safely); filtering `.DS_Store` from the report (it kept the folder before too; reporting it is honest).
+- Gate: e2e 853 passed, 1 failed (tablet flake, 13/13 on rerun); check failed on missing contract fixtures for the three new
+  schemas (added), then green (contract 1568, web 3105, server 4953).
+- **v3.14.5 deployed live** (~03:03 UTC, idle guard passed): backup score-pre-3.14.5-20261029.db, health ok.
