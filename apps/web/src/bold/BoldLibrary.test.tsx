@@ -117,6 +117,14 @@ function respond(input: string, init: RequestInit = {}): Response {
     if (!found) return json({ error: { code: 'not_found', message: 'gone' } }, 404)
     return json(note(rest))
   }
+  if (path === '/api/knowledge/folders/move') {
+    const body = JSON.parse(String(init.body)) as { to: string }
+    return json({ path: body.to, moved: 2, updatedNotes: 1, skipped: [], leftBehind: [] })
+  }
+  if (path.startsWith('/api/knowledge/folders/') && method === 'DELETE')
+    return url.searchParams.get('contents') === '1'
+      ? json({ deleted: 2, leftBehind: [] })
+      : new Response(null, { status: 204 })
   if (path === '/api/agents') return json({ asOfSeq: 0, items: [reviewer] })
   return json({ error: { code: 'not_found', message: 'no' } }, 404)
 }
@@ -386,4 +394,43 @@ test('New folder in the notes list creates the folder and stays on the notes', a
     ).toBe(true),
   )
   expect(screen.queryByRole('button', { name: 'Files', pressed: true })).toBeNull()
+})
+
+test('3.14.5: a folder with notes in it can be renamed and deleted from Files', async () => {
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+  const files = await screen.findByRole('region', { name: 'Files in this folder' })
+  // Rename: the whole folder moves, with links updated.
+  fireEvent.click(within(files).getByRole('button', { name: 'Rename Decisions' }))
+  const moveDialog = await screen.findByRole('dialog', {
+    name: /Rename or move the folder Decisions/,
+  })
+  fireEvent.change(within(moveDialog).getByLabelText('New folder path'), {
+    target: { value: 'Archive/Decisions' },
+  })
+  fireEvent.click(within(moveDialog).getByRole('button', { name: 'Move folder' }))
+  await screen.findByText(/Moved the folder to Archive\/Decisions; links updated in 1 notes/)
+  const moved = vi
+    .mocked(fetch)
+    .mock.calls.find(([url]) => String(url).includes('/api/knowledge/folders/move'))!
+  expect(JSON.parse(String(moved[1]!.body))).toEqual({
+    from: 'Decisions',
+    to: 'Archive/Decisions',
+    updateLinks: true,
+  })
+  // Delete: the folder has notes in it, so it asks first and says what goes with it.
+  fireEvent.click(within(files).getByRole('button', { name: 'Delete Decisions' }))
+  const deleteDialog = await screen.findByRole('dialog', { name: 'Delete the folder Decisions?' })
+  expect(deleteDialog.textContent).toMatch(/Everything in it goes too: \d+ notes?/)
+  fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete folder and contents' }))
+  await screen.findByText('Deleted the folder Decisions.')
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.some(
+        ([url, init]) =>
+          String(url).includes('/api/knowledge/folders/Decisions?contents=1') &&
+          init?.method === 'DELETE',
+      ),
+  ).toBe(true)
 })
