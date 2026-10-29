@@ -1356,6 +1356,21 @@ const cases = [
     { folder: 'f', written: 'a' },
   ],
   ['KnowledgeFolderRequestSchema', { path: 'f' }, { path: '' }],
+  [
+    'KnowledgeFolderMoveRequestSchema',
+    { from: 'a', to: 'b', updateLinks: true },
+    { from: '', to: 'b', updateLinks: true },
+  ],
+  [
+    'KnowledgeFolderMoveResponseSchema',
+    { path: 'b', moved: 2, updatedNotes: 1, skipped: [], leftBehind: [] },
+    { path: 'b', moved: -1, updatedNotes: 0 },
+  ],
+  [
+    'KnowledgeFolderDeleteResponseSchema',
+    { deleted: 2, leftBehind: [{ path: 'a/x.bin', reason: 'Not managed.' }] },
+    { deleted: 'two' },
+  ],
   ['KnowledgeExportRequestSchema', { folder: 'f' }, { all: true, folder: 'f' }],
   [
     'KnowledgeExportSummarySchema',
