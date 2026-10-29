@@ -199,6 +199,67 @@ describe('document routes', () => {
     expect((await call('DELETE', '/api/knowledge/folders/fresh/inbox')).statusCode).toBe(204)
   })
 
+  test('3.14.5: a folder renames or moves with its notes (links rewritten), documents and empty subfolders', async () => {
+    await vault.writeNote('projects/alpha/plan.md', {
+      body: '# Plan\n\nSee [[projects/alpha/notes]].\n',
+      etag: null,
+    })
+    await vault.writeNote('projects/alpha/notes.md', { body: '# Notes\n', etag: null })
+    await vault.writeNote('elsewhere.md', {
+      body: 'Links to [[projects/alpha/plan]] here.\n',
+      etag: null,
+    })
+    expect((await put('projects/alpha/pic.png', PNG)).statusCode).toBe(201)
+    expect(
+      (await call('POST', '/api/knowledge/folders', { path: 'projects/alpha/empty' })).statusCode,
+    ).toBe(201)
+    // Not into itself, not onto something that exists.
+    const move = (from: string, to: string) =>
+      call('POST', '/api/knowledge/folders/move', { from, to, updateLinks: true })
+    expect((await move('projects/alpha', 'projects/alpha/inner')).statusCode).toBe(400)
+    await vault.writeNote('taken/x.md', { body: 'x\n', etag: null })
+    expect((await move('projects/alpha', 'taken')).statusCode).toBe(409)
+    expect((await move('nowhere', 'somewhere')).statusCode).toBe(404)
+
+    const res = await move('projects/alpha', 'archive/alpha-2025')
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.json()).toMatchObject({ path: 'archive/alpha-2025', moved: 3, leftBehind: [] })
+    expect(res.json().updatedNotes).toBeGreaterThanOrEqual(1)
+    const tree = KnowledgeTreeSchema.parse((await call('GET', '/api/knowledge/tree')).json())
+    expect(tree.folders).toEqual(
+      expect.arrayContaining(['archive/alpha-2025', 'archive/alpha-2025/empty']),
+    )
+    expect(tree.folders).not.toContain('projects/alpha')
+    // The link still points at the moved note (written the shortest way that stays unique, as a note move does).
+    expect((await vault.readNote('elsewhere.md')).links.map((link) => link.path)).toEqual([
+      'archive/alpha-2025/plan.md',
+    ])
+    expect((await vault.docs.get('archive/alpha-2025/pic.png')).path).toBe(
+      'archive/alpha-2025/pic.png',
+    )
+  })
+
+  test('3.14.5: a folder deletes with what is in it; a file Knowledge does not manage stays, and says so', async () => {
+    await vault.writeNote('old/a.md', { body: '# A\n', etag: null })
+    await vault.writeNote('old/deep/b.md', { body: '# B\n', etag: null })
+    expect((await put('old/q.pdf', textPdf('Old report'))).statusCode).toBe(201)
+    // Without ?contents=1 a folder with things in it is refused, as before.
+    expect((await call('DELETE', '/api/knowledge/folders/old')).statusCode).toBe(409)
+    const res = await call('DELETE', '/api/knowledge/folders/old?contents=1')
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.json()).toEqual({ deleted: 3, leftBehind: [] })
+    expect(
+      KnowledgeTreeSchema.parse((await call('GET', '/api/knowledge/tree')).json()).folders,
+    ).not.toContain('old')
+    expect(fs.existsSync(path.join(dir, 'vault', 'old'))).toBe(false)
+
+    await vault.writeNote('mixed/c.md', { body: '# C\n', etag: null })
+    fs.writeFileSync(path.join(dir, 'vault', 'mixed', 'tool.bin'), 'x')
+    const mixed = await call('DELETE', '/api/knowledge/folders/mixed?contents=1')
+    expect(mixed.json()).toMatchObject({ deleted: 1, leftBehind: [{ path: 'mixed/tool.bin' }] })
+    expect(fs.existsSync(path.join(dir, 'vault', 'mixed', 'tool.bin'))).toBe(true)
+  })
+
   test('save a chat upload into Knowledge', async () => {
     const stored = app.media!.store(textPdf('From the chat'), 'application/pdf', 'chat.pdf')
     const res = await call('POST', '/api/knowledge/files-from-media', {

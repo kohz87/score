@@ -134,6 +134,29 @@ export const KnowledgeUnzipResultSchema = z.object({
   history: KnowledgeHistoryStatusSchema.default('committed'),
 })
 export const KnowledgeFolderRequestSchema = z.object({ path: z.string().min(1).max(1024) })
+/** A file a folder move or delete left where it was, with a short plain reason (3.14.5). */
+const LeftBehindSchema = z.object({ path: z.string(), reason: z.string() })
+/** 3.14.5: rename or move a folder with everything in it. */
+export const KnowledgeFolderMoveRequestSchema = z.object({
+  from: z.string().min(1).max(1024),
+  to: z.string().min(1).max(1024),
+  /** Rewrite `[[links]]` to the moved notes in other notes, as a note move does. */
+  updateLinks: z.boolean(),
+})
+export const KnowledgeFolderMoveResponseSchema = z.object({
+  path: z.string(),
+  moved: z.number().int().nonnegative(),
+  updatedNotes: z.number().int().nonnegative(),
+  skipped: z.array(z.object({ path: z.string(), reason: z.string() })).default([]),
+  leftBehind: z.array(LeftBehindSchema).default([]),
+})
+export type KnowledgeFolderMoveResponse = z.infer<typeof KnowledgeFolderMoveResponseSchema>
+/** 3.14.5: `DELETE /api/knowledge/folders/*?contents=1`. */
+export const KnowledgeFolderDeleteResponseSchema = z.object({
+  deleted: z.number().int().nonnegative(),
+  leftBehind: z.array(LeftBehindSchema).default([]),
+})
+export type KnowledgeFolderDeleteResponse = z.infer<typeof KnowledgeFolderDeleteResponseSchema>
 export const KnowledgeFromMediaRequestSchema = z.object({
   mediaId: z.string().min(1).max(64),
   /** Destination path including the file name. */
