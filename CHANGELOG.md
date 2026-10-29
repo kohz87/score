@@ -3,6 +3,18 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.14.5] — 2026-10-29
+
+### Added
+- **Knowledge folders can be renamed, moved and deleted.** Pick a folder in the notes list, or use the Files view (beside
+  each folder's name, or for the folder you are in): **Rename folder** moves everything inside, and notes elsewhere that
+  link to the moved notes are updated; **Delete folder** works on a folder with things in it after a confirmation that says
+  what goes with it and what can't be restored. A file Knowledge doesn't manage (a hidden file, a link, an unknown type)
+  stays where it is, and the notice says which.
+
+### Fixed
+- The Files table no longer breaks short words like "You" one letter per line.
+
 ## [3.14.4] — 2026-10-28
 
 ### Added
