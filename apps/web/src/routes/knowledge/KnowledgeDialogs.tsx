@@ -290,6 +290,8 @@ export function FolderDeleteDialog({
   path,
   notes,
   files,
+  unversionedFiles,
+  gitAvailable,
   folders,
   busy,
   error,
@@ -299,6 +301,10 @@ export function FolderDeleteDialog({
   path: string
   notes: number
   files: number
+  /** Files stored without history (over 10 MB, or not versioned): gone for good (review). */
+  unversionedFiles: number
+  /** Without git nothing here has history. */
+  gitAvailable: boolean
   folders: number
   busy: boolean
   error: unknown
@@ -316,7 +322,15 @@ export function FolderDeleteDialog({
       <p>
         {parts.length === 0
           ? 'The folder is empty.'
-          : `Everything in it goes too: ${parts.join(', ')}. Notes stay in Knowledge’s history if git is available; files over 10 MB are gone for good.`}
+          : `Everything in it goes too: ${parts.join(', ')}. ${
+              !gitAvailable
+                ? 'Git isn’t available for Knowledge, so none of it can be restored.'
+                : `Notes stay in Knowledge’s history unless .gitignore excludes them${
+                    unversionedFiles > 0
+                      ? `; ${plural(unversionedFiles, 'file has', 'files have')} no history and ${unversionedFiles === 1 ? 'is' : 'are'} gone for good`
+                      : ''
+                  }.`
+            }`}
       </p>
       {error != null && <p role="alert">{knowledgeFailure(error, 'delete the folder')}</p>}
       <div className="kn-actions">

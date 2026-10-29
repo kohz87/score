@@ -813,6 +813,12 @@ export function BoldLibrary({
               path={folder}
               notes={tree.data.notes.filter((note) => inside(note.path)).length}
               files={tree.data.documents.filter((document) => inside(document.path)).length}
+              unversionedFiles={
+                tree.data.documents.filter(
+                  (document) => inside(document.path) && !document.versioned,
+                ).length
+              }
+              gitAvailable={info.data?.gitAvailable !== false}
               folders={tree.data.folders.filter(inside).length}
               busy={actions.removeFolderWithContents.isPending}
               error={dialogError}

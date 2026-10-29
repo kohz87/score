@@ -258,6 +258,15 @@ describe('document routes', () => {
     const mixed = await call('DELETE', '/api/knowledge/folders/mixed?contents=1')
     expect(mixed.json()).toMatchObject({ deleted: 1, leftBehind: [{ path: 'mixed/tool.bin' }] })
     expect(fs.existsSync(path.join(dir, 'vault', 'mixed', 'tool.bin'))).toBe(true)
+    // A link inside is never followed, and is reported (it keeps the folder).
+    await vault.writeNote('linked/d.md', { body: '# D\n', etag: null })
+    fs.symlinkSync(
+      path.join(dir, 'vault', 'Welcome.md'),
+      path.join(dir, 'vault', 'linked', 'to-welcome'),
+    )
+    const linked = await call('DELETE', '/api/knowledge/folders/linked?contents=1')
+    expect(linked.json()).toMatchObject({ deleted: 1, leftBehind: [{ path: 'linked/to-welcome' }] })
+    expect(fs.existsSync(path.join(dir, 'vault', 'Welcome.md'))).toBe(true)
   })
 
   test('save a chat upload into Knowledge', async () => {

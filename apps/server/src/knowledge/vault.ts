@@ -1698,23 +1698,28 @@ export class KnowledgeVault {
   }
 
   /** Every file and folder under `folder` (paths relative to the vault), deepest folders first; hidden ones skipped. */
-  private async folderContents(folder: string): Promise<{ files: string[]; folders: string[] }> {
+  private async folderContents(
+    folder: string,
+  ): Promise<{ files: string[]; folders: string[]; unmanaged: string[] }> {
     const files: string[] = []
     const folders: string[] = []
+    // Hidden entries and links are never followed or touched; they are reported, since they keep the folder (review).
+    const unmanaged: string[] = []
     const walk = async (rel: string): Promise<void> => {
       for (const entry of await fs.readdir(path.join(this.root, ...rel.split('/')), {
         withFileTypes: true,
       })) {
-        if (entry.name.startsWith('.')) continue
         const child = `${rel}/${entry.name}`
-        if (entry.isDirectory()) {
+        if (entry.name.startsWith('.')) unmanaged.push(child)
+        else if (entry.isDirectory()) {
           await walk(child)
           folders.push(child)
         } else if (entry.isFile()) files.push(child)
+        else unmanaged.push(child)
       }
     }
     await walk(folder)
-    return { files, folders }
+    return { files, folders, unmanaged }
   }
 
   /** Removes the now-empty folders under `folder` (and `folder` itself), deepest first; a folder still in use stays. */
@@ -1754,7 +1759,7 @@ export class KnowledgeVault {
     if (to === from) throw new HttpError(409, 'exists', 'That name already exists.')
     if (to.startsWith(`${from}/`))
       throw new HttpError(400, 'bad_path', 'A folder can’t move into itself.')
-    const { files, folders } = await this.serial(async () => {
+    const { files, folders, unmanaged } = await this.serial(async () => {
       const source = await this.lookup(fromSegments)
       if (!source.stat?.isDirectory())
         throw new HttpError(404, 'not_found', 'Couldn’t find that folder.')
@@ -1772,7 +1777,10 @@ export class KnowledgeVault {
     let moved = 0
     let updatedNotes = 0
     const skipped: MoveSkipped[] = []
-    const leftBehind: Array<{ path: string; reason: string }> = []
+    const leftBehind: Array<{ path: string; reason: string }> = unmanaged.map((rel) => ({
+      path: rel,
+      reason: 'A hidden file or a link: Knowledge leaves it alone.',
+    }))
     for (const rel of files) {
       const dest = `${to}${rel.slice(from.length)}`
       try {
@@ -1813,13 +1821,16 @@ export class KnowledgeVault {
     if (segments.some((segment) => segment.startsWith('.')))
       throw new HttpError(400, 'bad_path', 'Hidden files and folders are not part of Knowledge.')
     const folder = segments.join('/')
-    const { files, folders } = await this.serial(async () => {
+    const { files, folders, unmanaged } = await this.serial(async () => {
       const { stat } = await this.lookup(segments)
       if (!stat?.isDirectory()) throw new HttpError(404, 'not_found', 'Couldn’t find that folder.')
       return this.folderContents(folder)
     })
     let deleted = 0
-    const leftBehind: Array<{ path: string; reason: string }> = []
+    const leftBehind: Array<{ path: string; reason: string }> = unmanaged.map((rel) => ({
+      path: rel,
+      reason: 'A hidden file or a link: Knowledge leaves it alone.',
+    }))
     for (const rel of files) {
       try {
         if (/\.md$/i.test(rel)) await this.deleteNote(rel, author)
