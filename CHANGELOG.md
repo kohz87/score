@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.15.3] — 2026-11-02
+
+### Changed
+- A coding agent runs on a newer Claude Code, Codex or Antigravity version without asking you to confirm it. Score
+  checks the new version's help on its own; only if it changed something Score relies on to keep the agent inside its
+  workspace does the agent stop, and its page says why (decision 157).
+
 ## [3.15.2] — 2026-11-02
 
 ### Removed

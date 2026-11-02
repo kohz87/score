@@ -24,17 +24,22 @@ describe('readiness', () => {
     expect(await worker()).toMatchObject({ readiness: 'ready', detail: null })
   })
 
-  test('an untested CLI version', async () => {
+  // 3.15.3 (decision 157): a newer version needs no confirmation; only a failed help check stops it.
+  test('a newer CLI version is ready without asking; one whose help changed is not', async () => {
     h = await workerHarness()
     h.addAgent()
     h.cliEnv['SCORE_CODING_FAKE_VERSION'] = '9.9.9'
+    expect(await worker()).toMatchObject({ readiness: 'ready', detail: null })
+    h.cliEnv['SCORE_CODING_FAKE_VERSION'] = '9.9.10'
+    h.cliEnv['SCORE_CODING_FAKE_HELP'] = join(h.workspace, 'missing-help.txt')
     const preflight = await h.orch.preflight('lead', ['coder'])
     expect(preflight.ok).toBe(false)
     expect(preflight.workers[0]).toMatchObject({
-      readiness: 'version_untested',
+      readiness: 'reach_unverifiable',
       policyId: null,
       reach: null,
     })
+    expect(preflight.workers[0]!.detail).toContain('couldn’t read Claude Code 9.9.10’s help')
     expect(preflight.checks.find((c) => c.id === 'allowed_agents')?.message).toContain('coder:')
   })
 
@@ -76,12 +81,11 @@ describe('readiness', () => {
     expect(await worker()).toMatchObject({ readiness: 'reach_unverifiable' })
   })
 
-  // 3.7.7 (decision 138): a newer CLI the person confirmed is checked from its help and remembered, so it can take steps.
-  test('a confirmed newer version is checked from its help, remembered, and can take a step', async () => {
+  // 3.7.7 (decision 138): a newer CLI is checked from its help and remembered, so it can take steps.
+  test('a newer version is checked from its help, remembered, and can take a step', async () => {
     h = await workerHarness()
     h.addAgent()
     h.cliEnv['SCORE_CODING_FAKE_VERSION'] = '2.1.399'
-    h.db.sqlite.prepare("UPDATE coding_agents SET confirmed_version = '2.1.399'").run()
     expect(await worker()).toMatchObject({ readiness: 'ready', detail: null })
     expect(h.rows('SELECT runtime, version FROM checked_cli_versions')).toEqual([
       { runtime: 'claude-code', version: '2.1.399' },
@@ -94,7 +98,6 @@ describe('readiness', () => {
   test('a newer version whose help changed a flag Score relies on, or that has no help, isn’t accepted', async () => {
     h = await workerHarness()
     h.addAgent()
-    h.db.sqlite.prepare("UPDATE coding_agents SET confirmed_version = '2.1.400'").run()
     h.cliEnv['SCORE_CODING_FAKE_VERSION'] = '2.1.400'
     const changed = join(h.workspace, 'changed-help.txt')
     writeFileSync(
@@ -120,6 +123,7 @@ describe('readiness', () => {
     h = await workerHarness()
     h.addAgent()
     h.cliEnv['SCORE_CODING_FAKE_VERSION'] = '9.9.9'
+    h.cliEnv['SCORE_CODING_FAKE_HELP'] = join(h.workspace, 'missing-help.txt')
     await expect(h.create()).rejects.toMatchObject({ code: 'preflight_failed' })
   })
 })

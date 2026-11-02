@@ -1176,7 +1176,7 @@ function CodingAgentPanel({
               {info.state === 'ready'
                 ? `Installed · version ${info.version ?? 'unknown'} · tested by Score for ${info.testedVersions.join(', ')}. ${info.quota}`
                 : info.state === 'untested_version'
-                  ? `Installed · version ${info.version ?? 'unknown'}, which Score has not tested. ${info.quota}`
+                  ? `Installed · version ${info.version ?? 'unknown'}, newer than the versions Score was tested with. It runs unless Score's check finds a problem. ${info.quota}`
                   : (info.message ?? 'This coding tool is not ready.')}
             </p>
             {info.warning && (

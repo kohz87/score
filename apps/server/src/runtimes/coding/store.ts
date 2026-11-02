@@ -27,7 +27,6 @@ const RowSchema = z.object({
   advisor_model: z.string().nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   shape: ShapeSchema,
-  confirmed_version: z.string().nullable(),
   quota_floor_percent: z.int().min(0).max(50),
   created_at: z.iso.datetime(),
   removed_at: z.string().nullable(),
@@ -47,7 +46,6 @@ export interface StoredCodingAgent {
   /** 3.14.1: Claude Code's own advisor model on every turn; null = none. */
   advisorModel: 'sonnet' | 'opus' | 'fable' | null
   style: AgentStyle
-  confirmedVersion: string | null
   quotaFloorPercent: number
   createdAt: string
   removedAt: string | null
@@ -67,7 +65,6 @@ const toAgent = (value: unknown): StoredCodingAgent => {
     effort: EffortWordSchema.safeParse(row.effort).success ? row.effort : null,
     advisorModel: ClaudeAdvisorModelSchema.safeParse(row.advisor_model).data ?? null,
     style: { color: row.color, shape: row.shape },
-    confirmedVersion: row.confirmed_version,
     quotaFloorPercent: row.quota_floor_percent,
     createdAt: row.created_at,
     removedAt: row.removed_at,
@@ -101,12 +98,7 @@ export function insertCodingAgent(
   sqlite: DatabaseSync,
   agent: Omit<
     StoredCodingAgent,
-    | 'confirmedVersion'
-    | 'removedAt'
-    | 'quotaFloorPercent'
-    | 'instructions'
-    | 'effort'
-    | 'advisorModel'
+    'removedAt' | 'quotaFloorPercent' | 'instructions' | 'effort' | 'advisorModel'
   > & {
     effort?: string | null
     quotaFloorPercent?: number
@@ -148,7 +140,6 @@ export function updateCodingAgent(
       | 'effort'
       | 'advisorModel'
       | 'workspace'
-      | 'confirmedVersion'
       | 'quotaFloorPercent'
     >
   >,
@@ -162,7 +153,6 @@ export function updateCodingAgent(
     effort: 'effort',
     advisorModel: 'advisor_model',
     workspace: 'workspace',
-    confirmedVersion: 'confirmed_version',
     quotaFloorPercent: 'quota_floor_percent',
   }
   for (const [key, value] of Object.entries(patch)) {
