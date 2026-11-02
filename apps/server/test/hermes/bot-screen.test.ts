@@ -397,3 +397,19 @@ test('the encoders write exactly RFB KeyEvent and PointerEvent', () => {
   expect([...keyEvent(true, 0xff0d)]).toEqual([4, 1, 0, 0, 0, 0, 0xff, 0x0d])
   expect([...pointerEvent(4, 258, 3)]).toEqual([5, 4, 1, 2, 0, 3])
 })
+
+test('input past the idle window or the hard limit is refused, even before the sweep ends the takeover', async () => {
+  const fake = await fakeXvnc()
+  const bot = screens()
+  try {
+    lease({ holder: 'human', viewer_id: VIEWER, epoch: 3 })
+    const key = [{ k: 'key', keysym: 0x61, down: true } as const]
+    bot.setControl('builder', control({ lastInput: Date.now() - 6 * 60_000 }))
+    expect(await bot.input('builder', 'me', 't1', key)).toBe('lost')
+    bot.setControl('builder', control({ expiresAt: Date.now() - 1 }))
+    expect(await bot.input('builder', 'me', 't1', key)).toBe('lost')
+    expect(inputTypes(fake)).toEqual([])
+  } finally {
+    bot.close()
+  }
+})

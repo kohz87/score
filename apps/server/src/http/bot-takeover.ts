@@ -7,7 +7,6 @@ import type { ScoreDb } from '../db/index.ts'
 import { readAgent } from '../domain/agents.ts'
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
-import { requestIdempotency } from './idempotency.ts'
 import { sessionKey } from './session.ts'
 
 const UNLOCK_MS = 5 * 60_000
@@ -28,9 +27,6 @@ export function registerBotTakeoverRoutes(
   },
 ): void {
   const guard = humanGuard(app.pairing)
-  const receipts = requestIdempotency(options.db, options.clock ?? Date.now, undefined, {
-    secretBody: true,
-  })
   const { port } = options
 
   function agentOf(params: unknown) {
@@ -49,7 +45,9 @@ export function registerBotTakeoverRoutes(
 
   app.post(
     '/api/agents/:agentId/bot-screen/take-over',
-    { preHandler: [guard, receipts.preHandler], onSend: receipts.onSend },
+    // No idempotency receipt: a replayed key would hand another session this takeover's answer, and a repeated take
+    // is harmless (the second one answers busy).
+    { preHandler: guard },
     async (request) => {
       const agentId = agentOf(request.params)
       const body = BotTakeoverRequestSchema.parse(request.body ?? {})

@@ -314,7 +314,7 @@ export class LivePort implements HermesPort {
     return (await this.botTakeovers?.handBack(agentId, owner, takeoverId)) ?? false
   }
   async stop(): Promise<void> {
-    this.botTakeoversValue?.close()
+    await this.botTakeoversValue?.close()
     this.botScreens.close()
     this.settings.close()
     clearInterval(this.timer)

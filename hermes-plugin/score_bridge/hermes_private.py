@@ -643,9 +643,13 @@ def desktop_take(profile: str | None, viewer_id: str, reason: str = "") -> dict:
     def act(lease, runtime, home):
         # Stamped before the lease is written, as Hermes' display.lease.acquire does: an idle check reading the new
         # lease against an old stamp would take it for an abandoned one and stop the screen under the person.
+        current = lease.get(profile_key=home)
+        # Hermes' acquire evicts whoever holds the screen (last writer wins). Score never takes it from a person: their
+        # lease comes back unchanged and Score reports the screen as busy.
+        if current.holder == lease.HUMAN and current.viewer_id != viewer_id:
+            return _lease_view(current)
         runtime.touch_activity()
-        kept = lease.get(profile_key=home).reason or ""
-        return _lease_view(lease.acquire(viewer_id, profile_key=home, reason=reason or kept))
+        return _lease_view(lease.acquire(viewer_id, profile_key=home, reason=reason or current.reason or ""))
     return _in_profile(profile, act)
 
 

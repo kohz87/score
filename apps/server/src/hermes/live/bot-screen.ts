@@ -555,6 +555,9 @@ export class BotScreens {
   ): Promise<'sent' | 'lost'> {
     const control = this.controls.get(agentId)
     if (!control || control.takeoverId !== takeoverId || control.owner !== viewer) return 'lost'
+    // Past the idle window or the hard limit it is over, even if the 5-s sweep hasn't ended it yet.
+    const at = this.now()
+    if (at - control.lastInput > CONTROL_IDLE_MS || at >= control.expiresAt) return 'lost'
     const { status } = await this.inspect(agentId, viewer)
     const entry = this.sessions.get(agentId)
     if (status.state !== 'running' || status.control?.takeoverId !== takeoverId || !entry)

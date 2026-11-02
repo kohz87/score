@@ -15,7 +15,8 @@ const TOUCH_MS = 60_000
 const TICK_MS = 5_000
 const ASK_MS = 10_000
 
-export type TakeoverEndReason = 'handed_back' | 'idle' | 'limit' | 'left' | 'lost' | 'restart'
+export type TakeoverEndReason =
+  'handed_back' | 'idle' | 'limit' | 'left' | 'lost' | 'restart' | 'not_granted'
 export type TakeResult =
   | { ok: true; control: BotControl }
   | { ok: false; code: 'unavailable' | 'busy' | 'not_running' | 'failed'; message: string }
@@ -43,6 +44,8 @@ export class BotTakeovers {
   private readonly heartbeats = new Map<string, number>()
   private readonly touched = new Map<string, number>()
   private readonly inFlight = new Set<string>()
+  /** Agents with a take in progress: one at a time, so two sessions can't both be granted (Hermes: last writer wins). */
+  private readonly taking = new Set<string>()
   private timer: NodeJS.Timeout | null = null
   private closed = false
 
@@ -66,8 +69,21 @@ export class BotTakeovers {
         code: 'unavailable',
         message: 'Score’s plugin isn’t connected to Hermes here.',
       }
-    if (this.deps.screens.control(agentId))
+    if (this.taking.has(agentId) || this.deps.screens.control(agentId))
       return { ok: false, code: 'busy', message: 'Someone already has control of this screen.' }
+    this.taking.add(agentId)
+    try {
+      return await this.takeOnce(agentId, owner, ask)
+    } finally {
+      this.taking.delete(agentId)
+    }
+  }
+
+  private async takeOnce(
+    agentId: string,
+    owner: string,
+    ask: NonNullable<BotTakeoverDeps['ask']>,
+  ): Promise<TakeResult> {
     const status = await this.deps.screens.status(agentId, owner)
     if (status.state === 'human')
       return { ok: false, code: 'busy', message: 'Someone has already taken over this screen.' }
@@ -92,20 +108,25 @@ export class BotTakeovers {
       this.inFlight.delete(id)
     }
     const lease = answer.status === 'done' ? answer.lease : undefined
-    if (!lease || lease.holder !== 'human' || lease.viewerId !== viewerId) {
-      // It may still have been applied (no answer in time): the release reads the lease and hands back only if it is ours.
-      this.finish(id, 'releasing', 'lost')
-      await this.releaseOwed()
+    if (!lease || lease.holder !== 'human' || lease.viewerId !== viewerId || this.closed) {
+      // It may still have been applied (no answer in time, or Score is stopping): the release reads the lease and hands
+      // back only if it is ours.
+      this.finish(id, 'releasing', 'not_granted')
+      if (!this.closed) await this.releaseOwed()
+      // The plugin refuses to take a screen another person holds and answers with their lease.
+      const someoneElse = lease?.holder === 'human' && lease.viewerId !== viewerId
       return {
         ok: false,
-        code: answer.status === 'unavailable' ? 'unavailable' : 'failed',
-        message:
-          answer.status === 'unavailable'
+        code: someoneElse ? 'busy' : answer.status === 'unavailable' ? 'unavailable' : 'failed',
+        message: someoneElse
+          ? 'Someone has already taken over this screen.'
+          : answer.status === 'unavailable'
             ? 'Score’s plugin isn’t running in this agent’s Hermes gateway.'
-            : 'Hermes didn’t hand over the screen. Try again.',
+            : this.closed
+              ? 'Score is stopping.'
+              : 'Hermes didn’t hand over the screen. Try again.',
       }
     }
-    if (this.closed) return { ok: false, code: 'failed', message: 'Score is stopping.' }
     this.deps.db.tx((sqlite) =>
       sqlite
         .prepare("UPDATE bot_takeovers SET state = 'active', epoch = ? WHERE id = ?")
@@ -143,16 +164,26 @@ export class BotTakeovers {
   }
 
   /** The screen saw the lease change under a takeover: nothing to hand back, the lease isn't Score's any more. */
-  lost(agentId: string, control: BotControl) {
+  lost(_agentId: string, control: BotControl) {
     this.forget(control.takeoverId)
     this.finish(control.takeoverId, 'ended', 'lost')
-    void agentId
   }
 
-  close() {
+  /** Score is stopping: every takeover is handed back now if the gateway answers, else at the next start. */
+  async close(): Promise<void> {
+    if (this.closed) return
     this.closed = true
     if (this.timer) clearInterval(this.timer)
     this.timer = null
+    const open = this.deps.db.sqlite
+      .prepare("SELECT id, agent_id FROM bot_takeovers WHERE state = 'active'")
+      .all() as unknown as { id: string; agent_id: string }[]
+    for (const row of open) {
+      this.deps.screens.clearControl(row.agent_id)
+      this.forget(row.id)
+      this.finish(row.id, 'releasing', 'restart')
+    }
+    await this.releaseOwed()
   }
 
   /** One sweep: idle, limit and left takeovers end; the desktop is marked in use; owed hand-backs are retried. */
@@ -165,7 +196,12 @@ export class BotTakeovers {
       .all() as unknown as Row[]
     for (const row of open) {
       const control = this.deps.screens.control(row.agent_id)
-      if (!control || control.takeoverId !== row.id) continue
+      if (!control || control.takeoverId !== row.id) {
+        // Active in the record but not held on the screen (a raced take, a lost takeover not yet recorded): hand back
+        // whatever of it Hermes still holds, by this row's own viewer and generation.
+        this.finish(row.id, 'releasing', 'lost')
+        continue
+      }
       const reason: TakeoverEndReason | null =
         now - control.lastInput > CONTROL_IDLE_MS
           ? 'idle'
@@ -215,8 +251,9 @@ export class BotTakeovers {
           // Hermes may have granted a take whose answer never came: hand back only what the lease names as ours.
           const home = this.deps.profileHome(row.agent_id)
           const lease = home ? await readLease(join(home, 'bot-desktop')) : null
+          // No profile any more (the agent was removed), or the lease isn't ours: nothing Score can or should release.
           if (!lease || lease.viewerId !== row.viewer_id) {
-            if (lease) this.finish(row.id, 'ended')
+            this.finish(row.id, 'ended')
             continue
           }
           epoch = lease.epoch
@@ -234,6 +271,7 @@ export class BotTakeovers {
   }
 
   private finish(id: string, state: 'releasing' | 'ended', reason?: TakeoverEndReason) {
+    if (state === 'releasing') this.arm()
     this.deps.db.tx((sqlite) =>
       sqlite
         .prepare(

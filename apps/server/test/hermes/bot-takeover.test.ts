@@ -106,7 +106,7 @@ test('take asks Hermes through the plugin and records the generation; hand back 
   expect(hermesLease.holder).toBe('agent')
   expect(rows()).toEqual([{ state: 'ended', end_reason: 'handed_back', epoch: 1 }])
   expect(controls.size).toBe(0)
-  takeovers.close()
+  await takeovers.close()
 })
 
 test('a hand-back the gateway can’t take now stays owed and is retried until it lands', async () => {
@@ -121,21 +121,24 @@ test('a hand-back the gateway can’t take now stays owed and is retried until i
   await takeovers.tick()
   expect(rows()[0]).toMatchObject({ state: 'ended' })
   expect(hermesLease.holder).toBe('agent')
-  takeovers.close()
+  await takeovers.close()
 })
 
 test('after a restart, a takeover Score held is handed back', async () => {
   const first = service()
   const result = await first.take('builder', 'me')
   if (!result.ok) throw new Error('not taken')
-  first.close()
-  controls.clear()
+  // Stopping hands back at once when the gateway answers; here it is down, so the next start does it.
+  gateway = 'down'
+  await first.close()
+  expect(controls.size).toBe(0)
+  gateway = 'up'
   const second = service()
   expect(rows()[0]).toMatchObject({ state: 'releasing', end_reason: 'restart' })
   await second.tick()
   expect(rows()[0]).toMatchObject({ state: 'ended' })
   expect(hermesLease.holder).toBe('agent')
-  second.close()
+  await second.close()
 })
 
 test('five minutes without input, the hard limit, or a page that stopped beating hands back', async () => {
@@ -161,7 +164,7 @@ test('five minutes without input, the hard limit, or a page that stopped beating
     expect(rows().at(-1)).toMatchObject({ state: 'ended', end_reason: reason })
     expect(hermesLease.holder).toBe('agent')
   }
-  takeovers.close()
+  await takeovers.close()
 })
 
 test('a take whose answer never came is handed back if Hermes granted it, and only then', async () => {
@@ -180,7 +183,7 @@ test('a take whose answer never came is handed back if Hermes granted it, and on
   await takeovers.tick()
   expect(hermesLease).toEqual({ holder: 'human', viewer_id: 'hermes-app', epoch: 9 })
   expect(rows()[1]).toMatchObject({ state: 'ended' })
-  takeovers.close()
+  await takeovers.close()
 })
 
 test('the desktop is marked in use once a minute while Score holds it', async () => {
@@ -197,5 +200,65 @@ test('the desktop is marked in use once a minute while Score holds it', async ()
   takeovers.heartbeat('builder', 'me', result.control.takeoverId)
   await takeovers.tick()
   expect(touches()).toBe(1)
-  takeovers.close()
+  await takeovers.close()
+})
+
+// Security review (3.17.0): races and loose ends.
+test('two sessions taking at once: one gets the screen, the other is told it’s busy', async () => {
+  const takeovers = service()
+  const [a, b] = await Promise.all([
+    takeovers.take('builder', 'me'),
+    takeovers.take('builder', 'you'),
+  ])
+  const granted = [a, b].filter((result) => result.ok)
+  expect(granted).toHaveLength(1)
+  expect([a, b].find((result) => !result.ok)).toMatchObject({ code: 'busy' })
+  expect(asked.filter((req) => req.kind === 'desktop_take')).toHaveLength(1)
+  await takeovers.close()
+})
+
+test('stopping Score hands back what it holds', async () => {
+  const takeovers = service()
+  await takeovers.take('builder', 'me')
+  await takeovers.close()
+  expect(hermesLease.holder).toBe('agent')
+  expect(rows()[0]).toMatchObject({ state: 'ended', end_reason: 'restart' })
+})
+
+test('a take refused because a person holds the screen is busy, and nothing is released', async () => {
+  const takeovers = service()
+  hermesLease = { holder: 'human', viewer_id: 'hermes-app', epoch: 4 }
+  writeLease()
+  const realAsk = ask
+  const refusing = new BotTakeovers({
+    screens,
+    ask: async (profile, req) =>
+      req.kind === 'desktop_take'
+        ? {
+            status: 'done',
+            turnsUndone: 0,
+            rewoundCount: 0,
+            lease: { holder: 'human', viewerId: 'hermes-app', epoch: 4 },
+          }
+        : realAsk(profile, req),
+    db,
+    profileHome: () => home,
+    clock: () => now,
+  })
+  expect(await refusing.take('builder', 'me')).toMatchObject({ ok: false, code: 'busy' })
+  expect(hermesLease).toEqual({ holder: 'human', viewer_id: 'hermes-app', epoch: 4 })
+  expect(rows()[0]).toMatchObject({ state: 'ended' })
+  await refusing.close()
+  await takeovers.close()
+})
+
+test('an active record the screen doesn’t hold is handed back by the sweep', async () => {
+  const takeovers = service()
+  const result = await takeovers.take('builder', 'me')
+  if (!result.ok) throw new Error('not taken')
+  controls.clear() // as if a raced take had replaced it on the screen
+  await takeovers.tick()
+  expect(rows()[0]).toMatchObject({ state: 'ended', end_reason: 'lost' })
+  expect(hermesLease.holder).toBe('agent')
+  await takeovers.close()
 })

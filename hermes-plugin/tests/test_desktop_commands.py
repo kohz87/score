@@ -135,3 +135,11 @@ def test_valid_desktop_commands_need_no_session():
     validate_command(command("desktop_take"))
     validate_command(command("desktop_hand_back", epoch=3))
     validate_command(command("desktop_touch"))
+
+
+def test_take_never_evicts_a_person_who_holds_the_screen(hermes):
+    hermes.lease.state.update(holder="human", viewer_id="hermes-app", epoch=7)
+    result = run_command(command("desktop_take"), "builder")
+    assert result["lease"] == {"holder": "human", "viewerId": "hermes-app", "epoch": 7}
+    assert not any(call[0] == "acquire" for call in hermes.lease.calls)
+    assert hermes.touched == []
