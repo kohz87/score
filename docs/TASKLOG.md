@@ -1990,4 +1990,4 @@ One entry per completed task: what landed, review results, and any **rejected re
   app (`GET …/runtimes/:runtime/usage`, `GET /api/themes/:id/style.css`) but woven into tests and e2e: kept, offered to the
   owner as a follow-up.
 - Gate: e2e 854 passed, 2 failed (tablet, terminal; 32/32 on rerun); check green (contract 1584, web 3096, server 4941).
-- **v3.15.1 deployed live** (~05:35 UTC, idle guard passed): backup score-pre-3.15.1-20261102.db, health ok.
+- **v3.15.1 deployed live** (~04:55 UTC, idle guard passed): backup score-pre-3.15.1-20261102.db, health ok.
