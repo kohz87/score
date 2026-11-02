@@ -1955,3 +1955,24 @@ One entry per completed task: what landed, review results, and any **rejected re
   fake-mode screenshots; Sonnet review clean (no P1/P2; wrapped small labels gain a little air). Affected specs 86/86.
   Gate: e2e 850 passed, 1 failed (workflows gate card briefly doubled, 8/8 on rerun); check green.
 - **v3.14.7 deployed live** (~03:25 UTC, idle guard passed): backup score-pre-3.14.7-20261102.db, health ok.
+
+## 3.15.0 — Update Hermes from Settings › System (2026-11-02)
+- Owner asked for it after today's manual upgrade; mock-up approved (agent picker for the test, moved under System).
+  Lead built the server (Hermes boundary): `hermesUpdateArgv` (only `--version`, `update --check|--plan|--backup --yes` with
+  a stable/main channel), `HermesUpdates` job, live deps (idle from message_runs/runs, statfs, a size-only estimate, the test
+  message through `startRun`, a running-update marker in Score's home), a fake for fake mode, routes with the password and a
+  keyed receipt. A Sonnet coder built the card (BoldHermesUpdates, polling, dialog, results), checked by the lead against
+  the mock-up in screenshots (version trimmed, a stale check cleared, "1 part differs", no promise to block turns).
+- Reviews: server security (P1 two quick starts — already fixed by the lead; P2 boundary test (app.ts named the Hermes home),
+  a Score restart mid-update, a timeout not waiting for the process — fixed; P3 check exit codes, check retries on throw,
+  version timeout, test-run stop, backup name cleaned — fixed; rejected: blocking new Score runs during the update (Hermes
+  drains its own gateway)); screens (P2 backup name in a copyable command, missing error words, a 409 conflict, the anchor
+  not scrolling — fixed; P3 focus, a too-wide live region, wording, a stale pick — fixed; rejected: clearing the password
+  from mutation variables after a failure (it also wiped the error message)); both fix rounds reviewed clean.
+- Gate: e2e 852 passed, 4 failed: specs used different security passwords on the shared fake server (one shared
+  `E2E_SECURITY_PASSWORD` now), the glass spec measured the Hermes card (it can hold a decision, so it stays solid — the spec
+  now measures another card), two "Check for updates" buttons on System (the Hermes one is "Check for Hermes updates");
+  affected specs 25/25 in the failing order; check green (contract 1584, web 3109, server 4966).
+- **v3.15.0 deployed live** (~04:11 UTC, idle guard passed, now also waiting for a running Hermes update): backup
+  score-pre-3.15.0-20261102.db, health ok. Live: version v0.22.5+3257.g557254f, 11.4 GB free (5.1 GB needed), check on main:
+  26 commits behind, restarts gateway [default].
