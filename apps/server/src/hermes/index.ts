@@ -124,3 +124,7 @@ export { ALWAYS_BLOCKED_KEYS, KNOWN_PATTERN_KEYS } from './pattern-keys.ts'
 export { ProfileInventorySchema, type ProfileStepContext } from './profile-management.ts'
 // Run rows are shared with the coding-agent runtime (PLAN 7.2): same table, same summary.
 export { readRun, runDraft, runLifecycle } from './live/translate.ts'
+// 3.15.0: updating Hermes from Settings › System.
+export type { HermesUpdates } from './live/updates.ts'
+export { createLiveHermesUpdates } from './live/updates-live.ts'
+export { createFakeHermesUpdates } from './fake/updates-fake.ts'

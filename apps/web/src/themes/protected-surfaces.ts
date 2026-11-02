@@ -48,6 +48,10 @@ export const protectedClasses = [
   'bold-tool-add',
   // 2.0.3: the inline confirm before removing a provider, tool server or messaging connection
   'bold-remove-confirm',
+  // 3.15.0: Update Hermes (the dialog, the progress and the results that ask for a decision)
+  'bold-hu-dialog',
+  'bold-hu-run',
+  'bold-hu-result',
   // 2.0.5: Remove agent… on the agent page (preview, typed name, progress)
   'bold-remove-agent',
   // 2.0.6: what an agent that is setting up, stopped or being removed says, with Retry / Confirm

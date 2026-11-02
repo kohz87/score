@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hermes updates</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+select,input{font:500 15px 'Hanken Grotesk',sans-serif}
+</style>
+</helmet>
+<div style="min-height: 1100px; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; padding: 28px 24px; box-sizing: border-box">
+<div style="max-width: 1180px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+
+<nav aria-label="Settings sections" style="flex: 1 1 220px; max-width: 260px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 26px; font-weight: 700; margin: 0 0 12px 12px">Settings</span>
+<a href="#" style="padding: 10px 14px; border-radius: 16px; text-decoration: none; color: #ECEEF2; font-weight: 600">Connections</a>
+<a href="#" style="padding: 10px 14px; border-radius: 16px; text-decoration: none; color: #ECEEF2; font-weight: 600">Tools and triggers</a>
+<a href="#" style="padding: 10px 14px; border-radius: 16px; text-decoration: none; color: #ECEEF2; font-weight: 600">Remote access and security</a>
+<a href="#" style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 16px; text-decoration: none; color: #ECEEF2; background: #1A1C23; box-shadow: inset 0 0 0 1px #3A3E4A"><span style="font-weight: 600">System</span><span style="font-size: 12px; color: #9AA0AD">Hermes updates, service, backups, logs</span></a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 28px; font-weight: 700">System</h1>
+
+<section aria-labelledby="h-hermes" style="background: #1A1C23; border-radius: 24px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
+<h2 id="h-hermes" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700">Hermes updates</h2>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #4FD1A5; font-weight: 600"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #4FD1A5"></span>Connected · gateway running</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<div style="background: #12131A; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #9AA0AD">Version</span><span style="font-weight: 700">{{version}}</span></div>
+<div style="background: #12131A; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px">
+<label for="ch" style="font-size: 12px; color: #9AA0AD">Update channel</label>
+<select id="ch" value="{{channel}}" onChange="{{pickChannel}}" style="min-height: 36px; border-radius: 12px; border: 1px solid #3A3E4A; background: #1A1C23; color: #ECEEF2; padding: 0 10px"><option value="stable">Stable releases</option><option value="main">Every change (main)</option></select>
+</div>
+<div style="background: #12131A; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: #9AA0AD">Score's check</span><span style="font-weight: 700; color: {{checkColor}}">{{checkText}}</span></div>
+</div>
+
+<sc-if value="{{showCard}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<sc-if value="{{checked}}" hint-placeholder-val="{{false}}">
+<div style="background: #12131A; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-weight: 700">{{availText}}</span>
+<span style="font-size: 13px; color: #C9CDD6">Restarts: gateway (default profile). Your 6 agents are paused for about a minute, after anything running finishes.</span>
+</div>
+</sc-if>
+<span style="display: flex; gap: 10px; flex-wrap: wrap">
+<button type="button" onClick="{{check}}" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif; cursor: pointer">{{checkLabel}}</button>
+<sc-if value="{{checked}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{openUpdate}}" style="min-height: 44px; padding: 0 20px; border-radius: 999px; border: none; background: #ECEEF2; color: #12131A; font: 700 14px 'Hanken Grotesk', sans-serif; cursor: pointer">Update Hermes…</button>
+</sc-if>
+</span>
+</div>
+</sc-if>
+
+<sc-if value="{{showConfirm}}" hint-placeholder-val="{{false}}">
+<form data-protected="block" onSubmit="{{start}}" aria-label="Update Hermes" style="background: #ECEEF2; color: #12131A; border-radius: 22px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px">
+<h3 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700">Update Hermes to {{target}}</h3>
+<ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.45; color: #2B2E38">
+<li>Waits until no agent is working (Score starts no new turns meanwhile).</li>
+<li>Backs up your Hermes folder: about 1.4 GB, 8.0 GB free. The gateway stops for about 20 seconds.</li>
+<li>Updates Hermes and restarts the gateway.</li>
+<li>Checks the new version, then sends one short test message to the agent you pick.</li>
+</ol>
+<label for="agent" style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600">Test with
+<select id="agent" value="{{agent}}" onChange="{{pickAgent}}" style="min-height: 46px; border-radius: 14px; border: 1px solid #B9BDC7; background: #FFFFFF; color: #12131A; padding: 0 12px">
+<option value="gem38">gem38 · gemini-3.8-flash (cheapest)</option>
+<option value="voter">voter · typesafe/jev-1.13</option>
+<option value="terra">terra · gpt-6.1-terra</option>
+<option value="astra">astra · gpt-6-astra</option>
+<option value="none">No test message (checks only)</option>
+</select>
+</label>
+<label for="pw" style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600">Security password
+<input id="pw" type="password" autocomplete="current-password" required="" style="min-height: 46px; border-radius: 14px; border: 1px solid #B9BDC7; background: #FFFFFF; color: #12131A; padding: 0 14px">
+</label>
+<span style="display: flex; gap: 10px; flex-wrap: wrap">
+<button type="submit" style="min-height: 46px; padding: 0 22px; border-radius: 999px; border: none; background: #12131A; color: #ECEEF2; font: 700 15px 'Hanken Grotesk', sans-serif; cursor: pointer">Back up and update</button>
+<button type="button" onClick="{{cancel}}" style="min-height: 46px; padding: 0 18px; border-radius: 999px; border: 1px solid #12131A; background: transparent; color: #12131A; font: 600 14px 'Hanken Grotesk', sans-serif; cursor: pointer">Cancel</button>
+</span>
+</form>
+</sc-if>
+
+<sc-if value="{{showRun}}" hint-placeholder-val="{{false}}">
+<div data-protected="block" style="background: #12131A; border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px" role="status" aria-label="Update progress">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="6">
+<span style="display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 14px">
+<span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; {{s.dot}}">{{s.mark}}</span>
+<span style="color: {{s.ink}}; font-weight: {{s.weight}}">{{s.label}}</span>
+<span style="font-size: 12px; color: #9AA0AD">{{s.note}}</span>
+</span>
+</sc-for>
+<sc-if value="{{running}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{advance}}" style="align-self: flex-start; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px dashed #3A3E4A; background: transparent; color: #9AA0AD; font: 600 12px 'Hanken Grotesk', sans-serif; cursor: pointer">Next step (mock-up only)</button>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{resClear}}" hint-placeholder-val="{{false}}">
+<div style="background: #1F3A2E; color: #DFF7EC; border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px" role="status">
+<span style="font-weight: 700; color: #4FD1A5">Hermes {{target}} works with Score</span>
+<span style="font-size: 14px">Nothing Score relies on changed, and gem38 answered the test message. Approvals are on. The backup stays for 7 days in case you need it.</span>
+</div>
+</sc-if>
+
+<sc-if value="{{resDiffers}}" hint-placeholder-val="{{false}}">
+<div data-protected="block" style="background: #12131A; border: 1px solid #F2A65A; border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-weight: 700; color: #F2A65A">Something Score relies on looks different</span>
+<span style="display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr); gap: 6px 14px; font-size: 13px">
+<b>Session database</b><span style="color: #F2A65A; font-weight: 700">Changed</span><span style="color: #C9CDD6">A new table; every column Score reads is still there.</span>
+<b>Approval functions</b><span style="color: #4FD1A5; font-weight: 700">Same</span><span style="color: #C9CDD6">Present</span>
+<b>Test message</b><span style="color: #4FD1A5; font-weight: 700">Passed</span><span style="color: #C9CDD6">gem38 answered PONG (streamed, used a tool)</span>
+</span>
+<span style="font-size: 14px; color: #C9CDD6">Approvals are paused. The test passed, so you can turn them on anyway; the next Score update will mark this version as tested.</span>
+<span style="display: flex; gap: 10px; flex-wrap: wrap">
+<button type="button" onClick="{{turnOn}}" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: none; background: #ECEEF2; color: #12131A; font: 700 14px 'Hanken Grotesk', sans-serif; cursor: pointer">Turn approvals on anyway</button>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif; cursor: pointer">Stay paused</button>
+</span>
+</div>
+</sc-if>
+
+<sc-if value="{{resBroken}}" hint-placeholder-val="{{false}}">
+<div data-protected="block" style="background: #12131A; border: 1px solid #FF9AA2; border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-weight: 700; color: #FF9AA2">The test message failed</span>
+<span style="font-size: 14px; color: #C9CDD6">gem38 started but Score couldn't read Hermes's reply: “approval.request: unknown field request_key”. Approvals stay paused; chats may not work until Score is updated for this version.</span>
+<span style="display: flex; gap: 10px; flex-wrap: wrap">
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: none; background: #ECEEF2; color: #12131A; font: 700 14px 'Hanken Grotesk', sans-serif; cursor: pointer">Restore the backup</button>
+<button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 14px 'Hanken Grotesk', sans-serif; cursor: pointer">Keep the new version</button>
+</span>
+<span style="font-size: 12px; color: #9AA0AD">Restore puts your Hermes folder back exactly as it was at 09:47 (the gateway stops for about 30 seconds).</span>
+</div>
+</sc-if>
+
+<sc-if value="{{showAgain}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{reset}}" style="align-self: flex-start; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font: 600 13px 'Hanken Grotesk', sans-serif; cursor: pointer">Start the mock-up again</button>
+</sc-if>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"result":{"editor":"enum","options":["clear","differs","broken"],"default":"differs"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { phase: 'card', checked: false, step: 0, channel: 'main', agent: 'gem38', approvalsOn: false };
+  }
+  renderVals() {
+    var s = this.state;
+    var self = this;
+    var result = this.props.result ?? 'differs';
+    var labels = ['Waiting for agents to finish', 'Backing up the Hermes folder', 'Updating Hermes', 'Restarting the gateway', 'Checking the new version', 'Test message to ' + s.agent];
+    var notes = ['nothing running', '1.4 GB · 18 s', '2,158 changes', 'about 30 s', '9 parts', 'reply PONG'];
+    var done = s.phase === 'result';
+    var failAt = result === 'broken' ? 5 : -1;
+    var steps = labels.map(function (label, i) {
+      var finished = done ? i !== failAt : i < s.step;
+      var current = !done && i === s.step;
+      var failed = done && i === failAt;
+      return {
+        label: label,
+        note: notes[i],
+        mark: failed ? '!' : finished ? '✓' : current ? '…' : '',
+        dot: failed ? 'background: #3A2326; color: #FF9AA2' : finished ? 'background: #1F3A2E; color: #4FD1A5' : current ? 'background: #3A2F1C; color: #F2A65A' : 'background: #23262F; color: #9AA0AD',
+        ink: finished || current || failed ? '#ECEEF2' : '#7C8291',
+        weight: current ? 700 : 500
+      };
+    });
+    var updated = done;
+    return {
+      version: updated ? '0.22.5 + 3,257 changes' : '0.22.5 + 1,099 changes',
+      target: '0.22.5 + 3,257',
+      channel: s.channel,
+      pickChannel: function (e) { self.setState({ channel: e.target.value, checked: false }); },
+      checkText: !updated ? 'Tested' : result === 'clear' || s.approvalsOn ? (s.approvalsOn ? 'Turned on anyway' : 'Tested') : 'Approvals paused',
+      checkColor: !updated || result === 'clear' || s.approvalsOn ? '#4FD1A5' : '#F2A65A',
+      showCard: s.phase === 'card',
+      checked: s.checked,
+      availText: s.channel === 'main' ? 'An update is available: 2,158 changes since your version.' : 'No newer stable release. Your version is ahead of the last one (0.22.5).',
+      checkLabel: s.checked ? 'Check again' : 'Check for updates',
+      check: function () { self.setState({ checked: true }); },
+      openUpdate: function () { self.setState({ phase: 'confirm' }); },
+      showConfirm: s.phase === 'confirm',
+      agent: s.agent,
+      pickAgent: function (e) { self.setState({ agent: e.target.value }); },
+      start: function (e) { if (e && e.preventDefault) e.preventDefault(); self.setState({ phase: 'run', step: 0 }); },
+      cancel: function () { self.setState({ phase: 'card' }); },
+      showRun: s.phase === 'run' || s.phase === 'result',
+      running: s.phase === 'run',
+      steps: steps,
+      advance: function () { if (s.step >= 5) self.setState({ phase: 'result' }); else self.setState({ step: s.step + 1 }); },
+      resClear: done && result === 'clear',
+      resDiffers: done && result === 'differs' && !s.approvalsOn,
+      resBroken: done && result === 'broken',
+      turnOn: function () { self.setState({ approvalsOn: true }); },
+      showAgain: done,
+      reset: function () { self.setState({ phase: 'card', checked: false, step: 0, approvalsOn: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

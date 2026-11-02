@@ -1,0 +1,308 @@
+/* 3.15.0: Settings › System › Hermes updates (docs/design/hermes-updates). Colours come from the theme tokens. */
+.bold-settings-page .bold-hu-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(12px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-hu-facts > div {
+  background: var(--bg);
+  border-radius: calc(16px * var(--bold-r, 1));
+  padding: calc(12px * var(--bold-d, 1)) calc(14px * var(--bold-d, 1));
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-hu-facts select.field {
+  min-height: 36px;
+  border-radius: calc(12px * var(--bold-r, 1));
+}
+
+.bold-settings-page .bold-hu-facts b[data-ok='true'] {
+  color: var(--ok);
+}
+
+.bold-settings-page .bold-hu-facts b[data-ok='false'] {
+  color: var(--warn);
+}
+
+.bold-settings-page .bold-hu-found {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg);
+  border-radius: calc(16px * var(--bold-r, 1));
+  padding: calc(14px * var(--bold-d, 1)) calc(16px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-hu-found span {
+  font-size: 13px;
+  color: var(--ink2);
+}
+
+.bold-settings-page .bold-hu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bold-settings-page .bold-hu-actions .btn {
+  min-height: 44px;
+}
+
+/* The light object: the update is a decision for the person. */
+.bold-settings-page .bold-hu-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--bold-d, 1));
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  border-radius: calc(22px * var(--bold-r, 1));
+  padding: calc(22px * var(--bold-d, 1)) calc(24px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-hu-dialog h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.bold-settings-page .bold-hu-dialog ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--hi-sub, var(--hi-ink));
+}
+
+.bold-settings-page .bold-hu-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bold-settings-page .bold-hu-field select,
+.bold-settings-page .bold-hu-field input {
+  min-height: 46px;
+  border-radius: calc(14px * var(--bold-r, 1));
+  border: 1px solid var(--hi-line, var(--hi-ink));
+  background: color-mix(in srgb, var(--hi-bg) 70%, white);
+  color: var(--hi-ink);
+  padding: 0 14px;
+  font: inherit;
+}
+
+.bold-settings-page .bold-hu-dialog .btn {
+  background: transparent;
+  color: var(--hi-ink);
+  border: 1px solid var(--hi-ink);
+}
+
+.bold-settings-page .bold-hu-dialog .btn.primary {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+.bold-settings-page .bold-hu-run {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  background: var(--bg);
+  border-radius: calc(18px * var(--bold-r, 1));
+  padding: calc(16px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-hu-run ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bold-settings-page .bold-hu-run li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.bold-settings-page .bold-hu-run li[data-state='running'] {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.bold-settings-page .bold-hu-run li[data-state='done'],
+.bold-settings-page .bold-hu-run li[data-state='failed'] {
+  color: var(--ink);
+}
+
+.bold-settings-page .bold-hu-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--field);
+  color: var(--muted);
+}
+
+.bold-settings-page .bold-hu-run li[data-state='done'] .bold-hu-dot {
+  color: var(--ok);
+}
+
+.bold-settings-page .bold-hu-run li[data-state='running'] .bold-hu-dot {
+  color: var(--warn);
+}
+
+.bold-settings-page .bold-hu-run li[data-state='failed'] .bold-hu-dot {
+  color: var(--bad);
+}
+
+/* The state word is for screen readers: the dot carries it for sighted people, and colour is never alone. */
+.bold-settings-page .bold-hu-state {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.bold-settings-page .bold-hu-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bold-settings-page .bold-hu-run summary {
+  cursor: pointer;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bold-settings-page .bold-hu-log {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
+  background: var(--code-bg, var(--deep));
+  color: var(--code-ink, var(--ink));
+  font: 12px/1.5 var(--font-m, monospace);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bold-settings-page .bold-hu-ok {
+  margin: 0;
+  background: var(--bg);
+  border: 1px solid var(--ok);
+  border-radius: calc(18px * var(--bold-r, 1));
+  padding: calc(16px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
+  color: var(--ok);
+}
+
+.bold-settings-page .bold-hu-result {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--bold-d, 1));
+  background: var(--bg);
+  border: 1px solid var(--warn);
+  border-radius: calc(18px * var(--bold-r, 1));
+  padding: calc(16px * var(--bold-d, 1)) calc(18px * var(--bold-d, 1));
+}
+
+.bold-settings-page .bold-hu-result[data-tone='bad'] {
+  border-color: var(--bad);
+}
+
+.bold-settings-page .bold-hu-result p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+.bold-settings-page .bold-hu-title {
+  color: var(--warn);
+}
+
+.bold-settings-page .bold-hu-result[data-tone='bad'] .bold-hu-title {
+  color: var(--bad);
+}
+
+.bold-settings-page .bold-hu-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.bold-settings-page .bold-hu-table th,
+.bold-settings-page .bold-hu-table td {
+  padding: 4px 14px 4px 0;
+  vertical-align: top;
+  font-weight: 500;
+  color: var(--ink2);
+}
+
+.bold-settings-page .bold-hu-table th[scope='row'] {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.bold-settings-page .bold-hu-copy {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bold-settings-page .bold-hu-copy code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 8px 12px;
+  border-radius: calc(12px * var(--bold-r, 1));
+  background: var(--code-bg, var(--deep));
+  color: var(--code-ink, var(--ink));
+  font: 13px var(--font-m, monospace);
+}
+
+@media (max-width: 860px) {
+  .bold-settings-page .bold-hu-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bold-settings-page .span2.bold-hu {
+    grid-column: auto;
+  }
+
+  .bold-settings-page .bold-hu-actions .btn,
+  .bold-settings-page .bold-hu-copy .btn {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+
+  .bold-settings-page .bold-hu-run li {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .bold-settings-page .bold-hu-note {
+    grid-column: 2;
+  }
+}
