@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.16.0] — 2026-11-02
+
+### Added
+- **Tasks** in the top bar: every Hermes task across your rooms on one board, in five columns (Planned, Working, In
+  review, Needs you, Done), filtered by agent and by room. Open a task to see its steps and comments, comment, unblock
+  it, or answer the approval it waits on. On a phone, what needs you comes first. Agents still move their own tasks.
+
 ## [3.15.3] — 2026-11-02
 
 ### Changed

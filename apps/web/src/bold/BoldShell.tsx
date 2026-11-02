@@ -49,12 +49,13 @@ import './bold-shape.css'
 
 const PHONE = '(max-width: 860px)'
 
-type View = 'room' | 'team' | 'recipes' | 'settings'
+type View = 'room' | 'team' | 'recipes' | 'tasks' | 'settings'
 
 function viewOf(path: string): View {
   if (path.startsWith('/b/team')) return 'team'
   if (path.startsWith('/b/settings')) return 'settings'
   if (path.startsWith('/b/recipes')) return 'recipes'
+  if (path.startsWith('/b/tasks')) return 'tasks'
   return 'room'
 }
 
@@ -286,6 +287,7 @@ function BoldShellFrame() {
                 {navButton('room', 'Room', '/b')}
                 {navButton('team', 'Team', '/b/team')}
                 {navButton('recipes', 'Recipes', '/b/recipes')}
+                {navButton('tasks', 'Tasks', '/b/tasks')}
               </nav>
             )}
             {!phone && (
@@ -308,9 +310,14 @@ function BoldShellFrame() {
               </div>
             )}
             {phone && (
-              <button type="button" className="btn sm" onClick={go('/b/recipes')}>
-                Recipes
-              </button>
+              <>
+                <button type="button" className="btn sm" onClick={go('/b/recipes')}>
+                  Recipes
+                </button>
+                <button type="button" className="btn sm" onClick={go('/b/tasks')}>
+                  Tasks
+                </button>
+              </>
             )}
             {!phone && (
               <button
