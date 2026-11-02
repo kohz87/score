@@ -11,6 +11,7 @@ import { BoldSettings } from './bold/BoldSettings.tsx'
 import { BoldTeam } from './bold/BoldTeam.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
 import { BoldRecipesPage } from './bold/BoldRecipes.tsx'
+import { BoldTasksPage } from './bold/BoldTasks.tsx'
 
 function keepSearch(request: Request, path: string) {
   return `${path}${new URL(request.url).search}`
@@ -79,6 +80,7 @@ export const appRoutes: RouteObject[] = [
           { path: 'team', Component: BoldTeam },
           { path: 'team/:agentId', Component: BoldAgentPage },
           { path: 'screen/:agentId', Component: BoldScreenPage },
+          { path: 'tasks', Component: BoldTasksPage },
           { path: 'recipes', Component: BoldRecipesPage },
           { path: 'recipes/:workflowId', Component: BoldRecipesPage },
           {
@@ -140,7 +142,7 @@ export const appRoutes: RouteObject[] = [
         loader: ({ request }) => redirect(keepSearch(request, '/b/team')),
       },
       { path: '/now/*', loader: ({ request }) => redirect(keepSearch(request, '/b')) },
-      { path: '/tasks/*', loader: () => redirect('/b') },
+      { path: '/tasks/*', loader: ({ request }) => redirect(keepSearch(request, '/b/tasks')) },
       { path: '/u/*', loader: () => redirect('/b') },
       { path: '/pair', loader: pairBrowser, Component: PairPage },
       { path: '*', loader: () => redirect('/b') },

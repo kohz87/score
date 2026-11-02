@@ -16,7 +16,7 @@ import {
   useTaskRefresh,
 } from './task-queries.ts'
 
-function TaskAgent({ task, agents }: { task: TaskSummary; agents: AgentSummary[] }) {
+export function TaskAgent({ task, agents }: { task: TaskSummary; agents: AgentSummary[] }) {
   const agent = task.assignee ? agents.find((item) => item.id === task.assignee) : undefined
   if (!agent) return <span className="small muted">Unassigned</span>
   return (
