@@ -177,7 +177,7 @@ export class CliLocator {
               : {
                   state: 'untested_version',
                   version,
-                  message: `${driver.label} ${version} is newer than the versions Score was tested with (${driver.testedVersions.join(', ')}). It runs unless Score's check finds it changed something Score relies on.`,
+                  message: `${driver.label} ${version} isn't one of the versions Score was tested with (${driver.testedVersions.join(', ')}). It runs unless Score's check finds it changed something Score relies on.`,
                 },
           )
         },

@@ -16,7 +16,7 @@ export const CliStateSchema = z.enum([
   'not_installed',
   /** Known, but this Score cannot drive it yet. */
   'not_supported',
-  /** Installed, but its version is not one of the tested versions: runs only after the person confirms that version. */
+  /** Installed, but its version is not one of the tested versions: runs unless Score's help check finds it broken (decision 157). */
   'untested_version',
 ])
 export type CliState = z.infer<typeof CliStateSchema>

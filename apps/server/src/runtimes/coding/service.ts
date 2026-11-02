@@ -570,7 +570,9 @@ export class CodingRuntime {
   ): Promise<string | null> {
     const key = `${driver.runtime}@${version}`
     const seen = this.shownProblems.get(key)
-    if (seen && Date.now() - seen.at < 60_000) return seen.problem
+    // A run may have passed the check since a transient failure was remembered.
+    if (seen && Date.now() - seen.at < 60_000 && !this.checkedVersions().has(key))
+      return seen.problem
     const problem = await this.checkVersion(driver, version)
     this.shownProblems.set(key, { at: Date.now(), problem })
     return problem
