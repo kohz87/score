@@ -146,18 +146,33 @@ export class HermesUpdates {
     channel: HermesUpdateChannel
     testAgentId: string | null
   }): Promise<HermesUpdateJob> {
-    if (this.#job?.state === 'running')
+    // Claimed before the first await: two quick starts can never both pass the check.
+    if (this.#job?.state === 'running' || this.#starting)
       throw new HttpError(409, 'update_running', 'Hermes is already being updated.')
-    const [free, needs] = await Promise.all([
-      this.deps.diskFreeBytes().catch(() => null),
-      this.deps.backupNeedsBytes().catch(() => null),
-    ])
-    if (free !== null && needs !== null && free < needs)
-      throw new HttpError(
-        409,
-        'disk_full',
-        `Not enough disk space for Hermes's backup: about ${gb(needs)} needed, ${gb(free)} free.`,
-      )
+    this.#starting = true
+    try {
+      const [free, needs] = await Promise.all([
+        this.deps.diskFreeBytes().catch(() => null),
+        this.deps.backupNeedsBytes().catch(() => null),
+      ])
+      if (free !== null && needs !== null && free < needs)
+        throw new HttpError(
+          409,
+          'disk_full',
+          `Not enough disk space for Hermes's backup: about ${gb(needs)} needed, ${gb(free)} free.`,
+        )
+      return await this.#begin(req)
+    } finally {
+      this.#starting = false
+    }
+  }
+
+  #starting = false
+
+  async #begin(req: {
+    channel: HermesUpdateChannel
+    testAgentId: string | null
+  }): Promise<HermesUpdateJob> {
     const job: HermesUpdateJob = {
       id: randomUUID(),
       state: 'running',

@@ -214,3 +214,17 @@ test('a check that can’t read the restarting gateway is tried again', async ()
   expect(await finished(updates)).toMatchObject({ outcome: 'clear' })
   expect(n).toBe(3)
 })
+
+test('two quick starts never both run', async () => {
+  const { updates, calls } = harness({
+    readRun: () => ({ status: 'running', output: null, error: null }),
+    limits: { testMs: 30 },
+  })
+  const results = await Promise.allSettled([
+    updates.start({ channel: 'main', testAgentId: null }),
+    updates.start({ channel: 'main', testAgentId: null }),
+  ])
+  expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected'])
+  await finished(updates)
+  expect(calls.filter((c) => c === 'run:main')).toHaveLength(1)
+})
