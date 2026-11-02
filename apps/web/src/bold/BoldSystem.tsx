@@ -14,6 +14,7 @@ import {
 } from '../routes/knowledge/knowledge-queries.ts'
 import { useNow, useTeamPause } from '../data/team-pause.ts'
 import { pairingProblem } from './bold-errors.ts'
+import { BoldHermesUpdates } from './BoldHermesUpdates.tsx'
 
 /** The classic Knowledge settings, with the vault summary and both agent switches. */
 function LibraryAccess() {
@@ -159,6 +160,7 @@ export function BoldSystem() {
     <div className="bold-system" id="system">
       <h2>System</h2>
       <div className="grid2 system-grid">
+        <BoldHermesUpdates />
         <AboutSection heading="Score" />
         <BackupSection heading="Backups" />
         <LibraryAccess />

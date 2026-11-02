@@ -146,6 +146,8 @@ export function signInShape(argv: string[]): SignInShape | null {
 export interface HermesChild {
   /** Kills the whole process group by the handle's pid; never by name or pattern. */
   kill(): void
+  /** The process id, when known (an update records it, so a Score restart can tell it is still running). */
+  readonly pid?: number
   /** Exit code; -1 when it could not start or died from a signal. */
   readonly exited: Promise<number>
 }
@@ -285,4 +287,73 @@ export const runHermes: HermesRunner = async (args, options) => {
       resolve({ exitCode: -1 })
     }
   })
+}
+
+// ---- 3.15.0 (owner): updating Hermes from Settings › System ---------------------------------------------------------
+// `hermes --version` and three update shapes, each with a validated channel; nothing else may run through this spawner. The update is
+// install-wide (no profile), and it restarts Hermes's gateway through the user's systemd, so the session bus variables
+// pass through as well.
+export type HermesUpdateCommand = 'version' | 'check' | 'plan' | 'run'
+const UpdateChannelSchema = z.enum(['stable', 'main'])
+export function hermesUpdateArgv(command: HermesUpdateCommand, channel: string): string[] {
+  if (command === 'version') return ['--version']
+  const parsed = UpdateChannelSchema.parse(channel)
+  if (command === 'check') return ['update', '--check', '--channel', parsed]
+  if (command === 'plan') return ['update', '--plan', '--channel', parsed]
+  // `--backup`: Hermes makes its own full backup first (Score never reads Hermes's files itself).
+  return ['update', '--backup', '--yes', '--channel', parsed]
+}
+export type HermesUpdateSpawner = (
+  command: HermesUpdateCommand,
+  channel: string,
+  options: { hermesHome?: string | undefined; onLine: (line: string) => void },
+) => HermesChild
+export const spawnHermesUpdate: HermesUpdateSpawner = (command, channel, options) => {
+  const argv = hermesUpdateArgv(command, channel)
+  const env = hermesEnv(options.hermesHome)
+  for (const name of ['XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'USER', 'LOGNAME']) {
+    if (process.env[name] !== undefined) env[name] = process.env[name]
+  }
+  const child = spawn('hermes', argv, { detached: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
+  // On `exit` plus a short drain, not `close`: a process the update starts could inherit the pipes and keep them open.
+  const exited = new Promise<number>((resolve) => {
+    child.once('error', () => resolve(-1))
+    child.once('exit', (code) => setTimeout(() => resolve(code ?? -1), 500).unref())
+  })
+  // Lines from both streams, in arrival order per stream; the caller redacts before keeping any.
+  for (const stream of [child.stdout, child.stderr]) {
+    let rest = ''
+    stream?.setEncoding('utf8')
+    stream?.on('data', (chunk: string) => {
+      const lines = (rest + chunk).split(/\r?\n/)
+      rest = lines.pop() ?? ''
+      for (const line of lines) options.onLine(line)
+    })
+    stream?.on('end', () => {
+      if (rest) options.onLine(rest)
+      rest = ''
+    })
+  }
+  let finished = false
+  void exited.then(() => {
+    finished = true
+  })
+  return {
+    exited,
+    ...(child.pid !== undefined ? { pid: child.pid } : {}),
+    kill() {
+      if (finished || child.pid === undefined) return
+      const signal = (name: NodeJS.Signals) => {
+        try {
+          process.kill(-child.pid!, name)
+        } catch {
+          // Already gone.
+        }
+      }
+      signal('SIGTERM')
+      setTimeout(() => {
+        if (!finished) signal('SIGKILL')
+      }, 10_000).unref()
+    },
+  }
 }

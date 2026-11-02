@@ -1629,6 +1629,23 @@ compatible: boolean }`. Read-only: compares the running build (version, code sha
   anyway: the security password is checked first (same errors and attempt limits as every password check), `409
   not_overridable` otherwise. The stored entry lists the parts that differed (`overridden`) and is **never a comparison
   baseline**: later checks compare with really tested or cleanly accepted builds only.
+- **Hermes updates (3.15.0, owner; Settings › System).** **H** `GET /api/system/hermes-update` → `HermesUpdateStatus`
+  `{ available; version /* hermes --version, e.g. v0.22.5+3257.g557254f */; lastCheck; job; diskFreeBytes; backupNeedsBytes }`
+  (`available: false` without a real Hermes or database). **H** `POST /api/system/hermes-update/check { channel: 'stable' |
+  'main' }` → `HermesUpdateCheck { channel; available; behind; summary; restarts: string[]; checkedAt }` from
+  `hermes update --check --channel X` and `--plan` (read-only). **H** `POST /api/system/hermes-update/start { channel;
+  testAgentId: string | null; password }` → `202 HermesUpdateJob`: the security password first (same errors and limits as
+  every password check; keyed-HMAC receipt), `409 update_running` (one job at a time), `409 disk_full` (free space below the
+  estimate: Hermes's home without its code, by file sizes only). The job, in memory, runs: **wait** until no Score turn or
+  run is active (30 min, else `failed`, nothing changed) → **update** `hermes update --backup --yes --channel X` (Hermes
+  backs itself up into its own backups folder, drains its gateway, restarts it; output redacted, last 200 lines) →
+  **check** Score's Hermes check (retried while the restarting gateway can't be read) → **test** one short message to the
+  picked Hermes agent (`startRun`; passes when the run completes within 4 min). Outcome: `clear` (accepted: approvals on),
+  `differs` (`check.overridable`, the test passed: the page offers the 3.14.4 override), `broken` (the test failed or
+  approvals can't work), `failed` (the update didn't finish; Hermes's output says why). Score never reads Hermes's files
+  for the backup and never rolls Hermes's code back; the page names the backup and the commands that go back
+  (`hermes update --channel stable`, `hermes import <backup> --force`). Only `hermes --version` and the three
+  `hermes update` shapes run through this path (`hermesUpdateArgv`).
 - Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
 
 ### Where an agent runs ("Runs on", PLAN 11.8a, D15)

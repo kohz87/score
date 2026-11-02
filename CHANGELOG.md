@@ -3,6 +3,17 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.15.0] — 2026-11-02
+
+### Added
+- **Update Hermes from Settings › System.** The **Hermes updates** card shows the version and an update channel (stable
+  releases or every change on main); **Check for updates** says how far behind you are and what restarts. **Update
+  Hermes…** (your security password) waits until no agent is working, lets Hermes back itself up and update (its gateway
+  restarts), runs Score's compatibility check, and sends one short test message to the agent you pick. Then: approvals
+  come back on by themselves; or, when something differs but the test passed, **Turn approvals on anyway**; or, when the
+  test failed, the backup and the two commands that go back. Hermes's own output is one click away. The "Hermes was
+  updated" notice on Connections links here.
+
 ## [3.14.7] — 2026-11-02
 
 ### Fixed

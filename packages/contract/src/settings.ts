@@ -264,3 +264,76 @@ export const HermesAcceptRequestSchema = z
   .strict()
 export type HermesAcceptRequest = z.infer<typeof HermesAcceptRequestSchema>
 export const HermesAcceptResponseSchema = z.object({ ok: z.literal(true) })
+
+// ---- 3.15.0 (owner): update Hermes from Settings › System ------------------------------------------------------------
+/** `stable` = published releases; `main` = every change on Hermes's main branch. */
+export const HermesUpdateChannelSchema = z.enum(['stable', 'main'])
+export type HermesUpdateChannel = z.infer<typeof HermesUpdateChannelSchema>
+/** `POST /api/system/hermes-update/check`: what `hermes update --check` and `--plan` say (read-only). */
+export const HermesUpdateCheckSchema = z.object({
+  channel: HermesUpdateChannelSchema,
+  available: z.boolean(),
+  /** Commits behind the channel's tip when Hermes says so; null otherwise. */
+  behind: z.number().int().nonnegative().nullable(),
+  /** Hermes's own one-line answer, redacted. */
+  summary: z.string(),
+  /** The services the update restarts, as Hermes plans them ("gateway [default]"). */
+  restarts: z.array(z.string()),
+  checkedAt: z.iso.datetime(),
+})
+export type HermesUpdateCheck = z.infer<typeof HermesUpdateCheckSchema>
+export const HermesUpdateStepIdSchema = z.enum(['wait', 'update', 'check', 'test'])
+export const HermesUpdateStepSchema = z.object({
+  id: HermesUpdateStepIdSchema,
+  state: z.enum(['pending', 'running', 'done', 'failed', 'skipped']),
+  /** A short plain note ("1 run still going", "2,158 changes"). */
+  note: z.string().nullable(),
+})
+export const HermesUpdateJobSchema = z.object({
+  id: z.string().min(1),
+  state: z.enum(['running', 'finished']),
+  channel: HermesUpdateChannelSchema,
+  /** The Hermes agent that answers the test message; null = no test message. */
+  testAgentId: z.string().nullable(),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().nullable(),
+  steps: z.array(HermesUpdateStepSchema),
+  fromVersion: z.string().nullable(),
+  toVersion: z.string().nullable(),
+  /**
+   * `clear`: approvals are on (the build checked out, the test passed or was skipped). `differs`: something Score relies
+   * on differs but approvals can be turned on anyway (`check.overridable`). `broken`: the test failed, or approvals can't
+   * work with this build. `failed`: the update itself did not finish (Hermes's message in `error`).
+   */
+  outcome: z.enum(['clear', 'differs', 'broken', 'failed']).nullable(),
+  check: HermesCheckSchema.nullable(),
+  test: z.object({ agentId: z.string(), ok: z.boolean(), detail: z.string() }).nullable(),
+  /** The backup Hermes made before updating (its file name in Hermes's backups folder), when it said so. */
+  backup: z.string().nullable(),
+  error: z.string().nullable(),
+  /** Hermes's output, redacted, at most the last 200 lines. */
+  log: z.array(z.string()),
+})
+export type HermesUpdateJob = z.infer<typeof HermesUpdateJobSchema>
+/** `GET /api/system/hermes-update`. */
+export const HermesUpdateStatusSchema = z.object({
+  /** Off when Score has no real Hermes (fake mode shows a simulated flow). */
+  available: z.boolean(),
+  version: z.string().nullable(),
+  lastCheck: HermesUpdateCheckSchema.nullable(),
+  job: HermesUpdateJobSchema.nullable(),
+  /** Free bytes on the disk that holds Hermes, and roughly what a full backup needs; null when unknown. */
+  diskFreeBytes: z.number().nonnegative().nullable(),
+  backupNeedsBytes: z.number().nonnegative().nullable(),
+})
+export type HermesUpdateStatus = z.infer<typeof HermesUpdateStatusSchema>
+export const HermesUpdateCheckRequestSchema = z
+  .object({ channel: HermesUpdateChannelSchema })
+  .strict()
+export const HermesUpdateStartRequestSchema = z
+  .object({
+    channel: HermesUpdateChannelSchema,
+    testAgentId: z.string().min(1).max(64).nullable(),
+    password: z.string().max(1024),
+  })
+  .strict()
