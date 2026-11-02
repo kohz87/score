@@ -700,7 +700,7 @@ test two big changes at once. Steps:
 Opportunities after the upgrade: the `post_compaction` and `on_session_delete` hooks, MCP event webhooks, the
 `kanban-stream` community plugin.
 
-**P2 Bot Screen in the agent's screen page** (parity row "Watch › live Bot Screen", PLAN 11.6b "when present"). Hermes
+**P2 Bot Screen in the agent's screen page** ✅ (shipped as the Live screen in 3.3.0, 2026-10-26, decision 135: Score reads the screen's own RFB socket, pictures only) (parity row "Watch › live Bot Screen", PLAN 11.6b "when present"). Hermes
 already has it (`tools/bot_desktop/`, `hermes computer-use screen`): an RFB-over-WebSocket viewer at the dashboard's
 `/api/display/ws`, behind a single-use ticket from `display.observe` and an input lease. Score would show it read-only
 (never take the lease). A new boundary: design and adversarial review first (ARCHITECTURE D2.1), then the build.
@@ -716,13 +716,13 @@ together with 2.0.2 as v2.0.3.
 (`/runs/:id`), Watch (`/watch/:agent`) and the Customizer open under `/b` with the new shell's chrome; old paths
 redirect; Back returns to the room. Their insides stay v1 until the rebuild below.
 
-**P2 Removing an agent whose setup stopped** (owner on live 2.0.5, 2026-10-25: g3's create stopped at `model` with the
+**P2 Removing an agent whose setup stopped** ✅ (3.3.0: Remove agent… works on a setup that stopped) (owner on live 2.0.5, 2026-10-25: g3's create stopped at `model` with the
 pre-2.0.3 local-provider refusal; its delete preview is blocked by "An operation already holds this agent."). 2.0.6 puts
 the stopped operation and its Retry on the agent page and in the Remove panel. Still missing: a way to abandon a create
 whose retry keeps failing (delete allowed from `needs_attention` after a create: export what exists, delete the profile,
 retire). Lifecycle change at the adapter boundary: lead, with a short design note first.
 
-**P2 Rebuild the remaining v1 pages in the new design** (decision 123): runs as a Runs view in the side panel and a run
+**P2 Rebuild the remaining v1 pages in the new design** ✅ (2.5.0–2.8.0, decision 131; classic shell removed, decision 132) (decision 123): runs as a Runs view in the side panel and a run
 as a job thread with its steps; the workflow list in Recipes; Watch folded into the agent's screen page; the Customizer
 restyled. Design pass first (prototype additions), then build.
 
