@@ -49,15 +49,6 @@ export const PROJECT_COLORS = [
   { value: '#8A909B', label: 'Grey' },
 ] as const
 
-/** "q4, #urgent Q1" → ['q4', 'urgent', 'q1'] (valid tags only; the server validates again). */
-export function parseTagInput(text: string): string[] {
-  const tags = text
-    .split(/[\s,]+/)
-    .map((word) => word.replace(/^#/, '').toLowerCase())
-    .filter((word) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(word))
-  return [...new Set(tags)]
-}
-
 // Room summary (PLAN 7.4a). The new message arrives on the stream (`message.created`, `message.updated`).
 const summaryUrl = (roomId: string) => `rooms/${encodeURIComponent(roomId)}/summary`
 export function regenerateSummary(roomId: string): Promise<unknown> {

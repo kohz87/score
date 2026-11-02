@@ -1,8 +1,6 @@
 import { AgentContextSchema, type AgentContext } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 
-export const agentContextKey = (agentId: string) => ['chat', 'context', agentId] as const
-
 export async function fetchAgentContext(agentId: string): Promise<AgentContext> {
   return AgentContextSchema.parse(await apiFetch(`agents/${encodeURIComponent(agentId)}/context`))
 }
@@ -20,12 +18,6 @@ export function meterText(context: AgentContext): string | null {
   const window = context.contextLength ? ` of ${compact(context.contextLength)}` : ''
   const cost = context.costUsd === null ? '' : ` · $${context.costUsd.toFixed(4)}`
   return `${compact(used)}${window} tokens${cost}`
-}
-
-/** Share of the context window used, or null when either side is unknown. */
-export function meterFraction(context: AgentContext): number | null {
-  if (!context.tokens || !context.contextLength) return null
-  return Math.min(1, (context.tokens.input + context.tokens.output) / context.contextLength)
 }
 
 /** The local card for `/usage`. */

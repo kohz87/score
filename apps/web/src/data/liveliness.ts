@@ -2,7 +2,6 @@ import { useSyncExternalStore } from 'react'
 
 /** How much agents move on this device (Settings › Look). A per-device choice, like the colour mode. */
 export type Liveliness = 'calm' | 'still'
-export const livelinessChoices: Liveliness[] = ['calm', 'still']
 const STORAGE_KEY = 'score.liveliness'
 /** Fired on window when this device's choice changes, so the page follows at once. */
 export const LIVELINESS_CHANGED = 'score:liveliness-changed'
@@ -76,11 +75,6 @@ export function watchLiveliness(): () => void {
   }
   apply()
   return subscribe(apply)
-}
-
-/** The effective liveliness for this device, live: a new choice, another tab, a resized window or the OS setting. */
-export function useLiveliness(): Liveliness {
-  return useSyncExternalStore(subscribe, effectiveLiveliness, () => 'calm')
 }
 
 /** The chosen liveliness (what Settings shows), live. */

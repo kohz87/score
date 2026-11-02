@@ -1,4 +1,4 @@
-import { ORC_CAPABILITY_PATTERN, ORC_CAPABILITY_PLACEHOLDER } from '@score/contract'
+import { ORC_CAPABILITY_PLACEHOLDER } from '@score/contract'
 import { createHash, randomBytes } from 'node:crypto'
 
 // A per-turn bearer capability (design v2 "Authority"). Only the hash is stored; the plaintext exists in memory while
@@ -7,7 +7,6 @@ import { createHash, randomBytes } from 'node:crypto'
 export const mintCapability = (): string => `orc_${randomBytes(32).toString('base64url')}`
 export const hashCapability = (capability: string): string =>
   createHash('sha256').update(capability).digest('hex')
-export const isCapability = (value: string): boolean => ORC_CAPABILITY_PATTERN.test(value)
 
 /** Anything shaped like a capability prefix: step inputs and lead-written text containing it are refused. */
 const CAPABILITY_LIKE = /orc_[A-Za-z0-9_-]{8,}/

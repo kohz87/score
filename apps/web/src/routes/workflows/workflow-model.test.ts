@@ -5,7 +5,6 @@ import {
   ancestorsOf,
   connect,
   disconnect,
-  idFromLabel,
   nextNodeId,
   outlineOf,
   portsOf,
@@ -174,16 +173,6 @@ test('the outline lists nodes in reading order with where each connection goes',
   expect(outline[0]).toMatchObject({ root: true })
   expect(outline[0]!.connections[0]!.text).toBe('when done goes to Done')
   expect(outline[1]).toMatchObject({ root: true, connections: [] })
-})
-
-test('ids made from a title are valid, short and unique', () => {
-  const draft = starterDraft('builder')
-  expect(idFromLabel(draft, 'Write the Draft!')).toBe('write-the-draft')
-  expect(idFromLabel(draft, '123 go')).toBe('go')
-  expect(idFromLabel(draft, '!!!')).toBe('node')
-  expect(idFromLabel(draft, 'step1')).toBe('step1-2')
-  expect(idFromLabel(draft, 'step1', 'step1')).toBe('step1')
-  expect(idFromLabel(draft, 'x'.repeat(60)).length).toBeLessThanOrEqual(32)
 })
 
 // ---- layout (PLAN 7.1c)

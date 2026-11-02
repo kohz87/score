@@ -271,12 +271,6 @@ export function activeStepCounts(sqlite: DatabaseSync): ActiveCounts {
   return counts
 }
 
-export const liveAttempts = (sqlite: DatabaseSync, orchId: string): AttemptRow[] =>
-  attemptsOf(sqlite, orchId).filter(
-    (attempt) =>
-      !attempt.suspended && ['created', 'send_started', 'running'].includes(attempt.state),
-  )
-
 /**
  * v8.1 item 2: every change that can make waiting work admissible (limits raised, Resume, fence lift, waiver, capacity
  * or quota released, an agent ready again) increments the global admission revision in its own transaction. Runs

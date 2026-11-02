@@ -187,11 +187,6 @@ export const AttemptRowSchema = z.object({
 })
 export type AttemptRow = z.infer<typeof AttemptRowSchema>
 
-/** States in which the attempt may still be (or become) a live Hermes run: they hold capacity and fence admissions. */
-export const LIVE_ATTEMPT_STATES = ['created', 'send_started', 'running', 'unknown'] as const
-/** States in which a run may exist in Hermes (a `created` attempt was never sent). */
-export const MAY_RUN_STATES = ['send_started', 'running', 'unknown'] as const
-
 export const GateRowSchema = z.object({
   orchestration_id: z.string(),
   id: z.string(),

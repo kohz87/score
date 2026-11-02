@@ -20,7 +20,6 @@ export type Draft = {
 }
 
 type Mutable = ThemeManifest
-type Layout = NonNullable<Mutable['layout']>
 
 export function emptyManifest(id: string, name: string): ThemeManifest {
   return { format: 1, id, name, version: '1.0.0' }
@@ -99,30 +98,6 @@ export function setShape<K extends keyof NonNullable<Mutable['shape']>>(
     const shape = (m.shape ??= {})
     if (value === undefined) delete shape[key]
     else shape[key] = value
-  })
-}
-
-export function setLayoutKey<K extends 'nav' | 'contentWidth'>(
-  draft: Draft,
-  key: K,
-  value: Layout[K] | undefined,
-): Draft {
-  return patch(draft, (m) => {
-    const layout = (m.layout ??= {})
-    if (value === undefined) delete layout[key]
-    else layout[key] = value
-  })
-}
-
-export function setChat<K extends 'messages' | 'roomList'>(
-  draft: Draft,
-  key: K,
-  value: NonNullable<Layout['chat']>[K] | undefined,
-): Draft {
-  return patch(draft, (m) => {
-    const chat = ((m.layout ??= {}).chat ??= {})
-    if (value === undefined) delete chat[key]
-    else chat[key] = value
   })
 }
 
@@ -221,7 +196,6 @@ export function setBackgroundDim(draft: Draft, dim: number): Draft {
 // Menu
 
 export type MenuRow = { to: (typeof destinations)[number]['path']; label?: string; hidden: boolean }
-const titleOf = (to: string) => destinations.find((item) => item.path === to)?.title ?? to
 
 /** The menu as the editor lists it: shown entries in order, then the hidden ones. Settings is always shown. */
 export function menuRows(manifest: ThemeManifest): MenuRow[] {
@@ -242,71 +216,6 @@ export function menuRows(manifest: ThemeManifest): MenuRow[] {
     .filter((to) => !shown.some((row) => row.to === to))
     .map((to): MenuRow => ({ to, hidden: true }))
   return [...shown, ...hidden]
-}
-
-export function menuLabel(row: MenuRow): string {
-  return row.label ?? titleOf(row.to)
-}
-
-/** Writes the rows back. A menu equal to Score's own is not stored at all. */
-export function setMenuRows(draft: Draft, rows: MenuRow[]): Draft {
-  const shown = rows.filter((row) => !row.hidden || row.to === '/settings')
-  const isDefault =
-    shown.length === destinations.length &&
-    shown.every((row, index) => row.to === destinations[index]?.path && !row.label)
-  return patch(draft, (m) => {
-    const layout = (m.layout ??= {})
-    if (isDefault) delete layout.menu
-    else
-      layout.menu = shown.map((row) => ({
-        to: row.to,
-        ...(row.label ? { label: row.label } : {}),
-      }))
-  })
-}
-
-export function moveItem<T>(items: T[], from: number, to: number): T[] {
-  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return items
-  const next = [...items]
-  const [item] = next.splice(from, 1)
-  next.splice(to, 0, item as T)
-  return next
-}
-
-/** Moves a row among the shown ones (the hidden rows stay below). */
-export function moveMenuRow(draft: Draft, from: number, to: number): Draft {
-  const rows = menuRows(draft.manifest)
-  const shown = rows.filter((row) => !row.hidden)
-  const hidden = rows.filter((row) => row.hidden)
-  return setMenuRows(draft, [...moveItem(shown, from, to), ...hidden])
-}
-
-export function renameMenuRow(draft: Draft, to: string, label: string): Draft {
-  const rows = menuRows(draft.manifest).map((row) => {
-    if (row.to !== to) return row
-    const rest = { to: row.to, hidden: row.hidden }
-    const text = label.trim().slice(0, 24)
-    return text && text !== titleOf(to) ? { ...rest, label: text } : rest
-  })
-  return setMenuRows(draft, rows)
-}
-
-export function hideMenuRow(draft: Draft, to: string, hidden: boolean): Draft {
-  if (to === '/settings') return draft
-  const rows = menuRows(draft.manifest)
-  const shown = rows.filter((row) => !row.hidden && row.to !== to)
-  const kept = rows.find((row) => row.to === to)
-  const others = rows.filter((row) => row.hidden && row.to !== to)
-  if (!kept) return draft
-  return hidden
-    ? setMenuRows(draft, [...shown, ...others, { to: kept.to, hidden: true }])
-    : setMenuRows(draft, [...shown, { to: kept.to, hidden: false }, ...others])
-}
-
-export function resetMenu(draft: Draft): Draft {
-  return patch(draft, (m) => {
-    if (m.layout) delete m.layout.menu
-  })
 }
 
 // ---------------------------------------------------------------------------------------------------------------

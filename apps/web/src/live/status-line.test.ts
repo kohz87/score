@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MessagePart } from '@score/contract'
-import { callingLine, statusLine, statusSegments, STATUS_MAX, trimLine } from './status-line.ts'
+import { callingLine, statusLine, statusSegments, STATUS_MAX } from './status-line.ts'
 
 const tool = (name: string, status: 'running' | 'ok' | 'error' = 'running'): MessagePart => ({
   kind: 'tool',
@@ -61,10 +61,5 @@ describe('statusLine', () => {
     expect(line).toMatch(/^Calling `.+…\(\)`…$/)
     expect(statusSegments(line)).toHaveLength(3)
     expect(callingLine('short')).toBe('Calling `short()`…')
-  })
-
-  it('trims plain text with one ellipsis', () => {
-    expect(trimLine('x'.repeat(100), 10)).toBe(`${'x'.repeat(9)}…`)
-    expect(trimLine('short', 10)).toBe('short')
   })
 })

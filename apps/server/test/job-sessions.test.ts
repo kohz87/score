@@ -6,11 +6,16 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 import { migrate, openDatabase, type ScoreDb } from '../src/db/index.ts'
 import {
   currentSession,
+  defaultJobId,
   isSuccessorSession,
   retireSession,
-  roomSession,
+  sessionFor,
   sessionOwner,
 } from '../src/domain/job-sessions.ts'
+
+// What room-scoped callers used to get from one helper: the session of the room's default job.
+const roomSession = (sqlite: ScoreDb['sqlite'], roomId: string, agentId: string) =>
+  sessionFor(sqlite, { roomId, jobId: defaultJobId(sqlite, roomId), agentId })
 
 let dir: string
 let db: ScoreDb

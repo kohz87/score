@@ -2,11 +2,7 @@ import type { TaskDetail } from '@score/contract'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { renameSync } from 'node:fs'
 import { z } from 'zod'
-import {
-  attemptSummary,
-  currentAttemptsOfTask,
-  listAttempts,
-} from '../../../src/domain/kanban-attempts.ts'
+import { attemptSummary, listAttempts } from '../../../src/domain/kanban-attempts.ts'
 import { buildLanes } from '../../../src/domain/lanes.ts'
 import { computeReports } from '../../../src/domain/reports.ts'
 import { projectTask, readProjectedTask } from '../../../src/domain/tasks.ts'
@@ -336,7 +332,11 @@ describe('copied attempts', () => {
       .sort((a, b) => order.indexOf(a.history_id) - order.indexOf(b.history_id))
     expect(rows).toHaveLength(2)
     expect(rows[1]!.copied_from).toBe(rows[0]!.id)
-    const current = currentAttemptsOfTask(h.score.sqlite, 't_a', h.clock.ms)
+    const current = listAttempts(h.score.sqlite, {
+      since: new Date(0).toISOString(),
+      until: new Date(h.clock.ms).toISOString(),
+      taskId: 't_a',
+    }).filter((attempt) => attemptSummary(attempt).task.current)
     expect(current.map((attempt) => attempt.id)).toEqual([rows[1]!.id])
     // Aggregates count it once, through the row that carries the later state.
     const all = listAttempts(h.score.sqlite, {

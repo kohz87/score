@@ -23,8 +23,6 @@ export const SCHEDULES = [
   { label: 'Every hour', value: 'every 1h' },
 ] as const
 
-export type ScheduleLabel = (typeof SCHEDULES)[number]['label']
-
 /** The schedule value to send for a label; an unknown label is passed through, as routines may also take cron. */
 export function scheduleValue(label: string): string {
   return SCHEDULES.find((option) => option.label === label)?.value ?? label

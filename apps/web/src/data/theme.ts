@@ -1,5 +1,4 @@
 export type ThemeChoice = 'light' | 'dark' | 'system'
-export const themeChoices: ThemeChoice[] = ['light', 'dark', 'system']
 const STORAGE_KEY = 'score.theme'
 /** Fired on window when this device's colour mode changes, so the look runtime re-reads it. */
 export const THEME_CHANGED = 'score:theme-changed'

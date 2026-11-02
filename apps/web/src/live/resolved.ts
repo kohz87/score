@@ -51,11 +51,6 @@ export function approvalChip(approval: Approval): Chip | null {
   return null
 }
 
-/** Plain text of a chip, with the time: "Approved by you · 14:02". */
-export function chipText(chip: Chip): string {
-  return chip.at ? `${chip.text} · ${clock(chip.at)}` : chip.text
-}
-
 /** The chip of a gate that was decided (a gate is only ever decided by you); null while open, withdrawn or unknown. */
 export function gateChip(gate: {
   status: 'open' | 'approved' | 'rejected' | 'withdrawn'

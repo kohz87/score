@@ -223,9 +223,6 @@ export function readResult(
   return row === undefined ? undefined : WfResultRowSchema.parse(row)
 }
 
-export const isWorkflowRun = (sqlite: DatabaseSync, orchId: string): boolean =>
-  sqlite.prepare('SELECT 1 FROM wf_runs WHERE orchestration_id = ?').get(orchId) !== undefined
-
 /** Node row update with a revision bump. */
 export function setNode(
   sqlite: DatabaseSync,
