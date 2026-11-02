@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import type { AgentSummary, HermesUpdateJob, HermesUpdateStatus } from '@score/contract'
 import { ApiError } from '../data/api.ts'
@@ -45,7 +45,12 @@ function problem(error: unknown, action: string) {
         </>
       )
     if (error.code === 'update_running') return <>An update is already running.</>
-    if (error.code === 'disk_full') return <>{error.message}</>
+    // The server's own words for these (review).
+    if (error.code === 'disk_full' || error.code === 'check_running') return <>{error.message}</>
+    if (error.code === 'hermes_unavailable')
+      return <>Hermes didn’t answer the check. Is the hermes command installed and working?</>
+    if (error.status === 409 && error.code === 'conflict')
+      return <>Hermes changed again since this update. Run Check for updates.</>
     if (error.code === 'not_paired')
       return <>Pair this browser using the link in the server terminal first.</>
   }
@@ -65,8 +70,9 @@ function Progress({ job, agents }: { job: HermesUpdateJob; agents: AgentSummary[
     ? (agents.find((agent) => agent.id === job.testAgentId)?.name ?? job.testAgentId)
     : null
   return (
-    <div className="bold-hu-run" data-protected="block" role="status" aria-label="Update progress">
-      <ol>
+    <div className="bold-hu-run" data-protected="block">
+      {/* Only the steps are announced, not Hermes's output every poll (review). */}
+      <ol role="status" aria-label="Update progress">
         {job.steps.map((step) => (
           <li key={step.id} data-state={step.state}>
             <span className="bold-hu-dot" aria-hidden="true">
@@ -138,7 +144,12 @@ function Differs({ job, onDone }: { job: HermesUpdateJob; onDone: () => void }) 
         event.preventDefault()
         const typed = password
         setPassword('')
-        override.mutate({ hash: check.hash, password: typed }, { onSuccess: () => setOn(true) })
+        override.mutate(
+          { hash: check.hash, password: typed },
+          {
+            onSuccess: () => setOn(true),
+          },
+        )
       }}
     >
       <b className="bold-hu-title">Something Score relies on looks different</b>
@@ -168,8 +179,11 @@ function Differs({ job, onDone }: { job: HermesUpdateJob; onDone: () => void }) 
         </tbody>
       </table>
       <p>
-        Approvals are paused. The test passed, so you can turn them on anyway; Score hasn’t been
-        tested with these changes, so approvals may show wrong details.
+        Approvals are paused.{' '}
+        {job.test?.ok
+          ? 'The test passed, so you can turn them on anyway; '
+          : 'You can turn them on anyway; '}
+        Score hasn’t been tested with these changes, so approvals may show wrong details.
       </p>
       <label className="bold-hu-field">
         Security password
@@ -225,7 +239,10 @@ function Outcome({ job, onDone }: { job: HermesUpdateJob; onDone: () => void }) 
         <p>To go back, run these in a terminal:</p>
         <CopyLine command="hermes update --channel stable" />
         <CopyLine
-          command={`hermes import ~/.hermes/backups/${job.backup ?? '<backup file>'} --force`}
+          command={`hermes import ~/.hermes/backups/${
+            // Only a plain file name goes into a command someone will paste into a shell (review).
+            job.backup && /^[\w.-]+$/.test(job.backup) ? job.backup : '<backup file>'
+          } --force`}
         />
       </div>
     )
@@ -255,7 +272,11 @@ function UpdateDialog({
   const candidates = hermesAgents(agents)
   const [pick, setPick] = useState<string | null>(null)
   const [password, setPassword] = useState('')
-  const agent = pick ?? candidates[0]?.id ?? NONE
+  // A picked agent that has since gone falls back to the first one (review).
+  const agent =
+    pick !== null && (pick === NONE || candidates.some((candidate) => candidate.id === pick))
+      ? pick
+      : (candidates[0]?.id ?? NONE)
   const needs = status.backupNeedsBytes
   const free = status.diskFreeBytes
   return (
@@ -304,6 +325,8 @@ function UpdateDialog({
           type="password"
           autoComplete="current-password"
           required
+          // The dialog opens on the one thing the person must type (review).
+          autoFocus
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
@@ -342,6 +365,11 @@ export function BoldHermesUpdates() {
       !job.endedAt ||
       data.lastCheck.checkedAt <= job.endedAt)
   const running = job?.state === 'running'
+  // The Connections banner links here: bring the card into view (the router doesn't scroll to a hash; review).
+  useEffect(() => {
+    if (window.location.hash === '#hermes-updates')
+      document.getElementById('hermes-updates')?.scrollIntoView?.({ block: 'start' })
+  }, [])
 
   return (
     <section
