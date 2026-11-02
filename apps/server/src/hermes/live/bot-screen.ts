@@ -458,6 +458,8 @@ export interface BotControl {
   since: number
   lastInput: number
   expiresAt: number
+  /** Keys and buttons this takeover holds down on the screen, released when it ends while the lease is still Score's. */
+  held?: { keys: Set<number>; buttons: number; x: number; y: number }
 }
 export const CONTROL_IDLE_MS = 5 * 60_000
 
@@ -507,7 +509,18 @@ export class BotScreens {
   }
   /** The takeover ended: nothing it saw stays in memory (the framebuffer may hold what the person typed). */
   clearControl(agentId: string) {
-    if (!this.controls.delete(agentId)) return
+    const control = this.controls.get(agentId)
+    if (!control) return
+    this.controls.delete(agentId)
+    // Ending on Score's side (hand back, idle, limit, page gone): the lease is still Score's, so let go of anything the
+    // person held down (a page that closed mid-keypress never sends its key-up), then forget the screen.
+    const held = control.held
+    const session = this.sessions.get(agentId)?.session
+    if (held && session && (held.keys.size || held.buttons))
+      session.sendInput([
+        ...[...held.keys].map((keysym) => keyEvent(false, keysym)),
+        ...(held.buttons ? [pointerEvent(0, held.x, held.y)] : []),
+      ])
     this.drop(agentId)
   }
 
@@ -573,6 +586,16 @@ export class BotScreens {
           ),
     )
     if (!entry.session.sendInput(bytes)) return 'lost'
+    const held = (control.held ??= { keys: new Set(), buttons: 0, x: 0, y: 0 })
+    for (const event of events)
+      if (event.k === 'key') {
+        if (event.down) held.keys.add(event.keysym)
+        else held.keys.delete(event.keysym)
+      } else {
+        held.buttons = event.buttons
+        held.x = Math.min(event.x, Math.max(0, width - 1))
+        held.y = Math.min(event.y, Math.max(0, height - 1))
+      }
     control.lastInput = this.now()
     entry.lastUsed = this.now()
     entry.session.demand()

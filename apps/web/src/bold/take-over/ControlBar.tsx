@@ -21,6 +21,8 @@ export function ControlBar({
   const [menu, setMenu] = useState(false)
   const [text, setText] = useState('')
   const keyboard = useRef<HTMLInputElement>(null)
+  // The text the last composition sent, so Safari's trailing input event doesn't send it twice.
+  const composed = useRef<string | null>(null)
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
@@ -122,13 +124,25 @@ export function ControlBar({
         onChange={() => undefined}
         onInput={(event) => {
           const native = event.nativeEvent as InputEvent
-          // Composition (IME, swipe keyboards) is sent once, when it ends, not as every intermediate guess.
-          if (native.isComposing || native.inputType === 'insertCompositionText') return
+          // Composition (IME, swipe keyboards) is sent once, when it ends, not as every intermediate guess. Safari fires
+          // compositionend before the composition's last input event, which then carries the same text again.
+          if (
+            native.isComposing ||
+            native.inputType === 'insertCompositionText' ||
+            native.inputType === 'insertFromComposition'
+          )
+            return
+          if (composed.current !== null && native.data === composed.current) {
+            composed.current = null
+            return
+          }
+          composed.current = null
           if (native.inputType === 'deleteContentBackward') push(...press(0xff08))
           else if (native.data) push(...textToEvents(native.data))
         }}
         onCompositionEnd={(event) => {
           if (event.data) push(...textToEvents(event.data))
+          composed.current = event.data || null
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') push(...press(0xff0d))

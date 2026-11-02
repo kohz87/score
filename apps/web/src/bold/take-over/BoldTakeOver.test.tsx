@@ -298,6 +298,16 @@ test('composition is sent once, at its end', async () => {
   expect(syms()).toEqual(['78v', '78^', '79v', '79^'])
 })
 
+test('Safari’s order (composition end, then the same text as input) still sends it once', async () => {
+  await takeOver()
+  const field = screen.getByLabelText('Keyboard input for the screen')
+  fireEvent.compositionEnd(field, { data: 'xy' })
+  fireEvent.input(field, { inputType: 'insertText', data: 'xy' })
+  fireEvent.input(field, { inputType: 'insertText', data: 'z' })
+  await waitFor(() => expect(inputEvents()).toHaveLength(6))
+  expect(syms()).toEqual(['78v', '78^', '79v', '79^', '7av', '7a^'])
+})
+
 test('hiding the page shows control as lost', async () => {
   await takeOver()
   Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })

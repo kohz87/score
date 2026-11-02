@@ -414,3 +414,29 @@ test('input past the idle window or the hard limit is refused, even before the s
     bot.close()
   }
 })
+
+test('ending a takeover on Score’s side lets go of held keys and buttons; a lost one sends nothing', async () => {
+  const fake = await fakeXvnc(100, 50)
+  const bot = screens()
+  try {
+    lease({ holder: 'human', viewer_id: VIEWER, epoch: 3 })
+    bot.setControl('builder', control())
+    await bot.input('builder', 'me', 't1', [
+      { k: 'key', keysym: 0xffe1, down: true },
+      { k: 'key', keysym: 0x61, down: true },
+      { k: 'key', keysym: 0x61, down: false },
+      { k: 'pointer', x: 5, y: 6, buttons: 1 },
+    ])
+    bot.clearControl('builder')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const bytes = Buffer.concat(fake.received)
+    // Shift released and the button let go, after the person's own events.
+    expect(inputTypes(fake)).toEqual([4, 4, 4, 5, 4, 5])
+    expect([...bytes.subarray(bytes.length - 14, bytes.length - 6)]).toEqual([
+      4, 0, 0, 0, 0, 0, 0xff, 0xe1,
+    ])
+    expect([...bytes.subarray(bytes.length - 6)]).toEqual([5, 0, 0, 5, 0, 6])
+  } finally {
+    bot.close()
+  }
+})
