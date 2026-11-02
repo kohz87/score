@@ -12,6 +12,7 @@ import { BoldTeam } from './bold/BoldTeam.tsx'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
 import { BoldRecipesPage } from './bold/BoldRecipes.tsx'
 import { BoldTasksPage } from './bold/BoldTasks.tsx'
+import { BoldScreensPage } from './bold/BoldScreens.tsx'
 
 function keepSearch(request: Request, path: string) {
   return `${path}${new URL(request.url).search}`
@@ -81,6 +82,7 @@ export const appRoutes: RouteObject[] = [
           { path: 'team/:agentId', Component: BoldAgentPage },
           { path: 'screen/:agentId', Component: BoldScreenPage },
           { path: 'tasks', Component: BoldTasksPage },
+          { path: 'screens', Component: BoldScreensPage },
           { path: 'recipes', Component: BoldRecipesPage },
           { path: 'recipes/:workflowId', Component: BoldRecipesPage },
           {
