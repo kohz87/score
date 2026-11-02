@@ -262,3 +262,17 @@ test('an active record the screen doesn’t hold is handed back by the sweep', a
   expect(hermesLease.holder).toBe('agent')
   await takeovers.close()
 })
+
+test('an owed hand-back for an agent that no longer exists ends instead of retrying forever', async () => {
+  const takeovers = service()
+  const result = await takeovers.take('builder', 'me')
+  if (!result.ok) throw new Error('not taken')
+  gateway = 'down'
+  await takeovers.handBack('builder', 'me', result.control.takeoverId)
+  expect(rows()[0]).toMatchObject({ state: 'releasing' })
+  const gone = new BotTakeovers({ screens, ask, db, profileHome: () => null, clock: () => now })
+  await gone.tick()
+  expect(rows()[0]).toMatchObject({ state: 'ended' })
+  await gone.close()
+  await takeovers.close()
+})

@@ -14,6 +14,7 @@ export const HEARTBEAT_LOST_MS = 30_000
 const TOUCH_MS = 60_000
 const TICK_MS = 5_000
 const ASK_MS = 10_000
+const CLOSE_WAIT_MS = 5_000
 
 export type TakeoverEndReason =
   'handed_back' | 'idle' | 'limit' | 'left' | 'lost' | 'restart' | 'not_granted'
@@ -183,7 +184,12 @@ export class BotTakeovers {
       this.forget(row.id)
       this.finish(row.id, 'releasing', 'restart')
     }
-    await this.releaseOwed()
+    // Best effort, bounded so a stop never waits on slow gateways: whatever isn't confirmed is handed back at the next
+    // start (the rows stay 'releasing').
+    await Promise.race([
+      this.releaseOwed(),
+      new Promise<void>((resolve) => setTimeout(resolve, CLOSE_WAIT_MS).unref()),
+    ])
   }
 
   /** One sweep: idle, limit and left takeovers end; the desktop is marked in use; owed hand-backs are retried. */
@@ -247,12 +253,16 @@ export class BotTakeovers {
       this.inFlight.add(row.id)
       try {
         let epoch = row.epoch
+        // No profile any more (the agent was removed): there is no screen and no gateway to hand back to.
+        const home = this.deps.profileHome(row.agent_id)
+        if (!home) {
+          this.finish(row.id, 'ended')
+          continue
+        }
         if (epoch === null) {
           // Hermes may have granted a take whose answer never came: hand back only what the lease names as ours.
-          const home = this.deps.profileHome(row.agent_id)
-          const lease = home ? await readLease(join(home, 'bot-desktop')) : null
-          // No profile any more (the agent was removed), or the lease isn't ours: nothing Score can or should release.
-          if (!lease || lease.viewerId !== row.viewer_id) {
+          const lease = await readLease(join(home, 'bot-desktop'))
+          if (lease.viewerId !== row.viewer_id) {
             this.finish(row.id, 'ended')
             continue
           }
