@@ -1318,8 +1318,9 @@ model: string|null; style; quota; quotaFloorPercent: number; cli: { state; versi
   One shape for all three CLIs; `usedPercent` is the share used (the web shows "% left"), null = the CLI didn't say. Claude Code: the latest `rate_limit_event` of a turn
   (`unifiedWindows.five_hour|seven_day`, `utilization` 0–1, `resetsAt` epoch seconds), `source: 'turn'`. Codex: the last `rate_limits` line in the tail (last 256 KB) of the session log
   of the run Score started, `$CODEX_HOME/sessions/<y>/<m>/<d>/rollout-*-<threadId>.jsonl` (opened with `O_NOFOLLOW`, regular file owned by the user; no other Codex file is ever read),
-  `source: 'log'`. Antigravity: the `/usage` reading above (`group` set per model group, `remaining` turned into `used`), `source: 'usage'`, only for `…/:id/quota` and `…/runtimes/antigravity/quota`
-  (same errors as `/usage`). Claude Code and Codex are stored (table `coding_quota`, latest per agent) and never read from the CLI between turns; `null` until a turn has reported one.
+  `source: 'log'`. Antigravity: its `agy -p /usage` reading (`group` set per model group, `remaining` turned into `used`), `source: 'usage'`, only for `…/:id/quota` and `…/runtimes/antigravity/quota`
+  (errors: other runtimes `409 unsupported`; CLI missing or untested `422 cli_not_installed` / `422 untested_cli_version`;
+  nothing readable `502 usage_unavailable`). Claude Code and Codex are stored (table `coding_quota`, latest per agent) and never read from the CLI between turns; `null` until a turn has reported one.
   The `runtimes/:runtime/quota` form answers with the most recent reading of any agent of that runtime. Unknown agent: `404`.
 - `GET /api/coding-agents/runtimes/:runtime/models` → `CodingModelsResponse` `{ models: { id; name; description?: string; efforts?: string[] }[]; source: 'cli'|'cache'|'aliases'|'none' }`
   (PLAN 8.5, decision 86). The model list the add-agent form and the agent's settings offer; `id` is what `--model` takes. Antigravity: `agy models` (lines `id<TAB>name`, run with no prompt,
