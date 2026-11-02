@@ -1947,3 +1947,11 @@ One entry per completed task: what landed, review results, and any **rejected re
   compatibility tested, nothing disabled: approvals back on.
 - Mock-up for updating Hermes from Settings (owner asked; agent picker for the test, per the owner):
   https://claude.ai/artifact/N4x7UVa9EEDwk2SeDsVNyb — waiting for the owner's review.
+
+## 3.14.7 — Settings alignment (2026-11-02)
+- Owner's screenshots in Knowledge/Troubleshooting.md: Library access checkboxes below their labels with uneven gaps; the
+  Advanced search floating beside the intro. Lead: `margin: 0` on bold checkboxes, `.check.small` centres a one-line label in
+  its 44px row (line-height 20px, padding 12px); the Advanced header stacks with the search full width. Checked with
+  fake-mode screenshots; Sonnet review clean (no P1/P2; wrapped small labels gain a little air). Affected specs 86/86.
+  Gate: e2e 850 passed, 1 failed (workflows gate card briefly doubled, 8/8 on rerun); check green.
+- **v3.14.7 deployed live** (~03:25 UTC, idle guard passed): backup score-pre-3.14.7-20261102.db, health ok.
