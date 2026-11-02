@@ -2017,3 +2017,21 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v3.15.3 deployed live** (~07:24 UTC, idle guard passed): backup score-pre-3.15.3-20261102.db, health ok. Live: all
   five Claude Code agents report 2.1.316 `untested_version` with `problem: null` (the help check passed); temporary
   session signed out.
+
+## 3.16.0 — Tasks board (2026-11-02)
+- Owner: "build the tasks board" on the mock-up https://claude.ai/artifact/9dWyfTob55Y3TZW3d2xDdY (boards in
+  docs/design/bold/mockups/13-tasks-board*.dc.html). Brief docs/briefs/3.16.0-tasks-board.md. Sonnet coder; web only
+  (`GET /api/tasks` already grouped tasks into columns).
+- Differences from the mock-up, by design: "Job" → "Room" (Hermes tasks belong to rooms); room links go to /b (the shell
+  has no per-room route); comments list all of a task's activity (the contract doesn't separate comments).
+- Lead screenshot check (fake mode, mocked tasks) found the phone "Details" button unreadable on the card's ink and the
+  Done column clipped with the panel open: fixed. Sonnet review: P1 the phone sheet re-focused on every stream render
+  (onClose through a ref now); P2 the detail panel kept one task's Sent/draft/approval state for the next (keyed by id);
+  P2 the phone card offered Unblock for a task waiting on an approval. First fix used the badge (wrong: a fix-round
+  review showed approvals keep their badge and needs-input tasks carry `needs_you`); final: Unblock only when Hermes
+  reports `blocked`. Accepted limit (fix-round review P2): a task both blocked and awaiting an approval shows Unblock on
+  the phone card (valid there too; the approval is one tap away in Details and in the room).
+- Gate: check green (contract 1582, web 3113, server 4938); e2e 858 passed, 2 failed: themes-safety's main-navigation
+  count (now 4 with Tasks; updated, 31/31) and the bold-tablet flake (passed on re-run).
+- **v3.16.0 deployed live** (~09:33 UTC): backup score-pre-3.16.0-20261102.db, health ok; live `/api/tasks` answers
+  (1 done task); temporary session signed out.

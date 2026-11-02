@@ -1,0 +1,614 @@
+/* 3.16.0: the Tasks board. Colours, radii and spacing follow the approved mock-up
+   (docs/design/bold/mockups/13-tasks-board*.dc.html) and the shell's tokens; the light objects are the shell's
+   "for you" objects (--hi-bg / --hi-ink). */
+[data-ui='bold'] .bold-tb {
+  max-width: 1392px;
+  gap: calc(18px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-tb-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-tb-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 640px;
+}
+
+[data-ui='bold'] .bold-tb-title h1 {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-tb-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-tb-quiet {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-none {
+  padding: calc(24px * var(--bold-d, 1));
+  border-radius: calc(24px * var(--bold-r, 1));
+  background: var(--panel);
+  text-align: center;
+}
+
+[data-ui='bold'] .bold-tb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-tb-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-tb-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-chips--room button {
+  min-height: 36px;
+}
+
+[data-ui='bold'] .bold-tb-chips button[aria-pressed='true'] {
+  background: var(--field);
+  border-color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-tb-layout {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-tb-scroll {
+  flex: 999 1 760px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+[data-ui='bold'] .bold-tb-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(156px, 1fr));
+  gap: 14px;
+  min-width: 840px;
+}
+
+[data-ui='bold'] .bold-tb-col {
+  background: var(--panel);
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 420px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-tb-phone-list .bold-tb-col {
+  min-height: 0;
+  background: transparent;
+  padding: 0;
+}
+
+[data-ui='bold'] .bold-tb-col h2 {
+  margin: 0 4px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+[data-ui='bold'] .bold-tb-phone-list .bold-tb-col h2 {
+  display: none;
+}
+
+[data-ui='bold'] .bold-tb-count {
+  min-width: 26px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='bold'] .bold-tb-card,
+[data-ui='bold'] .bold-tb-need--phone {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: calc(20px * var(--bold-r, 1));
+  border: 2px solid transparent;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 14px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-tb-phone-list .bold-tb-card {
+  background: var(--panel);
+  padding: 14px 16px;
+}
+
+[data-ui='bold'] .bold-tb-card[aria-pressed='true'] {
+  border-color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-tb-card:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Needs you is the shell's light "for you" object. */
+[data-ui='bold'] .bold-tb-need {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  --agent-violet-name: #4a2fd9;
+  --agent-jade-name: #00694f;
+  --agent-saffron-name: #8a5a00;
+  --agent-coral-name: #b01e43;
+}
+
+[data-ui='bold'][data-look='light'] .bold-tb-need {
+  --agent-violet-name: #b3a6ff;
+  --agent-jade-name: #5ee3bf;
+  --agent-saffron-name: #ffc94d;
+  --agent-coral-name: #ff97ae;
+}
+
+[data-ui='bold'] .bold-tb-need .bold-tb-card-top,
+[data-ui='bold'] .bold-tb-need .bold-tb-time {
+  color: var(--hi-sub);
+}
+
+[data-ui='bold'] .bold-tb-need--phone {
+  border-radius: calc(24px * var(--bold-r, 1));
+  padding: 16px;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-tb-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-card-title {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+[data-ui='bold'] .bold-tb-badge {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #2b3242;
+  color: #b3d4ff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-tb-badge--triage,
+[data-ui='bold'] .bold-tb-badge--changes_requested {
+  background: #3a3322;
+  color: #f5c66b;
+}
+
+[data-ui='bold'] .bold-tb-badge--blocked,
+[data-ui='bold'] .bold-tb-badge--needs_you {
+  background: var(--hi-ink);
+  color: var(--hi-bg);
+}
+
+[data-ui='bold'][data-look='light'] .bold-tb-badge--starts_after {
+  background: #dbe8fb;
+  color: #1d4e91;
+}
+
+[data-ui='bold'][data-look='light'] .bold-tb-badge--triage,
+[data-ui='bold'][data-look='light'] .bold-tb-badge--changes_requested {
+  background: #fbeccb;
+  color: #7a5200;
+}
+
+[data-ui='bold'] .bold-tb-progress {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+[data-ui='bold'] .bold-tb-progress > span {
+  display: block;
+  height: 6px;
+  background: #7db8ff;
+  border-radius: 999px;
+}
+
+[data-ui='bold'] .bold-tb-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-time {
+  margin-left: auto;
+  color: var(--muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='bold'] .bold-tb-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+[data-ui='bold'] .bold-tb-agent--none {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-empty {
+  margin: 8px 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* the side panel */
+[data-ui='bold'] .bold-tb-panel {
+  flex: 1 1 340px;
+  max-width: 420px;
+  min-width: 0;
+  background: var(--panel);
+  border-radius: calc(28px * var(--bold-r, 1));
+  padding: 24px;
+}
+
+[data-ui='bold'] .bold-tb-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+[data-ui='bold'] .bold-tb-panel-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-close {
+  border: 0;
+  background: transparent;
+  color: var(--ink2);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+[data-ui='bold'] .bold-tb-panel-body h2 {
+  margin: 0;
+  font-family: var(--font-d);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+[data-ui='bold'] .bold-tb-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-tb-facts dt {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-facts dd {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-tb-needs-block {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  border-radius: calc(22px * var(--bold-r, 1));
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  --agent-violet-name: #4a2fd9;
+}
+
+[data-ui='bold'] .bold-tb-needs-block p {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--hi-ink);
+}
+
+[data-ui='bold'] .bold-tb-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--hi-sub);
+}
+
+[data-ui='bold'] .bold-tb-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-tb-command {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font-family: var(--font-m);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='bold'] .bold-tb-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-tb-room-link {
+  color: var(--hi-ink);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: underline;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+[data-ui='bold'] .bold-tb-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-tb-section h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-tb-steps li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+[data-ui='bold'] .bold-tb-steps li[data-done='true'] {
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 6px;
+  border: 2px solid var(--faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
+[data-ui='bold'] .bold-tb-steps li[data-done='true'] .bold-tb-box {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--bg);
+}
+
+[data-ui='bold'] .bold-tb-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+[data-ui='bold'] .bold-tb-comment {
+  background: var(--field);
+  border-radius: 16px;
+  padding: 10px 14px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-ui='bold'] .bold-tb-comment > span:first-child {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-comment strong {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-tb-comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+[data-ui='bold'] .bold-tb-comment-form label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-tb-comment-row {
+  display: flex;
+  gap: 8px;
+}
+
+[data-ui='bold'] .bold-tb-comment-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* phone */
+[data-ui='bold'] .bold-tb-phone-needs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-tb-phone-needs h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-tb-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+[data-ui='bold'] .bold-tb-tabs button {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+[data-ui='bold'] .bold-tb-tabs button[aria-selected='true'] {
+  background: var(--field);
+  border-color: var(--ink2);
+}
+
+[data-ui='bold'] .bold-tb-tabs button span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='bold'] .bold-tb-phone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-tb-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow-y: auto;
+  background: var(--panel);
+  color: var(--ink);
+  padding: max(20px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 32px
+    max(16px, env(safe-area-inset-left, 0px));
+}
+
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-tb-title h1 {
+    font-size: 28px;
+  }
+
+  [data-ui='bold'] .bold-tb-title p {
+    font-size: 14px;
+  }
+}
+
+/* The second action on a needs-you card sits on the card's own ink: it takes the card's colours, not the page's. */
+[data-ui='bold'] .bold-tb-need .bold-tb-need-more {
+  color: inherit;
+  border-color: currentColor;
+  background: transparent;
+}

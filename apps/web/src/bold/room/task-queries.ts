@@ -103,3 +103,26 @@ export function taskStateLabel(task: TaskSummary): string {
 export function taskBlockedReason(task: TaskSummary): string {
   return task.badge?.label ?? task.note ?? 'This task needs you before it can go on.'
 }
+
+export type AllTasks = { asOfSeq: number; tasks: TaskSummary[] }
+
+/** Every Hermes task across rooms (the Tasks board, 3.16.0), newest change first, kept live by `task.upserted`. */
+export const allTasksQuery = defineStreamQuery<AllTasks>({
+  key: ['bold', 'tasks', 'all'],
+  async fetch(signal) {
+    const response = TasksSnapshotSchema.parse(await apiFetch('tasks', { signal }))
+    return {
+      asOfSeq: response.asOfSeq,
+      data: { asOfSeq: response.asOfSeq, tasks: flatten(response.columns) },
+    }
+  },
+  types: ['task.upserted'],
+  reduce(data, event) {
+    if (event.type !== 'task.upserted') return data
+    const task = TaskSummarySchema.parse(event.data)
+    return {
+      ...data,
+      tasks: [...data.tasks.filter((item) => item.id !== task.id), task],
+    }
+  },
+})
