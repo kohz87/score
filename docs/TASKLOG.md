@@ -2057,3 +2057,8 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v3.17.0 deployed live** (~10:14 UTC): backup score-pre-3.17.0-20261102.db, health ok. Live: every screen `off` (no
   Bot Desktop running), take-over without the password `403`. **Plugin not yet updated on the owner's profiles** (writes
   to ~/.hermes need the owner's OK): until it is, a take-over answers "Hermes didn't hand over the screen".
+- Plugin update (owner OK, 2026-11-02 ~10:20 UTC): `score-bridge` copies on default, astra, gem38, sol61, terra
+  replaced with the v3.17.0 plugin (previous copies, pinned at 614d566b and missing 2.3.1's on_session_delete hook too,
+  in $JOB/tmp/plugin-pre-3.17.0/); `SCORE_BRIDGE_INSTALL_REF` → v3.17.0 commit (old env saved beside them);
+  hermes-gateway restarted while idle, Score restarted; `hermes plugins list` shows score-bridge enabled on default and
+  gem38. No Bot Desktop on this host yet (Xvnc/Xfce not installed): owner given Hermes' own apt command (54 packages).
