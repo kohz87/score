@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.14.7] — 2026-11-02
+
+### Fixed
+- Checkboxes in the new shell sit level with their labels (Settings › System › Library access and every small checkbox),
+  without the uneven gap under each row.
+- Settings › Advanced: the search box sits full width under the intro instead of floating beside it.
+
 ## [3.14.6] — 2026-11-02
 
 ### Changed
