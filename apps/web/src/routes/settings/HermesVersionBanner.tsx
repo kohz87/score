@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import type { HermesCheck } from '@score/contract'
 import { ApiError } from '../../data/api.ts'
 import { needsHermesCheck, useHermesCheck, useSystemStatus } from './settings-queries.ts'
@@ -52,6 +53,11 @@ export function HermesVersionBanner() {
       <p>
         Hermes was updated{version ? ` to ${version}` : ''}. Approvals in Score are paused until you
         check this version.
+      </p>
+      <p>
+        <Link className="settings-link" to="/b/settings/system#hermes-updates">
+          Update Hermes from Settings › System
+        </Link>
       </p>
       {!result && (
         <button
