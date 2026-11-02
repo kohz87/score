@@ -56,7 +56,19 @@ const hhmm = (at: number) =>
 type Ended = { how: 'handed' | 'lost'; at: number }
 
 /** The agent's live Bot Desktop. Watching is read-only; Take over… hands this page the keyboard and pointer (3.17.0). */
-export function BoldLiveScreen({ agentId, agentName }: { agentId: string; agentName: string }) {
+export function BoldLiveScreen({
+  agentId,
+  agentName,
+  openConfirm = false,
+  onConfirmShown,
+}: {
+  agentId: string
+  agentName: string
+  /** 3.18.0: `?take=1` from the Screens page: open the confirm card once the status says it can be taken. */
+  openConfirm?: boolean
+  /** Called once the request has been handled (card opened, or the screen can't be taken), so the page drops `?take`. */
+  onConfirmShown?: () => void
+}) {
   const [hidden, setHidden] = useState(readHidden)
   const [confirming, setConfirming] = useState(false)
   const [ended, setEnded] = useState<Ended | null>(null)
@@ -88,6 +100,15 @@ export function BoldLiveScreen({ agentId, agentName }: { agentId: string; agentN
     setEnded({ how: 'lost', at: Date.now() })
     void refetch()
   }, [refetch])
+  // Handled once, when the first status arrives: derived during render (React's "adjust state on a change" pattern).
+  const [asked, setAsked] = useState(false)
+  if (openConfirm && !asked && status) {
+    setAsked(true)
+    if (status.state === 'running' && !status.control) setConfirming(true)
+  }
+  useEffect(() => {
+    if (asked) onConfirmShown?.()
+  }, [asked, onConfirmShown])
   const session = useControlSession(agentId, control?.takeoverId, onLost)
 
   // Control that ends on the server (idle, hard limit, the Hermes app) shows up as the status losing `control`.

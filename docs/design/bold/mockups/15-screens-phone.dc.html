@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Screens on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}
+a:focus-visible,button:focus-visible{outline:2px solid #7DB8FF;outline-offset:2px}
+@keyframes live{0%,100%{opacity:1}50%{opacity:.35}}
+.live{animation:live 1.6s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.live{animation:none!important}}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1300px; box-sizing: border-box; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; padding: 14px 16px 96px; display: flex; flex-direction: column; gap: 16px; position: relative">
+
+<header style="display: flex; align-items: center; gap: 6px">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 21px; font-weight: 700; margin-right: 4px">score</span>
+<a href="#" style="padding: 8px 11px; border-radius: 999px; background: #1A1C23; color: #ECEEF2; text-decoration: none; font-weight: 600; font-size: 13px">Recipes</a>
+<a href="#" style="padding: 8px 11px; border-radius: 999px; background: #1A1C23; color: #ECEEF2; text-decoration: none; font-weight: 600; font-size: 13px">Tasks</a>
+<a href="#" aria-current="page" style="padding: 8px 11px; border-radius: 999px; background: #ECEEF2; color: #12131A; text-decoration: none; font-weight: 700; font-size: 13px">Screens</a>
+<span style="flex: 1"></span>
+<span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 50%; background: #ECEEF2; color: #12131A; display: inline-flex; align-items: center; justify-content: center; font-weight: 700">Y</span>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 28px; font-weight: 700">Screens</h1>
+<p style="margin: 0; color: #9AA0AD; font-size: 14px">Tap one to watch it or take over.</p>
+</div>
+
+<sc-for list="{{agents}}" as="a" hint-placeholder-count="4">
+<a href="#" style="display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 22px; background: #1A1C23; color: #ECEEF2; text-decoration: none">
+<span style="position: relative; flex: none; width: 128px; aspect-ratio: 16 / 10; border-radius: 12px; overflow: hidden; background: {{a.ground}}">
+<sc-if value="{{a.desktop}}" hint-placeholder-val="{{false}}"><span style="position: absolute; left: 8%; top: 10%; width: 70%; height: 72%; border-radius: 4px; background: #F4F5F7"></span></sc-if>
+<sc-if value="{{a.code}}" hint-placeholder-val="{{false}}"><span style="position: absolute; inset: 14%; font: 8px/1.5 'JetBrains Mono', monospace; color: #8FD9A8">$ pnpm test<br>ok pages</span></sc-if>
+<sc-if value="{{a.isLive}}" hint-placeholder-val="{{false}}"><span class="live" style="position: absolute; left: 7px; top: 7px; width: 8px; height: 8px; border-radius: 50%; background: #D93A3A"></span></sc-if>
+</span>
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-weight: 700">{{a.name}}</span>
+<span style="font-size: 12px; font-weight: 700; color: {{a.stateColor}}">{{a.pill}}</span>
+<span style="font-size: 13px; color: #9AA0AD; line-height: 1.35">{{a.doing}}</span>
+</span>
+</a>
+</sc-for>
+
+<nav aria-label="Sections" style="position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 10px 8px 14px; background: #1A1C23; border-top: 1px solid #2E313B; font-size: 12px; text-align: center">
+<a href="#" style="color: #C9CDD6; text-decoration: none; padding: 6px 0">Room</a>
+<a href="#" style="color: #C9CDD6; text-decoration: none; padding: 6px 0">Team</a>
+<a href="#" style="color: #C9CDD6; text-decoration: none; padding: 6px 0">Search</a>
+<a href="#" style="color: #C9CDD6; text-decoration: none; padding: 6px 0">Settings</a>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1300}}'>
+const AGENTS = [
+  { id: 'builder', doing: 'Clicking through the feed', kind: 'desktop', pill: 'Live desktop', color: '#F2B8B8' },
+  { id: 'reviewer', doing: 'Reading api/events.py', kind: 'code', pill: 'Working', color: '#9AA0AD' },
+  { id: 'lead', doing: 'Ran the tests: 3 pass', kind: 'code', pill: 'Working', color: '#9AA0AD' },
+  { id: 'designer', doing: 'Someone took over in the Hermes app', kind: 'hidden', pill: 'Someone has control', color: '#F2B8B8' },
+];
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      agents: AGENTS.map((a) => ({
+        name: a.id, doing: a.doing, pill: a.pill, stateColor: a.color,
+        desktop: a.kind === 'desktop', code: a.kind === 'code', isLive: a.kind === 'desktop',
+        ground: a.kind === 'code' ? '#0D0E12' : a.kind === 'hidden' ? '#22252E' : '#1C2633',
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

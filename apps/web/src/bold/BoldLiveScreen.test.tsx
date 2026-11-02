@@ -132,3 +132,29 @@ test('no polling while the page is hidden', async () => {
   expect(calls).toBe(before)
   Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
 })
+
+test('?take=1 opens the confirm card once and reports it', async () => {
+  status = { state: 'running', width: 960, height: 600, frameSeq: 1 }
+  const shown = vi.fn()
+  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })
+  render(
+    <QueryClientProvider client={client}>
+      <BoldLiveScreen agentId="builder" agentName="builder" openConfirm onConfirmShown={shown} />
+    </QueryClientProvider>,
+  )
+  expect(await screen.findByRole('form', { name: 'Take over builder’s desktop?' })).toBeDefined()
+  expect(shown).toHaveBeenCalledTimes(1)
+})
+
+test('?take=1 on a screen that can’t be taken opens nothing but is still dropped', async () => {
+  status = { state: 'human' }
+  const shown = vi.fn()
+  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })
+  render(
+    <QueryClientProvider client={client}>
+      <BoldLiveScreen agentId="builder" agentName="builder" openConfirm onConfirmShown={shown} />
+    </QueryClientProvider>,
+  )
+  await waitFor(() => expect(shown).toHaveBeenCalledTimes(1))
+  expect(screen.queryByRole('form', { name: 'Take over builder’s desktop?' })).toBeNull()
+})
