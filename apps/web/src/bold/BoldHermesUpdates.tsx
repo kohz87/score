@@ -50,7 +50,7 @@ function problem(error: unknown, action: string) {
     if (error.code === 'hermes_unavailable')
       return <>Hermes didn’t answer the check. Is the hermes command installed and working?</>
     if (error.status === 409 && error.code === 'conflict')
-      return <>Hermes changed again since this update. Run Check for updates.</>
+      return <>Hermes changed again since this update. Run Check for Hermes updates.</>
     if (error.code === 'not_paired')
       return <>Pair this browser using the link in the server terminal first.</>
   }
@@ -454,7 +454,11 @@ export function BoldHermesUpdates() {
                     })
                   }
                 >
-                  {check.isPending ? 'Checking…' : checked ? 'Check again' : 'Check for updates'}
+                  {check.isPending
+                    ? 'Checking…'
+                    : checked
+                      ? 'Check again'
+                      : 'Check for Hermes updates'}
                 </button>
                 {checked?.available && (
                   <button type="button" className="btn primary" onClick={() => setOpen(true)}>
