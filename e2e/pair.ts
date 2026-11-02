@@ -44,3 +44,9 @@ export async function pair(page: Page) {
   await page.context().addCookies(JSON.parse(readFileSync(state, 'utf8')))
   await page.goto('/')
 }
+
+/**
+ * The one security password every spec sets on the shared fake server: the first spec to run sets it (it can't be
+ * changed without the current one), so specs with different passwords would depend on their order (3.15.0).
+ */
+export const E2E_SECURITY_PASSWORD = 'e2e share password'
