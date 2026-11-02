@@ -2035,3 +2035,25 @@ One entry per completed task: what landed, review results, and any **rejected re
   count (now 4 with Tasks; updated, 31/31) and the bold-tablet flake (passed on re-run).
 - **v3.16.0 deployed live** (~09:33 UTC): backup score-pre-3.16.0-20261102.db, health ok; live `/api/tasks` answers
   (1 done task); temporary session signed out.
+
+## 3.17.0 — Take over a bot's desktop (2026-11-02, decision 158)
+- Owner: "can we integrate into interact-able bot screen?" → "yes, do the take over mock-up" → "the mockup seems fine".
+  Design docs/briefs/3.17.0-take-over.md (adversarial design review by a Sonnet reviewer against Hermes' source: 3 P1,
+  6 P2, 2 P3, all accepted, review log in the note). Lead coded the plugin (desktop_take/hand_back/touch through Hermes'
+  lease), server (input gate, per-frame lease checks, durable hand-backs, migration 0104, routes), contract and fake.
+  Web part by a Sonnet coder from docs/briefs/3.17.0-take-over-web.md.
+- Server review: P1 concurrent takes orphaning a lease (takes serialised per agent; sweep hands back active rows the
+  screen doesn't hold); P2 the plugin could evict a person (now refuses: busy); no retry timer after a failed take;
+  shutdown didn't hand back (now best effort, ≤ 5 s); P3 receipt replay leaked a takeover id across sessions (receipt
+  dropped); limits enforced on input too; a removed profile's owed hand-back ends. Re-review: two P2 (removed profile
+  with an epoch; slow shutdown), fixed.
+- Web review: P2 stuck keys (released per code, all on blur/loss/hand back); IME duplication; leaving didn't show the
+  loss; a protected element's display; my screenshot found the phone header cramped (Hand back full width under the
+  screen). Re-review: Safari's trailing composition input (skipped; forgotten after its task) and keys held when a page
+  closes (the server now releases what a takeover holds when it ends on Score's side). The passkey path needed the
+  terminal's fresh proof (takeFresh) on the route: added, with a test.
+- Gate: e2e 862 passed, 1 failed (bold-terminal flake, 3/3 on re-run); check after two expectation fixes (schema
+  fixtures, table list): contract 1590, web 3142, server 4958.
+- **v3.17.0 deployed live** (~10:14 UTC): backup score-pre-3.17.0-20261102.db, health ok. Live: every screen `off` (no
+  Bot Desktop running), take-over without the password `403`. **Plugin not yet updated on the owner's profiles** (writes
+  to ~/.hermes need the owner's OK): until it is, a take-over answers "Hermes didn't hand over the screen".
