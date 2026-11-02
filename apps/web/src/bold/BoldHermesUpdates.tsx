@@ -276,7 +276,7 @@ function UpdateDialog({
     >
       <h3>Update Hermes</h3>
       <ol>
-        <li>Waits until no agent is working (Score starts no new turns meanwhile).</li>
+        <li>Waits until no agent is working; Hermes then pauses its gateway.</li>
         <li>
           Backs up your Hermes folder
           {needs != null ? `: about ${gb(needs)}` : ''}

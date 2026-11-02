@@ -276,7 +276,10 @@ export class HermesUpdates {
         at: now,
         value: this.deps
           .version()
-          .then((value) => (value ? clean(value).replace(/^Hermes Agent\s+/i, '') : null))
+          // Just the build ("v0.22.5+3257.g557254f"), not the rest of Hermes's version line.
+          .then((value) =>
+            value ? (clean(value).match(/v\d[\w.+-]*/)?.[0] ?? clean(value)) : null,
+          )
           .catch(() => null),
       }
     return this.#versionCache.value
@@ -366,7 +369,9 @@ export class HermesUpdates {
       job,
       'check',
       check.compatible ? 'done' : 'failed',
-      check.compatible ? 'nothing Score relies on changed' : `${differing} parts differ`,
+      check.compatible
+        ? 'nothing Score relies on changed'
+        : `${differing} ${differing === 1 ? 'part differs' : 'parts differ'}`,
     )
 
     // 4. One short test message through the new Hermes.
@@ -472,6 +477,8 @@ export class HermesUpdates {
     error: string | null,
   ): void {
     this.#versionCache = null
+    // The check from before the update no longer says anything true about the new version.
+    this.#lastCheck = null
     job.state = 'finished'
     job.outcome = outcome
     job.error = error
