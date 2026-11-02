@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { AddCodingAgentForm } from './CodingAgent.tsx'
 import { CodingPersonality } from './CodingPersonality.tsx'
 
 const runtime = (name: string, label: string, extra: object = {}) => ({
@@ -51,44 +50,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
-})
-
-test('Antigravity: warning, quota, unverified level disabled, no read acknowledgement inside the sandbox, argv-free request', async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <AddCodingAgentForm onAdded={() => undefined} />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
-  await screen.findByRole('option', { name: 'Antigravity (agy)' }, { timeout: 10_000 })
-  fireEvent.change(screen.getByLabelText('Kind of coding agent'), {
-    target: { value: 'antigravity' },
-  })
-  expect(
-    await screen.findByText(/browse the web, generate images/, {}, { timeout: 10_000 }),
-  ).toBeDefined()
-  expect(
-    await screen.findByText(
-      /Gemini Pro 5 hours 82% left · Gemini Pro week 64% left/,
-      {},
-      { timeout: 10_000 },
-    ),
-  ).toBeDefined()
-  const full = screen.getByRole('radio', { name: /Full access/ })
-  expect((full as HTMLInputElement).disabled).toBe(true)
-  expect(screen.getByText(/not verified for agy yet/)).toBeDefined()
-  fireEvent.change(screen.getByLabelText(/Agent name/), { target: { value: 'agy1' } })
-  // Below full access the sandbox keeps Antigravity inside its workspace: the box says so and no acknowledgement is asked.
-  expect(screen.getByText(/sandbox keeps it inside its workspace/)).toBeDefined()
-  expect(screen.queryByRole('checkbox', { name: /can read any file/ })).toBeNull()
-  const submit = screen.getByRole('button', { name: 'Add coding agent' }) as HTMLButtonElement
-  expect(submit.disabled).toBe(false)
-  fireEvent.click(submit)
-  await waitFor(() => expect(posted.length).toBe(1))
-  expect(posted[0]).toMatchObject({ runtime: 'antigravity', permission: 'workspace-write' })
-  expect(posted[0]).not.toHaveProperty('acknowledgeReads')
 })
 
 test('Release: shown only for groups Score can’t attribute, posts once and names nothing internal', async () => {
@@ -440,23 +401,6 @@ test('Personality editor: a stale save says so in plain words, and Overwrite wit
   fireEvent.click(screen.getByRole('button', { name: 'Overwrite with mine' }))
   await waitFor(() => expect(changed).toHaveBeenCalled())
   expect(patches.map((patch) => patch.instructionsEtag)).toEqual(['etag-1', 'etag-9'])
-})
-
-test('Add form: the optional role is sent only when filled in', async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <AddCodingAgentForm onAdded={() => undefined} />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
-  await screen.findByRole('option', { name: 'Claude Code' }, { timeout: 10_000 })
-  fireEvent.change(screen.getByLabelText(/Agent name/), { target: { value: 'rev' } })
-  fireEvent.change(screen.getByLabelText('Role (optional)'), { target: { value: 'Reviewer' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Add coding agent' }))
-  await waitFor(() => expect(posted.length).toBe(1))
-  expect(posted[0]).toMatchObject({ id: 'rev', role: 'Reviewer' })
 })
 
 test('the Model and Access cards edit in place and each saves only its own fields', async () => {

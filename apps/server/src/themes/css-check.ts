@@ -3,7 +3,7 @@
 // CSS that matches is rejected, never edited. Escapes and comments are resolved first so `\63 ontent`, `u\72l(` and
 // `con/**/tent` are caught.
 
-import { cssAssetPaths, cssAssetReferences, scanThemeCss, themeAssetUrl } from '@score/contract'
+import { cssAssetPaths, scanThemeCss } from '@score/contract'
 
 export const MAX_THEME_CSS_BYTES = 262_144
 
@@ -101,16 +101,4 @@ export function checkThemeCss(css: string): CssCheck {
   }
   // The files the CSS needs are read by the shared CSS-aware function the browser's draft check uses too.
   return { reasons: [...reasons], assets: cssAssetPaths(css) }
-}
-
-/** Serving: `url(asset:fonts/x.woff2)` becomes the URL Score serves that file at (escaped spellings too). */
-export function rewriteAssetUrls(css: string, themeId: string, rev: string): string {
-  let out = ''
-  let at = 0
-  for (const ref of cssAssetReferences(css)) {
-    out += css.slice(at, ref.start)
-    out += `url(${ref.quote}${themeAssetUrl(themeId, ref.path, rev)}${ref.quote})`
-    at = ref.end
-  }
-  return out + css.slice(at)
 }

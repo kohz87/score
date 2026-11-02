@@ -1346,22 +1346,28 @@ test('antigravity: a failed turn and a stale conversation falls back to a fresh 
   ])
 })
 
-test('antigravity: the quota reading comes from /usage, is cached, and other CLIs have none', async () => {
+test('antigravity: the quota reading comes from /usage and is cached', async () => {
   setEnv('SCORE_CODING_VERIFIED_ANTIGRAVITY', 'read-only')
-  const response = await request('GET', '/api/coding-agents/runtimes/antigravity/usage')
+  // 3.15.2: read through the quota route the app uses (the raw /usage route is gone).
+  const response = await request('GET', '/api/coding-agents/runtimes/antigravity/quota')
   expect(response.statusCode, response.body).toBe(200)
-  const usage = response.json()
-  expect(usage.groups[0]).toMatchObject({
-    name: 'Gemini Models',
-    fiveHourRemainingPercent: 87,
-    weeklyRemainingPercent: 75,
-  })
-  expect(usage.text).toContain('Gemini Models')
-  expect(usage.runtime).toBe('antigravity')
-  expect((await request('GET', '/api/coding-agents/runtimes/codex/usage')).statusCode).toBe(409)
+  const windows = response.json().quota.windows as {
+    name: string
+    group: string
+    usedPercent: number | null
+  }[]
+  expect(windows).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ name: '5 hours', group: 'Gemini Models', usedPercent: 13 }),
+      expect.objectContaining({ group: 'Gemini Models', usedPercent: 25 }),
+    ]),
+  )
+  expect((await request('GET', '/api/coding-agents/runtimes/antigravity/usage')).statusCode).toBe(
+    404,
+  )
   setEnv('SCORE_CODING_FAKE_VERSION', '9.9.9')
   // Cached for a minute, so the version change is not noticed yet.
-  expect((await request('GET', '/api/coding-agents/runtimes/antigravity/usage')).statusCode).toBe(
+  expect((await request('GET', '/api/coding-agents/runtimes/antigravity/quota')).statusCode).toBe(
     200,
   )
 })

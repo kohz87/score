@@ -13,16 +13,14 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useId } from 'react'
 import { useNavigate } from 'react-router'
-import { AgentAppearanceFields } from './AgentAppearanceFields.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { CodingBackend } from './CodingBackend.tsx'
 import { CodingPersonality } from './CodingPersonality.tsx'
-import { AGENT_ID_PATTERN, agentIdInput } from './agent-id.ts'
 import { ModelPicker, useCodingModels } from './ModelPicker.tsx'
 import { EffortSelect } from '../../components/model-settings/EffortSelect.tsx'
 import { ReleaseHeld } from './ReleaseHeld.tsx'
-import { AgentQuota, RuntimeQuotaLine } from './QuotaMeters.tsx'
+import { AgentQuota } from './QuotaMeters.tsx'
 
 const permissionLabels: Record<CodingPermission, string> = {
   'read-only': 'Read only: looks at files, changes nothing',
@@ -241,177 +239,6 @@ export function useCodingAgentDraft(
     needsAck,
     create,
   }
-}
-
-export function AddCodingAgentForm({
-  onAdded,
-}: {
-  /** The agent and one line about it, for the dialog's "joined the team" view. */
-  onAdded: (agent: CodingAgent, detail: string) => void
-}) {
-  const draft = useCodingAgentDraft(onAdded)
-  const {
-    runtimes,
-    runtime,
-    chooseRuntime,
-    id,
-    setId,
-    setName,
-    role,
-    setRole,
-    workspace,
-    setWorkspace,
-    model,
-    setModel,
-    permission,
-    setPermission,
-    password,
-    setPassword,
-    acknowledged,
-    setAcknowledged,
-    style,
-    setStyle,
-    info,
-    usable,
-    unverified,
-    needsAck,
-    create,
-  } = draft
-  return (
-    // One decision: the runtime's message and warning, the permission and read-access context, the fields that carry
-    // consent and the button that commits it. Vetting any click or the submit measures all of them (data-decision).
-    <form
-      className="team-routine-form"
-      data-decision
-      onSubmit={(event) => {
-        event.preventDefault()
-        create.mutate()
-      }}
-    >
-      <label>
-        Kind of coding agent
-        <select
-          aria-label="Kind of coding agent"
-          value={runtime}
-          onChange={(event) => chooseRuntime(event.target.value as CodingRuntime)}
-        >
-          {runtimes.data?.map((item) => (
-            <option key={item.runtime} value={item.runtime}>
-              {item.label}
-              {item.state === 'ready'
-                ? ''
-                : item.state === 'untested_version'
-                  ? ' (untested version)'
-                  : item.state === 'not_supported'
-                    ? ' (not supported yet)'
-                    : ' (not installed)'}
-            </option>
-          ))}
-        </select>
-      </label>
-      {info && (
-        <p className="team-muted-strong coding-add-context" data-protected="block">
-          {info.message ?? (info.version ? `Version ${info.version}. ` : '')}
-          {info.quota}
-        </p>
-      )}
-      {info?.warning && (
-        <p className="team-muted-strong coding-add-context" role="note" data-protected="block">
-          {info.warning}
-        </p>
-      )}
-      {usable && <RuntimeQuotaLine runtime={runtime} />}
-      <label>
-        Agent name (lowercase letters, digits, - and _)
-        <input
-          required
-          pattern={AGENT_ID_PATTERN}
-          title="Lowercase letters, digits, - and _"
-          maxLength={64}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          value={id}
-          onChange={(event) => {
-            const next = agentIdInput(event.target.value)
-            setId(next)
-            setName(next)
-          }}
-        />
-      </label>
-      <label>
-        Role (optional)
-        <input
-          maxLength={2000}
-          placeholder="For example: reviews build scripts"
-          value={role}
-          onChange={(event) => setRole(event.target.value)}
-        />
-      </label>
-      <label>
-        Workspace folder (optional)
-        <input
-          placeholder="~/score-workspaces/<name>"
-          value={workspace}
-          onChange={(event) => setWorkspace(event.target.value)}
-        />
-      </label>
-      <ModelPicker key={runtime} runtime={runtime} value={model} onChange={setModel} />
-      <PermissionPicker
-        value={permission}
-        onChange={setPermission}
-        name="coding-permission"
-        runtime={runtime}
-        unverified={unverified}
-      />
-      {needsAck && (
-        <label className="coding-acknowledge" data-protected="any">
-          <input
-            type="checkbox"
-            required
-            checked={acknowledged}
-            onChange={(event) => setAcknowledged(event.target.checked)}
-          />
-          I understand {info?.label ?? 'this agent'} can read any file my user can, including
-          secrets outside its workspace.
-        </label>
-      )}
-      {permission === 'full' && (
-        <label data-protected="any">
-          Security password
-          <input
-            type="password"
-            required
-            autoComplete="off"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </label>
-      )}
-      <AgentAppearanceFields
-        value={style}
-        onChange={setStyle}
-        preview={{ id: id || 'new', name: id || 'New agent' }}
-      />
-      <ReadAccessWarning runtime={runtime} permission={permission} />
-      {create.error && <p role="alert">{create.error.message}</p>}
-      <div className="team-file-actions">
-        <button
-          className="team-primary coding-add-commit"
-          data-protected="inline-flex"
-          disabled={
-            create.isPending ||
-            !usable ||
-            !id ||
-            (needsAck && !acknowledged) ||
-            unverified.includes(permission)
-          }
-        >
-          {create.isPending ? 'Adding…' : 'Add coding agent'}
-        </button>
-      </div>
-    </form>
-  )
 }
 
 export function CodingOverview({
