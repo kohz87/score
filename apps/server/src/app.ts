@@ -78,6 +78,7 @@ import { registerAboutRoutes } from './http/about.ts'
 import type { UpdateFetcher } from './domain/about.ts'
 import { registerSessionRoutes } from './http/session.ts'
 import { registerSystemRoutes } from './http/system.ts'
+import { registerBotTakeoverRoutes } from './http/bot-takeover.ts'
 import { registerHermesUpdateRoutes } from './http/hermes-update.ts'
 import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
 import type { ScoreDb } from './db/index.ts'
@@ -578,6 +579,13 @@ export function buildApp({
     })
   registerSystemRoutes(app, getSystemStatus)
   // 3.15.0 (owner): update Hermes from Settings › System (a simulated flow in fake mode).
+  if (db)
+    registerBotTakeoverRoutes(app, {
+      port,
+      db,
+      security: securityPassword,
+      ...(clock ? { clock } : {}),
+    })
   registerHermesUpdateRoutes(app, {
     updates:
       config.mode === 'live' && db

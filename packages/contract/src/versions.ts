@@ -121,10 +121,37 @@ const ContextBreakdownCommandSchema = z.object({
   sessionId: z.string().min(1).max(256),
   expiresAt: z.number().positive(),
 })
+/** 3.17.0: Score's own Bot Desktop viewer ids (`score:` + random), never another viewer's. */
+const DesktopViewerSchema = z.string().regex(/^score:[A-Za-z0-9_-]{8,120}$/u)
+/** Server → bridge plugin: take over the profile's Bot Desktop through Hermes' lease (docs/briefs/3.17.0-take-over.md). */
+const DesktopTakeCommandSchema = z.object({
+  commandId: z.string().min(1).max(128),
+  kind: z.literal('desktop_take'),
+  viewerId: DesktopViewerSchema,
+  expiresAt: z.number().positive(),
+})
+/** Server → bridge plugin: hand the desktop back; only this viewer's own lease generation is released. */
+const DesktopHandBackCommandSchema = z.object({
+  commandId: z.string().min(1).max(128),
+  kind: z.literal('desktop_hand_back'),
+  viewerId: DesktopViewerSchema,
+  epoch: z.int().nonnegative(),
+  expiresAt: z.number().positive(),
+})
+/** Server → bridge plugin: mark the desktop in use while this viewer holds it (Hermes' idle stop). */
+const DesktopTouchCommandSchema = z.object({
+  commandId: z.string().min(1).max(128),
+  kind: z.literal('desktop_touch'),
+  viewerId: DesktopViewerSchema,
+  expiresAt: z.number().positive(),
+})
 export const BridgeCommandSchema = z.discriminatedUnion('kind', [
   RewindCommandSchema,
   CompactCommandSchema,
   ContextBreakdownCommandSchema,
+  DesktopTakeCommandSchema,
+  DesktopHandBackCommandSchema,
+  DesktopTouchCommandSchema,
 ])
 export type BridgeCommand = z.infer<typeof BridgeCommandSchema>
 export const BridgeCommandsResponseSchema = z.object({ items: z.array(BridgeCommandSchema) })
@@ -142,6 +169,14 @@ export const BridgeCommandResultSchema = z.object({
   context: SessionContextReadingSchema.optional(),
   /** `compact`: the summary Hermes wrote for the turns it replaced, redacted and capped at 32 KB by the plugin. */
   summary: z.string().max(40_000).optional(),
+  /** Desktop commands: the lease after the change (holder, viewer, generation). */
+  lease: z
+    .object({
+      holder: z.enum(['agent', 'human']),
+      viewerId: z.string().max(200).nullable(),
+      epoch: z.int().nonnegative(),
+    })
+    .optional(),
   error: z.string().max(200).optional(),
 })
 export type BridgeCommandResult = z.infer<typeof BridgeCommandResultSchema>

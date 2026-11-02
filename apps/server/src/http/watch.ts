@@ -16,6 +16,7 @@ import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
+import { sessionKey } from './session.ts'
 
 const ParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
 const LastFrameRow = z.object({
@@ -106,11 +107,13 @@ export function registerWatchRoutes(
   app.get('/api/agents/:agentId/bot-screen', async (request, reply) => {
     const agentId = botScreenAgent(request.params)
     reply.header('cache-control', 'no-store')
-    return BotScreenStatusSchema.parse(await port.botScreenStatus(agentId))
+    return BotScreenStatusSchema.parse(
+      await port.botScreenStatus(agentId, sessionKey(request.headers.cookie)),
+    )
   })
   app.get('/api/agents/:agentId/bot-screen/frame', async (request, reply) => {
     const agentId = botScreenAgent(request.params)
-    const frame = await port.botScreenFrame(agentId)
+    const frame = await port.botScreenFrame(agentId, sessionKey(request.headers.cookie))
     if (!('png' in frame))
       throw new HttpError(409, 'conflict', 'The screen isn’t showing right now.', {
         state: BotScreenStatusSchema.parse(frame).state,

@@ -31,7 +31,7 @@ import {
 import { fakeJourneyFacts } from './journey-history.ts'
 import { fakeReportHistory } from './report-history.ts'
 import { FakeWorkspaces } from './fake-workspace.ts'
-import type { RunsOn, RunsOnUpdate } from '@score/contract'
+import type { BotInputEvent, RunsOn, RunsOnUpdate } from '@score/contract'
 import { describeRunsOn, type TerminalSettings } from '../runs-on.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
 import { assertNotKanbanAttempt } from '../../domain/kanban-attempts.ts'
@@ -96,7 +96,7 @@ import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import type { ProfileInventory, ProfileStepContext } from '../profile-management.ts'
 import type { ProfileStepName } from '@score/contract'
 import { ProfileNameSchema } from '../live/paths.ts'
-import { fakeBotScreenFrame, fakeBotScreenStatus } from './fake-bot-screen.ts'
+import { FakeBotTakeovers, fakeBotScreenFrame } from './fake-bot-screen.ts'
 import { createFakeConfigService } from './fake-config.ts'
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import {
@@ -2130,11 +2130,30 @@ export class FakePort implements HermesPort {
     return Promise.resolve()
   }
 
-  async botScreenStatus(agentId: string) {
-    return fakeBotScreenStatus(agentId, this.scheduler.now())
+  readonly botTakeovers = new FakeBotTakeovers()
+  async botScreenStatus(agentId: string, viewer?: string) {
+    return this.botTakeovers.status(agentId, viewer, this.scheduler.now())
   }
-  async botScreenFrame(agentId: string) {
-    return fakeBotScreenFrame(agentId, this.scheduler.now())
+  async botScreenFrame(agentId: string, viewer?: string) {
+    const status = this.botTakeovers.status(agentId, viewer, this.scheduler.now())
+    return status.state === 'running' ? fakeBotScreenFrame(agentId, this.scheduler.now()) : status
+  }
+  async botScreenTake(agentId: string, owner: string) {
+    return this.botTakeovers.take(agentId, owner, this.scheduler.now(), randomUUID())
+  }
+  async botScreenInput(
+    agentId: string,
+    owner: string,
+    takeoverId: string,
+    events: readonly BotInputEvent[],
+  ) {
+    return this.botTakeovers.input(agentId, owner, takeoverId, events.length, this.scheduler.now())
+  }
+  botScreenHeartbeat(agentId: string, owner: string, takeoverId: string) {
+    return this.botTakeovers.heartbeat(agentId, owner, takeoverId, this.scheduler.now())
+  }
+  async botScreenHandBack(agentId: string, owner: string, takeoverId: string) {
+    return this.botTakeovers.handBack(agentId, owner, takeoverId, this.scheduler.now())
   }
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {
     assertNotKanbanAttempt(req.runId)

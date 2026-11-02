@@ -2365,6 +2365,18 @@ const cases = [
     { state: 'running', width: 960, height: 600, frameSeq: 3 },
     { state: 'on', width: 0 },
   ],
+  ['BotTakeoverRequestSchema', { password: 'correct horse battery' }, { password: 1 }],
+  ['BotTakeoverRefSchema', { takeoverId: 't1' }, { takeoverId: '' }],
+  [
+    'BotInputEventSchema',
+    { k: 'pointer', x: 10, y: 20, buttons: 1 },
+    { k: 'clipboard', text: 'secret' },
+  ],
+  [
+    'BotInputSchema',
+    { takeoverId: 't1', events: [{ k: 'key', keysym: 97, down: true }] },
+    { takeoverId: 't1', events: [] },
+  ],
   [
     'WaiverDecisionSchema',
     { orchestrationRevision: 2, acknowledge: true },

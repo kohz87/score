@@ -65,9 +65,7 @@ test.each([
 test('human is a protected privacy line', async () => {
   status = { state: 'human' }
   renderCard()
-  const line = await screen.findByText(
-    'Someone has taken over this screen. Score hides it while they work.',
-  )
+  const line = (await screen.findByText('Someone else took over in the Hermes app')).parentElement!
   expect(line.hasAttribute('data-protected')).toBe(true)
 })
 

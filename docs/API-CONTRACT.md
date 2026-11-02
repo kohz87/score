@@ -652,6 +652,25 @@ attempts on) lists the step's attempts of the board lineage Score follows, by`or
 - **S** `GET /api/agents/:agentId/bot-screen/frame` → `image/png` (`Cache-Control: no-store`, `ETag: "<frameSeq>"`,
   `If-None-Match` → 304). 409 `conflict` with `details: { state }` when the screen isn't `running` (off, sandboxed, human,
   unavailable). Frames are never stored by Score.
+- **Taking over (3.17.0, docs/briefs/3.17.0-take-over.md).** Both reads above take the asking browser session into
+  account: while a session holds a takeover, it alone gets `running` (with `control: { takeoverId; since; idleExpiresAt;
+  expiresAt }`) and frames; every other session gets `human`. Every frame is checked against Hermes' lease before and
+  after the grab; a takeover the lease no longer names (handed back elsewhere, the Hermes app took over, an unreadable
+  file) ends at once and Score drops its framebuffer.
+  - **H** `POST /api/agents/:agentId/bot-screen/take-over` `{ password? }` → `{ takeoverId; since; expiresAt }`: needs the
+    security password, a session unlocked with it in the last 5 minutes, or a passkey sign-in moments ago (the fresh
+    proof the terminal uses, consumed once) (`401`/`403` as the security
+    routes). Taken through Hermes' lease by Score's plugin (`desktop_take` below). `409 conflict` when the screen isn't
+    running or someone already holds it; `503 unavailable` when the plugin isn't connected; `502 unavailable` when Hermes
+    didn't hand it over. Idempotency receipt with a keyed hash (the body may carry the password).
+  - **H** `POST …/bot-screen/input` `{ takeoverId; events: ({ k: 'key'; keysym; down } | { k: 'pointer'; x; y; buttons })[] }`
+    (1–200 events; keysym ≤ 0x1FFFFFFF; x, y clamped into the screen) → `204`; `409 conflict` when this session no longer
+    holds the screen. Sent as RFB KeyEvent/PointerEvent only, after the lease check; never replayed (no receipt).
+  - **H** `POST …/bot-screen/heartbeat` `{ takeoverId }` → `204` / `409`: the page is still open (every 10 s; 30 s without
+    one hands back). **H** `POST …/bot-screen/hand-back` `{ takeoverId }` → `204` (also when control already went back).
+  - Control goes back on Hand back, 5 minutes without input, 30 minutes in all, a page that stopped beating, or a Score
+    restart. Each takeover is a `bot_takeovers` row (who, agent, start, end, why); the hand-back is retried until the
+    profile's gateway confirms it.
 - **S** `GET /api/watch/overview` → `{ items: { agent: AgentSummary; thumbnail: string | null; status: string; live: boolean
 surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature */ }[] }`
 - Frames are upserted by `seq` (per agent); a terminal frame is re-emitted with the same `seq` when it finishes. Schemas live in
@@ -1919,7 +1938,7 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 **Commands** (PLAN 5.33, server → plugin). A sibling long poll next to the decisions one, served only to a producer
 whose `isolation` is not `unknown`; the plugin polls only while it runs inside a gateway (it needs Hermes's session store).
 
-- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: ({ commandId; kind: 'rewind'; sessionId; turns; since?; expiresAt } | { commandId; kind: 'compact'; sessionId; keepRecent?; expiresAt } | { commandId; kind: 'context_breakdown'; sessionId; expiresAt })[] }` (`expiresAt` = epoch seconds, issued + the 60 s answer
+- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: ({ commandId; kind: 'rewind'; sessionId; turns; since?; expiresAt } | { commandId; kind: 'compact'; sessionId; keepRecent?; expiresAt } | { commandId; kind: 'context_breakdown'; sessionId; expiresAt } | { commandId; kind: 'desktop_take' | 'desktop_touch'; viewerId; expiresAt } | { commandId; kind: 'desktop_hand_back'; viewerId; epoch; expiresAt })[] }` (`expiresAt` = epoch seconds, issued + the 60 s answer
   time; the plugin refuses the command (`expired`) when it is past, checked under the transcript lock immediately before it mutates, so a
   command Score gave up on can't rewind later work; `since` = epoch seconds of the rewound message; the plugin then
   computes the number of turns itself, as every user turn of Hermes's alternation-repaired projection from the first one at or after
@@ -1953,6 +1972,12 @@ before?: { messages; tokens }; after?: { messages; tokens }; context?: SessionCo
 'provider_usage_plus_estimate' | 'local_estimate'; autoCompactAt: number | null; parts: { kind: 'system_prompt' |
 'tool_definitions' | 'rules' | 'skills' | 'mcp' | 'subagent_definitions' | 'memory' | 'conversation'; label; tokens }[] }`,
   or `nothing` for a session without rows, or `failed` (`context_failed`).
+  **`desktop_take` / `desktop_hand_back` / `desktop_touch`** (3.17.0) `{ commandId; kind; viewerId: 'score:…'; epoch?
+  (hand back); expiresAt }`: run in the profile's gateway with Hermes' home bound to the profile, through Hermes' own
+  `tools.bot_desktop.lease` (`acquire`, `release(viewer_id, epoch)`, `get`) and `runtime.touch_activity` (stamped before
+  `acquire` and once a minute while Score holds it, so Hermes' idle stop doesn't take the screen from under the person).
+  Answer `done` with `lease: { holder; viewerId; epoch }` after the change, or `failed` (`desktop_unavailable`,
+  `desktop_failed`). A hand-back names Score's viewer and generation, so it never releases a takeover made since.
 
 **Kanban denials** (D4.3, revised 2026-10-07): there are **no** grant endpoints. A Kanban worker's `post_tool_call`
 event may carry `kanbanDenial: { patternKey: string; commandDigest: string; taskId: string; runId: number | null }`

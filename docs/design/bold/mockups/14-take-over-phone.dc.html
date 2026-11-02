@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>In control of builder's desktop on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&amp;family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12131A}
+a{color:#7DB8FF}a:hover{color:#B3D4FF}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:2px solid #7DB8FF;outline-offset:2px}
+@keyframes live{0%,100%{opacity:1}50%{opacity:.35}}
+.live{animation:live 1.6s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.live{animation:none!important}}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1200px; box-sizing: border-box; background: #12131A; color: #ECEEF2; font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 15px; padding: 14px 16px 32px; display: flex; flex-direction: column; gap: 14px">
+
+<header style="display: flex; align-items: center; gap: 12px">
+<a href="#" aria-label="Back to the team room" style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid #3A3E4A; color: #ECEEF2; display: inline-flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+<svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="#F5A35B"></rect><circle cx="9" cy="11" r="2.4" fill="#fff"></circle><circle cx="15" cy="11" r="2.4" fill="#fff"></circle></svg>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700">builder’s screen</h1>
+</header>
+
+<sc-if value="{{control}}" hint-placeholder-val="{{true}}">
+<div data-protected="flex" style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 20px; background: #D93A3A; color: #FFFFFF">
+<span class="live" style="width: 8px; height: 8px; border-radius: 50%; background: #FFFFFF; flex: none"></span>
+<span style="flex: 1; font-weight: 700; font-size: 14px">You have control · builder is paused</span>
+<span style="font-variant-numeric: tabular-nums; font-size: 13px">4:52</span>
+</div>
+
+<div style="border-radius: 18px; padding: 4px; background: #D93A3A">
+<div role="img" aria-label="builder's desktop: you have control" style="position: relative; aspect-ratio: 16 / 10; border-radius: 14px; overflow: hidden; background: #1C2633">
+<div style="position: absolute; left: 8%; top: 8%; width: 62%; height: 80%; border-radius: 6px; background: #F4F5F7; overflow: hidden">
+<div style="height: 14px; background: #DDE0E6"></div>
+<div style="padding: 10px 14%; display: flex; flex-direction: column; gap: 6px">
+<span style="height: 8px; width: 40%; border-radius: 4px; background: #12131A"></span>
+<span style="height: 14px; border-radius: 4px; background: #FFFFFF; border: 2px solid #2F6FDB"></span>
+<span style="height: 14px; border-radius: 4px; background: #FFFFFF; border: 1px solid #C9CDD6"></span>
+<span style="height: 14px; border-radius: 4px; background: #2F6FDB"></span>
+</div>
+</div>
+<div style="position: absolute; right: 4%; bottom: 8%; width: 30%; height: 36%; border-radius: 6px; background: #0D0E12; border: 1px solid #2E313B"></div>
+<span aria-hidden="true" style="position: absolute; left: 36%; top: 34%; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFFFFF; background: rgba(255,255,255,0.25)"></span>
+</div>
+</div>
+
+<p style="margin: 0; color: #C9CDD6; font-size: 14px; line-height: 1.45">Tap to click, press and hold to right-click, drag to scroll. Turn the phone sideways for a bigger screen.</p>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<button type="button" style="min-height: 48px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600; font-size: 14px">Keyboard</button>
+<button type="button" style="min-height: 48px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600; font-size: 14px">Type text…</button>
+<button type="button" style="min-height: 48px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600; font-size: 14px">Zoom</button>
+<button type="button" style="min-height: 48px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600; font-size: 14px">Ctrl / Alt / Esc</button>
+</div>
+
+<button type="button" onClick="{{handBack}}" data-protected="block" style="min-height: 52px; border-radius: 999px; border: 0; background: #ECEEF2; color: #12131A; font-weight: 700; font-size: 15px">Hand back to builder</button>
+</sc-if>
+
+<sc-if value="{{handed}}" hint-placeholder-val="{{false}}">
+<div style="background: #1A1C23; border-radius: 22px; padding: 24px 20px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 19px; font-weight: 700">builder has control again</h2>
+<p style="margin: 0; color: #C9CDD6; font-size: 14px; line-height: 1.45">You took over from 21:16 to 21:19. builder carries on from where it paused.</p>
+<button type="button" onClick="{{again}}" style="min-height: 44px; padding: 0 20px; border-radius: 999px; border: 1px solid #3A3E4A; background: transparent; color: #ECEEF2; font-weight: 600; font-size: 14px">Take over again…</button>
+</div>
+</sc-if>
+
+<section aria-labelledby="ask-h" style="background: #1A1C23; border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+<h2 id="ask-h" style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #9AA0AD">What builder asked</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.45">“Please sign in to git.example.com in my browser so I can push the branch.”</p>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1200}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { handed: false }; }
+  renderVals() {
+    return {
+      control: !this.state.handed, handed: this.state.handed,
+      handBack: () => this.setState({ handed: true }),
+      again: () => this.setState({ handed: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.17.0] — 2026-11-02
+
+### Added
+- **Take over an agent's desktop** from its screen page: **Take over…** on the Live screen, confirmed with your security
+  password (or a passkey). While you have control the agent's screen and browser tools pause, your clicks and keys go to
+  its desktop (with Type text…, shortcuts, full screen and phone gestures), and nobody else sees the screen. Control goes
+  back to the agent when you hand back, leave the page, after 5 minutes without input, after 30 minutes, or if Score
+  restarts. Score uses Hermes' own Take over / Hand back and never takes the screen from someone already using it.
+
 ## [3.16.0] — 2026-11-02
 
 ### Added

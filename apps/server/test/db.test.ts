@@ -82,6 +82,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'approval_delivery_leases',
     'approval_signals',
     'approvals',
+    'bot_takeovers',
     'brief_blocks',
     'brief_edges',
     'brief_paused_tasks',

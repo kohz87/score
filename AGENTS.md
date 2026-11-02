@@ -117,7 +117,8 @@ can hide, cover, relabel or fake it; a fixed or sticky element is added to `KNOW
 - Ground `#ECEEF2`; white cards with ~28px radius; ink `#12131A` for primary actions and anything that needs
   the user. Headings: Bricolage Grotesque; body: Hanken Grotesk; code: JetBrains Mono.
 - Agents are always identified by **color + shape**, never color alone. Use `AgentGlyph`.
-- Watch is an event replay, not a remote desktop.
+- Watch is an event replay, not a remote desktop. One exception (owner, 2026-11-02, decision 158): a person may take
+  over an agent's Hermes Bot Desktop through Hermes' own lease, behind the security password (docs/briefs/3.17.0-take-over.md).
 
 ## Git
 - Default branch `main`. One task per branch (`task/<plan-id>-<slug>`), small commits, imperative messages.
