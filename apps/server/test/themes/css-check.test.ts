@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { checkThemeCss, rewriteAssetUrls, unescapeCss } from '../../src/themes/css-check.ts'
+import { checkThemeCss, unescapeCss } from '../../src/themes/css-check.ts'
 
 const rejects = (css: string) => expect(checkThemeCss(css).reasons.length).toBeGreaterThan(0)
 const accepts = (css: string) => expect(checkThemeCss(css).reasons).toEqual([])
@@ -86,18 +86,6 @@ describe('helpers', () => {
     expect(unescapeCss('\\110000 x')).toBe('\uFFFDx')
   })
 
-  test('serving rewrites asset: references to the asset URLs and leaves the rest alone', () => {
-    expect(
-      rewriteAssetUrls(
-        `a{background:url(asset:img/bg.webp)} @font-face{src:url("asset:fonts/x.woff2")} b{color:red}`,
-        'seaside',
-        'f'.repeat(64),
-      ),
-    ).toBe(
-      `a{background:url(/api/themes/seaside/assets/img/bg.webp?rev=${'f'.repeat(64)})} @font-face{src:url("/api/themes/seaside/assets/fonts/x.woff2?rev=${'f'.repeat(64)}")} b{color:red}`,
-    )
-  })
-
   // Third gate finding 6: references are read as CSS (the browser's draft check uses the same function).
   test('asset references ignore comments and decode escapes', () => {
     expect(checkThemeCss('/* Example asset:img/missing.png */ a{color:red}').assets).toEqual([])
@@ -107,17 +95,5 @@ describe('helpers', () => {
     expect(checkThemeCss('a{background-image:u\\72 l("asset\\:img/a.png")}').assets).toEqual([
       'img/a.png',
     ])
-  })
-
-  test('serving rewrites escaped references too, and leaves comments alone', () => {
-    expect(
-      rewriteAssetUrls(
-        'a{background-image:url(asset\\3a img/a.png)} /* url(asset:img/b.png) is a note */',
-        'seaside',
-        'f'.repeat(64),
-      ),
-    ).toBe(
-      `a{background-image:url(/api/themes/seaside/assets/img/a.png?rev=${'f'.repeat(64)})} /* url(asset:img/b.png) is a note */`,
-    )
   })
 })

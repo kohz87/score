@@ -16,7 +16,7 @@ import { HttpError } from '../errors.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { parseSingleFile } from '../media/multipart.ts'
 import { isBuiltinThemeId } from '../themes/builtin.ts'
-import { checkThemeCss, rewriteAssetUrls } from '../themes/css-check.ts'
+import { checkThemeCss } from '../themes/css-check.ts'
 import { readLook, readResetGeneration, writeLook } from '../themes/look.ts'
 import {
   ASSET_TYPES,
@@ -172,20 +172,6 @@ export function registerThemeRoutes(
     const { id } = IdParams.parse(request.params)
     if (!store.exists(id)) throw notFound()
     return detail(id)
-  })
-
-  app.get('/api/themes/:id/style.css', guard, async (request, reply) => {
-    const { id } = IdParams.parse(request.params)
-    const { rev } = OptionalRevQuery.parse(request.query)
-    const theme = store.get(id)
-    if (!theme) throw notFound()
-    unlessLocked(() => store.assertReadable(id))
-    const current = assertCurrentRevision(theme, rev)
-    return reply
-      .header('Content-Type', 'text/css; charset=utf-8')
-      .header('X-Content-Type-Options', 'nosniff')
-      .header('Cache-Control', 'private, no-cache')
-      .send(rewriteAssetUrls(theme.css, id, current))
   })
 
   app.get('/api/themes/:id/assets/*', guard, async (request, reply) => {

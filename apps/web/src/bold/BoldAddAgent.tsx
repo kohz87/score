@@ -19,6 +19,7 @@ import {
 } from '../routes/team/CodingAgent.tsx'
 import { ModelPicker as CodingModelPicker } from '../routes/team/ModelPicker.tsx'
 import { ProfileOperation } from '../routes/team/ProfileOperation.tsx'
+import { RuntimeQuotaLine } from '../routes/team/QuotaMeters.tsx'
 import {
   addBlockReasons,
   availableStyle,
@@ -1183,6 +1184,7 @@ function CodingAgentPanel({
                 {info.warning}
               </p>
             )}
+            {usable && <RuntimeQuotaLine runtime={runtime} />}
             <button
               type="button"
               className="link"

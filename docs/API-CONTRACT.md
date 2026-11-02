@@ -1311,17 +1311,16 @@ model: string|null; style; quota; quotaFloorPercent: number; cli: { state; versi
   row (agent, run, pid, pgid, the releasing paired browser's session hash, time) and lets the agent take new turns. The runs involved stay `unconfirmed` (a release is not termination evidence).
   A group is held (and `canRelease`) when members of it survive that match no identity Score recorded while it supervised the run (a replacement group may have reused the number), when `/proc`
   cannot be read, or when another boot's table cannot be told apart. Absence is proven only by the kernel (`kill(-pgid, 0)` fails with `ESRCH`) or by another boot, never by a `/proc` listing.
-- `GET /api/coding-agents/runtimes/:runtime/usage` → `CodingUsage` `{ runtime; fetchedAt; groups: { name; fiveHourRemainingPercent: number|null;
-fiveHourResets: string|null; weeklyRemainingPercent: number|null; weeklyResets: string|null }[]; text }`: Antigravity's quota (`agy -p /usage`, no model
-  turn), cached for 60 s; `text` is the redacted table as printed, the fallback when a group could not be read. Other runtimes: `409 unsupported`;
-  CLI missing or untested: `422 cli_not_installed` / `422 untested_cli_version`; the CLI failing or printing nothing readable: `502 usage_unavailable`.
+- Antigravity's quota comes from `agy -p /usage` (no model turn), cached for 60 s, and reaches the page through the quota
+  routes below (`source: 'usage'`). The raw `…/runtimes/:runtime/usage` route was removed in 3.15.2 (nothing called it).
 - `GET /api/coding-agents/:id/quota` and `GET /api/coding-agents/runtimes/:runtime/quota` → `CodingQuotaResponse` `{ quota: CodingQuota | null }` (PLAN 8.1, decision 82),
   `CodingQuota` `{ runtime; seenAt; windows: { name: '5 hours'|'week'; group: string|null; usedPercent: number|null; resetsAt: string|null }[]; source: 'usage'|'turn'|'log' }`.
   One shape for all three CLIs; `usedPercent` is the share used (the web shows "% left"), null = the CLI didn't say. Claude Code: the latest `rate_limit_event` of a turn
   (`unifiedWindows.five_hour|seven_day`, `utilization` 0–1, `resetsAt` epoch seconds), `source: 'turn'`. Codex: the last `rate_limits` line in the tail (last 256 KB) of the session log
   of the run Score started, `$CODEX_HOME/sessions/<y>/<m>/<d>/rollout-*-<threadId>.jsonl` (opened with `O_NOFOLLOW`, regular file owned by the user; no other Codex file is ever read),
-  `source: 'log'`. Antigravity: the `/usage` reading above (`group` set per model group, `remaining` turned into `used`), `source: 'usage'`, only for `…/:id/quota` and `…/runtimes/antigravity/quota`
-  (same errors as `/usage`). Claude Code and Codex are stored (table `coding_quota`, latest per agent) and never read from the CLI between turns; `null` until a turn has reported one.
+  `source: 'log'`. Antigravity: its `agy -p /usage` reading (`group` set per model group, `remaining` turned into `used`), `source: 'usage'`, only for `…/:id/quota` and `…/runtimes/antigravity/quota`
+  (errors: other runtimes `409 unsupported`; CLI missing or untested `422 cli_not_installed` / `422 untested_cli_version`;
+  nothing readable `502 usage_unavailable`). Claude Code and Codex are stored (table `coding_quota`, latest per agent) and never read from the CLI between turns; `null` until a turn has reported one.
   The `runtimes/:runtime/quota` form answers with the most recent reading of any agent of that runtime. Unknown agent: `404`.
 - `GET /api/coding-agents/runtimes/:runtime/models` → `CodingModelsResponse` `{ models: { id; name; description?: string; efforts?: string[] }[]; source: 'cli'|'cache'|'aliases'|'none' }`
   (PLAN 8.5, decision 86). The model list the add-agent form and the agent's settings offer; `id` is what `--model` takes. Antigravity: `agy models` (lines `id<TAB>name`, run with no prompt,
@@ -2841,7 +2840,7 @@ folders exist; a folder that already exists is never a free id. While a theme id
 not settle (it is retried before every write of the id), the id is **not written**: replace (`POST /api/themes/import`),
 custom save (`PUT /api/themes/:id`) and delete answer `409 theme_recovering` (`details.id`) with a plain message, and the
 startup id move skips the row, until recovery succeeds. **Package reads are refused the same way** (third gate): while such
-a note stands, `GET /api/themes/:id`, `…/style.css`, `…/assets/*` and `…/export` of that id answer `409 theme_recovering`
+a note stands, `GET /api/themes/:id`, `…/assets/*` and `…/export` of that id answer `409 theme_recovering`
 (`details.id`) instead of mixing the row's CSS and etag with another version's asset bytes; every read first retries
 recovery, so the answer turns back into `200` as soon as the note is settled. `GET /api/themes` stays available (its
 summaries come from the row alone), built-ins and other ids are unaffected, and a start that cannot settle a note logs
@@ -2860,17 +2859,17 @@ it and still serves the other themes.
   and so does deleting and re-creating the theme.
 - **Revision-bound files (J1, fourth-gate finding 2; 1.8.1).** The package `etag` above is the package's **revision**.
   A file URL names the revision its client holds: `/api/themes/:id/assets/<fonts|img>/<file>?rev=<etag>`
-  (`themeAssetUrl` in `packages/contract/src/themes.ts` builds it; the engine, the sanitiser, the Customizer and the
-  server's `style.css` rewrite all use that one function). The server **enforces** it: a request whose `rev` is not the
+  (`themeAssetUrl` in `packages/contract/src/themes.ts` builds it; the engine, the sanitiser and the Customizer all use
+  that one function: the page rewrites a theme's `asset:` references itself when it applies the CSS from `GET
+  /api/themes/:id`). The server **enforces** it: a request whose `rev` is not the
   theme's current etag is `409 etag_mismatch` (`details.etag` = the current etag), never the newer bytes, so an editor
   holding an old manifest, stylesheet or etag can't read a later replacement's file at the same path, and a copy can't
   pair one version's manifest and CSS with another's files. Built-in themes are constants, so their etag is fixed for a
   server build; their URLs carry it like any other. The check runs after `404` for an unknown theme and `409 theme_recovering`, and
   **before** the file is looked up, in the same synchronous step as its read: an old revision whose file the newer
   version removed is `409 etag_mismatch` (it is stale), not `404`.
-- `GET /api/themes/:id/style.css[?rev=<etag>]` → `text/css` with `asset:` references rewritten to the asset URLs below
-  (each carries `?rev=` of the etag this response was made from). `rev` is optional here; when present and not
-  current it is `409 etag_mismatch`.
+- (3.15.2) The separate `GET /api/themes/:id/style.css` route was removed: nothing called it; the page reads the CSS from
+  the theme's detail and rewrites its `asset:` references with `themeAssetUrl`.
 - `GET /api/themes/:id/assets/<fonts|img>/<file>?rev=<etag>` → the file with its exact type, `nosniff`,
   `cache-control: private`. **`rev` is required** (nothing depends on unversioned asset URLs): without it, or with
   characters outside `[A-Za-z0-9_-]` (1–128), `400 bad_request`; a well-formed one that is not current is `409 etag_mismatch` as above. A page that kept a cached look from before 1.8.1 (URLs without
@@ -2932,8 +2931,8 @@ theme_rejected { reasons[] }` names the same problems an import would; the files
   `cssAssetPaths`, `packages/contract/src/theme-css-assets.ts`): a reference is the argument of a `url()` function,
   with comments and strings skipped and CSS escapes decoded (`url(asset\3a img/a.png)` and `u\72 l(…)` count; text in a
   comment such as `/* asset:img/x.png */` does not). The browser's draft check and the server's import check both use
-  it to decide which files the package must contain, and `GET …/style.css` rewrites every such reference to its asset URL
-  (escaped spellings included). A shared
+  it to decide which files the package must contain, and the page's sanitiser rewrites every such reference to its asset
+  URL (escaped spellings included). A shared
   accept/reject corpus (`packages/contract/test/theme-package-corpus.ts`) runs against both readers. A deflated entry
   must end exactly where its stored extent ends: bytes after the end of the deflate stream are refused by both
   readers (K2 X11).

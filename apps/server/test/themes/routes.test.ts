@@ -129,7 +129,6 @@ test('every route needs a paired browser, and changes need the web-client header
   for (const [method, url] of [
     ['GET', '/api/themes'],
     ['GET', '/api/themes/score'],
-    ['GET', '/api/themes/score/style.css'],
     ['GET', '/api/themes/score/assets/img/a.png'],
     ['GET', '/api/themes/score/export'],
     ['PUT', '/api/themes/x'],
@@ -189,18 +188,6 @@ test('GET /api/themes/:id: detail, built-in detail and 404', async () => {
   expect(missing.statusCode).toBe(404)
   expect(missing.json()).toMatchObject({ error: { code: 'not_found' } })
   expect((await call('GET', '/api/themes/..%2Fx')).statusCode).toBeGreaterThanOrEqual(400)
-})
-
-test('style.css rewrites asset: references and is served as nosniff text/css', async () => {
-  await upload(await fullPackage())
-  const res = await call('GET', '/api/themes/seaside/style.css')
-  expect(res.statusCode).toBe(200)
-  expect(res.headers['content-type']).toBe('text/css; charset=utf-8')
-  expect(res.headers['x-content-type-options']).toBe('nosniff')
-  const rev = ThemeDetailSchema.parse((await call('GET', '/api/themes/seaside')).json()).etag
-  expect(res.body).toBe(`.a{background:url(/api/themes/seaside/assets/img/a.png?rev=${rev})}`)
-  expect((await call('GET', '/api/themes/nope/style.css')).statusCode).toBe(404)
-  expect((await call('GET', '/api/themes/score/style.css')).body).toBe('')
 })
 
 test('assets are served with their exact type, nosniff, inline and private', async () => {
@@ -411,7 +398,7 @@ test('an id with an unsettled swap note answers 409 theme_recovering until it is
 })
 
 // Third gate finding 4: package reads of an id with an unsettled note are refused, never mixed.
-test('detail, style.css, assets and export answer 409 theme_recovering while a note is unsettled', async () => {
+test('detail, assets and export answer 409 theme_recovering while a note is unsettled', async () => {
   await upload(await fullPackage())
   const asset = await fileUrl('seaside', 'assets/img/a.png')
   expect((await call('GET', asset)).statusCode).toBe(200)
@@ -423,12 +410,7 @@ test('detail, style.css, assets and export answer 409 theme_recovering while a n
   db.sqlite.exec(
     "CREATE TRIGGER keep_notes BEFORE DELETE ON theme_swaps BEGIN SELECT RAISE(ABORT, 'injected'); END;",
   )
-  for (const path of [
-    '/api/themes/seaside',
-    '/api/themes/seaside/style.css',
-    asset,
-    '/api/themes/seaside/export',
-  ]) {
+  for (const path of ['/api/themes/seaside', asset, '/api/themes/seaside/export']) {
     const res = await call('GET', path)
     expect([path, res.statusCode]).toEqual([path, 409])
     expect(res.json()).toMatchObject({ error: { code: 'theme_recovering' } })
@@ -1051,7 +1033,6 @@ test.each(['harbour', 'ledger', 'studio'])(
       )
       expect(file.rawPayload.length).toBeGreaterThan(1000)
     }
-    expect((await call('GET', `/api/themes/${id}/style.css`)).body).not.toContain('asset:')
     // Built-ins can't be changed or removed, nor taken by an import.
     expect((await save(id, detail.etag)).json()).toMatchObject({ error: { code: 'builtin_theme' } })
     expect((await call('DELETE', `/api/themes/${id}`)).json()).toMatchObject({
@@ -1197,7 +1178,6 @@ test('a folder left on disk for an id with no row is not served or exported (K2 
   for (const url of [
     '/api/themes/ghost/assets/img/a.png',
     '/api/themes/ghost/export',
-    '/api/themes/ghost/style.css',
     '/api/themes/ghost',
   ])
     expect((await call('GET', url)).statusCode, url).toBe(404)
@@ -1245,12 +1225,6 @@ test("J1: read A, replace with B at the same paths: A's file and licence URLs ne
     'licence B',
   )
   expect((await call('GET', '/api/themes/mine/export')).statusCode).toBe(200)
-
-  // The stylesheet names the revision it was made from, and refuses a stale one.
-  expect((await call('GET', `/api/themes/mine/style.css?rev=${a.etag}`)).statusCode).toBe(409)
-  const css = await call('GET', `/api/themes/mine/style.css?rev=${b.etag}`)
-  expect(css.body).toBe(`.a{background:url(/api/themes/mine/assets/img/a.png?rev=${b.etag})}`)
-  expect((await call('GET', '/api/themes/mine/style.css')).body).toBe(css.body)
 })
 
 test('J1: an identical re-import is a new revision, so the earlier URL is refused', async () => {

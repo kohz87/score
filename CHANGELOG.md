@@ -3,6 +3,15 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.15.2] — 2026-11-02
+
+### Removed
+- Two server routes nothing called (Antigravity's raw usage; a theme's separate stylesheet) and the old add-coding-agent
+  form from the classic shell.
+
+### Changed
+- Adding a coding agent shows the tool's live quota (what's left this 5 hours and this week), as the old form did.
+
 ## [3.15.1] — 2026-11-02
 
 ### Removed
