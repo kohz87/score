@@ -1976,3 +1976,18 @@ One entry per completed task: what landed, review results, and any **rejected re
 - **v3.15.0 deployed live** (~04:11 UTC, idle guard passed, now also waiting for a running Hermes update): backup
   score-pre-3.15.0-20261102.db, health ok. Live: version v0.22.5+3257.g557254f, 11.4 GB free (5.1 GB needed), check on main:
   26 commits behind, restarts gateway [default].
+
+## 3.15.1 — Remove obsolete code (2026-11-02)
+- Owner: "vet and run a cleanup on the code, especially obsolete codes". Lead's scans (knip download was blocked, so a
+  local reachability script and an export-usage script): every file reachable except test helpers and
+  `hermes/live/reconcile.ts` (1.9b, never wired); 133 exports used nowhere and 65 used only by tests; no unused dependencies;
+  every classic URL redirects into the new shell. A Sonnet coder vetted the 88 non-contract candidates by hand and removed
+  the dead ones and the features only tests kept alive (Watch side panels, wikilink conversion, customizer menu editing,
+  TodoItems + todo.css, old search/attempt/liveliness helpers), with their tests and CSS; kept test seams,
+  AddCodingAgentForm (harness for live shared parts), contract types. 67 files, -1,984 lines. Lead checked the CSS
+  removals (watch-mini parts still used stay), Sonnet review clean (no P1/P2).
+- Route scan: 23 /api routes with no literal caller; 21 are called through path-building helpers. Two are unused by the
+  app (`GET …/runtimes/:runtime/usage`, `GET /api/themes/:id/style.css`) but woven into tests and e2e: kept, offered to the
+  owner as a follow-up.
+- Gate: e2e 854 passed, 2 failed (tablet, terminal; 32/32 on rerun); check green (contract 1584, web 3096, server 4941).
+- **v3.15.1 deployed live** (~05:35 UTC, idle guard passed): backup score-pre-3.15.1-20261102.db, health ok.
