@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.18.0] — 2026-11-02
+
+### Added
+- **Screens** in the top bar: every agent's screen at a glance (its live desktop, or the last thing it worked on), with
+  Open screen and, for a running desktop, Take over…. While someone else has taken over a desktop its card shows no
+  picture. On a phone the agents are listed as rows.
+
 ## [3.17.0] — 2026-11-02
 
 ### Added

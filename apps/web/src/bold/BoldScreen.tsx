@@ -720,9 +720,21 @@ export function BoldScreenPage() {
 function BoldScreenAgent({ agentId }: { agentId: string }) {
   // ?from=<seq> (History's Replay link) opens the replay at that moment; the frame window starts at the newest frames,
   // so a moment outside it re-anchors the window there.
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const fromParam = /^\d{1,12}$/.test(params.get('from') ?? '') ? Number(params.get('from')) : null
   const [anchor, setAnchor] = useState<number | null>(fromParam)
+  const dropTake = useCallback(
+    () =>
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current)
+          next.delete('take')
+          return next
+        },
+        { replace: true },
+      ),
+    [setParams],
+  )
   const watch = useStreamQuery(watchQuery(agentId, anchor))
   // Moving the frame window re-fetches under a new key; keep the last page on screen so the replay position survives.
   const [kept, setKept] = useState(watch.data)
@@ -791,7 +803,12 @@ function BoldScreenAgent({ agentId }: { agentId: string }) {
       ))}
       <BoldScreenView
         liveScreen={
-          <BoldLiveScreen agentId={data.agent.id} agentName={agentDisplayName(data.agent)} />
+          <BoldLiveScreen
+            agentId={data.agent.id}
+            agentName={agentDisplayName(data.agent)}
+            openConfirm={params.get('take') === '1'}
+            onConfirmShown={dropTake}
+          />
         }
         agent={data.agent}
         frames={data.frames}

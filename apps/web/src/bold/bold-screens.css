@@ -1,0 +1,329 @@
+/* 3.18.0: the Screens page. Colours, radii and spacing follow the approved mock-up
+   (docs/design/bold/mockups/15-screens*.dc.html) and the shell's tokens. */
+[data-ui='bold'] .bold-sc {
+  max-width: 1392px;
+  gap: calc(18px * var(--bold-d, 1));
+}
+
+[data-ui='bold'] .bold-sc-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='bold'] .bold-sc-head h1 {
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-sc-head p,
+[data-ui='bold'] .bold-sc-note {
+  margin: 0;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-sc-none-yet {
+  padding: calc(24px * var(--bold-d, 1));
+  border-radius: calc(24px * var(--bold-r, 1));
+  background: var(--panel);
+  text-align: center;
+  margin: 0;
+}
+
+[data-ui='bold'] .bold-sc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--sc-min, 300px), 1fr));
+  gap: 16px;
+}
+
+[data-ui='bold'] .bold-sc-card {
+  background: var(--panel);
+  border-radius: calc(26px * var(--bold-r, 1));
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+[data-ui='bold'] .bold-sc-mini {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #1c2633;
+}
+
+[data-ui='bold'] .bold-sc-mini[data-state='human'] {
+  background: #22252e;
+}
+
+[data-ui='bold'] .bold-sc-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+[data-ui='bold'] .bold-sc-code {
+  position: absolute;
+  inset: 10%;
+  font: 11px/1.6 var(--font-mono, 'JetBrains Mono', monospace);
+  color: #c9cdd6;
+}
+
+[data-ui='bold'] .bold-sc-term {
+  color: #8fd9a8;
+}
+
+[data-ui='bold'] .bold-sc-dim {
+  color: #9aa0ad;
+}
+
+[data-ui='bold'] .bold-sc-del {
+  color: #f28a8a;
+}
+
+[data-ui='bold'] .bold-sc-add {
+  color: #8fd9a8;
+}
+
+[data-ui='bold'] .bold-sc-mini:has(.bold-sc-code) {
+  background: #0d0e12;
+}
+
+[data-ui='bold'] .bold-sc-win {
+  position: absolute;
+  left: 7%;
+  top: 9%;
+  width: 70%;
+  height: 74%;
+  border-radius: 6px;
+  background: #f4f5f7;
+  overflow: hidden;
+}
+
+[data-ui='bold'] .bold-sc-bar {
+  height: 12px;
+  background: #dde0e6;
+}
+
+[data-ui='bold'] .bold-sc-page {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+[data-ui='bold'] .bold-sc-page span {
+  height: 7px;
+  width: 40%;
+  border-radius: 3px;
+  background: #12131a;
+}
+
+[data-ui='bold'] .bold-sc-page span + span {
+  height: 12px;
+  width: 100%;
+  background: #dde0e6;
+}
+
+[data-ui='bold'] .bold-sc-hidden,
+[data-ui='bold'] .bold-sc-none {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+[data-ui='bold'] .bold-sc-hidden {
+  color: #c9cdd6;
+}
+
+[data-ui='bold'] .bold-sc-none {
+  color: #7c8291;
+}
+
+[data-ui='bold'] .bold-sc-badge {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-sc-badge[data-tone='control'] {
+  background: #d93a3a;
+  color: #ffffff;
+}
+
+[data-ui='bold'] .bold-sc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d93a3a;
+  animation: bold-sc-live 1.6s ease-in-out infinite;
+}
+
+@keyframes bold-sc-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='bold'] .bold-sc-dot {
+    animation: none;
+  }
+}
+
+[data-ui='bold'] .bold-sc-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-sc-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+[data-ui='bold'] .bold-sc-name {
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-sc-doing {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-ui='bold'] .bold-sc-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+[data-ui='bold'] .bold-sc-open,
+[data-ui='bold'] .bold-sc-take {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+[data-ui='bold'] .bold-sc-open {
+  background: var(--hi-bg);
+  color: var(--hi-ink);
+  font-weight: 700;
+}
+
+[data-ui='bold'] .bold-sc-take {
+  border: 1px solid var(--line, #3a3e4a);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Phone: one row per agent, the whole row is the link. */
+[data-ui='bold'] .bold-sc-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+[data-ui='bold'] .bold-sc-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 22px;
+  background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+  min-height: 48px;
+}
+
+[data-ui='bold'] .bold-sc-row .bold-sc-mini {
+  flex: none;
+  width: 128px;
+  border-radius: 12px;
+}
+
+[data-ui='bold'] .bold-sc-row .bold-sc-doing {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+[data-ui='bold'] .bold-sc-row .bold-sc-text {
+  gap: 3px;
+}
+
+[data-ui='bold'] .bold-sc-row .bold-sc-hidden {
+  font-size: 10px;
+  padding: 6px;
+}
+
+[data-ui='bold'] .bold-sc-row .bold-sc-none {
+  font-size: 11px;
+  padding: 6px;
+}
+
+[data-ui='bold'] .bold-sc-row .bold-sc-code {
+  font-size: 8px;
+}
+
+[data-ui='bold'] .bold-sc-dot-red {
+  position: absolute;
+  left: 7px;
+  top: 7px;
+  width: 8px;
+  height: 8px;
+}
+
+[data-ui='bold'] .bold-sc-state {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+[data-ui='bold'] .bold-sc-state[data-tone='live'] {
+  color: var(--ink);
+}
+
+[data-ui='bold'] .bold-sc-state[data-tone='control'] {
+  color: #f28a8a;
+}
+
+@media (max-width: 600px) {
+  [data-ui='bold'] .bold-sc-head h1 {
+    font-size: 28px;
+  }
+
+  [data-ui='bold'] .bold-sc-head p {
+    font-size: 14px;
+  }
+}

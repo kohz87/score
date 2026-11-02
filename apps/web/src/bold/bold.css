@@ -150,6 +150,17 @@
     max(20px, env(safe-area-inset-left, 0px));
 }
 
+/* 3.18.0: three section links on a phone's top bar (Recipes, Tasks, Screens) stay on one line beside the avatar. */
+[data-ui='bold'] .bold-top-links {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+[data-ui='bold'] .bold-top-links .btn.sm {
+  padding-inline: 10px;
+  font-size: 13px;
+}
+
 [data-ui='bold'] .word {
   font-family: var(--font-d);
   font-weight: 800;
